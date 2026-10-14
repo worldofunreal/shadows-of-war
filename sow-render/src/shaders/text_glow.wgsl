@@ -173,12 +173,11 @@ fn shade_arc(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(in.color.rgb * globals.shader_params[__TEXT_SHAPE_STROKE_TINT__].rgb, ring_alpha * arc_alpha * in.color.a * globals.shader_params[__TEXT_OPACITY__].x);
 }
 
-// Rounded-square image sprite (KIND_SPRITE) sampled from the avatar atlas. `face_dilate`
-// carries its corner radius ratio; `color` tints the texels.
+// Circular image sprite (KIND_SPRITE) sampled from the avatar atlas.
 fn shade_sprite(in: VertexOutput) -> vec4<f32> {
     let span = max(in.uv_rect.zw - in.uv_rect.xy, vec2<f32>(1e-6));
     let local = (in.uv - in.uv_rect.xy) / span;
-    let d = rounded_rect_distance(local, globals.shader_params[__TEXT_AVATAR_CORNER__].x);
+    let d = rounded_rect_distance(local, 0.5);
     let aa = max(fwidth(d), 1e-5);
     let mask = 1.0 - smoothstep(-aa, aa, d);
     let tex = textureSample(avatar_atlas, avatar_sampler, clamp(in.uv, in.uv_rect.xy, in.uv_rect.zw));
@@ -232,7 +231,7 @@ fn shade_rounded_rect(in: VertexOutput) -> vec4<f32> {
 // Anti-aliased filled downward triangle (KIND_TRIANGLE). `local_uv` is the full quad; the
 // triangle occupies its bounding box with a flat top and a point at the bottom.
 fn shade_triangle(in: VertexOutput) -> vec4<f32> {
-    let p = in.local_uv;
+    let p = vec2<f32>(in.local_uv.x, select(in.local_uv.y, 1.0 - in.local_uv.y, in.face_dilate > 0.5));
     let half_width = 0.5 * (1.0 - p.y);
     let horizontal = half_width - abs(p.x - 0.5);
     let vertical = min(p.y, 1.0 - p.y);

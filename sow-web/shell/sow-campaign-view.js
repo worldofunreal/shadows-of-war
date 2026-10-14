@@ -12,7 +12,7 @@
         let homeGuideAnimation = null, homeGuideAnimationStep = null;
         root.classList.add("sow-story");
         root.innerHTML = '<div class="sow-story__shade" hidden></div>' +
-            '<div class="sow-story__cinematic" tabindex="-1" hidden><video playsinline preload="auto"></video><button class="sow-story__cinematic-start" type="button" data-story-start hidden></button><span class="sow-story__cinematic-hold" data-story-hold hidden aria-hidden="true"><span></span><i><b></b></i></span></div>' +
+            '<div class="sow-story__cinematic" tabindex="-1" hidden><video playsinline preload="none" fetchpriority="low"></video><button class="sow-story__cinematic-start" type="button" data-story-start hidden></button><span class="sow-story__cinematic-hold" data-story-hold hidden aria-hidden="true"><span></span><i><b></b></i></span></div>' +
             '<article class="sow-story__dialog" tabindex="-1" hidden>' +
                 '<div class="sow-story__main"><div class="sow-story__portrait" hidden><img alt="" draggable="false"><span class="sow-story__portrait-line" aria-hidden="true"></span></div>' +
                 '<div class="sow-story__conversation"><header class="sow-story__heading"><p class="sow-story__speaker"></p><button class="sow-story__close" type="button" data-story-dismiss>×</button></header>' +
@@ -50,7 +50,7 @@
         const spotlight = find(".sow-story__spotlight");
         const view = doc.defaultView;
         let cinematicStepKey = "", cinematicStatus = "none", cinematicHoldTimer = 0, cinematicHoldFrame = 0, cinematicPointerId = null;
-        let cinematicAudioActive = false;
+        let cinematicAudioActive = false, cinematicLoaderWait = null, cinematicMediaArmed = false;
         let portraitFrame = 0, guideStepId = "", guideLastPulseValue = NaN, guideLastPulseAt = 0, guidePulse = null;
         let portraitRequestId = 0, destroyed = false;
         const portraitCache = new Map(), preparedDefinitions = new WeakSet(), reportedPortraitFailures = new Set();
@@ -184,6 +184,57 @@
             cinematicHoldProgress.style.transition = "none";
             cinematicHoldProgress.style.transform = "scaleX(0)";
         }
+        function cinematicVariants(source) {
+            const dot = source.lastIndexOf(".");
+            const stem = dot > 0 ? source.slice(0, dot) : source;
+            return { stem, poster: stem + ".poster.webp" };
+        }
+        function clearCinematicMedia() {
+            cinematicMediaArmed = false;
+            cinematicVideo.removeAttribute("src");
+            cinematicVideo.removeAttribute("poster");
+            if (typeof cinematicVideo.replaceChildren === "function") cinematicVideo.replaceChildren();
+        }
+        function showCinematicPoster(source) {
+            cinematicMediaArmed = false;
+            cinematicVideo.removeAttribute("src");
+            if (typeof cinematicVideo.replaceChildren === "function") cinematicVideo.replaceChildren();
+            cinematicVideo.setAttribute("poster", cinematicVariants(source).poster);
+        }
+        function attachCinematicMedia(source) {
+            const variants = cinematicVariants(source);
+            if (cinematicMediaArmed && cinematicVideo.getAttribute("poster") === variants.poster) return;
+            const candidates = [
+                { src: variants.stem + ".webm", type: 'video/webm; codecs="vp9,opus"' },
+                { src: variants.stem + ".mp4", type: 'video/mp4; codecs="avc1.640028,mp4a.40.2"' }
+            ];
+            const elements = candidates.map(candidate => {
+                const element = doc.createElement("source");
+                element.src = candidate.src;
+                element.type = candidate.type;
+                return element;
+            });
+            cinematicVideo.removeAttribute("src");
+            cinematicVideo.setAttribute("poster", variants.poster);
+            if (typeof cinematicVideo.replaceChildren === "function") cinematicVideo.replaceChildren(...elements);
+            else elements.forEach(element => cinematicVideo.appendChild(element));
+            cinematicMediaArmed = true;
+            cinematicVideo.load();
+        }
+        function loaderVisible() {
+            if (typeof doc.getElementById !== "function") return false;
+            const loader = doc.getElementById("web-loader");
+            return Boolean(loader) && loader.getAttribute("aria-hidden") !== "true";
+        }
+        function clearCinematicLoaderWait() {
+            if (!cinematicLoaderWait) return;
+            const { target, start } = cinematicLoaderWait;
+            cinematicLoaderWait = null;
+            if (typeof target.removeEventListener === "function") {
+                target.removeEventListener("sow:loader-ready", start);
+                target.removeEventListener("sow:loader-cycle-ready", start);
+            }
+        }
         function setCinematicAudioActive(active) {
             if (cinematicAudioActive === active) return;
             cinematicAudioActive = active;
@@ -191,14 +242,30 @@
         }
         function stopCinematic() {
             setCinematicAudioActive(false);
-            clearCinematicHold();
+            clearCinematicHold(); clearCinematicLoaderWait();
             cinematicStepKey = ""; cinematicStatus = "none";
-            cinematicVideo.pause(); cinematicVideo.removeAttribute("src"); cinematicVideo.load();
+            cinematicVideo.pause(); clearCinematicMedia(); cinematicVideo.load();
             cinematic.hidden = true; root.classList.remove("is-cinematic");
         }
         function startCinematic(sourceKey) {
             if (!cinematicStepKey || sourceKey !== cinematicStepKey || !model || cinematicStatus === "fallback") return;
+            if (loaderVisible() && (doc.defaultView || doc).addEventListener) {
+                if (!cinematicLoaderWait) {
+                    const target = doc.defaultView || doc;
+                    const start = () => {
+                        clearCinematicLoaderWait();
+                        if (model && cinematicStepKey && cinematicStatus === "ready") startCinematic(cinematicStepKey);
+                    };
+                    cinematicLoaderWait = { target, start };
+                    target.addEventListener("sow:loader-ready", start, { once: true });
+                    target.addEventListener("sow:loader-cycle-ready", start, { once: true });
+                }
+                cinematicStatus = "ready";
+                syncCinematic(model.step);
+                return;
+            }
             cinematicStatus = "starting"; syncCinematic(model.step);
+            attachCinematicMedia(model.step.video_src);
             let playback;
             try { playback = cinematicVideo.play(); }
             catch (error) { playbackRejected(error, sourceKey); return; }
@@ -215,17 +282,18 @@
             const source = step.type === "scene" && step.presentation === "cinematic" ? step.video_src || "" : "";
             const nextKey = source ? step.id + "\u0000" + source : "";
             if (nextKey !== cinematicStepKey) {
-                clearCinematicHold();
+                clearCinematicHold(); clearCinematicLoaderWait();
                 cinematicStepKey = nextKey; cinematicStatus = source ? (options.autoPlayCinematic === false ? "ready" : "starting") : "none";
-                cinematicVideo.pause(); cinematicVideo.removeAttribute("src");
-                if (source) { cinematicVideo.src = source; cinematicVideo.load(); }
-                else cinematicVideo.load();
+                cinematicVideo.pause();
+                if (source) { showCinematicPoster(source); }
+                else { clearCinematicMedia(); }
+                cinematicVideo.load();
                 if (source && options.autoPlayCinematic !== false) startCinematic(nextKey);
             }
             const active = Boolean(source) && cinematicStatus !== "fallback" && cinematicStatus !== "ended";
             setCinematicAudioActive(active);
             cinematic.hidden = !active;
-            cinematicStart.hidden = !active || !(cinematicStatus === "blocked" || options.autoPlayCinematic === false && cinematicStatus === "ready");
+            cinematicStart.hidden = !active || !(cinematicStatus === "blocked" || cinematicStatus === "ready");
             cinematicStart.textContent = t("tutorial.cinematic_tap_to_play");
             cinematicStart.setAttribute("aria-label", t("tutorial.cinematic_tap_to_play"));
             cinematicHold.hidden = !active;
@@ -240,7 +308,7 @@
             if (!cinematicStepKey || cinematicStatus === "fallback") return;
             const focusVideo = doc.activeElement === cinematic || doc.activeElement === cinematicVideo || doc.activeElement === cinematicStart;
             cinematicStatus = "fallback";
-            cinematicVideo.pause(); cinematicVideo.removeAttribute("src"); cinematicVideo.load();
+            cinematicVideo.pause(); clearCinematicMedia(); cinematicVideo.load();
             if (model && model.step) { syncCinematic(model.step); if (focusVideo) continueButton.focus({ preventScroll: true }); }
         }
         cinematicVideo.addEventListener("playing", () => {

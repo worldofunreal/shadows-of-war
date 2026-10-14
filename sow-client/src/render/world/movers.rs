@@ -245,6 +245,13 @@ struct MoverSlot {
     arc_trail: bool,
 }
 
+fn fleet_sprite_color(sprite: MoverSpriteId, owner_color: [f32; 4]) -> [f32; 4] {
+    match sprite {
+        MoverSpriteId::Warship => [1.0; 4],
+        _ => owner_color,
+    }
+}
+
 pub struct MoverScene {
     id_to_idx: HashMap<u64, u32>,
     slots: Vec<MoverSlot>,
@@ -442,7 +449,7 @@ impl MoverScene {
             .get(&fleet.owner_id)
             .copied()
             .unwrap_or([0.5, 0.5, 0.5]);
-        let color = [rgb[0], rgb[1], rgb[2], 1.0];
+        let color = fleet_sprite_color(sprite, [rgb[0], rgb[1], rgb[2], 1.0]);
         let trail_color = [
             rgb[0] * 0.7 + 0.3,
             rgb[1] * 0.7 + 0.3,
@@ -883,7 +890,29 @@ impl Default for MoverScene {
 
 #[cfg(test)]
 mod tests {
-    use super::{NUKE_ARC_MIN_HEIGHT, NUKE_CURVE_MAX_SAMPLES, NUKE_CURVE_MIN_SAMPLES, NukeArcPath};
+    use super::{
+        MoverSpriteId, NUKE_ARC_MIN_HEIGHT, NUKE_CURVE_MAX_SAMPLES, NUKE_CURVE_MIN_SAMPLES,
+        NukeArcPath, fleet_sprite_color,
+    };
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn warship_sprite_keeps_original_colors_across_player_colors() {
+        for owner_color in [
+            [1.0, 0.0, 0.0, 1.0],
+            [0.0, 0.3, 1.0, 1.0],
+            [0.2, 0.8, 0.1, 1.0],
+        ] {
+            assert_eq!(
+                fleet_sprite_color(MoverSpriteId::Warship, owner_color),
+                [1.0; 4]
+            );
+            assert_eq!(
+                fleet_sprite_color(MoverSpriteId::TransportShip, owner_color),
+                owner_color
+            );
+        }
+    }
 
     #[test]
     fn nuke_arc_is_distance_spaced_bounded_and_distance_scaled() {

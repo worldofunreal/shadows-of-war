@@ -24,6 +24,7 @@ pub struct PlayerConnection {
     pub download_progress: u8,
     pub civilization: sow_core::player::Civilization,
     pub leader: sow_core::player::Leader,
+    pub random_leader: bool,
     pub skin_style: u8,
     pub database_account_id: Option<String>,
     /// Lobby-stage team (Teams mode only; `None` in FFA). Carried into the match start.
@@ -342,6 +343,7 @@ pub struct JoinPlayerOpts {
     pub clan_tag: String,
     pub civilization: sow_core::player::Civilization,
     pub leader: sow_core::player::Leader,
+    pub random_leader: bool,
     pub skin_style: u8,
     pub client_tx: mpsc::Sender<Vec<u8>>,
     pub target_lobby_id: Option<u64>,
@@ -360,9 +362,9 @@ pub fn join_player(
 ) -> Result<(u64, u16, String, bool), String> {
     let name = normalize_player_name(&opts.name);
     let clan_tag = opts.clan_tag;
-    let civilization = opts.civilization;
     let skin_style = opts.skin_style;
     let leader = opts.leader;
+    let random_leader = opts.random_leader;
     let client_tx = opts.client_tx;
     let target_lobby_id = opts.target_lobby_id;
     let host_private = opts.host_private;
@@ -519,11 +521,19 @@ pub fn join_player(
             name,
             lobby_id
         );
+        let first_player_id = lobby.players.first().map(|first| first.player_id);
         let p = &mut lobby.players[existing_idx];
         p.tx = client_tx;
         p.clan_tag = clan_tag;
-        p.civilization = civilization;
-        p.leader = leader;
+        if !(random_leader && p.random_leader) {
+            p.leader = leader;
+            p.civilization = leader.civilization();
+        }
+        p.random_leader = random_leader;
+        if Some(p.player_id) == first_player_id {
+            lobby.config.player_leader = p.leader;
+            lobby.config.player_civilization = p.civilization;
+        }
         p.ip = ip;
         let pid = p.player_id;
         return Ok((
@@ -555,6 +565,11 @@ pub fn join_player(
         .unwrap_or(0)
         .saturating_add(1);
 
+    if lobby.players.is_empty() {
+        lobby.config.player_leader = leader;
+        lobby.config.player_civilization = leader.civilization();
+    }
+
     // Teams mode: drop the joiner into whichever team is smaller (Red on a tie).
     // HumansVsNations: every human joins Red (AI nations are Blue, spawned engine-side).
     let team = if lobby.game_mode == "HumansVsNations" {
@@ -581,8 +596,9 @@ pub fn join_player(
         player_id,
         tx: client_tx,
         download_progress: 0,
-        civilization,
+        civilization: leader.civilization(),
         leader,
+        random_leader,
         skin_style,
         database_account_id,
         team,
@@ -857,7 +873,7 @@ pub fn master_tick(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
                             name: p.name.clone(),
                             is_ready: lobby.ready_players.contains(&p.player_id),
                             download_progress: p.download_progress,
-                            leader: p.leader,
+                            leader: (!p.random_leader).then_some(p.leader),
                             player_id: p.player_id,
                             team: p.team,
                         })
@@ -1000,7 +1016,7 @@ pub fn lobby_to_info(g: &ServerLobby) -> LobbyInfo {
                 name: p.name.clone(),
                 is_ready: g.ready_players.contains(&p.player_id),
                 download_progress: p.download_progress,
-                leader: p.leader,
+                leader: (!p.random_leader).then_some(p.leader),
                 player_id: p.player_id,
                 team: p.team,
             })
@@ -1026,7 +1042,7 @@ pub fn sync_host_lobby_to_members(lobby: &ServerLobby) {
             name: p.name.clone(),
             is_ready: lobby.ready_players.contains(&p.player_id),
             download_progress: p.download_progress,
-            leader: p.leader,
+            leader: (!p.random_leader).then_some(p.leader),
             player_id: p.player_id,
             team: p.team,
         })
@@ -1131,6 +1147,7 @@ mod name_tests {
             clan_tag: String::new(),
             civilization: Civilization::Rome,
             leader: Leader::Caesar,
+            random_leader: false,
             skin_style: 0,
             client_tx,
             target_lobby_id,
@@ -1426,6 +1443,7 @@ mod name_tests {
                 clan_tag: String::new(),
                 civilization: sow_core::player::Civilization::Rome,
                 leader: sow_core::player::Leader::Caesar,
+                random_leader: false,
                 skin_style: 0,
                 client_tx,
                 target_lobby_id: Some(10),
@@ -1455,6 +1473,7 @@ mod name_tests {
             download_progress: 0,
             civilization: Civilization::Rome,
             leader: Leader::Caesar,
+            random_leader: false,
             skin_style: 0,
             database_account_id: None,
             team,

@@ -3939,17 +3939,6 @@ pub static PARAMS: &[ParamDef] = &[
         "",
         "TEXT_AVATAR_OPACITY"
     ),
-    number!(
-        "avatar.corner_radius",
-        "Avatar corner roundness",
-        "Avatars",
-        0.5,
-        0.0,
-        0.5,
-        0.005,
-        "ratio",
-        "TEXT_AVATAR_CORNER"
-    ),
     linear_color!(
         "building_icon.tint",
         "Building icon tint",

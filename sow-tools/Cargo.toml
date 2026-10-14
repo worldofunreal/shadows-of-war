@@ -23,6 +23,7 @@ path = "src/bin/sow_top.rs"
 
 [dependencies]
 sow-core = { workspace = true }
+sow-i18n = { workspace = true }
 sow-map = { workspace = true, features = ["generator", "osm"] }
 serde = { workspace = true }
 image = { workspace = true }

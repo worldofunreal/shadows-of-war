@@ -85,12 +85,12 @@ pub(crate) fn get_build_version() -> String {
         ) {
             if let Some(s) = val.as_string() {
                 if s != "__BUILD_TS__" {
-                    return s;
+                    return sow_core::protocol::gameplay_build_identity(&s);
                 }
             }
         }
     }
-    "unknown".to_string()
+    sow_core::protocol::gameplay_build_identity("unknown")
 }
 
 mod anonymous_identity;
@@ -123,7 +123,7 @@ pub(crate) fn camera_zoom_lower_bound(screen_w: f32, screen_h: f32, map_w: u32, 
     fit_w.max(fit_h).max(CAMERA_MIN_ZOOM)
 }
 
-fn spawn_sow_client_connect(url: String, connect_tx: &app::WakeSender<Result<SowClient, String>>) {
+fn spawn_sow_client_connect(url: String, connect_tx: &app::WakeSender<(String, Result<SowClient, String>)>) {
     let tx = (*connect_tx).clone();
     let url_clone = url.clone();
     use std::sync::Arc;
@@ -139,10 +139,10 @@ fn spawn_sow_client_connect(url: String, connect_tx: &app::WakeSender<Result<Sow
         if !finished.swap(true, Ordering::SeqCst) {
             match res {
                 Ok(c) => {
-                    let _ = tx.send(Ok(c));
+                    let _ = tx.send((url_clone, Ok(c)));
                 }
                 Err(e) => {
-                    let _ = tx.send(Err(e.to_string()));
+                    let _ = tx.send((url_clone, Err(e.to_string())));
                 }
             }
         }
@@ -150,7 +150,7 @@ fn spawn_sow_client_connect(url: String, connect_tx: &app::WakeSender<Result<Sow
 
     let closure = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
         if !finished_clone.swap(true, Ordering::SeqCst) {
-            let _ = tx_for_timeout.send(Err("Connection timed out after 5 seconds".to_string()));
+            let _ = tx_for_timeout.send((url.clone(), Err("Connection timed out after 5 seconds".to_string())));
         }
     });
 

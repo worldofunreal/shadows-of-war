@@ -3,7 +3,6 @@ use crate::app::{InputState, MapContextMenuView, SimState, UiState};
 use crate::render::gpu::TextRenderer;
 use crate::theme::dev_config::DevConfig;
 use sow_core::game::BuildingKind;
-use sow_core::player::Leader;
 use sow_core::protocol::SimSnapshot;
 use std::collections::HashMap;
 use web_time::{Duration, Instant};
@@ -100,22 +99,13 @@ pub(crate) fn render_overlays(
         ui.tutorial_active
             .then_some(ui.tutorial_marker_player_id)
             .flatten(),
+        ui.app.settings_state.reduced_motion,
     );
     feedback::render(text, snapshot, sim, ui, input, &dev, sf, now);
 
     if !ui.tutorial_active {
         ui.tutorial_marker_player_id = None;
         ui.dialog_border_highlight = None;
-    }
-}
-
-pub(super) fn avatar_slot(leader: Option<Leader>) -> usize {
-    match leader {
-        Some(leader) => Leader::ALL
-            .iter()
-            .position(|value| *value == leader)
-            .unwrap_or(0),
-        None => Leader::ALL.len(),
     }
 }
 

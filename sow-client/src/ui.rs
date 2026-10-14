@@ -17,6 +17,10 @@ pub struct UiText {
 }
 
 impl UiText {
+    pub fn emote_notice(kind: sow_core::emote::EmoteKind) -> Self {
+        Self::new(kind.definition().notice_key)
+    }
+
     pub fn new(key: &'static str) -> Self {
         Self {
             key,

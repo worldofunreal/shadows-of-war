@@ -22,6 +22,8 @@ fn apply_exit_reward_profile(
             wait.account_id = Some(account_id.to_string());
         }
         wait.account_id.as_deref() == Some(account_id)
+            && (!wait.requires_verification || matches!(wait.server_state,
+                Some(sow_data::profile::MatchExitState::Confirmed | sow_data::profile::MatchExitState::Rejected)))
             && wait.receipt_id.as_deref().is_some_and(|receipt_id| {
                 cloud
                     .reward_receipts
@@ -341,6 +343,7 @@ impl SowApp {
             account_id: self.progress_account_id.clone(),
             receipt_id: receipt_id.clone(),
             requires_verification,
+            server_state: None,
         });
         if let Some(receipt_id) = receipt_id {
             self.track_reward_receipt_sync(receipt_id);
@@ -430,6 +433,7 @@ impl SowApp {
             log::debug!("[identity] profile refresh coalesced behind in-flight request");
             return;
         }
+        if self.fetch_match_exit_progress() { return; }
         let identity = crate::store_portals::load_identity("Player");
         let provider = identity.provider.to_string();
         let android_twa = crate::store_portals::is_android_twa();
@@ -524,6 +528,63 @@ impl SowApp {
                 }
             },
         );
+    }
+
+    fn fetch_match_exit_progress(&mut self) -> bool {
+        let Some(context) = self.menu_return.as_ref().filter(|context| context.source == "multiplayer"
+            && matches!(context.status.as_str(), "waiting" | "error")) else { return false; };
+        let (Some(account_id), Some(match_id)) = (self.progress_account_id.clone(), context.match_id.clone()) else { return false; };
+        let cycle_id = context.cycle_id;
+        let provider = self.progress_provider.clone();
+        let request_id = self.next_identity_request_id();
+        let auth_secret = (provider == "anonymous").then(crate::anonymous_identity::load_account_secret).flatten();
+        let body = serde_json::json!({"account_id":account_id,"match_id":match_id,"auth_secret":auth_secret});
+        let url = format!("{}/profile/match-exit", self.asset_config.database_base.trim_end_matches('/'));
+        let mut request = ehttp::Request::post(&url, serde_json::to_vec(&body).expect("serializable exit request"));
+        request.headers.insert("Content-Type", "application/json");
+        Self::apply_platform_auth(&mut request);
+        request.headers.insert("X-SOW-Identity-Request", request_id.to_string());
+        self.profile_request_in_flight = true;
+        let tx = self.tasks.db_tx.clone();
+        log::info!("[menu-flow] requesting server exit match={match_id} cycle={cycle_id}");
+        ehttp::fetch(request, move |result| {
+            #[derive(serde::Deserialize)]
+            struct ExitProfile {
+                account_id: String,
+                match_id: String,
+                display_name: String,
+                profile: crate::player_progress::PlayerProgress,
+                state: sow_data::profile::MatchExitState,
+            }
+            let status = result.as_ref().ok().map(|response| response.status);
+            if let Ok(response) = result {
+                if response.ok {
+                    if let Ok(account) = serde_json::from_slice::<ExitProfile>(&response.bytes) {
+                        if account.account_id == account_id && account.match_id == match_id {
+                            let _ = tx.send(crate::player_progress::DbEvent::MatchExitLoaded {
+                                account_id, match_id, cycle_id, request_id, display_name:account.display_name,
+                                provider, progress:account.profile, state:account.state,
+                            });
+                            return;
+                        }
+                    }
+                }
+            }
+            let _ = tx.send(crate::player_progress::DbEvent::MatchExitFailed {
+                account_id, match_id, cycle_id, request_id, status,
+            });
+        });
+        true
+    }
+
+    pub(crate) fn matches_exit_response(&self, account_id: &str, match_id: &str, cycle_id: u32) -> bool {
+        self.progress_account_id.as_deref() == Some(account_id)
+            && self.menu_return.as_ref().is_some_and(|context| {
+                context.account_id.as_deref() == Some(account_id)
+                    && context.match_id.as_deref() == Some(match_id)
+                    && context.cycle_id == cycle_id
+                    && matches!(context.status.as_str(), "waiting" | "error")
+            })
     }
 
     fn fetch_anonymous_progress(&mut self) {
@@ -725,6 +786,7 @@ impl SowApp {
                 .main_menu_state
                 .set_selected_leader(leader, false);
         }
+        self.ui.app.main_menu_state.set_random_leader(self.progress.prefer_random_leader, false);
     }
 
     pub(crate) fn apply_cloud_profile(
@@ -735,6 +797,7 @@ impl SowApp {
         provider: String,
     ) {
         let cloud_preferred_leader = cloud.preferred_leader.clone();
+        let cloud_completed_episodes = cloud.completed_episodes.clone();
         let account_changed = self.progress_account_id.as_deref() != Some(account_id.as_str());
         let account_switch = account_changed && self.progress_account_id.is_some();
         let cloud_intro_completed = cloud.intro_completed.unwrap_or(false);
@@ -751,6 +814,8 @@ impl SowApp {
             crate::anonymous_identity::clear_pending_display_name();
             self.pending_reward_receipt_ids.clear();
             self.reward_profile_retry_at = None;
+            self.profile_action_retry_at = None;
+            self.pending_campaign_exit = None;
             self.exit_reward_wait = None;
             self.menu_return = None;
             self.name_save_revision = 0;
@@ -759,7 +824,6 @@ impl SowApp {
             self.quick_match_revision = 0;
             self.menu_guide_save_revision = 0;
             self.menu_guide_save_pending = false;
-            self.net.exiting_relay = None;
         }
         #[cfg(target_arch = "wasm32")]
         if self.menu_return.is_none() {
@@ -782,15 +846,12 @@ impl SowApp {
                     account_id: Some(account_id.clone()),
                     receipt_id: context.match_id.clone(),
                     requires_verification: context.source == "multiplayer",
+                    server_state: None,
                 });
             }
         }
         #[cfg(target_arch = "wasm32")]
-        if self.exit_reward_wait.is_some() && self.net.exiting_relay.is_none()
-            && let Some(proof) = crate::anonymous_identity::load_exit_relay_proof(&account_id)
-        {
-            self.resume_exit_relay(proof);
-        }
+        crate::anonymous_identity::clear_legacy_exit_relay_proof(&account_id);
         if apply_exit_reward_profile(&mut self.exit_reward_wait, &account_id, &cloud) {
             if let Some(context) = &mut self.menu_return {
                 context.status = "confirmed".to_string();
@@ -800,9 +861,6 @@ impl SowApp {
             }
             log::info!("[menu-flow] server confirmed return account={} cycle={}",
                 account_hint(Some(&account_id)), self.ui.app.splash_state.cycle_id);
-            self.net.exiting_relay = None;
-            #[cfg(target_arch = "wasm32")]
-            crate::anonymous_identity::save_exit_relay_proof(&account_id, None);
         }
         self.save_menu_return_context();
         self.pending_reward_receipt_ids.extend(
@@ -868,6 +926,14 @@ impl SowApp {
                 sow_data::commerce::current_rotation_period(),
             )
         }));
+        if !account_switch {
+            self.progress.pending_campaign_completions.retain(|episode| !cloud_completed_episodes.contains(episode));
+            self.progress.pending_campaign_completions.extend(
+                self.progress.completed_episodes.iter()
+                    .filter(|episode| !cloud_completed_episodes.contains(*episode))
+                    .cloned(),
+            );
+        }
         self.apply_progress_preferences();
         if retry_tutorial {
             log::info!(
@@ -935,6 +1001,45 @@ impl SowApp {
         });
         if let Some(fields) = fields.as_object() {
             self.post_profile_action("menu guide progress", "/profile/menu-guide-progress", fields.clone());
+        }
+    }
+
+    pub(crate) fn persist_leader_selection(&mut self) {
+        let fields = serde_json::json!({
+            "preferred_leader": self.progress.preferred_leader.map(sow_data::commerce::leader_wire_id),
+            "prefer_random_leader": self.progress.prefer_random_leader,
+        });
+        if let Some(fields) = fields.as_object() {
+            self.profile_action_retry_at = Some(Instant::now() + Duration::from_secs(2));
+            self.post_profile_action("leader selection", "/profile/leader-selection", fields.clone());
+        }
+    }
+
+    pub(crate) fn poll_profile_actions(&mut self, now: Instant) {
+        if self.ui.app.main_menu_state.store_busy
+            || self.profile_action_retry_at.is_some_and(|retry_at| retry_at > now)
+        {
+            return;
+        }
+        if let Some(episode_id) = self.progress.pending_campaign_completions.iter().next().cloned() {
+            if sow_data::campaign::episode(&episode_id).is_none() {
+                return;
+            }
+            self.profile_action_retry_at = Some(now + Duration::from_secs(2));
+            let fields = serde_json::json!({ "episode_id": episode_id });
+            if let Some(fields) = fields.as_object() {
+                self.post_profile_action(
+                    &format!("campaign completion:{episode_id}"),
+                    "/profile/campaign-complete",
+                    fields.clone(),
+                );
+            }
+            return;
+        }
+        if self.progress.leader_selection_pending {
+            self.persist_leader_selection();
+        } else {
+            self.profile_action_retry_at = None;
         }
     }
 
@@ -1482,10 +1587,10 @@ mod reward_exit_tests {
     // browser APIs and delayed database response are replaced; no preconfirmed
     // menu state is injected into the return path.
     #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
-        let saved, currentProfile, completedProfile, releaseReward, tutorialRequests;
+        let saved, currentProfile, completedProfile, releaseReward, tutorialRequests, sockets, exitRequests, exitReady;
         export function setupTutorialExit(initial, completed) {
             const keys = ['Window', 'window', 'localStorage', 'WebSocket', 'fetch',
-                'matchMedia', 'SOW_MAPS_URL', 'SOW_ASSETS_URL', 'SOW_DATABASE_URL', 'SOW_WS_URL'];
+                'matchMedia', 'SOW_MAPS_URL', 'SOW_ASSETS_URL', 'SOW_DATABASE_URL', 'SOW_WS_URL', 'SOW_BUILD_VERSION'];
             saved = keys.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]);
             globalThis.Window = class { static [Symbol.hasInstance](value) { return value === globalThis; } };
             globalThis.window = globalThis;
@@ -1494,7 +1599,7 @@ mod reward_exit_tests {
                 setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key) };
             globalThis.matchMedia = () => ({ matches: false });
             globalThis.WebSocket = class {
-                constructor() { this.readyState = 0; queueMicrotask(() => { this.readyState = 1; this.onopen?.(); }); }
+                constructor(url) { this.url = url; sockets.push(this); this.readyState = 0; queueMicrotask(() => { this.readyState = 1; this.onopen?.(); }); }
                 send() {}
                 close() { this.readyState = 3; this.onclose?.(); }
             };
@@ -1502,6 +1607,7 @@ mod reward_exit_tests {
                 SOW_ASSETS_URL: 'https://journey.invalid/assets', SOW_DATABASE_URL: 'https://journey.invalid/api',
                 SOW_WS_URL: 'wss://journey.invalid/ws/' });
             currentProfile = initial; completedProfile = completed; tutorialRequests = 0;
+            sockets = []; exitRequests = 0; exitReady = false;
             globalThis.fetch = request => {
                 if (request.url.endsWith('/profile/tutorial-complete')) {
                     tutorialRequests++;
@@ -1524,6 +1630,47 @@ mod reward_exit_tests {
             click({ target: { closest: selector => selector === '[data-command]' ? button : null } });
         }
         export function rewardRequestCount() { return tutorialRequests; }
+        export function setupMultiplayerExit(initial, completed) {
+            const accountId = setupTutorialExit(initial, completed);
+            globalThis.fetch = async request => {
+                if (request.url.endsWith('/profile/match-exit')) {
+                    exitRequests++;
+                    const command = await request.json();
+                    if (exitRequests === 1) throw new Error('simulated lost response after accepting exit');
+                    return Promise.resolve(new Response(JSON.stringify({ ...JSON.parse(exitReady ? completedProfile : currentProfile),
+                        match_id: command.match_id, state: exitReady ? 'confirmed' : 'awaiting_result' }), { status: exitReady ? 200 : 202 }));
+                }
+                return Promise.resolve(new Response(currentProfile, { status: 200 }));
+            };
+            return accountId;
+        }
+        export function multiplayerExitRequests() { return exitRequests; }
+        export function relayConnections() { return sockets.filter(socket => socket.url.includes('relay.invalid')).length; }
+        export function closeMultiplayerRelay() {
+            for (const socket of sockets.filter(socket => socket.url.includes('relay.invalid'))) socket.close();
+        }
+        export function releaseMultiplayerReward() { exitReady = true; currentProfile = completedProfile; }
+        export function liveExitFixture() {
+            const file = globalThis.process?.env?.SOW_LIVE_MATCH_EXIT_FILE;
+            return file ? globalThis.process.getBuiltinModule('fs').readFileSync(file, 'utf8') : '';
+        }
+        export function setupLiveExit(fixture) {
+            const config = JSON.parse(fixture);
+            const transport = { fetch: globalThis.fetch, WebSocket: globalThis.WebSocket };
+            if (typeof transport.WebSocket !== 'function') throw new Error('real WebSocket transport is required');
+            setupTutorialExit(JSON.stringify(config.account), JSON.stringify(config.account));
+            globalThis.WebSocket = class extends transport.WebSocket {
+                constructor(url) { super(url); sockets.push(this); }
+            };
+            globalThis.fetch = transport.fetch;
+            Object.assign(globalThis, { SOW_MAPS_URL: config.maps_base, SOW_ASSETS_URL: config.assets_base,
+                SOW_DATABASE_URL: config.database_base, SOW_WS_URL: config.orchestrator_url, SOW_BUILD_VERSION: config.public_version });
+            localStorage.setItem('sow_account_id', config.account.account_id);
+            localStorage.setItem('sow_account_secret', config.account.auth_secret);
+        }
+        export function liveRelayConnections(url) { return sockets.filter(socket => socket.url === url).length; }
+        export function saveLiveReturn(path, state) { globalThis.process.getBuiltinModule('fs').writeFileSync(path, state, { mode: 0o600 }); }
+        export function nextLiveTurn() { return new Promise(resolve => setTimeout(resolve, 10)); }
         export function releaseTutorialReward() { releaseReward(); }
         export function nextTutorialTurn() { return new Promise(resolve => setTimeout(resolve, 0)); }
         export function restoreTutorialExit() {
@@ -1539,6 +1686,26 @@ mod reward_exit_tests {
         fn click_tutorial_exit(source: &str, command: &js_sys::Function);
         #[wasm_bindgen::prelude::wasm_bindgen(js_name = rewardRequestCount)]
         fn reward_request_count() -> u32;
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = setupMultiplayerExit)]
+        fn setup_multiplayer_exit(initial: &str, completed: &str) -> String;
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = multiplayerExitRequests)]
+        fn multiplayer_exit_requests() -> u32;
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = relayConnections)]
+        fn relay_connections() -> u32;
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = closeMultiplayerRelay)]
+        fn close_multiplayer_relay();
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = releaseMultiplayerReward)]
+        fn release_multiplayer_reward();
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = liveExitFixture)]
+        fn live_exit_fixture() -> String;
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = setupLiveExit)]
+        fn setup_live_exit(fixture: &str);
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = liveRelayConnections)]
+        fn live_relay_connections(url: &str) -> u32;
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = saveLiveReturn)]
+        fn save_live_return(path: &str, state: &str);
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = nextLiveTurn)]
+        fn next_live_turn() -> js_sys::Promise;
         #[wasm_bindgen::prelude::wasm_bindgen(js_name = releaseTutorialReward)]
         fn release_tutorial_reward();
         #[wasm_bindgen::prelude::wasm_bindgen(js_name = nextTutorialTurn)]
@@ -1614,12 +1781,169 @@ mod reward_exit_tests {
         restore_tutorial_exit();
     }
 
+    #[wasm_bindgen_test]
+    async fn multiplayer_exit_survives_closed_port_delay_and_reload() {
+        let live = live_exit_fixture();
+        if !live.is_empty() {
+            live_multiplayer_exit(&live).await;
+            return;
+        }
+        let account_id = "0123456789abcdef0123456789abcdef";
+        let mut initial_progress = PlayerProgress::default();
+        initial_progress.xp = 120;
+        initial_progress.level = 2;
+        initial_progress.intro_completed = Some(true);
+        let initial = serde_json::json!({"account_id":account_id,"auth_secret":"audit-proof",
+            "display_name":"Audit","profile":initial_progress}).to_string();
+        let mut completed = profile_with("42", Some(ReplayVerificationStatus::Verified), RewardSettlementStatus::Applied);
+        completed.xp = 176;
+        completed.level = 2;
+        completed.intro_completed = Some(true);
+        let final_profile = serde_json::json!({"account_id":account_id,"display_name":"Audit","profile":completed}).to_string();
+        setup_multiplayer_exit(&initial, &final_profile);
+        let mut app = crate::app::SowApp::new();
+        for _ in 0..200 {
+            wasm_bindgen_futures::JsFuture::from(next_tutorial_turn()).await.unwrap();
+            app.update_assets();
+            if app.profile_last_applied_request > 0 { break; }
+        }
+        app.ui.app.phase = crate::ClientPhase::Playing;
+        app.ui.tutorial_active = false;
+        app.net.is_offline = false;
+        app.sim.my_lobby_id = Some(42);
+        app.sim.my_player_id = Some(1);
+        app.sim.relay_reconnect_ticket = Some("private-test-ticket".into());
+        app.net.ws_url = "wss://relay.invalid:25594/ws/".into();
+        app.net.client = Some(sow_net::client::SowClient::connect(&app.net.ws_url).await.unwrap());
+        let original_connections = relay_connections();
+        app.begin_exit_to_main_menu();
+        close_multiplayer_relay();
+        app.ui.app.main_menu_state.is_connecting = true;
+        app.net.connect_tx.send(("wss://relay.invalid:25594/ws/".into(), Err("late game connection failure".into()))).unwrap();
+        app.update_net(web_time::Instant::now());
+        assert!(app.ui.app.main_menu_state.is_connecting, "an obsolete game connection must not reset the pending menu connection");
+        app.ui.app.main_menu_state.is_connecting = false;
+        for step in 1..9 {
+            let now = web_time::Instant::now() + web_time::Duration::from_secs(step * 3);
+            app.update_net(now);
+            app.poll_reward_profile_sync(now);
+            wasm_bindgen_futures::JsFuture::from(next_tutorial_turn()).await.unwrap();
+            app.update_assets();
+        }
+        assert!(multiplayer_exit_requests() > 0, "the actual exit must reach the permanent server API");
+        assert_eq!(relay_connections(), original_connections, "waiting for rewards must never reconnect to the closed game port");
+        assert!(app.exit_reward_wait.is_some());
+        assert_eq!(app.progress.xp, 120);
+        let cycle = app.menu_return.as_ref().unwrap().cycle_id;
+        assert!(!app.matches_exit_response("another-account", "42", cycle));
+        assert!(!app.matches_exit_response(account_id, "43", cycle));
+        assert!(!app.matches_exit_response(account_id, "42", cycle.wrapping_add(1)));
+        drop(app);
+        let mut app = crate::app::SowApp::new();
+        for _ in 0..200 {
+            wasm_bindgen_futures::JsFuture::from(next_tutorial_turn()).await.unwrap();
+            app.update_assets();
+            if app.profile_last_applied_request > 0 { break; }
+        }
+        assert!(app.exit_reward_wait.is_some(), "reload must recover the pending server-owned return");
+        release_multiplayer_reward();
+        for _ in 0..200 {
+            app.poll_reward_profile_sync(web_time::Instant::now() + web_time::Duration::from_secs(60));
+            wasm_bindgen_futures::JsFuture::from(next_tutorial_turn()).await.unwrap();
+            app.update_assets();
+            if app.exit_reward_wait.is_none() { break; }
+        }
+        assert!(app.exit_reward_wait.is_none());
+        assert_eq!(app.progress.xp, 176);
+        assert_eq!(app.menu_return.as_ref().unwrap().status, "confirmed");
+        assert_eq!(relay_connections(), original_connections);
+        drop(app);
+        restore_tutorial_exit();
+    }
+
+    async fn live_multiplayer_exit(fixture: &str) {
+        #[derive(serde::Deserialize)]
+        struct LiveMatch {
+            match_id: u64, player_id: u16, relay_url: String, relay_ticket: String, state_path: String,
+        }
+        let config: LiveMatch = serde_json::from_str(fixture).unwrap();
+        setup_live_exit(fixture);
+        let mut app = crate::app::SowApp::new();
+        let deadline = web_time::Instant::now() + web_time::Duration::from_secs(110);
+        while app.profile_last_applied_request == 0 {
+            assert!(web_time::Instant::now() < deadline, "live profile bootstrap timed out");
+            wasm_bindgen_futures::JsFuture::from(next_live_turn()).await.unwrap();
+            app.update_assets();
+        }
+        app.net.ws_url = config.relay_url.clone();
+        let client = sow_net::client::SowClient::connect(&config.relay_url).await.unwrap();
+        client.send(bincode::serialize(&sow_core::protocol::ClientMessage::ReadyWithTicket {
+            lobby_id:config.match_id, player_id:config.player_id, ticket:config.relay_ticket,
+        }).unwrap());
+        let mut received_turn = false;
+        while !received_turn {
+            assert!(web_time::Instant::now() < deadline, "live relay never delivered a turn");
+            while let Ok(bytes) = client.rx.try_recv() {
+                if matches!(bincode::deserialize::<sow_core::protocol::ServerMessage>(&bytes), Ok(sow_core::protocol::ServerMessage::Turn(_))) {
+                    received_turn = true;
+                }
+            }
+            wasm_bindgen_futures::JsFuture::from(next_live_turn()).await.unwrap();
+        }
+        app.net.client = Some(client);
+        app.sim.my_lobby_id = Some(config.match_id);
+        app.sim.my_player_id = Some(config.player_id);
+        app.net.is_offline = false;
+        app.ui.tutorial_active = false;
+        app.ui.app.phase = crate::ClientPhase::Playing;
+        let connections = live_relay_connections(&config.relay_url);
+        assert_eq!(connections, 1);
+        app.begin_exit_to_main_menu();
+        assert!(app.exit_reward_wait.is_some());
+        while app.exit_reward_wait.is_some() || app.ui.app.splash_state.gpu_load_step < 2 {
+            assert!(web_time::Instant::now() < deadline, "live exit never received its final server receipt");
+            let now = web_time::Instant::now();
+            app.update_net(now);
+            app.update_assets();
+            app.poll_reward_profile_sync(now);
+            app.update_loader();
+            if app.exit_reward_wait.is_some() {
+                assert!(app.ui.app.splash_state.gpu_load_step < 2, "loader advanced before the real receipt");
+            }
+            assert_eq!(live_relay_connections(&config.relay_url), connections, "exit opened a game connection while waiting for the server");
+            wasm_bindgen_futures::JsFuture::from(next_live_turn()).await.unwrap();
+        }
+        assert_eq!(app.menu_return.as_ref().unwrap().status, "confirmed");
+        assert!(app.progress.reward_receipts.contains_key(&config.match_id.to_string()));
+        // Rendering is outside this headless check; deliver its completed-frame
+        // count to the real loader and assert the destination it authorizes.
+        app.ui.app.splash_state.frames_drawn = 2;
+        app.update_loader();
+        assert_eq!(app.ui.app.phase, crate::ClientPhase::MainMenu);
+        crate::web_menu::publish_state(&mut app);
+        let state = js_sys::Reflect::get(&js_sys::global(), &"SOW_MENU_STATE".into()).unwrap().as_string().unwrap();
+        save_live_return(&config.state_path, &state);
+        drop(app);
+        restore_tutorial_exit();
+    }
+
     fn wait(receipt_id: &str, requires_verification: bool) -> Option<ExitRewardWait> {
         Some(ExitRewardWait {
             account_id: Some("account-a".to_string()),
             receipt_id: Some(receipt_id.to_string()),
             requires_verification,
+            server_state: Some(sow_data::profile::MatchExitState::Confirmed),
         })
+    }
+
+    #[wasm_bindgen_test]
+    fn a_visible_balance_cannot_replace_the_server_return_confirmation() {
+        let mut expected = wait("42", true);
+        expected.as_mut().unwrap().server_state = Some(sow_data::profile::MatchExitState::Verifying);
+        let profile = profile_with("42", Some(ReplayVerificationStatus::Verified), RewardSettlementStatus::Applied);
+        assert!(!apply_exit_reward_profile(&mut expected, "account-a", &profile));
+        expected.as_mut().unwrap().server_state = Some(sow_data::profile::MatchExitState::Confirmed);
+        assert!(apply_exit_reward_profile(&mut expected, "account-a", &profile));
     }
 
     fn profile_with(
@@ -1752,6 +2076,7 @@ mod reward_exit_tests {
             account_id: None,
             receipt_id: Some("tutorial".to_string()),
             requires_verification: false,
+            server_state: None,
         });
         assert!(!apply_exit_reward_profile(&mut expected, "account-a", &PlayerProgress::default()));
         assert_eq!(expected.as_ref().and_then(|wait| wait.account_id.as_deref()), Some("account-a"));

@@ -7,6 +7,13 @@ use serde::{Deserialize, Serialize};
 
 pub use sow_data::MAX_MATCH_PARTICIPANTS;
 
+/// Shared by live join compatibility and persisted turn recordings.
+pub const GAMEPLAY_FORMAT_VERSION: u64 = 2;
+
+pub fn gameplay_build_identity(public_version: &str) -> String {
+    format!("{public_version}/turns-{GAMEPLAY_FORMAT_VERSION}")
+}
+
 // ─── Intents (Client → Server) ─────────────────────────────────────────────
 
 /// A player wants to attack/expand toward a tile owner.
@@ -57,8 +64,8 @@ pub enum GameplayIntent {
     MarkDisconnected {
         is_disconnected: bool,
     },
-    ExpressEmoji {
-        emoji: String,
+    ExpressEmote {
+        kind: crate::emote::EmoteKind,
         pinned: bool,
     },
     ProposeAlliance {
@@ -103,6 +110,7 @@ pub enum GameplayIntent {
         relation: CampaignRelation,
         gold_cost: f64,
     },
+    ClearEmote,
 }
 
 /// Boat control frame for INK TIDE lockstep turns.
@@ -232,6 +240,8 @@ pub struct JoinPayload {
     pub clan_tag: String,
     pub civilization: crate::player::Civilization,
     pub leader: crate::player::Leader,
+    #[serde(default)]
+    pub random_leader: bool,
     #[serde(default)]
     pub host_config: Option<Box<crate::game_config::GameConfig>>,
     #[serde(default)]
@@ -407,7 +417,7 @@ pub struct LobbyPlayerSyncState {
     pub is_ready: bool,
     pub download_progress: u8,
     #[serde(default)]
-    pub leader: crate::player::Leader,
+    pub leader: Option<crate::player::Leader>,
     /// Per-lobby player id — lets the host target kick/ban actions at a roster entry.
     #[serde(default)]
     pub player_id: u16,
@@ -472,7 +482,9 @@ pub struct PlayerSnapshot {
     #[serde(default)]
     pub resource_requests: Vec<ResourceRequest>,
     pub disconnected: bool,
-    pub active_emoji: Option<String>,
+    pub active_emote: Option<crate::emote::ActiveEmote>,
+    pub can_express_emote: bool,
+    pub can_retaliate: bool,
     #[serde(default)]
     pub traitor: bool,
     pub civilization: crate::player::Civilization,

@@ -1,3 +1,4 @@
+//! Shared portrait and hero-expression loading; see docs/nameplates-and-emotes.md.
 use sow_core::player::Leader;
 use std::collections::{HashMap, HashSet};
 use web_time::{Duration, Instant};
@@ -8,6 +9,7 @@ pub const MAX_AVATAR_FETCHES_IN_FLIGHT: usize = 6;
 pub enum AvatarFetchKey {
     Fallback,
     Leader(Leader),
+    LeaderPortrait(Leader),
     Campaign { slug: String, slot: usize },
 }
 
@@ -29,9 +31,8 @@ pub struct AssetLoader {
     pub avatar_fallback: Option<Vec<u8>>,
     pub avatars_fetch_pending: Vec<AvatarFetchKey>,
     pub avatars_in_flight: HashSet<AvatarFetchKey>,
-    avatars_fetch_all_queued: bool,
     avatar_retry_state: HashMap<AvatarFetchKey, Retry>,
-    pub gpu_avatar_cells: Vec<(AvatarFetchKey, Vec<u8>)>,
+    pub gpu_avatar_cells: Vec<(usize, Vec<u8>)>,
     pub portal_avatar: Option<Vec<u8>>,
     pub portal_avatar_request: Option<String>,
     pub portal_avatar_in_flight: bool,
@@ -56,7 +57,6 @@ impl AssetLoader {
             avatar_fallback: None,
             avatars_fetch_pending: Vec::new(),
             avatars_in_flight: HashSet::new(),
-            avatars_fetch_all_queued: false,
             avatar_retry_state: HashMap::new(),
             gpu_avatar_cells: Vec::new(),
             portal_avatar: None,
@@ -69,27 +69,64 @@ impl AssetLoader {
         sow_core::maps::map_key(name)
     }
 
-    fn leader_slug(leader: Leader) -> String {
-        leader.name().to_lowercase().replace(' ', "_")
-    }
-
     pub fn avatar_filename(key: &AvatarFetchKey) -> String {
         match key {
             AvatarFetchKey::Fallback => "null.webp".into(),
-            AvatarFetchKey::Leader(leader) => format!("{}.webp", Self::leader_slug(*leader)),
+            AvatarFetchKey::Leader(leader) => format!(
+                "spritesheets/{}.webp",
+                sow_data::commerce::leader_id(*leader)
+            ),
+            AvatarFetchKey::LeaderPortrait(leader) => {
+                format!("{}.webp", sow_data::commerce::leader_id(*leader))
+            }
             AvatarFetchKey::Campaign { slug, .. } => format!("{slug}.webp"),
         }
+    }
+
+    pub fn queue_leader_avatar(&mut self, leader: Leader, priority: bool) {
+        self.queue_avatar_fetch(AvatarFetchKey::Fallback, true);
+        let sheet = AvatarFetchKey::Leader(leader);
+        let key = if self
+            .avatar_retry_state
+            .get(&sheet)
+            .is_some_and(|retry| retry.permanent)
+        {
+            AvatarFetchKey::LeaderPortrait(leader)
+        } else {
+            sheet
+        };
+        self.queue_avatar_fetch(key, priority);
     }
 
     pub fn queue_campaign_avatar(&mut self, slug: &str) {
         if slug == "null" || !valid_avatar_id(slug) {
             return;
         }
+        if let Some(&leader) = Leader::ALL
+            .iter()
+            .find(|leader| sow_data::commerce::leader_id(**leader) == slug)
+        {
+            self.campaign_avatar_slots.insert(
+                slug.to_owned(),
+                sow_render::text::leader_avatar_slot(
+                    leader,
+                    sow_core::emote::AvatarExpression::Calm,
+                ),
+            );
+            self.queue_leader_avatar(leader, false);
+            return;
+        }
         let slot = if let Some(slot) = self.campaign_avatar_slots.get(slug) {
             *slot
         } else {
-            let slot = Leader::ALL.len() + 1 + self.campaign_avatar_slots.len();
+            let static_count = self
+                .campaign_avatar_slots
+                .values()
+                .filter(|slot| **slot >= sow_render::text::AVATAR_CAMPAIGN_FIRST_SLOT)
+                .count();
+            let slot = sow_render::text::AVATAR_CAMPAIGN_FIRST_SLOT + static_count;
             if slot >= sow_render::text::AVATAR_SLOT_COUNT {
+                log::error!("Avatar atlas exhausted while allocating {slug}");
                 return;
             }
             self.campaign_avatar_slots.insert(slug.to_string(), slot);
@@ -106,7 +143,7 @@ impl AssetLoader {
 
     pub fn campaign_avatar_slot(&self, slug: &str) -> Option<usize> {
         if slug == "null" {
-            Some(Leader::ALL.len())
+            Some(sow_render::text::AVATAR_FALLBACK_SLOT)
         } else {
             self.campaign_avatar_slots.get(slug).copied()
         }
@@ -122,25 +159,12 @@ impl AssetLoader {
         sow_core::maps::load_map_br_payload(&key, self.maps.remove(&key))
     }
 
-    pub fn request_avatars_fetch_all(&mut self) {
-        if self.avatars_fetch_all_queued {
-            return;
-        }
-        self.avatars_fetch_all_queued = true;
-        self.queue_avatar_fetch(AvatarFetchKey::Fallback, true);
-        for &leader in &Leader::ALL {
-            self.queue_avatar_fetch(AvatarFetchKey::Leader(leader), false);
-        }
-    }
-
-    pub fn ensure_avatars_loaded(&mut self) {
-        self.request_avatars_fetch_all();
-    }
-
     fn avatar_loaded(&self, key: &AvatarFetchKey) -> bool {
         match key {
             AvatarFetchKey::Fallback => self.avatar_fallback.is_some(),
-            AvatarFetchKey::Leader(leader) => self.avatars.contains_key(&leader),
+            AvatarFetchKey::Leader(leader) | AvatarFetchKey::LeaderPortrait(leader) => {
+                self.avatars.contains_key(&leader)
+            }
             AvatarFetchKey::Campaign { slug, .. } => self.campaign_avatars.contains_key(slug),
         }
     }
@@ -190,12 +214,22 @@ impl AssetLoader {
     pub fn note_avatar_fetch_failed(&mut self, key: AvatarFetchKey, reason: impl Into<String>) {
         self.avatars_in_flight.remove(&key);
         let reason = reason.into();
-        let permanent = reason.contains("404");
+        let permanent_error = reason.contains("404")
+            || reason.contains("decode avatar")
+            || reason.contains("invalid hero sheet");
         let attempts = self
             .avatar_retry_state
             .get(&key)
             .map(|retry| retry.attempts + 1)
             .unwrap_or(1);
+        let permanent = permanent_error || attempts >= 3;
+        if permanent && let AvatarFetchKey::Leader(leader) = key {
+            log::warn!(
+                "Hero sheet unavailable for {}: {reason}; using static portrait",
+                sow_data::commerce::leader_id(leader)
+            );
+            self.queue_avatar_fetch(AvatarFetchKey::LeaderPortrait(leader), true);
+        }
         self.avatar_retry_state.insert(
             key,
             Retry {
@@ -217,19 +251,46 @@ impl AssetLoader {
         let image = image::load_from_memory(bytes)
             .map_err(|error| format!("decode avatar: {error}"))?
             .to_rgba8();
-        let cell = image::imageops::resize(
-            &image,
-            sow_render::text::AVATAR_CELL,
-            sow_render::text::AVATAR_CELL,
-            image::imageops::FilterType::Triangle,
-        )
-        .into_raw();
-        self.gpu_avatar_cells
-            .retain(|(loaded_key, _)| loaded_key != &key);
-        self.gpu_avatar_cells.push((key.clone(), cell));
+        let cells = match key {
+            AvatarFetchKey::Leader(leader) => hero_avatar_cells(&image)?
+                .into_iter()
+                .enumerate()
+                .map(|(index, cell)| {
+                    (
+                        sow_render::text::leader_avatar_slot(
+                            leader,
+                            sow_core::emote::AvatarExpression::ALL[index],
+                        ),
+                        cell,
+                    )
+                })
+                .collect::<Vec<_>>(),
+            AvatarFetchKey::LeaderPortrait(leader) => {
+                let cell = square_avatar_cell(&image);
+                sow_core::emote::AvatarExpression::ALL
+                    .into_iter()
+                    .map(|expression| {
+                        (
+                            sow_render::text::leader_avatar_slot(leader, expression),
+                            cell.clone(),
+                        )
+                    })
+                    .collect()
+            }
+            AvatarFetchKey::Fallback => vec![(
+                sow_render::text::AVATAR_FALLBACK_SLOT,
+                square_avatar_cell(&image),
+            )],
+            AvatarFetchKey::Campaign { slot, .. } => vec![(slot, square_avatar_cell(&image))],
+        };
+        for (slot, cell) in cells {
+            self.gpu_avatar_cells
+                .retain(|(loaded_slot, _)| *loaded_slot != slot);
+            self.gpu_avatar_cells.push((slot, cell));
+        }
         match key {
             AvatarFetchKey::Fallback => self.avatar_fallback = Some(bytes.to_vec()),
-            AvatarFetchKey::Leader(leader) => {
+            AvatarFetchKey::Leader(leader) | AvatarFetchKey::LeaderPortrait(leader) => {
                 self.avatars.insert(leader, bytes.to_vec());
             }
             AvatarFetchKey::Campaign { slug, .. } => {
@@ -272,6 +333,50 @@ impl AssetLoader {
     }
 }
 
+fn square_avatar_cell(image: &image::RgbaImage) -> Vec<u8> {
+    let size = image.width().min(image.height()).max(1);
+    let square = image::imageops::crop_imm(
+        image,
+        (image.width() - size) / 2,
+        (image.height() - size) / 2,
+        size,
+        size,
+    )
+    .to_image();
+    image::imageops::resize(
+        &square,
+        sow_render::text::AVATAR_CELL,
+        sow_render::text::AVATAR_CELL,
+        image::imageops::FilterType::Triangle,
+    )
+    .into_raw()
+}
+
+fn hero_avatar_cells(image: &image::RgbaImage) -> Result<Vec<Vec<u8>>, String> {
+    if image.width() < 4 || image.height() < 4 {
+        return Err("invalid hero sheet dimensions".into());
+    }
+    let half_w = image.width() / 2;
+    let half_h = image.height() / 2;
+    // Trim the source separators before square cropping; odd and non-square sheets are valid.
+    let inset = ((half_w.min(half_h) as f32 * 0.01).round() as u32).max(1);
+    Ok(sow_core::emote::AvatarExpression::ALL
+        .into_iter()
+        .map(|expression| {
+            let index = expression as u32;
+            let quadrant = image::imageops::crop_imm(
+                image,
+                (index % 2) * half_w + inset,
+                (index / 2) * half_h + inset,
+                half_w.saturating_sub(2 * inset).max(1),
+                half_h.saturating_sub(2 * inset).max(1),
+            )
+            .to_image();
+            square_avatar_cell(&quadrant)
+        })
+        .collect())
+}
+
 fn valid_avatar_id(value: &str) -> bool {
     let mut chars = value.chars();
     matches!(chars.next(), Some('a'..='z'))
@@ -283,13 +388,125 @@ mod tests {
     use super::*;
 
     #[test]
+    fn hero_quadrants_are_square_and_odd_sheets_do_not_distort() {
+        let mut source = image::RgbaImage::new(976, 1087);
+        let colors = [
+            [240, 10, 10, 255],
+            [10, 240, 10, 255],
+            [10, 10, 240, 255],
+            [240, 240, 10, 255],
+        ];
+        for (x, y, pixel) in source.enumerate_pixels_mut() {
+            let column = usize::from(x >= 488);
+            let row = usize::from(y >= 543);
+            *pixel = image::Rgba(colors[row * 2 + column]);
+        }
+        let cells = hero_avatar_cells(&source).unwrap();
+        for (index, cell) in cells.iter().enumerate() {
+            assert_eq!(cell.len(), 256 * 256 * 4);
+            assert!(cell.chunks_exact(4).all(|pixel| pixel == colors[index]));
+        }
+    }
+
+    #[test]
+    fn all_playable_hero_sheets_exist_and_have_four_distinct_frames() {
+        for leader in Leader::ALL {
+            let key = AvatarFetchKey::Leader(leader);
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../assets/gameplay/avatars")
+                .join(AssetLoader::avatar_filename(&key));
+            let bytes =
+                std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+            let mut loader = AssetLoader::new();
+            loader.ingest_avatar_webp_bytes(key, &bytes).unwrap();
+            assert_eq!(loader.gpu_avatar_cells.len(), 4);
+            for (index, (slot, cell)) in loader.gpu_avatar_cells.iter().enumerate() {
+                assert_eq!(
+                    *slot,
+                    sow_render::text::leader_avatar_slot(
+                        leader,
+                        sow_core::emote::AvatarExpression::ALL[index]
+                    )
+                );
+                assert_eq!(cell.len(), 256 * 256 * 4);
+                assert!(
+                    loader
+                        .gpu_avatar_cells
+                        .iter()
+                        .take(index)
+                        .all(|(_, other)| other != cell)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn hero_campaign_identity_shares_slots_and_failed_sheet_queues_static_fallback() {
+        let mut loader = AssetLoader::new();
+        loader.queue_campaign_avatar("boudica");
+        assert_eq!(
+            loader.campaign_avatar_slot("boudica"),
+            Some(sow_render::text::leader_avatar_slot(
+                Leader::Boudica,
+                sow_core::emote::AvatarExpression::Calm
+            ))
+        );
+        loader.note_avatar_fetch_failed(AvatarFetchKey::Leader(Leader::Boudica), "HTTP 404");
+        assert!(
+            loader
+                .avatars_fetch_pending
+                .contains(&AvatarFetchKey::LeaderPortrait(Leader::Boudica))
+        );
+        assert!(
+            loader
+                .ingest_avatar_webp_bytes(AvatarFetchKey::Leader(Leader::Boudica), b"broken sheet")
+                .is_err()
+        );
+    }
+
+    #[test]
     fn avatar_slots_cover_builtin_and_geo_entity_portraits_without_dropping_them() {
         let mut loader = AssetLoader::new();
-        let entity_avatars = sow_data::geo_entities::all()
-            .filter_map(|entity| entity.avatar.as_deref())
+        let mut entity_avatars = sow_data::geo_entities::all()
+            .filter_map(|entity| entity.avatar.clone())
             .collect::<HashSet<_>>();
+        fn collect_avatars(value: &serde_json::Value, out: &mut HashSet<String>) {
+            match value {
+                serde_json::Value::Object(object) => {
+                    for (key, value) in object {
+                        if key == "avatar"
+                            && let Some(slug) = value.as_str()
+                        {
+                            out.insert(slug.to_owned());
+                        }
+                        collect_avatars(value, out);
+                    }
+                }
+                serde_json::Value::Array(array) => {
+                    for value in array {
+                        collect_avatars(value, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let campaigns = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/campaign");
+        for entry in std::fs::read_dir(campaigns).unwrap() {
+            let path = entry.unwrap().path();
+            if path
+                .extension()
+                .is_some_and(|extension| extension == "json")
+            {
+                collect_avatars(
+                    &serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap(),
+                    &mut entity_avatars,
+                );
+            }
+        }
+        entity_avatars.remove("null");
         assert!(
-            entity_avatars.len() + Leader::ALL.len() + 1 <= sow_render::text::AVATAR_SLOT_COUNT
+            entity_avatars.len() + sow_render::text::AVATAR_CAMPAIGN_FIRST_SLOT
+                <= sow_render::text::AVATAR_SLOT_COUNT
         );
         for avatar in &entity_avatars {
             loader.queue_campaign_avatar(avatar);

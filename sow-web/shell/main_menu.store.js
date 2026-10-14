@@ -434,7 +434,7 @@
 
     function renderLeaderPurchase(leader) {
         var offer = storeLeaderById(leader.id);
-        var leaderActions = !offer || offer.owned ? "" :
+        var leaderActions = !offer || offer.owned || offer.permanently_free ? "" :
             renderLeaderCurrencyButton(offer, "crowns") +
             renderLeaderCurrencyButton(offer, "gems") +
             (canRenderDirectPurchase(offer.direct_product_id) ? storeProductButton(offer.direct_product_id, SOW_t("store.buy"), true, offer.direct_price_label, offer.id) : "");

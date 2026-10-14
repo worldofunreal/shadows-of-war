@@ -436,6 +436,10 @@
                 const wasm = await import('./__JS_FILE__');
                 const wasmLoad = await wasmResponsePromise;
                 if (wasmLoad.error) throw wasmLoad.error;
+                // The engine bytes are down; the rest of boot is CPU and one
+                // identity round-trip. Let the menu theme start fetching now
+                // so it never competes with the WASM download.
+                window.dispatchEvent(new Event('sow:wasm-bytes-ready'));
                 await wasm.default({ module_or_path: wasmLoad.response });
                 if (typeof wasm.SOW_wake_event_loop === "function") {
                     window.SOW_wake_event_loop = wasm.SOW_wake_event_loop;

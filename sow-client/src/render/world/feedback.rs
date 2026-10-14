@@ -3,6 +3,7 @@ use crate::death_nameplate::{
     GOLD_REWARD_DURATION, death_animation, death_emoji, gold_reward_elapsed,
 };
 use crate::render::gpu::TextRenderer;
+use crate::render::motion::spring_overshoot;
 use crate::render::world::overlays::{INLINE_EMOJI_SCALE, world_to_screen};
 use crate::render::{dev_emoji_outline, dev_text_style};
 use crate::theme::dev_config::DevConfig;
@@ -25,6 +26,11 @@ const DEATH_NAMEPLATE_ARC_OFFSET: f32 = 0.75;
 const GOLD_REWARD_FONT_SIZE: f32 = 14.0;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
 const ATTACK_BADGE_UPDATE_SECS: f32 = 0.09;
+const OUTGOING_ATTACK_TEXT_COLOR: [f32; 4] = [1.0, 90.0 / 255.0, 90.0 / 255.0, 1.0];
+
+fn troop_label_instance_requirement(amount_text: &str) -> usize {
+    amount_text.chars().count().saturating_add(1)
+}
 
 fn transport_eta_baseline_y(
     font_atlas: &FontAtlas,
@@ -85,8 +91,6 @@ fn render_attack_launch_notices(
     let screen_h = input.screen_h / sf;
     let font_scale = dev.font_size_scale.max(0.1);
     let char_spacing = dev.font_char_spacing.max(0.1);
-    let base_color = crate::rgb(6, 182, 212);
-
     ui.attack_launch_notices.retain(|notice| {
         let elapsed = now.duration_since(notice.start_time).as_secs_f32();
         let Some((progress, rise, scale)) =
@@ -105,15 +109,39 @@ fn render_attack_launch_notices(
         }
 
         let alpha = 1.0 - progress;
-        let color = [base_color[0], base_color[1], base_color[2], alpha];
+        let color = [
+            OUTGOING_ATTACK_TEXT_COLOR[0],
+            OUTGOING_ATTACK_TEXT_COLOR[1],
+            OUTGOING_ATTACK_TEXT_COLOR[2],
+            alpha,
+        ];
         let outline = dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]);
+        let emoji_scale = INLINE_EMOJI_SCALE * 0.65;
+        let font_size = ATTACK_LAUNCH_NOTICE_FONT_SIZE * scale * font_scale * sf;
+        let icon_diameter = font_size * emoji_scale;
+        let gap = 3.0 * sf;
+        let measure = text.measure_string(&notice.amount_text, font_size, char_spacing, 1.0);
+        let required = troop_label_instance_requirement(&notice.amount_text);
+        if text.remaining_instance_capacity() < required {
+            return true;
+        }
+        let row_left = screen[0] * sf - (icon_diameter + gap + measure.width) * 0.5;
+        text.push_troop_icon(
+            [
+                row_left + icon_diameter * 0.5,
+                screen[1] * sf - icon_diameter * 0.5,
+            ],
+            icon_diameter * 0.5,
+            alpha,
+            dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]),
+        );
         text.push_string(
-            &notice.text,
-            [screen[0] * sf, screen[1] * sf],
-            ATTACK_LAUNCH_NOTICE_FONT_SIZE * scale * font_scale * sf,
+            &notice.amount_text,
+            [row_left + icon_diameter + gap, screen[1] * sf],
+            font_size,
             color,
             outline,
-            (0.5, char_spacing, INLINE_EMOJI_SCALE * 0.65),
+            (0.0, char_spacing, emoji_scale),
         );
         true
     });
@@ -132,11 +160,6 @@ fn floating_notice_animation(elapsed: f32, duration: f32) -> Option<(f32, f32, f
         1.0
     };
     Some((progress, progress * FLOATING_NOTICE_RISE, scale))
-}
-
-#[inline]
-fn spring_overshoot(t: f32) -> f32 {
-    1.0 - (t * 7.5).cos() * (-3.5 * t).exp()
 }
 
 fn render_transport_targets(
@@ -453,7 +476,6 @@ fn render_death_nameplates(
             campaign_avatar_slots,
             [row_left + icon_block + icon_size * sf * 0.5, center_px[1]],
             icon_size * sf * 0.5,
-            animation.color,
         );
         crate::render::world::nameplates::paint_prepared_avatar(text, avatar, emoji_outline, alpha);
         text.push_string(
@@ -563,7 +585,7 @@ fn render_attack_badges(
     let emoji_outline = dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]);
 
     for attack in &snapshot.attacks {
-        let Some(color) = attack_badge_color(attack, my_id) else {
+        let Some(text_color) = attack_badge_text_color(attack, my_id) else {
             continue;
         };
         if !attack.front_cx.is_finite()
@@ -610,14 +632,17 @@ fn render_attack_badges(
         let row_left = screen[0] - row_width * 0.5;
         let row_top = screen[1] - entry.height * 0.5;
 
-        text.push_emoji(
-            "⚔",
+        let required = troop_label_instance_requirement(&entry.text);
+        if text.remaining_instance_capacity() < required {
+            continue;
+        }
+        text.push_troop_icon(
             [
                 (row_left + icon_size * 0.5) * sf,
                 (row_top + icon_size * 0.5) * sf,
             ],
             icon_size * 0.5 * sf,
-            color,
+            1.0,
             emoji_outline,
         );
         text.push_string(
@@ -627,21 +652,21 @@ fn render_attack_badges(
                 (row_top + entry.height * 0.85) * sf,
             ],
             font_size * sf,
-            color,
+            text_color,
             text_style,
             (0.0, char_spacing, INLINE_EMOJI_SCALE),
         );
     }
 }
 
-fn attack_badge_color(attack: &AttackSnapshot, my_id: u16) -> Option<[f32; 4]> {
+fn attack_badge_text_color(attack: &AttackSnapshot, my_id: u16) -> Option<[f32; 4]> {
     if my_id == 0 || !attack.troops.is_finite() || attack.troops <= 0.0 {
         return None;
     }
     if attack.target_owner == my_id {
-        Some(crate::rgb(255, 90, 90))
+        Some([1.0; 4])
     } else if attack.owner_id == my_id {
-        Some(crate::rgb(6, 182, 212))
+        Some(OUTGOING_ATTACK_TEXT_COLOR)
     } else {
         None
     }
@@ -678,7 +703,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn attack_badges_only_include_local_incoming_or_outgoing_attacks() {
         let base = AttackSnapshot {
             id: 1,
@@ -689,9 +714,23 @@ mod tests {
             front_cx: 1.0,
             front_cy: 1.0,
         };
-        assert_eq!(attack_badge_color(&base, 2), Some(crate::rgb(6, 182, 212)));
-        assert_eq!(attack_badge_color(&base, 3), Some(crate::rgb(255, 90, 90)));
-        assert_eq!(attack_badge_color(&base, 4), None);
+        assert_eq!(
+            attack_badge_text_color(&base, 2),
+            Some(OUTGOING_ATTACK_TEXT_COLOR)
+        );
+        assert_eq!(attack_badge_text_color(&base, 3), Some([1.0; 4]));
+        assert_eq!(attack_badge_text_color(&base, 4), None);
+
+        let another_player = AttackSnapshot {
+            owner_id: 7,
+            target_owner: 8,
+            ..base
+        };
+        assert_eq!(
+            attack_badge_text_color(&another_player, 7),
+            Some(OUTGOING_ATTACK_TEXT_COLOR)
+        );
+        assert_eq!(troop_label_instance_requirement("+13.0K"), 7);
     }
 
     #[wasm_bindgen_test]

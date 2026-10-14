@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+lineage="${1:-${RENEWED_LINEAGE:-/etc/letsencrypt/live/relay.shadowsofwar.io}}"
+tmp=$(mktemp -d /usr/local/etc/sow/.relay-cert.XXXXXX)
+trap 'rm -rf "$tmp"' EXIT
+
+install -o root -g sowrelay -m 0640 "$lineage/fullchain.pem" "$tmp/relay.crt"
+install -o root -g sowrelay -m 0640 "$lineage/privkey.pem" "$tmp/relay.key"
+openssl x509 -in "$tmp/relay.crt" -noout -checkend 2592000 >/dev/null
+openssl x509 -in "$tmp/relay.crt" -noout -checkhost relay.shadowsofwar.io >/dev/null
+mv "$tmp/relay.crt" /usr/local/etc/sow/relay.crt
+mv "$tmp/relay.key" /usr/local/etc/sow/relay.key

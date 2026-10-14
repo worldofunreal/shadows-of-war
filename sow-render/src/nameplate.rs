@@ -1,3 +1,4 @@
+//! Pure nameplate placement and capacity; see docs/nameplates-and-emotes.md.
 const AVATAR_TEXT_GAP_SCALE: f32 = 0.16;
 const BADGE_GAP: f32 = 3.0;
 const BADGE_STACK_GAP: f32 = 2.0;
@@ -6,8 +7,8 @@ const LAND_REFRESH_TICKS: u64 = 20;
 pub const NAMEPLATE_SAMPLE_TICKS: u64 = 4;
 const SPAWN_LOCAL_SIDE: usize = sow_core::config::SPAWN_RADIUS as usize * 2 + 1;
 const SPAWN_LOCAL_AREA: usize = SPAWN_LOCAL_SIDE * SPAWN_LOCAL_SIDE;
-const HUMAN_AVATAR_SCALE: f32 = 4.0;
-const BOT_AVATAR_SCALE: f32 = 3.0;
+const HUMAN_AVATAR_SCALE: f32 = 8.0;
+const BOT_AVATAR_SCALE: f32 = 6.0;
 const BADGE_SCALE: f32 = 1.8;
 const TROOPS_SCALE: f32 = 1.30;
 const NAMEPLATE_SIZE_DEADZONE: f32 = 0.2;
@@ -119,7 +120,7 @@ impl NameplateMetrics {
             render_size,
             avatar_diameter,
             avatar_radius: avatar_diameter * 0.5,
-            badge_size: avatar_diameter.max(render_size * BADGE_SCALE),
+            badge_size: render_size * BADGE_SCALE,
             troops_render_size: render_size * TROOPS_SCALE,
         }
     }
@@ -750,9 +751,10 @@ pub struct NameplateStatus {
     pub has_request: bool,
     pub rank: Option<usize>,
     pub has_traitor: bool,
-    pub has_active_emoji: bool,
     pub has_disconnected: bool,
 }
+
+pub const NAMEPLATE_MAX_BADGES: usize = 6;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BadgeKind {
@@ -763,7 +765,6 @@ pub enum BadgeKind {
     Request,
     Allied,
     Traitor,
-    Active,
     Disconnected,
 }
 
@@ -856,10 +857,9 @@ pub struct NameplateLayout {
     troops_icon_size: f32,
     troops_icon_gap: f32,
     badge_effect_padding: f32,
-    badges: [Option<NameplateBadge>; 7],
+    badges: [Option<NameplateBadge>; NAMEPLATE_MAX_BADGES],
     badge_count: usize,
     stack_step: f32,
-    express_offset: f32,
 }
 
 impl NameplateLayout {
@@ -914,13 +914,12 @@ impl NameplateLayout {
         let total_height = avatar_diameter + avatar_text_gap + text_height;
         let content_top = center.0[1] - total_height * 0.5;
         let avatar_center = ScreenPoint([center.0[0], content_top + avatar_diameter * 0.5]);
-        let avatar_visual_radius = avatar_visual_radius(avatar_radius);
         let badge_effect_padding = badge_effect_padding.max(0.0);
         let badge_clearance = BADGE_GAP + badge_effect_padding;
         let badge_half = badge_size * 0.5;
         let stack_step = badge_size + BADGE_STACK_GAP + badge_effect_padding * 2.0;
-        let left_x = center.0[0] - avatar_visual_radius - badge_half - badge_clearance;
-        let right_x = center.0[0] + avatar_visual_radius + badge_half + badge_clearance;
+        let left_x = center.0[0] - avatar_radius - badge_half - badge_clearance;
+        let right_x = center.0[0] + avatar_radius + badge_half + badge_clearance;
 
         let mut layout = Self {
             avatar_center,
@@ -930,7 +929,7 @@ impl NameplateLayout {
             right_x,
             rank_center: ScreenPoint([
                 center.0[0],
-                avatar_center.0[1] - avatar_visual_radius - badge_half - badge_clearance,
+                avatar_center.0[1] - avatar_radius - badge_half - badge_clearance,
             ]),
             star_center: ScreenPoint([left_x, avatar_center.0[1]]),
             text_top: content_top + avatar_diameter + avatar_text_gap,
@@ -942,10 +941,9 @@ impl NameplateLayout {
             troops_icon_size,
             troops_icon_gap: 3.0,
             badge_effect_padding,
-            badges: [None; 7],
+            badges: [None; NAMEPLATE_MAX_BADGES],
             badge_count: 0,
             stack_step,
-            express_offset: 2.0,
         };
         layout.prepare_badges(status);
         layout
@@ -988,7 +986,6 @@ impl NameplateLayout {
             }),
             badge_count: self.badge_count,
             stack_step: self.stack_step * scale,
-            express_offset: self.express_offset * scale,
         }
     }
 
@@ -1000,13 +997,6 @@ impl NameplateLayout {
             self.avatar_center.0[1] - stack_slot as f32 * self.stack_step
         };
         ScreenPoint([x, y])
-    }
-
-    pub fn express_center(&self, right_stack_slots: usize) -> ScreenPoint {
-        ScreenPoint([
-            self.right_x + self.express_offset,
-            self.side_badge_center(false, right_stack_slots, false).0[1] - self.badge_size * 0.5,
-        ])
     }
 
     pub fn name_anchor(&self, center: ScreenPoint) -> ScreenPoint {
@@ -1025,7 +1015,7 @@ impl NameplateLayout {
         self.badge_effect_padding
     }
 
-    pub fn badges(&self) -> &[Option<NameplateBadge>; 7] {
+    pub fn badges(&self) -> &[Option<NameplateBadge>; NAMEPLATE_MAX_BADGES] {
         &self.badges
     }
 
@@ -1090,7 +1080,7 @@ impl NameplateLayout {
             return bounds;
         }
 
-        bounds.include_disc(self.avatar_center, avatar_visual_radius(self.avatar_radius));
+        bounds.include_disc(self.avatar_center, self.avatar_radius);
         for badge in self.badges[..self.badge_count].iter().flatten() {
             bounds.include_disc(
                 badge.center,
@@ -1144,20 +1134,13 @@ impl NameplateLayout {
             let center = self.side_badge_center(false, right_slots, status.is_me);
             let size = self.badge_size;
             self.add_badge(BadgeKind::Traitor, center, size, [1.0; 4]);
-            right_slots += 1;
-        }
-        if status.has_active_emoji {
-            let center = self.express_center(right_slots);
-            let size = self.badge_size;
-            self.add_badge(BadgeKind::Active, center, size, [1.0; 4]);
         }
         if status.has_disconnected {
             let center = ScreenPoint([
                 self.avatar_center.0[0] + self.avatar_radius * 0.6,
                 self.avatar_center.0[1] + self.avatar_radius * 0.6,
             ]);
-            let diameter = self.avatar_radius * 0.8;
-            self.add_badge(BadgeKind::Disconnected, center, diameter, [1.0; 4]);
+            self.add_badge(BadgeKind::Disconnected, center, self.badge_size, [1.0; 4]);
         }
     }
 
@@ -1180,14 +1163,6 @@ pub fn fit_bounds_to_land(
 ) -> f32 {
     let extents = bounds.extents_about(center);
     fit_size_to_land(extents[0] * 2.0, extents[1] * 2.0, land_bounds, zoom_scaled)
-}
-
-pub(crate) fn avatar_visual_radius(radius: f32) -> f32 {
-    if radius <= 0.0 {
-        return 0.0;
-    }
-    let border = radius * 0.12;
-    radius + border * 0.3
 }
 
 #[cfg(test)]
@@ -1495,7 +1470,6 @@ mod tests {
             has_request: true,
             rank: Some(1),
             has_traitor: true,
-            has_active_emoji: true,
             has_disconnected: true,
             ..Default::default()
         };
@@ -1513,11 +1487,12 @@ mod tests {
         let undecorated_extents = undecorated.extents_about(center);
         assert!(full_extents[0] > undecorated_extents[0]);
         assert!(full_extents[1] > undecorated_extents[1]);
-        assert_eq!(full_layout.badge_count, 7);
+        assert_eq!(full_layout.badge_count, NAMEPLATE_MAX_BADGES);
         for badge in full_layout.badges[..full_layout.badge_count]
             .iter()
             .flatten()
         {
+            assert_eq!(badge.diameter, metrics.badge_size());
             let extents = full.extents_about(center);
             let radius = badge.diameter * 0.5 + full_layout.badge_effect_padding;
             assert!(extents[0] + 0.001 >= (badge.center.0[0] - center.0[0]).abs() + radius);
@@ -1576,8 +1551,14 @@ mod tests {
         assert_eq!(human.avatar_diameter, 14.0 * HUMAN_AVATAR_SCALE);
         assert_eq!(campaign_bot.avatar_diameter, human.avatar_diameter);
         assert_eq!(tribe.avatar_diameter, 14.0 * BOT_AVATAR_SCALE);
-        assert_eq!(human.badge_size(), human.avatar_diameter());
-        assert_eq!(tribe.badge_size(), tribe.avatar_diameter());
+        assert_eq!(human.avatar_diameter(), 14.0 * 8.0);
+        assert_eq!(tribe.avatar_diameter(), 14.0 * 6.0);
+        assert_eq!(human.badge_size(), 14.0 * BADGE_SCALE);
+        assert_eq!(tribe.badge_size(), 14.0 * BADGE_SCALE);
+        assert_eq!(
+            NameplateMetrics::compute(14.0, NameplateStyle::Tribe, false).badge_size(),
+            14.0 * BADGE_SCALE
+        );
     }
 
     #[test]
@@ -1678,14 +1659,21 @@ mod tests {
     }
 
     #[test]
-    fn avatar_frame_bounds_scale_with_the_prepared_avatar() {
-        let radius = 32.0;
-        for scale in [1.0, 0.75, 0.5, 0.25] {
-            assert!(
-                (avatar_visual_radius(radius * scale) - avatar_visual_radius(radius) * scale).abs()
-                    < 1e-5
-            );
-        }
+    fn avatar_bounds_use_the_circular_mask_edge_without_a_second_frame() {
+        let layout = NameplateLayout::compute(
+            ScreenPoint([100.0, 100.0]),
+            NameplateMetrics::compute(14.0, NameplateStyle::HumanGhost, true),
+            &PreparedText::default(),
+            &PreparedText::default(),
+            1.0,
+            NameplateStatus::default(),
+            0.0,
+        );
+        let bounds = layout.visual_bounds(ScreenPoint([100.0, 100.0]), 0.0);
+        let avatar = layout.avatar_center();
+        assert!(bounds.min_x <= avatar.0[0] - layout.avatar_radius());
+        assert!(bounds.max_x >= avatar.0[0] + layout.avatar_radius());
+        assert_eq!(layout.avatar_radius(), 14.0 * HUMAN_AVATAR_SCALE * 0.5);
     }
 
     struct TestCapacityPlan {

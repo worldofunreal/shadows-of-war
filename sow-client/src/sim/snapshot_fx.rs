@@ -176,8 +176,7 @@ impl SowApp {
                         if !my_info_new.alliances.contains(ally_id)
                             && let Some(other_player) =
                                 snap.players.iter().find(|p| p.id == *ally_id)
-                            && (other_player.traitor
-                                || other_player.active_emoji.as_deref() == Some("🗡️"))
+                            && other_player.traitor
                         {
                             self.ui
                                 .trigger_viewport_alert(crate::app::ViewportAlertKind::Betrayal);
@@ -216,6 +215,38 @@ impl SowApp {
                         }
                     }
                 }
+            }
+            for player in &snap.players {
+                let Some(event) = player.active_emote else {
+                    continue;
+                };
+                if !player.alive
+                    || event.age_seconds(snap.tick, self.sim.config.tick_rate_ms)
+                        >= sow_core::emote::EMOTE_DURATION_SECS
+                    || !sow_core::emote::is_recipient(&snap.players, player.id, my_id)
+                    || existing
+                        .players
+                        .iter()
+                        .find(|old| old.id == player.id)
+                        .and_then(|old| old.active_emote)
+                        .is_some_and(|old| old.event_id == event.event_id)
+                {
+                    continue;
+                }
+                notifications.push((
+                    crate::ui::UiText::emote_notice(event.kind).with(
+                        "name",
+                        sow_core::player::nameplate_display_name(
+                            player.id,
+                            &player.name,
+                            player.player_type,
+                        ),
+                    ),
+                    [Some(player.id), None],
+                    1,
+                    format!("emote:{}", player.id),
+                    false,
+                ));
             }
             for (text, players, priority, group, sum_values) in notifications {
                 self.ui.app.hud_state.push_notification_for_players(
@@ -413,7 +444,9 @@ mod nuke_alert_tests {
             alliance_requests: Vec::new(),
             resource_requests: Vec::new(),
             disconnected: false,
-            active_emoji: None,
+            active_emote: None,
+            can_express_emote: false,
+            can_retaliate: false,
             traitor: false,
             civilization: Civilization::Rome,
             leader: Leader::Caesar,

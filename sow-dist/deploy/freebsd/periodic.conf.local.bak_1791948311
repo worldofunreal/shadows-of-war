@@ -1,0 +1,3 @@
+# Managed by ./sow p: renew Let's Encrypt certificates and reload nginx.
+weekly_certbot_enable="YES"
+weekly_certbot_deploy_hook="service nginx reload"

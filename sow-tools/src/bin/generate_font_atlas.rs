@@ -98,8 +98,7 @@ fn main() {
     let glyphs_data =
         std::fs::read_to_string(&args[5]).expect("Failed to read Unicode glyph corpus");
     let latin = FontRef::try_from_slice(&latin_data).expect("Failed to parse Latin font");
-    let cyrillic =
-        FontRef::try_from_slice(&cyrillic_data).expect("Failed to parse Cyrillic font");
+    let cyrillic = FontRef::try_from_slice(&cyrillic_data).expect("Failed to parse Cyrillic font");
     let arabic = FontRef::try_from_slice(&arabic_data).expect("Failed to parse Arabic font");
     let japanese =
         FontRef::try_from_slice_and_index(&cjk_data, 0).expect("Failed to parse Japanese face");
@@ -126,6 +125,7 @@ fn main() {
         sources.insert(char::from_u32(codepoint).unwrap(), FontSource::Latin);
     }
     let mut arabic_chars = BTreeSet::new();
+    let mut localized_arabic_samples = Vec::new();
     let mut section = "";
     for line in glyphs_data.lines() {
         if let Some(name_section) = line.strip_prefix("# ") {
@@ -157,6 +157,43 @@ fn main() {
                 sources.insert(character, source);
             } else {
                 sources.entry(character).or_insert(source);
+            }
+        }
+    }
+    // Fixed messages are another consumer of this same atlas. Derive their glyphs
+    // from the published catalogs, never maintain a second translated corpus.
+    for (language, _, _) in sow_i18n::Language::published_registry() {
+        let source = match language {
+            sow_i18n::Language::Japanese => FontSource::Japanese,
+            sow_i18n::Language::Korean => FontSource::Korean,
+            sow_i18n::Language::SimplifiedChinese => FontSource::Chinese,
+            sow_i18n::Language::Russian => FontSource::Cyrillic,
+            _ => FontSource::Latin,
+        };
+        for definition in sow_core::emote::EMOTES {
+            let key = definition
+                .bubble_key
+                .strip_prefix("hud.")
+                .expect("emote HUD key");
+            let message = &sow_i18n::web(language).hud.values[key];
+            if language == sow_i18n::Language::Arabic {
+                arabic_chars.extend(
+                    message
+                        .chars()
+                        .filter(|character| is_arabic_character(*character)),
+                );
+                localized_arabic_samples.push(message.clone());
+            } else {
+                for character in message
+                    .chars()
+                    .filter(|character| !character.is_whitespace())
+                {
+                    if matches!(source, FontSource::Chinese) {
+                        sources.insert(character, source);
+                    } else {
+                        sources.entry(character).or_insert(source);
+                    }
+                }
             }
         }
     }
@@ -192,6 +229,7 @@ fn main() {
             arabic_samples.push(format!("{character}{next}"));
         }
     }
+    arabic_samples.extend(localized_arabic_samples);
     for sample in arabic_samples {
         let mut buffer = UnicodeBuffer::new();
         buffer.push_str(&sample);

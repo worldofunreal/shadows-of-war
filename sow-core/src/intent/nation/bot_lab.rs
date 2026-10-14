@@ -850,9 +850,9 @@ impl serde::Serialize for S16TracePlayer<'_> {
         field!(alliance_timers);
         field!(disconnected);
         field!(is_ai_controlled);
-        field!(active_emoji);
-        field!(emoji_timer);
-        field!(emoji_pinned);
+        field!(active_emote);
+        field!(emote_event_id);
+        field!(betrayal_retaliation_ticks);
         field!(traitor);
         field!(traitor_tick);
         field!(civilization);
@@ -2616,19 +2616,19 @@ fn s16_checkpoint_decision_and_state_reference() {
         s16_trace_hash_bytes(&mut hash, &tick_trace);
         checkpoints.push((ticks, hash));
     }
-    // Vanilla tribes now answer incoming player attacks, changing the
-    // deterministic simulation trace while the early/long-horizon contracts
-    // continue to verify expansion and sustained wars independently.
+    // Typed emote fields change the serialized trace. Projecting those fields
+    // back to the legacy format reproduced the prior reference exactly;
+    // early/long-horizon contracts still verify gameplay independently.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x4409_b4c8_0a48_0368),
-        (500, 0x9e9c_e068_253e_967e),
-        (750, 0xdd1f_12a4_eb08_9feb),
-        (1000, 0xc2a3_5472_3ccb_aaf6),
-        (1250, 0xf51e_0fb9_1eb3_e327),
-        (1500, 0x9751_0846_e4fc_5d3f),
-        (1750, 0xb7ba_df15_70a9_2224),
-        (2000, 0x6ce7_d490_d100_2250),
-        (2102, 0x9d44_5bdf_ede8_7ff2),
+        (250, 0xfd4c_71eb_6368_374c),
+        (500, 0x7234_7a30_5390_e14f),
+        (750, 0xf7c1_e26f_5d30_2f31),
+        (1000, 0xd295_5755_c260_f4b1),
+        (1250, 0x15eb_a8b6_3e11_d49d),
+        (1500, 0xda8d_e066_8046_bc06),
+        (1750, 0x38df_da8c_58bd_dbdc),
+        (2000, 0x6814_c2b1_5d98_5b4c),
+        (2102, 0xaff9_ae00_1c44_275b),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

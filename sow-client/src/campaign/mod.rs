@@ -95,14 +95,13 @@ impl CampaignId {
     }
 
     pub fn is_unlocked(self, progress: &crate::player_progress::PlayerProgress) -> bool {
-        match self {
-            CampaignId::Boudica => true,
-            // Owner decision: episode 1 is not finished yet, so the whole Six Sky
-            // chain stays locked. Only the Boudica tutorial can be replayed.
-            CampaignId::SixSkyEp1 => false,
-            CampaignId::SixSkyEp2 => CampaignId::SixSkyEp1.is_completed(progress),
-            CampaignId::SixSkyEp3 => CampaignId::SixSkyEp2.is_completed(progress),
-        }
+        let Some(episode) = sow_data::campaign::episode(self.episode_id()) else {
+            return false;
+        };
+        sow_data::campaign::episode_is_published(episode.id)
+            && episode
+                .prerequisite
+                .is_none_or(|required| progress.completed_episodes.contains(required))
     }
 
     pub fn advisor(self) -> Leader {

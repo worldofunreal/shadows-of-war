@@ -1,5 +1,5 @@
 use crate::diplomacy::{
-    ALLIANCE_DURATION_TICKS, BOT_BETRAYAL_EMOJI_TICKS, HUMAN_BETRAYAL_EMOJI_TICKS,
+    ALLIANCE_DURATION_TICKS, BOT_BETRAYAL_RETALIATION_TICKS, HUMAN_BETRAYAL_RETALIATION_TICKS,
     TRAITOR_STATUS_TICKS, alliance_can_renew,
 };
 use crate::engine::SowEngine;
@@ -321,7 +321,7 @@ impl SowEngine {
                 let is_betrayer = self
                     .state
                     .player(owner)
-                    .map(|p| p.active_emoji.as_deref() == Some("🗡️"))
+                    .map(crate::diplomacy::can_retaliate_against)
                     .unwrap_or(false);
                 let is_allied_in_list = self
                     .state
@@ -527,13 +527,24 @@ impl SowEngine {
                     player.disconnected = *is_disconnected;
                 }
             }
-            GameplayIntent::ExpressEmoji { emoji, pinned } => {
-                let max_emoji_ticks =
-                    (3.0 * 1000.0 / self.state.config.tick_rate_ms).round() as u32;
+            GameplayIntent::ExpressEmote { kind, pinned } => {
+                let tick = self.state.tick;
+                let phase = self.state.phase.clone();
+                if let Some(player) = self.state.player_mut(stamped.player_id)
+                    && crate::emote::can_express(player, &phase)
+                {
+                    player.emote_event_id = player.emote_event_id.wrapping_add(1);
+                    player.active_emote = Some(crate::emote::ActiveEmote {
+                        kind: *kind,
+                        pinned: *pinned,
+                        started_tick: tick,
+                        event_id: player.emote_event_id,
+                    });
+                }
+            }
+            GameplayIntent::ClearEmote => {
                 if let Some(player) = self.state.player_mut(stamped.player_id) {
-                    player.active_emoji = Some(emoji.clone());
-                    player.emoji_pinned = *pinned;
-                    player.emoji_timer = if *pinned { 0 } else { max_emoji_ticks };
+                    player.active_emote = None;
                 }
             }
             GameplayIntent::ProposeAlliance { target_player } => {
@@ -646,23 +657,22 @@ impl SowEngine {
             GameplayIntent::BreakAlliance { target_player } => {
                 let breaker = stamped.player_id;
                 let target = *target_player;
-                let emoji_ticks = self
+                let retaliation_ticks = self
                     .state
                     .player(breaker)
                     .map(|p| {
                         if p.player_type == PlayerType::Human {
-                            HUMAN_BETRAYAL_EMOJI_TICKS
+                            HUMAN_BETRAYAL_RETALIATION_TICKS
                         } else {
-                            BOT_BETRAYAL_EMOJI_TICKS
+                            BOT_BETRAYAL_RETALIATION_TICKS
                         }
                     })
-                    .unwrap_or(BOT_BETRAYAL_EMOJI_TICKS);
+                    .unwrap_or(BOT_BETRAYAL_RETALIATION_TICKS);
                 let traitor_until = self.current_tick_u32().saturating_add(TRAITOR_STATUS_TICKS);
                 if let Some(p1) = self.state.player_mut(breaker) {
                     p1.traitor = true;
                     p1.traitor_tick = traitor_until;
-                    p1.active_emoji = Some("🗡️".to_string());
-                    p1.emoji_timer = emoji_ticks;
+                    p1.betrayal_retaliation_ticks = retaliation_ticks;
                 }
                 self.mark_betrayal_cooldown(breaker);
                 self.break_campaign_alliance(breaker, target);
@@ -789,6 +799,14 @@ impl SowEngine {
                     .position(|r| r.proposer == target && r.target == acceptor)
                 {
                     let req = self.resource_requests_proposed.remove(pos);
+                    if !self
+                        .state
+                        .player(acceptor)
+                        .is_some_and(|player| player.alive)
+                        || !self.state.player(target).is_some_and(|player| player.alive)
+                    {
+                        return;
+                    }
                     let mut actual_g = 0.0;
                     let mut actual_t = 0.0;
                     let mut acceptor_ok = false;
@@ -857,7 +875,7 @@ impl SowEngine {
         let is_betrayer = self
             .state
             .player(owner)
-            .map(|p| p.active_emoji.as_deref() == Some("🗡️"))
+            .map(crate::diplomacy::can_retaliate_against)
             .unwrap_or(false);
         let is_allied_in_list = self
             .state
@@ -949,6 +967,57 @@ mod tests {
         assert!(!engine.fleets[1].retreating);
         assert!(!engine.fleets[2].retreating);
         assert!(!engine.fleets[3].retreating);
+    }
+
+    #[test]
+    fn resource_requests_only_pay_once_between_live_participants() {
+        for (payer_alive, requester_alive) in [(true, true), (true, false), (false, true)] {
+            let config = GameConfig::default();
+            let mut state = GameState::new(1, 4, 4, config.clone());
+            for id in 1..=2 {
+                let mut player = Player::new_human(id, format!("Player {id}"), [1.0; 3], &config);
+                player.gold = 100.0;
+                player.troops = 100.0;
+                player.max_troops = 1_000.0;
+                state.register_player(player);
+            }
+            let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+            engine.apply_stamped_intent(
+                &StampedIntent {
+                    player_id: 2,
+                    intent: GameplayIntent::RequestResources {
+                        target_player: 1,
+                        gold: 20.0,
+                        troops: 10.0,
+                    },
+                },
+                0,
+            );
+            engine.apply_stamped_intent(
+                &StampedIntent {
+                    player_id: 3,
+                    intent: GameplayIntent::AcceptResourceRequest { target_player: 2 },
+                },
+                1,
+            );
+            assert_eq!(engine.resource_requests_proposed.len(), 1);
+            engine.state.player_mut(1).unwrap().alive = payer_alive;
+            engine.state.player_mut(2).unwrap().alive = requester_alive;
+            let accept = StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::AcceptResourceRequest { target_player: 2 },
+            };
+            engine.apply_stamped_intent(&accept, 2);
+            engine.apply_stamped_intent(&accept, 3);
+            let paid = payer_alive && requester_alive;
+            let payer = engine.state.player(1).unwrap();
+            let requester = engine.state.player(2).unwrap();
+            assert_eq!(payer.gold, if paid { 80.0 } else { 100.0 });
+            assert_eq!(payer.troops, if paid { 90.0 } else { 100.0 });
+            assert_eq!(requester.gold, if paid { 120.0 } else { 100.0 });
+            assert_eq!(requester.troops, if paid { 110.0 } else { 100.0 });
+            assert!(engine.resource_requests_proposed.is_empty());
+        }
     }
 
     #[test]

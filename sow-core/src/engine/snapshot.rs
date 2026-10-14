@@ -18,6 +18,7 @@ impl SowEngine {
 
         let proposed = &self.alliances_proposed;
         let proposed_resources = &self.resource_requests_proposed;
+        let emote_phase = self.state.phase.clone();
         let boats_in_use = self.boat_slots_used_by_player();
         let players = self
             .state
@@ -80,7 +81,9 @@ impl SowEngine {
                     alliance_requests,
                     resource_requests,
                     disconnected: p.disconnected,
-                    active_emoji: p.active_emoji.clone(),
+                    active_emote: p.active_emote,
+                    can_express_emote: crate::emote::can_express(p, &emote_phase),
+                    can_retaliate: crate::diplomacy::can_retaliate_against(p),
                     traitor: p.traitor,
                     civilization: p.civilization,
                     leader: p.leader,

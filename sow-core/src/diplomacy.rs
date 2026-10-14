@@ -14,10 +14,10 @@ pub const ALLIANCE_RENEWAL_WINDOW_TICKS: u32 = 300;
 pub const BETRAYAL_COOLDOWN_TICKS: u32 = 600;
 /// Traitor stigma duration for accept logic (~30s).
 pub const TRAITOR_STATUS_TICKS: u32 = 300;
-/// Bot dagger emoji after breaking an alliance (~10s).
-pub const BOT_BETRAYAL_EMOJI_TICKS: u32 = 100;
-/// Human dagger emoji after breaking an alliance (~30s).
-pub const HUMAN_BETRAYAL_EMOJI_TICKS: u32 = 300;
+/// Bot retaliation window after breaking an alliance (~10s).
+pub const BOT_BETRAYAL_RETALIATION_TICKS: u32 = 100;
+/// Human retaliation window after breaking an alliance (~30s).
+pub const HUMAN_BETRAYAL_RETALIATION_TICKS: u32 = 300;
 /// Fresh alliances are protected from betrayal (~60s).
 pub const ALLY_GRACE_AFTER_FORM_TICKS: u32 = 600;
 /// Alliance duration on accept (must match intent handlers).
@@ -78,6 +78,11 @@ impl AllianceActionState {
             Self::Renew => "renew",
         }
     }
+}
+
+#[inline]
+pub fn can_retaliate_against(player: &Player) -> bool {
+    player.betrayal_retaliation_ticks > 0
 }
 
 /// Chaotic diplomats: well below 1% of typical bot id space.

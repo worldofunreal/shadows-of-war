@@ -188,6 +188,19 @@ impl SowApp {
     pub(crate) fn start_offline_match(&mut self, mut config: GameConfig, tutorial: bool) {
         let leader = if tutorial {
             config.player_leader
+        } else if self.ui.app.main_menu_state.prefer_random_leader {
+            let period = sow_data::commerce::current_rotation_period();
+            let available = sow_data::commerce::available_leaders(&self.progress.owned_leaders, period);
+            if available.is_empty() {
+                self.ui.app.main_menu_state.selected_leader
+            } else {
+                let time = web_time::SystemTime::now()
+                    .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos() as u64;
+                let index = (config.seed ^ time.rotate_left(17)) as usize % available.len();
+                available[index]
+            }
         } else {
             self.ui.app.main_menu_state.selected_leader
         };

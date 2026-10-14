@@ -7,7 +7,10 @@ impl SowApp {
         if self.ui.app.phase == ClientPhase::Playing {
             // The browser shell owns the main menu, so the normal WASM path never reaches
             // ClientApp::draw(MainMenu), where avatars are otherwise queued.
-            self.ui.app.asset_loader.ensure_avatars_loaded();
+            self.ui
+                .app
+                .asset_loader
+                .queue_leader_avatar(self.ui.app.main_menu_state.selected_leader, true);
         }
         self.poll_avatar_fetches();
         self.poll_portal_avatar_fetch();
@@ -95,7 +98,10 @@ impl SowApp {
                         .ingest_avatar_webp_bytes(key.clone(), &bytes)
                     {
                         Ok(()) => log::debug!("Loaded avatar {:?}", key),
-                        Err(e) => log::warn!("Failed to ingest avatar {:?}: {e}", key),
+                        Err(e) => {
+                            log::warn!("Failed to ingest avatar {:?}: {e}", key);
+                            self.ui.app.asset_loader.note_avatar_fetch_failed(key, e);
+                        }
                     }
                     // GPU atlas upload is fed inside `ingest_avatar_webp_bytes`.
                 }
@@ -162,6 +168,14 @@ impl SowApp {
         let priority = AvatarFetchKey::Leader(priority_leader);
 
         if let Some(snapshot) = self.sim.current_snapshot.as_ref() {
+            for player in &snapshot.players {
+                if player.player_type == sow_core::player::PlayerType::Human {
+                    self.ui.app.asset_loader.queue_leader_avatar(
+                        player.leader,
+                        player.id == self.sim.my_player_id.unwrap_or_default(),
+                    );
+                }
+            }
             for slug in snapshot
                 .players
                 .iter()
@@ -223,7 +237,32 @@ impl SowApp {
 
     fn poll_database_events(&mut self) {
         while let Ok(event) = self.tasks.db_rx.try_recv() {
+            let event = match event {
+                crate::player_progress::DbEvent::MatchExitLoaded {
+                    account_id, match_id, cycle_id, request_id, display_name, provider, progress, state,
+                } => {
+                    if request_id <= self.profile_last_applied_request { continue; }
+                    if !self.matches_exit_response(&account_id, &match_id, cycle_id) {
+                        if request_id == self.identity_request_seq { self.profile_request_in_flight = false; }
+                        continue;
+                    }
+                    log::info!("[menu-flow] server exit state={state:?} match={match_id} cycle={cycle_id}");
+                    if let Some(wait) = &mut self.exit_reward_wait { wait.server_state = Some(state); }
+                    crate::player_progress::DbEvent::ProfileLoaded { progress, account_id, display_name, provider, request_id }
+                }
+                crate::player_progress::DbEvent::MatchExitFailed { account_id, match_id, cycle_id, request_id, status } => {
+                    if request_id <= self.profile_last_applied_request { continue; }
+                    if !self.matches_exit_response(&account_id, &match_id, cycle_id) {
+                        if request_id == self.identity_request_seq { self.profile_request_in_flight = false; }
+                        continue;
+                    }
+                    crate::player_progress::DbEvent::LoadFailed { request_id, status }
+                }
+                event => event,
+            };
             match event {
+                crate::player_progress::DbEvent::MatchExitLoaded { .. }
+                    | crate::player_progress::DbEvent::MatchExitFailed { .. } => unreachable!("exit responses are checked before profile application"),
                 crate::player_progress::DbEvent::ProfileLoaded {
                     progress,
                     account_id,
@@ -501,31 +540,77 @@ impl SowApp {
                     if operation == "menu guide progress" {
                         self.progress.merge_menu_guides(progress.menu_guides);
                         self.menu_guide_save_pending = false;
-                        self.menu_guide_save_revision = self.menu_guide_save_revision.wrapping_add(1);
+                        self.menu_guide_save_revision =
+                            self.menu_guide_save_revision.wrapping_add(1);
                         self.save_local_progress();
                         continue;
                     }
                     if operation == "leader unlock" {
                         self.purchase_revision = self.purchase_revision.wrapping_add(1);
                     }
+                    let campaign_episode = operation.strip_prefix("campaign completion:").map(str::to_string);
+                    let finish_campaign_exit = campaign_episode.as_deref()
+                        .is_some_and(|episode| self.pending_campaign_exit.as_deref() == Some(episode));
                     let saved_guides = std::mem::take(&mut self.progress.menu_guides);
                     progress.merge_menu_guides(saved_guides);
+                    let local_episodes = self.progress.completed_episodes.clone();
+                    let local_pending_episodes = self.progress.pending_campaign_completions.clone();
+                    let local_selection = (
+                        self.progress.preferred_leader,
+                        self.progress.prefer_random_leader,
+                        self.progress.leader_selection_pending,
+                    );
+                    let server_episodes = progress.completed_episodes.clone();
+                    progress.completed_episodes.extend(local_episodes);
+                    progress.pending_campaign_completions.extend(local_pending_episodes);
+                    progress.pending_campaign_completions.extend(
+                        progress.completed_episodes.iter()
+                            .filter(|episode| !server_episodes.contains(*episode))
+                            .cloned(),
+                    );
+                    progress.pending_campaign_completions.retain(|episode| !server_episodes.contains(episode));
+                    if let Some(episode) = campaign_episode.as_deref() {
+                        progress.completed_episodes.insert(episode.to_string());
+                        progress.pending_campaign_completions.remove(episode);
+                    }
+                    if operation == "leader selection" {
+                        progress.leader_selection_pending = false;
+                    } else if local_selection.2 {
+                        progress.preferred_leader = local_selection.0;
+                        progress.prefer_random_leader = local_selection.1;
+                        progress.leader_selection_pending = true;
+                    }
                     self.progress = progress;
                     self.save_local_progress();
                     self.sync_wou_collectibles();
                     self.ui.app.main_menu_state.store_busy = false;
                     self.ui.app.main_menu_state.error_message = None;
+                    self.profile_action_retry_at = None;
                     log::info!("[store] {operation} acknowledged by server");
+                    if finish_campaign_exit {
+                        self.begin_exit_to_main_menu();
+                    }
                 }
-                crate::player_progress::DbEvent::StoreActionFailed { account_id, operation, status } => {
+                crate::player_progress::DbEvent::StoreActionFailed {
+                    account_id,
+                    operation,
+                    status,
+                } => {
                     if self.progress_account_id.as_deref() != Some(account_id.as_str()) {
                         continue;
                     }
                     if operation == "menu guide progress" {
                         self.menu_guide_save_pending = false;
-                        self.menu_guide_save_revision = self.menu_guide_save_revision.wrapping_add(1);
-                        log::warn!("[menu-guide] progress save failed status={status:?}; retry remains pending");
+                        self.menu_guide_save_revision =
+                            self.menu_guide_save_revision.wrapping_add(1);
+                        log::warn!(
+                            "[menu-guide] progress save failed status={status:?}; retry remains pending"
+                        );
                         continue;
+                    }
+                    if operation == "leader selection" || operation.starts_with("campaign completion:") {
+                        self.profile_action_retry_at = Some(web_time::Instant::now() + web_time::Duration::from_secs(if status == Some(409) { 30 } else { 2 }));
+                        log::warn!("[profile] {operation} failed status={status:?}; saved request will retry");
                     }
                     self.ui.app.main_menu_state.store_busy = false;
                     self.ui.app.main_menu_state.error_message =

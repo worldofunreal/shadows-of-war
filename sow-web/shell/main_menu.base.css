@@ -382,10 +382,18 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 
 .sow-menu__reward-card--crowns,
 .sow-menu__reward-card--level { --reward-color: #ffd36a; --reward-glow: rgba(255, 211, 106, .48); }
+.sow-menu__reward-card--leader { --reward-color: #efc878; --reward-glow: rgba(239, 200, 120, .52); }
 .sow-menu__reward-card--laurels { --reward-color: #d9b5ff; --reward-glow: rgba(192, 132, 252, .5); }
 .sow-menu__reward-card--level .sow-menu__reward-amount {
     font-size: clamp(22px, 2.8vw, 38px);
     white-space: nowrap;
+}
+.sow-menu__reward-card--leader .sow-menu__reward-emblem { width: 116px; height: 116px; border-radius: 50%; object-fit: cover; }
+.sow-menu__reward-card--leader .sow-menu__reward-amount {
+    max-width: 100%;
+    font-size: clamp(18px, 2.2vw, 30px);
+    line-height: 1.15;
+    text-align: center;
 }
 
 .sow-menu__reward-medallion {

@@ -21,6 +21,7 @@ rustybuzz = "0.20"
 unicode-bidi = "0.3"
 
 [dev-dependencies]
+sow-i18n = { workspace = true }
 # Exact same naga blade uses at runtime (incl. the web build) so the
 # headless shader tests validate with the production parser.
 naga = { git = "https://github.com/gfx-rs/wgpu", rev = "b0a44f766e95a38f0aa45565ff005173cc96d46a", features = ["wgsl-in"] }

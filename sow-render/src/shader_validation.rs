@@ -55,6 +55,13 @@ fn text_shader_parses_and_matches_globals_layout() {
 }
 
 #[test]
+fn avatar_sprite_mask_stays_circular_without_an_adjustable_corner_control() {
+    let source = include_str!("shaders/text_glow.wgsl");
+    assert!(source.contains("rounded_rect_distance(local, 0.5)"));
+    assert!(!source.contains("__TEXT_AVATAR_CORNER__"));
+}
+
+#[test]
 fn mover_shaders_parse_and_match_globals_layout() {
     let sprite_source =
         crate::shader_params::prepare_shader("MOVER_", include_str!("shaders/mover_sprites.wgsl"));

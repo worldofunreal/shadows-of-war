@@ -275,6 +275,10 @@ pub struct PlayerProfile {
     pub tribes_defeated: u32,
     pub preferred_leader: Option<String>,
     #[serde(default)]
+    pub prefer_random_leader: bool,
+    #[serde(default)]
+    pub completed_episodes: std::collections::BTreeSet<String>,
+    #[serde(default)]
     pub kills: u32,
     #[serde(default)]
     pub deaths: u32,
@@ -353,6 +357,8 @@ impl Default for PlayerProfile {
             empires_defeated: 0,
             tribes_defeated: 0,
             preferred_leader: None,
+            prefer_random_leader: false,
+            completed_episodes: std::collections::BTreeSet::new(),
             kills: 0,
             deaths: 0,
             assists: 0,
@@ -437,6 +443,7 @@ impl PlayerProfile {
                 laurels: reward
                     .laurels
                     .saturating_add(self.laurels.saturating_sub(laurels_before)),
+                unlocked_leaders: Vec::new(),
                 level_before: Some(level_before),
                 level_after: Some(self.level),
                 personal_closure_turn: None,
@@ -748,6 +755,13 @@ impl PlayerDb {
     /// line rather than surfacing as a user-facing timeout.
     pub async fn warm_connection(&self) -> Result<(), redis::RedisError> {
         self.get_connection().await.map(|_| ())
+    }
+
+    pub async fn account_by_id(
+        &self, account_id: &str,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let mut con = self.get_connection().await?;
+        Self::load_account(&mut con, account_id).await
     }
 
     /// Record an already validated batch in one Redis round trip. The Lua
@@ -3439,6 +3453,118 @@ impl PlayerDb {
         ))
     }
 
+    pub async fn draw_leader_for_account(
+        &self,
+        account_id: &str,
+    ) -> Result<crate::leaders::Leader, Box<dyn std::error::Error + Send + Sync>> {
+        let mut con = self.get_connection().await?;
+        let account = Self::load_account(&mut con, account_id).await?;
+        crate::commerce::draw_available_leader(
+            &account.profile.owned_leaders,
+            crate::commerce::current_rotation_period(),
+        )
+        .ok_or_else(|| "no available leaders".into())
+    }
+
+    pub async fn update_leader_selection(
+        &self,
+        account_id: &str,
+        preferred_leader: Option<&str>,
+        prefer_random_leader: bool,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let requested = if prefer_random_leader {
+            None
+        } else {
+            Some(crate::commerce::leader_from_id(
+                preferred_leader.ok_or("leader selection is required")?,
+            ).ok_or("unknown leader")?)
+        };
+        let period = crate::commerce::current_rotation_period();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mut con = self.get_connection().await?;
+        let account = Self::update_account_atomic(&mut con, &Self::account_key(account_id), |account| {
+            if let Some(leader) = requested {
+                account.profile.preferred_leader = Some(crate::commerce::leader_wire_id(leader).to_string());
+                account.profile.prefer_random_leader = false;
+            } else {
+                if account.profile.preferred_leader.is_none() {
+                    let assigned = crate::commerce::assigned_leader_for_account(account_id, period);
+                    account.profile.preferred_leader = Some(crate::commerce::leader_wire_id(assigned).to_string());
+                }
+                account.profile.prefer_random_leader = true;
+            }
+            account.updated_at = now;
+        }).await?;
+        self.save_player_account_to_redb(&account);
+        Ok(account)
+    }
+
+    pub async fn complete_campaign_episode(
+        &self,
+        account_id: &str,
+        episode_id: &str,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let episode = crate::campaign::episode(episode_id).ok_or("unknown campaign episode")?;
+        if !crate::campaign::episode_is_published(episode.id) {
+            return Err("campaign episode is not published".into());
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mut failure = None;
+        let mut con = self.get_connection().await?;
+        let account = Self::update_account_atomic(&mut con, &Self::account_key(account_id), |account| {
+            if account.kind != AccountKind::Human {
+                failure = Some("campaign progress requires a human account");
+                return;
+            }
+            if account.profile.completed_episodes.contains(episode.id) {
+                return;
+            }
+            if !crate::campaign::prerequisite_satisfied(
+                episode.id,
+                &account.profile.completed_episodes,
+            ) {
+                failure = Some("campaign episodes must be completed in order");
+                return;
+            }
+
+            account.profile.completed_episodes.insert(episode.id.to_string());
+            let reward = crate::rewards::calculate(crate::rewards::RewardInput {
+                tutorial: true,
+                ..Default::default()
+            });
+            let receipt_id = format!("campaign:{}", episode.id);
+            let unlocked_leader = crate::campaign::earned_leader(&account.profile.completed_episodes)
+                .filter(|leader| !account.profile.owned_leaders.contains(crate::commerce::leader_id(*leader)));
+            if let Some(leader) = unlocked_leader {
+                account.profile.owned_leaders.insert(crate::commerce::leader_id(leader).to_string());
+            }
+            account.profile.apply_reward_receipt(
+                &receipt_id,
+                &receipt_id,
+                episode.advisor.name(),
+                reward,
+                now,
+            );
+            if let Some(leader) = unlocked_leader
+                && let Some(receipt) = account.profile.reward_receipts.get_mut(&receipt_id)
+            {
+                receipt.unlocked_leaders.push(crate::commerce::leader_id(leader).to_string());
+            }
+            account.updated_at = now;
+        }).await?;
+        if let Some(error) = failure {
+            return Err(error.into());
+        }
+        self.save_player_account_to_redb(&account);
+        Ok(account)
+    }
+
     /// Resolve a canonical account ID. Display handles and non-canonical
     /// identity namespaces are not accepted for authenticated operations.
     pub async fn account_id_from_reference(
@@ -3708,7 +3834,11 @@ impl PlayerDb {
                 {
                     let leader_id = crate::commerce::leader_id(leader).to_string();
                     if account.profile.purchased_leaders.remove(&leader_id) {
-                        account.profile.owned_leaders.remove(&leader_id);
+                        let earned = crate::campaign::earned_leader(&account.profile.completed_episodes)
+                            .is_some_and(|earned| crate::commerce::leader_id(earned) == leader_id);
+                        if !earned {
+                            account.profile.owned_leaders.remove(&leader_id);
+                        }
                     }
                 } else if let Some(skin) = crate::commerce::direct_skin_for_product(product_id) {
                     if account.profile.purchased_skins.remove(&skin.id) {
@@ -3768,6 +3898,9 @@ impl PlayerDb {
         currency: &str,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         let leader = crate::commerce::leader_from_id(requested_leader).ok_or("unknown leader")?;
+        if crate::commerce::PERMANENTLY_FREE_LEADERS.contains(&leader) {
+            return Err("leader is permanently free".into());
+        }
         let leader_id = crate::commerce::leader_id(leader).to_string();
         let (cost, use_gems) = match currency {
             "gems" => (crate::commerce::LEADER_UNLOCK_COST_GEMS, true),
@@ -4266,13 +4399,6 @@ impl PlayerDb {
                 0,
                 canonical_leader.as_deref(),
             );
-            if let Some(leader) = canonical_leader
-                .as_deref()
-                .and_then(crate::commerce::leader_from_id)
-            {
-                account.profile.preferred_leader =
-                    Some(crate::commerce::leader_wire_id(leader).to_string());
-            }
             account.profile.apply_reward_receipt(
                 match_id,
                 match_id,
@@ -4580,6 +4706,120 @@ impl PlayerDb {
         Ok(())
     }
 
+    pub fn registered_human_participant(
+        &self, match_id: &str, account_id: &str,
+    ) -> Result<MatchStartRecord, Box<dyn std::error::Error + Send + Sync>> {
+        let start = self.match_start_record(match_id)?.ok_or("trusted match registration unavailable")?;
+        let human = start.player_ids.iter().any(|id| id == account_id)
+            && start.metadata.get("relay_players").and_then(serde_json::Value::as_array)
+                .is_some_and(|players| players.iter().any(|player| {
+                    player.get("database_account_id").and_then(serde_json::Value::as_str) == Some(account_id)
+                        && player.get("is_internal").and_then(serde_json::Value::as_bool) != Some(true)
+                }));
+        if !human { return Err("account is not a registered human participant".into()); }
+        Ok(start)
+    }
+
+    pub fn match_work(
+        &self, key: &str,
+    ) -> Result<Option<crate::profile::MatchWorkRecord>, Box<dyn std::error::Error + Send + Sync>> {
+        let db = self.metadata_db.as_ref().ok_or("match metadata database unavailable")?;
+        let txn = db.begin_read()?;
+        let table = txn.open_table(PENDING_REPLAY_VERIFICATIONS_TABLE)?;
+        table.get(key)?.map(|value| crate::profile::MatchWorkRecord::decode(key, value.value())
+            .map_err(Into::into)).transpose()
+    }
+
+    /// The existing durable replay queue also owns exit commands and personal
+    /// results. A duplicate key must describe the exact same committed result.
+    pub fn queue_match_work(
+        &self, work: crate::profile::MatchWork,
+    ) -> Result<crate::profile::MatchWorkRecord, Box<dyn std::error::Error + Send + Sync>> {
+        use crate::profile::MatchWorkRecord;
+        if work.match_id().parse::<u64>().is_err() { return Err("invalid match id".into()); }
+        match &work {
+            crate::profile::MatchWork::Exit { match_id, account_id }
+                | crate::profile::MatchWork::Participant { match_id, account_id, .. } => {
+                self.registered_human_participant(match_id, account_id)?;
+            }
+            crate::profile::MatchWork::Replay { match_id } => {
+                self.match_start_record(match_id)?.ok_or("trusted match registration unavailable")?;
+            }
+        }
+        let db = self.metadata_db.as_ref().ok_or("match metadata database unavailable")?;
+        let txn = db.begin_write()?;
+        let mut table = txn.open_table(PENDING_REPLAY_VERIFICATIONS_TABLE)?;
+        let key = work.key();
+        if let Some(value) = table.get(key.as_str())? {
+            let existing = MatchWorkRecord::decode(&key, value.value())?;
+            if existing.work != work { return Err("pending result conflicts with its saved state".into()); }
+            return Ok(existing);
+        }
+        let record = MatchWorkRecord::new(work);
+        let bytes = serde_json::to_vec(&record)?;
+        table.insert(key.as_str(), bytes.as_slice())?;
+        drop(table);
+        txn.commit()?;
+        Ok(record)
+    }
+
+    pub fn save_match_work(
+        &self, record: &crate::profile::MatchWorkRecord,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let db = self.metadata_db.as_ref().ok_or("match metadata database unavailable")?;
+        let txn = db.begin_write()?;
+        let mut table = txn.open_table(PENDING_REPLAY_VERIFICATIONS_TABLE)?;
+        let key = record.work.key();
+        // Never resurrect a job already completed by another operation.
+        if table.get(key.as_str())?.is_some() {
+            let bytes = serde_json::to_vec(record)?;
+            table.insert(key.as_str(), bytes.as_slice())?;
+        }
+        drop(table);
+        txn.commit()?;
+        Ok(())
+    }
+
+    pub fn remove_match_work(
+        &self, key: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let db = self.metadata_db.as_ref().ok_or("match metadata database unavailable")?;
+        let txn = db.begin_write()?;
+        let mut table = txn.open_table(PENDING_REPLAY_VERIFICATIONS_TABLE)?;
+        table.remove(key)?;
+        drop(table);
+        txn.commit()?;
+        Ok(())
+    }
+
+    pub fn pending_match_work(
+        &self, now: u64,
+    ) -> Result<Vec<crate::profile::MatchWorkRecord>, Box<dyn std::error::Error + Send + Sync>> {
+        let db = self.metadata_db.as_ref().ok_or("match metadata database unavailable")?;
+        let txn = db.begin_read()?;
+        let table = txn.open_table(PENDING_REPLAY_VERIFICATIONS_TABLE)?;
+        let mut jobs = Vec::new();
+        for entry in table.iter()? {
+            let (key, value) = entry?;
+            let job = crate::profile::MatchWorkRecord::decode(key.value(), value.value())?;
+            if job.retry_at <= now { jobs.push(job); }
+        }
+        jobs.sort_by_key(|job| match job.work {
+            crate::profile::MatchWork::Exit { .. } => 0,
+            crate::profile::MatchWork::Participant { .. } => 1,
+            crate::profile::MatchWork::Replay { .. } => 2,
+        });
+        // Reserve room for both owners: a backlog of exits must not hide the
+        // result needed to finish them, or vice versa.
+        let (mut exits, mut checks) = (0, 0);
+        jobs.retain(|job| {
+            let count = if matches!(job.work, crate::profile::MatchWork::Exit { .. }) { &mut exits } else { &mut checks };
+            *count += 1;
+            *count <= 32
+        });
+        Ok(jobs)
+    }
+
     pub fn pending_replay_verifications(
         &self,
         limit: usize,
@@ -4592,7 +4832,7 @@ impl PlayerDb {
         let mut pending = Vec::with_capacity(limit.min(64));
         for entry in table.iter()?.take(limit.min(64)) {
             let (key, _) = entry?;
-            pending.push(key.value().to_string());
+            if key.value().parse::<u64>().is_ok() { pending.push(key.value().to_string()); }
         }
         Ok(pending)
     }
@@ -5149,6 +5389,62 @@ fn is_valid_gem_grant_request_id(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn match_work_survives_restart_and_four_concurrent_deliveries() {
+        use crate::profile::{MatchStartRecord, MatchWork, ReplayVerificationStatus};
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("returns.redb");
+        let account = "0123456789abcdef0123456789abcdef";
+        let work = MatchWork::Participant { match_id:"42".into(), account_id:account.into(),
+            closure_turn:7, replay_sha256:"a".repeat(64), rejected:false };
+        let exit = MatchWork::Exit { match_id:"42".into(), account_id:account.into() };
+        {
+            let db = super::PlayerDb::new("redis://127.0.0.1/", None,
+                Some(std::sync::Arc::new(crate::metadata_db::init_database(&path).unwrap())));
+            db.save_match_start_record(MatchStartRecord { match_id:"42".into(), player_ids:vec![account.into()],
+                metadata:serde_json::json!({"relay_players":[{"database_account_id":account,"is_internal":false}]}),
+                replay_status:ReplayVerificationStatus::Pending }).unwrap();
+            let barrier = std::sync::Arc::new(std::sync::Barrier::new(4));
+            std::thread::scope(|scope| {
+                for _ in 0..4 {
+                    let db = &db;
+                    let work = &work;
+                    let barrier = barrier.clone();
+                    scope.spawn(move || { barrier.wait(); db.queue_match_work(work.clone()).unwrap(); });
+                }
+            });
+            assert_eq!(db.pending_match_work(u64::MAX).unwrap().len(), 1);
+            db.queue_match_work(exit.clone()).unwrap();
+            let mut conflict = work.clone();
+            if let MatchWork::Participant { closure_turn, .. } = &mut conflict { *closure_turn = 8; }
+            assert!(db.queue_match_work(conflict).is_err());
+            assert!(db.queue_match_work(MatchWork::Exit { match_id:"42".into(), account_id:"ffffffffffffffffffffffffffffffff".into() }).is_err());
+            db.queue_replay_verification("42").unwrap();
+        }
+        let db = super::PlayerDb::new("redis://127.0.0.1/", None,
+            Some(std::sync::Arc::new(crate::metadata_db::init_database(&path).unwrap())));
+        assert_eq!(db.match_work(&work.key()).unwrap().unwrap().work, work);
+        assert_eq!(db.match_work(&exit.key()).unwrap().unwrap().work, exit);
+        assert_eq!(db.match_work("42").unwrap().unwrap().work, MatchWork::Replay { match_id:"42".into() });
+        db.queue_match_work(exit.clone()).unwrap();
+        for id in 100..180 {
+            db.save_match_start_record(MatchStartRecord { match_id:id.to_string(), player_ids:vec![account.into()],
+                metadata:serde_json::json!({"relay_players":[{"database_account_id":account,"is_internal":false}]}), replay_status:ReplayVerificationStatus::Pending }).unwrap();
+            db.queue_replay_verification(&id.to_string()).unwrap();
+        }
+        let pending = db.pending_match_work(u64::MAX).unwrap();
+        assert_eq!(pending.len(), 33);
+        assert_eq!(pending[0].work, exit, "old replay backlog must not hide a new exit command");
+        assert!(pending.iter().any(|job| job.work == work));
+        for id in 100..180 {
+            db.queue_match_work(MatchWork::Exit { match_id:id.to_string(), account_id:account.into() }).unwrap();
+        }
+        let pending = db.pending_match_work(u64::MAX).unwrap();
+        assert_eq!(pending.len(), 64);
+        assert!(pending.iter().any(|job| job.work == work), "an exit backlog must not hide the result needed to finish those exits");
+        db.remove_match_work(&work.key()).unwrap();
+        assert!(db.match_work(&work.key()).unwrap().is_none());
+    }
     use super::{
         AccountKind, DISPLAY_NAME_MAX_CHARS, LeaderCareerStats, MatchRecord, PlayerAccount,
         PlayerDb, PlayerProfile, PurchaseRecord, VerifiedReceiptDecision,
@@ -5648,6 +5944,12 @@ mod tests {
             verified_receipt_decision(Some(&receipt), Some(8)),
             VerifiedReceiptDecision::Apply
         );
+        let visible_verified = crate::profile::RewardReceipt {
+            verification_status: Some(crate::profile::ReplayVerificationStatus::Verified),
+            ..receipt.clone()
+        };
+        assert_eq!(verified_receipt_decision(Some(&visible_verified), Some(8)), VerifiedReceiptDecision::Apply,
+            "retry must finish checked storage even when the live receipt is already verified");
         assert_eq!(
             verified_receipt_decision(Some(&receipt), Some(9)),
             VerifiedReceiptDecision::Reject

@@ -60,9 +60,18 @@
     }
 
     function assetUrl(path) {
-        const v = window.SOW_BUILD_TS;
-        if (v && v !== '__BUILD_TS__') {
-            return path + '?v=' + encodeURIComponent(v);
+        const versions = window.SOW_ASSET_TS || {};
+        let keyed;
+        for (const root of ['/assets/', '/']) {
+            const at = path.indexOf(root);
+            if (at >= 0) {
+                keyed = versions[path.slice(at)];
+                if (keyed !== undefined) break;
+            }
+        }
+        if (keyed === undefined) keyed = window.SOW_BUILD_TS;
+        if (keyed && keyed !== '__BUILD_TS__') {
+            return path + '?v=' + encodeURIComponent(keyed);
         }
         return path;
     }
@@ -80,7 +89,7 @@
             : (window.innerHeight >= window.innerWidth ? 'mobile' : 'desktop');
     }
 
-    function prepareLeaderArt(slug) {
+    function prepareLeaderArt(slug, fetchPriority) {
         slug = String(slug || '');
         if (!/^[a-z0-9_]+$/.test(slug)) return Promise.resolve(false);
 
@@ -90,7 +99,10 @@
 
         const image = new Image();
         image.decoding = 'async';
-        image.fetchPriority = 'high';
+        // The boot loader paints its inline splash and never waits on this art,
+        // so at Boot it must not compete with the WASM download; match
+        // transitions do wait on it and keep the high priority.
+        image.fetchPriority = fetchPriority === 'low' ? 'low' : 'high';
         const prepared = { slug, variant, url, image, ready: false, promise: null };
         preparedLeaderArt = prepared;
         prepared.promise = new Promise((resolve) => {
@@ -248,7 +260,7 @@
         if (loaderArtKey === 'boot' && state && state.loader_job === 'EnterGame') {
             const slug = leaderSlugForState(state);
             if (slug) {
-                prepareLeaderArt(slug);
+                prepareLeaderArt(slug, 'low');
                 if (preparedLeaderArt && preparedLeaderArt.slug === slug) {
                     activeMatchArt = preparedLeaderArt;
                 }

@@ -161,6 +161,7 @@ struct VerifiedIdentityRequest<'a> {
     display_name: Option<&'a str>,
     avatar_url: Option<&'a str>,
     requested_leader: Option<&'a str>,
+    random_leader: bool,
 }
 
 struct VerifiedExternalIdentity {
@@ -201,6 +202,7 @@ impl IdentityState {
         avatar_url: Option<&str>,
         requested_leader: Option<&str>,
         account_id: Option<&str>,
+        random_leader: bool,
     ) -> Result<DbIdentityResponse, String> {
         if provider.trim().is_empty()
             || environment.trim().is_empty()
@@ -223,6 +225,7 @@ impl IdentityState {
                 display_name,
                 avatar_url,
                 requested_leader,
+                random_leader,
             })
             .timeout(Duration::from_secs(5))
             .send()
@@ -377,6 +380,7 @@ impl IdentityState {
         &self,
         auth: &AuthProof,
         requested_leader: sow_core::player::Leader,
+        random_leader: bool,
     ) -> Result<VerifiedIdentity, String> {
         let requested = sow_core::commerce::leader_wire_id(requested_leader).to_string();
         if auth.provider == "anonymous" {
@@ -392,6 +396,7 @@ impl IdentityState {
                     "account_id": auth.account_id,
                     "token": auth.token,
                     "requested_leader": requested,
+                    "random_leader": random_leader,
                 }))
                 .timeout(Duration::from_secs(5))
                 .send()
@@ -434,6 +439,7 @@ impl IdentityState {
                 identity.avatar_url.as_deref(),
                 Some(&requested),
                 identity.account_id.as_deref(),
+                random_leader,
             )
             .await?;
         let leader = body
@@ -466,6 +472,7 @@ impl IdentityState {
                 identity.avatar_url.as_deref(),
                 None,
                 identity.account_id.as_deref(),
+                false,
             )
             .await?
             .account)
@@ -547,6 +554,7 @@ impl IdentityState {
                 player.avatar_url.as_deref(),
                 None,
                 account_id.as_deref(),
+                false,
             )
             .await?;
         let handoff_token = random_token();

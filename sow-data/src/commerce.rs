@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 
 pub const FREE_ROTATION_SIZE: usize = 8;
 pub const ROTATION_PERIOD_SECS: u64 = 7 * 24 * 60 * 60;
+pub const PERMANENTLY_FREE_LEADERS: [Leader; 1] = [Leader::Boudica];
 // ponytail: one balancing constant until real retention data exists; move pricing to live config then.
 // Crowns are the free spendable currency (owner decision 2026-09); laurels are
 // achievement points and are never a price.
@@ -56,6 +57,8 @@ pub struct LeaderOffer {
     pub cost_crowns: u64,
     pub cost_gems: u64,
     pub free_rotation: bool,
+    #[serde(default)]
+    pub permanently_free: bool,
     pub owned: bool,
     pub available: bool,
     pub direct_product_id: String,
@@ -118,9 +121,13 @@ pub const fn rotation_period(unix_seconds: u64) -> u64 {
 }
 
 pub fn rotation_for_period(period: u64) -> Vec<Leader> {
-    let start = (period as usize * FREE_ROTATION_SIZE) % Leader::ALL.len();
+    let candidates = Leader::ALL
+        .into_iter()
+        .filter(|leader| !PERMANENTLY_FREE_LEADERS.contains(leader))
+        .collect::<Vec<_>>();
+    let start = (period as usize * FREE_ROTATION_SIZE) % candidates.len();
     (0..FREE_ROTATION_SIZE)
-        .map(|offset| Leader::ALL[(start + offset) % Leader::ALL.len()])
+        .map(|offset| candidates[(start + offset) % candidates.len()])
         .collect()
 }
 
@@ -190,7 +197,24 @@ pub fn assigned_leader_for_account(account_id: &str, period: u64) -> Leader {
 }
 
 pub fn leader_available(leader: Leader, owned: &BTreeSet<String>, period: u64) -> bool {
-    owned.contains(leader_id(leader)) || rotation_for_period(period).contains(&leader)
+    PERMANENTLY_FREE_LEADERS.contains(&leader)
+        || owned.contains(leader_id(leader))
+        || rotation_for_period(period).contains(&leader)
+}
+
+pub fn available_leaders(owned: &BTreeSet<String>, period: u64) -> Vec<Leader> {
+    Leader::ALL
+        .into_iter()
+        .filter(|leader| leader_available(*leader, owned, period))
+        .collect()
+}
+
+#[cfg(feature = "server")]
+pub fn draw_available_leader(owned: &BTreeSet<String>, period: u64) -> Option<Leader> {
+    use rand::seq::SliceRandom;
+    available_leaders(owned, period)
+        .choose(&mut rand::thread_rng())
+        .copied()
 }
 
 pub fn gem_bundles() -> Vec<GemBundle> {
@@ -215,7 +239,11 @@ pub fn gem_amount_for_product(product_id: &str) -> Option<u64> {
 }
 
 pub fn direct_leader_product_id(leader: Leader) -> String {
-    format!("sow_offer_leader_{}", leader_id(leader))
+    if PERMANENTLY_FREE_LEADERS.contains(&leader) {
+        String::new()
+    } else {
+        format!("sow_offer_leader_{}", leader_id(leader))
+    }
 }
 
 pub fn direct_skin_product_id(skin_id: &str) -> Option<String> {
@@ -242,13 +270,18 @@ pub fn direct_skin_for_product(product_id: &str) -> Option<SkinOffer> {
 
 pub fn is_store_product(product_id: &str) -> bool {
     gem_amount_for_product(product_id).is_some()
-        || direct_leader_for_product(product_id).is_some()
+        || direct_leader_for_product(product_id)
+            .is_some_and(|leader| !PERMANENTLY_FREE_LEADERS.contains(&leader))
         || direct_skin_for_product(product_id).is_some()
         || product_id == "sow_offer_genghis_khan_royal_lattice"
 }
 
-pub fn direct_price_label_for_leader(_leader: Leader) -> &'static str {
-    "$5.99"
+pub fn direct_price_label_for_leader(leader: Leader) -> &'static str {
+    if PERMANENTLY_FREE_LEADERS.contains(&leader) {
+        ""
+    } else {
+        "$5.99"
+    }
 }
 
 pub fn direct_price_label_for_skin(skin_id: &str) -> Option<&'static str> {
@@ -338,16 +371,18 @@ pub fn catalog_for_profile(
         .map(|leader| {
             let owned = owned_leaders.contains(leader_id(leader));
             let free_rotation = free.contains(&leader);
+            let permanently_free = PERMANENTLY_FREE_LEADERS.contains(&leader);
             LeaderOffer {
                 id: leader_id(leader).to_string(),
                 name: leader.name().to_string(),
                 civilization: leader.civilization().name().to_string(),
                 perk: leader.perk_description().to_string(),
-                cost_crowns: LEADER_UNLOCK_COST_CROWNS,
-                cost_gems: LEADER_UNLOCK_COST_GEMS,
+                cost_crowns: if permanently_free { 0 } else { LEADER_UNLOCK_COST_CROWNS },
+                cost_gems: if permanently_free { 0 } else { LEADER_UNLOCK_COST_GEMS },
                 free_rotation,
+                permanently_free,
                 owned,
-                available: free_rotation || owned,
+                available: permanently_free || free_rotation || owned,
                 direct_product_id: direct_leader_product_id(leader),
                 direct_price_label: direct_price_label_for_leader(leader).to_string(),
             }
@@ -382,20 +417,68 @@ mod tests {
 
     #[test]
     fn rotation_is_eight_and_deterministic() {
-        assert_eq!(rotation_for_period(7).len(), FREE_ROTATION_SIZE);
-        assert_eq!(rotation_for_period(7), rotation_for_period(7));
-        assert_ne!(rotation_for_period(7), rotation_for_period(8));
+        let first = rotation_for_period(7);
+        assert_eq!(first.len(), FREE_ROTATION_SIZE);
+        assert_eq!(first, rotation_for_period(7));
+        assert_ne!(first, rotation_for_period(8));
+        assert!(!first.contains(&Leader::Boudica));
+        assert_eq!(first.iter().copied().collect::<std::collections::HashSet<_>>().len(), FREE_ROTATION_SIZE);
+    }
+
+    #[test]
+    fn new_account_assignment_stays_inside_the_eight_leader_rotation() {
+        for period in 0..16 {
+            let assigned = assigned_leader_for_account("new-account", period);
+            assert!(rotation_for_period(period).contains(&assigned));
+            assert_ne!(assigned, Leader::Boudica);
+        }
     }
 
     #[test]
     fn locked_leader_falls_back_to_account_assignment() {
         let owned = BTreeSet::new();
-        // period 7 rotation = Boudica, LadySixSky, Leonidas, Napoleon, Caesar, Cleopatra, Ragnar, SunTzu
-        // Alexander is locked at period 7, so it must fallback
-        let resolution = resolve_leader(Some("alexander"), "account", &owned, 7);
+        let rotation = rotation_for_period(7);
+        let locked = Leader::ALL
+            .into_iter()
+            .find(|leader| *leader != Leader::Boudica && !rotation.contains(leader))
+            .unwrap();
+        let resolution = resolve_leader(Some(leader_id(locked)), "account", &owned, 7);
         assert!(!resolution.requested_available);
         assert!(resolution.used_fallback);
-        assert!(rotation_for_period(7).contains(&resolution.resolved));
+        assert!(rotation.contains(&resolution.resolved));
+    }
+
+    #[test]
+    fn random_pool_is_unique_and_contains_only_free_or_owned_leaders() {
+        let rotation = rotation_for_period(7);
+        let owned = BTreeSet::from([leader_id(Leader::Napoleon).to_string()]);
+        let available = available_leaders(&owned, 7);
+        assert_eq!(available.iter().copied().collect::<std::collections::HashSet<_>>().len(), available.len());
+        assert!(available.contains(&Leader::Boudica));
+        assert!(available.contains(&Leader::Napoleon));
+        for leader in Leader::ALL {
+            if !rotation.contains(&leader)
+                && !owned.contains(leader_id(leader))
+                && leader != Leader::Boudica
+            {
+                assert!(!available.contains(&leader));
+            }
+        }
+    }
+
+    #[test]
+    fn boudica_is_permanently_free_and_has_no_purchase_product() {
+        let empty = BTreeSet::new();
+        let catalog = catalog_for_profile(&empty, &empty, 0, 0, 7);
+        let boudica = catalog.leaders.iter().find(|leader| leader.id == "boudica").unwrap();
+        assert!(boudica.permanently_free);
+        assert!(boudica.available);
+        assert_eq!(boudica.cost_crowns, 0);
+        assert_eq!(boudica.cost_gems, 0);
+        assert!(boudica.direct_product_id.is_empty());
+        assert!(boudica.direct_price_label.is_empty());
+        assert!(!catalog.free_leaders.contains(&"boudica".to_string()));
+        assert!(!is_store_product("sow_offer_leader_boudica"));
     }
 
     #[test]
@@ -456,7 +539,7 @@ mod tests {
     fn catalog_distinguishes_free_owned_and_locked_leaders() {
         let empty = BTreeSet::new();
         let catalog = catalog_for_profile(&empty, &empty, 0, 475, 7);
-        assert!(catalog.leaders.iter().all(|leader| {
+        assert!(catalog.leaders.iter().filter(|leader| !leader.permanently_free).all(|leader| {
             leader.cost_gems == 450 && leader.cost_crowns == LEADER_UNLOCK_COST_CROWNS
         }));
         let free = catalog
@@ -467,8 +550,10 @@ mod tests {
         let locked = catalog
             .leaders
             .iter()
-            .find(|leader| !leader.free_rotation)
+            .find(|leader| !leader.free_rotation && !leader.permanently_free)
             .unwrap();
+        assert_eq!(catalog.free_leaders.len(), FREE_ROTATION_SIZE);
+        assert!(!catalog.free_leaders.contains(&"boudica".to_string()));
         assert!(free.available);
         assert!(!free.owned);
         assert!(!locked.available);

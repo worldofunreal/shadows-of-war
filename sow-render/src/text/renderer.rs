@@ -2,10 +2,10 @@ use crate::context::RenderContext;
 use crate::text::msdf::{FontAtlas, MsdfChar};
 use crate::text::texture::FontAtlasTexture;
 use crate::text::types::{
-    AVATAR_CELL, AVATAR_COLS, AVATAR_CORNER_RADIUS_RATIO, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC,
-    KIND_BUILDING_SPRITE, KIND_CROSS, KIND_DISC, KIND_EMOJI, KIND_GLYPH, KIND_RECT, KIND_RING,
-    KIND_ROUNDED_RECT, KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite,
-    OutlineStyle, TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
+    AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC, KIND_BUILDING_SPRITE,
+    KIND_CROSS, KIND_DISC, KIND_EMOJI, KIND_GLYPH, KIND_RECT, KIND_RING, KIND_ROUNDED_RECT,
+    KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite, OutlineStyle,
+    TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
 };
 use blade_graphics as gpu;
 
@@ -205,6 +205,10 @@ fn emoji_instance(
         underlay_softness,
         kind: KIND_EMOJI,
     }
+}
+
+fn troop_icon_tint(alpha: f32) -> [f32; 4] {
+    [1.0, 1.0, 1.0, alpha]
 }
 
 fn shape_text(
@@ -915,6 +919,17 @@ impl TextRenderer {
         true
     }
 
+    /// Push the troop sword with its atlas colors and only the requested opacity.
+    pub fn push_troop_icon(
+        &mut self,
+        screen_pos: [f32; 2],
+        half_size: f32,
+        alpha: f32,
+        outline: OutlineStyle,
+    ) -> bool {
+        self.push_emoji("⚔", screen_pos, half_size, troop_icon_tint(alpha), outline)
+    }
+
     /// Push an emoji with standard tactical outline (90% black alpha, 1.5px thickness, 1.5px shadow).
     pub fn push_emoji_tactical(
         &mut self,
@@ -931,7 +946,7 @@ impl TextRenderer {
         )
     }
 
-    /// Push a filled, anti-aliased disc. `center`/`radius` are physical pixels.
+    /// Push a filled, anti-aliased disc. `center`/`size` are physical pixels.
     pub fn push_disc(&mut self, center: [f32; 2], radius: f32, color: [f32; 4]) {
         self.push_inst(TextInstanceGpu {
             screen_pos: [center[0] - radius, center[1] - radius],
@@ -1038,9 +1053,10 @@ impl TextRenderer {
         });
     }
 
-    /// Push an anti-aliased filled downward triangle. `center`/`size` are physical pixels.
+    /// Push an anti-aliased filled triangle; negative height points upward. `center`/`size` are physical pixels.
     pub fn push_triangle(&mut self, center: [f32; 2], size: [f32; 2], color: [f32; 4]) {
-        let size = [size[0].max(0.0), size[1].max(0.0)];
+        let points_up = size[1] < 0.0;
+        let size = [size[0].max(0.0), size[1].abs()];
         self.push_inst(TextInstanceGpu {
             screen_pos: [center[0] - size[0] * 0.5, center[1] - size[1] * 0.5],
             size,
@@ -1048,7 +1064,7 @@ impl TextRenderer {
             content_rect: [0.0, 0.0, 1.0, 1.0],
             color,
             outline_color: [0.0; 4],
-            face_dilate: 0.0,
+            face_dilate: if points_up { 1.0 } else { 0.0 },
             outline_thickness: 0.0,
             underlay_offset_y: 0.0,
             underlay_softness: 0.0,
@@ -1056,23 +1072,23 @@ impl TextRenderer {
         });
     }
 
-    /// Push a rounded-square image sprite from the avatar atlas. `center`/`radius` are physical
+    /// Push a circularly masked image sprite from the avatar atlas. `center`/`size` are physical
     /// pixels; `uv_rect` comes from [`avatar_uv`](Self::avatar_uv); `tint` multiplies the texels.
     pub fn push_sprite(
         &mut self,
         center: [f32; 2],
-        radius: f32,
+        size: [f32; 2],
         uv_rect: [f32; 4],
         tint: [f32; 4],
     ) {
         self.push_inst(TextInstanceGpu {
-            screen_pos: [center[0] - radius, center[1] - radius],
-            size: [radius * 2.0, radius * 2.0],
+            screen_pos: [center[0] - size[0] * 0.5, center[1] - size[1] * 0.5],
+            size,
             uv_rect,
             content_rect: [0.0, 0.0, 1.0, 1.0],
             color: tint,
             outline_color: [0.0; 4],
-            face_dilate: AVATAR_CORNER_RADIUS_RATIO,
+            face_dilate: 0.0,
             outline_thickness: 0.0,
             underlay_offset_y: 0.0,
             underlay_softness: 0.0,
@@ -1350,6 +1366,12 @@ impl TextRenderer {
 mod tests {
     use super::*;
 
+    #[test]
+    fn troop_icon_keeps_atlas_rgb_and_uses_alpha_only() {
+        assert_eq!(troop_icon_tint(1.0), [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(troop_icon_tint(0.35), [1.0, 1.0, 1.0, 0.35]);
+    }
+
     fn prepared_test_text(atlas: &FontAtlas, text: &str, spacing: f32) -> PreparedText {
         prepared_test_text_aligned(atlas, text, spacing, 0.5)
     }
@@ -1432,6 +1454,49 @@ mod tests {
                         "glyph {character:?} missing from Unicode corpus"
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn gameplay_atlas_covers_every_localized_emote_phrase() {
+        let atlas = FontAtlas::load_static();
+        let face = rustybuzz::Face::from_slice(ARABIC_FONT_BYTES, 0).unwrap();
+        let space_glyph = face.glyph_index(' ').map(|glyph| u32::from(glyph.0));
+        for (language, code, _) in sow_i18n::Language::published_registry() {
+            for definition in sow_core::emote::EMOTES {
+                let key = definition.bubble_key.strip_prefix("hud.").unwrap();
+                let message = &sow_i18n::web(language).hud.values[key];
+                if language == sow_i18n::Language::Arabic {
+                    let mut buffer = rustybuzz::UnicodeBuffer::new();
+                    buffer.push_str(message);
+                    buffer.set_direction(rustybuzz::Direction::RightToLeft);
+                    buffer.guess_segment_properties();
+                    for glyph in rustybuzz::shape(&face, &[], buffer).glyph_infos() {
+                        if Some(glyph.glyph_id) != space_glyph {
+                            assert!(
+                                atlas.arabic_glyph_map.contains_key(&glyph.glyph_id),
+                                "missing shaped Arabic glyph {} for {key}",
+                                glyph.glyph_id
+                            );
+                        }
+                    }
+                } else {
+                    for character in message
+                        .chars()
+                        .filter(|character| !character.is_whitespace())
+                    {
+                        assert!(
+                            atlas.char_map.contains_key(&character),
+                            "missing {character:?} in {code} {key}"
+                        );
+                    }
+                }
+                let prepared = prepared_test_text(&atlas, message, 1.0);
+                assert!(
+                    prepared.complete && prepared.instance_count() > 0,
+                    "empty or incomplete {code} {key}"
+                );
             }
         }
     }
@@ -1817,5 +1882,50 @@ mod tests {
         );
         assert!(!accepted);
         assert_eq!(instances.len(), MAX_TEXT_GLYPHS - 1);
+    }
+
+    #[test]
+    fn long_nameplate_text_fits_with_avatar_and_badges_at_each_zoom() {
+        use crate::nameplate::{
+            NameplateLayout, NameplateMetrics, NameplateStatus, NameplateStyle, ScreenPoint,
+            WorldRect, fit_bounds_to_land,
+        };
+
+        let atlas = FontAtlas::load_static();
+        let name = prepared_test_text(
+            &atlas,
+            "NAMEPLATE LONG NAME 0123456789 NAMEPLATE LONG NAME",
+            0.55,
+        );
+        let troops = prepared_test_text(&atlas, "15.0K", 0.55);
+        let center = ScreenPoint([20.0, 30.0]);
+        let metrics = NameplateMetrics::compute(16.0, NameplateStyle::HumanGhost, true);
+        assert!(name.measure_at(metrics.render_size()).width > metrics.avatar_diameter());
+
+        let status = NameplateStatus {
+            show_names: true,
+            show_troops: true,
+            is_me: true,
+            is_allied: true,
+            has_request: true,
+            rank: Some(1),
+            has_traitor: true,
+            has_disconnected: true,
+            ..Default::default()
+        };
+        let layout = NameplateLayout::compute(center, metrics, &name, &troops, 1.0, status, 2.0);
+        let bounds = layout.visual_bounds(center, 2.0);
+        let land = WorldRect([19.0, 29.0, 21.0, 31.0]);
+
+        for zoom in [1.0, 4.0, 12.0] {
+            let scale = fit_bounds_to_land(bounds, center, land, zoom);
+            assert!(scale > 0.0 && scale < 1.0);
+            let fitted = layout
+                .scaled_about(center, scale)
+                .visual_bounds(center, 2.0 * scale)
+                .extents_about(center);
+            assert!(fitted[0] * 2.0 <= 2.0 * zoom + 0.001);
+            assert!(fitted[1] * 2.0 <= 2.0 * zoom + 0.001);
+        }
     }
 }

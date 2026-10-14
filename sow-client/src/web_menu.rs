@@ -118,6 +118,7 @@ enum WebMenuCommand {
     SetLeader {
         leader_id: String,
     },
+    SetRandomLeader,
     UnlockLeader {
         leader_id: String,
         currency: String,
@@ -269,13 +270,21 @@ enum WebMenuCommand {
     ZoomIn,
     ZoomOut,
     CenterCamera,
-    ExpressEmoji {
-        emoji: String,
+    ExpressEmote {
+        session: u64,
+        tile_idx: u32,
+        kind: sow_core::emote::EmoteKind,
         #[serde(default)]
         pinned: bool,
     },
-    SetEmojiPinned {
+    ClearEmote,
+    SetEmotePinned {
         pinned: bool,
+    },
+    SetEmoteTexts {
+        texts: [String; 4],
+        #[serde(default)]
+        safe_area: [f32; 4],
     },
     FocusPlayer {
         player_id: u16,
@@ -444,6 +453,7 @@ struct MyPlayerSummary {
     nuke_cooldown_ticks: u32,
     boats_in_use: u32,
     boat_capacity: u32,
+    emote_pinned: bool,
 }
 
 fn my_player_summary(app: &SowApp, snapshot_tick: u64, my_pid: u16) -> Option<MyPlayerSummary> {
@@ -475,6 +485,7 @@ fn my_player_summary(app: &SowApp, snapshot_tick: u64, my_pid: u16) -> Option<My
                 nuke_cooldown_ticks: player.nuke_cooldown_ticks,
                 boats_in_use: player.boats_in_use,
                 boat_capacity: player.boat_capacity,
+                emote_pinned: player.active_emote.is_some_and(|event| event.pinned),
             });
         *cache = Some((snapshot_tick, my_pid, summary));
         summary
@@ -835,13 +846,29 @@ impl SowApp {
                         );
                         continue;
                     }
-                    if campaign != CampaignId::Boudica && self
-                        .progress
-                        .complete_episode(campaign.episode_id(), campaign.advisor())
-                    {
+                    if campaign == CampaignId::Boudica {
+                        self.begin_exit_to_main_menu();
+                        continue;
+                    }
+                    if !sow_data::campaign::episode_is_published(campaign.episode_id()) {
+                        self.ui.app.main_menu_state.error_message =
+                            Some(crate::ui::UiText::new("tutorial.unavailable"));
+                        continue;
+                    }
+                    if self.progress.complete_episode(campaign.episode_id()) {
                         self.save_local_progress();
                     }
-                    self.begin_exit_to_main_menu();
+                    if self
+                        .progress
+                        .pending_campaign_completions
+                        .contains(campaign.episode_id())
+                    {
+                        self.pending_campaign_exit = Some(campaign.episode_id().to_string());
+                        self.profile_action_retry_at = Some(web_time::Instant::now());
+                        self.poll_profile_actions(web_time::Instant::now());
+                    } else {
+                        self.begin_exit_to_main_menu();
+                    }
                 }
                 WebMenuCommand::SetLeader { leader_id } => {
                     let value = serde_json::Value::String(leader_id);
@@ -851,10 +878,23 @@ impl SowApp {
                                 .app
                                 .main_menu_state
                                 .set_selected_leader(leader, true);
-                            self.leader_selection_revision = self.leader_selection_revision.wrapping_add(1);
+                            self.progress.preferred_leader = Some(leader);
+                            self.progress.prefer_random_leader = false;
+                            self.progress.leader_selection_pending = true;
+                            self.save_local_progress();
+                            self.persist_leader_selection();
+                            self.leader_selection_revision =
+                                self.leader_selection_revision.wrapping_add(1);
                         }
                         Err(error) => log::warn!("[WEB MENU] invalid leader: {error}"),
                     }
+                }
+                WebMenuCommand::SetRandomLeader => {
+                    self.ui.app.main_menu_state.set_random_leader(true, true);
+                    self.progress.prefer_random_leader = true;
+                    self.progress.leader_selection_pending = true;
+                    self.save_local_progress();
+                    self.persist_leader_selection();
                 }
                 WebMenuCommand::UnlockLeader {
                     leader_id,
@@ -882,8 +922,20 @@ impl SowApp {
                         self.acknowledge_reward_receipts(receipt_ids);
                     }
                 }
-                WebMenuCommand::SaveMenuGuideProgress { guide_id, completed_steps, current_step, status, selected_leader } => {
-                    self.save_menu_guide_progress(guide_id, completed_steps, current_step, status, selected_leader);
+                WebMenuCommand::SaveMenuGuideProgress {
+                    guide_id,
+                    completed_steps,
+                    current_step,
+                    status,
+                    selected_leader,
+                } => {
+                    self.save_menu_guide_progress(
+                        guide_id,
+                        completed_steps,
+                        current_step,
+                        status,
+                        selected_leader,
+                    );
                 }
                 WebMenuCommand::OpenBrowser => {
                     self.process_ui_actions(Some(UiAction::OpenJoinBrowser));
@@ -1220,7 +1272,8 @@ impl SowApp {
                     #[cfg(not(any(feature = "dev", debug_assertions)))]
                     let _ = (target, phase, paused, repeat);
                 }
-                WebMenuCommand::ReplayDevVfxPreview => {
+                WebMenuCommand::ReplayDevVfxPreview =>
+                {
                     #[cfg(any(feature = "dev", debug_assertions))]
                     if self.ui.show_dev_sidebar {
                         self.ui.dev_vfx_preview.replay(Instant::now());
@@ -1293,14 +1346,41 @@ impl SowApp {
                     self.ui.app.settings_state.show_fps_ping = value;
                     self.ui.app.settings_state.persist_local();
                 }
-                WebMenuCommand::ExpressEmoji { emoji, pinned } => {
-                    self.send_intent(sow_core::protocol::GameplayIntent::ExpressEmoji {
-                        emoji,
-                        pinned,
-                    });
+                WebMenuCommand::ExpressEmote {
+                    session,
+                    tile_idx,
+                    kind,
+                    pinned,
+                } => {
+                    let matches_menu = self
+                        .input
+                        .map_context_menu
+                        .is_some_and(|menu| menu.session == session && menu.tile_idx == tile_idx);
+                    if matches_menu
+                        && self
+                            .map_menu_actions(tile_idx)
+                            .contains(&crate::input::map_click::MapMenuAction::Emote)
+                    {
+                        self.ui.app.hud_state.pin_emote = pinned;
+                        self.send_intent(sow_core::protocol::GameplayIntent::ExpressEmote {
+                            kind,
+                            pinned,
+                        });
+                        self.close_map_context_menu();
+                    }
                 }
-                WebMenuCommand::SetEmojiPinned { pinned } => {
-                    self.ui.app.hud_state.pin_emoji = pinned;
+                WebMenuCommand::ClearEmote => {
+                    self.ui.app.hud_state.pin_emote = false;
+                    self.send_intent(sow_core::protocol::GameplayIntent::ClearEmote);
+                }
+                WebMenuCommand::SetEmotePinned { pinned } => {
+                    self.ui.app.hud_state.pin_emote = pinned;
+                    if !pinned {
+                        self.send_intent(sow_core::protocol::GameplayIntent::ClearEmote);
+                    }
+                }
+                WebMenuCommand::SetEmoteTexts { texts, safe_area } => {
+                    self.ui.nameplates.set_emote_texts(texts, safe_area);
                 }
                 WebMenuCommand::FocusPlayer { player_id } => {
                     if let Some(snap) = &self.sim.current_snapshot {
@@ -2526,7 +2606,7 @@ fn player_json(
         "avatar": &player.campaign_avatar,
         "civilization": player.civilization.name(),
         "team": player.team,
-        "active_emoji": &player.active_emoji,
+        "active_emote": player.active_emote,
         "disconnected": player.disconnected,
         "traitor": player.traitor,
         "kills": player.kills,
@@ -2717,7 +2797,7 @@ fn build_inbox(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) -> serde
                 "kind": "alliance",
                 "requester_id": requester.id,
                 "name": &requester.name,
-                "leader": leader_id(requester.leader),
+                "avatar": sow_core::player::avatar_identity(requester),
                 "active": requester.alive,
             }));
         }
@@ -2732,6 +2812,8 @@ fn build_inbox(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) -> serde
                 "kind": "resources",
                 "requester_id": requester.id,
                 "name": &requester.name,
+                "avatar": sow_core::player::avatar_identity(requester),
+                "active": requester.alive,
                 "gold": request.gold,
                 "troops": request.troops,
             }));
@@ -3448,7 +3530,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "port": costs[3],
             "farm": costs[4],
         },
-        "pin_emoji": hud.pin_emoji,
+        "pin_emote": hud.pin_emote,
+        "emotes": sow_core::emote::EMOTES,
+        "emote_pinned": me.is_some_and(|player| player.emote_pinned),
         "fps": (app.time.current_fps > 0).then_some(app.time.current_fps),
         "ping": app.net.current_ping_ms,
         "hovered_tile": if hovered_tile == u32::MAX { serde_json::Value::Null } else { serde_json::json!(hovered_tile) },
@@ -3491,43 +3575,47 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         if hud.show_alliance_inbox {
             payload["inbox"] = cached_inbox_payload(snapshot, my_pid);
         }
-        if let Some(target_id) = hud.show_ask_panel {
-            if let Some(target) = snapshot
-                .players
-                .iter()
-                .find(|player| player.id == target_id)
-            {
-                payload["transfer"] = serde_json::json!({
-                    "target_id": target.id,
-                    "target_name": &target.name,
-                    "target_alive": target.alive,
-                    "confirm_pending": hud.transfer_confirm_pending,
-                    "suggested_gold": hud.ask_gold,
-                    "suggested_troops": hud.ask_troops,
-                });
-            }
-        }
     }
-
-    if hud.show_betrayal_warning.is_some() || hud.betrayal_warning_cached.is_some() {
-        let warning = hud
-            .show_betrayal_warning
-            .as_ref()
-            .or(hud.betrayal_warning_cached.as_ref());
-        if let Some((ally_id, _)) = warning {
-            payload["betrayal"] = serde_json::json!({
-                "ally_id": ally_id,
-                "ally_name": snapshot
-                    .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == *ally_id))
-                    .map(|player| player.name.clone())
-                    .unwrap_or_else(|| "Ally".to_string()),
-            });
-        }
-    }
+    append_player_dialog_payloads(&mut payload, snapshot, hud);
     if let Some(sync) = &hud.sync_state {
         payload["sync"] = serde_json::to_value(sync).unwrap_or(serde_json::Value::Null);
     }
     payload
+}
+
+fn append_player_dialog_payloads(
+    payload: &mut serde_json::Value,
+    snapshot: Option<&sow_core::protocol::SimSnapshot>,
+    hud: &crate::ui::hud::HudState,
+) {
+    let players = snapshot
+        .map(|snapshot| snapshot.players.as_slice())
+        .unwrap_or_default();
+    if let Some(target) = hud
+        .show_ask_panel
+        .and_then(|id| players.iter().find(|player| player.id == id))
+    {
+        payload["transfer"] = serde_json::json!({
+            "target_id": target.id,
+            "target_name": &target.name,
+            "target_avatar": sow_core::player::avatar_identity(target),
+            "target_alive": target.alive,
+            "confirm_pending": hud.transfer_confirm_pending,
+            "suggested_gold": hud.ask_gold,
+            "suggested_troops": hud.ask_troops,
+        });
+    }
+    if let Some((ally_id, _)) = hud
+        .show_betrayal_warning
+        .as_ref()
+        .or(hud.betrayal_warning_cached.as_ref())
+    {
+        payload["betrayal"] = serde_json::json!({
+            "ally_id": ally_id,
+            "ally_name": players.iter().find(|player| player.id == *ally_id).map(|player| player.name.as_str()).unwrap_or_default(),
+            "ally_avatar": sow_core::player::avatar_identity_for_player_id(players, *ally_id),
+        });
+    }
 }
 
 fn localized_text_payload(text: &crate::ui::UiText) -> serde_json::Value {
@@ -3775,6 +3863,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                     ),
                     "slug": slug,
                     "free_rotation": offer.free_rotation,
+                    "permanently_free": offer.permanently_free,
                     "owned": offer.owned,
                     "available": offer.available,
                     "cost_crowns": offer.cost_crowns,
@@ -3820,6 +3909,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "selected_leader": leader_id(state.selected_leader),
             "selected_leader_name": state.selected_leader.name(),
             "selected_civilization": state.selected_civilization.name(),
+            "prefer_random_leader": state.prefer_random_leader,
             "show_browser": matches!(
                 state.visible_route(),
                 crate::ui::main_menu::MainMenuRoute::Browser
@@ -3955,7 +4045,9 @@ mod tests {
             alliance_requests: Vec::new(),
             resource_requests: Vec::new(),
             disconnected: false,
-            active_emoji: None,
+            active_emote: None,
+            can_express_emote: false,
+            can_retaliate: false,
             traitor: false,
             civilization: Civilization::Rome,
             leader: Leader::Caesar,
@@ -3979,11 +4071,8 @@ mod tests {
             64.0
         );
         assert_eq!(
-            decode_dev_config_value(
-                "lighting.direction",
-                &serde_json::json!([8.0, -8.0, 3.0])
-            )
-            .unwrap(),
+            decode_dev_config_value("lighting.direction", &serde_json::json!([8.0, -8.0, 3.0]))
+                .unwrap(),
             [8.0, -8.0, 3.0, 0.0]
         );
         assert_eq!(
@@ -4124,6 +4213,117 @@ mod tests {
             total_land_tiles: 10_000,
             sea_lanes: Arc::new(Vec::new()),
             debug_mem_info: String::new(),
+        }
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn inbox_reuses_typed_identity_for_both_received_request_kinds() {
+        use sow_core::protocol::ResourceRequest;
+
+        let mut me = test_player(1, 5, 100.0);
+        me.alliance_requests = (2..=7).chain([99]).collect();
+        me.resource_requests = me
+            .alliance_requests
+            .iter()
+            .map(|&requester| ResourceRequest {
+                requester,
+                gold: 25.0,
+                troops: 10.0,
+            })
+            .collect();
+        let mut human = test_player(2, 5, 100.0);
+        human.player_type = PlayerType::Human;
+        let bot = test_player(3, 5, 100.0);
+        let mut nation = test_player(4, 5, 100.0);
+        nation.player_type = PlayerType::Nation;
+        let mut campaign = test_player(5, 5, 100.0);
+        campaign.campaign_avatar = Some("boudica".into());
+        let mut fallback = test_player(6, 5, 100.0);
+        fallback.campaign_avatar = Some("null".into());
+        let mut eliminated = test_player(7, 5, 100.0);
+        eliminated.alive = false;
+        let snapshot = test_snapshot(vec![me, human, bot, nation, campaign, fallback, eliminated]);
+        let payload = build_inbox(&snapshot, 1);
+        let rows = payload.as_array().unwrap();
+        assert_eq!(rows.len(), 12);
+        for requester in &snapshot.players[1..] {
+            for kind in ["alliance", "resources"] {
+                let row = rows
+                    .iter()
+                    .find(|row| row["kind"] == kind && row["requester_id"] == requester.id)
+                    .unwrap();
+                assert_eq!(
+                    row["avatar"],
+                    serde_json::to_value(sow_core::player::avatar_identity(requester)).unwrap()
+                );
+                assert_eq!(row["name"], requester.name);
+                assert_eq!(row["active"], requester.alive);
+                assert!(row.get("leader").is_none());
+                if kind == "resources" {
+                    assert_eq!(row["gold"], 25.0);
+                    assert_eq!(row["troops"], 10.0);
+                }
+            }
+        }
+        assert!(build_inbox(&snapshot, 99).as_array().unwrap().is_empty());
+        assert!(build_inbox(&snapshot, 2).as_array().unwrap().is_empty());
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn player_dialogs_use_snapshot_identity_and_keep_pending_intents_unchanged() {
+        let mut players = vec![
+            test_player(1, 5, 100.0),
+            test_player(2, 5, 100.0),
+            test_player(3, 5, 100.0),
+            test_player(4, 5, 100.0),
+            test_player(5, 5, 100.0),
+        ];
+        players[0].player_type = PlayerType::Human;
+        players[1].player_type = PlayerType::Nation;
+        players[2].campaign_avatar = Some("boudica".into());
+        players[3].campaign_avatar = Some("null".into());
+        players[4].alive = false;
+        let snapshot = test_snapshot(players);
+        for player in &snapshot.players {
+            let intent =
+                sow_core::protocol::GameplayIntent::Attack(sow_core::protocol::AttackIntent {
+                    target_owner: player.id,
+                    troops: Some(37.0),
+                });
+            let mut hud = crate::ui::hud::HudState::default();
+            hud.show_ask_panel = Some(player.id);
+            hud.ask_gold = 25.0;
+            hud.ask_troops = 12.0;
+            hud.betrayal_warning_cached = Some((player.id, intent.clone()));
+            let mut payload = serde_json::json!({});
+            append_player_dialog_payloads(&mut payload, Some(&snapshot), &hud);
+            let identity = serde_json::to_value(sow_core::player::avatar_identity(player)).unwrap();
+            assert_eq!(payload["transfer"]["target_avatar"], identity);
+            assert_eq!(payload["betrayal"]["ally_avatar"], identity);
+            assert_eq!(payload["transfer"]["target_name"], player.name);
+            assert_eq!(payload["transfer"]["target_alive"], player.alive);
+            assert_eq!(payload["betrayal"]["ally_name"], player.name);
+            assert_eq!(payload["transfer"]["suggested_gold"], 25.0);
+            assert_eq!(payload["transfer"]["suggested_troops"], 12.0);
+            assert_eq!(hud.betrayal_warning_cached.as_ref().unwrap().1, intent);
+            hud.show_ask_panel = None;
+            hud.betrayal_warning_cached = None;
+            let mut closed = serde_json::json!({});
+            append_player_dialog_payloads(&mut closed, Some(&snapshot), &hud);
+            assert!(closed.get("transfer").is_none() && closed.get("betrayal").is_none());
+        }
+        let mut hud = crate::ui::hud::HudState::default();
+        hud.show_ask_panel = Some(99);
+        hud.show_betrayal_warning = Some((
+            99,
+            sow_core::protocol::GameplayIntent::BreakAlliance { target_player: 99 },
+        ));
+        for missing in [None, Some(&snapshot)] {
+            let mut payload = serde_json::json!({});
+            append_player_dialog_payloads(&mut payload, missing, &hud);
+            assert!(payload.get("transfer").is_none());
+            assert_eq!(payload["betrayal"]["ally_name"], "");
+            assert_eq!(payload["betrayal"]["ally_avatar"]["kind"], "fallback");
         }
     }
 

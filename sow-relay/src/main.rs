@@ -49,7 +49,7 @@ use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::task::{Context, Poll};
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 use tokio::io::AsyncWriteExt;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::TcpListener;
@@ -282,7 +282,9 @@ fn configured_db_url() -> Result<String, String> {
 fn db_client(db_url: &str) -> Result<reqwest::Client, String> {
     let parsed =
         reqwest::Url::parse(db_url).map_err(|e| format!("invalid database URL {db_url}: {e}"))?;
-    let mut builder = reqwest::Client::builder();
+    let mut builder = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none());
     if let Ok(raw_ip) = std::env::var("SOW_DB_RESOLVE_IP") {
         let ip = raw_ip
             .parse::<IpAddr>()
@@ -345,10 +347,37 @@ static DISPATCH_LOCAL: AtomicU64 = AtomicU64::new(0);
 static DISPATCH_REDIRECTED: AtomicU64 = AtomicU64::new(0);
 static DISPATCH_UNMATCHED: AtomicU64 = AtomicU64::new(0);
 
-/// TLS acceptor for direct browser connections. `None` when no cert is
-/// configured (dev mode, plain ws://). Set once at boot from
-/// `SOW_RELAY_TLS_CERT` / `SOW_RELAY_TLS_KEY` file paths.
-static TLS_ACCEPTOR: OnceLock<Option<TlsAcceptor>> = OnceLock::new();
+/// TLS acceptor for direct browser connections. Reload it when Certbot swaps
+/// either file so new connections use the renewed certificate without
+/// restarting workers or interrupting existing games.
+#[derive(PartialEq, Eq)]
+struct TlsFileStamp {
+    cert_len: u64,
+    cert_modified: Option<SystemTime>,
+    key_len: u64,
+    key_modified: Option<SystemTime>,
+}
+
+#[derive(Default)]
+struct TlsAcceptorState {
+    files: Option<TlsFileStamp>,
+    acceptor: Option<TlsAcceptor>,
+}
+
+static TLS_ACCEPTOR: OnceLock<StdMutex<TlsAcceptorState>> = OnceLock::new();
+
+fn tls_file_stamp() -> Option<TlsFileStamp> {
+    let cert_path = std::env::var("SOW_RELAY_TLS_CERT").ok()?;
+    let key_path = std::env::var("SOW_RELAY_TLS_KEY").ok()?;
+    let cert = std::fs::metadata(cert_path).ok()?;
+    let key = std::fs::metadata(key_path).ok()?;
+    Some(TlsFileStamp {
+        cert_len: cert.len(),
+        cert_modified: cert.modified().ok(),
+        key_len: key.len(),
+        key_modified: key.modified().ok(),
+    })
+}
 
 fn load_tls_acceptor() -> Option<TlsAcceptor> {
     let cert_path = std::env::var("SOW_RELAY_TLS_CERT").ok()?;
@@ -413,6 +442,21 @@ fn load_tls_acceptor() -> Option<TlsAcceptor> {
             None
         }
     }
+}
+
+fn current_tls_acceptor() -> Option<TlsAcceptor> {
+    let files = tls_file_stamp();
+    let state = TLS_ACCEPTOR.get_or_init(|| StdMutex::new(TlsAcceptorState::default()));
+    let mut state = state.lock().unwrap_or_else(|error| error.into_inner());
+    if state.files != files {
+        state.files = files;
+        if let Some(acceptor) = load_tls_acceptor() {
+            state.acceptor = Some(acceptor);
+        } else if state.acceptor.is_some() {
+            warn!("[tls] certificate reload failed; retaining the current certificate");
+        }
+    }
+    state.acceptor.clone()
 }
 
 fn base_mgmt_port() -> u16 {
@@ -523,7 +567,6 @@ const MAX_REPLAY_BYTES: u64 = 16 * 1024 * 1024;
 
 // ---- relay event plumbing ---------------------------------------------------
 
-#[derive(Clone)]
 enum RelayEvent {
     Gameplay {
         player_id: u16,
@@ -533,6 +576,10 @@ enum RelayEvent {
         player_id: u16,
         generation: u64,
         peer: SocketAddr,
+    },
+    ExitRequested {
+        account_id: String,
+        reply: oneshot::Sender<Result<u64, String>>,
     },
     Disconnected {
         player_id: u16,
@@ -753,6 +800,14 @@ async fn replay_writer(
     mut rx: mpsc::Receiver<ReplayCommand>,
     failed: Arc<AtomicBool>,
 ) {
+    let _journal_claim = match claim_result(journal_path.clone()).await {
+        Ok(claim) => claim,
+        Err(error) => {
+            failed.store(true, Ordering::Release);
+            error!("[replay] cannot own journal {:?}: {error}", journal_path);
+            return;
+        }
+    };
     if let Some(parent) = journal_path.parent() {
         if let Err(e) = tokio::fs::create_dir_all(parent).await {
             failed.store(true, Ordering::Release);
@@ -763,7 +818,7 @@ async fn replay_writer(
             return;
         }
     }
-    let mut file = match tokio::fs::File::create(&journal_path).await {
+    let mut file = match tokio::fs::OpenOptions::new().write(true).create_new(true).open(&journal_path).await {
         Ok(file) => file,
         Err(e) => {
             failed.store(true, Ordering::Release);
@@ -813,7 +868,7 @@ async fn replay_writer(
                     let bytes = tokio::fs::read(&journal_path)
                         .await
                         .map_err(|e| e.to_string())?;
-                    let history = decode_replay_journal(&bytes)?;
+                    let history = decode_replay_journal(&bytes, false)?;
                     replay_prefix_through(&history, through_turn)
                 }
                 .await;
@@ -836,16 +891,19 @@ async fn replay_writer(
                     let bytes = tokio::fs::read(&journal_path)
                         .await
                         .map_err(|e| e.to_string())?;
-                    let history = decode_replay_journal(&bytes)?;
+                    let history = decode_replay_journal(&bytes, false)?;
                     let canonical = bincode::serialize(&history).map_err(|e| e.to_string())?;
                     let replay_path = journal_path.with_extension("replay");
                     let temp_path = journal_path.with_extension("replay.tmp");
-                    tokio::fs::write(&temp_path, &canonical)
-                        .await
-                        .map_err(|e| e.to_string())?;
+                    let mut replay_file = tokio::fs::File::create(&temp_path).await.map_err(|e| e.to_string())?;
+                    replay_file.write_all(&canonical).await.map_err(|e| e.to_string())?;
+                    replay_file.sync_all().await.map_err(|e| e.to_string())?;
+                    drop(replay_file);
                     tokio::fs::rename(&temp_path, &replay_path)
                         .await
                         .map_err(|e| e.to_string())?;
+                    std::fs::File::open(replay_path.parent().ok_or("replay directory unavailable")?)
+                        .and_then(|directory| directory.sync_all()).map_err(|e| e.to_string())?;
                     let _ = tokio::fs::remove_file(&journal_path).await;
                     Ok(ReplayArtifact {
                         bytes: canonical,
@@ -863,11 +921,12 @@ async fn replay_writer(
     }
 }
 
-fn decode_replay_journal(bytes: &[u8]) -> Result<Vec<Turn>, String> {
+fn decode_replay_journal(bytes: &[u8], recover_complete_records: bool) -> Result<Vec<Turn>, String> {
     let mut offset = 0usize;
     let mut history = Vec::new();
     while offset < bytes.len() {
         if bytes.len().saturating_sub(offset) < 4 {
+            if recover_complete_records { break; }
             return Err("truncated replay record length".to_string());
         }
         let len = u32::from_le_bytes(
@@ -877,6 +936,7 @@ fn decode_replay_journal(bytes: &[u8]) -> Result<Vec<Turn>, String> {
         ) as usize;
         offset += 4;
         if len > bytes.len().saturating_sub(offset) {
+            if recover_complete_records { break; }
             return Err("truncated replay record".to_string());
         }
         let turn = bincode::deserialize(&bytes[offset..offset + len])
@@ -900,15 +960,37 @@ fn finalize_gate() -> Arc<Semaphore> {
     GATE.get_or_init(|| Arc::new(Semaphore::new(1))).clone()
 }
 
+/// Keep the lock inode: unlinking it could let different processes own two
+/// locks for the same result. File locks are released automatically on exit.
+async fn claim_result(path: PathBuf) -> Result<std::fs::File, String> {
+    tokio::task::spawn_blocking(move || lock_result(&path, libc::LOCK_EX).map_err(|error| error.to_string()))
+        .await.map_err(|error| error.to_string())?
+}
+
+fn lock_result(path: &Path, flags: c_int) -> std::io::Result<std::fs::File> {
+    use std::os::fd::AsRawFd;
+    let parent = path.parent().ok_or_else(|| std::io::Error::other("result lock directory unavailable"))?;
+    std::fs::create_dir_all(parent)?;
+    let name = path.file_name().ok_or_else(|| std::io::Error::other("result lock name unavailable"))?.to_string_lossy();
+    // Recovery scans only pending artifacts, never a growing list of old locks.
+    let directory = parent.join(".locks");
+    std::fs::create_dir_all(&directory)?;
+    let file = std::fs::OpenOptions::new().create(true).truncate(false).read(true).write(true)
+        .open(directory.join(name.as_ref()))?;
+    if unsafe { libc::flock(file.as_raw_fd(), flags) } != 0 { return Err(std::io::Error::last_os_error()); }
+    Ok(file)
+}
+
 async fn post_replay_finalize(
     match_id: &str,
     lobby_json: &str,
     replay_data: Option<&[u8]>,
     participant_closures: &[ParticipantClosure],
 ) -> Result<(), String> {
+    let _claim = claim_result(replay_spool_dir().join(format!("{match_id}.replay"))).await?;
     let db_url = configured_db_url()?;
-    let secret =
-        std::env::var("SOW_DB_SECRET").map_err(|_| "SOW_DB_SECRET is not available".to_string())?;
+    let secret = std::env::var("SOW_RELAY_SETTLEMENT_SECRET")
+        .map_err(|_| "SOW_RELAY_SETTLEMENT_SECRET is not available".to_string())?;
     let url = format!("{}/internal/match-finalize", db_url.trim_end_matches('/'));
     let payload = ReplayFinalizePayload {
         match_id,
@@ -930,8 +1012,13 @@ async fn post_replay_finalize(
             .await
         {
             Ok(response) if response.status().is_success() => {
-                info!("Match {match_id} successfully finalized and archived!");
-                return Ok(());
+                let ack = response.json::<serde_json::Value>().await.map_err(|error| error.to_string())?;
+                if ack.get("match_id").and_then(serde_json::Value::as_str) == Some(match_id)
+                    && matches!(ack.get("status").and_then(serde_json::Value::as_str), Some("queued" | "finalized")) {
+                    info!("Match {match_id} durably accepted by database");
+                    return Ok(());
+                }
+                warn!("[replay] database did not acknowledge match {match_id}; retaining spool");
             }
             Ok(response) => {
                 let status = response.status();
@@ -939,19 +1026,8 @@ async fn post_replay_finalize(
                     "Attempt {attempt}/5: database returned HTTP status {} for match {match_id}",
                     status
                 );
-                // A 4xx (other than timeout/rate-limit) means the payload itself
-                // is bad: retrying can never succeed, so drop the spool entry
-                // instead of retrying it forever.
-                if status.is_client_error()
-                    && status != reqwest::StatusCode::REQUEST_TIMEOUT
-                    && status != reqwest::StatusCode::TOO_MANY_REQUESTS
-                {
-                    warn!(
-                        "Match {match_id} permanently rejected by database (HTTP {}); dropping spool entry",
-                        status
-                    );
-                    return Ok(());
-                }
+                let reason = response.text().await.unwrap_or_else(|error| format!("response unavailable: {error}"));
+                warn!("[replay] match {match_id} remains unacknowledged: {reason}");
             }
             Err(error) => {
                 warn!("Attempt {attempt}/5: network error uploading match {match_id}: {error}");
@@ -969,6 +1045,10 @@ async fn post_replay_finalize(
 }
 
 fn participant_spool_path(match_id: &str, account_id: &str) -> PathBuf {
+    participant_spool_path_at(&replay_spool_dir(), match_id, account_id)
+}
+
+fn participant_spool_path_at(directory: &Path, match_id: &str, account_id: &str) -> PathBuf {
     let safe_account = account_id
         .chars()
         .map(|ch| {
@@ -979,7 +1059,57 @@ fn participant_spool_path(match_id: &str, account_id: &str) -> PathBuf {
             }
         })
         .collect::<String>();
-    replay_spool_dir().join(format!("{match_id}-{safe_account}.participant"))
+    directory.join(format!("{match_id}-{safe_account}.participant"))
+}
+
+fn recovered_exit_prefix(mut turns: Vec<Turn>, player_id: u16) -> Result<(u64, Vec<u8>), String> {
+    if !turns.iter().enumerate().all(|(index, turn)| turn.turn_number == index as u64) {
+        return Err("orphaned journal turn sequence is invalid".into());
+    }
+    let closure = turns.iter().position(|turn| turn.intents.iter().any(|intent| intent.player_id == player_id
+        && matches!(intent.intent, GameplayIntent::Resign)));
+    let turn = if let Some(index) = closure { turns.truncate(index + 1); index as u64 }
+        else {
+            let turn = turns.len() as u64;
+            turns.push(Turn { turn_number:turn, intents:vec![StampedIntent { player_id, intent:GameplayIntent::Resign }] });
+            turn
+        };
+    Ok((turn, bincode::serialize(&turns).map_err(|error| error.to_string())?))
+}
+
+/// The server proves the owning worker and registered player. The native
+/// journal lock proves its writer has stopped; a closed game port alone does
+/// not authorize recovery or rejection.
+async fn recover_detached_exit(directory: &Path, command: &sow_data::profile::MatchExitCommand) -> Result<ParticipantSettlementJob, String> {
+    if !command.owner_verified { return Err("journal owner has not been verified".into()); }
+    let player_id = command.player_id.ok_or("registered player is missing")?;
+    let journal = directory.join(format!("{}.journal", command.match_id));
+    let claim_path = journal.clone();
+    let _claim = tokio::task::spawn_blocking(move || lock_result(&claim_path, libc::LOCK_EX | libc::LOCK_NB))
+        .await.map_err(|error| error.to_string())?.map_err(|error| format!("journal still owned or unavailable: {error}"))?;
+    let history = match tokio::fs::read(&journal).await {
+        Ok(bytes) => decode_replay_journal(&bytes, true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            match tokio::fs::read(journal.with_extension("replay")).await {
+                Ok(bytes) => bincode::deserialize::<Vec<Turn>>(&bytes).map_err(|error| error.to_string()),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Err("stopped relay has no recoverable turn record".into()),
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+        Err(error) => return Err(error.to_string()),
+    };
+    let (turn, replay_bytes, rejected) = match history.and_then(|turns| recovered_exit_prefix(turns, player_id)) {
+        Ok((turn, bytes)) => (turn, bytes, false),
+        Err(reason) => {
+            warn!("[rewards] detached exit match={} has no valid replay prefix; recording rejection: {reason}", command.match_id);
+            (0, Vec::new(), true)
+        }
+    };
+    let payload = ParticipantSettlementPayload { match_id:command.match_id.clone(), account_id:command.account_id.clone(),
+        closure_turn:turn, replay_sha256:hex::encode(Sha256::digest(&replay_bytes)), rejected };
+    let path = participant_spool_path_at(directory, &command.match_id, &command.account_id);
+    persist_participant_spool(&path, &payload, &replay_bytes)?;
+    Ok(ParticipantSettlementJob { payload, replay_bytes, spool_path:path })
 }
 
 fn participant_replay_path(path: &Path) -> PathBuf {
@@ -1033,9 +1163,10 @@ async fn post_participant_settle(
     payload: &ParticipantSettlementPayload,
     replay_bytes: Vec<u8>,
 ) -> Result<(), String> {
+    let _claim = claim_result(participant_spool_path(&payload.match_id, &payload.account_id)).await?;
     let db_url = configured_db_url()?;
-    let secret =
-        std::env::var("SOW_DB_SECRET").map_err(|_| "SOW_DB_SECRET is not available".to_string())?;
+    let secret = std::env::var("SOW_RELAY_SETTLEMENT_SECRET")
+        .map_err(|_| "SOW_RELAY_SETTLEMENT_SECRET is not available".to_string())?;
     let url = format!(
         "{}/internal/match-participant-settle/{}/{}/{}",
         db_url.trim_end_matches('/'),
@@ -1053,13 +1184,21 @@ async fn post_participant_settle(
             .send()
             .await
         {
-            Ok(response) if response.status().is_success() => return Ok(()),
-            Ok(response) => warn!(
-                "[rewards] participant settle attempt {attempt}/5 returned HTTP {} match={} account={}",
-                response.status(),
-                payload.match_id,
-                payload.account_id
-            ),
+            Ok(response) if response.status().is_success() => {
+                let ack = response.json::<serde_json::Value>().await.map_err(|error| error.to_string())?;
+                if ack.get("match_id").and_then(serde_json::Value::as_str) == Some(payload.match_id.as_str())
+                    && ack.get("account_id").and_then(serde_json::Value::as_str) == Some(payload.account_id.as_str())
+                    && ack.get("closure_turn").and_then(serde_json::Value::as_u64) == Some(payload.closure_turn)
+                    && matches!(ack.get("status").and_then(serde_json::Value::as_str), Some("queued" | "settled" | "rejected")) {
+                    return Ok(());
+                }
+                warn!("[rewards] database did not acknowledge participant match={}; retaining spool", payload.match_id);
+            }
+            Ok(response) => {
+                let status = response.status();
+                let reason = response.text().await.unwrap_or_else(|error| format!("response unavailable: {error}"));
+                warn!("[rewards] participant settle attempt {attempt}/5 returned HTTP {status} match={} account={}: {reason}", payload.match_id, payload.account_id);
+            }
             Err(error) => warn!(
                 "[rewards] participant settle attempt {attempt}/5 failed match={} account={}: {error}",
                 payload.match_id, payload.account_id
@@ -1129,8 +1268,7 @@ async fn recover_participant_spool() {
             }
         };
         if payload_value.get("closure_turn").is_none() {
-            warn!("[rewards] discarding legacy participant spool without a replay prefix {:?}", path);
-            cleanup_participant_spool(&path).await;
+            warn!("[rewards] retaining legacy participant spool without a replay prefix; whole replay is required {:?}", path);
             continue;
         }
         let payload = match serde_json::from_value::<ParticipantSettlementPayload>(payload_value) {
@@ -1217,8 +1355,9 @@ fn retry_pending_participant_settlements(
     match_id: u64,
     pending: &mut Vec<PendingParticipantSettlement>,
     result_tx: &mpsc::UnboundedSender<(String, u64, bool)>,
-) {
+) -> Vec<(String, u64)> {
     let mut retry = Vec::new();
+    let mut recorded = Vec::new();
     for mut settlement in pending.drain(..) {
         let replay_bytes = if settlement.rejected {
             Vec::new()
@@ -1232,7 +1371,10 @@ fn retry_pending_participant_settlements(
             replay_bytes,
             settlement.rejected,
         ) {
-            Ok(job) => dispatch_participant_settlements(vec![job]),
+            Ok(job) => {
+                recorded.push((settlement.account_id.clone(), settlement.closure_turn));
+                dispatch_participant_settlements(vec![job]);
+            }
             Err(error) => {
                 settlement.retry_count = settlement.retry_count.saturating_add(1);
                 if !settlement.rejected
@@ -1281,6 +1423,7 @@ fn retry_pending_participant_settlements(
         }
     }
     *pending = retry;
+    recorded
 }
 
 fn dispatch_participant_settlements(jobs: Vec<ParticipantSettlementJob>) {
@@ -1391,6 +1534,7 @@ async fn recover_replay_spool() {
         if replay_path.extension().and_then(|value| value.to_str()) != Some("replay") {
             continue;
         }
+        if replay_path.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.ends_with(".participant.replay")) { continue; }
         let Some(match_id) = replay_path
             .file_stem()
             .and_then(|value| value.to_str())
@@ -1665,12 +1809,12 @@ type Registry = Arc<RwLock<HashMap<u64, Arc<LobbyState>>>>;
 
 fn main() {
     env_logger::init();
-    if std::env::var("SOW_DB_SECRET")
+    if std::env::var("SOW_RELAY_SETTLEMENT_SECRET")
         .ok()
         .filter(|value| !value.trim().is_empty())
         .is_none()
     {
-        eprintln!("SOW_DB_SECRET must be set; refusing insecure default");
+        eprintln!("SOW_RELAY_SETTLEMENT_SECRET must be set; refusing shared settlement auth");
         std::process::exit(78);
     }
     if std::env::var("SOW_RELAY_CONTROL_SECRET")
@@ -1726,21 +1870,13 @@ fn main() {
     let base_mgmt = base_mgmt_port();
 
     // TLS: load cert if configured, otherwise plain ws://.
-    TLS_ACCEPTOR.get_or_init(|| {
-        let acceptor = load_tls_acceptor();
-        if acceptor.is_some() {
-            info!("[BOOT] TLS enabled — browser connects via wss:// directly");
-        } else {
-            info!("[BOOT] TLS disabled — plain ws:// (dev mode)");
-        }
-        acceptor
-    });
-    if std::env::var("SOW_MGMT_TLS_REQUIRED").ok().as_deref() == Some("1")
-        && TLS_ACCEPTOR
-            .get()
-            .and_then(|acceptor| acceptor.as_ref())
-            .is_none()
-    {
+    let tls_enabled = current_tls_acceptor().is_some();
+    if tls_enabled {
+        info!("[BOOT] TLS enabled — browser connects via wss:// directly");
+    } else {
+        info!("[BOOT] TLS disabled — plain ws:// (dev mode)");
+    }
+    if std::env::var("SOW_MGMT_TLS_REQUIRED").ok().as_deref() == Some("1") && !tls_enabled {
         error!("[sow-relay] management TLS is required but the relay certificate is unavailable");
         std::process::exit(78);
     }
@@ -1986,7 +2122,7 @@ async fn mgmt_http(registry: Registry, mport: u16) {
         };
         let reg = registry.clone();
         let nonce_cache = nonce_cache.clone();
-        let tls_acceptor = TLS_ACCEPTOR.get().and_then(|acceptor| acceptor.clone());
+        let tls_acceptor = current_tls_acceptor();
         tokio::spawn(async move {
             if let Some(acceptor) = tls_acceptor {
                 match acceptor.accept(sock).await {
@@ -2084,6 +2220,62 @@ async fn handle_http(
     body: &[u8],
 ) -> (&'static str, serde_json::Value) {
     match (method, path) {
+        ("POST", "/internal/match/exit") => {
+            let command = match serde_json::from_slice::<sow_data::profile::MatchExitCommand>(body) {
+                Ok(command) if command.match_id.parse::<u64>().is_ok()
+                    && sow_data::profile::is_valid_account_id(&command.account_id) => command,
+                _ => return ("400 Bad Request", serde_json::json!({"error":"invalid match participant"})),
+            };
+            let id = command.match_id.parse::<u64>().unwrap();
+            let lobby = registry.read().await.get(&id).cloned();
+            let ack = |status: &str, turn: Option<u64>| serde_json::json!({
+                "status":status,"match_id":command.match_id,"account_id":command.account_id,"closure_turn":turn,
+            });
+            let path = participant_spool_path(&command.match_id, &command.account_id);
+            if let Ok(bytes) = tokio::fs::read(&path).await {
+                if let Ok(payload) = serde_json::from_slice::<ParticipantSettlementPayload>(&bytes) {
+                    if payload.match_id == command.match_id && payload.account_id == command.account_id {
+                        match tokio::fs::read(participant_replay_path(&path)).await {
+                            Ok(replay) if hex::encode(Sha256::digest(&replay)) == payload.replay_sha256 => {
+                                if let Err(error) = std::fs::File::open(path.parent().unwrap()).and_then(|directory| directory.sync_all()) {
+                                    return ("503 Service Unavailable", serde_json::json!({"error":format!("exit not durable: {error}")}));
+                                }
+                                return ("200 OK", ack("recorded", Some(payload.closure_turn)));
+                            }
+                            _ => {}, // A concurrently accepted upload may have removed its copy.
+                        }
+                    }
+                }
+            }
+            let Some(lobby) = lobby else {
+                match tokio::fs::try_exists(replay_spool_dir().join(format!("{id}.json"))).await {
+                    Ok(true) => return ("200 OK", ack("awaiting_result", None)),
+                    Ok(false) => {},
+                    Err(error) => return ("503 Service Unavailable", serde_json::json!({"error":format!("pending result unavailable: {error}")})),
+                }
+                if command.owner_verified {
+                    match recover_detached_exit(&replay_spool_dir(), &command).await {
+                        Ok(job) => {
+                            let turn = job.payload.closure_turn;
+                            dispatch_participant_settlements(vec![job]);
+                            return ("200 OK", ack("recorded", Some(turn)));
+                        }
+                        Err(error) => return ("503 Service Unavailable", serde_json::json!({"error":error})),
+                    }
+                }
+                return ("404 Not Found", serde_json::json!({"error":"no active match or pending result on this relay"}));
+            };
+            let (reply, response) = oneshot::channel();
+            if !matches!(tokio::time::timeout(Duration::from_secs(3),
+                lobby.ev_tx.send(RelayEvent::ExitRequested { account_id: command.account_id.clone(), reply })).await, Ok(Ok(()))) {
+                return ("503 Service Unavailable", serde_json::json!({"error":"exit recorder unavailable"}));
+            }
+            match tokio::time::timeout(Duration::from_secs(5), response).await {
+                Ok(Ok(Ok(turn))) => ("200 OK", ack("recorded", Some(turn))),
+                Ok(Ok(Err(error))) => ("400 Bad Request", serde_json::json!({"error":error})),
+                _ => ("503 Service Unavailable", serde_json::json!({"error":"exit not yet durably recorded"})),
+            }
+        }
         ("GET", "/healthz") => ("200 OK", serde_json::json!({ "ok": true })),
         ("POST", "/internal/lobby/register") => {
             let rb: RegisterBody = match serde_json::from_slice(body) {
@@ -2377,6 +2569,14 @@ fn admit_gameplay_intent(
         .admit_at_tick(tick_number, tick_rate_ms)
 }
 
+type ExitReplies = HashMap<String, Vec<oneshot::Sender<Result<u64, String>>>>;
+
+fn acknowledge_exit(replies: &mut ExitReplies, account_id: &str, turn: u64) {
+    if let Some(waiters) = replies.remove(account_id) {
+        for reply in waiters { let _ = reply.send(Ok(turn)); }
+    }
+}
+
 async fn tick_task(
     state: Arc<LobbyState>,
     registry: Registry,
@@ -2393,6 +2593,7 @@ async fn tick_task(
     let mut pending_closures = Vec::<(String, u64)>::new();
     let mut pending_closure_checkpoint_since = HashMap::<u64, Instant>::new();
     let mut pending_participant_settlements = Vec::<PendingParticipantSettlement>::new();
+    let mut exit_replies = ExitReplies::new();
     let mut replay_recording_failed = false;
     let (settlement_result_tx, mut settlement_result_rx) = mpsc::unbounded_channel();
     let mut spawn_rate_limits = HashMap::<u16, SpawnIntentRateLimit>::new();
@@ -2413,11 +2614,12 @@ async fn tick_task(
         tokio::select! {
             _ = ticker.tick() => {
                 let mut clients = state.clients.lock().await;
-                retry_pending_participant_settlements(
+                let recorded = retry_pending_participant_settlements(
                     state.id,
                     &mut pending_participant_settlements,
                     &settlement_result_tx,
                 );
+                for (account_id, turn) in recorded { acknowledge_exit(&mut exit_replies, &account_id, turn); }
                 let active_relay_connections = clients.len();
                 let already_finalized = state.tracker.lock().unwrap().finalized;
 
@@ -2554,7 +2756,10 @@ async fn tick_task(
                                         replay_bytes.clone(),
                                         false,
                                     ) {
-                                        Ok(job) => dispatch_participant_settlements(vec![job]),
+                                        Ok(job) => {
+                                            acknowledge_exit(&mut exit_replies, &account_id, closure_turn);
+                                            dispatch_participant_settlements(vec![job]);
+                                        }
                                         Err(error) => {
                                             error!("[rewards] lobby {} participant spool failed; retrying while match stays active: {error}", state.id);
                                             pending_participant_settlements.push(
@@ -2687,6 +2892,7 @@ async fn tick_task(
             }
             Some((account_id, closure_turn, accepted)) = settlement_result_rx.recv() => {
                 if accepted {
+                    acknowledge_exit(&mut exit_replies, &account_id, closure_turn);
                     pending_participant_settlements.retain(|settlement| {
                         settlement.account_id != account_id
                             || settlement.closure_turn != closure_turn
@@ -2704,6 +2910,33 @@ async fn tick_task(
             }
             Some(event) = ev_rx.recv() => {
                 match event {
+                    RelayEvent::ExitRequested { account_id, reply } => {
+                        let player_id = {
+                            let tracker = state.tracker.lock().unwrap();
+                            tracker.player_accounts.iter().find(|(_, account)| **account == account_id
+                                && tracker.human_accounts.contains(*account)).map(|(player, _)| *player)
+                        };
+                        let Some(player_id) = player_id else {
+                            let _ = reply.send(Err("account is not a registered human participant".into()));
+                            continue;
+                        };
+                        let committed = state.tracker.lock().unwrap().personal_closures.get(&account_id).copied();
+                        if let Some(turn) = committed {
+                            let still_recording = pending_closures.iter().any(|(account, _)| account == &account_id)
+                                || pending_participant_settlements.iter().any(|entry| entry.account_id == account_id);
+                            if !still_recording { let _ = reply.send(Ok(turn)); continue; }
+                        }
+                        let waiters = exit_replies.entry(account_id.clone()).or_default();
+                        waiters.retain(|waiter| !waiter.is_closed());
+                        waiters.push(reply);
+                        state.clients.lock().await.remove(&player_id);
+                        let (new_exit, _) = state.tracker.lock().unwrap().record_voluntary_exit(player_id);
+                        if new_exit {
+                            pending_intents.push(StampedIntent { player_id, intent: GameplayIntent::Resign });
+                            pending_closure_checkpoint_since.entry(tick_number).or_insert_with(Instant::now);
+                            pending_closures.push((account_id, tick_number));
+                        }
+                    }
                     RelayEvent::Gameplay { player_id, intent } => {
                         if !admit_gameplay_intent(
                             player_id,
@@ -3004,7 +3237,7 @@ async fn ws_task(
     };
 
     // TLS handshake (if cert configured), then WebSocket upgrade.
-    let stream = if let Some(acceptor) = TLS_ACCEPTOR.get().and_then(|o| o.as_ref()) {
+    let stream = if let Some(acceptor) = current_tls_acceptor() {
         match tokio::time::timeout(
             Duration::from_secs(HANDSHAKE_TIMEOUT_SECS),
             acceptor.accept(conn),
@@ -3591,7 +3824,7 @@ fn lobby_info(state: &Arc<LobbyState>) -> LobbyInfo {
             name: name.clone(),
             is_ready: false,
             download_progress: 100,
-            leader: Leader::Cleopatra,
+            leader: Some(Leader::Cleopatra),
             player_id: *pid,
             team: None,
         })
@@ -3617,6 +3850,78 @@ fn lobby_info(state: &Arc<LobbyState>) -> LobbyInfo {
 
 #[cfg(test)]
 mod dispatcher_tests {
+    #[tokio::test]
+    async fn detached_exit_recovers_durable_turns_only_after_the_writer_stops() {
+        let temp = tempfile::tempdir().unwrap();
+        let command = sow_data::profile::MatchExitCommand { match_id:"42".into(),
+            account_id:"0123456789abcdef0123456789abcdef".into(), player_id:Some(1), owner_verified:true };
+        let turns = vec![
+            Turn { turn_number:0, intents:vec![] },
+            Turn { turn_number:1, intents:vec![sow_core::protocol::StampedIntent { player_id:1, intent:GameplayIntent::Resign }] },
+            Turn { turn_number:2, intents:vec![] },
+        ];
+        let journal = temp.path().join("42.journal");
+        let mut bytes = Vec::new();
+        for turn in &turns {
+            let record = bincode::serialize(turn).unwrap();
+            bytes.extend_from_slice(&(record.len() as u32).to_le_bytes());
+            bytes.extend_from_slice(&record);
+        }
+        // A crash may leave an incomplete final append. Only complete records
+        // belong to the recovered prefix; the normal decoder remains strict.
+        bytes.extend_from_slice(&10u32.to_le_bytes());
+        bytes.extend_from_slice(&[1, 2]);
+        assert!(super::decode_replay_journal(&bytes, false).is_err());
+        assert_eq!(super::decode_replay_journal(&bytes, true).unwrap(), turns);
+        std::fs::write(&journal, bytes).unwrap();
+        let owner = super::lock_result(&journal, libc::LOCK_EX).unwrap();
+        assert!(super::recover_detached_exit(temp.path(), &command).await.is_err(), "an active writer must never be treated as lost");
+        drop(owner);
+        let job = super::recover_detached_exit(temp.path(), &command).await.unwrap();
+        assert!(!job.payload.rejected);
+        assert_eq!(job.payload.closure_turn, 1);
+        assert_eq!(bincode::deserialize::<Vec<Turn>>(&job.replay_bytes).unwrap(), turns[..2]);
+        assert_eq!(std::fs::read(super::participant_replay_path(&job.spool_path)).unwrap(), job.replay_bytes);
+        let new_exit = super::recovered_exit_prefix(vec![turns[0].clone()], 1).unwrap();
+        assert_eq!(new_exit.0, 1);
+        assert!(matches!(bincode::deserialize::<Vec<Turn>>(&new_exit.1).unwrap()[1].intents[0].intent, GameplayIntent::Resign));
+        let unknown = sow_data::profile::MatchExitCommand { match_id:"43".into(), owner_verified:false, ..command };
+        assert!(super::recover_detached_exit(temp.path(), &unknown).await.is_err());
+        let lost = sow_data::profile::MatchExitCommand { owner_verified:true, ..unknown };
+        let job = super::recover_detached_exit(temp.path(), &lost).await.unwrap();
+        assert!(job.payload.rejected);
+        assert!(job.replay_bytes.is_empty());
+    }
+    #[test]
+    fn result_claim_child() {
+        let Ok(directory) = std::env::var("SOW_RESULT_CLAIM_TEST_DIR") else { return; };
+        let directory = std::path::PathBuf::from(directory);
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let _claim = runtime.block_on(super::claim_result(directory.join("42.participant"))).unwrap();
+        let marker = directory.join("sending");
+        assert!(!marker.exists(), "two relay processes are sending the same result");
+        std::fs::write(&marker, b"sending").unwrap();
+        let counter = directory.join("deliveries");
+        let previous = std::fs::read_to_string(&counter).unwrap_or_else(|_| "0".into()).parse::<u32>().unwrap();
+        // Deliberate overlap window exercises the native inter-process lock.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(counter, (previous + 1).to_string()).unwrap();
+        std::fs::remove_file(marker).unwrap();
+    }
+
+    #[test]
+    fn four_processes_share_one_result_claim() {
+        let temp = tempfile::tempdir().unwrap();
+        let executable = std::env::current_exe().unwrap();
+        let mut children = (0..4).map(|_| {
+            std::process::Command::new(&executable)
+                .args(["--exact", "dispatcher_tests::result_claim_child"])
+                .env("SOW_RESULT_CLAIM_TEST_DIR", temp.path())
+                .stdout(std::process::Stdio::null()).spawn().unwrap()
+        }).collect::<Vec<_>>();
+        for child in &mut children { assert!(child.wait().unwrap().success()); }
+        assert_eq!(std::fs::read_to_string(temp.path().join("deliveries")).unwrap(), "4");
+    }
     use super::{
         AdmissionState, IpAdmissionState, MatchTracker, ParticipantClosure, ParticipantSettlementPayload,
         RelayAdmissionPolicy, admit_gameplay_intent,

@@ -41,6 +41,10 @@ pub struct PlayerProgress {
     pub tribes_defeated: u32,
     #[serde(default, deserialize_with = "deserialize_leader")]
     pub preferred_leader: Option<Leader>,
+    #[serde(default)]
+    pub prefer_random_leader: bool,
+    #[serde(default)]
+    pub leader_selection_pending: bool,
     pub intro_completed: Option<bool>,
     #[serde(default)]
     pub kills: u32,
@@ -67,10 +71,11 @@ pub struct PlayerProgress {
     pub owned_skins: std::collections::BTreeSet<String>,
     #[serde(default)]
     pub selected_skin: Option<String>,
-    /// Campaign episodes finished (stable ids, e.g. `"six_sky_ep1"`).
-    /// Local-first: merged (union) with any cloud profile, never overwritten.
+    /// Campaign episodes finished or awaiting server confirmation.
     #[serde(default)]
     pub completed_episodes: std::collections::BTreeSet<String>,
+    #[serde(default)]
+    pub pending_campaign_completions: std::collections::BTreeSet<String>,
     /// Server-created match receipts used only for main-menu presentation.
     #[serde(default)]
     pub reward_receipts: std::collections::BTreeMap<String, sow_data::profile::RewardReceipt>,
@@ -96,6 +101,23 @@ where
 
 #[derive(Clone, Debug)]
 pub enum DbEvent {
+    MatchExitLoaded {
+        account_id: String,
+        match_id: String,
+        cycle_id: u32,
+        request_id: u64,
+        display_name: String,
+        provider: String,
+        progress: PlayerProgress,
+        state: sow_data::profile::MatchExitState,
+    },
+    MatchExitFailed {
+        account_id: String,
+        match_id: String,
+        cycle_id: u32,
+        request_id: u64,
+        status: Option<u16>,
+    },
     ProfileLoaded {
         progress: PlayerProgress,
         account_id: String,
@@ -220,22 +242,12 @@ impl PlayerProgress {
         true
     }
 
-    /// Mark a campaign episode complete with the same reward weight as the
-    /// teaching intro (100 crowns; laurels come only from server achievements):
-    /// finishing an episode is the retention backbone, and a full saga lands
-    /// near one free leader unlock.
-    /// Idempotent per episode id.
-    pub fn complete_episode(&mut self, episode_id: &str, leader: Leader) -> bool {
+    /// Keep a local completion pending until the server confirms its rewards.
+    pub fn complete_episode(&mut self, episode_id: &str) -> bool {
         if !self.completed_episodes.insert(episode_id.to_string()) {
             return false;
         }
-        self.apply_reward(
-            leader,
-            sow_data::rewards::calculate(sow_data::rewards::RewardInput {
-                tutorial: true,
-                ..Default::default()
-            }),
-        );
+        self.pending_campaign_completions.insert(episode_id.to_string());
         true
     }
 
@@ -255,22 +267,32 @@ impl PlayerProgress {
             || !self.unlocked_achievements.is_empty()
     }
 
-    /// Prefer cloud profile when it has history; otherwise keep local/CG portal data.
-    /// Episode completions always merge by union: the server never tracks them,
-    /// so a cloud overwrite must not erase local saga progress.
+    /// Prefer cloud profile when it has history; preserve this account's pending
+    /// episode and selection requests until the server confirms them.
     pub fn merge_boot_profile(&mut self, cloud: PlayerProgress) {
         let local_intro_completed = self.intro_completed.unwrap_or(false);
         let local_episodes = std::mem::take(&mut self.completed_episodes);
+        let local_pending_episodes = std::mem::take(&mut self.pending_campaign_completions);
+        let local_selection = (self.preferred_leader, self.prefer_random_leader, self.leader_selection_pending);
         let local_receipts = std::mem::take(&mut self.reward_receipts);
         let local_achievements = std::mem::take(&mut self.unlocked_achievements);
         let local_guides = std::mem::take(&mut self.menu_guides);
+        let server_episodes = cloud.completed_episodes.clone();
         if cloud.has_history() || !self.has_history() {
             *self = cloud;
         }
         if local_intro_completed || self.intro_completed.unwrap_or(false) {
             self.intro_completed = Some(true);
         }
+        self.pending_campaign_completions.extend(local_pending_episodes);
+        self.pending_campaign_completions.extend(local_episodes.iter().filter(|id| !server_episodes.contains(*id)).cloned());
+        self.pending_campaign_completions.retain(|id| !server_episodes.contains(id));
         self.completed_episodes.extend(local_episodes);
+        if local_selection.2 {
+            self.preferred_leader = local_selection.0;
+            self.prefer_random_leader = local_selection.1;
+            self.leader_selection_pending = true;
+        }
         for (id, receipt) in local_receipts {
             self.reward_receipts.entry(id).or_insert(receipt);
         }
@@ -293,9 +315,7 @@ impl PlayerProgress {
     }
 
     pub fn replace_account_profile(&mut self, cloud: PlayerProgress) {
-        let local_episodes = std::mem::take(&mut self.completed_episodes);
         *self = cloud;
-        self.completed_episodes.extend(local_episodes);
     }
 
     pub fn sync_level(&mut self) {
@@ -336,6 +356,35 @@ impl PlayerProgress {
             ..Default::default()
         });
         self.apply_reward(self.preferred_leader.unwrap_or(Leader::Caesar), reward);
+    }
+
+    pub fn record_match_with_kda_for_leader(
+        &mut self,
+        won: bool,
+        defeats: SessionDefeats,
+        kills: u32,
+        deaths: u32,
+        assists: u32,
+        leader: Leader,
+    ) {
+        self.matches_played = self.matches_played.saturating_add(1);
+        if won { self.wins = self.wins.saturating_add(1); }
+        self.players_defeated = self.players_defeated.saturating_add(defeats.players);
+        self.empires_defeated = self.empires_defeated.saturating_add(defeats.empires);
+        self.tribes_defeated = self.tribes_defeated.saturating_add(defeats.tribes);
+        self.kills = self.kills.saturating_add(kills);
+        self.deaths = self.deaths.saturating_add(deaths);
+        self.assists = self.assists.saturating_add(assists);
+        let reward = sow_data::rewards::calculate(sow_data::rewards::RewardInput {
+            won,
+            players_defeated: defeats.players,
+            empires_defeated: defeats.empires,
+            tribes_defeated: defeats.tribes,
+            kills,
+            assists,
+            ..Default::default()
+        });
+        self.apply_reward(leader, reward);
     }
 }
 
@@ -408,6 +457,53 @@ mod tests {
     }
 
     #[test]
+    fn random_match_reward_uses_the_resolved_leader_without_changing_preference() {
+        let mut progress = PlayerProgress {
+            preferred_leader: Some(Leader::Boudica),
+            prefer_random_leader: true,
+            ..Default::default()
+        };
+        progress.record_match_with_kda_for_leader(true, Default::default(), 0, 0, 0, Leader::Napoleon);
+        assert_eq!(progress.leader_xp.get("Napoleon"), Some(&120));
+        assert!(!progress.leader_xp.contains_key("Boudica"));
+        assert_eq!(progress.preferred_leader, Some(Leader::Boudica));
+        assert!(progress.prefer_random_leader);
+    }
+
+    #[test]
+    fn random_selection_survives_reload_and_cloud_profile_merge() {
+        let local = PlayerProgress {
+            preferred_leader: Some(Leader::Boudica),
+            prefer_random_leader: true,
+            leader_selection_pending: true,
+            ..Default::default()
+        };
+        let mut reloaded: PlayerProgress = serde_json::from_str(&serde_json::to_string(&local).unwrap()).unwrap();
+        reloaded.merge_boot_profile(PlayerProgress {
+            preferred_leader: Some(Leader::Caesar),
+            ..Default::default()
+        });
+        assert_eq!(reloaded.preferred_leader, Some(Leader::Boudica));
+        assert!(reloaded.prefer_random_leader);
+        assert!(reloaded.leader_selection_pending);
+    }
+
+    #[test]
+    fn pending_campaign_completion_survives_until_server_confirms_it() {
+        let mut local = PlayerProgress::default();
+        local.complete_episode("six_sky_ep1");
+        local.merge_boot_profile(PlayerProgress::default());
+        assert!(local.completed_episodes.contains("six_sky_ep1"));
+        assert!(local.pending_campaign_completions.contains("six_sky_ep1"));
+
+        let mut confirmed = PlayerProgress::default();
+        confirmed.completed_episodes.insert("six_sky_ep1".to_string());
+        local.merge_boot_profile(confirmed);
+        assert!(local.completed_episodes.contains("six_sky_ep1"));
+        assert!(!local.pending_campaign_completions.contains("six_sky_ep1"));
+    }
+
+    #[test]
     fn assigned_leader_does_not_make_a_new_profile_have_history() {
         let progress = PlayerProgress {
             preferred_leader: Some(Leader::Caesar),
@@ -445,7 +541,7 @@ mod tests {
     }
 
     #[test]
-    fn switching_accounts_does_not_carry_currency_or_tutorial_state() {
+    fn switching_accounts_does_not_carry_progress_or_campaign_completions() {
         let mut old = PlayerProgress {
             xp: 900,
             crowns: 700,
@@ -463,6 +559,6 @@ mod tests {
         assert_eq!(old.crowns, 0);
         assert_eq!(old.gems, 475);
         assert_eq!(old.intro_completed, Some(false));
-        assert!(old.completed_episodes.contains("six_sky_ep1"));
+        assert!(!old.completed_episodes.contains("six_sky_ep1"));
     }
 }

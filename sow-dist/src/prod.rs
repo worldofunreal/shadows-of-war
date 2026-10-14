@@ -79,6 +79,7 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     require_stripe_config()?;
     require_secret("SOW_DB_SECRET")?;
     require_secret("SOW_RELAY_CONTROL_SECRET")?;
+    require_secret("SOW_RELAY_SETTLEMENT_SECRET")?;
     require_secret("SOW_REVENUECAT_WEBHOOK_SECRET")?;
     require_config("SOW_PLAY_GAMES_APP_ID")?;
     require_config("SOW_PLAY_GAMES_WEB_CLIENT_ID")?;
@@ -99,6 +100,24 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     preflight(paths, &config)?;
     let version = version(paths, bump)?;
     println!("==> Production {version}");
+    let runtime_inputs = [
+        "Cargo.toml",
+        "Cargo.lock",
+        "sow-core",
+        "sow-data",
+        "sow-net",
+        "sow-server",
+        "sow-relay",
+        "sow-dist/src",
+        "sow-dist/deploy/freebsd",
+        "sow-dist/deploy/linux",
+    ]
+    .map(|path| paths.root.join(path));
+    let runtime_inputs = runtime_inputs
+        .iter()
+        .map(PathBuf::as_path)
+        .collect::<Vec<_>>();
+    let runtime_snapshot = input_fingerprint("production-runtime-v1", "", &runtime_inputs)?;
     // Android is deliberately NOT part of this pipeline: every Play upload
     // resets Google's review clock, so AAB publication lives in `./sow a`
     // and runs only when a new build is actually ready for review.
@@ -123,15 +142,31 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     println!("==> 3/8 Package immutable release");
     let release = assemble_release(paths, &web, &backend, &version, &config)?;
     println!("  release {}", release.id);
+    if input_fingerprint("production-runtime-v1", "", &runtime_inputs)? != runtime_snapshot {
+        bail!(
+            "runtime sources or deployment templates changed during the build; refusing a mixed release"
+        );
+    }
 
     println!("==> Runtime prerequisites");
-    ensure_relay_runtime(&config)?;
+    let relay_stopped = relay_workers_stopped(&config)?;
+    if !relay_stopped {
+        ensure_relay_runtime(&config)?;
+        verify_relay_control_path(&config)?;
+    }
     ensure_control_clock(&config)?;
     verify_control_runtime_secret(&config)?;
-    verify_relay_control_path(&config)?;
 
     println!("==> 4/8 Compare deployed manifest");
     let mut plan = remote_plan(&config, &release)?;
+    if relay_stopped {
+        println!("  relay workers stopped; recovering with the current release");
+        plan.relay = true;
+    }
+    if control_certificate_automation_drift(&config)? {
+        println!("  runtime drift: IONOS certificate renewal automation");
+        plan.ops = true;
+    }
     if maps_catalog_path_drift(&config)? {
         println!("  runtime env drift: SOW_MAPS_CATALOG_PATH");
         plan.ops = true;
@@ -152,17 +187,28 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
         println!("  runtime env drift: Stripe/RevenueCat checkout configuration");
         plan.database = true;
     }
+    if relay_settlement_auth_drift(&config)? {
+        println!("  runtime auth drift: relay-only reward settlement credential");
+        plan.database = true;
+        plan.relay = true;
+    }
     println!("  plan: {plan:?}");
 
     if !plan.any() {
         println!("  no production component changed; no restart performed");
+        renew_and_verify_control_certificates(&config)?;
+        verify_origin_tls_from_relay(&config)?;
+        ensure_relay_certificate_automation(paths, &config)?;
+        verify_relay_certificate_served(&config)?;
         verify_control_host(&config, &plan)?;
         verify_relay_runtime(&config)?;
         verify_control_runtime_secret(&config)?;
+        verify_relay_settlement_auth(&config)?;
         verify_relay_control_path(&config)?;
         verify_relay_identity(&config, &release)?;
         retain_releases(&config)?;
         verify_public(paths, &config, &release)?;
+        verify_live_reward_return(paths, &config)?;
         println!("✅ Production already serves the requested content");
         return Ok(());
     }
@@ -172,28 +218,77 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     if plan.relay {
         stage_relay(&config, &release)?;
     }
+    if input_fingerprint("production-runtime-v1", "", &runtime_inputs)? != runtime_snapshot {
+        bail!(
+            "runtime sources or deployment templates changed before activation; refusing a mixed release"
+        );
+    }
 
     println!("==> 6/8 Activate changed components only");
     activate_control_host(paths, &config, &release, &plan)?;
+    renew_and_verify_control_certificates(&config)?;
+    verify_origin_tls_from_relay(&config)?;
+    ensure_relay_certificate_automation(paths, &config)?;
     // Relay last: its worker swap force-kills active games (user-authorized
     // drain mode until a non-destructive drain exists), so the control host
     // must already be healthy before any relay worker is touched.
     if plan.relay {
         activate_relay_host(&config, &release)?;
     }
+    verify_relay_certificate_served(&config)?;
 
     println!("==> 7/8 Healthcheck and retain");
     verify_control_host(&config, &plan)?;
     verify_relay_runtime(&config)?;
     verify_control_runtime_secret(&config)?;
+    verify_relay_settlement_auth(&config)?;
     verify_relay_control_path(&config)?;
     verify_relay_identity(&config, &release)?;
     retain_releases(&config)?;
 
     println!("==> 8/8 Public verification");
     verify_public(paths, &config, &release)?;
+    verify_live_reward_return(paths, &config)?;
     println!("✅ Production {} ready as {}", release.version, release.id);
     Ok(())
+}
+
+fn verify_live_reward_return(paths: &Paths, config: &Config) -> Result<()> {
+    let mut websocket = url::Url::parse(&config.public_origin)?;
+    let scheme = if websocket.scheme() == "https" {
+        "wss"
+    } else {
+        "ws"
+    };
+    websocket
+        .set_scheme(scheme)
+        .map_err(|_| anyhow::anyhow!("invalid public WebSocket scheme"))?;
+    websocket.set_path("/ws/");
+    let database = format!("{}/api", config.public_origin);
+    let accounts = paths
+        .root
+        .join("dist/.sow-state/reward-audit-accounts.json");
+    run(
+        "cargo",
+        &[
+            "run",
+            "--locked",
+            "-p",
+            "sow-tools",
+            "--bin",
+            "test-relay",
+            "--",
+            "--verify-rewards",
+            "--url",
+            websocket.as_str(),
+            "--database-url",
+            &database,
+            "--audit-accounts-file",
+            accounts.to_str().context("invalid audit accounts path")?,
+        ],
+        Some(&paths.root),
+    )
+    .context("real multiplayer exit and reward presentation failed")
 }
 
 /// `./sow a` — Android-only track, decoupled from `./sow p` on purpose.
@@ -581,7 +676,7 @@ fn publish_android(paths: &Paths, version_code: u32) -> Result<()> {
 fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     super::validate_current_ui_contract(paths)?;
     for command in [
-        "cargo", "curl", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt",
+        "cargo", "curl", "magick", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt",
     ] {
         if !Command::new("/bin/sh")
             .args(["-c", &format!("command -v {command} >/dev/null")])
@@ -602,6 +697,14 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
         Some(&paths.root),
     )
     .context("web interaction regression tests failed")?;
+    for filter in ["test_build_index_", "test_nginx_conf_"] {
+        run(
+            "cargo",
+            &["test", "--locked", "-p", "sow-dist", "--bin", "sow", filter],
+            Some(&paths.root),
+        )
+        .context("distribution packaging regression tests failed")?;
+    }
     run(
         "cargo",
         &[
@@ -637,9 +740,14 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "sow-core/src/map.rs",
             "sow-core/src/player/mod.rs",
             "sow-client/src/death_nameplate.rs",
+            "sow-client/src/app/state.rs",
+            "sow-client/src/input/intents.rs",
+            "sow-client/src/render/world/movers.rs",
             "sow-render/src/text/renderer.rs",
             "sow-render/src/text/types.rs",
             "sow-render/src/nameplate.rs",
+            "sow-render/src/shader_params.rs",
+            "sow-render/src/shader_validation.rs",
             "sow-render/src/lib.rs",
             "sow-client/src/render/world/feedback.rs",
             "sow-client/src/render/world/nameplates.rs",
@@ -663,46 +771,68 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "--locked",
             "-p",
             "sow-client",
+            "--lib",
             "--test",
             "death_nameplate",
+            "--test",
+            "nameplate_emotes",
         ],
         Some(&paths.root),
     )
     .context("death nameplate icon regression tests failed")?;
-    run(
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "sow-client",
-            "--target",
-            "wasm32-unknown-unknown",
-            "--config",
-            "target.wasm32-unknown-unknown.runner=\"wasm-bindgen-test-runner\"",
-            "--lib",
+    for (filter, failure) in [
+        (
             "reward_exit_tests",
-        ],
-        Some(&paths.root),
-    )
-    .context("server-confirmed reward exit tests failed")?;
-    run(
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "sow-client",
-            "--target",
-            "wasm32-unknown-unknown",
-            "--config",
-            "target.wasm32-unknown-unknown.runner=\"wasm-bindgen-test-runner\"",
-            "--lib",
-            "tutorial_camera",
-        ],
-        Some(&paths.root),
-    )
-    .context("tutorial camera regression tests failed")?;
+            "server-confirmed reward exit tests failed",
+        ),
+        ("tutorial_camera", "tutorial camera regression tests failed"),
+        (
+            "web_menu::tests::inbox_",
+            "inbox identity regression tests failed",
+        ),
+        (
+            "web_menu::tests::player_dialogs_",
+            "player dialog identity regression tests failed",
+        ),
+        (
+            "input::map_click::tests",
+            "map gestures and context actions regression tests failed",
+        ),
+        (
+            "render::world::nameplates::emote_tests",
+            "nameplate emote lifecycle regression tests failed",
+        ),
+        (
+            "input::intents::tests::repeated_attacks_each_get_a_notice_even_for_the_same_target",
+            "attack launch amount notice regression tests failed",
+        ),
+        (
+            "render::world::feedback::tests::attack_badges_only_include_local_incoming_or_outgoing_attacks",
+            "attack badge text color regression tests failed",
+        ),
+        (
+            "render::world::movers::tests::warship_sprite_keeps_original_colors_across_player_colors",
+            "warship sprite color regression tests failed",
+        ),
+    ] {
+        run(
+            "cargo",
+            &[
+                "test",
+                "--locked",
+                "-p",
+                "sow-client",
+                "--target",
+                "wasm32-unknown-unknown",
+                "--config",
+                "target.wasm32-unknown-unknown.runner=\"wasm-bindgen-test-runner\"",
+                "--lib",
+                filter,
+            ],
+            Some(&paths.root),
+        )
+        .context(failure)?;
+    }
     if !Command::new("rustc")
         .args([
             "--print",
@@ -962,6 +1092,17 @@ fn ensure_relay_runtime(config: &Config) -> Result<()> {
     Ok(())
 }
 
+fn relay_workers_stopped(config: &Config) -> Result<bool> {
+    let units = (0..relay_worker_count()?)
+        .map(|id| format!("sow-relay@{id}.service"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let command = format!(
+        "set -eu; for unit in {units}; do if systemctl is-active --quiet \"$unit\"; then echo running; exit 0; fi; done; echo stopped"
+    );
+    Ok(output("ssh", &[&config.relay_host, &command])? == "stopped")
+}
+
 fn verify_relay_runtime(config: &Config) -> Result<()> {
     let command = relay_runtime_command(false)?;
     run("ssh", &[&config.relay_host, &command], None).context("relay worker healthcheck failed")
@@ -1065,6 +1206,136 @@ printf %s "$value" | sha256 -q"#;
     Ok(())
 }
 
+fn relay_settlement_auth_drift(config: &Config) -> Result<bool> {
+    let secret = env::var("SOW_RELAY_SETTLEMENT_SECRET")?;
+    let expected = format!("{:x}", Sha256::digest(secret.as_bytes()));
+    let control_command = r#"set -eu
+for spec in 'host:/usr/local/etc/sow/sow.env' 'server:/zroot/jails/sow-server/usr/local/etc/sow/sow.env' 'database:/zroot/jails/sow-database/usr/local/etc/sow/sow.env'; do
+    label=${spec%%:*}
+    file=${spec#*:}
+    value=$(sudo awk -F= -v k='SOW_RELAY_SETTLEMENT_SECRET' '$1 == k { sub(/^[^=]*=/, ""); print; exit }' "$file" 2>/dev/null || true)
+    if [ -n "$value" ]; then
+        hash=$(printf %s "$value" | sha256 -q)
+        printf '%s=%s\n' "$label" "$hash"
+    else
+        printf '%s=missing\n' "$label"
+    fi
+done
+db_pid=$(sudo jexec sow-database pgrep -xo sow-database)
+db_value=$(sudo procstat -e "$db_pid" | tr ' ' '\n' | sed -n 's/^SOW_RELAY_SETTLEMENT_SECRET=//p' | head -1)
+server_pid=$(sudo jexec sow-server pgrep -xo sow-server)
+server_value=$(sudo procstat -e "$server_pid" | tr ' ' '\n' | sed -n 's/^SOW_RELAY_SETTLEMENT_SECRET=//p' | head -1)
+for pair in "database_process:$db_value" "server_process:$server_value"; do
+    label=${pair%%:*}
+    value=${pair#*:}
+    if [ -n "$value" ]; then
+        hash=$(printf %s "$value" | sha256 -q)
+        printf '%s=%s\n' "$label" "$hash"
+    else
+        printf '%s=missing\n' "$label"
+    fi
+done"#;
+    let control = output("ssh", &[&config.control_host, control_command])?;
+    let expected_control = format!(
+        "host=missing\nserver=missing\ndatabase={expected}\ndatabase_process={expected}\nserver_process=missing"
+    );
+
+    let worker_count = relay_worker_count()?;
+    let ids = (0..worker_count)
+        .map(|id| id.to_string())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let relay_command = format!(
+        r#"set -eu
+for id in {ids}; do
+    unit="sow-relay@$id.service"
+    pid=$(sudo systemctl show "$unit" -p MainPID --value)
+    value=
+    shared=missing
+    if [ "$pid" -gt 1 ] && sudo test -r "/proc/$pid/environ"; then
+        value=$(sudo cat "/proc/$pid/environ" | tr '\0' '\n' | awk -F= '$1 == "SOW_RELAY_SETTLEMENT_SECRET" {{ sub(/^[^=]*=/, ""); print; exit }}')
+        if sudo cat "/proc/$pid/environ" | tr '\0' '\n' | grep -q '^SOW_DB_SECRET='; then shared=present; fi
+    fi
+    if [ -n "$value" ]; then
+        hash=$(printf %s "$value" | sha256sum | awk '{{print $1}}')
+        printf 'worker%s=%s\n' "$id" "$hash"
+    else
+        printf 'worker%s=missing\n' "$id"
+    fi
+    printf 'worker%s_shared=%s\n' "$id" "$shared"
+done"#
+    );
+    let relay = output("ssh", &[&config.relay_host, &relay_command])?;
+    let expected_relay = (0..worker_count)
+        .flat_map(|id| {
+            [
+                format!("worker{id}={expected}"),
+                format!("worker{id}_shared=missing"),
+            ]
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    Ok(control.trim() != expected_control || relay.trim() != expected_relay)
+}
+
+fn verify_relay_settlement_auth(config: &Config) -> Result<()> {
+    if relay_settlement_auth_drift(config)? {
+        bail!("relay-only reward settlement credential is missing, misplaced, or inactive");
+    }
+    let relay_env = RelayEnv::load()?;
+    let url = url::Url::parse(&relay_env.db_url)?;
+    let host = url.host_str().context("SOW_DB_URL has no hostname")?;
+    let port = url
+        .port_or_known_default()
+        .context("SOW_DB_URL has no port")?;
+    let base = url.join("/")?.to_string();
+    let base = base.trim_end_matches('/');
+    let resolve = format!("{host}:{port}:{}", relay_env.db_resolve_ip);
+    // Invalid identifiers stop both handlers before any storage operation.
+    let relay_command = format!(
+        r#"set -eu
+base={base}
+resolve={resolve}
+origin_ip={origin_ip}
+pid=$(systemctl show sow-relay@0.service -p MainPID --value)
+secret=$(sudo cat "/proc/$pid/environ" | tr '\0' '\n' | sed -n 's/^SOW_RELAY_SETTLEMENT_SECRET=//p')
+test -n "$secret"
+for route in match-participant-settle/invalid/invalid/0 match-finalize; do
+    status=$(printf 'header = "Authorization: Bearer %s"\n' "$secret" | curl --noproxy '*' -sS --max-time 10 --config - --resolve "$resolve" -o /dev/null -w '%{{http_code}}|%{{remote_ip}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "$base/internal/$route")
+    if [ "$status" != "400|$origin_ip" ]; then echo "relay result route rejected its dedicated credential or did not reach the pinned origin: $route ($status)" >&2; exit 1; fi
+    status=$(curl --noproxy '*' -sS --max-time 10 --resolve "$resolve" -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "$base/internal/$route")
+    if [ "$status" != 401 ]; then echo "relay result route accepted a missing credential: $route ($status)" >&2; exit 1; fi
+done"#,
+        base = shell_quote(base),
+        resolve = shell_quote(&resolve),
+        origin_ip = shell_quote(&relay_env.db_resolve_ip),
+    );
+    run("ssh", &[&config.relay_host, &relay_command], None)
+        .context("direct relay result route authentication failed")?;
+    let control_command = format!(
+        r#"set -eu
+base={base}
+resolve={resolve}
+shared=$(sudo awk -F= '$1 == "SOW_DB_SECRET" {{ sub(/^[^=]*=/, ""); print; exit }}' /zroot/jails/sow-server/usr/local/etc/sow/sow.env)
+test -n "$shared"
+for route in match-participant-settle/invalid/invalid/0 match-finalize; do
+    status=$(printf 'header = "Authorization: Bearer %s"\n' "$shared" | curl --noproxy '*' -sS --max-time 10 --config - -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "http://{database_ip}:25585/internal/$route")
+    if [ "$status" != 401 ]; then echo "result route accepted the server's general database credential: $route ($status)" >&2; exit 1; fi
+    status=$(curl --noproxy '*' -sS --max-time 10 --resolve "$resolve" -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "$base/internal/$route")
+    if [ "$status" != 403 ]; then echo "result route allowed a non-relay network source: $route ($status)" >&2; exit 1; fi
+done"#,
+        base = shell_quote(base),
+        resolve = shell_quote(&format!("{host}:{port}:127.0.0.1")),
+        database_ip = DATABASE_JAIL_IP,
+    );
+    run("ssh", &[&config.control_host, &control_command], None)
+        .context("relay result route isolation failed")?;
+    println!(
+        "  relay result routes use the pinned origin and reject missing, server, and non-relay access"
+    );
+    Ok(())
+}
+
 /// Authenticated GET to every relay worker's management port, executed from
 /// the control host (the only host the Azure NSG lets through). Returns one
 /// response body per worker, in worker-id order.
@@ -1096,7 +1367,7 @@ fn relay_authed_get(config: &Config, path: &str) -> Result<Vec<(usize, String)>>
         let url = format!("https://{host}:{port}{path}");
         let resolve = format!("{host}:{port}:{resolve_ip}");
         let command = format!(
-            "curl -fsS --max-time 5 --resolve {} -H {} -H {} -H {} {}",
+            "curl --noproxy '*' -fsS --max-time 5 --resolve {} -H {} -H {} -H {} {}",
             shell_quote(&resolve),
             shell_quote(&format!("X-SOW-Timestamp: {timestamp}")),
             shell_quote(&format!("X-SOW-Nonce: {nonce}")),
@@ -1178,7 +1449,11 @@ fn stage_relay(config: &Config, release: &Release) -> Result<()> {
 /// own, so workers are stopped and started individually — never the group
 /// unit — and the kill is registered in the manifest).
 fn activate_relay_host(config: &Config, release: &Release) -> Result<()> {
-    let active = relay_active_connections(config)?;
+    let active = if relay_workers_stopped(config)? {
+        0
+    } else {
+        relay_active_connections(config)?
+    };
     println!(
         "  relay drain: {active} active client connection(s) across workers — force-kill (registered)"
     );
@@ -1197,12 +1472,12 @@ fn activate_relay_host(config: &Config, release: &Release) -> Result<()> {
         .and_then(|relay| relay.get("bin_sha256"))
         .and_then(serde_json::Value::as_str)
         .context("release.json relay bin_sha256 missing")?;
-    let db_secret = env::var("SOW_DB_SECRET")?;
     let control_secret = env::var("SOW_RELAY_CONTROL_SECRET")?;
-    let db_path = format!("/tmp/sow-relay-db-secret-{}", std::process::id());
+    let settlement_secret = env::var("SOW_RELAY_SETTLEMENT_SECRET")?;
     let control_path = format!("/tmp/sow-relay-control-secret-{}", std::process::id());
-    stage_secret(&config.relay_host, &db_secret, &db_path)?;
+    let settlement_path = format!("/tmp/sow-relay-settlement-secret-{}", std::process::id());
     stage_secret(&config.relay_host, &control_secret, &control_path)?;
+    stage_secret(&config.relay_host, &settlement_secret, &settlement_path)?;
 
     let ids = (0..env.count)
         .map(|id| id.to_string())
@@ -1244,8 +1519,8 @@ sudo install -o root -g root -m 0755 "$stage/ops/linux/sow-relay-worker" /usr/lo
 sudo install -o root -g root -m 0644 "$stage/ops/linux/sow-relay.service" /etc/systemd/system/sow-relay.service
 sudo install -o root -g root -m 0644 "$stage/ops/linux/sow-relay@.service" /etc/systemd/system/sow-relay@.service
 sudo mkdir -p /etc/systemd/system/sow-relay@.service.d
-db=$(cat {db_path}); ctl=$(cat {control_path}); rm -f {db_path} {control_path}
-sed -e "s|__SOW_DB_SECRET__|$db|" -e "s|__SOW_RELAY_CONTROL_SECRET__|$ctl|" "$stage/ops/linux/sow-relay-override.conf.tmpl" | sudo tee /etc/systemd/system/sow-relay@.service.d/override.conf >/dev/null
+ctl=$(cat {control_path}); settlement=$(cat {settlement_path}); rm -f {control_path} {settlement_path}
+sed -e "s|__SOW_RELAY_SETTLEMENT_SECRET__|$settlement|" -e "s|__SOW_RELAY_CONTROL_SECRET__|$ctl|" "$stage/ops/linux/sow-relay-override.conf.tmpl" | sudo tee /etc/systemd/system/sow-relay@.service.d/override.conf >/dev/null
 sudo chmod 0600 /etc/systemd/system/sow-relay@.service.d/override.conf
 sudo test -s /usr/local/etc/sow/relay.crt
 sudo test -s /usr/local/etc/sow/relay.key
@@ -1286,8 +1561,8 @@ sudo chmod 0644 {manifest}
         state = RELAY_STATE,
         replays = RELAY_REPLAYS,
         manifest = RELAY_MANIFEST,
-        db_path = db_path,
         control_path = control_path,
+        settlement_path = settlement_path,
         ids = ids,
         units = units,
         version = release.version,
@@ -1833,7 +2108,6 @@ fn assemble_release(
         &paths.root.join("sow-dist/deploy/freebsd/snippets"),
         &work.join("ops/snippets"),
     )?;
-
     // Relay component: binary, config, systemd units, wrapper, and the rendered
     // drop-in template (secrets stay as placeholders, injected on the host).
     // Everything here is release content — the relay component hash changes
@@ -1935,7 +2209,7 @@ fn assemble_release(
     // The two secret placeholders are injected on the host (sed) — they are
     // the only tokens allowed to survive this check.
     let secrets_only = override_tpl
-        .replace("__SOW_DB_SECRET__", "")
+        .replace("__SOW_RELAY_SETTLEMENT_SECRET__", "")
         .replace("__SOW_RELAY_CONTROL_SECRET__", "");
     if secrets_only.contains("__SOW_") {
         bail!("relay override template has an unrendered token");
@@ -2214,6 +2488,287 @@ fn remote_plan(config: &Config, release: &Release) -> Result<ComponentPlan> {
     })
 }
 
+fn control_certificate_automation_drift(config: &Config) -> Result<bool> {
+    let command = r#"if [ "$(sudo sysrc -n -f /etc/periodic.conf.local weekly_certbot_enable 2>/dev/null || true)" = YES ] \
+        && [ "$(sudo sysrc -n -f /etc/periodic.conf.local weekly_certbot_deploy_hook 2>/dev/null || true)" = 'service nginx reload' ] \
+        && sudo grep -Fq 'location ^~ /.well-known/acme-challenge/' /usr/local/etc/nginx/conf.d/shadowsofwar.io.conf \
+        && sudo grep -Fq 'root /usr/local/www/letsencrypt;' /usr/local/etc/nginx/conf.d/shadowsofwar.io.conf \
+        && sudo grep -Fq 'periodic weekly' /etc/crontab \
+        && sudo find /usr/local/etc/periodic/weekly -maxdepth 1 -type f -name '500.certbot-*' | grep -q . \
+        && [ "$(sudo sysrc -n cron_enable 2>/dev/null || true)" = YES ] \
+        && sudo service cron onestatus >/dev/null 2>&1; then echo clean; else echo drift; fi"#;
+    let state = output("ssh", &[&config.control_host, command])?;
+    Ok(state.trim() == "drift")
+}
+
+fn renew_and_verify_control_certificates(config: &Config) -> Result<()> {
+    if control_certificate_automation_drift(config)? {
+        bail!("IONOS certificate renewal schedule or validation route is not installed");
+    }
+    let command = r#"set -eu
+sudo /usr/local/bin/certbot renew --dry-run --force-renewal --no-random-sleep-on-renew --cert-name shadowsofwar.io
+sudo /usr/local/bin/certbot renew --no-random-sleep-on-renew --deploy-hook 'service nginx reload'
+for cert in \
+    /usr/local/etc/letsencrypt/live/ionicswap.com/cert.pem \
+    /usr/local/etc/letsencrypt/live/mail.worldofunreal.com/cert.pem \
+    /usr/local/etc/letsencrypt/live/shadowsofwar.io/cert.pem; do
+    sudo openssl x509 -in "$cert" -noout -checkend 2592000 >/dev/null || {
+        echo "certificate is missing or expires within 30 days: $cert" >&2
+        exit 1
+    }
+done
+sudo openssl x509 -in /usr/local/etc/letsencrypt/live/shadowsofwar.io/cert.pem \
+    -noout -checkhost shadowsofwar.io >/dev/null
+sudo openssl x509 -in /usr/local/etc/letsencrypt/live/shadowsofwar.io/cert.pem \
+    -noout -checkhost ws.shadowsofwar.io >/dev/null"#;
+    run("ssh", &[&config.control_host, command], None)
+        .context("IONOS certificate renewal or validity check failed")?;
+    println!("  IONOS certificates valid and renewal command completed");
+    Ok(())
+}
+
+fn verify_origin_tls_from_relay(config: &Config) -> Result<()> {
+    let relay_env = RelayEnv::load()?;
+    let url = url::Url::parse(&relay_env.db_url).context("invalid SOW_DB_URL")?;
+    let host = url.host_str().context("SOW_DB_URL has no hostname")?;
+    let port = url
+        .port_or_known_default()
+        .context("SOW_DB_URL has no port")?;
+    let root_url = url.join("/")?.to_string();
+    let resolve = format!("{host}:{port}:{}", relay_env.db_resolve_ip);
+    let command = format!(
+        "curl --noproxy '*' -fsS --max-time 10 --resolve {} -o /dev/null {}",
+        shell_quote(&resolve),
+        shell_quote(&root_url)
+    );
+    run("ssh", &[&config.relay_host, &command], None)
+        .context("relay-to-origin HTTPS certificate verification failed")?;
+    let expected = output(
+        "ssh",
+        &[
+            &config.control_host,
+            "sudo openssl x509 -in /usr/local/etc/letsencrypt/live/shadowsofwar.io/cert.pem -noout -fingerprint -sha256",
+        ],
+    )?;
+    let command = format!(
+        r#"set -eu
+set -o pipefail
+certificate=$(openssl s_client -connect {address} -servername {host} -verify_hostname {host} -verify_return_error </dev/null 2>/dev/null | openssl x509 -outform PEM)
+printf '%s\n' "$certificate" | openssl x509 -noout -checkend 2592000 >/dev/null
+printf '%s\n' "$certificate" | openssl x509 -noout -fingerprint -sha256"#,
+        address = shell_quote(&format!("{}:{port}", relay_env.db_resolve_ip)),
+        host = shell_quote(host),
+    );
+    let served = output("ssh", &[&config.relay_host, &command])?;
+    if served != expected {
+        bail!("IONOS is not serving its installed certificate to the relay");
+    }
+    println!("  relay-to-origin HTTPS certificate verified with the production IP pin");
+    Ok(())
+}
+
+fn relay_dns_credentials() -> Result<String> {
+    let cert_path = env::var("SOW_RELAY_TLS_CERT_LOCAL").unwrap_or_else(|_| {
+        "/etc/letsencrypt/live/relay.shadowsofwar.io/fullchain.pem".to_string()
+    });
+    let lineage = Path::new(&cert_path)
+        .parent()
+        .context("SOW_RELAY_TLS_CERT_LOCAL must point to fullchain.pem")?;
+    if lineage.file_name().and_then(|name| name.to_str()) != Some("relay.shadowsofwar.io") {
+        bail!("SOW_RELAY_TLS_CERT_LOCAL must point to the relay.shadowsofwar.io lineage");
+    }
+    let config_root = lineage
+        .parent()
+        .and_then(Path::parent)
+        .context("could not locate the local Certbot config directory")?;
+    let renewal = fs::read_to_string(
+        config_root
+            .join("renewal")
+            .join("relay.shadowsofwar.io.conf"),
+    )
+    .context("local Certbot relay renewal config is unavailable")?;
+    let credentials_path = renewal
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .find_map(|(key, value)| {
+            (key.trim() == "dns_cloudflare_credentials")
+                .then(|| PathBuf::from(value.trim().trim_matches('"')))
+        })
+        .context("local Certbot relay config has no Cloudflare credentials path")?;
+    let metadata = fs::metadata(&credentials_path).with_context(|| {
+        format!(
+            "read local DNS credentials metadata at {}",
+            credentials_path.display()
+        )
+    })?;
+    if metadata.permissions().mode() & 0o077 != 0 {
+        bail!("local DNS credentials file must not be readable by group or other users");
+    }
+    let credentials = fs::read_to_string(&credentials_path).with_context(|| {
+        format!(
+            "read local DNS credentials at {}",
+            credentials_path.display()
+        )
+    })?;
+    let mut token_present = false;
+    let mut global_key_present = false;
+    for (key, value) in credentials.lines().filter_map(|line| line.split_once('=')) {
+        match key.trim() {
+            "dns_cloudflare_api_token" => token_present |= !value.trim().is_empty(),
+            "dns_cloudflare_api_key" => global_key_present |= !value.trim().is_empty(),
+            _ => {}
+        }
+    }
+    if !token_present || global_key_present {
+        bail!("local DNS credentials must contain the existing scoped Cloudflare API token");
+    }
+    Ok(credentials)
+}
+
+fn ensure_relay_certificate_automation(paths: &Paths, config: &Config) -> Result<()> {
+    let credentials = relay_dns_credentials()?;
+    let expected_credentials_sha = format!("{:x}", Sha256::digest(credentials.as_bytes()));
+    let current_credentials_sha = output(
+        "ssh",
+        &[
+            &config.relay_host,
+            "if sudo test -s /etc/letsencrypt/cloudflare.ini; then sudo sha256sum /etc/letsencrypt/cloudflare.ini | awk '{print $1}'; else echo missing; fi",
+        ],
+    )?;
+    let credential_stage = format!("/tmp/sow-relay-cloudflare-{}", std::process::id());
+    let stage_credentials = current_credentials_sha.trim() != expected_credentials_sha;
+    if stage_credentials {
+        stage_secret(&config.relay_host, &credentials, &credential_stage)?;
+    }
+
+    let hook_source = paths
+        .root
+        .join("sow-dist/deploy/linux/sow-relay-cert-deploy");
+    require_file(&hook_source, "relay certificate deploy hook")?;
+    let hook_sha = file_sha256(&hook_source)?;
+    let current_hook_sha = output(
+        "ssh",
+        &[
+            &config.relay_host,
+            "if sudo test -s /etc/letsencrypt/renewal-hooks/deploy/50-sow-relay; then sudo sha256sum /etc/letsencrypt/renewal-hooks/deploy/50-sow-relay | awk '{print $1}'; else echo missing; fi",
+        ],
+    )?;
+    let hook_stage = format!("/tmp/sow-relay-cert-hook-{}", std::process::id());
+    let stage_hook = current_hook_sha.trim() != hook_sha;
+    if stage_hook {
+        let contents = fs::read_to_string(&hook_source)?;
+        stage_secret(&config.relay_host, &contents, &hook_stage)?;
+    }
+
+    let credential_update = if stage_credentials {
+        format!(
+            r#"
+if sudo test -e /etc/letsencrypt/cloudflare.ini; then sudo cp -p /etc/letsencrypt/cloudflare.ini /etc/letsencrypt/cloudflare.ini.bak_$(date +%s); fi
+sudo install -o root -g root -m 0600 {credential_stage} /etc/letsencrypt/cloudflare.ini
+"#,
+            credential_stage = shell_quote(&credential_stage),
+        )
+    } else {
+        ":".to_string()
+    };
+    let hook_update = if stage_hook {
+        format!(
+            r#"
+if sudo test -e /etc/letsencrypt/renewal-hooks/deploy/50-sow-relay; then sudo cp -p /etc/letsencrypt/renewal-hooks/deploy/50-sow-relay /etc/letsencrypt/renewal-hooks/deploy/50-sow-relay.bak_$(date +%s); fi
+sudo install -o root -g root -m 0755 {hook_stage} /etc/letsencrypt/renewal-hooks/deploy/50-sow-relay
+"#,
+            hook_stage = shell_quote(&hook_stage),
+        )
+    } else {
+        ":".to_string()
+    };
+    let credential_stage_arg = if stage_credentials {
+        shell_quote(&credential_stage)
+    } else {
+        String::new()
+    };
+    let hook_stage_arg = if stage_hook {
+        shell_quote(&hook_stage)
+    } else {
+        String::new()
+    };
+    let remote = format!(
+        r#"set -eu
+credential_stage={credential_stage_arg}
+hook_stage={hook_stage_arg}
+cleanup() {{
+    [ -z "$credential_stage" ] || rm -f "$credential_stage"
+    [ -z "$hook_stage" ] || rm -f "$hook_stage"
+}}
+trap cleanup EXIT
+if ! dpkg-query -W -f='${{Status}}' certbot 2>/dev/null | grep -qx 'install ok installed' \
+    || ! dpkg-query -W -f='${{Status}}' python3-certbot-dns-cloudflare 2>/dev/null | grep -qx 'install ok installed'; then
+    sudo apt-get update
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-dns-cloudflare
+fi
+sudo install -d -o root -g root -m 0755 /etc/letsencrypt/renewal-hooks/deploy
+sudo install -d -o root -g sowrelay -m 0750 /usr/local/etc/sow
+{credential_update}
+{hook_update}
+sudo systemctl enable --now certbot.timer
+renewal=/etc/letsencrypt/renewal/relay.shadowsofwar.io.conf
+if ! sudo test -s "$renewal" \
+    || ! sudo grep -Fxq 'authenticator = dns-cloudflare' "$renewal" \
+    || ! sudo grep -Fxq 'dns_cloudflare_credentials = /etc/letsencrypt/cloudflare.ini' "$renewal"; then
+    sudo certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
+        --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
+        --cert-name relay.shadowsofwar.io -d relay.shadowsofwar.io --dry-run
+    sudo certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
+        --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
+        --cert-name relay.shadowsofwar.io -d relay.shadowsofwar.io --force-renewal
+else
+    sudo certbot renew --no-random-sleep-on-renew --cert-name relay.shadowsofwar.io --dry-run --force-renewal
+    sudo certbot renew --no-random-sleep-on-renew --cert-name relay.shadowsofwar.io
+fi
+sudo /etc/letsencrypt/renewal-hooks/deploy/50-sow-relay
+sudo openssl x509 -in /usr/local/etc/sow/relay.crt -noout -checkend 2592000 >/dev/null
+sudo openssl x509 -in /usr/local/etc/sow/relay.crt -noout -checkhost relay.shadowsofwar.io >/dev/null
+sudo test "$(sudo stat -c '%a %U:%G' /etc/letsencrypt/cloudflare.ini)" = '600 root:root'
+systemctl is-enabled --quiet certbot.timer
+systemctl is-active --quiet certbot.timer
+sudo grep -Fxq 'authenticator = dns-cloudflare' "$renewal"
+sudo grep -Fxq 'dns_cloudflare_credentials = /etc/letsencrypt/cloudflare.ini' "$renewal"
+"#,
+        credential_stage_arg = credential_stage_arg,
+        hook_stage_arg = hook_stage_arg,
+        credential_update = credential_update,
+        hook_update = hook_update,
+    );
+    run("ssh", &[&config.relay_host, &remote], None)
+        .context("relay DNS certificate automation or renewal failed")?;
+    println!("  relay Certbot DNS automation installed and renewal dry-run passed");
+    Ok(())
+}
+
+fn verify_relay_certificate_served(config: &Config) -> Result<()> {
+    let workers = relay_management_workers()?;
+    let ports = workers
+        .iter()
+        .map(|(_, port)| port.to_string())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let command = format!(
+        r#"set -eu
+set -o pipefail
+for port in {ports}; do
+    curl -fsS --max-time 10 --resolve "relay.shadowsofwar.io:$port:127.0.0.1" "https://relay.shadowsofwar.io:$port/healthz" >/dev/null
+    served=$(openssl s_client -connect "127.0.0.1:$port" -servername relay.shadowsofwar.io -verify_hostname relay.shadowsofwar.io -verify_return_error </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256)
+    configured=$(sudo openssl x509 -in /usr/local/etc/sow/relay.crt -noout -fingerprint -sha256)
+    test "$served" = "$configured"
+done
+"#
+    );
+    run("ssh", &[&config.relay_host, &command], None)
+        .context("live relay TLS certificate verification failed")?;
+    println!("  relay public TLS certificate verified on every worker");
+    Ok(())
+}
+
 fn stripe_config_drift(config: &Config) -> Result<bool> {
     const KEYS: [&str; 4] = [
         "SOW_STRIPE_SECRET_KEY",
@@ -2417,6 +2972,14 @@ fn activate_control_host(
     } else {
         (None, None)
     };
+    let settlement_secret_file = if runtime_env {
+        let secret = env::var("SOW_RELAY_SETTLEMENT_SECRET")?;
+        let path = format!("/tmp/sow-relay-settlement-secret-{}", std::process::id());
+        stage_secret(&config.control_host, &secret, &path)?;
+        Some(path)
+    } else {
+        None
+    };
     let revenuecat_webhook_file = if runtime_env {
         env::var("SOW_REVENUECAT_WEBHOOK_SECRET")
             .ok()
@@ -2561,6 +3124,24 @@ fn activate_control_host(
     } else {
         env_update_base
     };
+    let settlement_secret_update = if let Some(secret_file) = settlement_secret_file.as_deref() {
+        format!(
+            r#"for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do
+    t=$(mktemp /tmp/sow-settlement-env.XXXXXX)
+    if sudo test -f "$f"; then sudo grep -v '^SOW_RELAY_SETTLEMENT_SECRET=' "$f" > "$t" || true; else : > "$t"; fi
+    if [ "$f" = /zroot/jails/sow-database/usr/local/etc/sow/sow.env ]; then
+        printf '%s' 'SOW_RELAY_SETTLEMENT_SECRET=' >> "$t"
+        sudo cat {secret_file} >> "$t"
+        printf '\n' >> "$t"
+    fi
+    sudo install -o root -g wheel -m 0600 "$t" "$f"
+    rm -f "$t"
+done"#,
+            secret_file = shell_quote(secret_file),
+        )
+    } else {
+        ":".to_string()
+    };
     let revenuecat_update = if let Some(secret_file) = revenuecat_webhook_file.as_deref() {
         format!(
             "for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do if sudo test -f \"$f\"; then sudo cp -p \"$f\" \"$f.bak_$(date +%s)\"; fi; t=$(mktemp /tmp/sow.env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v '^SOW_REVENUECAT_WEBHOOK_SECRET=' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s' 'SOW_REVENUECAT_WEBHOOK_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {secret_file} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done; rm -f {secret_file}",
@@ -2588,6 +3169,7 @@ fn activate_control_host(
     let secret_files = [
         db_secret_file.as_deref(),
         control_secret_file.as_deref(),
+        settlement_secret_file.as_deref(),
         revenuecat_webhook_file.as_deref(),
         stripe_secret_file.as_deref(),
         stripe_webhook_file.as_deref(),
@@ -2675,11 +3257,24 @@ if __NGINX_RELOAD__; then
         if sudo test -f "$dest"; then sudo cp -p "$dest" "$dest.bak_$(date +%s)"; fi
         sudo install -o root -g wheel -m 0644 "$f" "$dest"
     done
+    dest=/etc/periodic.conf.local
+    if [ "$(sudo sysrc -n -f "$dest" weekly_certbot_enable 2>/dev/null || true)" != YES ] \
+        || [ "$(sudo sysrc -n -f "$dest" weekly_certbot_deploy_hook 2>/dev/null || true)" != 'service nginx reload' ]; then
+        if sudo test -f "$dest"; then sudo cp -p "$dest" "$dest.bak_$(date +%s)"; fi
+        sudo sysrc -f "$dest" weekly_certbot_enable=YES >/dev/null
+        sudo sysrc -f "$dest" 'weekly_certbot_deploy_hook=service nginx reload' >/dev/null
+    fi
+    if [ "$(sudo sysrc -n cron_enable 2>/dev/null || true)" != YES ]; then
+        if sudo test -f /etc/rc.conf; then sudo cp -p /etc/rc.conf "/etc/rc.conf.bak_$(date +%s)"; fi
+        sudo sysrc cron_enable=YES >/dev/null
+    fi
+    sudo service cron onestatus >/dev/null 2>&1 || sudo service cron onestart
     sudo nginx -t || rollback
     sudo service nginx reload || rollback
 fi
 __ENV_BACKUPS__
 __ENV_UPDATE__
+__SETTLEMENT_SECRET_UPDATE__
 __REVENUECAT_UPDATE__
 __STRIPE_UPDATE__
 __DATABASE_SECRET_SCRUB__
@@ -2729,6 +3324,7 @@ __SECRET_CLEANUP__
             },
         ),
         ("__ENV_UPDATE__", env_update),
+        ("__SETTLEMENT_SECRET_UPDATE__", settlement_secret_update),
         ("__ENV_BACKUPS__", env_backups),
         ("__REVENUECAT_UPDATE__", revenuecat_update),
         ("__STRIPE_UPDATE__", stripe_update),
@@ -2805,6 +3401,13 @@ fi"#,
     if plan.web || plan.ops {
         checks.push_str("\nsudo nginx -t");
     }
+    checks.push_str(
+        r#"
+test "$(sudo sysrc -n -f /etc/periodic.conf.local weekly_certbot_enable)" = YES
+test "$(sudo sysrc -n -f /etc/periodic.conf.local weekly_certbot_deploy_hook)" = 'service nginx reload'
+sudo service cron onestatus >/dev/null
+"#,
+    );
     run("ssh", &[&config.control_host, &checks], None).context("control-host healthcheck failed")
 }
 
@@ -2822,6 +3425,40 @@ fn verify_public(paths: &Paths, config: &Config, release: &Release) -> Result<()
         .context("public game manifest request failed")?;
     if manifest.trim() != local_manifest.trim() {
         bail!("public domain does not serve {}", release.id);
+    }
+
+    let local_assets: serde_json::Value = serde_json::from_str(&local_manifest)?;
+    for (field, expected_type) in [
+        ("js", "application/javascript"),
+        ("wasm", "application/wasm"),
+    ] {
+        let asset = local_assets[field]
+            .as_str()
+            .with_context(|| format!("game manifest missing {field}"))?;
+        let url = format!("{}/{asset}", config.public_origin);
+        let headers = output(
+            "curl",
+            &[
+                "-fsS",
+                "--max-time",
+                "20",
+                "--head",
+                "-H",
+                "Accept-Encoding: br",
+                &url,
+            ],
+        )?;
+        let content_type = headers
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-type")
+                    .then(|| value.split(';').next().unwrap_or_default().trim())
+            })
+            .unwrap_or_default();
+        if content_type != expected_type {
+            bail!("public {asset} must be served as {expected_type}, got {content_type}");
+        }
     }
 
     let local_assetlinks_path = release.dir.join("web/.well-known/assetlinks.json");

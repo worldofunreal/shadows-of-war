@@ -151,19 +151,7 @@ impl SowApp {
 
         if let Some(text) = &mut self.gfx.text_renderer {
             text.begin_frame();
-            for (key, cell) in &self.ui.app.asset_loader.gpu_avatar_cells {
-                let slot = match key {
-                    crate::ui::asset_loader::AvatarFetchKey::Leader(leader) => {
-                        sow_core::player::Leader::ALL
-                            .iter()
-                            .position(|value| value == leader)
-                            .unwrap_or(0)
-                    }
-                    crate::ui::asset_loader::AvatarFetchKey::Fallback => {
-                        sow_core::player::Leader::ALL.len()
-                    }
-                    crate::ui::asset_loader::AvatarFetchKey::Campaign { slot, .. } => *slot,
-                };
+            for &(slot, ref cell) in &self.ui.app.asset_loader.gpu_avatar_cells {
                 if text.avatar_uv(slot).is_none() {
                     text.upload_avatar(slot, cell);
                 }

@@ -58,6 +58,7 @@
         crossfade: null,
         cinematicActive: false,
         mediaMetadataSet: false,
+        fetchRequested: false,
         frame: 0
     };
 
@@ -81,7 +82,8 @@
             return null;
         }
         var url = base + "/gameplay/music/shadows-of-war.webm";
-        var version = String(window.SOW_BUILD_TS || "");
+        var versions = window.SOW_ASSET_TS || {};
+        var version = String(versions["/assets/gameplay/music/shadows-of-war.webm"] || window.SOW_BUILD_TS || "");
         if (version === "__BUILD_TS__") version = "";
         return version ? url + "?v=" + encodeURIComponent(version) : url;
     }
@@ -244,6 +246,7 @@
         var deck = menuMusic.decks && menuMusic.decks[index];
         if (!deck || !menuMusic.activated || menuMusicLoaderActive(menuMusic.state) ||
             menuMusicMuted() || menuMusicVolume() <= 0) return false;
+        if (!menuMusic.fetchRequested) menuMusicBeginLoading();
         if (userGesture) {
             menuMusic.playBlocked = false;
             menuMusic.blockedDeck = null;
@@ -301,7 +304,7 @@
             if (!url) return false;
             menuMusic.decks = [new window.Audio(), new window.Audio()];
             menuMusic.decks.forEach(function (deck, index) {
-                deck.preload = index === menuMusic.active ? "auto" : "none";
+                deck.preload = "none";
                 deck.loop = false;
                 deck.volume = 0;
                 deck.addEventListener("error", function () {
@@ -326,7 +329,6 @@
                     menuMusicPlayDeck(menuMusic.active, false);
                 });
                 deck.src = url;
-                if (index === menuMusic.active) deck.load();
             });
             return true;
         } catch (error) {
@@ -384,7 +386,18 @@
 
     window.SOW_menu_music_cinematic = menuMusicSetCinematicActive;
 
+    // Music bytes wait for their own window: the boot template fires
+    // sow:wasm-bytes-ready once the engine download completes, so the theme
+    // buffers against CPU/identity work instead of the WASM wire.
+    function menuMusicBeginLoading() {
+        if (menuMusic.fetchRequested || !menuMusic.decks) return;
+        if (menuMusicMuted() || menuMusicVolume() <= 0) return;
+        menuMusic.fetchRequested = true;
+        try { menuMusic.decks[menuMusic.active].load(); } catch (_) {}
+    }
+
     function menuMusicStartAtLoaderEnd() {
+        menuMusicBeginLoading();
         menuMusic.activated = true;
         if (menuMusic.state && Number.isSafeInteger(menuMusic.state.loader_cycle_id)) {
             menuMusic.completedCycleId = Math.max(menuMusic.completedCycleId, menuMusic.state.loader_cycle_id);
@@ -401,6 +414,7 @@
 
     menuMusicCreatePlayer();
     window.addEventListener("sow:loader-ready", menuMusicStartAtLoaderEnd, { once: true });
+    window.addEventListener("sow:wasm-bytes-ready", menuMusicBeginLoading, { once: true });
     document.addEventListener("click", menuMusicUnlockFromClick, true);
     window.addEventListener("sow:locale-change", function () {
         if (menuMusic.unlockButton && !menuMusic.unlockButton.hidden) menuMusicShowUnlockPrompt();
@@ -1011,8 +1025,10 @@
         return (state && state.reward_receipts || []).filter(function (receipt) {
             var tutorialApplied = receipt && receipt.id === "tutorial" && receipt.match_id === "tutorial" &&
                 receipt.status === "applied";
+            var campaignApplied = receipt && typeof receipt.id === "string" &&
+                /^campaign:[a-z][a-z0-9_]{0,63}$/.test(receipt.id) && receipt.match_id === receipt.id;
             return receipt && receipt.id && receipt.status === "applied" && !receipt.presented_at &&
-                (tutorialApplied || receipt.verification_status === "verified" || receipt.verification_status === "rejected");
+                (tutorialApplied || campaignApplied || receipt.verification_status === "verified" || receipt.verification_status === "rejected");
         });
     }
 
@@ -1153,7 +1169,8 @@
             card.style.animationDelay = (120 + index * 140) + "ms";
             card.setAttribute("role", "group");
             var levelLabel = stage.kind === "level" ? SOW_t("profile.level", { level: stage.level }) : null;
-            card.setAttribute("aria-label", levelLabel || stage.amount + " " + SOW_t(stage.kind === "xp" ? "menu.xp" : stage.kind === "crowns" ? "store.crowns" : "store.laurels"));
+            card.setAttribute("aria-label", stage.kind === "leader" ? stage.label :
+                levelLabel || stage.amount + " " + SOW_t(stage.kind === "xp" ? "menu.xp" : stage.kind === "crowns" ? "store.crowns" : "store.laurels"));
             var medallion = document.createElement("span");
             medallion.className = "sow-menu__reward-medallion";
             medallion.setAttribute("aria-hidden", "true");
@@ -1161,12 +1178,16 @@
             emblem.className = "sow-menu__reward-emblem";
             if (stage.kind === "xp") emblem.textContent = "XP";
             else if (stage.kind === "level") emblem.textContent = "↑";
+            else if (stage.kind === "leader") {
+                emblem.src = asset("gameplay/avatars/" + stage.slug + ".webp");
+                emblem.alt = "";
+            }
             else emblem.src = currencyAsset(stage.kind === "crowns" ? "crown" : "laurel");
             medallion.appendChild(emblem);
             var amount = document.createElement("strong");
             amount.className = "sow-menu__reward-amount";
-            amount.setAttribute("aria-hidden", "true");
-            amount.textContent = levelLabel || "+0";
+            if (stage.kind !== "leader") amount.setAttribute("aria-hidden", "true");
+            amount.textContent = levelLabel || (stage.kind === "leader" ? stage.label : "+0");
             card.appendChild(medallion);
             card.appendChild(amount);
             cards.appendChild(card);
@@ -1207,6 +1228,7 @@
                     var t = Math.max(0, Math.min(1, (elapsed - 300 - index * 140) / 650));
                     var value = item.stage.kind === "level"
                         ? SOW_t("profile.level", { level: item.stage.level })
+                        : item.stage.kind === "leader" ? item.stage.label
                         : "+" + Math.round(item.stage.amount * (1 - Math.pow(1 - t, 3)));
                     if (item.amount.textContent !== value) item.amount.textContent = value;
                 });
@@ -1287,6 +1309,15 @@
             sum.laurels += Math.max(0, Number(receipt.laurels) || 0);
             return sum;
         }, { xp: 0, crowns: 0, laurels: 0 });
+        var unlockedLeaderIds = Array.from(new Set(receipts.reduce(function (ids, receipt) {
+            return ids.concat(Array.isArray(receipt.unlocked_leaders) ? receipt.unlocked_leaders : []);
+        }, []))).filter(function (id) { return /^[a-z][a-z0-9_]{0,63}$/.test(id); });
+        var leaderStages = unlockedLeaderIds.map(function (slug) {
+            var leader = leaderById(slug);
+            var name = leader ? leaderDisplayName(leader) : slug.replace(/_/g, " ");
+            return { kind: "leader", amount: 0, slug: slug,
+                label: SOW_t("heroes.leader_unlocked", { name: name }) };
+        });
         var canonical = progressionFromState();
         var target = canonical;
         var startLevel = (displayedProgression || canonical).level;
@@ -1311,8 +1342,9 @@
             { kind: "xp", amount: totals.xp, selector: "[data-progression-xp-value]" },
             { kind: "crowns", amount: totals.crowns, selector: "[data-progression-crowns-value]" },
             { kind: "laurels", amount: totals.laurels, selector: "[data-progression-laurels-value]" },
+            ...leaderStages,
             ...levelStages
-        ].filter(function (stage) { return stage.amount > 0; });
+        ].filter(function (stage) { return stage.kind === "leader" || stage.amount > 0; });
 
         function finish(shown) {
             if (token !== rewardAnimationToken || !state || state.account_id !== accountId) return;
@@ -1353,6 +1385,10 @@
             }
             var item = items[index];
             var stage = item.stage;
+            if (stage.kind === "leader") {
+                window.setTimeout(function () { next(index + 1); }, 900);
+                return;
+            }
             var nextValues = Object.assign({}, displayedProgression || progressionFromState());
             var oldLevel = nextValues.level;
             if (stage.kind === "level") {
@@ -1379,7 +1415,17 @@
                 });
             });
         }
-        if (reducedRewardMotion() || !stages.length) { finish(true); return; }
+        if (reducedRewardMotion()) {
+            if (!leaderStages.length) { finish(true); return; }
+            var staticItems = createRewardStage(stages, function () { finish(true); });
+            staticItems.forEach(function (item) {
+                item.amount.textContent = item.stage.kind === "leader" ? item.stage.label
+                    : item.stage.kind === "level" ? SOW_t("profile.level", { level: item.stage.level })
+                    : "+" + item.stage.amount;
+            });
+            return;
+        }
+        if (!stages.length) { finish(true); return; }
         var items = createRewardStage(stages, function () { finish(true); });
         revealRewardAmounts(items, token).then(function (shown) { if (shown) next(0); else finish(false); });
     }
@@ -1637,6 +1683,7 @@
                 heroesRegionFilter = "all";
                 dropdownOpenKey = null;
                 tempSelectedLeader = state ? state.selected_leader : "Caesar";
+                tempSelectedRandom = !!(state && state.prefer_random_leader);
                 render();
                 return;
             }
@@ -1859,6 +1906,7 @@
             heroesRegionFilter = "all";
             dropdownOpenKey = null;
             tempSelectedLeader = state ? state.selected_leader : "Caesar";
+            tempSelectedRandom = !!(state && state.prefer_random_leader);
             settingsOpen = false;
             signOutConfirmOpen = false;
             render();
@@ -1885,6 +1933,7 @@
         }
         if (command === "preview_leader") {
             tempSelectedLeader = target.dataset.leaderId;
+            tempSelectedRandom = false;
             var previewLeader = leaderById(tempSelectedLeader);
             if (previewLeader && previewLeader.available !== false && tempSelectedLeader !== state.selected_leader) {
                 menuOutcomeCounts.leader_preview_selected = (menuOutcomeCounts.leader_preview_selected || 0) + 1;
@@ -1898,6 +1947,22 @@
             maybePresentRewards();
             return;
         }
+        if (command === "preview_random_leader") {
+            tempSelectedLeader = null;
+            tempSelectedRandom = true;
+            if (!updateHeroesPreview()) render();
+            return;
+        }
+        if (command === "confirm_random_leader") {
+            send("set_random_leader");
+            heroesOpen = false;
+            heroesSearchQuery = "";
+            heroesRegionFilter = "all";
+            tempSelectedLeader = null;
+            tempSelectedRandom = false;
+            render();
+            return;
+        }
         if (command === "confirm_leader") {
             var leaderId = target.dataset.leaderId || tempSelectedLeader;
             var leader = leaderById(leaderId);
@@ -1907,6 +1972,7 @@
                 heroesSearchQuery = "";
                 heroesRegionFilter = "all";
                 tempSelectedLeader = null;
+                tempSelectedRandom = false;
                 render();
             }
             return;

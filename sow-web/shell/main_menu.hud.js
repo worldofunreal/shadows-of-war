@@ -9,12 +9,13 @@
     var hudState = null;
     var lastHudRaw = "";
     var activeHudPanel = null;
-    var transferOpen = false;
     var betrayalOpen = false;
-    var pinEmoji = false;
+    var pinEmote = false;
+    var emoteTextKey = "";
+    var emoteTextTarget = null;
+    var hudSafeArea = [0, 0, 0, 0];
     var surrenderModalOpen = false;
     var surrenderMessage = null;
-    var emojiPickerOpen = false;
     var devSidebarOpen = false;
     var devToolsSchemaKey = "";
 
@@ -22,11 +23,8 @@
     var hudRefs = null;
     var leaderboardRows = Object.create(null);
     var leaderboardRenderKey = "";
-    var combatOperationRows = Object.create(null);
-    var combatOperationsOrderKey = "";
     var pendingCounterAttacks = Object.create(null);
     var lastLeaderboardPlayers = [];
-    var inboxRenderKey = "";
     var notificationCursor = 0;
     var notificationTimer = null;
     var activeNotifications = [];
@@ -52,13 +50,6 @@
     var lastAllocationKey = "";
     var EMPTY_CAMPAIGN_UNLOCKS = { buildings: {}, actions: [] };
 
-    var EMOJIS = [
-        "😀", "😎", "😏", "😂", "🤣", "😋", "😉", "😜", "😍", "🥰", "🥳", "🥺", "😇", "🤩", "👍",
-        "❤️", "😮", "🤔", "🧐", "🙄", "🤯", "🤡", "💩", "🤫", "😠", "😡", "🤬", "😤", "🥵", "🥶",
-        "🤢", "🤮", "⚔️", "🛡️", "🏹", "💣", "💥", "💀", "👑", "💪", "🔥", "👀", "🏳️", "🤝", "💔",
-        "🔌", "⭐", "🐺"
-    ];
-
     var surrenderMessageKeys = [
         "endgame.match_message_1",
         "endgame.match_message_2",
@@ -72,6 +63,28 @@
         var command = Object.assign({ type: type }, extra || {});
         window.SOW_menu_command(JSON.stringify(command));
         return true;
+    }
+
+    function updateHudSafeArea() {
+        if (!hudRoot || typeof window.getComputedStyle !== "function") return;
+        var probe = document.createElement("span");
+        probe.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)";
+        hudRoot.appendChild(probe);
+        var style = window.getComputedStyle(probe);
+        hudSafeArea = [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft].map(function (value) { return Math.max(0, parseFloat(value) || 0); });
+        probe.remove();
+        syncEmoteTexts(hudState && hudState.hud);
+    }
+
+    function syncEmoteTexts(hud) {
+        if (!hud || !Array.isArray(hud.emotes) || hud.emotes.length !== 4) return;
+        var texts = hud.emotes.map(function (definition) { return SOW_t(definition.bubble_key); });
+        var key = String(window.SOW_LOCALE || "en") + ":" + JSON.stringify(texts) + ":" + hudSafeArea.join(",");
+        if (key === emoteTextKey && emoteTextTarget === window.SOW_menu_command) return;
+        if (send("set_emote_texts", { texts: texts, safe_area: hudSafeArea })) {
+            emoteTextKey = key;
+            emoteTextTarget = window.SOW_menu_command;
+        }
     }
 
     function setHudPanel(panel) {
@@ -119,7 +132,7 @@
         plus: '<path d="M12 4v16M4 12h16"/>',
         minus: '<path d="M4 12h16"/>',
         inbox: '<path d="M4 4h16v16H4zM4 13h4l2 3h4l2-3h4M4 7l8 6 8-6"/>',
-        reaction: '<path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.7 8.7 0 0 1-3.5-.7L4 20l1.4-3.6A7 7 0 0 1 4 12c0-4.1 3.6-7.5 8-7.5s8 3.1 8 7Z"/><path d="M9 11h.01M15 11h.01M9 14.5s1 1.5 3 1.5 3-1.5 3-1.5"/>',
+        emote: '<path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.7 8.7 0 0 1-3.5-.7L4 20l1.4-3.6A7 7 0 0 1 4 12c0-4.1 3.6-7.5 8-7.5s8 3.1 8 7Z"/><path d="M9 11h.01M15 11h.01M9 14.5s1 1.5 3 1.5 3-1.5 3-1.5"/>',
         rankings: '<path d="M3 20h18M5 20v-6h4v6M10 20V4h4v16M15 20v-10h4v10"/>',
         settings: '<path d="m10 3-.6 2.2a7.6 7.6 0 0 0-1.7 1L5.5 5.4 3.8 8.3l1.8 1.5a7.9 7.9 0 0 0 0 2.1l-1.8 1.5 1.7 2.9 2.2-.8a7.6 7.6 0 0 0 1.7 1L10 19h4l.6-2.2a7.6 7.6 0 0 0 1.7-1l2.2.8 1.7-2.9-1.8-1.5a7.9 7.9 0 0 0 0-2.1l1.8-1.5-1.7-2.9-2.2.8a7.6 7.6 0 0 0-1.7-1L14 3h-4Z"/><circle cx="12" cy="11" r="3"/>',
         leave: '<path d="M13 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6M10 16l4-4-4-4M14 12H3"/>',
@@ -300,14 +313,15 @@
         syncCompactHudBounds();
         if (!notificationLayoutStarted) {
             notificationLayoutStarted = true;
-            window.addEventListener("resize", function () {
+            var onViewportChange = function () {
                 syncCompactHudBounds();
                 scheduleNotificationPlacement();
-            }, { passive: true });
-            if (window.visualViewport) window.visualViewport.addEventListener("resize", function () {
-                syncCompactHudBounds();
-                scheduleNotificationPlacement();
-            }, { passive: true });
+            };
+            window.addEventListener("resize", onViewportChange, { passive: true });
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener("resize", onViewportChange, { passive: true });
+                window.visualViewport.addEventListener("scroll", onViewportChange, { passive: true });
+            }
             document.addEventListener("focusout", function () {
                 if (window.requestAnimationFrame) window.requestAnimationFrame(syncCompactHudBounds);
                 else syncCompactHudBounds();
@@ -354,6 +368,7 @@
     function ensureHudDom() {
         if (!hudRoot || hudInitialized) return;
         hudInitialized = true;
+        emoteTextKey = "";
         hudRoot.innerHTML = ''
             + '<header class="sow-hud__topbar">'
             + '  <div class="sow-hud__status-right">'
@@ -402,16 +417,7 @@
             + '  <button type="button" class="sow-hud__icon-btn" data-command="zoom_in" aria-label="' + SOW_t("hud.zoom_in") + '" title="' + SOW_t("hud.zoom_in") + '">' + hudIcon("plus") + '</button>'
             + '  <button type="button" class="sow-hud__icon-btn" data-command="zoom_out" aria-label="' + SOW_t("hud.zoom_out") + '" title="' + SOW_t("hud.zoom_out") + '">' + hudIcon("minus") + '</button>'
             + '  <button type="button" class="sow-hud__icon-btn" data-command="center_camera" aria-label="' + SOW_t("hud.center_camera") + '" title="' + SOW_t("hud.center_camera") + '">' + hudIcon("camera", "sow-hud__action-icon") + '</button>'
-            + '  <button type="button" class="sow-hud__icon-btn" data-command="toggle_emoji" aria-label="' + SOW_t("hud.emojis") + '" title="' + SOW_t("hud.emojis") + '">' + hudIcon("reaction") + '</button>'
             + '</aside>'
-            + '<div class="sow-hud__emoji-popout hidden" id="sow-hud-emoji-popout">'
-            + '  <div class="sow-hud__emoji-header">'
-            + '    <span>' + SOW_t("hud.express_reaction") + '</span>'
-            + '    <button type="button" class="sow-hud__pin-btn" data-command="toggle_pin_emoji" aria-pressed="false">' + SOW_t("hud.pin") + '</button>'
-            + '    <button type="button" class="sow-hud__close-btn" data-command="toggle_emoji" aria-label="' + SOW_t("hud.close_emojis") + '">✕</button>'
-            + '  </div>'
-            + '  <div class="sow-hud__emoji-grid" id="sow-hud-emoji-grid"></div>'
-            + '</div>'
             + '<aside class="sow-hud__dev-sidebar hidden" id="sow-hud-dev-sidebar">'
             + '  <div class="sow-hud__dev-header"><b>' + SOW_t("hud.dev_tools") + '</b><button type="button" class="sow-hud__close-btn" data-command="toggle_dev_sidebar" aria-label="' + SOW_t("hud.close_developer_tools") + '">✕</button></div>'
             + '  <div class="sow-hud__dev-body">'
@@ -466,21 +472,28 @@
             + '  </div>'
             + '  <div class="sow-hud__leaderboard-rows" id="sow-hud-lb-rows"></div>'
             + '</aside>'
-            + '<aside class="sow-hud__panel sow-hud__inbox hidden" id="sow-hud-inbox">'
-            + '  <div class="sow-hud__panel-header"><h3>' + SOW_t("hud.inbox") + '</h3><button class="sow-hud__close-btn" type="button" data-command="toggle_inbox" aria-label="' + SOW_t("hud.close_inbox") + '">✕</button></div>'
-            + '  <div class="sow-hud__panel-rows" id="sow-hud-inbox-rows"></div>'
+            + '<aside class="sow-hud__inbox hidden" id="sow-hud-inbox" role="dialog" aria-modal="false" aria-labelledby="sow-hud-inbox-title">'
+            + '  <div class="sow-hud__transfer-header sow-hud__inbox-header"><span class="sow-hud__transfer-icon" aria-hidden="true">' + hudIcon("inbox", "sow-hud__inline-icon") + '</span><h3 id="sow-hud-inbox-title">' + SOW_t("hud.inbox") + '</h3><span class="sow-hud__inbox-total" id="sow-hud-inbox-total" aria-hidden="true">0</span><button class="sow-hud__close-btn" id="sow-hud-inbox-close" type="button" data-command="toggle_inbox" aria-label="' + SOW_t("hud.close_inbox") + '">✕</button></div>'
+            + '  <div class="sow-hud__inbox-list" id="sow-hud-inbox-rows"></div>'
+            + '  <p class="sow-hud__inbox-empty" id="sow-hud-inbox-empty" hidden>' + SOW_t("hud.no_pending_requests") + '</p>'
             + '</aside>'
-            + '<aside class="sow-hud__panel sow-hud__transfer hidden" id="sow-hud-transfer">'
-            + '  <div class="sow-hud__transfer-header"><span class="sow-hud__transfer-icon" aria-hidden="true">' + hudIcon("transfer", "sow-hud__inline-icon") + '</span><h3>' + SOW_t("hud.resource_transfer") + '</h3><button class="sow-hud__close-btn" type="button" data-command="close_transfer" aria-label="' + SOW_t("hud.close_resource_transfer") + '">✕</button></div>'
-            + '  <p class="sow-hud__transfer-target" id="sow-hud-transfer-target"></p>'
+            + '<aside class="sow-hud__dialog sow-hud__transfer hidden" id="sow-hud-transfer" role="dialog" aria-modal="false" aria-labelledby="sow-hud-transfer-title">'
+            + '  <div class="sow-hud__transfer-header"><span class="sow-hud__transfer-icon" aria-hidden="true">' + hudIcon("transfer", "sow-hud__inline-icon") + '</span><h3 id="sow-hud-transfer-title">' + SOW_t("hud.resource_transfer") + '</h3><button class="sow-hud__close-btn" id="sow-hud-transfer-close" type="button" data-command="close_transfer" aria-label="' + SOW_t("hud.close_resource_transfer") + '">✕</button></div>'
+            + '  <div class="sow-hud__dialog-body">'
+            + '  <div class="sow-hud__dialog-participant" id="sow-hud-transfer-target"></div>'
             + '  <div class="sow-hud__transfer-fields">'
-            + '    <label><span>' + SOW_t("hud.troops") + '</span><input id="sow-hud-transfer-troops" type="number" min="0" step="1" value="0"></label>'
-            + '    <label><span>' + SOW_t("hud.gold") + '</span><input id="sow-hud-transfer-gold" type="number" min="0" step="1" value="0"></label>'
+            + '    <label><span>' + hudIcon("troops", "sow-hud__inline-icon") + SOW_t("hud.troops") + '</span><input id="sow-hud-transfer-troops" type="number" inputmode="numeric" min="0" step="1" value="0"></label>'
+            + '    <label><span><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' + currencyAsset("gold") + '" alt="">' + SOW_t("hud.gold") + '</span><input id="sow-hud-transfer-gold" type="number" inputmode="numeric" min="0" step="1" value="0"></label>'
+            + '  </div>'
             + '  </div>'
             + '  <div class="sow-hud__transfer-actions"><button class="sow-hud__transfer-send" type="button" data-command="send_resources"><span>' + SOW_t("hud.send") + '</span><span aria-hidden="true">↗</span></button><button class="sow-hud__transfer-request" type="button" data-command="request_resources">' + SOW_t("hud.request") + '</button></div>'
             + '</aside>'
-            + '<div class="sow-hud__modal-backdrop hidden" id="sow-hud-betrayal-modal">'
-            + '  <div class="sow-hud__modal-card"><h3>' + hudIcon("betray", "sow-hud__inline-icon") + ' ' + SOW_t("hud.break_alliance") + '</h3><p id="sow-hud-betrayal-copy">' + SOW_t("hud.break_alliance_body") + '</p><div class="sow-hud__panel-actions"><button type="button" data-command="cancel_betrayal">' + SOW_t("hud.keep_alliance") + '</button><button class="sow-hud__btn-danger" type="button" data-command="confirm_betrayal">' + SOW_t("hud.attack") + '</button></div></div>'
+            + '<div class="sow-hud__modal-backdrop sow-hud__betrayal-backdrop hidden" id="sow-hud-betrayal-modal">'
+            + '  <section class="sow-hud__dialog sow-hud__betrayal" role="dialog" aria-modal="true" aria-labelledby="sow-hud-betrayal-title" aria-describedby="sow-hud-betrayal-copy">'
+            + '    <div class="sow-hud__transfer-header"><span class="sow-hud__transfer-icon sow-hud__betrayal-mark" aria-hidden="true">' + hudIcon("betray", "sow-hud__inline-icon") + '</span><h3 id="sow-hud-betrayal-title">' + SOW_t("hud.break_alliance") + '</h3><button class="sow-hud__close-btn" id="sow-hud-betrayal-close" type="button" data-command="cancel_betrayal" aria-label="' + SOW_t("endgame.cancel") + '">✕</button></div>'
+            + '    <div class="sow-hud__dialog-body"><div class="sow-hud__dialog-participant" id="sow-hud-betrayal-target"></div><p class="sow-hud__betrayal-copy" id="sow-hud-betrayal-copy">' + SOW_t("hud.break_alliance_body") + '</p></div>'
+            + '    <div class="sow-hud__transfer-actions sow-hud__betrayal-actions"><button class="sow-hud__transfer-request" id="sow-hud-betrayal-cancel" type="button" data-command="cancel_betrayal">' + SOW_t("hud.keep_alliance") + '</button><button class="sow-hud__betrayal-confirm" id="sow-hud-betrayal-confirm" type="button" data-command="confirm_betrayal">' + hudIcon("betray", "sow-hud__inline-icon") + SOW_t("hud.attack") + '</button></div>'
+            + '  </section>'
             + '</div>'
             + '<div class="sow-hud__endgame-backdrop hidden" id="sow-hud-surrender-modal">'
             + '  <section class="sow-hud__endgame-card sow-hud__exit-card" data-result="defeat" role="dialog" aria-modal="true" aria-labelledby="sow-hud-surrender-banner" aria-describedby="sow-hud-surrender-desc">'
@@ -543,19 +556,6 @@
             hudDevLayer.appendChild(hudRoot.querySelector("#sow-hud-dev-sidebar"));
         }
 
-        var emojiGrid = document.getElementById("sow-hud-emoji-grid");
-        if (emojiGrid) {
-            EMOJIS.forEach(function (emoji) {
-                var cell = document.createElement("button");
-                cell.type = "button";
-                cell.className = "sow-hud__emoji-cell";
-                cell.textContent = emoji;
-                cell.dataset.command = "express_emoji";
-                cell.dataset.emoji = emoji;
-                emojiGrid.appendChild(cell);
-            });
-        }
-
         hudRefs = {
             fps: document.getElementById("sow-hud-fps"),
             ping: document.getElementById("sow-hud-ping"),
@@ -582,8 +582,6 @@
             armyAllocation: document.getElementById("sow-hud-army-allocation"),
             armyRatio: document.getElementById("sow-hud-army-ratio"),
             rightRail: document.getElementById("sow-hud-right-rail"),
-            emojiPopout: document.getElementById("sow-hud-emoji-popout"),
-            pinEmoji: hudRoot.querySelector("[data-command='toggle_pin_emoji']"),
             devSidebar: document.getElementById("sow-hud-dev-sidebar"),
             devBtn: document.getElementById("sow-hud-dev-btn"),
             settings: document.getElementById("sow-hud-settings"),
@@ -596,17 +594,28 @@
             fleetWarship: hudRoot.querySelector("[data-fleet-kind='warship']"),
             fleetNuke: hudRoot.querySelector("[data-fleet-kind='nuke']"),
             buildingCancel: hudRoot.querySelector("[data-command='cancel_building_mode']"),
-            panelButtons: Array.prototype.slice.call(hudRoot.querySelectorAll(".sow-hud__topbar [data-command^='toggle_'], .sow-hud__right-rail [data-command='toggle_emoji']")),
+            panelButtons: Array.prototype.slice.call(hudRoot.querySelectorAll(".sow-hud__topbar [data-command^='toggle_']")),
             leaderboard: document.getElementById("sow-hud-leaderboard"),
             rows: document.getElementById("sow-hud-lb-rows"),
             inbox: document.getElementById("sow-hud-inbox"),
             inboxRows: document.getElementById("sow-hud-inbox-rows"),
+            inboxClose: document.getElementById("sow-hud-inbox-close"),
+            inboxButton: hudRoot.querySelector(".sow-hud__inbox-pill"),
+            inboxTotal: document.getElementById("sow-hud-inbox-total"),
+            inboxEmpty: document.getElementById("sow-hud-inbox-empty"),
+            inboxRequests: Object.create(null),
+            inboxRequestKeys: [],
+            inboxRenderKey: "",
             transfer: document.getElementById("sow-hud-transfer"),
             transferTarget: document.getElementById("sow-hud-transfer-target"),
+            transferClose: document.getElementById("sow-hud-transfer-close"),
+            transferReturnFocus: null,
             transferGold: document.getElementById("sow-hud-transfer-gold"),
             transferTroops: document.getElementById("sow-hud-transfer-troops"),
             betrayal: document.getElementById("sow-hud-betrayal-modal"),
-            betrayalCopy: document.getElementById("sow-hud-betrayal-copy"),
+            betrayalTarget: document.getElementById("sow-hud-betrayal-target"),
+            betrayalCancel: document.getElementById("sow-hud-betrayal-cancel"),
+            betrayalReturnFocus: null,
             surrender: document.getElementById("sow-hud-surrender-modal"),
             surrenderBanner: document.getElementById("sow-hud-surrender-banner"),
             surrenderDesc: document.getElementById("sow-hud-surrender-desc"),
@@ -633,6 +642,8 @@
             mapMenu: document.getElementById("sow-hud-map-menu"),
             operations: document.getElementById("sow-hud-operations"),
             operationRows: document.getElementById("sow-hud-operations-list"),
+            combatOperationRows: Object.create(null),
+            combatOperationsOrderKey: "",
             buildingCard: document.getElementById("sow-hud-building-card"),
             buildingCardIcon: document.getElementById("sow-hud-building-card-icon"),
             buildingCardKind: document.getElementById("sow-hud-building-card-kind"),
@@ -649,6 +660,10 @@
             mapFeedback: document.createElement("div")
         };
 
+        hudRefs.transferIdentity = createPlayerIdentity();
+        hudRefs.transferTarget.appendChild(hudRefs.transferIdentity.element);
+        hudRefs.betrayalIdentity = createPlayerIdentity();
+        hudRefs.betrayalTarget.appendChild(hudRefs.betrayalIdentity.element);
 
         hudRefs.notifications.className = "sow-hud__notifications";
         hudRefs.notifications.setAttribute("aria-live", "polite");
@@ -740,6 +755,11 @@
             if (previewTarget) send("set_dev_vfx_preview", { target: Number(previewTarget.value) });
         });
         hudRoot.addEventListener("change", function (event) {
+            if (event.target.matches("[data-emote-pin]")) {
+                pinEmote = event.target.checked;
+                send("set_emote_pinned", { pinned: pinEmote });
+                return;
+            }
             var input = event.target.closest("[data-hud-setting]");
             if (!input) return;
             var setting = input.dataset.hudSetting;
@@ -760,6 +780,7 @@
     }
 
     var mapActionLabels = {
+        emote: { icon: "emote", key: "hud.map_action_emote" },
         spawn: { icon: "spawn", emoji: "🌱", key: "hud.map_action_deploy" },
         attack: { icon: "attack", emoji: "⚔️", key: "hud.map_action_attack" },
         fleet: { icon: "fleet", emoji: "⛵", key: "hud.map_action_fleet" },
@@ -1041,25 +1062,6 @@
         radial.appendChild(button);
     }
 
-    function mapDisabledSector(radial, index, count, kind, icon, label, presentation) {
-        var button = document.createElement("button");
-        button.type = "button";
-        button.className = "sow-hud__map-sector sow-hud__map-sector--" + kind;
-        button.setAttribute("role", "menuitem");
-        var actionName = presentation ? SOW_t(presentation.key) : label;
-        button.setAttribute("aria-label", actionName);
-        button.setAttribute("aria-disabled", "true");
-        button.disabled = true;
-        button.title = actionName;
-        if (presentation && presentation.state) button.dataset.allianceState = presentation.state;
-        button.appendChild(mapActionContent(
-            presentation ? emojiIcon(presentation.emoji, "sow-hud__map-action-icon") : icon,
-            actionName
-        ));
-        radialSectorGeometry(button, index, count);
-        radial.appendChild(button);
-    }
-
     function mapGroupSector(radial, items, index, count, group, icon, text) {
         var button = document.createElement("button");
         button.type = "button";
@@ -1100,13 +1102,12 @@
             mapMenuStateKey = stateKey;
             mapMenuView = "root";
         }
-        var renderKey = stateKey + ":" + mapMenuView;
+        var renderKey = stateKey + ":" + mapMenuView + ":" + Boolean(hudState && hudState.hud && hudState.hud.pin_emote) + ":" + Boolean(hudState && hudState.hud && hudState.hud.emote_pinned);
         if (menu.dataset.renderKey !== renderKey) {
             menu.replaceChildren();
             menu.classList.toggle("is-submenu", mapMenuView !== "root");
             var buildItems = items.filter(function (item) { return buildMenuActions[item.action]; });
             var nukeItem = items.find(function (item) { return item.action === "nuke"; });
-            var campaignMenu = campaignUnlocks(hudState && hudState.hud) !== null;
             if (mapMenuView === "root") {
                 var radial = document.createElement("div");
                 radial.className = "sow-hud__map-radial";
@@ -1114,33 +1115,20 @@
                 if (centerItem) {
                     var center = mapActionButton(centerItem, "sow-hud__map-center " + (centerItem.action === "spawn" ? "is-spawn" : "is-attack"), false);
                     radial.appendChild(center);
-                } else {
-                    var disabledCenter = mapActionButton({ action: "attack", disabled: true }, "sow-hud__map-center is-attack", false);
-                    disabledCenter.disabled = true;
-                    disabledCenter.removeAttribute("data-map-action");
-                    disabledCenter.setAttribute("aria-label", mapLabel("attack"));
-                    disabledCenter.title = mapLabel("attack");
-                    radial.appendChild(disabledCenter);
                 }
-                var transfer = items.find(function (item) { return item.action === "transfer"; });
-                var fleet = items.find(function (item) { return item.action === "fleet"; });
-                var alliance = items.find(function (item) { return item.action === "alliance"; });
-                var alliancePresentation = allianceActionLabels[mapMenu.alliance_state] || null;
-                var radialCount = 4;
-                if (transfer) mapSector(radial, transfer, 0, radialCount, "transfer");
-                else if (!campaignMenu) mapDisabledSector(radial, 0, radialCount, "transfer", emojiIcon("📦", "sow-hud__map-action-icon"), mapLabel("transfer"));
-                if (fleet) mapSector(radial, fleet, 1, radialCount, "fleet");
-                else if (!campaignMenu) mapDisabledSector(radial, 1, radialCount, "fleet", emojiIcon("⛵", "sow-hud__map-action-icon"), mapLabel("fleet"));
-                if (alliance) mapSector(radial, alliance, 2, radialCount, "alliance", alliancePresentation);
-                else if (!campaignMenu) mapDisabledSector(radial, 2, radialCount, "alliance", emojiIcon("🤝", "sow-hud__map-action-icon"), mapLabel("alliance"), alliancePresentation);
-                if (buildItems.length) {
-                    var buildIcon = emojiIcon("🏗️", "sow-hud__map-action-icon");
-                    mapGroupSector(radial, buildItems, 3, radialCount, "build", buildIcon, SOW_t("hud.map_action_build"));
-                } else if (nukeItem) {
-                    mapSector(radial, nukeItem, 3, radialCount, "nuke");
-                } else if (!campaignMenu) {
-                    mapDisabledSector(radial, 3, radialCount, "build", emojiIcon("🏗️", "sow-hud__map-action-icon"), SOW_t("hud.map_action_build"));
-                }
+                var sectors = [];
+                var emoteItem = items.find(function (item) { return item.action === "emote"; });
+                if (emoteItem) sectors.push({ group: "emote", icon: hudIcon("emote"), label: SOW_t("hud.map_action_emote") });
+                ["transfer", "fleet", "alliance"].forEach(function (action) {
+                    var item = items.find(function (candidate) { return candidate.action === action; });
+                    if (item) sectors.push({ item: item, kind: action });
+                });
+                if (buildItems.length) sectors.push({ group: "build", icon: emojiIcon("🏗️", "sow-hud__map-action-icon"), label: SOW_t("hud.map_action_build") });
+                if (nukeItem) sectors.push({ item: nukeItem, kind: "nuke" });
+                sectors.forEach(function (sector, index) {
+                    if (sector.group) mapGroupSector(radial, items, index, sectors.length, sector.group, sector.icon, sector.label);
+                    else mapSector(radial, sector.item, index, sectors.length, sector.kind, sector.kind === "alliance" ? allianceActionLabels[mapMenu.alliance_state] : null);
+                });
                 menu.appendChild(radial);
             } else {
                 var panel = document.createElement("div");
@@ -1149,7 +1137,7 @@
                 header.className = "sow-hud__map-submenu-header";
                 var heading = document.createElement("span");
                 heading.className = "sow-hud__map-submenu-icon";
-                heading.innerHTML = emojiIcon("🏗️", "sow-hud__map-action-icon");
+                heading.innerHTML = mapMenuView === "emote" ? hudIcon("emote") : emojiIcon("🏗️", "sow-hud__map-action-icon");
                 heading.setAttribute("aria-hidden", "true");
                 header.appendChild(heading);
                 var back = document.createElement("button");
@@ -1157,12 +1145,42 @@
                 back.className = "sow-hud__map-back";
                 back.dataset.mapBack = "true";
                 back.textContent = "←";
-                back.setAttribute("aria-label", "Back");
+                back.setAttribute("aria-label", SOW_t("hud.map_action_back"));
                 header.appendChild(back);
                 panel.appendChild(header);
-                buildItems.forEach(function (item) {
-                    panel.appendChild(mapActionButton(item, "sow-hud__map-action sow-hud__map-card", true));
-                });
+                if (mapMenuView === "emote") {
+                    var emotes = hudState && hudState.hud && hudState.hud.emotes || [];
+                    emotes.forEach(function (definition) {
+                        var choice = document.createElement("button");
+                        choice.type = "button";
+                        choice.className = "sow-hud__map-action sow-hud__map-card sow-hud__emote-choice";
+                        choice.setAttribute("role", "menuitem");
+                        choice.dataset.emoteKind = definition.kind;
+                        choice.textContent = SOW_t(definition.menu_key);
+                        panel.appendChild(choice);
+                    });
+                    var pinLabel = document.createElement("label");
+                    pinLabel.className = "sow-hud__emote-pin";
+                    var pinControl = document.createElement("input");
+                    pinControl.type = "checkbox";
+                    pinControl.dataset.emotePin = "true";
+                    pinControl.checked = Boolean(hudState.hud.pin_emote);
+                    pinLabel.appendChild(pinControl);
+                    pinLabel.appendChild(document.createTextNode(SOW_t("hud.emote_pin")));
+                    panel.appendChild(pinLabel);
+                    if (hudState.hud.emote_pinned) {
+                        var release = document.createElement("button");
+                        release.type = "button";
+                        release.className = "sow-hud__map-action sow-hud__map-card";
+                        release.dataset.command = "clear_emote";
+                        release.textContent = SOW_t("hud.emote_clear");
+                        panel.appendChild(release);
+                    }
+                } else {
+                    buildItems.forEach(function (item) {
+                        panel.appendChild(mapActionButton(item, "sow-hud__map-action sow-hud__map-card", true));
+                    });
+                }
                 menu.appendChild(panel);
             }
             menu.dataset.renderKey = renderKey;
@@ -1573,20 +1591,6 @@
         leaderboardRenderKey = renderKey;
     }
 
-    function appendPanelRows(container, rows) {
-        if (!container || !Array.isArray(rows)) return;
-        var fragment = document.createDocumentFragment();
-        rows.forEach(function (row) { fragment.appendChild(row); });
-        container.replaceChildren(fragment);
-    }
-
-    function panelRow(text) {
-        var row = document.createElement("div");
-        row.className = "sow-hud__panel-row";
-        row.textContent = text;
-        return row;
-    }
-
     function createNotificationCard(container, contextual) {
         var card = document.createElement("div");
         card.className = "sow-hud__notification sow-hud__notification--premium"
@@ -1822,6 +1826,18 @@
 
     function syncCompactHudBounds() {
         if (!hudRoot || !hudRefs) return;
+        var viewport = window.visualViewport;
+        var viewHeight = viewport && viewport.height || hudRoot.clientHeight || window.innerHeight;
+        var viewTop = viewport && viewport.offsetTop || 0;
+        var viewBottom = Math.max(0, (hudRoot.clientHeight || window.innerHeight) - viewHeight - viewTop);
+        var viewportValues = {
+            "--sow-hud-dialog-view-height": viewHeight + "px",
+            "--sow-hud-dialog-view-top": viewTop + "px",
+            "--sow-hud-dialog-view-bottom": viewBottom + "px"
+        };
+        Object.keys(viewportValues).forEach(function (key) {
+            if (hudRoot.style.getPropertyValue(key) !== viewportValues[key]) hudRoot.style.setProperty(key, viewportValues[key]);
+        });
         var density = syncCompactHudDensity();
         var coarsePointer = window.matchMedia
             && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
@@ -1944,36 +1960,136 @@
         }, Math.max(0, activeMapFeedback.expiresAt - Date.now()));
     }
 
-    function renderInbox(requests) {
-        if (!hudRefs || !Array.isArray(requests)) return;
-        var renderKey = requests.map(function (request) {
-            return [request.kind, request.requester_id, request.name, request.gold, request.troops, request.active].join("|");
-        }).join("\u001e");
-        if (renderKey === inboxRenderKey) return;
-        var rows = requests.map(function (request) {
-            var row = panelRow(request.kind === "resources"
-                ? SOW_t("hud.resource_request", {
-                    name: request.name || SOW_t("hud.player_name"),
-                    gold: Math.floor(request.gold || 0),
-                    troops: Math.floor(request.troops || 0)
-                })
-                : SOW_t("hud.alliance_request", { name: request.name || SOW_t("hud.player_name") }));
-            var actions = document.createElement("span");
-            actions.className = "sow-hud__panel-actions";
-            [request.kind === "resources" ? "accept_resource_request" : "accept_alliance", request.kind === "resources" ? "reject_resource_request" : "reject_alliance"].forEach(function (command) {
-                var button = document.createElement("button");
-                button.type = "button";
-                button.textContent = command.indexOf("reject") >= 0 ? SOW_t("hud.reject") : SOW_t("hud.accept");
-                button.dataset.command = command;
-                button.dataset.playerId = String(request.requester_id);
-                actions.appendChild(button);
-            });
-            row.appendChild(actions);
-            return row;
+    function createPlayerIdentity() {
+        var identity = document.createElement("div");
+        identity.className = "sow-hud__request-identity";
+        var avatar = document.createElement("span");
+        avatar.className = "sow-hud__notification-avatar";
+        var portrait = document.createElement("img");
+        portrait.className = "sow-hud__notification-portrait";
+        portrait.alt = "";
+        portrait.draggable = false;
+        bindAvatarFallback(portrait);
+        var emblem = document.createElement("span");
+        emblem.className = "sow-hud__notification-emblem";
+        avatar.append(portrait, emblem);
+        var copy = document.createElement("div");
+        copy.className = "sow-hud__request-copy";
+        var name = document.createElement("bdi");
+        name.className = "sow-hud__request-name";
+        copy.appendChild(name);
+        identity.append(avatar, copy);
+        return { element: identity, portrait: portrait, emblem: emblem, copy: copy, name: name };
+    }
+
+    function renderPlayerIdentity(parts, name, avatar) {
+        var displayName = name || SOW_t("hud.player_name");
+        if (parts.name.textContent !== displayName) parts.name.textContent = displayName;
+        renderAvatarIdentity(parts.portrait, parts.emblem, avatar || { kind: "fallback" });
+    }
+
+    function restoreHudFocus(target) {
+        if (target && !target.isConnected && target.id) target = document.getElementById(target.id);
+        if (!target || !target.isConnected || !target.getClientRects().length) target = document.getElementById("blade");
+        if (target && typeof target.focus === "function") target.focus({ preventScroll: true });
+    }
+
+    function createInboxRequest(request) {
+        var element = document.createElement("article");
+        element.className = "sow-hud__request-card";
+        var identity = createPlayerIdentity();
+        var type = document.createElement("span");
+        type.className = "sow-hud__request-type";
+        var resources = document.createElement("div");
+        resources.className = "sow-hud__request-resources";
+        var amounts = {};
+        ["gold", "troops"].forEach(function (kind) {
+            var metric = document.createElement("span");
+            metric.className = "sow-hud__request-metric";
+            if (kind === "gold") {
+                var icon = document.createElement("img");
+                icon.className = "sow-hud__currency-icon sow-hud__currency-icon--gold";
+                icon.src = currencyAsset("gold");
+                icon.alt = "";
+                metric.appendChild(icon);
+            } else metric.innerHTML = hudIcon("troops", "sow-hud__inline-icon");
+            var value = document.createElement("bdi");
+            metric.appendChild(value);
+            resources.appendChild(metric);
+            amounts[kind] = { element: metric, value: value };
         });
-        if (!rows.length) rows.push(panelRow(SOW_t("hud.no_pending_requests")));
-        appendPanelRows(hudRefs.inboxRows, rows);
-        inboxRenderKey = renderKey;
+        identity.copy.append(type, resources);
+        var actions = document.createElement("div");
+        actions.className = "sow-hud__request-actions";
+        var buttons = ["accept", "reject"].map(function (action) {
+            var button = document.createElement("button");
+            button.type = "button";
+            button.className = "sow-hud__request-" + action;
+            button.dataset.command = action + (request.kind === "resources" ? "_resource_request" : "_alliance");
+            button.dataset.playerId = String(request.requester_id);
+            actions.appendChild(button);
+            return button;
+        });
+        element.append(identity.element, actions);
+        return { element: element, portrait: identity.portrait, emblem: identity.emblem, name: identity.name, type: type, resources: resources, amounts: amounts, accept: buttons[0], reject: buttons[1] };
+    }
+
+    function renderInbox(requests) {
+        if (!hudRefs || !hudRefs.inboxRows || !Array.isArray(requests)) return;
+        var renderKey = String(window.SOW_LOCALE || "en") + ":" + JSON.stringify(requests);
+        if (renderKey === hudRefs.inboxRenderKey) return;
+        var previous = hudRefs.inboxRequests;
+        var previousKeys = hudRefs.inboxRequestKeys;
+        var focusedKey = previousKeys.find(function (key) { return previous[key].element.contains(document.activeElement); });
+        var next = Object.create(null);
+        var keys = [];
+        var numbers = new Intl.NumberFormat(window.SOW_LOCALE || "en", { maximumFractionDigits: 0 });
+        requests.forEach(function (request) {
+            if (!request || (request.kind !== "alliance" && request.kind !== "resources")
+                || !Number.isSafeInteger(request.requester_id) || request.requester_id <= 0) return;
+            var key = request.kind + ":" + request.requester_id;
+            if (next[key]) return;
+            var row = previous[key] || createInboxRequest(request);
+            var name = request.name || SOW_t("hud.player_name");
+            renderPlayerIdentity(row, name, request.avatar);
+            row.type.textContent = SOW_t(request.kind === "resources" ? "hud.resource_request_title" : "hud.alliance_request_title");
+            var values = { name: name };
+            ["gold", "troops"].forEach(function (kind) {
+                var value = Number(request[kind]);
+                value = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+                values[kind] = numbers.format(value);
+                row.amounts[kind].value.textContent = values[kind];
+                row.amounts[kind].element.hidden = value === 0;
+                row.amounts[kind].element.setAttribute("aria-label", SOW_t(kind === "gold" ? "hud.gold" : "hud.troops") + ": " + values[kind]);
+            });
+            row.resources.hidden = request.kind !== "resources";
+            row.element.setAttribute("aria-label", SOW_t(request.kind === "resources" ? "hud.resource_request" : "hud.alliance_request", values));
+            row.accept.textContent = SOW_t("hud.accept");
+            row.reject.textContent = SOW_t("hud.reject");
+            row.accept.disabled = request.active === false;
+            row.accept.title = row.accept.disabled ? SOW_t("hud.action_unavailable") : "";
+            row.element.classList.toggle("is-inactive", row.accept.disabled);
+            next[key] = row;
+            keys.push(key);
+        });
+        previousKeys.forEach(function (key) {
+            if (!next[key]) previous[key].element.remove();
+        });
+        keys.forEach(function (key, index) {
+            var row = next[key].element;
+            var before = hudRefs.inboxRows.children[index] || null;
+            if (before !== row) hudRefs.inboxRows.insertBefore(row, before);
+        });
+        hudRefs.inboxRequests = next;
+        hudRefs.inboxRequestKeys = keys;
+        hudRefs.inboxRenderKey = renderKey;
+        hudRefs.inboxRows.hidden = keys.length === 0;
+        hudRefs.inboxEmpty.hidden = keys.length !== 0;
+        hudRefs.inboxTotal.textContent = numbers.format(keys.length);
+        if (focusedKey && !next[focusedKey]) {
+            var nextRow = next[keys[Math.min(previousKeys.indexOf(focusedKey), keys.length - 1)]];
+            (nextRow ? (nextRow.accept.disabled ? nextRow.reject : nextRow.accept) : hudRefs.inboxClose).focus();
+        }
     }
 
     function renderNotifications(entries, forceRefresh) {
@@ -2152,7 +2268,7 @@
             if (!operation || (operation.kind !== "attack" && operation.kind !== "fleet")) return;
             var key = operation.kind + ":" + operation.id;
             nextKeys.push(key);
-            var row = combatOperationRows[key] || createCombatOperationRow();
+            var row = hudRefs.combatOperationRows[key] || createCombatOperationRow();
             var incoming = operation.direction === "incoming";
             var outgoing = operation.direction === "outgoing";
             var neutral = Boolean(operation.neutral);
@@ -2216,13 +2332,13 @@
         });
 
         var orderKey = nextKeys.join("\u001e");
-        if (orderKey !== combatOperationsOrderKey) {
+        if (orderKey !== hudRefs.combatOperationsOrderKey) {
             var fragment = document.createDocumentFragment();
             nextKeys.forEach(function (key) { fragment.appendChild(nextRows[key].element); });
             hudRefs.operationRows.replaceChildren(fragment);
-            combatOperationsOrderKey = orderKey;
+            hudRefs.combatOperationsOrderKey = orderKey;
         }
-        combatOperationRows = nextRows;
+        hudRefs.combatOperationRows = nextRows;
         hudRefs.operations.hidden = nextKeys.length === 0;
     }
 
@@ -2233,9 +2349,9 @@
             if (hudDevLayer) hudDevLayer.hidden = true;
             clearCompactHudDensity();
             activeHudPanel = null;
-            transferOpen = false;
             betrayalOpen = false;
-            emojiPickerOpen = false;
+            pinEmote = false;
+            emoteTextKey = "";
             devSidebarOpen = false;
 
             hudRoot.dataset.overlayOpen = "false";
@@ -2244,13 +2360,17 @@
             leaderboardRows = Object.create(null);
             leaderboardRenderKey = "";
             lastLeaderboardPlayers = [];
-            inboxRenderKey = "";
+            if (hudRefs) {
+                hudRefs.inboxRequests = Object.create(null);
+                hudRefs.inboxRequestKeys = [];
+                hudRefs.inboxRenderKey = "";
+                if (hudRefs.inboxRows) hudRefs.inboxRows.replaceChildren();
+            }
             if (hudRefs && hudRefs.rows) hudRefs.rows.replaceChildren();
             if (notificationTimer) window.clearTimeout(notificationTimer);
             notificationTimer = null;
             activeNotifications = [];
-            combatOperationRows = Object.create(null);
-            combatOperationsOrderKey = "";
+            renderCombatOperations([]);
             pendingCounterAttacks = Object.create(null);
             notificationCards.forEach(clearNotificationCard);
             notificationCursor = 0;
@@ -2520,21 +2640,15 @@
             hudRefs.fleetStrip.style.display = isDeploying || !hasFleetItems ? "none" : "flex";
         }
 
-        // Emoji Popout
-        if (hudRefs.emojiPopout) {
-            hudRefs.emojiPopout.classList.toggle("hidden", !emojiPickerOpen);
-        }
+        pinEmote = Boolean(hud.pin_emote);
+        syncEmoteTexts(hud);
         if (hudRefs.devSidebar) {
             hudRefs.devSidebar.classList.toggle("hidden", !showDevTools || !devSidebarOpen);
         }
         if (hudRefs.devBtn) {
             hudRefs.devBtn.classList.toggle("active", devSidebarOpen);
         }
-        if (hudRefs.pinEmoji) {
-            pinEmoji = Boolean(hud.pin_emoji);
-            hudRefs.pinEmoji.classList.toggle("active", pinEmoji);
-            hudRefs.pinEmoji.setAttribute("aria-pressed", String(pinEmoji));
-        }
+
 
         if (hudRefs.settings) {
             hudRefs.settings.classList.toggle("hidden", !settingsOpen);
@@ -2558,31 +2672,49 @@
         }
 
         if (hudRefs.inbox) {
+            var inboxWasHidden = hudRefs.inbox.classList.contains("hidden");
             hudRefs.inbox.classList.toggle("hidden", !inboxOpen);
-            if (inboxOpen) renderInbox(hud.inbox);
+            if (inboxOpen) {
+                renderInbox(hud.inbox);
+                if (inboxWasHidden && hudRefs.inboxClose) hudRefs.inboxClose.focus();
+            } else if (!inboxWasHidden && hudRefs.inbox.contains(document.activeElement) && hudRefs.inboxButton) {
+                hudRefs.inboxButton.focus();
+            }
         }
         if (hudRefs.transfer) {
-            transferOpen = Boolean(hud.transfer) || transferOpen;
-            hudRefs.transfer.classList.toggle("hidden", !transferOpen || !hud.transfer);
+            var transferWasHidden = hudRefs.transfer.classList.contains("hidden");
+            hudRefs.transfer.classList.toggle("hidden", !hud.transfer);
             if (hud.transfer) {
                 hudRefs.transfer.dataset.targetId = String(hud.transfer.target_id);
-                if (hudRefs.transferTarget) hudRefs.transferTarget.textContent = SOW_t("hud.target_player", {
+                renderPlayerIdentity(hudRefs.transferIdentity, hud.transfer.target_name, hud.transfer.target_avatar);
+                hudRefs.transferTarget.setAttribute("aria-label", SOW_t("hud.target_player", {
                     name: hud.transfer.target_name || SOW_t("hud.player_name")
-                });
-                if (hudRefs.transfer.dataset.suggestedTarget !== String(hud.transfer.target_id)) {
+                }));
+                if (transferWasHidden || hudRefs.transfer.dataset.suggestedTarget !== String(hud.transfer.target_id)) {
                     hudRefs.transfer.dataset.suggestedTarget = String(hud.transfer.target_id);
                     if (hudRefs.transferGold) hudRefs.transferGold.value = String(Math.floor(hud.transfer.suggested_gold || 0));
                     if (hudRefs.transferTroops) hudRefs.transferTroops.value = String(Math.floor(hud.transfer.suggested_troops || 0));
                 }
+                if (transferWasHidden) {
+                    hudRefs.transferReturnFocus = document.activeElement;
+                    hudRefs.transferClose.focus({ preventScroll: true });
+                }
+            } else if (!transferWasHidden && hudRefs.transfer.contains(document.activeElement)) {
+                restoreHudFocus(hudRefs.transferReturnFocus);
             }
         }
         if (hudRefs.betrayal) {
+            var betrayalWasHidden = hudRefs.betrayal.classList.contains("hidden");
             betrayalOpen = Boolean(hud.betrayal);
             hudRefs.betrayal.classList.toggle("hidden", !betrayalOpen);
-            if (betrayalOpen && hudRefs.betrayalCopy) {
-                hudRefs.betrayalCopy.textContent = SOW_t("hud.break_alliance_with", {
-                    name: hud.betrayal.ally_name || SOW_t("hud.no_name")
-                });
+            if (betrayalOpen) {
+                renderPlayerIdentity(hudRefs.betrayalIdentity, hud.betrayal.ally_name, hud.betrayal.ally_avatar);
+                if (betrayalWasHidden) {
+                    hudRefs.betrayalReturnFocus = document.activeElement;
+                    hudRefs.betrayalCancel.focus({ preventScroll: true });
+                }
+            } else if (!betrayalWasHidden && hudRefs.betrayal.contains(document.activeElement)) {
+                restoreHudFocus(hudRefs.betrayalReturnFocus);
             }
         }
 
@@ -2666,7 +2798,7 @@
         var mapMenuOpen = renderMapMenu(hud.map_menu);
         if (hudRefs.buildingCancel) hudRefs.buildingCancel.hidden = !hud.selected_building;
         renderBuildingCard(hud.map_menu, hud.gold);
-        var panelStates = { toggle_leaderboard: leaderboardOpen, toggle_inbox: inboxOpen, toggle_settings: settingsOpen, toggle_dev_sidebar: devSidebarOpen, toggle_emoji: emojiPickerOpen };
+        var panelStates = { toggle_leaderboard: leaderboardOpen, toggle_inbox: inboxOpen, toggle_settings: settingsOpen, toggle_dev_sidebar: devSidebarOpen };
         hudRefs.panelButtons.forEach(function (button) {
             var expanded = Boolean(panelStates[button.dataset.command]);
             button.classList.toggle("active", expanded);
@@ -2674,8 +2806,8 @@
             if (button.getAttribute("aria-expanded") !== value) button.setAttribute("aria-expanded", value);
         });
         hudRoot.dataset.overlayOpen = String(Boolean(
-            leaderboardOpen || inboxOpen || transferOpen || betrayalOpen ||
-            surrenderModalOpen || emojiPickerOpen || isOver
+            leaderboardOpen || inboxOpen || hud.transfer || betrayalOpen ||
+            surrenderModalOpen || isOver
             || devSidebarOpen || settingsOpen || mapMenuOpen
         ));
         var dockHidden = !(isDeploying || hasBuildingItems || hasFleetItems);
@@ -2725,6 +2857,13 @@
             window.addEventListener(type, stopZoomHold, { passive: true });
         });
         function handleHudClick(event) {
+            var emoteChoice = event.target.closest("[data-emote-kind]");
+            if (emoteChoice) {
+                event.preventDefault();
+                event.stopPropagation();
+                send("express_emote", { session: Number(hudRefs.mapMenu.dataset.session), tile_idx: Number(hudRefs.mapMenu.dataset.tileIdx), kind: emoteChoice.dataset.emoteKind, pinned: pinEmote });
+                return;
+            }
             var mapButton = event.target.closest("[data-map-action]");
             var mapGroup = event.target.closest("[data-map-group]");
             var mapBack = event.target.closest("[data-map-back]");
@@ -2739,6 +2878,8 @@
                 } else if (mapGroup) {
                     mapMenuView = mapGroup.dataset.mapGroup || "build";
                     renderMapMenu(hudState && hudState.hud && hudState.hud.map_menu);
+                    var firstChoice = mapMenu.querySelector("[data-emote-kind], [data-map-action]");
+                    if (firstChoice) firstChoice.focus();
                 } else {
                     if (mapButton.disabled) return;
                     send("map_menu_action", {
@@ -2779,19 +2920,15 @@
                 send("replay_dev_vfx_preview");
             } else if (cmd === "dev_vfx_all") {
                 send("dev_vfx_all", { on: btn.dataset.on === "1" });
-            } else if (cmd === "toggle_pin_emoji") {
-                pinEmoji = !pinEmoji;
-                send("set_emoji_pinned", { pinned: pinEmoji });
-                renderHud();
+            } else if (cmd === "clear_emote") {
+                pinEmote = false;
+                send("clear_emote");
             } else if (cmd === "open_transfer") {
                 setHudPanel(null);
-                transferOpen = true;
                 send("open_transfer", { target_player_id: Number(btn.dataset.playerId) });
                 renderHud();
             } else if (cmd === "close_transfer") {
-                transferOpen = false;
                 send("close_transfer");
-                renderHud();
             } else if (cmd === "send_resources" || cmd === "request_resources") {
                 var transfer = hudRefs && hudRefs.transfer;
                 var targetId = transfer ? Number(transfer.dataset.targetId) : 0;
@@ -2800,8 +2937,6 @@
                 if (!Number.isFinite(gold)) gold = 0;
                 if (!Number.isFinite(transferTroops)) transferTroops = 0;
                 if (targetId > 0) send(cmd, { target_player_id: targetId, gold: gold, troops: transferTroops });
-                transferOpen = false;
-                renderHud();
             } else if (cmd === "accept_alliance" || cmd === "reject_alliance" || cmd === "accept_resource_request" || cmd === "reject_resource_request") {
                 var requesterId = Number(btn.dataset.playerId);
                 if (requesterId > 0) send(cmd, { target_player_id: requesterId });
@@ -2853,15 +2988,6 @@
                 surrenderMessage = null;
                 send("return_to_menu");
                 renderHud();
-            } else if (cmd === "toggle_emoji") {
-                emojiPickerOpen = !emojiPickerOpen;
-                renderHud();
-
-            } else if (cmd === "express_emoji") {
-                var emoji = btn.dataset.emoji || "😀";
-                send("express_emoji", { emoji: emoji, pinned: pinEmoji });
-                emojiPickerOpen = false;
-                renderHud();
             } else if (cmd === "zoom_in") {
                 send("zoom_in");
             } else if (cmd === "zoom_out") {
@@ -2910,6 +3036,7 @@
             return;
         }
         if (hudState.phase === "Playing") {
+            if (!previousHud) emoteTextKey = "";
             hudState.hud = hudState.hud || previousHud;
             if (hudState.hud && hudState.hud.dev_tools && typeof hudState.hud.dev_tools.open === "boolean") {
                 devSidebarOpen = hudState.hud.dev_tools.open;
@@ -2928,8 +3055,76 @@
         handleHudStateUpdate(raw);
     };
 
+    if (window.SOW_I18N_READY && typeof window.SOW_I18N_READY.then === "function") {
+        window.SOW_I18N_READY.then(function () { emoteTextKey = ""; syncEmoteTexts(hudState && hudState.hud); });
+    }
+    if (hudRoot) hudRoot.addEventListener("keydown", function (event) {
+        if (hudRefs && hudRefs.betrayal && !hudRefs.betrayal.classList.contains("hidden")) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                pendingCounterAttacks = Object.create(null);
+                send("cancel_betrayal");
+                return;
+            }
+            if (event.key === "Tab") {
+                var buttons = Array.prototype.slice.call(hudRefs.betrayal.querySelectorAll("button:not(:disabled)"));
+                var index = buttons.indexOf(document.activeElement);
+                if (buttons.length && (index < 0 || event.shiftKey && index === 0 || !event.shiftKey && index === buttons.length - 1)) {
+                    event.preventDefault();
+                    (event.shiftKey ? buttons[buttons.length - 1] : buttons[0]).focus({ preventScroll: true });
+                }
+                return;
+            }
+        }
+        if (event.key === "Escape" && hudRefs && hudRefs.transfer && !hudRefs.transfer.classList.contains("hidden")) {
+            event.preventDefault();
+            event.stopPropagation();
+            send("close_transfer");
+            return;
+        }
+        if (event.key === "Escape" && activeHudPanel === "inbox") {
+            event.preventDefault();
+            event.stopPropagation();
+            setHudPanel(null);
+            renderHud();
+            return;
+        }
+        var menu = hudRefs && hudRefs.mapMenu;
+        if (!menu || menu.classList.contains("hidden") || !menu.contains(event.target)) return;
+        if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            if (mapMenuView !== "root") {
+                mapMenuView = "root";
+                renderMapMenu(hudState && hudState.hud && hudState.hud.map_menu);
+                var group = menu.querySelector("[data-map-group]");
+                if (group) group.focus();
+            } else send("close_map_context_menu");
+        } else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].indexOf(event.key) >= 0) {
+            var choices = Array.prototype.slice.call(menu.querySelectorAll("button:not(:disabled), input:not(:disabled)"));
+            if (!choices.length) return;
+            event.preventDefault();
+            event.stopPropagation();
+            var direction = event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1;
+            var index = choices.indexOf(document.activeElement);
+            choices[(index + direction + choices.length) % choices.length].focus();
+        }
+    });
+
     window.addEventListener("sow:locale-change", function () {
+        emoteTextKey = "";
         if (!hudState) return;
+        var active = document.activeElement;
+        var transferDraft = hudRefs && hudRefs.transfer && !hudRefs.transfer.classList.contains("hidden") ? {
+            target: hudRefs.transfer.dataset.targetId,
+            gold: hudRefs.transferGold.value,
+            troops: hudRefs.transferTroops.value,
+            focus: hudRefs.transfer.contains(active) ? active.id : null,
+            returnFocus: hudRefs.transferReturnFocus
+        } : null;
+        var betrayalFocus = hudRefs && hudRefs.betrayal && hudRefs.betrayal.contains(active) ? active.id : null;
+        var betrayalReturnFocus = hudRefs && hudRefs.betrayalReturnFocus;
         hudInitialized = false;
         hudRefs = null;
         if (hudRoot) hudRoot.replaceChildren();
@@ -2939,8 +3134,20 @@
             hudDevLayer = freshDevLayer;
         }
         renderHud(true);
+        if (transferDraft && hudRefs && hudRefs.transfer.dataset.targetId === transferDraft.target) {
+            hudRefs.transferGold.value = transferDraft.gold;
+            hudRefs.transferTroops.value = transferDraft.troops;
+            hudRefs.transferReturnFocus = transferDraft.returnFocus;
+            if (transferDraft.focus) restoreHudFocus(document.getElementById(transferDraft.focus));
+        }
+        if (betrayalFocus && hudRefs) {
+            hudRefs.betrayalReturnFocus = betrayalReturnFocus;
+            restoreHudFocus(document.getElementById(betrayalFocus));
+        }
     });
 
+    window.addEventListener("resize", updateHudSafeArea);
+    updateHudSafeArea();
     if (hudRoot) hudRoot.hidden = true;
     if (hudDevLayer) hudDevLayer.hidden = true;
     window.SOW_onStateUpdate(window.SOW_MENU_STATE);

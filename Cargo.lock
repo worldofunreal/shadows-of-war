@@ -3705,6 +3705,7 @@ dependencies = [
  "sow-i18n",
  "sow-map",
  "tempfile",
+ "url",
  "walkdir",
  "wasm-bindgen-cli-support",
 ]
@@ -3776,6 +3777,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sow-core",
+ "sow-data",
  "sow-net",
  "tempfile",
  "tokio",
@@ -3799,6 +3801,7 @@ dependencies = [
  "serde_json",
  "sow-core",
  "sow-data",
+ "sow-i18n",
  "unicode-bidi",
  "web-time",
 ]
@@ -3850,6 +3853,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sow-core",
+ "sow-i18n",
  "sow-map",
  "tokio",
  "tokio-tungstenite",

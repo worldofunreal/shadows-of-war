@@ -8,7 +8,7 @@ const CELL_PX: u32 = 64;
 const GUTTER_PX: u32 = 2;
 const MOJI_BASE: &str = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72";
 
-/// Canonical list of all gameplay, HUD, leader, tribe, and reaction emojis.
+/// Canonical list of all gameplay, HUD, leader, tribe, and functional status emojis.
 pub const CANONICAL_GAMEPLAY_EMOJIS: &[&str] = &[
     // Core Buildings & Infrastructure
     "🏛", "🏭", "⚓", "🛡", "🏘", "🏡", "🏙", "🌆", "🏰", "🏯", "🗼", "👁", "🌱", "🚜", "🛶", "🛳",
@@ -21,9 +21,7 @@ pub const CANONICAL_GAMEPLAY_EMOJIS: &[&str] = &[
     // Tribe Animals (sow-data)
     "🐯", "🐆", "🦊", "🦝", "🐻", "🐨", "🐼", "🐗", "🦄", "🦅", "🦉", "🐊", "🦖", "🐉", "🦈", "🦂",
     "🐃", "🐏", "🐘", "🦏", "🦍", "🐎", "🦌", "🦇", "🦢", "🦩", "🐍", "🐢", "🐙", "🐬", "🐝", "🦋",
-    "🕷", "🦦", "🦫", "🐫", "🦘", "🦡", "🦁", // In-game Reactions & Chat
-    "😀", "😏", "😂", "🤣", "😋", "😉", "😜", "😍", "🥰", "🥳", "🥺", "😇", "🤩", "👍", "❤️", "🤔",
-    "🧐", "🙄", "🤯", "🤡", "💩", "🤫", "😠", "🤬", "😤", "🥵", "🥶", "🤢", "🤮", "💀", "💪", "👀",
+    "🕷", "🦦", "🦫", "🐫", "🦘", "🦡", "🦁",
 ];
 
 pub struct PackEmojiAtlasArgs {

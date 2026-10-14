@@ -21,6 +21,7 @@ impl SowApp {
         self.update_assets();
         self.update_loader();
         self.poll_reward_profile_sync(now);
+        self.poll_profile_actions(now);
         self.poll_pointer_hold();
         self.update_sim(now);
         if self.ui.app.phase != crate::ClientPhase::Playing {

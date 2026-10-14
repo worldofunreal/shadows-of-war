@@ -90,18 +90,8 @@ pub(crate) fn save_menu_return(context: &crate::app::MenuReturnContext) {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn load_exit_relay_proof(account_id: &str) -> Option<crate::app::ExitRelayProof> {
-    serde_json::from_str(&load_storage(&format!("sow_pending_exit_v1:{account_id}"))?).ok()
-}
-
-#[cfg(target_arch = "wasm32")]
-pub(crate) fn save_exit_relay_proof(account_id: &str, proof: Option<&crate::app::ExitRelayProof>) {
-    let key = format!("sow_pending_exit_v1:{account_id}");
-    if let Some(proof) = proof {
-        if let Ok(raw) = serde_json::to_string(proof) { save_storage(&key, &raw); }
-    } else {
-        clear_storage(&key);
-    }
+pub(crate) fn clear_legacy_exit_relay_proof(account_id: &str) {
+    clear_storage(&format!("sow_pending_exit_v1:{account_id}"));
 }
 
 #[cfg(target_arch = "wasm32")]

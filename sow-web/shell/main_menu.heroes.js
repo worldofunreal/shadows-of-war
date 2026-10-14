@@ -47,6 +47,38 @@
             "</button>";
     }
 
+    function randomLeaderName() {
+        return SOW_t("heroes.random_leader");
+    }
+
+    function randomLeaderOption() {
+        return {
+            id: "random",
+            slug: "random",
+            name: randomLeaderName(),
+            civilization: "",
+            available: true,
+            permanently_free: true
+        };
+    }
+
+    function isWelcomeLeaderSelectionStep() {
+        var guide = state && state.menu_guides && state.menu_guides.welcome;
+        return !!(guide && guide.status === "active" &&
+            (guide.current_step === "welcome_offer_selection" || guide.current_step === "welcome_owned_selection"));
+    }
+
+    function renderRandomLeaderCard(selected) {
+        if (isWelcomeLeaderSelectionStep()) return "";
+        var matchesSearch = !heroesSearchQuery.trim()
+            || randomLeaderName().toLowerCase().indexOf(heroesSearchQuery.trim().toLowerCase()) !== -1;
+        if (!matchesSearch || heroesRegionFilter !== "all") return "";
+        var avatarUrl = asset("gameplay/avatars/random.webp");
+        return "<button class='sow-heroes__card" + (selected ? " is-selected" : "") + "' type='button' data-command='preview_random_leader' aria-pressed='" + selected + "'>" +
+            "<span class='sow-heroes__card-art' style=\"background-image:url('" + esc(avatarUrl) + "')\"></span>" +
+            "<span class='sow-heroes__card-copy'><strong>" + esc(randomLeaderName()) + "</strong><small>" + esc(SOW_t("heroes.random_leader_description")) + "</small></span></button>";
+    }
+
     function heroesRoster(leaders) {
         var query = heroesSearchQuery.trim().toLowerCase();
         return leaders.filter(function (leader) {
@@ -78,10 +110,11 @@
         });
     }
 
-    function renderHeroesRoster(activeId) {
+    function renderHeroesRoster(activeId, randomSelected) {
         var leaders = state && Array.isArray(state.leaders) ? state.leaders : [];
         var filtered = heroesRoster(leaders);
-        var cards = filtered.map(function (leader) { return renderHeroesCard(leader, activeId); }).join("");
+        var cards = renderRandomLeaderCard(randomSelected) +
+            filtered.map(function (leader) { return renderHeroesCard(leader, activeId); }).join("");
         return cards || "<p class='sow-menu__empty sow-heroes__empty'>" + esc(SOW_t("heroes.no_leaders")) + "</p>";
     }
 
@@ -90,7 +123,8 @@
         var heroesRosterContainer = panel.querySelector("[data-heroes-roster]");
         if (!heroesRosterContainer) return;
         var activeHeroesId = tempSelectedLeader || (state && state.selected_leader) || "Caesar";
-        heroesRosterContainer.innerHTML = renderHeroesRoster(activeHeroesId);
+        var randomSelected = tempSelectedRandom || (!tempSelectedLeader && !!(state && state.prefer_random_leader));
+        heroesRosterContainer.innerHTML = renderHeroesRoster(activeHeroesId, randomSelected);
         if (resetScroll) {
             var heroesRosterPanel = panel.querySelector(".sow-heroes__roster");
             if (heroesRosterPanel) heroesRosterPanel.scrollTop = 0;
@@ -99,7 +133,9 @@
 
     function updateHeroesPreview() {
         if (currentScreen() !== "heroes") return false;
-        var activeLeader = leaderById(tempSelectedLeader || (state && state.selected_leader) || "Caesar");
+        var randomSelected = !isWelcomeLeaderSelectionStep() &&
+            (tempSelectedRandom || (!tempSelectedLeader && !!(state && state.prefer_random_leader)));
+        var activeLeader = randomSelected ? randomLeaderOption() : leaderById(tempSelectedLeader || (state && state.selected_leader) || "Caesar");
         var panel = activeScreenPanel() || root;
         var featured = panel.querySelector(".sow-heroes__featured");
         if (!activeLeader || !featured) return false;
@@ -110,7 +146,7 @@
         var civilization = featured.querySelector(".sow-heroes__civilization");
         var perk = featured.querySelector(".sow-heroes__perk");
         var status = featured.querySelector("[data-hero-status]");
-        var confirm = featured.querySelector("[data-command='confirm_leader']");
+        var confirm = featured.querySelector("[data-command='confirm_leader'], [data-command='confirm_random_leader']");
         var locked = activeLeader.available === false;
         featured.classList.toggle("is-locked", locked);
         // prepareLeaderArt() warms the loader splash art (loader.js), not this
@@ -123,26 +159,29 @@
             image.src = featuredArt.column;
             image.alt = leaderDisplayName(activeLeader);
         }
-        if (title) title.textContent = leaderDisplayName(activeLeader);
+        if (title) title.textContent = randomSelected ? randomLeaderName() : leaderDisplayName(activeLeader);
         var historical = featured.querySelector(".sow-heroes__historical-name");
         if (historical) {
             historical.textContent = leaderHistoricalName(activeLeader);
-            historical.hidden = !leaderHistoricalName(activeLeader);
+            historical.hidden = randomSelected || !leaderHistoricalName(activeLeader);
         }
-        if (civilization) civilization.textContent = leaderCivilization(activeLeader);
-        if (perk) perk.textContent = leaderPerk(activeLeader);
+        if (civilization) civilization.textContent = randomSelected ? "" : leaderCivilization(activeLeader);
+        if (perk) perk.textContent = randomSelected ? SOW_t("heroes.random_leader_description") : leaderPerk(activeLeader);
         if (status) {
             var inWeeklyRotation = isWeeklyFreeRotation(activeLeader);
-            status.textContent = SOW_t("heroes.weekly_free_rotation");
-            status.hidden = !inWeeklyRotation;
+            status.textContent = activeLeader.permanently_free
+                ? SOW_t("heroes.always_free")
+                : SOW_t("heroes.weekly_free_rotation");
+            status.hidden = randomSelected || (!inWeeklyRotation && !activeLeader.permanently_free);
         }
         var purchase = featured.querySelector("[data-hero-purchase]");
-        if (purchase) purchase.innerHTML = renderLeaderPurchase(activeLeader);
+        if (purchase) purchase.innerHTML = randomSelected ? "" : renderLeaderPurchase(activeLeader);
         if (confirm) {
             confirm.disabled = locked;
             confirm.setAttribute("aria-disabled", locked ? "true" : "false");
-            confirm.dataset.leaderId = activeLeader.id;
-            confirm.firstChild.nodeValue = SOW_t("heroes.confirm_leader", { name: "" }) + " ";
+            confirm.setAttribute("data-command", randomSelected ? "confirm_random_leader" : "confirm_leader");
+            confirm.dataset.leaderId = randomSelected ? "" : activeLeader.id;
+            confirm.firstChild.nodeValue = SOW_t(randomSelected ? "heroes.confirm_random_leader" : "heroes.confirm_leader", { name: "" }) + " ";
         }
         var cards = panel.querySelectorAll("[data-command='preview_leader']");
         for (var i = 0; i < cards.length; i++) {
@@ -150,13 +189,23 @@
             cards[i].classList.toggle("is-selected", selected);
             cards[i].setAttribute("aria-pressed", selected ? "true" : "false");
         }
+        var randomCard = panel.querySelector("[data-command='preview_random_leader']");
+        if (randomCard) {
+            randomCard.classList.toggle("is-selected", randomSelected);
+            randomCard.setAttribute("aria-pressed", randomSelected ? "true" : "false");
+        }
         var info = featured.querySelector("[data-command='open_hero_info']");
-        if (info) info.setAttribute("aria-label", leaderDisplayName(activeLeader));
+        if (info) {
+            info.hidden = randomSelected;
+            info.setAttribute("aria-label", randomSelected ? randomLeaderName() : leaderDisplayName(activeLeader));
+        }
         return true;
     }
 
     function renderHeroInfoModal() {
         if (!heroInfoOpen) return "";
+        if (!isWelcomeLeaderSelectionStep() &&
+            (tempSelectedRandom || (!tempSelectedLeader && state && state.prefer_random_leader))) return "";
         var activeLeader = leaderById(tempSelectedLeader || (state && state.selected_leader) || "Caesar");
         if (!activeLeader) return "";
         // The info dialog is one tall portrait card on every device, so it
@@ -282,7 +331,9 @@
 
     function renderHeroes() {
         var activeId = tempSelectedLeader || (state && state.selected_leader) || "Caesar";
-        var activeLeader = leaderById(activeId);
+        var activeRandom = !isWelcomeLeaderSelectionStep() &&
+            (tempSelectedRandom || (!tempSelectedLeader && !!(state && state.prefer_random_leader)));
+        var activeLeader = activeRandom ? randomLeaderOption() : leaderById(activeId);
         var locked = activeLeader.available === false;
         // prepareLeaderArt() warms the loader splash art (loader.js), not this
         // panel art. Leave it alone; the <picture> fetches its own file.
@@ -291,10 +342,12 @@
         // The <img> fallback is the tall column art, so width='1080'
         // height='1920' below are correct on purpose.
         var featuredArt = heroesFeaturedArt(activeLeader.slug);
+        var displayName = activeRandom ? randomLeaderName() : leaderDisplayName(activeLeader);
+        var statusLabel = activeLeader.permanently_free ? SOW_t("heroes.always_free") : SOW_t("heroes.weekly_free_rotation");
         return "<main class='sow-menu__main sow-menu__main--heroes' data-screen-panel='heroes'><section class='sow-menu__heroes-slot' aria-label='" + esc(SOW_t("menu.heroes")) + "'>" +
                     "<div class='sow-heroes__workspace'>" +
-                        "<section class='sow-heroes__featured" + (locked ? " is-locked" : "") + "' aria-labelledby='sow-heroes-selected'><button class='sow-menu__icon-button sow-heroes__info' type='button' data-command='open_hero_info' aria-label='" + esc(leaderDisplayName(activeLeader)) + "'>i</button><picture><source media='(max-width: 680px), (orientation: portrait)' srcset='" + esc(featuredArt.band) + "'><img src='" + esc(featuredArt.column) + "' alt='" + esc(leaderDisplayName(activeLeader)) + "' width='1080' height='1920' fetchpriority='high'></picture><div class='sow-heroes__featured-copy'><p class='sow-heroes__rotation' data-hero-status" + (isWeeklyFreeRotation(activeLeader) ? "" : " hidden") + ">" + esc(SOW_t("heroes.weekly_free_rotation")) + "</p><h2 id='sow-heroes-selected'>" + esc(leaderDisplayName(activeLeader)) + "</h2>" + (leaderHistoricalName(activeLeader) ? "<p class='sow-heroes__historical-name'>" + esc(leaderHistoricalName(activeLeader)) + "</p>" : "") + "<p class='sow-heroes__civilization'>" + esc(leaderCivilization(activeLeader)) + "</p><p class='sow-heroes__perk'>" + esc(leaderPerk(activeLeader)) + "</p><div class='sow-heroes__actions'><div data-hero-purchase>" + renderLeaderPurchase(activeLeader) + "</div><button class='sow-menu__primary sow-heroes__confirm' type='button' data-command='confirm_leader' data-leader-id='" + esc(activeLeader.id) + "'" + (locked ? " disabled aria-disabled='true'" : "") + ">" + esc(SOW_t("heroes.confirm_leader", { name: "" })) + " <span>✓</span></button></div></div></section>" +
-                        "<section class='sow-heroes__roster' aria-label='" + esc(SOW_t("heroes.leader_list")) + "'><div class='sow-heroes__section-head'><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>" + esc(SOW_t("heroes.search_leaders")) + "</span><input data-role='heroes-search' type='search' placeholder='" + esc(SOW_t("heroes.search_leader_civilization")) + "' value=\"" + esc(heroesSearchQuery) + "\" autocomplete='off' spellcheck='false'></label>" + renderHeroesRegionDropdown() + "</div></div><div class='sow-heroes__grid' data-heroes-roster aria-live='polite'>" + renderHeroesRoster(activeId) + "</div></section>" +
+                        "<section class='sow-heroes__featured" + (locked ? " is-locked" : "") + "' aria-labelledby='sow-heroes-selected'><button class='sow-menu__icon-button sow-heroes__info' type='button' data-command='open_hero_info' aria-label='" + esc(displayName) + "'" + (activeRandom ? " hidden" : "") + ">i</button><picture><source media='(max-width: 680px), (orientation: portrait)' srcset='" + esc(featuredArt.band) + "'><img src='" + esc(featuredArt.column) + "' alt='" + esc(displayName) + "' width='1080' height='1920' fetchpriority='high'></picture><div class='sow-heroes__featured-copy'><p class='sow-heroes__rotation' data-hero-status" + (activeRandom || (!activeLeader.permanently_free && !isWeeklyFreeRotation(activeLeader)) ? " hidden" : "") + ">" + esc(statusLabel) + "</p><h2 id='sow-heroes-selected'>" + esc(displayName) + "</h2>" + (!activeRandom && leaderHistoricalName(activeLeader) ? "<p class='sow-heroes__historical-name'>" + esc(leaderHistoricalName(activeLeader)) + "</p>" : "") + "<p class='sow-heroes__civilization'>" + esc(activeRandom ? "" : leaderCivilization(activeLeader)) + "</p><p class='sow-heroes__perk'>" + esc(activeRandom ? SOW_t("heroes.random_leader_description") : leaderPerk(activeLeader)) + "</p><div class='sow-heroes__actions'><div data-hero-purchase>" + (activeRandom ? "" : renderLeaderPurchase(activeLeader)) + "</div><button class='sow-menu__primary sow-heroes__confirm' type='button' data-command='" + (activeRandom ? "confirm_random_leader" : "confirm_leader") + "' data-leader-id='" + (activeRandom ? "" : esc(activeLeader.id)) + "'" + (locked ? " disabled aria-disabled='true'" : "") + ">" + esc(SOW_t(activeRandom ? "heroes.confirm_random_leader" : "heroes.confirm_leader", { name: "" })) + " <span>✓</span></button></div></div></section>" +
+                        "<section class='sow-heroes__roster' aria-label='" + esc(SOW_t("heroes.leader_list")) + "'><div class='sow-heroes__section-head'><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>" + esc(SOW_t("heroes.search_leaders")) + "</span><input data-role='heroes-search' type='search' placeholder='" + esc(SOW_t("heroes.search_leader_civilization")) + "' value=\"" + esc(heroesSearchQuery) + "\" autocomplete='off' spellcheck='false'></label>" + renderHeroesRegionDropdown() + "</div></div><div class='sow-heroes__grid' data-heroes-roster aria-live='polite'>" + renderHeroesRoster(activeId, activeRandom) + "</div></section>" +
                     "</div>" +
         "</section></main>";
     }

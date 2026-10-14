@@ -1,18 +1,22 @@
-use super::overlays::{avatar_slot, world_to_screen_values};
+//! Owns live/death avatar presentation; see docs/nameplates-and-emotes.md.
+use super::overlays::world_to_screen_values;
 use crate::app::{InputState, SimState};
-use crate::render::gpu::{AVATAR_CORNER_RADIUS_RATIO, TextRenderer};
+use crate::render::gpu::TextRenderer;
+use crate::render::motion::{EmoteMotion, emote_motion, smoothstep};
 use crate::theme::dev_config::DevConfig;
+use sow_core::emote::{ActiveEmote, AvatarExpression, EMOTE_DURATION_SECS, EMOTES};
 use sow_core::player::{Leader, PlayerType};
 use sow_core::protocol::{PlayerSnapshot, SimSnapshot};
 use sow_render::nameplate::{
-    BadgeKind, MapPoint, NAMEPLATE_SAMPLE_TICKS, NameplateCapacityPlan, NameplateLandCache,
-    NameplateLayout, NameplateMetrics, NameplatePresentation, NameplateStatus, NameplateStyle,
-    ScreenPoint, WorldRect, assign_nameplate_capacity, fit_bounds_to_land, fit_size_to_land,
-    fitted_font_px, fog_allows_nameplate, font_size_scale,
+    BadgeKind, MapPoint, NAMEPLATE_MAX_BADGES, NAMEPLATE_SAMPLE_TICKS, NameplateCapacityPlan,
+    NameplateLandCache, NameplateLayout, NameplateMetrics, NameplatePresentation, NameplateStatus,
+    NameplateStyle, ScreenPoint, WorldRect, assign_nameplate_capacity, fit_bounds_to_land,
+    fit_size_to_land, fitted_font_px, fog_allows_nameplate, font_size_scale,
     nameplate_visible_after_viewport_and_fog, sample_due as nameplate_sample_due,
     size_needs_interpolation as nameplate_size_needs_interpolation,
 };
 use sow_render::text::NameplateStatusSprite;
+use sow_render::text::{AVATAR_FALLBACK_SLOT, leader_avatar_slot};
 use std::collections::{HashMap, HashSet};
 use web_time::{Duration, Instant};
 
@@ -26,6 +30,7 @@ const SPAWN_STICKY_HOLD: Duration = Duration::from_millis(120);
 const SPAWN_SETTLE_DURATION: Duration = Duration::from_millis(180);
 const LOD_DOT_RADIUS: f32 = 2.0;
 const CATEGORY_EMOJI_DIAMETER_SCALE: f32 = 0.70;
+const AVATAR_PLACEHOLDER_COLOR: [f32; 4] = [0.16, 0.18, 0.20, 1.0];
 pub(crate) const INLINE_EMOJI_SCALE: f32 = 1.4;
 
 #[derive(Clone, Debug)]
@@ -61,6 +66,13 @@ pub(crate) struct NameplateSystem {
     local_spawn_tick: Option<u64>,
     frame_plans: Vec<PreparedNameplate>,
     tutorial_target_hit_bounds: Option<(u16, [f32; 4])>,
+    emote_visuals: HashMap<u16, AvatarEmote>,
+    emote_tick: Option<u64>,
+    emote_tick_at: Option<Instant>,
+    emote_texts: [String; 4],
+    prepared_emotes: [sow_render::text::PreparedText; 4],
+    emote_text_style_key: Option<u32>,
+    safe_area: [f32; 4],
 }
 
 #[derive(Clone, Copy)]
@@ -102,7 +114,7 @@ struct LodDot {
 struct FullNameplate {
     player_id: u16,
     avatar: Option<AvatarPlan>,
-    badges: [Option<BadgePlan>; 7],
+    badges: [Option<BadgePlan>; NAMEPLATE_MAX_BADGES],
     badge_count: usize,
     name: Option<TextPlan>,
     troops: Option<TroopsPlan>,
@@ -115,10 +127,19 @@ struct FullNameplate {
 pub(crate) struct AvatarPlan {
     center: [f32; 2],
     radius: f32,
-    frame_radius: f32,
-    border: f32,
-    frame_color: [f32; 4],
     content: AvatarContent,
+    scale: [f32; 2],
+    blend: Option<([f32; 4], f32)>,
+}
+
+impl AvatarPlan {
+    fn base_instance_count(self) -> usize {
+        1
+    }
+
+    fn transition_instance_count(self) -> usize {
+        usize::from(self.blend.is_some())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -126,6 +147,71 @@ enum AvatarContent {
     Sprite([f32; 4]),
     Emblem(&'static str),
     None,
+}
+
+#[derive(Clone, Copy)]
+struct AvatarEmote {
+    event: ActiveEmote,
+    previous: AvatarExpression,
+    from_motion: EmoteMotion,
+    age_bias: f32,
+    release_at: Option<Instant>,
+    suppress_bubble: bool,
+}
+
+impl AvatarEmote {
+    fn age(self, tick: u64, tick_secs: f32, fraction: f32) -> f32 {
+        (self.event.age_seconds(tick, tick_secs * 1000.0) + fraction - self.age_bias).max(0.0)
+    }
+
+    fn motion(self, age: f32, now: Instant, reduced: bool) -> EmoteMotion {
+        if let Some(released) = self.release_at {
+            let fade = 1.0 - smoothstep(now.duration_since(released).as_secs_f32() / 0.15);
+            return EmoteMotion {
+                offset: self
+                    .from_motion
+                    .offset
+                    .map(|v| if reduced { 0.0 } else { v * fade }),
+                scale: self
+                    .from_motion
+                    .scale
+                    .map(|v| if reduced { 1.0 } else { 1.0 + (v - 1.0) * fade }),
+                bubble_alpha: self.from_motion.bubble_alpha * fade,
+                bubble_scale: self.from_motion.bubble_scale,
+            };
+        }
+        let mut motion = emote_motion(self.event.kind, age, reduced);
+        if !reduced {
+            let continuity = 1.0 - smoothstep(age / 0.07);
+            for axis in 0..2 {
+                motion.offset[axis] += self.from_motion.offset[axis] * continuity;
+                motion.scale[axis] += (self.from_motion.scale[axis] - 1.0) * continuity;
+            }
+        }
+        if self.suppress_bubble {
+            motion.bubble_alpha = 0.0;
+        }
+        motion
+    }
+
+    fn expressions(self, age: f32, now: Instant) -> (AvatarExpression, AvatarExpression, f32) {
+        let expression = self.event.kind.definition().expression;
+        if let Some(released) = self.release_at {
+            return (
+                self.previous,
+                AvatarExpression::Calm,
+                smoothstep(now.duration_since(released).as_secs_f32() / 0.15),
+            );
+        }
+        if !self.event.pinned && age >= EMOTE_DURATION_SECS - 0.15 {
+            return (
+                expression,
+                AvatarExpression::Calm,
+                smoothstep((age - (EMOTE_DURATION_SECS - 0.15)) / 0.15),
+            );
+        }
+        (self.previous, expression, smoothstep((age - 0.07) / 0.12))
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -151,7 +237,126 @@ struct BadgePlan {
 
 impl NameplateSystem {
     pub(crate) fn reset(&mut self) {
+        let texts = std::mem::take(&mut self.emote_texts);
+        let safe_area = self.safe_area;
         *self = Self::default();
+        self.emote_texts = texts;
+        self.safe_area = safe_area;
+    }
+
+    pub(crate) fn set_emote_texts(&mut self, texts: [String; 4], safe_area: [f32; 4]) {
+        for (index, value) in texts.into_iter().enumerate() {
+            let value = value.trim();
+            self.emote_texts[index] = if value.is_empty()
+                || value.chars().count() > 160
+                || value.chars().any(char::is_control)
+            {
+                EMOTES[index].fallback.to_owned()
+            } else {
+                value.to_owned()
+            };
+        }
+        self.safe_area = safe_area.map(|v| {
+            if v.is_finite() {
+                v.clamp(0.0, 300.0)
+            } else {
+                0.0
+            }
+        });
+        self.emote_text_style_key = None;
+    }
+
+    fn observe_emotes(
+        &mut self,
+        snapshot: &SimSnapshot,
+        tick_secs: f32,
+        now: Instant,
+        reduced: bool,
+    ) {
+        if self.emote_tick.is_some_and(|tick| snapshot.tick < tick) {
+            self.emote_visuals.clear();
+        }
+        if self.emote_tick != Some(snapshot.tick) {
+            self.emote_tick = Some(snapshot.tick);
+            self.emote_tick_at = Some(now);
+        }
+        let fraction = self.emote_tick_at.map_or(0.0, |at| {
+            now.duration_since(at).as_secs_f32().min(tick_secs)
+        });
+        for player in &snapshot.players {
+            if !player.alive {
+                self.emote_visuals.remove(&player.id);
+                continue;
+            }
+            let old = self.emote_visuals.get(&player.id).copied();
+            if let Some(event) = player.active_emote {
+                if old.is_some_and(|old| {
+                    old.event.event_id == event.event_id && old.release_at.is_none()
+                }) {
+                    continue;
+                }
+                let raw_age = event.age_seconds(snapshot.tick, tick_secs * 1000.0);
+                let (from_motion, previous) = old
+                    .map(|old| {
+                        let age = old.age(snapshot.tick, tick_secs, fraction);
+                        let (from, to, blend) = old.expressions(age, now);
+                        (
+                            old.motion(age, now, reduced),
+                            if blend < 0.5 { from } else { to },
+                        )
+                    })
+                    .unwrap_or((EmoteMotion::default(), AvatarExpression::Calm));
+                self.emote_visuals.insert(
+                    player.id,
+                    AvatarEmote {
+                        event,
+                        previous,
+                        from_motion,
+                        age_bias: if raw_age <= tick_secs * 2.0 {
+                            raw_age
+                        } else {
+                            0.0
+                        },
+                        release_at: None,
+                        suppress_bubble: event.pinned && old.is_none() && raw_age > tick_secs * 2.0,
+                    },
+                );
+            } else if let Some(mut old) = old {
+                if let Some(released) = old.release_at {
+                    if now.duration_since(released).as_secs_f32() >= 0.15 {
+                        self.emote_visuals.remove(&player.id);
+                    }
+                } else if old.event.expired(snapshot.tick, tick_secs * 1000.0) {
+                    // Finish the existing return fade; expiry must not restart it.
+                    if old.age(snapshot.tick, tick_secs, fraction) >= EMOTE_DURATION_SECS {
+                        self.emote_visuals.remove(&player.id);
+                    }
+                } else {
+                    let age = old.age(snapshot.tick, tick_secs, fraction);
+                    let (from, to, blend) = old.expressions(age, now);
+                    old.previous = if blend < 0.5 { from } else { to };
+                    old.from_motion = old.motion(age, now, reduced);
+                    old.release_at = Some(now);
+                    self.emote_visuals.insert(player.id, old);
+                }
+            }
+        }
+    }
+
+    fn prepare_emote_texts(&mut self, text: &TextRenderer, dev: &DevConfig) {
+        let style_key = nameplate_metrics_style_key(dev);
+        if self.emote_text_style_key != Some(style_key) {
+            for (index, definition) in EMOTES.iter().enumerate() {
+                let source = if self.emote_texts[index].is_empty() {
+                    definition.fallback
+                } else {
+                    &self.emote_texts[index]
+                };
+                self.prepared_emotes[index] =
+                    text.prepare_string(source, nameplate_char_spacing(dev), 1.0, 0.5);
+            }
+            self.emote_text_style_key = Some(style_key);
+        }
     }
 
     pub(crate) fn anchor_for(&self, player_id: u16) -> Option<[f32; 2]> {
@@ -186,8 +391,16 @@ pub(super) fn render_nameplates(
     my_id: u16,
     leaderboard_top_three: [Option<u16>; 3],
     tutorial_target_player: Option<u16>,
+    reduced_motion: bool,
 ) {
     let sf = if sf.is_finite() { sf.max(0.01) } else { 1.0 };
+    system.observe_emotes(
+        snapshot,
+        (sim.config.tick_rate_ms / 1000.0).max(0.001),
+        now,
+        reduced_motion,
+    );
+    system.prepare_emote_texts(text, dev);
     system.tutorial_target_hit_bounds = None;
     sample_nameplates(text, snapshot, sim, system, dev, sf, my_id, now);
 
@@ -199,6 +412,10 @@ pub(super) fn render_nameplates(
     let alpha = nameplate_sample_alpha(system.sample_at, now, nameplate_sample_duration(sim));
     let inverse_alpha = 1.0 - alpha;
 
+    let tick_secs = (sim.config.tick_rate_ms / 1000.0).max(0.001);
+    let emote_fraction = system.emote_tick_at.map_or(0.0, |at| {
+        now.duration_since(at).as_secs_f32().min(tick_secs)
+    });
     let (order, visuals, frame_plans) = (&system.order, &system.visuals, &mut system.frame_plans);
     frame_plans.clear();
     for &player_index in order.iter() {
@@ -297,10 +514,6 @@ pub(super) fn render_nameplates(
             has_request,
             rank,
             has_traitor: player.traitor,
-            has_active_emoji: player
-                .active_emoji
-                .as_deref()
-                .is_some_and(|emoji| emoji != "🗡️"),
             has_disconnected: player.disconnected,
         };
         let show_bot_avatars = dev.vfx_bot_avatars || player.campaign_avatar.is_some();
@@ -385,6 +598,17 @@ pub(super) fn render_nameplates(
     }
 
     assign_nameplate_capacity(frame_plans, text.remaining_instance_capacity());
+    let base_reserved = frame_plans
+        .iter()
+        .map(|plan| match plan.presentation {
+            NameplatePresentation::Full => plan.full.map_or(0, |full| full.instance_count),
+            NameplatePresentation::Compact => 2,
+            NameplatePresentation::Hidden => 0,
+        })
+        .sum::<usize>();
+    let mut decoration_budget = text
+        .remaining_instance_capacity()
+        .saturating_sub(base_reserved);
     let mut tutorial_target_hit_bounds = None;
     for plan in frame_plans.iter() {
         let player = &snapshot.players[plan.player_index];
@@ -395,19 +619,81 @@ pub(super) fn render_nameplates(
         }
         match plan.presentation {
             NameplatePresentation::Full => {
-                let full = plan
+                let mut full = plan
                     .full
                     .expect("full presentation requires a complete prepared plate");
                 let state = visuals
                     .get(&full.player_id)
                     .expect("prepared plate retains its sampled player state");
-                paint_prepared_nameplate(text, player, state, full);
+                if let Some(avatar) = &mut full.avatar
+                    && let Some(emote) = system.emote_visuals.get(&player.id).copied()
+                {
+                    let age = emote.age(snapshot.tick, tick_secs, emote_fraction);
+                    let motion = emote.motion(age, now, reduced_motion);
+                    let diameter = avatar.radius * 2.0;
+                    for axis in 0..2 {
+                        avatar.center[axis] += motion.offset[axis] * diameter;
+                    }
+                    avatar.scale = motion.scale;
+                    let (from, to, mix) = emote.expressions(age, now);
+                    avatar.content = resolve_avatar_content(
+                        text,
+                        sow_core::player::avatar_identity_ref(player),
+                        campaign_avatar_slots,
+                        to,
+                    );
+                    if from != to && mix < 1.0 && decoration_budget > 0 {
+                        if let AvatarContent::Sprite(from_uv) = resolve_avatar_content(
+                            text,
+                            sow_core::player::avatar_identity_ref(player),
+                            campaign_avatar_slots,
+                            from,
+                        ) {
+                            avatar.blend = Some((from_uv, mix));
+                            decoration_budget -= 1;
+                        }
+                    }
+                }
+                paint_prepared_nameplate(text, state, full);
             }
             NameplatePresentation::Compact => {
                 paint_lod_dot(text, plan.dot.center, plan.dot.color, sf, plan.dot.scale)
             }
             NameplatePresentation::Hidden => {}
         }
+    }
+    // Decorations are a second pass so glyph pressure cannot hide another player's base plate.
+    for plan in frame_plans.iter() {
+        if plan.presentation != NameplatePresentation::Full {
+            continue;
+        }
+        let player = &snapshot.players[plan.player_index];
+        if !sow_core::emote::is_recipient(&snapshot.players, player.id, my_id) {
+            continue;
+        }
+        let Some(avatar) = plan.full.and_then(|full| full.avatar) else {
+            continue;
+        };
+        let Some(emote) = system.emote_visuals.get(&player.id).copied() else {
+            continue;
+        };
+        let age = emote.age(snapshot.tick, tick_secs, emote_fraction);
+        let motion = emote.motion(age, now, reduced_motion);
+        let prepared = &system.prepared_emotes[emote.event.kind as usize];
+        let needed = prepared.instance_count().saturating_add(5);
+        if motion.bubble_alpha <= 0.0 || needed > text.remaining_instance_capacity() {
+            continue;
+        }
+        paint_emote_bubble(
+            text,
+            prepared,
+            avatar,
+            motion,
+            player_color(player),
+            input,
+            system.safe_area,
+            sf,
+        );
     }
     system.tutorial_target_hit_bounds = tutorial_target_hit_bounds;
 }
@@ -699,6 +985,190 @@ fn player_at_explored_tile(center: MapPoint, sim: &SimState) -> bool {
         .contains((row * sim.map_w as i32 + col) as u32)
 }
 
+#[cfg(test)]
+mod emote_tests {
+    use super::*;
+    use sow_core::emote::EmoteKind;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    fn snapshot(event: Option<ActiveEmote>) -> SimSnapshot {
+        let config = sow_core::game_config::GameConfig::default();
+        let mut state = sow_core::game::GameState::new(7, 4, 4, config.clone());
+        state.phase = sow_core::game::GamePhase::Playing;
+        state.tick = 1;
+        let mut player = sow_core::player::Player::new_human(1, "Hero".into(), [1.0; 3], &config);
+        player.has_spawned = true;
+        player.active_emote = event;
+        state.register_player(player);
+        let mut engine = sow_core::engine::SowEngine::new(
+            state,
+            sow_core::water_components::WaterComponents::default(),
+        );
+        engine.build_snapshot()
+    }
+
+    fn event(id: u64, pinned: bool) -> ActiveEmote {
+        ActiveEmote {
+            kind: EmoteKind::Threat,
+            pinned,
+            started_tick: 0,
+            event_id: id,
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn portrait_uses_one_instance_and_crossfade_adds_only_the_second_image() {
+        let portrait = avatar_plan([20.0, 30.0], 16.0, AvatarContent::Sprite([0.0; 4]));
+        assert_eq!(portrait.base_instance_count(), 1);
+        assert_eq!(portrait.transition_instance_count(), 0);
+
+        let transition = AvatarPlan {
+            blend: Some(([0.5, 0.5, 0.75, 0.75], 0.5)),
+            ..portrait
+        };
+        assert_eq!(transition.base_instance_count(), 1);
+        assert_eq!(transition.transition_instance_count(), 1);
+    }
+
+    #[wasm_bindgen_test]
+    fn reduced_motion_keeps_active_and_releasing_avatars_still() {
+        let now = Instant::now();
+        let from_motion = EmoteMotion {
+            offset: [0.08, -0.08],
+            scale: [1.04, 0.96],
+            bubble_alpha: 0.8,
+            ..Default::default()
+        };
+        let active = AvatarEmote {
+            event: event(1, false),
+            previous: AvatarExpression::Calm,
+            from_motion,
+            age_bias: 0.0,
+            release_at: None,
+            suppress_bubble: false,
+        };
+        let active_motion = active.motion(0.18, now, true);
+        assert_eq!(active_motion.offset, [0.0; 2]);
+        assert_eq!(active_motion.scale, [1.0; 2]);
+        assert!(active_motion.bubble_alpha > 0.0);
+
+        let releasing = AvatarEmote {
+            release_at: Some(now),
+            ..active
+        };
+        let release_motion = releasing.motion(0.18, now + Duration::from_millis(30), true);
+        assert_eq!(release_motion.offset, [0.0; 2]);
+        assert_eq!(release_motion.scale, [1.0; 2]);
+        assert!(release_motion.bubble_alpha > 0.0);
+    }
+
+    #[wasm_bindgen_test]
+    fn events_are_immediate_duplicates_do_not_replay_and_death_clears_them() {
+        let now = Instant::now();
+        let mut system = NameplateSystem::default();
+        let mut snap = snapshot(Some(event(1, false)));
+        system.observe_emotes(&snap, 0.1, now, false);
+        assert!(system.sample_tick.is_none());
+        let original = system.emote_visuals[&1];
+        assert!(!original.suppress_bubble);
+        system.observe_emotes(&snap, 0.1, now + Duration::from_millis(50), false);
+        assert_eq!(
+            system.emote_visuals[&1].event.event_id,
+            original.event.event_id
+        );
+        assert_eq!(system.emote_tick_at, Some(now));
+        snap.players[0].alive = false;
+        system.observe_emotes(&snap, 0.1, now, false);
+        assert!(system.emote_visuals.is_empty());
+    }
+
+    #[wasm_bindgen_test]
+    fn repeated_emotes_keep_current_pose_and_clear_returns_to_calm() {
+        let now = Instant::now();
+        let mut system = NameplateSystem::default();
+        let mut snap = snapshot(Some(event(1, true)));
+        system.observe_emotes(&snap, 0.1, now, false);
+        snap.tick = 2;
+        let previous = system.emote_visuals[&1];
+        let previous_motion = previous.motion(previous.age(2, 0.1, 0.0), now, false);
+        snap.players[0].active_emote = Some(ActiveEmote {
+            event_id: 2,
+            started_tick: 1,
+            ..event(1, true)
+        });
+        system.observe_emotes(&snap, 0.1, now, false);
+        let repeated = system.emote_visuals[&1];
+        let first = repeated.motion(0.0, now, false);
+        assert_eq!(first.offset, previous_motion.offset);
+        assert_eq!(first.scale, previous_motion.scale);
+        snap.players[0].active_emote = None;
+        system.observe_emotes(&snap, 0.1, now, false);
+        let released = system.emote_visuals[&1];
+        assert!(released.release_at.is_some());
+        assert_eq!(
+            released
+                .expressions(0.0, now + Duration::from_millis(150))
+                .1,
+            AvatarExpression::Calm
+        );
+        system.observe_emotes(&snap, 0.1, now + Duration::from_millis(160), false);
+        assert!(system.emote_visuals.is_empty());
+    }
+
+    #[wasm_bindgen_test]
+    fn old_pin_does_not_replay_bubble_and_reset_keeps_local_language() {
+        let now = Instant::now();
+        let mut system = NameplateSystem::default();
+        let mut snap = snapshot(Some(event(1, true)));
+        snap.tick = 500;
+        system.observe_emotes(&snap, 0.1, now, false);
+        let old = system.emote_visuals[&1];
+        assert!(old.suppress_bubble);
+        assert_eq!(
+            old.motion(old.age(500, 0.1, 0.0), now, false).bubble_alpha,
+            0.0
+        );
+        assert_eq!(
+            old.expressions(50.0, now),
+            (AvatarExpression::Calm, AvatarExpression::Angry, 1.0)
+        );
+        system.set_emote_texts(
+            [
+                "¡Saludos!".into(),
+                "¡Ayuda!".into(),
+                "¡Prepárate!".into(),
+                "¡Victoria!".into(),
+            ],
+            [12.0, 0.0, 24.0, 0.0],
+        );
+        system.reset();
+        assert!(system.emote_visuals.is_empty());
+        assert_eq!(system.emote_texts[1], "¡Ayuda!");
+        assert_eq!(system.safe_area[2], 24.0);
+    }
+
+    #[wasm_bindgen_test]
+    fn expiry_finishes_the_return_without_restarting_it_at_different_frame_rates() {
+        let now = Instant::now();
+        for frame_ms in [8, 16, 33] {
+            let mut system = NameplateSystem::default();
+            let mut snap = snapshot(Some(event(1, false)));
+            system.observe_emotes(&snap, 0.1, now, false);
+            for elapsed_ms in (frame_ms..=3200).step_by(frame_ms as usize) {
+                snap.tick = 1 + elapsed_ms / 100;
+                if snap.tick >= 30 {
+                    snap.players[0].active_emote = None;
+                }
+                system.observe_emotes(&snap, 0.1, now + Duration::from_millis(elapsed_ms), false);
+                if let Some(visual) = system.emote_visuals.get(&1) {
+                    assert!(visual.release_at.is_none(), "expiry restarted the return");
+                }
+            }
+            assert!(system.emote_visuals.is_empty());
+        }
+    }
+}
+
 fn nameplate_world_size(tile_count: u32) -> f32 {
     (tile_count as f32).sqrt().clamp(0.2, 150.0)
 }
@@ -750,7 +1220,6 @@ fn prepare_full_nameplate(
     campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     sf: f32,
 ) -> FullNameplate {
-    let color = player_color(player);
     let layout = layout.scaled_about(center, fit_scale);
     let font_scale = font_size_scale(dev.font_size_scale);
     let metrics = NameplateMetrics::compute(
@@ -766,7 +1235,7 @@ fn prepare_full_nameplate(
     );
     let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]).scaled(fit_scale);
     let avatar = (layout.avatar_radius() > 0.0)
-        .then(|| prepare_avatar(text, player, campaign_avatar_slots, layout, color, sf));
+        .then(|| prepare_avatar(text, player, campaign_avatar_slots, layout, sf));
     let (badges, badge_count) = prepare_badges(layout, sf);
     let name = dev.vfx_nameplate_names.then_some(TextPlan {
         position: {
@@ -787,10 +1256,8 @@ fn prepare_full_nameplate(
             },
         }
     });
-    let instance_count = usize::from(avatar.is_some())
-        .saturating_add(avatar.map_or(0, |avatar| {
-            usize::from(!matches!(avatar.content, AvatarContent::None))
-        }))
+    let instance_count = avatar
+        .map_or(0, AvatarPlan::base_instance_count)
         .saturating_add(badge_count)
         .saturating_add(name.map_or(0, |_| state.prepared_name.instance_count()))
         .saturating_add(troops.map_or(0, |_| {
@@ -816,7 +1283,6 @@ pub(crate) fn prepare_death_avatar(
     campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     center: [f32; 2],
     radius: f32,
-    color: [f32; 4],
 ) -> AvatarPlan {
     let identity_ref = match identity {
         sow_core::player::AvatarIdentity::Portrait { slug, leader } => {
@@ -830,57 +1296,44 @@ pub(crate) fn prepare_death_avatar(
         }
         sow_core::player::AvatarIdentity::Fallback => sow_core::player::AvatarIdentityRef::Fallback,
     };
-    let (frame_color, content) =
-        resolve_avatar_content(text, identity_ref, campaign_avatar_slots, color);
-    let border = radius * 0.12;
-    AvatarPlan {
-        center,
-        radius,
-        frame_radius: radius + border * 0.3,
-        border,
-        frame_color,
-        content,
-    }
+    let content = resolve_avatar_content(
+        text,
+        identity_ref,
+        campaign_avatar_slots,
+        AvatarExpression::Calm,
+    );
+    avatar_plan(center, radius, content)
 }
 
 fn resolve_avatar_content(
     text: &TextRenderer,
     identity: sow_core::player::AvatarIdentityRef<'_>,
     campaign_avatar_slots: &std::collections::HashMap<String, usize>,
-    color: [f32; 4],
-) -> ([f32; 4], AvatarContent) {
+    expression: AvatarExpression,
+) -> AvatarContent {
     match identity {
         sow_core::player::AvatarIdentityRef::Portrait { slug, leader: None } => {
-            let slot = campaign_avatar_slots
-                .get(slug)
-                .copied()
-                .unwrap_or(Leader::ALL.len());
-            let content = text
-                .avatar_uv(slot)
-                .or_else(|| text.avatar_uv(Leader::ALL.len()))
-                .map_or(AvatarContent::None, AvatarContent::Sprite);
-            (color, content)
+            let slot = Leader::ALL
+                .iter()
+                .find(|leader| sow_data::commerce::leader_id(**leader) == slug)
+                .map(|leader| leader_avatar_slot(*leader, expression))
+                .or_else(|| campaign_avatar_slots.get(slug).copied())
+                .unwrap_or(AVATAR_FALLBACK_SLOT);
+            text.avatar_uv(slot)
+                .or_else(|| text.avatar_uv(AVATAR_FALLBACK_SLOT))
+                .map_or(AvatarContent::None, AvatarContent::Sprite)
         }
         sow_core::player::AvatarIdentityRef::Portrait {
             leader: Some(leader),
             ..
-        } => {
-            let rgb = leader.filler_rgb();
-            let frame = [rgb[0], rgb[1], rgb[2], 1.0];
-            let content = text
-                .avatar_uv(avatar_slot(Some(leader)))
-                .or_else(|| text.avatar_uv(avatar_slot(None)))
-                .map_or(AvatarContent::None, AvatarContent::Sprite);
-            (frame, content)
-        }
-        sow_core::player::AvatarIdentityRef::Emblem { symbol } => {
-            (color, AvatarContent::Emblem(symbol))
-        }
-        sow_core::player::AvatarIdentityRef::Fallback => (
-            color,
-            text.avatar_uv(Leader::ALL.len())
-                .map_or(AvatarContent::None, AvatarContent::Sprite),
-        ),
+        } => text
+            .avatar_uv(leader_avatar_slot(leader, expression))
+            .or_else(|| text.avatar_uv(AVATAR_FALLBACK_SLOT))
+            .map_or(AvatarContent::None, AvatarContent::Sprite),
+        sow_core::player::AvatarIdentityRef::Emblem { symbol } => AvatarContent::Emblem(symbol),
+        sow_core::player::AvatarIdentityRef::Fallback => text
+            .avatar_uv(AVATAR_FALLBACK_SLOT)
+            .map_or(AvatarContent::None, AvatarContent::Sprite),
     }
 }
 
@@ -889,32 +1342,36 @@ fn prepare_avatar(
     player: &PlayerSnapshot,
     campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     layout: NameplateLayout,
-    color: [f32; 4],
     sf: f32,
 ) -> AvatarPlan {
-    let (frame_color, content) = resolve_avatar_content(
+    let content = resolve_avatar_content(
         text,
         sow_core::player::avatar_identity_ref(player),
         campaign_avatar_slots,
-        color,
+        AvatarExpression::Calm,
     );
     let center = [
         layout.avatar_center().0[0] * sf,
         layout.avatar_center().0[1] * sf,
     ];
     let radius = layout.avatar_radius() * sf;
-    let border = radius * 0.12;
+    avatar_plan(center, radius, content)
+}
+
+fn avatar_plan(center: [f32; 2], radius: f32, content: AvatarContent) -> AvatarPlan {
     AvatarPlan {
         center,
         radius,
-        frame_radius: radius + border * 0.3,
-        border,
-        frame_color,
         content,
+        scale: [1.0; 2],
+        blend: None,
     }
 }
 
-fn prepare_badges(layout: NameplateLayout, sf: f32) -> ([Option<BadgePlan>; 7], usize) {
+fn prepare_badges(
+    layout: NameplateLayout,
+    sf: f32,
+) -> ([Option<BadgePlan>; NAMEPLATE_MAX_BADGES], usize) {
     (
         (*layout.badges()).map(|badge| {
             badge.map(|badge| BadgePlan {
@@ -930,12 +1387,10 @@ fn prepare_badges(layout: NameplateLayout, sf: f32) -> ([Option<BadgePlan>; 7], 
 
 fn paint_prepared_nameplate(
     text: &mut TextRenderer,
-    player: &PlayerSnapshot,
     state: &NameplateVisualState,
     plan: FullNameplate,
 ) {
     let before = text.instance_count();
-    let icon_color = player_color(player);
     if let Some(avatar) = plan.avatar {
         paint_prepared_avatar(text, avatar, plan.emoji_outline, 1.0);
     }
@@ -956,7 +1411,6 @@ fn paint_prepared_nameplate(
             BadgeKind::Rank3 => Some("🥉"),
             BadgeKind::Star => Some("⭐"),
             BadgeKind::Request | BadgeKind::Allied | BadgeKind::Traitor => None,
-            BadgeKind::Active => player.active_emoji.as_deref(),
             BadgeKind::Disconnected => Some("🔌"),
         };
         if let Some(icon) = icon {
@@ -981,14 +1435,11 @@ fn paint_prepared_nameplate(
         );
     }
     if let Some(troops) = plan.troops {
-        draw_emoji(
-            text,
-            "⚔",
+        text.push_troop_icon(
             troops.icon_center,
-            troops.icon_diameter,
-            icon_color,
-            plan.emoji_outline,
+            troops.icon_diameter * 0.5,
             1.0,
+            plan.emoji_outline,
         );
         let _ = text.push_prepared_text(
             &state.prepared_troops,
@@ -998,7 +1449,10 @@ fn paint_prepared_nameplate(
             plan.text_style,
         );
     }
-    debug_assert!(text.instance_count().saturating_sub(before) <= plan.instance_count);
+    debug_assert!(
+        text.instance_count().saturating_sub(before)
+            <= plan.instance_count + plan.avatar.map_or(0, AvatarPlan::transition_instance_count)
+    );
 }
 
 pub(crate) fn paint_prepared_avatar(
@@ -1007,20 +1461,16 @@ pub(crate) fn paint_prepared_avatar(
     outline: sow_render::text::OutlineStyle,
     alpha: f32,
 ) {
-    let mut frame_color = avatar.frame_color;
-    frame_color[3] *= alpha;
-    text.push_rounded_rect(
-        avatar.center,
-        [avatar.frame_radius * 2.0; 2],
-        AVATAR_CORNER_RADIUS_RATIO,
-        frame_color,
-        [0.0, 0.0, 0.0, 160.0 / 255.0 * alpha],
-        avatar.border * 0.5,
-    );
     let tint = [1.0, 1.0, 1.0, alpha];
     match avatar.content {
         AvatarContent::Sprite(uv) => {
-            text.push_sprite(avatar.center, avatar.radius, uv, tint);
+            let size = avatar.scale.map(|scale| avatar.radius * 2.0 * scale);
+            if let Some((previous, mix)) = avatar.blend {
+                text.push_sprite(avatar.center, size, previous, [1.0, 1.0, 1.0, alpha]);
+                text.push_sprite(avatar.center, size, uv, [1.0, 1.0, 1.0, alpha * mix]);
+            } else {
+                text.push_sprite(avatar.center, size, uv, tint);
+            }
         }
         AvatarContent::Emblem(glyph) => {
             let _ = text.push_emoji(
@@ -1031,8 +1481,100 @@ pub(crate) fn paint_prepared_avatar(
                 outline,
             );
         }
-        AvatarContent::None => {}
+        AvatarContent::None => text.push_disc(
+            avatar.center,
+            avatar.radius * avatar.scale[0],
+            [
+                AVATAR_PLACEHOLDER_COLOR[0],
+                AVATAR_PLACEHOLDER_COLOR[1],
+                AVATAR_PLACEHOLDER_COLOR[2],
+                alpha,
+            ],
+        ),
     }
+}
+
+fn paint_emote_bubble(
+    text: &mut TextRenderer,
+    prepared: &sow_render::text::PreparedText,
+    avatar: AvatarPlan,
+    motion: EmoteMotion,
+    accent: [f32; 4],
+    input: &InputState,
+    insets: [f32; 4],
+    sf: f32,
+) {
+    let safe = insets.map(|v| v * sf + 8.0 * sf);
+    let max_width = (240.0 * sf).min((input.screen_w - safe[1] - safe[3]).max(1.0));
+    let mut font = 14.0 * sf;
+    let measured = prepared.measure_at(font);
+    font *= ((max_width - 24.0 * sf).max(1.0) / measured.width.max(1.0)).min(1.0);
+    let measured = prepared.measure_at(font);
+    let Some(bounds) = prepared.visual_bounds_at(font) else {
+        return;
+    };
+    let width = (measured.width + 24.0 * sf).min(max_width);
+    let height = (bounds[3] - bounds[1] + 18.0 * sf).max(32.0 * sf);
+    let above = avatar.center[1] - avatar.radius - height - 10.0 * sf >= safe[0];
+    let direction = if above { -1.0 } else { 1.0 };
+    let center = [
+        avatar.center[0].clamp(
+            safe[3] + width * 0.5,
+            (input.screen_w - safe[1] - width * 0.5).max(safe[3] + width * 0.5),
+        ),
+        (avatar.center[1] + direction * (avatar.radius + height * 0.5 + 10.0 * sf)).clamp(
+            safe[0] + height * 0.5,
+            (input.screen_h - safe[2] - height * 0.5).max(safe[0] + height * 0.5),
+        ),
+    ];
+    let alpha = motion.bubble_alpha;
+    let size = [width * motion.bubble_scale, height * motion.bubble_scale];
+    let tip_inset = (12.0 * sf).min(size[0] * 0.45);
+    let tip_x = avatar.center[0].clamp(
+        center[0] - size[0] * 0.5 + tip_inset,
+        center[0] + size[0] * 0.5 - tip_inset,
+    );
+    let tip_y = center[1] - direction * (size[1] * 0.5 + 3.0 * sf);
+    text.push_rounded_rect(
+        [center[0], center[1] + 3.0 * sf],
+        [size[0] + 4.0 * sf, size[1] + 4.0 * sf],
+        0.2,
+        [0.0, 0.0, 0.0, 0.18 * alpha],
+        [0.0; 4],
+        0.0,
+    );
+    text.push_rounded_rect(
+        center,
+        size,
+        0.2,
+        [0.97, 0.95, 0.90, alpha],
+        [accent[0], accent[1], accent[2], 0.9 * alpha],
+        1.2 * sf,
+    );
+    text.push_triangle(
+        [tip_x, tip_y],
+        [12.0 * sf, -direction * 8.0 * sf],
+        [accent[0], accent[1], accent[2], alpha],
+    );
+    text.push_triangle(
+        [tip_x, tip_y - direction * sf],
+        [8.0 * sf, -direction * 6.0 * sf],
+        [0.97, 0.95, 0.90, alpha],
+    );
+    let _ = text.push_prepared_text(
+        prepared,
+        [
+            center[0],
+            center[1] - (bounds[1] + bounds[3]) * 0.5 * motion.bubble_scale,
+        ],
+        font * motion.bubble_scale,
+        [0.07, 0.09, 0.12, alpha],
+        sow_render::text::TextPaintStyle {
+            face_dilate: 0.0,
+            outline: sow_render::text::OutlineStyle::NONE,
+            underlay_softness: 0.0,
+        },
+    );
 }
 
 fn scale_outline_style(

@@ -69,6 +69,7 @@ const hudStateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/ui
 const avatarIdentitySource = fs.readFileSync(path.join(shell, "../../sow-core/src/player/mod.rs"), "utf8");
 const matchStartSource = fs.readFileSync(path.join(shell, "../../sow-client/src/loader/match_start.rs"), "utf8");
 const campaignModule = fs.readFileSync(path.join(shell, "../../sow-client/src/campaign/mod.rs"), "utf8");
+const campaignPolicySource = fs.readFileSync(path.join(shell, "../../sow-data/src/campaign.rs"), "utf8");
 const sessionSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/session.rs"), "utf8");
 const netMessagesSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/update/messages.rs"), "utf8");
 const simUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/sim/update.rs"), "utf8");
@@ -111,6 +112,148 @@ const menuCssFiles = [
     "main_menu.campaign.css"
 ];
 const menuCss = Object.fromEntries(menuCssFiles.map((file) => [file, fs.readFileSync(path.join(shell, file), "utf8")]));
+
+function makeHudDocument() {
+    const doc = { activeElement: null, nodes: Object.create(null) };
+    class Element {
+        constructor(tagName) {
+            this.tagName = tagName;
+            this.children = [];
+            this.parentNode = null;
+            this.dataset = {};
+            this.attributes = {};
+            this.hidden = false;
+            this.disabled = false;
+            this.isConnected = true;
+            this.textContent = "";
+            this.insertions = 0;
+            const styles = new Map(), classes = new Set();
+            this.style = { getPropertyValue: key => styles.get(key) || "", setProperty: (key, value) => styles.set(key, value), removeProperty: key => styles.delete(key) };
+            this.classList = {
+                add: name => classes.add(name),
+                contains: name => classes.has(name),
+                toggle(name, on) { if (on) classes.add(name); else classes.delete(name); }
+            };
+        }
+        append(...items) { items.forEach(item => this.appendChild(item)); }
+        appendChild(item) { return this.insertBefore(item, null); }
+        insertBefore(item, before) {
+            item.remove();
+            const index = before ? this.children.indexOf(before) : this.children.length;
+            this.children.splice(index, 0, item);
+            item.parentNode = this;
+            item.isConnected = true;
+            this.insertions += 1;
+            return item;
+        }
+        remove() {
+            if (!this.parentNode) return;
+            if (this.contains(doc.activeElement)) doc.activeElement = null;
+            const siblings = this.parentNode.children;
+            siblings.splice(siblings.indexOf(this), 1);
+            this.parentNode = null;
+            this.isConnected = false;
+        }
+        replaceChildren(...items) { this.children.slice().forEach(item => item.remove()); this.append(...items); }
+        contains(item) { return item === this || this.children.some(child => child.contains(item)); }
+        focus() { doc.activeElement = this; }
+        getClientRects() { return !this.isConnected || this.hidden || this.classList.contains("hidden") || this.parentNode && !this.parentNode.getClientRects().length ? [] : [{}]; }
+        closest(selector) {
+            if (selector === "[data-command]") return this.dataset.command ? this : this.parentNode?.closest(selector) || null;
+            return null;
+        }
+        querySelectorAll(selector) {
+            return this.children.flatMap(child => [child, ...child.querySelectorAll(selector)])
+                .filter(child => selector === "button:not(:disabled)" && child.tagName.toLowerCase() === "button" && !child.disabled);
+        }
+        setAttribute(name, value) { this.attributes[name] = String(value); }
+        getAttribute(name) { return name === "src" ? this.src || null : this.attributes[name] || null; }
+        removeAttribute(name) { delete this.attributes[name]; if (name === "src") this.src = ""; }
+    }
+    doc.createElement = tag => new Element(tag);
+    doc.getElementById = id => doc.nodes[id] || null;
+    return { doc, Element };
+}
+
+function makePlayerDialogsHarness() {
+    const { doc, Element } = makeHudDocument();
+    const calls = [], listeners = {};
+    const context = vm.createContext({
+        document: doc, hudRoot: new Element("root"), hudDevLayer: null,
+        leaderboardOpen: false, inboxOpen: false, settingsOpen: false, mapMenuOpen: false, isOver: false,
+        window: { SOW_LOCALE: "en", SOW_menu_command: raw => calls.push(JSON.parse(raw)), addEventListener: (name, listener) => { listeners[name] = listener; } },
+        asset: name => "/assets/" + name,
+        SOW_t: key => context.window.SOW_LOCALE + ":" + key
+    });
+    const part = (start, end) => {
+        const begin = hud.indexOf(start), finish = hud.indexOf(end, begin + start.length);
+        assert.ok(begin >= 0 && finish > begin, start);
+        return hud.slice(begin, finish);
+    };
+    vm.runInContext(
+        part("    var hudState =", "    function send(")
+        + part("    function send(", "    function asset(")
+        + part("    function bindAvatarFallback(", "    function clearNotificationCard(")
+        + part("    function createPlayerIdentity(", "    function createInboxRequest(")
+        + part("        function handleHudClick(event) {", '        hudRoot.addEventListener("click", handleHudClick)')
+        + part("    function handleHudStateUpdate(", "    window.SOW_onStateUpdate ="), context
+    );
+    const canvas = doc.nodes.blade = new Element("canvas");
+    canvas.focus();
+    const makeRefs = () => {
+        const element = (tag, id, command) => {
+            const node = new Element(tag);
+            node.id = id;
+            if (command) node.dataset.command = command;
+            doc.nodes[id] = node;
+            return node;
+        };
+        const refs = {
+            transfer: element("aside", "sow-hud-transfer"),
+            transferTarget: element("div", "sow-hud-transfer-target"),
+            transferClose: element("button", "sow-hud-transfer-close", "close_transfer"),
+            transferGold: element("input", "sow-hud-transfer-gold"),
+            transferTroops: element("input", "sow-hud-transfer-troops"),
+            transferIdentity: context.createPlayerIdentity(),
+            betrayal: element("div", "sow-hud-betrayal-modal"),
+            betrayalTarget: element("div", "sow-hud-betrayal-target"),
+            betrayalClose: element("button", "sow-hud-betrayal-close", "cancel_betrayal"),
+            betrayalCancel: element("button", "sow-hud-betrayal-cancel", "cancel_betrayal"),
+            betrayalConfirm: element("button", "sow-hud-betrayal-confirm", "confirm_betrayal"),
+            betrayalIdentity: context.createPlayerIdentity()
+        };
+        refs.transfer.classList.add("hidden");
+        refs.betrayal.classList.add("hidden");
+        refs.transferTarget.append(refs.transferIdentity.element);
+        refs.betrayalTarget.append(refs.betrayalIdentity.element);
+        refs.transfer.append(refs.transferClose, refs.transferTarget, refs.transferGold, refs.transferTroops);
+        refs.betrayal.append(refs.betrayalClose, refs.betrayalTarget, refs.betrayalCancel, refs.betrayalConfirm);
+        context.hudRoot.append(refs.transfer, refs.betrayal);
+        return refs;
+    };
+    context.hudRefs = makeRefs();
+    const renderStart = hud.indexOf("    function renderHud(");
+    const transferStart = hud.indexOf("        if (hudRefs.transfer) {", renderStart);
+    const transferEnd = hud.indexOf("        renderNotifications(", transferStart);
+    const overlayStart = hud.indexOf("        hudRoot.dataset.overlayOpen = String(Boolean(", renderStart);
+    const overlayEnd = hud.indexOf("        var dockHidden", overlayStart);
+    assert.ok(transferStart > renderStart && transferEnd > transferStart && overlayStart > transferEnd && overlayEnd > overlayStart);
+    const redraw = new vm.Script(hud.slice(transferStart, transferEnd) + hud.slice(overlayStart, overlayEnd));
+    context.renderHud = () => {
+        if (context.hudInitialized === false) { context.hudRefs = makeRefs(); context.hudInitialized = true; }
+        context.hud = context.hudState.hud;
+        redraw.runInContext(context);
+    };
+    context.hudInitialized = true;
+    context.hudRoot.addEventListener = (name, listener) => { listeners[name] = listener; };
+    vm.runInContext(part('    if (hudRoot) hudRoot.addEventListener("keydown",', '    window.addEventListener("resize", updateHudSafeArea);'), context);
+    return {
+        context, doc, calls, listeners, canvas,
+        update: (hudValue, extra = {}) => context.handleHudStateUpdate(JSON.stringify({ phase: "Playing", hud: { attack_ratio: .25, ...hudValue }, ...extra })),
+        click: command => context.handleHudClick({ target: { closest: selector => selector === "[data-command]" ? { dataset: { command, playerId: "2" } } : null } }),
+        key: (key, shiftKey = false) => { const event = { key, shiftKey, prevented: false, preventDefault() { this.prevented = true; }, stopPropagation() {} }; listeners.keydown(event); return event; }
+    };
+}
 
 function renderSettingsBody(source, endMarker) {
     const start = source.indexOf("function renderSettings()");
@@ -308,6 +451,42 @@ function confirmedMenuReturn(overrides = {}) {
     return { state: Object.assign(state, overrides), receipt };
 }
 
+test("live multiplayer return uses the confirmed client state", { skip: !process.env.SOW_LIVE_RETURN_STATE_FILE }, async () => {
+    const state = JSON.parse(fs.readFileSync(process.env.SOW_LIVE_RETURN_STATE_FILE, "utf8"));
+    assert.equal(state.menu_return.source, "multiplayer");
+    assert.equal(state.menu_return.status, "confirmed");
+    assert.equal(state.menu_return.account_id, state.account_id);
+    const matchId = state.menu_return.match_id;
+    assert.ok(state.reward_receipts.some(receipt => receipt.id === matchId && receipt.verification_status === "verified"));
+    const guide = makeMenuGuideHarness();
+    const presenter = makeMenuShellRewardHarness(guide, state);
+    presenter.holdPresentation();
+    presenter.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(presenter.phase, "rewards");
+    assert.deepEqual(guide.renderedSteps, [], "real confirmed rewards must finish before the guide");
+    presenter.releasePresentation();
+    for (let step = 0; step < 100 && presenter.phase === "rewards"; step++) {
+        await new Promise(resolve => setImmediate(resolve));
+    }
+    assert.ok(presenter.rewardStageRuns.some(stage => stage.kind === "xp"));
+    assert.ok(presenter.shownReceipts.includes(matchId));
+    assert.equal(presenter.phase, "guide");
+    const count = presenter.rewardStageSets.length;
+    presenter.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(presenter.rewardStageSets.length, count, "confirmed receipts are presented once");
+    const fixture = JSON.parse(fs.readFileSync(process.env.SOW_LIVE_MATCH_EXIT_FILE, "utf8"));
+    const ack = await fetch(fixture.database_base + "/profile/reward-receipts/ack", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ account_id: fixture.account.account_id, auth_secret: fixture.account.auth_secret,
+            receipt_ids: presenter.shownReceipts })
+    });
+    assert.equal(ack.status, 200);
+    const profile = await ack.json();
+    assert.equal(profile.profile.xp, state.xp);
+});
+
 test("public landing keeps the video hero, interactive leader roster, community links, and FAQ", () => {
     assert.match(landingHtml, /<section class="hero section-rule">[\s\S]*class="hero-video"[\s\S]*class="hero-copy"[\s\S]*href="\/play\/"[\s\S]*href="#media"[\s\S]*<\/section>/);
     assert.doesNotMatch(landingHtml, /hero-stage|data-leader-rail/);
@@ -368,7 +547,7 @@ test("menu analytics use the shared event dispatcher instead of a Poki-only clic
 
 test("CrazyGames font stylesheet and server keep the same cross-origin path", () => {
     assert.ok(siteDistSource.includes('"https://shadowsofwar.io/fonts/fonts.css"'));
-    assert.match(siteRedirectConfig, /location \^~ \/fonts\/ \{\s*add_header Access-Control-Allow-Origin \*;\s*try_files \$uri =404;/);
+    assert.match(siteRedirectConfig, /location \^~ \/fonts\/ \{\s*add_header Access-Control-Allow-Origin \*;\s*include snippets\/security-headers\.conf;\s*try_files \$uri =404;/);
 });
 
 test("landing alpha badges link to the iOS and Android tests in every locale", () => {
@@ -1050,13 +1229,14 @@ test("participation receipt stays synced until replay verification resolves", ()
     assert.match(shellSource, /ids\.forEach\(function \(id\) \{ rewardAnimationShown\.add\(id\); \}\)/);
 });
 
-test("missing replay maps warn instead of erroring and bad finalizes never retry", () => {
+test("missing replay maps warn and unacknowledged results remain recoverable", () => {
     assert.match(serverSource, /MissingMap\(String\),/);
     assert.match(serverSource, /ReplayVerificationError::MissingMap\(format!\("map read failed/);
     assert.match(serverSource, /replay map unavailable, will retry after a later release/);
     assert.match(serverSource, /"error": "replay map unavailable"/);
-    assert.match(relaySource, /permanently rejected by database.*dropping spool entry/);
-    assert.match(relaySource, /TOO_MANY_REQUESTS/);
+    assert.doesNotMatch(relaySource, /permanently rejected by database.*dropping spool entry/);
+    assert.match(relaySource, /remains unacknowledged/);
+    assert.match(relaySource, /database did not acknowledge.*retaining spool/);
 });
 
 test("pending reward lookups survive reload without crossing accounts", () => {
@@ -1134,10 +1314,39 @@ test("game exit resets Battle and replays the screen entrance after the loader",
     assert.match(menuCss["main_menu.layout.css"], /sow-screen-panel-enter 240ms/);
 });
 
+test("shell media URLs bust by content hash when the build ships one", () => {
+    const assetUrlStart = loaderSource.indexOf("    function assetUrl(");
+    const assetUrlEnd = loaderSource.indexOf("    function leaderArtUrl(", assetUrlStart);
+    assert.ok(assetUrlStart >= 0 && assetUrlEnd > assetUrlStart);
+    const context = { window: {} };
+    vm.runInNewContext(
+        loaderSource.slice(assetUrlStart, assetUrlEnd) + "; this.assetUrl = assetUrl;",
+        context
+    );
+    context.window.SOW_BUILD_TS = "build-42";
+    assert.equal(
+        context.assetUrl("/assets/shell/leaders/boudica_desktop.webp"),
+        "/assets/shell/leaders/boudica_desktop.webp?v=build-42",
+        "without a content entry the build bust still applies"
+    );
+    context.window.SOW_ASSET_TS = { "/assets/shell/leaders/other_desktop.webp": "cafe1234" };
+    assert.equal(
+        context.assetUrl("/assets/shell/leaders/boudica_desktop.webp"),
+        "/assets/shell/leaders/boudica_desktop.webp?v=build-42",
+        "an unlisted path keeps the build bust"
+    );
+    context.window.SOW_ASSET_TS = { "/assets/shell/leaders/boudica_desktop.webp": "cafe1234" };
+    assert.equal(
+        context.assetUrl("/assets/shell/leaders/boudica_desktop.webp"),
+        "/assets/shell/leaders/boudica_desktop.webp?v=cafe1234",
+        "a content hash wins over the build stamp so unrelated deploys keep the cache"
+    );
+});
+
 test("first-run tutorial keeps one boot loader and splash art until Rust signals completion", async () => {
     assert.match(loaderSource, /window\.SOW_leaderArtUrl = leaderArtUrl/);
     assert.match(loaderSource, /window\.SOW_prepareLeaderArt = prepareLeaderArt/);
-    assert.match(loaderSource, /if \(loaderArtKey === 'boot' && state && state\.loader_job === 'EnterGame'\) \{[\s\S]*?prepareLeaderArt\(slug\);[\s\S]*?activeMatchArt = preparedLeaderArt;/,
+    assert.match(loaderSource, /if \(loaderArtKey === 'boot' && state && state\.loader_job === 'EnterGame'\) \{[\s\S]*?prepareLeaderArt\(slug, 'low'\);[\s\S]*?activeMatchArt = preparedLeaderArt;/,
         "tutorial art is prepared behind the original splash and pinned to the match");
     const attachExitArt = loaderSource.indexOf("const pendingArt = syncLoaderArt(state);");
     const closeAfterArt = loaderSource.indexOf("if (state.loader_done === true) {\n            if (pendingArt) return;\n            finish(cycleId);", attachExitArt);
@@ -1197,11 +1406,15 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.match(offlineStart, /civilization: leader\.civilization\(\),\s*leader,/,
         "the tutorial's actual game player still uses its campaign leader");
     const serverStartStart = netMessagesSource.indexOf("ServerMessage::Start(start_msg) =>");
-    const serverStartEnd = netMessagesSource.indexOf("self.ui.app.main_menu_state.is_waiting = false;", serverStartStart);
+    const serverStartEnd = netMessagesSource.indexOf("self.tasks.engine_init_queued_msg = Some(*start_msg);", serverStartStart);
     assert.ok(serverStartStart >= 0 && serverStartEnd > serverStartStart);
-    assert.match(netMessagesSource.slice(serverStartStart, serverStartEnd),
-        /sync_selected_leader_from_match\(\s*player\.leader,\s*start_msg\.config\.tutorial,?\s*\)/,
-        "the initialized tutorial player cannot overwrite the account leader");
+    const serverStart = netMessagesSource.slice(serverStartStart, serverStartEnd + "self.tasks.engine_init_queued_msg = Some(*start_msg);".length);
+    assert.match(serverStart, /let loader_leader = start_msg[\s\S]*?\.map\(\|player\| player\.leader\)/,
+        "the server-assigned leader is used for the match loader");
+    assert.match(serverStart, /self\.tasks\.engine_init_queued_msg = Some\(\*start_msg\);/,
+        "the match starts from the server-assigned player data");
+    assert.doesNotMatch(serverStart, /sync_selected_leader_from_match\(|preferred_leader\s*=/,
+        "starting a match cannot overwrite the account's saved leader choice");
     const exitStart = sessionSource.indexOf("pub(crate) fn begin_exit_to_main_menu");
     const exitEnd = sessionSource.indexOf("/// Enter the EnterGame splash", exitStart);
     assert.match(sessionSource.slice(exitStart, exitEnd),
@@ -1209,11 +1422,16 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         "leaving a tutorial keeps its campaign leader for the exit splash");
     assert.doesNotMatch(sessionSource.slice(exitStart, exitEnd), /sync_selected_leader_from_match\(/,
         "leaving a tutorial does not replace the account's menu selection");
-    assert.match(nativeProfileSource,
-        /fn sync_selected_leader_from_match\([\s\S]*?if !tutorial \{[\s\S]*?set_selected_leader\(leader, false\)/,
-        "MainMenuState owns the rule for keeping campaign heroes separate from account selection");
-    assert.match(nativeProfileSource, /fn tutorial_match_does_not_replace_account_leader\([\s\S]*?sync_selected_leader_from_match\(Leader::Boudica, true\)[\s\S]*?assert_eq!\(state\.selected_leader, Leader::Caesar\)/,
-        "the Boudica tutorial cannot replace the account's selected hero");
+    assert.doesNotMatch(nativeProfileSource, /fn sync_selected_leader_from_match\(/,
+        "a match no longer owns the account's selected hero");
+    const preferencesStart = accountSource.indexOf("pub(crate) fn apply_progress_preferences(");
+    const preferencesEnd = accountSource.indexOf("pub(crate) fn apply_cloud_profile(", preferencesStart);
+    assert.ok(preferencesStart >= 0 && preferencesEnd > preferencesStart);
+    const preferences = accountSource.slice(preferencesStart, preferencesEnd);
+    assert.match(preferences, /has_explicit_leader_selection\(\) \{\s*return;/,
+        "a profile refresh cannot overwrite an explicit hero choice");
+    assert.match(preferences, /if let Some\(leader\) = self\.progress\.preferred_leader[\s\S]*?set_selected_leader\(leader, false\)/,
+        "the saved profile, not the tutorial hero, restores the menu selection");
     const applyCloudProfileStart = accountSource.indexOf("pub(crate) fn apply_cloud_profile(");
     const applyCloudProfileEnd = accountSource.indexOf("\n    pub(crate) fn ", applyCloudProfileStart + 1);
     assert.ok(applyCloudProfileStart >= 0);
@@ -1850,10 +2068,13 @@ test("Opus theme pauses for loaders, restarts at menu/game boundaries, and recov
     const [first, second] = h.audios;
     assert.equal(first.src, "https://cdn.test/assets/gameplay/music/shadows-of-war.webm?v=build-42");
     assert.equal(second.src, first.src, "both decks use Opus");
-    assert.equal(first.preload, "auto", "music begins loading before the loader ends");
+    assert.equal(first.preload, "none", "music never competes with the WASM download");
     assert.equal(second.preload, "none", "the loop's second deck does not preload a duplicate copy");
-    assert.equal(first.loadCalls, 1);
+    assert.equal(first.loadCalls, 0, "no theme bytes are requested during the engine download");
     assert.equal(second.loadCalls, 0);
+    h.window.dispatchEvent({ type: "sow:wasm-bytes-ready" });
+    assert.equal(first.loadCalls, 1, "the theme starts fetching once the engine bytes are down");
+    assert.equal(second.loadCalls, 0, "only the active deck buffers early");
     assert.equal(first.playCalls, 0, "music waits until the initial loader finishes");
     h.api.menuMusicSetCinematicActive(true);
     h.window.dispatchEvent({ type: "sow:loader-ready" });
@@ -2028,7 +2249,7 @@ test("music volume no longer controls SFX and music assets reach every shared-sh
 });
 
 test("hero purchase stays server-backed, direct, and visually honest", () => {
-    assert.match(storeSource, /var leaderActions = !offer \|\| offer\.owned \? ""/);
+    assert.match(storeSource, /var leaderActions = !offer \|\| offer\.owned \|\| offer\.permanently_free \? ""/);
     assert.doesNotMatch(storeSource, /offer\.free_rotation \|\| offer\.available/);
     assert.match(storeSource, /data-command='unlock_leader'/);
     assert.match(storeSource, /data-command='open_skin_purchase'/);
@@ -2130,6 +2351,26 @@ test("weekly free rotation is a splash-only status", () => {
     assert.equal(context.isWeeklyFreeRotation({ available: true, free_rotation: true, owned: false }), true);
     assert.equal((heroesSource.match(/isWeeklyFreeRotation\(activeLeader\)/g) || []).length, 2);
     assert.match(profileCss, /\.sow-heroes__rotation/);
+});
+
+test("random leader is hidden from welcome purchase choices", () => {
+    const start = heroesSource.indexOf("function randomLeaderName");
+    const end = heroesSource.indexOf("function heroesRoster", start);
+    assert.ok(start >= 0 && end > start);
+    const context = {
+        state: { menu_guides: { welcome: { status: "active", current_step: "welcome_offer_selection" } } },
+        heroesSearchQuery: "",
+        heroesRegionFilter: "all",
+        SOW_t: key => key,
+        asset: path => "/assets/" + path,
+        esc: value => String(value)
+    };
+    vm.runInNewContext(heroesSource.slice(start, end) + "this.renderRandomLeaderCard = renderRandomLeaderCard;", context);
+    assert.equal(context.renderRandomLeaderCard(true), "");
+    context.state.menu_guides.welcome.current_step = "welcome_owned_selection";
+    assert.equal(context.renderRandomLeaderCard(false), "");
+    context.state.menu_guides.welcome.current_step = "welcome_complete";
+    assert.match(context.renderRandomLeaderCard(false), /data-command='preview_random_leader'/);
 });
 
 // GUARD — owner decision. Read this before changing anything in it.
@@ -2244,6 +2485,10 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
             assert.ok(opening.video_src.startsWith(`/assets/campaign/${episodeId}/`), `${episodeId} cinematic stays in its asset folder`);
             const mediaPath = path.join(shell, "../..", opening.video_src.replace(/^\/assets\//, "assets/"));
             assert.ok(fs.existsSync(mediaPath), `${episodeId} video asset exists`);
+            const stem = mediaPath.replace(/\.(webm|mp4)$/i, "");
+            assert.ok(fs.existsSync(stem + ".mp4") && fs.existsSync(stem + ".webm"), `${episodeId} cinematic ships both WebM and MP4 renditions`);
+            assert.ok(fs.existsSync(stem + ".poster.webp"), `${episodeId} cinematic ships a poster`);
+            assert.ok(fs.statSync(mediaPath).size <= 6 * 1024 * 1024, `${episodeId} cinematic rendition stays under 6 MB`);
         }
         if (episodeId === "boudica") {
             const ratioOverrides = definition.steps.filter(step => Object.hasOwn(step, "attack_ratio_on_enter"))
@@ -2838,7 +3083,9 @@ test("campaign cinematic steps reuse the shared editor/game player and validate 
     }
     assert.ok(campaignEditor.includes("Local cinematic video"));
     assert.ok(campaignEditor.includes('"/assets/campaign/" + state.definition.episode_id'));
-    assert.ok(campaignView.includes('<video playsinline preload="auto"></video>'));
+    assert.ok(campaignView.includes('<video playsinline preload="none" fetchpriority="low"></video>'), "the cinematic never preloads over the loader");
+    assert.match(campaignView, /attachCinematicMedia/, "the cinematic uses derived WebM+MP4 sources");
+    assert.match(campaignView, /\.poster\.webp/, "the cinematic ships a poster");
     assert.doesNotMatch(campaignView, /<video[^>]*\bmuted\b/i, "cinematic audio starts enabled by default");
     assert.ok(campaignView.indexOf('<div class="sow-story__cinematic"') < campaignView.indexOf('<article class="sow-story__dialog"'), "cinematic is a root overlay, not dialog content");
     assert.match(storyCss, /\.sow-story\.is-cinematic \.sow-story__cinematic \{[^}]*inset: 0/);
@@ -2989,6 +3236,113 @@ test("shared cinematic handles autoplay blocking, canceled holds, completed hold
     view.destroy();
 });
 
+test("cinematic waits for the loader and swaps in hashed WebM+MP4 sources with a poster", async () => {
+    const timers = new Map(); let timerId = 0;
+    class Element {
+        constructor(ownerDocument, tagName) {
+            this.ownerDocument = ownerDocument; this.tagName = tagName; this.listeners = {}; this.queries = new Map();
+            this.children = []; this.attributes = {}; this.dataset = {}; this.hidden = false; this.textContent = "";
+            this.style = { setProperty() {}, removeProperty(name) { delete this[name]; }, getPropertyValue() { return ""; } };
+            const classes = new Set();
+            this.classList = {
+                add: (...values) => values.forEach(value => classes.add(value)),
+                remove: (...values) => values.forEach(value => classes.delete(value)),
+                toggle: (value, force) => force === undefined ? (classes.has(value) ? classes.delete(value) : classes.add(value)) : (force ? classes.add(value) : classes.delete(value)),
+                contains: value => classes.has(value)
+            };
+            this.clientWidth = 800; this.clientHeight = 600; this.scrollHeight = 20; this.isConnected = true;
+        }
+        addEventListener(type, listener, options) { (this.listeners[type] ||= []).push({ listener, once: Boolean(options && options.once) }); }
+        removeEventListener(type, listener) { this.listeners[type] = (this.listeners[type] || []).filter(item => item.listener !== listener); }
+        dispatch(type, extra = {}) {
+            const event = Object.assign({ type, target: this, timeStamp: 1000, stopPropagation() {}, preventDefault() {} }, extra);
+            const listeners = this.listeners[type] || [];
+            this.listeners[type] = listeners.filter(item => !item.once);
+            listeners.forEach(item => item.listener(event));
+        }
+        setAttribute(name, value) { this.attributes[name] = String(value); }
+        getAttribute(name) { return this.attributes[name] || null; }
+        hasAttribute(name) { return Object.hasOwn(this.attributes, name); }
+        removeAttribute(name) { delete this.attributes[name]; }
+        querySelector(selector) {
+            if (!this.queries.has(selector)) this.queries.set(selector, new Element(this.ownerDocument, /img$/.test(selector) ? "img" : selector === "video" ? "video" : selector === "[data-story-start]" ? "button" : "div"));
+            return this.queries.get(selector);
+        }
+        querySelectorAll() { return []; }
+        replaceChildren(...children) { this.children = children; }
+        appendChild(child) { this.children.push(child); return child; }
+        contains(child) { return this.children.includes(child) || [...this.queries.values()].includes(child); }
+        closest(selector) { return selector.includes("button") && this.tagName === "button" ? this : null; }
+        getBoundingClientRect() { return { width: 100, height: 40 }; }
+        focus() { this.ownerDocument.activeElement = this; }
+        pause() {}
+        load() {}
+        click() {}
+    }
+    const loader = new Element(null, "div");
+    loader.attributes["aria-hidden"] = "true";
+    const viewListeners = {};
+    const doc = {
+        hidden: false,
+        documentElement: { dir: "ltr", dataset: { localeScript: "latin" } },
+        defaultView: {
+            matchMedia: () => ({ matches: false }), performance: { now: () => 1 }, navigator: {},
+            addEventListener(type, listener, options) { (viewListeners[type] ||= []).push({ listener, once: Boolean(options && options.once) }); },
+            removeEventListener(type, listener) { viewListeners[type] = (viewListeners[type] || []).filter(item => item.listener !== listener); }
+        },
+        createElement(tagName) { return new Element(this, tagName); },
+        getElementById(id) { return id === "web-loader" ? loader : null; },
+        addEventListener() {}, removeEventListener() {}
+    };
+    const dispatchView = type => {
+        (viewListeners[type] || []).forEach(item => item.listener({ type }));
+        viewListeners[type] = (viewListeners[type] || []).filter(item => !item.once);
+    };
+    const root = new Element(doc, "div"); root.ownerDocument = doc; root.hidden = true;
+    const sandbox = {
+        console,
+        setTimeout(callback, delay) { const id = ++timerId; timers.set(id, { callback, delay }); return id; },
+        clearTimeout(id) { timers.delete(id); }
+    };
+    vm.runInNewContext(campaignView, sandbox, { filename: "sow-campaign-view.js" });
+    const view = sandbox.SOWCampaignView.mount(root, {
+        asset: value => "/" + value,
+        translate: key => key,
+        roster: { factions: [] },
+        onContinue() {},
+        onDismiss() {},
+        onCinematicChange() {}
+    });
+    const video = root.querySelector(".sow-story__cinematic").querySelector("video");
+    let playCalls = 0;
+    video.play = () => { playCalls++; return Promise.resolve(); };
+    const step = { id: "opening", type: "scene", presentation: "cinematic", video_src: "/assets/campaign/boudica/intro.720p.555d0500.webm", title_key: "opening_title", body_key: "opening_body" };
+    const definition = { episode_id: "boudica", speakers: {}, steps: [step] };
+    const machineView = { definition, step, line: step, paused: true, done: false, choices: [], progress: { target: 0, current: 0 }, state: { line: 0 } };
+    view.render(machineView, {});
+    await Promise.resolve();
+    assert.equal(playCalls, 1, "a free loader lets the cinematic start at once");
+    assert.deepEqual(video.children.map(child => [child.src, child.tagName]), [
+        ["/assets/campaign/boudica/intro.720p.555d0500.webm", "source"],
+        ["/assets/campaign/boudica/intro.720p.555d0500.mp4", "source"]
+    ], "WebM first, MP4 as fallback");
+    assert.equal(video.getAttribute("poster"), "/assets/campaign/boudica/intro.720p.555d0500.poster.webp", "the poster comes from the same stem");
+
+    playCalls = 0;
+    loader.attributes["aria-hidden"] = "false";
+    const second = { ...step, id: "opening2", video_src: "/assets/campaign/boudica/intro.720p.555d0500.webm" };
+    const secondView = { ...machineView, step: second, line: second, definition: { ...definition, steps: [second] } };
+    view.render(secondView, {});
+    await Promise.resolve();
+    assert.equal(playCalls, 0, "a visible loader defers the cinematic without downloading bytes");
+    assert.equal(root.querySelector("[data-story-start]").hidden, false, "the deferred cinematic shows the start prompt over its poster");
+    loader.attributes["aria-hidden"] = "true";
+    dispatchView("sow:loader-cycle-ready");
+    await Promise.resolve();
+    assert.equal(playCalls, 1, "the cinematic starts once the loader is gone");
+    view.destroy();
+});
+
 test("contact responses wait behind an open campaign scene", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const machine = campaign.create({
@@ -3059,7 +3413,7 @@ test("gameplay chrome keeps dev tools and separate FPS/ping rows at the bottom o
     assert.match(hudCss, /\.sow-hud__panel \{[^}]*top: var\(--sow-hud-top-edge\);[^}]*inset-inline-end: calc\(var\(--sow-hud-right-edge\) \+ var\(--sow-hud-toolbar-side-offset\)\)/);
     assert.match(hudCss, /@media \(max-width: 720px\)[^]*?\.sow-hud__panel \{[^}]*top: calc\(max\(8px, var\(--sow-sat\)\) \+ 186px\)/);
     assert.match(hudCss, /#sow-hud\[data-compact="true"\] \.sow-hud__panel \{[^}]*top: calc\(var\(--sow-hud-top-edge\) \+ 50px\)[^}]*bottom: max\(6px, var\(--sow-sab\)\)[^}]*max-height: none/);
-    assert.doesNotMatch(hudCss, /\.sow-hud__leaderboard,\s*\.sow-hud__panel,\s*\.sow-hud__emoji-popout \{ top: 50px/);
+    assert.doesNotMatch(hudCss, /\.sow-hud__leaderboard,\s*\.sow-hud__panel \{ top: 50px/);
     assert.doesNotMatch(hudCss, /\.sow-hud__leaderboard \{ top: calc\(max\(12px, var\(--sow-sat\)\) \+ 272px\)/);
     assert.match(campaignView, /objective\.hidden = modal \|\| context\.hideObjective === true/);
 });
@@ -3252,6 +3606,9 @@ test("combat operations reuse snapshots and intents across desktop and mobile HU
     assert.match(hudCss, /#sow-hud\[data-compact="true"\] \.sow-hud__operations \{[^}]*max-height: var\(--sow-hud-layout-operations-max-height, 20dvh\)/);
     assert.match(hudCss, /@media \(orientation: portrait\)\s*\{\s*#sow-hud\[data-compact="true"\] \.sow-hud__operations \{\s*width: min\(560px, calc\(100vw - 124px\)\)/);
     assert.match(hudCss, /\.sow-hud__operation-emblem \{ font-size: 18px; line-height: 1; \}/);
+    assert.equal((hudCss.match(/#sow-hud\[data-overlay-open="true"\] \.sow-hud__operations\s*\{/g) || []).length, 1);
+    assert.match(hudCss, /@media \(hover: none\) and \(pointer: coarse\) \{\s*#sow-hud\[data-overlay-open="true"\] \.sow-hud__operations \{ display: none; \}/);
+    assert.match(hudCss, /\.sow-hud__operations\[hidden\] \{ display: none !important; \}/);
 
     for (const locale of fs.readdirSync(path.join(shell, "../../sow-i18n/strings"))) {
         const catalog = path.join(shell, `../../sow-i18n/strings/${locale}/web.toml`);
@@ -3261,6 +3618,178 @@ test("combat operations reuse snapshots and intents across desktop and mobile HU
             assert.match(source, new RegExp(`^${key}\\s*=`, "m"), `${locale} is missing hud.${key}`);
         }
     }
+});
+
+test("combat operations survive HUD and locale rebuilds, reuse rows, and reset on match exit", () => {
+    class Element {
+        constructor(tagName) {
+            this.tagName = tagName;
+            this.children = [];
+            this.parentNode = null;
+            this.dataset = {};
+            this.attributes = {};
+            this.classList = { toggle() {}, add() {} };
+            this.hidden = false;
+            this.textContent = "";
+            this.replacements = 0;
+        }
+        append(...items) { items.forEach(item => this.appendChild(item)); }
+        appendChild(item) {
+            if (item.tagName === "#fragment") {
+                item.children.slice().forEach(child => this.appendChild(child));
+                return item;
+            }
+            if (item.parentNode) item.parentNode.children.splice(item.parentNode.children.indexOf(item), 1);
+            item.parentNode = this;
+            this.children.push(item);
+            return item;
+        }
+        replaceChildren(...items) {
+            this.children.forEach(item => { item.parentNode = null; });
+            this.children = [];
+            this.replacements += 1;
+            this.append(...items);
+        }
+        setAttribute(name, value) { this.attributes[name] = String(value); }
+        getAttribute(name) { return name === "src" ? this.src || null : this.attributes[name] || null; }
+        removeAttribute(name) { delete this.attributes[name]; if (name === "src") this.src = ""; }
+        querySelector() { return null; }
+        querySelectorAll(selector) {
+            const match = selector.match(/^\[data-command="([^"]+)"\]$/);
+            if (!match) return [];
+            const command = match[1];
+            return this.children.flatMap(child => [child, ...child.querySelectorAll(selector)])
+                .filter(child => child.dataset.command === command);
+        }
+        closest(selector) { return selector === "[data-command]" && this.dataset.command ? this : null; }
+    }
+    const calls = [];
+    const listeners = {};
+    let locale = "en";
+    let elements = new Map();
+    const context = vm.createContext({
+        hudRoot: new Element("root"), hudDevLayer: null,
+        document: {
+            createElement: tag => new Element(tag),
+            createDocumentFragment: () => new Element("#fragment"),
+            getElementById: id => elements.get(id) || null,
+            querySelector: () => null
+        },
+        window: {
+            addEventListener: (type, listener) => { listeners[type] = listener; },
+            SOW_menu_command: raw => calls.push(JSON.parse(raw))
+        },
+        asset: name => "/assets/" + name,
+        hudIcon: name => name,
+        formatNameplateTroops: String,
+        SOW_t: key => locale + ":" + key,
+        clearCompactHudDensity() {}, clearMapFeedback() {}, clearNotificationCard() {}
+    });
+    vm.runInContext(hud.slice(hud.indexOf("    var hudState ="), hud.indexOf("    function send(")), context);
+    const refsStart = hud.indexOf("        hudRefs = {");
+    const refsEnd = hud.indexOf("\n        };", refsStart) + "\n        };".length;
+    assert.ok(refsStart >= 0 && refsEnd > refsStart);
+    const refsScript = new vm.Script(hud.slice(refsStart, refsEnd));
+    const rendererStart = hud.indexOf("    function createCombatOperationRow(");
+    const renderHudStart = hud.indexOf("\n    function renderHud(", rendererStart);
+    const avatarStart = hud.indexOf("    function bindAvatarFallback(");
+    const avatarEnd = hud.indexOf("\n    function clearNotificationCard(", avatarStart);
+    const clickStart = hud.indexOf("        function handleHudClick(event) {");
+    const clickEnd = hud.indexOf('        hudRoot.addEventListener("click", handleHudClick)', clickStart);
+    vm.runInContext(
+        hud.slice(hud.indexOf("    function send("), hud.indexOf("    function setHudPanel("))
+        + hud.slice(avatarStart, avatarEnd)
+        + hud.slice(rendererStart, renderHudStart)
+        + hud.slice(clickStart, clickEnd), context
+    );
+    const inactiveEnd = hud.indexOf("        ensureHudDom();", renderHudStart);
+    vm.runInContext(hud.slice(renderHudStart, inactiveEnd) + "\n    }\nthis.hideHud = renderHud;", context);
+    context.renderHud = () => {
+        if (!context.hudRefs) {
+            elements = new Map([
+                ["sow-hud-operations", new Element("aside")],
+                ["sow-hud-operations-list", new Element("list")]
+            ]);
+            refsScript.runInContext(context);
+        }
+        context.hudRoot.hidden = false;
+        context.renderCombatOperations(context.hudState.hud.operations);
+    };
+    const localeStart = hud.indexOf('    window.addEventListener("sow:locale-change", function () {');
+    const localeEnd = hud.indexOf("\n    });", localeStart) + "\n    });".length;
+    vm.runInContext(hud.slice(localeStart, localeEnd), context);
+    const operations = [
+        { kind: "attack", id: 7, direction: "incoming", player_id: 2, name: "Caesar", troops: 100, avatar: { kind: "portrait", slug: "caesar" }, focus_x: 3, focus_y: 4 },
+        { kind: "attack", id: 8, direction: "outgoing", player_id: 0, neutral: true, troops: 200, avatar: { kind: "emblem", symbol: "🌱" } },
+        { kind: "fleet", id: 9, direction: "outgoing", player_id: 3, name: "Ally", troops: 50, avatar: { kind: "emblem", symbol: "🛡️" } }
+    ];
+    const click = button => context.handleHudClick({ target: button });
+    const counters = () => calls.filter(call => call.type === "counter_attack");
+    context.hudState = { phase: "Playing", hud: { operations } };
+    context.renderHud();
+    const firstList = context.hudRefs.operationRows;
+    const firstRows = firstList.children.slice();
+    const counter = firstRows[0].querySelectorAll('[data-command="counter_attack"]')[0];
+    assert.equal(firstRows.length, 3);
+    assert.equal(context.hudRefs.operations.hidden, false);
+    assert.equal(firstRows[0].children[0].children[0].src, "/assets/gameplay/avatars/caesar.webp");
+    assert.equal(firstRows[1].children[0].children[1].textContent, "🌱");
+    assert.equal(firstRows[2].querySelectorAll('[data-command="recall_fleet"]').length, 1);
+    context.renderHud();
+    assert.equal(firstList.replacements, 1, "unchanged operations do not remount rows");
+    firstRows.forEach((row, index) => assert.equal(firstList.children[index], row));
+    operations[0].troops = 120;
+    operations[0].focus_x = 5;
+    context.renderHud();
+    assert.equal(firstRows[0].querySelectorAll('[data-command="counter_attack"]')[0], counter);
+    assert.equal(counter.dataset.incomingTroops, "120");
+    assert.equal(firstRows[0].children[2].textContent, "120");
+    click(firstRows[0].querySelectorAll('[data-command="focus_world"]')[0]);
+    assert.deepEqual(calls[0], { type: "focus_world", x: 5, y: 4 });
+    click(counter);
+    click(counter);
+    assert.equal(counters().length, 1);
+
+    locale = "es";
+    listeners["sow:locale-change"]();
+    const rebuiltList = context.hudRefs.operationRows;
+    assert.notEqual(rebuiltList, firstList);
+    assert.equal(rebuiltList.children.length, 3, "identical operation IDs populate the new HUD");
+    rebuiltList.children.forEach((row, index) => {
+        assert.notEqual(row, firstRows[index]);
+        assert.equal(row.parentNode, rebuiltList);
+    });
+    assert.equal(rebuiltList.children[1].children[1].children[0].textContent, "es:hud.land");
+    const rebuiltCounter = rebuiltList.children[0].querySelectorAll('[data-command="counter_attack"]')[0];
+    assert.equal(rebuiltCounter.getAttribute("aria-label"), "es:hud.map_action_attack");
+    assert.equal(rebuiltCounter.disabled, true, "a rebuild preserves pending commands");
+    click(rebuiltCounter);
+    assert.equal(counters().length, 1, "locale rebuild cannot resend a pending counterattack");
+
+    context.renderCombatOperations(operations.slice(1));
+    assert.equal(rebuiltList.children.length, 2);
+    assert.equal(rebuiltList.children[0].children[1].children[0].textContent, "es:hud.land");
+    assert.equal(Object.keys(context.pendingCounterAttacks).length, 0);
+    context.renderCombatOperations([...operations, { kind: "fleet", id: 10, direction: "incoming", player_id: 4, name: "Enemy", troops: 30 }]);
+    assert.equal(rebuiltList.children.length, 4);
+    context.renderCombatOperations([]);
+    assert.equal(rebuiltList.children.length, 0);
+    assert.equal(context.hudRefs.operations.hidden, true);
+
+    context.renderHud();
+    click(context.hudRefs.operationRows.children[0].querySelectorAll('[data-command="counter_attack"]')[0]);
+    assert.equal(counters().length, 2);
+    context.hudState = { phase: "MainMenu" };
+    context.hideHud();
+    assert.equal(context.hudRoot.hidden, true);
+    assert.equal(context.hudRefs.operationRows.children.length, 0);
+    assert.equal(context.hudRefs.operations.hidden, true);
+    assert.equal(Object.keys(context.pendingCounterAttacks).length, 0);
+    context.hudState = { phase: "Playing", hud: { operations } };
+    context.renderHud();
+    assert.equal(context.hudRefs.operationRows.children.length, 3);
+    assert.equal(context.hudRefs.operationRows.children[0].querySelectorAll('[data-command="counter_attack"]')[0].disabled, false);
+    assert.equal(counters().length, 2, "rendering never sends gameplay commands");
 });
 
 test("campaign support reactions queue by delivery order, wait for their gate and preserve objective progress", () => {
@@ -3902,6 +4431,152 @@ test("notification cards render typed avatars, recover failed art, and clear reu
     assert.equal(parts.avatars[0].wrapper.hidden, true);
     assert.equal(parts.avatars[1].wrapper.hidden, true);
     assert.equal(parts.avatars[1].emblem.textContent, "");
+});
+
+test("inbox reuses identities and live buttons, resolves focus, and survives locale rebuilds", () => {
+    const { doc, Element } = makeHudDocument();
+    const makeRefs = () => {
+        const refs = {
+            inbox: new Element("aside"), inboxRows: new Element("list"), inboxEmpty: new Element("empty"),
+            inboxTotal: new Element("total"), inboxClose: new Element("button"), inboxButton: new Element("button"),
+            inboxRequests: Object.create(null), inboxRequestKeys: [], inboxRenderKey: ""
+        };
+        refs.inbox.classList.add("hidden");
+        refs.inbox.append(refs.inboxClose, refs.inboxRows, refs.inboxEmpty);
+        return refs;
+    };
+    const calls = [], listeners = {};
+    const context = vm.createContext({
+        document: doc, hudRefs: makeRefs(), hudRoot: new Element("root"), hudDevLayer: null,
+        hudState: { phase: "Playing" }, emoteTextKey: "", hudInitialized: true,
+        window: {
+            SOW_LOCALE: "en",
+            SOW_menu_command: raw => calls.push(JSON.parse(raw)),
+            addEventListener: (name, listener) => { listeners[name] = listener; }
+        },
+        asset: name => "/assets/" + name,
+        currencyAsset: name => "/assets/gameplay/currency/" + name + ".webp",
+        hudIcon: name => name,
+        SOW_t: key => context.window.SOW_LOCALE + ":" + key
+    });
+    const avatarStart = hud.indexOf("    function bindAvatarFallback(");
+    const avatarEnd = hud.indexOf("    function clearNotificationCard(", avatarStart);
+    const inboxStart = hud.indexOf("    function createPlayerIdentity(");
+    const inboxEnd = hud.indexOf("    function renderNotifications(", inboxStart);
+    const clickStart = hud.indexOf("        function handleHudClick(event) {");
+    const clickEnd = hud.indexOf('        hudRoot.addEventListener("click", handleHudClick)', clickStart);
+    for (const [start, end] of [[avatarStart, avatarEnd], [inboxStart, inboxEnd], [clickStart, clickEnd]]) {
+        assert.ok(start >= 0 && end > start);
+    }
+    vm.runInContext(
+        hud.slice(avatarStart, avatarEnd) + hud.slice(inboxStart, inboxEnd)
+        + hud.slice(hud.indexOf("    function send("), hud.indexOf("    function updateHudSafeArea("))
+        + hud.slice(clickStart, clickEnd), context
+    );
+    const alliance = { kind: "alliance", requester_id: 2, name: "Caesar", active: true, avatar: { kind: "portrait", slug: "caesar" } };
+    const resources = { kind: "resources", requester_id: 3, name: "Trinovantes", active: true, gold: 1234.9, troops: 56.8, avatar: { kind: "emblem", symbol: "🐺" } };
+    const campaign = { kind: "resources", requester_id: 4, name: "<img onerror=alert(1)>", active: true, gold: 5, troops: 0, avatar: { kind: "portrait", slug: "boudica" } };
+    const eliminated = { kind: "resources", requester_id: 5, name: "Defeated", active: false, gold: 10, troops: 10 };
+    let requests = [alliance, resources, campaign, eliminated];
+    context.renderInbox(requests);
+    const refs = context.hudRefs, cards = refs.inboxRequests;
+    assert.equal(refs.inboxRows.children.length, 4);
+    assert.equal(cards["alliance:2"].portrait.src, "/assets/gameplay/avatars/caesar.webp");
+    assert.equal(cards["resources:3"].emblem.textContent, "🐺");
+    assert.equal(cards["resources:3"].portrait.hidden, true);
+    assert.equal(cards["resources:3"].amounts.gold.value.textContent, "1,234");
+    assert.equal(cards["resources:3"].amounts.troops.value.textContent, "56");
+    assert.equal(cards["resources:4"].name.textContent, campaign.name);
+    assert.equal(cards["resources:4"].name.children.length, 0, "player names are text, never HTML");
+    assert.equal(cards["resources:4"].amounts.troops.element.hidden, true);
+    assert.equal(cards["resources:5"].portrait.src, "/assets/gameplay/avatars/null.webp");
+    assert.equal(cards["resources:5"].accept.disabled, true);
+    assert.equal(cards["resources:5"].reject.disabled, false, "obsolete requests can still be dismissed");
+    cards["alliance:2"].portrait.onerror.call(cards["alliance:2"].portrait);
+    assert.equal(cards["alliance:2"].portrait.src, "/assets/gameplay/avatars/null.webp");
+
+    const pressed = cards["resources:3"].accept;
+    pressed.focus();
+    const insertions = refs.inboxRows.insertions;
+    context.renderInbox(requests);
+    assert.equal(refs.inboxRows.insertions, insertions, "unchanged snapshots never detach a button");
+    requests = [alliance, { ...resources, gold: 2000 }, campaign, eliminated];
+    context.renderInbox(requests);
+    assert.equal(refs.inboxRows.insertions, insertions);
+    assert.equal(refs.inboxRequests["resources:3"].accept, pressed);
+    assert.equal(doc.activeElement, pressed);
+    context.handleHudClick({ target: pressed });
+    context.handleHudClick({ target: refs.inboxRequests["alliance:2"].reject });
+    assert.deepEqual(calls, [
+        { type: "accept_resource_request", target_player_id: 3 },
+        { type: "reject_alliance", target_player_id: 2 }
+    ]);
+    const added = { ...alliance, requester_id: 6, name: "LongPlayerName".repeat(12) };
+    context.renderInbox([added, ...requests]);
+    assert.equal(refs.inboxRows.insertions, insertions + 1, "a new request preserves the other cards");
+    assert.equal(refs.inboxRequests["alliance:6"].name.textContent, added.name, "long names are retained as text");
+    assert.equal(refs.inboxRequests["resources:3"].accept, pressed);
+    context.renderInbox([added, alliance, campaign, eliminated]);
+    assert.equal(doc.activeElement, refs.inboxRequests["resources:4"].accept, "resolved cards move focus to the next request");
+
+    context.window.SOW_LOCALE = "es";
+    context.renderInbox([added, alliance, campaign, eliminated]);
+    assert.equal(refs.inboxRequests["alliance:2"].accept.textContent, "es:hud.accept");
+    assert.equal(refs.inboxRequests["alliance:2"].type.textContent, "es:hud.alliance_request_title");
+    context.renderHud = () => { context.hudRefs = makeRefs(); context.renderInbox(requests); };
+    const localeStart = hud.indexOf('    window.addEventListener("sow:locale-change", function () {');
+    const localeEnd = hud.indexOf('    window.addEventListener("resize", updateHudSafeArea);', localeStart);
+    vm.runInContext(hud.slice(localeStart, localeEnd), context);
+    listeners["sow:locale-change"]();
+    assert.notEqual(context.hudRefs, refs);
+    assert.equal(context.hudRefs.inboxRows.children.length, 4, "a rebuilt inbox cannot retain the old DOM render key");
+    assert.equal(context.hudRefs.inboxRequests["resources:3"].type.textContent, "es:hud.resource_request_title");
+    context.hudRefs.inboxRequests["resources:3"].accept.focus();
+    context.renderInbox([]);
+    assert.equal(context.hudRefs.inboxRows.hidden, true);
+    assert.equal(context.hudRefs.inboxEmpty.hidden, false);
+    assert.equal(context.hudRefs.inboxTotal.textContent, "0");
+    assert.equal(doc.activeElement, context.hudRefs.inboxClose);
+
+    const visibilityStart = hud.indexOf("        if (hudRefs.inbox) {", hud.indexOf("    function renderHud("));
+    const visibilityEnd = hud.indexOf("        if (hudRefs.transfer)", visibilityStart);
+    const visibility = new vm.Script(hud.slice(visibilityStart, visibilityEnd));
+    context.activeHudPanel = "inbox";
+    context.hud = { inbox: requests };
+    context.renderHud = () => {
+        context.inboxOpen = context.activeHudPanel === "inbox";
+        visibility.runInContext(context);
+    };
+    context.renderHud();
+    assert.equal(doc.activeElement, context.hudRefs.inboxClose, "opening the inbox moves focus inside it");
+    context.hudRoot.addEventListener = (name, listener) => { listeners[name] = listener; };
+    const keyboardStart = hud.indexOf('    if (hudRoot) hudRoot.addEventListener("keydown", function (event) {');
+    vm.runInContext(
+        hud.slice(hud.indexOf("    function setHudPanel("), hud.indexOf("    function asset("))
+        + hud.slice(keyboardStart, localeStart), context
+    );
+    let prevented = false;
+    listeners.keydown({ key: "Escape", preventDefault() { prevented = true; }, stopPropagation() {} });
+    assert.equal(prevented, true);
+    assert.equal(context.activeHudPanel, null);
+    assert.equal(context.hudRefs.inbox.classList.contains("hidden"), true);
+    assert.equal(doc.activeElement, context.hudRefs.inboxButton, "Escape returns focus to the toolbar control");
+    assert.deepEqual(calls.at(-1), { type: "toggle_inbox" });
+
+    assert.match(hudCss, /\.sow-hud__transfer-actions button:active:not\(:disabled\),\s*\.sow-hud__request-actions button:active:not\(:disabled\)\s*\{[^}]*transform:\s*translateY\(1px\)/);
+    assert.match(hudCss, /\.sow-hud__transfer-actions button:disabled,\s*\.sow-hud__request-actions button:disabled\s*\{[^}]*opacity:\s*0\.35/);
+    assert.match(hudCss, /\.sow-hud__request-actions button \{[^}]*min-block-size:\s*2\.75rem/);
+    assert.match(hudCss, /\.sow-hud__request-name \{[^}]*overflow-wrap:\s*anywhere/);
+
+    const localeRoot = path.join(shell, "../../sow-i18n/strings");
+    for (const locale of fs.readdirSync(localeRoot)) {
+        const file = path.join(localeRoot, locale, "web.toml");
+        if (!fs.existsSync(file)) continue;
+        const catalog = fs.readFileSync(file, "utf8");
+        for (const key of ["alliance_request_title", "resource_request_title"]) {
+            assert.match(catalog, new RegExp(`^${key}\\s*=\\s*"[^"]+"$`, "m"), `${locale}: ${key}`);
+        }
+    }
 });
 
 test("map feedback reuses one compact card, clamps to the viewport, and releases message data", () => {
@@ -5625,6 +6300,170 @@ test("menu guide uses the shared flow engine from its own entry", () => {
     assert.equal(machine.view().step.id, "menu_end");
 });
 
+test("transfer acknowledgements release the mobile sidebars without leaving a hidden open panel", () => {
+    const transfer = { target_id: 2, target_name: "Trinovantes", suggested_gold: 12, suggested_troops: 34 };
+    for (const command of ["close_transfer", "send_resources", "request_resources"]) {
+        const { context, calls, update: publish, click } = makePlayerDialogsHarness();
+        const panel = context.hudRefs.transfer;
+        const update = (value, extra = {}) => publish({ transfer: value, ...extra });
+        update(transfer);
+        assert.equal(panel.classList.contains("hidden"), false);
+        assert.equal(context.hudRoot.dataset.overlayOpen, "true");
+        click(command);
+        assert.deepEqual(calls, [command === "close_transfer" ? { type: command }
+            : { type: command, target_player_id: 2, gold: 12, troops: 34 }]);
+        context.renderHud();
+        assert.equal(panel.classList.contains("hidden"), false, "the current state keeps a pending transfer visible");
+        assert.equal(context.hudRoot.dataset.overlayOpen, "true");
+        update(null);
+        assert.equal(panel.classList.contains("hidden"), true, command);
+        assert.equal(context.hudRoot.dataset.overlayOpen, "false", command + " releases both mobile sidebars");
+        update(null, { gold: 100, attack_ratio: 1 });
+        context.renderHud();
+        assert.equal(context.hudRoot.dataset.overlayOpen, "false", "later tutorial/HUD updates cannot resurrect a closed transfer");
+        for (const flag of ["settingsOpen", "mapMenuOpen", "surrenderModalOpen"]) {
+            context[flag] = true;
+            context.renderHud();
+            assert.equal(context.hudRoot.dataset.overlayOpen, "true", flag + " still blocks as intended");
+            context[flag] = false;
+            context.renderHud();
+            assert.equal(context.hudRoot.dataset.overlayOpen, "false");
+        }
+        click("open_transfer");
+        assert.equal(calls.at(-1).type, "open_transfer");
+        assert.equal(context.hudRoot.dataset.overlayOpen, "false", "an unconfirmed open cannot hide the rails without a panel");
+        update(transfer);
+        click("send_resources");
+        update(transfer);
+        context.renderHud();
+        assert.equal(panel.classList.contains("hidden"), false, "a rejected send keeps the authoritative panel open for retry");
+        assert.equal(context.hudRefs.transferGold.value, "12");
+        assert.equal(context.hudRefs.transferTroops.value, "34");
+        update(null);
+        assert.equal(context.hudRoot.dataset.overlayOpen, "false", "a state-driven close also restores the rails");
+    }
+    assert.match(hudCss, /#sow-hud\[data-overlay-open="true"\] \.sow-hud__left-rail,[^}]*\.sow-hud__right-rail,[^}]*display: none;/);
+});
+
+test("player dialogs share identities, preserve drafts and focus, and prioritize safe keyboard actions", () => {
+    const { context, doc, calls, listeners, update, click, key, canvas } = makePlayerDialogsHarness();
+    const transfer = { target_id: 2, target_name: "<img onerror=alert(1)>".repeat(8), target_avatar: { kind: "portrait", slug: "caesar" }, suggested_gold: 12.9, suggested_troops: 34.9 };
+    update({ transfer });
+    const first = context.hudRefs, gold = first.transferGold, troops = first.transferTroops;
+    assert.equal(doc.activeElement, first.transferClose, "opening a transfer does not open the mobile keyboard");
+    assert.equal(first.transferIdentity.name.textContent, transfer.target_name);
+    assert.equal(first.transferIdentity.name.children.length, 0);
+    assert.equal(first.transferIdentity.portrait.src, "/assets/gameplay/avatars/caesar.webp");
+    assert.equal(gold.value, "12");
+    first.transferIdentity.portrait.onerror.call(first.transferIdentity.portrait);
+    assert.equal(first.transferIdentity.portrait.src, "/assets/gameplay/avatars/null.webp");
+    gold.value = "1234567";
+    troops.value = "7000";
+    gold.focus();
+    for (let tick = 1; tick <= 5; tick += 1) update({ transfer: { ...transfer, suggested_gold: tick }, tick });
+    assert.equal(context.hudRefs.transferGold, gold);
+    assert.equal(gold.value, "1234567");
+    assert.equal(troops.value, "7000");
+    assert.equal(doc.activeElement, gold);
+    click("request_resources");
+    assert.deepEqual(calls.at(-1), { type: "request_resources", target_player_id: 2, gold: 1234567, troops: 7000 }, "requests are not capped by the sender's balance");
+    context.window.SOW_LOCALE = "ar";
+    listeners["sow:locale-change"]();
+    assert.notEqual(context.hudRefs.transferGold, gold);
+    assert.equal(context.hudRefs.transferGold.value, "1234567");
+    assert.equal(context.hudRefs.transferTroops.value, "7000");
+    assert.equal(doc.activeElement, context.hudRefs.transferGold);
+    assert.equal(context.hudRefs.transferIdentity.name.textContent, transfer.target_name);
+    context.activeHudPanel = "inbox";
+    assert.equal(key("Escape").prevented, true);
+    assert.deepEqual(calls.at(-1), { type: "close_transfer" });
+    assert.equal(context.activeHudPanel, "inbox", "Escape closes only the foreground transfer");
+    assert.equal(context.hudRefs.transfer.classList.contains("hidden"), false, "wait for the authoritative close");
+    update({ transfer: null });
+    assert.equal(doc.activeElement, canvas);
+    update({ transfer });
+    assert.equal(context.hudRefs.transferGold.value, "12", "reopening the same target starts a fresh draft");
+    update({ transfer: { ...transfer, target_id: 3, target_name: "Trinovantes", target_avatar: { kind: "emblem", symbol: "🐺" }, suggested_gold: 7 } });
+    assert.equal(context.hudRefs.transferGold.value, "7");
+    assert.equal(context.hudRefs.transferIdentity.emblem.textContent, "🐺");
+    assert.equal(context.hudRefs.transferIdentity.portrait.hidden, true);
+    update({ transfer: { ...transfer, target_avatar: { kind: "portrait", slug: "boudica" } } });
+    assert.equal(context.hudRefs.transferIdentity.portrait.src, "/assets/gameplay/avatars/boudica.webp");
+    update({ transfer: null });
+    const betrayal = { ally_id: 3, ally_name: "Ally".repeat(30), ally_avatar: { kind: "emblem", symbol: "🐺" } };
+    update({ betrayal });
+    const refs = context.hudRefs;
+    assert.equal(refs.betrayalIdentity.emblem.textContent, "🐺");
+    assert.equal(refs.betrayalIdentity.name.textContent, betrayal.ally_name);
+    assert.equal(doc.activeElement, refs.betrayalCancel, "the destructive action is never focused by default");
+    const commandCount = calls.length;
+    context.handleHudClick({ target: refs.betrayal });
+    assert.equal(calls.length, commandCount, "backdrop taps do not attack or send anything to the game");
+    refs.betrayalConfirm.focus();
+    assert.equal(key("Tab").prevented, true);
+    assert.equal(doc.activeElement, refs.betrayalClose);
+    key("Tab", true);
+    assert.equal(doc.activeElement, refs.betrayalConfirm);
+    update({ betrayal, tick: 20 });
+    assert.equal(doc.activeElement, refs.betrayalConfirm);
+    context.window.SOW_LOCALE = "es";
+    listeners["sow:locale-change"]();
+    assert.equal(doc.activeElement, context.hudRefs.betrayalConfirm);
+    assert.equal(key("Escape").prevented, true);
+    assert.deepEqual(calls.at(-1), { type: "cancel_betrayal" });
+    update({ betrayal: null });
+    update({ betrayal });
+    const beforeConfirm = calls.length;
+    click("confirm_betrayal");
+    assert.equal(calls.length, beforeConfirm + 1);
+    assert.deepEqual(calls.at(-1), { type: "confirm_betrayal" });
+    update({ betrayal: null });
+    update({ betrayal: { ally_id: 99, ally_name: "", ally_avatar: { kind: "fallback" } } });
+    assert.equal(context.hudRefs.betrayalIdentity.name.textContent, "es:hud.player_name");
+    assert.equal(context.hudRefs.betrayalIdentity.portrait.src, "/assets/gameplay/avatars/null.webp");
+    assert.match(hud, /hudIcon\("betray", "sow-hud__inline-icon"\)/);
+    assert.doesNotMatch(hud, /class="sow-hud__panel sow-hud__transfer/);
+    assert.doesNotMatch(hudCss, /sow-hud__modal-card|sow-hud__transfer-target|sow-hud__panel-actions|sow-hud__btn-danger/);
+    assert.match(hudCss, /\.sow-hud__dialog-body \{[^}]*min-block-size: 0;[^}]*overflow-y: auto;/);
+    assert.match(hudCss, /#sow-hud \.sow-hud__dialog \.sow-hud__transfer-actions button \{[^}]*min-block-size: 2\.75rem/);
+    assert.match(hudCss, /\.sow-hud__dialog \.sow-hud__transfer-actions \{[^}]*flex-wrap: wrap/);
+    assert.match(hudCss, /\.sow-hud__transfer-actions \.sow-hud__betrayal-confirm \{[^}]*var\(--sow-red\)/);
+});
+
+test("shared dialog viewport tracks the available keyboard area without scaling or per-dialog listeners", () => {
+    const start = hud.indexOf("    function syncCompactHudBounds() {");
+    const end = hud.indexOf("        var density = syncCompactHudDensity();", start);
+    assert.ok(start >= 0 && end > start);
+    const { doc, Element } = makeHudDocument();
+    const root = new Element("root");
+    const context = vm.createContext({ hudRoot: root, hudRefs: {}, window: {} });
+    vm.runInContext(hud.slice(start, end) + "    }", context);
+    for (const [width, height] of [[1366,768], [390,844], [360,640], [844,390], [640,360], [568,320]]) {
+        context.window.innerWidth = width;
+        context.window.innerHeight = root.clientHeight = height;
+        context.window.visualViewport = { height, offsetTop: 0 };
+        context.syncCompactHudBounds();
+        assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-height"), height + "px");
+        assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-bottom"), "0px");
+    }
+    root.clientHeight = context.window.innerHeight = 844;
+    context.window.visualViewport = { height: 360, offsetTop: 80 };
+    context.syncCompactHudBounds();
+    assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-height"), "360px");
+    assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-top"), "80px");
+    assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-bottom"), "404px");
+    context.window.visualViewport = null;
+    context.syncCompactHudBounds();
+    assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-height"), "844px");
+    assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-bottom"), "0px");
+    assert.match(hud, /visualViewport\.addEventListener\("resize", onViewportChange/);
+    assert.match(hud, /visualViewport\.addEventListener\("scroll", onViewportChange/);
+    assert.match(hudCss, /\.sow-hud__dialog \{[^}]*inline-size: min\(28rem/);
+    assert.match(hudCss, /data-compact="true"\] \.sow-hud__dialog \{[^}]*inline-size: min\(36rem/);
+    assert.match(hudCss, /\.sow-hud__dialog \{[^}]*max-block-size: min\(75dvh/);
+    assert.match(hudCss, /\.sow-hud__transfer \{[^}]*bottom: calc\(var\(--sow-hud-dialog-view-bottom/);
+});
+
 test("mobile overlays never hide the building dock and story dialogs remain above it", () => {
     const overlayRules = hudCss.match(/#sow-hud\[data-overlay-open="true"\][^{]*\{[^}]*\}/g) || [];
     assert.ok(overlayRules.length >= 2, "portrait and short-landscape overlay rules remain covered");
@@ -5763,14 +6602,17 @@ test("first multiplayer guide waits for its exact settled receipt after reload",
     assert.equal(harness.renderedSteps.at(-1), "first_store", "history must contain the exact source match");
 });
 
-// Owner decision: episode 1 ("Arrival") is not finished yet, so the whole Six Sky
-// chain stays locked and the campaign screen only lets players replay the tutorial.
+// Six Sky stays closed until its shared campaign registry publishes the episodes.
 test("campaign episode 1 stays locked so only the tutorial can be replayed", () => {
     const unlockStart = campaignModule.indexOf("pub fn is_unlocked(");
     const unlock = campaignModule.slice(unlockStart, campaignModule.indexOf("pub fn advisor(", unlockStart));
     assert.ok(unlockStart >= 0, "is_unlocked must exist");
-    assert.match(unlock, /CampaignId::SixSkyEp1 => false/);
-    assert.doesNotMatch(unlock, /SixSkyEp1 => CampaignId::Boudica\.is_completed/);
+    assert.match(campaignPolicySource, /pub const PUBLISHED_EPISODES: &\[&str\] = &\["boudica"\];/,
+        "the shared registry keeps all Six Sky episodes unpublished");
+    assert.match(unlock, /sow_data::campaign::episode_is_published\(episode\.id\)/,
+        "campaign availability follows the shared published-episode registry");
+    assert.match(unlock, /episode\s*\.\s*prerequisite\s*\.\s*is_none_or\s*\(\s*\|required\|\s*progress\.completed_episodes\.contains\(required\)\s*\)/,
+        "later campaign episodes follow the shared prerequisite metadata");
     // A locked episode renders the same disabled card as the rest of the chain.
     assert.match(lobbiesSource, /: "<button class='sow-menu__secondary sow-campaign__play' type='button' disabled>"/);
     // "Saga complete" may only appear when every episode is really finished.
@@ -5831,7 +6673,7 @@ test("campaign studio preview matches the real build submenu and direct nuke act
     assert.doesNotMatch(campaignEditorHtml, /data-preview-map-menu="nuke"|data-map-group="nuke"/);
     assert.match(campaignEditorCss, /\.sample-menu\{[^}]*z-index:3/);
     assert.match(campaignEditorCss, /#previewRoot\s*\{[^}]*z-index:\s*4/);
-    assert.match(hud, /else if \(nukeItem\) \{\s*mapSector\(radial, nukeItem, 3, radialCount, "nuke"\)/);
+    assert.match(hud, /if \(nukeItem\) sectors\.push\(\{ item: nukeItem, kind: "nuke" \}\)/);
     assert.doesNotMatch(hud, /mapMenuView === "nuke"|mapGroupSector\([^;]*"nuke"/);
     assert.match(campaignEngine, /map_nuke: '#sow-hud \[data-map-action="nuke"\]'/);
     assert.equal([...campaignEditorHtml.matchAll(/data-map-back/g)].length, 1);
@@ -6040,8 +6882,7 @@ test("campaign hides unavailable actions instead of rendering lock-label UI", ()
     assert.match(mapClick, /Some\(\("hud\.fleet_capacity_full", None\)\)/);
     assert.match(mapClick, /fleet_route_check\([\s\S]*?FleetRouteCheck::Access\)/);
     assert.match(webMenu, /"reason_troops": item\.reason_troops/);
-    assert.match(hud, /var campaignMenu = campaignUnlocks\(hudState && hudState\.hud\) !== null/);
-    assert.match(hud, /else if \(!campaignMenu\) mapDisabledSector/);
+    assert.doesNotMatch(hud, /mapDisabledSector|var radialCount = 4/);
     assert.match(hud, /fleetTrade\.hidden = hideTrade/);
     assert.match(hud, /fleetWarship\.hidden = hideWarship/);
     assert.match(hud, /fleetNuke\.hidden = hideNuke/);
@@ -6277,7 +7118,7 @@ test("WASM right-click opens on pointer press; touch hold stays intact", () => {
     assert.doesNotMatch(mapClick, /handle_secondary_click/);
 });
 
-test("map menu stays visible with disabled sectors when no action is available", () => {
+test("map menu keeps context without inventing unavailable actions", () => {
     const openStart = mapClick.indexOf("pub(crate) fn open_map_context_menu");
     const openEnd = mapClick.indexOf("pub(crate) fn close_map_context_menu", openStart);
     const openBody = mapClick.slice(openStart, openEnd);
@@ -6288,17 +7129,17 @@ test("map menu stays visible with disabled sectors when no action is available",
     const renderEnd = hud.indexOf("function updateLeaderboard", renderStart);
     const renderBody = hud.slice(renderStart, renderEnd);
     assert.doesNotMatch(renderBody, /if \(!items\.length\)/);
-    assert.match(renderBody, /else if \(!campaignMenu\) mapDisabledSector\(radial, 1, radialCount, "fleet"/);
+    assert.doesNotMatch(renderBody, /mapDisabledSector|disabledCenter/);
+    assert.match(renderBody, /sectors\.forEach/);
 });
 
 test("map menu keeps the radial sectors and recovered submenu actions", () => {
     assert.match(hud, /sow-hud__map-radial/);
     assert.match(hud, /function radialSectorGeometry/);
-    assert.match(hud, /function mapDisabledSector/);
-    assert.match(hud, /var radialCount = 4/);
-    assert.match(hud, /mapSector\(radial, transfer, 0, radialCount/);
-    assert.match(hud, /mapSector\(radial, fleet, 1, radialCount/);
-    assert.match(hud, /mapSector\(radial, alliance, 2, radialCount/);
+    assert.doesNotMatch(hud, /function mapDisabledSector|var radialCount = 4/);
+    assert.match(hud, /if \(emoteItem\) sectors\.push/);
+    assert.match(hud, /\["transfer", "fleet", "alliance"\]/);
+    assert.match(hud, /index, sectors\.length/);
     assert.match(hud, /dataset\.mapGroup = group/);
     assert.match(hud, /upgrade_structure/);
     assert.match(hud, /build_warship/);
@@ -6484,9 +7325,9 @@ test("building menus use generated pixel-art sprites with emoji fallback", () =>
     assert.equal(buildingIcon("Farm", 4), '<span class="sow-hud__building-icon is-emoji" aria-hidden="true">🌱</span>');
     assert.match(buildingOverlaySource, /building_sprite_uv/);
     assert.match(hudCss, /\.sow-hud__building-icon\.is-pixel-art[\s\S]*?image-rendering: pixelated/);
-    assert.match(hud, /var buildIcon = emojiIcon\("🏗️", "sow-hud__map-action-icon"\)/);
-    assert.match(hud, /mapDisabledSector\(radial, 3, radialCount, "build", emojiIcon\("🏗️", "sow-hud__map-action-icon"\)/);
-    assert.match(hud, /heading\.innerHTML = emojiIcon\("🏗️", "sow-hud__map-action-icon"\)/);
+    assert.match(hud, /group: "build", icon: emojiIcon\("🏗️", "sow-hud__map-action-icon"\)/);
+    assert.doesNotMatch(hud, /mapDisabledSector/);
+    assert.match(hud, /heading\.innerHTML = mapMenuView === "emote" \? hudIcon\("emote"\) : emojiIcon\("🏗️", "sow-hud__map-action-icon"\)/);
     assert.match(hud, /var buildingImg = buildingKind \? buildingIcon\(buildingKind\) : ""/);
     assert.match(hud, /buildingIcon\(detail\.kind, detail\.level\)/);
     assert.match(hudCss, /\.sow-hud__building-icon[\s\S]*?font-size: 30px/);
@@ -6534,7 +7375,7 @@ test("army allocation starts centered and only formats send/keep while shown", (
 
 test("campaign players use the active leader name in both map and leaderboard", () => {
     assert.match(matchStartSource, /name: \{\s*if tutorial \{\s*leader\.name\(\)\.to_string\(\)/);
-    const leaderboard = hud.slice(hud.indexOf("function updateLeaderboard"), hud.indexOf("function appendPanelRows"));
+    const leaderboard = hud.slice(hud.indexOf("function updateLeaderboard"), hud.indexOf("function createNotificationCard"));
     assert.match(leaderboard, /var displayName = player\.name \|\| SOW_t\("hud\.player_name"\)/);
     assert.doesNotMatch(leaderboard, /campaignActive|leaderById/);
 });
@@ -6934,4 +7775,76 @@ test("tutorial hand and ripple fade in at screen center and glide together to th
     assert.doesNotMatch(storyCss, /@keyframes story-drag/);
     assert.doesNotMatch(tutorial, /step\.trigger && step\.trigger\.type === "territory" && step\.guide\.target === "expand"/);
     assert.doesNotMatch(tutorial, /step\.id === "boudica_first_victory"[\s\S]*attacks_by_faction_id/);
+});
+
+
+test("fixed emotes share catalog definitions and sync translated bubbles once per runtime", () => {
+    const core = fs.readFileSync(path.join(shell, "../../sow-core/src/emote.rs"), "utf8");
+    const kinds = ["greet", "help", "threat", "celebrate"];
+    const localeRoot = path.join(shell, "../../sow-i18n/strings");
+    for (const locale of fs.readdirSync(localeRoot)) {
+        const catalog = fs.readFileSync(path.join(localeRoot, locale, "web.toml"), "utf8");
+        for (const kind of kinds) for (const suffix of ["", "_message", "_notice"]) {
+            assert.match(catalog, new RegExp("^emote_" + kind + suffix + ' = ".+"$', "m"));
+        }
+        for (const key of ["map_action_emote", "emote_pin", "emote_clear", "map_action_back"]) {
+            assert.match(catalog, new RegExp("^" + key + ' = ".+"$', "m"));
+        }
+    }
+    assert.doesNotMatch(hud, /express_emoji|toggle_emoji|emojiPickerOpen|var EMOJIS/);
+    assert.match(webMenu, /SetEmoteTexts/);
+    assert.match(core, /enum EmoteKind/);
+    const commands = [];
+    const context = {
+        window: { SOW_LOCALE: "en", SOW_menu_command: function () {} },
+        SOW_t: key => "en:" + key,
+        send: (type, payload) => { commands.push({ type, payload }); return true; },
+        emoteTextKey: "", emoteTextTarget: null, hudSafeArea: [0, 0, 0, 0]
+    };
+    const start = hud.indexOf("function syncEmoteTexts(");
+    const end = hud.indexOf("function setHudPanel(", start);
+    const sync = vm.runInNewContext(hud.slice(start, end) + "syncEmoteTexts;", context);
+    const state = { emotes: kinds.map(kind => ({ bubble_key: "hud.emote_" + kind + "_message" })) };
+    sync(state); sync(state);
+    assert.equal(commands.length, 1);
+    assert.equal(commands[0].type, "set_emote_texts");
+    context.window.SOW_LOCALE = "ar";
+    context.SOW_t = key => "ar:" + key;
+    sync(state);
+    assert.equal(commands.length, 2);
+    assert.ok(commands[1].payload.texts.every(text => text.startsWith("ar:")));
+    context.window.SOW_menu_command = function () {};
+    sync(state);
+    assert.equal(commands.length, 3);
+    assert.match(hud, /SOW_I18N_READY\.then/);
+    assert.match(hud, /if \(!previousHud\) emoteTextKey = ""/);
+    assert.match(hud, /event\.key === "Escape"/);
+    assert.match(hudCss, /emote-choice[^}]*min-block-size: 44px/);
+});
+
+
+test("radial capabilities put Emote first and omit inapplicable sectors", () => {
+    const start = hud.indexOf("var sectors = [];");
+    const end = hud.indexOf("menu.appendChild(radial);", start);
+    const source = hud.slice(start, end);
+    function render(items, buildItems = []) {
+        const calls = [];
+        vm.runInNewContext(source, {
+            items, buildItems, nukeItem: items.find(item => item.action === "nuke"), radial: {},
+            hudIcon: name => name, emojiIcon: value => value, SOW_t: key => key,
+            mapMenu: { alliance_state: "pending" }, allianceActionLabels: { pending: { disabled: true } },
+            mapGroupSector: (radial, items, index, count, group) => calls.push({ group, index, count }),
+            mapSector: (radial, item, index, count, kind, presentation) => calls.push({ kind, index, count, disabled: item.disabled, presentation })
+        });
+        return calls;
+    }
+    assert.deepEqual(render([{ action: "emote" }]), [{ group: "emote", index: 0, count: 1 }]);
+    assert.deepEqual(render([{ action: "emote" }, { action: "build_city" }], [{ action: "build_city" }]), [
+        { group: "emote", index: 0, count: 2 }, { group: "build", index: 1, count: 2 }
+    ]);
+    const enemy = render([{ action: "fleet" }, { action: "alliance", disabled: true }, { action: "nuke" }]);
+    assert.deepEqual(enemy.map(item => item.kind), ["fleet", "alliance", "nuke"]);
+    assert.equal(enemy[1].disabled, true);
+    assert.equal(enemy[1].presentation.disabled, true);
+    assert.deepEqual(render([]), []);
 });

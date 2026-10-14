@@ -708,6 +708,7 @@ impl SowEngine {
     pub fn kill_player(&mut self, player_id: u16) {
         if let Some(player) = self.state.player_mut(player_id) {
             player.alive = false;
+            player.active_emote = None;
         }
         let mut to_clear = Vec::new();
         for (i, &owner) in self.state.map.owner_states().iter().enumerate() {

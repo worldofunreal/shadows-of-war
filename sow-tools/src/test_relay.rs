@@ -18,6 +18,8 @@ use reqwest::Url;
 use sow_core::protocol::{AuthProof, ClientMessage, ServerMessage};
 use tokio_tungstenite::tungstenite::protocol::Message;
 
+mod reward_return;
+
 fn parse_websocket_url(value: &str) -> Result<Url, String> {
     let url = Url::parse(value).map_err(|error| format!("invalid WebSocket URL: {error}"))?;
 
@@ -132,7 +134,7 @@ struct Args {
 
     /// Authentication provider used by the join proof
     #[arg(long)]
-    auth_provider: String,
+    auth_provider: Option<String>,
 
     /// Account ID for providers that use an explicit account identity
     #[arg(long)]
@@ -140,17 +142,28 @@ struct Args {
 
     /// Provider token or anonymous account secret
     #[arg(long)]
-    auth_token: String,
+    auth_token: Option<String>,
+    /// Run the real client return and two-player reward acceptance gate.
+    #[arg(long)]
+    verify_rewards: bool,
+    #[arg(long)]
+    database_url: Option<Url>,
+    #[arg(long)]
+    audit_accounts_file: Option<std::path::PathBuf>,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
     let url = args.url;
+    if args.verify_rewards {
+        reward_return::verify(&url, args.database_url.as_ref().expect("--database-url is required for reward verification"), args.audit_accounts_file.as_deref()).await;
+        return;
+    }
     let auth = AuthProof {
-        provider: args.auth_provider,
+        provider: args.auth_provider.expect("--auth-provider is required"),
         account_id: args.auth_account_id,
-        token: args.auth_token,
+        token: args.auth_token.expect("--auth-token is required"),
     };
 
     let version = std::fs::read_to_string(".version")
@@ -177,10 +190,11 @@ async fn main() {
             name: "TestBot".to_string(),
             target_lobby_id: None,
             host_private: false,
-            build_version: version,
+            build_version: sow_core::protocol::gameplay_build_identity(&version),
             clan_tag: "".to_string(),
             civilization: sow_core::player::Civilization::Rome,
             leader: sow_core::player::Leader::Caesar,
+            random_leader: false,
             host_config: None,
             password: None,
         }),

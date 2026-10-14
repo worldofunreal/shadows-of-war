@@ -397,7 +397,7 @@ mod alliance_lifecycle_tests {
         engine.state.player_mut(1).unwrap().alliances.push(2);
         let betrayer = engine.state.player_mut(2).unwrap();
         betrayer.alliances.push(1);
-        betrayer.active_emoji = Some("🗡️".into());
+        betrayer.betrayal_retaliation_ticks = 300;
 
         engine.apply_stamped_intent(
             &StampedIntent {

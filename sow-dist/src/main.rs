@@ -170,6 +170,44 @@ fn file_sha256(path: &Path) -> Result<String> {
     Ok(format!("{:x}", h.finalize()))
 }
 
+/// Content hashes keyed by the exact URL paths the shell builds (relative to
+/// assets/, e.g. "shell/leaders/boudica_desktop.webp"). Injected as
+/// window.SOW_ASSET_TS so ?v= cache keys stop changing on unrelated deploys:
+/// a music/leader/loader redraw alone invalidates its own entry.
+fn asset_versions(paths: &Paths) -> Result<serde_json::Value> {
+    let mut map = serde_json::Map::new();
+    let mut roots = vec![
+        (paths.assets_shell.clone(), "shell".to_string()),
+        (paths.assets_gameplay.clone(), "gameplay".to_string()),
+    ];
+    while let Some((dir, prefix)) = roots.pop() {
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let rel = format!("{prefix}/{name}");
+            if path.is_dir() {
+                roots.push((path, rel));
+                continue;
+            }
+            let track = matches!(
+                rel.as_str(),
+                s if s.starts_with("shell/leaders/")
+                    || s.starts_with("shell/loader/")
+                    || s.starts_with("shell/mobile-nav/")
+                    || s.starts_with("gameplay/music/")
+            );
+            if track && path.extension().is_some_and(|e| e == "webp" || e == "webm") {
+                map.insert(
+                    format!("/assets/{rel}"),
+                    serde_json::Value::String(file_sha256(&path)?[..8].to_string()),
+                );
+            }
+        }
+    }
+    Ok(serde_json::Value::Object(map))
+}
+
 fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst).with_context(|| format!("create directory {}", dst.display()))?;
     for e in fs::read_dir(src).with_context(|| format!("read directory {}", src.display()))? {
@@ -185,16 +223,52 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-fn optimize_poki_webp(src: &Path, dst: &Path, geometry: &str) -> Result<()> {
+fn optimize_webp(src: &Path, dst: &Path, geometry: &str, quality: u32) -> Result<()> {
     let status = Command::new("magick")
         .arg(src)
-        .args(["-resize", geometry, "-strip", "-quality", "70"])
+        .args([
+            "-resize",
+            geometry,
+            "-strip",
+            "-quality",
+            &quality.to_string(),
+        ])
         .args(["-define", "webp:method=6"])
         .arg(dst)
         .status()
-        .with_context(|| "Poki packaging requires ImageMagick (magick)")?;
+        .with_context(|| "web packaging requires ImageMagick (magick)")?;
     if !status.success() {
-        bail!("Poki image optimization failed for {}", src.display());
+        bail!("webp optimization failed for {}", src.display());
+    }
+    Ok(())
+}
+
+/// Full-bleed loader/menu leader art ships recompressed: the repo masters are
+/// 400-950 KB each and the loader waits on this art at match exit. Cap keeps a
+/// regression (a new unoptimized master) from silently re-inflating the boot.
+fn compress_web_leaders(leaders: &Path) -> Result<()> {
+    const MAX_LEADER_BYTES: u64 = 400_000;
+    for entry in fs::read_dir(leaders)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !name.ends_with(".webp") {
+            continue;
+        }
+        let path = entry.path();
+        let geometry = if name.ends_with("_mobile.webp") {
+            "900x1600>"
+        } else {
+            "1600x900>"
+        };
+        let tmp = path.with_extension("webp.optimizing");
+        optimize_webp(&path, &tmp, geometry, 75)?;
+        fs::rename(&tmp, &path)?;
+        let size = fs::metadata(&path)?.len();
+        if size > MAX_LEADER_BYTES {
+            bail!(
+                "leader art {name} weighs {size} bytes after optimization; cap is {MAX_LEADER_BYTES}"
+            );
+        }
     }
     Ok(())
 }
@@ -233,10 +307,11 @@ fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
         } else {
             "960x540"
         };
-        optimize_poki_webp(
+        optimize_webp(
             &entry.path(),
             &dst.join("shell/leaders").join(entry.file_name()),
             geometry,
+            70,
         )?;
     }
     copy_dir(&src.join("gameplay/avatars"), &dst.join("gameplay/avatars"))?;
@@ -249,7 +324,7 @@ fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
         &src.join("gameplay/currency"),
         &dst.join("gameplay/currency"),
     )?;
-    copy_dir(&src.join("campaign"), &dst.join("campaign"))?;
+    copy_campaign_for_poki(&src.join("campaign"), &dst.join("campaign"))?;
     copy_dir(&src.join("guides"), &dst.join("guides"))?;
     let mobile_nav = dst.join("shell/mobile-nav");
     fs::create_dir_all(&mobile_nav)?;
@@ -258,6 +333,33 @@ fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
             src.join("shell/mobile-nav").join(file),
             mobile_nav.join(file),
         )?;
+    }
+    Ok(())
+}
+
+/// Poki players are Chromium/Safari; the MP4 rendition covers both. Shipping
+/// only the MP4 halves the campaign payload in the portal package. The
+/// triggers JSON is rewritten to the MP4 stem so no source 404s on boot.
+fn copy_campaign_for_poki(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let from = entry.path();
+        if from.is_dir() {
+            copy_campaign_for_poki(&from, &dst.join(&name))?;
+            continue;
+        }
+        if name.ends_with(".webm") {
+            continue;
+        }
+        let to = dst.join(&name);
+        if name.ends_with(".triggers.json") {
+            let text = fs::read_to_string(&from)?.replace(".webm\"", ".mp4\"");
+            fs::write(&to, text)?;
+        } else {
+            fs::copy(&from, &to)?;
+        }
     }
     Ok(())
 }
@@ -280,7 +382,7 @@ fn copy_poki_maps(src: &Path, dst: &Path) -> Result<()> {
         }
         let thumbnail = entry.path().join("thumbnail.webp");
         if thumbnail.is_file() {
-            optimize_poki_webp(&thumbnail, &out_dir.join("thumbnail.webp"), "256x144")?;
+            optimize_webp(&thumbnail, &out_dir.join("thumbnail.webp"), "256x144", 70)?;
         }
     }
     Ok(())
@@ -861,6 +963,14 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         serde_json::to_string(&source.sha)?,
         serde_json::to_string(&source.url)?,
     );
+    // Portal builds keep the whole-build bust (their asset bytes are
+    // re-encoded at packaging time); self-hosted and native use per-file
+    // content hashes so music/leader/loader cache keys survive unrelated deploys.
+    let asset_versions = if portal {
+        serde_json::json!({})
+    } else {
+        asset_versions(paths)?
+    };
     let splash_desktop = inline_webp(&paths.assets_shell.join("loader/sow-splash-desktop.webp"))?;
     let splash_mobile = inline_webp(&paths.assets_shell.join("loader/sow-splash-mobile.webp"))?;
     let locale_codes = serde_json::to_string(
@@ -1190,19 +1300,34 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         }
     }
     let mut fh = fs::read_to_string(&index)?;
+    for bar in ["loader_empty", "loader_full"] {
+        if let Some(hash) = asset_versions
+            .get(format!("/assets/shell/loader/{bar}.webp"))
+            .and_then(|v| v.as_str())
+        {
+            fh = fh.replace(
+                &format!("{bar}.webp?v=__BUILD_TS__"),
+                &format!("{bar}.webp?v={hash}"),
+            );
+        }
+    }
     let marker = "/* __INLINE_LOADER_JS__ */";
+    let loader_with_versions = format!(
+        "window.SOW_ASSET_TS = {};\n{loader}",
+        serde_json::to_string(&asset_versions)?
+    );
     if fh.contains(marker) {
-        fh = fh.replacen(marker, &loader, 1);
+        fh = fh.replacen(marker, &loader_with_versions, 1);
     } else if fh.contains(r#"<script src="../loader.js"></script>"#) {
         fh = fh.replacen(
             r#"<script src="../loader.js"></script>"#,
-            &format!("<script>\n{loader}\n</script>"),
+            &format!("<script>\n{loader_with_versions}\n</script>"),
             1,
         );
     } else if fh.contains(r#"<script src="./loader.js"></script>"#) {
         fh = fh.replacen(
             r#"<script src="./loader.js"></script>"#,
-            &format!("<script>\n{loader}\n</script>"),
+            &format!("<script>\n{loader_with_versions}\n</script>"),
             1,
         );
     } else {
@@ -1213,11 +1338,25 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         bail!("index.html: no main menu CSS injection point");
     }
     fh = fh.replacen(menu_css_marker, &menu_css, 1);
-    let menu_js_marker = "/* __INLINE_MAIN_MENU_JS__ */";
-    if !fh.contains(menu_js_marker) {
-        bail!("index.html: no main menu JS injection point");
+    let menu_js_marker = "<script>/* __INLINE_MAIN_MENU_JS__ */</script>";
+    if fh.matches(menu_js_marker).count() != 1 {
+        bail!("index.html must contain one main menu script slot");
     }
-    fh = fh.replacen(menu_js_marker, &menu_js, 1);
+    // Self-hosted web and native ship the menu bundle as a sibling file so a
+    // returning visitor pulls it from cache instead of re-reading ~1.4 MB of
+    // HTML on every boot. Portal builds (CrazyGames/Poki/Jest) keep inlining.
+    let menu_js_injection = if !portal {
+        let menu_hash = format!("{:x}", Sha256::digest(menu_js.as_bytes()))[..8].to_string();
+        let menu_name = format!("main_menu_{menu_hash}.js");
+        fs::write(index.with_file_name(&menu_name), &menu_js)
+            .context("write externalized main menu bundle")?;
+        format!(
+            "<link rel=\"preload\" href=\"./{menu_name}\" as=\"script\">\n    <script src=\"./{menu_name}\"></script>"
+        )
+    } else {
+        format!("<script>{menu_js}</script>")
+    };
+    fh = fh.replacen(menu_js_marker, &menu_js_injection, 1);
     if poki || jest {
         fh = fh
             .replace("href=\"/fonts/fonts.css\"", "href=\"fonts/fonts.css\"")
@@ -1578,6 +1717,7 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
                 | "endgame.xp"
                 | "heroes.africa"
                 | "heroes.americas"
+                | "heroes.random_leader"
                 | "heroes.asia"
                 | "heroes.civilization_sparta"
                 | "heroes.europe"
@@ -1804,6 +1944,25 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
     let root = &paths.root;
     let catalog = validate_web_catalogs(true)?;
     validate_dynamic_web_keys(&catalog)?;
+    for definition in sow_core::emote::EMOTES {
+        if web_catalog_value(&catalog, definition.bubble_key).and_then(serde_json::Value::as_str)
+            != Some(definition.fallback)
+        {
+            bail!(
+                "emote fallback differs from its English catalog: {}",
+                definition.bubble_key
+            );
+        }
+        for key in [
+            definition.menu_key,
+            definition.bubble_key,
+            definition.notice_key,
+        ] {
+            if web_catalog_value(&catalog, key).is_none() {
+                bail!("emote definition uses unknown localization key {key}");
+            }
+        }
+    }
     let strings_root = root.join("sow-i18n/strings");
     let registered = sow_i18n::Language::registry()
         .iter()
@@ -1972,6 +2131,97 @@ fn verify_exported_locales(dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Every cinematic ships a WebM + MP4 pair with a poster under the episode's
+/// own folder, small enough to start instantly and muxed with its index at
+/// the front so the browser plays without fetching the tail of the file.
+fn validate_cinematic_media(
+    dir: &Path,
+    episode_id: &str,
+    definition: &serde_json::Value,
+) -> Result<()> {
+    const MAX_RENDITION_BYTES: u64 = 6 * 1024 * 1024;
+    let Some(steps) = definition
+        .get("steps")
+        .and_then(serde_json::Value::as_array)
+    else {
+        return Ok(());
+    };
+    for step in steps {
+        let video_src = step.get("video_src").and_then(serde_json::Value::as_str);
+        if step.get("presentation").and_then(serde_json::Value::as_str) != Some("cinematic")
+            || video_src.is_none()
+        {
+            continue;
+        }
+        let video_src = video_src.unwrap();
+        let prefix = format!("/assets/campaign/{episode_id}/");
+        let Some(relative) = video_src.strip_prefix(&prefix) else {
+            bail!("campaign cinematic video_src must live under {prefix}: {episode_id}");
+        };
+        let video_path = dir.join(episode_id).join(relative);
+        let stem = video_path
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_string();
+        for extension in ["webm", "mp4"] {
+            let path = video_path.with_file_name(format!("{stem}.{extension}"));
+            if !path.is_file() {
+                bail!(
+                    "campaign cinematic rendition missing for {episode_id}: {}",
+                    path.display()
+                );
+            }
+            let size = fs::metadata(&path)?.len();
+            if size > MAX_RENDITION_BYTES {
+                bail!(
+                    "campaign cinematic rendition is too heavy for instant start ({size} bytes, max {MAX_RENDITION_BYTES}): {}",
+                    path.display()
+                );
+            }
+            let mut head = fs::File::open(&path)?;
+            let mut window = Vec::new();
+            std::io::Read::by_ref(&mut head)
+                .take(1024 * 1024)
+                .read_to_end(&mut window)?;
+            let streamable = match extension {
+                "webm" => window
+                    .windows(4)
+                    .position(|bytes| bytes == [0x1C, 0x53, 0xBB, 0x6B])
+                    .is_some_and(|position| position < 16 * 1024),
+                _ => match (
+                    window.windows(4).position(|bytes| bytes == *b"moov"),
+                    window.windows(4).position(|bytes| bytes == *b"mdat"),
+                ) {
+                    (Some(moov), Some(mdat)) => moov < mdat,
+                    (Some(_), None) => true,
+                    _ => false,
+                },
+            };
+            if !streamable {
+                bail!(
+                    "campaign cinematic must ship its index at the front (-cues_to_front 1 / +faststart) so playback never waits for the whole file: {}",
+                    path.display()
+                );
+            }
+        }
+        let poster = video_path.with_file_name(format!("{stem}.poster.webp"));
+        if !poster.is_file() {
+            bail!(
+                "campaign cinematic poster missing for {episode_id}: {}",
+                poster.display()
+            );
+        }
+        if fs::metadata(&poster)?.len() > 128 * 1024 {
+            bail!(
+                "campaign cinematic poster is too heavy: {}",
+                poster.display()
+            );
+        }
+    }
+    Ok(())
+}
+
 fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Result<()> {
     let dir = paths.root.join("assets/campaign");
     let mut rosters = HashMap::new();
@@ -2055,6 +2305,7 @@ fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Resul
                 }
             }
         }
+        validate_cinematic_media(&dir, episode_id, &definition)?;
         episodes.push(serde_json::json!({
             "episode_id": episode_id,
             "definition": definition,
@@ -2217,11 +2468,20 @@ fn verify_layout(dir: &Path) -> Result<()> {
         bail!("webroot must not contain admin/ (dashboard was removed)");
     }
     let play_html = fs::read_to_string(dir.join("play/index.html"))?;
+    // Self-hosted web externalizes the menu bundle next to the page; the
+    // registries it must carry live there instead of inside the HTML.
+    let menu_bundle = fs::read_dir(dir.join("play"))?
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("main_menu") && n.ends_with(".js"))
+        .map(|n| fs::read_to_string(dir.join("play").join(n)).unwrap_or_default())
+        .collect::<String>();
+    let shell_page = format!("{play_html}{menu_bundle}");
     if !play_html.contains("name=\"sow-media-artwork\" content=\"../icon-192.png\"") {
         bail!("web game page has no game music artwork reference");
     }
-    if !play_html.contains("window.SOW_BUILDING_ART =")
-        || !play_html.contains("gameplay/buildings/atlas.webp")
+    if !shell_page.contains("window.SOW_BUILDING_ART =")
+        || !shell_page.contains("gameplay/buildings/atlas.webp")
     {
         bail!("webroot game page is missing the building-art registry");
     }
@@ -2651,6 +2911,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
 
     let assets = out.join("assets");
     copy_dir(&paths.assets_shell, &assets.join("shell"))?;
+    compress_web_leaders(&assets.join("shell/leaders"))?;
     copy_dir(
         &paths.assets_gameplay.join("avatars"),
         &assets.join("gameplay/avatars"),
@@ -2721,6 +2982,13 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
             target: WebTarget::Local,
         },
     )?;
+    for entry in fs::read_dir(out.join("play"))? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with("main_menu") && name.ends_with(".js") {
+            brotli_file(&entry.path())?;
+        }
+    }
     export_locales(out)?;
 
     if compile {
@@ -2912,6 +3180,7 @@ fn package_native_web(
         fs::create_dir_all(out)?;
         let assets = out.join("assets");
         copy_dir(&paths.assets_shell, &assets.join("shell"))?;
+        compress_web_leaders(&assets.join("shell/leaders"))?;
         for name in [
             "avatars",
             "skins",
@@ -4106,7 +4375,7 @@ fn load_dotenv(path: &Path) {
     }
 }
 
-/// Create the machine-to-machine relay control secret once, locally, when
+/// Create a machine-to-machine deployment secret once, locally, when
 /// the ignored deployment environment does not have one yet.  The value is
 /// persisted only in sow-dist/.env (mode 0600) and is staged to both ends by
 /// ./sow p; it is never included in a command line or pipeline output.
@@ -4193,7 +4462,7 @@ fn ensure_shared_identity_secret() -> Result<()> {
     Ok(())
 }
 
-/// Rotate both deployment credentials in the ignored local environment.
+/// Rotate deployment credentials in the ignored local environment.
 /// Values never enter command-line arguments or stdout; the caller must run
 /// the normal production pipeline immediately afterwards.
 fn rotate_deployment_secrets(root: &Path) -> Result<()> {
@@ -4201,22 +4470,23 @@ fn rotate_deployment_secrets(root: &Path) -> Result<()> {
     let input = fs::read_to_string(&path)
         .with_context(|| format!("read {} for secret rotation", path.display()))?;
     let mut output = String::with_capacity(input.len() + 160);
-    let mut replaced = [false; 2];
+    let mut replaced = [false; 3];
     for line in input.lines() {
         let key = line.split_once('=').map(|(key, _)| key.trim());
         let slot = match key {
             Some("SOW_DB_SECRET") => Some(0),
             Some("SOW_RELAY_CONTROL_SECRET") => Some(1),
+            Some("SOW_RELAY_SETTLEMENT_SECRET") => Some(2),
             _ => None,
         };
         if let Some(slot) = slot {
             let mut bytes = [0u8; 32];
             rand::rngs::OsRng.fill_bytes(&mut bytes);
-            let name = if slot == 0 {
-                "SOW_DB_SECRET"
-            } else {
-                "SOW_RELAY_CONTROL_SECRET"
-            };
+            let name = [
+                "SOW_DB_SECRET",
+                "SOW_RELAY_CONTROL_SECRET",
+                "SOW_RELAY_SETTLEMENT_SECRET",
+            ][slot];
             output.push_str(name);
             output.push('=');
             output.push_str(&hex::encode(bytes));
@@ -4231,11 +4501,11 @@ fn rotate_deployment_secrets(root: &Path) -> Result<()> {
         if !present {
             let mut bytes = [0u8; 32];
             rand::rngs::OsRng.fill_bytes(&mut bytes);
-            let name = if slot == 0 {
-                "SOW_DB_SECRET"
-            } else {
-                "SOW_RELAY_CONTROL_SECRET"
-            };
+            let name = [
+                "SOW_DB_SECRET",
+                "SOW_RELAY_CONTROL_SECRET",
+                "SOW_RELAY_SETTLEMENT_SECRET",
+            ][slot];
             output.push_str(name);
             output.push('=');
             output.push_str(&hex::encode(bytes));
@@ -4267,6 +4537,7 @@ fn main() -> Result<()> {
     load_dotenv(&root.join("sow-dist/.env"));
     ensure_generated_secret(&root, "SOW_DB_SECRET")?;
     ensure_generated_secret(&root, "SOW_RELAY_CONTROL_SECRET")?;
+    ensure_generated_secret(&root, "SOW_RELAY_SETTLEMENT_SECRET")?;
     ensure_generated_secret(&root, "SOW_REVENUECAT_WEBHOOK_SECRET")?;
 
     let paths = Paths::discover()?;
@@ -4300,6 +4571,198 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn cinematic_definition(video_src: &str) -> serde_json::Value {
+        serde_json::json!({
+            "steps": [{
+                "id": "opening", "type": "scene", "presentation": "cinematic",
+                "video_src": video_src, "title_key": "t", "body_key": "b", "next": "end"
+            }, { "id": "end", "type": "end", "title_key": "t", "body_key": "b" }]
+        })
+    }
+
+    fn write_cinematic_triple(
+        dir: &Path,
+        stem: &str,
+        webm: &[u8],
+        mp4: &[u8],
+        poster: &[u8],
+    ) -> Result<()> {
+        let episode = dir.join("boudica");
+        fs::create_dir_all(&episode)?;
+        fs::write(episode.join(format!("{stem}.webm")), webm)?;
+        fs::write(episode.join(format!("{stem}.mp4")), mp4)?;
+        fs::write(episode.join(format!("{stem}.poster.webp")), poster)?;
+        Ok(())
+    }
+
+    fn streamable_webm() -> Vec<u8> {
+        let mut bytes = vec![0u8; 2048];
+        bytes[120..124].copy_from_slice(&[0x1C, 0x53, 0xBB, 0x6B]);
+        bytes
+    }
+
+    fn streamable_mp4(moov_at: usize, mdat_at: usize) -> Vec<u8> {
+        let mut bytes = vec![0u8; 2048];
+        bytes[moov_at..moov_at + 4].copy_from_slice(b"moov");
+        bytes[mdat_at..mdat_at + 4].copy_from_slice(b"mdat");
+        bytes
+    }
+
+    #[test]
+    fn asset_version_keys_match_the_urls_the_shell_builds() -> Result<()> {
+        let paths = Paths::discover()?;
+        let versions = asset_versions(&paths)?;
+        for key in [
+            "/assets/shell/leaders/boudica_desktop.webp",
+            "/assets/shell/loader/loader_empty.webp",
+            "/assets/gameplay/music/shadows-of-war.webm",
+        ] {
+            let value = versions
+                .get(key)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            assert!(
+                value.len() == 8 && value.bytes().all(|b| b.is_ascii_hexdigit()),
+                "missing content hash for {key}: {value:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn poki_campaign_package_ships_only_the_mp4_and_rewrites_the_source() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        let episode = root.path().join("campaign/boudica");
+        fs::create_dir_all(&episode)?;
+        fs::write(episode.join("intro.720p.abc.webm"), b"webm-bytes")?;
+        fs::write(episode.join("intro.720p.abc.mp4"), b"mp4-bytes")?;
+        fs::write(episode.join("intro.720p.abc.poster.webp"), b"poster")?;
+        fs::write(
+            root.path().join("campaign/boudica.triggers.json"),
+            "{\"steps\":[{\"video_src\":\"/assets/campaign/boudica/intro.720p.abc.webm\"}]}",
+        )?;
+        fs::write(
+            root.path().join("campaign/boudica.json"),
+            "{\"map\":\"eastanglia\"}",
+        )?;
+        let dst = root.path().join("poki");
+        copy_campaign_for_poki(&root.path().join("campaign"), &dst.join("campaign"))?;
+        assert!(!dst.join("campaign/boudica/intro.720p.abc.webm").exists());
+        assert!(dst.join("campaign/boudica/intro.720p.abc.mp4").is_file());
+        assert!(
+            dst.join("campaign/boudica/intro.720p.abc.poster.webp")
+                .is_file()
+        );
+        let triggers = fs::read_to_string(dst.join("campaign/boudica.triggers.json"))?;
+        assert!(
+            triggers.contains("/assets/campaign/boudica/intro.720p.abc.mp4\""),
+            "portal triggers must point at the shipped MP4: {triggers}"
+        );
+        assert!(!triggers.contains(".webm"));
+        assert!(
+            dst.join("campaign/boudica.json").is_file(),
+            "plain JSON copies verbatim"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn web_leader_packaging_recompresses_art_under_the_cap() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        let leaders = root.path().join("leaders");
+        fs::create_dir_all(&leaders)?;
+        let master = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("assets/shell/leaders/boudica_desktop.webp");
+        let original = fs::metadata(&master)?.len();
+        fs::copy(&master, leaders.join("boudica_desktop.webp"))?;
+        fs::write(leaders.join("boudica_mobile.webp"), b"not-an-image")?;
+        assert!(
+            compress_web_leaders(&leaders).is_err(),
+            "a corrupt leader webp must fail the build, never ship silently"
+        );
+        fs::remove_file(leaders.join("boudica_mobile.webp"))?;
+        compress_web_leaders(&leaders)?;
+        let after = fs::metadata(leaders.join("boudica_desktop.webp"))?.len();
+        assert!(
+            after < original && after <= 400_000,
+            "boudica_desktop shrank {original} -> {after}; cap 400000"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn campaign_cinematic_media_accepts_shipped_boudica_renditions() -> Result<()> {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .canonicalize()?;
+        let definition: serde_json::Value = serde_json::from_str(&fs::read_to_string(
+            root.join("assets/campaign/boudica.triggers.json"),
+        )?)?;
+        validate_cinematic_media(&root.join("assets/campaign"), "boudica", &definition)
+    }
+
+    #[test]
+    fn campaign_cinematic_media_rejects_missing_siblings_or_poster() -> Result<()> {
+        let out = tempfile::tempdir()?;
+        let dir = out.path().join("campaign");
+        fs::create_dir_all(dir.join("boudica"))?;
+        fs::write(dir.join("boudica/intro.webm"), streamable_webm())?;
+        let definition = cinematic_definition("/assets/campaign/boudica/intro.webm");
+        let error = validate_cinematic_media(&dir, "boudica", &definition)
+            .err()
+            .context("missing MP4 sibling must fail")?;
+        assert!(error.to_string().contains("rendition missing"), "{error}");
+        write_cinematic_triple(
+            &dir,
+            "intro",
+            &streamable_webm(),
+            &streamable_mp4(8, 64),
+            b"x",
+        )?;
+        fs::remove_file(dir.join("boudica/intro.poster.webp"))?;
+        let error = validate_cinematic_media(&dir, "boudica", &definition)
+            .err()
+            .context("missing poster must fail")?;
+        assert!(error.to_string().contains("poster missing"), "{error}");
+        Ok(())
+    }
+
+    #[test]
+    fn campaign_cinematic_media_rejects_unstreamable_or_heavy_files() -> Result<()> {
+        let out = tempfile::tempdir()?;
+        let dir = out.path().join("campaign");
+        write_cinematic_triple(
+            &dir,
+            "intro",
+            &streamable_webm(),
+            &streamable_mp4(64, 8),
+            b"x",
+        )?;
+        let definition = cinematic_definition("/assets/campaign/boudica/intro.webm");
+        let error = validate_cinematic_media(&dir, "boudica", &definition)
+            .err()
+            .context("MP4 with mdat before moov must fail")?;
+        assert!(error.to_string().contains("index at the front"), "{error}");
+        let mut fat = streamable_mp4(8, 64);
+        fat.resize(6 * 1024 * 1024 + 1, 0);
+        fs::write(dir.join("boudica/intro.mp4"), &fat)?;
+        let error = validate_cinematic_media(&dir, "boudica", &definition)
+            .err()
+            .context("over-budget rendition must fail")?;
+        assert!(error.to_string().contains("too heavy"), "{error}");
+        Ok(())
+    }
+
+    #[test]
+    fn campaign_cinematic_media_ignores_steps_without_video() -> Result<()> {
+        let out = tempfile::tempdir()?;
+        let dir = out.path().join("campaign");
+        fs::create_dir_all(&dir)?;
+        let definition = serde_json::json!({ "steps": [{ "id": "talk", "type": "scene", "presentation": "dialogue" }] });
+        validate_cinematic_media(&dir, "boudica", &definition)
+    }
 
     #[test]
     fn test_web_site_sources_present() -> Result<()> {
@@ -4392,6 +4855,82 @@ mod tests {
     }
 
     #[test]
+    fn test_build_index_keeps_menu_scripts_valid_for_every_target() -> Result<()> {
+        let paths = Paths::discover()?;
+        for target in [
+            WebTarget::Local,
+            WebTarget::Native,
+            WebTarget::CrazyGames,
+            WebTarget::Poki,
+            WebTarget::Jest,
+        ] {
+            let out = tempfile::tempdir()?;
+            build_index(
+                &paths,
+                out.path(),
+                IndexBuild {
+                    version: "test",
+                    js: "sow_client_test.js",
+                    wasm: "sow_client_test_bg.wasm",
+                    ts: "test",
+                    maps_cache_bust: "test-maps",
+                    target,
+                },
+            )?;
+            let external = matches!(target, WebTarget::Local | WebTarget::Native);
+            let page_dir = if external {
+                out.path().join("play")
+            } else {
+                out.path().to_path_buf()
+            };
+            let html = fs::read_to_string(page_dir.join("index.html"))?;
+            let body = &html[html.find("<body").context("game body missing")?..];
+            for script in body.split("</script>") {
+                assert!(
+                    script.matches("<script").count() <= 1,
+                    "{target:?}: HTML must not be nested inside a script"
+                );
+            }
+            let menu_start = html
+                .find(if external {
+                    "<link rel=\"preload\" href=\"./main_menu_"
+                } else {
+                    "window.SOW_BUILDING_ART ="
+                })
+                .context("menu injection missing")?;
+            let (_, before_menu) = html[..menu_start]
+                .rsplit_once("</script>")
+                .context("loader script must precede the menu")?;
+            assert_eq!(
+                before_menu.matches("<script").count(),
+                usize::from(!external),
+                "{target:?}: external menu markup must be outside JavaScript; inline menus need one wrapper"
+            );
+            let hashed_menu = fs::read_dir(page_dir)?
+                .filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .find(|n| n.starts_with("main_menu_") && n.ends_with(".js"))
+                .filter(|n| {
+                    let stem = &n["main_menu_".len()..n.len() - ".js".len()];
+                    stem.len() == 8 && stem.bytes().all(|b| b.is_ascii_hexdigit())
+                });
+            assert_eq!(
+                hashed_menu.is_some(),
+                external,
+                "{target:?}: hashed menu bundle only for self-hosted"
+            );
+            if let Some(name) = hashed_menu {
+                assert!(
+                    html.contains(&format!("<script src=\"./{name}\"></script>")),
+                    "{target:?}: page must load the exact hashed bundle it shipped"
+                );
+            }
+            assert_eq!(html.contains("window.SOW_BUILDING_ART ="), !external);
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_build_index_inlines_web_menu_shell() -> Result<()> {
         let paths = Paths::discover()?;
         let out = tempfile::tempdir()?;
@@ -4415,7 +4954,24 @@ mod tests {
         assert!(!html.contains("__INLINE_MAIN_MENU_JS__"));
         assert!(html.contains("#sow-menu"));
         assert!(html.contains("SOW_menu_command"));
-        assert!(html.contains("SOW_onStateUpdate"));
+        let menu_name = fs::read_dir(out.path().join("play"))?
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .find(|n| n.starts_with("main_menu_") && n.ends_with(".js"))
+            .context("self-hosted menu bundle must be an external hashed file")?;
+        assert!(
+            html.contains(&format!("<script src=\"./{menu_name}\"></script>")),
+            "the page must reference the exact hashed bundle on disk"
+        );
+        let bundle = fs::read_to_string(out.path().join("play").join(&menu_name))?;
+        assert!(
+            bundle.contains("sow-campaign-view.js"),
+            "external bundle keeps the shell part banners"
+        );
+        assert!(
+            bundle.contains("window.SOW_onStateUpdate"),
+            "the HUD state pump lives in the externalized bundle"
+        );
         assert!(html.contains("sow-hud__dock"));
         assert!(html.contains("../analytics.js?v=test"));
         assert!(html.contains("name=\"sow-media-artwork\" content=\"../icon-192.png\""));
@@ -4739,6 +5295,32 @@ mod tests {
             .canonicalize()?;
         let conf =
             fs::read_to_string(root.join("sow-dist/deploy/freebsd/conf.d/shadowsofwar.io.conf"))?;
+        for line in conf.lines().filter(|line| {
+            line.trim_start().starts_with("location ~") && line.contains("[0-9a-f]{")
+        }) {
+            let expression = line.split_whitespace().nth(2).unwrap();
+            assert!(
+                expression.starts_with('"') && expression.ends_with('"'),
+                "Nginx regex quantifiers must be quoted: {line}"
+            );
+            let block = conf
+                .split(line)
+                .nth(1)
+                .unwrap()
+                .split("\n    }")
+                .next()
+                .unwrap();
+            let content_type = if line.contains("_bg") {
+                "application/wasm"
+            } else {
+                "application/javascript"
+            };
+            assert!(
+                block.contains("types { }")
+                    && block.contains(&format!("default_type {content_type};")),
+                "Precompressed assets must retain their browser MIME type: {line}"
+            );
+        }
         assert!(
             conf.contains("server_name www.shadowsofwar.io;"),
             "Nginx missing dedicated www server_name"
@@ -4752,6 +5334,36 @@ mod tests {
                 && conf.contains("return 301 https://shadowsofwar.io/;"),
             "Nginx must permanently redirect retired pages to the landing"
         );
+        let top_adders = conf
+            .split("\n    location ")
+            .skip(1)
+            .filter(|block| {
+                block
+                    .lines()
+                    .take_while(|l| !l.starts_with("    location "))
+                    .any(|l| l.trim_start().starts_with("add_header"))
+            })
+            .count();
+        assert_eq!(
+            conf.matches("include snippets/security-headers.conf;")
+                .count(),
+            top_adders,
+            "every add_header location must include the security-headers snippet (nginx drops inherited headers)"
+        );
+        let headers = fs::read_to_string(
+            root.join("sow-dist/deploy/freebsd/snippets/security-headers.conf"),
+        )?;
+        for header in [
+            "Strict-Transport-Security",
+            "X-Frame-Options",
+            "X-Content-Type-Options",
+            "Referrer-Policy",
+        ] {
+            assert!(
+                headers.contains(header),
+                "security-headers snippet missing {header}"
+            );
+        }
         let security =
             fs::read_to_string(root.join("sow-dist/deploy/freebsd/conf.d/00-00-security.conf"))?;
         assert!(

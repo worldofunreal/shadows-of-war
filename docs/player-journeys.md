@@ -2,7 +2,7 @@
 
 ## Estado y alcance
 
-Contrato de conexión de los sistemas, revisado el 12 de octubre de 2026.
+Contrato de conexión de los sistemas, revisado el 14 de octubre de 2026.
 La evidencia de aceptación se registra al final; la comprobación de las
 respuestas y transiciones se distingue de la revisión visual del jugador.
 
@@ -32,6 +32,7 @@ Las rutas siguientes son relativas a la raíz del proyecto.
 | Sistema | Dueño que se reutiliza | Responsabilidad |
 | --- | --- | --- |
 | Resultado y concesión | `sow-relay/src/main.rs`, `sow-server/src/main.rs`, `sow-data/src/db.rs` y `sow-data/src/main.rs` | Registrar participación, comprobar resultado y guardar premios una sola vez. |
+| Solicitud y comprobación recuperables | `sow-data/src/match_exit.rs`, cola existente en `sow-data/src/db.rs` | Guardar salida y resultado antes de responder, entregar la salida por administración privada y comprobar cada resultado una vez. |
 | Datos compartidos | `sow-data/src/profile.rs` | Definir comprobantes de premios y progreso de recorridos. |
 | Regreso y espera | `sow-client/src/app/account.rs`, `sow-client/src/net/session.rs`, `sow-client/src/loader/engine.rs` | Conservar el regreso pendiente, esperar la respuesta correcta y recuperarse de errores. |
 | Conexión con el menú | `sow-client/src/web_menu.rs`, `sow-client/src/asset.rs` | Publicar datos confirmados y resultados de acciones; recibir comandos. |
@@ -95,6 +96,21 @@ aplicables y error.
 - Salir voluntariamente de multijugador confirma lo ganado hasta la salida
   registrada. Una desconexión temporal no equivale a abandonar. El cierre
   posterior de la partida no vuelve a pagar lo ya cerrado.
+- `POST /profile/match-exit` autentica al dueño del perfil y comprueba su
+  participación registrada. Guarda la solicitud antes de responder y devuelve
+  cuenta, partida, perfil y estado: `requested`, `awaiting_result`, `verifying`,
+  `confirmed` o `rejected`. Repetir la petición recupera el mismo trabajo.
+- La salida llega al relay por su administración HTTPS permanente y autenticada.
+  Esperar el resultado consulta exclusivamente el servidor; nunca reconecta al
+  puerto de la partida. Una conexión de juego iniciada antes de salir tampoco
+  puede ocupar la conexión del menú si termina después.
+- El relay confirma cuando guardó el resultado recuperable. El servidor acepta
+  sus datos antes de comprobarlos; los errores de conexión o acceso conservan
+  el pendiente. Sus cuatro procesos comparten un bloqueo nativo por resultado.
+  Tras un reinicio, solo se recupera un registro cuyo escritor haya terminado;
+  un puerto cerrado por sí solo no demuestra que el resultado se perdió.
+- El loader requiere el comprobante exacto y la confirmación final del servidor.
+  Un saldo visible mientras sigue la comprobación no autoriza el regreso.
 - Cada comprobante nuevo conserva el nivel anterior y posterior, para celebrar
   cada nivel cruzado sin reconstruirlo con una suposición del cliente.
 - Guardar un premio y confirmar que se mostró son operaciones distintas.

@@ -3,6 +3,7 @@
 pub const MAX_MATCH_PARTICIPANTS: usize = 256;
 
 pub mod colors;
+pub mod campaign;
 pub mod commerce;
 #[cfg(feature = "server")]
 pub mod crazygames;

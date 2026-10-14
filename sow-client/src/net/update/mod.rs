@@ -8,7 +8,6 @@ mod messages;
 
 impl SowApp {
     pub fn update_net(&mut self, now: Instant) {
-        self.poll_exit_relay(now);
         self.poll_portal_intents();
 
         #[cfg(target_arch = "wasm32")]
@@ -43,7 +42,12 @@ impl SowApp {
 
         // No fake map download simulation! Progress is real!
 
-        while let Ok(res) = self.net.connect_rx.try_recv() {
+        while let Ok((url, res)) = self.net.connect_rx.try_recv() {
+            // A connection started before leaving may finish after the target
+            // changed. Its result must never replace the menu connection.
+            if url != self.ui.app.main_menu_state.server_address {
+                continue;
+            }
             match res {
                 Ok(client) => {
                     log::info!(

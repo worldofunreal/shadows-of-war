@@ -13,7 +13,7 @@ notes = "Web shell only. The WASM client does not fetch or embed these files."
 [shell_leaders]
 path = "assets/shell/leaders/"
 source = "ai_generated"
-tool = "Gemini / Meta AI / Midjourney (mixed, historical)"
+tool = "Gemini / Meta AI / Midjourney / OpenAI ImageGen (mixed, historical)"
 license = "CC-BY-SA-4.0"
 license_doc = "docs/legal/LICENSE-ASSETS"
 notes = "Web landing and JavaScript main menu only. Never part of the gameplay asset bundle."
@@ -33,6 +33,8 @@ themed_placeholder = [
   "vercingetorix",
   "lady_six_sky",
 ]
+original_files = ["random_mobile.webp", "random_desktop.webp"]
+original_source_path = "assets/artwork/random-leader/"
 
 [shell_brand]
 path = "assets/shell/brand/"
@@ -76,10 +78,19 @@ files = [
 [gameplay_avatars]
 path = "assets/gameplay/avatars/"
 source = "ai_generated"
-tool = "Gemini / Meta AI / Midjourney (mixed, historical)"
+tool = "Gemini / Meta AI / Midjourney / OpenAI ImageGen (mixed, historical)"
 license = "CC-BY-SA-4.0"
 license_doc = "docs/legal/LICENSE-ASSETS"
 notes = "Runtime gameplay HUD/nameplates/leaderboard assets. Streamed when gameplay needs them."
+original_files = ["random.webp"]
+original_source_path = "assets/artwork/random-leader/"
+
+[random_leader_art_source]
+path = "assets/artwork/random-leader/"
+source = "original"
+license = "AGPL-3.0-or-later"
+files = ["avatar.svg", "mobile.svg", "desktop.svg"]
+notes = "Original dice-and-map art for the presentation-only random leader option."
 
 [gameplay_ui]
 path = "assets/gameplay/ui/"

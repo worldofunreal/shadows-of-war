@@ -17,6 +17,7 @@ fn attack_troops_meet_minimum(troops: f64, minimum: f64) -> bool {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum MapMenuAction {
+    Emote,
     Spawn,
     Attack,
     Fleet,
@@ -35,6 +36,7 @@ pub(crate) enum MapMenuAction {
 impl MapMenuAction {
     pub(crate) const fn name(self) -> &'static str {
         match self {
+            Self::Emote => "emote",
             Self::Spawn => "spawn",
             Self::Attack => "attack",
             Self::Fleet => "fleet",
@@ -181,7 +183,7 @@ impl MapTarget {
                 actions.push(MapMenuAction::Nuke);
             }
         }
-        if !self.is_teammate && self.alliance_action_state().can_act() {
+        if !self.is_teammate {
             actions.push(MapMenuAction::Alliance);
         }
         actions
@@ -590,6 +592,17 @@ impl SowApp {
         }
 
         actions.clear();
+        if !self.ui.is_spectating
+            && !self.ui.tutorial_camera_only
+            && self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                snapshot
+                    .players
+                    .iter()
+                    .any(|p| p.id == target.my_id && p.can_express_emote)
+            })
+        {
+            actions.push(MapMenuAction::Emote);
+        }
 
         let building = self
             .sim
@@ -650,7 +663,10 @@ impl SowApp {
                         .engine
                         .as_ref()
                         .is_some_and(|engine| engine.campaign_unlocks.is_some());
-                let action_unavailable = if campaign_fleet {
+                let action_unavailable = if action == MapMenuAction::Alliance {
+                    self.map_menu_alliance_state(tile_idx)
+                        .is_none_or(|state| !state.can_act())
+                } else if campaign_fleet {
                     let blocker = self.map_target(tile_idx).and_then(|target| {
                         if target.is_teammate {
                             Some(("hud.fleet_teammate", None))
@@ -789,6 +805,7 @@ impl SowApp {
         }
 
         match action {
+            MapMenuAction::Emote => return,
             MapMenuAction::Spawn => {
                 if let Some((col, row)) = self.tile_coords(tile_idx) {
                     self.spawn_at(col, row);
@@ -1339,7 +1356,7 @@ impl SowApp {
         let snapshot = self.sim.current_snapshot.as_ref()?;
         let me = snapshot.players.iter().find(|player| player.id == my_id);
         let other = snapshot.players.iter().find(|player| player.id == owner);
-        let is_betrayer = other.is_some_and(|player| player.active_emoji.as_deref() == Some("🗡️"));
+        let is_betrayer = other.is_some_and(|player| player.can_retaliate);
         let is_teammate = me
             .zip(other)
             .is_some_and(|(me, other)| me.team.is_some() && me.team == other.team);
@@ -1803,7 +1820,11 @@ mod tests {
         };
         assert_eq!(
             ally.menu_actions(false, false, false),
-            vec![MapMenuAction::Transfer, MapMenuAction::Fleet]
+            vec![
+                MapMenuAction::Transfer,
+                MapMenuAction::Fleet,
+                MapMenuAction::Alliance
+            ]
         );
         assert_eq!(
             ally.menu_actions(false, true, false),
@@ -1811,6 +1832,7 @@ mod tests {
                 MapMenuAction::Transfer,
                 MapMenuAction::Attack,
                 MapMenuAction::Fleet,
+                MapMenuAction::Alliance,
             ]
         );
 
@@ -1839,7 +1861,7 @@ mod tests {
             ..enemy
         };
         assert!(
-            !outgoing_request
+            outgoing_request
                 .menu_actions(false, false, false)
                 .contains(&MapMenuAction::Alliance)
         );

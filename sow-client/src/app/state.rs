@@ -1,7 +1,7 @@
+pub(crate) use crate::death_nameplate::local_gold_reward;
 pub use crate::death_nameplate::{
     DeathNameplateAnimation, DeathNameplateReward, MAX_DEATH_NAMEPLATES,
 };
-pub(crate) use crate::death_nameplate::local_gold_reward;
 use web_time::{Duration, Instant};
 
 /// Subset of [`sow_core::protocol::ProjectileSnapshot`] for detonation / launch detection.
@@ -200,9 +200,9 @@ impl LoadTelemetry {
 
 pub struct NetState {
     pub client: Option<sow_net::client::SowClient>,
-    pub(crate) exiting_relay: Option<ExitRelayConnection>,
-    pub connect_tx: WakeSender<Result<sow_net::client::SowClient, String>>,
-    pub connect_rx: crossbeam_channel::Receiver<Result<sow_net::client::SowClient, String>>,
+    pub connect_tx: WakeSender<(String, Result<sow_net::client::SowClient, String>)>,
+    pub connect_rx:
+        crossbeam_channel::Receiver<(String, Result<sow_net::client::SowClient, String>)>,
     pub ws_url: String,
     pub orchestrator_url: String,
     pub is_offline: bool,
@@ -218,25 +218,6 @@ pub struct NetState {
     /// Set when the orchestrator handed us off to a game relay (Start carried
     /// relay_host). The loader uses this instead of string-matching ws_url.
     pub relay_handoff_done: bool,
-}
-
-/// Private reconnect capability for completing an explicit exit. Never exposed
-/// in SOW_MENU_STATE; the server profile is the settlement acknowledgement.
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub(crate) struct ExitRelayProof {
-    pub url: String,
-    pub lobby_id: u64,
-    pub player_id: u16,
-    pub ticket: String,
-}
-
-pub(crate) struct ExitRelayConnection {
-    pub client: Option<sow_net::client::SowClient>,
-    pub proof: ExitRelayProof,
-    pub connect_tx: WakeSender<Result<sow_net::client::SowClient, String>>,
-    pub connect_rx: crossbeam_channel::Receiver<Result<sow_net::client::SowClient, String>>,
-    pub connecting: bool,
-    pub retry_at: Instant,
 }
 
 pub struct SimState {
@@ -361,7 +342,7 @@ pub struct ClickMarker {
 
 #[derive(Clone, Debug)]
 pub struct AttackLaunchNotice {
-    pub text: String,
+    pub amount_text: String,
     pub world_x: f32,
     pub world_y: f32,
     pub start_time: web_time::Instant,
@@ -686,9 +667,7 @@ impl UiState {
 
 #[cfg(test)]
 mod alliance_celebration_tests {
-    use super::{
-        MAX_ALLIANCE_CELEBRATIONS, alliance_celebration_age, queue_alliance_celebration,
-    };
+    use super::{MAX_ALLIANCE_CELEBRATIONS, alliance_celebration_age, queue_alliance_celebration};
     use std::collections::VecDeque;
     use web_time::{Duration, Instant};
 
@@ -744,7 +723,10 @@ mod dev_vfx_preview_tests {
         let start = Instant::now();
         let mut preview = DevVfxPreview::new(start);
         preview.replay(start);
-        assert_eq!(preview.advance(start + Duration::from_millis(250), 1.0), 0.25);
+        assert_eq!(
+            preview.advance(start + Duration::from_millis(250), 1.0),
+            0.25
+        );
 
         preview.set_paused(true, start + Duration::from_millis(250));
         assert_eq!(preview.advance(start + Duration::from_secs(1), 1.0), 0.25);
@@ -757,7 +739,10 @@ mod dev_vfx_preview_tests {
 
         preview.repeat = false;
         preview.replay(start + Duration::from_millis(3250));
-        assert_eq!(preview.advance(start + Duration::from_millis(4250), 1.0), 1.0);
+        assert_eq!(
+            preview.advance(start + Duration::from_millis(4250), 1.0),
+            1.0
+        );
         assert!(preview.paused);
         assert!(!preview.playing);
     }
@@ -845,6 +830,7 @@ pub(crate) struct ExitRewardWait {
     pub account_id: Option<String>,
     pub receipt_id: Option<String>,
     pub requires_verification: bool,
+    pub server_state: Option<sow_data::profile::MatchExitState>,
 }
 
 /// The durable handoff consumed by main_menu.flow.js. An empty receipt list
@@ -903,6 +889,8 @@ pub struct SowApp {
     /// Receipts still being fetched before their menu presentation.
     pub pending_reward_receipt_ids: std::collections::BTreeSet<String>,
     pub reward_profile_retry_at: Option<Instant>,
+    pub profile_action_retry_at: Option<Instant>,
+    pub pending_campaign_exit: Option<String>,
     /// Monotonic identity request sequence; used to reject stale async responses.
     pub identity_request_seq: u64,
     pub profile_last_applied_request: u64,

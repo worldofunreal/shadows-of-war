@@ -43,6 +43,8 @@ pub struct RewardReceipt {
     pub leader_xp: u32,
     pub crowns: u64,
     pub laurels: u64,
+    #[serde(default)]
+    pub unlocked_leaders: Vec<String>,
     /// Player level immediately before and after this receipt was applied.
     /// Older receipts omit these fields and deserialize as `None`.
     #[serde(default)]
@@ -268,6 +270,82 @@ pub struct MatchStartRecord {
     pub metadata: serde_json::Value,
     #[serde(default)]
     pub replay_status: ReplayVerificationStatus,
+}
+
+/// Server-owned return progress. Receiving an exit and verifying its reward
+/// are separate operations; neither depends on the lifetime of a game socket.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MatchExitState {
+    Requested,
+    AwaitingResult,
+    Verifying,
+    Confirmed,
+    Rejected,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MatchExitCommand {
+    pub match_id: String,
+    pub account_id: String,
+    #[serde(default)]
+    pub player_id: Option<u16>,
+    #[serde(default)]
+    pub owner_verified: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MatchWork {
+    Exit { match_id: String, account_id: String },
+    Participant {
+        match_id: String,
+        account_id: String,
+        closure_turn: u64,
+        replay_sha256: String,
+        rejected: bool,
+    },
+    Replay { match_id: String },
+}
+
+impl MatchWork {
+    pub fn match_id(&self) -> &str {
+        match self {
+            Self::Exit { match_id, .. } | Self::Participant { match_id, .. }
+                | Self::Replay { match_id } => match_id,
+        }
+    }
+
+    pub fn key(&self) -> String {
+        match self {
+            Self::Exit { match_id, account_id } => format!("exit:{match_id}:{account_id}"),
+            Self::Participant { match_id, account_id, .. } => format!("participant:{match_id}:{account_id}"),
+            // Numeric keys preserve the existing durable whole-replay queue.
+            Self::Replay { match_id } => match_id.clone(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct MatchWorkRecord {
+    pub work: MatchWork,
+    pub state: MatchExitState,
+    pub retry_at: u64,
+    pub last_error: Option<String>,
+}
+
+impl MatchWorkRecord {
+    pub fn new(work: MatchWork) -> Self {
+        Self { work, state: MatchExitState::Requested, retry_at: 0, last_error: None }
+    }
+
+    pub fn decode(key: &str, bytes: &[u8]) -> Result<Self, serde_json::Error> {
+        if bytes == b"1" && key.parse::<u64>().is_ok() {
+            Ok(Self::new(MatchWork::Replay { match_id: key.to_string() }))
+        } else {
+            serde_json::from_slice(bytes)
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]

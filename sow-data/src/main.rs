@@ -1,3 +1,5 @@
+mod match_exit;
+
 use sow_data::crazygames;
 use sow_data::db::{PlayGamesMatchOutcome, PlayerDb, PlayerProfile};
 
@@ -40,6 +42,7 @@ struct AnalyticsQuery {
 struct AppState {
     db: PlayerDb,
     secret_token: String,
+    relay_settlement_secret: String,
     revenuecat_webhook_secret: Option<String>,
     stripe_secret_key: Option<String>,
     stripe_publishable_key: Option<String>,
@@ -52,6 +55,7 @@ struct AppState {
     playgames_access_tokens: std::sync::Mutex<HashMap<String, PlayGamesAccessToken>>,
     replay_verification_tx: tokio::sync::mpsc::Sender<String>,
     replay_verification_client: reqwest::Client,
+    match_artifact_lock: tokio::sync::Mutex<()>,
 }
 
 const PLAYGAMES_HANDOFF_TTL: Duration = Duration::from_secs(60);
@@ -110,6 +114,25 @@ struct TutorialCompleteRequest {
     account_id: String,
     #[serde(default)]
     auth_secret: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CampaignCompleteRequest {
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
+    episode_id: String,
+}
+
+#[derive(Deserialize)]
+struct LeaderSelectionRequest {
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
+    #[serde(default)]
+    preferred_leader: Option<String>,
+    #[serde(default)]
+    prefer_random_leader: bool,
 }
 
 #[derive(Deserialize)]
@@ -192,6 +215,8 @@ struct VerifyRequest {
     token: String,
     #[serde(default)]
     requested_leader: Option<String>,
+    #[serde(default)]
+    random_leader: bool,
 }
 
 #[derive(Serialize)]
@@ -216,6 +241,8 @@ struct VerifiedIdentityRequest {
     avatar_url: Option<String>,
     #[serde(default)]
     requested_leader: Option<String>,
+    #[serde(default)]
+    random_leader: bool,
 }
 
 #[derive(Serialize)]
@@ -1658,6 +1685,28 @@ struct AnonymousProfileResponse {
 }
 
 /// POST /internal/verify
+async fn resolve_identity_leader(
+    db: &sow_data::db::PlayerDb,
+    account_id: &str,
+    requested_leader: Option<&str>,
+    random_leader: bool,
+) -> Result<Option<String>, String> {
+    if random_leader {
+        return db
+            .draw_leader_for_account(account_id)
+            .await
+            .map(|leader| Some(sow_data::commerce::leader_wire_id(leader).to_string()))
+            .map_err(|error| error.to_string());
+    }
+    let Some(requested) = requested_leader else {
+        return Ok(None);
+    };
+    db.resolve_leader_for_account(account_id, Some(requested))
+        .await
+        .map(|resolution| Some(sow_data::commerce::leader_wire_id(resolution.resolved).to_string()))
+        .map_err(|error| error.to_string())
+}
+
 async fn handle_internal_verify(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -1688,30 +1737,17 @@ async fn handle_internal_verify(
     };
     match result {
         Ok(account_id) => {
-            let leader = match payload.requested_leader.as_deref() {
-                Some(requested) => match state
-                    .db
-                    .resolve_leader_for_account(&account_id, Some(requested))
-                    .await
-                {
-                    Ok(resolution) => {
-                        Some(sow_data::commerce::leader_wire_id(resolution.resolved).to_string())
-                    }
-                    Err(error) => {
-                        error!(
-                            "[identity] leader resolution failed account={} error={error}",
-                            account_hint(Some(&account_id))
-                        );
-                        return (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(ErrorResponse {
-                                error: "leader resolution unavailable".to_string(),
-                            }),
-                        )
-                            .into_response();
-                    }
-                },
-                None => None,
+            let leader = match resolve_identity_leader(
+                &state.db,
+                &account_id,
+                payload.requested_leader.as_deref(),
+                payload.random_leader,
+            ).await {
+                Ok(leader) => leader,
+                Err(error) => {
+                    error!("[identity] leader resolution failed account={} error={error}", account_hint(Some(&account_id)));
+                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "leader resolution unavailable".to_string() })).into_response();
+                }
             };
             let skin_style = match state.db.selected_skin_style_for_account(&account_id).await {
                 Ok(style) => style,
@@ -1813,27 +1849,17 @@ async fn handle_internal_identity_resolve(
                 .into_response();
         }
     };
-    let leader = match payload.requested_leader.as_deref() {
-        Some(requested) => match state
-            .db
-            .resolve_leader_for_account(&account.id, Some(requested))
-            .await
-        {
-            Ok(resolution) => {
-                Some(sow_data::commerce::leader_wire_id(resolution.resolved).to_string())
-            }
-            Err(error) => {
-                error!("verified identity leader resolution failed: {error}");
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        error: "leader resolution unavailable".to_string(),
-                    }),
-                )
-                    .into_response();
-            }
-        },
-        None => None,
+    let leader = match resolve_identity_leader(
+        &state.db,
+        &account.id,
+        payload.requested_leader.as_deref(),
+        payload.random_leader,
+    ).await {
+        Ok(leader) => leader,
+        Err(error) => {
+            error!("verified identity leader resolution failed: {error}");
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "leader resolution unavailable".to_string() })).into_response();
+        }
     };
     let skin_style = sow_data::commerce::skin_style_for_profile(
         &account.profile.owned_skins,
@@ -2093,6 +2119,10 @@ async fn main() {
         .ok()
         .filter(|value| !value.trim().is_empty())
         .expect("SOW_DB_SECRET must be set; refusing insecure default");
+    let relay_settlement_secret = std::env::var("SOW_RELAY_SETTLEMENT_SECRET")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .expect("SOW_RELAY_SETTLEMENT_SECRET must be set; refusing shared settlement auth");
 
     let revenuecat_webhook_secret = std::env::var("SOW_REVENUECAT_WEBHOOK_SECRET")
         .ok()
@@ -2188,6 +2218,8 @@ async fn main() {
 
     let (replay_verification_tx, replay_verification_rx) = tokio::sync::mpsc::channel(16);
     let replay_verification_client = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(120))
         .build()
         .expect("failed to create replay verification client");
@@ -2195,6 +2227,7 @@ async fn main() {
     let state = Arc::new(AppState {
         db: player_db,
         secret_token,
+        relay_settlement_secret,
         revenuecat_webhook_secret,
         stripe_secret_key,
         stripe_publishable_key,
@@ -2207,9 +2240,10 @@ async fn main() {
         playgames_access_tokens: std::sync::Mutex::new(HashMap::new()),
         replay_verification_tx,
         replay_verification_client,
+        match_artifact_lock: tokio::sync::Mutex::new(()),
     });
 
-    tokio::spawn(replay_verification_worker(
+    tokio::spawn(match_exit::worker(
         Arc::clone(&state),
         replay_verification_rx,
     ));
@@ -2308,6 +2342,9 @@ async fn main() {
             post(handle_tutorial_complete),
         )
         .route("/profile/tutorial-complete", post(handle_tutorial_complete))
+        .route("/profile/match-exit", post(match_exit::handle_exit))
+        .route("/profile/campaign-complete", post(handle_campaign_complete))
+        .route("/profile/leader-selection", post(handle_leader_selection))
         .route(
             "/profile/menu-guide-progress",
             post(handle_menu_guide_progress),
@@ -3139,6 +3176,83 @@ async fn handle_tutorial_complete(
     }
 }
 
+async fn handle_campaign_complete(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<CampaignCompleteRequest>,
+) -> impl IntoResponse {
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    ).await {
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
+    match state.db.complete_campaign_episode(&account_id, payload.episode_id.trim()).await {
+        Ok(account) => {
+            let sync_state = Arc::clone(&state);
+            let sync_account_id = account.id.clone();
+            tokio::spawn(async move {
+                if let Err(error) = sync_state.sync_playgames_profile(&sync_account_id).await {
+                    warn!("Play Games campaign sync failed for account={}: {error}", account_hint(Some(&sync_account_id)));
+                }
+            });
+            (StatusCode::OK, Json(account.without_auth_secret())).into_response()
+        }
+        Err(error) => {
+            let message = error.to_string();
+            let status = if message.starts_with("unknown campaign") {
+                StatusCode::BAD_REQUEST
+            } else if message.contains("not published") || message.contains("completed in order") {
+                StatusCode::CONFLICT
+            } else if message.contains("account") || message.contains("Account not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                error!("campaign completion failed: {message}");
+                StatusCode::SERVICE_UNAVAILABLE
+            };
+            (status, Json(ErrorResponse { error: message })).into_response()
+        }
+    }
+}
+
+async fn handle_leader_selection(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<LeaderSelectionRequest>,
+) -> impl IntoResponse {
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    ).await {
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
+    match state.db.update_leader_selection(
+        &account_id,
+        payload.preferred_leader.as_deref(),
+        payload.prefer_random_leader,
+    ).await {
+        Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
+        Err(error) => {
+            let message = error.to_string();
+            let status = if message.starts_with("unknown") || message.contains("not available") || message.contains("required") {
+                StatusCode::BAD_REQUEST
+            } else if message.contains("Account not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                error!("leader selection save failed: {message}");
+                StatusCode::SERVICE_UNAVAILABLE
+            };
+            (status, Json(ErrorResponse { error: message })).into_response()
+        }
+    }
+}
+
 /// POST /profile/menu-guide-progress — save server-validated menu guide state.
 async fn handle_menu_guide_progress(
     State(state): State<Arc<AppState>>,
@@ -3196,7 +3310,7 @@ async fn handle_match_participant_settle(
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    if !verify_internal_auth(&headers, &state.secret_token) {
+    if !verify_internal_auth(&headers, &state.relay_settlement_secret) {
         warn!("Unauthorized access attempt to /internal/match-participant-settle");
         return (
             StatusCode::UNAUTHORIZED,
@@ -3225,186 +3339,14 @@ async fn handle_match_participant_settle(
         )
             .into_response();
     }
-    if body.is_empty() {
-        let rejected = match reject_participant_settlement(
-            &state.db,
-            &match_id,
-            &account_id,
-            closure_turn,
-        )
-        .await
-        {
-            Ok(rejected) => rejected,
-            Err(message) => {
-                return (
-                    participant_closure_error_status(&message),
-                    Json(ErrorResponse { error: message }),
-                )
-                    .into_response();
-            }
-        };
-        return (
-            StatusCode::OK,
-            Json(serde_json::json!({
-                "status": if rejected { "rejected" } else { "settled" }
-            })),
-        )
-            .into_response();
-    }
-
-    let verifier_base = std::env::var("SOW_SERVER_HTTP_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:25566".to_string());
-    let verifier_url = format!(
-        "{}/internal/replay/verify/{match_id}/participant/{account_id}/{closure_turn}",
-        verifier_base.trim_end_matches('/')
-    );
-    let response = match state
-        .replay_verification_client
-        .post(verifier_url)
-        .bearer_auth(&state.secret_token)
-        .header("Content-Type", "application/octet-stream")
-        .body(body)
-        .send()
-        .await
-    {
-        Ok(response) => response,
+    match match_exit::accept_participant(&state, &match_id, account_id, closure_turn, body).await {
+        Ok(ack) => (StatusCode::ACCEPTED, Json(ack)).into_response(),
         Err(error) => {
-            warn!("[rewards] participant verifier unavailable match={match_id}: {error}");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse {
-                    error: "participant result is not available yet".to_string(),
-                }),
-            )
-                .into_response();
-        }
-    };
-    if response.status() == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
-        let rejected = match reject_participant_settlement(
-            &state.db,
-            &match_id,
-            &account_id,
-            closure_turn,
-        )
-        .await
-        {
-            Ok(rejected) => rejected,
-            Err(message) => {
-                return (
-                    participant_closure_error_status(&message),
-                    Json(ErrorResponse { error: message }),
-                )
-                    .into_response();
-            }
-        };
-        return (
-            StatusCode::OK,
-            Json(serde_json::json!({
-                "status": if rejected { "rejected" } else { "settled" }
-            })),
-        )
-            .into_response();
-    }
-    if !response.status().is_success() {
-        warn!(
-            "[rewards] participant verifier returned HTTP {} match={match_id}",
-            response.status()
-        );
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse {
-                error: "participant result is not available yet".to_string(),
-            }),
-        )
-            .into_response();
-    }
-    let result = match response
-        .json::<sow_data::profile::VerifiedMatchResult>()
-        .await
-    {
-        Ok(result)
-            if result.match_id == match_id
-                && result.personal_closure_turn == Some(closure_turn) =>
-        {
-            result
-        }
-        Ok(_) => {
-            warn!("[rewards] participant verifier returned mismatched closure match={match_id}");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse {
-                    error: "participant result is not available yet".to_string(),
-                }),
-            )
-                .into_response();
-        }
-        Err(error) => {
-            warn!("[rewards] participant verifier response invalid match={match_id}: {error}");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse {
-                    error: "participant result is not available yet".to_string(),
-                }),
-            )
-                .into_response();
-        }
-    };
-    if let Err(error) = state
-        .db
-        .note_match_participant_closure(&match_id, &account_id, closure_turn)
-        .await
-    {
-        let message = error.to_string();
-        warn!(
-            "[rewards] participant closure rejected match={match_id} account={} error={message}",
-            account_hint(Some(&account_id))
-        );
-        return (
-            participant_closure_error_status(&message),
-            Json(ErrorResponse { error: message }),
-        )
-            .into_response();
-    }
-    match state
-        .db
-        .apply_verified_match_participant_result(&result, &account_id, closure_turn)
-        .await
-    {
-        Ok(Some((outcome, account))) => {
-            state.db.submit_crazygames_score(&account).await;
-            if let Err(error) = state.sync_playgames_match_outcome(&outcome).await {
-                warn!(
-                    "participant Play Games outcome sync failed account={}: {error}",
-                    account_hint(Some(&outcome.account_id))
-                );
-            }
-            info!(
-                "[rewards] participant receipt verified match={match_id} account={}",
-                account_hint(Some(&account.id))
-            );
-            (
-                StatusCode::OK,
-                Json(serde_json::json!({ "status": "settled" })),
-            )
-                .into_response()
-        }
-        Ok(None) => (
-            StatusCode::OK,
-            Json(serde_json::json!({ "status": "ignored" })),
-        )
-            .into_response(),
-        Err(error) => {
-            warn!(
-                "[rewards] participant settlement failed match={match_id} account={} error={error}",
-                account_hint(Some(&account_id))
-            );
-            (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse {
-                    error: "participant settlement will retry".to_string(),
-                }),
-            )
-                .into_response()
+            let message = error.to_string();
+            warn!("[rewards] participant intake remains unacknowledged match={match_id}: {message}");
+            let status = if message.contains("conflicts with its saved state") { StatusCode::CONFLICT }
+                else { participant_closure_error_status(&message) };
+            (status, Json(ErrorResponse { error: message })).into_response()
         }
     }
 }
@@ -4402,7 +4344,7 @@ async fn handle_match_finalize(
     headers: HeaderMap,
     Json(payload): Json<MatchFinalizeRequest>,
 ) -> impl IntoResponse {
-    if !verify_internal_auth(&headers, &state.secret_token) {
+    if !verify_internal_auth(&headers, &state.relay_settlement_secret) {
         warn!("Unauthorized access attempt to /internal/match-finalize");
         return (
             StatusCode::UNAUTHORIZED,
@@ -4411,6 +4353,31 @@ async fn handle_match_finalize(
             }),
         )
             .into_response();
+    }
+
+    if payload.match_id.parse::<u64>().is_err() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "match_id is invalid".to_string(),
+            }),
+        )
+            .into_response();
+    }
+
+    let _guard = state.match_artifact_lock.lock().await;
+    match state.db.match_start_record(&payload.match_id) {
+        Ok(Some(start)) => {
+            match state.db.match_work(&payload.match_id) {
+                Ok(pending) if pending.is_some() || start.replay_status != sow_data::profile::ReplayVerificationStatus::Pending => {
+                    return (StatusCode::ACCEPTED, Json(serde_json::json!({"status":"queued", "match_id":payload.match_id}))).into_response();
+                }
+                Ok(_) => {},
+                Err(error) => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: error.to_string() })).into_response(),
+            }
+        }
+        Ok(None) => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error:"trusted match registration unavailable".into() })).into_response(),
+        Err(error) => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error:error.to_string() })).into_response(),
     }
 
     // Commit the replay before finalizing statistics. The bounded request and
@@ -4450,7 +4417,8 @@ async fn handle_match_finalize(
             file.write_all(replay_bytes).await?;
             file.sync_all().await?;
             drop(file);
-            tokio::fs::rename(&temp_path, &file_path).await
+            tokio::fs::rename(&temp_path, &file_path).await?;
+            std::fs::File::open(&replay_dir)?.sync_all()
         }
         .await;
         match write_result {
@@ -4502,7 +4470,8 @@ async fn handle_match_finalize(
             file.write_all(lobby_json.as_bytes()).await?;
             file.sync_all().await?;
             drop(file);
-            tokio::fs::rename(&temp_path, &meta_path).await
+            tokio::fs::rename(&temp_path, &meta_path).await?;
+            std::fs::File::open(&replay_dir)?.sync_all()
         }
         .await;
         if let Err(e) = write_result {
@@ -4620,7 +4589,7 @@ async fn handle_match_finalize(
             }
             (
                 StatusCode::OK,
-                Json(serde_json::json!({ "status": "finalized" })),
+                Json(serde_json::json!({ "status": "finalized", "match_id": payload.match_id })),
             )
                 .into_response()
         }
@@ -4633,31 +4602,6 @@ async fn handle_match_finalize(
                 }),
             )
                 .into_response()
-        }
-    }
-}
-
-async fn replay_verification_worker(
-    state: Arc<AppState>,
-    mut notifications: tokio::sync::mpsc::Receiver<String>,
-) {
-    let mut retry = tokio::time::interval(Duration::from_secs(30));
-    loop {
-        tokio::select! {
-            Some(match_id) = notifications.recv() => {
-                verify_queued_replay(&state, &match_id).await;
-            }
-            _ = retry.tick() => {
-                match state.db.pending_replay_verifications(32) {
-                    Ok(match_ids) => {
-                        for match_id in match_ids {
-                            verify_queued_replay(&state, &match_id).await;
-                        }
-                    },
-                    Err(error) => error!("pending replay queue read failed: {error}"),
-                }
-            }
-            else => break,
         }
     }
 }
@@ -4795,10 +4739,9 @@ async fn verify_queued_replay(state: &AppState, match_id: &str) {
         return;
     }
     if !response.status().is_success() {
-        warn!(
-            "replay {match_id} verifier returned HTTP {}",
-            response.status()
-        );
+        let status = response.status();
+        let reason = response.text().await.unwrap_or_else(|error| format!("response unavailable: {error}"));
+        warn!("replay {match_id} verifier returned HTTP {status}: {reason}");
         return;
     }
     let result = match response

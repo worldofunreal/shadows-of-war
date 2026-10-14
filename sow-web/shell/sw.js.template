@@ -15,13 +15,11 @@
 
 const CACHE_NAME = 'sow-__BUILD_TS__';
 
-const SHELL_LOADER = 'https://shadowsofwar.io/assets/shell/loader';
+// Loader art is inlined in the boot HTML (splash) or fetched with a
+// content-hashed ?v= that the browser and CDN keep for a year; precaching it
+// here only made the install phase double-download it.
 const PRECACHE = [
     './sow.svg',
-    SHELL_LOADER + '/sow-splash-desktop.webp?v=__BUILD_TS__',
-    SHELL_LOADER + '/sow-splash-mobile.webp?v=__BUILD_TS__',
-    SHELL_LOADER + '/loader_empty.webp?v=__BUILD_TS__',
-    SHELL_LOADER + '/loader_full.webp?v=__BUILD_TS__',
 ];
 
 self.addEventListener('install', (event) => {

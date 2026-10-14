@@ -62,9 +62,14 @@ impl SowApp {
             return;
         }
 
-        self.progress.preferred_leader = Some(self.ui.app.main_menu_state.selected_leader);
-        self.progress
-            .record_match_with_kda(won, defeats, kills, deaths, assists);
+        self.progress.record_match_with_kda_for_leader(
+            won,
+            defeats,
+            kills,
+            deaths,
+            assists,
+            self.sim.config.player_leader,
+        );
         self.save_local_progress();
         log::info!(
             "Recorded local match progress: won={won}, defeats={defeats:?}, level={}",

@@ -244,7 +244,7 @@ fn record_attack_launch_notice(
     let pointer_y = mouse_y as f32 - 60.0;
     let world_y = (pointer_y - camera_y) / camera_zoom;
     notices.push(crate::app::AttackLaunchNotice {
-        text: format!("⚔️ +{}", crate::utils::format_number(troops)),
+        amount_text: format!("+{}", crate::utils::format_number(troops)),
         world_x,
         world_y,
         start_time: now,
@@ -502,8 +502,8 @@ mod tests {
             record_attack_launch_notice(&mut notices, &intent, 100.0, 200.0, 10.0, 20.0, 2.0, now);
         }
         assert_eq!(notices.len(), 2);
-        assert_eq!(notices[0].text, "⚔️ +13.0K");
-        assert_eq!(notices[1].text, "⚔️ +13.0K");
+        assert_eq!(notices[0].amount_text, "+13.0K");
+        assert_eq!(notices[1].amount_text, "+13.0K");
         assert_eq!((notices[0].world_x, notices[0].world_y), (45.0, 60.0));
     }
 

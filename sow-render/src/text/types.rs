@@ -121,8 +121,6 @@ pub const KIND_ARC: f32 = 8.0;
 pub const KIND_ROUNDED_RECT: f32 = 10.0;
 pub const KIND_BUILDING_SPRITE: f32 = 11.0;
 pub const KIND_STATUS_SPRITE: f32 = 12.0;
-pub const AVATAR_CORNER_RADIUS_RATIO: f32 = 0.14;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NameplateStatusSprite {
     Request,
@@ -142,11 +140,28 @@ impl NameplateStatusSprite {
     }
 }
 
-// 64 portrait slots cover current leaders and every distinct geo-entity portrait, with room to grow.
+// Four 256px expressions per hero, plus shared static campaign portraits.
+// See docs/nameplates-and-emotes.md; capacity is checked against referenced assets.
 pub const AVATAR_CELL: u32 = 256;
 pub const AVATAR_COLS: u32 = 8;
-pub const AVATAR_ROWS: u32 = 8;
+pub const AVATAR_ROWS: u32 = 16;
 pub const AVATAR_SLOT_COUNT: usize = (AVATAR_COLS * AVATAR_ROWS) as usize;
+
+pub const AVATAR_EXPRESSIONS: usize = 4;
+pub const AVATAR_FALLBACK_SLOT: usize = sow_core::player::Leader::ALL.len() * AVATAR_EXPRESSIONS;
+pub const AVATAR_CAMPAIGN_FIRST_SLOT: usize = AVATAR_FALLBACK_SLOT + 1;
+
+pub fn leader_avatar_slot(
+    leader: sow_core::player::Leader,
+    expression: sow_core::emote::AvatarExpression,
+) -> usize {
+    sow_core::player::Leader::ALL
+        .iter()
+        .position(|value| *value == leader)
+        .expect("every leader has an atlas block")
+        * AVATAR_EXPRESSIONS
+        + expression as usize
+}
 
 pub fn avatar_slot_uv(slot: usize) -> [f32; 4] {
     let i = slot as u32;
@@ -154,13 +169,13 @@ pub fn avatar_slot_uv(slot: usize) -> [f32; 4] {
     let row = i / AVATAR_COLS;
     let aw = (AVATAR_COLS * AVATAR_CELL) as f32;
     let ah = (AVATAR_ROWS * AVATAR_CELL) as f32;
-    let u0 = (col * AVATAR_CELL) as f32 / aw;
-    let v0 = (row * AVATAR_CELL) as f32 / ah;
+    let u0 = ((col * AVATAR_CELL) as f32 + 0.5) / aw;
+    let v0 = ((row * AVATAR_CELL) as f32 + 0.5) / ah;
     [
         u0,
         v0,
-        u0 + AVATAR_CELL as f32 / aw,
-        v0 + AVATAR_CELL as f32 / ah,
+        u0 + (AVATAR_CELL - 1) as f32 / aw,
+        v0 + (AVATAR_CELL - 1) as f32 / ah,
     ]
 }
 

@@ -300,6 +300,7 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
                 download_progress: 100,
                 civilization,
                 leader,
+                random_leader: false,
                 skin_style: 0,
                 database_account_id,
                 team,

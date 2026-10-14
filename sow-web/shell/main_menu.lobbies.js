@@ -472,8 +472,7 @@
     }
 
     function renderQueuePlayerRow(player, lobby) {
-        var leader = leaderById(player.leader);
-        var avatarUrl = asset("gameplay/avatars/" + leader.slug + ".webp");
+        var avatarUrl = avatarImage(player.leader);
         var isMe = player.player_id === state.my_player_id;
         var isHost = lobby && lobby.host_name === player.name;
         var canModerate = lobby && lobby.kind === "Custom" && state.is_lobby_host && !isMe;

@@ -11,6 +11,7 @@
     var lastMenuPhase = null;
     var pendingExitScreenIntro = false;
     var tempSelectedLeader = null;
+    var tempSelectedRandom = false;
     var browserSearchQuery = "";
     var heroesSearchQuery = "";
     var heroesRegionFilter = "all";
@@ -115,8 +116,9 @@
         return window.SOW_leaderArtUrl(slug, variant);
     }
 
-    function prepareLeaderArt(leader) {
-        return leader ? window.SOW_prepareLeaderArt(leader.slug) : Promise.resolve(false);
+    function prepareLeaderArt(slugOrLeader, fetchPriority) {
+        var leader = typeof slugOrLeader === "string" ? leaderById(slugOrLeader) : slugOrLeader;
+        return leader ? window.SOW_prepareLeaderArt(leader.slug, fetchPriority) : Promise.resolve(false);
     }
 
     var MAIN_NAV_ITEMS = [
@@ -275,17 +277,28 @@
 
     function heroImage(leaderId) {
         var selected = arguments.length === 0;
+        if (selected && state && state.prefer_random_leader && state.phase === "MainMenu" &&
+            state.loader_job !== "EnterGame" && state.loader_job !== "ExitGame") {
+            window.SOW_prepareLeaderArt("random", state.loader_job === "Boot" ? "low" : "high");
+            return leaderArtUrl("random");
+        }
         var leader = arguments.length
             ? leaderById(leaderId || "Caesar")
             : leaderById(state && state.selected_leader);
         if (selected && state && state.phase === "MainMenu" &&
             state.loader_job !== "EnterGame" && state.loader_job !== "ExitGame") {
-            prepareLeaderArt(leader);
+            prepareLeaderArt(leader.slug, state.loader_job === "Boot" ? "low" : "high");
         }
         return leaderArtUrl(leader.slug);
     }
 
-    function avatarImage() {
+    function avatarImage(leaderId) {
+        if (arguments.length && !leaderId) return asset("gameplay/avatars/random.webp");
+        if (!arguments.length && state && state.prefer_random_leader) return asset("gameplay/avatars/random.webp");
+        if (arguments.length) {
+            var explicitLeader = leaderById(leaderId);
+            return asset("gameplay/avatars/" + explicitLeader.slug + ".webp");
+        }
         var leader = leaderById(state && state.selected_leader);
         return asset("gameplay/avatars/" + leader.slug + ".webp");
     }
@@ -307,11 +320,13 @@
             campaign: state.campaign,
             name: state.player_name,
             leader: state.selected_leader,
+            random_leader: state.prefer_random_leader,
             gems: state.gems,
             crowns: state.crowns,
             laurels: state.laurels,
             reward_receipts: (state.reward_receipts || []).map(function (receipt) {
-                return [receipt.id, receipt.xp, receipt.leader_xp, receipt.crowns, receipt.laurels, receipt.status, receipt.presented_at, receipt.verification_status];
+                return [receipt.id, receipt.xp, receipt.leader_xp, receipt.crowns, receipt.laurels,
+                    receipt.unlocked_leaders, receipt.status, receipt.presented_at, receipt.verification_status];
             }),
             selected_skin: state.selected_skin,
             store_busy: state.store_busy,
@@ -322,7 +337,8 @@
                 gems: state.store.gems,
                 crowns: state.store.crowns,
                 leaders: (state.store.leaders || []).map(function (leader) {
-                    return [leader.id, leader.owned, leader.free_rotation, leader.available, leader.cost_crowns, leader.cost_gems];
+                    return [leader.id, leader.owned, leader.free_rotation, leader.permanently_free,
+                        leader.available, leader.cost_crowns, leader.cost_gems];
                 }),
                 skins: (state.store.skins || []).map(function (skin) {
                     return [skin.id, skin.owned, skin.cost_gems];

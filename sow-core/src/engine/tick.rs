@@ -161,11 +161,13 @@ impl SowEngine {
         let mut expired_alliances = Vec::new();
         for player in &mut self.state.players {
             let pid = player.id;
-            if player.emoji_timer > 0 && !player.emoji_pinned {
-                player.emoji_timer -= 1;
-                if player.emoji_timer == 0 {
-                    player.active_emoji = None;
-                }
+            player.betrayal_retaliation_ticks = player.betrayal_retaliation_ticks.saturating_sub(1);
+            if !player.alive
+                || player.active_emote.is_some_and(|event| {
+                    event.expired(self.state.tick, self.state.config.tick_rate_ms)
+                })
+            {
+                player.active_emote = None;
             }
 
             // Decay alliance timers

@@ -14,6 +14,7 @@ pub mod config;
 pub mod diplomacy;
 #[cfg(test)]
 mod diplomacy_engine_tests;
+pub mod emote;
 pub mod engine;
 pub mod execution;
 pub mod game;

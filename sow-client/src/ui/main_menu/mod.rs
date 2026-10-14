@@ -71,6 +71,7 @@ pub struct MainMenuState {
     pub clan_tag: String,
     pub selected_leader: sow_core::player::Leader,
     pub selected_civilization: sow_core::player::Civilization,
+    pub prefer_random_leader: bool,
     leader_selection_dirty: bool,
     pub error_message: Option<crate::ui::UiText>,
     pub my_player_id: Option<u16>,
@@ -143,6 +144,7 @@ impl Default for MainMenuState {
             clan_tag: String::new(),
             selected_leader: leader,
             selected_civilization: leader.civilization(),
+            prefer_random_leader: false,
             leader_selection_dirty: false,
             error_message: None,
             my_player_id: None,
@@ -227,17 +229,15 @@ impl MainMenuState {
         self.custom_game_config.player_leader = leader;
         self.custom_game_config.player_civilization = leader.civilization();
         if explicit_user_choice {
+            self.prefer_random_leader = false;
             self.leader_selection_dirty = true;
         }
     }
 
-    pub(crate) fn sync_selected_leader_from_match(
-        &mut self,
-        leader: sow_core::player::Leader,
-        tutorial: bool,
-    ) {
-        if !tutorial {
-            self.set_selected_leader(leader, false);
+    pub(crate) fn set_random_leader(&mut self, prefer_random: bool, explicit_user_choice: bool) {
+        self.prefer_random_leader = prefer_random;
+        if explicit_user_choice {
+            self.leader_selection_dirty = true;
         }
     }
 
@@ -256,13 +256,32 @@ mod tests {
     use sow_core::player::Leader;
 
     #[test]
-    fn tutorial_match_does_not_replace_account_leader() {
+    fn choosing_random_keeps_the_last_concrete_leader_as_backup() {
         let mut state = MainMenuState::default();
-        state.set_selected_leader(Leader::Caesar, false);
+        state.set_selected_leader(Leader::Boudica, false);
+        state.set_random_leader(true, true);
 
-        state.sync_selected_leader_from_match(Leader::Boudica, true);
+        assert_eq!(state.selected_leader, Leader::Boudica);
+        assert!(state.prefer_random_leader);
+    }
 
-        assert_eq!(state.selected_leader, Leader::Caesar);
-        assert_eq!(state.custom_game_config.player_leader, Leader::Caesar);
+    #[test]
+    fn choosing_a_concrete_leader_clears_random() {
+        let mut state = MainMenuState::default();
+        state.set_random_leader(true, true);
+        state.set_selected_leader(Leader::Napoleon, true);
+
+        assert_eq!(state.selected_leader, Leader::Napoleon);
+        assert!(!state.prefer_random_leader);
+    }
+
+    #[test]
+    fn syncing_a_concrete_backup_does_not_cancel_random_selection() {
+        let mut state = MainMenuState::default();
+        state.set_random_leader(true, true);
+        state.set_selected_leader(Leader::Boudica, false);
+
+        assert_eq!(state.selected_leader, Leader::Boudica);
+        assert!(state.prefer_random_leader);
     }
 }

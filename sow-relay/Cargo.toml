@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 sow-core = { workspace = true }
+sow-data = { workspace = true }
 sow-net = { workspace = true }
 fstack-bridge = { workspace = true }
 serde = { workspace = true }

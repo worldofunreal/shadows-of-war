@@ -4,3 +4,5 @@
 
 - Campaign episode translations stay locked until the owner explicitly marks that episode finished. Add its ID to APPROVED_CAMPAIGN_TRANSLATION_EPISODES only after that approval; an episode end step is not approval.
 - Before map or thumbnail work, inspect assets/maps/SOURCES.toml, assets/map_sources/thumbnail_frames.json, and the map generation code. A thumbnail change must not alter playable map data.
+
+- Before changing nameplates, player emotes, hero sheets or replay-format compatibility, read `docs/nameplates-and-emotes.md`. Reuse its owners and keep live communication separate from betrayal and archived recordings.

@@ -175,7 +175,6 @@ impl SowApp {
             },
             net: NetState {
                 client: net_client,
-                exiting_relay: None,
                 connect_tx,
                 connect_rx,
                 ws_url,
@@ -358,6 +357,8 @@ impl SowApp {
             profile_refresh_pending: false,
             pending_reward_receipt_ids,
             reward_profile_retry_at: None,
+            profile_action_retry_at: None,
+            pending_campaign_exit: None,
             identity_request_seq: 0,
             profile_last_applied_request: 0,
             join_waiting_for_identity: false,
