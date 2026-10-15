@@ -1906,6 +1906,7 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
             &paths.root.join("Cargo.toml"),
             &paths.root.join("Cargo.lock"),
             &paths.root.join("sow-relay"),
+            &paths.root.join("sow-data"),
             &paths.root.join("sow-core"),
             &paths.root.join("sow-net"),
             &paths.root.join("fstack-bridge"),

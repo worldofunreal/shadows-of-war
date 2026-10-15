@@ -997,6 +997,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_ninth_strike_body",
       "speaker": "boudica",
       "presentation": "dialogue",
+      "wait_before": true,
       "next": "boudica_ninth_legion"
     },
     {

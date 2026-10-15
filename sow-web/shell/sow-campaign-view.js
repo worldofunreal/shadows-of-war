@@ -2,17 +2,45 @@
 (function (host) {
     "use strict";
     let instance = 0;
+    function isCompactViewport(root, width, height) {
+        if (root && root.dataset && root.dataset.compact === "true") return true;
+        width = Number.isFinite(Number(width)) ? Number(width) : Number(root && root.clientWidth);
+        height = Number.isFinite(Number(height)) ? Number(height) : Number(root && root.clientHeight);
+        if (!(width > 0) || !(height > 0)) return false;
+        return width <= height ? width <= 959 : Math.min(width / 960, height / 720) < 1;
+    }
+    function compactGuideMetric(step, progress) {
+        const trigger = step && step.trigger || {};
+        if (!step || !step.guide || step.guide.show_label === false || !progress
+            || trigger.type === "territory" && trigger.scope === "total" && trigger.comparison === "lte") return null;
+        const current = Number(progress.current), target = Number(progress.target);
+        if (!Number.isFinite(current) || !Number.isFinite(target)) return null;
+        if (trigger.type === "ui" && trigger.action === "attack_ratio") {
+            const percent = value => Math.round(Math.max(0, Math.min(1, value)) * 100) + "%";
+            return { text: percent(current) + " / " + percent(target) };
+        }
+        if (target > 1) return { text: Math.floor(current).toLocaleString() + " / " + Math.ceil(target).toLocaleString() };
+        return null;
+    }
+    function compactStatusLabel(step, context, translate) {
+        if (context.statusLabel) return context.statusLabel;
+        if (step.trigger && step.trigger.type === "structure_level") {
+            const progress = translate("hud.building_in_progress");
+            if (progress) return progress;
+        }
+        return translate(step.hint_key || step.body_key);
+    }
     function mount(root, options) {
         options = options || {};
         const doc = root.ownerDocument;
         const uid = "sow-story-" + (++instance);
         let model = null, renderKey = "", lastBeatKey = "", focusBefore = null, wasModal = false, lastAction = -Infinity;
-        let objectiveStepId = null;
-        let guideWasVisible = false, cameraTracking = false, guideX = null, guideY = null, guideLabelWidth = 0, guideLabelMeasureKey = "", nudgeTimer = 0;
+        let compactViewport = false, lastRenderContext = null, compactStatusVisible = false;
+        let guideWasVisible = false, cameraTracking = false, guideX = null, guideY = null, guideLabelWidth = 0, guideLabelHeight = 0, guideLabelMeasureKey = "", nudgeTimer = 0;
         let homeGuideAnimation = null, homeGuideAnimationStep = null;
         root.classList.add("sow-story");
         root.innerHTML = '<div class="sow-story__shade" hidden></div>' +
-            '<div class="sow-story__cinematic" tabindex="-1" hidden><video playsinline preload="none" fetchpriority="low"></video><button class="sow-story__cinematic-start" type="button" data-story-start hidden></button><span class="sow-story__cinematic-hold" data-story-hold hidden aria-hidden="true"><span></span><i><b></b></i></span></div>' +
+            '<div class="sow-story__cinematic" tabindex="-1" hidden><video playsinline preload="none" fetchpriority="low"></video><button class="sow-story__continue sow-story__cinematic-start" type="button" data-story-start hidden></button><span class="sow-story__cinematic-hold" data-story-hold hidden aria-hidden="true"><span></span><i><b></b></i></span></div>' +
             '<article class="sow-story__dialog" tabindex="-1" hidden>' +
                 '<div class="sow-story__main"><div class="sow-story__portrait" hidden><img alt="" draggable="false"><span class="sow-story__portrait-line" aria-hidden="true"></span></div>' +
                 '<div class="sow-story__conversation"><header class="sow-story__heading"><p class="sow-story__speaker"></p><button class="sow-story__close" type="button" data-story-dismiss>×</button></header>' +
@@ -22,10 +50,9 @@
             '</article>' +
             '<aside class="sow-story__objective" hidden>' +
                 '<div class="sow-story__objective-copy"><h3></h3><p id="' + uid + '-hint"></p><div class="sow-story__meter"><progress></progress><output></output></div></div>' +
-                '<button class="sow-story__details-toggle" type="button" data-story-objective-toggle aria-controls="' + uid + '-hint"><span aria-hidden="true">⌄</span></button>' +
                 '<button class="sow-story__locate" type="button" data-story-focus>⌖</button></aside>' +
             '<div class="sow-story__spotlight" aria-hidden="true" hidden></div>' +
-            '<div class="sow-story__gesture" data-tutorial-hand aria-hidden="true" hidden><span class="sow-story__ripple"></span><span class="sow-story__hand"><img alt="" aria-hidden="true" draggable="false"></span><span class="sow-story__zoom"><span class="sow-story__zoom-fingers"><i></i><i></i><b>↔</b></span><span class="sow-story__zoom-wheel">↕</span></span><span class="sow-story__pan-keys"><kbd>↑</kbd><span><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span></span><span class="sow-story__gesture-label" hidden><span class="sow-story__gesture-copy"></span><span class="sow-story__gesture-hint" hidden></span><span class="sow-story__gesture-metric" hidden><b class="sow-story__zoom-current"></b><i aria-hidden="true">→</i><b class="sow-story__zoom-target"></b></span></span></div>';
+            '<div class="sow-story__gesture" data-tutorial-hand hidden><span class="sow-story__ripple" aria-hidden="true"></span><span class="sow-story__hand" aria-hidden="true"><img alt="" draggable="false"></span><span class="sow-story__zoom" aria-hidden="true"><span class="sow-story__zoom-fingers"><i></i><i></i><b>↔</b></span><span class="sow-story__zoom-wheel">↕</span></span><span class="sow-story__pan-keys" aria-hidden="true"><kbd>↑</kbd><span><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span></span><span class="sow-story__gesture-label" hidden><span class="sow-story__gesture-copy"></span><span class="sow-story__gesture-hint" hidden></span><span class="sow-story__gesture-metric" hidden><b class="sow-story__zoom-current"></b><i aria-hidden="true">→</i><b class="sow-story__zoom-target"></b></span></span></div>';
         const find = selector => root.querySelector(selector);
         const dialog = find(".sow-story__dialog"), shade = find(".sow-story__shade");
         const portrait = find(".sow-story__portrait"), portraitLine = portrait.querySelector(".sow-story__portrait-line");
@@ -36,7 +63,6 @@
         const cinematic = find(".sow-story__cinematic"), cinematicVideo = cinematic.querySelector("video");
         const cinematicStart = find("[data-story-start]"), cinematicHold = find("[data-story-hold]"), cinematicHoldProgress = cinematicHold.querySelector("b");
         const objective = find(".sow-story__objective"), objectiveTitle = objective.querySelector("h3"), hint = objective.querySelector("p");
-        const objectiveToggle = find("[data-story-objective-toggle]");
         const meter = objective.querySelector("progress"), amount = objective.querySelector("output");
         const gesture = find(".sow-story__gesture"), gestureLabel = find(".sow-story__gesture-label"), gestureCopy = find(".sow-story__gesture-copy"), gestureHint = find(".sow-story__gesture-hint");
         const gestureMetric = find(".sow-story__gesture-metric"), guideCurrent = find(".sow-story__zoom-current"), guideTarget = find(".sow-story__zoom-target");
@@ -167,12 +193,43 @@
         const ResizeObserverCtor = view && view.ResizeObserver;
         const portraitObserver = typeof ResizeObserverCtor === "function" ? new ResizeObserverCtor(() => {
             if (portraitFrame || !view) return;
-            portraitFrame = view.requestAnimationFrame(() => { portraitFrame = 0; syncMobilePortrait(); });
+            portraitFrame = view.requestAnimationFrame(() => {
+                portraitFrame = 0;
+                syncMobilePortrait();
+                const nextCompact = isCompactViewport(root);
+                if (model && !root.hidden && nextCompact !== compactViewport) render(model, lastRenderContext);
+            });
         }) : null;
         if (portraitObserver) { portraitObserver.observe(conversation); portraitObserver.observe(root); }
         find(".sow-story__hand img").src = options.asset("gameplay/icons/tutorial_hand.webp");
         const dismissButtons = Array.from(root.querySelectorAll("[data-story-dismiss]"));
         const t = key => key ? options.translate(key) : "";
+        function positionGuideLabel(anchor, statusOnly) {
+            if (!anchor || !Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) return;
+            if (!statusOnly && model.step.guide && model.step.guide.kind === "ui" && model.step.guide.target === "attack_ratio") {
+                gestureLabel.style.removeProperty("top"); gestureLabel.style.removeProperty("bottom");
+                gestureLabel.style.transform = "translateY(-50%)";
+                return;
+            }
+            const measureKey = gestureCopy.textContent + ":" + gestureMetric.textContent + ":" + root.clientWidth + ":" + root.clientHeight + ":" + (statusOnly ? "status" : "guide");
+            if (measureKey !== guideLabelMeasureKey) {
+                guideLabelMeasureKey = measureKey;
+                const rect = gestureLabel.getBoundingClientRect();
+                guideLabelWidth = rect.width; guideLabelHeight = rect.height;
+            }
+            const halfLabel = guideLabelWidth / 2, viewportWidth = root.clientWidth;
+            const shift = Math.max(12 - (anchor.x - halfLabel), Math.min(0, viewportWidth - 12 - (anchor.x + halfLabel)));
+            if (statusOnly) {
+                const above = anchor.y > root.clientHeight / 2;
+                gestureLabel.style.top = above ? "auto" : "14px";
+                gestureLabel.style.bottom = above ? "14px" : "auto";
+            } else if (anchor.y + 61 + guideLabelHeight > root.clientHeight - 12) {
+                gestureLabel.style.top = "auto"; gestureLabel.style.bottom = "14px";
+            } else {
+                gestureLabel.style.removeProperty("top"); gestureLabel.style.removeProperty("bottom");
+            }
+            gestureLabel.style.transform = "translateX(calc(-50% + " + shift + "px))";
+        }
         function clearCinematicHold() {
             if (cinematicHoldTimer) { clearTimeout(cinematicHoldTimer); cinematicHoldTimer = 0; }
             if (cinematicHoldFrame) {
@@ -266,6 +323,10 @@
             }
             cinematicStatus = "starting"; syncCinematic(model.step);
             attachCinematicMedia(model.step.video_src);
+            cinematicVideo.muted = false;
+            requestCinematicPlayback(sourceKey);
+        }
+        function requestCinematicPlayback(sourceKey) {
             let playback;
             try { playback = cinematicVideo.play(); }
             catch (error) { playbackRejected(error, sourceKey); return; }
@@ -273,10 +334,24 @@
         }
         function playbackRejected(error, sourceKey) {
             if (sourceKey !== cinematicStepKey || !model || cinematicStatus === "fallback") return;
-            if (error && error.name === "NotAllowedError") {
-                cinematicStatus = "blocked";
+            if (error && error.name === "NotAllowedError" && !cinematicVideo.muted) {
+                cinematicVideo.muted = true;
+                cinematicStatus = "starting";
                 syncCinematic(model.step);
+                requestCinematicPlayback(sourceKey);
             } else if (!error || error.name !== "AbortError") failCinematic();
+        }
+        function recoverCinematicFromClick(event) {
+            if (!event || !event.isTrusted || !cinematicStepKey || !model ||
+                cinematicStatus === "fallback" || cinematicStatus === "ended" || cinematicStatus === "ready") return;
+            if (cinematicStatus === "paused" || cinematicStatus === "starting" && cinematicVideo.paused) {
+                cinematicVideo.muted = false;
+                cinematicStatus = "starting";
+                syncCinematic(model.step);
+                requestCinematicPlayback(cinematicStepKey);
+            } else if (cinematicVideo.muted && (cinematicStatus === "playing" || cinematicStatus === "starting")) {
+                cinematicVideo.muted = false;
+            }
         }
         function syncCinematic(step) {
             const source = step.type === "scene" && step.presentation === "cinematic" ? step.video_src || "" : "";
@@ -284,6 +359,7 @@
             if (nextKey !== cinematicStepKey) {
                 clearCinematicHold(); clearCinematicLoaderWait();
                 cinematicStepKey = nextKey; cinematicStatus = source ? (options.autoPlayCinematic === false ? "ready" : "starting") : "none";
+                cinematicVideo.muted = false;
                 cinematicVideo.pause();
                 if (source) { showCinematicPoster(source); }
                 else { clearCinematicMedia(); }
@@ -293,9 +369,9 @@
             const active = Boolean(source) && cinematicStatus !== "fallback" && cinematicStatus !== "ended";
             setCinematicAudioActive(active);
             cinematic.hidden = !active;
-            cinematicStart.hidden = !active || !(cinematicStatus === "blocked" || cinematicStatus === "ready");
-            cinematicStart.textContent = t("tutorial.cinematic_tap_to_play");
-            cinematicStart.setAttribute("aria-label", t("tutorial.cinematic_tap_to_play"));
+            cinematicStart.hidden = !active || !(options.autoPlayCinematic === false && cinematicStatus === "ready");
+            cinematicStart.textContent = t("lobbies.play");
+            cinematicStart.setAttribute("aria-label", t("lobbies.play"));
             cinematicHold.hidden = !active;
             cinematicHold.querySelector("span").textContent = t("tutorial.hold_to_skip");
             root.classList.toggle("is-cinematic", active);
@@ -318,7 +394,7 @@
         });
         cinematicVideo.addEventListener("pause", () => {
             if (!cinematicStepKey || cinematicStatus !== "playing" || cinematicVideo.ended) return;
-            cinematicStatus = "blocked"; syncCinematic(model.step);
+            cinematicStatus = "paused"; syncCinematic(model.step);
         });
         cinematicVideo.addEventListener("ended", () => {
             if (!cinematicStepKey || cinematicStatus === "fallback") return;
@@ -435,16 +511,14 @@
         }
         function render(next, context) {
             context = context || {};
+            lastRenderContext = context;
             model = next;
+            compactViewport = isCompactViewport(root);
             const wasHidden = root.hidden;
             root.hidden = !model || model.done;
-            if (root.hidden) { portraitRequestId++; guideWasVisible = false; cameraTracking = false; clearHomeGuideAnimation(); gesture.classList.remove("is-following", "is-camera-following"); clearNudge(); clearGuideMetric(); objectiveStepId = null; stopCinematic(); if (wasModal) releaseFocus(); wasModal = false; return; }
+            if (root.hidden) { portraitRequestId++; guideWasVisible = false; cameraTracking = false; compactStatusVisible = false; clearHomeGuideAnimation(); gesture.classList.remove("is-following", "is-camera-following", "is-status", "is-compact"); clearNudge(); clearGuideMetric(); stopCinematic(); if (wasModal) releaseFocus(); wasModal = false; return; }
             preparePortraits(model.definition);
             const step = model.step, line = model.line || step;
-            if (objectiveStepId !== step.id) {
-                objectiveStepId = step.id;
-                objective.dataset.detailsExpanded = "false";
-            }
             footer.hidden = step.type === "choice" || step.pause_game === true;
             const beatKey = JSON.stringify([step.id, model.state && model.state.line]);
             const beatChanged = Boolean(lastBeatKey && beatKey !== lastBeatKey);
@@ -462,7 +536,7 @@
             syncCinematic(step);
             root.dataset.stepId = step.id;
             root.dataset.stepType = step.type;
-            objective.hidden = modal || context.hideObjective === true;
+            objective.hidden = modal || context.hideObjective === true || compactViewport;
             dialog.setAttribute("role", "dialog");
             dialog.setAttribute("aria-modal", "true");
             dialog.setAttribute("aria-labelledby", uid + (line.title_key || step.title_key ? "-title" : "-body"));
@@ -543,9 +617,6 @@
             });
             setText(objectiveTitle, t(step.title_key));
             setText(hint, context.hintOverride || t(step.hint_key || step.body_key)); hint.hidden = !hint.textContent;
-            objectiveToggle.setAttribute("aria-label", t("tutorial.objective_details"));
-            objectiveToggle.setAttribute("aria-expanded", String(objective.dataset.detailsExpanded === "true"));
-            objectiveToggle.hidden = hint.hidden;
             const progress = model.progress;
             objective.querySelector(".sow-story__meter").hidden = progress.target <= 1;
             meter.max = Math.max(1, progress.target); meter.value = progress.current;
@@ -567,17 +638,27 @@
             const homeGuide = Boolean(step.guide && step.guide.kind === "ui" && step.guide.target === "hud_center_camera"
                 && step.guide.gesture === "tap" && step.trigger && step.trigger.type === "ui" && step.trigger.action === "hud_center_camera");
             const anchor = context.anchor;
-            const labeledGesture = showGestureText && (zoomGuide || zoomButtonGuide || ["drag", "pan_keys", "hover"].includes(gestureType) || Boolean(context.gestureLabel));
+            const statusOnly = context.statusOnly === true;
+            const statusVisible = compactViewport && !modal && step.type === "objective"
+                && (statusOnly || !step.guide) && anchor
+                && Number.isFinite(anchor.x) && Number.isFinite(anchor.y);
+            const statusLabel = statusVisible ? compactStatusLabel(step, context, t) : "";
+            compactStatusVisible = Boolean(statusVisible && statusLabel);
+            const labeledGesture = compactStatusVisible || showGestureText && (zoomGuide || zoomButtonGuide || ["drag", "pan_keys", "hover"].includes(gestureType) || Boolean(context.gestureLabel));
             gestureLabel.hidden = !labeledGesture;
             const gestureTitleKey = zoomGuide ? (gestureType === "zoom_in" ? "hud.zoom_in" : "hud.zoom_out")
                 : zoomButtonGuide ? (step.guide.target === "hud_zoom_in" ? "hud.zoom_in" : "hud.zoom_out") : step.title_key;
-            if (labeledGesture) setText(gestureCopy, context.gestureLabel || t(gestureTitleKey));
-            const showGestureHint = showGestureText && (gestureType === "hover" || zoomGuide) && Boolean(context.gestureHint || context.hintOverride);
+            if (labeledGesture) setText(gestureCopy, compactStatusVisible ? statusLabel : context.gestureLabel || t(gestureTitleKey));
+            const showGestureHint = !compactStatusVisible && showGestureText && (gestureType === "hover" || zoomGuide) && Boolean(context.gestureHint || context.hintOverride);
             gestureHint.hidden = !showGestureHint;
             if (showGestureHint) setText(gestureHint, context.gestureHint || context.hintOverride);
-            renderGuideMetric(context.guideMetric, reducedMotion, step.id);
-            const guideVisible = !modal && step.guide && anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y);
-            gesture.hidden = !guideVisible; spotlight.hidden = !guideVisible || !anchor.width;
+            const guideVisible = Boolean(!modal && !statusOnly && step.guide && anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y));
+            const statusDrawable = Boolean(compactStatusVisible && statusLabel);
+            renderGuideMetric(context.guideMetric || (compactViewport && guideVisible ? compactGuideMetric(step, progress) : null), reducedMotion, step.id);
+            gesture.hidden = !guideVisible && !statusDrawable;
+            gesture.classList.toggle("is-status", statusDrawable);
+            gesture.classList.toggle("is-compact", compactViewport);
+            spotlight.hidden = !guideVisible || !anchor.width;
             spotlight.classList.toggle("is-dimmed", Boolean(guideVisible && (anchor.dimOutside || step.guide.kind === "ui")));
             if (!guideVisible || !homeGuide) clearHomeGuideAnimation();
             if (guideVisible) {
@@ -619,21 +700,7 @@
                         };
                     }
                 }
-                if (labeledGesture) {
-                    if (step.guide.kind === "ui" && step.guide.target === "attack_ratio") {
-                        gestureLabel.style.transform = "translateY(-50%)";
-                    } else {
-                        const measureKey = gestureCopy.textContent + ":" + gestureMetric.textContent + ":" + root.clientWidth;
-                        if (measureKey !== guideLabelMeasureKey) {
-                            guideLabelMeasureKey = measureKey;
-                            guideLabelWidth = gestureLabel.getBoundingClientRect().width;
-                        }
-                        const halfLabel = guideLabelWidth / 2, viewportWidth = root.clientWidth;
-                        const shift = Math.max(12 - (anchor.x - halfLabel), Math.min(0, viewportWidth - 12 - (anchor.x + halfLabel)));
-                        const labelTransform = "translateX(calc(-50% + " + shift + "px))";
-                        if (gestureLabel.style.transform !== labelTransform) gestureLabel.style.transform = labelTransform;
-                    }
-                }
+                if (labeledGesture) positionGuideLabel(anchor, false);
                 const direction = root.dir === "rtl" ? -1 : 1;
                 const localDragX = anchor.width ? Math.min(64, anchor.width * 0.35) * direction : 0;
                 const guideDx = homeGuide ? anchor.x - originX : (anchor.toX == null ? anchor.x + localDragX : anchor.toX) - anchor.x;
@@ -650,9 +717,17 @@
                     spotlight.style.left = (spotlightX - spotlightWidth / 2 - 6) + "px";
                     spotlight.style.top = (spotlightY - spotlightHeight / 2 - 6) + "px";
                 }
+            } else if (statusDrawable) {
+                gesture.classList.remove("is-following");
+                cameraTracking = anchor.cameraTracked === true;
+                gesture.classList.toggle("is-camera-following", cameraTracking);
+                delete gesture.dataset.gesture; delete gesture.dataset.zoomMode; delete gesture.dataset.guideTarget; delete gesture.dataset.guidePath;
+                if (!guideWasVisible || !wasHidden || anchor.x !== guideX || anchor.y !== guideY) gesture.style.transform = guideTransform(anchor.x, anchor.y);
+                guideX = anchor.x; guideY = anchor.y; guideWasVisible = true;
+                positionGuideLabel(anchor, true);
             } else {
                 gesture.classList.remove("is-following");
-                gesture.classList.remove("is-camera-following");
+                gesture.classList.remove("is-camera-following", "is-status");
                 cameraTracking = false;
                 guideWasVisible = false;
             }
@@ -661,6 +736,7 @@
             if (!cameraTracking || root.hidden || !Number.isFinite(x) || !Number.isFinite(y)) return false;
             if (x !== guideX || y !== guideY) gesture.style.transform = guideTransform(x, y);
             guideX = x; guideY = y;
+            if (compactStatusVisible && model && model.step.type === "objective") positionGuideLabel({ x: x, y: y }, true);
             return true;
         }
         function click(event) {
@@ -672,10 +748,6 @@
             if (event.timeStamp - lastAction < 220) return;
             lastAction = event.timeStamp;
             if (button.hasAttribute("data-story-choice")) options.onChoice(button.dataset.storyChoice);
-            else if (button.hasAttribute("data-story-objective-toggle")) {
-                objective.dataset.detailsExpanded = String(objective.dataset.detailsExpanded !== "true");
-                button.setAttribute("aria-expanded", objective.dataset.detailsExpanded);
-            }
             else if (button.hasAttribute("data-story-continue")) options.onContinue();
             else if (button.hasAttribute("data-story-start")) {
                 const sourceKey = cinematicStepKey;
@@ -721,6 +793,7 @@
             }
         }
         root.addEventListener("click", click);
+        doc.addEventListener("click", recoverCinematicFromClick, true);
         doc.addEventListener("click", outsideClick, true);
         ["pointerdown", "pointerup", "touchstart", "touchend", "wheel"].forEach(type => root.addEventListener(type, stop, { passive: true }));
         root.addEventListener("keydown", keys);
@@ -737,6 +810,7 @@
                 if (portraitObserver) portraitObserver.disconnect();
                 root.style.removeProperty("--story-portrait-size");
                 root.removeEventListener("click", click); root.removeEventListener("keydown", keys);
+                doc.removeEventListener("click", recoverCinematicFromClick, true);
                 doc.removeEventListener("click", outsideClick, true);
                 doc.removeEventListener("visibilitychange", clearHoldWhenHidden);
                 ["pointerdown", "pointerup", "touchstart", "touchend", "wheel"].forEach(type => root.removeEventListener(type, stop));
@@ -744,5 +818,5 @@
             }
         };
     }
-    host.SOWCampaignView = { mount };
+    host.SOWCampaignView = { mount, isCompactViewport, compactGuideMetric };
 })(typeof globalThis !== "undefined" ? globalThis : this);

@@ -1632,14 +1632,15 @@
         var deviceHint = model.step.guide && ["drag", "hover"].includes(model.step.guide.gesture)
             ? translated(stepTextKey(model.step, "_" + ($("#device").value === "mobile" ? "mobile" : "desktop") + "_hint"), state.previewLanguage) : null;
         var previewHint = deviceHint || "", guideMetric = null, gestureLabel = null;
+        var guideAction = model.step.guide ? window.SOWCampaign.guideAction(model.step) : "";
+        var statusOnly = model.step.type === "objective" && (!model.step.guide || guideAction === "upgrade_progress");
         if (model.step.guide && model.step.guide.gesture === "tap" && model.step.guide.show_label !== false) {
             var expansionResumed = model.step.paused_action === "expand_once_then_resume" && model.paused_action == null;
             var actionSuffix = expansionResumed ? "_continue_action" : "_" + (zoomMode === "pinch" ? "mobile" : "desktop") + "_action";
             var actionKey = stepTextKey(model.step, actionSuffix), actionText = textValue(actionKey, state.previewLanguage);
-            var action = window.SOWCampaign.guideAction(model.step);
-            var fallbackKey = action === "upgrade_progress" ? "tutorial.hand_upgrade_progress"
-                : action === "interact" ? "tutorial.hand_" + (zoomMode === "pinch" ? "tap" : "click")
-                    : "tutorial.hand_" + (zoomMode === "pinch" ? "tap" : "click") + "_" + action;
+            var fallbackKey = guideAction === "upgrade_progress" ? "tutorial.hand_upgrade_progress"
+                : guideAction === "interact" ? "tutorial.hand_" + (zoomMode === "pinch" ? "tap" : "click")
+                    : "tutorial.hand_" + (zoomMode === "pinch" ? "tap" : "click") + "_" + guideAction;
             gestureLabel = actionText || translated(fallbackKey, state.previewLanguage);
         }
         if (zoomGuide) {
@@ -1659,7 +1660,7 @@
             guideMetric = { text: previewMetric(stepTextKey(model.step, "_progress"), { current: Math.ceil(Number(state.facts.camera_target_distance)), target: model.step.trigger.distance }) };
         }
         if (menuControl) gestureLabel = translated(menuControl.hint_key, state.previewLanguage);
-        try { state.renderer.render(model.waiting ? null : model, { hideObjective: state.isMenuGuides, anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric, gestureLabel: gestureLabel }); }
+        try { state.renderer.render(model.waiting ? null : model, { hideObjective: state.isMenuGuides, anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric, gestureLabel: gestureLabel, statusOnly: statusOnly, statusLabel: statusOnly ? gestureLabel : null }); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         $("#engineState").textContent = JSON.stringify(state.isMenuGuides
             ? { journey: state.menuGuideId, step: model.step.id, type: model.step.type, progress: model.progress, facts: state.facts }
@@ -1700,7 +1701,14 @@
     function previewAnchor(step, facts) {
         var frame = $("#previewFrame");
         frame.querySelectorAll(".is-guide-target").forEach(function (marker) { marker.classList.remove("is-guide-target"); });
-        if (!step.guide) return null;
+        var passiveStatus = step.type === "objective" && (!step.guide || window.SOWCampaign.guideAction(step) === "upgrade_progress");
+        if (!step.guide || passiveStatus) {
+            if (!passiveStatus) return null;
+            var playerMarker = previewWorldMarker(frame, "player", step) || frame.querySelector(".player-base");
+            if (!playerMarker || playerMarker.getClientRects().length === 0) return null;
+            var playerRect = playerMarker.getBoundingClientRect(), frameRect = frame.getBoundingClientRect();
+            return { x: playerRect.left + playerRect.width / 2 - frameRect.left, y: playerRect.top + playerRect.height / 2 - frameRect.top };
+        }
         var frameRect = frame.getBoundingClientRect(), guide = step.guide;
         if (["zoom_in", "zoom_out"].includes(guide.gesture)) return { x: frame.clientWidth * 0.5, y: frame.clientHeight * 0.5 };
         var target;

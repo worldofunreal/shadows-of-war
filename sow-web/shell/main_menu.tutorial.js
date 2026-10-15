@@ -263,6 +263,14 @@
                 if (step.guide.gesture === "hover") context.gestureHint = context.hintOverride;
             }
         }
+        if (step && step.type === "objective") {
+            var guideAction = step.guide ? window.SOWCampaign.guideAction(step) : "";
+            if (!step.guide || guideAction === "upgrade_progress") {
+                context.statusOnly = true;
+                context.statusLabel = context.gestureLabel || (step.trigger && step.trigger.type === "structure_level"
+                    ? tr("hud.building_in_progress") : tr(step.hint_key || step.body_key));
+            }
+        }
         return context;
     }
 
@@ -502,9 +510,23 @@
     }
 
     function anchorFor(step, hud, guideFacts) {
-        if (!step || !step.guide) return null;
-        var guide = step.guide, tutorial = hud.tutorial || {};
+        if (!step) return null;
+        var tutorial = hud && hud.tutorial || {};
         var triggerType = step.trigger && step.trigger.type;
+        if (!step.guide) {
+            if (step.type !== "objective") return null;
+            if (triggerType === "structure_level") {
+                var passiveKind = step.trigger.kind || ({ city_level: "City", port_level: "Port" })[triggerType];
+                var passiveBuilding = tutorial.upgrading_buildings && tutorial.upgrading_buildings[passiveKind];
+                if (passiveBuilding && Number.isFinite(Number(passiveBuilding.x)) && Number.isFinite(Number(passiveBuilding.y))) {
+                    return { x: Number(passiveBuilding.x), y: Number(passiveBuilding.y) };
+                }
+            }
+            var passivePlayer = tutorial.player;
+            return passivePlayer && Number.isFinite(Number(passivePlayer.x)) && Number.isFinite(Number(passivePlayer.y))
+                ? { x: Number(passivePlayer.x), y: Number(passivePlayer.y), cameraTracked: true } : null;
+        }
+        var guide = step.guide;
         var factionAction = step.trigger && ["attack", "contact", "alliance", "defeated", "fleet"].includes(triggerType);
         if (guide.kind === "world" && factionAction
             && ["target_action", "nameplate", "player"].includes(guide.target)) {
@@ -521,7 +543,11 @@
             var anchors = ["structure_level", "city_level", "port_level"].includes(trigger.type)
                 ? tutorial.upgrading_buildings : tutorial.upgrade_buildings;
             var buildingAnchor = anchors && anchors[buildingKind];
-            if (!buildingAnchor || !Number.isFinite(Number(buildingAnchor.x)) || !Number.isFinite(Number(buildingAnchor.y))) return null;
+            if (!buildingAnchor || !Number.isFinite(Number(buildingAnchor.x)) || !Number.isFinite(Number(buildingAnchor.y))) {
+                var upgradeWaitPlayer = trigger.type === "structure_level" && tutorial.player;
+                return upgradeWaitPlayer && Number.isFinite(Number(upgradeWaitPlayer.x)) && Number.isFinite(Number(upgradeWaitPlayer.y))
+                    ? { x: Number(upgradeWaitPlayer.x), y: Number(upgradeWaitPlayer.y), cameraTracked: true } : null;
+            }
             return { x: Number(buildingAnchor.x), y: Number(buildingAnchor.y) };
         }
 

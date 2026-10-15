@@ -300,3 +300,60 @@ sin añadir otro presentador ni otra guía.
   salud de servicios y verificación pública en
   `dist/logs/production-20261012-224817.log`. La repetición contra el servidor
   público con la cuenta de auditoría `ca438eae…` conservó el mismo resultado.
+
+### Salida multijugador controlada por el servidor — 14 de octubre de 2026
+
+En la partida 20003, el puerto 25594 ya había cerrado después de registrar la
+salida. El cliente seguía intentando conectarse allí mientras esperaba el premio.
+Además, los cuatro procesos del relay enviaban el mismo resultado y competían
+por la única comprobación disponible en el servidor.
+
+| Cambio revisado | Comportamiento introducido |
+| --- | --- |
+| `80c7043d`, 24 de septiembre | Concesión del servidor a partir del resultado personal de la partida. |
+| `c6baa342`, 12 de octubre | Espera del loader hasta recibir el comprobante del servidor. |
+| `5dfda69f`, 13 de octubre | Comprobación del recibo exacto y reconexiones al relay durante esa espera. |
+
+La solicitud ahora queda guardada en el servidor antes de responder. Este la
+entrega por la administración permanente del relay y conserva el trabajo hasta
+terminar de guardar el resultado y el premio. El cliente consulta ese pendiente;
+el puerto de juego puede cerrar. Se retiraron las reconexiones y tickets
+guardados exclusivamente para cobrar. Una conexión iniciada antes de salir
+tampoco puede sustituir la conexión del menú si termina después.
+
+Evidencia de aceptación:
+
+- `multiplayer_exit_survives_closed_port_delay_and_reload` ejecuta `SowApp` y
+  sus solicitudes reales, con transporte simulado para retrasar el resultado,
+  perder una respuesta, cerrar el puerto y recargar. Conserva el loader hasta
+  la confirmación correcta y no abre nuevas conexiones de juego.
+- `accepted_result_survives_process_restart_and_pays_once` detiene el proceso
+  real después de aceptar el resultado. Lo arranca para terminarlo y vuelve a
+  arrancarlo con su caché vacía: recupera desde disco el mismo premio y saldo.
+- `detached_exit_recovers_durable_turns_only_after_the_writer_stops` comprueba
+  la recuperación del registro, incluida una última escritura incompleta,
+  únicamente cuando su escritor ya terminó.
+- `four_processes_share_one_result_claim` hace competir cuatro procesos.
+  `denied_delivery_retains_result_until_a_matching_acknowledgment` comprueba
+  que un rechazo de acceso conserve los archivos hasta la confirmación válida.
+- La partida real **21423** ejecutó el regreso del cliente y su estado publicado
+  en el presentador compartido. El segundo jugador siguió recibiendo turnos.
+  La prueba esperó a que el registro de la partida completa estuviera comprobado
+  y definitivo antes de confirmar que XP, coronas, laureles y cierre personal
+  del primero permanecían intactos. Repetir la solicitud no repitió el premio.
+- `./sow p` completó también la ejecución sin componentes nuevos ni reinicios,
+  incluida esa partida real: `dist/logs/production-20261014-190701.log`.
+  Las pruebas nativas del relay están en
+  `dist/logs/production-20261014-183709.log`; la publicación con comprobación
+  pública está en `dist/logs/production-20261014-184444.log`.
+- La renovación automática del servidor y del relay pasó su prueba real.
+  Se verificaron los certificados servidos, la conexión directa al origen y
+  el rechazo de resultados sin la clave exclusiva del relay, con la clave del
+  servidor o desde otra máquina. Estas comprobaciones forman parte de `./sow p`.
+- Los archivos públicos `sow_client_e616ea2485.js` y su WASM coincidieron byte
+  por byte con la versión aceptada `0.1.3-9f381e0da851`. El WASM incluye la API
+  de salida del servidor y excluye el antiguo código de reconexión para cobrar.
+
+La comprobación anterior ejecuta el cliente, transporte, servidor y presentador
+sin abrir un navegador. La revisión de la presentación visual corresponde al
+jugador.

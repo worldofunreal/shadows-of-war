@@ -334,11 +334,25 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         result = exit(&http, base, &second, match_id).await;
     }
-    assert_eq!(
-        profile(&http, base, Some(&first), "Exit Audit One").await["profile"]["xp"],
-        settled_first["profile"]["xp"],
-        "whole-match closure must preserve the first participant's reward"
-    );
+    // Personal confirmation can precede the whole replay. Wait for the
+    // existing public record to prove that its verification also finished.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(120);
+    loop {
+        let detail: Value = http.get(format!("{}/matches/{match_id}", base.as_str().trim_end_matches('/')))
+            .send().await.unwrap().error_for_status().unwrap().json().await.unwrap();
+        assert_eq!(detail["match_id"], match_id.to_string());
+        if detail["verified"] == true && detail["provisional"] == false { break; }
+        assert!(tokio::time::Instant::now() < deadline, "whole replay verification never finished");
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    let after_closure = profile(&http, base, Some(&first), "Exit Audit One").await;
+    for field in ["xp", "crowns", "laurels"] {
+        assert_eq!(after_closure["profile"][field], settled_first["profile"][field],
+            "whole-match closure must preserve the first participant's {field}");
+    }
+    let receipt = match_id.to_string();
+    assert_eq!(after_closure["profile"]["reward_receipts"][&receipt]["personal_closure_turn"],
+        settled_first["profile"]["reward_receipts"][&receipt]["personal_closure_turn"]);
     std::fs::remove_file(fixture_path).unwrap();
     std::fs::remove_file(state_path).unwrap();
     pass(&format!(

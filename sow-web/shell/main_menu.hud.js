@@ -315,6 +315,7 @@
             notificationLayoutStarted = true;
             var onViewportChange = function () {
                 syncCompactHudBounds();
+                renderNotifications([], false);
                 scheduleNotificationPlacement();
             };
             window.addEventListener("resize", onViewportChange, { passive: true });
@@ -2095,11 +2096,18 @@
     function renderNotifications(entries, forceRefresh) {
         if (!hudRefs || !hudRefs.notifications || !Array.isArray(entries)) return;
         var changed = Boolean(forceRefresh);
+        var width = hudRoot.clientWidth || window.innerWidth || 0;
+        var height = hudRoot.clientHeight || window.innerHeight || 0;
+        var limit = window.SOWCampaignView.isCompactViewport(hudRoot, width, height) ? 1 : 3;
         var now = Date.now();
         var unexpired = activeNotifications.filter(function (item) { return item.expiresAt > now; });
         if (unexpired.length !== activeNotifications.length) changed = true;
         activeNotifications = unexpired;
-        if (hudRoot) hudRoot.dataset.notificationsVisible = String(activeNotifications.length > 0);
+        if (activeNotifications.length > limit) {
+            activeNotifications.sort(function (a, b) { return b.priority - a.priority || b.createdAt - a.createdAt; });
+            activeNotifications.length = limit;
+            changed = true;
+        }
         entries.forEach(function (entry) {
             var id = Number(entry && entry.id);
             if (!Number.isSafeInteger(id) || id <= notificationCursor) return;
@@ -2155,7 +2163,7 @@
                 changed = true;
                 return;
             }
-            if (activeNotifications.length < 3) {
+            if (activeNotifications.length < limit) {
                 activeNotifications.push(item);
                 changed = true;
                 return;
@@ -2171,6 +2179,7 @@
                 changed = true;
             }
         });
+        hudRoot.dataset.notificationsVisible = String(activeNotifications.length > 0);
         if (!changed) return;
         activeNotifications.sort(function (a, b) { return b.priority - a.priority || a.createdAt - b.createdAt; });
         notificationCards.forEach(function (parts, index) {

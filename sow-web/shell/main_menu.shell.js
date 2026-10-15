@@ -53,7 +53,6 @@
         completedCycleId: -1,
         playBlocked: false,
         blockedDeck: null,
-        unlockButton: null,
         pendingVolume: null,
         crossfade: null,
         cinematicActive: false,
@@ -180,42 +179,10 @@
         });
     }
 
-    function menuMusicHasCinematicPrompt() {
-        var storyRoot = document.getElementById("sow-story");
-        var prompt = storyRoot && storyRoot.querySelector("[data-story-start]");
-        return Boolean(prompt && !prompt.hidden && !storyRoot.hidden);
-    }
-
-    function menuMusicHideUnlockPrompt() {
-        if (menuMusic.unlockButton) menuMusic.unlockButton.hidden = true;
-    }
-
-    function menuMusicShowUnlockPrompt() {
-        if (menuMusicHasCinematicPrompt()) {
-            menuMusicHideUnlockPrompt();
-            return;
-        }
-        if (!menuMusic.unlockButton) {
-            var button = document.createElement("button");
-            button.type = "button";
-            button.className = "sow-story__cinematic-start sow-menu__music-unlock";
-            button.setAttribute("data-sow-music-unlock", "");
-            document.body.appendChild(button);
-            menuMusic.unlockButton = button;
-        }
-        var label = typeof window.SOW_t === "function"
-            ? window.SOW_t("tutorial.cinematic_tap_to_play")
-            : "Tap or click to start";
-        menuMusic.unlockButton.textContent = label;
-        menuMusic.unlockButton.setAttribute("aria-label", label);
-        menuMusic.unlockButton.hidden = false;
-    }
-
     function menuMusicPlaybackFailed(error, index) {
         if (error && error.name === "NotAllowedError") {
             menuMusic.playBlocked = true;
             menuMusic.blockedDeck = index;
-            menuMusicShowUnlockPrompt();
             return true;
         }
         console.error("[SOW MUSIC] Opus playback failed:", error);
@@ -259,7 +226,6 @@
                 menuMusic.playBlocked = false;
                 menuMusic.blockedDeck = null;
                 menuMusicSetMediaMetadata();
-                menuMusicHideUnlockPrompt();
                 if (menuMusic.crossfade && menuMusic.crossfade.incoming === index) menuMusicScheduleCrossfade();
             };
             if (result && typeof result.then === "function") {
@@ -364,7 +330,6 @@
         if (menuMusicMuted() || menuMusicVolume() <= 0) {
             menuMusic.playBlocked = false;
             menuMusic.blockedDeck = null;
-            menuMusicHideUnlockPrompt();
             menuMusicSetVolumes(menuMusicMixes());
             return;
         }
@@ -406,9 +371,14 @@
     }
 
     function menuMusicUnlockFromClick(event) {
-        if (!menuMusic.playBlocked || !event.target || typeof event.target.closest !== "function") return;
-        if (!event.target.closest("[data-sow-music-unlock]") &&
-            !event.target.closest("#sow-story [data-story-start]")) return;
+        if (!event || !event.isTrusted || !event.target || typeof root.contains !== "function" ||
+            root.contains(event.target) || !menuMusic.activated || !menuMusic.state ||
+            menuMusicLoaderActive(menuMusic.state) || menuMusic.cinematicActive ||
+            menuMusicMuted() || menuMusicVolume() <= 0) return;
+        var deckIndex = menuMusic.crossfade ? menuMusic.crossfade.incoming
+            : menuMusic.blockedDeck == null ? menuMusic.active : menuMusic.blockedDeck;
+        var deck = menuMusic.decks && menuMusic.decks[deckIndex];
+        if (!menuMusic.playBlocked && (!deck || !deck.paused)) return;
         syncMenuMusic(menuMusic.state, true);
     }
 
@@ -416,9 +386,6 @@
     window.addEventListener("sow:loader-ready", menuMusicStartAtLoaderEnd, { once: true });
     window.addEventListener("sow:wasm-bytes-ready", menuMusicBeginLoading, { once: true });
     document.addEventListener("click", menuMusicUnlockFromClick, true);
-    window.addEventListener("sow:locale-change", function () {
-        if (menuMusic.unlockButton && !menuMusic.unlockButton.hidden) menuMusicShowUnlockPrompt();
-    });
 
     function renderTopbar() {
         var leader = leaderById(state.selected_leader);

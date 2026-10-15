@@ -1563,6 +1563,12 @@ fn placeholder_names(value: &str) -> Result<Vec<String>> {
 }
 
 const APPROVED_CAMPAIGN_TRANSLATION_EPISODES: &[&str] = &[];
+const APPROVED_CAMPAIGN_TRANSLATION_KEYS: &[&str] = &[
+    "campaign_boudica_boudica_city_upgrade_ready_body",
+    "campaign_boudica_boudica_city_upgrade_ready_title",
+    "campaign_boudica_boudica_structure_upgrade_hint",
+    "campaign_boudica_boudica_structure_upgrade_title",
+];
 
 const CAMPAIGN_TRANSLATION_NAMESPACES: &[(&str, &str)] = &[
     ("boudica", "boudica_"),
@@ -1591,7 +1597,7 @@ fn is_campaign_translation_key(key: &str) -> bool {
 }
 
 fn is_locked_campaign_translation_key(key: &str, approved_episodes: &[&str]) -> bool {
-    if !is_campaign_translation_key(key) {
+    if !is_campaign_translation_key(key) || APPROVED_CAMPAIGN_TRANSLATION_KEYS.contains(&key) {
         return false;
     }
     let episode_id = CAMPAIGN_TRANSLATION_NAMESPACES
@@ -5195,6 +5201,10 @@ mod tests {
             "tutorial": {
                 "boudica_rise_title": "Boudica",
                 "campaign_boudica_first_title": "First strike",
+                "campaign_boudica_boudica_structure_upgrade_hint": "Upgrade the City once to raise troop capacity before the Ninth arrives.",
+                "campaign_boudica_boudica_structure_upgrade_title": "Strengthen the City",
+                "campaign_boudica_boudica_city_upgrade_ready_body": "Our city can now sustain a larger host.",
+                "campaign_boudica_boudica_city_upgrade_ready_title": "Ready for the Ninth",
                 "campaign_studio_demo_turn_title": "The next decision is yours",
                 "six_sky_ep1_landfall_title": "Landfall",
                 "six_sky_ep2_regent_title": "Regent",
@@ -5214,6 +5224,21 @@ mod tests {
             "lobbies": {}
         });
         assert!(validate_web_node("es", &expected, &translated).is_err());
+        let approved_campaign_copy = serde_json::json!({
+            "tutorial": {
+                "campaign_boudica_boudica_structure_upgrade_hint": "Mejora la Ciudad antes de que llegue la Novena.",
+                "campaign_boudica_boudica_structure_upgrade_title": "Refuerza la ciudad",
+                "campaign_boudica_boudica_city_upgrade_ready_body": "La ciudad puede sostener un ejército mayor.",
+                "campaign_boudica_boudica_city_upgrade_ready_title": "Listos para la Novena"
+            },
+            "lobbies": {}
+        });
+        assert!(validate_web_node("es", &expected, &approved_campaign_copy).is_ok());
+        let unapproved_boudica_copy = serde_json::json!({
+            "tutorial": {"campaign_boudica_boudica_council_title": "La deuda de Roma"},
+            "lobbies": {}
+        });
+        assert!(validate_web_node("es", &expected, &unapproved_boudica_copy).is_err());
         let translated_episode_title = serde_json::json!({
             "tutorial": {},
             "lobbies": {"campaign_boudica_title": "Alzamiento de los icenos"}

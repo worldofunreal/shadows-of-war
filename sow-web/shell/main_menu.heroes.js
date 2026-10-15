@@ -157,13 +157,14 @@
         if (source) source.srcset = featuredArt.band;
         if (image) {
             image.src = featuredArt.column;
-            image.alt = leaderDisplayName(activeLeader);
+            image.alt = randomSelected ? randomLeaderName() : leaderDisplayName(activeLeader);
         }
         if (title) title.textContent = randomSelected ? randomLeaderName() : leaderDisplayName(activeLeader);
         var historical = featured.querySelector(".sow-heroes__historical-name");
         if (historical) {
-            historical.textContent = leaderHistoricalName(activeLeader);
-            historical.hidden = randomSelected || !leaderHistoricalName(activeLeader);
+            var historicalName = randomSelected ? "" : leaderHistoricalName(activeLeader);
+            historical.textContent = historicalName;
+            historical.hidden = randomSelected || !historicalName;
         }
         if (civilization) civilization.textContent = randomSelected ? "" : leaderCivilization(activeLeader);
         if (perk) perk.textContent = randomSelected ? SOW_t("heroes.random_leader_description") : leaderPerk(activeLeader);

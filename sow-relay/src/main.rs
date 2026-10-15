@@ -284,6 +284,7 @@ fn db_client(db_url: &str) -> Result<reqwest::Client, String> {
         reqwest::Url::parse(db_url).map_err(|e| format!("invalid database URL {db_url}: {e}"))?;
     let mut builder = reqwest::Client::builder()
         .no_proxy()
+        .timeout(Duration::from_secs(30))
         .redirect(reqwest::redirect::Policy::none());
     if let Ok(raw_ip) = std::env::var("SOW_DB_RESOLVE_IP") {
         let ip = raw_ip
@@ -1028,6 +1029,9 @@ async fn post_replay_finalize(
                 );
                 let reason = response.text().await.unwrap_or_else(|error| format!("response unavailable: {error}"));
                 warn!("[replay] match {match_id} remains unacknowledged: {reason}");
+                if matches!(status.as_u16(), 401 | 403) {
+                    return Err(format!("match {match_id} access rejected HTTP {status}: {reason}"));
+                }
             }
             Err(error) => {
                 warn!("Attempt {attempt}/5: network error uploading match {match_id}: {error}");
@@ -1198,6 +1202,9 @@ async fn post_participant_settle(
                 let status = response.status();
                 let reason = response.text().await.unwrap_or_else(|error| format!("response unavailable: {error}"));
                 warn!("[rewards] participant settle attempt {attempt}/5 returned HTTP {status} match={} account={}: {reason}", payload.match_id, payload.account_id);
+                if matches!(status.as_u16(), 401 | 403) {
+                    return Err(format!("participant result access rejected HTTP {status}: {reason}"));
+                }
             }
             Err(error) => warn!(
                 "[rewards] participant settle attempt {attempt}/5 failed match={} account={}: {error}",
@@ -3850,6 +3857,63 @@ fn lobby_info(state: &Arc<LobbyState>) -> LobbyInfo {
 
 #[cfg(test)]
 mod dispatcher_tests {
+    #[test]
+    fn participant_delivery_child() {
+        if std::env::var_os("SOW_PARTICIPANT_DELIVERY_TEST").is_none() { return; }
+        tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap()
+            .block_on(super::recover_participant_spool());
+    }
+
+    #[test]
+    fn denied_delivery_retains_result_until_a_matching_acknowledgment() {
+        use std::io::{Read, Write};
+        let directory = tempfile::tempdir().unwrap();
+        let bytes = b"durable participant prefix";
+        let payload = ParticipantSettlementPayload { match_id:"42".into(),
+            account_id:"0123456789abcdef0123456789abcdef".into(), closure_turn:7,
+            replay_sha256:hex::encode(Sha256::digest(bytes)), rejected:false };
+        let path = super::participant_spool_path_at(directory.path(), &payload.match_id, &payload.account_id);
+        persist_participant_spool(&path, &payload, bytes).unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let ack = serde_json::json!({"status":"queued","match_id":payload.match_id,
+            "account_id":payload.account_id,"closure_turn":payload.closure_turn}).to_string();
+        let server = std::thread::spawn(move || {
+            for (status, body) in [("401 Unauthorized", "{}".to_string()), ("200 OK", ack)] {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+                let mut request = Vec::new();
+                let mut buffer = [0u8; 4096];
+                loop {
+                    let count = socket.read(&mut buffer).unwrap();
+                    assert!(count > 0);
+                    request.extend_from_slice(&buffer[..count]);
+                    if let Some(end) = request.windows(4).position(|chunk| chunk == b"\r\n\r\n") {
+                        let headers = String::from_utf8_lossy(&request[..end]).to_ascii_lowercase();
+                        let size = headers.lines().find_map(|line| line.strip_prefix("content-length:")).unwrap().trim().parse::<usize>().unwrap();
+                        if request.len() >= end + 4 + size { break; }
+                    }
+                }
+                write!(socket, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            }
+        });
+        let run = || {
+            assert!(std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "dispatcher_tests::participant_delivery_child"])
+                .env_clear().env("SOW_PARTICIPANT_DELIVERY_TEST", "1")
+                .env("SOW_REPLAY_SPOOL_DIR", directory.path()).env("SOW_DB_URL", &url)
+                .env("SOW_RELAY_SETTLEMENT_SECRET", "isolated-test-secret")
+                .stdout(std::process::Stdio::null()).status().unwrap().success());
+        };
+        run();
+        assert!(path.exists(), "an access failure must retain the pending result");
+        assert_eq!(std::fs::read(participant_replay_path(&path)).unwrap(), bytes);
+        run();
+        assert!(!path.exists(), "the matching durable ACK allows cleanup");
+        assert!(!participant_replay_path(&path).exists());
+        server.join().unwrap();
+    }
+
     #[tokio::test]
     async fn detached_exit_recovers_durable_turns_only_after_the_writer_stops() {
         let temp = tempfile::tempdir().unwrap();

@@ -3,7 +3,7 @@ use super::state::{ExitRewardWait, MenuReturnContext, SowApp};
 use web_time::{Duration, Instant};
 
 const REWARD_PROFILE_RETRY_INTERVAL: Duration = Duration::from_secs(30);
-const EXIT_REWARD_PROFILE_RETRY_INTERVAL: Duration = Duration::from_secs(2);
+const EXIT_REWARD_PROFILE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 
 fn account_hint(account_id: Option<&str>) -> String {
     account_id
