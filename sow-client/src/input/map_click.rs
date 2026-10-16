@@ -1621,10 +1621,19 @@ impl SowApp {
                 for col in min_x..=max_x {
                     let distance = (col as i64 - center_x as i64).pow(2)
                         + (row as i64 - center_y as i64).pow(2);
-                    if best.is_some_and(|(d, _)| d <= distance) { continue; }
+                    if best.is_some_and(|(d, _)| d <= distance) {
+                        continue;
+                    }
                     let tile = row as u32 * self.sim.map_w + col as u32;
-                    if sow_core::building::validate_structure_site(&engine.state.map,
-                        my_id, kind, tile, &engine.building_grid).is_ok() {
+                    if sow_core::building::validate_structure_site(
+                        &engine.state.map,
+                        my_id,
+                        kind,
+                        tile,
+                        &engine.building_grid,
+                    )
+                    .is_ok()
+                    {
                         best = Some((distance, tile));
                     }
                 }

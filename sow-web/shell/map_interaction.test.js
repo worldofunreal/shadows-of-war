@@ -492,8 +492,9 @@ test("radial and HUD icons use one concept-based visual contract", () => {
     // Emoji render differently on every device and mix art styles; use hudIcon, statusIcon or buildingIcon.
     assert.doesNotMatch(hud, /\p{Extended_Pictographic}/u);
     assert.doesNotMatch(hud, /emojiIcon|BUILDING_EMOJIS|emoji:/);
-    assert.match(hud, /var STATUS_CELLS = \{ request: 0, allied: 1, traitor: 2 \};/);
-    assert.match(statusSpriteSource, /Self::Request => 0\.0,\s*Self::Allied => 1\.0,\s*Self::Traitor => 2\.0,/);
+    const badgeAtlas = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/generated/badges-atlas.json"), "utf8"));
+    assert.equal(hud.match(/var STATUS_CELLS = (\[[^\]]+\]);/)[1], JSON.stringify(badgeAtlas.cells).replace(/,/g, ", "));
+    assert.match(statusSpriteSource, /pub const ALL: \[Self; 9\]/);
 });
 
 
@@ -527,34 +528,33 @@ test("only the confirmed center attack can break an alliance", () => {
 test("building menus use generated pixel-art sprites with white glyph fallback", () => {
     const iconStart = hud.indexOf("var HUD_ICONS = {");
     const iconEnd = hud.indexOf("function leaderById(id)", iconStart);
-    const artManifest = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/gameplay/buildings/atlas.json"), "utf8"));
-    const buildingIcon = vm.runInNewContext(hud.slice(iconStart, iconEnd) + "\nbuildingIcon;", {
-        window: { SOW_BUILDING_ART: artManifest, SOW_ASSETS_URL: "/assets" },
+    const artManifest = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/generated/buildings-atlas.json"), "utf8"));
+    const load = (art) => vm.runInNewContext(hud.slice(iconStart, iconEnd) + "\nbuildingIcon;", {
+        window: { SOW_BUILDING_ART: art, SOW_ASSETS_URL: "/assets" },
         asset: (name) => "/assets/" + name,
         escapeHudText: (value) => String(value),
     });
-    const glyphs = { City: "city", Factory: "factory", Port: "anchor", Bunker: "defense" };
+    const buildingIcon = load(artManifest);
+    for (const kind of ["City", "Factory", "Port", "Bunker", "Farm"]) {
+        for (const level of [1, 2, 3, 4]) {
+            const icon = buildingIcon(kind, level);
+            const sprite = artManifest.sprites[kind][String(level)];
+            assert.match(icon, /class="sow-hud__building-icon is-pixel-art"/, kind + level);
+            assert.match(icon, /assets\/gameplay\/buildings\/atlas\.webp/);
+            const x = (sprite.x * 100 / (artManifest.atlas_width - artManifest.cell_size)).toFixed(4);
+            const y = (sprite.y * 100 / (artManifest.atlas_height - artManifest.cell_size)).toFixed(4);
+            assert.ok(icon.includes("background-position:" + x + "% " + y + "%"));
+            assert.equal(sprite.width, 64);
+            assert.match(sprite.sha256, /^[a-f0-9]{64}$/);
+        }
+    }
+    assert.match(buildingIcon("Port", 1, "sow-hud__inline-icon"), /^<span class="sow-hud__inline-icon is-pixel-art"/);
+    // Before the manifest arrives the HUD shows the white glyph, never an emoji.
     const glyphSource = (name) => hud.match(new RegExp("\\n        " + name + ": '([^']+)'"))[1];
-    for (const [kind, glyph] of Object.entries(glyphs)) {
-        const icon = buildingIcon(kind);
-        assert.match(icon, /^<svg class="sow-hud__building-icon"/);
-        assert.ok(icon.includes('<g class="sow-hud__glyph-ink">' + glyphSource(glyph) + "</g>"), kind);
-        assert.ok(icon.includes('<g class="sow-hud__glyph-face">' + glyphSource(glyph) + "</g>"), kind);
+    const withoutArt = load(undefined);
+    for (const [kind, glyph] of Object.entries({ City: "city", Factory: "factory", Port: "anchor", Bunker: "defense", Farm: "farm" })) {
+        assert.ok(withoutArt(kind).includes('<g class="sow-hud__glyph-face">' + glyphSource(glyph) + "</g>"), kind);
     }
-    for (const level of [1, 2, 3]) {
-        const icon = buildingIcon("Farm", level);
-        const sprite = artManifest.sprites.Farm[String(level)];
-        assert.match(icon, /class="sow-hud__building-icon is-pixel-art"/);
-        assert.match(icon, /assets\/gameplay\/buildings\/atlas\.webp/);
-        const x = (sprite.x * 100 / (artManifest.atlas_width - artManifest.cell_size)).toFixed(4);
-        const y = (sprite.y * 100 / (artManifest.atlas_height - artManifest.cell_size)).toFixed(4);
-        assert.ok(icon.includes("background-position:" + x + "% " + y + "%"));
-        assert.equal(sprite.width, 64);
-        assert.equal(sprite.height, 64);
-        assert.match(sprite.sha256, /^[a-f0-9]{64}$/);
-    }
-    assert.match(buildingIcon("Farm", 4), /^<svg class="sow-hud__building-icon"/);
-    assert.match(buildingIcon("Port", 1, "sow-hud__inline-icon"), /^<svg class="sow-hud__inline-icon"/);
     assert.match(buildingOverlaySource, /building_sprite_uv/);
     assert.match(hudCss, /\.sow-hud__building-icon\.is-pixel-art[\s\S]*?image-rendering: pixelated/);
     assert.match(hud, /group: "build", icon: hudIcon\("construction", "sow-hud__map-action-icon"\)/);

@@ -2,13 +2,13 @@
 //!
 //! Usage:
 //! cargo run -p sow-tools --bin generate-font-atlas -- \
-//!   assets/gameplay/fonts/WorkSans-Black.ttf \
+//!   assets/fonts/WorkSans-Black.ttf \
 //!   sow-web/site/fonts/noto-sans-regular.ttf \
 //!   sow-web/site/fonts/noto-sans-arabic-regular.ttf \
 //!   sow-web/site/fonts/noto-sans-cjk-regular.ttc \
 //!   sow-render/src/text/unicode_name_glyphs.txt \
-//!   assets/gameplay/fonts/msdf-atlas.png \
-//!   assets/gameplay/fonts/msdf-atlas.json
+//!   assets/generated/msdf-atlas.png \
+//!   assets/generated/msdf-atlas.json
 //!
 //! The corpus sections select Vietnamese Latin diacritics, Cyrillic, Japanese,
 //! Korean, Simplified and Traditional Chinese, and Arabic glyphs; they stay separate from the ghost-name list.

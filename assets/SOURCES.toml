@@ -1,58 +1,90 @@
 # Asset provenance and ownership for Shadows of War.
 #
-# This is the source tree. Delivery paths are chosen by sow-dist; there is no
-# `cdn/` or `static/` source taxonomy and no mirrored map copy.
+# assets/art is the only place art is added or replaced (see assets/art/README.md).
+# assets/generated is written by sow-tools. sow-dist publishes both under the
+# runtime URLs (/assets/shell/..., /assets/gameplay/...); there is no other copy.
 
-[shell_loader]
-path = "assets/shell/loader/"
+[leaders]
+path = "assets/art/leaders/"
+source = "ai_generated"
+tool = "Gemini / Meta AI / Midjourney / OpenAI ImageGen (mixed, historical)"
+license = "CC-BY-SA-4.0"
+license_doc = "docs/legal/LICENSE-ASSETS"
+notes = "One folder per leader or campaign figure: portrait (HUD, nameplates, profile), expressions (playable heroes on the map), scene-desktop and scene-mobile (web menu and loader only). _fallback is the unknown-player portrait. random is original dice-and-map art for the random leader option (AGPL-3.0-or-later)."
+restored = ["alexander", "caesar", "cleopatra", "genghis_khan", "ragnar", "sun_tzu"]
+themed_placeholder = ["boudica", "leonidas", "napoleon", "richard_the_lionheart", "vercingetorix", "lady_six_sky"]
+
+[buildings]
+path = "assets/art/buildings/"
+source = "original_and_twemoji_placeholder"
+license = "farm-1..3: AGPL-3.0-or-later; other slots: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art"
+notes = "<kind>-<level>.png for city, factory, port, bunker and farm, levels 1-4. Packed into assets/generated/buildings-atlas.* for the map and the HUD."
+
+[badges]
+path = "assets/art/badges/"
+source = "original_and_twemoji_placeholder"
+license = "request/allied/traitor: AGPL-3.0-or-later; other slots: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art"
+notes = "Nameplate and HUD badges. Packed in a fixed order into assets/generated/badges-atlas.*."
+
+[icons]
+path = "assets/art/icons/"
+source = "user_supplied"
+license = "Project-owner supplied; cleared for distribution"
+notes = "Currency (gold, gem, crown, laurel), troops, tutorial hand and mobile navigation icons. laurel is a generated placeholder pending final art."
+
+[store]
+path = "assets/art/store/"
+source = "user_supplied"
+license = "Project-owner supplied; cleared for distribution"
+files = ["sow_gems_500.webp", "sow_gems_1200.webp", "sow_gems_2600.webp"]
+
+[brand]
+path = "assets/art/brand/"
+source = "original"
+license = "AGPL-3.0-or-later"
+files = ["sow.svg", "tower.svg", "sow-long.svg", "app-icon.png"]
+
+[loader]
+path = "assets/art/loader/"
 source = "ai_generated_and_placeholder"
 license = "Review per original tool terms; placeholder art is AGPL-3.0-or-later"
 files = ["sow-splash-desktop.webp", "sow-splash-mobile.webp", "loader_empty.webp", "loader_full.webp"]
 notes = "Web shell only. The WASM client does not fetch or embed these files."
 
-[shell_leaders]
-path = "assets/shell/leaders/"
-source = "ai_generated"
-tool = "Gemini / Meta AI / Midjourney / OpenAI ImageGen (mixed, historical)"
-license = "CC-BY-SA-4.0"
-license_doc = "docs/legal/LICENSE-ASSETS"
-notes = "Web landing and JavaScript main menu only. Never part of the gameplay asset bundle."
-restored = [
-  "alexander",
-  "caesar",
-  "cleopatra",
-  "genghis_khan",
-  "ragnar",
-  "sun_tzu",
-]
-themed_placeholder = [
-  "boudica",
-  "leonidas",
-  "napoleon",
-  "richard_the_lionheart",
-  "vercingetorix",
-  "lady_six_sky",
-]
-original_files = ["random_mobile.webp", "random_desktop.webp"]
-original_source_path = "assets/artwork/random-leader/"
-
-[shell_brand]
-path = "assets/shell/brand/"
+[skins]
+path = "assets/art/skins/"
 source = "original"
 license = "AGPL-3.0-or-later"
-files = ["sow.svg", "tower.svg", "sow-long.svg", "app-icon.png"]
 
-[shell_shop_icon]
-path = "assets/shell/mobile-nav/"
+[music]
+path = "assets/art/music/"
 source = "user_supplied"
 license = "Project-owner supplied; cleared for distribution"
-files = ["store.webp"]
-notes = "Shared SHOP navigation icon for web and native clients."
+
+[fonts]
+path = "assets/fonts/"
+source = "google_fonts"
+license = "SIL Open Font License 1.1"
+license_doc = "sow-web/site/fonts/OFL.txt"
+files = ["WorkSans-Black.ttf", "WorkSans-Regular.ttf"]
+notes = "Sources for the msdf nameplate atlas (assets/generated/msdf-atlas.*)."
+
+[site_fonts]
+path = "sow-web/site/fonts/"
+source = "google_fonts"
+license = "SIL Open Font License 1.1"
+license_doc = "sow-web/site/fonts/OFL.txt"
+notes = "Web fonts served by the site and shell; the Noto faces are also embedded by the renderer."
+
+[generated]
+path = "assets/generated/"
+source = "generated"
+notes = "Written only by sow-tools: buildings-atlas and badges-atlas (pack-building-atlas), emoji atlas (pack-emoji-atlas, Twemoji 14.0.2 CC-BY-4.0, cache/ holds the downloaded glyphs) and msdf-atlas (generate_font_atlas)."
 
 [site_media]
 path = "assets/site/media/"
 source = "original_and_ai_generated"
-notes = "Marketing website media. It is not loaded by the gameplay WASM client."
+notes = "Marketing website and README media. Not loaded by the game."
 
 [site_icons]
 path = "assets/site/icons/"
@@ -60,94 +92,12 @@ source = "original"
 license = "AGPL-3.0-or-later"
 files = ["icon-192.png", "icon-512.png", "icon-512-maskable.png"]
 
-[site_fonts]
-path = "sow-web/site/fonts/"
-source = "google_fonts"
-license = "SIL Open Font License 1.1"
-license_doc = "sow-web/site/fonts/OFL.txt"
-files = [
-  "work-sans-italic-latin-ext.woff2",
-  "work-sans-italic-latin.woff2",
-  "work-sans-latin-ext.woff2",
-  "work-sans-latin.woff2",
-  "noto-sans-regular.ttf",
-  "noto-sans-arabic-regular.ttf",
-  "noto-sans-cjk-regular.ttc",
-]
-
-[gameplay_avatars]
-path = "assets/gameplay/avatars/"
-source = "ai_generated"
-tool = "Gemini / Meta AI / Midjourney / OpenAI ImageGen (mixed, historical)"
-license = "CC-BY-SA-4.0"
-license_doc = "docs/legal/LICENSE-ASSETS"
-notes = "Runtime gameplay HUD/nameplates/leaderboard assets. Streamed when gameplay needs them."
-original_files = ["random.webp"]
-original_source_path = "assets/artwork/random-leader/"
-
-[random_leader_art_source]
-path = "assets/artwork/random-leader/"
-source = "original"
-license = "AGPL-3.0-or-later"
-files = ["avatar.svg", "mobile.svg", "desktop.svg"]
-notes = "Original dice-and-map art for the presentation-only random leader option."
-
-[gameplay_ui]
-path = "assets/gameplay/ui/"
-source = "placeholder_and_original"
-license = "AGPL-3.0-or-later"
-notes = "In-match HUD/audio/UI assets only."
-
-[gameplay_currency]
-path = "assets/gameplay/currency/"
-source = "user_supplied"
-license = "Project-owner supplied; cleared for distribution"
-files = ["crown.webp", "gem.webp", "gold.webp", "laurel.webp"]
-notes = "Optimized transparent currency icons shared by the shop and gameplay HUD. laurel.webp is a generated placeholder for achievement points (laurels) pending final art."
-
-[gameplay_store]
-path = "assets/gameplay/store/gem_bundles/"
-source = "user_supplied"
-license = "Project-owner supplied; cleared for distribution"
-files = ["sow_gems_500.webp", "sow_gems_1200.webp", "sow_gems_2600.webp"]
-notes = "Optimized transparent gem-bundle artwork for the three configured products."
-
-[gameplay_fonts]
-path = "assets/gameplay/fonts/"
-source = "google_fonts"
-license = "SIL Open Font License 1.1"
-license_doc = "sow-web/site/fonts/OFL.txt"
-files = ["WorkSans-Black.ttf", "WorkSans-Regular.ttf", "msdf-atlas.png", "msdf-atlas.json"]
-notes = "Compile-time nameplate atlas generated from Work Sans plus the regional Noto Arabic/CJK faces listed in site_fonts."
-
-[gameplay_emoji]
-path = "assets/gameplay/emoji/"
-source = "twemoji"
-license = "CC-BY-4.0"
-upstream = "https://github.com/twitter/twemoji"
-pin = "14.0.2"
-files = ["atlas.webp"]
-notes = "Curated glyphs packed by sow-tools pack-emoji-atlas."
-
 [maps]
 path = "assets/maps/"
 source = "image_and_osm"
-notes = "Single canonical map library for the online service and the WASM world-map embed. OpenFront-derived image recipes and their license are documented in assets/maps/SOURCES.toml; OSM maps retain their own source terms. No static mirror."
+notes = "Single canonical map library for the online service and the WASM world-map embed. OpenFront-derived image recipes and their license are documented in assets/maps/SOURCES.toml; OSM maps retain their own source terms."
 
 [campaign]
 path = "assets/campaign/"
 source = "original"
-notes = "Compile-time campaign data and native editor override."
-
-[editor]
-path = "assets/editor/"
-source = "original"
-notes = "Authoring sources for developer tools; never shipped as public web assets."
-
-[artwork_research_wikimedia_emblems]
-path = "artwork-research/wikimedia-emblems/"
-source = "Wikimedia Commons"
-license = "Per-file; see docs/legal/WIKIMEDIA-EMBLEMS.md and attribution.csv"
-runtime = false
-files = ["README.md", "targets.csv", "bot-identity-audit.csv", "bot-source-review.csv", "commons-search-results.csv", "selected-candidates.csv", "commission-needed.csv", "commons-review-needed.csv", "historical-review-needed.csv", "legal-review-needed.csv", "attribution.csv", "download-manifest.csv", "file-metadata.json", "originals/", "square-256/", "bot-candidate-raster/", "bot-candidate-square-256/"]
-notes = "Research only, not loaded by the game. File-specific creator, license, source page, and Commons restrictions are recorded per candidate. Bot raster files are official Commons thumbnails; square WebP previews preserve aspect ratio."
+notes = "Compile-time campaign data, triggers and cinematic media."

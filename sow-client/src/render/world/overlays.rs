@@ -4,6 +4,7 @@ use crate::render::gpu::TextRenderer;
 use crate::theme::dev_config::DevConfig;
 use sow_core::game::BuildingKind;
 use sow_core::protocol::SimSnapshot;
+use sow_render::text::NameplateStatusSprite;
 use std::collections::HashMap;
 use web_time::{Duration, Instant};
 
@@ -388,27 +389,15 @@ fn render_buildings(
             marker_size[0] * sf * BUILDING_FOOTPRINT_FILL,
             marker_size[1] * sf * BUILDING_FOOTPRINT_FILL,
         ];
-        let building_art = if building.detail == BuildingDetail::Full {
+        // Every kind and level has art in assets/art/buildings (checked by tests).
+        if let Some(uv_rect) =
             crate::render::gpu::building_sprite_uv(building.kind, building.level.max(1))
-        } else {
-            None
-        };
-        if let Some(uv_rect) = building_art {
+        {
             text.push_building_sprite(
                 building_center,
                 building_size,
                 uv_rect,
                 [1.0, 1.0, 1.0, alpha],
-            );
-        } else {
-            let icon_half_size =
-                marker_size[0].min(marker_size[1]) * sf * BUILDING_FOOTPRINT_FILL * 0.5;
-            let _ = text.push_emoji(
-                building_kind_emoji(building.kind, building.level.max(1)),
-                building_center,
-                icon_half_size,
-                [1.0, 1.0, 1.0, alpha],
-                crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]),
             );
         }
 
@@ -418,12 +407,11 @@ fn render_buildings(
         {
             let t = (now.duration_since(*started).as_secs_f32() / 0.3).clamp(0.0, 1.0);
             let alpha = 1.0 - t;
-            let _ = text.push_emoji(
-                "✨",
+            text.push_status_sprite(
+                NameplateStatusSprite::UpgradeSparkle,
                 [center[0] * sf, center[1] * sf],
-                marker_extent * sf * (0.5 + 0.35 * t),
+                2.0 * marker_extent * sf * (0.5 + 0.35 * t),
                 [1.0, 0.88, 0.46, alpha],
-                crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha * 0.7]),
             );
             if building.owner_id == my_id
                 && !reduced_motion
@@ -432,15 +420,14 @@ fn render_buildings(
                 let radius = marker_extent * sf * (0.3 + 0.55 * t);
                 let sparkle_size = (marker_extent * sf * 0.18).clamp(4.0 * sf, 14.0 * sf);
                 for offset in BUILDING_CELEBRATION_OFFSETS {
-                    let _ = text.push_emoji(
-                        "✨",
+                    text.push_status_sprite(
+                        NameplateStatusSprite::UpgradeSparkle,
                         [
                             center[0] * sf + offset[0] * radius,
                             center[1] * sf + offset[1] * radius,
                         ],
-                        sparkle_size,
+                        2.0 * sparkle_size,
                         [1.0, 0.84, 0.36, alpha * 0.9],
-                        crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha * 0.6]),
                     );
                 }
                 celebration_budget -= BUILDING_CELEBRATION_OFFSETS.len();
@@ -699,7 +686,7 @@ fn render_building_placement_preview(
     ui: &mut UiState,
     input: &InputState,
     _map_renderer: Option<&crate::render::gpu::MapRenderer>,
-    dev: &DevConfig,
+    _dev: &DevConfig,
     sf: f32,
     _time_secs: f32,
     _now: Instant,
@@ -859,15 +846,6 @@ fn render_building_placement_preview(
             ],
             uv_rect,
             [1.0, 1.0, 1.0, if can_place { 0.94 } else { 0.78 }],
-        );
-    } else {
-        let icon_half_size = footprint_size_px[0].min(footprint_size_px[1]) * sprite_scale * 0.5;
-        let _ = text.push_emoji(
-            building_kind_emoji(kind, 1),
-            sprite_center,
-            icon_half_size,
-            [1.0, 1.0, 1.0, if can_place { 0.94 } else { 0.78 }],
-            crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.75]),
         );
     }
     if kind == BuildingKind::Bunker {
@@ -1060,33 +1038,6 @@ fn building_icon_size(zoom_scaled: f32) -> f32 {
         zoom_scaled * 1.6
     };
     size.clamp(11.0, 96.0)
-}
-
-fn building_kind_emoji(kind: BuildingKind, level: u8) -> &'static str {
-    match (kind, level.clamp(1, kind.max_level())) {
-        (BuildingKind::City, 1) => "🏕️",
-        (BuildingKind::City, 2) => "🏘️",
-        (BuildingKind::City, 3) => "🏡",
-        (BuildingKind::City, 4) => "🏙️",
-        (BuildingKind::City, 5) => "🏛️",
-        (BuildingKind::City, _) => "🌆",
-        (BuildingKind::Factory, 1) => "🛠️",
-        (BuildingKind::Factory, 2) => "🏗️",
-        (BuildingKind::Factory, 3) => "🏭",
-        (BuildingKind::Factory, _) => "🏭",
-        (BuildingKind::Port, 1) => "⚓",
-        (BuildingKind::Port, 2) => "🛶",
-        (BuildingKind::Port, 3) => "🚢",
-        (BuildingKind::Port, 4) => "⚓",
-        (BuildingKind::Port, _) => "🛳️",
-        (BuildingKind::Bunker, 1) => "👁️",
-        (BuildingKind::Bunker, 2) => "🗼",
-        (BuildingKind::Bunker, 3) => "🏰",
-        (BuildingKind::Bunker, _) => "🏯",
-        (BuildingKind::Farm, 1) => "🌱",
-        (BuildingKind::Farm, 2) => "🌾",
-        (BuildingKind::Farm, _) => "🚜",
-    }
 }
 
 #[cfg(test)]
@@ -1299,39 +1250,14 @@ mod tests {
     }
 
     #[test]
-    fn building_levels_restore_the_historical_emojis_and_all_are_packed() {
-        let expected: &[(BuildingKind, &[&str])] = &[
-            (BuildingKind::City, &["🏕️", "🏘️", "🏡", "🏙️", "🏛️", "🌆"]),
-            (BuildingKind::Factory, &["🛠️", "🏗️", "🏭", "🏭"]),
-            (BuildingKind::Port, &["⚓", "🛶", "🚢", "⚓", "🛳️"]),
-            (BuildingKind::Bunker, &["👁️", "🗼", "🏰", "🏯"]),
-            (BuildingKind::Farm, &["🌱", "🌾", "🚜"]),
-        ];
-
-        for (kind, emojis) in expected {
-            assert_eq!(emojis.len(), kind.max_level() as usize);
-            assert_eq!(building_kind_emoji(*kind, 0), emojis[0]);
-            for (level, emoji) in emojis.iter().enumerate() {
-                let level = level as u8 + 1;
-                assert_eq!(building_kind_emoji(*kind, level), *emoji);
+    fn every_building_kind_and_level_has_packed_art() {
+        for kind in BuildingKind::ALL {
+            for level in 0..=kind.max_level() {
                 assert!(
-                    crate::render::gpu::emoji_uv_opt(emoji).is_some(),
-                    "missing emoji atlas entry for {kind:?} level {level}: {emoji}"
+                    crate::render::gpu::building_sprite_uv(kind, level).is_some(),
+                    "missing assets/art/buildings art for {kind:?} level {level}"
                 );
             }
-        }
-        for level in 1..=BuildingKind::Farm.max_level() {
-            assert!(crate::render::gpu::building_sprite_uv(BuildingKind::Farm, level).is_some());
-        }
-        assert!(crate::render::gpu::building_sprite_uv(BuildingKind::Farm, 0).is_some());
-        assert!(crate::render::gpu::building_sprite_uv(BuildingKind::Farm, 4).is_none());
-        for kind in [
-            BuildingKind::City,
-            BuildingKind::Factory,
-            BuildingKind::Port,
-            BuildingKind::Bunker,
-        ] {
-            assert!(crate::render::gpu::building_sprite_uv(kind, 1).is_none());
         }
     }
 

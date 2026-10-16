@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/shell/loader/sow-splash-desktop.webp" alt="Shadows of War" width="100%" />
+  <img src="assets/art/loader/sow-splash-desktop.webp" alt="Shadows of War" width="100%" />
 </p>
 
 <h1 align="center">Shadows of War</h1>

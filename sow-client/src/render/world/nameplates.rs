@@ -1395,35 +1395,18 @@ fn paint_prepared_nameplate(
         paint_prepared_avatar(text, avatar, plan.emoji_outline, 1.0);
     }
     for badge in plan.badges[..plan.badge_count].iter().flatten() {
-        let status_sprite = match badge.kind {
-            BadgeKind::Request => Some(NameplateStatusSprite::Request),
-            BadgeKind::Allied => Some(NameplateStatusSprite::Allied),
-            BadgeKind::Traitor => Some(NameplateStatusSprite::Traitor),
-            _ => None,
+        // Every badge is a cell of the art/badges strip; none is a system emoji.
+        let sprite = match badge.kind {
+            BadgeKind::Request => NameplateStatusSprite::Request,
+            BadgeKind::Allied => NameplateStatusSprite::Allied,
+            BadgeKind::Traitor => NameplateStatusSprite::Traitor,
+            BadgeKind::Rank1 => NameplateStatusSprite::Rank1,
+            BadgeKind::Rank2 => NameplateStatusSprite::Rank2,
+            BadgeKind::Rank3 => NameplateStatusSprite::Rank3,
+            BadgeKind::Star => NameplateStatusSprite::You,
+            BadgeKind::Disconnected => NameplateStatusSprite::Disconnected,
         };
-        if let Some(sprite) = status_sprite {
-            text.push_status_sprite(sprite, badge.center, badge.diameter, badge.tint);
-            continue;
-        }
-        let icon = match badge.kind {
-            BadgeKind::Rank1 => Some("👑"),
-            BadgeKind::Rank2 => Some("🥈"),
-            BadgeKind::Rank3 => Some("🥉"),
-            BadgeKind::Star => Some("⭐"),
-            BadgeKind::Request | BadgeKind::Allied | BadgeKind::Traitor => None,
-            BadgeKind::Disconnected => Some("🔌"),
-        };
-        if let Some(icon) = icon {
-            draw_emoji(
-                text,
-                icon,
-                badge.center,
-                badge.diameter,
-                badge.tint,
-                plan.emoji_outline,
-                1.0,
-            );
-        }
+        text.push_status_sprite(sprite, badge.center, badge.diameter, badge.tint);
     }
     if let Some(name) = plan.name {
         let _ = text.push_prepared_text(
@@ -1585,24 +1568,6 @@ fn scale_outline_style(
     outline.shadow_y *= scale;
     outline.reference_diameter *= scale;
     outline
-}
-
-fn draw_emoji(
-    text: &mut TextRenderer,
-    emoji: &str,
-    center: [f32; 2],
-    diameter: f32,
-    tint: [f32; 4],
-    outline: crate::render::gpu::OutlineStyle,
-    sf: f32,
-) {
-    let _ = text.push_emoji(
-        emoji,
-        [center[0] * sf, center[1] * sf],
-        diameter * sf * 0.5,
-        tint,
-        outline,
-    );
 }
 
 fn paint_lod_dot(

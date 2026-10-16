@@ -519,10 +519,10 @@ test("Boudica spoken cards and contact responses require named existing portrait
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definitionPath = path.join(shell, "../../assets/campaign/boudica.triggers.json");
     const rosterPath = path.join(shell, "../../assets/campaign/boudica.json");
-    const avatarDir = path.join(shell, "../../assets/gameplay/avatars");
+    const leadersDir = path.join(shell, "../../assets/art/leaders");
     const definition = JSON.parse(fs.readFileSync(definitionPath, "utf8"));
     const roster = JSON.parse(fs.readFileSync(rosterPath, "utf8"));
-    const options = { hasText: () => true, hasAvatar: avatar => fs.existsSync(path.join(avatarDir, avatar + ".webp")) };
+    const options = { hasText: () => true, hasAvatar: avatar => fs.existsSync(path.join(leadersDir, avatar, "portrait.webp")) };
     const report = value => campaign.validate(value, roster, options);
     assert.equal(definition.require_speaker_portraits, true);
     assert.deepEqual(report(definition).errors, []);
@@ -1503,7 +1503,7 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
 
 
 test("tutorial hand and ripple fade in at screen center and glide together to the dimmed Home button", () => {
-    const hand = fs.readFileSync(path.join(shell, "../../assets/gameplay/icons/tutorial_hand.webp"));
+    const hand = fs.readFileSync(path.join(shell, "../../assets/art/icons/tutorial-hand.webp"));
     assert.equal(hand.subarray(0, 4).toString(), "RIFF");
     assert.equal(hand.subarray(8, 12).toString(), "WEBP");
     assert.match(campaignView, /options\.asset\("gameplay\/icons\/tutorial_hand\.webp"\)/);

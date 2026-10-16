@@ -700,6 +700,7 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "sow-web/shell/gameplay_interaction.test.js",
             "sow-web/shell/gameplay_ui.test.js",
             "sow-web/shell/map_interaction.test.js",
+            "sow-web/shell/assets_layout.test.js",
             "sow-web/shell/sow-i18n.test.js",
             "sow-web/shell/experience_events.test.js",
             "sow-web/site/analytics.test.js",

@@ -1,3 +1,4 @@
+mod badge_atlas;
 mod building_atlas;
 pub mod msdf;
 pub mod renderer;

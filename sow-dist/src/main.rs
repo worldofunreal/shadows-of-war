@@ -136,12 +136,14 @@ impl Paths {
             .map(PathBuf::from)
             .unwrap_or_else(|_| root.join("target"));
         let s = root.join("dist/.sow-state");
+        let runtime_assets = s.join("runtime-assets");
+        stage_runtime_assets(&root, &runtime_assets)?;
         Ok(Self {
             wasm_input: t.join("wasm32-unknown-unknown/wasm-release/sow_client.wasm"),
             wasm_cache: s.join("wasm-opt-cache"),
             shell: root.join("sow-web/shell"),
-            assets_shell: root.join("assets/shell"),
-            assets_gameplay: root.join("assets/gameplay"),
+            assets_shell: runtime_assets.join("shell"),
+            assets_gameplay: runtime_assets.join("gameplay"),
             assets_site: root.join("assets/site"),
             assets_maps: root.join("assets/maps"),
             map_sources: root.join("assets/map_sources"),
@@ -154,6 +156,182 @@ impl Paths {
             root,
         })
     }
+}
+
+/// Icons and store art: (file stem in assets/art/<dir>/, published path, max side in px).
+const ART_ICONS: [(&str, &str, &str, u32); 13] = [
+    ("icons", "gold", "gameplay/currency/gold.webp", 128),
+    ("icons", "gem", "gameplay/currency/gem.webp", 128),
+    ("icons", "crown", "gameplay/currency/crown.webp", 128),
+    ("icons", "laurel", "gameplay/currency/laurel.webp", 128),
+    (
+        "icons",
+        "troops",
+        "gameplay/icons/battle_icon_cutout.webp",
+        128,
+    ),
+    (
+        "icons",
+        "tutorial-hand",
+        "gameplay/icons/tutorial_hand.webp",
+        256,
+    ),
+    ("icons", "nav-battle", "shell/mobile-nav/battle.webp", 128),
+    ("icons", "nav-heroes", "shell/mobile-nav/heroes.webp", 128),
+    ("icons", "nav-profile", "shell/mobile-nav/profile.webp", 128),
+    ("icons", "nav-store", "shell/mobile-nav/store.webp", 128),
+    (
+        "store",
+        "sow_gems_500",
+        "gameplay/store/gem_bundles/sow_gems_500.webp",
+        128,
+    ),
+    (
+        "store",
+        "sow_gems_1200",
+        "gameplay/store/gem_bundles/sow_gems_1200.webp",
+        128,
+    ),
+    (
+        "store",
+        "sow_gems_2600",
+        "gameplay/store/gem_bundles/sow_gems_2600.webp",
+        128,
+    ),
+];
+/// Folders published byte-for-byte: (assets/art/<dir>, published folder).
+const ART_FOLDERS: [(&str, &str); 4] = [
+    ("brand", "shell/brand"),
+    ("loader", "shell/loader"),
+    ("skins", "gameplay/skins"),
+    ("music", "gameplay/music"),
+];
+/// Tool output in assets/generated: (file, published path).
+const GENERATED_FILES: [(&str, &str); 3] = [
+    ("buildings-atlas.webp", "gameplay/buildings/atlas.webp"),
+    ("buildings-atlas.json", "gameplay/buildings/atlas.json"),
+    (
+        "badges-atlas.webp",
+        "gameplay/icons/nameplate_status_atlas.webp",
+    ),
+];
+const PORTRAIT_PX: u32 = 256;
+
+/// The owner edits only assets/art; the tools write assets/generated. This is the
+/// single place that turns them into the published tree (/assets/shell, /assets/gameplay)
+/// used by the shell, the WASM client and the CDN. Unknown art fails the build so a
+/// dropped file can never sit unused or unpublished.
+fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
+    let art = root.join("assets/art");
+    let generated = root.join("assets/generated");
+    let mut produced = std::collections::BTreeSet::new();
+    let mut publish = |src: &Path, rel: &str, max_side: Option<u32>| -> Result<()> {
+        let dst = out.join(rel);
+        if let Some(parent) = dst.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let is_webp = src.extension().is_some_and(|ext| ext == "webp");
+        let oversized = match max_side {
+            Some(max) => {
+                let (w, h) = image::image_dimensions(src)
+                    .with_context(|| format!("read art {}", src.display()))?;
+                w > max || h > max
+            }
+            None => false,
+        };
+        let needs_webp = rel.ends_with(".webp") && !is_webp;
+        if oversized || needs_webp {
+            let fresh = fs::metadata(&dst)
+                .and_then(|d| Ok(d.modified()? >= fs::metadata(src)?.modified()?))
+                .unwrap_or(false);
+            if !fresh {
+                let max = max_side.unwrap_or(4096);
+                optimize_webp(src, &dst, &format!("{max}x{max}>"), 85)?;
+            }
+        } else if fs::read(&dst).ok() != Some(fs::read(src)?) {
+            fs::copy(src, &dst).with_context(|| format!("publish {}", src.display()))?;
+        }
+        produced.insert(dst);
+        Ok(())
+    };
+    let source_named = |dir: &Path, stem: &str| -> Option<PathBuf> {
+        ["webp", "png", "jpg", "jpeg"]
+            .iter()
+            .map(|ext| dir.join(format!("{stem}.{ext}")))
+            .find(|path| path.is_file())
+    };
+
+    let mut leaders: Vec<_> = fs::read_dir(art.join("leaders"))?.collect::<Result<_, _>>()?;
+    leaders.sort_by_key(|entry| entry.file_name());
+    for entry in leaders {
+        let folder = entry.file_name().to_string_lossy().into_owned();
+        let slug = if folder == "_fallback" {
+            "null"
+        } else {
+            folder.as_str()
+        };
+        for file in fs::read_dir(entry.path())? {
+            let file = file?.path();
+            let stem = file
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
+            let (rel, max) = match stem.as_str() {
+                "portrait" => (format!("gameplay/avatars/{slug}.webp"), Some(PORTRAIT_PX)),
+                "expressions" => (format!("gameplay/avatars/spritesheets/{slug}.webp"), None),
+                "scene-desktop" => (format!("shell/leaders/{slug}_desktop.webp"), None),
+                "scene-mobile" => (format!("shell/leaders/{slug}_mobile.webp"), None),
+                _ => bail!(
+                    "unknown leader art {}: use portrait, expressions, scene-desktop or scene-mobile",
+                    file.display()
+                ),
+            };
+            publish(&file, &rel, max)?;
+        }
+    }
+    let mut known_icons = std::collections::BTreeSet::new();
+    for (dir, stem, rel, max) in ART_ICONS {
+        let src = source_named(&art.join(dir), stem)
+            .with_context(|| format!("missing art: assets/art/{dir}/{stem}.png"))?;
+        known_icons.insert(src.clone());
+        publish(&src, rel, Some(max))?;
+    }
+    for dir in ["icons", "store"] {
+        for file in fs::read_dir(art.join(dir))? {
+            let file = file?.path();
+            if !known_icons.contains(&file) {
+                bail!(
+                    "unknown art {}: add it to ART_ICONS in sow-dist",
+                    file.display()
+                );
+            }
+        }
+    }
+    for (dir, rel_dir) in ART_FOLDERS {
+        for file in fs::read_dir(art.join(dir))? {
+            let file = file?.path();
+            let name = file
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
+            publish(&file, &format!("{rel_dir}/{name}"), None)?;
+        }
+    }
+    for (name, rel) in GENERATED_FILES {
+        publish(&generated.join(name), rel, None)?;
+    }
+
+    for entry in walkdir::WalkDir::new(out).contents_first(true) {
+        let entry = entry?;
+        if entry.file_type().is_file() && !produced.contains(entry.path()) {
+            fs::remove_file(entry.path())?;
+        } else if entry.file_type().is_dir() && entry.path() != out {
+            let _ = fs::remove_dir(entry.path());
+        }
+    }
+    Ok(())
 }
 
 fn file_sha256(path: &Path) -> Result<String> {
@@ -259,10 +437,7 @@ fn copy_web_fonts(src: &Path, dst: &Path) -> Result<()> {
         let tail = &rest[i + 6..];
         let end = tail.find(')').unwrap_or(tail.len());
         if !tail[..end].contains("?v=") {
-            bail!(
-                "fonts.css references an unshipped face: {}",
-                &tail[..end]
-            );
+            bail!("fonts.css references an unshipped face: {}", &tail[..end]);
         }
         rest = &tail[end..];
     }
@@ -270,7 +445,8 @@ fn copy_web_fonts(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-fn copy_dir(src: &Path, dst: &Path) -> Result<()> {    fs::create_dir_all(dst).with_context(|| format!("create directory {}", dst.display()))?;
+fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst).with_context(|| format!("create directory {}", dst.display()))?;
     for e in fs::read_dir(src).with_context(|| format!("read directory {}", src.display()))? {
         let e = e?;
         let to = dst.join(e.file_name());
@@ -2526,7 +2702,6 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "fonts/work-sans-latin-ext.woff2",
         "fonts/work-sans-italic-latin.woff2",
         "fonts/work-sans-italic-latin-ext.woff2",
-
         "wou-auth.js",
         "privacy/index.html",
         "terms/index.html",
@@ -2827,7 +3002,6 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "fonts/fonts.css",
         "fonts/OFL.txt",
         "fonts/work-sans-latin.woff2",
-
         "assets/shell/loader/loader_empty.webp",
         "assets/shell/loader/loader_full.webp",
         "assets/campaign/boudica.json",
@@ -3118,7 +3292,14 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     for name in ["icon-192.png", "icon-512.png", "icon-512-maskable.png"] {
         fs::copy(paths.assets_site.join("icons").join(name), out.join(name))?;
     }
-    for path in ["privacy", "terms", "cookies", "support", "auth", ".well-known"] {
+    for path in [
+        "privacy",
+        "terms",
+        "cookies",
+        "support",
+        "auth",
+        ".well-known",
+    ] {
         let src = site.join(path);
         if !src.is_dir() {
             bail!("website legal page missing: {}", src.display());
@@ -3126,7 +3307,10 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         copy_dir(&src, &out.join(path))?;
     }
     if !site.join("fonts").is_dir() {
-        bail!("website font directory missing: {}", site.join("fonts").display());
+        bail!(
+            "website font directory missing: {}",
+            site.join("fonts").display()
+        );
     }
     copy_web_fonts(&site.join("fonts"), &out.join("fonts"))?;
     expand_public_site_header(paths, out)?;
@@ -3610,7 +3794,6 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         "fonts/fonts.css",
         "fonts/OFL.txt",
         "fonts/work-sans-latin.woff2",
-
         "assets/shell/loader/loader_empty.webp",
         "assets/shell/loader/loader_full.webp",
         "assets/campaign/boudica.json",
@@ -3938,7 +4121,6 @@ fn local_watch_roots(paths: &Paths) -> Vec<PathBuf> {
         paths.root.join("sow-net"),
         paths.root.join("sow-render"),
         paths.root.join("sow-tools/src"),
-        paths.root.join("sow-tools/assets/buildings"),
         paths.root.join("sow-dist"),
         paths.root.join("sow-web"),
         paths.root.join("assets"),
@@ -4013,8 +4195,10 @@ fn local_file_requires_wasm(paths: &Paths, path: &Path) -> bool {
     if path.starts_with(paths.root.join("sow-render/src/shaders")) {
         return path.extension().and_then(|extension| extension.to_str()) == Some("wgsl");
     }
-    if path.starts_with(paths.root.join("sow-tools/assets/buildings")) {
-        return path.extension().and_then(|extension| extension.to_str()) == Some("png");
+    if path.starts_with(paths.root.join("assets/art/buildings"))
+        || path.starts_with(paths.root.join("assets/art/badges"))
+    {
+        return true;
     }
     if path.starts_with(paths.root.join("sow-tools/src")) {
         return path.extension().and_then(|extension| extension.to_str()) == Some("rs");
@@ -4726,7 +4910,9 @@ mod tests {
         // The loader bars are served by URLs baked with ?v=__BUILD_TS__ in the
         // HTML; giving them a content hash made loader.js fetch a SECOND copy.
         assert!(
-            versions.get("/assets/shell/loader/loader_empty.webp").is_none(),
+            versions
+                .get("/assets/shell/loader/loader_empty.webp")
+                .is_none(),
             "loader bars must stay on the build stamp, not a content hash"
         );
         Ok(())
@@ -4776,7 +4962,7 @@ mod tests {
         fs::create_dir_all(&leaders)?;
         let master = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
-            .join("assets/shell/leaders/boudica_desktop.webp");
+            .join("assets/art/leaders/boudica/scene-desktop.webp");
         let original = fs::metadata(&master)?.len();
         fs::copy(&master, leaders.join("boudica_desktop.webp"))?;
         fs::write(leaders.join("boudica_mobile.webp"), b"not-an-image")?;
@@ -4885,7 +5071,6 @@ mod tests {
             "fonts/work-sans-latin-ext.woff2",
             "fonts/work-sans-italic-latin.woff2",
             "fonts/work-sans-italic-latin-ext.woff2",
-
             "wou-auth.js",
             "auth/callback/index.html",
             "8d227b8f9e6140d39e3381a1829e1db3.txt",

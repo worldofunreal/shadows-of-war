@@ -1,0 +1,16 @@
+{
+  "atlas": "gameplay/icons/nameplate_status_atlas.webp",
+  "cell_size": 128,
+  "cells": [
+    "request",
+    "allied",
+    "traitor",
+    "rank-1",
+    "rank-2",
+    "rank-3",
+    "you",
+    "disconnected",
+    "upgrade-sparkle"
+  ],
+  "schema_version": 1
+}

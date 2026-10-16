@@ -413,8 +413,9 @@ mod tests {
         for leader in Leader::ALL {
             let key = AvatarFetchKey::Leader(leader);
             let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../assets/gameplay/avatars")
-                .join(AssetLoader::avatar_filename(&key));
+                .join("../assets/art/leaders")
+                .join(sow_data::commerce::leader_id(leader))
+                .join("expressions.webp");
             let bytes =
                 std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
             let mut loader = AssetLoader::new();

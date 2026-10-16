@@ -192,7 +192,7 @@ fn fetch_moji(
     client: &reqwest::blocking::Client,
     emoji: &str,
 ) -> Result<RgbaImage, Box<dyn std::error::Error + Send + Sync>> {
-    let cache_dir = Path::new("assets/gameplay/emoji/cache");
+    let cache_dir = Path::new("assets/generated/emoji/cache");
     fs::create_dir_all(cache_dir)?;
 
     let filenames = moji_filenames(emoji);

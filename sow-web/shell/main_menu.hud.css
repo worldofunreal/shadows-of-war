@@ -113,7 +113,6 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
 .sow-hud__status-icon {
     display: inline-block;
     background-repeat: no-repeat;
-    background-size: 300% 100%;
 }
 
 /* Outlined text for numbers, titles and button labels (same rule as the story overlay). */

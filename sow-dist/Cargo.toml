@@ -20,6 +20,7 @@ rand = { workspace = true }
 hex = { workspace = true }
 hmac = { workspace = true }
 walkdir = "2"
+image = { workspace = true }
 url = "2"
 wasm-bindgen-cli-support = { workspace = true }
 tempfile = { workspace = true }

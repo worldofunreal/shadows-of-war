@@ -126,17 +126,72 @@ pub enum NameplateStatusSprite {
     Request,
     Allied,
     Traitor,
+    Rank1,
+    Rank2,
+    Rank3,
+    You,
+    Disconnected,
+    UpgradeSparkle,
 }
 
 impl NameplateStatusSprite {
-    pub const fn uv_rect(self) -> [f32; 4] {
-        const CELL_WIDTH: f32 = 1.0 / 3.0;
-        let column = match self {
-            Self::Request => 0.0,
-            Self::Allied => 1.0,
-            Self::Traitor => 2.0,
-        };
-        [column * CELL_WIDTH, 0.0, (column + 1.0) * CELL_WIDTH, 1.0]
+    pub const ALL: [Self; 9] = [
+        Self::Request,
+        Self::Allied,
+        Self::Traitor,
+        Self::Rank1,
+        Self::Rank2,
+        Self::Rank3,
+        Self::You,
+        Self::Disconnected,
+        Self::UpgradeSparkle,
+    ];
+
+    /// File name in `assets/art/badges/` and cell name in the generated strip.
+    pub const fn art_name(self) -> &'static str {
+        match self {
+            Self::Request => "request",
+            Self::Allied => "allied",
+            Self::Traitor => "traitor",
+            Self::Rank1 => "rank-1",
+            Self::Rank2 => "rank-2",
+            Self::Rank3 => "rank-3",
+            Self::You => "you",
+            Self::Disconnected => "disconnected",
+            Self::UpgradeSparkle => "upgrade-sparkle",
+        }
+    }
+
+    pub fn uv_rect(self) -> [f32; 4] {
+        let cells = &super::badge_atlas::CELLS;
+        let column = cells
+            .iter()
+            .position(|cell| *cell == self.art_name())
+            .unwrap_or_default() as f32;
+        let width = 1.0 / cells.len() as f32;
+        [column * width, 0.0, (column + 1.0) * width, 1.0]
+    }
+}
+
+#[cfg(test)]
+mod badge_atlas_tests {
+    use super::NameplateStatusSprite;
+
+    #[test]
+    fn every_badge_has_exactly_one_generated_cell() {
+        let cells = &super::super::badge_atlas::CELLS;
+        assert_eq!(cells.len(), NameplateStatusSprite::ALL.len());
+        for sprite in NameplateStatusSprite::ALL {
+            assert_eq!(
+                cells
+                    .iter()
+                    .filter(|cell| **cell == sprite.art_name())
+                    .count(),
+                1,
+                "{}",
+                sprite.art_name()
+            );
+        }
     }
 }
 

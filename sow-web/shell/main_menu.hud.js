@@ -114,8 +114,8 @@
         gold: "gameplay/currency/gold.webp"
     };
 
-    // Same atlas and cell order as NameplateStatusSprite (sow-render/src/text/types.rs).
-    var STATUS_CELLS = { request: 0, allied: 1, traitor: 2 };
+    // Cell order of the badge strip packed from assets/art/badges (assets/generated/badges-atlas.json).
+    var STATUS_CELLS = ["request", "allied", "traitor", "rank-1", "rank-2", "rank-3", "you", "disconnected", "upgrade-sparkle"];
 
     var BUILDING_GLYPHS = {
         city: "city",
@@ -165,7 +165,8 @@
 
     function statusIcon(kind, cls) {
         var style = 'background-image:url(&quot;' + escapeHudText(asset("gameplay/icons/nameplate_status_atlas.webp")) + '&quot;);'
-            + 'background-position:' + (STATUS_CELLS[kind] || 0) * 50 + '% 0;';
+            + 'background-size:' + STATUS_CELLS.length * 100 + '% 100%;'
+            + 'background-position:' + Math.max(0, STATUS_CELLS.indexOf(kind)) * 100 / (STATUS_CELLS.length - 1) + '% 0;';
         return '<span class="' + (cls || "sow-hud__action-icon") + ' sow-hud__status-icon" style="' + style + '" aria-hidden="true"></span>';
     }
 

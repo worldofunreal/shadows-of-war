@@ -94,7 +94,7 @@ struct StampGeoArgs {
 
 #[derive(Parser, Debug)]
 struct PackEmojiAtlasArgs {
-    #[arg(long, default_value = "assets/gameplay/emoji/atlas.webp")]
+    #[arg(long, default_value = "assets/generated/emoji/atlas.webp")]
     out_atlas: PathBuf,
     #[arg(long, default_value = "sow-data/src/emoji/manifest.rs")]
     out_manifest: PathBuf,
@@ -102,12 +102,14 @@ struct PackEmojiAtlasArgs {
 
 #[derive(Parser, Debug)]
 struct PackBuildingAtlasArgs {
-    #[arg(long, default_value = "sow-tools/assets/buildings")]
-    source_root: PathBuf,
-    #[arg(long, default_value = "assets/gameplay/buildings")]
-    asset_root: PathBuf,
+    #[arg(long, default_value = "assets/art")]
+    art_root: PathBuf,
+    #[arg(long, default_value = "assets/generated")]
+    generated_root: PathBuf,
     #[arg(long, default_value = "sow-render/src/text/building_atlas.rs")]
     rust_manifest: PathBuf,
+    #[arg(long, default_value = "sow-render/src/text/badge_atlas.rs")]
+    badge_manifest: PathBuf,
 }
 
 /// Generate a map from a pre-rendered world-map image (no network calls).
@@ -262,9 +264,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Some(Commands::PackBuildingAtlas(args)) => {
             let repo_root = std::env::current_dir()?;
             building_atlas::pack(building_atlas::PackBuildingAtlasArgs {
-                source_root: repo_root.join(args.source_root),
-                asset_root: repo_root.join(args.asset_root),
+                art_root: repo_root.join(args.art_root),
+                generated_root: repo_root.join(args.generated_root),
                 rust_manifest: repo_root.join(args.rust_manifest),
+                badge_manifest: repo_root.join(args.badge_manifest),
             })
             .map_err(|error| error.to_string().into())
         }

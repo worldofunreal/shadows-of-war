@@ -66,9 +66,10 @@ de mensajes ni ruta de red para comunicar estas cuatro acciones.
 
 ## Imágenes y capacidad
 
-Los archivos estáticos en `assets/gameplay/avatars/` siguen sirviendo perfiles,
-diálogos y avisos. Las hojas en su subdirectorio `spritesheets/` sirven las
-expresiones del mapa. Ambos usan `sow_data::commerce::leader_id`; no se construye
+Cada líder tiene su carpeta `assets/art/leaders/<slug>/`: `portrait.*` sirve
+perfiles, diálogos y avisos, y `expressions.*` sirve las expresiones del mapa.
+El pipeline las publica en `/assets/gameplay/avatars/<slug>.webp` y
+`/assets/gameplay/avatars/spritesheets/<slug>.webp`. Ambos usan `sow_data::commerce::leader_id`; no se construye
 el nombre de archivo a partir del nombre visible del héroe.
 
 - Una hoja por cada héroe de `Leader::ALL`; orden de lectura: Happy, Calm,
@@ -106,7 +107,7 @@ idioma publicado, tomadas de los catálogos compartidos. Incluye las formas
 árabes obtenidas de las frases completas. El test
 `gameplay_atlas_covers_every_localized_emote_phrase` comprueba cada carácter y
 cada forma árabe; cambiar una traducción que necesite caracteres nuevos obliga
-a regenerar `assets/gameplay/fonts/msdf-atlas.png` y su JSON antes de publicar.
+a regenerar `assets/generated/msdf-atlas.png` y su JSON antes de publicar.
 La cabecera del generador documenta su comando completo.
 
 ## Movimiento y placa

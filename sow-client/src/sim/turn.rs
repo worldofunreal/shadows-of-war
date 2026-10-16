@@ -687,7 +687,7 @@ mod tests {
             app.building_placement_site_valid(),
             "a lack of gold does not invalidate owned clear land"
         );
-        app.sim.current_snapshot = Some(engine.build_snapshot());
+        app.sim.current_snapshot = Some(app.sim.engine.as_mut().unwrap().build_snapshot());
         app.confirm_building_placement();
         assert!(app.sim.offline_intents.is_empty());
         assert!(!app.ui.app.hud_state.building_placement.unwrap().pending);

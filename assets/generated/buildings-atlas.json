@@ -1,0 +1,179 @@
+{
+  "atlas": "gameplay/buildings/atlas.webp",
+  "atlas_height": 272,
+  "atlas_width": 340,
+  "cell_size": 64,
+  "schema_version": 1,
+  "sprites": {
+    "Bunker": {
+      "1": {
+        "height": 64,
+        "sha256": "b625748c631b0e921860f91288bbc04f7cdab05209b3b7754e3d33228be6d3b4",
+        "source": "bunker-1.png",
+        "width": 64,
+        "x": 138,
+        "y": 138
+      },
+      "2": {
+        "height": 64,
+        "sha256": "81d35b12e79d341e5bf1b88f006e81ec65120f0f157ffc93e1fb53c19b4b1ce3",
+        "source": "bunker-2.png",
+        "width": 64,
+        "x": 206,
+        "y": 138
+      },
+      "3": {
+        "height": 64,
+        "sha256": "d699bf4fd3646eb2d744ea75efb6b5aba97c24b16feded8c63912aee8af12cad",
+        "source": "bunker-3.png",
+        "width": 64,
+        "x": 274,
+        "y": 138
+      },
+      "4": {
+        "height": 64,
+        "sha256": "7438daa20e76a118f3b1b4da65a9b7f25d7a268d006d88a07b929d456e9bbcff",
+        "source": "bunker-4.png",
+        "width": 64,
+        "x": 2,
+        "y": 206
+      }
+    },
+    "City": {
+      "1": {
+        "height": 64,
+        "sha256": "8986e37f1687d1818dce3fae4249cf2276d6ed8e99f8cf178fc87402ceb9b72d",
+        "source": "city-1.png",
+        "width": 64,
+        "x": 2,
+        "y": 2
+      },
+      "2": {
+        "height": 64,
+        "sha256": "0e8e21c45877ac905de39fe413fd3c89d9507f06341814a7d901d944c2624699",
+        "source": "city-2.png",
+        "width": 64,
+        "x": 70,
+        "y": 2
+      },
+      "3": {
+        "height": 64,
+        "sha256": "7006de5e14de343f7877d812da0aebe60f86dafceb51c92a51e789985c48285c",
+        "source": "city-3.png",
+        "width": 64,
+        "x": 138,
+        "y": 2
+      },
+      "4": {
+        "height": 64,
+        "sha256": "90310872d293ce3587e60d2a9773fb3dfe13df7e643d523a16ed7303bfaf8418",
+        "source": "city-4.png",
+        "width": 64,
+        "x": 206,
+        "y": 2
+      }
+    },
+    "Factory": {
+      "1": {
+        "height": 64,
+        "sha256": "9763416a9c0caa35c4d03ea2cd5c65e44e53e6324ae4f58671840fb16dd306d2",
+        "source": "factory-1.png",
+        "width": 64,
+        "x": 274,
+        "y": 2
+      },
+      "2": {
+        "height": 64,
+        "sha256": "7dec929c5b2e015a405078bdd038137420b8b9605cf4525d2d8f145c4abfc8c3",
+        "source": "factory-2.png",
+        "width": 64,
+        "x": 2,
+        "y": 70
+      },
+      "3": {
+        "height": 64,
+        "sha256": "90bd1e5a01ae895e0053a5327ba51c5937a131d872a4041c18aa44e6fd197fe9",
+        "source": "factory-3.png",
+        "width": 64,
+        "x": 70,
+        "y": 70
+      },
+      "4": {
+        "height": 64,
+        "sha256": "90bd1e5a01ae895e0053a5327ba51c5937a131d872a4041c18aa44e6fd197fe9",
+        "source": "factory-4.png",
+        "width": 64,
+        "x": 138,
+        "y": 70
+      }
+    },
+    "Farm": {
+      "1": {
+        "height": 64,
+        "sha256": "37ca4a847b80c1e269d0c78cff285cc1d6bec9edc031f48dd60b536a7e42ea03",
+        "source": "farm-1.png",
+        "width": 64,
+        "x": 70,
+        "y": 206
+      },
+      "2": {
+        "height": 64,
+        "sha256": "06eab9f45320448e2119537e82fdaa6ff7b6a3229e120c06c8e41b6c7a6013f4",
+        "source": "farm-2.png",
+        "width": 64,
+        "x": 138,
+        "y": 206
+      },
+      "3": {
+        "height": 64,
+        "sha256": "1855d90fb81bbbdf0b41fbe48891a040b2f09d7d12cf4e68b9bc01f9cf5aba27",
+        "source": "farm-3.png",
+        "width": 64,
+        "x": 206,
+        "y": 206
+      },
+      "4": {
+        "height": 64,
+        "sha256": "500d6532398ddf1a1755f414fa328d5e9e04782038f188c54c88fd1fa2a9b980",
+        "source": "farm-4.png",
+        "width": 64,
+        "x": 274,
+        "y": 206
+      }
+    },
+    "Port": {
+      "1": {
+        "height": 64,
+        "sha256": "1260afd0865ebad054bf4c2b45cdeae5163835045ae307b20ecad648ff3e6d89",
+        "source": "port-1.png",
+        "width": 64,
+        "x": 206,
+        "y": 70
+      },
+      "2": {
+        "height": 64,
+        "sha256": "c626ef24cb265b27b6974cdbbaaad6e2aacf4bafa5316cb86cc563b02aef1f12",
+        "source": "port-2.png",
+        "width": 64,
+        "x": 274,
+        "y": 70
+      },
+      "3": {
+        "height": 64,
+        "sha256": "e6df1e91005b59783fcc316081748a13e8c4bd6dc057db8ea2bef2ae52f99a5c",
+        "source": "port-3.png",
+        "width": 64,
+        "x": 2,
+        "y": 138
+      },
+      "4": {
+        "height": 64,
+        "sha256": "1260afd0865ebad054bf4c2b45cdeae5163835045ae307b20ecad648ff3e6d89",
+        "source": "port-4.png",
+        "width": 64,
+        "x": 70,
+        "y": 138
+      }
+    }
+  }
+}

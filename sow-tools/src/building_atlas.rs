@@ -8,33 +8,67 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const CELL_PX: u32 = 64;
+const BADGE_CELL_PX: u32 = 128;
 const GUTTER_PX: u32 = 2;
 const ART_MARGIN_PX: u32 = 2;
-const SOURCES: [(&str, u8, &str); 3] = [
-    ("Farm", 1, "farm-level-1.png"),
-    ("Farm", 2, "farm-level-2.png"),
-    ("Farm", 3, "farm-level-3.png"),
+/// Every building and level needs art: `assets/art/buildings/<kind>-<level>.png`.
+const BUILDING_KINDS: [&str; 5] = ["City", "Factory", "Port", "Bunker", "Farm"];
+const BUILDING_LEVELS: u8 = 4;
+/// Nameplate and HUD badges, one strip in this order: `assets/art/badges/<name>.png`.
+/// The cell order is read by sow-render (`badge_atlas::CELLS`) and the HUD (`STATUS_CELLS`).
+pub const BADGES: [&str; 9] = [
+    "request",
+    "allied",
+    "traitor",
+    "rank-1",
+    "rank-2",
+    "rank-3",
+    "you",
+    "disconnected",
+    "upgrade-sparkle",
 ];
+/// Runtime URLs the pipeline publishes the generated atlases under.
+const BUILDING_ATLAS_URL: &str = "gameplay/buildings/atlas.webp";
+const BADGE_ATLAS_URL: &str = "gameplay/icons/nameplate_status_atlas.webp";
 
 pub struct PackBuildingAtlasArgs {
-    pub source_root: PathBuf,
-    pub asset_root: PathBuf,
+    pub art_root: PathBuf,
+    pub generated_root: PathBuf,
     pub rust_manifest: PathBuf,
+    pub badge_manifest: PathBuf,
+}
+
+fn art_source(dir: &Path, stem: &str) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
+    ["png", "webp"]
+        .iter()
+        .map(|ext| dir.join(format!("{stem}.{ext}")))
+        .find(|path| path.is_file())
+        .ok_or_else(|| format!("missing art: {}/{stem}.png", dir.display()).into())
 }
 
 pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sync>> {
-    let mut entries = Vec::with_capacity(SOURCES.len());
-    let mut metadata = Vec::with_capacity(SOURCES.len());
-    for (kind, level, filename) in SOURCES {
-        let source = args.source_root.join(filename);
-        let bytes = fs::read(&source)?;
-        let image = image::load_from_memory(&bytes)?.to_rgba8();
-        entries.push((format!("{kind}:{level}"), pixel_cell(&image)?));
-        metadata.push((kind, level, filename, sha256(&bytes)));
+    let mut entries = Vec::new();
+    let mut metadata = Vec::new();
+    for kind in BUILDING_KINDS {
+        for level in 1..=BUILDING_LEVELS {
+            let source = art_source(
+                &args.art_root.join("buildings"),
+                &format!("{}-{level}", kind.to_lowercase()),
+            )?;
+            let bytes = fs::read(&source)?;
+            let image = image::load_from_memory(&bytes)?.to_rgba8();
+            entries.push((format!("{kind}:{level}"), pixel_cell(&image, CELL_PX)?));
+            let filename = source
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
+            metadata.push((kind, level, filename, sha256(&bytes)));
+        }
     }
 
     let packed = pack_grid(&entries, CELL_PX, GUTTER_PX)?;
-    let atlas_path = args.asset_root.join("atlas.webp");
+    let atlas_path = args.generated_root.join("buildings-atlas.webp");
     write_webp_if_changed(&packed.atlas, &atlas_path)?;
 
     let mut sprites = serde_json::Map::new();
@@ -68,14 +102,14 @@ pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sy
 
     let manifest = json!({
         "schema_version": 1,
-        "atlas": "gameplay/buildings/atlas.webp",
+        "atlas": BUILDING_ATLAS_URL,
         "atlas_width": packed.atlas.width(),
         "atlas_height": packed.atlas.height(),
         "cell_size": CELL_PX,
         "sprites": sprites,
     });
     write_if_changed(
-        &args.asset_root.join("atlas.json"),
+        &args.generated_root.join("buildings-atlas.json"),
         format!("{}\n", serde_json::to_string_pretty(&manifest)?).as_bytes(),
     )?;
     write_if_changed(
@@ -83,17 +117,65 @@ pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sy
         rust_registry(&packed.rects, packed.atlas.width(), packed.atlas.height())?.as_bytes(),
     )?;
 
+    pack_badges(&args)?;
     println!(
-        "✅ Building atlas ready: {} ({}x{}, {} pixel-art levels)",
+        "✅ Atlases ready: {} ({}x{}, {} building levels) and {} badges",
         atlas_path.display(),
         packed.atlas.width(),
         packed.atlas.height(),
-        SOURCES.len()
+        entries.len(),
+        BADGES.len()
     );
     Ok(())
 }
 
-fn pixel_cell(source: &RgbaImage) -> Result<RgbaImage, Box<dyn Error + Send + Sync>> {
+/// One horizontal strip so the HUD can address a badge with a single CSS
+/// background-position and the renderer with `index / count`.
+fn pack_badges(args: &PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let mut strip = ImageBuffer::from_pixel(
+        BADGE_CELL_PX * BADGES.len() as u32,
+        BADGE_CELL_PX,
+        Rgba([0, 0, 0, 0]),
+    );
+    for (index, name) in BADGES.iter().enumerate() {
+        let source = art_source(&args.art_root.join("badges"), name)?;
+        let image = image::load_from_memory(&fs::read(&source)?)?.to_rgba8();
+        let cell = pixel_cell(&image, BADGE_CELL_PX)?;
+        image::imageops::overlay(
+            &mut strip,
+            &cell,
+            i64::from(BADGE_CELL_PX) * index as i64,
+            0,
+        );
+    }
+    write_webp_if_changed(&strip, &args.generated_root.join("badges-atlas.webp"))?;
+    let manifest = json!({
+        "schema_version": 1,
+        "atlas": BADGE_ATLAS_URL,
+        "cell_size": BADGE_CELL_PX,
+        "cells": BADGES,
+    });
+    write_if_changed(
+        &args.generated_root.join("badges-atlas.json"),
+        format!("{}\n", serde_json::to_string_pretty(&manifest)?).as_bytes(),
+    )?;
+    let cells = BADGES
+        .iter()
+        .map(|name| format!("    \"{name}\",\n"))
+        .collect::<String>();
+    write_if_changed(
+        &args.badge_manifest,
+        format!(
+            "// @generated by sow-tools pack-building-atlas; do not edit.\n\
+             pub(crate) const CELLS: [&str; {}] = [\n{cells}];\n",
+            BADGES.len()
+        )
+        .as_bytes(),
+    )?;
+    Ok(())
+}
+
+fn pixel_cell(source: &RgbaImage, cell_px: u32) -> Result<RgbaImage, Box<dyn Error + Send + Sync>> {
     let mut bounds = (source.width(), source.height(), 0, 0);
     let mut found = false;
     for (x, y, pixel) in source.enumerate_pixels() {
@@ -107,7 +189,7 @@ fn pixel_cell(source: &RgbaImage) -> Result<RgbaImage, Box<dyn Error + Send + Sy
         bounds.3 = bounds.3.max(y + 1);
     }
     if !found {
-        return Err("building source image is fully transparent".into());
+        return Err("art source image is fully transparent".into());
     }
 
     let cropped = image::imageops::crop_imm(
@@ -118,16 +200,16 @@ fn pixel_cell(source: &RgbaImage) -> Result<RgbaImage, Box<dyn Error + Send + Sy
         bounds.3 - bounds.1,
     )
     .to_image();
-    let max_side = CELL_PX - GUTTER_PX * 2 - ART_MARGIN_PX * 2;
+    let max_side = cell_px - GUTTER_PX * 2 - ART_MARGIN_PX * 2;
     let scale =
         (max_side as f32 / cropped.width() as f32).min(max_side as f32 / cropped.height() as f32);
     let width = ((cropped.width() as f32 * scale).round() as u32).clamp(1, max_side);
     let height = ((cropped.height() as f32 * scale).round() as u32).clamp(1, max_side);
     let resized = image::imageops::resize(&cropped, width, height, FilterType::Lanczos3);
 
-    let mut cell = ImageBuffer::from_pixel(CELL_PX, CELL_PX, Rgba([0, 0, 0, 0]));
-    let x = (CELL_PX - width) / 2;
-    let y = (CELL_PX - height) / 2;
+    let mut cell = ImageBuffer::from_pixel(cell_px, cell_px, Rgba([0, 0, 0, 0]));
+    let x = (cell_px - width) / 2;
+    let y = (cell_px - height) / 2;
     image::imageops::overlay(&mut cell, &resized, x.into(), y.into());
     Ok(cell)
 }
