@@ -105,10 +105,10 @@ async fn accepted_result_survives_process_restart_and_pays_once() {
     available.store(true, Ordering::SeqCst);
     let mut database = start();
     ready(&http, &base, &mut database).await;
-    let command = json!({"account_id":account_id,"auth_secret":account["auth_secret"],"match_id":"42"});
+    let command = json!({"account_id":account_id,"auth_secret":account["auth_secret"],"match_id":"42","closure_known":true});
     let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
     let settled: Value = loop {
-        let response: Value = http.post(format!("{base}/profile/match-exit")).json(&command)
+        let response: Value = http.post(format!("{base}/profile/match-result")).timeout(Duration::from_secs(25)).json(&command)
             .send().await.unwrap().error_for_status().unwrap().json().await.unwrap();
         if response["state"] == "confirmed" { break response; }
         assert!(tokio::time::Instant::now() < deadline, "restarted process did not finish the accepted result");
@@ -123,13 +123,21 @@ async fn accepted_result_survives_process_restart_and_pays_once() {
     }
     assert_eq!(requests.load(Ordering::SeqCst), checks, "accepted duplicates must not trigger another verification");
     drop(database);
+    {
+        use redb::ReadableTable;
+        let db = redb::Database::open(directory.path().join("metadata.redb")).unwrap();
+        let txn = db.begin_read().unwrap();
+        let work = txn.open_table(sow_data::metadata_db::PENDING_REPLAY_VERIFICATIONS_TABLE).unwrap();
+        assert!(!work.iter().unwrap().any(|row| row.unwrap().0.value().starts_with("exit:")),
+            "result observation must never persist an exit command");
+    }
     // Remove only this test's volatile cache: the third process must rebuild
     // the same confirmed profile from durable data, without replaying a reward.
     let mut cache = redis::Client::open(redis_url.as_str()).unwrap().get_multiplexed_async_connection().await.unwrap();
     redis::cmd("FLUSHDB").query_async::<()>(&mut cache).await.unwrap();
     let mut database = start();
     ready(&http, &base, &mut database).await;
-    let recovered: Value = http.post(format!("{base}/profile/match-exit")).json(&command)
+    let recovered: Value = http.post(format!("{base}/profile/match-result")).timeout(Duration::from_secs(25)).json(&command)
         .send().await.unwrap().error_for_status().unwrap().json().await.unwrap();
     assert_eq!(recovered["state"], "confirmed");
     assert_eq!(recovered["profile"]["xp"], settled["profile"]["xp"]);

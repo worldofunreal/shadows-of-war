@@ -3,7 +3,6 @@ pub struct SettingsState {
     pub mute_all: bool,
     pub reduced_motion: bool,
     pub free_zoom_out: bool,
-    pub sticky_building_mode: bool,
     pub show_fps_ping: bool,
     pub show_dev_tools: bool,
 }
@@ -60,7 +59,6 @@ impl Default for SettingsState {
             mute_all: false,
             reduced_motion: false,
             free_zoom_out: true,
-            sticky_building_mode: false,
             show_fps_ping: false,
             show_dev_tools: false,
         }
@@ -69,11 +67,6 @@ impl Default for SettingsState {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn sticky_building_mode_defaults_to_one_shot_placement() {
-        assert!(!super::SettingsState::default().sticky_building_mode);
-    }
-
     #[test]
     fn fps_ping_and_dev_tools_are_off_by_default() {
         let settings = super::SettingsState::default();

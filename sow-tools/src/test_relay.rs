@@ -86,33 +86,37 @@ async fn ws_send(
     ws.send(Message::Binary(bytes)).await.unwrap();
 }
 
-async fn recv(
-    read: &mut futures_util::stream::SplitStream<
+#[track_caller]
+fn recv<'a>(
+    read: &'a mut futures_util::stream::SplitStream<
         tokio_tungstenite::WebSocketStream<
             tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
         >,
     >,
     timeout_secs: u64,
-) -> ServerMessage {
-    let deadline = tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), async {
-        loop {
-            match read.next().await {
-                Some(Ok(Message::Binary(data))) => {
-                    if let Ok(msg) = bincode::deserialize::<ServerMessage>(&data) {
-                        return msg;
+) -> impl std::future::Future<Output = ServerMessage> + 'a {
+    let caller = std::panic::Location::caller();
+    async move {
+        let deadline = tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), async {
+            loop {
+                match read.next().await {
+                    Some(Ok(Message::Binary(data))) => {
+                        if let Ok(msg) = bincode::deserialize::<ServerMessage>(&data) {
+                            return msg;
+                        }
                     }
+                    Some(Ok(_)) => continue,
+                    Some(Err(e)) => fail(&format!("WS read error at {caller}: {e}")),
+                    None => fail(&format!("WS stream ended unexpectedly at {caller}")),
                 }
-                Some(Ok(_)) => continue,
-                Some(Err(e)) => fail(&format!("WS read error: {e}")),
-                None => fail("WS stream ended unexpectedly"),
             }
+        });
+        match deadline.await {
+            Ok(msg) => msg,
+            Err(_) => fail(&format!(
+                "Timed out after {timeout_secs}s waiting for server message at {caller}"
+            )),
         }
-    });
-    match deadline.await {
-        Ok(msg) => msg,
-        Err(_) => fail(&format!(
-            "Timed out after {timeout_secs}s waiting for server message"
-        )),
     }
 }
 

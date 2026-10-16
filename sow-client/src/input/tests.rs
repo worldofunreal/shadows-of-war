@@ -24,7 +24,7 @@ mod placement_tests {
     }
 
     #[test]
-    fn click_on_city_resolves_to_another_valid_site() {
+    fn occupied_site_is_rejected_without_moving_the_preview() {
         let map_w = 32u32;
         let map_h = 32u32;
         let my_id = 1u16;
@@ -44,13 +44,13 @@ mod placement_tests {
             my_id,
             buildings: &buildings,
         })
-        .expect("click near a city should find an open site");
+        ;
 
-        assert_ne!(resolved, city_tile);
+        assert_eq!(resolved, Err("hud.build_occupied"));
     }
 
     #[test]
-    fn click_far_from_city_snaps_to_spawn_tile() {
+    fn open_site_preserves_the_exact_confirmed_anchor() {
         let map_w = 32u32;
         let map_h = 32u32;
         let my_id = 1u16;
@@ -72,7 +72,7 @@ mod placement_tests {
         })
         .expect("click far from city should find spawn tile");
 
-        assert_ne!(resolved, city_tile);
+        assert_eq!(resolved, 20 * map_w + 20);
     }
 }
 

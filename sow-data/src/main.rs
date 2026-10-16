@@ -1,7 +1,7 @@
 mod match_exit;
 
 use sow_data::crazygames;
-use sow_data::db::{PlayGamesMatchOutcome, PlayerDb, PlayerProfile};
+use sow_data::db::{PlayerDb, PlayerProfile};
 
 use axum::{
     Json, Router,
@@ -56,6 +56,7 @@ struct AppState {
     replay_verification_tx: tokio::sync::mpsc::Sender<String>,
     replay_verification_client: reqwest::Client,
     match_artifact_lock: tokio::sync::Mutex<()>,
+    match_results: tokio::sync::broadcast::Sender<String>,
 }
 
 const PLAYGAMES_HANDOFF_TTL: Duration = Duration::from_secs(60);
@@ -2241,6 +2242,7 @@ async fn main() {
         replay_verification_tx,
         replay_verification_client,
         match_artifact_lock: tokio::sync::Mutex::new(()),
+        match_results: tokio::sync::broadcast::channel(256).0,
     });
 
     tokio::spawn(match_exit::worker(
@@ -2252,6 +2254,9 @@ async fn main() {
     tokio::spawn(async move {
         loop {
             sync_state.retry_active_playgames_sync().await;
+            if let Err(error) = sync_state.db.retry_crazygames_scores().await {
+                warn!("CrazyGames pending score retry failed: {error}");
+            }
             tokio::time::sleep(std::time::Duration::from_secs(30)).await;
         }
     });
@@ -2343,6 +2348,7 @@ async fn main() {
         )
         .route("/profile/tutorial-complete", post(handle_tutorial_complete))
         .route("/profile/match-exit", post(match_exit::handle_exit))
+        .route("/profile/match-result", post(match_exit::handle_result))
         .route("/profile/campaign-complete", post(handle_campaign_complete))
         .route("/profile/leader-selection", post(handle_leader_selection))
         .route(
@@ -3786,85 +3792,6 @@ async fn handle_playgames_consume(
 }
 
 impl AppState {
-    async fn sync_playgames_match_event(&self, participants: &[String]) -> Result<(), String> {
-        let event_id = std::env::var("SOW_PLAY_GAMES_MATCH_EVENT_ID")
-            .unwrap_or_default()
-            .trim()
-            .to_string();
-        if event_id.is_empty() || participants.is_empty() {
-            return Ok(());
-        }
-
-        let now = Instant::now();
-        let tokens = {
-            let mut access_tokens = self
-                .playgames_access_tokens
-                .lock()
-                .map_err(|_| "Play Games access-token store is poisoned".to_string())?;
-            access_tokens.retain(|_, value| value.expires_at > now);
-            participants
-                .iter()
-                .filter_map(|account_id| {
-                    access_tokens
-                        .get(account_id)
-                        .map(|value| (account_id.clone(), value.access_token.clone()))
-                })
-                .collect::<Vec<_>>()
-        };
-        if tokens.is_empty() {
-            return Ok(());
-        }
-
-        let body = serde_json::json!({
-            "kind": "games#eventRecordRequest",
-            "requestId": rand::random::<u64>().to_string(),
-            "currentTimeMillis": std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis()
-                .to_string(),
-            "events": [{
-                "definitionId": event_id,
-                "updateCount": "1"
-            }]
-        });
-        let client = reqwest::Client::new();
-        let mut first_error = None;
-        for (account_id, access_token) in tokens {
-            match client
-                .post("https://games.googleapis.com/games/v1/events")
-                .bearer_auth(access_token)
-                .json(&body)
-                .timeout(Duration::from_secs(5))
-                .send()
-                .await
-            {
-                Ok(response) if response.status().is_success() => {
-                    info!(
-                        "Play Games match event recorded for account={}",
-                        account_hint(Some(&account_id))
-                    );
-                }
-                Ok(response) => {
-                    let message = format!(
-                        "HTTP {} for account={}",
-                        response.status(),
-                        account_hint(Some(&account_id))
-                    );
-                    error!("Play Games event request rejected: {message}");
-                    first_error.get_or_insert(message);
-                }
-                Err(error) => {
-                    let message =
-                        format!("{} for account={}", error, account_hint(Some(&account_id)));
-                    error!("Play Games event request failed: {message}");
-                    first_error.get_or_insert(message);
-                }
-            }
-        }
-        first_error.map_or(Ok(()), Err)
-    }
-
     async fn sync_playgames_progress(
         &self,
         account_id: &str,
@@ -3990,26 +3917,6 @@ impl AppState {
         }
 
         first_error.map_or(Ok(true), Err)
-    }
-
-    async fn sync_playgames_match_outcome(
-        &self,
-        outcome: &PlayGamesMatchOutcome,
-    ) -> Result<(), String> {
-        if self
-            .sync_playgames_progress(
-                &outcome.account_id,
-                &outcome.unlocked_achievements,
-                outcome.won.then_some(outcome.wins),
-            )
-            .await?
-        {
-            self.db
-                .mark_playgames_sync(&outcome.account_id, outcome.sync_revision)
-                .await
-                .map_err(|error| format!("mark Play Games sync: {error}"))?;
-        }
-        Ok(())
     }
 
     /// Reconcile verified profile progress when a Play Games token is active.
@@ -4527,7 +4434,7 @@ async fn handle_match_finalize(
     }
 
     // Keep analytics and match history on the immutable roster registered before relay handoff.
-    let participants = match state
+    let _participants = match state
         .db
         .match_participants_with_lobby(&payload.match_id, payload.lobby_json.as_deref())
         .await
@@ -4574,6 +4481,7 @@ async fn handle_match_finalize(
                         payload.match_id
                     );
                 }
+                let _ = state.match_results.send(payload.match_id.clone());
             } else if let Err(error) = reject_queued_replay(&state, &payload.match_id).await {
                 error!(
                     "match {} without replay could not close verification: {error}",
@@ -4764,7 +4672,7 @@ async fn verify_queued_replay(state: &AppState, match_id: &str) {
             return;
         }
     };
-    let (outcomes, accounts) = match state.db.apply_verified_match_result(&result).await {
+    let _applied = match state.db.apply_verified_match_result(&result).await {
         Ok(applied) => applied,
         Err(error) => {
             if error.to_string().starts_with("invalid verified result:") {
@@ -4778,17 +4686,6 @@ async fn verify_queued_replay(state: &AppState, match_id: &str) {
             return;
         }
     };
-    for account in &accounts {
-        state.db.submit_crazygames_score(account).await;
-    }
-    for outcome in outcomes {
-        if let Err(error) = state.sync_playgames_match_outcome(&outcome).await {
-            warn!(
-                "verified Play Games outcome sync failed account={}: {error}",
-                account_hint(Some(&outcome.account_id))
-            );
-        }
-    }
     if let Err(error) = state.db.finish_replay_verification(
         match_id,
         sow_data::profile::ReplayVerificationStatus::Verified,

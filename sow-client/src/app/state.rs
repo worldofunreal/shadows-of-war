@@ -200,6 +200,8 @@ impl LoadTelemetry {
 
 pub struct NetState {
     pub client: Option<sow_net::client::SowClient>,
+    /// Only receives durable exit acknowledgment; never reconnects for rewards.
+    pub closing_game: Option<sow_net::client::SowClient>,
     pub connect_tx: WakeSender<(String, Result<sow_net::client::SowClient, String>)>,
     pub connect_rx:
         crossbeam_channel::Receiver<(String, Result<sow_net::client::SowClient, String>)>,
@@ -212,8 +214,6 @@ pub struct NetState {
     pub pending_lobby_rejoin: bool,
     pub current_ping_ms: Option<u32>,
     pub last_ping_time: web_time::Instant,
-    pub relay_connect_start: Option<web_time::Instant>,
-    pub relay_retry_count: u32,
     pub load_telemetry: LoadTelemetry,
     /// Set when the orchestrator handed us off to a game relay (Start carried
     /// relay_host). The loader uses this instead of string-matching ws_url.
@@ -262,11 +262,7 @@ pub struct InputState {
     pub last_pinch_state: Option<(f64, f64, f64)>,
     pub map_context_menu: Option<MapContextMenu>,
     pub map_context_menu_session: u64,
-    /// Hold-to-build
-    pub hold_build_active: bool,
-    pub hold_build_accum: f32,
-    pub hold_build_action_succeeded: bool,
-    pub hold_build_shift_override: bool,
+    pub building_drag_offset: Option<(f32, f32)>,
     pub shift_pressed: bool,
     pub has_snapped_camera_to_spawn: bool,
     pub spawn_intent_rate: sow_core::spawn_rate_limit::SpawnIntentRateLimit,
@@ -288,7 +284,10 @@ pub struct InputState {
 
 impl InputState {
     pub fn is_pointer_gesture_active(&self) -> bool {
-        self.dragging || self.last_pinch_state.is_some() || !self.active_touches.is_empty()
+        self.dragging
+            || self.building_drag_offset.is_some()
+            || self.last_pinch_state.is_some()
+            || !self.active_touches.is_empty()
     }
 }
 
@@ -583,7 +582,6 @@ pub struct UiState {
     pub border_flashes: Vec<BorderFlashInstance>,
     pub alliance_celebrations: std::collections::VecDeque<AllianceCelebration>,
     pub border_flash_intensities: std::collections::HashMap<u16, f32>,
-    pub placement_scratch: Vec<(i32, i32, f32, i32)>,
     pub last_player_attack_flash_time: std::collections::HashMap<u16, web_time::Instant>,
     /// Screen vignette alert state.
     pub viewport_alert: Option<ViewportAlertState>,
@@ -825,17 +823,9 @@ pub struct TaskState {
     pub engine_init_queued_msg: Option<sow_core::protocol::ServerStartMessage>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ExitRewardWait {
-    pub account_id: Option<String>,
-    pub receipt_id: Option<String>,
-    pub requires_verification: bool,
-    pub server_state: Option<sow_data::profile::MatchExitState>,
-}
-
 /// The durable handoff consumed by main_menu.flow.js. An empty receipt list
 /// never means a reward-bearing return has finished.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct MenuReturnContext {
     pub account_id: Option<String>,
     pub cycle_id: u32,
@@ -844,6 +834,23 @@ pub(crate) struct MenuReturnContext {
     pub receipt_ids: Vec<String>,
     pub status: String,
     pub requested_screen: Option<String>,
+    /// None is the isolated reader for older persisted explicit exits.
+    #[serde(default)]
+    pub voluntary_exit: Option<bool>,
+    #[serde(default)]
+    pub exit_recorded: bool,
+    #[serde(default)]
+    pub server_state: Option<sow_data::profile::MatchExitState>,
+    #[serde(skip)]
+    pub recording_deadline: Option<web_time::Instant>,
+    #[serde(skip)]
+    pub result_request_id: Option<u64>,
+    #[serde(skip)]
+    pub recovery_request_id: Option<u64>,
+    #[serde(skip)]
+    pub recovery_accepted: bool,
+    #[serde(skip)]
+    pub started_at: Option<web_time::Instant>,
 }
 
 pub struct SowApp {
@@ -859,13 +866,9 @@ pub struct SowApp {
     #[cfg(target_arch = "wasm32")]
     pub wasm_doc_was_visible: bool,
     pub asset_config: crate::AssetConfig,
-    #[cfg(target_arch = "wasm32")]
-    pub(crate) web_exit_lobbies_ready: bool,
     /// Set when Blade/Vulkan init fails; event loop exits on next tick.
     pub gpu_init_failed: bool,
     pub progress: crate::player_progress::PlayerProgress,
-    /// The ExitGame loader stays up until this account's server receipt is ready.
-    pub(crate) exit_reward_wait: Option<ExitRewardWait>,
     pub(crate) menu_return: Option<MenuReturnContext>,
     pub progress_account_id: Option<String>,
     pub profile_account_id: Option<String>,

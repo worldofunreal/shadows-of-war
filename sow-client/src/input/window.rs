@@ -3,27 +3,6 @@ use crate::input::map_click::{TOUCH_HOLD_MS, is_quick_tap};
 use crate::{ClientPhase, camera_zoom_upper_bound};
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, PointerKind, WindowEvent};
 
-const HOLD_BUILD_INTERVAL_SECS: f32 = 0.25;
-const HOLD_BUILD_BURST_INTERVAL_SECS: f32 = 0.1;
-pub(crate) const HOLD_BUILD_BURST_AFTER_SECS: f32 = 2.0;
-
-pub(crate) fn hold_build_repeat_interval(held_secs: f32) -> f32 {
-    if held_secs >= HOLD_BUILD_BURST_AFTER_SECS {
-        HOLD_BUILD_BURST_INTERVAL_SECS
-    } else {
-        HOLD_BUILD_INTERVAL_SECS
-    }
-}
-
-fn advance_hold_build_timer(remaining: &mut f32, dt: f32, held_secs: f32) -> bool {
-    *remaining -= dt.max(0.0);
-    if *remaining > 0.0 {
-        return false;
-    }
-    *remaining = hold_build_repeat_interval(held_secs);
-    true
-}
-
 impl SowApp {
     pub fn handle_window_event(
         &mut self,
@@ -104,7 +83,7 @@ impl SowApp {
     }
 
     fn handle_pointer_left(&mut self, kind: PointerKind) {
-        self.finish_build_pointer_gesture();
+        self.finish_pointer_gesture();
         match kind {
             PointerKind::Touch(finger_id) => {
                 self.input
@@ -128,7 +107,6 @@ impl SowApp {
 
     fn rebase_single_touch_drag(&mut self) {
         if self.input.active_touches.len() == 1
-            && self.ui.app.hud_state.selected_building_kind.is_none()
             && self.ui.app.hud_state.selected_nuke_kind.is_none()
             && !self.ui.app.hud_state.selected_warship_build
         {
@@ -261,6 +239,10 @@ impl SowApp {
         if let Some(kind) = building {
             self.select_building_kind(kind);
         }
+        if code == winit::keyboard::KeyCode::Enter || code == winit::keyboard::KeyCode::NumpadEnter
+        {
+            self.confirm_building_placement();
+        }
         if code == winit::keyboard::KeyCode::Digit0 || code == winit::keyboard::KeyCode::Numpad0 {
             self.select_nuke_kind(sow_core::game::NukeKind::AtomBomb);
         }
@@ -279,8 +261,13 @@ impl SowApp {
         primary: bool,
     ) {
         let pointer_was_down = self.input.map_pointer_start.is_some();
-        let previous_mouse_x = self.input.last_mouse_x;
-        let previous_mouse_y = self.input.last_mouse_y;
+        if pressed
+            && pointer_was_down
+            && matches!(button, winit::event::ButtonSource::Mouse(MouseButton::Left))
+        {
+            self.handle_pointer_move(winit::event::PointerSource::Mouse, x, y, primary);
+            return;
+        }
 
         let is_touch = matches!(button, winit::event::ButtonSource::Touch { .. });
         let left =
@@ -305,8 +292,7 @@ impl SowApp {
                         action_sent: false,
                     });
                 } else {
-                    self.finish_build_pointer_gesture();
-                    self.cancel_hold_build();
+                    self.finish_pointer_gesture();
                     self.input.dragging = false;
                     self.close_map_context_menu();
                 }
@@ -325,9 +311,7 @@ impl SowApp {
             self.sync_hover_pointer(HoverPointer::Mouse, Some((x, y)));
         }
 
-        let in_game =
-            self.ui.app.phase == ClientPhase::Playing && self.ui.app.hud_state.sync_state.is_none();
-        let build_tool_selected = self.ui.app.hud_state.selected_building_kind.is_some();
+        let build_tool_selected = self.ui.app.hud_state.building_placement.is_some();
         let warship_tool_selected = self.ui.app.hud_state.selected_warship_build;
 
         if left {
@@ -336,27 +320,17 @@ impl SowApp {
                 // handler. Keep the original press so release still resolves
                 // the tile that was clicked instead of turning the gesture
                 // into a new click at every move.
-                if !is_touch && pointer_was_down {
-                    if self.input.dragging {
-                        self.record_tutorial_camera_drag_if_moved(x, y);
-                        self.close_map_context_menu();
-                        self.input.camera_x += (x - previous_mouse_x) as f32;
-                        self.input.camera_y += (y - previous_mouse_y) as f32;
-                        self.clamp_camera_to_map();
-                    }
-                    return;
-                }
                 self.close_map_context_menu();
                 if !is_touch && !pointer_was_down {
                     self.input.tutorial_camera_drag_recorded = false;
                 }
                 self.input.dragging = self.ui.tutorial_camera_only
-                    || (!build_tool_selected
-                        && !warship_tool_selected
+                    || (!warship_tool_selected
                         && self.ui.app.hud_state.selected_nuke_kind.is_none());
                 if !is_touch {
                     let action_sent = !self.ui.tutorial_camera_only
-                        && (build_tool_selected || self.try_attack_at(x, y));
+                        && !build_tool_selected
+                        && self.try_attack_at(x, y);
                     self.input.map_pointer_start = Some(MapPointerStart {
                         started_at: web_time::Instant::now(),
                         x,
@@ -364,11 +338,6 @@ impl SowApp {
                         is_touch,
                         action_sent,
                     });
-                    if build_tool_selected {
-                        if in_game && !self.ui.observing {
-                            self.begin_hold_build(x, y);
-                        }
-                    }
                 } else if self.input.map_pointer_start.is_none()
                     && self.input.active_touches.len() == 1
                 {
@@ -377,22 +346,37 @@ impl SowApp {
                         x,
                         y,
                         is_touch,
-                        action_sent: build_tool_selected,
+                        action_sent: false,
                     });
                 }
-                if is_touch && build_tool_selected && self.input.active_touches.len() == 1 {
-                    let has_start = if let Some(start) = self.input.map_pointer_start.as_mut() {
-                        start.action_sent = true;
-                        true
-                    } else {
-                        false
-                    };
-                    if has_start && in_game && !self.ui.observing {
-                        self.begin_hold_build(x, y);
+                if build_tool_selected && (!is_touch || self.input.active_touches.len() == 1) {
+                    if let Some(placement) = self
+                        .ui
+                        .app
+                        .hud_state
+                        .building_placement
+                        .filter(|p| !p.pending)
+                    {
+                        let center_x = self.input.camera_x
+                            + (placement.tile_idx % self.sim.map_w) as f32 * self.input.camera_zoom;
+                        let center_y = self.input.camera_y
+                            + (placement.tile_idx / self.sim.map_w) as f32 * self.input.camera_zoom;
+                        let sf = crate::web_canvas::device_pixel_ratio() as f32;
+                        let half = (2.0 * self.input.camera_zoom).max(24.0 * sf);
+                        if (x as f32 - center_x).abs() <= half
+                            && (y as f32 - center_y).abs() <= half
+                        {
+                            self.input.building_drag_offset = Some((
+                                (x as f32 - center_x) / self.input.camera_zoom,
+                                (y as f32 - center_y) / self.input.camera_zoom,
+                            ));
+                            self.input.dragging = false;
+                        }
                     }
                 }
             } else {
-                let Some(start) = self.finish_build_pointer_gesture() else {
+                let was_building_drag = self.input.building_drag_offset.is_some();
+                let Some(start) = self.finish_pointer_gesture() else {
                     if self.input.active_touches.is_empty() {
                         self.input.dragging = false;
                     }
@@ -405,7 +389,11 @@ impl SowApp {
                 if distance_sq > 400.0 || self.ui.app.phase != ClientPhase::Playing {
                     return;
                 }
-                if start.action_sent {
+                if start.action_sent || was_building_drag {
+                    return;
+                }
+                if build_tool_selected {
+                    self.handle_map_click(x, y);
                     return;
                 }
                 if start.is_touch {
@@ -424,7 +412,7 @@ impl SowApp {
             && self.ui.app.phase == ClientPhase::Playing
             && !self.ui.tutorial_camera_only
         {
-            if self.ui.app.hud_state.selected_building_kind.is_some()
+            if self.ui.app.hud_state.building_placement.is_some()
                 || self.ui.app.hud_state.selected_nuke_kind.is_some()
                 || self.ui.app.hud_state.selected_warship_build
             {
@@ -452,8 +440,7 @@ impl SowApp {
         }
         let is_touch = matches!(source, winit::event::PointerSource::Touch { .. });
         if self.input.active_touches.len() >= 2 {
-            self.finish_build_pointer_gesture();
-            self.cancel_hold_build();
+            self.finish_pointer_gesture();
             self.input.dragging = false;
             self.input.hover_pointer = HoverPointer::None;
             self.close_map_context_menu();
@@ -475,16 +462,20 @@ impl SowApp {
                 );
             }
             self.input.last_pinch_state = Some((distance, cx, cy));
+        } else if let Some((offset_x, offset_y)) = self.input.building_drag_offset {
+            let col = ((x as f32 - self.input.camera_x) / self.input.camera_zoom - offset_x).round()
+                as i32;
+            let row = ((y as f32 - self.input.camera_y) / self.input.camera_zoom - offset_y).round()
+                as i32;
+            self.move_building_preview(col, row);
         } else if is_touch {
             let mut crossed_drag_threshold = false;
             if let Some(start) = self.input.map_pointer_start.as_ref() {
                 let distance_sq = (x - start.x).powi(2) + (y - start.y).powi(2);
                 if distance_sq > 400.0 {
-                    if !self.input.hold_build_active {
-                        self.record_tutorial_camera_drag_if_moved(x, y);
-                        self.input.map_pointer_start = None;
-                        crossed_drag_threshold = true;
-                    }
+                    self.record_tutorial_camera_drag_if_moved(x, y);
+                    self.input.map_pointer_start = None;
+                    crossed_drag_threshold = true;
                 }
             }
             if (crossed_drag_threshold || self.input.map_pointer_start.is_none())
@@ -547,7 +538,7 @@ impl SowApp {
     }
 
     fn cancel_pointer_gesture(&mut self) {
-        self.finish_build_pointer_gesture();
+        self.finish_pointer_gesture();
         self.input.dragging = false;
         self.input.active_touches.clear();
         self.input.last_pinch_state = None;
@@ -563,7 +554,7 @@ impl SowApp {
             || self.ui.tutorial_camera_only
             || self.ui.app.phase != ClientPhase::Playing
             || start.action_sent
-            || self.ui.app.hud_state.selected_building_kind.is_some()
+            || self.ui.app.hud_state.building_placement.is_some()
             || self.ui.app.hud_state.selected_nuke_kind.is_some()
             || self.ui.app.hud_state.selected_warship_build
             || start.started_at.elapsed().as_millis() < TOUCH_HOLD_MS
@@ -576,73 +567,10 @@ impl SowApp {
         self.open_map_context_menu(x, y);
     }
 
-    pub(crate) fn begin_hold_build(&mut self, x: f64, y: f64) {
-        if self.ui.tutorial_camera_only {
-            return;
-        }
-        self.input.hold_build_action_succeeded = false;
-        self.input.hold_build_shift_override = false;
-        self.input.hold_build_active = true;
-        self.input.hold_build_accum = HOLD_BUILD_INTERVAL_SECS;
-        self.handle_map_click(x, y);
+    fn finish_pointer_gesture(&mut self) -> Option<MapPointerStart> {
+        self.input.building_drag_offset = None;
+        self.input.map_pointer_start.take()
     }
-
-    fn finish_build_pointer_gesture(&mut self) -> Option<MapPointerStart> {
-        let start = self.input.map_pointer_start.take();
-        let held_mobile = start.as_ref().is_some_and(|start| {
-            start.is_touch && start.started_at.elapsed().as_secs_f32() >= HOLD_BUILD_INTERVAL_SECS
-        });
-        let should_exit = should_exit_build_mode_after_gesture(
-            self.ui.app.settings_state.sticky_building_mode,
-            self.input.hold_build_action_succeeded,
-            self.input.hold_build_shift_override,
-            held_mobile,
-        );
-        self.cancel_hold_build();
-        self.input.hold_build_action_succeeded = false;
-        self.input.hold_build_shift_override = false;
-        if should_exit {
-            self.clear_placement();
-        }
-        start
-    }
-
-    pub(crate) fn cancel_hold_build(&mut self) {
-        self.input.hold_build_active = false;
-        self.input.hold_build_accum = 0.0;
-    }
-
-    pub(crate) fn pump_hold_build(&mut self, dt: f32, now: web_time::Instant) {
-        if !self.input.hold_build_active {
-            return;
-        }
-        let Some(start) = self.input.map_pointer_start.as_ref() else {
-            self.cancel_hold_build();
-            return;
-        };
-        if self.ui.app.phase != ClientPhase::Playing
-            || self.ui.app.hud_state.sync_state.is_some()
-            || self.ui.observing
-            || self.ui.app.hud_state.selected_building_kind.is_none()
-            || self.input.active_touches.len() > 1
-        {
-            self.cancel_hold_build();
-            return;
-        }
-        let held_secs = now.duration_since(start.started_at).as_secs_f32();
-        if advance_hold_build_timer(&mut self.input.hold_build_accum, dt, held_secs) {
-            self.handle_map_click(self.input.last_mouse_x, self.input.last_mouse_y);
-        }
-    }
-}
-
-fn should_exit_build_mode_after_gesture(
-    sticky: bool,
-    action_succeeded: bool,
-    shift_override: bool,
-    held_mobile: bool,
-) -> bool {
-    action_succeeded && !sticky && !shift_override && !held_mobile
 }
 
 fn single_touch_position(
@@ -655,10 +583,7 @@ fn single_touch_position(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        HOLD_BUILD_BURST_INTERVAL_SECS, HOLD_BUILD_INTERVAL_SECS, advance_hold_build_timer,
-        hold_build_repeat_interval, should_exit_build_mode_after_gesture, single_touch_position,
-    };
+    use super::single_touch_position;
     use std::collections::HashMap;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -666,48 +591,110 @@ mod tests {
     fn touch_hover_requires_exactly_one_finger() {
         let mut touches = HashMap::new();
         assert_eq!(single_touch_position(&touches), None);
-
         touches.insert(7, (120.0, 240.0));
         assert_eq!(single_touch_position(&touches), Some((120.0, 240.0)));
-
-        touches.insert(8, (320.0, 480.0));
+        touches.insert(8, (200.0, 240.0));
         assert_eq!(single_touch_position(&touches), None);
     }
-
     #[wasm_bindgen_test]
-    fn hold_build_changes_to_burst_after_two_seconds() {
-        assert_eq!(hold_build_repeat_interval(1.999), HOLD_BUILD_INTERVAL_SECS);
+    #[cfg(target_arch = "wasm32")]
+    async fn building_drag_pan_cancel_and_pending_confirmation_never_spend_gold() {
+        use crate::app::SowApp;
+        use crate::ui::hud::state::BuildingPlacement;
+        use winit::event::{ButtonSource, FingerId, MouseButton, PointerSource};
+        let profile = serde_json::json!({ "account_id": "0123456789abcdef0123456789abcdef", "auth_secret": "placement-test", "display_name": "Builder", "profile": crate::player_progress::PlayerProgress::default() }).to_string();
+        crate::app::setup_tutorial_exit(&profile, &profile);
+        let mut app = SowApp::new();
+        app.ui.app.phase = crate::ClientPhase::Playing;
+        app.sim.map_w = 64;
+        app.sim.map_h = 64;
+        app.input.camera_zoom = 12.0;
+        app.input.target_zoom = 12.0;
+        app.input.camera_x = 0.0;
+        app.input.camera_y = 0.0;
+        app.input.screen_w = 800.0;
+        app.input.screen_h = 600.0;
+        app.ui.app.hud_state.building_placement = Some(BuildingPlacement {
+            kind: sow_core::game::BuildingKind::City,
+            tile_idx: 20 * 64 + 20,
+            pending: false,
+        });
+        let left = ButtonSource::Mouse(MouseButton::Left);
+        app.handle_pointer_button(true, left.clone(), 240.0, 240.0, true);
+        app.handle_pointer_move(PointerSource::Mouse, 300.0, 240.0, true);
+        app.handle_pointer_button(false, left.clone(), 300.0, 240.0, true);
         assert_eq!(
-            hold_build_repeat_interval(2.0),
-            HOLD_BUILD_BURST_INTERVAL_SECS
+            app.ui.app.hud_state.building_placement.unwrap().tile_idx,
+            20 * 64 + 25
         );
-
-        let mut remaining = HOLD_BUILD_INTERVAL_SECS;
-        assert!(!advance_hold_build_timer(&mut remaining, 0.125, 0.0));
-        assert!(advance_hold_build_timer(&mut remaining, 0.125, 0.25));
-        assert_eq!(remaining, HOLD_BUILD_INTERVAL_SECS);
-
-        remaining = 0.001;
-        assert!(advance_hold_build_timer(&mut remaining, 0.001, 2.0));
-        assert_eq!(remaining, HOLD_BUILD_BURST_INTERVAL_SECS);
-    }
-
-    #[wasm_bindgen_test]
-    fn building_mode_exits_only_after_success_without_a_keep_override() {
-        assert!(should_exit_build_mode_after_gesture(
-            false, true, false, false
-        ));
-        assert!(!should_exit_build_mode_after_gesture(
-            false, false, false, false
-        ));
-        assert!(!should_exit_build_mode_after_gesture(
-            true, true, false, false
-        ));
-        assert!(!should_exit_build_mode_after_gesture(
-            false, true, true, false
-        ));
-        assert!(!should_exit_build_mode_after_gesture(
-            false, true, false, true
-        ));
+        assert!(app.sim.offline_intents.is_empty());
+        let tile = app.ui.app.hud_state.building_placement.unwrap().tile_idx;
+        app.handle_pointer_button(true, left.clone(), 40.0, 40.0, true);
+        app.handle_pointer_move(PointerSource::Mouse, 80.0, 60.0, true);
+        app.handle_pointer_button(false, left, 80.0, 60.0, true);
+        assert_eq!(
+            app.ui.app.hud_state.building_placement.unwrap().tile_idx,
+            tile
+        );
+        assert_eq!(app.input.camera_x, 40.0);
+        assert_eq!(app.input.camera_y, 20.0);
+        let touch = |id| ButtonSource::Touch {
+            finger_id: FingerId::from_raw(id),
+            force: None,
+        };
+        let movement = |id| PointerSource::Touch {
+            finger_id: FingerId::from_raw(id),
+            force: None,
+        };
+        app.handle_pointer_button(true, touch(1), 340.0, 260.0, true);
+        app.handle_pointer_move(movement(1), 352.0, 260.0, true);
+        app.handle_pointer_button(false, touch(1), 352.0, 260.0, true);
+        assert_eq!(
+            app.ui.app.hud_state.building_placement.unwrap().tile_idx,
+            20 * 64 + 26
+        );
+        app.handle_pointer_button(true, touch(1), 160.0, 140.0, true);
+        app.handle_pointer_button(false, touch(1), 160.0, 140.0, true);
+        let tile = 10 * 64 + 10;
+        assert_eq!(
+            app.ui.app.hud_state.building_placement.unwrap().tile_idx,
+            tile
+        );
+        app.handle_pointer_button(true, touch(1), 160.0, 140.0, true);
+        app.handle_pointer_button(true, touch(2), 260.0, 140.0, false);
+        app.handle_pointer_move(movement(2), 280.0, 140.0, false);
+        app.handle_pointer_move(movement(2), 300.0, 140.0, false);
+        assert!(app.input.target_zoom > 12.0);
+        app.handle_pointer_button(false, touch(2), 300.0, 140.0, false);
+        app.handle_pointer_button(false, touch(1), 160.0, 140.0, true);
+        app.cancel_pointer_gesture();
+        assert_eq!(
+            app.ui.app.hud_state.building_placement.unwrap().tile_idx,
+            tile
+        );
+        app.ui
+            .app
+            .hud_state
+            .building_placement
+            .as_mut()
+            .unwrap()
+            .pending = true;
+        app.confirm_building_placement();
+        app.confirm_building_placement();
+        assert!(app.sim.offline_intents.is_empty());
+        app.ui
+            .app
+            .hud_state
+            .building_placement
+            .as_mut()
+            .unwrap()
+            .pending = false;
+        app.clear_placement();
+        assert!(app.ui.app.hud_state.building_placement.is_none());
+        assert!(app.sim.offline_intents.is_empty());
+        drop(app);
+        wasm_bindgen_futures::JsFuture::from(crate::app::restore_tutorial_exit())
+            .await
+            .unwrap();
     }
 }

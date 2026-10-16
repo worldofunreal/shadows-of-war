@@ -1,4 +1,4 @@
-use crate::building::resolve_structure_spawn_tile;
+use crate::building::find_structure_site_near;
 
 use crate::game::BuildingKind;
 use crate::protocol::GameplayIntent;
@@ -130,11 +130,12 @@ pub(super) fn resolve_structure_from_candidates(
     candidates: StructureCandidates<'_>,
     existing: &crate::building::BuildingGrid,
     scratch: &mut crate::engine::PlacementScratch,
+    legacy: bool,
 ) -> Option<u32> {
     let map_w = map.width;
     for &idx in candidates.border {
         if let Some(spawn) =
-            resolve_structure_spawn_tile(map, owner_id, kind, idx, existing, scratch)
+            find_structure_site_near(map, owner_id, idx, kind, existing, scratch, legacy)
         {
             return Some(spawn);
         }
@@ -149,7 +150,7 @@ pub(super) fn resolve_structure_from_candidates(
         }
         let idx = uy * map_w + ux;
         if let Some(spawn) =
-            resolve_structure_spawn_tile(map, owner_id, kind, idx, existing, scratch)
+            find_structure_site_near(map, owner_id, idx, kind, existing, scratch, legacy)
         {
             return Some(spawn);
         }
@@ -162,8 +163,20 @@ pub(super) fn resolve_farm_from_candidates(
     owner_id: u16,
     candidates: StructureCandidates<'_>,
     buildings: &[crate::building::Building],
+    existing: &crate::building::BuildingGrid,
+    legacy: bool,
 ) -> Option<u32> {
     let suitable = |idx: u32| {
+        if !legacy {
+            return crate::building::validate_structure_site(
+                map,
+                owner_id,
+                BuildingKind::Farm,
+                idx,
+                existing,
+            )
+            .is_ok();
+        }
         let x = idx % map.width;
         let y = idx / map.width;
         map.owner_id(x, y) == owner_id

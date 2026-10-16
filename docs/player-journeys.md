@@ -96,21 +96,68 @@ aplicables y error.
 - Salir voluntariamente de multijugador confirma lo ganado hasta la salida
   registrada. Una desconexión temporal no equivale a abandonar. El cierre
   posterior de la partida no vuelve a pagar lo ya cerrado.
-- `POST /profile/match-exit` autentica al dueño del perfil y comprueba su
-  participación registrada. Guarda la solicitud antes de responder y devuelve
-  cuenta, partida, perfil y estado: `requested`, `awaiting_result`, `verifying`,
-  `confirmed` o `rejected`. Repetir la petición recupera el mismo trabajo.
-- La salida llega al relay por su administración HTTPS permanente y autenticada.
-  Esperar el resultado consulta exclusivamente el servidor; nunca reconecta al
-  puerto de la partida. Una conexión de juego iniciada antes de salir tampoco
-  puede ocupar la conexión del menú si termina después.
-- El relay confirma cuando guardó el resultado recuperable. El servidor acepta
-  sus datos antes de comprobarlos; los errores de conexión o acceso conservan
-  el pendiente. Sus cuatro procesos comparten un bloqueo nativo por resultado.
-  Tras un reinicio, solo se recupera un registro cuyo escritor haya terminado;
-  un puerto cerrado por sí solo no demuestra que el resultado se perdió.
-- El loader requiere el comprobante exacto y la confirmación final del servidor.
-  Un saldo visible mientras sigue la comprobación no autoriza el regreso.
+- Recorrido normal: **jugador → relay → servidor → jugador**. El botón del HUD,
+  final de partida y destino Tienda convergen en `UiAction::ReturnToMenu` y
+  `begin_exit_to_main_menu`. Ese responsable envía una sola orden `Leave` a la
+  conexión autenticada de la partida. No envía otra orden al servidor.
+- `MatchTracker`, en `sow-relay/src/main.rs`, es el único responsable de la
+  participación: `Active`, `Disconnected`, `Closing`, `Closed`. La identidad
+  viene de la conexión y su generación vigente. Una conexión sustituida no
+  puede rendir ni sacar al jugador reconectado; `MarkDisconnected` pertenece
+  exclusivamente al relay. El primer cierre conserva turno y motivo.
+- El relay envía `ExitRecorded` (cuenta, partida, turno, motivo) después de
+  guardar el cierre recuperable. Esa confirmación permite cerrar el socket de
+  juego, pero nunca concede ni permite mostrar premios. El cliente conserva
+  ese socket únicamente para recibirla, mientras conecta al menú en paralelo.
+  El relay completa el cierre normal de WebSocket después de responder; no
+  corta directamente el transporte y espera la despedida del cliente con el
+  mismo límite de tiempo que sus escrituras.
+- El relay entrega el registro al servidor por HTTPS directo al origen,
+  autenticado con su clave exclusiva. No calcula XP, coronas ni laureles.
+  `verify_replay` reconstruye el motor con los datos registrados por el servidor;
+  `PlayerDb` guarda el comprobante y el historial. El cierre posterior no paga
+  de nuevo una participación cerrada.
+- `POST /profile/match-result` autentica al dueño y **solo observa** su resultado.
+  Nunca crea un trabajo de salida ni llama al relay. Mantiene abierta la
+  solicitud hasta 20 segundos y responde al guardarse el comprobante; si sigue
+  pendiente, el cliente observa de nuevo tras un segundo. Las desconexiones
+  durante el juego pueden recibir antes la confirmación de cierre del relay
+  aceptada por el servidor, para dejar de reconectar y esperar su premio.
+- `POST /profile/match-exit` es exclusivamente recuperación de una salida
+  voluntaria sin confirmación después de un segundo, o sin conexión de juego.
+  Guarda la orden del dueño antes de responder. `MatchWork::RecoveryExit`
+  reutiliza la cola existente; su etiqueta guardada `exit` conserva pendientes
+  anteriores. Una conexión perdida no crea esta orden.
+- El relay concede **60 segundos reales por jugador** desde la detección de
+  desconexión; reconectar antes del vencimiento cancela el cierre. Los errores
+  de conexión no reinician ese reloj. Los 45 segundos de silencio detectan un
+  socket muerto; los pings son cada 15 segundos. Ya no existe un contador de
+  sala vacía basado en turnos ni un límite del cliente que decida abandonar.
+  La caducidad de la entrada inicial no caduca la reconexión de una partida activa.
+- `MenuReturnContext` concentra el pendiente, identidad, partida, ciclo,
+  confirmaciones y destino. El comprobante exacto y el estado final del servidor
+  son necesarios para liberar el loader; un saldo visible no lo sustituye.
+  Las respuestas de consultas anteriores no sustituyen ese estado.
+- El registro existente `<partida>.json` se guarda al registrar la partida con
+  fase `recording` y pasa a `finalized` al terminar. Tras un reinicio, un bloqueo
+  nativo compartido por los cuatro procesos demuestra que su escritor terminó
+  antes de recuperar los turnos y cierres. Un puerto cerrado no prueba pérdida.
+  Los lectores aislados conservan las grabaciones y trabajos históricos.
+- El verificador retiene como máximo un motor comprobado. Solo reutiliza su
+  prefijo si coinciden partida, datos iniciales confiables, mapa y huella de los
+  turnos. Un reinicio, otra partida o bytes distintos obliga a reconstruir.
+  El cierre completo libera ese motor. Los formatos históricos conservan sus
+  reglas originales y no reutilizan ese avance.
+- Rankings y logros de plataformas externas se sincronizan después mediante
+  revisiones persistentes del perfil; un fallo externo no retiene el premio.
+  CrazyGames guarda su pendiente junto al perfil y lo reintenta por separado.
+- El loader no espera miniaturas de otras salas. Mantiene el orden: comprobante
+  del servidor → recompensas → cada nivel ganado → destino solicitado → guía.
+  Esperar un premio nunca abre otra conexión al puerto de la partida.
+- La revancha retirada y los informes locales de premios conservan únicamente
+  sus espacios de comunicación antiguos, sin comportamiento ejecutable.
+  `LIVE_PROTOCOL_VERSION` identifica conexiones actuales por separado de
+  `GAMEPLAY_FORMAT_VERSION`, que pertenece a las grabaciones.
 - Cada comprobante nuevo conserva el nivel anterior y posterior, para celebrar
   cada nivel cruzado sin reconstruirlo con una suposición del cliente.
 - Guardar un premio y confirmar que se mostró son operaciones distintas.
@@ -314,12 +361,11 @@ por la única comprobación disponible en el servidor.
 | `c6baa342`, 12 de octubre | Espera del loader hasta recibir el comprobante del servidor. |
 | `5dfda69f`, 13 de octubre | Comprobación del recibo exacto y reconexiones al relay durante esa espera. |
 
-La solicitud ahora queda guardada en el servidor antes de responder. Este la
-entrega por la administración permanente del relay y conserva el trabajo hasta
-terminar de guardar el resultado y el premio. El cliente consulta ese pendiente;
-el puerto de juego puede cerrar. Se retiraron las reconexiones y tickets
-guardados exclusivamente para cobrar. Una conexión iniciada antes de salir
-tampoco puede sustituir la conexión del menú si termina después.
+Esta revisión introdujo la orden de salida guardada en el servidor, entregada
+por la administración permanente del relay. Esa ruta fue sustituida por el
+contrato actual de arriba y permanece únicamente para recuperación. La evidencia
+siguiente corresponde a aquella revisión; no sustituye la aceptación del nuevo
+recorrido normal.
 
 Evidencia de aceptación:
 
@@ -357,3 +403,35 @@ Evidencia de aceptación:
 La comprobación anterior ejecuta el cliente, transporte, servidor y presentador
 sin abrir un navegador. La revisión de la presentación visual corresponde al
 jugador.
+
+### Aceptación del recorrido unificado
+
+`./sow p` ejecuta las comprobaciones existentes y `sow-tools::reward_return`
+contra la publicación real. No se acepta el cambio solo por leer fuentes.
+
+- El cliente Rust/WASM ejecuta el botón real del HUD: exactamente una orden al
+  relay, ninguna orden de salida al servidor y comprobante exacto antes del menú.
+  La conexión real de juego termina con código normal 1000 y sin errores.
+- Tres cuentas privadas de auditoría: A sale, B reconecta y luego vence por
+  ausencia sin enviar salida, C sigue recibiendo turnos y finalmente sale.
+  La conexión sustituida de B y la revancha retirada no pueden cerrar jugadores.
+- La prueba espera el cierre completo, repite solicitudes y presentación, y
+  compara los saldos y turno personal de A para impedir un segundo pago.
+- Las comprobaciones de cliente cubren respuesta perdida, puerto cerrado,
+  recarga, cuenta tardía y respuestas de otra cuenta, partida, ciclo o solicitud.
+- El proceso de datos se detiene y reinicia con pendientes aceptados, y vuelve
+  a arrancar sin su caché. La observación no deja órdenes de salida guardadas.
+- El relay recupera un registro con última escritura incompleta únicamente
+  tras detenerse su escritor; cuatro procesos comparten la entrega y un rechazo
+  de acceso conserva el resultado hasta recibir su confirmación correcta.
+- `ten_minute_recording_reuses_only_the_verified_prefix` mide una simulación de
+  diez minutos en world, con un humano y 26 bots internos. Compara comprobación
+  completa nueva frente a reutilizada y exige resultados idénticos. Su informe
+  está en `dist/.sow-state/exit-verification-benchmark.json`; es una medición
+  automatizada del verificador, separada de los tiempos reales del recorrido.
+- Los registros `[exit-timing]` identifican solicitud, guardado y entrega del
+  relay, espera de comprobación, cálculo, guardado del premio y recepción.
+- La aceptación termina con salud de servicios, identidad de los archivos
+  públicos, conexión privada autenticada y renovación automática de certificados.
+  Una condición fallida mantiene abierto el trabajo: corregir su responsable,
+  repetir las comprobaciones afectadas y completar otra vez `./sow p`.

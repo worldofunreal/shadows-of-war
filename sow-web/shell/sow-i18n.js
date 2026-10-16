@@ -10,7 +10,47 @@
             inferredBase = new URL("locales", runtimeScript.src).toString().replace(/\/$/, "");
         } catch (error) {}
     }
-    var defaultLocale = String(window.SOW_LOCALE_DEFAULT || "en").toLowerCase().replace(/_/g, "-");
+    var configuredDefault = String(window.SOW_LOCALE_DEFAULT || "").toLowerCase().replace(/_/g, "-");
+    var defaultLocale = "en";
+
+    // Browsers report regional tags (es-MX, pt-PT, ja-JP); the published
+    // codes are bare. Fall back to the base tag, then to the aliases above.
+    function normalizeLocale(value) {
+        var locale = String(value || "").toLowerCase().replace(/_/g, "-");
+        if (supported[locale]) return locale;
+        var aliases = { zh: "zh-cn", pt: "pt-br", tl: "fil" };
+        var alias = aliases[locale];
+        if (alias && supported[alias]) return alias;
+        var base = locale.split("-")[0];
+        if (supported[base]) return base;
+        var baseAlias = aliases[base];
+        if (baseAlias && supported[baseAlias]) return baseAlias;
+        return defaultLocale;
+    }
+
+    function browserLanguages() {
+        var list = Array.isArray(navigator.languages) ? navigator.languages.slice() : [];
+        if (navigator.language) list.unshift(navigator.language);
+        return list;
+    }
+
+    function preferredLocale() {
+        var stored = "";
+        try {
+            stored = String(window.localStorage.getItem(STORAGE_KEY) || "");
+        } catch (error) {}
+        // An explicit choice (or a build-level default, e.g. a portal) always
+        // wins; the browser only decides when nobody has chosen yet.
+        if (stored) return normalizeLocale(stored);
+        if (configuredDefault) return normalizeLocale(configuredDefault);
+        var browser = browserLanguages();
+        for (var i = 0; i < browser.length; i++) {
+            var candidate = normalizeLocale(browser[i]);
+            if (candidate !== defaultLocale) return candidate;
+        }
+        return defaultLocale;
+    }
+
     var catalogVersion = Number(window.SOW_LOCALE_CATALOG_VERSION || 0);
     var configuredCodes = Array.isArray(window.SOW_LOCALE_CODES) ? window.SOW_LOCALE_CODES : [];
     var hasConfiguredCodes = configuredCodes.length > 0;
@@ -35,14 +75,6 @@
     var englishStrings = {};
     var englishReady = false;
 
-    function normalizeLocale(value) {
-        var locale = String(value || "").toLowerCase().replace(/_/g, "-");
-        if (supported[locale]) return locale;
-        var aliases = { zh: "zh-cn", pt: "pt-br", tl: "fil" };
-        var alias = aliases[locale];
-        return alias && supported[alias] ? alias : defaultLocale;
-    }
-
     function localeTag(locale) {
         var code = String(locale || defaultLocale).toLowerCase();
         return code === "zh-cn" ? "zh-CN" : code === "pt-br" ? "pt-BR" : code;
@@ -64,23 +96,25 @@
         return "latin";
     }
 
-    function storedLocale() {
-        try {
-            return window.localStorage.getItem(STORAGE_KEY) || defaultLocale;
-        } catch (error) {
-            return defaultLocale;
-        }
+    function localeVersion(key) {
+        // Content hash first (server ships /locales/* hashed), published
+        // catalog version as fallback, then the build stamp. Same bytes keep
+        // their URL across deploys; changed bytes are instantly visible.
+        var versions = window.SOW_ASSET_TS || {};
+        return String(
+            versions[key] || window.SOW_LOCALE_VERSION || window.SOW_BUILD_TS || ""
+        );
     }
 
     function catalogUrl(locale) {
         var base = String(window.SOW_LOCALE_BASE || inferredBase).replace(/\/$/, "");
-        var version = String(window.SOW_LOCALE_VERSION || "");
+        var version = localeVersion("/locales/" + locale);
         return base + "/" + encodeURIComponent(locale) + (version ? "?v=" + encodeURIComponent(version) : "");
     }
 
     function registryUrl() {
         var base = String(window.SOW_LOCALE_BASE || inferredBase).replace(/\/$/, "");
-        var version = String(window.SOW_LOCALE_VERSION || "");
+        var version = localeVersion("/locales/index.json");
         return base + "/index.json" + (version ? "?v=" + encodeURIComponent(version) : "");
     }
 
@@ -233,7 +267,7 @@
     window.SOW_LOCALE = defaultLocale;
     var initialLocale = defaultLocale;
     window.SOW_I18N_READY = loadRegistry().then(function () {
-        initialLocale = normalizeLocale(storedLocale());
+        initialLocale = preferredLocale();
         return load(defaultLocale);
     }).then(function (strings) {
         englishStrings = strings;

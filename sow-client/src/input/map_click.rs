@@ -221,7 +221,7 @@ impl SowApp {
         if self.ui.tutorial_camera_only
             || self.ui.observing
             || self.ui.app.phase != crate::ClientPhase::Playing
-            || self.ui.app.hud_state.selected_building_kind.is_some()
+            || self.ui.app.hud_state.building_placement.is_some()
             || self.ui.app.hud_state.selected_nuke_kind.is_some()
             || self.ui.app.hud_state.selected_warship_build
         {
@@ -284,11 +284,8 @@ impl SowApp {
             self.build_ship_at(tile_idx, sow_core::game::UnitType::Warship);
             return;
         }
-        if let Some(kind) = self.ui.app.hud_state.selected_building_kind {
-            if self.build_structure_at(kind, col, row) {
-                self.input.hold_build_action_succeeded = true;
-                self.input.hold_build_shift_override |= self.input.shift_pressed;
-            }
+        if self.ui.app.hud_state.building_placement.is_some() {
+            self.move_building_preview(col, row);
             return;
         }
 
@@ -314,7 +311,7 @@ impl SowApp {
         if self.ui.tutorial_camera_only
             || self.ui.observing
             || self.ui.app.phase != crate::ClientPhase::Playing
-            || self.ui.app.hud_state.selected_building_kind.is_some()
+            || self.ui.app.hud_state.building_placement.is_some()
             || self.ui.app.hud_state.selected_nuke_kind.is_some()
             || self.ui.app.hud_state.selected_warship_build
             || !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
@@ -837,7 +834,8 @@ impl SowApp {
                     _ => unreachable!(),
                 };
                 if let Some((col, row)) = self.tile_coords(tile_idx) {
-                    self.build_structure_at(kind, col, row);
+                    self.select_building_kind(kind);
+                    self.move_building_preview(col, row);
                 }
             }
             MapMenuAction::UpgradeStructure => {
@@ -937,81 +935,123 @@ impl SowApp {
         });
     }
 
-    fn build_structure_at(
-        &mut self,
-        kind: sow_core::game::BuildingKind,
-        col: i32,
-        row: i32,
-    ) -> bool {
-        let my_id = self.sim.my_player_id.unwrap_or(0);
-        let stack_target = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
-            super::placement::find_stack_target_tile(
-                kind,
-                col,
-                row,
-                self.sim.map_w,
-                my_id,
-                &snapshot.buildings,
-            )
-            .and_then(|tile_idx| {
-                snapshot
-                    .buildings
-                    .iter()
-                    .find(|building| building.tile_idx == tile_idx)
-                    .copied()
-            })
-        });
-        if let Some(building) = stack_target {
-            self.cancel_hold_build();
-            if building.under_construction {
-                self.add_action_feedback("Building under construction. 🏗️");
-                return false;
-            }
-            if building.level >= kind.max_level() {
-                self.add_map_feedback(crate::ui::UiText::new("hud.building_max_level"));
-                return false;
-            }
-            let cost = self
-                .map_menu_cost(MapMenuAction::UpgradeStructure, building.tile_idx)
-                .0
-                .unwrap_or(f64::INFINITY);
-            let gold = self.current_player_gold();
-            if !cost.is_finite() || gold < cost {
-                let message = if cost.is_finite() {
-                    format!("Need {} gold.", crate::utils::format_number(cost))
-                } else {
-                    "Action unavailable here.".to_string()
-                };
-                self.add_action_feedback(message);
-                return false;
-            }
-            self.send_intent(sow_core::protocol::GameplayIntent::UpgradeStructure {
-                building_id: building.id,
-            });
-            return true;
+    pub(crate) fn move_building_preview(&mut self, col: i32, row: i32) {
+        if let Some(placement) = self.ui.app.hud_state.building_placement.as_mut()
+            && !placement.pending
+            && col >= 0
+            && row >= 0
+            && col < self.sim.map_w as i32
+            && row < self.sim.map_h as i32
+        {
+            placement.tile_idx = row as u32 * self.sim.map_w + col as u32;
         }
-        let target_res = self.resolve_building_target(kind, col, row);
-        let cost_index = sow_core::game::BuildingKind::ALL
-            .iter()
-            .position(|candidate| *candidate == kind)
-            .unwrap_or(0);
-        if self.current_player_gold() < self.ui.app.hud_state.building_costs[cost_index] {
-            let text = format!(
-                "Need {} gold.",
-                crate::utils::format_number(self.ui.app.hud_state.building_costs[cost_index])
-            );
-            self.add_action_feedback(text);
-            return false;
-        }
-        let target_tile = match target_res {
-            Ok(target_tile) => target_tile,
-            Err(message) => {
-                self.add_action_feedback(message);
-                return false;
-            }
+    }
+
+    pub(crate) fn confirm_building_placement(&mut self) {
+        let Some(placement) = self.ui.app.hud_state.building_placement else {
+            return;
         };
-        self.send_intent(sow_core::protocol::GameplayIntent::BuildStructure { kind, target_tile });
-        true
+        if placement.pending
+            || self.ui.observing
+            || self.ui.tutorial_camera_only
+            || self.ui.app.phase != crate::ClientPhase::Playing
+            || self.ui.app.hud_state.sync_state.is_some()
+        {
+            return;
+        }
+        if let Some(reason) = self.building_placement_reason() {
+            self.add_map_feedback(reason);
+            return;
+        }
+        self.input.building_drag_offset = None;
+        self.ui
+            .app
+            .hud_state
+            .building_placement
+            .as_mut()
+            .unwrap()
+            .pending = true;
+        if !self.send_intent(sow_core::protocol::GameplayIntent::BuildStructure {
+            kind: placement.kind,
+            target_tile: placement.tile_idx,
+        }) && let Some(placement) = self
+            .ui
+            .app
+            .hud_state
+            .building_placement
+            .as_mut()
+            .filter(|p| p.pending)
+        {
+            // A processed paused-tutorial rejection already cleared pending
+            // and supplied its precise reason in finish_building_confirmation.
+            placement.pending = false;
+            self.add_map_feedback(crate::ui::UiText::new("hud.action_unavailable"));
+        }
+    }
+
+    pub(crate) fn finish_building_confirmation(&mut self, accepted: bool) {
+        let Some(placement) = self
+            .ui
+            .app
+            .hud_state
+            .building_placement
+            .filter(|p| p.pending)
+        else {
+            return;
+        };
+        if accepted {
+            let footprint = sow_core::building::BuildingFootprint::at(
+                placement.kind,
+                placement.tile_idx % self.sim.map_w,
+                placement.tile_idx / self.sim.map_w,
+            );
+            let (x, y) = (footprint.left as f32 + 2.0, footprint.top as f32 + 2.0);
+            self.ui.click_markers.push(crate::app::ClickMarker {
+                world_x: x,
+                world_y: y,
+                start_time: web_time::Instant::now(),
+            });
+            self.sfx.play_placement(
+                web_time::Instant::now(),
+                crate::building_sound_kind(placement.kind),
+                self.spatial_sound_params(x, y),
+            );
+            self.ui.app.hud_state.building_placement = None;
+        } else {
+            self.ui
+                .app
+                .hud_state
+                .building_placement
+                .as_mut()
+                .unwrap()
+                .pending = false;
+            let reason = self
+                .building_placement_reason()
+                .unwrap_or_else(|| crate::ui::UiText::new("hud.action_unavailable"));
+            self.add_map_feedback(reason);
+        }
+    }
+
+    pub(crate) fn building_placement_reason(&mut self) -> Option<crate::ui::UiText> {
+        let placement = self.ui.app.hud_state.building_placement?;
+        if let Err(key) = self.resolve_building_target(
+            placement.kind,
+            (placement.tile_idx % self.sim.map_w) as i32,
+            (placement.tile_idx / self.sim.map_w) as i32,
+        ) {
+            return Some(crate::ui::UiText::new(key));
+        }
+        if self.campaign_building_max_level(placement.kind) < 1 {
+            return Some(crate::ui::UiText::new("hud.campaign_unlock_required"));
+        }
+        let cost = self.ui.app.hud_state.building_costs[placement.kind as usize];
+        if !cost.is_finite() || self.current_player_gold() < cost {
+            return Some(
+                crate::ui::UiText::new("hud.need_gold")
+                    .with("cost", crate::utils::format_number(cost)),
+            );
+        }
+        None
     }
 
     fn resolve_building_target(
@@ -1020,35 +1060,29 @@ impl SowApp {
         col: i32,
         row: i32,
     ) -> Result<u32, &'static str> {
-        let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
-            return Err("Action unavailable here.");
+        let Some(engine) = self.sim.engine.as_mut() else {
+            return Err("hud.action_unavailable");
         };
-        let owners = self
-            .gfx
-            .map_renderer
-            .as_ref()
-            .map(|renderer| renderer.owners.as_slice())
-            .unwrap_or(&[]);
-        let terrain = self
-            .gfx
-            .map_renderer
-            .as_ref()
-            .map(|renderer| renderer.terrain.as_slice())
-            .unwrap_or(&[]);
-        self.ui.building_placement_cache.resolve(
-            snapshot.tick,
-            &PlacementQuery {
-                kind,
-                click_x: col,
-                click_y: row,
-                map_w: self.sim.map_w,
-                map_h: self.sim.map_h,
-                owners,
-                terrain,
-                my_id: self.sim.my_player_id.unwrap_or(0),
-                buildings: &snapshot.buildings,
-            },
+        if col < 0
+            || row < 0
+            || col >= engine.state.map.width as i32
+            || row >= engine.state.map.height as i32
+        {
+            return Err("hud.build_outside_map");
+        }
+        // Paused tutorial actions change ownership before the next GPU upload.
+        // Validate against the simulation that will accept the order.
+        engine.refresh_building_grid();
+        let tile = row as u32 * engine.state.map.width + col as u32;
+        sow_core::building::validate_structure_site(
+            &engine.state.map,
+            self.sim.my_player_id.unwrap_or(0),
+            kind,
+            tile,
+            &engine.building_grid,
         )
+        .map(|()| tile)
+        .map_err(|error| error.reason_key())
     }
 
     pub(crate) fn map_menu_cost(
@@ -1476,20 +1510,37 @@ impl SowApp {
     }
 
     pub(crate) fn clear_placement(&mut self) {
-        self.ui.app.hud_state.selected_building_kind = None;
+        if self
+            .ui
+            .app
+            .hud_state
+            .building_placement
+            .is_some_and(|p| p.pending)
+        {
+            return;
+        }
+        self.ui.app.hud_state.building_placement = None;
         self.ui.app.hud_state.selected_warship_build = false;
         self.ui.app.hud_state.selected_nuke_kind = None;
-        self.cancel_hold_build();
-        self.input.hold_build_action_succeeded = false;
-        self.input.hold_build_shift_override = false;
+        self.input.building_drag_offset = None;
     }
 
     pub(crate) fn select_building_kind(&mut self, kind: sow_core::game::BuildingKind) {
         if self.ui.observing
+            || self.ui.tutorial_camera_only
             || self.ui.app.phase != crate::ClientPhase::Playing
-            || !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
-                matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
-            })
+            || self.ui.app.hud_state.sync_state.is_some()
+            || self
+                .ui
+                .app
+                .hud_state
+                .building_placement
+                .is_some_and(|p| p.pending)
+            || !self
+                .sim
+                .current_snapshot
+                .as_ref()
+                .is_some_and(|s| matches!(s.phase, sow_core::game::GamePhase::Playing))
         {
             return;
         }
@@ -1497,30 +1548,101 @@ impl SowApp {
             self.add_map_feedback(crate::ui::UiText::new("hud.campaign_unlock_required"));
             return;
         }
-        let cost_index = match kind {
-            sow_core::game::BuildingKind::City => 0,
-            sow_core::game::BuildingKind::Bunker => 1,
-            sow_core::game::BuildingKind::Factory => 2,
-            sow_core::game::BuildingKind::Port => 3,
-            sow_core::game::BuildingKind::Farm => 4,
-        };
-        let cost = self.ui.app.hud_state.building_costs[cost_index];
-        if self.ui.app.hud_state.selected_building_kind != Some(kind)
-            && self.current_player_gold() < cost
+        if self
+            .ui
+            .app
+            .hud_state
+            .building_placement
+            .is_some_and(|p| p.kind == kind)
         {
-            self.add_action_feedback(format!("Need {} gold.", crate::utils::format_number(cost)));
+            self.clear_placement();
             return;
         }
-        let selected = &mut self.ui.app.hud_state.selected_building_kind;
-        *selected = (*selected != Some(kind)).then_some(kind);
+        let center_x =
+            ((self.input.screen_w * 0.5 - self.input.camera_x) / self.input.camera_zoom) as i32;
+        let center_y =
+            ((self.input.screen_h * 0.45 - self.input.camera_y) / self.input.camera_zoom) as i32;
+        let min_x = ((-self.input.camera_x / self.input.camera_zoom).floor() as i32).max(2);
+        let min_y = ((-self.input.camera_y / self.input.camera_zoom).floor() as i32).max(2);
+        let max_x = (((self.input.screen_w - self.input.camera_x) / self.input.camera_zoom).ceil()
+            as i32)
+            .min(self.sim.map_w as i32 - 2);
+        let max_y = (((self.input.screen_h - self.input.camera_y) / self.input.camera_zoom).ceil()
+            as i32)
+            .min(self.sim.map_h as i32 - 2);
+        let mut best = None;
+        if let Some(renderer) = self.gfx.map_renderer.as_ref()
+            && let Some(snapshot) = self.sim.current_snapshot.as_ref()
+        {
+            let my_id = self.sim.my_player_id.unwrap_or(0);
+            for row in min_y..=max_y {
+                for col in min_x..=max_x {
+                    let distance = (col as i64 - center_x as i64).pow(2)
+                        + (row as i64 - center_y as i64).pow(2);
+                    if best.is_some_and(|(d, _)| d <= distance) {
+                        continue;
+                    }
+                    let tile = row as u32 * self.sim.map_w + col as u32;
+                    let query = PlacementQuery {
+                        kind,
+                        click_x: col,
+                        click_y: row,
+                        map_w: self.sim.map_w,
+                        map_h: self.sim.map_h,
+                        owners: &renderer.owners,
+                        terrain: &renderer.terrain,
+                        my_id,
+                        buildings: &snapshot.buildings,
+                    };
+                    if self
+                        .ui
+                        .building_placement_cache
+                        .is_legal_site(snapshot.tick, &query, tile)
+                    {
+                        best = Some((distance, tile));
+                    }
+                }
+            }
+        }
+        let tile = best.map(|(_, tile)| tile).unwrap_or_else(|| {
+            center_y.clamp(0, self.sim.map_h.saturating_sub(1) as i32) as u32 * self.sim.map_w
+                + center_x.clamp(0, self.sim.map_w.saturating_sub(1) as i32) as u32
+        });
+        self.ui.app.hud_state.building_placement = Some(crate::ui::hud::state::BuildingPlacement {
+            kind,
+            tile_idx: tile,
+            pending: false,
+        });
         self.ui.app.hud_state.selected_warship_build = false;
         self.ui.app.hud_state.selected_nuke_kind = None;
-        self.cancel_hold_build();
-        self.input.hold_build_action_succeeded = false;
-        self.input.hold_build_shift_override = false;
+        self.input.building_drag_offset = None;
+        self.close_map_context_menu();
+        let sf = crate::web_canvas::device_pixel_ratio() as f32;
+        self.input.target_zoom =
+            self.input
+                .target_zoom
+                .max(12.0 * sf)
+                .min(crate::camera_zoom_upper_bound(
+                    self.input.screen_w,
+                    self.input.screen_h,
+                ));
+        self.input.camera_focus_target = Some((
+            (tile % self.sim.map_w) as f32,
+            (tile / self.sim.map_w) as f32,
+        ));
+        self.input.camera_focus_waiting_for_input_release = true;
     }
 
     pub(crate) fn select_warship_build_mode(&mut self) {
+        if self
+            .ui
+            .app
+            .hud_state
+            .building_placement
+            .is_some_and(|p| p.pending)
+        {
+            return;
+        }
         if self.ui.observing
             || self.ui.app.phase != crate::ClientPhase::Playing
             || !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
@@ -1562,11 +1684,20 @@ impl SowApp {
         }
         self.ui.app.hud_state.selected_warship_build =
             !self.ui.app.hud_state.selected_warship_build;
-        self.ui.app.hud_state.selected_building_kind = None;
+        self.ui.app.hud_state.building_placement = None;
         self.ui.app.hud_state.selected_nuke_kind = None;
     }
 
     pub(crate) fn select_nuke_kind(&mut self, kind: sow_core::game::NukeKind) {
+        if self
+            .ui
+            .app
+            .hud_state
+            .building_placement
+            .is_some_and(|p| p.pending)
+        {
+            return;
+        }
         if self.ui.observing
             || self.ui.app.phase != crate::ClientPhase::Playing
             || !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
@@ -1604,7 +1735,7 @@ impl SowApp {
         }
         let selected = &mut self.ui.app.hud_state.selected_nuke_kind;
         *selected = (*selected != Some(kind)).then_some(kind);
-        self.ui.app.hud_state.selected_building_kind = None;
+        self.ui.app.hud_state.building_placement = None;
         self.ui.app.hud_state.selected_warship_build = false;
     }
 }
@@ -1639,12 +1770,6 @@ fn action_notice(message: &str) -> crate::ui::UiText {
             UiText::new("hud.build_owned_land")
         }
         "Structures go on land, not water." => UiText::new("hud.build_land"),
-        "Too close to another City! Minimum spacing is 6 tiles." => {
-            UiText::new("hud.build_spacing_city")
-        }
-        "Too close to another structure! Spacing rules: City requires 6, other structures require 4." => {
-            UiText::new("hud.build_spacing_structure")
-        }
         "No space nearby!" => UiText::new("hud.build_no_space"),
         "Building under construction. 🏗️" => UiText::new("hud.building_in_progress"),
         _ => UiText::new("hud.action_unavailable"),

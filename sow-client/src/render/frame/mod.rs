@@ -78,6 +78,9 @@ impl SowApp {
                 if self.gfx.needs_first_upload {
                     render_ctx.command_encoder.init_texture(mr.terrain_texture);
                     render_ctx.command_encoder.init_texture(mr.owner_texture);
+                    render_ctx
+                        .command_encoder
+                        .init_texture(mr.occupancy_texture);
                     if let Some(ref tr) = self.gfx.text_renderer {
                         tr.init_textures(&mut render_ctx.command_encoder);
                         tr.upload_atlas(&mut render_ctx.command_encoder, &render_ctx.context);
@@ -190,7 +193,10 @@ impl SowApp {
                     let threat_max_radius = dev.value("threat.max_radius")[0];
                     let current_time = web_time::Instant::now();
                     let preview_duration = self.ui.dev_vfx_preview.duration(&dev);
-                    let preview_phase = self.ui.dev_vfx_preview.advance(current_time, preview_duration);
+                    let preview_phase = self
+                        .ui
+                        .dev_vfx_preview
+                        .advance(current_time, preview_duration);
                     let preview_effect = if self.ui.dev_vfx_preview.active {
                         self.ui.dev_vfx_preview.target
                     } else {
@@ -199,14 +205,26 @@ impl SowApp {
                     let preview_time = preview_phase * preview_duration.max(0.0);
                     let preview_player_id = self.sim.my_player_id.unwrap_or(0);
                     let preview_player = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
-                        snapshot.players.iter().find(|player| {
-                            player.id == preview_player_id && player.alive && player.tile_count > 0
-                        }).map(|player| (player.id, player.centroid_x, player.centroid_y))
+                        snapshot
+                            .players
+                            .iter()
+                            .find(|player| {
+                                player.id == preview_player_id
+                                    && player.alive
+                                    && player.tile_count > 0
+                            })
+                            .map(|player| (player.id, player.centroid_x, player.centroid_y))
                     });
                     let preview_partner = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
-                        snapshot.players.iter().find(|player| {
-                            player.id != preview_player_id && player.alive && player.tile_count > 0
-                        }).map(|player| (player.id, player.centroid_x, player.centroid_y))
+                        snapshot
+                            .players
+                            .iter()
+                            .find(|player| {
+                                player.id != preview_player_id
+                                    && player.alive
+                                    && player.tile_count > 0
+                            })
+                            .map(|player| (player.id, player.centroid_x, player.centroid_y))
                     });
                     let preview_center = preview_player
                         .map(|(_, x, y)| [x, y])
@@ -305,10 +323,13 @@ impl SowApp {
                         } else {
                             preview_player_id
                         };
-                        let attacker_id = if preview_effect == crate::app::DevVfxPreview::EXPANSION {
+                        let attacker_id = if preview_effect == crate::app::DevVfxPreview::EXPANSION
+                        {
                             preview_player_id
                         } else {
-                            preview_partner.map(|(id, _, _)| id).unwrap_or(preview_player_id)
+                            preview_partner
+                                .map(|(id, _, _)| id)
+                                .unwrap_or(preview_player_id)
                         };
                         threat_slots[8] = [
                             preview_center[0],
@@ -318,77 +339,17 @@ impl SowApp {
                         ];
                     }
 
-                    let mut hover_hex = [0.0f32, 0.0f32];
-                    let mut hover_building_kind = 0.0f32;
-                    let mut nobuild_slots = [[0.0f32; 4]; 32];
-
-                    if let Some(kind) = self.ui.app.hud_state.selected_building_kind {
-                        let mx = self.input.last_mouse_x as f32;
-                        let my = self.input.last_mouse_y as f32;
-
-                        let world_x = (mx - self.input.camera_x) / self.input.camera_zoom;
-                        let world_y = (my - self.input.camera_y) / self.input.camera_zoom;
-
-                        let (col, row) =
-                            crate::render::world::movers::world_to_tile(world_x, world_y);
-
-                        hover_hex = [col as f32, row as f32];
-                        hover_building_kind = match kind {
-                            sow_core::game::BuildingKind::City => 1.0,
-                            sow_core::game::BuildingKind::Bunker => 2.0,
-                            sow_core::game::BuildingKind::Factory => 3.0,
-                            sow_core::game::BuildingKind::Port => 4.0,
-                            sow_core::game::BuildingKind::Farm => 5.0,
-                        };
-
-                        if let Some(snap) = &self.sim.current_snapshot {
-                            let my_id = self.sim.my_player_id.unwrap_or(0);
-                            let stack_tile = crate::input::find_stack_target_tile(
-                                kind,
-                                col,
-                                row,
-                                self.sim.map_w,
-                                my_id,
-                                &snap.buildings,
-                            );
-
-                            let mut slot = 0usize;
-                            if let Some(tile_idx) = stack_tile {
-                                nobuild_slots[slot] = [
-                                    (tile_idx % self.sim.map_w) as f32,
-                                    (tile_idx / self.sim.map_w) as f32,
-                                    0.0,
-                                    2.0,
-                                ];
-                                slot += 1;
-                            }
-                            self.ui.placement_scratch.clear();
-                            for b in &snap.buildings {
-                                if stack_tile == Some(b.tile_idx) {
-                                    continue;
-                                }
-
-                                let bx = (b.tile_idx % self.sim.map_w) as i32;
-                                let by = (b.tile_idx / self.sim.map_w) as i32;
-
-                                let radius =
-                                    sow_core::building::minimum_building_spacing(kind, b.kind)
-                                        as f32;
-                                let dx = (bx - col).abs();
-                                let dy = (by - row).abs();
-                                let dist = dx.max(dy);
-                                self.ui.placement_scratch.push((bx, by, radius, dist));
-                            }
-
-                            self.ui
-                                .placement_scratch
-                                .sort_unstable_by_key(|item| item.3);
-                            for item in self.ui.placement_scratch.iter().take(32 - slot) {
-                                nobuild_slots[slot] =
-                                    [item.0 as f32, item.1 as f32, item.2, 1.0f32];
-                                slot += 1;
-                            }
-                        }
+                    let placement_active = if self.ui.app.hud_state.building_placement.is_some() {
+                        1.0
+                    } else {
+                        0.0
+                    };
+                    if let Some(snapshot) = &self.sim.current_snapshot {
+                        mr.update_building_occupancy(
+                            &mut render_ctx.command_encoder,
+                            &render_ctx.context,
+                            &snapshot.buildings,
+                        );
                     }
 
                     let mut fallout_slots = [[0.0f32; 4]; 9];
@@ -426,8 +387,7 @@ impl SowApp {
                             effect.start_time,
                             current_time,
                             alliance_duration,
-                        )
-                        else {
+                        ) else {
                             return false;
                         };
                         let Some(snapshot) = snapshot else {
@@ -453,19 +413,11 @@ impl SowApp {
                     if preview_effect == crate::app::DevVfxPreview::ALLIANCE
                         && let Some((first_id, first_x, first_y)) = preview_player
                     {
-                        alliance_celebration_slots[16] = [
-                            first_id as f32,
-                            first_x,
-                            first_y,
-                            preview_time,
-                        ];
+                        alliance_celebration_slots[16] =
+                            [first_id as f32, first_x, first_y, preview_time];
                         if let Some((second_id, second_x, second_y)) = preview_partner {
-                            alliance_celebration_slots[17] = [
-                                second_id as f32,
-                                second_x,
-                                second_y,
-                                preview_time,
-                            ];
+                            alliance_celebration_slots[17] =
+                                [second_id as f32, second_x, second_y, preview_time];
                         }
                     }
 
@@ -486,7 +438,8 @@ impl SowApp {
                         }
                         _ => [0.0f32; 4],
                     };
-                    if preview_effect == crate::app::DevVfxPreview::DIALOG && preview_player_id > 0 {
+                    if preview_effect == crate::app::DevVfxPreview::DIALOG && preview_player_id > 0
+                    {
                         dialog_border = [preview_player_id as f32, preview_time, 0.0, 0.0];
                     }
 
@@ -501,7 +454,9 @@ impl SowApp {
                         self.ui.border_flashes.retain(|flash| {
                             let elapsed =
                                 current_time.duration_since(flash.start_time).as_secs_f32();
-                            if let Some(t) = crate::app::easeout_flash_with_duration(elapsed, duration) {
+                            if let Some(t) =
+                                crate::app::easeout_flash_with_duration(elapsed, duration)
+                            {
                                 let intensity = (base
                                     + flash.attacker_count.saturating_sub(1) as f32 * per_attacker)
                                     .max(0.0)
@@ -522,7 +477,8 @@ impl SowApp {
                             .map(|(&id, &t)| (id as f32, t.min(max_intensity)))
                             .unwrap_or((0.0, 0.0))
                     };
-                    let (attack_flash_target, attack_flash_t) = if preview_effect == crate::app::DevVfxPreview::ATTACK_FLASH
+                    let (attack_flash_target, attack_flash_t) = if preview_effect
+                        == crate::app::DevVfxPreview::ATTACK_FLASH
                         && preview_player_id > 0
                     {
                         (preview_player_id as f32, (1.0 - preview_phase).powi(2))
@@ -562,9 +518,14 @@ impl SowApp {
                             || kind == crate::app::ViewportAlertKind::Defeat;
 
                         let intensity = if persistent {
-                            if duration <= 0.0 { 1.0 } else { (elapsed / duration).min(1.0) }
+                            if duration <= 0.0 {
+                                1.0
+                            } else {
+                                (elapsed / duration).min(1.0)
+                            }
                         } else {
-                            crate::app::easeout_flash_with_duration(elapsed, duration).unwrap_or(0.0)
+                            crate::app::easeout_flash_with_duration(elapsed, duration)
+                                .unwrap_or(0.0)
                         };
 
                         let color_id = match kind {
@@ -597,7 +558,8 @@ impl SowApp {
                         alert_intensity = 1.0 - preview_phase;
                     }
                     // Clear expired one-shot alerts
-                    if preview_effect != crate::app::DevVfxPreview::ALERT && alert_intensity <= 0.0 {
+                    if preview_effect != crate::app::DevVfxPreview::ALERT && alert_intensity <= 0.0
+                    {
                         self.ui.viewport_alert = None;
                     }
 
@@ -617,11 +579,10 @@ impl SowApp {
                         effect_breathe: if dev.vfx_border_breathe { 1.0 } else { 0.0 },
                         effect_energy_flow: if dev.vfx_energy_flow { 1.0 } else { 0.0 },
                         my_player_id: self.sim.my_player_id.unwrap_or(0) as f32,
-                        hover_hex,
-                        hover_building_kind,
+                        placement_active,
+                        _placement_pad: [0.0; 2],
                         territory_opacity,
                         fallout_slots,
-                        nobuild_slots,
                         blend_mode,
                         effect_heartbeat: if dev.vfx_heartbeat { 1.0 } else { 0.0 },
                         effect_war_fog: if dev.vfx_war_fog { 1.0 } else { 0.0 },

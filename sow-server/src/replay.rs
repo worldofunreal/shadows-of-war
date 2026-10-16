@@ -244,7 +244,7 @@ pub(crate) fn decode(
             .reject_trailing_bytes()
     };
     match version {
-        sow_core::protocol::GAMEPLAY_FORMAT_VERSION => options()
+        2 | sow_core::protocol::GAMEPLAY_FORMAT_VERSION => options()
             .deserialize(bytes)
             .map(|turns| (turns, None))
             .map_err(|e| e.to_string()),
@@ -445,6 +445,10 @@ mod tests {
         let (decoded, legacy) =
             decode(&bytes, sow_core::protocol::GAMEPLAY_FORMAT_VERSION, 4096).unwrap();
         assert_eq!(decoded, turns);
+        assert!(legacy.is_none());
+        // V3 changes placement rules, not the serialized action layout.
+        let (historical, legacy) = decode(&bytes, 2, 4096).unwrap();
+        assert_eq!(historical, turns);
         assert!(legacy.is_none());
     }
 }

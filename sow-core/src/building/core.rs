@@ -388,7 +388,7 @@ impl DefenseGrid {
     }
 }
 
-/// Cell side length for spatial indexing of structure centers. Must match `STRUCTURE_MIN_DIST` in `placement.rs`.
+/// Spatial index cell size. This is not a minimum construction distance.
 pub const BUILDING_GRID_CELL_SIZE: u32 = 6;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

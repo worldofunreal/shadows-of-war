@@ -156,7 +156,6 @@ impl SowApp {
         self.ui.app.phase = ClientPhase::MainMenu;
         self.ui.is_spectating = false;
         self.ui.endgame_cache = None;
-        self.exit_reward_wait = None;
         self.prepare_menu_return("lobby", None);
     }
 
@@ -182,6 +181,14 @@ impl SowApp {
 
     /// Tear down the current match and use ExitGame only for an active game.
     pub(crate) fn begin_exit_to_main_menu(&mut self) {
+        self.begin_menu_return(true);
+    }
+
+    pub(crate) fn begin_relay_closed_return(&mut self) {
+        self.begin_menu_return(false);
+    }
+
+    fn begin_menu_return(&mut self, voluntary: bool) {
         self.ui.tutorial_camera_only = false;
         self.ui.tutorial_paused_action = None;
         self.ui.dialog_border_highlight = None;
@@ -189,7 +196,8 @@ impl SowApp {
         let phase = self.ui.app.phase;
         let entering_game = matches!(phase, ClientPhase::Splash)
             && matches!(&self.ui.app.splash_state.job, SplashJob::EnterGame);
-        let use_loader = should_use_exit_game_loader(phase);
+        let use_loader =
+            should_use_exit_game_loader(phase) || (entering_game && !self.net.is_offline);
         let was_playing = phase == crate::ClientPhase::Playing;
         let was_offline = self.net.is_offline;
         let was_spectating = self.ui.is_spectating;
@@ -208,21 +216,31 @@ impl SowApp {
                 &serde_json::json!({ "episode_id": self.ui.tutorial_campaign.episode_id() }),
             );
         }
-        let reward_match_id = (was_playing && !self.net.is_offline && self.sim.my_player_id.is_some())
-            .then(|| self.sim.my_lobby_id)
-            .flatten();
+        let reward_match_id = ((was_playing || entering_game)
+            && !self.net.is_offline
+            && self.sim.my_player_id.is_some())
+        .then(|| self.sim.my_lobby_id)
+        .flatten();
         let tutorial_reward_id = (was_playing
             && was_offline
             && !was_spectating
             && self.ui.tutorial_active
             && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica)
-        .then(|| "tutorial".to_string());
+            .then(|| "tutorial".to_string());
         // Every active tutorial exit joins the same one-time server reward and
         // welcome handoff, including the HUD's Leave tutorial button.
         if tutorial_reward_id.is_some() {
             self.complete_boudica_tutorial();
         }
         let exit_leader = self.ui.app.splash_state.loader_leader;
+        // Keep only this authenticated game socket until the durable acknowledgment.
+        // Menu connection and result observation proceed independently.
+        self.net.closing_game = if voluntary && reward_match_id.is_some() && self.ws_on_relay() {
+            self.send_leave_message();
+            self.net.client.take()
+        } else {
+            None
+        };
         if was_playing {
             if !self.progress_match_recorded {
                 crate::store_portals::track_product_event("match_exit");
@@ -242,10 +260,6 @@ impl SowApp {
         self.ui.app.main_menu_state.is_connecting = false;
         if entering_game {
             self.reset_game_session();
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            self.web_exit_lobbies_ready = false;
         }
         while self.net.connect_rx.try_recv().is_ok() {}
         self.net.ws_connect_not_before = web_time::Instant::now();
@@ -268,15 +282,34 @@ impl SowApp {
             .clone()
             .or_else(|| campaign_receipt_id.clone())
             .or_else(|| reward_match_id.map(|id| id.to_string()));
-        let source = if tutorial_reward_id.is_some() { "tutorial" }
-            else if campaign_receipt_id.is_some() { "campaign" }
-            else if reward_match_id.is_some() { "multiplayer" }
-            else if was_playing && was_spectating { "spectator" }
-            else { "other" };
-        self.exit_reward_wait = None;
+        let source = if tutorial_reward_id.is_some() {
+            "tutorial"
+        } else if campaign_receipt_id.is_some() {
+            "campaign"
+        } else if reward_match_id.is_some() {
+            "multiplayer"
+        } else if was_playing && was_spectating {
+            "spectator"
+        } else {
+            "other"
+        };
         self.prepare_menu_return(source, receipt_id.clone());
+        if source == "multiplayer" {
+            let context = self.menu_return.as_mut().unwrap();
+            context.voluntary_exit = Some(voluntary);
+            context.exit_recorded = !voluntary;
+            context.recording_deadline = Some(
+                web_time::Instant::now()
+                    + if self.net.closing_game.is_some() {
+                        web_time::Duration::from_secs(1)
+                    } else {
+                        web_time::Duration::ZERO
+                    },
+            );
+            self.save_menu_return_context();
+        }
 
-        if was_playing
+        if (was_playing || reward_match_id.is_some())
             && (crate::store_portals::should_fetch_cloud_profile() || campaign_receipt_id.is_some())
         {
             if let Some(receipt_id) = receipt_id {

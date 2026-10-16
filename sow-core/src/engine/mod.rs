@@ -366,6 +366,8 @@ pub struct SowEngine {
     pub defense_grid_dirty: bool,
     pub render_defense_dirty: bool,
     pub building_grid: BuildingGrid,
+    /// Enabled only by the trusted reader of pre-v3 recordings.
+    pub legacy_building_rules: bool,
     pub building_aggregates: Vec<BuildingAggregate>,
     pub building_aggregates_dirty: bool,
     pub sea_lanes_dirty: bool,
@@ -477,6 +479,7 @@ impl SowEngine {
             defense_grid_dirty: true,
             render_defense_dirty: true,
             building_grid: BuildingGrid::default(),
+            legacy_building_rules: false,
             building_aggregates: Vec::with_capacity(256),
             building_aggregates_dirty: true,
             sea_lanes_dirty: true,

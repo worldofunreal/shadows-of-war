@@ -28,7 +28,7 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" href="./sow.svg" type="image/svg+xml">
     <meta name="sow-media-artwork" content="./icon-192.png">
-    <link rel="stylesheet" href="/fonts/fonts.css">
+    <link rel="stylesheet" href="/fonts/fonts.css?v=__BUILD_TS__">
 
     <!-- __SOW_SOURCE_IDENTITY_SLOT__ -->
 

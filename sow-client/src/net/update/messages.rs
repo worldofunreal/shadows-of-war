@@ -10,7 +10,7 @@ pub(super) struct ProcessWsResult {
     pub(super) switch_to_relay: Option<(u16, Option<String>)>,
     pub(super) exit_to_menu_after_net: bool,
     pub(super) lobby_exit_to_menu: bool,
-    pub(super) pending_rematch: Option<u64>,
+    pub(super) relay_session_resumed: bool,
 }
 
 impl SowApp {
@@ -26,7 +26,7 @@ impl SowApp {
         let mut switch_to_relay: Option<(u16, Option<String>)> = None;
         let mut exit_to_menu_after_net = false;
         let mut lobby_exit_to_menu = false;
-        let mut pending_rematch: Option<u64> = None;
+        let mut relay_session_resumed = false;
 
         // Process network messages
         if let Some(c) = self.net.client.as_ref()
@@ -56,6 +56,11 @@ impl SowApp {
                 };
 
                 match server_msg {
+                    ServerMessage::ExitRecorded { .. } => {
+                        log::warn!(
+                            "[CLIENT NET] Exit acknowledgment outside an explicit exit ignored"
+                        );
+                    }
                     ServerMessage::RelayTicket {
                         lobby_id,
                         player_id,
@@ -77,6 +82,7 @@ impl SowApp {
                             && self.sim.my_player_id == Some(player_id)
                         {
                             self.sim.relay_reconnect_ticket = Some(ticket);
+                            relay_session_resumed = true;
                         }
                     }
                     ServerMessage::Start(start_msg) => {
@@ -186,10 +192,6 @@ impl SowApp {
                         if self.ui.app.phase != ClientPhase::Splash || exiting_to_web_menu {
                             apply_lobbies_broadcast(&mut self.ui.app.main_menu_state, &broadcast);
                         }
-                        #[cfg(target_arch = "wasm32")]
-                        if exiting_to_web_menu {
-                            self.web_exit_lobbies_ready = true;
-                        }
 
                         let maps_base = self.asset_config.maps_base.clone();
                         let maps_to_fetch = self
@@ -259,18 +261,16 @@ impl SowApp {
                         self.ui.update_available = true;
                     }
                     ServerMessage::LobbyClosed(closed) => {
+                        if self.sim.my_lobby_id != Some(closed.lobby_id)
+                            && self.ui.app.main_menu_state.joined_lobby_id != Some(closed.lobby_id)
+                        {
+                            continue;
+                        }
                         log::warn!("Lobby {} closed: {}", closed.lobby_id, closed.reason);
                         self.ui.app.hud_state.sync_state = None;
-                        self.sim.my_lobby_id = None;
-                        self.sim.my_player_id = None;
-                        self.sim.relay_ticket = None;
-                        self.sim.relay_reconnect_ticket = None;
-
-                        if let Some(rematch_id) = closed.rematch_lobby_id {
-                            log::info!("Rematch lobby {} offered", rematch_id);
-                            clear_lobby_snapshot(&mut self.ui.app.main_menu_state);
-                            pending_rematch = Some(rematch_id);
-                        } else if closed.reason.contains("Requeueing") {
+                        // Preserve the registered match identity until the common
+                        // return owner captures it for the server receipt.
+                        if closed.reason.contains("Requeueing") {
                             log::info!("Auto-requeueing to a new lobby...");
                             clear_lobby_snapshot(&mut self.ui.app.main_menu_state);
                             self.ui.app.main_menu_state.joined_lobby_id = None;
@@ -514,7 +514,7 @@ impl SowApp {
             switch_to_relay,
             exit_to_menu_after_net,
             lobby_exit_to_menu,
-            pending_rematch,
+            relay_session_resumed,
         }
     }
 }

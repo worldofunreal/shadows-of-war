@@ -6,6 +6,8 @@ mod progress;
 pub(crate) mod sfx;
 mod state;
 
+#[cfg(all(test, target_arch = "wasm32"))]
+pub(crate) use account::reward_exit_tests::{restore_tutorial_exit, setup_tutorial_exit};
 pub use state::*;
 
 impl SowApp {

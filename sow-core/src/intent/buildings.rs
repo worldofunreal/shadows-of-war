@@ -1,6 +1,4 @@
-use crate::building::{
-    Building, resolve_structure_spawn_tile, structure_build_cost_gold, structure_upgrade_cost_gold,
-};
+use crate::building::{Building, structure_build_cost_gold, structure_upgrade_cost_gold};
 use crate::engine::SowEngine;
 use crate::game::{BuildingKind, GameEvent, GamePhase};
 
@@ -58,7 +56,7 @@ impl SowEngine {
         }
         self.refresh_building_grid();
 
-        if kind == BuildingKind::Farm {
+        if self.legacy_building_rules && kind == BuildingKind::Farm {
             let map = &self.state.map;
             let x = target_tile % w;
             let y = target_tile / w;
@@ -83,16 +81,30 @@ impl SowEngine {
 
         // Placement is intentionally separate from upgrades. A nearby building
         // never absorbs a new foundation order.
-        let spawn_idx = if kind == BuildingKind::Farm {
-            target_tile
-        } else {
-            let Some(spawn_idx) = resolve_structure_spawn_tile(
+        let spawn_idx = if !self.legacy_building_rules {
+            if crate::building::validate_structure_site(
                 &self.state.map,
                 player_id,
                 kind,
                 target_tile,
                 &self.building_grid,
+            )
+            .is_err()
+            {
+                return;
+            }
+            target_tile
+        } else if kind == BuildingKind::Farm {
+            target_tile
+        } else {
+            let Some(spawn_idx) = crate::building::find_structure_site_near(
+                &self.state.map,
+                player_id,
+                target_tile,
+                kind,
+                &self.building_grid,
                 &mut self.placement_scratch,
+                true,
             ) else {
                 return;
             };
@@ -224,6 +236,40 @@ mod tests {
         player.gold = 1_000_000.0;
         game.register_player(player);
         SowEngine::new(game, WaterComponents::default())
+    }
+
+    #[test]
+    fn confirmed_foundations_touch_without_upgrading_or_relocating_and_rejection_costs_nothing() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 32, 32, config.clone());
+        state.phase = GamePhase::Playing;
+        let mut player = Player::new_human(1, "Builder".into(), [1.0, 0.0, 0.0], &config);
+        player.gold = 1_000_000.0;
+        state.register_player(player);
+        for y in 0..32 {
+            for x in 0..32 {
+                state.map.set_owner_id(x, y, 1);
+            }
+        }
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        for (kind, x, y) in [
+            (BuildingKind::City, 10, 10),
+            (BuildingKind::City, 14, 10),
+            (BuildingKind::Factory, 14, 14),
+        ] {
+            engine.apply_build_structure_intent(1, kind, y * 32 + x);
+            assert!(
+                engine
+                    .buildings
+                    .iter()
+                    .any(|b| b.kind == kind && b.tile_idx == y * 32 + x && b.level == 1)
+            );
+        }
+        let gold = engine.state.player(1).unwrap().gold;
+        engine.apply_build_structure_intent(1, BuildingKind::City, 10 * 32 + 13);
+        assert_eq!(engine.buildings.len(), 3);
+        assert_eq!(engine.state.player(1).unwrap().gold, gold);
+        assert!(engine.buildings.iter().all(|b| b.level == 1));
     }
 
     fn pacing_match() -> SowEngine {

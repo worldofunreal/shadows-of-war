@@ -20,7 +20,7 @@ function catalog(locale, settings, version = 11) {
     };
 }
 
-function loadRuntime(storedLocale, catalogs) {
+function loadRuntime(storedLocale, catalogs, settings) {
     const storage = new Map([["sow_ui_locale", storedLocale]]);
     const errors = [];
     const requests = [];
@@ -58,6 +58,7 @@ function loadRuntime(storedLocale, catalogs) {
         return { ok: true, json: async () => structuredClone(catalogs[code]) };
     };
     window.CustomEvent = CustomEvent;
+    if (settings && settings.window) Object.assign(window, settings.window);
     const context = {
         window,
         document,
@@ -65,6 +66,7 @@ function loadRuntime(storedLocale, catalogs) {
         Promise,
         fetch,
         CustomEvent,
+        navigator: (settings && settings.navigator) || { languages: ["en-US"], language: "en-US" },
         console: { error: (...args) => errors.push(args) }
     };
     vm.runInNewContext(runtimeSource, context, { filename: "sow-i18n.js" });

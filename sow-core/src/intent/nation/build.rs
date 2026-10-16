@@ -181,6 +181,8 @@ impl SowEngine {
                                     bot_id,
                                     candidates,
                                     &self.buildings,
+                                    &self.building_grid,
+                                    self.legacy_building_rules,
                                 )
                             } else {
                                 resolve_structure_from_candidates(
@@ -190,6 +192,7 @@ impl SowEngine {
                                     candidates,
                                     &self.building_grid,
                                     &mut self.placement_scratch,
+                                    self.legacy_building_rules,
                                 )
                             };
                             self.placement_scratch.border_scratch = border_candidates;

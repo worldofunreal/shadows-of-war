@@ -97,7 +97,6 @@ impl SowApp {
                     self.input.camera_y = 0.0;
                     self.input.camera_zoom = 2.0;
                     self.input.target_zoom = 2.0;
-                    self.send_leave_message();
                     self.begin_exit_to_main_menu();
                 }
                 UiAction::SetAttackRatio(r) => {

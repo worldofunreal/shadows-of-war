@@ -690,7 +690,12 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
         "node",
         &[
             "--test",
-            "sow-web/shell/main_menu.interaction.test.js",
+            "sow-web/site/site_interaction.test.js",
+            "sow-web/shell/menu_flow.test.js",
+            "sow-web/shell/campaign_runtime.test.js",
+            "sow-tools/editors/campaign-editor/editor_interaction.test.js",
+            "sow-web/shell/gameplay_interaction.test.js",
+            "sow-web/shell/sow-i18n.test.js",
             "sow-web/shell/experience_events.test.js",
             "sow-web/site/analytics.test.js",
         ],
@@ -797,6 +802,18 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
         (
             "input::map_click::tests",
             "map gestures and context actions regression tests failed",
+        ),
+        (
+            "input::window::tests::building_drag_pan_cancel_and_pending_confirmation_never_spend_gold",
+            "building placement gestures regression failed",
+        ),
+        (
+            "sim::turn::tests",
+            "building confirmation regression failed",
+        ),
+        (
+            "input::placement::tests",
+            "building placement cells regression failed",
         ),
         (
             "render::world::nameplates::emote_tests",
@@ -2697,9 +2714,11 @@ sudo install -o root -g root -m 0755 {hook_stage} /etc/letsencrypt/renewal-hooks
         r#"set -eu
 credential_stage={credential_stage_arg}
 hook_stage={hook_stage_arg}
+cert_test_stage=
 cleanup() {{
     [ -z "$credential_stage" ] || rm -f "$credential_stage"
     [ -z "$hook_stage" ] || rm -f "$hook_stage"
+    [ -z "$cert_test_stage" ] || sudo rm -rf -- "$cert_test_stage"
 }}
 trap cleanup EXIT
 if ! dpkg-query -W -f='${{Status}}' certbot 2>/dev/null | grep -qx 'install ok installed' \
@@ -2712,18 +2731,21 @@ sudo install -d -o root -g sowrelay -m 0750 /usr/local/etc/sow
 {credential_update}
 {hook_update}
 sudo systemctl enable --now certbot.timer
+# Certbot 2.9 deactivates reused dry-run authorizations. Keep each simulation's
+# account state separate so a previous check cannot leave this one unusable.
+cert_test_stage=$(sudo mktemp -d /tmp/sow-relay-cert-test.XXXXXX)
+sudo certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
+    --config /dev/null --config-dir "$cert_test_stage/config" --work-dir "$cert_test_stage/work" \
+    --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
+    --cert-name relay.shadowsofwar.io -d relay.shadowsofwar.io --dry-run
 renewal=/etc/letsencrypt/renewal/relay.shadowsofwar.io.conf
 if ! sudo test -s "$renewal" \
     || ! sudo grep -Fxq 'authenticator = dns-cloudflare' "$renewal" \
     || ! sudo grep -Fxq 'dns_cloudflare_credentials = /etc/letsencrypt/cloudflare.ini' "$renewal"; then
     sudo certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
         --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
-        --cert-name relay.shadowsofwar.io -d relay.shadowsofwar.io --dry-run
-    sudo certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
-        --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
         --cert-name relay.shadowsofwar.io -d relay.shadowsofwar.io --force-renewal
 else
-    sudo certbot renew --no-random-sleep-on-renew --cert-name relay.shadowsofwar.io --dry-run --force-renewal
     sudo certbot renew --no-random-sleep-on-renew --cert-name relay.shadowsofwar.io
 fi
 sudo /etc/letsencrypt/renewal-hooks/deploy/50-sow-relay
@@ -2742,7 +2764,7 @@ sudo grep -Fxq 'dns_cloudflare_credentials = /etc/letsencrypt/cloudflare.ini' "$
     );
     run("ssh", &[&config.relay_host, &remote], None)
         .context("relay DNS certificate automation or renewal failed")?;
-    println!("  relay Certbot DNS automation installed and renewal dry-run passed");
+    println!("  relay Certbot DNS issuance dry-run passed and automatic renewal verified");
     Ok(())
 }
 

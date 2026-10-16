@@ -163,13 +163,14 @@ impl SowEngine {
             }
             if let Some(tile_idx) = found_tile {
                 self.refresh_building_grid();
-                let spawn_ok = crate::building::resolve_structure_spawn_tile(
+                let spawn_ok = crate::building::find_structure_site_near(
                     &self.state.map,
                     tid,
-                    crate::game::BuildingKind::City,
                     tile_idx,
+                    crate::game::BuildingKind::City,
                     &self.building_grid,
                     &mut self.placement_scratch,
+                    self.legacy_building_rules,
                 );
                 if let Some(spawn_idx) = spawn_ok {
                     let building_id = self.state.next_building_id;

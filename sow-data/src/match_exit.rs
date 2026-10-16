@@ -71,6 +71,95 @@ pub(super) struct ExitRequest {
     match_id: String,
     #[serde(default)]
     auth_secret: Option<String>,
+    #[serde(default)]
+    closure_known: bool,
+}
+
+/// Authenticated observation never creates an exit command. Subscribe before
+/// reading durable state so a completion between the read and wait is retained.
+pub(super) async fn handle_result(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(request): Json<ExitRequest>,
+) -> axum::response::Response {
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &request.account_id,
+        request.auth_secret.as_deref(),
+    )
+    .await
+    {
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
+    if !valid_match_participant_settlement_params(&request.match_id, &account_id) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error":"invalid match id"})),
+        )
+            .into_response();
+    }
+    let mut changes = state.match_results.subscribe();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+    let result = async {
+        state.db.registered_human_participant(&request.match_id, &account_id)?;
+        loop {
+            let account = state.db.account_by_id(&account_id).await?;
+            if let Some(phase) = committed_terminal(&state, &account, &request.match_id)? {
+                return Ok::<_, Box<dyn std::error::Error + Send + Sync>>((StatusCode::OK, serde_json::json!({
+                    "account_id":account.id, "match_id":request.match_id, "state":phase,
+                    "display_name":account.display_name, "profile":account.profile,
+                })));
+            }
+            if !request.closure_known {
+                let personal = state.db.match_work(&format!("participant:{}:{account_id}", request.match_id))?;
+                if personal.is_some() || state.db.match_work(&request.match_id)?.is_some() {
+                    return Ok((StatusCode::ACCEPTED, serde_json::json!({
+                        "account_id":account_id, "match_id":request.match_id,
+                        "state":personal.map_or(MatchExitState::AwaitingResult, |job| job.state),
+                        "closure_recorded":true,
+                    })));
+                }
+            }
+            let timed_out = loop {
+                match tokio::time::timeout_at(deadline, changes.recv()).await {
+                    Ok(Ok(match_id)) if match_id == request.match_id => break false,
+                    Ok(Ok(_)) => continue,
+                    Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(count))) => {
+                        warn!("[rewards] result observer missed {count} wakeups; rereading durable state");
+                        break false;
+                    }
+                    Ok(Err(error)) => return Err(error.into()),
+                    Err(_) => break true,
+                }
+            };
+            if timed_out {
+                let job = state.db.match_work(&format!("participant:{}:{account_id}", request.match_id))?;
+                let phase = job.as_ref().map_or(MatchExitState::AwaitingResult, |job| job.state);
+                return Ok((StatusCode::ACCEPTED, serde_json::json!({
+                    "account_id":account_id, "match_id":request.match_id, "state":phase,
+                })));
+            }
+        }
+    }.await;
+    match result {
+        Ok((code, body)) => (code, Json(body)).into_response(),
+        Err(error) => {
+            warn!(
+                "[rewards] result observation match={} account={}: {error}",
+                request.match_id,
+                account_hint(Some(&account_id))
+            );
+            (
+                participant_closure_error_status(&error.to_string()),
+                Json(ErrorResponse {
+                    error: error.to_string(),
+                }),
+            )
+                .into_response()
+        }
+    }
 }
 
 pub(super) async fn handle_exit(
@@ -101,7 +190,7 @@ pub(super) async fn handle_exit(
             .db
             .registered_human_participant(&request.match_id, &account_id)?;
         let account = state.db.account_by_id(&account_id).await?;
-        let work = MatchWork::Exit {
+        let work = MatchWork::RecoveryExit {
             match_id: request.match_id.clone(),
             account_id: account_id.clone(),
         };
@@ -162,6 +251,7 @@ pub(super) async fn accept_participant(
     closure_turn: u64,
     body: Bytes,
 ) -> WorkResult<serde_json::Value> {
+    let intake_started = Instant::now();
     state
         .db
         .registered_human_participant(match_id, account_id)?;
@@ -178,7 +268,9 @@ pub(super) async fn accept_participant(
     // removed between the exit command's lookup and delivery. A missing local
     // copy cannot reject a result that the database is already checking.
     if body.is_empty() && state.db.match_work(match_id)?.is_some() {
-        return Ok(serde_json::json!({"status":"queued", "match_id":match_id,"account_id":account_id,"closure_turn":closure_turn}));
+        return Ok(
+            serde_json::json!({"status":"queued", "match_id":match_id,"account_id":account_id,"closure_turn":closure_turn}),
+        );
     }
     let work = MatchWork::Participant {
         match_id: match_id.to_string(),
@@ -208,13 +300,19 @@ pub(super) async fn accept_participant(
         state.db.queue_match_work(work)?;
     }
     wake(state, key);
+    let _ = state.match_results.send(match_id.to_string());
+    info!(
+        "[exit-timing] accepted match={match_id} account={} turn={closure_turn} intake_ms={}",
+        account_hint(Some(account_id)),
+        intake_started.elapsed().as_millis()
+    );
     Ok(
         serde_json::json!({"status":"queued", "match_id":match_id, "account_id":account_id, "closure_turn":closure_turn}),
     )
 }
 
-async fn dispatch_exit(state: &AppState, work: &MatchWork) -> WorkResult<bool> {
-    let MatchWork::Exit {
+async fn dispatch_recovery_exit(state: &AppState, work: &MatchWork) -> WorkResult<bool> {
+    let MatchWork::RecoveryExit {
         match_id,
         account_id,
     } = work
@@ -307,6 +405,7 @@ async fn verify_participant(state: &AppState, work: &MatchWork) -> WorkResult<bo
         "{}/internal/replay/verify/{match_id}/participant/{account_id}/{closure_turn}",
         base.trim_end_matches('/')
     );
+    let verify_started = Instant::now();
     let response = state
         .replay_verification_client
         .post(url)
@@ -330,19 +429,22 @@ async fn verify_participant(state: &AppState, work: &MatchWork) -> WorkResult<bo
     if result.match_id != *match_id || result.personal_closure_turn != Some(*closure_turn) {
         return Err("participant verifier returned a different closure".into());
     }
+    let verify_ms = verify_started.elapsed().as_millis();
+    let save_started = Instant::now();
     state
         .db
         .note_match_participant_closure(match_id, account_id, *closure_turn)
         .await?;
-    if let Some((outcome, account)) = state
+    let applied = state
         .db
         .apply_verified_match_participant_result(&result, account_id, *closure_turn)
-        .await?
-    {
-        state.db.submit_crazygames_score(&account).await;
-        if let Err(error) = state.sync_playgames_match_outcome(&outcome).await {
-            warn!("participant Play Games outcome sync failed: {error}");
-        }
+        .await?;
+    if applied.is_some() {
+        info!(
+            "[exit-timing] saved match={match_id} account={} verify_ms={verify_ms} save_ms={}",
+            account_hint(Some(account_id)),
+            save_started.elapsed().as_millis()
+        );
         info!(
             "[rewards] participant receipt verified match={match_id} account={}",
             account_hint(Some(account_id))
@@ -368,10 +470,13 @@ pub(super) async fn worker(
             Some(_) = notifications.recv() => {},
             Some((mut job, result)) = done_rx.recv() => {
                 let key = job.work.key();
-                if matches!(job.work, MatchWork::Exit { .. }) { exits.remove(&key); } else { verifier = None; }
+                if matches!(job.work, MatchWork::RecoveryExit { .. }) { exits.remove(&key); } else { verifier = None; }
                 match result {
                     Ok(true) => {
-                        if let Err(error) = state.db.remove_match_work(&key) { error!("[rewards] completed work {key} could not be removed: {error}"); }
+                        match state.db.remove_match_work(&key) {
+                            Ok(()) => { let _ = state.match_results.send(job.work.match_id().to_string()); }
+                            Err(error) => error!("[rewards] completed work {key} could not be removed: {error}"),
+                        }
                     }
                     Ok(false) => {
                         job.state = MatchExitState::AwaitingResult;
@@ -397,7 +502,7 @@ pub(super) async fn worker(
         };
         for mut job in jobs {
             let key = job.work.key();
-            let is_exit = matches!(job.work, MatchWork::Exit { .. });
+            let is_exit = matches!(job.work, MatchWork::RecoveryExit { .. });
             if is_exit {
                 if exits.contains(&key) || exits.len() >= 8 {
                     continue;
@@ -418,9 +523,23 @@ pub(super) async fn worker(
             let state = Arc::clone(&state);
             let done = done_tx.clone();
             tokio::spawn(async move {
+                let current_ms = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                info!(
+                    "[exit-timing] work={key} queue_wait_ms={}",
+                    if job.queued_at_ms == 0 {
+                        0
+                    } else {
+                        current_ms.saturating_sub(job.queued_at_ms)
+                    }
+                );
                 info!("[rewards] work {key} starting");
                 let result = match &job.work {
-                    MatchWork::Exit { .. } => dispatch_exit(&state, &job.work).await,
+                    MatchWork::RecoveryExit { .. } => {
+                        dispatch_recovery_exit(&state, &job.work).await
+                    }
                     MatchWork::Participant { .. } => verify_participant(&state, &job.work).await,
                     MatchWork::Replay { match_id } => {
                         verify_queued_replay(&state, match_id).await;

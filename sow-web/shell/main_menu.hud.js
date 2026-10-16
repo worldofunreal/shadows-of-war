@@ -99,7 +99,8 @@
 
     function asset(path) {
         var base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
-        return base + "/" + path.split("/").map(encodeURIComponent).join("/");
+        var url = base + "/" + path.split("/").map(encodeURIComponent).join("/");
+        return window.SOW_assetUrl ? window.SOW_assetUrl(url) : url;
     }
 
     function currencyAsset(kind) {
@@ -306,7 +307,7 @@
                 scheduleNotificationPlacement();
             });
         }
-        [hudRefs.topbar, hudRefs.nameplate, hudRefs.dock, hudRefs.dockStack, hudRefs.buildingCancel].forEach(function (element) {
+        [hudRefs.topbar, hudRefs.nameplate, hudRefs.dock, hudRefs.dockStack].forEach(function (element) {
             if (element && notificationResizeObserver) notificationResizeObserver.observe(element);
         });
         observeNotificationAnchors();
@@ -315,6 +316,7 @@
             notificationLayoutStarted = true;
             var onViewportChange = function () {
                 syncCompactHudBounds();
+                renderBuildingPlacement(hudState && hudState.hud && hudState.hud.building_placement);
                 renderNotifications([], false);
                 scheduleNotificationPlacement();
             };
@@ -432,7 +434,6 @@
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.music") + '</span><input type="range" min="0" max="1" step="0.05" data-hud-setting="music_volume"></label>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.reduced_motion") + '</span><input type="checkbox" data-hud-setting="reduced_motion"></label>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.free_zoom_out") + '</span><input type="checkbox" data-hud-setting="free_zoom_out"></label>'
-            + '  <div class="sow-hud__setting-row sow-hud__setting-row--hint"><label for="sow-hud-sticky-building-mode">' + escapeHudText(SOW_t("menu.sticky_building_mode")) + '</label><details class="sow-menu__setting-info"><summary aria-label="' + escapeHudText(SOW_t("menu.sticky_building_mode_hint")) + '">i</summary><span role="tooltip">' + escapeHudText(SOW_t("menu.sticky_building_mode_hint")) + '</span></details><input id="sow-hud-sticky-building-mode" type="checkbox" data-hud-setting="sticky_building_mode"></div>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.show_fps_ping") + '</span><input type="checkbox" data-hud-setting="show_fps_ping"></label>'
             + (hudState.settings && hudState.settings.show_dev_tools_available
                 ? '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.show_dev_tools") + '</span><input type="checkbox" data-hud-setting="show_dev_tools"></label>'
@@ -461,11 +462,15 @@
             + '    </div>'
             + '  </div>'
             + '</footer>'
-            + '<button type="button" class="sow-hud__building-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '" title="' + SOW_t("endgame.cancel") + '" hidden><span class="sow-hud__building-cancel-icon" aria-hidden="true">×</span><span>' + SOW_t("endgame.cancel") + '</span></button>'
             + '<aside class="sow-hud__operations" id="sow-hud-operations" hidden aria-label="' + SOW_t("hud.combat_operations") + '">'
             + '  <div class="sow-hud__operations-list" id="sow-hud-operations-list"></div>'
             + '</aside>'
             + '</div>'
+            + '<aside class="sow-hud__placement" id="sow-hud-placement" role="group" aria-label="' + SOW_t("hud.build_placement") + '" hidden>'
+            + '  <div class="sow-hud__placement-info" id="sow-hud-placement-info"></div>'
+            + '  <div class="sow-hud__placement-actions"><button type="button" class="sow-hud__placement-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '">×</button><button type="button" class="sow-hud__placement-confirm" data-command="confirm_building_placement"><span aria-hidden="true">✓</span><span>' + SOW_t("hud.build_confirm") + '</span></button></div>'
+            + '  <div class="sow-hud__placement-reason" id="sow-hud-placement-reason" role="status" aria-live="polite"></div>'
+            + '</aside>'
             + '<aside class="sow-hud__panel sow-hud__leaderboard hidden" id="sow-hud-leaderboard">'
             + '  <div class="sow-hud__panel-header">'
             + '    <h3>' + hudIcon("rankings", "sow-hud__inline-icon") + ' ' + SOW_t("hud.rankings_title") + '</h3>'
@@ -594,7 +599,11 @@
             fleetTrade: hudRoot.querySelector("[data-fleet-kind='trade']"),
             fleetWarship: hudRoot.querySelector("[data-fleet-kind='warship']"),
             fleetNuke: hudRoot.querySelector("[data-fleet-kind='nuke']"),
-            buildingCancel: hudRoot.querySelector("[data-command='cancel_building_mode']"),
+            placement: document.getElementById("sow-hud-placement"),
+            placementInfo: document.getElementById("sow-hud-placement-info"),
+            placementReason: document.getElementById("sow-hud-placement-reason"),
+            placementConfirm: hudRoot.querySelector('[data-command="confirm_building_placement"]'),
+            placementCancel: hudRoot.querySelector('[data-command="cancel_building_mode"]'),
             panelButtons: Array.prototype.slice.call(hudRoot.querySelectorAll(".sow-hud__topbar [data-command^='toggle_']")),
             leaderboard: document.getElementById("sow-hud-leaderboard"),
             rows: document.getElementById("sow-hud-lb-rows"),
@@ -768,7 +777,6 @@
             if (setting === "music_volume") send("set_music_volume", { value: Number(input.value) });
             if (setting === "reduced_motion") send("set_reduced_motion", { value: input.checked });
             if (setting === "free_zoom_out") send("set_free_zoom_out", { value: input.checked });
-            if (setting === "sticky_building_mode") send("set_sticky_building_mode", { value: input.checked });
             if (setting === "show_fps_ping") send("set_show_fps_ping", { value: input.checked });
             if (setting === "show_dev_tools") {
                 if (input.checked) {
@@ -1417,6 +1425,29 @@
         return buildingMetricMarkup(deltas);
     }
 
+    function renderBuildingPlacement(placement) {
+        var panel = hudRefs.placement;
+        if (!panel) return;
+        panel.hidden = !placement;
+        if (!placement) return;
+        hudRefs.placementConfirm.disabled = !placement.can_confirm;
+        hudRefs.placementCancel.disabled = Boolean(placement.pending);
+        hudRefs.placementInfo.textContent = SOW_t("hud.build_details", {
+            cost: Math.ceil(Number(placement.cost) || 0).toLocaleString(),
+            seconds: Math.ceil(Number(placement.seconds) || 0)
+        });
+        var reason = placement.reason;
+        hudRefs.placementReason.textContent = placement.pending ? SOW_t("hud.build_pending")
+            : reason && reason.key ? SOW_t(reason.key, reason.values || {}) : SOW_t("hud.build_placement_help");
+        var gap = 10, margin = 8;
+        var width = panel.offsetWidth, height = panel.offsetHeight;
+        var left = Number(placement.x) - width / 2;
+        var top = Number(placement.y) - Number(placement.half_height) - height - gap;
+        if (top < margin) top = Number(placement.y) + Number(placement.half_height) + gap;
+        panel.style.left = Math.max(margin, Math.min(left, window.innerWidth - width - margin)) + "px";
+        panel.style.top = Math.max(margin, Math.min(top, window.innerHeight - height - margin)) + "px";
+    }
+
     function positionBuildingCard(mapMenu) {
         var card = hudRefs.buildingCard;
         var width = card.offsetWidth;
@@ -1762,10 +1793,12 @@
                 "--sow-hud-hit-target-zoom": (1 / density).toFixed(4),
                 "--sow-hud-text-primary-size": (12 / density).toFixed(2) + "px",
                 "--sow-hud-text-secondary-size": (11 / density).toFixed(2) + "px",
-                "--sow-player-panel-height": (storyRoot ? 92 * density : 92).toFixed(2) + "px",
-                "--sow-tutorial-progress-height": "24px",
-                "--sow-tutorial-progress-label-size": (14 / density).toFixed(2) + "px"
+                "--sow-player-panel-height": (storyRoot ? 92 * density : 92).toFixed(2) + "px"
             };
+            if (!storyRoot) {
+                values["--sow-tutorial-progress-height"] = "24px";
+                values["--sow-tutorial-progress-label-size"] = (14 / density).toFixed(2) + "px";
+            }
             Object.keys(values).forEach(function (property) {
                 if (target.style.getPropertyValue(property) !== values[property]) target.style.setProperty(property, values[property]);
             });
@@ -1844,7 +1877,7 @@
             && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
         hudRoot.style.removeProperty("--sow-hud-layout-operations-bottom");
         var operationAnchorTop = window.innerHeight;
-        [hudRefs.dock, hudRefs.buildingCancel].forEach(function (element) {
+        [hudRefs.dock].forEach(function (element) {
             if (!element || element.hidden || !element.getClientRects().length) return;
             operationAnchorTop = Math.min(operationAnchorTop, element.getBoundingClientRect().top);
         });
@@ -1882,19 +1915,16 @@
         var dockHeight = dockInner
             ? Math.ceil(dockInner.getBoundingClientRect().height)
             : (hudRefs.dock ? Math.ceil(hudRefs.dock.getBoundingClientRect().height) : 0);
-        if (hudRefs.buildingCancel && !hudRefs.buildingCancel.hidden) {
-            dockHeight += Math.ceil(hudRefs.buildingCancel.getBoundingClientRect().height) + 6;
-        }
         var safeBottom = Number.parseFloat(window.getComputedStyle(hudRoot).getPropertyValue("--sow-sab")) || 0;
         hudRoot.style.setProperty("--sow-hud-layout-dock-height", dockHeight + "px");
         var dockAnchorTop = window.innerHeight;
-        [hudRefs.dock, hudRefs.buildingCancel].forEach(function (element) {
+        [hudRefs.dock].forEach(function (element) {
             if (!element || element.hidden || !element.getClientRects().length) return;
             dockAnchorTop = Math.min(dockAnchorTop, element.getBoundingClientRect().top);
         });
         var stackTop = window.innerHeight;
         var stackBottom = 0;
-        [dockInner, hudRefs.buildingCancel, hudRefs.operations].forEach(function (element) {
+        [dockInner, hudRefs.operations].forEach(function (element) {
             if (!element || element.hidden || !element.getClientRects().length) return;
             var rect = element.getBoundingClientRect();
             stackTop = Math.min(stackTop, rect.top);
@@ -2544,7 +2574,8 @@
                 var selected = selectedBuilding === kind;
                 button.disabled = false;
                 var disabled = !affordable && !selected;
-                button.setAttribute("aria-disabled", String(disabled));
+                button.setAttribute("aria-disabled", "false");
+                button.classList.toggle("is-unaffordable", disabled);
                 button.classList.toggle("active", selected);
                 button.setAttribute("aria-pressed", String(selected));
                 var costText = hasCost ? Math.floor(cost).toLocaleString() + "g" : "";
@@ -2667,14 +2698,12 @@
                 var musicInput = hudRefs.settings.querySelector('[data-hud-setting="music_volume"]');
                 var motionInput = hudRefs.settings.querySelector('[data-hud-setting="reduced_motion"]');
                 var freeZoomInput = hudRefs.settings.querySelector('[data-hud-setting="free_zoom_out"]');
-                var stickyBuildingInput = hudRefs.settings.querySelector('[data-hud-setting="sticky_building_mode"]');
                 var fpsPingInput = hudRefs.settings.querySelector('[data-hud-setting="show_fps_ping"]');
                 var devToolsInput = hudRefs.settings.querySelector('[data-hud-setting="show_dev_tools"]');
                 if (muteInput && document.activeElement !== muteInput) muteInput.checked = !settings.mute_all;
                 if (musicInput && document.activeElement !== musicInput) musicInput.value = settings.music_volume == null ? 0.8 : settings.music_volume;
                 if (motionInput && document.activeElement !== motionInput) motionInput.checked = Boolean(settings.reduced_motion);
                 if (freeZoomInput && document.activeElement !== freeZoomInput) freeZoomInput.checked = Boolean(settings.free_zoom_out);
-                if (stickyBuildingInput && document.activeElement !== stickyBuildingInput) stickyBuildingInput.checked = Boolean(settings.sticky_building_mode);
                 if (fpsPingInput && document.activeElement !== fpsPingInput) fpsPingInput.checked = settings.show_fps_ping === true;
                 if (devToolsInput && document.activeElement !== devToolsInput) devToolsInput.checked = Boolean(settings.show_dev_tools);
             }
@@ -2805,7 +2834,7 @@
             }
         }
         var mapMenuOpen = renderMapMenu(hud.map_menu);
-        if (hudRefs.buildingCancel) hudRefs.buildingCancel.hidden = !hud.selected_building;
+        renderBuildingPlacement(hud.building_placement);
         renderBuildingCard(hud.map_menu, hud.gold);
         var panelStates = { toggle_leaderboard: leaderboardOpen, toggle_inbox: inboxOpen, toggle_settings: settingsOpen, toggle_dev_sidebar: devSidebarOpen };
         hudRefs.panelButtons.forEach(function (button) {
@@ -3016,9 +3045,10 @@
                 send("select_warship");
             } else if (cmd === "select_nuke") {
                 send("select_nuke");
+            } else if (cmd === "confirm_building_placement") {
+                if (hudState && hudState.hud && hudState.hud.building_placement && hudState.hud.building_placement.can_confirm) send("confirm_building_placement");
             } else if (cmd === "cancel_building_mode") {
-                var selectedBuilding = hudState && hudState.hud && hudState.hud.selected_building;
-                if (selectedBuilding) send("select_building", { kind: selectedBuilding });
+                send("cancel_building_mode");
             } else if (cmd === "close_building_card") {
                 send("close_map_context_menu");
             } else if (cmd === "confirm_endgame_leave") {

@@ -525,8 +525,10 @@ pub(crate) fn building_at_pointer(
         let distance_sq = dx * dx + dy * dy;
         if building.tile_idx.is_some() {
             let (width, height) = building.kind.footprint_dimensions();
-            if (pointer_world_x - building.bx).abs() > width as f32 * 0.5
-                || (pointer_world_y - building.by).abs() > height as f32 * 0.5
+            if pointer_world_x < building.bx - width as f32 * 0.5
+                || pointer_world_x >= building.bx + width as f32 * 0.5
+                || pointer_world_y < building.by - height as f32 * 0.5
+                || pointer_world_y >= building.by + height as f32 * 0.5
             {
                 continue;
             }
@@ -699,10 +701,14 @@ fn render_building_placement_preview(
     map_renderer: Option<&crate::render::gpu::MapRenderer>,
     dev: &DevConfig,
     sf: f32,
-    time_secs: f32,
-    now: Instant,
+    _time_secs: f32,
+    _now: Instant,
 ) {
-    let Some(kind) = ui.app.hud_state.selected_building_kind else {
+    let Some(placement) = ui.app.hud_state.building_placement else {
+        return;
+    };
+    let kind = placement.kind;
+    if sim.map_w == 0 {
         return;
     };
     let Some(map_renderer) = map_renderer else {
@@ -712,14 +718,10 @@ fn render_building_placement_preview(
         return;
     }
 
-    let world_x = (input.last_mouse_x as f32 - input.camera_x) / input.camera_zoom;
-    let world_y = (input.last_mouse_y as f32 - input.camera_y) / input.camera_zoom;
-    let (col, row) = crate::render::world::movers::world_to_tile(world_x, world_y);
-    if col < 0 || row < 0 || col >= sim.map_w as i32 || row >= sim.map_h as i32 {
-        return;
-    }
-    let hovered_tile = (row as u32) * sim.map_w + col as u32;
-    let my_id = sim.my_player_id.unwrap_or(0);
+    let (col, row) = (
+        (placement.tile_idx % sim.map_w) as i32,
+        (placement.tile_idx / sim.map_w) as i32,
+    );
     let target = ui.building_placement_cache.resolve(
         snapshot.tick,
         &crate::input::placement::PlacementQuery {
@@ -730,11 +732,11 @@ fn render_building_placement_preview(
             map_h: sim.map_h,
             owners: &map_renderer.owners,
             terrain: &map_renderer.terrain,
-            my_id,
+            my_id: sim.my_player_id.unwrap_or(0),
             buildings: &snapshot.buildings,
         },
     );
-    let preview_tile = target.unwrap_or(hovered_tile);
+    let preview_tile = placement.tile_idx;
     let cost_index = sow_core::game::BuildingKind::ALL
         .iter()
         .position(|candidate| *candidate == kind)
@@ -767,7 +769,7 @@ fn render_building_placement_preview(
         input.camera_y + footprint.top as f32 * input.camera_zoom,
     ];
     let color = if can_place {
-        [0.13, 0.83, 0.94, 1.0]
+        [0.18, 0.85, 0.35, 1.0]
     } else {
         [0.94, 0.27, 0.27, 1.0]
     };
@@ -793,59 +795,37 @@ fn render_building_placement_preview(
             [color[0], color[1], color[2], 0.58],
         );
     }
-    if input.hold_build_active
-        && let Some(start) = input.map_pointer_start.as_ref()
-    {
-        let held_secs = now.duration_since(start.started_at).as_secs_f32();
-        let interval = crate::input::window::hold_build_repeat_interval(held_secs);
-        let progress = (1.0 - input.hold_build_accum / interval).clamp(0.0, 1.0);
-        let burst = held_secs >= crate::input::window::HOLD_BUILD_BURST_AFTER_SECS;
-        let color = if burst {
-            [1.0, 0.62, 0.16, 1.0]
-        } else {
-            [0.13, 0.83, 0.94, 1.0]
-        };
-        let pulse_rate = if burst { 28.0 } else { 8.0 };
-        let pulse = (time_secs * pulse_rate).sin().max(0.0);
-        let radius =
-            footprint_size_px[0].max(footprint_size_px[1]) * 0.5 + (3.0 + pulse * 2.0) * sf;
-        text.push_ring(
-            center_px,
-            radius,
-            [color[0], color[1], color[2], 0.32],
-            (2.0 * sf).max(1.0),
-        );
-        text.push_arc(center_px, radius, progress, color, (3.0 * sf).max(1.0));
+    let dragging = input.building_drag_offset.is_some();
+    let sprite_scale = BUILDING_FOOTPRINT_FILL * BUILDING_FOOTPRINT_FILL;
+    let lift = if dragging && !ui.app.settings_state.reduced_motion {
+        5.0 * sf
+    } else {
+        0.0
+    };
+    if dragging {
+        text.push_rect(footprint_top_left, footprint_size_px, [0.0, 0.0, 0.0, 0.16]);
     }
-
+    let sprite_center = [center_px[0], center_px[1] - lift];
     if let Some(uv_rect) = crate::render::gpu::building_sprite_uv(kind, 1) {
         text.push_building_sprite(
-            center_px,
+            sprite_center,
             [
-                footprint_size_px[0] * BUILDING_FOOTPRINT_FILL,
-                footprint_size_px[1] * BUILDING_FOOTPRINT_FILL,
+                footprint_size_px[0] * sprite_scale,
+                footprint_size_px[1] * sprite_scale,
             ],
             uv_rect,
             [1.0, 1.0, 1.0, if can_place { 0.78 } else { 0.42 }],
         );
     } else {
-        let icon_half_size =
-            footprint_size_px[0].min(footprint_size_px[1]) * BUILDING_FOOTPRINT_FILL * 0.5;
+        let icon_half_size = footprint_size_px[0].min(footprint_size_px[1]) * sprite_scale * 0.5;
         let _ = text.push_emoji(
             building_kind_emoji(kind, 1),
-            center_px,
+            sprite_center,
             icon_half_size,
             [1.0, 1.0, 1.0, if can_place { 0.78 } else { 0.42 }],
             crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.75]),
         );
     }
-    let label = construction_status_label(
-        None,
-        kind.construction_duration_ticks(),
-        sim.config.tick_rate_ms,
-    );
-    render_building_preview_badge(text, center_px, &label, color, dev, sf);
-
     if kind == BuildingKind::Bunker {
         let (anchor_x, anchor_y) =
             crate::render::world::movers::tile_to_world(preview_tile, sim.map_w);
@@ -864,26 +844,6 @@ fn render_building_placement_preview(
             (1.5 * sf).max(1.0),
         );
     }
-
-    let balance = if has_gold {
-        crate::utils::format_number(ui.app.hud_state.gold - cost)
-    } else {
-        format!(
-            "-{}",
-            crate::utils::format_number(cost - ui.app.hud_state.gold)
-        )
-    };
-    render_building_gold_badge(
-        text,
-        [
-            center_px[0],
-            center_px[1] + footprint_size_px[1] * 0.5 + 18.0 * sf,
-        ],
-        &balance,
-        has_gold,
-        dev,
-        sf,
-    );
 }
 
 fn building_badge_label(building: &RenderedBuilding) -> Option<String> {
@@ -943,55 +903,6 @@ fn render_building_preview_badge(
         [1.0; 4],
         crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]),
         (0.5, dev.font_char_spacing.max(0.1), INLINE_EMOJI_SCALE),
-    );
-}
-
-fn render_building_gold_badge(
-    text: &mut TextRenderer,
-    center: [f32; 2],
-    balance: &str,
-    positive: bool,
-    dev: &DevConfig,
-    sf: f32,
-) {
-    let font_size = 13.0 * dev.font_size_scale.max(0.1) * sf;
-    let measure = text.measure_string(balance, font_size, dev.font_char_spacing.max(0.1), 1.0);
-    let icon_size = font_size;
-    let gap = 4.0 * sf;
-    let width = icon_size + gap + measure.width + 12.0 * sf;
-    let height = (measure.height.max(icon_size) + 8.0 * sf).max(20.0 * sf);
-    let top = center[1] - height * 0.5;
-    let left_edge = center[0] - width * 0.5;
-    let border = if positive {
-        [0.29, 0.87, 0.49, 0.8]
-    } else {
-        [0.97, 0.44, 0.44, 0.8]
-    };
-    text.push_rect([left_edge, top], [width, height], border);
-    text.push_rect(
-        [left_edge + sf, top + sf],
-        [(width - 2.0 * sf).max(1.0), (height - 2.0 * sf).max(1.0)],
-        [0.06, 0.09, 0.16, 0.92],
-    );
-    let left = center[0] - width * 0.5 + 6.0 * sf;
-    let _ = text.push_emoji(
-        "🪙",
-        [left + icon_size * 0.5, center[1]],
-        icon_size * 0.5,
-        [1.0; 4],
-        crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.75]),
-    );
-    text.push_string(
-        balance,
-        [left + icon_size + gap, center[1] + font_size * 0.3],
-        font_size,
-        if positive {
-            [0.29, 0.87, 0.49, 1.0]
-        } else {
-            [0.97, 0.44, 0.44, 1.0]
-        },
-        crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]),
-        (0.0, dev.font_char_spacing.max(0.1), INLINE_EMOJI_SCALE),
     );
 }
 

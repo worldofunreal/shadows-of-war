@@ -647,47 +647,7 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
 .sow-hud__operation-action-icon { width: 17px; height: 17px; }
 .sow-hud__operation.is-incoming .sow-hud__operation-action[data-command="counter_attack"] { border-color: rgb(222 133 129 / 42%); color: #f0aaa5; }
 
-.sow-hud__building-cancel {
-    position: fixed;
-    inset-inline-start: 50%;
-    bottom: calc(max(8px, var(--sow-sab)) + var(--sow-dock-reserve) + 12px);
-    z-index: 210;
-    transform: translateX(-50%);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    min-width: 124px;
-    min-height: 54px;
-    pointer-events: auto;
-    padding: 0 16px;
-    border: 1px solid color-mix(in srgb, var(--sow-gold) 72%, transparent);
-    border-radius: 999px;
-    background: linear-gradient(150deg, rgb(39 51 57 / 99%), rgb(9 15 19 / 99%));
-    box-shadow: 0 8px 24px rgb(0 0 0 / 55%), inset 0 1px rgb(255 255 255 / 11%);
-    color: var(--sow-gold-bright);
-    font: inherit;
-    font-size: 14px;
-    font-weight: 800;
-    letter-spacing: .04em;
-    cursor: pointer;
-    touch-action: manipulation;
-}
 
-.sow-hud__building-cancel-icon {
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    border: 1px solid color-mix(in srgb, var(--sow-red) 48%, transparent);
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--sow-red) 22%, transparent);
-    color: #ffd2cb;
-    font-size: 21px;
-    line-height: 1;
-}
-
-.sow-hud__building-cancel[hidden] { display: none; }
 
 .sow-hud__building-icon {
     display: grid;
@@ -3089,7 +3049,7 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     }
     #sow-hud[data-compact="true"] .sow-hud__operations-list { overflow-y: auto; }
     #sow-hud[data-compact="true"] .sow-hud__operation { min-height: 46px; }
-    #sow-hud[data-compact="true"] .sow-hud__building-cancel { position: relative; align-self: center; inset: auto; left: auto; bottom: auto; width: min(260px, 100%); min-height: 44px; margin: 0; transform: none; }
+
     #sow-hud[data-compact="true"] .sow-hud__allocation-detail { max-width: min(240px, calc(100vw - 94px)); }
     #sow-hud[data-compact="true"] .sow-hud__hover-card,
     #sow-hud[data-compact="true"] .sow-hud__notifications {
@@ -3108,7 +3068,8 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     #sow-hud[data-compact="true"] .sow-hud__hover-card.hidden { transform: none; }
     #sow-hud[data-compact="true"] .sow-hud__hover-stats { flex-wrap: wrap; gap: 4px 8px; font-size: 10px; }
     #sow-hud[data-compact="true"] .sow-hud__notifications { display: grid; gap: 6px; pointer-events: auto; }
-    #sow-hud[data-compact="true"] .sow-hud__notifications.is-positioned { left: auto; right: auto; inset-inline-start: auto; inset-inline-end: max(8px, var(--sow-sar)); }
+    #sow-hud[data-compact="true"] .sow-hud__notifications { top: var(--sow-hud-notifications-top, var(--sow-hud-layout-top-reserve, 72px)); }
+    #sow-hud[data-compact="true"] .sow-hud__notifications.is-positioned { left: auto; right: auto; inset-inline-start: var(--sow-hud-notifications-inline-start); inset-inline-end: auto; }
     #sow-hud[data-compact="true"][data-notifications-visible="true"] .sow-hud__hover-card { display: none; }
     #sow-hud[data-compact="true"][data-overlay-open="true"] .sow-hud__notifications { z-index: 69; }
     #sow-hud[data-compact="true"] .sow-hud__panel {
@@ -3145,7 +3106,7 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     #sow-hud[data-compact="true"] .sow-hud__rail-card { backdrop-filter: none; -webkit-backdrop-filter: none; }
     #sow-hud[data-compact="true"] .sow-hud__icon-btn { width: 44px; height: 44px; backdrop-filter: none; -webkit-backdrop-filter: none; }
     #sow-hud[data-compact="true"] .sow-hud__dock { bottom: max(4px, var(--sow-sab)); width: min(520px, calc(100vw - 120px)); max-width: 520px; }
-    #sow-hud[data-compact="true"] .sow-hud__building-cancel { bottom: calc(max(6px, var(--sow-sab)) + 96px); }
+
     #sow-hud[data-compact="true"] .sow-hud__dock-inner { padding: 4px 6px; gap: 3px; backdrop-filter: none; -webkit-backdrop-filter: none; }
     #sow-hud[data-compact="true"] .sow-hud__operations { bottom: var(--sow-hud-layout-operations-bottom, calc(max(4px, var(--sow-sab)) + var(--sow-dock-reserve))); max-height: var(--sow-hud-layout-operations-max-height, 20dvh); padding: 4px; backdrop-filter: none; -webkit-backdrop-filter: none; }
     #sow-hud[data-compact="true"] .sow-hud__operation { min-height: 46px; }
@@ -3165,7 +3126,6 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
 #sow-hud[data-compact="true"] .sow-hud__right-rail,
 #sow-hud[data-compact="true"] .sow-hud__dock-inner,
 #sow-hud[data-compact="true"] .sow-hud__operations,
-#sow-hud[data-compact="true"] .sow-hud__building-cancel,
 #sow-hud[data-compact="true"] .sow-hud__hover-card,
 #sow-hud[data-compact="true"] .sow-hud__panel,
 #sow-hud[data-compact="true"] .sow-hud__notifications {
@@ -3178,7 +3138,7 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
 #sow-hud[data-compact="true"] .sow-hud__right-rail { transform-origin: right bottom; }
 #sow-hud[data-compact="true"] .sow-hud__dock-inner { transform-origin: center bottom; }
 #sow-hud[data-compact="true"] .sow-hud__operations { transform-origin: center bottom; }
-#sow-hud[data-compact="true"] .sow-hud__building-cancel { transform-origin: center center; }
+
 #sow-hud[data-compact="true"] .sow-hud__hover-card,
 #sow-hud[data-compact="true"] .sow-hud__notifications { transform-origin: left top; }
 #sow-hud[data-compact="true"] .sow-hud__panel { transform-origin: right top; }
@@ -3201,12 +3161,8 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__right-rail { transform-o
 html[dir="rtl"] #sow-hud-dev-layer[data-compact="true"] .sow-hud__dev-sidebar { transform-origin: left bottom; }
 
 @media (pointer: coarse) {
-    #sow-hud[data-compact="true"] .sow-hud__building-cancel {
-        zoom: var(--sow-hud-hit-target-zoom);
-        min-inline-size: 44px;
-        min-block-size: 44px;
-    }
-    #sow-hud[data-compact="true"] :is(.sow-hud__status-right, .sow-hud__nameplate, .sow-hud__left-rail, .sow-hud__right-rail, .sow-hud__dock-inner, .sow-hud__operations, .sow-hud__building-cancel, .sow-hud__panel, .sow-hud__notifications) :is(button, input, select, textarea),
+
+    #sow-hud[data-compact="true"] :is(.sow-hud__status-right, .sow-hud__nameplate, .sow-hud__left-rail, .sow-hud__right-rail, .sow-hud__dock-inner, .sow-hud__operations, .sow-hud__panel, .sow-hud__notifications) :is(button, input, select, textarea),
     #sow-hud-dev-layer[data-compact="true"] .sow-hud__dev-sidebar :is(button, input, select, textarea) {
         zoom: var(--sow-hud-hit-target-zoom);
         min-inline-size: 44px;
@@ -3215,12 +3171,8 @@ html[dir="rtl"] #sow-hud-dev-layer[data-compact="true"] .sow-hud__dev-sidebar { 
 }
 
 @media (pointer: fine) {
-    #sow-hud[data-compact="true"] .sow-hud__building-cancel {
-        zoom: var(--sow-hud-hit-target-zoom);
-        min-inline-size: 32px;
-        min-block-size: 32px;
-    }
-    #sow-hud[data-compact="true"] :is(.sow-hud__status-right, .sow-hud__nameplate, .sow-hud__left-rail, .sow-hud__right-rail, .sow-hud__dock-inner, .sow-hud__operations, .sow-hud__building-cancel, .sow-hud__panel, .sow-hud__notifications) :is(button, input, select, textarea),
+
+    #sow-hud[data-compact="true"] :is(.sow-hud__status-right, .sow-hud__nameplate, .sow-hud__left-rail, .sow-hud__right-rail, .sow-hud__dock-inner, .sow-hud__operations, .sow-hud__panel, .sow-hud__notifications) :is(button, input, select, textarea),
     #sow-hud-dev-layer[data-compact="true"] .sow-hud__dev-sidebar :is(button, input, select, textarea) {
         zoom: var(--sow-hud-hit-target-zoom);
         min-inline-size: 32px;
@@ -3269,3 +3221,23 @@ html[dir="rtl"] #sow-hud-dev-layer[data-compact="true"] .sow-hud__dev-sidebar { 
 .sow-hud__emote-choice { justify-content: center; min-block-size: 44px; font-weight: 700; }
 .sow-hud__emote-pin { display: flex; align-items: center; gap: 10px; min-block-size: 44px; padding: 0 12px; cursor: pointer; }
 .sow-hud__emote-pin input { inline-size: 20px; block-size: 20px; accent-color: var(--sow-gold); }
+
+/* Placement controls use viewport coordinates published by the Rust camera. */
+#sow-hud .sow-hud__placement {
+    position: fixed; z-index: 60; box-sizing: border-box; width: min(270px, calc(100vw - 16px));
+    padding: 10px; border: 1px solid rgba(220, 235, 230, .35); border-radius: 12px;
+    background: rgba(12, 20, 25, .96); color: #fff; pointer-events: auto;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .35); text-align: center;
+}
+#sow-hud .sow-hud__placement[hidden] { display: none; }
+#sow-hud .sow-hud__placement-info { font-size: 14px; margin-bottom: 8px; }
+#sow-hud .sow-hud__placement-actions { display: flex; gap: 8px; }
+#sow-hud .sow-hud__placement-actions button {
+    min-width: 48px; min-height: 48px; border: 1px solid rgba(255,255,255,.3); border-radius: 8px;
+    font: inherit; font-weight: 700; color: #fff; cursor: pointer; touch-action: manipulation;
+}
+#sow-hud .sow-hud__placement-confirm { flex: 1; background: #25843a; display: flex; align-items: center; justify-content: center; gap: 8px; }
+#sow-hud .sow-hud__placement-cancel { background: #a83832; font-size: 28px; }
+#sow-hud .sow-hud__placement-actions button:disabled { opacity: .5; cursor: default; }
+#sow-hud .sow-hud__placement-actions button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+#sow-hud .sow-hud__placement-reason { margin-top: 8px; font-size: 12px; line-height: 1.3; }

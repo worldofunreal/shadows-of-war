@@ -46,7 +46,6 @@ pub struct ServerLobby {
     /// Remaining seconds while CountingDown.
     pub countdown_secs: f32,
     /// Counts down while Active and there are zero external players in `players`.
-    pub active_empty_secs: f32,
     pub players: Vec<PlayerConnection>,
     pub ready_players: std::collections::HashSet<u16>,
     pub seed: u64,
@@ -177,7 +176,6 @@ fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: Sp
         is_private,
         phase: LobbyPhase::Waiting,
         countdown_secs: 0.0,
-        active_empty_secs: 0.0,
         players: Vec::new(),
         ready_players: std::collections::HashSet::new(),
         seed: 0,
@@ -768,7 +766,6 @@ fn start_match(lobby: &mut ServerLobby) {
     lobby.countdown_secs = 16.5; // 15s load + 1.5s stabilize
     lobby.phase = LobbyPhase::Loading;
 
-    lobby.active_empty_secs = 30.0;
     log::info!(
         "Lobby {} is Loading (seed {}, roster={} external={} internal_bots={})",
         lobby.id,
@@ -1118,8 +1115,7 @@ mod name_tests {
             is_private: false,
             phase: LobbyPhase::Waiting,
             countdown_secs: 0.0,
-            active_empty_secs: 0.0,
-            players: Vec::new(),
+                players: Vec::new(),
             ready_players: std::collections::HashSet::new(),
             seed: 0,
             config: GameConfig {

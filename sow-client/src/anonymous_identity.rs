@@ -82,11 +82,18 @@ pub(crate) fn load_menu_return(account_id: &str) -> Option<crate::app::MenuRetur
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn save_menu_return(context: &crate::app::MenuReturnContext) {
-    let Some(account_id) = context.account_id.as_deref() else { return; };
+    let Some(account_id) = context.account_id.as_deref() else {
+        return;
+    };
     let key = format!("sow_menu_return_v1:{account_id}");
     if let Ok(raw) = serde_json::to_string(context) {
         save_storage(&key, &raw);
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn clear_menu_return(account_id: &str) {
+    clear_storage(&format!("sow_menu_return_v1:{account_id}"));
 }
 
 #[cfg(target_arch = "wasm32")]

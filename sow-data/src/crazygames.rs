@@ -72,6 +72,7 @@ pub async fn submit_score(api_key: &str, user_id: &str, score: u32) -> Result<()
     let client = reqwest::Client::new();
     let resp = client
         .post("https://leaderboard.crazygames.com/leaderboard/scores")
+        .timeout(std::time::Duration::from_secs(5))
         .header("X-API-Key", api_key)
         .header("Content-Type", "application/json")
         .json(&payload)

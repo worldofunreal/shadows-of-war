@@ -329,6 +329,8 @@ pub struct PlayerProfile {
     #[serde(default)]
     pub playgames_synced_revision: u64,
     #[serde(default)]
+    pub crazygames_synced_revision: u64,
+    #[serde(default)]
     pub intro_completed: bool,
 }
 
@@ -379,6 +381,7 @@ impl Default for PlayerProfile {
             unlocked_achievements: std::collections::BTreeSet::new(),
             playgames_sync_revision: 0,
             playgames_synced_revision: 0,
+            crazygames_synced_revision: 0,
             intro_completed: false,
         }
     }
@@ -1113,6 +1116,16 @@ impl PlayerDb {
             let json = serde_json::to_vec(account)?;
             table.insert(account.id.as_str(), json.as_slice())?;
         }
+        {
+            let mut table = write_txn.open_table(crate::metadata_db::PENDING_CRAZYGAMES_SCORES_TABLE)?;
+            if account.linked_identities.iter().any(|identity| identity.provider == "crazygames")
+                && account.profile.playgames_sync_revision > account.profile.crazygames_synced_revision
+            {
+                table.insert(account.id.as_str(), b"1".as_slice())?;
+            } else {
+                table.remove(account.id.as_str())?;
+            }
+        }
         let old_public_index = {
             let mut table = write_txn.open_table(PUBLIC_PROFILES_TABLE)?;
             let previous = table
@@ -1174,6 +1187,7 @@ impl PlayerDb {
         self.persist_match_record(record, false, Some(account_id))
     }
 
+    #[cfg(test)]
     fn save_provisional_match_record(
         &self,
         record: &MatchRecord,
@@ -4738,7 +4752,7 @@ impl PlayerDb {
         use crate::profile::MatchWorkRecord;
         if work.match_id().parse::<u64>().is_err() { return Err("invalid match id".into()); }
         match &work {
-            crate::profile::MatchWork::Exit { match_id, account_id }
+            crate::profile::MatchWork::RecoveryExit { match_id, account_id }
                 | crate::profile::MatchWork::Participant { match_id, account_id, .. } => {
                 self.registered_human_participant(match_id, account_id)?;
             }
@@ -4805,7 +4819,7 @@ impl PlayerDb {
             if job.retry_at <= now { jobs.push(job); }
         }
         jobs.sort_by_key(|job| match job.work {
-            crate::profile::MatchWork::Exit { .. } => 0,
+            crate::profile::MatchWork::RecoveryExit { .. } => 0,
             crate::profile::MatchWork::Participant { .. } => 1,
             crate::profile::MatchWork::Replay { .. } => 2,
         });
@@ -4813,7 +4827,7 @@ impl PlayerDb {
         // result needed to finish them, or vice versa.
         let (mut exits, mut checks) = (0, 0);
         jobs.retain(|job| {
-            let count = if matches!(job.work, crate::profile::MatchWork::Exit { .. }) { &mut exits } else { &mut checks };
+            let count = if matches!(job.work, crate::profile::MatchWork::RecoveryExit { .. }) { &mut exits } else { &mut checks };
             *count += 1;
             *count <= 32
         });
@@ -5197,24 +5211,34 @@ impl PlayerDb {
         Ok((playgames_outcomes, mirrored_accounts))
     }
 
-    pub async fn submit_crazygames_score(&self, account: &PlayerAccount) {
-        let Some(api_key) = &self.crazygames_api_key else {
-            return;
-        };
-
-        if let Some(cg_identity) = account
-            .linked_identities
-            .iter()
-            .find(|li| li.provider == "crazygames")
-        {
-            let score = account.profile.xp;
-            let user_id = &cg_identity.external_id;
-            info!("Submitting CrazyGames leaderboard score for user {user_id}: {score}");
-            if let Err(e) = crate::crazygames::submit_score(api_key, user_id, score).await {
-                error!("Failed to submit CrazyGames leaderboard score: {e}");
-            }
-        }
+    pub fn pending_crazygames_scores(&self) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
+        let db = self.metadata_db.as_ref().ok_or("profile metadata database unavailable")?;
+        let txn = db.begin_read()?;
+        let table = txn.open_table(crate::metadata_db::PENDING_CRAZYGAMES_SCORES_TABLE)?;
+        table.iter()?.take(32).map(|row| row.map(|(key, _)| key.value().to_string()).map_err(Into::into)).collect()
     }
+
+    /// The same persisted profile revision drives both external mirrors.
+    /// The pending index is saved in the reward's own REDB transaction.
+    pub async fn retry_crazygames_scores(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let Some(api_key) = &self.crazygames_api_key else { return Ok(()); };
+        for account_id in self.pending_crazygames_scores()? {
+            let account = self.account_by_id(&account_id).await?;
+            let Some(identity) = account.linked_identities.iter().find(|identity| identity.provider == "crazygames") else { continue; };
+            let revision = account.profile.playgames_sync_revision;
+            if let Err(error) = crate::crazygames::submit_score(api_key, &identity.external_id, account.profile.xp).await {
+                log::warn!("CrazyGames score remains pending account={account_id}: {error}");
+                continue;
+            }
+            let mut con = self.get_connection().await?;
+            let updated = Self::update_account_atomic(&mut con, &Self::account_key(&account_id), |account| {
+                account.profile.crazygames_synced_revision = account.profile.crazygames_synced_revision.max(revision);
+            }).await?;
+            self.save_player_account_to_redb_checked(&updated)?;
+        }
+        Ok(())
+    }
+
 }
 
 fn validate_lobby_match_id(
@@ -5397,7 +5421,8 @@ mod tests {
         let account = "0123456789abcdef0123456789abcdef";
         let work = MatchWork::Participant { match_id:"42".into(), account_id:account.into(),
             closure_turn:7, replay_sha256:"a".repeat(64), rejected:false };
-        let exit = MatchWork::Exit { match_id:"42".into(), account_id:account.into() };
+        let exit = MatchWork::RecoveryExit { match_id:"42".into(), account_id:account.into() };
+        assert_eq!(serde_json::to_value(&exit).unwrap()["kind"], "exit", "existing pending exit rows remain readable");
         {
             let db = super::PlayerDb::new("redis://127.0.0.1/", None,
                 Some(std::sync::Arc::new(crate::metadata_db::init_database(&path).unwrap())));
@@ -5418,7 +5443,7 @@ mod tests {
             let mut conflict = work.clone();
             if let MatchWork::Participant { closure_turn, .. } = &mut conflict { *closure_turn = 8; }
             assert!(db.queue_match_work(conflict).is_err());
-            assert!(db.queue_match_work(MatchWork::Exit { match_id:"42".into(), account_id:"ffffffffffffffffffffffffffffffff".into() }).is_err());
+            assert!(db.queue_match_work(MatchWork::RecoveryExit { match_id:"42".into(), account_id:"ffffffffffffffffffffffffffffffff".into() }).is_err());
             db.queue_replay_verification("42").unwrap();
         }
         let db = super::PlayerDb::new("redis://127.0.0.1/", None,
@@ -5437,7 +5462,7 @@ mod tests {
         assert_eq!(pending[0].work, exit, "old replay backlog must not hide a new exit command");
         assert!(pending.iter().any(|job| job.work == work));
         for id in 100..180 {
-            db.queue_match_work(MatchWork::Exit { match_id:id.to_string(), account_id:account.into() }).unwrap();
+            db.queue_match_work(MatchWork::RecoveryExit { match_id:id.to_string(), account_id:account.into() }).unwrap();
         }
         let pending = db.pending_match_work(u64::MAX).unwrap();
         assert_eq!(pending.len(), 64);
@@ -5491,6 +5516,30 @@ mod tests {
         );
         assert_eq!(views[0].progress, 1);
         assert!(!views[0].unlocked);
+    }
+
+    #[test]
+    fn external_score_pending_is_saved_with_the_reward_and_survives_restart() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("scores.redb");
+        let mut account = test_account(AccountKind::Human);
+        account.linked_identities.push(super::LinkedIdentity {
+            provider:"crazygames".into(), external_id:"audit-platform-player".into(), environment:"production".into(),
+        });
+        account.profile.playgames_sync_revision = 3;
+        {
+            let db = super::PlayerDb::new("redis://127.0.0.1/", None, Some(std::sync::Arc::new(crate::metadata_db::init_database(&path).unwrap())));
+            db.save_player_account_to_redb_checked(&account).unwrap();
+            assert_eq!(db.pending_crazygames_scores().unwrap(), vec![account.id.clone()]);
+        }
+        let db = super::PlayerDb::new("redis://127.0.0.1/", None, Some(std::sync::Arc::new(crate::metadata_db::init_database(&path).unwrap())));
+        assert_eq!(db.pending_crazygames_scores().unwrap(), vec![account.id.clone()]);
+        account.profile.crazygames_synced_revision = 2;
+        db.save_player_account_to_redb_checked(&account).unwrap();
+        assert_eq!(db.pending_crazygames_scores().unwrap(), vec![account.id.clone()], "an older platform acknowledgment cannot clear newer progress");
+        account.profile.crazygames_synced_revision = 3;
+        db.save_player_account_to_redb_checked(&account).unwrap();
+        assert!(db.pending_crazygames_scores().unwrap().is_empty());
     }
 
     #[test]

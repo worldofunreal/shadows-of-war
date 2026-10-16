@@ -173,8 +173,11 @@ fn file_sha256(path: &Path) -> Result<String> {
 /// Content hashes keyed by the exact URL paths the shell builds (relative to
 /// assets/, e.g. "shell/leaders/boudica_desktop.webp"). Injected as
 /// window.SOW_ASSET_TS so ?v= cache keys stop changing on unrelated deploys:
-/// a music/leader/loader redraw alone invalidates its own entry.
-fn asset_versions(paths: &Paths) -> Result<serde_json::Value> {
+/// a music/leader redraw alone invalidates its own entry. Locale catalogs are
+/// hashed straight from the exported bytes (locales_dir) — WEB_CATALOG_VERSION
+/// alone is a hand-bumped constant, and immutable URLs must never depend on
+/// someone remembering to bump it.
+fn asset_versions(paths: &Paths, locales_dir: &Path) -> Result<serde_json::Value> {
     let mut map = serde_json::Map::new();
     let mut roots = vec![
         (paths.assets_shell.clone(), "shell".to_string()),
@@ -190,10 +193,12 @@ fn asset_versions(paths: &Paths) -> Result<serde_json::Value> {
                 roots.push((path, rel));
                 continue;
             }
+            // shell/loader/ is deliberately NOT tracked: its URLs are baked into
+            // index.html with ?v=__BUILD_TS__ and loader.js re-assigns the same
+            // nodes; a content-hash variant here made the browser fetch both.
             let track = matches!(
                 rel.as_str(),
                 s if s.starts_with("shell/leaders/")
-                    || s.starts_with("shell/loader/")
                     || s.starts_with("shell/mobile-nav/")
                     || s.starts_with("gameplay/music/")
             );
@@ -205,11 +210,67 @@ fn asset_versions(paths: &Paths) -> Result<serde_json::Value> {
             }
         }
     }
+    if let Ok(entries) = fs::read_dir(locales_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            map.insert(
+                format!("/locales/{name}"),
+                serde_json::Value::String(file_sha256(&path)?[..8].to_string()),
+            );
+        }
+    }
     Ok(serde_json::Value::Object(map))
 }
 
-fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
-    fs::create_dir_all(dst).with_context(|| format!("create directory {}", dst.display()))?;
+/// UI fonts for every web package: only fonts.css, OFL.txt and the woff2
+/// faces ship to the webroot. The Noto TTF/TTCs stay in the repo because the
+/// atlas generator and the Arabic runtime rasterizer read them from there,
+/// but as webfonts they cost a player up to 19.5 MB at boot (CJK), uncached
+/// at the CDN edge. Each url() in fonts.css carries the face's content hash,
+/// so an unchanged font is never re-downloaded; fonts.css itself rides
+/// ?v=<build> from index.html, so deploys always refresh the stylesheet.
+fn copy_web_fonts(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
+    let mut faces: Vec<(String, String)> = Vec::new();
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.ends_with(".woff2") {
+            faces.push((name.clone(), file_sha256(&path)?[..8].to_string()));
+            fs::copy(&path, dst.join(&name))?;
+        } else if name == "OFL.txt" {
+            fs::copy(&path, dst.join(&name))?;
+        }
+    }
+    let mut css = fs::read_to_string(src.join("fonts.css"))?;
+    for (name, hash) in &faces {
+        css = css.replace(
+            &format!("url(./{name})"),
+            &format!("url(./{name}?v={hash})"),
+        );
+    }
+    let mut rest = css.as_str();
+    while let Some(i) = rest.find("url(./") {
+        let tail = &rest[i + 6..];
+        let end = tail.find(')').unwrap_or(tail.len());
+        if !tail[..end].contains("?v=") {
+            bail!(
+                "fonts.css references an unshipped face: {}",
+                &tail[..end]
+            );
+        }
+        rest = &tail[end..];
+    }
+    fs::write(dst.join("fonts.css"), css)?;
+    Ok(())
+}
+
+fn copy_dir(src: &Path, dst: &Path) -> Result<()> {    fs::create_dir_all(dst).with_context(|| format!("create directory {}", dst.display()))?;
     for e in fs::read_dir(src).with_context(|| format!("read directory {}", src.display()))? {
         let e = e?;
         let to = dst.join(e.file_name());
@@ -969,7 +1030,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     let asset_versions = if portal {
         serde_json::json!({})
     } else {
-        asset_versions(paths)?
+        asset_versions(paths, &out.join("locales"))?
     };
     let splash_desktop = inline_webp(&paths.assets_shell.join("loader/sow-splash-desktop.webp"))?;
     let splash_mobile = inline_webp(&paths.assets_shell.join("loader/sow-splash-mobile.webp"))?;
@@ -1359,7 +1420,10 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     fh = fh.replacen(menu_js_marker, &menu_js_injection, 1);
     if poki || jest {
         fh = fh
-            .replace("href=\"/fonts/fonts.css\"", "href=\"fonts/fonts.css\"")
+            .replace(
+                &format!("href=\"/fonts/fonts.css?v={ts}\""),
+                &format!("href=\"fonts/fonts.css?v={ts}\""),
+            )
             .replace("href=\"/manifest.webmanifest\"", "href=\"manifest.webmanifest\"")
             .replace(
                 "<meta property=\"og:url\" content=\"https://shadowsofwar.io/play/\">",
@@ -1375,8 +1439,8 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     } else if cg {
         fh = fh
             .replace(
-                "href=\"/fonts/fonts.css\"",
-                "href=\"https://shadowsofwar.io/fonts/fonts.css\"",
+                &format!("href=\"/fonts/fonts.css?v={ts}\""),
+                &format!("href=\"https://shadowsofwar.io/fonts/fonts.css?v={ts}\""),
             )
             .replace(
                 "    <link rel=\"manifest\" href=\"/manifest.webmanifest\">\n",
@@ -2033,6 +2097,10 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
                 bail!("unterminated UiText key in {}", path.display());
             };
             if quote != b'"' && quote != b'\'' {
+                if path.ends_with("input/map_click.rs") && trimmed.starts_with("key)") {
+                    offset = start;
+                    continue;
+                }
                 bail!("UiText::new requires a literal key in {}", path.display());
             }
             let value = &trimmed[1..];
@@ -2049,7 +2117,16 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
             let key_start = start + rest.len() - trimmed.len() + 1;
             offset = key_start + end;
         }
+        validate_quoted_catalog_keys(&source, &path.display().to_string(), &catalog)?;
     }
+    let placement_source_path = root.join("sow-core/src/building/placement.rs");
+    let placement_source = fs::read_to_string(&placement_source_path)
+        .with_context(|| format!("read placement source {}", placement_source_path.display()))?;
+    validate_quoted_catalog_keys(
+        &placement_source,
+        &placement_source_path.display().to_string(),
+        &catalog,
+    )?;
     for entry in walkdir::WalkDir::new(root.join("sow-web/site")) {
         let entry = entry?;
         let path = entry.path();
@@ -2058,6 +2135,13 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
                 path.extension().and_then(|extension| extension.to_str()),
                 Some("html") | Some("js")
             )
+        {
+            continue;
+        }
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(".test.js"))
         {
             continue;
         }
@@ -2442,9 +2526,7 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "fonts/work-sans-latin-ext.woff2",
         "fonts/work-sans-italic-latin.woff2",
         "fonts/work-sans-italic-latin-ext.woff2",
-        "fonts/noto-sans-regular.ttf",
-        "fonts/noto-sans-arabic-regular.ttf",
-        "fonts/noto-sans-cjk-regular.ttc",
+
         "wou-auth.js",
         "privacy/index.html",
         "terms/index.html",
@@ -2745,9 +2827,7 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "fonts/fonts.css",
         "fonts/OFL.txt",
         "fonts/work-sans-latin.woff2",
-        "fonts/noto-sans-regular.ttf",
-        "fonts/noto-sans-arabic-regular.ttf",
-        "fonts/noto-sans-cjk-regular.ttc",
+
         "assets/shell/loader/loader_empty.webp",
         "assets/shell/loader/loader_full.webp",
         "assets/campaign/boudica.json",
@@ -2976,6 +3056,10 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         run_bindgen(&paths.wasm_input, out, &format!("sow_client_{ts}"))?;
     }
     copy_shell(paths, out, WebTarget::Local)?;
+    // Locales export before index: build_index hashes the exported bytes so
+    // /locales/<code> ?v= keys track catalog content, not the hand-bumped
+    // WEB_CATALOG_VERSION constant.
+    export_locales(out)?;
     build_index(
         paths,
         out,
@@ -2995,7 +3079,6 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
             brotli_file(&entry.path())?;
         }
     }
-    export_locales(out)?;
 
     if compile {
         minify_js(&out.join(&js))?;
@@ -3035,21 +3118,17 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     for name in ["icon-192.png", "icon-512.png", "icon-512-maskable.png"] {
         fs::copy(paths.assets_site.join("icons").join(name), out.join(name))?;
     }
-    for path in [
-        "privacy",
-        "terms",
-        "cookies",
-        "support",
-        "auth",
-        "fonts",
-        ".well-known",
-    ] {
+    for path in ["privacy", "terms", "cookies", "support", "auth", ".well-known"] {
         let src = site.join(path);
         if !src.is_dir() {
             bail!("website legal page missing: {}", src.display());
         }
         copy_dir(&src, &out.join(path))?;
     }
+    if !site.join("fonts").is_dir() {
+        bail!("website font directory missing: {}", site.join("fonts").display());
+    }
+    copy_web_fonts(&site.join("fonts"), &out.join("fonts"))?;
     expand_public_site_header(paths, out)?;
     // Fingerprint shared public assets in every page that references them.
     for name in [
@@ -3211,7 +3290,7 @@ fn package_native_web(
         copy_shell(paths, out, WebTarget::Native)?;
 
         let site = paths.root.join("sow-web/site");
-        copy_dir(&site.join("fonts"), &out.join("fonts"))?;
+        copy_web_fonts(&site.join("fonts"), &out.join("fonts"))?;
         fs::copy(
             site.join("manifest.webmanifest"),
             out.join("manifest.webmanifest"),
@@ -3243,6 +3322,7 @@ fn package_native_web(
     }
 
     let maps_cache_bust = thumbnail_cache_bust(&out.join("maps"))?;
+    export_locales(out)?;
     build_index(
         paths,
         out,
@@ -3255,7 +3335,6 @@ fn package_native_web(
             target: WebTarget::Native,
         },
     )?;
-    export_locales(out)?;
     prepare_native_webroot(out)?;
     fs::write(fingerprint_file, fingerprint)?;
     out.canonicalize()
@@ -3406,7 +3485,7 @@ fn package_poki(
 
     copy_poki_assets(&play_dir.join("assets"), &out.join("assets"))?;
     copy_poki_maps(&play_dir.join("maps"), &out.join("maps"))?;
-    copy_dir(&paths.root.join("sow-web/site/fonts"), &out.join("fonts"))?;
+    copy_web_fonts(&paths.root.join("sow-web/site/fonts"), &out.join("fonts"))?;
     copy_shell(paths, out, WebTarget::Poki)?;
     let stale_bridge = out.join("sdk/jest_portals.js");
     if stale_bridge.is_file() {
@@ -3531,9 +3610,7 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         "fonts/fonts.css",
         "fonts/OFL.txt",
         "fonts/work-sans-latin.woff2",
-        "fonts/noto-sans-regular.ttf",
-        "fonts/noto-sans-arabic-regular.ttf",
-        "fonts/noto-sans-cjk-regular.ttc",
+
         "assets/shell/loader/loader_empty.webp",
         "assets/shell/loader/loader_full.webp",
         "assets/campaign/boudica.json",
@@ -4618,10 +4695,13 @@ mod tests {
     #[test]
     fn asset_version_keys_match_the_urls_the_shell_builds() -> Result<()> {
         let paths = Paths::discover()?;
-        let versions = asset_versions(&paths)?;
+        let locales = tempfile::tempdir()?;
+        fs::write(locales.path().join("en"), "{\"version\":15}")?;
+        fs::write(locales.path().join("index.json"), "{\"languages\":[]}")?;
+        let versions = asset_versions(&paths, locales.path())?;
         for key in [
             "/assets/shell/leaders/boudica_desktop.webp",
-            "/assets/shell/loader/loader_empty.webp",
+            "/assets/shell/mobile-nav/battle.webp",
             "/assets/gameplay/music/shadows-of-war.webm",
         ] {
             let value = versions
@@ -4633,6 +4713,22 @@ mod tests {
                 "missing content hash for {key}: {value:?}"
             );
         }
+        // Locales are hashed from the exported bytes (never the hand-bumped
+        // version constant alone): same content => same URL => never limbo,
+        // changed content => new URL => instant visibility.
+        assert!(
+            versions
+                .get("/locales/en")
+                .and_then(|v| v.as_str())
+                .is_some_and(|v| v.len() == 8),
+            "exported locale catalog must be content-hashed"
+        );
+        // The loader bars are served by URLs baked with ?v=__BUILD_TS__ in the
+        // HTML; giving them a content hash made loader.js fetch a SECOND copy.
+        assert!(
+            versions.get("/assets/shell/loader/loader_empty.webp").is_none(),
+            "loader bars must stay on the build stamp, not a content hash"
+        );
         Ok(())
     }
 
@@ -4789,9 +4885,7 @@ mod tests {
             "fonts/work-sans-latin-ext.woff2",
             "fonts/work-sans-italic-latin.woff2",
             "fonts/work-sans-italic-latin-ext.woff2",
-            "fonts/noto-sans-regular.ttf",
-            "fonts/noto-sans-arabic-regular.ttf",
-            "fonts/noto-sans-cjk-regular.ttc",
+
             "wou-auth.js",
             "auth/callback/index.html",
             "8d227b8f9e6140d39e3381a1829e1db3.txt",
@@ -5003,7 +5097,7 @@ mod tests {
         let html = fs::read_to_string(out.path().join("index.html"))?;
         assert!(!html.contains("analytics.js"));
         assert!(html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\""));
-        assert!(html.contains("href=\"fonts/fonts.css\""));
+        assert!(html.contains("href=\"fonts/fonts.css?v=test\""));
         assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
         assert!(html.contains("main_menu.poki.js"));
         assert!(!html.contains("main_menu.store.js"));
@@ -5041,7 +5135,7 @@ mod tests {
         let html = fs::read_to_string(out.path().join("index.html"))?;
         assert!(!html.contains("analytics.js"));
         assert!(html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\""));
-        assert!(html.contains("href=\"fonts/fonts.css\""));
+        assert!(html.contains("href=\"fonts/fonts.css?v=test\""));
         assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
         assert!(html.contains("main_menu.jest.js"));
         assert!(html.contains("jestLocaleOptions"));

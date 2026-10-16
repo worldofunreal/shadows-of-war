@@ -196,6 +196,7 @@
         dock_trade_ship: '#sow-hud [data-fleet-kind="trade"]',
         dock_warship: '#sow-hud [data-command="select_warship"]',
         dock_nuke: '#sow-hud [data-command="select_nuke"]',
+        confirm_building_placement: '#sow-hud [data-command="confirm_building_placement"]',
         cancel_building_mode: '#sow-hud [data-command="cancel_building_mode"]',
         upgrade_structure: "#sow-hud-building-card-upgrade",
         transfer_gold: "#sow-hud-transfer-gold",

@@ -618,6 +618,7 @@
     window.SOW_refreshWebLoaderText = refreshLoaderText;
     window.SOW_leaderArtUrl = leaderArtUrl;
     window.SOW_prepareLeaderArt = prepareLeaderArt;
+    window.SOW_assetUrl = assetUrl;
     window.addEventListener('sow:locale-change', refreshLoaderText);
     window.SOW_syncWebLoader = sync;
 

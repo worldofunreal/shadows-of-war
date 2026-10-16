@@ -142,17 +142,19 @@ La traición utiliza `betrayal_retaliation_ticks`, mediante
 separados de los 300 turnos del estado de traidor. Ningún emote ni fijado puede
 acortar, extender, activar o borrar esa regla.
 
-`GAMEPLAY_FORMAT_VERSION` en `sow-core/src/protocol.rs` es la versión única del
-formato de turnos. `gameplay_build_identity` la incluye en la identificación de
-entrada del cliente y del servidor; un cliente anterior recibe el rechazo de
-versión existente aunque la versión pública del juego no haya cambiado.
+`GAMEPLAY_FORMAT_VERSION`, en `sow-core/src/protocol.rs`, identifica el formato
+de turnos guardados. `LIVE_PROTOCOL_VERSION` identifica por separado los mensajes
+de conexión. `gameplay_build_identity` incluye ambos; el servidor rechaza una
+conexión anterior sin cambiar cómo interpreta una grabación histórica.
 
-Las nuevas partidas registran `replay_format = 2` en sus datos de inicio
+Las nuevas partidas registran `replay_format = 3` en sus datos de inicio
 confiables. La ausencia de ese campo significa formato 1. El verificador escoge
 el lector mediante esos datos; el archivo subido no decide su versión.
 
-`sow-server/src/replay.rs` conserva exclusivamente el formato 1 y su antigua
-relación entre reacción y ventana de represalia. Respeta el índice de cada
+`sow-server/src/replay.rs` conserva los formatos 1 y 2. El formato 1 mantiene su
+antigua relación entre reacción y ventana de represalia; ambos formatos anteriores
+utilizan las reglas históricas de construcción al comprobar resultados. Las nuevas
+partidas usan bases 4x4 sin separación adicional y aceptan solo la posición confirmada. Respeta el índice de cada
 acción porque también interviene en identificadores de flotas. Cubre
 grabaciones completas y cierres parciales; los reintentos conservan los bytes
 originales. Este lector es una dependencia activa de recompensas pendientes,
@@ -176,7 +178,7 @@ aceptación.
   Estas pruebas se ejecutan en WASM mediante el control oficial.
 - `sow-render/src/nameplate.rs`: tierra, escala y prioridad con presupuesto
   limitado; sus comprobaciones existentes siguen cubriendo el ajuste.
-- `sow-web/shell/main_menu.interaction.test.js`: capacidades del radial,
+- `sow-web/shell/gameplay_interaction.test.js`: capacidades del radial,
   traducciones, sincronización local y ausencia del selector retirado.
 
 La calidad visual final requiere revisión del usuario en escritorio y móvil:

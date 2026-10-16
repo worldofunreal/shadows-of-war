@@ -28,7 +28,7 @@
     //
     // This function is the ONLY owner of the mapping. Guarded by the test
     // "heroes featured art follows the panel shape, not the device name"
-    // (main_menu.interaction.test.js, runs in the ./sow p preflight) and by
+    // (menu_flow.test.js, runs in the ./sow p preflight) and by
     // AGENTS.md -> "Heroes featured art (owner decision — do not flip)".
     function heroesFeaturedArt(slug) {
         return {

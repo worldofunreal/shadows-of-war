@@ -120,6 +120,26 @@ async fn exit(http: &reqwest::Client, base: &Url, account: &Value, match_id: u64
         .send().await.unwrap().error_for_status().unwrap().json().await.unwrap()
 }
 
+async fn result(http: &reqwest::Client, base: &Url, account: &Value, match_id: u64) -> Value {
+    http.post(format!(
+        "{}/profile/match-result",
+        base.as_str().trim_end_matches('/')
+    ))
+    .timeout(std::time::Duration::from_secs(25))
+    .json(
+        &json!({"account_id":account["account_id"],"auth_secret":account["auth_secret"],
+            "match_id":match_id.to_string(),"closure_known":true}),
+    )
+    .send()
+    .await
+    .unwrap()
+    .error_for_status()
+    .unwrap()
+    .json()
+    .await
+    .unwrap()
+}
+
 pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::path::Path>) {
     let http = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
@@ -131,34 +151,59 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
     let mut first = profile(
         &http,
         base,
-        saved.as_ref().map(|accounts| &accounts[0]),
+        saved.as_ref().and_then(|accounts| accounts.get(0)),
         "Exit Audit One",
     )
     .await;
     let mut second = profile(
         &http,
         base,
-        saved.as_ref().map(|accounts| &accounts[1]),
+        saved.as_ref().and_then(|accounts| accounts.get(1)),
         "Exit Audit Two",
     )
     .await;
-    if let Some(saved) = &saved {
-        first["auth_secret"] = saved[0]["auth_secret"].clone();
-        second["auth_secret"] = saved[1]["auth_secret"].clone();
-    } else if let Some(path) = accounts_file {
+    let mut third = profile(
+        &http,
+        base,
+        saved.as_ref().and_then(|accounts| accounts.get(2)),
+        "Exit Audit Three",
+    )
+    .await;
+    for (index, account) in [&mut first, &mut second, &mut third]
+        .into_iter()
+        .enumerate()
+    {
+        if let Some(secret) = saved
+            .as_ref()
+            .and_then(|accounts| accounts.get(index))
+            .and_then(|account| account.get("auth_secret"))
+        {
+            account["auth_secret"] = secret.clone();
+        }
+    }
+    if let Some(path) = accounts_file {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let temporary = path.with_extension("json.tmp");
         let mut file = std::fs::OpenOptions::new()
             .write(true)
-            .create_new(true)
+            .create(true)
+            .truncate(true)
             .mode(0o600)
-            .open(path)
+            .open(&temporary)
             .unwrap();
         file.write_all(
-            serde_json::to_string(&[&first, &second])
+            serde_json::to_string(&[&first, &second, &third])
                 .unwrap()
                 .as_bytes(),
         )
         .unwrap();
+        file.sync_all().unwrap();
+        drop(file);
+        std::fs::rename(temporary, path).unwrap();
+        std::fs::File::open(path.parent().unwrap())
+            .unwrap()
+            .sync_all()
+            .unwrap();
     }
     let version = std::fs::read_to_string(".version").unwrap();
     let (mut first_write, mut first_read, first_join) =
@@ -166,9 +211,12 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
     let match_id = first_join.lobby_id;
     let (mut second_write, mut second_read, second_join) =
         join(url, &second, Some(match_id), version.trim()).await;
+    let (mut third_write, mut third_read, third_join) =
+        join(url, &third, Some(match_id), version.trim()).await;
     for (write, id) in [
         (&mut first_write, first_join.player_id),
         (&mut second_write, second_join.player_id),
+        (&mut third_write, third_join.player_id),
     ] {
         ws_send(
             write,
@@ -198,6 +246,7 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
     .await;
     let (first_start, first_ticket) = started(&mut first_read).await;
     let (second_start, second_ticket) = started(&mut second_read).await;
+    let (third_start, third_ticket) = started(&mut third_read).await;
     let relay_url = direct_relay_url(
         url,
         first_start.relay_host.as_deref().unwrap(),
@@ -213,10 +262,7 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         },
     )
     .await;
-    other_write.close().await.unwrap();
-    drop(other_write);
-    drop(other_read);
-    let (other_write, mut other_read, _) = ready_relay(
+    let (mut active_write, mut active_read, next_ticket) = ready_relay(
         &relay_url,
         ClientMessage::ReconnectWithTicket {
             lobby_id: match_id,
@@ -225,6 +271,50 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         },
     )
     .await;
+    // This still-authenticated old socket no longer owns the participation.
+    ws_send(&mut other_write, &ClientMessage::Leave {}).await;
+    drop(other_write);
+    drop(other_read);
+    assert!(
+        matches!(
+            recv(&mut active_read, 5).await,
+            ServerMessage::Turn(_) | ServerMessage::Pong { .. }
+        ),
+        "a superseded socket cannot exit the reconnected player"
+    );
+    active_write.close().await.unwrap();
+    drop(active_write);
+    drop(active_read);
+    let (mut other_write, mut other_read, _) = ready_relay(
+        &relay_url,
+        ClientMessage::ReconnectWithTicket {
+            lobby_id: match_id,
+            player_id: second_start.my_player_id.unwrap(),
+            ticket: next_ticket,
+        },
+    )
+    .await;
+    let (mut survivor_write, mut survivor_read, _) = ready_relay(
+        &relay_url,
+        ClientMessage::ReadyWithTicket {
+            lobby_id: match_id,
+            player_id: third_start.my_player_id.unwrap(),
+            ticket: third_ticket,
+        },
+    )
+    .await;
+    ws_send(
+        &mut survivor_write,
+        &ClientMessage::ReservedRematchRequest { lobby_id: match_id },
+    )
+    .await;
+    assert!(
+        matches!(
+            recv(&mut survivor_read, 5).await,
+            ServerMessage::Turn(_) | ServerMessage::Pong { .. }
+        ),
+        "the retired rematch message cannot eject another player"
+    );
     let still_playing = profile(&http, base, Some(&second), "Exit Audit Two").await;
     assert!(
         still_playing["profile"]["reward_receipts"]
@@ -232,11 +322,12 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
             .is_none(),
         "temporary disconnect must not settle an exit"
     );
-    let forbidden = http.post(format!("{}/profile/match-exit", base.as_str().trim_end_matches('/')))
-        .json(&json!({"account_id":second["account_id"],"auth_secret":first["auth_secret"],"match_id":match_id.to_string()}))
-        .send().await.unwrap();
-    assert_eq!(forbidden.status(), reqwest::StatusCode::UNAUTHORIZED);
-
+    for endpoint in ["match-exit", "match-result"] {
+        let forbidden = http.post(format!("{}/profile/{endpoint}", base.as_str().trim_end_matches('/')))
+            .json(&json!({"account_id":second["account_id"],"auth_secret":first["auth_secret"],"match_id":match_id.to_string()}))
+            .send().await.unwrap();
+        assert_eq!(forbidden.status(), reqwest::StatusCode::UNAUTHORIZED);
+    }
     let fixture_path = std::env::temp_dir().join(format!(
         "sow-match-exit-{:016x}.json",
         rand::random::<u64>()
@@ -268,6 +359,8 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
             "target.wasm32-unknown-unknown.runner=\"wasm-bindgen-test-runner\"",
             "--lib",
             "reward_exit_tests::multiplayer_exit_survives_closed_port_delay_and_reload",
+            "--",
+            "--nocapture",
         ])
         .env("SOW_LIVE_MATCH_EXIT_FILE", &fixture_path)
         .env("WASM_BINDGEN_TEST_TIMEOUT", "120")
@@ -284,14 +377,18 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
             tokio::time::Instant::now() < deadline,
             "real WASM return exceeded its deadline"
         );
+        let message = tokio::select! {
+            message = recv(&mut other_read, 5) => message,
+            message = recv(&mut survivor_read, 5) => message,
+        };
         assert!(
             matches!(
-                recv(&mut other_read, 5).await,
+                message,
                 ServerMessage::Turn(_)
                     | ServerMessage::RelayReconnectTicket { .. }
                     | ServerMessage::Pong { .. }
             ),
-            "the second player must continue receiving turns during the first exit"
+            "other players must keep receiving turns during the first exit"
         );
     };
     assert!(status.success(), "actual WASM client exit failed");
@@ -313,7 +410,7 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         .args([
             "--test",
             "--test-name-pattern=live multiplayer return uses the confirmed client state",
-            "sow-web/shell/main_menu.interaction.test.js",
+            "sow-web/shell/menu_flow.test.js",
         ])
         .env("SOW_LIVE_RETURN_STATE_FILE", &state_path)
         .env("SOW_LIVE_MATCH_EXIT_FILE", &fixture_path)
@@ -323,39 +420,128 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         status.success(),
         "real client state did not finish reward presentation"
     );
-    let mut result = exit(&http, base, &second, match_id).await;
+    // No exit command for B: its temporary absence must expire in the relay
+    // while C continues receiving turns. Timing uses wall time, not tick count.
+    let disconnected_at = tokio::time::Instant::now();
+    other_write.close().await.unwrap();
     drop(other_write);
+    drop(other_read);
+    let expiry = disconnected_at + std::time::Duration::from_secs(60);
+    let mut turn_after_timeout = false;
+    while tokio::time::Instant::now() < expiry + std::time::Duration::from_secs(1) {
+        match recv(&mut survivor_read, 5).await {
+            ServerMessage::Turn(turn) => {
+                if tokio::time::Instant::now() >= expiry {
+                    turn_after_timeout = true;
+                }
+                assert!(
+                    !turn
+                        .turn
+                        .intents
+                        .iter()
+                        .any(|intent| intent.player_id == third_join.player_id
+                            && matches!(intent.intent, sow_core::protocol::GameplayIntent::Resign)),
+                    "the survivor cannot be closed with B"
+                );
+            }
+            ServerMessage::Pong { .. } => {}
+            message => fail(&format!(
+                "survivor lost its game during another participant's timeout: {message:?}"
+            )),
+        }
+    }
+    assert!(turn_after_timeout);
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(120);
-    while result["state"] != "confirmed" {
+    loop {
+        let observed = result(&http, base, &second, match_id).await;
+        if observed["state"] == "confirmed" {
+            break;
+        }
         assert!(
             tokio::time::Instant::now() < deadline,
-            "second participant reward never finalized"
+            "relay timeout never settled without an exit command"
         );
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        result = exit(&http, base, &second, match_id).await;
+    }
+    assert!(matches!(
+        recv(&mut survivor_read, 5).await,
+        ServerMessage::Turn(_) | ServerMessage::Pong { .. }
+    ));
+    let closed_survivor = survivor_write
+        .send(Message::Binary(
+            bincode::serialize(&ClientMessage::Leave {}).unwrap(),
+        ))
+        .await;
+    assert!(closed_survivor.is_ok());
+    let mut got_ack = false;
+    while !got_ack {
+        match recv(&mut survivor_read, 5).await {
+            ServerMessage::ExitRecorded {
+                account_id,
+                match_id: ack_match,
+                ..
+            } => {
+                assert_eq!(account_id, third["account_id"].as_str().unwrap());
+                assert_eq!(ack_match, match_id);
+                got_ack = true;
+            }
+            ServerMessage::Turn(_) | ServerMessage::Pong { .. } => {}
+            message => fail(&format!("unexpected exit acknowledgment: {message:?}")),
+        }
+    }
+    drop(survivor_write);
+    drop(survivor_read);
+    loop {
+        let observed = result(&http, base, &third, match_id).await;
+        if observed["state"] == "confirmed" {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "third participant never received its reward"
+        );
     }
     // Personal confirmation can precede the whole replay. Wait for the
     // existing public record to prove that its verification also finished.
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(120);
     loop {
-        let detail: Value = http.get(format!("{}/matches/{match_id}", base.as_str().trim_end_matches('/')))
-            .send().await.unwrap().error_for_status().unwrap().json().await.unwrap();
+        let detail: Value = http
+            .get(format!(
+                "{}/matches/{match_id}",
+                base.as_str().trim_end_matches('/')
+            ))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
         assert_eq!(detail["match_id"], match_id.to_string());
-        if detail["verified"] == true && detail["provisional"] == false { break; }
-        assert!(tokio::time::Instant::now() < deadline, "whole replay verification never finished");
+        if detail["verified"] == true && detail["provisional"] == false {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "whole replay verification never finished"
+        );
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
     let after_closure = profile(&http, base, Some(&first), "Exit Audit One").await;
     for field in ["xp", "crowns", "laurels"] {
-        assert_eq!(after_closure["profile"][field], settled_first["profile"][field],
-            "whole-match closure must preserve the first participant's {field}");
+        assert_eq!(
+            after_closure["profile"][field], settled_first["profile"][field],
+            "whole-match closure must preserve the first participant's {field}"
+        );
     }
     let receipt = match_id.to_string();
-    assert_eq!(after_closure["profile"]["reward_receipts"][&receipt]["personal_closure_turn"],
-        settled_first["profile"]["reward_receipts"][&receipt]["personal_closure_turn"]);
+    assert_eq!(
+        after_closure["profile"]["reward_receipts"][&receipt]["personal_closure_turn"],
+        settled_first["profile"]["reward_receipts"][&receipt]["personal_closure_turn"]
+    );
     std::fs::remove_file(fixture_path).unwrap();
     std::fs::remove_file(state_path).unwrap();
     pass(&format!(
-        "real WASM exit, permanent server confirmation, presentation and two-player closure verified for match {match_id}"
+        "real WASM exit, permanent server confirmation, presentation, relay timeout and three-player closure verified for match {match_id}"
     ));
 }

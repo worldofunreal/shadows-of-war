@@ -1,6 +1,5 @@
 use crate::ClientPhase;
 use crate::app::SowApp;
-use crate::net::lobby::clear_lobby_snapshot;
 use crate::spawn_sow_client_connect;
 use web_time::{Duration, Instant};
 
@@ -57,8 +56,6 @@ impl SowApp {
                     self.ui.app.main_menu_state.is_connecting = false;
                     self.net.ws_connect_fail_backoff_ms = 400;
                     if self.ws_on_relay() {
-                        self.net.relay_connect_start = None;
-                        self.net.relay_retry_count = 0;
                         self.net.load_telemetry.mark_relay_connected();
                         if let (Some(lid), Some(pid)) =
                             (self.sim.my_lobby_id, self.sim.my_player_id)
@@ -154,26 +151,11 @@ impl SowApp {
                     self.ui.app.main_menu_state.is_connected = false;
                     self.ui.app.main_menu_state.is_connecting = false;
                     if self.ws_on_relay() && !self.net.is_offline {
-                        self.net.relay_retry_count += 1;
-                        self.net.relay_connect_start = Some(now); // reset timer on each Err to extend per-attempt budget
-                        if self.net.relay_retry_count >= 10 {
-                            log::error!("Relay connection failed after 10 attempts");
-                            self.net.relay_connect_start = None;
-                            self.net.relay_retry_count = 0;
-                            self.ui.app.main_menu_state.notice =
-                                Some(crate::LobbyNotice::ConnectionLost);
-                            self.ui.app.main_menu_state.notice_at = None;
-                            self.begin_exit_to_main_menu();
-                        } else {
-                            log::warn!(
-                                "Relay connection failed: {}; retrying rapid connection attempt {}/10",
-                                e,
-                                self.net.relay_retry_count + 1
-                            );
-                            self.net.ws_connect_fail_backoff_ms = 500;
-                            self.net.ws_connect_not_before = now + Duration::from_millis(500);
-                            crate::web_menu::wake_event_loop_after(500);
-                        }
+                        // Transport retries cannot decide that a player abandoned.
+                        self.observe_disconnected_match();
+                        self.net.ws_connect_fail_backoff_ms = 500;
+                        self.net.ws_connect_not_before = now + Duration::from_millis(500);
+                        crate::web_menu::wake_event_loop_after(500);
                     } else {
                         self.net.ws_connect_fail_backoff_ms =
                             (self.net.ws_connect_fail_backoff_ms.saturating_mul(2)).min(30_000);
@@ -185,54 +167,16 @@ impl SowApp {
             }
         }
 
-        // 15-second total relay timeout check (as a last-resort safety net)
-        if self.ws_on_relay() && self.net.client.is_none() && !self.net.is_offline {
-            if self.net.relay_connect_start.is_none() {
-                self.net.relay_connect_start = Some(now);
-                self.net.relay_retry_count = 0;
-            }
-            if let Some(start) = self.net.relay_connect_start
-                && now.duration_since(start) >= Duration::from_secs(15)
-            {
-                log::error!("Relay connection/reconnection timed out after 15 seconds total");
-                self.net.relay_connect_start = None;
-                self.net.relay_retry_count = 0;
-                self.ui.app.main_menu_state.notice = Some(crate::LobbyNotice::ConnectionLost);
-                self.ui.app.main_menu_state.notice_at = None;
-                self.begin_exit_to_main_menu();
-            }
-        } else {
-            self.net.relay_connect_start = None;
-        }
-
         let messages::ProcessWsResult {
             mut ws_disconnected,
             switch_to_relay,
             exit_to_menu_after_net,
             lobby_exit_to_menu,
-            pending_rematch,
+            relay_session_resumed,
         } = self.process_ws_messages();
 
-        if let Some(rematch_id) = pending_rematch {
-            crate::store_portals::gameplay_stop();
-            self.reset_game_session();
-            clear_lobby_snapshot(&mut self.ui.app.main_menu_state);
-            self.net.pending_lobby_rejoin = true;
-            self.ui.app.main_menu_state.joined_lobby_id = None;
-            self.ui.app.main_menu_state.pending_join_lobby_id = Some(rematch_id);
-            self.ui.app.main_menu_state.in_private_match = false;
-            self.ui.app.main_menu_state.is_lobby_host = false;
-            self.ui.app.main_menu_state.my_player_id = None;
-            self.ui.app.phase = ClientPhase::MainMenu;
-            self.ui.app.main_menu_state.is_waiting = true;
-
-            // Drop relay connection and force orchestrator reconnect for the rematch
-            self.net.client = None;
-            self.net.current_ping_ms = None;
-            self.net.ws_url = self.net.orchestrator_url.clone();
-            self.ui.app.main_menu_state.server_address = self.net.ws_url.clone();
-            self.net.ws_connect_not_before = now;
-            self.net.relay_handoff_done = false;
+        if relay_session_resumed {
+            self.clear_disconnect_observation();
         }
 
         if lobby_exit_to_menu {
@@ -240,7 +184,7 @@ impl SowApp {
         }
 
         if exit_to_menu_after_net {
-            self.begin_exit_to_main_menu();
+            self.begin_relay_closed_return();
         }
 
         if let Some((relay_port, relay_host)) = switch_to_relay {
@@ -273,8 +217,6 @@ impl SowApp {
                 log::info!("Purged stale connection from channel during handoff to relay");
             }
 
-            self.net.relay_connect_start = Some(now);
-            self.net.relay_retry_count = 0;
             self.net.ws_connect_not_before = now; // Ensure no backoff delays are active for retries
         }
 
@@ -295,8 +237,6 @@ impl SowApp {
             self.ui.app.main_menu_state.is_connecting = false;
             if self.ws_on_relay() {
                 self.net.ws_connect_not_before = now;
-                self.net.relay_connect_start = Some(now);
-                self.net.relay_retry_count = 0;
             } else {
                 self.net.ws_connect_not_before = now + Duration::from_millis(2000);
                 crate::web_menu::wake_event_loop_after(2000);
@@ -305,19 +245,10 @@ impl SowApp {
             if self.net.is_offline {
                 log::debug!("[CLIENT NET] Offline match; ignoring disconnect recovery");
             } else if self.ui.app.phase == ClientPhase::Playing {
-                // Relay can replay turns after a reconnect ticket (see sow-relay), but we do not
-                // resume in-place: the socket drop may mean the relay died, and catch-up without a
-                // full snapshot risks desync. Use the existing ExitGame loader → MainMenu.
-                if self.ws_on_relay() {
-                    log::warn!("[CLIENT NET] Relay lost during match — attempting reconnect");
-                } else {
-                    log::warn!(
-                        "[CLIENT NET] Connection lost during match — returning to main menu"
-                    );
-                    self.ui.app.main_menu_state.notice = Some(crate::LobbyNotice::ConnectionLost);
-                    self.ui.app.main_menu_state.notice_at = None;
-                    self.begin_exit_to_main_menu();
-                }
+                self.observe_disconnected_match();
+                log::info!(
+                    "[CLIENT NET] Temporary game disconnect; awaiting relay decision while reconnecting"
+                );
             } else if self.ui.app.phase != ClientPhase::Splash {
                 log::info!("[CLIENT NET] Disconnected outside match; reconnecting to orchestrator");
                 self.net.ws_url = self.net.orchestrator_url.clone();

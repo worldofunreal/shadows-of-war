@@ -15,9 +15,6 @@
     var reportTarget = null;
     var reportSent = false;
     var reportBusy = false;
-    var exitMenuAssetsPending = false;
-    var exitMenuAssetsReady = false;
-    var exitMenuAssetsCycleId = null;
     var latestLoaderCycleId = -1;
     var completedLoaderCycleId = -1;
     var deleteArmed = false;
@@ -565,11 +562,6 @@
                                 "<span>" + esc(SOW_t("menu.free_zoom_out")) + "</span>" +
                                 "<input class='sow-menu__field' type='checkbox' name='free_zoom_out' data-setting='free_zoom_out'" + (settings.free_zoom_out ? " checked" : "") + ">" +
                             "</label>" +
-                            "<div class='sow-menu__form-field sow-menu__sticky-setting'>" +
-                                "<label for='sow-main-menu-sticky-building-mode'>" + esc(SOW_t("menu.sticky_building_mode")) + "</label>" +
-                                "<details class='sow-menu__setting-info'><summary aria-label='" + esc(SOW_t("menu.sticky_building_mode_hint")) + "'>i</summary><span role='tooltip'>" + esc(SOW_t("menu.sticky_building_mode_hint")) + "</span></details>" +
-                                "<input class='sow-menu__field' id='sow-main-menu-sticky-building-mode' type='checkbox' name='sticky_building_mode' data-setting='sticky_building_mode'" + (settings.sticky_building_mode ? " checked" : "") + ">" +
-                            "</div>" +
                             "<label class='sow-menu__form-field'>" +
                                 "<span>" + esc(SOW_t("menu.show_fps_ping")) + "</span>" +
                                 "<input class='sow-menu__field' type='checkbox' name='show_fps_ping' data-setting='show_fps_ping'" + (settings.show_fps_ping === true ? " checked" : "") + ">" +
@@ -1498,7 +1490,6 @@
         var musicInput = root.querySelector("[data-setting='music_volume']");
         var motionInput = root.querySelector("[data-setting='reduced_motion']");
         var freeZoomInput = root.querySelector("[data-setting='free_zoom_out']");
-        var stickyBuildingInput = root.querySelector("[data-setting='sticky_building_mode']");
         var fpsPingInput = root.querySelector("[data-setting='show_fps_ping']");
         var devToolsInput = root.querySelector("[data-setting='show_dev_tools']");
         if (musicInput && document.activeElement !== musicInput) musicInput.value = settings.music_volume == null ? 0.8 : settings.music_volume;
@@ -1506,7 +1497,6 @@
         if (fpsPingInput && document.activeElement !== fpsPingInput) fpsPingInput.checked = settings.show_fps_ping === true;
         if (devToolsInput && document.activeElement !== devToolsInput) devToolsInput.checked = Boolean(settings.show_dev_tools);
         if (freeZoomInput && document.activeElement !== freeZoomInput) freeZoomInput.checked = Boolean(settings.free_zoom_out);
-        if (stickyBuildingInput && document.activeElement !== stickyBuildingInput) stickyBuildingInput.checked = Boolean(settings.sticky_building_mode);
         var musicValBadge = root.querySelector("[data-val-for='music_vol']");
         if (musicValBadge && musicInput) musicValBadge.textContent = Math.round(Number(musicInput.value) * 100) + "%";
         var timer = panel.querySelector("[data-live-countdown]");
@@ -2503,18 +2493,9 @@
         if (input.dataset.setting === "music_volume") send("set_music_volume", { value: Number(input.value) });
         if (input.dataset.setting === "reduced_motion") send("set_reduced_motion", { value: input.value === "reduced" });
         if (input.dataset.setting === "free_zoom_out") send("set_free_zoom_out", { value: input.checked });
-        if (input.dataset.setting === "sticky_building_mode") send("set_sticky_building_mode", { value: input.checked });
         if (input.dataset.setting === "show_fps_ping") send("set_show_fps_ping", { value: input.checked });
         if (input.dataset.setting === "show_dev_tools") send("set_show_dev_tools", { value: input.checked });
     });
-
-    function waitForExitMenuArt() {
-        var waits = [];
-        publicLobbies(true).forEach(function (lobby) {
-            waits.push(preloadLobbyThumbnail(lobby).catch(function () {}));
-        });
-        return Promise.all(waits);
-    }
 
     function normalizeCompletedExitState(nextState) {
         if (nextState.phase === "MainMenu" && nextState.loader_job === "ExitGame" &&
@@ -2525,37 +2506,7 @@
     }
 
     function syncWebLoaderForState(nextState) {
-        if (typeof window.SOW_syncWebLoader !== "function") return;
-        var cycleId = nextState.loader_cycle_id;
-        if (nextState.phase !== "MainMenu" || nextState.loader_job !== "ExitGame" || !Number.isSafeInteger(cycleId)) {
-            exitMenuAssetsCycleId = null;
-            exitMenuAssetsPending = false;
-            exitMenuAssetsReady = false;
-            window.SOW_syncWebLoader(nextState);
-            return;
-        }
-        if (exitMenuAssetsCycleId !== cycleId) {
-            exitMenuAssetsCycleId = cycleId;
-            exitMenuAssetsPending = false;
-            exitMenuAssetsReady = false;
-        }
-        if (exitMenuAssetsReady) {
-            window.SOW_syncWebLoader(nextState);
-            return;
-        }
-        if (!exitMenuAssetsPending) {
-            exitMenuAssetsPending = true;
-            waitForExitMenuArt().then(function () {
-                if (exitMenuAssetsCycleId !== cycleId || !state || state.phase !== "MainMenu" ||
-                    state.loader_job !== "ExitGame" || state.loader_cycle_id !== cycleId) return;
-                exitMenuAssetsPending = false;
-                exitMenuAssetsReady = true;
-                syncWebLoaderForState(state);
-            });
-        }
-        window.SOW_syncWebLoader(nextState.loader_done === true
-            ? Object.assign({}, nextState, { loader_done: false })
-            : nextState);
+        if (typeof window.SOW_syncWebLoader === "function") window.SOW_syncWebLoader(nextState);
     }
 
     function scheduleRewardPresentation(delay) {
@@ -2578,9 +2529,6 @@
         var replayExitIntro = pendingExitScreenIntro;
         state = normalizeCompletedExitState(state);
         syncMenuMusic(state, false);
-        exitMenuAssetsCycleId = null;
-        exitMenuAssetsPending = false;
-        exitMenuAssetsReady = false;
         if (replayExitIntro) {
             pendingExitScreenIntro = false;
             previousScreen = null;

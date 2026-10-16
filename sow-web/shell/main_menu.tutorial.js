@@ -87,7 +87,8 @@
 
     function asset(path) {
         var base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
-        return base + "/" + path.split("/").map(encodeURIComponent).join("/");
+        var url = base + "/" + path.split("/").map(encodeURIComponent).join("/");
+        return window.SOW_assetUrl ? window.SOW_assetUrl(url) : url;
     }
 
     function send(type, fields) {
@@ -262,6 +263,10 @@
                 context.hintOverride = tr(hintKey);
                 if (step.guide.gesture === "hover") context.gestureHint = context.hintOverride;
             }
+        }
+        if (step && step.paused_action === "build_until_started" && hud && hud.building_placement) {
+            context.hintOverride = tr("hud.build_placement_help");
+            if (hud.building_placement.can_confirm) context.gestureLabel = tr("hud.build_confirm");
         }
         if (step && step.type === "objective") {
             var guideAction = step.guide ? window.SOWCampaign.guideAction(step) : "";
@@ -507,6 +512,14 @@
         }).then(function () {
             if (runtime.activating === episodeId) runtime.activating = null;
         });
+    }
+
+    function placementGuideView(model, hud) {
+        if (!model || !model.step || model.step.paused_action !== "build_until_started" || !hud || !hud.building_placement || !hud.building_placement.can_confirm) return model;
+        var step = Object.assign({}, model.step, {
+            guide: { kind: "ui", target: "confirm_building_placement", gesture: "tap" }
+        });
+        return Object.assign({}, model, { step: step });
     }
 
     function anchorFor(step, hud, guideFacts) {
@@ -887,7 +900,8 @@
                 }
             } else {
                 clearStepRevealTimer();
-                runtime.view.render(machineView, renderContext(machineView.step, hud, anchorFor(machineView.step, hud), machineView));
+                var displayView = placementGuideView(machineView, hud);
+                runtime.view.render(displayView, renderContext(displayView.step, hud, anchorFor(displayView.step, hud), displayView));
             }
         }
         if (machineView.done && !runtime.completionSent) {
@@ -1343,7 +1357,10 @@
         if (!runtime.latestHud) return;
         var model = runtime.machine.view();
         if (model.waiting) runtime.view.render(null);
-        else runtime.view.render(model, renderContext(model.step, runtime.latestHud, anchorFor(model.step, runtime.latestHud), model));
+        else {
+            var displayView = placementGuideView(model, runtime.latestHud);
+            runtime.view.render(displayView, renderContext(displayView.step, runtime.latestHud, anchorFor(displayView.step, runtime.latestHud), displayView));
+        }
     }
     window.addEventListener("resize", function () {
         runtime.guidedScrollStepId = null;
@@ -1381,7 +1398,7 @@
             || step.trigger.type !== "ui" || step.trigger.action !== "cancel_building_mode") return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        send("select_building", { kind: selected });
+        send("cancel_building_mode");
         runtime.uiCounts.cancel_building_mode = (runtime.uiCounts.cancel_building_mode || 0) + 1;
         update(runtime.latestHud);
     }, true);

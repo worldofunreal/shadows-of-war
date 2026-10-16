@@ -20,13 +20,11 @@ pub struct MapGlobals {
     pub effect_breathe: f32,
     pub effect_energy_flow: f32,
     pub my_player_id: f32,
-    pub hover_hex: [f32; 2],
-    pub hover_building_kind: f32,
+    pub placement_active: f32,
+    pub _placement_pad: [f32; 2],
     pub territory_opacity: f32,
     /// Up to 8 fallout zones: [center_col, center_row, radius, alpha_progress].
     pub fallout_slots: [[f32; 4]; 9],
-    /// Up to 32 nobuild exclusion zones: [center_col, center_row, radius, active].
-    pub nobuild_slots: [[f32; 4]; 32],
     pub blend_mode: f32,
     pub effect_heartbeat: f32,
     pub effect_war_fog: f32,

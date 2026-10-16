@@ -2,13 +2,11 @@ use super::core::BuildingGrid;
 use crate::game::BuildingKind;
 use crate::map::{GameMap, TerrainType};
 
-/// Min spacing distance between Cities.
-pub const STRUCTURE_MIN_DIST: i32 = 6;
-const STRUCTURE_MIN_DIST_SQ: i64 = (STRUCTURE_MIN_DIST as i64) * (STRUCTURE_MIN_DIST as i64);
-const STRUCTURE_SEARCH_RADIUS_SQ: i64 = STRUCTURE_MIN_DIST_SQ;
-
-/// Universal minimum spacing between any two buildings.
-const BUILDING_MIN_DIST: i32 = 4;
+/// Frozen spacing used exclusively when verifying pre-v3 recordings.
+const LEGACY_CITY_SPACING: i32 = 6;
+const LEGACY_BUILDING_SPACING: i32 = 4;
+/// Bounded AI candidate search, independent of legal building adjacency.
+const STRUCTURE_SEARCH_RADIUS_SQ: i64 = 36;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BuildingFootprint {
@@ -55,11 +53,11 @@ impl BuildingKind {
 }
 
 #[inline]
-pub const fn minimum_building_spacing(a: BuildingKind, b: BuildingKind) -> i32 {
+pub(crate) const fn legacy_minimum_building_spacing(a: BuildingKind, b: BuildingKind) -> i32 {
     if matches!(a, BuildingKind::City) || matches!(b, BuildingKind::City) {
-        STRUCTURE_MIN_DIST
+        LEGACY_CITY_SPACING
     } else {
-        BUILDING_MIN_DIST
+        LEGACY_BUILDING_SPACING
     }
 }
 
@@ -141,6 +139,115 @@ fn footprint_touches_water(map: &GameMap, footprint: BuildingFootprint) -> bool 
     touches_water
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlacementError {
+    OutsideMap,
+    OwnLand,
+    Occupied,
+    CoastRequired,
+    LowlandRequired,
+}
+
+impl PlacementError {
+    pub const fn reason_key(self) -> &'static str {
+        match self {
+            Self::OutsideMap => "hud.build_outside_map",
+            Self::OwnLand => "hud.build_owned_land",
+            Self::Occupied => "hud.build_occupied",
+            Self::CoastRequired => "hud.build_coast_required",
+            Self::LowlandRequired => "hud.build_lowland_required",
+        }
+    }
+}
+
+/// One placement rule for simulation, preview and guides. Adjoining bases are legal.
+pub fn validate_building_site(
+    kind: BuildingKind,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    owner_id: u16,
+    owner_at: impl Fn(u32, u32) -> u16,
+    terrain_at: impl Fn(u32, u32) -> u8,
+    occupied: impl FnOnce(BuildingFootprint) -> bool,
+) -> Result<(), PlacementError> {
+    let footprint = BuildingFootprint::at(kind, x, y);
+    if width == 0
+        || height == 0
+        || x >= width
+        || y >= height
+        || footprint.left < 0
+        || footprint.top < 0
+        || footprint.left + footprint.width as i32 > width as i32
+        || footprint.top + footprint.height as i32 > height as i32
+    {
+        return Err(PlacementError::OutsideMap);
+    }
+    for fy in footprint.top..footprint.top + footprint.height as i32 {
+        for fx in footprint.left..footprint.left + footprint.width as i32 {
+            let (fx, fy) = (fx as u32, fy as u32);
+            let terrain = terrain_at(fx, fy);
+            if owner_id == 0 || owner_at(fx, fy) != owner_id || terrain & 0x80 == 0 {
+                return Err(PlacementError::OwnLand);
+            }
+            if kind == BuildingKind::Farm && terrain & 0x1f >= 10 {
+                return Err(PlacementError::LowlandRequired);
+            }
+        }
+    }
+    if occupied(footprint) {
+        return Err(PlacementError::Occupied);
+    }
+    if kind == BuildingKind::Port {
+        let mut coast = false;
+        for fy in footprint.top - 1..=footprint.top + footprint.height as i32 {
+            for fx in footprint.left - 1..=footprint.left + footprint.width as i32 {
+                if fx >= 0
+                    && fy >= 0
+                    && fx < width as i32
+                    && fy < height as i32
+                    && terrain_at(fx as u32, fy as u32) & 0x80 == 0
+                {
+                    coast = true;
+                }
+            }
+        }
+        if !coast {
+            return Err(PlacementError::CoastRequired);
+        }
+    }
+    Ok(())
+}
+
+pub fn validate_structure_site(
+    map: &GameMap,
+    owner_id: u16,
+    kind: BuildingKind,
+    tile: u32,
+    existing: &BuildingGrid,
+) -> Result<(), PlacementError> {
+    if map.width == 0 || tile >= map.width.saturating_mul(map.height) {
+        return Err(PlacementError::OutsideMap);
+    }
+    let (x, y) = idx_xy(tile, map.width);
+    validate_building_site(
+        kind,
+        x,
+        y,
+        map.width,
+        map.height,
+        owner_id,
+        |x, y| map.owner_id(x, y),
+        |x, y| map.terrain[map.ref_id(x, y)].as_byte(),
+        |footprint| {
+            existing.iter_all_in_range(x, y, 3).any(|building| {
+                footprint.intersects(BuildingFootprint::at(building.kind, building.x, building.y))
+            })
+        },
+    )
+}
+
 fn for_each_valid_land_structure_index(
     map: &GameMap,
     owner_id: u16,
@@ -148,6 +255,7 @@ fn for_each_valid_land_structure_index(
     kind: BuildingKind,
     existing: &BuildingGrid,
     scratch: &mut crate::engine::PlacementScratch,
+    legacy: bool,
     mut visit: impl FnMut(u32),
 ) {
     let w = map.width;
@@ -197,22 +305,26 @@ fn for_each_valid_land_structure_index(
         }
 
         let footprint = BuildingFootprint::at(kind, x, y);
-        let valid_placement = footprint_fits(map, owner_id, footprint)
-            && !existing
-                .iter_all_in_range(x, y, STRUCTURE_MIN_DIST as u32)
-                .any(|building| {
-                    #[cfg(feature = "ai-metrics")]
-                    {
-                        scratch.building_checks += 1;
-                    }
-                    let dx = xi - building.x as i64;
-                    let dy = yi - building.y as i64;
-                    let min_dist = minimum_building_spacing(kind, building.kind) as i64;
-                    let too_close = dx * dx + dy * dy < min_dist * min_dist;
-                    let other = BuildingFootprint::at(building.kind, building.x, building.y);
-                    too_close || footprint.intersects(other)
-                })
-            && (kind != BuildingKind::Port || footprint_touches_water(map, footprint));
+        let valid_placement = if !legacy {
+            validate_structure_site(map, owner_id, kind, idx, existing).is_ok()
+        } else {
+            footprint_fits(map, owner_id, footprint)
+                && !existing
+                    .iter_all_in_range(x, y, LEGACY_CITY_SPACING as u32)
+                    .any(|building| {
+                        #[cfg(feature = "ai-metrics")]
+                        {
+                            scratch.building_checks += 1;
+                        }
+                        let dx = xi - building.x as i64;
+                        let dy = yi - building.y as i64;
+                        let min_dist = legacy_minimum_building_spacing(kind, building.kind) as i64;
+                        let too_close = dx * dx + dy * dy < min_dist * min_dist;
+                        let other = BuildingFootprint::at(building.kind, building.x, building.y);
+                        too_close || footprint.intersects(other)
+                    })
+                && (kind != BuildingKind::Port || footprint_touches_water(map, footprint))
+        };
         if valid_placement {
             visit(idx);
         }
@@ -238,8 +350,7 @@ fn for_each_valid_land_structure_index(
     }
 }
 
-/// Tiles within Euclidean 12 of `click_idx`, 4-connected, owned by `owner_id`,
-/// excluding tiles too close to existing cities if building a City.
+/// Bounded AI candidate list using the current exact footprint rules.
 pub fn valid_land_structure_indices(
     map: &GameMap,
     owner_id: u16,
@@ -253,9 +364,16 @@ pub fn valid_land_structure_indices(
     let cx_i = cx as i64;
     let cy_i = cy as i64;
     let mut out = Vec::new();
-    for_each_valid_land_structure_index(map, owner_id, click_idx, kind, existing, scratch, |idx| {
-        out.push(idx)
-    });
+    for_each_valid_land_structure_index(
+        map,
+        owner_id,
+        click_idx,
+        kind,
+        existing,
+        scratch,
+        false,
+        |idx| out.push(idx),
+    );
 
     out.sort_by(|&a, &b| {
         let (ax, ay) = idx_xy(a, w);
@@ -267,24 +385,34 @@ pub fn valid_land_structure_indices(
     out
 }
 
-fn best_valid_land_structure_index(
+pub fn find_structure_site_near(
     map: &GameMap,
     owner_id: u16,
     click_idx: u32,
     kind: BuildingKind,
     existing: &BuildingGrid,
     scratch: &mut crate::engine::PlacementScratch,
+    legacy: bool,
 ) -> Option<u32> {
     let w = map.width;
     let (cx, cy) = idx_xy(click_idx, w);
     let mut best: Option<(i64, u32)> = None;
-    for_each_valid_land_structure_index(map, owner_id, click_idx, kind, existing, scratch, |idx| {
-        let (x, y) = idx_xy(idx, w);
-        let candidate = (euclid_sq(x as i64, y as i64, cx as i64, cy as i64), idx);
-        if best.is_none_or(|current| candidate < current) {
-            best = Some(candidate);
-        }
-    });
+    for_each_valid_land_structure_index(
+        map,
+        owner_id,
+        click_idx,
+        kind,
+        existing,
+        scratch,
+        legacy,
+        |idx| {
+            let (x, y) = idx_xy(idx, w);
+            let candidate = (euclid_sq(x as i64, y as i64, cx as i64, cy as i64), idx);
+            if best.is_none_or(|current| candidate < current) {
+                best = Some(candidate);
+            }
+        },
+    );
     best.map(|(_, idx)| idx)
 }
 
@@ -295,7 +423,7 @@ pub fn resolve_structure_spawn_tile(
     kind: BuildingKind,
     click_idx: u32,
     existing: &BuildingGrid,
-    scratch: &mut crate::engine::PlacementScratch,
+    _scratch: &mut crate::engine::PlacementScratch,
 ) -> Option<u32> {
     let w = map.width;
     let h = map.height;
@@ -304,5 +432,7 @@ pub fn resolve_structure_spawn_tile(
         return None;
     }
 
-    best_valid_land_structure_index(map, owner_id, click_idx, kind, existing, scratch)
+    validate_structure_site(map, owner_id, kind, click_idx, existing)
+        .ok()
+        .map(|()| click_idx)
 }

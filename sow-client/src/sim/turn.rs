@@ -3,6 +3,22 @@ use sow_core::engine::SowEngine;
 use sow_core::game::GameEvent;
 use sow_core::protocol::Turn;
 
+fn building_confirmation_result(
+    placement: Option<crate::ui::hud::state::BuildingPlacement>,
+    my_id: u16,
+    intents: &[sow_core::protocol::StampedIntent],
+    events: &[GameEvent],
+) -> Option<bool> {
+    let placement = placement.filter(|placement| placement.pending)?;
+    intents.iter().any(|stamped| stamped.player_id == my_id && matches!(
+        stamped.intent, sow_core::protocol::GameplayIntent::BuildStructure { kind, target_tile }
+            if kind == placement.kind && target_tile == placement.tile_idx
+    )).then(|| events.iter().any(|event| matches!(event,
+        GameEvent::StructureSpawned { owner_id, kind, tile_idx, .. }
+            if *owner_id == my_id && *kind == placement.kind && *tile_idx == placement.tile_idx
+    )))
+}
+
 fn take_alliance_request_lifecycle_events(events: &mut Vec<GameEvent>) -> Vec<GameEvent> {
     let mut lifecycle_events = Vec::new();
     events.retain(|event| {
@@ -331,7 +347,8 @@ impl SowApp {
             && self.ui.tutorial_active
             && self.sim.config.tutorial
             && my_id != 0;
-        let (mut snap, events) = {
+        let pending = self.ui.app.hud_state.building_placement;
+        let (mut snap, events, placement_result) = {
             let Some(engine) = self.sim.engine.as_mut() else {
                 return;
             };
@@ -350,10 +367,13 @@ impl SowApp {
                 }
                 _ => None,
             };
-            engine.apply_intents(&[sow_core::protocol::StampedIntent {
+            let intents = [sow_core::protocol::StampedIntent {
                 player_id: my_id,
                 intent,
-            }]);
+            }];
+            engine.apply_intents(&intents);
+            let placement_result =
+                building_confirmation_result(pending, my_id, &intents, &engine.state.events);
             if let Some(before) = neutral_attack_troops_before {
                 let after = engine
                     .attacks
@@ -375,19 +395,26 @@ impl SowApp {
             }
             let snap = engine.build_snapshot();
             let events = std::mem::take(&mut engine.state.events);
-            (snap, events)
+            (snap, events, placement_result)
         };
         self.process_tick_events(events, &snap, my_id);
         self.apply_snapshot_fx(&mut snap, my_id);
         self.sim.current_snapshot = Some(snap);
+        // Paused actions replace the snapshot without advancing its tick.
+        self.ui.building_render_cache = Default::default();
+        self.sim.last_synced_cost_tick = None;
         self.sync_hud_player_state();
         self.sync_building_costs();
+        if let Some(accepted) = placement_result {
+            self.finish_building_confirmation(accepted);
+        }
     }
 
     pub(crate) fn handle_sim_turn(&mut self, turn: Turn) {
         let my_id = self.sim.my_player_id.unwrap_or(0);
         let observe_tutorial = self.net.is_offline && self.sim.config.tutorial && my_id != 0;
-        let (mut snap, events, local_spawn_target) = {
+        let pending = self.ui.app.hud_state.building_placement;
+        let (mut snap, events, local_spawn_target, placement_result) = {
             let Some(e) = self.sim.engine.as_mut() else {
                 return;
             };
@@ -417,6 +444,8 @@ impl SowApp {
                     Vec::new()
                 };
             e.apply_intents(&turn.intents);
+            let placement_result =
+                building_confirmation_result(pending, my_id, &turn.intents, &e.state.events);
             let local_spawn_target = local_spawn_targets
                 .into_iter()
                 .find(|(x, y)| e.state.map.owner_id(*x, *y) == my_id);
@@ -438,7 +467,7 @@ impl SowApp {
             let snap = e.build_snapshot();
             let mut events = std::mem::take(&mut e.state.events);
             events.append(&mut lifecycle_events);
-            (snap, events, local_spawn_target)
+            (snap, events, local_spawn_target, placement_result)
         };
 
         let turn_defeats = self.process_tick_events(events, &snap, my_id);
@@ -484,6 +513,9 @@ impl SowApp {
             self.sim.latest_local_spawn = Some((snap.tick, x, y));
         }
         self.sim.current_snapshot = Some(snap);
+        if let Some(accepted) = placement_result {
+            self.finish_building_confirmation(accepted);
+        }
 
         // Recompute Fog of War visibility
         if let Some(ref snap_ref) = self.sim.current_snapshot {
@@ -521,8 +553,8 @@ impl SowApp {
 #[cfg(test)]
 mod tests {
     use super::{
-        SowEngine, TutorialObservation, take_alliance_request_lifecycle_events,
-        take_resource_transfer_events,
+        SowEngine, TutorialObservation, building_confirmation_result,
+        take_alliance_request_lifecycle_events, take_resource_transfer_events,
     };
     use sow_core::building::Building;
     use sow_core::game::{BuildingKind, GameEvent, GamePhase, GameState, ProjectileKind, UnitType};
@@ -532,6 +564,243 @@ mod tests {
     use sow_core::protocol::{AttackIntent, GameplayIntent, StampedIntent};
     use sow_core::warp_fleet::WarpFleet;
     use sow_core::water_components::WaterComponents;
+
+    #[cfg(target_arch = "wasm32")]
+    fn building_app(paused: bool) -> crate::app::SowApp {
+        let profile = serde_json::json!({ "account_id": "0123456789abcdef0123456789abcdef", "auth_secret": "placement-test", "display_name": "Builder", "profile": crate::player_progress::PlayerProgress::default() }).to_string();
+        crate::app::setup_tutorial_exit(&profile, &profile);
+        let mut app = crate::app::SowApp::new();
+        let config = GameConfig {
+            tutorial: true,
+            map_control_win_percentage: 2.0,
+            ..Default::default()
+        };
+        let mut state = GameState::new(42, 16, 16, config.clone());
+        state.phase = GamePhase::Playing;
+        for id in 1..=2 {
+            let mut player = Player::new_human(id, format!("Builder {id}"), [1.0; 3], &config);
+            player.has_spawned = true;
+            player.gold = 1_000_000.0;
+            state.register_player(player);
+        }
+        for y in 0..16 {
+            for x in 0..16 {
+                state.set_tile_owner(x, y, 1);
+            }
+        }
+        state.set_tile_owner(15, 15, 2);
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.set_campaign_unlocks(sow_core::campaign::CampaignUnlocks {
+            buildings: std::collections::HashMap::from([(BuildingKind::City, 2)]),
+            actions: vec![],
+        });
+        app.sim.current_snapshot = Some(engine.build_snapshot());
+        app.sim.engine = Some(engine);
+        app.sim.config = config;
+        app.sim.my_player_id = Some(1);
+        app.sim.map_w = 16;
+        app.sim.map_h = 16;
+        app.sim.paused = paused;
+        app.net.is_offline = true;
+        app.ui.app.phase = crate::ClientPhase::Playing;
+        app.ui.tutorial_active = paused;
+        if paused {
+            app.ui.tutorial_paused_action =
+                Some(crate::app::TutorialPausedAction::BuildUntilStarted);
+        }
+        app.sync_hud_player_state();
+        app.sync_building_costs();
+        app.ui.app.hud_state.building_placement = Some(crate::ui::hud::state::BuildingPlacement {
+            kind: BuildingKind::City,
+            tile_idx: 6 * 16 + 6,
+            pending: false,
+        });
+        app
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    #[cfg(target_arch = "wasm32")]
+    async fn paused_tutorial_advances_only_after_confirmed_foundation_and_retains_rejected_preview()
+    {
+        let mut app = building_app(true);
+        let initial_gold = app.current_player_gold();
+        let initial_cost = app.ui.app.hud_state.building_costs[0];
+        app.move_building_preview(7, 6);
+        assert!(app.sim.engine.as_ref().unwrap().buildings.is_empty());
+        assert!(
+            app.sim
+                .tutorial_observation
+                .seen_buildings_by_kind
+                .is_empty()
+        );
+        assert_eq!(app.current_player_gold(), initial_gold);
+        app.confirm_building_placement();
+        app.confirm_building_placement();
+        let engine = app.sim.engine.as_ref().unwrap();
+        assert_eq!(engine.buildings.len(), 1);
+        assert_eq!(engine.buildings[0].tile_idx, 6 * 16 + 7);
+        assert!(app.current_player_gold() < initial_gold);
+        assert!(app.ui.app.hud_state.building_costs[0] > initial_cost);
+        assert!(app.ui.app.hud_state.building_placement.is_none());
+        assert_eq!(
+            app.sim.tutorial_observation.seen_buildings_by_kind["cities"].len(),
+            1
+        );
+        assert!(app.ui.tutorial_paused_action.is_none());
+        assert!(app.sim.paused);
+        assert!(app.sim.offline_intents.is_empty());
+
+        let gold = app.current_player_gold();
+        let placement = crate::ui::hud::state::BuildingPlacement {
+            kind: BuildingKind::City,
+            tile_idx: 6 * 16 + 7,
+            pending: true,
+        };
+        app.ui.app.hud_state.building_placement = Some(placement);
+        app.apply_paused_tutorial_intent(GameplayIntent::BuildStructure {
+            kind: placement.kind,
+            target_tile: placement.tile_idx,
+        });
+        assert_eq!(app.current_player_gold(), gold);
+        assert_eq!(app.sim.engine.as_ref().unwrap().buildings.len(), 1);
+        assert_eq!(
+            app.ui.app.hud_state.building_placement,
+            Some(crate::ui::hud::state::BuildingPlacement {
+                pending: false,
+                ..placement
+            })
+        );
+        assert!(app.building_placement_reason().is_some());
+        drop(app);
+        wasm_bindgen_futures::JsFuture::from(crate::app::restore_tutorial_exit())
+            .await
+            .unwrap();
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    #[cfg(target_arch = "wasm32")]
+    async fn construction_requires_gold_and_queues_only_one_order_until_accepted_turn() {
+        let mut app = building_app(false);
+        let engine = app.sim.engine.as_mut().unwrap();
+        engine.state.player_mut(1).unwrap().gold = 0.0;
+        app.sim.current_snapshot = Some(engine.build_snapshot());
+        app.confirm_building_placement();
+        assert!(app.sim.offline_intents.is_empty());
+        assert!(!app.ui.app.hud_state.building_placement.unwrap().pending);
+        let engine = app.sim.engine.as_mut().unwrap();
+        engine.state.player_mut(1).unwrap().gold = 1_000_000.0;
+        app.sim.current_snapshot = Some(engine.build_snapshot());
+        app.confirm_building_placement();
+        app.confirm_building_placement();
+        app.move_building_preview(10, 10);
+        app.clear_placement();
+        assert_eq!(app.sim.offline_intents.len(), 1);
+        assert!(app.ui.app.hud_state.building_placement.unwrap().pending);
+        assert_eq!(app.current_player_gold(), 1_000_000.0);
+        let intents = std::mem::take(&mut app.sim.offline_intents)
+            .into_iter()
+            .map(|intent| StampedIntent {
+                player_id: 1,
+                intent,
+            })
+            .collect();
+        app.handle_sim_turn(sow_core::protocol::Turn {
+            turn_number: 0,
+            intents,
+        });
+        assert_eq!(app.sim.engine.as_ref().unwrap().buildings.len(), 1);
+        assert_eq!(
+            app.sim.engine.as_ref().unwrap().buildings[0].tile_idx,
+            6 * 16 + 6
+        );
+        assert!(app.ui.app.hud_state.building_placement.is_none());
+        assert!(app.current_player_gold() < 1_000_000.0);
+        drop(app);
+        wasm_bindgen_futures::JsFuture::from(crate::app::restore_tutorial_exit())
+            .await
+            .unwrap();
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    #[cfg(target_arch = "wasm32")]
+    async fn adjoining_buildings_share_one_border_without_ambiguous_selection() {
+        let mut app = building_app(false);
+        app.input.camera_zoom = 12.0;
+        app.input.camera_x = 0.0;
+        app.input.camera_y = 0.0;
+        let engine = app.sim.engine.as_mut().unwrap();
+        for (id, x) in [(1, 6), (2, 10)] {
+            engine.add_building(Building {
+                id,
+                owner_id: 1,
+                tile_idx: 6 * 16 + x,
+                kind: BuildingKind::City,
+                level: 1,
+                under_construction: false,
+                ticks_until_complete: 0,
+            });
+        }
+        app.sim.current_snapshot = Some(engine.build_snapshot());
+        let snapshot = app.sim.current_snapshot.as_ref().unwrap();
+        for (x, expected) in [(7.99, 6), (8.0, 10), (10.0, 10), (6.0, 6)] {
+            assert_eq!(
+                crate::render::world::building_at_pointer(
+                    snapshot,
+                    &app.sim,
+                    &mut app.ui,
+                    &app.input,
+                    x * 12.0,
+                    6.0 * 12.0
+                ),
+                Some(6 * 16 + expected)
+            );
+        }
+        drop(app);
+        wasm_bindgen_futures::JsFuture::from(crate::app::restore_tutorial_exit())
+            .await
+            .unwrap();
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn placement_acceptance_requires_its_processed_intent_and_real_foundation() {
+        use sow_core::game::BuildingKind;
+        use sow_core::protocol::{GameplayIntent, StampedIntent};
+        let placement = crate::ui::hud::state::BuildingPlacement {
+            kind: BuildingKind::City,
+            tile_idx: 500,
+            pending: true,
+        };
+        let order = StampedIntent {
+            player_id: 1,
+            intent: GameplayIntent::BuildStructure {
+                kind: placement.kind,
+                target_tile: placement.tile_idx,
+            },
+        };
+        let event = GameEvent::StructureSpawned {
+            id: 1,
+            owner_id: 1,
+            tile_idx: 500,
+            kind: BuildingKind::City,
+            level: 1,
+        };
+        assert_eq!(
+            building_confirmation_result(Some(placement), 1, &[], &[event.clone()]),
+            None
+        );
+        assert_eq!(
+            building_confirmation_result(Some(placement), 1, &[order.clone()], &[]),
+            Some(false)
+        );
+        assert_eq!(
+            building_confirmation_result(Some(placement), 1, &[order.clone()], &[event.clone()]),
+            Some(true)
+        );
+        assert_eq!(
+            building_confirmation_result(Some(placement), 2, &[order], &[event]),
+            None
+        );
+    }
 
     fn engine() -> SowEngine {
         let config = GameConfig {

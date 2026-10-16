@@ -25,7 +25,7 @@
     {
       "id": "snettisham",
       "name": "Snettisham",
-      "x": 719,
+      "x": 720,
       "y": 45,
       "starting_troops": 500,
       "relation": "neutral",
@@ -103,8 +103,8 @@
     {
       "id": "roman_supply_depot",
       "name": "Roman Supply Depot",
-      "x": 764,
-      "y": 128,
+      "x": 775,
+      "y": 131,
       "starting_troops": 500,
       "relation": "enemy",
       "team": "Red",
@@ -118,8 +118,8 @@
     {
       "id": "tax_collectors",
       "name": "Tax Collectors",
-      "x": 689,
-      "y": 115,
+      "x": 672,
+      "y": 118,
       "starting_troops": 250,
       "relation": "enemy",
       "team": "Red",

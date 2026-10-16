@@ -109,7 +109,10 @@
 
     function asset(path) {
         var base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
-        return base + "/" + path.split("/").map(encodeURIComponent).join("/");
+        var url = base + "/" + path.split("/").map(encodeURIComponent).join("/");
+        // One versioning owner: loader.js maps heavy art to content hashes and
+        // stamps everything else with the build, exactly like ?v= on the HTML.
+        return window.SOW_assetUrl ? window.SOW_assetUrl(url) : url;
     }
 
     function leaderArtUrl(slug, variant) {

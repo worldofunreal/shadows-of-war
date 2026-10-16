@@ -179,9 +179,6 @@ enum WebMenuCommand {
     SetFreeZoomOut {
         value: bool,
     },
-    SetStickyBuildingMode {
-        value: bool,
-    },
     SetAttackRatio {
         ratio: f32,
     },
@@ -189,6 +186,8 @@ enum WebMenuCommand {
     SelectBuilding {
         kind: sow_core::game::BuildingKind,
     },
+    ConfirmBuildingPlacement,
+    CancelBuildingMode,
     SelectWarship,
     SelectNuke,
     ToggleInbox,
@@ -229,7 +228,6 @@ enum WebMenuCommand {
     CounterAttack {
         target_player_id: u16,
     },
-    Surrender,
     ToggleLeaderboard,
     ToggleDevSidebar,
     SetDevConfig {
@@ -389,7 +387,8 @@ struct HudPublishKey {
     gold_rate: u64,
     attack_ratio: u32,
     spawn_timer_tenths: i32,
-    selected_building: u8,
+    selected_building: Option<crate::ui::hud::state::BuildingPlacement>,
+    placement_anchor: Option<(i32, i32)>,
     selected_warship_build: bool,
     selected_nuke: u8,
     building_costs: [u64; 9],
@@ -397,7 +396,6 @@ struct HudPublishKey {
     settings_music_volume: u32,
     settings_reduced_motion: bool,
     settings_free_zoom_out: bool,
-    settings_sticky_building_mode: bool,
     settings_show_fps_ping: bool,
     settings_show_dev_tools: bool,
     leaderboard_open: bool,
@@ -689,7 +687,6 @@ impl SowApp {
                         }
                         if self.ui.tutorial_camera_only {
                             self.clear_placement();
-                            self.cancel_hold_build();
                             self.close_map_context_menu();
                         }
                     }
@@ -1003,9 +1000,6 @@ impl SowApp {
                     self.ui.app.settings_state.free_zoom_out = value;
                     self.clamp_camera_to_map();
                 }
-                WebMenuCommand::SetStickyBuildingMode { value } => {
-                    self.ui.app.settings_state.sticky_building_mode = value;
-                }
                 WebMenuCommand::SetAttackRatio { ratio } => {
                     self.ui.app.hud_state.attack_ratio = ratio.clamp(0.05, 1.0);
                 }
@@ -1031,6 +1025,8 @@ impl SowApp {
                         self.select_building_kind(kind);
                     }
                 }
+                WebMenuCommand::ConfirmBuildingPlacement => self.confirm_building_placement(),
+                WebMenuCommand::CancelBuildingMode => self.clear_placement(),
                 WebMenuCommand::SelectWarship => {
                     if !self.ui.tutorial_camera_only {
                         self.select_warship_build_mode();
@@ -1182,9 +1178,6 @@ impl SowApp {
                             self.send_intent(intent);
                         }
                     }
-                }
-                WebMenuCommand::Surrender => {
-                    self.send_intent(sow_core::protocol::GameplayIntent::Resign);
                 }
                 WebMenuCommand::ToggleLeaderboard => {
                     self.ui.show_leaderboard = !self.ui.show_leaderboard;
@@ -1503,6 +1496,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         .map(|snapshot| snapshot.tick)
         .unwrap_or(0);
     let cold_open = app.ui.show_leaderboard
+        || hud.building_placement.is_some()
         || hovered_owner != 0
         || hud.show_alliance_inbox
         || hud.show_ask_panel.is_some()
@@ -1535,10 +1529,11 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .spawn_timer_secs
             .map(|secs| (secs.max(0.0) * 10.0).round() as i32)
             .unwrap_or(-1),
-        selected_building: hud
-            .selected_building_kind
-            .map(|kind| kind as u8)
-            .unwrap_or(u8::MAX),
+        selected_building: hud.building_placement,
+        placement_anchor: hud.building_placement.map(|placement| (
+            (app.input.camera_x + (placement.tile_idx % app.sim.map_w.max(1)) as f32 * app.input.camera_zoom).round() as i32,
+            (app.input.camera_y + (placement.tile_idx / app.sim.map_w.max(1)) as f32 * app.input.camera_zoom).round() as i32,
+        )),
         selected_warship_build: hud.selected_warship_build,
         selected_nuke: hud
             .selected_nuke_kind
@@ -1549,7 +1544,6 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         settings_music_volume: app.ui.app.settings_state.music_volume.to_bits(),
         settings_reduced_motion: app.ui.app.settings_state.reduced_motion,
         settings_free_zoom_out: app.ui.app.settings_state.free_zoom_out,
-        settings_sticky_building_mode: app.ui.app.settings_state.sticky_building_mode,
         settings_show_fps_ping: app.ui.app.settings_state.show_fps_ping,
         settings_show_dev_tools: app.ui.app.settings_state.show_dev_tools,
         leaderboard_open: app.ui.show_leaderboard,
@@ -2087,7 +2081,8 @@ fn tutorial_guide_tiles(
         .ui
         .app
         .hud_state
-        .selected_building_kind
+        .building_placement
+        .map(|placement| placement.kind)
         .unwrap_or(sow_core::game::BuildingKind::City);
     let Some(me) = snapshot
         .players
@@ -3254,6 +3249,22 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         return serde_json::Value::Null;
     }
 
+    let placement_reason = app.building_placement_reason();
+    let placement_payload = app.ui.app.hud_state.building_placement.map(|placement| {
+        let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
+        let x = app.input.camera_x + (placement.tile_idx % app.sim.map_w.max(1)) as f32 * app.input.camera_zoom;
+        let y = app.input.camera_y + (placement.tile_idx / app.sim.map_w.max(1)) as f32 * app.input.camera_zoom;
+        serde_json::json!({
+            "tile_idx": placement.tile_idx,
+            "x": x / sf, "y": y / sf,
+            "half_height": 2.0 * app.input.camera_zoom / sf,
+            "pending": placement.pending,
+            "can_confirm": !placement.pending && placement_reason.is_none() && !app.ui.observing && app.ui.app.hud_state.sync_state.is_none(),
+            "reason": placement_reason.as_ref().map(localized_text_payload),
+            "cost": app.ui.app.hud_state.building_costs[placement.kind as usize],
+            "seconds": placement.kind.construction_duration_ticks() as f64 * app.sim.config.tick_rate_ms as f64 / 1000.0,
+        })
+    });
     let tutorial_pid = app
         .sim
         .my_player_id
@@ -3386,7 +3397,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     } else {
         None
     };
-    let selected_building = hud.selected_building_kind.map(|kind| match kind {
+    let selected_building = hud.building_placement.map(|placement| match placement.kind {
         sow_core::game::BuildingKind::City => "City",
         sow_core::game::BuildingKind::Bunker => "Bunker",
         sow_core::game::BuildingKind::Factory => "Factory",
@@ -3504,6 +3515,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "operations": operations,
         "spawn_timer_secs": hud.spawn_timer_secs,
         "selected_building": selected_building,
+        "building_placement": placement_payload,
         "selected_warship_build": hud.selected_warship_build,
         "selected_nuke": selected_nuke,
         "fleet_panel": {
@@ -3788,7 +3800,6 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                 "music_volume": app.ui.app.settings_state.music_volume,
                 "reduced_motion": app.ui.app.settings_state.reduced_motion,
                 "free_zoom_out": app.ui.app.settings_state.free_zoom_out,
-                "sticky_building_mode": app.ui.app.settings_state.sticky_building_mode,
                 "show_fps_ping": app.ui.app.settings_state.show_fps_ping,
                 "show_dev_tools": app.ui.app.settings_state.show_dev_tools,
                 "show_dev_tools_available": cfg!(any(feature = "dev", debug_assertions)),
@@ -3974,7 +3985,6 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                 "music_volume": app.ui.app.settings_state.music_volume,
                 "reduced_motion": app.ui.app.settings_state.reduced_motion,
                 "free_zoom_out": app.ui.app.settings_state.free_zoom_out,
-                "sticky_building_mode": app.ui.app.settings_state.sticky_building_mode,
                 "show_fps_ping": app.ui.app.settings_state.show_fps_ping,
                 "show_dev_tools": app.ui.app.settings_state.show_dev_tools,
                 "show_dev_tools_available": cfg!(any(feature = "dev", debug_assertions)),

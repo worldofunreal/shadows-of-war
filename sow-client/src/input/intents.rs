@@ -144,20 +144,6 @@ impl SowApp {
                 self.sfx
                     .play_deploy(web_time::Instant::now(), self.spatial_sound_params(wx, wy));
             }
-            sow_core::protocol::GameplayIntent::BuildStructure { kind, target_tile } => {
-                let wx = (*target_tile % self.sim.map_w) as f32 + 0.5;
-                let wy = (*target_tile / self.sim.map_w) as f32 + 0.5;
-                self.ui.click_markers.push(crate::app::ClickMarker {
-                    world_x: wx,
-                    world_y: wy,
-                    start_time: web_time::Instant::now(),
-                });
-                self.sfx.play_placement(
-                    web_time::Instant::now(),
-                    crate::building_sound_kind(*kind),
-                    self.spatial_sound_params(wx, wy),
-                );
-            }
             sow_core::protocol::GameplayIntent::Attack(attack) => {
                 let now = web_time::Instant::now();
                 // Flash enemy borders red

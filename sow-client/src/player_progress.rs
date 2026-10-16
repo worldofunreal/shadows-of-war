@@ -101,21 +101,30 @@ where
 
 #[derive(Clone, Debug)]
 pub enum DbEvent {
-    MatchExitLoaded {
+    MatchResultLoaded {
         account_id: String,
         match_id: String,
         cycle_id: u32,
         request_id: u64,
         display_name: String,
         provider: String,
-        progress: PlayerProgress,
+        progress: Option<PlayerProgress>,
         state: sow_data::profile::MatchExitState,
+        closure_recorded: bool,
     },
-    MatchExitFailed {
+    MatchResultFailed {
         account_id: String,
         match_id: String,
         cycle_id: u32,
         request_id: u64,
+        status: Option<u16>,
+    },
+    ExitRecovery {
+        account_id: String,
+        match_id: String,
+        cycle_id: u32,
+        request_id: u64,
+        accepted: bool,
         status: Option<u16>,
     },
     ProfileLoaded {
@@ -247,7 +256,8 @@ impl PlayerProgress {
         if !self.completed_episodes.insert(episode_id.to_string()) {
             return false;
         }
-        self.pending_campaign_completions.insert(episode_id.to_string());
+        self.pending_campaign_completions
+            .insert(episode_id.to_string());
         true
     }
 
@@ -273,7 +283,11 @@ impl PlayerProgress {
         let local_intro_completed = self.intro_completed.unwrap_or(false);
         let local_episodes = std::mem::take(&mut self.completed_episodes);
         let local_pending_episodes = std::mem::take(&mut self.pending_campaign_completions);
-        let local_selection = (self.preferred_leader, self.prefer_random_leader, self.leader_selection_pending);
+        let local_selection = (
+            self.preferred_leader,
+            self.prefer_random_leader,
+            self.leader_selection_pending,
+        );
         let local_receipts = std::mem::take(&mut self.reward_receipts);
         let local_achievements = std::mem::take(&mut self.unlocked_achievements);
         let local_guides = std::mem::take(&mut self.menu_guides);
@@ -284,9 +298,16 @@ impl PlayerProgress {
         if local_intro_completed || self.intro_completed.unwrap_or(false) {
             self.intro_completed = Some(true);
         }
-        self.pending_campaign_completions.extend(local_pending_episodes);
-        self.pending_campaign_completions.extend(local_episodes.iter().filter(|id| !server_episodes.contains(*id)).cloned());
-        self.pending_campaign_completions.retain(|id| !server_episodes.contains(id));
+        self.pending_campaign_completions
+            .extend(local_pending_episodes);
+        self.pending_campaign_completions.extend(
+            local_episodes
+                .iter()
+                .filter(|id| !server_episodes.contains(*id))
+                .cloned(),
+        );
+        self.pending_campaign_completions
+            .retain(|id| !server_episodes.contains(id));
         self.completed_episodes.extend(local_episodes);
         if local_selection.2 {
             self.preferred_leader = local_selection.0;
@@ -301,10 +322,15 @@ impl PlayerProgress {
         self.merge_menu_guides(confirmed_guides);
     }
 
-    pub(crate) fn merge_menu_guides(&mut self, incoming: std::collections::BTreeMap<String, sow_data::profile::MenuGuideProgress>) {
+    pub(crate) fn merge_menu_guides(
+        &mut self,
+        incoming: std::collections::BTreeMap<String, sow_data::profile::MenuGuideProgress>,
+    ) {
         for (id, progress) in incoming {
             let saved = self.menu_guides.get(&id);
-            let source_match_id = progress.source_match_id.clone()
+            let source_match_id = progress
+                .source_match_id
+                .clone()
                 .or_else(|| saved.and_then(|record| record.source_match_id.clone()));
             let mut merged = sow_data::profile::merge_menu_guide_progress(saved, &progress);
             // These snapshots came from the server; the shared write merger
@@ -368,7 +394,9 @@ impl PlayerProgress {
         leader: Leader,
     ) {
         self.matches_played = self.matches_played.saturating_add(1);
-        if won { self.wins = self.wins.saturating_add(1); }
+        if won {
+            self.wins = self.wins.saturating_add(1);
+        }
         self.players_defeated = self.players_defeated.saturating_add(defeats.players);
         self.empires_defeated = self.empires_defeated.saturating_add(defeats.empires);
         self.tribes_defeated = self.tribes_defeated.saturating_add(defeats.tribes);
@@ -463,7 +491,14 @@ mod tests {
             prefer_random_leader: true,
             ..Default::default()
         };
-        progress.record_match_with_kda_for_leader(true, Default::default(), 0, 0, 0, Leader::Napoleon);
+        progress.record_match_with_kda_for_leader(
+            true,
+            Default::default(),
+            0,
+            0,
+            0,
+            Leader::Napoleon,
+        );
         assert_eq!(progress.leader_xp.get("Napoleon"), Some(&120));
         assert!(!progress.leader_xp.contains_key("Boudica"));
         assert_eq!(progress.preferred_leader, Some(Leader::Boudica));
@@ -478,7 +513,8 @@ mod tests {
             leader_selection_pending: true,
             ..Default::default()
         };
-        let mut reloaded: PlayerProgress = serde_json::from_str(&serde_json::to_string(&local).unwrap()).unwrap();
+        let mut reloaded: PlayerProgress =
+            serde_json::from_str(&serde_json::to_string(&local).unwrap()).unwrap();
         reloaded.merge_boot_profile(PlayerProgress {
             preferred_leader: Some(Leader::Caesar),
             ..Default::default()
@@ -497,7 +533,9 @@ mod tests {
         assert!(local.pending_campaign_completions.contains("six_sky_ep1"));
 
         let mut confirmed = PlayerProgress::default();
-        confirmed.completed_episodes.insert("six_sky_ep1".to_string());
+        confirmed
+            .completed_episodes
+            .insert("six_sky_ep1".to_string());
         local.merge_boot_profile(confirmed);
         assert!(local.completed_episodes.contains("six_sky_ep1"));
         assert!(!local.pending_campaign_completions.contains("six_sky_ep1"));

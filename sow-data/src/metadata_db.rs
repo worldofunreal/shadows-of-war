@@ -20,6 +20,8 @@ pub const PENDING_REPLAY_VERIFICATIONS_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("pending_replay_verifications");
 pub const VERIFIED_VICTORY_BOARD_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("verified_victory_board");
+pub const PENDING_CRAZYGAMES_SCORES_TABLE: TableDefinition<&str, &[u8]> =
+    TableDefinition::new("pending_crazygames_scores");
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LeaderRecord {
@@ -98,6 +100,7 @@ pub fn init_database<P: AsRef<Path>>(path: P) -> Result<Database, Box<dyn std::e
     }
     // Tables are created independently of the initial-data branch so an
     // existing installation gets the profile schema without replacing data.
+    let score_index_exists = db.begin_read()?.open_table(PENDING_CRAZYGAMES_SCORES_TABLE).is_ok();
     let write_txn = db.begin_write()?;
     write_txn.open_table(MATCHES_TABLE)?;
     write_txn.open_table(PLAYER_MATCH_INDEX_TABLE)?;
@@ -107,6 +110,19 @@ pub fn init_database<P: AsRef<Path>>(path: P) -> Result<Database, Box<dyn std::e
     write_txn.open_table(MATCH_STARTS_TABLE)?;
     write_txn.open_table(PENDING_REPLAY_VERIFICATIONS_TABLE)?;
     write_txn.open_table(VERIFIED_VICTORY_BOARD_TABLE)?;
+    write_txn.open_table(PENDING_CRAZYGAMES_SCORES_TABLE)?;
+    if !score_index_exists {
+        let players = write_txn.open_table(PLAYERS_TABLE)?;
+        let mut pending = write_txn.open_table(PENDING_CRAZYGAMES_SCORES_TABLE)?;
+        for row in players.iter()? {
+            let (key, bytes) = row?;
+            let account: crate::db::PlayerAccount = serde_json::from_slice(bytes.value())?;
+            if account.linked_identities.iter().any(|identity| identity.provider == "crazygames")
+                && account.profile.playgames_sync_revision > account.profile.crazygames_synced_revision {
+                pending.insert(key.value(), b"1".as_slice())?;
+            }
+        }
+    }
     write_txn.commit()?;
     Ok(db)
 }

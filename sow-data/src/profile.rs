@@ -297,7 +297,9 @@ pub struct MatchExitCommand {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MatchWork {
-    Exit { match_id: String, account_id: String },
+    // Keep the persisted tag so pending recoveries survive the rollout.
+    #[serde(rename = "exit")]
+    RecoveryExit { match_id: String, account_id: String },
     Participant {
         match_id: String,
         account_id: String,
@@ -311,14 +313,14 @@ pub enum MatchWork {
 impl MatchWork {
     pub fn match_id(&self) -> &str {
         match self {
-            Self::Exit { match_id, .. } | Self::Participant { match_id, .. }
+            Self::RecoveryExit { match_id, .. } | Self::Participant { match_id, .. }
                 | Self::Replay { match_id } => match_id,
         }
     }
 
     pub fn key(&self) -> String {
         match self {
-            Self::Exit { match_id, account_id } => format!("exit:{match_id}:{account_id}"),
+            Self::RecoveryExit { match_id, account_id } => format!("exit:{match_id}:{account_id}"),
             Self::Participant { match_id, account_id, .. } => format!("participant:{match_id}:{account_id}"),
             // Numeric keys preserve the existing durable whole-replay queue.
             Self::Replay { match_id } => match_id.clone(),
@@ -332,11 +334,14 @@ pub struct MatchWorkRecord {
     pub state: MatchExitState,
     pub retry_at: u64,
     pub last_error: Option<String>,
+    #[serde(default)]
+    pub queued_at_ms: u64,
 }
 
 impl MatchWorkRecord {
     pub fn new(work: MatchWork) -> Self {
-        Self { work, state: MatchExitState::Requested, retry_at: 0, last_error: None }
+        Self { work, state: MatchExitState::Requested, retry_at: 0, last_error: None,
+            queued_at_ms:std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64 }
     }
 
     pub fn decode(key: &str, bytes: &[u8]) -> Result<Self, serde_json::Error> {

@@ -237,32 +237,113 @@ impl SowApp {
 
     fn poll_database_events(&mut self) {
         while let Ok(event) = self.tasks.db_rx.try_recv() {
-            let event = match event {
-                crate::player_progress::DbEvent::MatchExitLoaded {
-                    account_id, match_id, cycle_id, request_id, display_name, provider, progress, state,
-                } => {
-                    if request_id <= self.profile_last_applied_request { continue; }
-                    if !self.matches_exit_response(&account_id, &match_id, cycle_id) {
-                        if request_id == self.identity_request_seq { self.profile_request_in_flight = false; }
-                        continue;
-                    }
-                    log::info!("[menu-flow] server exit state={state:?} match={match_id} cycle={cycle_id}");
-                    if let Some(wait) = &mut self.exit_reward_wait { wait.server_state = Some(state); }
-                    crate::player_progress::DbEvent::ProfileLoaded { progress, account_id, display_name, provider, request_id }
-                }
-                crate::player_progress::DbEvent::MatchExitFailed { account_id, match_id, cycle_id, request_id, status } => {
-                    if request_id <= self.profile_last_applied_request { continue; }
-                    if !self.matches_exit_response(&account_id, &match_id, cycle_id) {
-                        if request_id == self.identity_request_seq { self.profile_request_in_flight = false; }
-                        continue;
-                    }
-                    crate::player_progress::DbEvent::LoadFailed { request_id, status }
-                }
-                event => event,
-            };
             match event {
-                crate::player_progress::DbEvent::MatchExitLoaded { .. }
-                    | crate::player_progress::DbEvent::MatchExitFailed { .. } => unreachable!("exit responses are checked before profile application"),
+                crate::player_progress::DbEvent::MatchResultLoaded {
+                    account_id,
+                    match_id,
+                    cycle_id,
+                    request_id,
+                    display_name,
+                    provider,
+                    progress,
+                    state,
+                    closure_recorded,
+                } => {
+                    if !self.matches_exit_response(&account_id, &match_id, cycle_id)
+                        || self
+                            .menu_return
+                            .as_ref()
+                            .and_then(|context| context.result_request_id)
+                            != Some(request_id)
+                    {
+                        continue;
+                    }
+                    let context = self.menu_return.as_mut().unwrap();
+                    context.result_request_id = None;
+                    context.server_state = Some(state);
+                    context.exit_recorded |= closure_recorded;
+                    if closure_recorded && self.ui.app.phase == crate::ClientPhase::Playing {
+                        self.begin_relay_closed_return();
+                    }
+                    if let Some(progress) = progress {
+                        if matches!(
+                            state,
+                            sow_data::profile::MatchExitState::Confirmed
+                                | sow_data::profile::MatchExitState::Rejected
+                        ) {
+                            if self.ui.app.phase == crate::ClientPhase::Playing
+                                || (self.ui.app.phase == crate::ClientPhase::Splash
+                                    && self.ui.app.splash_state.job
+                                        == crate::ui::loading_screen::SplashJob::EnterGame)
+                            {
+                                self.begin_relay_closed_return();
+                                if let Some(context) = &mut self.menu_return {
+                                    context.server_state = Some(state);
+                                }
+                            }
+                            self.profile_last_applied_request =
+                                self.profile_last_applied_request.max(request_id);
+                            self.apply_cloud_profile(progress, account_id, display_name, provider);
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                self.boot_db_settled = true;
+                            }
+                        }
+                    }
+                    self.schedule_reward_profile_retry();
+                }
+                crate::player_progress::DbEvent::MatchResultFailed {
+                    account_id,
+                    match_id,
+                    cycle_id,
+                    request_id,
+                    status,
+                } => {
+                    if !self.matches_exit_response(&account_id, &match_id, cycle_id)
+                        || self
+                            .menu_return
+                            .as_ref()
+                            .and_then(|context| context.result_request_id)
+                            != Some(request_id)
+                    {
+                        continue;
+                    }
+                    self.menu_return.as_mut().unwrap().result_request_id = None;
+                    self.mark_menu_return_error();
+                    log::warn!(
+                        "[menu-flow] result observation failed match={match_id} cycle={cycle_id} status={status:?}"
+                    );
+                    self.schedule_reward_profile_retry();
+                }
+                crate::player_progress::DbEvent::ExitRecovery {
+                    account_id,
+                    match_id,
+                    cycle_id,
+                    request_id,
+                    accepted,
+                    status,
+                } => {
+                    if !self.matches_exit_response(&account_id, &match_id, cycle_id)
+                        || self
+                            .menu_return
+                            .as_ref()
+                            .and_then(|context| context.recovery_request_id)
+                            != Some(request_id)
+                    {
+                        continue;
+                    }
+                    let context = self.menu_return.as_mut().unwrap();
+                    context.recovery_request_id = None;
+                    context.recovery_accepted = accepted;
+                    context.recording_deadline =
+                        Some(web_time::Instant::now() + web_time::Duration::from_secs(1));
+                    if !accepted {
+                        log::warn!(
+                            "[menu-flow] exit recovery remains pending match={match_id} status={status:?}"
+                        );
+                    }
+                    self.save_menu_return_context();
+                }
                 crate::player_progress::DbEvent::ProfileLoaded {
                     progress,
                     account_id,
@@ -398,9 +479,7 @@ impl SowApp {
                         self.fetch_cloud_progress();
                         continue;
                     }
-                    if !self.pending_reward_receipt_ids.is_empty()
-                        || self.exit_reward_wait.is_some()
-                    {
+                    if !self.pending_reward_receipt_ids.is_empty() || self.waiting_menu_return() {
                         self.mark_menu_return_error();
                         log::warn!(
                             "[rewards] profile refresh id={request_id} failed status={status:?}; keeping retry window"
@@ -548,9 +627,12 @@ impl SowApp {
                     if operation == "leader unlock" {
                         self.purchase_revision = self.purchase_revision.wrapping_add(1);
                     }
-                    let campaign_episode = operation.strip_prefix("campaign completion:").map(str::to_string);
-                    let finish_campaign_exit = campaign_episode.as_deref()
-                        .is_some_and(|episode| self.pending_campaign_exit.as_deref() == Some(episode));
+                    let campaign_episode = operation
+                        .strip_prefix("campaign completion:")
+                        .map(str::to_string);
+                    let finish_campaign_exit = campaign_episode.as_deref().is_some_and(|episode| {
+                        self.pending_campaign_exit.as_deref() == Some(episode)
+                    });
                     let saved_guides = std::mem::take(&mut self.progress.menu_guides);
                     progress.merge_menu_guides(saved_guides);
                     let local_episodes = self.progress.completed_episodes.clone();
@@ -562,13 +644,19 @@ impl SowApp {
                     );
                     let server_episodes = progress.completed_episodes.clone();
                     progress.completed_episodes.extend(local_episodes);
-                    progress.pending_campaign_completions.extend(local_pending_episodes);
+                    progress
+                        .pending_campaign_completions
+                        .extend(local_pending_episodes);
                     progress.pending_campaign_completions.extend(
-                        progress.completed_episodes.iter()
+                        progress
+                            .completed_episodes
+                            .iter()
                             .filter(|episode| !server_episodes.contains(*episode))
                             .cloned(),
                     );
-                    progress.pending_campaign_completions.retain(|episode| !server_episodes.contains(episode));
+                    progress
+                        .pending_campaign_completions
+                        .retain(|episode| !server_episodes.contains(episode));
                     if let Some(episode) = campaign_episode.as_deref() {
                         progress.completed_episodes.insert(episode.to_string());
                         progress.pending_campaign_completions.remove(episode);
@@ -608,9 +696,20 @@ impl SowApp {
                         );
                         continue;
                     }
-                    if operation == "leader selection" || operation.starts_with("campaign completion:") {
-                        self.profile_action_retry_at = Some(web_time::Instant::now() + web_time::Duration::from_secs(if status == Some(409) { 30 } else { 2 }));
-                        log::warn!("[profile] {operation} failed status={status:?}; saved request will retry");
+                    if operation == "leader selection"
+                        || operation.starts_with("campaign completion:")
+                    {
+                        self.profile_action_retry_at = Some(
+                            web_time::Instant::now()
+                                + web_time::Duration::from_secs(if status == Some(409) {
+                                    30
+                                } else {
+                                    2
+                                }),
+                        );
+                        log::warn!(
+                            "[profile] {operation} failed status={status:?}; saved request will retry"
+                        );
                     }
                     self.ui.app.main_menu_state.store_busy = false;
                     self.ui.app.main_menu_state.error_message =

@@ -30,6 +30,13 @@ pub struct HudMapFeedback {
     pub position: [f32; 2],
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BuildingPlacement {
+    pub kind: sow_core::game::BuildingKind,
+    pub tile_idx: u32,
+    pub pending: bool,
+}
+
 pub struct HudState {
     pub gold: f64,
     pub troops: f64,
@@ -48,7 +55,7 @@ pub struct HudState {
     pub show_alliance_inbox: bool,
     pub show_betrayal_warning: Option<(u16, sow_core::protocol::GameplayIntent)>,
     pub betrayal_warning_cached: Option<(u16, sow_core::protocol::GameplayIntent)>,
-    pub selected_building_kind: Option<sow_core::game::BuildingKind>,
+    pub building_placement: Option<BuildingPlacement>,
     pub selected_warship_build: bool,
     pub building_costs: [f64; 9],
     pub selected_nuke_kind: Option<sow_core::game::NukeKind>,
@@ -82,7 +89,7 @@ impl Default for HudState {
             show_alliance_inbox: false,
             show_betrayal_warning: None,
             betrayal_warning_cached: None,
-            selected_building_kind: None,
+            building_placement: None,
             selected_warship_build: false,
             building_costs: [0.0; 9],
             selected_nuke_kind: None,

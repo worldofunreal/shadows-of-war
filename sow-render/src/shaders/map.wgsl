@@ -14,11 +14,11 @@ struct Globals {
     effect_breathe: f32,
     effect_energy_flow: f32,
     my_player_id: f32,
-    hover_hex: vec2<f32>,
-    hover_building_kind: f32,
+    placement_active: f32,
+    placement_pad_x: f32,
+    placement_pad_y: f32,
     territory_opacity: f32,
     fallout_slots: array<vec4<f32>, 9>,
-    nobuild_slots: array<vec4<f32>, 32>,
     blend_mode: f32,
     effect_heartbeat: f32,
     effect_war_fog: f32,
@@ -54,6 +54,7 @@ var<uniform> player_colors: PlayerColors;
 var<uniform> player_skin_styles: PlayerSkinStyles;
 var terrain_texture: texture_2d<f32>;
 var owner_texture: texture_2d<u32>;
+var occupancy_texture: texture_2d<u32>;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -919,95 +920,16 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
         base_color = base_color * mix(globals.shader_params[__MAP_VIGNETTE_EDGE_GAIN__].x, globals.shader_params[__MAP_VIGNETTE_CENTER_GAIN__].x, vignette);
     }
 
-    // ── Building Placement Holographic Grid ──
-    if (globals.effect_holo_grid > 0.0 && globals.hover_building_kind > 0.0) {
-        var cell_in_nobuild_zone = false;
-        var is_upgrade_target = false;
-        for (var i = 0; i < 32; i = i + 1) {
-            let slot = globals.nobuild_slots[i];
-            let active_flag = slot.w;
-            if (active_flag > 0.0) {
-                let b_hex = vec2<i32>(i32(slot.x), i32(slot.y));
-                let b_dist = hex_distance(cell_hex, b_hex);
-                let block_radius = i32(slot.z);
-                if (active_flag > 1.0 && b_dist == 0) {
-                    is_upgrade_target = true;
-                } else if (active_flag == 1.0 && b_dist < block_radius) {
-                    cell_in_nobuild_zone = true;
-                }
-            }
-        }
-
-        let hover_center = vec2<i32>(i32(globals.hover_hex.x), i32(globals.hover_hex.y));
-        let hover_w = hex_to_world(hover_center);
-        let cell_w = hex_to_world(cell_hex);
-        let dist_w = distance(hover_w, cell_w);
-
-        if (dist_w <= globals.shader_params[__MAP_BUILD_REACH__].x || is_upgrade_target) {
-            let is_mine = owner_id == u32(globals.my_player_id);
-            if (is_land && is_mine) {
-                var overlay_color = globals.shader_params[__MAP_BUILD_VALID_COLOR__].rgb;
-                var fill_intensity = globals.shader_params[__MAP_BUILD_VALID_FILL__].x;
-                if (is_upgrade_target) {
-                    overlay_color = globals.shader_params[__MAP_BUILD_UPGRADE_COLOR__].rgb;
-                    fill_intensity = globals.shader_params[__MAP_BUILD_UPGRADE_FILL__].x;
-                } else if (cell_in_nobuild_zone) {
-                    overlay_color = globals.shader_params[__MAP_BUILD_BLOCKED_COLOR__].rgb;
-                    fill_intensity = globals.shader_params[__MAP_BUILD_BLOCKED_FILL__].x;
-                }
-
-                // ── Cybernetic Placement Scan Lines ──
-                let scanline = sin(screen_pixel.y * globals.shader_params[__MAP_BUILD_SCAN_SPATIAL__].x + globals.time * globals.shader_params[__MAP_BUILD_SCAN_SPEED__].x) * globals.shader_params[__MAP_BUILD_SCAN_AMOUNT__].x + globals.shader_params[__MAP_BUILD_SCAN_BASE__].x;
-                overlay_color = overlay_color * scanline;
-
-                let fade_start = globals.shader_params[__MAP_BUILD_FADE_START__].x;
-                let fade_end = max(fade_start + 0.001, globals.shader_params[__MAP_BUILD_FADE_END__].x);
-                let scan_fade = 1.0 - smoothstep_safe(fade_start, fade_end, dist_w);
-                let wave = sin(globals.time * globals.shader_params[__MAP_BUILD_WAVE_SPEED__].x - dist_w * globals.shader_params[__MAP_BUILD_WAVE_DISTANCE__].x) * 0.5 + 0.5;
-                let border_pulse = globals.shader_params[__MAP_BUILD_BORDER_BASE__].x + globals.shader_params[__MAP_BUILD_BORDER_PULSE__].x * wave;
-                let fill_pulse = globals.shader_params[__MAP_BUILD_FILL_BASE__].x + globals.shader_params[__MAP_BUILD_FILL_PULSE__].x * wave;
-
-                let fill_alpha = fill_intensity * scan_fade * fill_pulse;
-                base_color = mix(base_color, overlay_color, fill_alpha);
-
-                let valid_edge_width = max(globals.shader_params[__MAP_BUILD_VALID_EDGE__].x, 0.006);
-                let line_intensity = 1.0 - smoothstep_safe(0.005, valid_edge_width, min_dist_to_edge);
-                let border_alpha = line_intensity * border_pulse * scan_fade * globals.shader_params[__MAP_BUILD_VALID_EDGE_STRENGTH__].x;
-                base_color = mix(base_color, overlay_color * 1.5, border_alpha);
-            } else {
-                var overlay_color = globals.shader_params[__MAP_BUILD_BLOCKED_COLOR__].rgb;
-                let fade_start = globals.shader_params[__MAP_BUILD_FADE_START__].x;
-                let fade_end = max(fade_start + 0.001, globals.shader_params[__MAP_BUILD_FADE_END__].x);
-                let scan_fade = 1.0 - smoothstep_safe(fade_start, fade_end, dist_w);
-
-                // ── Cybernetic Placement Scan Lines ──
-                let scanline = sin(screen_pixel.y * globals.shader_params[__MAP_BUILD_SCAN_SPATIAL__].x + globals.time * globals.shader_params[__MAP_BUILD_SCAN_SPEED__].x) * globals.shader_params[__MAP_BUILD_SCAN_AMOUNT__].x + globals.shader_params[__MAP_BUILD_SCAN_BASE__].x;
-                overlay_color = overlay_color * scanline;
-
-                let blocked_edge_width = max(globals.shader_params[__MAP_BUILD_BLOCKED_EDGE__].x, 0.001);
-                let line_intensity = 1.0 - smoothstep_safe(0.0, blocked_edge_width, min_dist_to_edge);
-                let line_alpha = line_intensity * scan_fade * globals.shader_params[__MAP_BUILD_BLOCKED_EDGE_STRENGTH__].x;
-                base_color = mix(base_color, overlay_color, line_alpha);
-
-                let fill_alpha = globals.shader_params[__MAP_BUILD_BLOCKED_AREA_FILL__].x * scan_fade;
-                base_color = mix(base_color, overlay_color, fill_alpha);
-            }
-        } else if (cell_in_nobuild_zone) {
-            var overlay_color = globals.shader_params[__MAP_BUILD_BLOCKED_COLOR__].rgb;
-
-            // ── Cybernetic Placement Scan Lines ──
-            let scanline = sin(screen_pixel.y * globals.shader_params[__MAP_BUILD_SCAN_SPATIAL__].x + globals.time * globals.shader_params[__MAP_BUILD_SCAN_SPEED__].x) * globals.shader_params[__MAP_BUILD_SCAN_AMOUNT__].x + globals.shader_params[__MAP_BUILD_SCAN_BASE__].x;
-            overlay_color = overlay_color * scanline;
-
-            let fill_pulse = globals.shader_params[__MAP_BUILD_BLOCKED_PULSE_BASE__].x + globals.shader_params[__MAP_BUILD_BLOCKED_PULSE_AMOUNT__].x * sin(globals.time * globals.shader_params[__MAP_BUILD_WAVE_SPEED__].x);
-            let fill_alpha = globals.shader_params[__MAP_BUILD_BLOCKED_FAR_FILL__].x * fill_pulse;
-            base_color = mix(base_color, overlay_color, fill_alpha);
-
-            let blocked_edge_width = max(globals.shader_params[__MAP_BUILD_BLOCKED_EDGE_FAR__].x, 0.001);
-            let line_intensity = 1.0 - smoothstep_safe(0.0, blocked_edge_width, min_dist_to_edge);
-            let line_alpha = line_intensity * globals.shader_params[__MAP_BUILD_BLOCKED_EDGE_FAR_STRENGTH__].x;
-            base_color = mix(base_color, overlay_color * 1.2, line_alpha);
-        }
+    // Construction grid shows real occupied cells; the selected 4x4 base is
+    // validated and drawn by Rust, so free individual cells never promise a fit.
+    if (globals.placement_active > 0.0 && is_land && owner_id == u32(globals.my_player_id)) {
+        let occupied = textureLoad(occupancy_texture, cell_hex, 0).x > 0u;
+        let color = select(vec3<f32>(0.78, 0.86, 0.82), vec3<f32>(0.7, 0.35, 0.3), occupied);
+        let edge_width = max(fwidth(min_dist_to_edge), 0.001);
+        let edge = 1.0 - smoothstep_safe(0.0, edge_width, min_dist_to_edge);
+        let readable = smoothstep_safe(2.0, 5.0, globals.zoom);
+        base_color = mix(base_color, color, edge * readable * select(select(0.20, 0.28, globals.effect_holo_grid > 0.0), 0.42, occupied));
+        base_color = mix(base_color, vec3<f32>(0.12, 0.08, 0.08), select(0.0, 0.22, occupied));
     }
 
     // ── Fog of War shading ──

@@ -71,7 +71,9 @@ impl SowApp {
         self.ui.last_projectile_snapshot_tick = None;
         self.ui.detonation_scratch.clear();
         self.ui.border_flash_intensities.clear();
-        self.ui.placement_scratch.clear();
+        self.ui.app.hud_state.building_placement = None;
+        self.input.building_drag_offset = None;
+        self.ui.building_placement_cache = Default::default();
         self.ui.click_markers.clear();
         self.ui.transport_target_markers.clear();
         self.ui.transport_target_seen.clear();
@@ -235,7 +237,7 @@ impl SowApp {
                         // loader.js owns the boot presentation. Rust only publishes the phase
                         // and waits for identity/bootstrap work before exposing the menu.
                         splash_show_loading_progress(&mut self.ui.app.splash_state, 0.95);
-                        if !self.boot_db_settled || self.exit_reward_wait.is_some() {
+                        if !self.boot_db_settled || self.waiting_menu_return() {
                             return;
                         }
                         if self.should_portal_auto_intro() {
@@ -264,14 +266,8 @@ impl SowApp {
                             );
                         }
 
-                        let hero_ready = true;
-                        let lobby_snapshot_ready = self.web_exit_lobbies_ready;
-                        let reward_receipt_ready = self.exit_reward_wait.is_none();
-                        if self.net.client.is_some()
-                            && hero_ready
-                            && lobby_snapshot_ready
-                            && reward_receipt_ready
-                        {
+                        let reward_receipt_ready = !self.waiting_menu_return();
+                        if self.net.client.is_some() && reward_receipt_ready {
                             log::info!(
                                 "Exit game splash: menu dependencies ready, transitioning to main menu"
                             );

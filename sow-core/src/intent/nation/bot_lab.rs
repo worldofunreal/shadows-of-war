@@ -2579,12 +2579,12 @@ fn s16_seed_replays_same_checkpoints_and_first_failure() {
     );
 }
 
-#[test]
-fn s16_checkpoint_decision_and_state_reference() {
+fn s16_building_rules_trace(legacy: bool) -> Vec<(u64, u64)> {
     const S16_REFERENCE_TICKS: u64 = 2_102;
 
     let mut scenario = build_s16_scenario();
     scenario.assert_setup();
+    scenario.engine.legacy_building_rules = legacy;
     let mut hash = 0xcbf29ce484222325;
     let mut ticks = 0u64;
     let mut checkpoints = Vec::with_capacity(9);
@@ -2616,9 +2616,37 @@ fn s16_checkpoint_decision_and_state_reference() {
         s16_trace_hash_bytes(&mut hash, &tick_trace);
         checkpoints.push((ticks, hash));
     }
-    // Typed emote fields change the serialized trace. Projecting those fields
-    // back to the legacy format reproduced the prior reference exactly;
-    // early/long-horizon contracts still verify gameplay independently.
+    checkpoints
+}
+
+#[test]
+fn s16_checkpoint_decision_and_state_reference() {
+    let checkpoints = s16_building_rules_trace(false);
+    // v3 allows touching foundations; the historical reference is checked separately.
+    const REFERENCE: &[(u64, u64)] = &[
+        (250, 0x2e8ea695b8d4f132),
+        (500, 0x84bdecb5d45d61f0),
+        (750, 0x23fcfd7f17face3f),
+        (1000, 0x8bee0a9f03f955b6),
+        (1250, 0x7a36ab35567e29e1),
+        (1500, 0xc07fdecbf5fc7252),
+        (1750, 0xf6a3b7e9634eeac1),
+        (1867, 0x718abeb0d2f147bc),
+    ];
+    assert_eq!(
+        checkpoints,
+        s16_building_rules_trace(false),
+        "same seed must reproduce v3 checkpoints"
+    );
+    assert_eq!(
+        checkpoints, REFERENCE,
+        "S16 checkpoint intent/state trace changed"
+    );
+}
+
+#[test]
+fn historical_s16_building_rules_keep_recorded_results() {
+    let checkpoints = s16_building_rules_trace(true);
     const REFERENCE: &[(u64, u64)] = &[
         (250, 0xfd4c_71eb_6368_374c),
         (500, 0x7234_7a30_5390_e14f),
@@ -2632,7 +2660,7 @@ fn s16_checkpoint_decision_and_state_reference() {
     ];
     assert_eq!(
         checkpoints, REFERENCE,
-        "S16 checkpoint intent/state trace changed"
+        "pre-v3 building rules changed recorded outcomes"
     );
 }
 

@@ -1,37 +1,3 @@
-/// Closest same-kind building within stack range of the click (matches server logic).
-pub fn find_stack_target_tile(
-    kind: sow_core::game::BuildingKind,
-    click_x: i32,
-    click_y: i32,
-    map_w: u32,
-    my_id: u16,
-    buildings: &[sow_core::protocol::BuildingSnapshot],
-) -> Option<u32> {
-    let stack_dist = sow_core::building::placement::STRUCTURE_MIN_DIST;
-    let mut best: Option<(i32, u64, u32)> = None;
-    for b in buildings {
-        if b.owner_id != my_id || b.kind != kind {
-            continue;
-        }
-        let bx = (b.tile_idx % map_w) as i32;
-        let by = (b.tile_idx / map_w) as i32;
-        let d = (click_x - bx).abs() + (click_y - by).abs();
-        if d > stack_dist {
-            continue;
-        }
-        let cand = (d, b.id, b.tile_idx);
-        match best {
-            None => best = Some(cand),
-            Some((bd, bid, _)) => {
-                if d < bd || (d == bd && b.id < bid) {
-                    best = Some(cand);
-                }
-            }
-        }
-    }
-    best.map(|(_, _, tile)| tile)
-}
-
 #[derive(Clone, Copy)]
 pub struct PlacementQuery<'a> {
     pub kind: sow_core::game::BuildingKind,
@@ -54,32 +20,13 @@ pub struct BuildingPlacementCache {
     map_h: u32,
     grid_w: u32,
     cells: Vec<Vec<usize>>,
-    last_key: Option<(u32, u32, sow_core::game::BuildingKind, u16)>,
-    last_result: Option<Result<u32, &'static str>>,
+    buildings_identity: (usize, usize),
 }
 
 impl BuildingPlacementCache {
     pub fn resolve(&mut self, tick: u64, query: &PlacementQuery) -> Result<u32, &'static str> {
-        let click_idx = if query.click_x >= 0
-            && query.click_y >= 0
-            && query.click_x < query.map_w as i32
-            && query.click_y < query.map_h as i32
-        {
-            query.click_y as u32 * query.map_w + query.click_x as u32
-        } else {
-            u32::MAX
-        };
-        let key = (click_idx, query.map_w, query.kind, query.my_id);
         self.rebuild_index(tick, query);
-        if self.last_key == Some(key)
-            && let Some(result) = self.last_result
-        {
-            return result;
-        }
-        let result = resolve_building_placement_tile_indexed(query, self);
-        self.last_key = Some(key);
-        self.last_result = Some(result);
-        result
+        resolve_building_placement_tile_indexed(query, Some(self))
     }
 
     pub fn is_legal_site(&mut self, tick: u64, query: &PlacementQuery, tile_idx: u32) -> bool {
@@ -92,14 +39,20 @@ impl BuildingPlacementCache {
         }
         let x = tile_idx % query.map_w;
         let y = tile_idx / query.map_w;
-        placement_site_status(query, Some(self), x, y).is_legal()
+        placement_site_status(query, Some(self), x, y).is_ok()
     }
 
     fn rebuild_index(&mut self, tick: u64, query: &PlacementQuery) {
-        if self.tick == Some(tick) && self.map_w == query.map_w && self.map_h == query.map_h {
+        let buildings_identity = (query.buildings.as_ptr() as usize, query.buildings.len());
+        if self.tick == Some(tick)
+            && self.map_w == query.map_w
+            && self.map_h == query.map_h
+            && self.buildings_identity == buildings_identity
+        {
             return;
         }
         self.tick = Some(tick);
+        self.buildings_identity = buildings_identity;
         self.map_w = query.map_w;
         self.map_h = query.map_h;
         self.grid_w = query.map_w.div_ceil(PLACEMENT_CELL_SIZE);
@@ -124,8 +77,6 @@ impl BuildingPlacementCache {
                 self.cells[cell].push(index);
             }
         }
-        self.last_key = None;
-        self.last_result = None;
     }
 
     fn any_nearby(
@@ -164,61 +115,48 @@ impl BuildingPlacementCache {
     }
 }
 
-#[derive(Clone, Copy, Default)]
-struct PlacementSiteStatus {
-    owned: bool,
-    land: bool,
-    enough_space: bool,
-    kind_specific: bool,
-}
-
-impl PlacementSiteStatus {
-    fn is_legal(self) -> bool {
-        self.owned && self.land && self.enough_space && self.kind_specific
-    }
-}
-
 fn placement_site_status(
     query: &PlacementQuery,
     index: Option<&BuildingPlacementCache>,
     x: u32,
     y: u32,
-) -> PlacementSiteStatus {
-    if query.map_w == 0 || x >= query.map_w || y >= query.map_h {
-        return PlacementSiteStatus::default();
-    }
-    let tile_idx = y * query.map_w + x;
-    let owned = query.owners.get(tile_idx as usize).copied() == Some(query.my_id);
-    if !owned {
-        return PlacementSiteStatus::default();
-    }
-    let terrain_byte = query.terrain.get(tile_idx as usize).copied().unwrap_or(0);
-    let land = terrain_byte & 0x80 != 0;
-    if !land {
-        return PlacementSiteStatus {
-            owned,
-            ..PlacementSiteStatus::default()
-        };
-    }
-    let footprint = sow_core::building::BuildingFootprint::at(query.kind, x, y);
-    let (range, enforce_spacing) = if query.kind == sow_core::game::BuildingKind::Farm {
-        (3, false)
-    } else {
-        (6, true)
-    };
-    let enough_space = footprint_fits(query, footprint)
-        && !blocked_by_building(query, index, x, y, footprint, range, enforce_spacing);
-    let kind_specific = match query.kind {
-        sow_core::game::BuildingKind::Farm => terrain_byte & 0x1f < 10,
-        sow_core::game::BuildingKind::Port => footprint_touches_water(query, footprint),
-        _ => true,
-    };
-    PlacementSiteStatus {
-        owned,
-        land,
-        enough_space,
-        kind_specific,
-    }
+) -> Result<(), sow_core::building::PlacementError> {
+    sow_core::building::validate_building_site(
+        query.kind,
+        x,
+        y,
+        query.map_w,
+        query.map_h,
+        query.my_id,
+        |x, y| {
+            query
+                .owners
+                .get((y * query.map_w + x) as usize)
+                .copied()
+                .unwrap_or(0)
+        },
+        |x, y| {
+            query
+                .terrain
+                .get((y * query.map_w + x) as usize)
+                .copied()
+                .unwrap_or(0)
+        },
+        |footprint| {
+            let blocks = |building: &sow_core::protocol::BuildingSnapshot| {
+                footprint.intersects(sow_core::building::BuildingFootprint::at(
+                    building.kind,
+                    building.tile_idx % query.map_w,
+                    building.tile_idx / query.map_w,
+                ))
+            };
+            if let Some(index) = index {
+                index.any_nearby(query, x, y, 3, blocks)
+            } else {
+                query.buildings.iter().any(blocks)
+            }
+        },
+    )
 }
 
 pub fn resolve_build_target_tile(query: &PlacementQuery) -> Result<u32, &'static str> {
@@ -226,185 +164,19 @@ pub fn resolve_build_target_tile(query: &PlacementQuery) -> Result<u32, &'static
 }
 
 pub fn resolve_building_placement_tile(query: &PlacementQuery) -> Result<u32, &'static str> {
-    resolve_placement(query, None)
+    resolve_building_placement_tile_indexed(query, None)
 }
 
 fn resolve_building_placement_tile_indexed(
     query: &PlacementQuery,
-    index: &BuildingPlacementCache,
-) -> Result<u32, &'static str> {
-    resolve_placement(query, Some(index))
-}
-
-fn footprint_fits(
-    query: &PlacementQuery,
-    footprint: sow_core::building::BuildingFootprint,
-) -> bool {
-    for y in footprint.top..footprint.top + footprint.height as i32 {
-        for x in footprint.left..footprint.left + footprint.width as i32 {
-            if x < 0 || y < 0 || x >= query.map_w as i32 || y >= query.map_h as i32 {
-                return false;
-            }
-            let idx = y as u32 * query.map_w + x as u32;
-            if query.owners.get(idx as usize).copied() != Some(query.my_id)
-                || query.terrain.get(idx as usize).copied().unwrap_or(0) & 0x80 == 0
-            {
-                return false;
-            }
-        }
-    }
-    true
-}
-
-fn footprint_touches_water(
-    query: &PlacementQuery,
-    footprint: sow_core::building::BuildingFootprint,
-) -> bool {
-    for y in footprint.top..footprint.top + footprint.height as i32 {
-        for x in footprint.left..footprint.left + footprint.width as i32 {
-            for (dx, dy) in [
-                (1, 0),
-                (-1, 0),
-                (0, 1),
-                (0, -1),
-                (1, -1),
-                (-1, -1),
-                (1, 1),
-                (-1, 1),
-            ] {
-                let nx = x + dx;
-                let ny = y + dy;
-                if nx >= 0 && ny >= 0 && nx < query.map_w as i32 && ny < query.map_h as i32 {
-                    let idx = ny as u32 * query.map_w + nx as u32;
-                    if query.terrain.get(idx as usize).copied().unwrap_or(0) & 0x80 == 0 {
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    false
-}
-
-fn blocked_by_building(
-    query: &PlacementQuery,
-    index: Option<&BuildingPlacementCache>,
-    x: u32,
-    y: u32,
-    footprint: sow_core::building::BuildingFootprint,
-    range: u32,
-    enforce_spacing: bool,
-) -> bool {
-    let mut blocks = |building: &sow_core::protocol::BuildingSnapshot| {
-        let bx = (building.tile_idx % query.map_w) as i32;
-        let by = (building.tile_idx / query.map_w) as i32;
-        let other = sow_core::building::BuildingFootprint::at(building.kind, bx as u32, by as u32);
-        if footprint.intersects(other) {
-            return true;
-        }
-        let min_dist = sow_core::building::minimum_building_spacing(query.kind, building.kind);
-        let dx = x as i32 - bx;
-        let dy = y as i32 - by;
-        enforce_spacing && dx * dx + dy * dy < min_dist * min_dist
-    };
-    if let Some(index) = index {
-        index.any_nearby(query, x, y, range, &mut blocks)
-    } else {
-        query.buildings.iter().any(&mut blocks)
-    }
-}
-
-fn resolve_placement(
-    query: &PlacementQuery,
     index: Option<&BuildingPlacementCache>,
 ) -> Result<u32, &'static str> {
-    let kind = query.kind;
-    let click_x = query.click_x;
-    let click_y = query.click_y;
-    let map_w = query.map_w;
-    let map_h = query.map_h;
-    let owners = query.owners;
-    let terrain = query.terrain;
-    let my_id = query.my_id;
-
-    if kind == sow_core::game::BuildingKind::Farm {
-        if click_x < 0 || click_y < 0 || click_x >= map_w as i32 || click_y >= map_h as i32 {
-            return Err("Tap a lowland tile you own.");
-        }
-        let tile_idx = click_y as u32 * map_w + click_x as u32;
-        if !placement_site_status(query, index, click_x as u32, click_y as u32).is_legal() {
-            return Err("Tap an empty lowland tile you own.");
-        }
-        return Ok(tile_idx);
+    if query.click_x < 0 || query.click_y < 0 {
+        return Err(sow_core::building::PlacementError::OutsideMap.reason_key());
     }
-
-    let pokayoke_dist = 25;
-    let pokayoke_dist_sq = pokayoke_dist * pokayoke_dist;
-
-    let mut found_any_owned = false;
-    let mut found_any_land = false;
-    let mut found_any_far_enough = false;
-
-    let mut best: Option<(i32, u32)> = None;
-    for dy in -pokayoke_dist..=pokayoke_dist {
-        for dx in -pokayoke_dist..=pokayoke_dist {
-            let tx = click_x + dx;
-            let ty = click_y + dy;
-            if tx < 0 || tx >= map_w as i32 || ty < 0 || ty >= map_h as i32 {
-                continue;
-            }
-            if (dx * dx + dy * dy) >= pokayoke_dist_sq {
-                continue;
-            }
-            let tile_idx = (ty * map_w as i32 + tx) as u32;
-
-            if owners.get(tile_idx as usize).copied().unwrap_or(0) != my_id {
-                continue;
-            }
-            found_any_owned = true;
-
-            let tile_terrain = terrain.get(tile_idx as usize).copied().unwrap_or(0);
-            let is_land = (tile_terrain & 0x80) != 0;
-            if !is_land {
-                continue;
-            }
-            found_any_land = true;
-
-            let status = placement_site_status(query, index, tx as u32, ty as u32);
-            if !status.enough_space {
-                continue;
-            }
-            found_any_far_enough = true;
-            if !status.kind_specific {
-                continue;
-            }
-            let distance_sq = dx * dx + dy * dy;
-            let candidate = (distance_sq, tile_idx);
-            if best.is_none_or(|current| candidate < current) {
-                best = Some(candidate);
-            }
-        }
-    }
-
-    let Some((_, tile_idx)) = best else {
-        if !found_any_owned {
-            return Err("Build inside your own land.");
-        }
-        if !found_any_land {
-            return Err("Structures go on land, not water.");
-        }
-        if !found_any_far_enough {
-            if kind == sow_core::game::BuildingKind::City {
-                return Err("Too close to another City! Minimum spacing is 6 tiles.");
-            } else {
-                return Err(
-                    "Too close to another structure! Spacing rules: City requires 6, other structures require 4.",
-                );
-            }
-        }
-        return Err("No space nearby!");
-    };
-    Ok(tile_idx)
+    placement_site_status(query, index, query.click_x as u32, query.click_y as u32)
+        .map(|()| query.click_y as u32 * query.map_w + query.click_x as u32)
+        .map_err(|error| error.reason_key())
 }
 
 #[cfg(test)]
@@ -412,7 +184,7 @@ mod tests {
     use super::*;
     use sow_core::game::BuildingKind;
 
-    #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn placement_index_limits_checks_to_local_buildings() {
         let buildings: Vec<_> = (0..5000u32)
             .map(|tile_idx| sow_core::protocol::BuildingSnapshot {
@@ -448,7 +220,7 @@ mod tests {
         assert!(checked < buildings.len() / 10);
     }
 
-    #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn tutorial_sites_require_owned_land_and_clear_placement_space() {
         let (map_w, map_h, my_id) = (64, 64, 1);
         let owners = vec![my_id; (map_w * map_h) as usize];
@@ -474,14 +246,14 @@ mod tests {
             buildings: &buildings,
         };
         let legal_site = 40 * map_w + 40;
-        let too_close_site = 14 * map_w + 10;
+        let adjacent_site = 14 * map_w + 10;
         let occupied_site = buildings[0].tile_idx;
         let mut cache = BuildingPlacementCache::default();
 
         assert!(cache.is_legal_site(1, &query, legal_site));
         assert_eq!(cache.resolve(1, &query), Ok(legal_site));
         assert!(!cache.is_legal_site(1, &query, occupied_site));
-        assert!(!cache.is_legal_site(1, &query, too_close_site));
+        assert!(cache.is_legal_site(1, &query, adjacent_site));
 
         let mut foreign_owners = owners.clone();
         foreign_owners[legal_site as usize] = 2;
@@ -500,8 +272,8 @@ mod tests {
         assert!(!cache.is_legal_site(1, &water_site, legal_site));
     }
 
-    #[test]
-    fn preview_result_is_cached_until_tick_or_hover_changes() {
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn preview_observes_same_tick_ownership_and_building_changes() {
         let (map_w, map_h, my_id) = (32, 32, 1);
         let owners = vec![my_id; (map_w * map_h) as usize];
         let terrain = vec![0x80; (map_w * map_h) as usize];
@@ -562,58 +334,19 @@ mod tests {
             my_id,
             buildings: &buildings,
         };
-        assert_ne!(cache.resolve(11, &next), Ok(first));
-    }
-
-    #[test]
-    fn stack_target_uses_owner_kind_nearest_tie_break_and_historical_radius() {
-        let map_w = 40;
-        let building = |id, owner_id, kind, x, y| sow_core::protocol::BuildingSnapshot {
-            id,
-            tile_idx: y * map_w + x,
-            owner_id,
-            kind,
-            level: 1,
-            under_construction: false,
-            ticks_until_complete: 0,
+        assert_eq!(cache.resolve(10, &next), Err("hud.build_occupied"));
+        let mut foreign_owners = owners.clone();
+        foreign_owners[(12 * map_w + 12) as usize] = 2;
+        let foreign = PlacementQuery {
+            click_x: 12,
+            click_y: 12,
+            owners: &foreign_owners,
+            ..next
         };
-        let buildings = [
-            building(1, 2, BuildingKind::City, 10, 10),
-            building(8, 1, BuildingKind::City, 12, 10),
-            building(9, 1, BuildingKind::City, 11, 10),
-            building(2, 1, BuildingKind::Farm, 10, 10),
-        ];
-
-        assert_eq!(
-            find_stack_target_tile(BuildingKind::City, 10, 10, map_w, 1, &buildings),
-            Some(10 * map_w + 11)
-        );
-
-        let tied = [
-            building(8, 1, BuildingKind::City, 12, 10),
-            building(7, 1, BuildingKind::City, 10, 12),
-            building(1, 2, BuildingKind::City, 10, 10),
-            building(2, 1, BuildingKind::Farm, 10, 10),
-        ];
-        assert_eq!(
-            find_stack_target_tile(BuildingKind::City, 10, 10, map_w, 1, &tied),
-            Some(12 * map_w + 10)
-        );
-
-        let radius = sow_core::building::placement::STRUCTURE_MIN_DIST as u32;
-        let boundary = [building(3, 1, BuildingKind::City, 10 + radius, 10)];
-        let outside = [building(4, 1, BuildingKind::City, 11 + radius, 10)];
-        assert_eq!(
-            find_stack_target_tile(BuildingKind::City, 10, 10, map_w, 1, &boundary),
-            Some(10 * map_w + 10 + radius)
-        );
-        assert_eq!(
-            find_stack_target_tile(BuildingKind::City, 10, 10, map_w, 1, &outside),
-            None
-        );
+        assert_eq!(cache.resolve(10, &foreign), Err("hud.build_owned_land"));
     }
 
-    #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn farm_uses_the_standard_footprint_in_bounds_on_owned_land_without_overlap() {
         let (map_w, map_h, my_id) = (8, 8, 1);
         let owners = vec![my_id; (map_w * map_h) as usize];

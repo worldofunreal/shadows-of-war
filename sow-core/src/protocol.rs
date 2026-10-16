@@ -7,11 +7,12 @@ use serde::{Deserialize, Serialize};
 
 pub use sow_data::MAX_MATCH_PARTICIPANTS;
 
-/// Shared by live join compatibility and persisted turn recordings.
-pub const GAMEPLAY_FORMAT_VERSION: u64 = 2;
+/// Persisted turn recordings; changing live messages must not change this.
+pub const GAMEPLAY_FORMAT_VERSION: u64 = 3;
+pub const LIVE_PROTOCOL_VERSION: u64 = 2;
 
 pub fn gameplay_build_identity(public_version: &str) -> String {
-    format!("{public_version}/turns-{GAMEPLAY_FORMAT_VERSION}")
+    format!("{public_version}/turns-{GAMEPLAY_FORMAT_VERSION}/net-{LIVE_PROTOCOL_VERSION}")
 }
 
 // ─── Intents (Client → Server) ─────────────────────────────────────────────
@@ -42,7 +43,7 @@ pub enum GameplayIntent {
     RecallFleet {
         fleet_id: u64,
     },
-    /// `target_tile` is the clicked tile index (`y * width + x`);
+    /// Exact confirmed anchor (`y * width + x`); invalid sites are rejected.
     BuildStructure {
         kind: BuildingKind,
         target_tile: u32,
@@ -187,7 +188,8 @@ pub enum ClientMessage {
     Ping {
         client_time: f64,
     },
-    RematchRequest {
+    /// Retired wire slot. No handler may act on this message.
+    ReservedRematchRequest {
         lobby_id: u64,
     },
     /// Identity-proving join. Authentication is required before a player can
@@ -289,6 +291,22 @@ pub enum ServerMessage {
         player_id: u16,
         ticket: String,
     },
+    /// The relay has durably recorded participation closure, not a reward.
+    ExitRecorded {
+        account_id: String,
+        match_id: u64,
+        closure_turn: u64,
+        reason: ExitReason,
+    },
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ExitReason {
+    #[default]
+    Voluntary,
+    Timeout,
+    MatchEnded,
 }
 
 /// Classifies a lobby so every code path can branch on it explicitly instead of

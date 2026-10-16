@@ -36,6 +36,7 @@
         const uid = "sow-story-" + (++instance);
         let model = null, renderKey = "", lastBeatKey = "", focusBefore = null, wasModal = false, lastAction = -Infinity;
         let compactViewport = false, lastRenderContext = null, compactStatusVisible = false;
+        let renderedWidth = 0, renderedHeight = 0;
         let guideWasVisible = false, cameraTracking = false, guideX = null, guideY = null, guideLabelWidth = 0, guideLabelHeight = 0, guideLabelMeasureKey = "", nudgeTimer = 0;
         let homeGuideAnimation = null, homeGuideAnimationStep = null;
         root.classList.add("sow-story");
@@ -196,8 +197,11 @@
             portraitFrame = view.requestAnimationFrame(() => {
                 portraitFrame = 0;
                 syncMobilePortrait();
-                const nextCompact = isCompactViewport(root);
-                if (model && !root.hidden && nextCompact !== compactViewport) render(model, lastRenderContext);
+                const width = root.clientWidth, height = root.clientHeight;
+                const nextCompact = isCompactViewport(root, width, height);
+                if (model && !root.hidden && (nextCompact !== compactViewport || width !== renderedWidth || height !== renderedHeight)) {
+                    render(model, lastRenderContext);
+                }
             });
         }) : null;
         if (portraitObserver) { portraitObserver.observe(conversation); portraitObserver.observe(root); }
@@ -206,29 +210,42 @@
         const t = key => key ? options.translate(key) : "";
         function positionGuideLabel(anchor, statusOnly) {
             if (!anchor || !Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) return;
-            if (!statusOnly && model.step.guide && model.step.guide.kind === "ui" && model.step.guide.target === "attack_ratio") {
-                gestureLabel.style.removeProperty("top"); gestureLabel.style.removeProperty("bottom");
-                gestureLabel.style.transform = "translateY(-50%)";
-                return;
-            }
+            const ratioGuide = !statusOnly && model.step.guide && model.step.guide.kind === "ui" && model.step.guide.target === "attack_ratio";
             const measureKey = gestureCopy.textContent + ":" + gestureMetric.textContent + ":" + root.clientWidth + ":" + root.clientHeight + ":" + (statusOnly ? "status" : "guide");
             if (measureKey !== guideLabelMeasureKey) {
                 guideLabelMeasureKey = measureKey;
                 const rect = gestureLabel.getBoundingClientRect();
                 guideLabelWidth = rect.width; guideLabelHeight = rect.height;
             }
-            const halfLabel = guideLabelWidth / 2, viewportWidth = root.clientWidth;
-            const shift = Math.max(12 - (anchor.x - halfLabel), Math.min(0, viewportWidth - 12 - (anchor.x + halfLabel)));
+            const viewportWidth = root.clientWidth, viewportHeight = root.clientHeight;
+            const halfLabel = guideLabelWidth / 2;
+            const labelLeft = ratioGuide
+                ? root.dir === "rtl" ? anchor.x - 68 - guideLabelWidth : anchor.x + 68
+                : anchor.x - halfLabel;
+            const shiftX = Math.max(12 - labelLeft, Math.min(0, viewportWidth - 12 - (labelLeft + guideLabelWidth)));
+            let labelTop;
+            let shiftY;
+            if (ratioGuide) {
+                gestureLabel.style.removeProperty("top"); gestureLabel.style.removeProperty("bottom");
+                labelTop = anchor.y - guideLabelHeight / 2;
+                shiftY = Math.max(12 - labelTop, Math.min(0, viewportHeight - 12 - (labelTop + guideLabelHeight)));
+                gestureLabel.style.transform = "translateY(-50%) translateX(" + shiftX + "px) translateY(" + shiftY + "px)";
+                return;
+            }
             if (statusOnly) {
                 const above = anchor.y > root.clientHeight / 2;
                 gestureLabel.style.top = above ? "auto" : "14px";
                 gestureLabel.style.bottom = above ? "14px" : "auto";
+                labelTop = above ? anchor.y - 14 - guideLabelHeight : anchor.y + 14;
             } else if (anchor.y + 61 + guideLabelHeight > root.clientHeight - 12) {
                 gestureLabel.style.top = "auto"; gestureLabel.style.bottom = "14px";
+                labelTop = anchor.y - 14 - guideLabelHeight;
             } else {
                 gestureLabel.style.removeProperty("top"); gestureLabel.style.removeProperty("bottom");
+                labelTop = anchor.y + 61;
             }
-            gestureLabel.style.transform = "translateX(calc(-50% + " + shift + "px))";
+            shiftY = Math.max(12 - labelTop, Math.min(0, viewportHeight - 12 - (labelTop + guideLabelHeight)));
+            gestureLabel.style.transform = "translateX(calc(-50% + " + shiftX + "px)) translateY(" + shiftY + "px)";
         }
         function clearCinematicHold() {
             if (cinematicHoldTimer) { clearTimeout(cinematicHoldTimer); cinematicHoldTimer = 0; }
@@ -513,7 +530,8 @@
             context = context || {};
             lastRenderContext = context;
             model = next;
-            compactViewport = isCompactViewport(root);
+            renderedWidth = root.clientWidth; renderedHeight = root.clientHeight;
+            compactViewport = isCompactViewport(root, renderedWidth, renderedHeight);
             const wasHidden = root.hidden;
             root.hidden = !model || model.done;
             if (root.hidden) { portraitRequestId++; guideWasVisible = false; cameraTracking = false; compactStatusVisible = false; clearHomeGuideAnimation(); gesture.classList.remove("is-following", "is-camera-following", "is-status", "is-compact"); clearNudge(); clearGuideMetric(); stopCinematic(); if (wasModal) releaseFocus(); wasModal = false; return; }
@@ -757,7 +775,7 @@
             else if (button.hasAttribute("data-story-dismiss")) dismissDialog();
         }
         function outsideClick(event) {
-            if (!model || root.hidden || !model.paused || root.contains(event.target)) return;
+            if (!model || root.hidden || !model.paused || !root.classList.contains("is-modal") || root.contains(event.target)) return;
             const control = event.target.closest && event.target.closest("button, a[href], input:not([type='hidden']), select, textarea, [role='button'], [data-command], [data-map-action]");
             if (control) return;
             event.preventDefault();
