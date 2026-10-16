@@ -143,6 +143,7 @@ impl BuildingPlacementCache {
         (self.sites_bounds, &self.sites, self.sites_revision)
     }
 
+    #[cfg(test)]
     pub fn resolve(&mut self, tick: u64, query: &PlacementQuery) -> Result<u32, &'static str> {
         self.rebuild_index(tick, query);
         resolve_building_placement_tile_indexed(query, Some(self))

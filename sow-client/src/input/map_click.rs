@@ -29,7 +29,6 @@ pub(crate) enum MapMenuAction {
     BuildFarm,
     UpgradeStructure,
     Nuke,
-    BuildWarship,
 }
 
 impl MapMenuAction {
@@ -48,7 +47,6 @@ impl MapMenuAction {
             Self::BuildFarm => "build_farm",
             Self::UpgradeStructure => "upgrade_structure",
             Self::Nuke => "nuke",
-            Self::BuildWarship => "build_warship",
         }
     }
 }
@@ -214,6 +212,23 @@ impl SowApp {
     ) -> Option<sow_core::diplomacy::AllianceActionState> {
         let target = self.map_target(tile_idx)?;
         (target.is_player() && !target.is_teammate).then(|| target.alliance_action_state())
+    }
+
+    /// Who owns the tile, from the local player's point of view; the HUD
+    /// uses it to name and color the menu's center.
+    pub(crate) fn map_menu_relation(&self, tile_idx: u32) -> Option<&'static str> {
+        let target = self.map_target(tile_idx)?;
+        Some(if target.owner == 0 {
+            if target.is_land { "neutral" } else { "water" }
+        } else if target.owner == target.my_id {
+            "own"
+        } else if target.is_teammate {
+            "teammate"
+        } else if target.is_allied {
+            "ally"
+        } else {
+            "enemy"
+        })
     }
 
     pub(crate) fn try_attack_at(&mut self, x: f64, y: f64) -> bool {
@@ -577,9 +592,6 @@ impl SowApp {
                 MapMenuAction::Nuke => {
                     self.campaign_action_unlocked(sow_core::campaign::CampaignAction::Nuke)
                 }
-                MapMenuAction::BuildWarship => {
-                    self.campaign_action_unlocked(sow_core::campaign::CampaignAction::Warship)
-                }
                 _ => true,
             });
         }
@@ -850,9 +862,6 @@ impl SowApp {
             }
             MapMenuAction::Nuke => {
                 self.launch_nuke_at(sow_core::game::NukeKind::AtomBomb, tile_idx);
-            }
-            MapMenuAction::BuildWarship => {
-                self.build_ship_at(tile_idx, sow_core::game::UnitType::Warship);
             }
         }
         self.close_map_context_menu();
@@ -1134,9 +1143,6 @@ impl SowApp {
         tile_idx: u32,
     ) -> (Option<f64>, Option<u8>) {
         match action {
-            MapMenuAction::BuildWarship => {
-                (Some(sow_core::game::UnitType::Warship.gold_cost()), None)
-            }
             MapMenuAction::Nuke => (Some(self.sim.config.nuke_cost), None),
             MapMenuAction::BuildCity
             | MapMenuAction::BuildFactory

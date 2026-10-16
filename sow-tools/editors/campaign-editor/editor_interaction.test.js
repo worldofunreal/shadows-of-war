@@ -890,8 +890,8 @@ test("campaign studio preview matches the real build submenu and direct nuke act
     assert.doesNotMatch(campaignEditorHtml, /data-preview-map-menu="nuke"|data-map-group="nuke"/);
     assert.match(campaignEditorCss, /\.sample-menu\{[^}]*z-index:3/);
     assert.match(campaignEditorCss, /#previewRoot\s*\{[^}]*z-index:\s*4/);
-    assert.match(hud, /if \(nukeItem\) sectors\.push\(\{ item: nukeItem, kind: "nuke" \}\)/);
-    assert.doesNotMatch(hud, /mapMenuView === "nuke"|mapGroupSector\([^;]*"nuke"/);
+    assert.match(hud, /var RING_ROOT_SLOTS = \{[^}]*nuke: 2/);
+    assert.doesNotMatch(hud, /mapMenuView === "nuke"|group: "nuke"/);
     assert.match(campaignEngine, /map_nuke: '#sow-hud \[data-map-action="nuke"\]'/);
     assert.equal([...campaignEditorHtml.matchAll(/data-map-back/g)].length, 1);
     assert.doesNotMatch(campaignEditor, /syncPreviewMapMenu/);

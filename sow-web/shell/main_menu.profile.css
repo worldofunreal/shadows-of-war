@@ -1222,8 +1222,7 @@
     font-size: 16px;
 }
 
-.sow-store__currency-icon,
-.sow-store__button-icon {
+.sow-store__currency-icon {
     display: block;
     width: 22px;
     height: 22px;
@@ -1270,153 +1269,6 @@
     text-transform: uppercase;
 }
 
-.sow-store__leader-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-}
-
-.sow-store__leader-card {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    overflow: visible;
-    border: 1px solid rgba(255, 255, 255, .14);
-    border-radius: 8px;
-    background: linear-gradient(180deg, rgba(19, 23, 30, .94), rgba(9, 12, 17, .96));
-    box-shadow: 0 10px 24px rgba(0, 0, 0, .18);
-    transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
-}
-
-.sow-store__leader-card:hover {
-    border-color: rgba(243, 177, 43, .72);
-    box-shadow: 0 14px 30px rgba(0, 0, 0, .3);
-    transform: translateY(-2px);
-}
-
-.sow-store__leader-card:focus-within {
-    border-color: var(--sow-gold-bright);
-}
-
-.sow-store__leader-visual {
-    position: relative;
-    height: 132px;
-    overflow: visible;
-    background: #10151d;
-}
-
-.sow-store__leader-visual picture {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-}
-
-.sow-store__leader-visual picture,
-.sow-store__leader-visual picture img {
-    display: block;
-    width: 100%;
-    height: 100%;
-}
-
-.sow-store__leader-visual img {
-    object-fit: cover;
-    object-position: center 26%;
-}
-
-.sow-store__leader-visual::after {
-    position: absolute;
-    inset: 0;
-    content: "";
-    background: linear-gradient(180deg, rgba(5, 7, 10, .04), rgba(5, 7, 10, .12) 42%, rgba(5, 7, 10, .84));
-    pointer-events: none;
-}
-
-.sow-store__leader-avatar {
-    position: absolute;
-    z-index: 1;
-    bottom: -24px;
-    inset-inline-start: 14px;
-    display: block;
-    width: 64px;
-    height: 64px;
-    padding: 3px;
-    border: 1px solid var(--sow-gold);
-    border-radius: 50%;
-    background: #0a0d12;
-    box-shadow: 0 5px 14px rgba(0, 0, 0, .5);
-}
-
-.sow-store__leader-avatar img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    object-fit: cover;
-}
-
-.sow-store__leader-status {
-    position: absolute;
-    z-index: 1;
-    inset-inline-end: 10px;
-    bottom: 10px;
-    padding: 4px 6px;
-    border: 1px solid rgba(243, 177, 43, .45);
-    border-radius: 4px;
-    background: rgba(8, 10, 14, .8);
-    color: var(--sow-gold-bright);
-    font-size: 8px;
-    font-weight: 900;
-    letter-spacing: .1em;
-}
-
-.sow-store__leader-body {
-    display: flex;
-    min-width: 0;
-    flex: 1;
-    flex-direction: column;
-    padding: 34px 14px 14px;
-}
-
-.sow-store__leader-title h3 {
-    margin: 0;
-    overflow: hidden;
-    color: #fff;
-    font-size: 16px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.sow-store__leader-title span,
-.sow-store__leader-perk {
-    color: var(--sow-muted);
-    font-size: 10px;
-}
-
-.sow-store__leader-title span {
-    display: block;
-    margin-top: 3px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.sow-store__leader-perk {
-    display: -webkit-box;
-    min-height: 30px;
-    margin: 10px 0 13px;
-    overflow: hidden;
-    line-height: 1.45;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-}
-
-.sow-store__leader-action {
-    display: flex;
-    min-height: 34px;
-    align-items: end;
-    margin-top: auto;
-}
-
 .sow-store__offer-state {
     color: var(--sow-gold-bright);
     font-size: 10px;
@@ -1450,11 +1302,6 @@
     text-decoration: none;
     cursor: pointer;
     transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
-}
-
-.sow-store__button-icon {
-    width: 17px;
-    height: 17px;
 }
 
 .sow-store__buy .sow-store__currency-icon {
@@ -1696,10 +1543,6 @@
     .sow-store__promos { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 900px) {
-    .sow-store__leader-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
 @media (max-width: 680px), (orientation: portrait) {
     #sow-menu[data-screen="store"] .sow-menu__shell.sow-menu__store {
         width: 100%;
@@ -1719,16 +1562,8 @@
     .sow-store__balances {
         justify-content: start;
     }
-
-    .sow-store__leader-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .sow-store__skin-grid,
     .sow-store__bundle-grid { grid-template-columns: 1fr; }
-    .sow-store__leader-visual { height: 118px; }
-}
-
-@media (max-width: 390px) {
-    .sow-store__leader-grid { grid-template-columns: 1fr; }
-    .sow-store__leader-visual { height: 150px; }
 }
 
 /* Heroes: a first-class roster screen, not a modal leader picker. */
@@ -1852,8 +1687,7 @@
     text-wrap: balance;
 }
 
-.sow-heroes__historical-name,
-.sow-profile__historical-name {
+.sow-heroes__historical-name {
     display: block;
     margin: 4px 0 0;
     color: var(--sow-muted);

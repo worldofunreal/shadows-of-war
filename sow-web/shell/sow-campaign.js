@@ -144,7 +144,7 @@
             const dock = /^dock_(city|factory|port|bunker|farm)$/.exec(target);
             if (dock) addBuilding(dock[1] === "bunker" ? "Bunker" : dock[1][0].toUpperCase() + dock[1].slice(1), 1);
             if (target === "dock_trade_ship") addAction("trade_ship");
-            if (target === "dock_warship" || target === "map_build_warship") addAction("warship");
+            if (target === "dock_warship") addAction("warship");
             if (target === "dock_nuke" || target === "map_nuke" || target === "map_nuke_launch") addAction("nuke");
             if (target === "map_fleet") addAction("transport_fleet");
         });
@@ -215,7 +215,6 @@
         map_build_factory: '#sow-hud [data-map-action="build_factory"]',
         map_build_port: '#sow-hud [data-map-action="build_port"]',
         map_build_bunker: '#sow-hud [data-map-action="build_bunker"]',
-        map_build_warship: '#sow-hud [data-map-action="build_warship"]',
         map_nuke_launch: '#sow-hud [data-map-action="nuke"]',
         map_back: '#sow-hud [data-map-back]',
         rankings: '#sow-hud [data-command="toggle_leaderboard"]',

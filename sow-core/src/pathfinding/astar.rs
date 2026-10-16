@@ -15,13 +15,9 @@ const CARDINAL_DELTAS: [(i32, i32); 4] = [(1, 0), (-1, 0), (0, -1), (0, 1)];
 
 #[inline]
 fn magnitude_penalty(magnitude: u8) -> u32 {
-    if magnitude < 3 {
-        10 * COST_SCALE
-    } else if magnitude <= 10 {
-        0
-    } else {
-        COST_SCALE
-    }
+    // Water magnitude is distance to land / 2. Only hugging the beach costs
+    // extra; open sea is as cheap as coastal water so routes cross it straight.
+    if magnitude < 3 { 2 * COST_SCALE } else { 0 }
 }
 
 #[inline]
@@ -219,12 +215,24 @@ impl WaterNavGraph {
         graph
     }
 
-    fn edge_tiles(&self, from_region: u32, to_region: u32) -> Option<(u32, u32)> {
+    /// Crossing between two regions that keeps `from -> crossing -> goal`
+    /// shortest, so routes stay near the straight line instead of snapping to
+    /// the first open tile of every cluster border. Ties keep edge order.
+    fn edge_tiles(
+        &self,
+        from_region: u32,
+        to_region: u32,
+        from_tile: u32,
+        goal_tile: u32,
+    ) -> Option<(u32, u32)> {
         let start = *self.edge_offsets.get(from_region as usize)? as usize;
         let end = *self.edge_offsets.get(from_region as usize + 1)? as usize;
+        let w = self.width;
+        let dist = |a: u32, b: u32| manhattan(a % w, a / w, b % w, b / w);
         self.edges[start..end]
             .iter()
-            .find(|edge| edge.to_region == to_region)
+            .filter(|edge| edge.to_region == to_region)
+            .min_by_key(|edge| dist(from_tile, edge.from_tile) + dist(edge.to_tile, goal_tile))
             .map(|edge| (edge.from_tile, edge.to_tile))
     }
 }
@@ -312,7 +320,7 @@ impl WaterAStar {
             gscore: Vec::new(),
             came_from: Vec::new(),
             heap: BinaryHeap::new(),
-            heuristic_weight: 5,
+            heuristic_weight: 1,
             push_seq: 0,
             navigation_graph: None,
             route_regions: Vec::new(),
@@ -563,14 +571,6 @@ impl WaterAStar {
         }
         self.route_regions.reverse();
 
-        self.route_crossings.clear();
-        for pair in self.route_regions.windows(2) {
-            let Some(crossing) = graph.edge_tiles(pair[0], pair[1]) else {
-                return self.find_tile_path(map, None, starts, goal);
-            };
-            self.route_crossings.push(crossing);
-        }
-
         let Some((source_tile, source_water)) =
             Self::first_start_in_region(&graph, map, starts, self.route_regions[0])
         else {
@@ -582,6 +582,16 @@ impl WaterAStar {
         let Some(goal_water) = Self::goal_tile_in_region(&graph, map, goal, last_region) else {
             return self.find_tile_path(map, None, starts, goal);
         };
+
+        self.route_crossings.clear();
+        let mut from_tile = source_water;
+        for pair in self.route_regions.windows(2) {
+            let Some(crossing) = graph.edge_tiles(pair[0], pair[1], from_tile, goal_water) else {
+                return self.find_tile_path(map, None, starts, goal);
+            };
+            from_tile = crossing.1;
+            self.route_crossings.push(crossing);
+        }
 
         let mut path = Vec::with_capacity(self.route_regions.len().saturating_mul(8));
         if source_tile != source_water {
@@ -866,6 +876,24 @@ mod tests {
             &graph,
             pathfinder.navigation_graph.as_ref().unwrap()
         ));
+    }
+
+    #[test]
+    fn open_sea_route_across_clusters_has_no_detour() {
+        let mut map = GameMap::new(128, 128);
+        for y in 0..map.height {
+            for x in 0..map.width {
+                set_water(&mut map, x, y);
+            }
+        }
+        let (sx, sy, gx, gy) = (5, 100, 120, 10);
+        let mut pathfinder = WaterAStar::new();
+
+        let path = pathfinder
+            .find_path(&map, &[sy * map.width + sx], gy * map.width + gx)
+            .unwrap();
+        assert_cardinal_water_path(&map, &path, false);
+        assert_eq!(path.len() as u32, manhattan(sx, sy, gx, gy) + 1);
     }
 
     #[test]

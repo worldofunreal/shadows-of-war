@@ -1319,11 +1319,6 @@
         if (player) send("focus_player", { player_id: Number(player.id) });
     }
 
-    function openLeaveMatch() {
-        var button = hudRoot && hudRoot.querySelector('[data-command="prompt_surrender"]');
-        if (button) button.click();
-    }
-
     function syncTutorialPause(machineView) {
         var paused = Boolean(machineView && machineView.paused);
         var cameraOnly = paused && machineView.step.camera_only === true;

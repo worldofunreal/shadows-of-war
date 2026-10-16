@@ -339,7 +339,6 @@ fn resolve_or_spawn_matchmaking_lobby(games: &mut Vec<ServerLobby>, next_id: &mu
 pub struct JoinPlayerOpts {
     pub name: String,
     pub clan_tag: String,
-    pub civilization: sow_core::player::Civilization,
     pub leader: sow_core::player::Leader,
     pub random_leader: bool,
     pub skin_style: u8,
@@ -1120,7 +1119,6 @@ mod name_tests {
         JoinPlayerOpts {
             name: "Commander".to_string(),
             clan_tag: String::new(),
-            civilization: Civilization::Rome,
             leader: Leader::Caesar,
             random_leader: false,
             skin_style: 0,
@@ -1500,7 +1498,6 @@ mod name_tests {
             JoinPlayerOpts {
                 name: "Commander".to_string(),
                 clan_tag: String::new(),
-                civilization: sow_core::player::Civilization::Rome,
                 leader: sow_core::player::Leader::Caesar,
                 random_leader: false,
                 skin_style: 0,

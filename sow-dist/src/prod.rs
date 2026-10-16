@@ -207,6 +207,7 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
         verify_relay_control_path(&config)?;
         verify_relay_identity(&config, &release)?;
         retain_releases(&config)?;
+        retain_local_builds(paths)?;
         verify_public(paths, &config, &release)?;
         verify_live_reward_return(paths, &config)?;
         println!("✅ Production already serves the requested content");
@@ -245,6 +246,7 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     verify_relay_control_path(&config)?;
     verify_relay_identity(&config, &release)?;
     retain_releases(&config)?;
+    retain_local_builds(paths)?;
 
     println!("==> 8/8 Public verification");
     verify_public(paths, &config, &release)?;
@@ -674,7 +676,6 @@ fn publish_android(paths: &Paths, version_code: u32) -> Result<()> {
 }
 
 fn preflight(paths: &Paths, config: &Config) -> Result<()> {
-    super::validate_current_ui_contract(paths)?;
     for command in [
         "cargo", "curl", "magick", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt",
     ] {
@@ -686,6 +687,8 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             bail!("{command} is required");
         }
     }
+    super::pack_art_atlases(paths)?;
+    super::validate_current_ui_contract(paths)?;
     run(
         "node",
         &[
@@ -3449,6 +3452,33 @@ fn retain_releases(config: &Config) -> Result<()> {
         "set -eu; current=$(sudo readlink /srv/sow/current 2>/dev/null || true); case \"$current\" in releases/*) current_path=\"/srv/sow/$current\" ;; *) current_path=\"$current\" ;; esac; i=0; for dir in $(sudo ls -dt {REMOTE_RELEASES}/* 2>/dev/null || true); do i=$((i+1)); [ $i -le 5 ] && continue; [ \"$current_path\" = \"$dir\" ] && continue; case \"$dir\" in {REMOTE_RELEASES}/*) sudo rm -rf -- \"$dir\" ;; esac; done; sudo find {REMOTE_RELEASES} -maxdepth 2 -type l -name '.current.*' -delete"
     );
     run("ssh", &[&config.control_host, &command], None).context("release retention failed")
+}
+
+/// Same rule as the server: keep the 5 newest local releases, and drop
+/// wasm-opt cache entries not touched since the oldest kept release was
+/// built (cache hits refresh their mtime).
+fn retain_local_builds(paths: &Paths) -> Result<()> {
+    let mtime = |p: &Path| fs::metadata(p).and_then(|m| m.modified());
+    let mut releases: Vec<_> = fs::read_dir(paths.root.join("dist/releases"))?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.is_dir())
+        .filter_map(|p| mtime(&p).ok().map(|t| (t, p)))
+        .collect();
+    releases.sort_by(|a, b| b.0.cmp(&a.0));
+    for (_, old) in releases.iter().skip(5) {
+        fs::remove_dir_all(old)?;
+    }
+    let Some((cutoff, _)) = releases.iter().take(5).last() else {
+        return Ok(());
+    };
+    if let Ok(entries) = fs::read_dir(&paths.wasm_cache) {
+        for path in entries.filter_map(|e| e.ok().map(|e| e.path())) {
+            if mtime(&path).is_ok_and(|t| t < *cutoff) {
+                fs::remove_file(&path)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn verify_public(paths: &Paths, config: &Config, release: &Release) -> Result<()> {

@@ -787,13 +787,10 @@ fn prune_qs(root: &Path) -> Result<()> {
     Ok(())
 }
 
-fn compile_wasm_profile(paths: &Paths, profile: &str, dev: bool) -> Result<PathBuf> {
-    let profile_dir = match profile {
-        "dev" => "debug",
-        "wasm-dev" => "wasm-dev",
-        "wasm-release" => "wasm-release",
-        _ => bail!("unsupported WASM profile: {profile}"),
-    };
+/// Packs assets/art/{buildings,badges} into assets/generated. Runs before
+/// anything reads the atlases (tests and the WASM build), so replacing art and
+/// running the pipeline is always enough.
+fn pack_art_atlases(paths: &Paths) -> Result<()> {
     run(
         "cargo",
         &[
@@ -806,7 +803,17 @@ fn compile_wasm_profile(paths: &Paths, profile: &str, dev: bool) -> Result<PathB
             "pack-building-atlas",
         ],
         Some(&paths.root),
-    )?;
+    )
+}
+
+fn compile_wasm_profile(paths: &Paths, profile: &str, dev: bool) -> Result<PathBuf> {
+    let profile_dir = match profile {
+        "dev" => "debug",
+        "wasm-dev" => "wasm-dev",
+        "wasm-release" => "wasm-release",
+        _ => bail!("unsupported WASM profile: {profile}"),
+    };
+    pack_art_atlases(paths)?;
     println!("==> Compiling WASM ({profile})...");
     let mut a = vec!["build"];
     if profile != "dev" {
@@ -862,8 +869,12 @@ fn run_wasm_opt(path: &Path, cache: &Path, compress: bool) -> Result<()> {
     let br = brotli_dst(path);
     if c.is_file() {
         fs::copy(&c, path)?;
+        // Keeps the entry alive for retain_local_builds.
+        let now = std::time::SystemTime::now();
+        fs::File::options().append(true).open(&c)?.set_modified(now)?;
         if compress {
             if cb.is_file() {
+                fs::File::options().append(true).open(&cb)?.set_modified(now)?;
                 fs::copy(&cb, &br)?;
             } else {
                 compress_brotli(path, &br)?;
@@ -2695,7 +2706,6 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "sow-controls.css",
         "locales/index.json",
         "styles.css",
-        "legal.css",
         "fonts/fonts.css",
         "fonts/OFL.txt",
         "fonts/work-sans-latin.woff2",
@@ -3278,7 +3288,6 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         "app.js",
         "site-chrome.js",
         "styles.css",
-        "legal.css",
         "wou-auth.js",
         "8d227b8f9e6140d39e3381a1829e1db3.txt",
         "manifest.webmanifest",
@@ -3323,7 +3332,6 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         "sow-i18n.js",
         "sow-dropdown.js",
         "sow-controls.css",
-        "legal.css",
         "wou-auth.js",
     ] {
         let hash = file_sha256(&out.join(name))?;
@@ -5065,7 +5073,6 @@ mod tests {
             "site-chrome.js",
             "site-header.html",
             "styles.css",
-            "legal.css",
             "fonts/fonts.css",
             "fonts/work-sans-latin.woff2",
             "fonts/work-sans-latin-ext.woff2",

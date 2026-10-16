@@ -1200,10 +1200,10 @@ test("tutorial hand selectors stay tied to controls rendered by the game", () =>
     for (const [, selector] of targetBlock[1].matchAll(/:\s*'([^']+)'/g)) {
         for (const [, attribute, value] of selector.matchAll(/\[([a-z-]+)="([^"]+)"\]/g)) {
             if (attribute === "data-map-action") {
-                assert.match(hud, /dataset\.mapAction = action/);
+                assert.match(hud, /dataset\.mapAction = slot\.item\.action/);
                 assert.ok(hud.includes(value), `No game map action ${value}`);
             } else if (attribute === "data-map-group") {
-                assert.match(hud, /dataset\.mapGroup = group/);
+                assert.match(hud, /dataset\.mapGroup = slot\.group/);
                 assert.ok(hud.includes(value), `No game map group ${value}`);
             } else if (attribute === "data-episode-id") {
                 assert.match(lobbiesSource, /data-episode-id=.*episode\.id/);

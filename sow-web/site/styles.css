@@ -251,7 +251,6 @@ button { color: inherit; font: inherit; }
 .hero-alpha-copy { min-width: 0; }
 .hero-alpha-copy small { color: #fff; font: 500 7px/1.25 Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
 .hero-alpha-copy b { margin-top: 2px; font: 600 13px/1.05 Arial, sans-serif; letter-spacing: -.035em; white-space: nowrap; }
-.foot-line { height: 1px; flex: 1; background: var(--line); }
 
 /* Proof strip */
 .proof-strip { border-bottom: 1px solid var(--line); background: var(--panel); }

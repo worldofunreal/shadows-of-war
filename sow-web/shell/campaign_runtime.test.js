@@ -974,7 +974,6 @@ test("campaign episode 1 stays locked so only the tutorial can be replayed", () 
 
 
 test("tutorial X is not wired to leave match and menu exit clears runtime", () => {
-    assert.match(tutorial, /data-command=.*prompt_surrender/);
     assert.match(tutorial, /function update\(hud\) \{\s*if \(!runtime\.machine \|\| runtime\.modalOpen \|\|/);
     assert.match(tutorial, /runtime\.machine\.setPaused\(open\)/);
     assert.match(tutorial, /onDismiss: skipMenuGuide/);

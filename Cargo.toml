@@ -14,7 +14,7 @@ members = [
     "sow-dist",
     "fstack-bridge",
 ]
-exclude = ["blade", "winit", "sow-ipwatch"]
+exclude = ["blade"]
 resolver = "2"
 
 [workspace.package]

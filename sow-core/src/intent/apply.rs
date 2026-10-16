@@ -416,49 +416,13 @@ impl SowEngine {
                             && f.owner_id == pid
                             && f.unit_type == crate::game::UnitType::Warship
                     }) {
-                        // Try sea lane routing first (Dijkstra on ~20 port nodes)
-                        let lane_path = if !self.state.sea_lanes.is_empty() {
-                            let src_comp = self.water.component_of(fleet.current_tile);
-                            let dst_comp = self.water.component_of(target);
-                            if src_comp > 0 && src_comp == dst_comp {
-                                let src_port = crate::sea_lane::closest_port_on_component(
-                                    &self.buildings,
-                                    &self.state.map,
-                                    &self.water,
-                                    fleet.current_tile,
-                                    src_comp,
-                                );
-                                let dst_port = crate::sea_lane::closest_port_on_component(
-                                    &self.buildings,
-                                    &self.state.map,
-                                    &self.water,
-                                    target,
-                                    dst_comp,
-                                );
-                                match (src_port, dst_port) {
-                                    (Some(sp), Some(dp)) => crate::sea_lane::route_through_lanes(
-                                        &self.state.sea_lanes,
-                                        sp,
-                                        dp,
-                                    ),
-                                    _ => None,
-                                }
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        };
-
-                        let path = lane_path.or_else(|| {
-                            self.path_scratch.astar.find_path(
-                                &self.state.map,
-                                &[fleet.current_tile],
-                                target,
-                            )
-                        });
-
-                        if let Some(path) = path {
+                        // Route from where the warship is to the clicked tile.
+                        // Port-to-port sea lanes belong to trade ships only.
+                        if let Some(path) = self.path_scratch.astar.find_path(
+                            &self.state.map,
+                            &[fleet.current_tile],
+                            target,
+                        ) {
                             fleet.replace_path(path);
                             fleet.retreating = false;
                         }

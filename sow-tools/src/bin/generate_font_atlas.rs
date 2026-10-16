@@ -401,7 +401,16 @@ fn main() {
 
     let image = image::RgbImage::from_raw(ATLAS_SIZE, ATLAS_SIZE, atlas_pixels)
         .expect("Failed to create atlas image");
-    image.save(&args[6]).expect("Failed to save atlas PNG");
+    // Best compression: the atlas is embedded in the WASM, and the default
+    // fast PNG is ~4x larger for identical pixels.
+    let file = std::fs::File::create(&args[6]).expect("Failed to create atlas PNG");
+    image
+        .write_with_encoder(image::codecs::png::PngEncoder::new_with_quality(
+            std::io::BufWriter::new(file),
+            image::codecs::png::CompressionType::Best,
+            image::codecs::png::FilterType::Adaptive,
+        ))
+        .expect("Failed to save atlas PNG");
 
     let chars_json: Vec<serde_json::Value> = sheets
         .iter()

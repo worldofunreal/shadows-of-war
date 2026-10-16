@@ -45,7 +45,7 @@
     var MAP_FEEDBACK_DURATION_MS = 2000;
     var MAP_FEEDBACK_FADE_OUT_MS = 180;
     var mapMenuView = "root";
-    var mapMenuStateKey = "";
+    var ring = { session: "", hot: -1, slots: [], press: null, hold: null, holdConfirmed: false, pointerDown: false, pointerId: null };
     var allocationHoverNone = window.matchMedia ? window.matchMedia("(hover: none)") : null;
     var lastAllocationKey = "";
     var EMPTY_CAMPAIGN_UNLOCKS = { buildings: {}, actions: [] };
@@ -770,11 +770,6 @@
             if (previewTarget) send("set_dev_vfx_preview", { target: Number(previewTarget.value) });
         });
         hudRoot.addEventListener("change", function (event) {
-            if (event.target.matches("[data-emote-pin]")) {
-                pinEmote = event.target.checked;
-                send("set_emote_pinned", { pinned: pinEmote });
-                return;
-            }
             var input = event.target.closest("[data-hud-setting]");
             if (!input) return;
             var setting = input.dataset.hudSetting;
@@ -804,10 +799,9 @@
         build_factory: { key: "hud.map_action_factory" },
         build_port: { key: "hud.map_action_port" },
         build_bunker: { key: "hud.map_action_bunker" },
-        build_farm: { text: "Farm" },
-        upgrade_structure: { icon: "upgrade", text: "Upgrade" },
-        nuke: { icon: "nuke", key: "hud.map_action_nuke" },
-        build_warship: { icon: "warship", key: "hud.map_action_build_warship" }
+        build_farm: { key: "hud.map_action_farm" },
+        upgrade_structure: { icon: "upgrade", key: "hud.map_action_upgrade" },
+        nuke: { icon: "nuke", key: "hud.map_action_nuke" }
     };
 
     var allianceActionLabels = {
@@ -816,16 +810,6 @@
         pending: { state: "pending", key: "hud.map_action_alliance_pending", status: "request", disabled: true },
         active: { state: "active", key: "hud.map_action_alliance_active", status: "allied", disabled: true },
         renew: { state: "renew", key: "hud.map_action_renew_alliance", status: "allied", disabled: false }
-    };
-
-    var buildMenuActions = {
-        build_city: true,
-        build_factory: true,
-        build_port: true,
-        build_bunker: true,
-        build_farm: true,
-        upgrade_structure: true,
-        build_warship: true,
     };
 
     function mapLabel(action) {
@@ -926,165 +910,375 @@
         });
     }
 
-    function mapActionContent(icon, label, reason) {
-        var content = document.createElement("span");
-        content.className = "sow-hud__map-action-content";
-        var title = document.createElement("span");
-        title.className = "sow-hud__map-action-title";
-        title.innerHTML = icon;
-        content.appendChild(title);
-        if (label) {
-            var caption = document.createElement("span");
-            caption.className = "sow-hud__map-sector-caption";
-            caption.textContent = label;
-            content.appendChild(caption);
+    // Command ring: six fixed 60° slots, clockwise from the top. An action keeps
+    // its slot in every context, so the ring never changes shape; actions that do
+    // not apply leave an empty notch. Submenus reuse the same six slots.
+    var RING_SLOTS = 6;
+    var RING_HOLD_MS = 600;
+    var RING_HUB_RADIUS = 19;
+    var RING_INNER_RADIUS = 21;
+    var RING_OUTER_RADIUS = 48;
+    var RING_ICON_RADIUS = 34.5;
+    var RING_ROOT_SLOTS = { attack: 0, spawn: 0, upgrade_structure: 0, build: 0, fleet: 1, nuke: 2, alliance: 3, transfer: 4, emote: 5 };
+    var RING_BUILD_SLOTS = { build_city: 0, build_factory: 1, build_port: 2, build_bunker: 3, build_farm: 4 };
+    var RING_EMOTE_SLOTS = { greet: 0, celebrate: 1, threat: 2, help: 3 };
+    var RING_ACCENTS = { attack: "red", nuke: "red", spawn: "green", alliance: "green", transfer: "green", fleet: "cyan" };
+    var RING_HOLD_ACTIONS = { nuke: true };
+    var EXPRESSION_CELLS = ["happy", "calm", "fear", "angry"];
+
+    function ringSlots(mapMenu, items, hud) {
+        var slots = new Array(RING_SLOTS).fill(null);
+        if (mapMenuView === "emote") {
+            (hud.emotes || []).forEach(function (definition) {
+                var index = RING_EMOTE_SLOTS[definition.kind];
+                if (index != null) slots[index] = { type: "emote", definition: definition };
+            });
+            if (hud.emote_pinned) slots[4] = { type: "clear" };
+            slots[5] = { type: "pin" };
+            return slots;
         }
-        if (reason) {
-            var reasonLabel = document.createElement("small");
-            reasonLabel.className = "sow-hud__map-action-reason";
-            reasonLabel.textContent = reason;
-            content.appendChild(reasonLabel);
+        if (mapMenuView === "build") {
+            items.forEach(function (item) {
+                var index = RING_BUILD_SLOTS[item.action];
+                if (index != null) slots[index] = { type: "action", item: item };
+            });
+            return slots;
         }
-        return content;
+        items.forEach(function (item) {
+            if (RING_BUILD_SLOTS[item.action] != null) slots[0] = { type: "group", group: "build" };
+            else if (item.action === "emote") slots[5] = { type: "group", group: "emote" };
+            else if (RING_ROOT_SLOTS[item.action] != null) {
+                slots[RING_ROOT_SLOTS[item.action]] = {
+                    type: "action",
+                    item: item,
+                    presentation: item.action === "alliance" ? allianceActionLabels[mapMenu.alliance_state] : null
+                };
+            }
+        });
+        return slots;
     }
 
-    function mapActionButton(item, className, withDetails, presentation) {
-        var label = mapActionLabels[item.action] || { icon: "•", text: item.action };
+    function ringSlotIdentity(slot) {
+        if (!slot) return "-";
+        if (slot.type === "action") return slot.item.action;
+        if (slot.type === "group") return "group:" + slot.group;
+        if (slot.type === "emote") return "emote:" + slot.definition.kind;
+        return slot.type;
+    }
+
+    function ringSlotAccent(slot) {
+        if (slot && slot.type === "action") return RING_ACCENTS[slot.item.action] || "gold";
+        return "gold";
+    }
+
+    function ringSlotLabel(slot) {
+        if (slot.type === "action") return slot.presentation ? SOW_t(slot.presentation.key) : mapLabel(slot.item.action);
+        if (slot.type === "group") return SOW_t(slot.group === "emote" ? "hud.map_action_emote" : "hud.map_action_build");
+        if (slot.type === "emote") return SOW_t(slot.definition.menu_key);
+        return SOW_t(slot.type === "clear" ? "hud.emote_clear" : "hud.emote_pin");
+    }
+
+    function ringSlotDisabled(slot) {
+        return Boolean(slot.type === "action" && (slot.item.disabled || (slot.presentation && slot.presentation.disabled)));
+    }
+
+    function ringSlotDetail(slot, availableGold) {
+        if (slot.type !== "action") return "";
+        var reason = mapActionReason(slot.item, availableGold);
+        if (reason) return escapeHudText(reason);
+        var parts = [];
+        if (slot.item.level != null) parts.push("Lv " + slot.item.level + " → " + (slot.item.level + 1));
+        if (slot.item.cost != null) parts.push(hudIcon("gold", "sow-hud__ring-readout-icon") + escapeHudText(Math.ceil(slot.item.cost).toLocaleString()));
+        return parts.join(" · ");
+    }
+
+    function ringPoint(angle, radius) {
+        var radians = angle * Math.PI / 180;
+        return (50 + Math.sin(radians) * radius).toFixed(2) + " " + (50 - Math.cos(radians) * radius).toFixed(2);
+    }
+
+    function ringSectorMarkup(slot, index) {
+        var span = 360 / RING_SLOTS;
+        var start = index * span - span / 2 + 1.6;
+        var end = index * span + span / 2 - 1.6;
+        var wedge = "M" + ringPoint(start, RING_OUTER_RADIUS)
+            + " A" + RING_OUTER_RADIUS + " " + RING_OUTER_RADIUS + " 0 0 1 " + ringPoint(end, RING_OUTER_RADIUS)
+            + " L" + ringPoint(end, RING_INNER_RADIUS)
+            + " A" + RING_INNER_RADIUS + " " + RING_INNER_RADIUS + " 0 0 0 " + ringPoint(start, RING_INNER_RADIUS) + " Z";
+        var rimRadius = RING_OUTER_RADIUS - 1.6;
+        var rim = "M" + ringPoint(start + 1, rimRadius)
+            + " A" + rimRadius + " " + rimRadius + " 0 0 1 " + ringPoint(end - 1, rimRadius);
+        return '<g class="sow-hud__ring-sector' + (slot ? "" : " is-empty") + '" data-slot="' + index + '" data-accent="' + ringSlotAccent(slot) + '">'
+            + '<path class="sow-hud__ring-wedge" d="' + wedge + '"/>'
+            + (slot ? '<path class="sow-hud__ring-rim" d="' + rim + '" pathLength="1"/><path class="sow-hud__ring-hold" d="' + rim + '" pathLength="1"/>' : "")
+            + "</g>";
+    }
+
+    function ringFace(expression) {
+        var hud = hudState && hudState.hud || {};
+        var leader = leaderById(hud.player_leader || (hudState && hudState.selected_leader));
+        var cell = EXPRESSION_CELLS.indexOf(expression);
+        var face = document.createElement("span");
+        face.className = "sow-hud__ring-face";
+        face.innerHTML = hudIcon("emote", "sow-hud__ring-icon");
+        if (cell < 0 || !leader || !leader.slug) return face;
+        face.style.setProperty("--face-x", String(cell % 2));
+        face.style.setProperty("--face-y", String(Math.floor(cell / 2)));
+        var image = document.createElement("img");
+        image.alt = "";
+        image.onerror = function () { this.remove(); };
+        image.src = asset("gameplay/avatars/spritesheets/" + leader.slug + ".webp");
+        face.appendChild(image);
+        return face;
+    }
+
+    function ringSlotIcon(slot, mapMenu) {
+        if (slot.type === "emote") return ringFace(slot.definition.expression);
+        if (slot.type === "clear") return ringFace("calm");
+        var title = document.createElement("span");
+        if (slot.type === "pin") title.innerHTML = hudIcon("anchor", "sow-hud__ring-icon");
+        else if (slot.type === "group") title.innerHTML = hudIcon(slot.group === "emote" ? "emote" : "construction", "sow-hud__ring-icon");
+        else {
+            var action = slot.item.action;
+            var label = mapActionLabels[action] || {};
+            var status = slot.presentation && slot.presentation.status || label.status;
+            var building = RING_BUILD_SLOTS[action] != null ? buildingIcon(action.slice(6), 1, "sow-hud__building-icon sow-hud__ring-icon") : "";
+            if (action === "upgrade_structure" && mapMenu.building) building = buildingIcon(mapMenu.building.kind, mapMenu.building.level, "sow-hud__building-icon sow-hud__ring-icon");
+            title.innerHTML = status ? statusIcon(status, "sow-hud__ring-icon")
+                : building || hudIcon(label.icon || "plus", "sow-hud__ring-icon");
+        }
+        return title;
+    }
+
+    function ringSlotButton(slot, index, mapMenu, hud) {
         var button = document.createElement("button");
-        var action = item.action;
         button.type = "button";
-        button.className = className;
-        button.dataset.mapAction = action;
+        button.className = "sow-hud__ring-slot";
+        button.dataset.slot = String(index);
+        button.dataset.accent = ringSlotAccent(slot);
         button.setAttribute("role", "menuitem");
-        var disabled = Boolean(item.disabled || (presentation && presentation.disabled));
-        button.disabled = disabled;
-        button.setAttribute("aria-disabled", String(disabled));
-        var buildingKind = action.indexOf("build_") === 0 ? action.slice(6) : "";
-        buildingKind = buildingKind.charAt(0).toUpperCase() + buildingKind.slice(1);
-        var buildingImg = buildingKind ? buildingIcon(buildingKind) : "";
-        var status = presentation && presentation.status || label.status;
-        var icon = status
-            ? statusIcon(status, "sow-hud__map-action-icon")
-            : buildingImg || (label.icon ? hudIcon(label.icon, "sow-hud__map-action-icon") : "•");
-        var actionName = presentation ? SOW_t(presentation.key) : mapLabel(action);
-        button.dataset.mapActionLabel = actionName;
-        if (item.reason_key) button.dataset.reasonKey = item.reason_key;
-        if (item.reason_level != null) button.dataset.reasonLevel = String(item.reason_level);
-        if (item.reason_seconds != null) button.dataset.reasonSeconds = String(item.reason_seconds);
-        if (item.reason_troops != null) button.dataset.reasonTroops = String(item.reason_troops);
-        if (presentation && presentation.state) button.dataset.allianceState = presentation.state;
-        var reason = mapActionReason(item, hudState && hudState.hud && hudState.hud.gold);
-        var accessibleLabel = reason ? actionName + ". " + reason : actionName;
-        button.setAttribute("aria-label", accessibleLabel);
-        button.title = reason ? accessibleLabel : "";
-        var content = mapActionContent(icon, withDetails ? "" : actionName, withDetails ? "" : reason);
-        button.appendChild(content);
-        if (withDetails) {
-            var copy = document.createElement("span");
-            var name = document.createElement("span");
-            name.className = "sow-hud__map-action-label";
-            name.textContent = actionName;
-            copy.appendChild(name);
-            if (reason) {
-                copy.appendChild(document.createElement("br"));
-                var reasonLabel = document.createElement("small");
-                reasonLabel.className = "sow-hud__map-action-reason";
-                reasonLabel.textContent = reason;
-                copy.appendChild(reasonLabel);
-            }
-            button.appendChild(copy);
+        var angle = index * 360 / RING_SLOTS * Math.PI / 180;
+        button.style.left = (50 + Math.sin(angle) * RING_ICON_RADIUS).toFixed(2) + "%";
+        button.style.top = (50 - Math.cos(angle) * RING_ICON_RADIUS).toFixed(2) + "%";
+        button.style.setProperty("--slot-angle", index * 360 / RING_SLOTS + "deg");
+        button.style.setProperty("--slot-index", String(index));
+        if (slot.type === "action") {
+            button.dataset.mapAction = slot.item.action;
+            if (RING_HOLD_ACTIONS[slot.item.action]) button.dataset.ringHold = "true";
+            if (slot.presentation && slot.presentation.state) button.dataset.allianceState = slot.presentation.state;
+        } else if (slot.type === "group") button.dataset.mapGroup = slot.group;
+        else if (slot.type === "emote") button.dataset.emoteKind = slot.definition.kind;
+        else if (slot.type === "clear") button.dataset.command = "clear_emote";
+        else {
+            button.dataset.emotePinToggle = "true";
+            button.setAttribute("aria-pressed", String(Boolean(hud.pin_emote)));
         }
-        if (withDetails && (item.cost != null || item.level != null)) {
-            var details = document.createElement("small");
-            details.className = "sow-hud__map-action-meta";
-            var parts = [];
-            if (item.level != null) parts.push(item.level + "→" + (item.level + 1));
-            if (item.cost != null) parts.push(Math.ceil(item.cost) + "g");
-            details.textContent = parts.join(" · ");
-            button.appendChild(details);
-        }
-        if (item.cost != null) button.dataset.mapCost = String(item.cost);
+        var icon = ringSlotIcon(slot, mapMenu);
+        icon.classList.add("sow-hud__map-action-title");
+        button.appendChild(icon);
+        var badge = document.createElement("span");
+        badge.className = "sow-hud__ring-badge";
+        badge.setAttribute("aria-hidden", "true");
+        button.appendChild(badge);
         return button;
     }
 
-    function updateDisabledMapActionReasons(menu, availableGold) {
-        menu.querySelectorAll('.sow-hud__map-card[aria-disabled="true"]').forEach(function (button) {
-            var cost = Number(button.dataset.mapCost);
-            var reason = mapActionReason({
-                disabled: true,
-                cost: Number.isFinite(cost) ? cost : null,
-                reason_key: button.dataset.reasonKey || null,
-                reason_level: Number.isFinite(Number(button.dataset.reasonLevel)) ? Number(button.dataset.reasonLevel) : null,
-                reason_seconds: Number.isFinite(Number(button.dataset.reasonSeconds)) ? Number(button.dataset.reasonSeconds) : null,
-                reason_troops: Number.isFinite(Number(button.dataset.reasonTroops)) ? Number(button.dataset.reasonTroops) : null
-            }, availableGold);
-            if (!reason) return;
-            var reasonLabel = button.querySelector(".sow-hud__map-action-reason");
-            if (reasonLabel && reasonLabel.textContent !== reason) reasonLabel.textContent = reason;
-            var accessibleLabel = button.dataset.mapActionLabel + ". " + reason;
-            if (button.getAttribute("aria-label") !== accessibleLabel) {
-                button.setAttribute("aria-label", accessibleLabel);
+    function ringHub(mapMenu) {
+        var hub;
+        if (mapMenuView === "root") {
+            hub = document.createElement("span");
+            if (mapMenu.target_avatar) {
+                var image = document.createElement("img");
+                image.className = "sow-hud__ring-portrait";
+                image.alt = "";
+                var emblem = document.createElement("span");
+                emblem.className = "sow-hud__ring-emblem";
+                bindAvatarFallback(image);
+                renderAvatarIdentity(image, emblem, mapMenu.target_avatar);
+                hub.append(image, emblem);
+            } else hub.innerHTML = hudIcon("camera", "sow-hud__ring-icon");
+        } else {
+            hub = document.createElement("button");
+            hub.type = "button";
+            hub.dataset.mapBack = "true";
+            hub.setAttribute("aria-label", SOW_t("hud.map_action_back"));
+            hub.innerHTML = hudIcon(mapMenuView === "emote" ? "emote" : "construction", "sow-hud__ring-icon")
+                + '<span class="sow-hud__ring-back" aria-hidden="true"></span>';
+        }
+        hub.className = "sow-hud__ring-hub";
+        hub.dataset.relation = mapMenu.relation || "neutral";
+        return hub;
+    }
+
+    function renderRingReadout(menu) {
+        var readout = menu.querySelector(".sow-hud__ring-readout");
+        if (!readout) return;
+        var hud = hudState && hudState.hud || {};
+        var mapMenu = hud.map_menu || {};
+        var slot = ring.hot >= 0 ? ring.slots[ring.hot] : null;
+        var title, detail;
+        if (slot) {
+            title = ringSlotLabel(slot);
+            detail = ringSlotDetail(slot, hud.gold);
+        } else if (mapMenuView !== "root") {
+            title = SOW_t(mapMenuView === "emote" ? "hud.map_action_emote" : "hud.map_action_build");
+            detail = "";
+        } else {
+            var relation = SOW_t("hud.map_relation_" + (mapMenu.relation || "neutral"));
+            title = mapMenu.target_name || relation;
+            detail = title === relation ? "" : escapeHudText(relation);
+        }
+        readout.dataset.state = slot ? (ringSlotDisabled(slot) ? "blocked" : "action") : "target";
+        if (readout.firstChild.textContent !== title) readout.firstChild.textContent = title;
+        if (readout.lastChild.innerHTML !== detail) readout.lastChild.innerHTML = detail;
+        readout.lastChild.hidden = !detail;
+    }
+
+    function buildRing(menu, slots, mapMenu, hud) {
+        menu.replaceChildren();
+        menu.dataset.level = mapMenuView;
+        menu.style.setProperty("--ring-hold-ms", RING_HOLD_MS + "ms");
+        var readout = document.createElement("div");
+        readout.className = "sow-hud__ring-readout";
+        readout.setAttribute("aria-live", "polite");
+        readout.append(document.createElement("strong"), document.createElement("small"));
+        var radial = document.createElement("div");
+        radial.className = "sow-hud__map-radial";
+        radial.innerHTML = '<svg class="sow-hud__ring-art" viewBox="0 0 100 100" aria-hidden="true">'
+            + '<defs><radialGradient id="sow-ring-sheen" cx="50" cy="50" r="50" gradientUnits="userSpaceOnUse">'
+            + '<stop offset="0.4" stop-color="#fff" stop-opacity="0"/><stop offset="0.96" stop-color="#fff" stop-opacity="0.07"/>'
+            + '<stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>'
+            + '<circle class="sow-hud__ring-bezel" cx="50" cy="50" r="49.5"/>'
+            + slots.map(ringSectorMarkup).join("")
+            + '<circle class="sow-hud__ring-sheen" cx="50" cy="50" r="' + RING_OUTER_RADIUS + '" fill="url(#sow-ring-sheen)"/>'
+            + '<circle class="sow-hud__ring-hub-plate" cx="50" cy="50" r="' + RING_HUB_RADIUS + '"/></svg>';
+        slots.forEach(function (slot, index) {
+            if (slot) radial.appendChild(ringSlotButton(slot, index, mapMenu, hud));
+        });
+        radial.appendChild(ringHub(mapMenu));
+        var tether = document.createElement("span");
+        tether.className = "sow-hud__ring-tether";
+        tether.setAttribute("aria-hidden", "true");
+        menu.append(readout, radial, tether);
+    }
+
+    // Live values (cost, reason, countdown) patch the built ring in place, so a
+    // ticking timer never rebuilds it and hover/focus survive.
+    function patchRing(menu, slots, availableGold) {
+        slots.forEach(function (slot, index) {
+            if (!slot) return;
+            var button = menu.querySelector('.sow-hud__ring-slot[data-slot="' + index + '"]');
+            if (!button) return;
+            var disabled = ringSlotDisabled(slot);
+            var name = ringSlotLabel(slot);
+            var reason = slot.type === "action" ? mapActionReason(slot.item, availableGold) : "";
+            var accessibleLabel = reason ? name + ". " + reason : name;
+            if (button.disabled !== disabled) button.disabled = disabled;
+            button.setAttribute("aria-disabled", String(disabled));
+            if (button.getAttribute("aria-label") !== accessibleLabel) button.setAttribute("aria-label", accessibleLabel);
+            var blocked = "";
+            if (slot.type === "action" && slot.item.disabled) blocked = slot.item.reason_seconds != null ? "clock" : slot.item.reason_key ? "lock" : "gold";
+            if (button.dataset.blocked !== blocked) {
+                button.dataset.blocked = blocked;
+                button.lastChild.innerHTML = blocked ? hudIcon(blocked, "sow-hud__ring-badge-icon") : "";
             }
-            if (button.title !== accessibleLabel) button.title = accessibleLabel;
+            var sector = menu.querySelector('.sow-hud__ring-sector[data-slot="' + index + '"]');
+            if (sector) sector.classList.toggle("is-disabled", disabled);
+        });
+        ring.slots = slots;
+        renderRingReadout(menu);
+    }
+
+    function positionRing(menu, mapMenu) {
+        var x = Number(mapMenu.x || 0);
+        var y = Number(mapMenu.y || 0);
+        var half = menu.offsetWidth * 0.5;
+        var readout = menu.querySelector(".sow-hud__ring-readout");
+        var readoutSpace = readout ? readout.offsetHeight + 10 : 0;
+        var minX = half + 8;
+        var minY = half + 8;
+        var maxX = Math.max(minX, window.innerWidth - half - 8);
+        var maxY = Math.max(minY, window.innerHeight - half - 8);
+        var left = Math.min(Math.max(x, minX), maxX);
+        var top = Math.min(Math.max(y, minY), maxY);
+        menu.style.left = left + "px";
+        menu.style.top = top + "px";
+        menu.dataset.readout = top - half - readoutSpace < 8 ? "below" : "above";
+        var dx = x - left;
+        var dy = y - top;
+        var distance = Math.sqrt(dx * dx + dy * dy);
+        menu.classList.toggle("has-tether", distance > half * 0.2);
+        menu.style.setProperty("--tether-x", dx.toFixed(1) + "px");
+        menu.style.setProperty("--tether-y", dy.toFixed(1) + "px");
+        menu.style.setProperty("--tether-angle", Math.atan2(dy, dx).toFixed(4) + "rad");
+        menu.style.setProperty("--tether-length", Math.max(0, distance - half).toFixed(1) + "px");
+    }
+
+    // Returns "hub", a slot index, or null. Direction picks the slot; while a
+    // drag that opened the ring is in progress any distance past the hub counts.
+    function ringSlotAt(menu, clientX, clientY, unbounded) {
+        var radial = menu.querySelector(".sow-hud__map-radial");
+        if (!radial) return null;
+        var rect = radial.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        var dx = (clientX - rect.left) / rect.width * 100 - 50;
+        var dy = (clientY - rect.top) / rect.height * 100 - 50;
+        var distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance <= RING_HUB_RADIUS) return "hub";
+        if (!unbounded && distance > 50) return null;
+        var angle = (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360;
+        return Math.round(angle / (360 / RING_SLOTS)) % RING_SLOTS;
+    }
+
+    function ringSlotButtonAt(menu, index) {
+        return menu.querySelector('.sow-hud__ring-slot[data-slot="' + index + '"]');
+    }
+
+    function setRingHot(menu, index) {
+        if (ring.hold && ring.hold.index !== index) ringHoldCancel(menu);
+        if (ring.hot === index) return;
+        ring.hot = index;
+        menu.querySelectorAll(".sow-hud__ring-sector, .sow-hud__ring-slot").forEach(function (element) {
+            element.classList.toggle("is-hot", Number(element.dataset.slot) === index);
+        });
+        renderRingReadout(menu);
+    }
+
+    function ringHoldStart(menu, index) {
+        if (ring.hold && ring.hold.index === index) return;
+        ringHoldCancel(menu);
+        ring.hold = { index: index, started: performance.now() };
+        var sector = menu.querySelector('.sow-hud__ring-sector[data-slot="' + index + '"]');
+        if (sector) sector.classList.add("is-arming");
+    }
+
+    function ringHoldCancel(menu) {
+        ring.hold = null;
+        if (menu) menu.querySelectorAll(".sow-hud__ring-sector.is-arming").forEach(function (sector) {
+            sector.classList.remove("is-arming");
         });
     }
 
-    function radialSectorGeometry(button, index, count) {
-        var span = 360 / count;
-        var gap = Math.min(7, span * 0.14);
-        var origin = -90 - span / 2;
-        var start = origin + index * span + gap / 2;
-        var end = origin + (index + 1) * span - gap / 2;
-        var outerRadius = 46;
-        var innerRadius = 17;
-        var points = [];
-        var steps = Math.max(4, Math.ceil((end - start) / 12));
-        var point = function (angle, radius) {
-            var radians = angle * Math.PI / 180;
-            return (50 + Math.cos(radians) * radius).toFixed(2) + "% "
-                + (50 + Math.sin(radians) * radius).toFixed(2) + "%";
-        };
-        for (var outer = 0; outer <= steps; outer += 1) {
-            points.push(point(start + (end - start) * outer / steps, outerRadius));
+    function ringActivate(menu, target) {
+        if (target === "hub") {
+            var back = menu.querySelector("[data-map-back]");
+            if (back) back.click();
+            return;
         }
-        for (var inner = steps; inner >= 0; inner -= 1) {
-            points.push(point(start + (end - start) * inner / steps, innerRadius));
+        if (typeof target !== "number") return;
+        setRingHot(menu, target);
+        var button = ringSlotButtonAt(menu, target);
+        if (!button || button.disabled) return;
+        if (button.dataset.ringHold === "true") {
+            var held = ring.hold && ring.hold.index === target && performance.now() - ring.hold.started >= RING_HOLD_MS;
+            ringHoldCancel(menu);
+            if (!held) return;
+            ring.holdConfirmed = true;
+            button.click();
+            ring.holdConfirmed = false;
+            return;
         }
-        var polygon = "polygon(" + points.join(", ") + ")";
-        button.style.clipPath = polygon;
-        button.style.webkitClipPath = polygon;
-
-        var midpoint = origin + (index + 0.5) * span;
-        var midpointRadians = midpoint * Math.PI / 180;
-        var anchorRadius = (outerRadius + innerRadius) / 2;
-        var anchorX = 50 + Math.cos(midpointRadians) * anchorRadius;
-        var anchorY = 50 + Math.sin(midpointRadians) * anchorRadius;
-        button.dataset.tutorialAnchorX = String(anchorX);
-        button.dataset.tutorialAnchorY = String(anchorY);
-        var content = button.querySelector(".sow-hud__map-action-content");
-        if (content) {
-            content.style.left = anchorX + "%";
-            content.style.top = anchorY + "%";
-            content.style.transform = "translate(-50%, -50%)";
-        }
-    }
-
-    function mapSector(radial, item, index, count, kind, presentation) {
-        var button = mapActionButton(item, "sow-hud__map-sector sow-hud__map-sector--" + kind, false, presentation);
-        radialSectorGeometry(button, index, count);
-        radial.appendChild(button);
-    }
-
-    function mapGroupSector(radial, items, index, count, group, icon, text) {
-        var button = document.createElement("button");
-        button.type = "button";
-        button.className = "sow-hud__map-sector sow-hud__map-sector--" + group;
-        button.dataset.mapGroup = group;
-        button.setAttribute("role", "menuitem");
-        button.setAttribute("aria-label", text);
-        button.appendChild(mapActionContent(icon, text));
-        radialSectorGeometry(button, index, count);
-        radial.appendChild(button);
+        button.click();
     }
 
     function renderMapMenu(mapMenu) {
@@ -1093,123 +1287,98 @@
         var open = Boolean(mapMenu && mapMenu.open);
         var showRadial = Boolean(open && mapMenu.view === "radial");
         menu.classList.toggle("hidden", !showRadial);
-        if (!open) {
+        if (!showRadial) {
+            if (menu.dataset.renderKey) menu.replaceChildren();
             menu.dataset.renderKey = "";
-            mapMenuStateKey = "";
+            ring.session = "";
             mapMenuView = "root";
+            ring.hot = -1;
+            ring.press = null;
+            ringHoldCancel(null);
+            if (open && mapMenu.view === "building_details") return !(mapMenu.building && mapMenu.building.under_construction);
             return false;
         }
-        menu.dataset.session = String(mapMenu.session);
-        menu.dataset.tileIdx = String(mapMenu.tile_idx);
-        if (mapMenu.view === "building_details") {
-            if (menu.dataset.renderKey !== "building_details") menu.replaceChildren();
-            menu.dataset.renderKey = "building_details";
-            mapMenuStateKey = "";
+        var hud = hudState && hudState.hud || {};
+        var session = String(mapMenu.session) + ":" + String(mapMenu.tile_idx);
+        if (ring.session !== session) {
+            ring.session = session;
+            menu.dataset.session = String(mapMenu.session);
+            menu.dataset.tileIdx = String(mapMenu.tile_idx);
             mapMenuView = "root";
-            return !(mapMenu.building && mapMenu.building.under_construction);
+            ring.hot = -1;
+            ringHoldCancel(null);
+            ring.press = ring.pointerDown ? { id: ring.pointerId, fromOpen: true } : null;
         }
-        if (!showRadial) return false;
         var items = mapItems(mapMenu);
-        var stateKey = String(window.SOW_LOCALE || "en") + ":" + String(mapMenu.session) + ":" + String(mapMenu.tile_idx) + ":" + String(showRadial) + ":" + String(mapMenu.alliance_state || "") + ":" + JSON.stringify(items);
-        if (stateKey !== mapMenuStateKey) {
-            mapMenuStateKey = stateKey;
+        var slots = ringSlots(mapMenu, items, hud);
+        if (mapMenuView !== "root" && !slots.some(Boolean)) {
             mapMenuView = "root";
+            slots = ringSlots(mapMenu, items, hud);
         }
-        var renderKey = stateKey + ":" + mapMenuView + ":" + Boolean(hudState && hudState.hud && hudState.hud.pin_emote) + ":" + Boolean(hudState && hudState.hud && hudState.hud.emote_pinned);
+        ring.slots = slots;
+        var renderKey = [window.SOW_LOCALE || "en", session, mapMenuView, mapMenu.alliance_state, mapMenu.relation,
+            mapMenu.target_player_id, hud.pin_emote, hud.emote_pinned, hud.player_leader,
+            mapMenu.building && mapMenu.building.level].join(":") + ":" + slots.map(ringSlotIdentity).join(",");
         if (menu.dataset.renderKey !== renderKey) {
-            menu.replaceChildren();
-            menu.classList.toggle("is-submenu", mapMenuView !== "root");
-            var buildItems = items.filter(function (item) { return buildMenuActions[item.action]; });
-            var nukeItem = items.find(function (item) { return item.action === "nuke"; });
-            if (mapMenuView === "root") {
-                var radial = document.createElement("div");
-                radial.className = "sow-hud__map-radial";
-                var centerItem = items.find(function (item) { return item.action === "spawn" || item.action === "attack"; });
-                if (centerItem) {
-                    var center = mapActionButton(centerItem, "sow-hud__map-center " + (centerItem.action === "spawn" ? "is-spawn" : "is-attack"), false);
-                    radial.appendChild(center);
-                }
-                var sectors = [];
-                var emoteItem = items.find(function (item) { return item.action === "emote"; });
-                if (emoteItem) sectors.push({ group: "emote", icon: hudIcon("emote"), label: SOW_t("hud.map_action_emote") });
-                ["transfer", "fleet", "alliance"].forEach(function (action) {
-                    var item = items.find(function (candidate) { return candidate.action === action; });
-                    if (item) sectors.push({ item: item, kind: action });
-                });
-                if (buildItems.length) sectors.push({ group: "build", icon: hudIcon("construction", "sow-hud__map-action-icon"), label: SOW_t("hud.map_action_build") });
-                if (nukeItem) sectors.push({ item: nukeItem, kind: "nuke" });
-                sectors.forEach(function (sector, index) {
-                    if (sector.group) mapGroupSector(radial, items, index, sectors.length, sector.group, sector.icon, sector.label);
-                    else mapSector(radial, sector.item, index, sectors.length, sector.kind, sector.kind === "alliance" ? allianceActionLabels[mapMenu.alliance_state] : null);
-                });
-                menu.appendChild(radial);
-            } else {
-                var panel = document.createElement("div");
-                panel.className = "sow-hud__map-submenu";
-                var header = document.createElement("div");
-                header.className = "sow-hud__map-submenu-header";
-                var heading = document.createElement("span");
-                heading.className = "sow-hud__map-submenu-icon";
-                heading.innerHTML = mapMenuView === "emote" ? hudIcon("emote") : hudIcon("construction", "sow-hud__map-action-icon");
-                heading.setAttribute("aria-hidden", "true");
-                header.appendChild(heading);
-                var back = document.createElement("button");
-                back.type = "button";
-                back.className = "sow-hud__map-back";
-                back.dataset.mapBack = "true";
-                back.textContent = "←";
-                back.setAttribute("aria-label", SOW_t("hud.map_action_back"));
-                header.appendChild(back);
-                panel.appendChild(header);
-                if (mapMenuView === "emote") {
-                    var emotes = hudState && hudState.hud && hudState.hud.emotes || [];
-                    emotes.forEach(function (definition) {
-                        var choice = document.createElement("button");
-                        choice.type = "button";
-                        choice.className = "sow-hud__map-action sow-hud__map-card sow-hud__emote-choice";
-                        choice.setAttribute("role", "menuitem");
-                        choice.dataset.emoteKind = definition.kind;
-                        choice.textContent = SOW_t(definition.menu_key);
-                        panel.appendChild(choice);
-                    });
-                    var pinLabel = document.createElement("label");
-                    pinLabel.className = "sow-hud__emote-pin";
-                    var pinControl = document.createElement("input");
-                    pinControl.type = "checkbox";
-                    pinControl.dataset.emotePin = "true";
-                    pinControl.checked = Boolean(hudState.hud.pin_emote);
-                    pinLabel.appendChild(pinControl);
-                    pinLabel.appendChild(document.createTextNode(SOW_t("hud.emote_pin")));
-                    panel.appendChild(pinLabel);
-                    if (hudState.hud.emote_pinned) {
-                        var release = document.createElement("button");
-                        release.type = "button";
-                        release.className = "sow-hud__map-action sow-hud__map-card";
-                        release.dataset.command = "clear_emote";
-                        release.textContent = SOW_t("hud.emote_clear");
-                        panel.appendChild(release);
-                    }
-                } else {
-                    buildItems.forEach(function (item) {
-                        panel.appendChild(mapActionButton(item, "sow-hud__map-action sow-hud__map-card", true));
-                    });
-                }
-                menu.appendChild(panel);
-            }
+            buildRing(menu, slots, mapMenu, hud);
             menu.dataset.renderKey = renderKey;
+            var hot = ring.hot;
+            ring.hot = -1;
+            if (hot >= 0 && slots[hot]) setRingHot(menu, hot);
         }
-        updateDisabledMapActionReasons(menu, hudState && hudState.hud && hudState.hud.gold);
-        var x = Number(mapMenu.x || 0);
-        var y = Number(mapMenu.y || 0);
-        var halfWidth = menu.offsetWidth * 0.5;
-        var halfHeight = menu.offsetHeight * 0.5;
-        var minX = halfWidth + 8;
-        var minY = halfHeight + 8;
-        var maxX = Math.max(minX, window.innerWidth - halfWidth - 8);
-        var maxY = Math.max(minY, window.innerHeight - halfHeight - 8);
-        menu.style.left = Math.min(Math.max(x, minX), maxX) + "px";
-        menu.style.top = Math.min(Math.max(y, minY), maxY) + "px";
+        patchRing(menu, slots, hud.gold);
+        positionRing(menu, mapMenu);
         return true;
+    }
+
+    function openRingMenu() {
+        var menu = hudRefs && hudRefs.mapMenu;
+        return menu && !menu.classList.contains("hidden") && menu.dataset.level ? menu : null;
+    }
+
+    function ringPointer(menu, event) {
+        var target = ringSlotAt(menu, event.clientX, event.clientY, Boolean(ring.press && ring.press.fromOpen));
+        var index = typeof target === "number" ? target : -1;
+        if (event.pointerType === "mouse" || ring.press) setRingHot(menu, index);
+        if (!ring.press || index < 0) return;
+        var button = ringSlotButtonAt(menu, index);
+        if (button && !button.disabled && button.dataset.ringHold === "true") ringHoldStart(menu, index);
+    }
+
+    function bindRingInput() {
+        window.addEventListener("pointerdown", function (event) {
+            ring.pointerDown = true;
+            ring.pointerId = event.pointerId;
+            var menu = openRingMenu();
+            if (!menu || !menu.contains(event.target)) return;
+            event.preventDefault();
+            ring.press = { id: event.pointerId, fromOpen: false };
+            ringPointer(menu, event);
+        }, true);
+        window.addEventListener("pointermove", function (event) {
+            var menu = openRingMenu();
+            if (menu) ringPointer(menu, event);
+        }, true);
+        window.addEventListener("pointerup", function (event) {
+            ring.pointerDown = false;
+            var menu = openRingMenu();
+            var press = ring.press;
+            ring.press = null;
+            if (!menu || !press || press.id !== event.pointerId) {
+                if (menu) ringHoldCancel(menu);
+                return;
+            }
+            var target = ringSlotAt(menu, event.clientX, event.clientY, press.fromOpen);
+            // Releasing the opening press on the hub leaves the ring open for taps.
+            if (press.fromOpen && typeof target !== "number") return;
+            ringActivate(menu, target);
+        }, true);
+        window.addEventListener("pointercancel", function () {
+            ring.pointerDown = false;
+            ring.press = null;
+            var menu = openRingMenu();
+            if (menu) ringHoldCancel(menu);
+        }, true);
     }
 
     function escapeHudText(value) {
@@ -2971,6 +3140,13 @@
                 send("express_emote", { session: Number(hudRefs.mapMenu.dataset.session), tile_idx: Number(hudRefs.mapMenu.dataset.tileIdx), kind: emoteChoice.dataset.emoteKind, pinned: pinEmote });
                 return;
             }
+            if (event.target.closest("[data-emote-pin-toggle]")) {
+                event.preventDefault();
+                event.stopPropagation();
+                pinEmote = !pinEmote;
+                send("set_emote_pinned", { pinned: pinEmote });
+                return;
+            }
             var mapButton = event.target.closest("[data-map-action]");
             var mapGroup = event.target.closest("[data-map-group]");
             var mapBack = event.target.closest("[data-map-back]");
@@ -2980,15 +3156,20 @@
                 var mapMenu = hudRefs && (mapButton && mapButton.closest(".sow-hud__building-card") || hudRefs.mapMenu);
                 if (!mapMenu) return;
                 if (mapBack) {
+                    var fromGroup = mapMenuView;
                     mapMenuView = "root";
                     renderMapMenu(hudState && hudState.hud && hudState.hud.map_menu);
+                    var groupSlot = mapMenu.querySelector('[data-map-group="' + fromGroup + '"]');
+                    if (groupSlot) groupSlot.focus({ preventScroll: true });
                 } else if (mapGroup) {
                     mapMenuView = mapGroup.dataset.mapGroup || "build";
                     renderMapMenu(hudState && hudState.hud && hudState.hud.map_menu);
-                    var firstChoice = mapMenu.querySelector("[data-emote-kind], [data-map-action]");
-                    if (firstChoice) firstChoice.focus();
+                    var firstChoice = mapMenu.querySelector(".sow-hud__ring-slot:not(:disabled)");
+                    if (firstChoice) firstChoice.focus({ preventScroll: true });
                 } else {
                     if (mapButton.disabled) return;
+                    // Hold-to-confirm actions only fire from a completed hold.
+                    if (mapButton.dataset.ringHold === "true" && !ring.holdConfirmed) return;
                     send("map_menu_action", {
                         session: Number(mapMenu.dataset.session),
                         tile_idx: Number(mapMenu.dataset.tileIdx),
@@ -3137,6 +3318,7 @@
         }
         hudRoot.addEventListener("click", handleHudClick);
         hudDevLayer.addEventListener("click", handleHudClick);
+        bindRingInput();
     }
 
     function handleHudStateUpdate(raw) {
@@ -3226,21 +3408,33 @@
         if (event.key === "Escape") {
             event.preventDefault();
             event.stopPropagation();
-            if (mapMenuView !== "root") {
-                mapMenuView = "root";
-                renderMapMenu(hudState && hudState.hud && hudState.hud.map_menu);
-                var group = menu.querySelector("[data-map-group]");
-                if (group) group.focus();
-            } else send("close_map_context_menu");
+            var back = menu.querySelector("[data-map-back]");
+            if (back) back.click();
+            else send("close_map_context_menu");
         } else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].indexOf(event.key) >= 0) {
-            var choices = Array.prototype.slice.call(menu.querySelectorAll("button:not(:disabled), input:not(:disabled)"));
+            // Arrows walk the ring clockwise/counter-clockwise, skipping empty and blocked slots.
+            var choices = Array.prototype.slice.call(menu.querySelectorAll(".sow-hud__ring-slot:not(:disabled)"));
             if (!choices.length) return;
             event.preventDefault();
             event.stopPropagation();
             var direction = event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1;
             var index = choices.indexOf(document.activeElement);
-            choices[(index + direction + choices.length) % choices.length].focus();
+            if (index < 0) index = direction > 0 ? -1 : 0;
+            choices[(index + direction + choices.length) % choices.length].focus({ preventScroll: true });
+        } else if ((event.key === "Enter" || event.key === " ") && event.target.dataset.ringHold === "true") {
+            event.preventDefault();
+            if (!event.repeat) ringHoldStart(menu, Number(event.target.dataset.slot));
         }
+    });
+    if (hudRoot) hudRoot.addEventListener("keyup", function (event) {
+        var menu = openRingMenu();
+        if (!menu || (event.key !== "Enter" && event.key !== " ") || event.target.dataset.ringHold !== "true") return;
+        event.preventDefault();
+        ringActivate(menu, Number(event.target.dataset.slot));
+    });
+    if (hudRoot) hudRoot.addEventListener("focusin", function (event) {
+        var menu = openRingMenu();
+        if (menu && menu.contains(event.target) && event.target.dataset.slot != null) setRingHot(menu, Number(event.target.dataset.slot));
     });
 
     window.addEventListener("sow:locale-change", function () {

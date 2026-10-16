@@ -28,7 +28,6 @@ dump.rdb
 *debug*.txt
 eslint_out.txt
 
-# Leader portraits + boot UI publish tree: assets/cdn/
 # Server map library (large binaries): assets/maps/
 assets/maps/*
 !assets/maps/world/
@@ -59,12 +58,9 @@ ponytail/
 .home_mock/
 .home/
 .rustup_home/
-assets/emoji/cache/
-com.unity.textmeshpro/
 
 # Local checkout dependencies
 /blade/
-/winit/
 /OpenFrontIO/
 
 # Native desktop wrapper dependencies/build output

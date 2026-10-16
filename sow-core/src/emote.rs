@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 pub const EMOTE_DURATION_SECS: f32 = 3.0;
 
 /// Order matches the four cells of every hero sheet, read left-to-right.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 #[repr(usize)]
 pub enum AvatarExpression {
     Happy,
@@ -31,7 +32,6 @@ pub enum EmoteKind {
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct EmoteDefinition {
     pub kind: EmoteKind,
-    #[serde(skip)]
     pub expression: AvatarExpression,
     pub menu_key: &'static str,
     pub bubble_key: &'static str,

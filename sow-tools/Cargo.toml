@@ -35,7 +35,6 @@ tokio = { workspace = true, features = ["net"] }
 reqwest = { workspace = true, features = ["blocking"] }
 bincode.workspace = true
 clap = { workspace = true }
-env_logger = { workspace = true }
 tokio-tungstenite = { workspace = true, features = ["connect", "native-tls"] }
 futures-util = { workspace = true }
 rand = { workspace = true }

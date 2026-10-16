@@ -584,7 +584,6 @@ enum ServerEvent {
         client_tx: mpsc::Sender<Vec<u8>>,
         name: String,
         clan_tag: String,
-        civilization: sow_core::player::Civilization,
         leader: sow_core::player::Leader,
         random_leader: bool,
         skin_style: u8,
@@ -1070,12 +1069,11 @@ async fn main() {
                     let mut games = games_clone.lock().await;
                     let mut nid = next_id_clone.lock().await;
                     match event {
-                        ServerEvent::Join { client_tx, name, clan_tag, civilization, leader, random_leader, skin_style, target_lobby_id, host_private, build_version, database_account_id, host_config, password, ip, session_id } => {
+                        ServerEvent::Join { client_tx, name, clan_tag, leader, random_leader, skin_style, target_lobby_id, host_private, build_version, database_account_id, host_config, password, ip, session_id } => {
                             log::info!("Player {} (clan: {}, ip: {}, session_id: {}) joining with version: {}", name, clan_tag, ip, session_id, build_version);
                             match join_player(&mut games, &mut nid, JoinPlayerOpts {
                                 name,
                                 clan_tag,
-                                civilization,
                                 leader,
                                 random_leader,
                                 skin_style,
@@ -1417,7 +1415,6 @@ async fn main() {
                                                 let _ = ev_tx.send(ServerEvent::Join {
                                                     name: payload.name,
                                                     clan_tag: payload.clan_tag,
-                                                    civilization: leader.civilization(),
                                                     leader,
                                                     random_leader: payload.random_leader,
                                                     skin_style,

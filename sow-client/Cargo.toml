@@ -33,8 +33,6 @@ web-time = { workspace = true }
 image = { workspace = true }
 url = { workspace = true }
 blade-graphics = { git = "https://github.com/ohsalmeron/blade", rev = "be2fc3130ce09212f41a31bbce629f0a1c14bc61" }
-blade-macros = { git = "https://github.com/ohsalmeron/blade", rev = "be2fc3130ce09212f41a31bbce629f0a1c14bc61" }
-bytemuck = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = { workspace = true }

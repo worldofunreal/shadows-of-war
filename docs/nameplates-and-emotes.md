@@ -51,9 +51,11 @@ de mensajes ni ruta de red para comunicar estas cuatro acciones.
 - La expresión vuelve a calma a los tres segundos. Fijar conserva la cara,
   mientras la burbuja siempre termina. El control de fijado se aplica a la
   siguiente selección; desactivarlo o «Volver a calma» libera la expresión.
-- En territorio propio, Emote es el primer sector del radial. Las demás
-  acciones proceden de las capacidades de Rust. Una acción que no corresponde
-  desaparece; una acción válida pero temporalmente indisponible sigue visible.
+- El radial tiene seis posiciones fijas; Emote vive siempre en la de 300° y
+  abre los cuatro gestos (con las caras del héroe), volver a calma y fijar
+  dentro del mismo anillo. Las demás acciones proceden de las capacidades de
+  Rust. Una acción que no corresponde deja su posición vacía; una acción válida
+  pero temporalmente indisponible sigue visible y atenuada.
 - El avatar conserva las reglas de visibilidad de su placa. La burbuja requiere
   una placa completa visible y audiencia propia/aliada/de equipo. Los avisos
   comparten audiencia sin depender de la cámara; se agrupan por emisor y tienen

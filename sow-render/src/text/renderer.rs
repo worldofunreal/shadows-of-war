@@ -427,9 +427,7 @@ fn shape_arabic_run(
     let base = atlas.atlas.common.base as f32;
     let mut item_count = 0usize;
 
-    for (((info, position), advance), glyph) in
-        infos.iter().zip(positions).zip(advances).zip(glyphs)
-    {
+    for ((position, advance), glyph) in positions.iter().zip(advances).zip(glyphs) {
         let glyph = glyph.map(|(glyph, _)| glyph);
         if let Some(glyph) = glyph {
             emit(PreparedTextItem {

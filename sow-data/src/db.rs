@@ -4,7 +4,7 @@ use crate::metadata_db::{
     SEASONS_TABLE, VERIFIED_VICTORY_BOARD_TABLE,
 };
 use crate::profile::{
-    LeaderCareerStats, MatchRecord, MatchStartRecord, MenuGuideProgress, MenuGuideStatus,
+    LeaderCareerStats, MatchRecord, MatchStartRecord, MenuGuideProgress,
     PublicLeaderSummary, PublicLeaderboardEntry, PublicMatchDetail, PublicMatchParticipant,
     PublicMatchSummary, PublicProfileIndex, PublicProfileSummary, PublicProfileView,
     PublicRatingView, ReplayVerificationStatus, SeasonRating, SeasonRecord, VerifiedMatchResult,
@@ -4703,7 +4703,7 @@ impl PlayerDb {
             return Err("match metadata database unavailable".into());
         };
         let write_txn = db.begin_write()?;
-        let mut starts = write_txn.open_table(MATCH_STARTS_TABLE)?;
+        let starts = write_txn.open_table(MATCH_STARTS_TABLE)?;
         let Some(value) = starts.get(match_id)? else {
             return Err("trusted match registration unavailable".into());
         };
@@ -5055,7 +5055,7 @@ impl PlayerDb {
             }
         }
 
-        let mut record = MatchRecord {
+        let record = MatchRecord {
             schema_version: 1,
             match_id: match_id.to_string(),
             season_id: crate::profile::CURRENT_SEASON_ID,

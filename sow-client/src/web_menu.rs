@@ -3312,6 +3312,23 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 .as_ref()
                 .and_then(|renderer| renderer.owners.get(menu.tile_idx as usize).copied())
                 .unwrap_or(0);
+            let (target_name, target_avatar) = app
+                .sim
+                .current_snapshot
+                .as_ref()
+                .and_then(|snapshot| {
+                    snapshot
+                        .players
+                        .iter()
+                        .find(|player| target_player_id != 0 && player.id == target_player_id)
+                })
+                .map(|player| {
+                    (
+                        player.name.clone(),
+                        sow_core::player::avatar_identity(player),
+                    )
+                })
+                .unzip();
             let alliance_state = app
                 .map_menu_alliance_state(menu.tile_idx)
                 .map(sow_core::diplomacy::AllianceActionState::as_str);
@@ -3360,6 +3377,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 "actions": actions,
                 "items": items,
                 "alliance_state": alliance_state,
+                "relation": app.map_menu_relation(menu.tile_idx),
+                "target_name": target_name,
+                "target_avatar": target_avatar,
                 "building": building,
             })
         })
@@ -3482,7 +3502,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         .unwrap_or_default();
     let trade_ship = sow_core::game::UnitType::TradeShip;
     let warship = sow_core::game::UnitType::Warship;
-    let nuke = sow_core::game::NukeKind::AtomBomb;
     let notifications = hud
         .hud_notifications
         .iter()

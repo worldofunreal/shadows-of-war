@@ -26,8 +26,34 @@ const cameraFrameUiSource = fs.readFileSync(path.join(shell, "../../sow-client/s
 const buildingOverlaySource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/world/overlays.rs"), "utf8");
 
 
+// Loads the command-ring helpers (ringSlots … ringActivate) with stubbed HUD dependencies.
+function loadRing(overrides = {}) {
+    const start = hud.indexOf("    var RING_SLOTS = 6;");
+    const end = hud.indexOf("    function renderMapMenu(mapMenu) {", start);
+    const labelsStart = hud.indexOf("var mapActionLabels =");
+    const labelsEnd = hud.indexOf("function mapLabel(action)", labelsStart);
+    const context = Object.assign({
+        mapMenuView: "root",
+        ring: { hot: -1, slots: [], press: null, hold: null, holdConfirmed: false },
+        hudState: { hud: {} },
+        SOW_t: key => key,
+        mapLabel: action => "label:" + action,
+        mapActionReason: item => item.reason_key ? "reason:" + item.reason_key : "",
+        hudIcon: name => "<icon:" + name + ">",
+        statusIcon: name => "<status:" + name + ">",
+        buildingIcon: kind => "<building:" + kind + ">",
+        escapeHudText: value => String(value),
+        leaderById: () => ({ slug: "caesar" }),
+        asset: value => value,
+        performance: { now: () => context.now || 0 },
+        Math, Number, String, Array, Boolean
+    }, overrides);
+    vm.runInNewContext(hud.slice(labelsStart, labelsEnd) + hud.slice(start, end), context);
+    return context;
+}
+
 test("map menu sends the Rust-validated session, tile, and action", () => {
-    assert.match(hud, /button\.dataset\.mapAction = action/);
+    assert.match(hud, /button\.dataset\.mapAction = slot\.item\.action/);
     assert.match(hud, /send\("map_menu_action", \{/);
     assert.match(hud, /session: Number\(mapMenu\.dataset\.session\)/);
     assert.match(hud, /tile_idx: Number\(mapMenu\.dataset\.tileIdx\)/);
@@ -345,38 +371,31 @@ test("map menu keeps context without inventing unavailable actions", () => {
     const renderBody = hud.slice(renderStart, renderEnd);
     assert.doesNotMatch(renderBody, /if \(!items\.length\)/);
     assert.doesNotMatch(renderBody, /mapDisabledSector|disabledCenter/);
-    assert.match(renderBody, /sectors\.forEach/);
+    assert.match(renderBody, /ringSlots\(mapMenu, items, hud\)/);
 });
 
 
-test("map menu keeps the radial sectors and recovered submenu actions", () => {
-    assert.match(hud, /sow-hud__map-radial/);
-    assert.match(hud, /function radialSectorGeometry/);
-    assert.doesNotMatch(hud, /function mapDisabledSector|var radialCount = 4/);
-    assert.match(hud, /if \(emoteItem\) sectors\.push/);
-    assert.match(hud, /\["transfer", "fleet", "alliance"\]/);
-    assert.match(hud, /index, sectors\.length/);
-    assert.match(hud, /dataset\.mapGroup = group/);
-    assert.match(hud, /upgrade_structure/);
-    assert.match(hud, /build_warship/);
-    assert.doesNotMatch(hud, /build_trade_ship/);
-    assert.match(hudCss, /\.sow-hud__map-sector--build/);
-    assert.match(hudCss, /\.sow-hud__map-sector--nuke/);
-    assert.match(hudCss, /isolation: isolate/);
-    assert.match(hudCss, /\.sow-hud__map-submenu/);
-    assert.match(hudCss, /@keyframes sow-map-menu-in/);
-    assert.match(hud, /var status = presentation && presentation\.status \|\| label\.status;/);
-    assert.match(hud, /mapActionContent\(icon, withDetails \? "" : actionName, withDetails \? "" : reason\)/);
-    assert.match(hud, /parts\.push\(item\.level/);
+test("command ring keeps one six-slot shape with submenus inside the ring", () => {
+    assert.match(hud, /var RING_SLOTS = 6;/);
+    assert.doesNotMatch(hud, /radialSectorGeometry|mapGroupSector|mapSector\(|clipPath|function mapDisabledSector|var radialCount = 4/);
+    assert.doesNotMatch(hud, /sow-hud__map-submenu|sow-hud__map-card|sow-hud__emote-choice|data-emote-pin"|build_warship: |buildMenuActions/);
+    assert.doesNotMatch(hudCss, /sow-hud__map-sector|sow-hud__map-submenu|sow-hud__map-card|sow-hud__emote-choice|sow-hud__emote-pin|sow-hud__map-center/);
+    assert.match(hudCss, /\.sow-hud__ring-sector\.is-empty/);
+    assert.match(hudCss, /\.sow-hud__ring-sector\.is-arming \.sow-hud__ring-hold/);
+    assert.match(hudCss, /@media \(pointer: coarse\) \{\s*\.sow-hud__map-menu \{ --ring-size: clamp\(240px/);
+    assert.match(hudCss, /\.sow-hud__ring-readout strong \{[^}]*font-size: 15px/);
     assert.match(hud, /sow-hud__buildings-strip/);
     assert.match(hudCss, /\.sow-hud__buildings-strip/);
     assert.match(hudCss, /\.sow-hud__building-btn/);
-    assert.doesNotMatch(hud, /build_structure|cancel_placement/);
+    assert.doesNotMatch(hud, /build_structure|cancel_placement|build_trade_ship/);
     assert.doesNotMatch(hudCss, /sow-hud__bld-btn|sow-hud__cancel-btn/);
     assert.doesNotMatch(hud, /mapClose|data-map-close|close_map_menu|STRATEGIC STRIKE|CONSTRUCT/);
-    assert.match(hudCss, /\.sow-hud__map-sector-caption/);
     assert.doesNotMatch(hudCss, /sow-hud__map-close/);
+    assert.doesNotMatch(mapClick, /BuildWarship/);
+    assert.doesNotMatch(campaignEngine, /map_build_warship/);
+    assert.match(webMenu, /"relation": app\.map_menu_relation\(menu\.tile_idx\)/);
 });
+
 
 
 test("fleet dock uses building buttons for real actions and an automatic-trade status icon", () => {
@@ -430,7 +449,7 @@ test("radial and HUD icons use one concept-based visual contract", () => {
     assert.match(storyCss, /\.sow-story__title,[^{]*\{ -webkit-text-stroke: var\(--sow-text-outline\)/);
     assert.match(hudCss, /\.sow-hud__status-right \{\s*flex-direction: column;\s*align-items: stretch;\s*gap: 6px;/);
     const configStart = hud.indexOf("var mapActionLabels =");
-    const configEnd = hud.indexOf("var buildMenuActions", configStart);
+    const configEnd = hud.indexOf("function mapLabel(action)", configStart);
     const config = vm.runInNewContext(hud.slice(configStart, configEnd) + "({ mapActionLabels, allianceActionLabels });");
     for (const [action, icon] of Object.entries({
         spawn: "spawn", attack: "attack", fleet: "fleet", transfer: "transfer", nuke: "nuke"
@@ -451,43 +470,16 @@ test("radial and HUD icons use one concept-based visual contract", () => {
     assert.match(webMenu, /"alliance_state": alliance_state/);
     assert.doesNotMatch(hud, /has_alliance_request|has_proposed_alliance|alliance_requests/);
 
-    function element() {
-        return {
-            dataset: {}, children: [], attributes: {}, style: {},
-            appendChild(child) { this.children.push(child); return child; },
-            setAttribute(name, value) { this.attributes[name] = String(value); },
-            getAttribute(name) { return this.attributes[name] ?? null; }
-        };
-    }
-    const buttonSource = hud.slice(hud.indexOf("function mapActionContent("), hud.indexOf("function updateDisabledMapActionReasons", hud.indexOf("function mapActionContent(")));
-    const renderButton = vm.runInNewContext(buttonSource + "\nmapActionButton;", {
-        document: { createElement: element },
-        mapActionLabels: config.mapActionLabels,
-        mapActionContent: undefined,
-        mapActionReason: item => item.reason_key ? "Unavailable." : "",
-        mapLabel: action => action,
-        SOW_t: key => "translated:" + key,
-        statusIcon: (kind, cls) => `<span class="${cls} sow-hud__status-icon" data-status="${kind}"></span>`,
-        hudIcon: () => "",
-        buildingIcon: () => "",
-        hudState: null
-    });
-    const accepted = renderButton(
-        { action: "alliance" }, "sector", false, config.allianceActionLabels.accept
-    );
-    assert.equal(accepted.disabled, false);
-    assert.equal(accepted.getAttribute("aria-label"), "translated:hud.map_action_accept_alliance");
-    assert.match(accepted.children[0].children[0].innerHTML, /data-status="allied"/);
-    assert.equal(accepted.children[0].children[1].textContent, "translated:hud.map_action_accept_alliance");
-    const pending = renderButton(
-        { action: "alliance" }, "sector", false, config.allianceActionLabels.pending
-    );
-    assert.equal(pending.disabled, true);
-    assert.equal(pending.getAttribute("aria-disabled"), "true");
-    assert.equal(pending.children[0].children[1].textContent, "translated:hud.map_action_alliance_pending");
-    assert.match(pending.children[0].children[0].innerHTML, /data-status="request"/);
-    assert.match(hudCss, /\.sow-hud__map-sector:focus-visible/);
-    assert.match(hudCss, /\.sow-hud__map-sector:active/);
+    const ringContext = loadRing();
+    const allianceSlot = state => ringContext.ringSlots({ alliance_state: state }, [{ action: "alliance" }], {})[3];
+    const accepted = allianceSlot("accept");
+    assert.equal(ringContext.ringSlotDisabled(accepted), false);
+    assert.equal(ringContext.ringSlotLabel(accepted), "hud.map_action_accept_alliance");
+    const pending = allianceSlot("pending");
+    assert.equal(ringContext.ringSlotDisabled(pending), true);
+    assert.equal(ringContext.ringSlotLabel(pending), "hud.map_action_alliance_pending");
+    assert.equal(pending.presentation.status, "request");
+    assert.match(hudCss, /#sow-hud \.sow-hud__ring-slot:focus-visible/);
 
     // Emoji render differently on every device and mix art styles; use hudIcon, statusIcon or buildingIcon.
     assert.doesNotMatch(hud, /\p{Extended_Pictographic}/u);
@@ -557,10 +549,9 @@ test("building menus use generated pixel-art sprites with white glyph fallback",
     }
     assert.match(buildingOverlaySource, /building_sprite_uv/);
     assert.match(hudCss, /\.sow-hud__building-icon\.is-pixel-art[\s\S]*?image-rendering: pixelated/);
-    assert.match(hud, /group: "build", icon: hudIcon\("construction", "sow-hud__map-action-icon"\)/);
+    assert.match(hud, /hudIcon\(slot\.group === "emote" \? "emote" : "construction", "sow-hud__ring-icon"\)/);
     assert.doesNotMatch(hud, /mapDisabledSector/);
-    assert.match(hud, /heading\.innerHTML = mapMenuView === "emote" \? hudIcon\("emote"\) : hudIcon\("construction", "sow-hud__map-action-icon"\)/);
-    assert.match(hud, /var buildingImg = buildingKind \? buildingIcon\(buildingKind\) : ""/);
+    assert.match(hud, /buildingIcon\(action\.slice\(6\), 1, "sow-hud__building-icon sow-hud__ring-icon"\)/);
     assert.match(hud, /buildingIcon\(detail\.kind, detail\.level\)/);
     assert.match(hudCss, /\.sow-hud__building-icon[\s\S]*?font-size: 30px/);
     assert.doesNotMatch(hudCss, /is-emoji/);
@@ -583,7 +574,12 @@ test("mobile hover is Rust-owned and the HUD only presents its state", () => {
     assert.match(hud, /var hov = hud\.hovered/);
     assert.match(hud, /hoverCard\.classList\.remove\("hidden"\)/);
     assert.match(hud, /hoverCard\.classList\.add\("hidden"\)/);
-    assert.doesNotMatch(hud, /addEventListener\("(?:touchstart|touchmove|pointermove)"/);
+    assert.doesNotMatch(hud, /addEventListener\("(?:touchstart|touchmove)"/);
+    // The only pointer tracking in the HUD is the command ring's own slot selection.
+    const pointerMoves = [...hud.matchAll(/addEventListener\("pointermove"/g)].map(match => match.index);
+    assert.equal(pointerMoves.length, 1);
+    const ringInput = hud.indexOf("function bindRingInput()");
+    assert.ok(pointerMoves[0] > ringInput && pointerMoves[0] < hud.indexOf("\n    }\n", ringInput));
     assert.match(hud, /hudRefs\.slider\.addEventListener\("pointerdown"/);
 });
 
@@ -637,8 +633,9 @@ test("terms dialog smoothly focuses the requesting entity without changing zoom"
 
 test("tutorial hand uses the map radial action's exact icon anchor", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
-    assert.match(hud, /button\.dataset\.tutorialAnchorX = String\(anchorX\)/);
-    assert.match(hud, /button\.dataset\.tutorialAnchorY = String\(anchorY\)/);
+    // Ring slots sit on the icon radius, so the hand points at the slot button's own center.
+    assert.match(hud, /icon\.classList\.add\("sow-hud__map-action-title"\)/);
+    assert.doesNotMatch(hud, /tutorialAnchorX/);
     assert.match(tutorial, /SOWCampaign\.resolveUiAnchor\(source, spotlightPanel\)/);
     assert.match(tutorial, /SOWCampaign\.resolveUiAnchor\(destination\)/);
     assert.match(campaignEditor, /SOWCampaign\.resolveUiAnchor\(target, spotlightPanel\)/);
@@ -711,36 +708,87 @@ test("fixed emotes share catalog definitions and sync translated bubbles once pe
     assert.match(hud, /SOW_I18N_READY\.then/);
     assert.match(hud, /if \(!previousHud\) emoteTextKey = ""/);
     assert.match(hud, /event\.key === "Escape"/);
-    assert.match(hudCss, /emote-choice[^}]*min-block-size: 44px/);
+    assert.match(hud, /slots\[5\] = \{ type: "pin" \}/);
 });
 
 
 
-test("radial capabilities put Emote first and omit inapplicable sectors", () => {
-    const start = hud.indexOf("var sectors = [];");
-    const end = hud.indexOf("menu.appendChild(radial);", start);
-    const source = hud.slice(start, end);
-    function render(items, buildItems = []) {
-        const calls = [];
-        vm.runInNewContext(source, {
-            items, buildItems, nukeItem: items.find(item => item.action === "nuke"), radial: {},
-            hudIcon: name => name, statusIcon: name => name, SOW_t: key => key,
-            mapMenu: { alliance_state: "pending" }, allianceActionLabels: { pending: { disabled: true } },
-            mapGroupSector: (radial, items, index, count, group) => calls.push({ group, index, count }),
-            mapSector: (radial, item, index, count, kind, presentation) => calls.push({ kind, index, count, disabled: item.disabled, presentation })
-        });
-        return calls;
-    }
-    assert.deepEqual(render([{ action: "emote" }]), [{ group: "emote", index: 0, count: 1 }]);
-    assert.deepEqual(render([{ action: "emote" }, { action: "build_city" }], [{ action: "build_city" }]), [
-        { group: "emote", index: 0, count: 2 }, { group: "build", index: 1, count: 2 }
-    ]);
-    const enemy = render([{ action: "fleet" }, { action: "alliance", disabled: true }, { action: "nuke" }]);
-    assert.deepEqual(enemy.map(item => item.kind), ["fleet", "alliance", "nuke"]);
-    assert.equal(enemy[1].disabled, true);
-    assert.equal(enemy[1].presentation.disabled, true);
-    assert.deepEqual(render([]), []);
+test("ring slots stay fixed per action and leave notches for inapplicable ones", () => {
+    const context = loadRing();
+    const ids = (items, hudState = {}) => context.ringSlots({ alliance_state: "request" }, items, hudState).map(context.ringSlotIdentity);
+    const act = (...actions) => actions.map(action => ({ action }));
+    // Enemy: offense on the right, diplomacy at the bottom; transfer and emote leave notches.
+    assert.deepEqual(ids(act("attack", "fleet", "nuke", "alliance")), ["attack", "fleet", "nuke", "alliance", "-", "-"]);
+    // Ally: same positions for shared actions.
+    assert.deepEqual(ids(act("transfer", "attack", "fleet", "alliance")), ["attack", "fleet", "-", "alliance", "transfer", "-"]);
+    // Teammate: a single action never becomes a 360° slice.
+    assert.deepEqual(ids(act("transfer")), ["-", "-", "-", "-", "transfer", "-"]);
+    // Own empty tile: Build is the primary slot, Emote keeps 300°.
+    assert.deepEqual(ids(act("emote", "build_city", "build_port")), ["group:build", "-", "-", "-", "-", "group:emote"]);
+    // Own building: Upgrade is direct, not a one-item submenu.
+    assert.deepEqual(ids(act("emote", "upgrade_structure")), ["upgrade_structure", "-", "-", "-", "-", "group:emote"]);
+    assert.deepEqual(ids(act("spawn")), ["spawn", "-", "-", "-", "-", "-"]);
+    assert.deepEqual(ids([]), ["-", "-", "-", "-", "-", "-"]);
+
+    context.mapMenuView = "build";
+    assert.deepEqual(ids(act("emote", "build_city", "build_bunker", "build_farm")), ["build_city", "-", "-", "build_bunker", "build_farm", "-"]);
+    context.mapMenuView = "emote";
+    const emotes = [{ kind: "greet" }, { kind: "help" }, { kind: "threat" }, { kind: "celebrate" }];
+    assert.deepEqual(ids([], { emotes }), ["emote:greet", "emote:celebrate", "emote:threat", "emote:help", "-", "pin"]);
+    assert.deepEqual(ids([], { emotes, emote_pinned: true }), ["emote:greet", "emote:celebrate", "emote:threat", "emote:help", "clear", "pin"]);
 });
+
+
+test("ring resolves pointer direction, keeps live values in place, and gates the nuke behind a hold", () => {
+    const radial = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 200, height: 200 }) };
+    const clicks = [];
+    const buttons = {};
+    const menu = {
+        querySelector: selector => {
+            if (selector === ".sow-hud__map-radial") return radial;
+            const slot = /data-slot="(\d)"/.exec(selector);
+            return slot && selector.startsWith(".sow-hud__ring-slot") ? buttons[slot[1]] || null : null;
+        },
+        querySelectorAll: () => []
+    };
+    const context = loadRing({ renderRingReadout: () => {} });
+    const at = (x, y, unbounded) => context.ringSlotAt(menu, x, y, unbounded);
+    assert.equal(at(100, 100), "hub");
+    assert.equal(at(100, 10), 0);
+    assert.equal(at(180, 60), 1);
+    assert.equal(at(180, 140), 2);
+    assert.equal(at(100, 190), 3);
+    assert.equal(at(20, 140), 4);
+    assert.equal(at(20, 60), 5);
+    assert.equal(at(100, -50), null, "hover past the rim selects nothing");
+    assert.equal(at(100, -50, true), 0, "a drag that opened the ring selects by direction");
+
+    for (const index of ["0", "2"]) buttons[index] = { disabled: false, dataset: { slot: index }, click: () => clicks.push(index) };
+    buttons["2"].dataset.ringHold = "true";
+    context.ringActivate(menu, 0);
+    assert.deepEqual(clicks, ["0"]);
+    context.ringActivate(menu, 2);
+    assert.deepEqual(clicks, ["0"], "a tap never launches a hold action");
+    context.now = 1000;
+    context.ringHoldStart(menu, 2);
+    context.now = 1000 + 599;
+    context.ringActivate(menu, 2);
+    assert.deepEqual(clicks, ["0"], "releasing early cancels");
+    context.ringHoldStart(menu, 2);
+    context.now += 600;
+    context.ringActivate(menu, 2);
+    assert.deepEqual(clicks, ["0", "2"]);
+    assert.equal(context.ring.holdConfirmed, false);
+    assert.match(hud, /if \(mapButton\.dataset\.ringHold === "true" && !ring\.holdConfirmed\) return;/);
+
+    // Countdown values patch the ring; only the structure key rebuilds it.
+    const renderStart = hud.indexOf("function renderMapMenu(mapMenu)");
+    const renderBody = hud.slice(renderStart, hud.indexOf("function openRingMenu()", renderStart));
+    const keyLine = renderBody.slice(renderBody.indexOf("var renderKey"), renderBody.indexOf("if (menu.dataset.renderKey !== renderKey)"));
+    assert.doesNotMatch(keyLine, /JSON\.stringify|reason_seconds|items/);
+    assert.match(renderBody, /patchRing\(menu, slots, hud\.gold\)/);
+});
+
 
 
 test("placement controls follow the building, clamp in both orientations and prevent pending duplicates", () => {

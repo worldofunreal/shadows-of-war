@@ -117,8 +117,8 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
 
 /* Outlined text for numbers, titles and button labels (same rule as the story overlay). */
 #sow-hud :is(.sow-hud__nameplate-copy strong, .sow-hud__nameplate-readout, .sow-hud__nameplate-stat b,
-    .sow-hud__army-allocation strong, .sow-hud__deploy-title, .sow-hud__deploy-timer, .sow-hud__map-sector-caption,
-    .sow-hud__map-action-label, .sow-hud__panel-header h3, .sow-hud__transfer-header h3, .sow-hud__player-rank,
+    .sow-hud__army-allocation strong, .sow-hud__deploy-title, .sow-hud__deploy-timer, .sow-hud__ring-readout strong,
+    .sow-hud__panel-header h3, .sow-hud__transfer-header h3, .sow-hud__player-rank,
     .sow-hud__player-identity b, .sow-hud__player-land, .sow-hud__player-troops, .sow-hud__hover-header b,
     .sow-hud__hover-stats b, .sow-hud__building-card-title, .sow-hud__building-metric b, .sow-hud__endgame-banner,
     .sow-hud__endgame-title, .sow-hud__endgame-stat b, .sow-hud__placement-info, .sow-hud__fps, .sow-hud__ping,
@@ -414,7 +414,6 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     font-size: 13px;
 }
 
-
 .sow-hud__hover-stats {
     display: flex;
     align-items: center;
@@ -655,8 +654,6 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
 .sow-hud__operation-action-icon { width: 17px; height: 17px; }
 .sow-hud__operation.is-incoming .sow-hud__operation-action[data-command="counter_attack"] { border-color: rgb(222 133 129 / 42%); color: #f0aaa5; }
 
-
-
 .sow-hud__building-icon {
     display: grid;
     place-items: center;
@@ -680,7 +677,6 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     pointer-events: none;
 }
 
-
 .sow-hud__inline-icon {
     display: inline-block;
     width: 1.1em;
@@ -689,15 +685,6 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     vertical-align: -0.2em;
     pointer-events: none;
 }
-
-.sow-hud__map-action-icon {
-    display: block;
-    width: 34px;
-    height: 34px;
-    object-fit: contain;
-    pointer-events: none;
-}
-
 
 .sow-hud__building-btn:hover:not(:disabled):not([aria-disabled="true"]),
 .sow-hud__building-btn:focus-visible:not(:disabled):not([aria-disabled="true"]) {
@@ -1184,18 +1171,6 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     margin-top: 0;
 }
 
-.sow-hud__map-menu {
-    --sow-map-size: min(240px, calc(100vw - 24px), calc(100vh - 24px));
-    position: absolute;
-    z-index: 190;
-    width: var(--sow-map-size);
-    height: var(--sow-map-size);
-    transform: translate(-50%, -50%);
-    pointer-events: auto;
-    filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.58));
-    animation: sow-map-menu-in 220ms cubic-bezier(.2, 1.35, .35, 1) both;
-}
-
 .sow-hud__building-card {
     position: fixed;
     left: 0;
@@ -1260,8 +1235,6 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
 
 .sow-hud__building-card-title,
 .sow-hud__building-level,
-.sow-hud__building-next-level,
-.sow-hud__building-metrics,
 .sow-hud__building-metric,
 .sow-hud__building-requirement {
     display: inline-flex;
@@ -1277,8 +1250,7 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     margin-inline-start: 2px;
 }
 
-.sow-hud__building-level,
-.sow-hud__building-next-level {
+.sow-hud__building-level {
     min-height: 22px;
     padding: 3px 7px;
     gap: 4px;
@@ -1329,8 +1301,6 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
 .sow-hud__building-card-benefit[hidden],
 .sow-hud__building-card-next[hidden] { display: none; }
 
-.sow-hud__building-metrics { flex-wrap: wrap; gap: 5px; }
-
 .sow-hud__building-metric {
     min-height: 22px;
     padding: 2px 4px;
@@ -1343,8 +1313,7 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     font-variant-numeric: tabular-nums;
 }
 
-.sow-hud__building-metric-icon,
-.sow-hud__building-upgrade-icon {
+.sow-hud__building-metric-icon {
     width: 14px;
     height: 14px;
     flex: 0 0 auto;
@@ -1387,371 +1356,416 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     opacity: .42;
 }
 
-.sow-hud__map-menu.is-submenu {
-    width: min(260px, calc(100vw - 24px));
-    height: auto;
-    min-height: 0;
-    animation-name: sow-map-submenu-in;
-}
-
-.sow-hud__map-radial {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    isolation: isolate;
-    background: radial-gradient(circle, rgb(21 31 35 / 99%) 0 20%, rgb(11 18 22 / 97%) 21% 57%, transparent 58%);
-    box-shadow: inset 0 0 0 1px rgb(237 216 173 / 28%), 0 0 0 1px color-mix(in srgb, var(--sow-gold) 18%, transparent), 0 12px 36px rgb(0 0 0 / 42%);
-}
-
-.sow-hud__map-radial::before {
+/* Command ring: one fixed six-slot shape for every context and submenu.
+   Wedges are drawn in SVG; slot buttons sit on the icon radius for focus,
+   screen readers and tutorial targets. Pointer input is resolved by angle in JS. */
+.sow-hud__map-menu {
+    --ring-size: clamp(216px, 58vmin, 272px);
+    --ring-relation: var(--sow-muted);
     position: absolute;
-    inset: 15%;
-    z-index: 0;
-    border: 1px solid var(--sow-line);
-    border-radius: 50%;
-    content: "";
-    pointer-events: none;
-}
-
-.sow-hud__map-sector,
-.sow-hud__map-center {
-    position: absolute;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgb(212 220 213 / 24%);
-    color: #f8fafc;
-    font: inherit;
-    cursor: pointer;
-    touch-action: manipulation;
-    transition: transform 140ms ease, background 140ms ease, border-color 140ms ease, filter 140ms ease;
-}
-
-.sow-hud__map-sector {
-    inset: 0;
-    z-index: 1;
-    width: 100%;
-    height: 100%;
-    padding: 0;
-    border: 0;
-    background: color-mix(in srgb, var(--sector-color) 12%, rgb(12 18 23 / 97%));
-    filter: none;
-}
-
-.sow-hud__map-sector--transfer {
-    --sector-color: var(--sow-gold);
-}
-
-.sow-hud__map-sector--fleet {
-    --sector-color: var(--sow-cyan);
-}
-
-.sow-hud__map-sector--alliance {
-    --sector-color: var(--sow-green);
-}
-
-.sow-hud__map-sector--build {
-    --sector-color: var(--sow-cyan);
-}
-
-.sow-hud__map-sector--nuke {
-    --sector-color: var(--sow-red);
-}
-
-.sow-hud__map-sector:hover,
-.sow-hud__map-sector:focus-visible {
-    z-index: 2;
-    transform: scale(1.045);
-    background: color-mix(in srgb, var(--sector-color) 22%, rgb(12 18 23 / 97%));
-    filter: brightness(1.08);
-}
-
-.sow-hud__map-sector:active:not(:disabled) {
-    transform: scale(.975);
-    filter: brightness(1.16);
-}
-
-.sow-hud__map-sector:focus-visible {
-    box-shadow: inset 0 0 0 2px rgb(255 255 255 / 92%);
-}
-
-.sow-hud__map-sector .sow-hud__map-action-content {
-    position: absolute;
-    z-index: 2;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    width: max-content;
-    max-width: 78px;
-    text-align: center;
-    pointer-events: none;
-}
-
-.sow-hud__map-center {
-    top: 50%;
-    left: 50%;
-    width: 68px;
-    height: 68px;
+    z-index: 190;
+    width: var(--ring-size);
+    height: var(--ring-size);
     transform: translate(-50%, -50%);
-    border: 2px solid var(--sow-red);
-    border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--sow-red) 76%, white), color-mix(in srgb, var(--sow-red) 42%, black) 78%);
-    box-shadow: 0 0 0 5px color-mix(in srgb, var(--sow-red) 16%, transparent), 0 8px 20px rgb(0 0 0 / 38%);
-    font-size: 36px;
-}
-
-.sow-hud__map-center.is-spawn {
-    border-color: var(--sow-green);
-    background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--sow-green) 82%, white), color-mix(in srgb, var(--sow-green) 55%, black) 78%);
-    box-shadow: 0 0 0 5px color-mix(in srgb, var(--sow-green) 16%, transparent), 0 8px 20px rgb(0 0 0 / 38%);
-}
-
-.sow-hud__map-center:hover,
-.sow-hud__map-center:focus-visible {
-    transform: translate(-50%, -50%) scale(1.08);
-    filter: brightness(1.16);
-}
-
-.sow-hud__map-center:focus-visible {
-    outline: 2px solid #fff8e8;
-    outline-offset: 3px;
-}
-
-.sow-hud__map-center:active:not(:disabled) {
-    transform: translate(-50%, -50%) scale(.96);
-}
-
-.sow-hud__map-center .sow-hud__map-action-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1px;
-    max-width: 64px;
     pointer-events: none;
 }
 
-.sow-hud__map-action-title {
-    display: block;
-    line-height: 1;
-}
-
-.sow-hud__map-sector-caption {
-    display: block;
-    max-width: 78px;
-    padding: 2px 5px;
-    border: 1px solid rgb(238 231 209 / 18%);
-    border-radius: 999px;
-    background: rgb(8 13 16 / 82%);
-    color: #fff8e8;
-    font-size: clamp(8px, 3.1vw, 10px);
-    font-weight: 850;
-    line-height: 1.05;
-    text-align: center;
-    text-shadow: 0 1px 3px #000;
-    overflow-wrap: anywhere;
-    pointer-events: none;
-}
-
-.sow-hud__map-center .sow-hud__map-sector-caption {
-    max-width: 58px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    font-size: 8px;
-}
-
-.sow-hud__map-sector[data-alliance-state="active"] {
-    --sector-color: var(--sow-green);
-    filter: saturate(.7) brightness(.78);
-    opacity: .86;
-}
-
-.sow-hud__map-sector[data-alliance-state="pending"] {
-    --sector-color: var(--sow-gold);
-    filter: saturate(.82) brightness(.82);
-    opacity: .9;
-}
-
-.sow-hud__map-action-label {
-    display: block;
-    min-width: 0;
-    color: #f5f1e8;
-    font-size: 13px;
-    font-weight: 800;
-    line-height: 1.25;
-    overflow-wrap: anywhere;
-}
-
-.sow-hud__map-action-reason {
-    display: block;
-    min-width: 0;
-    color: var(--sow-muted);
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 1.35;
-    overflow-wrap: anywhere;
-}
-
-.sow-hud__map-sector .sow-hud__map-action-content,
-.sow-hud__map-center .sow-hud__map-action-content {
-    pointer-events: none;
-}
-
-.sow-hud__map-sector:disabled,
-.sow-hud__map-sector[aria-disabled="true"],
-.sow-hud__map-center:disabled,
-.sow-hud__map-center[aria-disabled="true"],
-.sow-hud__map-card:disabled,
-.sow-hud__map-card[aria-disabled="true"] {
-    cursor: help;
-    filter: grayscale(.75) brightness(.62);
-    opacity: .62;
-}
-
-.sow-hud__map-sector[data-alliance-state="active"]:disabled {
-    filter: saturate(.7) brightness(.78);
-    opacity: .86;
-}
-
-.sow-hud__map-sector[data-alliance-state="pending"]:disabled {
-    filter: saturate(.82) brightness(.82);
-    opacity: .9;
-}
-
-.sow-hud__map-submenu {
-    position: relative;
-    z-index: 5;
-    display: grid;
-    gap: 7px;
-    max-height: min(520px, calc(100vh - 20px));
-    overflow-y: auto;
-    padding: 14px;
-    border: 1px solid var(--sow-line);
-    border-top-color: color-mix(in srgb, var(--sow-gold) 55%, transparent);
-    border-radius: 6px 6px 16px 4px;
-    background: var(--sow-panel);
-    box-shadow: var(--sow-surface-shadow), 0 14px 30px rgb(0 0 0 / 38%);
-    pointer-events: auto;
-}
-
-.sow-hud__map-submenu-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1px 2px 5px;
-    color: var(--sow-gold-bright);
-}
-
-.sow-hud__map-submenu-icon {
-    font-size: 26px;
-    line-height: 1;
-}
-
-.sow-hud__map-back {
-    width: 28px;
-    height: 26px;
-    border: 1px solid var(--sow-line);
-    border-radius: var(--sow-button-radius);
-    background: var(--sow-panel-soft);
-    color: var(--sow-muted);
-    cursor: pointer;
-}
-
-.sow-hud__map-action,
-.sow-hud__map-card {
-    min-height: 52px;
-    padding: 8px 12px;
-    border: 1px solid var(--sow-line);
-    border-radius: 4px 7px 7px 4px;
-    background: rgb(255 255 255 / 3%);
-    color: #f5f1e8;
-    font: inherit;
-    text-align: start;
-    cursor: pointer;
-    touch-action: manipulation;
-}
-
-.sow-hud__map-card {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
-    align-items: center;
-    justify-content: stretch;
-    gap: 12px;
-    width: 100%;
-}
-
-.sow-hud__map-card .sow-hud__map-action-title {
-    grid-column: 1;
-    grid-row: 1 / span 2;
-    font-size: 28px;
-    line-height: 1;
-    font-weight: 800;
-}
-
-.sow-hud__map-card .sow-hud__map-action-label {
-    grid-column: 2;
-    grid-row: 1;
-}
-
-.sow-hud__map-card .sow-hud__map-action-reason {
-    grid-column: 2;
-    grid-row: 2;
-}
-
-.sow-hud__map-action-meta {
-    grid-column: 3;
-    grid-row: 1 / span 2;
-    align-self: center;
-    color: var(--sow-gold-bright);
-    font-size: 10px;
-    font-weight: 700;
-    white-space: nowrap;
-}
-
-.sow-hud__map-action:hover:not(:disabled),
-.sow-hud__map-action:focus-visible:not(:disabled) {
-    border-color: color-mix(in srgb, var(--sow-gold) 45%, transparent);
-    background: color-mix(in srgb, var(--sow-gold) 8%, transparent);
-}
-
-@keyframes sow-map-menu-in {
-    from { opacity: 0; transform: translate(-50%, -50%) scale(.72); }
-    72% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
-    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-
-@keyframes sow-map-submenu-in {
-    from { opacity: 0; transform: translate(-50%, -50%) scale(.92); }
-    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .sow-hud__map-menu { animation: none; }
-    .sow-hud__map-sector,
-    .sow-hud__map-center,
-    .sow-hud__map-action { transition: none; }
-
-    #sow-hud .sow-hud__building-btn,
-    #sow-hud .sow-hud__map-sector,
-    #sow-hud .sow-hud__map-center,
-    #sow-hud .sow-hud__map-action { transition: none !important; }
-
-    #sow-hud .sow-hud__building-btn:hover,
-    #sow-hud .sow-hud__map-sector:is(:hover, :focus-visible) { transform: none !important; }
-
-    #sow-hud .sow-hud__map-center:is(:hover, :focus-visible) { transform: translate(-50%, -50%) !important; }
-}
-
-/* Keep the overlay itself click-through; only the menu controls capture input. */
 .sow-hud__map-menu.hidden {
     display: none !important;
 }
 
-.sow-hud__map-menu button {
+.sow-hud__map-radial {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
     pointer-events: auto;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    animation: sow-ring-in 200ms cubic-bezier(.2, 1.25, .35, 1) both;
+}
+
+.sow-hud__map-menu:not([data-level="root"]) .sow-hud__map-radial {
+    animation-name: sow-ring-turn;
+}
+
+.sow-hud__ring-art {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    filter: drop-shadow(0 12px 22px rgb(0 0 0 / 55%));
+    pointer-events: none;
+}
+
+.sow-hud__ring-bezel {
+    fill: rgb(7 11 14 / 94%);
+    stroke: color-mix(in srgb, var(--sow-gold) 48%, transparent);
+    stroke-width: .5;
+}
+
+.sow-hud__ring-sector {
+    --ring-accent: var(--sow-gold);
+}
+
+.sow-hud__ring-sector[data-accent="red"],
+.sow-hud__ring-slot[data-accent="red"] { --ring-accent: var(--sow-red); }
+.sow-hud__ring-sector[data-accent="green"],
+.sow-hud__ring-slot[data-accent="green"] { --ring-accent: var(--sow-green); }
+.sow-hud__ring-sector[data-accent="cyan"],
+.sow-hud__ring-slot[data-accent="cyan"] { --ring-accent: var(--sow-cyan); }
+
+.sow-hud__ring-wedge {
+    fill: color-mix(in srgb, var(--ring-accent) 7%, rgb(24 33 39));
+    stroke: rgb(255 255 255 / 7%);
+    stroke-width: .35;
+    transition: fill 120ms ease;
+}
+
+.sow-hud__ring-rim {
+    fill: none;
+    stroke: var(--ring-accent);
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    opacity: .5;
+    transition: opacity 120ms ease, stroke-width 120ms ease;
+}
+
+.sow-hud__ring-hold {
+    fill: none;
+    stroke: #fff8e8;
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    opacity: 0;
+}
+
+.sow-hud__ring-sector.is-empty .sow-hud__ring-wedge {
+    fill: rgb(5 8 10 / 72%);
+    stroke: rgb(255 255 255 / 3%);
+}
+
+.sow-hud__ring-sector.is-hot .sow-hud__ring-wedge {
+    fill: color-mix(in srgb, var(--ring-accent) 24%, rgb(30 40 46));
+}
+
+.sow-hud__ring-sector.is-hot .sow-hud__ring-rim {
+    opacity: 1;
+    stroke-width: 2.4;
+}
+
+.sow-hud__ring-sector.is-disabled .sow-hud__ring-wedge {
+    fill: rgb(14 19 23);
+}
+
+.sow-hud__ring-sector.is-disabled .sow-hud__ring-rim {
+    stroke: var(--sow-muted);
+    opacity: .22;
+}
+
+.sow-hud__ring-sector.is-disabled.is-hot .sow-hud__ring-wedge {
+    fill: rgb(22 28 33);
+}
+
+.sow-hud__ring-sector.is-arming .sow-hud__ring-hold {
+    opacity: 1;
+    animation: sow-ring-hold var(--ring-hold-ms, 600ms) linear forwards;
+}
+
+.sow-hud__ring-sheen {
+    pointer-events: none;
+}
+
+.sow-hud__ring-hub-plate {
+    fill: rgb(9 14 17);
+    stroke: color-mix(in srgb, var(--sow-gold) 55%, transparent);
+    stroke-width: .7;
+}
+
+.sow-hud__ring-slot {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 24%;
+    height: 24%;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #f5f1e8;
+    font: inherit;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    transition: transform 120ms ease;
+    animation: sow-ring-slot-in 220ms cubic-bezier(.2, 1.2, .35, 1) backwards;
+    animation-delay: calc(var(--slot-index, 0) * 22ms);
+}
+
+.sow-hud__ring-slot.is-hot:not(:disabled) {
+    transform: translate(-50%, -50%) rotate(var(--slot-angle)) translateY(-3px) rotate(calc(-1 * var(--slot-angle)));
+}
+
+.sow-hud__ring-slot:disabled .sow-hud__map-action-title {
+    filter: grayscale(.8) brightness(.7);
+    opacity: .6;
+}
+
+.sow-hud__ring-slot[aria-pressed="true"] {
+    color: var(--sow-gold-bright);
+}
+
+.sow-hud__ring-slot[aria-pressed="true"]::after {
+    position: absolute;
+    inset: 6%;
+    border: 2px solid var(--sow-gold);
+    border-radius: 50%;
+    content: "";
+}
+
+#sow-hud .sow-hud__ring-slot:focus-visible {
+    outline: 2px solid #fff8e8;
+    outline-offset: 0;
+}
+
+.sow-hud__map-action-title {
+    display: grid;
+    place-items: center;
+    line-height: 1;
+}
+
+.sow-hud__ring-icon {
+    display: block;
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+.sow-hud__ring-icon.sow-hud__status-icon {
+    border-radius: 4px;
+}
+
+.sow-hud__ring-face {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--sow-gold) 45%, transparent);
+    border-radius: 50%;
+    background: rgb(9 14 17);
+}
+
+/* ponytail: assumes square or portrait sheets (all current heroes); a landscape
+   sheet would need a height-based crop like the renderer's centered square. */
+.sow-hud__ring-face img {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 200%;
+    height: auto;
+    max-width: none;
+    transform: translate(calc(var(--face-x) * -50%), calc(-25% - var(--face-y) * 50%));
+}
+
+.sow-hud__ring-badge {
+    position: absolute;
+    right: 4%;
+    bottom: 4%;
+    display: grid;
+    place-items: center;
+    width: 17px;
+    height: 17px;
+    border: 1px solid var(--sow-line);
+    border-radius: 50%;
+    background: rgb(8 12 15);
+    color: var(--sow-muted);
+}
+
+.sow-hud__ring-badge:empty {
+    display: none;
+}
+
+.sow-hud__ring-badge-icon {
+    display: block;
+    width: 11px;
+    height: 11px;
+}
+
+.sow-hud__ring-hub {
+    --ring-relation: var(--sow-muted);
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    display: grid;
+    place-items: center;
+    width: 34%;
+    height: 34%;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--ring-relation), 0 0 14px color-mix(in srgb, var(--ring-relation) 30%, transparent);
+    color: #f5f1e8;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+}
+
+.sow-hud__ring-hub[data-relation="own"] { --ring-relation: var(--sow-gold); }
+.sow-hud__ring-hub[data-relation="ally"],
+.sow-hud__ring-hub[data-relation="teammate"] { --ring-relation: var(--sow-green); }
+.sow-hud__ring-hub[data-relation="enemy"] { --ring-relation: var(--sow-red); }
+
+.sow-hud__ring-portrait {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.sow-hud__ring-emblem {
+    font-size: 26px;
+    line-height: 1;
+}
+
+.sow-hud__ring-hub[data-map-back] .sow-hud__ring-icon {
+    color: var(--sow-gold-bright);
+}
+
+.sow-hud__ring-back {
+    position: absolute;
+    left: 12%;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    border-bottom: 2px solid var(--sow-muted);
+    border-left: 2px solid var(--sow-muted);
+    transform: translateY(-50%) rotate(45deg);
+}
+
+.sow-hud__ring-readout {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    min-width: 128px;
+    max-width: min(264px, calc(100vw - 24px));
+    padding: 7px 14px 8px;
+    border: 1px solid var(--sow-line);
+    border-top-color: color-mix(in srgb, var(--sow-gold) 55%, transparent);
+    border-radius: 6px;
+    background: var(--sow-panel);
+    box-shadow: var(--sow-surface-shadow);
+    text-align: center;
+    pointer-events: none;
+    transform: translateX(-50%);
+}
+
+.sow-hud__map-menu[data-readout="below"] .sow-hud__ring-readout {
+    top: calc(100% + 8px);
+    bottom: auto;
+}
+
+.sow-hud__ring-readout strong {
+    display: block;
+    color: #fff8e8;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.sow-hud__ring-readout small {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    margin-top: 2px;
+    color: var(--sow-muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.sow-hud__ring-readout small[hidden] {
+    display: none;
+}
+
+.sow-hud__ring-readout[data-state="action"] small { color: var(--sow-gold-bright); }
+.sow-hud__ring-readout[data-state="blocked"] small { color: var(--sow-red); }
+
+.sow-hud__ring-readout-icon {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    vertical-align: -0.15em;
+}
+
+/* When the ring is pushed in from a screen edge, a thin line points back at the tile. */
+.sow-hud__ring-tether {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    display: none;
+    width: var(--tether-length, 0);
+    height: 2px;
+    background: color-mix(in srgb, var(--sow-gold) 70%, transparent);
+    transform-origin: 0 50%;
+    transform: rotate(var(--tether-angle, 0rad)) translateX(calc(var(--ring-size) / 2));
+    pointer-events: none;
+}
+
+.sow-hud__ring-tether::after {
+    position: absolute;
+    right: -4px;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--sow-gold-bright);
+    content: "";
+}
+
+.sow-hud__map-menu.has-tether .sow-hud__ring-tether {
+    display: block;
+}
+
+@media (pointer: coarse) {
+    .sow-hud__map-menu { --ring-size: clamp(240px, 66vmin, 288px); }
+    .sow-hud__ring-icon { width: 32px; height: 32px; }
+    .sow-hud__ring-face { width: 44px; height: 44px; }
+}
+
+@keyframes sow-ring-in {
+    from { opacity: 0; transform: scale(.85); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes sow-ring-turn {
+    from { opacity: 0; transform: rotate(-30deg) scale(.96); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes sow-ring-slot-in {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(.6); }
+}
+
+@keyframes sow-ring-hold {
+    to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sow-hud__map-radial,
+    .sow-hud__ring-slot { animation: none; }
+    .sow-hud__ring-slot,
+    .sow-hud__ring-wedge,
+    .sow-hud__ring-rim { transition: none; }
+    #sow-hud .sow-hud__building-btn { transition: none !important; }
+    #sow-hud .sow-hud__building-btn:hover { transform: none !important; }
 }
 
 .sow-campaign-error {
@@ -2469,8 +2483,7 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
 }
 
-.sow-hud__transfer-actions .sow-hud__transfer-send,
-.sow-hud__request-actions .sow-hud__request-accept {
+.sow-hud__transfer-actions .sow-hud__transfer-send {
     border-color: var(--sow-gold);
     background: linear-gradient(110deg, #d9a64d, #f0ca78 55%, #d8a34a);
     box-shadow: inset 0 1px rgb(255 255 255 / 38%), 0 4px 12px rgb(0 0 0 / 30%);
@@ -2487,8 +2500,7 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     line-height: .8;
 }
 
-.sow-hud__transfer-actions .sow-hud__transfer-request,
-.sow-hud__request-actions .sow-hud__request-reject {
+.sow-hud__transfer-actions .sow-hud__transfer-request {
     border-color: var(--sow-line);
     background: transparent;
     color: var(--sow-muted);
@@ -2499,8 +2511,7 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     transform: translateY(-1px);
 }
 
-.sow-hud__transfer-actions .sow-hud__transfer-send:not(:disabled):hover,
-.sow-hud__request-actions .sow-hud__request-accept:not(:disabled):hover {
+.sow-hud__transfer-actions .sow-hud__transfer-send:not(:disabled):hover {
     border-color: #ffe6a7;
     background: linear-gradient(110deg, #edc16b, #ffe09a 55%, #e7b85e);
     box-shadow: inset 0 1px rgb(255 255 255 / 50%), 0 0 18px color-mix(in srgb, var(--sow-gold) 28%, transparent);
@@ -2862,7 +2873,7 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     }
 
     .sow-hud__leaderboard,
-    .sow-hud__panel{
+    .sow-hud__panel {
         top: auto;
         inset-inline-end: max(8px, var(--sow-sar));
         bottom: max(8px, var(--sow-sab));
@@ -3186,10 +3197,6 @@ html[dir="rtl"] #sow-hud-dev-layer[data-compact="true"] .sow-hud__dev-sidebar { 
     .sow-hud__building-icon { width: 32px; height: 32px; }
 }
 
-/* The emote submenu shares the map menu and its mobile positioning. */
-.sow-hud__emote-choice { justify-content: center; min-block-size: 44px; font-weight: 700; }
-.sow-hud__emote-pin { display: flex; align-items: center; gap: 10px; min-block-size: 44px; padding: 0 12px; cursor: pointer; }
-.sow-hud__emote-pin input { inline-size: 20px; block-size: 20px; accent-color: var(--sow-gold); }
 
 /* Placement controls use viewport coordinates published by the Rust camera. */
 #sow-hud .sow-hud__placement {

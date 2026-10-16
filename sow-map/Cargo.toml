@@ -11,12 +11,11 @@ path = "src/lib.rs"
 
 [features]
 default = ["generator", "osm"]
-generator = ["dep:image", "dep:brotli"]
+generator = ["dep:image"]
 osm = [
     "generator",
     "dep:ehttp",
     "dep:reqwest",
-    "dep:tokio",
     "dep:serde",
     "dep:serde_json",
 ]
@@ -26,12 +25,9 @@ sow-core = { workspace = true }
 log = { workspace = true }
 bincode.workspace = true
 crossbeam-channel = { workspace = true }
-web-time = { workspace = true }
 
 image = { workspace = true, optional = true }
-brotli = { workspace = true, optional = true }
 ehttp = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true, features = ["rt", "rt-multi-thread"] }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }

@@ -9,7 +9,6 @@ repository.workspace = true
 [dependencies]
 sow-core = { workspace = true }
 sow-data = { workspace = true }
-sow-net = { workspace = true }
 fstack-bridge = { workspace = true }
 serde = { workspace = true }
 serde_json.workspace = true
@@ -17,7 +16,7 @@ bincode.workspace = true
 log = { workspace = true }
 env_logger = { workspace = true }
 tokio = { workspace = true, features = ["net", "io-util", "fs"] }
-tokio-tungstenite = { workspace = true }
+tokio-tungstenite = { workspace = true, features = ["handshake"] }
 futures-util = { workspace = true }
 redis = { workspace = true }
 hmac = { workspace = true }
