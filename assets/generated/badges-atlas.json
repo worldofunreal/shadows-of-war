@@ -10,7 +10,19 @@
     "rank-3",
     "you",
     "disconnected",
-    "upgrade-sparkle"
+    "upgrade-sparkle",
+    "wilderness",
+    "troops",
+    "death",
+    "radiation",
+    "construction",
+    "hammer",
+    "arrow-up",
+    "arrow-right",
+    "arrow-down",
+    "arrow-left",
+    "cancel",
+    "confirm"
   ],
   "schema_version": 1
 }

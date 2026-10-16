@@ -16,7 +16,7 @@ const BUILDING_KINDS: [&str; 5] = ["City", "Factory", "Port", "Bunker", "Farm"];
 const BUILDING_LEVELS: u8 = 4;
 /// Nameplate and HUD badges, one strip in this order: `assets/art/badges/<name>.png`.
 /// The cell order is read by sow-render (`badge_atlas::CELLS`) and the HUD (`STATUS_CELLS`).
-pub const BADGES: [&str; 9] = [
+pub const BADGES: [&str; 21] = [
     "request",
     "allied",
     "traitor",
@@ -26,7 +26,29 @@ pub const BADGES: [&str; 9] = [
     "you",
     "disconnected",
     "upgrade-sparkle",
+    "wilderness",
+    "troops",
+    "death",
+    "radiation",
+    "construction",
+    "hammer",
+    "arrow-up",
+    "arrow-right",
+    "arrow-down",
+    "arrow-left",
+    "cancel",
+    "confirm",
 ];
+/// Map movers, `assets/art/units/<name>.png`, packed 4x2 in sow-render
+/// `MoverSpriteId` order (embedded in the game, never published).
+const UNITS: [&str; 5] = [
+    "transport-ship",
+    "trade-ship",
+    "warship",
+    "atom-bomb",
+    "sam-missile",
+];
+const UNIT_COLUMNS: u32 = 4;
 /// Runtime URLs the pipeline publishes the generated atlases under.
 const BUILDING_ATLAS_URL: &str = "gameplay/buildings/atlas.webp";
 const BADGE_ATLAS_URL: &str = "gameplay/icons/nameplate_status_atlas.webp";
@@ -118,15 +140,35 @@ pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sy
     )?;
 
     pack_badges(&args)?;
+    pack_units(&args)?;
     println!(
-        "✅ Atlases ready: {} ({}x{}, {} building levels) and {} badges",
+        "✅ Atlases ready: {} ({}x{}, {} building levels), {} badges and {} units",
         atlas_path.display(),
         packed.atlas.width(),
         packed.atlas.height(),
         entries.len(),
-        BADGES.len()
+        BADGES.len(),
+        UNITS.len()
     );
     Ok(())
+}
+
+fn pack_units(args: &PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let rows = (UNITS.len() as u32).div_ceil(UNIT_COLUMNS);
+    let mut grid =
+        ImageBuffer::from_pixel(CELL_PX * UNIT_COLUMNS, CELL_PX * rows, Rgba([0, 0, 0, 0]));
+    for (index, name) in UNITS.iter().enumerate() {
+        let source = art_source(&args.art_root.join("units"), name)?;
+        let image = image::load_from_memory(&fs::read(&source)?)?.to_rgba8();
+        let index = index as u32;
+        image::imageops::overlay(
+            &mut grid,
+            &pixel_cell(&image, CELL_PX)?,
+            i64::from(index % UNIT_COLUMNS * CELL_PX),
+            i64::from(index / UNIT_COLUMNS * CELL_PX),
+        );
+    }
+    write_webp_if_changed(&grid, &args.generated_root.join("units-atlas.webp"))
 }
 
 /// One horizontal strip so the HUD can address a badge with a single CSS

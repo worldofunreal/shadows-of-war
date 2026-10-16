@@ -29,7 +29,7 @@ impl MoverSpriteId {
     }
 }
 
-const EMOJI_ATLAS_BYTES: &[u8] = crate::EMOJI_ATLAS_BYTES;
+const UNITS_ATLAS_BYTES: &[u8] = crate::UNITS_ATLAS_BYTES;
 
 pub struct SpriteAtlas {
     pub texture: gpu::Texture,
@@ -56,39 +56,16 @@ impl SpriteAtlas {
         });
         let dst = buffer.data();
         let slice = unsafe { std::slice::from_raw_parts_mut(dst, total) };
-        slice.fill(0);
-
-        let atlas_img = image::load_from_memory(EMOJI_ATLAS_BYTES)
-            .expect("failed to load emoji atlas bytes")
+        // assets/art/units packed 4x2 in MoverSpriteId order by pack-building-atlas.
+        let atlas_img = image::load_from_memory(UNITS_ATLAS_BYTES)
+            .expect("failed to load units atlas bytes")
             .to_rgba8();
-
-        // Look up mover sprite coordinates dynamically from the generated emoji manifest.
-        let emoji_labels = ["🚢", "⛵", "⚔️", "⚡", "🚀"];
-        let coords: Vec<(u32, u32)> = emoji_labels
-            .iter()
-            .map(|e| {
-                let r = sow_data::emoji::lookup(e).unwrap_or_else(|| {
-                    panic!(
-                        "Mover sprite emoji {e} missing from atlas — run `./sow emoji` to rebuild"
-                    )
-                });
-                (r.x, r.y)
-            })
-            .collect();
-
-        for (i, &(src_x, src_y)) in coords.iter().enumerate() {
-            let col = (i as u32) % cols;
-            let row = (i as u32) / cols;
-            for y in 0..cell {
-                for x in 0..cell {
-                    let pixel = atlas_img.get_pixel(src_x + x, src_y + y);
-                    let dst_x = col * cell + x;
-                    let dst_y = row * cell + y;
-                    let dst_i = (dst_y * bytes_per_row + dst_x * 4) as usize;
-                    slice[dst_i..dst_i + 4].copy_from_slice(&pixel.0);
-                }
-            }
-        }
+        assert_eq!(
+            atlas_img.dimensions(),
+            (width, height),
+            "units atlas must be {cols}x{rows} cells of {cell}px; run pack-building-atlas"
+        );
+        slice.copy_from_slice(atlas_img.as_raw());
         context.sync_buffer(buffer, 0, buffer.size());
 
         let texture = context.create_texture(gpu::TextureDesc {
@@ -147,5 +124,18 @@ impl SpriteAtlas {
         render_ctx.context.destroy_texture_view(self.view);
         render_ctx.context.destroy_texture(self.texture);
         render_ctx.context.destroy_buffer(self.buffer);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn units_atlas_has_one_cell_per_mover_sprite() {
+        let cell = MoverSpriteId::ATLAS_CELL;
+        let atlas = image::load_from_memory(UNITS_ATLAS_BYTES).unwrap();
+        assert_eq!((atlas.width(), atlas.height()), (4 * cell, 2 * cell));
+        assert!(MoverSpriteId::COUNT <= 8);
     }
 }

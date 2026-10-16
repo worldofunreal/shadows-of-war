@@ -400,23 +400,46 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         }
     };
     assert!(status.success(), "actual WASM client exit failed");
-    let client_time = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs_f64();
-    ws_send(
-        &mut other_write,
-        &ClientMessage::Ping { client_time },
-    )
-    .await;
-    assert!(
-        match recv(&mut other_read, 5).await {
-            ServerMessage::Turn(_) => true,
-            ServerMessage::Pong { client_time: echoed } => echoed == client_time,
-            _ => false,
-        },
-        "the other player must receive a turn or the matching relay pong after the first exit"
+    let pong_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    let mut other_ping = tokio::time::interval_at(
+        tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+        std::time::Duration::from_secs(1),
     );
+    other_ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut sent_pings = Vec::new();
+    let mut received_turn = false;
+    let mut received_pong = false;
+    while !(received_turn && received_pong) {
+        tokio::select! {
+            biased;
+            _ = tokio::time::sleep_until(pong_deadline) => panic!(
+                "B did not receive a turn and matching Pong within 5 seconds (turn={received_turn}, pong={received_pong})"
+            ),
+            _ = other_ping.tick(), if !received_pong => {
+                let client_time = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs_f64();
+                ws_send(&mut other_write, &ClientMessage::Ping { client_time }).await;
+                sent_pings.push(client_time);
+            }
+            message = recv(&mut other_read, 5) => {
+                match message {
+                    ServerMessage::Turn(_) => received_turn = true,
+                    ServerMessage::Pong { client_time } => {
+                        assert!(
+                            sent_pings.contains(&client_time),
+                            "B received a Pong that did not match a Ping sent by B"
+                        );
+                        received_pong = true;
+                    }
+                    message => panic!(
+                        "unexpected relay message while waiting for B's turn and Pong: {message:?}"
+                    ),
+                }
+            }
+        }
+    }
     let settled_first = profile(&http, base, Some(&first), "Exit Audit One").await;
     for _ in 0..3 {
         let repeated = exit(&http, base, &first, match_id).await;
@@ -448,30 +471,76 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
     drop(other_write);
     drop(other_read);
     let expiry = disconnected_at + std::time::Duration::from_secs(60);
+    let receive_until = expiry + std::time::Duration::from_secs(1);
+    let pong_timeout = std::time::Duration::from_secs(5);
+    let mut survivor_ping = tokio::time::interval_at(
+        tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+        std::time::Duration::from_secs(1),
+    );
+    survivor_ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut pending_pings: Vec<(f64, tokio::time::Instant)> = Vec::new();
+    let mut sent_pings = 0;
     let mut turn_after_timeout = false;
-    while tokio::time::Instant::now() < expiry + std::time::Duration::from_secs(1) {
-        match recv(&mut survivor_read, 5).await {
-            ServerMessage::Turn(turn) => {
-                if tokio::time::Instant::now() >= expiry {
-                    turn_after_timeout = true;
-                }
-                assert!(
-                    !turn
-                        .turn
-                        .intents
-                        .iter()
-                        .any(|intent| intent.player_id == third_join.player_id
-                            && matches!(intent.intent, sow_core::protocol::GameplayIntent::Resign)),
-                    "the survivor cannot be closed with B"
-                );
+    while tokio::time::Instant::now() < receive_until {
+        let pong_deadline = pending_pings
+            .first()
+            .map(|(_, sent_at)| *sent_at + pong_timeout);
+        let can_send_ping = tokio::time::Instant::now() + pong_timeout <= receive_until;
+        tokio::select! {
+            biased;
+            _ = tokio::time::sleep_until(receive_until) => break,
+            _ = async { tokio::time::sleep_until(pong_deadline.unwrap()).await }, if pong_deadline.is_some() => {
+                fail("survivor C did not receive a matching relay Pong within 5 seconds");
             }
-            ServerMessage::Pong { .. } => {}
-            message => fail(&format!(
-                "survivor lost its game during another participant's timeout: {message:?}"
-            )),
+            _ = survivor_ping.tick(), if can_send_ping => {
+                let client_time = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs_f64();
+                ws_send(&mut survivor_write, &ClientMessage::Ping { client_time }).await;
+                pending_pings.push((client_time, tokio::time::Instant::now()));
+                sent_pings += 1;
+            }
+            message = recv(&mut survivor_read, 5) => {
+                match message {
+                    ServerMessage::Turn(turn) => {
+                        if tokio::time::Instant::now() >= expiry {
+                            turn_after_timeout = true;
+                        }
+                        assert!(
+                            !turn
+                                .turn
+                                .intents
+                                .iter()
+                                .any(|intent| intent.player_id == third_join.player_id
+                                    && matches!(intent.intent, sow_core::protocol::GameplayIntent::Resign)),
+                            "the survivor cannot be closed with B"
+                        );
+                    }
+                    ServerMessage::Pong { client_time } => {
+                        let position = pending_pings
+                            .iter()
+                            .position(|(sent_time, _)| *sent_time == client_time)
+                            .expect("survivor C received a Pong not matching a Ping sent by C");
+                        let (_, sent_at) = pending_pings.remove(position);
+                        assert!(
+                            tokio::time::Instant::now().duration_since(sent_at) <= pong_timeout,
+                            "survivor C's relay Pong exceeded the 5 second limit"
+                        );
+                    }
+                    message => fail(&format!(
+                        "survivor lost its game during another participant's timeout: {message:?}"
+                    )),
+                }
+            }
         }
     }
     assert!(turn_after_timeout);
+    assert!(sent_pings > 0, "survivor C must send relay heartbeats");
+    assert!(
+        pending_pings.is_empty(),
+        "survivor C has an unanswered relay Ping"
+    );
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(120);
     loop {
         let observed = result(&http, base, &second, match_id).await;

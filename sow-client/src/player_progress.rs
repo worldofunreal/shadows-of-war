@@ -201,46 +201,12 @@ impl PlayerProgress {
         self.intro_completed = Some(true);
     }
 
-    pub fn apply_reward(&mut self, leader: Leader, reward: sow_data::rewards::MatchReward) {
+    fn apply_reward(&mut self, leader: Leader, reward: sow_data::rewards::MatchReward) {
         self.add_xp(reward.xp);
         let entry = self.leader_xp.entry(leader.name().to_string()).or_default();
         *entry = entry.saturating_add(reward.leader_xp);
         self.crowns = self.crowns.saturating_add(reward.crowns);
         self.laurels = self.laurels.saturating_add(reward.laurels);
-    }
-
-    pub fn preview_participation_laurels(
-        &self,
-        leader: Leader,
-        reward: sow_data::rewards::MatchReward,
-    ) -> u64 {
-        let leader = leader.name().to_string();
-        let leader_stats = self.leader_stats.get(&leader);
-        let mut leader_xp = self.leader_xp.clone();
-        let xp = leader_xp.entry(leader.clone()).or_default();
-        *xp = xp.saturating_add(reward.leader_xp);
-        let totals = sow_data::rewards::AchievementTotals {
-            matches_played: u64::from(self.matches_played.saturating_add(1)),
-            wins: u64::from(self.wins),
-            laurels: self.laurels.saturating_add(reward.laurels),
-            leader_matches_played: self
-                .leader_stats
-                .values()
-                .map(|stats| u64::from(stats.matches_played))
-                .sum::<u64>()
-                .saturating_add(1),
-            leader_wins: self
-                .leader_stats
-                .values()
-                .map(|stats| u64::from(stats.wins))
-                .sum(),
-            distinct_leaders: self.leader_stats.len() as u64 + u64::from(leader_stats.is_none()),
-            best_leader_xp: leader_xp.values().copied().max().unwrap_or_default() as u64,
-        };
-        sow_data::rewards::newly_unlocked_achievements(totals, &self.unlocked_achievements)
-            .into_iter()
-            .map(|achievement| achievement.points)
-            .sum()
     }
 
     pub fn mark_tutorial_completed(&mut self) -> bool {
@@ -353,37 +319,6 @@ impl PlayerProgress {
         self.sync_level();
     }
 
-    pub fn record_match_with_kda(
-        &mut self,
-        won: bool,
-        defeats: SessionDefeats,
-        kills: u32,
-        deaths: u32,
-        assists: u32,
-    ) {
-        self.matches_played = self.matches_played.saturating_add(1);
-        if won {
-            self.wins = self.wins.saturating_add(1);
-        }
-        self.players_defeated = self.players_defeated.saturating_add(defeats.players);
-        self.empires_defeated = self.empires_defeated.saturating_add(defeats.empires);
-        self.tribes_defeated = self.tribes_defeated.saturating_add(defeats.tribes);
-        self.kills = self.kills.saturating_add(kills);
-        self.deaths = self.deaths.saturating_add(deaths);
-        self.assists = self.assists.saturating_add(assists);
-
-        let reward = sow_data::rewards::calculate(sow_data::rewards::RewardInput {
-            won,
-            players_defeated: defeats.players,
-            empires_defeated: defeats.empires,
-            tribes_defeated: defeats.tribes,
-            kills,
-            assists,
-            ..Default::default()
-        });
-        self.apply_reward(self.preferred_leader.unwrap_or(Leader::Caesar), reward);
-    }
-
     pub fn record_match_with_kda_for_leader(
         &mut self,
         won: bool,
@@ -418,7 +353,7 @@ impl PlayerProgress {
 
 #[cfg(test)]
 mod tests {
-    use super::{PlayerProgress, SessionDefeats};
+    use super::PlayerProgress;
     use sow_core::player::Leader;
 
     #[test]
@@ -460,28 +395,6 @@ mod tests {
         let progress: PlayerProgress = serde_json::from_value(current).unwrap();
         assert_eq!(progress.crowns, 100);
         assert_eq!(progress.laurels, 40);
-    }
-
-    #[test]
-    fn match_reward_tracks_the_selected_leader_without_changing_gold() {
-        let mut progress = PlayerProgress {
-            preferred_leader: Some(Leader::Boudica),
-            ..Default::default()
-        };
-        progress.record_match_with_kda(
-            true,
-            SessionDefeats {
-                players: 1,
-                ..Default::default()
-            },
-            2,
-            1,
-            1,
-        );
-        assert_eq!(progress.matches_played, 1);
-        assert_eq!(progress.leader_xp.get("Boudica"), Some(&140));
-        assert_eq!(progress.crowns, 106);
-        assert_eq!(progress.laurels, 0);
     }
 
     #[test]

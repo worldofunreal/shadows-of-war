@@ -407,7 +407,7 @@ impl PlayerProfile {
         self.sync_level();
     }
 
-    pub fn apply_reward(&mut self, leader: &str, reward: crate::rewards::MatchReward) {
+    fn apply_reward(&mut self, leader: &str, reward: crate::rewards::MatchReward) {
         self.add_xp(reward.xp);
         let entry = self.leader_xp.entry(leader.to_string()).or_default();
         *entry = entry.saturating_add(reward.leader_xp);
@@ -419,7 +419,7 @@ impl PlayerProfile {
 
     /// One ledger operation for every server-owned reward. Balances, newly
     /// unlocked achievements, and the presentation receipt move together.
-    pub fn apply_reward_receipt(
+    fn apply_reward_receipt(
         &mut self,
         receipt_id: &str,
         match_id: &str,
@@ -527,40 +527,6 @@ impl PlayerProfile {
                 unlocked: self.unlocked_achievements.contains(achievement.id),
             })
             .collect()
-    }
-
-    pub fn record_match_with_kda(
-        &mut self,
-        won: bool,
-        defeats: SessionDefeats,
-        kills: u32,
-        deaths: u32,
-        assists: u32,
-    ) {
-        self.record_match_with_leader(won, defeats, kills, deaths, assists, None);
-    }
-
-    pub fn record_match_with_leader(
-        &mut self,
-        won: bool,
-        defeats: SessionDefeats,
-        kills: u32,
-        deaths: u32,
-        assists: u32,
-        leader: Option<&str>,
-    ) {
-        let leader =
-            self.record_match_stats_with_leader(won, defeats, kills, deaths, assists, leader);
-        let reward = crate::rewards::calculate(crate::rewards::RewardInput {
-            won,
-            players_defeated: defeats.players,
-            empires_defeated: defeats.empires,
-            tribes_defeated: defeats.tribes,
-            kills,
-            assists,
-            ..Default::default()
-        });
-        self.apply_reward(&leader, reward);
     }
 
     fn record_match_stats_with_leader(

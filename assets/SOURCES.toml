@@ -24,7 +24,13 @@ notes = "<kind>-<level>.png for city, factory, port, bunker and farm, levels 1-4
 path = "assets/art/badges/"
 source = "original_and_twemoji_placeholder"
 license = "request/allied/traitor: AGPL-3.0-or-later; other slots: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art"
-notes = "Nameplate and HUD badges. Packed in a fixed order into assets/generated/badges-atlas.*."
+notes = "Nameplate, map and HUD badges (also wilderness, troops, death, radiation, construction, hammer). Packed in a fixed order into assets/generated/badges-atlas.*."
+
+[units]
+path = "assets/art/units/"
+source = "twemoji_placeholder"
+license = "CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art"
+notes = "Ships and missiles moving on the map, packed into assets/generated/units-atlas.webp (embedded in the game)."
 
 [icons]
 path = "assets/art/icons/"

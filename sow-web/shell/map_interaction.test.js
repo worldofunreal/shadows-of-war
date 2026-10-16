@@ -74,7 +74,8 @@ test("building actions choose the selected tile, filter invalid placement, and a
     const actionStart = mapClick.indexOf("pub(crate) fn handle_map_menu_action");
     const actionEnd = mapClick.indexOf("pub(crate) fn move_selected_warships", actionStart);
     const actionBody = mapClick.slice(actionStart, actionEnd);
-    assert.match(actionBody, /if let Some\(\(col, row\)\) = self\.tile_coords\(tile_idx\) \{\s*self\.select_building_kind\(kind\);\s*self\.move_building_preview\(col, row\);/);
+    assert.match(actionBody, /BuildingPlacement \{\s*kind,\s*tile_idx,\s*pending: false,[\s\S]*?self\.confirm_building_placement\(\)/);
+    assert.doesNotMatch(actionBody, /select_building_kind|move_building_preview/);
     assert.doesNotMatch(actionBody, /GameplayIntent::BuildStructure/);
 
     const selectionStart = mapClick.indexOf("pub(crate) fn select_building_kind");
@@ -82,8 +83,7 @@ test("building actions choose the selected tile, filter invalid placement, and a
     const selectionBody = mapClick.slice(selectionStart, selectionEnd);
     assert.match(selectionBody, /building_placement\s*\.is_some_and\(\|p\| p\.kind == kind\)\s*\{\s*self\.clear_placement\(\)/);
     assert.match(mapClick, /pub\(crate\) fn clear_placement\(&mut self\)\s*\{\s*if self\s*\.ui\s*\.app\s*\.hud_state\s*\.building_placement\s*\.is_some_and\(\|p\| p\.pending\)\s*\{\s*return;\s*\}/);
-    assert.match(webMenu, /WebMenuCommand::CancelBuildingMode => self\.clear_placement\(\)/);
-    assert.match(hud, /data-command="cancel_building_mode"/);
+    assert.match(mapClick, /PlacementButton::Cancel => self\.clear_placement\(\)/);
     assert.match(mapClick, /confirm_building_placement[\s\S]*?GameplayIntent::BuildStructure \{[\s\S]*?target_tile: placement\.tile_idx/);
     assert.match(buildingOverlaySource, /celebration_budget = 24/);
     assert.match(buildingOverlaySource, /!reduced_motion[\s\S]*?celebration_budget >= BUILDING_CELEBRATION_OFFSETS\.len\(\)/);
@@ -470,15 +470,28 @@ test("radial and HUD icons use one concept-based visual contract", () => {
     assert.match(webMenu, /"alliance_state": alliance_state/);
     assert.doesNotMatch(hud, /has_alliance_request|has_proposed_alliance|alliance_requests/);
 
-    const ringContext = loadRing();
-    const allianceSlot = state => ringContext.ringSlots({ alliance_state: state }, [{ action: "alliance" }], {})[3];
-    const accepted = allianceSlot("accept");
-    assert.equal(ringContext.ringSlotDisabled(accepted), false);
-    assert.equal(ringContext.ringSlotLabel(accepted), "hud.map_action_accept_alliance");
-    const pending = allianceSlot("pending");
-    assert.equal(ringContext.ringSlotDisabled(pending), true);
-    assert.equal(ringContext.ringSlotLabel(pending), "hud.map_action_alliance_pending");
-    assert.equal(pending.presentation.status, "request");
+    const ringContext = loadRing({ SOW_t: key => "translated:" + key });
+    const accepted = ringContext.ringSlots({ alliance_state: "accept" }, [{ action: "alliance" }], {});
+    const pending = ringContext.ringSlots({ alliance_state: "pending" }, [{ action: "alliance" }], {});
+    assert.equal(ringContext.ringSlotDisabled(accepted[3]), false);
+    assert.equal(ringContext.ringSlotDisabled(pending[3]), true);
+    assert.equal(pending[3].presentation.status, "request");
+    const readout = { firstChild: { textContent: "" }, lastChild: { innerHTML: "", hidden: false }, dataset: {} };
+    const button = {
+        disabled: false, dataset: {}, lastChild: { innerHTML: "" }, attributes: {},
+        setAttribute(name, value) { this.attributes[name] = String(value); },
+        getAttribute(name) { return this.attributes[name] ?? null; }
+    };
+    const menu = { querySelector: selector => selector === ".sow-hud__ring-readout" ? readout : selector.startsWith(".sow-hud__ring-slot") ? button : null };
+    ringContext.ring.hot = 3;
+    ringContext.patchRing(menu, accepted, 0);
+    assert.equal(button.getAttribute("aria-label"), "translated:hud.map_action_accept_alliance");
+    assert.equal(readout.firstChild.textContent, "translated:hud.map_action_accept_alliance");
+    ringContext.patchRing(menu, pending, 0);
+    assert.equal(button.disabled, true);
+    assert.equal(button.getAttribute("aria-disabled"), "true");
+    assert.equal(button.getAttribute("aria-label"), "translated:hud.map_action_alliance_pending");
+    assert.equal(readout.firstChild.textContent, "translated:hud.map_action_alliance_pending");
     assert.match(hudCss, /#sow-hud \.sow-hud__ring-slot:focus-visible/);
 
     // Emoji render differently on every device and mix art styles; use hudIcon, statusIcon or buildingIcon.
@@ -486,7 +499,7 @@ test("radial and HUD icons use one concept-based visual contract", () => {
     assert.doesNotMatch(hud, /emojiIcon|BUILDING_EMOJIS|emoji:/);
     const badgeAtlas = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/generated/badges-atlas.json"), "utf8"));
     assert.equal(hud.match(/var STATUS_CELLS = (\[[^\]]+\]);/)[1], JSON.stringify(badgeAtlas.cells).replace(/,/g, ", "));
-    assert.match(statusSpriteSource, /pub const ALL: \[Self; 9\]/);
+    assert.ok(statusSpriteSource.includes(`pub const ALL: [Self; ${badgeAtlas.cells.length}]`));
 });
 
 
@@ -565,7 +578,7 @@ test("building menus use generated pixel-art sprites with white glyph fallback",
     assert.match(windowInput, /fn rebase_single_touch_drag/);
     assert.match(windowInput, /\} else if is_touch \{[\s\S]*?camera_x \+=/);
     assert.doesNotMatch(windowInput, /self\.input\.dragging && !is_touch/);
-    assert.match(mapClick, /MapMenuAction::BuildCity[\s\S]*?self\.select_building_kind\(kind\);\s*self\.move_building_preview\(col, row\)/);
+    assert.match(mapClick, /MapMenuAction::BuildCity[\s\S]*?BuildingPlacement \{\s*kind,\s*tile_idx,\s*pending: false,[\s\S]*?self\.confirm_building_placement\(\)/);
     assert.doesNotMatch(hud, /cancel_placement/);
 });
 
@@ -614,7 +627,9 @@ test("campaign players use the active leader name in both map and leaderboard", 
 
 test("terms dialog smoothly focuses the requesting entity without changing zoom", () => {
     assert.match(actionsSource, /UiAction::CenterCamera[\s\S]*?camera_focus_target = Some\(\(world_cx, world_cy\)\);[\s\S]*?target_zoom = 10\.0/);
-    assert.match(webMenu, /WebMenuCommand::FocusWorld \{ x, y \}[\s\S]*?let tutorial_focus = self\.ui\.tutorial_active && self\.net\.is_offline;[\s\S]*?target_zoom = self\.input\.camera_zoom;\s*self\.input\.camera_focus_target = Some\(\(x, y\)\);\s*self\.input\.tutorial_camera_focus = tutorial_focus/);
+    assert.match(webMenu, /WebMenuCommand::FocusWorld \{ x, y \}/);
+    assert.match(webMenu, /let tutorial_focus = self\.ui\.tutorial_active && self\.net\.is_offline/);
+    assert.match(webMenu, /self\.input\.target_zoom = self\.input\.camera_zoom;/);
     assert.match(cameraFrameUiSource, /let \(camera, zoom, target\) = focus_camera_step\([\s\S]*?self\.input\.camera_x = camera\.0;[\s\S]*?self\.input\.camera_zoom = zoom/);
     const focusStepStart = cameraFrameUiSource.indexOf("fn focus_camera_step(");
     const focusStepEnd = cameraFrameUiSource.indexOf("\nimpl SowApp", focusStepStart);
@@ -791,102 +806,18 @@ test("ring resolves pointer direction, keeps live values in place, and gates the
 
 
 
-test("placement controls follow the building, clamp in both orientations and prevent pending duplicates", () => {
-    const panel = { hidden: true, dataset: {}, style: {},
-        get offsetWidth() { return Math.min(this.dataset.layout === "docked" ? 344 : 270, parseFloat(this.style.maxWidth) || Infinity); },
-        get offsetHeight() { return this.dataset.layout === "docked" ? 112 : 128; }
-    };
-    const moves = ["up", "right", "down", "left"].map(direction => ({ dataset: { direction }, style: {} }));
-    const hudRefs = { placement: panel, placementMoves: moves,
-        placementInfo: {}, placementReason: {}, placementConfirm: {}, placementCancel: {} };
-    const viewport = { innerWidth: 360, innerHeight: 800 };
-    const hudSafeArea = [0, 0, 0, 0];
-    const begin = hud.indexOf("    function buildingPlacementLayout(");
-    const end = hud.indexOf("    function positionBuildingCard(", begin);
-    const render = vm.runInNewContext(hud.slice(begin, end) + "\nrenderBuildingPlacement;", {
-        hudRefs, window: viewport, hudSafeArea, SOW_t: (key, values) => key + JSON.stringify(values || {})
-    });
-    const placement = { x: 180, y: 400, half_height: 24, half_width: 24, cost: 100,
-        seconds: 5, can_confirm: true, site_valid: true, affordable: true, pending: false,
-        can_nudge: { up: true, right: true, down: true, left: true } };
-    for (const [width, height] of [[320,800],[360,800],[800,360],[1600,900]]) {
-        viewport.innerWidth = width; viewport.innerHeight = height;
-        for (const [x,y] of [[1,1],[width-1,height-1],[width/2,height/2]]) {
-            render({ ...placement, x, y });
-            assert.equal(panel.hidden, false);
-            assert.ok(parseFloat(panel.style.left) >= 8);
-            assert.ok(parseFloat(panel.style.top) >= 8);
-            assert.ok(parseFloat(panel.style.left) + panel.offsetWidth <= width - 8);
-            assert.ok(parseFloat(panel.style.top) + panel.offsetHeight <= height - 8);
-            if (panel.dataset.layout === "floating") moves.forEach(button => {
-                assert.ok(parseFloat(button.style.left) >= 8 && parseFloat(button.style.left) + 48 <= width - 8);
-                assert.ok(parseFloat(button.style.top) >= 8 && parseFloat(button.style.top) + 48 <= height - 8);
-            });
-        }
-    }
-    const resizeStart = hud.indexOf("            var onViewportChange = function () {");
-    const resizeEnd = hud.indexOf("            window.addEventListener(\"resize\"", resizeStart);
-    const resize = vm.runInNewContext(hud.slice(resizeStart, resizeEnd) + "\nonViewportChange;", {
-        hudState: { hud: { building_placement: placement } }, renderBuildingPlacement: render,
-        syncCompactHudBounds() {}, renderNotifications() {}, scheduleNotificationPlacement() {}
-    });
-    viewport.innerWidth = 360; viewport.innerHeight = 800; resize();
-    assert.equal(panel.dataset.layout, "floating");
-    viewport.innerWidth = 800; viewport.innerHeight = 360;
-    render({ ...placement, x: 400, y: 180 });
-    assert.equal(panel.dataset.layout, "docked", "landscape reuses one compact group");
-    const surface = (left, top, width, height) => ({ getBoundingClientRect() { return { left, top, width, height, right: left + width, bottom: top + height }; } });
-    hudRefs.topbar = surface(0, 0, 800, 56);
-    hudRefs.dock = surface(0, 292, 800, 68);
-    hudSafeArea.splice(0, 4, 3, 7, 9, 11);
-    render({ ...placement, x: 400, y: 180 });
-    assert.ok(parseFloat(panel.style.top) >= 64);
-    assert.ok(parseFloat(panel.style.top) + panel.offsetHeight <= 284);
-    assert.ok(parseFloat(panel.style.left) + panel.offsetWidth <= 368,
-        "compact controls leave the selected foundation visible");
-    render({ ...placement, pending: true, can_confirm: false });
-    assert.equal(hudRefs.placementConfirm.disabled, true);
-    assert.equal(hudRefs.placementCancel.disabled, true);
-    assert.ok(moves.every(button => button.disabled));
-    assert.match(hudRefs.placementReason.textContent, /build_pending/);
-    render({ ...placement, can_confirm: false, reason: { key: "hud.build_occupied" },
-        site_valid: false, can_nudge: { ...placement.can_nudge, up: false } });
-    assert.equal(panel.dataset.siteValid, "false");
-    assert.equal(hudRefs.placementConfirm.disabled, true);
-    assert.equal(hudRefs.placementCancel.disabled, false);
-    assert.equal(moves[0].disabled, true);
-    assert.equal(moves[1].disabled, false, "invalid terrain can still be explored");
-    assert.match(hudRefs.placementReason.textContent, /build_occupied/);
-    render({ ...placement, affordable: false, can_confirm: false, reason: { key: "hud.need_gold" } });
-    assert.equal(panel.dataset.siteValid, "true", "low gold never marks a fitting foundation invalid");
-    assert.equal(panel.dataset.affordable, "false");
-    assert.equal(hudRefs.placementConfirm.disabled, true);
-    const commands = [];
-    const state = { hud: { building_placement: placement } };
-    const branchStart = hud.indexOf('                var placement = hudState', hud.indexOf('cmd === "nudge_building_placement"'));
-    const branchEnd = hud.indexOf('            } else if (cmd === "confirm_building_placement")', branchStart);
-    const click = vm.runInNewContext('(function(btn) {' + hud.slice(branchStart, branchEnd) + '})', {
-        hudState: state, send: (type, payload) => commands.push({ type, ...payload })
-    });
-    moves.forEach(button => click(button));
-    assert.deepEqual(commands.map(command => command.direction), ["up", "right", "down", "left"]);
-    state.hud.building_placement = { ...placement, pending: true };
-    click(moves[0]); assert.equal(commands.length, 4, "pending blocks repeated commands");
-    const keyStart = hud.indexOf('        if (hudRefs && hudRefs.placement && !hudRefs.placement.hidden');
-    const keyEnd = hud.indexOf('        if (hudRefs && hudRefs.betrayal', keyStart);
-    panel.contains = () => true;
-    const keydown = vm.runInNewContext('(function(event) {' + hud.slice(keyStart, keyEnd) + '})', {
-        hudRefs, hudState: state, send: (type, payload) => commands.push({ type, ...payload })
-    });
-    state.hud.building_placement = placement;
-    const key = value => ({ key: value, target: moves[0], preventDefault() {}, stopPropagation() {} });
-    keydown(key("ArrowRight")); assert.equal(commands.at(-1).direction, "right");
-    const beforeEnter = commands.length;
-    keydown(key("Enter")); assert.equal(commands.length, beforeEnter, "Enter leaves focused button activation to the browser");
-    keydown(key("Escape")); assert.equal(commands.at(-1).type, "cancel_building_mode");
-    render(null); assert.equal(panel.hidden, true);
-    assert.match(hudCss, /placement-actions button[\s\S]*?min-width: 48px; min-height: 48px/);
+test("build mode controls live in the world renderer, not the HTML HUD", () => {
+    assert.doesNotMatch(hud, /renderBuildingPlacement|nudge_building_placement|confirm_building_placement|cancel_building_mode/);
+    assert.doesNotMatch(hudCss, /sow-hud__placement/);
+    assert.doesNotMatch(webMenu, /"can_nudge"|"half_width"|placement_anchor|FocusWorld \{[^}]*viewport/);
+    assert.match(buildingOverlaySource, /fn render_building_placement_controls[\s\S]*?placement_controls\([\s\S]*?NameplateStatusSprite::Cancel[\s\S]*?NameplateStatusSprite::Confirm/);
+    const clickStart = mapClick.indexOf("pub(crate) fn handle_map_click");
+    const clickBody = mapClick.slice(clickStart, mapClick.indexOf("fn try_tutorial_campaign_nameplate_attack", clickStart));
+    assert.ok(clickBody.indexOf("button_at(") < clickBody.indexOf("self.mouse_to_tile(x, y)"), "buttons resolve before the tile");
+    assert.match(windowInput, /controls\.button_at\([\s\S]*?controls\.grabs\(/);
+    assert.doesNotMatch(mapShader, /snap_point|anchor_valid|site & 4u/);
     assert.doesNotMatch(windowInput, /begin_hold_build|pump_hold_build|hold_build_active/);
     assert.doesNotMatch(mapShader, /nobuild_slots/);
-    assert.match(mapShader, /textureLoad\(placement_texture, cell_hex, 0\)/);
+    assert.doesNotMatch(mapShader, /placement_texture/, "placement reads the live owner texture");
+    assert.match(mapShader, /let own_land = placement_own\(cell_hex\);[\s\S]*?length\(world_pos - center\)/);
 });

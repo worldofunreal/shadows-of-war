@@ -64,7 +64,8 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: TextInstance) -> VertexOutput {
     if inst.kind > 1.5 && inst.kind < 2.5 { instance_scale = globals.shader_params[__TEXT_DISC_SCALE__].x; }
     if inst.kind > 3.5 && inst.kind < 4.5 { instance_scale = globals.shader_params[__TEXT_AVATAR_SIZE__].x; }
     if inst.kind > 10.5 && inst.kind < 11.5 { instance_scale = globals.shader_params[__TEXT_BUILDING_SIZE__].x; }
-    if inst.kind > 11.5 { instance_scale = globals.shader_params[__TEXT_STATUS_SIZE__].x; }
+    if inst.kind > 11.5 && inst.kind < 12.5 { instance_scale = globals.shader_params[__TEXT_STATUS_SIZE__].x; }
+    if inst.kind > 12.5 { instance_scale = globals.shader_params[__TEXT_EMOJI_SIZE__].x; }
     let center = inst.screen_pos + inst.size * 0.5;
     let screen = center + (inst.screen_pos + local * inst.size - center) * instance_scale;
     let ndc = vec2<f32>(
@@ -113,11 +114,14 @@ fn sample_atlas(uv: vec2<f32>, uv_rect: vec4<f32>) -> vec3<f32> {
     return sampled * inside_x * inside_y;
 }
 
-fn sample_emoji(uv: vec2<f32>, lo: vec2<f32>, hi: vec2<f32>) -> vec4<f32> {
+// `badge` picks the badge atlas (KIND_ICON) instead of the emoji atlas.
+fn sample_emoji(uv: vec2<f32>, lo: vec2<f32>, hi: vec2<f32>, badge: bool) -> vec4<f32> {
     let eps = 1e-5;
     let inside_x = step(lo.x - eps, uv.x) * step(uv.x, hi.x + eps);
     let inside_y = step(lo.y - eps, uv.y) * step(uv.y, hi.y + eps);
-    return textureSample(emoji_atlas, emoji_sampler, clamp(uv, lo, hi)) * inside_x * inside_y;
+    let emoji = textureSample(emoji_atlas, emoji_sampler, clamp(uv, lo, hi));
+    let icon = textureSample(status_atlas, status_sampler, clamp(uv, lo, hi));
+    return select(emoji, icon, badge) * inside_x * inside_y;
 }
 
 // Procedural shapes (KIND_DISC / KIND_RING). For shapes uv_rect is [0,0,1,1], so `in.uv`
@@ -255,7 +259,60 @@ fn shade_cross(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(in.color.rgb * globals.shader_params[__TEXT_SHAPE_STROKE_TINT__].rgb, alpha * in.color.a * globals.shader_params[__TEXT_OPACITY__].x);
 }
 
+fn shade_outlined(in: VertexOutput, badge: bool) -> vec4<f32> {
+    let lo = in.uv_rect.xy;
+    let hi = in.uv_rect.zw;
+    let span = hi - lo;
+    let content_span = max(in.content_rect.zw - in.content_rect.xy, vec2<f32>(1e-6));
+    let content_local = (in.local_uv - in.content_rect.xy) / content_span;
+    let emoji_uv = mix(lo, hi, content_local);
+    let content_diameter = min(in.quad_size.x * content_span.x, in.quad_size.y * content_span.y);
+    let reference_diameter = max(in.face_dilate, 1.0);
+    let outline_scale = clamp(max(content_diameter / reference_diameter, globals.shader_params[__TEXT_EMOJI_MIN_OUTLINE__].x), 0.0, 1.0);
+
+    let fw = fwidth(emoji_uv);
+    var ow = vec2<f32>(0.0);
+    let outline_control = globals.shader_params[__TEXT_EMOJI_OUTLINE_SCALE__].x;
+    if (in.outline_thickness > 0.0 && outline_scale > 0.0 && outline_control > 0.0) {
+        ow = max(fw * in.outline_thickness * outline_scale * outline_control, span * (0.01 * outline_control));
+    }
+    var so = 0.0;
+    let shadow_control = globals.shader_params[__TEXT_EMOJI_SHADOW_SCALE__].x;
+    if (in.underlay_offset_y > 0.0 && outline_scale > 0.0 && shadow_control > 0.0) {
+        so = max(fw.y * in.underlay_offset_y * outline_scale * shadow_control, span.y * (0.01 * shadow_control));
+    }
+
+    let center = sample_emoji(emoji_uv, lo, hi, badge);
+
+    var ring = sample_emoji(emoji_uv + vec2<f32>( ow.x, 0.0), lo, hi, badge).a;
+    ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(-ow.x, 0.0), lo, hi, badge).a);
+    ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(0.0,  ow.y), lo, hi, badge).a);
+    ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(0.0, -ow.y), lo, hi, badge).a);
+    ring = max(ring, sample_emoji(emoji_uv + vec2<f32>( ow.x,  ow.y), lo, hi, badge).a);
+    ring = max(ring, sample_emoji(emoji_uv + vec2<f32>( ow.x, -ow.y), lo, hi, badge).a);
+    ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(-ow.x,  ow.y), lo, hi, badge).a);
+    ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(-ow.x, -ow.y), lo, hi, badge).a);
+
+    let shadow_a = sample_emoji(emoji_uv - vec2<f32>(0.0, so), lo, hi, badge).a;
+
+    let fill_a = center.a * in.color.a * globals.shader_params[__TEXT_EMOJI_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x;
+    let dark_a = max(ring, shadow_a) * in.outline_color.a * globals.shader_params[__TEXT_EMOJI_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x;
+    let out_a = max(fill_a, dark_a);
+    if (out_a <= 0.001) {
+        // Transparent (not `discard`): keeps this a plain helper so the
+        // Naga GLSL/WebGL path stays happy; equivalent under alpha blending.
+        return vec4<f32>(0.0);
+    }
+    let fill_ratio = fill_a / max(out_a, 0.0001);
+    let outline_tint = globals.shader_params[__TEXT_EMOJI_TINT__].rgb * globals.shader_params[__TEXT_EMOJI_OUTLINE_TINT__].rgb;
+    let rgb = mix(in.outline_color.rgb * outline_tint, center.rgb * in.color.rgb * globals.shader_params[__TEXT_EMOJI_TINT__].rgb, fill_ratio);
+    return vec4<f32>(rgb, out_a);
+}
+
 fn shade_text(in: VertexOutput) -> vec4<f32> {
+    if (in.kind > 12.5) {
+        return shade_outlined(in, true);
+    }
     if (in.kind > 11.5) {
         return shade_status_sprite(in);
     }
@@ -284,53 +341,7 @@ fn shade_text(in: VertexOutput) -> vec4<f32> {
         return shade_shape(in);
     }
     if (in.kind > 0.5) {
-        let lo = in.uv_rect.xy;
-        let hi = in.uv_rect.zw;
-        let span = hi - lo;
-        let content_span = max(in.content_rect.zw - in.content_rect.xy, vec2<f32>(1e-6));
-        let content_local = (in.local_uv - in.content_rect.xy) / content_span;
-        let emoji_uv = mix(lo, hi, content_local);
-        let content_diameter = min(in.quad_size.x * content_span.x, in.quad_size.y * content_span.y);
-        let reference_diameter = max(in.face_dilate, 1.0);
-        let outline_scale = clamp(max(content_diameter / reference_diameter, globals.shader_params[__TEXT_EMOJI_MIN_OUTLINE__].x), 0.0, 1.0);
-
-        let fw = fwidth(emoji_uv);
-        var ow = vec2<f32>(0.0);
-        let outline_control = globals.shader_params[__TEXT_EMOJI_OUTLINE_SCALE__].x;
-        if (in.outline_thickness > 0.0 && outline_scale > 0.0 && outline_control > 0.0) {
-            ow = max(fw * in.outline_thickness * outline_scale * outline_control, span * (0.01 * outline_control));
-        }
-        var so = 0.0;
-        let shadow_control = globals.shader_params[__TEXT_EMOJI_SHADOW_SCALE__].x;
-        if (in.underlay_offset_y > 0.0 && outline_scale > 0.0 && shadow_control > 0.0) {
-            so = max(fw.y * in.underlay_offset_y * outline_scale * shadow_control, span.y * (0.01 * shadow_control));
-        }
-
-        let center = sample_emoji(emoji_uv, lo, hi);
-
-        var ring = sample_emoji(emoji_uv + vec2<f32>( ow.x, 0.0), lo, hi).a;
-        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(-ow.x, 0.0), lo, hi).a);
-        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(0.0,  ow.y), lo, hi).a);
-        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(0.0, -ow.y), lo, hi).a);
-        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>( ow.x,  ow.y), lo, hi).a);
-        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>( ow.x, -ow.y), lo, hi).a);
-        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(-ow.x,  ow.y), lo, hi).a);
-        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(-ow.x, -ow.y), lo, hi).a);
-
-        let shadow_a = sample_emoji(emoji_uv - vec2<f32>(0.0, so), lo, hi).a;
-
-        let fill_a = center.a * in.color.a * globals.shader_params[__TEXT_EMOJI_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x;
-        let dark_a = max(ring, shadow_a) * in.outline_color.a * globals.shader_params[__TEXT_EMOJI_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x;
-        let out_a = max(fill_a, dark_a);
-        if (out_a <= 0.001) {
-            // Transparent (not `discard`): keeps this a plain helper so the
-            // Naga GLSL/WebGL path stays happy; equivalent under alpha blending.
-            return vec4<f32>(0.0);
-        }
-        let fill_ratio = fill_a / max(out_a, 0.0001);
-        let outline_tint = globals.shader_params[__TEXT_EMOJI_TINT__].rgb * globals.shader_params[__TEXT_EMOJI_OUTLINE_TINT__].rgb;
-        let rgb = mix(in.outline_color.rgb * outline_tint, center.rgb * in.color.rgb * globals.shader_params[__TEXT_EMOJI_TINT__].rgb, fill_ratio);
-        return vec4<f32>(rgb, out_a);
+        return shade_outlined(in, false);
     }
 
     // MSDF text path

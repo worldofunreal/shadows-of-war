@@ -11,8 +11,7 @@ pub struct PlacementQuery<'a> {
     pub buildings: &'a [sow_core::protocol::BuildingSnapshot],
 }
 
-#[derive(Clone, Copy, Debug, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PlacementDirection {
     Up,
     Right,
@@ -31,26 +30,121 @@ impl PlacementDirection {
     }
 }
 
-// Shader values: owned land, valid whole foundation, occupied physical cell.
-const SITE_OWN_LAND: u32 = 1;
-const SITE_VALID: u32 = 2;
-const SITE_OCCUPIED: u32 = 4;
+/// Build-mode controls in physical px, one source for drawing and tapping so a
+/// drawn button and its tap area cannot drift apart. Arrows are a drag hint
+/// beside the foundation; cancel and confirm sit above it, clear of the finger.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct PlacementControls {
+    pub center: [f32; 2],
+    /// Half side of the square that starts a drag (never below a 48px target).
+    pub grab_half: f32,
+    pub arrow: f32,
+    pub arrows: [(PlacementDirection, [f32; 2]); 4],
+    pub button: f32,
+    pub cancel: [f32; 2],
+    pub confirm: [f32; 2],
+}
 
-pub(crate) fn visible_placement_bounds(
-    map: (u32, u32),
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PlacementButton {
+    Cancel,
+    Confirm,
+}
+
+// ponytail: fixed top inset for the HUD top bar; read the bar's real height if it grows.
+const PLACEMENT_TOP_INSET: f32 = 64.0;
+
+pub(crate) fn placement_controls(
+    kind: sow_core::game::BuildingKind,
+    tile_idx: u32,
+    map_w: u32,
     camera: [f32; 2],
     zoom: f32,
-    screen: [f32; 2],
-) -> [u32; 4] {
-    if !zoom.is_finite() || zoom <= 0.0 {
-        return [0; 4];
+    sf: f32,
+) -> PlacementControls {
+    let map_w = map_w.max(1);
+    let footprint =
+        sow_core::building::BuildingFootprint::at(kind, tile_idx % map_w, tile_idx / map_w);
+    let center = [
+        camera[0] + (footprint.left as f32 + footprint.width as f32 * 0.5) * zoom,
+        camera[1] + (footprint.top as f32 + footprint.height as f32 * 0.5) * zoom,
+    ];
+    let grab_half = (footprint.width.max(footprint.height) as f32 * 0.5 * zoom).max(24.0 * sf);
+    let arrow = 28.0 * sf;
+    let button = 52.0 * sf;
+    let gap = 6.0 * sf;
+    let arrow_offset = grab_half + gap + arrow * 0.5;
+    let row_offset = grab_half + gap + arrow + 2.0 * gap + button * 0.5;
+    // No room above under the top bar: the row flips below the foundation.
+    let row_y = if center[1] - row_offset - button * 0.5 >= PLACEMENT_TOP_INSET * sf {
+        center[1] - row_offset
+    } else {
+        center[1] + row_offset
+    };
+    let row_dx = button * 0.5 + 2.0 * gap;
+    PlacementControls {
+        center,
+        grab_half,
+        arrow,
+        arrows: [
+            (
+                PlacementDirection::Up,
+                [center[0], center[1] - arrow_offset],
+            ),
+            (
+                PlacementDirection::Right,
+                [center[0] + arrow_offset, center[1]],
+            ),
+            (
+                PlacementDirection::Down,
+                [center[0], center[1] + arrow_offset],
+            ),
+            (
+                PlacementDirection::Left,
+                [center[0] - arrow_offset, center[1]],
+            ),
+        ],
+        button,
+        cancel: [center[0] - row_dx, row_y],
+        confirm: [center[0] + row_dx, row_y],
     }
-    [
-        ((-camera[0] / zoom).floor() - 1.0).clamp(0.0, map.0 as f32) as u32,
-        ((-camera[1] / zoom).floor() - 1.0).clamp(0.0, map.1 as f32) as u32,
-        (((screen[0] - camera[0]) / zoom).ceil() + 1.0).clamp(0.0, map.0 as f32) as u32,
-        (((screen[1] - camera[1]) / zoom).ceil() + 1.0).clamp(0.0, map.1 as f32) as u32,
-    ]
+}
+
+impl PlacementControls {
+    pub(crate) fn button_at(&self, x: f32, y: f32) -> Option<PlacementButton> {
+        let half = self.button * 0.5;
+        [
+            (PlacementButton::Cancel, self.cancel),
+            (PlacementButton::Confirm, self.confirm),
+        ]
+        .into_iter()
+        .find(|(_, [cx, cy])| (x - cx).abs() <= half && (y - cy).abs() <= half)
+        .map(|(button, _)| button)
+    }
+
+    pub(crate) fn grabs(&self, x: f32, y: f32) -> bool {
+        (x - self.center[0]).abs() <= self.grab_half && (y - self.center[1]).abs() <= self.grab_half
+    }
+}
+
+impl crate::app::SowApp {
+    /// Controls for the live (not yet submitted) preview at the current camera.
+    pub(crate) fn placement_controls(&self) -> Option<PlacementControls> {
+        let placement = self
+            .ui
+            .app
+            .hud_state
+            .building_placement
+            .filter(|p| !p.pending)?;
+        Some(placement_controls(
+            placement.kind,
+            placement.tile_idx,
+            self.sim.map_w,
+            [self.input.camera_x, self.input.camera_y],
+            self.input.camera_zoom,
+            crate::web_canvas::device_pixel_ratio() as f32,
+        ))
+    }
 }
 
 const PLACEMENT_CELL_SIZE: u32 = sow_core::building::core::BUILDING_GRID_CELL_SIZE;
@@ -63,86 +157,9 @@ pub struct BuildingPlacementCache {
     grid_w: u32,
     cells: Vec<Vec<usize>>,
     buildings_identity: (usize, usize),
-    sites_key: Option<(usize, u64, sow_core::game::BuildingKind, u16, [u32; 4])>,
-    sites_buildings: Vec<(u64, u32, sow_core::game::BuildingKind)>,
-    sites_bounds: [u32; 4],
-    sites: Vec<u32>,
-    sites_revision: u64,
 }
 
 impl BuildingPlacementCache {
-    /// Recompute only visible anchors when their spatial inputs change. Preview
-    /// movement and gold do not invalidate this map of possible destinations.
-    pub(crate) fn update_visible_sites(
-        &mut self,
-        engine: &mut sow_core::engine::SowEngine,
-        kind: sow_core::game::BuildingKind,
-        owner: u16,
-        bounds: [u32; 4],
-    ) {
-        let key = (
-            engine.state.map.terrain.as_ptr() as usize,
-            engine.state.map.ownership_revision(),
-            kind,
-            owner,
-            bounds,
-        );
-        if self.sites_key == Some(key)
-            && self
-                .sites_buildings
-                .iter()
-                .copied()
-                .eq(engine.buildings.iter().map(|b| (b.id, b.tile_idx, b.kind)))
-        {
-            return;
-        }
-        engine.refresh_building_grid();
-        self.sites_key = Some(key);
-        self.sites_buildings.clear();
-        self.sites_buildings
-            .extend(engine.buildings.iter().map(|b| (b.id, b.tile_idx, b.kind)));
-        self.sites_bounds = bounds;
-        self.sites.clear();
-        let map = &engine.state.map;
-        for y in bounds[1]..bounds[3] {
-            for x in bounds[0]..bounds[2] {
-                let own_land = owner != 0
-                    && map.owner_id(x, y) == owner
-                    && map.terrain[map.ref_id(x, y)].as_byte() & 0x80 != 0;
-                let valid = sow_core::building::validate_structure_site(
-                    map,
-                    owner,
-                    kind,
-                    y * map.width + x,
-                    &engine.building_grid,
-                )
-                .is_ok();
-                let occupied = engine.building_grid.iter_all_in_range(x, y, 3).any(|b| {
-                    sow_core::building::BuildingFootprint::at(b.kind, b.x, b.y)
-                        .contains(x as i32, y as i32)
-                });
-                self.sites.push(
-                    u32::from(own_land) * SITE_OWN_LAND
-                        | u32::from(valid) * SITE_VALID
-                        | u32::from(occupied) * SITE_OCCUPIED,
-                );
-            }
-        }
-        self.sites_revision = self.sites_revision.wrapping_add(1);
-    }
-
-    pub(crate) fn clear_visible_sites(&mut self) {
-        if self.sites_key.take().is_some() {
-            self.sites.clear();
-            self.sites_bounds = [0; 4];
-            self.sites_revision = self.sites_revision.wrapping_add(1);
-        }
-    }
-
-    pub(crate) fn visible_sites(&self) -> ([u32; 4], &[u32], u64) {
-        (self.sites_bounds, &self.sites, self.sites_revision)
-    }
-
     #[cfg(test)]
     pub fn resolve(&mut self, tick: u64, query: &PlacementQuery) -> Result<u32, &'static str> {
         self.rebuild_index(tick, query);
@@ -305,92 +322,51 @@ mod tests {
     use sow_core::game::BuildingKind;
 
     #[wasm_bindgen_test::wasm_bindgen_test]
-    fn visible_destinations_match_confirmation_and_invalidate_only_spatial_changes() {
-        use sow_core::{
-            engine::SowEngine, game::GameState, game_config::GameConfig, map::MapTile,
-            water_components::WaterComponents,
-        };
-        let mut state = GameState::new(42, 32, 32, GameConfig::default());
-        for y in 0..32 {
-            for x in 0..32 {
-                state.map.set_owner_id(x, y, 1);
-            }
-        }
-        for y in 0..32 {
-            state.map.terrain[(y * 32) as usize] = MapTile::from_byte(0);
-        }
-        state.map.terrain[8 * 32 + 8] = MapTile::from_byte(0x80 | 12);
-        let mut engine = SowEngine::new(state, WaterComponents::default());
-        let mut cache = BuildingPlacementCache::default();
-        let bounds = [0, 0, 32, 32];
-        for kind in BuildingKind::ALL {
-            cache.update_visible_sites(&mut engine, kind, 1, bounds);
-            let (_, sites, _) = cache.visible_sites();
-            for (tile, site) in sites.iter().enumerate() {
+    fn controls_sit_above_the_foundation_and_hit_test_what_is_drawn() {
+        for sf in [1.0, 2.0, 3.0] {
+            for zoom in [2.0 * sf, 12.0 * sf, 40.0 * sf] {
+                let camera = 400.0 * sf - 50.0 * zoom;
+                let c = placement_controls(
+                    BuildingKind::City,
+                    50 * 100 + 50,
+                    100,
+                    [camera, camera],
+                    zoom,
+                    sf,
+                );
+                let row_top = c.cancel[1] - c.button * 0.5;
+                assert!(row_top >= PLACEMENT_TOP_INSET * sf || c.cancel[1] > c.center[1]);
+                assert_eq!(c.cancel[1], c.confirm[1]);
+                assert!(c.cancel[0] < c.center[0] && c.confirm[0] > c.center[0]);
                 assert_eq!(
-                    site & SITE_VALID != 0,
-                    sow_core::building::validate_structure_site(
-                        &engine.state.map,
-                        1,
-                        kind,
-                        tile as u32,
-                        &engine.building_grid
-                    )
-                    .is_ok(),
-                    "visible destination and confirmation differ at {tile}"
+                    c.button_at(c.confirm[0], c.confirm[1]),
+                    Some(PlacementButton::Confirm)
+                );
+                assert_eq!(
+                    c.button_at(c.cancel[0], c.cancel[1]),
+                    Some(PlacementButton::Cancel)
+                );
+                assert_eq!(c.button_at(c.center[0], c.center[1]), None);
+                assert!(c.grabs(c.center[0], c.center[1]));
+                for (_, arrow) in c.arrows {
+                    assert_eq!(
+                        c.button_at(arrow[0], arrow[1]),
+                        None,
+                        "arrows are only a hint"
+                    );
+                    assert!(!c.grabs(arrow[0], arrow[1]));
+                }
+                assert!(
+                    !c.grabs(c.confirm[0], c.confirm[1]),
+                    "a button tap never drags"
                 );
             }
         }
-        cache.update_visible_sites(&mut engine, BuildingKind::City, 1, bounds);
-        let revision = cache.visible_sites().2;
-        engine.state.tick += 1;
-        cache.update_visible_sites(&mut engine, BuildingKind::City, 1, bounds);
-        assert_eq!(
-            cache.visible_sites().2,
-            revision,
-            "time alone does not rebuild destinations"
+        let top = placement_controls(BuildingKind::City, 2 * 100 + 50, 100, [0.0, 0.0], 12.0, 1.0);
+        assert!(
+            top.confirm[1] > top.center[1],
+            "no room above: the row flips below"
         );
-        engine.state.map.set_owner_id(24, 24, 2);
-        cache.update_visible_sites(&mut engine, BuildingKind::City, 1, bounds);
-        assert_ne!(
-            cache.visible_sites().2,
-            revision,
-            "ownership invalidates within the same tick"
-        );
-        assert_eq!(cache.visible_sites().1[24 * 32 + 24] & SITE_VALID, 0);
-        engine.buildings.push(sow_core::building::Building {
-            id: 1,
-            owner_id: 1,
-            tile_idx: 16 * 32 + 16,
-            kind: BuildingKind::City,
-            level: 1,
-            under_construction: false,
-            ticks_until_complete: 0,
-        });
-        engine.building_grid.mark_dirty();
-        cache.update_visible_sites(&mut engine, BuildingKind::City, 1, bounds);
-        let sites = cache.visible_sites().1;
-        assert_eq!(
-            sites[16 * 32 + 17] & SITE_VALID,
-            0,
-            "partial overlap is blocked"
-        );
-        assert_ne!(
-            sites[16 * 32 + 20] & SITE_VALID,
-            0,
-            "touching edges remain legal"
-        );
-        assert_ne!(sites[16 * 32 + 16] & SITE_OCCUPIED, 0);
-        let cropped = visible_placement_bounds((32, 32), [-96.0, -96.0], 12.0, [48.0, 48.0]);
-        assert_eq!(cropped, [7, 7, 13, 13]);
-        cache.update_visible_sites(&mut engine, BuildingKind::Farm, 1, cropped);
-        assert_eq!(
-            cache.visible_sites().1.len(),
-            36,
-            "only visible anchors are computed"
-        );
-        cache.clear_visible_sites();
-        assert!(cache.visible_sites().1.is_empty());
     }
 
     #[wasm_bindgen_test::wasm_bindgen_test]

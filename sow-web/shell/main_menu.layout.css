@@ -717,6 +717,12 @@
             border-radius: 0.625rem;
             box-shadow: 0.5rem 0 1.5rem rgba(0, 0, 0, 0.18);
         }
+
+        /* Owner order for the desktop sidebar; keep the mobile bar unchanged. */
+        #sow-menu .sow-menu__main-nav-item[data-nav-screen="battle"] { order: 1; }
+        #sow-menu .sow-menu__main-nav-item[data-nav-screen="heroes"] { order: 2; }
+        #sow-menu .sow-menu__main-nav-item[data-nav-screen="profile"] { order: 3; }
+        #sow-menu .sow-menu__main-nav-item[data-nav-screen="store"] { order: 4; }
     
 }
 

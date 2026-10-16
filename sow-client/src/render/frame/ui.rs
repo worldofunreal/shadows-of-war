@@ -92,17 +92,18 @@ impl SowApp {
                 && (target_y - self.input.camera_y).abs() < 0.5
                 && (self.input.target_zoom - self.input.camera_zoom).abs() < 0.001
             {
-                self.input.camera_zoom = self.input.target_zoom;
-                self.input.camera_x = clamp_camera_offset(
-                    self.input.screen_w,
-                    self.sim.map_w as f32 * self.input.camera_zoom,
-                    self.input.screen_w * 0.5 - world_x * self.input.camera_zoom,
+                let (camera, zoom, _) = focus_camera_step(
+                    (self.input.camera_x, self.input.camera_y),
+                    self.input.camera_zoom,
+                    self.input.target_zoom,
+                    (world_x, world_y),
+                    (self.input.screen_w, self.input.screen_h),
+                    (self.sim.map_w, self.sim.map_h),
+                    1.0,
                 );
-                self.input.camera_y = clamp_camera_offset(
-                    self.input.screen_h,
-                    self.sim.map_h as f32 * self.input.camera_zoom,
-                    self.input.screen_h * 0.5 - world_y * self.input.camera_zoom,
-                );
+                self.input.camera_zoom = zoom;
+                self.input.camera_x = camera.0;
+                self.input.camera_y = camera.1;
                 self.clamp_camera_to_map();
                 self.input.camera_focus_target = None;
                 self.input.camera_focus_waiting_for_input_release = false;
@@ -149,6 +150,7 @@ impl SowApp {
             self.sync_hud_player_state();
         }
 
+        let placement_can_confirm = self.building_placement_can_confirm();
         if let Some(text) = &mut self.gfx.text_renderer {
             text.begin_frame();
             for &(slot, ref cell) in &self.ui.app.asset_loader.gpu_avatar_cells {
@@ -164,11 +166,10 @@ impl SowApp {
                     &self.sim,
                     &mut self.ui,
                     &self.input,
-                    self.gfx.map_renderer.as_ref(),
                     &campaign_avatar_slots,
                     sf,
-                    self.time.start_time.elapsed().as_secs_f32() % 1000.0,
                     now,
+                    placement_can_confirm,
                 );
                 self.ui.app.asset_loader.campaign_avatar_slots = campaign_avatar_slots;
             }

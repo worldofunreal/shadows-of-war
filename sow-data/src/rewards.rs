@@ -1,4 +1,4 @@
-//! Shared, deterministic rewards math used by the client preview and database.
+//! Shared, deterministic rewards math for local client progress and database settlement.
 //!
 //! Two earned currencies, by product decision (owner, 2026-09):
 //! - **Crowns** — the free spendable currency (leader unlocks, store).

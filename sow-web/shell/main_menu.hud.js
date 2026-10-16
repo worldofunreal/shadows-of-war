@@ -18,6 +18,10 @@
     var surrenderMessage = null;
     var devSidebarOpen = false;
     var devToolsSchemaKey = "";
+    var devTab = "";
+    var devControlIndex = Object.create(null);
+    var devStepTimer = 0;
+    var devResetTimer = 0;
 
     var hudInitialized = false;
     var hudRefs = null;
@@ -93,6 +97,10 @@
         if (previous === "leaderboard" && next !== previous) send("toggle_leaderboard");
         if (previous === "inbox" && next !== previous) send("toggle_inbox");
         activeHudPanel = next;
+        if (next && devSidebarOpen) {
+            devSidebarOpen = false;
+            send("toggle_dev_sidebar");
+        }
         if (next === "leaderboard") send("toggle_leaderboard");
         if (next === "inbox") send("toggle_inbox");
     }
@@ -111,11 +119,12 @@
     // atlases for relationships and buildings, white glyphs for actions.
     var HUD_ICONS = {
         troops: "gameplay/icons/battle_icon_cutout.webp",
-        gold: "gameplay/currency/gold.webp"
+        gold: "gameplay/currency/gold.webp",
+        surrender: "gameplay/icons/surrender_flag.webp"
     };
 
     // Cell order of the badge strip packed from assets/art/badges (assets/generated/badges-atlas.json).
-    var STATUS_CELLS = ["request", "allied", "traitor", "rank-1", "rank-2", "rank-3", "you", "disconnected", "upgrade-sparkle"];
+    var STATUS_CELLS = ["request", "allied", "traitor", "rank-1", "rank-2", "rank-3", "you", "disconnected", "upgrade-sparkle", "wilderness", "troops", "death", "radiation", "construction", "hammer", "arrow-up", "arrow-right", "arrow-down", "arrow-left", "cancel", "confirm"];
 
     var BUILDING_GLYPHS = {
         city: "city",
@@ -153,7 +162,10 @@
         discount: '<circle cx="7" cy="7" r="2"/><circle cx="17" cy="17" r="2"/><path d="m19 5-14 14"/>',
         clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
         construction: '<path d="M14.5 6.5a5 5 0 0 0-6.7 6.7L3 18l3 3 4.8-4.8a5 5 0 0 0 6.7-6.7L14 13l-3-3 3.5-3.5Z"/>',
-        lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/>'
+        lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/>',
+        dice: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h.01M15 9h.01M12 12h.01M9 15h.01M15 15h.01"/>',
+        globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+        solo: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'
     };
 
     function hudIcon(name, cls) {
@@ -162,6 +174,9 @@
         if (!HUD_ICONS[name]) return "";
         return '<img class="' + (cls || "sow-hud__action-icon") + '" src="' + asset(HUD_ICONS[name]) + '" alt="" aria-hidden="true">';
     }
+
+    // The menu shares the same line icons (lock, dice, settings...).
+    window.SOW_hudIcon = function (name) { return hudIcon(name, "sow-menu__inline-icon"); };
 
     function statusIcon(kind, cls) {
         var style = 'background-image:url(&quot;' + escapeHudText(asset("gameplay/icons/nameplate_status_atlas.webp")) + '&quot;);'
@@ -315,7 +330,6 @@
             notificationLayoutStarted = true;
             var onViewportChange = function () {
                 syncCompactHudBounds();
-                renderBuildingPlacement(hudState && hudState.hud && hudState.hud.building_placement);
                 renderNotifications([], false);
                 scheduleNotificationPlacement();
             };
@@ -420,23 +434,40 @@
             + '  <button type="button" class="sow-hud__icon-btn" data-command="zoom_out" aria-label="' + SOW_t("hud.zoom_out") + '" title="' + SOW_t("hud.zoom_out") + '">' + hudIcon("minus") + '</button>'
             + '  <button type="button" class="sow-hud__icon-btn" data-command="center_camera" aria-label="' + SOW_t("hud.center_camera") + '" title="' + SOW_t("hud.center_camera") + '">' + hudIcon("camera", "sow-hud__action-icon") + '</button>'
             + '</aside>'
-            + '<aside class="sow-hud__dev-sidebar hidden" id="sow-hud-dev-sidebar">'
-            + '  <div class="sow-hud__dev-header"><b>' + SOW_t("hud.dev_tools") + '</b><button type="button" class="sow-hud__close-btn" data-command="toggle_dev_sidebar" aria-label="' + SOW_t("hud.close_developer_tools") + '">✕</button></div>'
-            + '  <div class="sow-hud__dev-body">'
-            + '    <input class="sow-hud__dev-search" type="search" data-dev-search placeholder="Find shader setting" aria-label="Find shader setting">'
+            + '<aside class="sow-hud__sheet sow-hud__dev-sidebar hidden" id="sow-hud-dev-sidebar">'
+            + '  <div class="sow-hud__sheet-header"><b class="sow-hud__sheet-title">' + SOW_t("hud.dev_tools") + '</b>'
+            + '    <button type="button" class="sow-hud__sheet-btn" data-command="dev_menu" aria-label="More" aria-expanded="false">⋯</button>'
+            + '    <button type="button" class="sow-hud__sheet-btn" data-command="toggle_dev_sidebar" aria-label="' + SOW_t("hud.close_developer_tools") + '">✕</button>'
+            + '    <div class="sow-hud__dev-menu" id="sow-hud-dev-menu" hidden>'
+            + '      <button type="button" data-command="dev_vfx_all" data-on="1">All effects on</button>'
+            + '      <button type="button" data-command="dev_vfx_all" data-on="0">All effects off</button>'
+            + '      <button type="button" data-command="dev_reset_all" id="sow-hud-dev-reset-all">Reset all</button>'
+            + '    </div>'
+            + '  </div>'
+            + '  <nav class="sow-hud__dev-tabs" id="sow-hud-dev-tabs" aria-label="Groups"></nav>'
+            + '  <div class="sow-hud__dev-transport" id="sow-hud-dev-transport" hidden>'
+            + '    <input type="range" min="0" max="1" step="0.01" data-dev-preview="phase" aria-label="Preview position">'
+            + '    <label class="sow-hud__dev-chip"><input type="checkbox" data-dev-preview="paused"><span>Pause</span></label>'
+            + '    <label class="sow-hud__dev-chip"><input type="checkbox" data-dev-preview="repeat"><span>Loop</span></label>'
+            + '  </div>'
+            + '  <div class="sow-hud__sheet-body sow-hud__dev-body">'
+            + '    <input class="sow-hud__dev-search" type="search" data-dev-search placeholder="Search" aria-label="Find shader setting">'
+            + '    <div class="sow-hud__dev-perf" id="sow-hud-dev-perf" role="group" aria-label="Frame cost switches" hidden></div>'
             + '    <div class="sow-hud__dev-controls" id="sow-hud-dev-controls"></div>'
             + '  </div>'
             + '</aside>'
-            + '<aside class="sow-hud__panel sow-hud__settings hidden" id="sow-hud-settings">'
-            + '  <div class="sow-hud__panel-header"><h3>' + SOW_t("menu.settings") + '</h3><button class="sow-hud__close-btn" type="button" data-command="toggle_settings" aria-label="' + SOW_t("hud.close_settings") + '">✕</button></div>'
-            + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.sound") + '</span><input type="checkbox" data-hud-setting="mute_all"></label>'
-            + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.music") + '</span><input type="range" min="0" max="1" step="0.05" data-hud-setting="music_volume"></label>'
-            + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.reduced_motion") + '</span><input type="checkbox" data-hud-setting="reduced_motion"></label>'
-            + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.free_zoom_out") + '</span><input type="checkbox" data-hud-setting="free_zoom_out"></label>'
-            + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.show_fps_ping") + '</span><input type="checkbox" data-hud-setting="show_fps_ping"></label>'
+            + '<aside class="sow-hud__panel sow-hud__settings sow-hud__sheet hidden" id="sow-hud-settings">'
+            + '  <div class="sow-hud__sheet-header"><h3 class="sow-hud__sheet-title">' + SOW_t("menu.settings") + '</h3><button class="sow-hud__close-btn sow-hud__sheet-btn" type="button" data-command="toggle_settings" aria-label="' + SOW_t("hud.close_settings") + '">✕</button></div>'
+            + '  <div class="sow-hud__sheet-body">'
+            + '    <label class="sow-hud__setting-row"><span>' + SOW_t("hud.sound") + '</span><input class="sow-hud__switch" type="checkbox" data-hud-setting="mute_all"></label>'
+            + '    <label class="sow-hud__setting-row sow-hud__setting-row--slider"><span>' + SOW_t("hud.music") + '</span><input type="range" min="0" max="1" step="0.05" data-hud-setting="music_volume"></label>'
+            + '    <label class="sow-hud__setting-row"><span>' + SOW_t("hud.reduced_motion") + '</span><input class="sow-hud__switch" type="checkbox" data-hud-setting="reduced_motion"></label>'
+            + '    <label class="sow-hud__setting-row"><span>' + SOW_t("hud.free_zoom_out") + '</span><input class="sow-hud__switch" type="checkbox" data-hud-setting="free_zoom_out"></label>'
+            + '    <label class="sow-hud__setting-row"><span>' + SOW_t("hud.show_fps_ping") + '</span><input class="sow-hud__switch" type="checkbox" data-hud-setting="show_fps_ping"></label>'
             + (hudState.settings && hudState.settings.show_dev_tools_available
-                ? '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.show_dev_tools") + '</span><input type="checkbox" data-hud-setting="show_dev_tools"></label>'
+                ? '    <label class="sow-hud__setting-row"><span>' + SOW_t("hud.show_dev_tools") + '</span><input class="sow-hud__switch" type="checkbox" data-hud-setting="show_dev_tools"></label>'
                 : '')
+            + '  </div>'
             + '</aside>'
             + '<div class="sow-hud__dock-stack" id="sow-hud-dock-stack">'
             + '<footer class="sow-hud__dock" id="sow-hud-dock">'
@@ -465,27 +496,16 @@
             + '  <div class="sow-hud__operations-list" id="sow-hud-operations-list"></div>'
             + '</aside>'
             + '</div>'
-            + '<aside class="sow-hud__placement" id="sow-hud-placement" role="group" aria-label="' + SOW_t("hud.build_placement") + '" hidden>'
-            + '  <div class="sow-hud__placement-moves">'
-            + '  <button type="button" class="sow-hud__placement-move" data-command="nudge_building_placement" data-direction="up" aria-label="' + SOW_t("hud.build_move_up") + '"><span aria-hidden="true">↑</span></button>'
-            + '  <button type="button" class="sow-hud__placement-move" data-command="nudge_building_placement" data-direction="right" aria-label="' + SOW_t("hud.build_move_right") + '"><span aria-hidden="true">→</span></button>'
-            + '  <button type="button" class="sow-hud__placement-move" data-command="nudge_building_placement" data-direction="down" aria-label="' + SOW_t("hud.build_move_down") + '"><span aria-hidden="true">↓</span></button>'
-            + '  <button type="button" class="sow-hud__placement-move" data-command="nudge_building_placement" data-direction="left" aria-label="' + SOW_t("hud.build_move_left") + '"><span aria-hidden="true">←</span></button>'
+            + '<aside class="sow-hud__panel sow-hud__leaderboard sow-hud__sheet hidden" id="sow-hud-leaderboard">'
+            + '  <div class="sow-hud__sheet-header">'
+            + '    <h3 class="sow-hud__sheet-title">' + hudIcon("rankings", "sow-hud__inline-icon") + ' ' + SOW_t("hud.rankings_title") + '</h3>'
+            + '    <button class="sow-hud__close-btn sow-hud__sheet-btn" type="button" data-command="toggle_leaderboard" aria-label="' + SOW_t("hud.close_rankings") + '">✕</button>'
             + '  </div>'
-            + '  <div class="sow-hud__placement-info" id="sow-hud-placement-info"></div>'
-            + '  <div class="sow-hud__placement-actions"><button type="button" class="sow-hud__placement-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '">×</button><button type="button" class="sow-hud__placement-confirm" data-command="confirm_building_placement" aria-label="' + SOW_t("hud.build_confirm") + '"><span aria-hidden="true">✓</span><span>' + SOW_t("hud.build_confirm") + '</span></button></div>'
-            + '  <div class="sow-hud__placement-reason" id="sow-hud-placement-reason" role="status" aria-live="polite"></div>'
+            + '  <div class="sow-hud__sheet-body sow-hud__leaderboard-rows" id="sow-hud-lb-rows"></div>'
             + '</aside>'
-            + '<aside class="sow-hud__panel sow-hud__leaderboard hidden" id="sow-hud-leaderboard">'
-            + '  <div class="sow-hud__panel-header">'
-            + '    <h3>' + hudIcon("rankings", "sow-hud__inline-icon") + ' ' + SOW_t("hud.rankings_title") + '</h3>'
-            + '    <button class="sow-hud__close-btn" type="button" data-command="toggle_leaderboard" aria-label="' + SOW_t("hud.close_rankings") + '">✕</button>'
-            + '  </div>'
-            + '  <div class="sow-hud__leaderboard-rows" id="sow-hud-lb-rows"></div>'
-            + '</aside>'
-            + '<aside class="sow-hud__inbox hidden" id="sow-hud-inbox" role="dialog" aria-modal="false" aria-labelledby="sow-hud-inbox-title">'
-            + '  <div class="sow-hud__transfer-header sow-hud__inbox-header"><span class="sow-hud__transfer-icon" aria-hidden="true">' + hudIcon("inbox", "sow-hud__inline-icon") + '</span><h3 id="sow-hud-inbox-title">' + SOW_t("hud.inbox") + '</h3><span class="sow-hud__inbox-total" id="sow-hud-inbox-total" aria-hidden="true">0</span><button class="sow-hud__close-btn" id="sow-hud-inbox-close" type="button" data-command="toggle_inbox" aria-label="' + SOW_t("hud.close_inbox") + '">✕</button></div>'
-            + '  <div class="sow-hud__inbox-list" id="sow-hud-inbox-rows"></div>'
+            + '<aside class="sow-hud__inbox sow-hud__sheet hidden" id="sow-hud-inbox" role="dialog" aria-modal="false" aria-labelledby="sow-hud-inbox-title">'
+            + '  <div class="sow-hud__sheet-header sow-hud__inbox-header"><span class="sow-hud__transfer-icon" aria-hidden="true">' + hudIcon("inbox", "sow-hud__inline-icon") + '</span><h3 class="sow-hud__sheet-title" id="sow-hud-inbox-title">' + SOW_t("hud.inbox") + '</h3><span class="sow-hud__inbox-total" id="sow-hud-inbox-total" aria-hidden="true">0</span><button class="sow-hud__close-btn sow-hud__sheet-btn" id="sow-hud-inbox-close" type="button" data-command="toggle_inbox" aria-label="' + SOW_t("hud.close_inbox") + '">✕</button></div>'
+            + '  <div class="sow-hud__sheet-body sow-hud__inbox-list" id="sow-hud-inbox-rows"></div>'
             + '  <p class="sow-hud__inbox-empty" id="sow-hud-inbox-empty" hidden>' + SOW_t("hud.no_pending_requests") + '</p>'
             + '</aside>'
             + '<aside class="sow-hud__dialog sow-hud__transfer hidden" id="sow-hud-transfer" role="dialog" aria-modal="false" aria-labelledby="sow-hud-transfer-title">'
@@ -513,7 +533,7 @@
             + '        <img class="sow-hud__endgame-portrait" id="sow-hud-surrender-portrait" src="" alt="' + SOW_t("hud.leader_avatar") + '" />'
             + '      </div>'
             + '      <div class="sow-hud__endgame-hero-copy">'
-            + '        <h2 class="sow-hud__endgame-banner" id="sow-hud-surrender-banner">' + hudIcon("leave", "sow-hud__inline-icon") + ' ' + SOW_t("endgame.leave_match") + '</h2>'
+            + '        <h2 class="sow-hud__endgame-banner" id="sow-hud-surrender-banner">' + hudIcon("surrender", "sow-hud__inline-icon") + ' <span id="sow-hud-surrender-title">' + SOW_t("endgame.leave_match") + '</span></h2>'
             + '        <p class="sow-hud__endgame-desc" id="sow-hud-surrender-desc">' + SOW_t("endgame.your_battle_will_end") + '</p>'
             + '      </div>'
             + '    </div>'
@@ -603,12 +623,6 @@
             fleetTrade: hudRoot.querySelector("[data-fleet-kind='trade']"),
             fleetWarship: hudRoot.querySelector("[data-fleet-kind='warship']"),
             fleetNuke: hudRoot.querySelector("[data-fleet-kind='nuke']"),
-            placement: document.getElementById("sow-hud-placement"),
-            placementInfo: document.getElementById("sow-hud-placement-info"),
-            placementReason: document.getElementById("sow-hud-placement-reason"),
-            placementConfirm: hudRoot.querySelector('[data-command="confirm_building_placement"]'),
-            placementMoves: Array.prototype.slice.call(hudRoot.querySelectorAll('[data-command="nudge_building_placement"]')),
-            placementCancel: hudRoot.querySelector('[data-command="cancel_building_mode"]'),
             panelButtons: Array.prototype.slice.call(hudRoot.querySelectorAll(".sow-hud__topbar [data-command^='toggle_']")),
             leaderboard: document.getElementById("sow-hud-leaderboard"),
             rows: document.getElementById("sow-hud-lb-rows"),
@@ -632,7 +646,7 @@
             betrayalCancel: document.getElementById("sow-hud-betrayal-cancel"),
             betrayalReturnFocus: null,
             surrender: document.getElementById("sow-hud-surrender-modal"),
-            surrenderBanner: document.getElementById("sow-hud-surrender-banner"),
+            surrenderTitle: document.getElementById("sow-hud-surrender-title"),
             surrenderDesc: document.getElementById("sow-hud-surrender-desc"),
             surrenderStats: document.getElementById("sow-hud-surrender-stats"),
             surrenderKda: document.getElementById("sow-hud-surrender-kda"),
@@ -765,9 +779,19 @@
             if (!input) return;
             sendDevControl(input);
         });
-        hudDevLayer.addEventListener("change", function (event) {
-            var previewTarget = event.target.closest('[data-dev-preview="target"]');
-            if (previewTarget) send("set_dev_vfx_preview", { target: Number(previewTarget.value) });
+        hudDevLayer.addEventListener("pointerdown", function (event) {
+            var button = event.target.closest('[data-command="dev_step"]');
+            if (!button) return;
+            event.preventDefault();
+            devStepOnce(button);
+            var delay = 380;
+            var repeat = function () {
+                devStepTimer = window.setTimeout(function () { devStepOnce(button); delay = 70; repeat(); }, delay);
+            };
+            repeat();
+        });
+        ["pointerup", "pointercancel"].forEach(function (type) {
+            window.addEventListener(type, function () { window.clearTimeout(devStepTimer); }, { passive: true });
         });
         hudRoot.addEventListener("change", function (event) {
             var input = event.target.closest("[data-hud-setting]");
@@ -1404,48 +1428,68 @@
         return value;
     }
 
+    var DEV_RESET_ICON = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/></svg>';
+
+    function devDecimals(step) {
+        var text = String(step);
+        var dot = text.indexOf(".");
+        return dot < 0 ? 0 : Math.min(2, text.length - dot - 1);
+    }
+
+    // At most 2 decimals; a nonzero value never reads as 0.00.
+    function devFormat(value, decimals) {
+        var number = Number(value);
+        if (!Number.isFinite(number)) return "";
+        var text = number.toFixed(decimals);
+        return number !== 0 && Number(text) === 0 ? number.toFixed(3) : text;
+    }
+
+    function devIsDirty(def, current) {
+        var now = Array.isArray(current) ? current : [current];
+        var base = Array.isArray(def.default) ? def.default : [def.default];
+        return now.some(function (part, index) { return Math.abs(Number(part) - Number(base[index])) > 1e-6; });
+    }
+
     function sendDevControl(input) {
         var control = input.closest("[data-dev-control]");
         if (!control) return;
         var id = control.dataset.devControl;
         var kind = control.dataset.devKind;
+        var decimals = Number(control.dataset.devDecimals) || 0;
         var value;
         if (kind === "bool") {
             value = input.checked;
         } else if (kind === "number" || kind === "select") {
             value = Number(input.value);
             if (!Number.isFinite(value)) return;
-            if (kind === "number" && input.type === "number") {
+            if (kind === "number") {
                 var range = control.querySelector('input[type="range"]');
-                if (range) {
+                if (range && input.type !== "range") {
                     var rangeMin = Number(range.dataset.devMin);
                     var rangeMax = Number(range.dataset.devMax);
                     var margin = Math.max((rangeMax - rangeMin) * 0.1, Number(range.step) || 0.01);
                     range.min = String(value < rangeMin ? value - margin : rangeMin);
                     range.max = String(value > rangeMax ? value + margin : rangeMax);
                 }
+                control.querySelectorAll('[data-dev="' + id + '"]').forEach(function (sibling) {
+                    if (sibling !== input) sibling.value = sibling.type === "range" ? input.value : devFormat(input.value, decimals);
+                });
             }
-            control.querySelectorAll('[data-dev="' + id + '"]').forEach(function (sibling) {
-                if (sibling !== input) sibling.value = input.value;
-            });
         } else {
             var config = hudState && hudState.hud && hudState.hud.dev_tools && hudState.hud.dev_tools.config || {};
             value = Array.isArray(config[id]) ? config[id].slice() : (kind === "color" ? [1, 1, 1, 1] : [0, 0, 0]);
-            control.querySelectorAll("[data-dev-channel]").forEach(function (channel) {
-                var index = Number(channel.dataset.devChannel);
-                var current = Number(channel.value);
-                if (Number.isFinite(current)) value[index] = current;
-            });
             if (input.hasAttribute("data-dev-picker")) {
                 var rgb = devColorFromHex(input.value, input.dataset.devLinear === "1");
                 value[0] = rgb[0]; value[1] = rgb[1]; value[2] = rgb[2];
                 control.querySelectorAll("[data-dev-channel]").forEach(function (channel) {
-                    channel.value = value[Number(channel.dataset.devChannel)] || 0;
+                    var channelIndex = Number(channel.dataset.devChannel);
+                    if (channelIndex < 3) channel.value = value[channelIndex];
                 });
             } else {
                 var index = Number(input.dataset.devChannel);
                 value[index] = Number(input.value);
                 if (!Number.isFinite(value[index])) return;
+                devReadout(input, decimals);
                 var picker = control.querySelector("[data-dev-picker]");
                 if (picker && index < 3) picker.value = devColorHex(value, picker.dataset.devLinear === "1");
             }
@@ -1453,68 +1497,158 @@
         send("set_dev_config", { field: id, value: value });
     }
 
+    function disarmDevReset() {
+        window.clearTimeout(devResetTimer);
+        devResetTimer = 0;
+        var button = hudRefs && hudRefs.devSidebar && hudRefs.devSidebar.querySelector("#sow-hud-dev-reset-all");
+        if (button) button.textContent = "Reset all";
+    }
+
+    function setDevMenu(open) {
+        disarmDevReset();
+        var menu = hudRefs.devSidebar.querySelector("#sow-hud-dev-menu");
+        menu.hidden = !open;
+        hudRefs.devSidebar.querySelector('[data-command="dev_menu"]').setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    function devReadout(input, decimals) {
+        var readout = input.parentElement && input.parentElement.querySelector("output");
+        if (readout) readout.textContent = devFormat(input.value, decimals);
+    }
+
+    function devStepOnce(button) {
+        var control = button.closest("[data-dev-control]");
+        var range = control && control.querySelector('input[type="range"]');
+        var chip = control && control.querySelector('input[type="text"][data-dev]');
+        if (!range || !chip) return;
+        var next = Number(range.value) + Number(button.dataset.devStepDir) * (Number(range.step) || 0.01);
+        if (!Number.isFinite(next)) return;
+        chip.value = String(Number(next.toFixed(6)));
+        sendDevControl(chip);
+        chip.value = devFormat(next, Number(control.dataset.devDecimals) || 0);
+    }
+
+    function devControlMarkup(def) {
+        var id = escapeHudText(def.id);
+        var label = escapeHudText(def.label);
+        var decimals = def.kind === "color" || def.kind === "vector" ? 2 : devDecimals(def.step);
+        var attrs = ' data-dev-control="' + id + '" data-dev-kind="' + def.kind + '" data-dev-decimals="' + decimals + '" data-dev-search-text="' + escapeHudText((def.section + " " + def.label + " " + def.id).toLowerCase()) + '"';
+        var name = '<span class="sow-hud__dev-label">' + label + '</span>';
+        var reset = '<button type="button" class="sow-hud__dev-reset" data-command="reset_dev_config" data-dev-field="' + id + '" aria-label="Reset ' + label + '">' + DEV_RESET_ICON + '</button>';
+        var channel = function (text, index, min, max, step, tone, readout) {
+            return '<label class="sow-hud__dev-channel" data-tone="' + tone + '"><b>' + text + '</b>'
+                + '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" data-dev="' + id + '" data-dev-channel="' + index + '" aria-label="' + label + ' ' + text + '">'
+                + (readout ? '<output></output>' : '') + '</label>';
+        };
+        if (def.kind === "bool") {
+            return '<label class="sow-hud__dev-control sow-hud__dev-control--bool"' + attrs + '>' + name + reset + '<input class="sow-hud__switch" type="checkbox" data-dev="' + id + '"></label>';
+        }
+        var html = '<div class="sow-hud__dev-control"' + attrs + '><div class="sow-hud__dev-head">' + name;
+        if (def.kind === "number") {
+            var unit = { "s": "s", "screen px": "px" }[def.unit];
+            html += '<input class="sow-hud__dev-chip-input" type="text" inputmode="decimal" autocomplete="off" data-dev="' + id + '" aria-label="' + label + ' value">'
+                + (unit ? '<span class="sow-hud__dev-unit">' + unit + '</span>' : '') + reset + '</div>'
+                + '<div class="sow-hud__dev-slide"><button type="button" data-command="dev_step" data-dev-step-dir="-1" aria-label="Decrease ' + label + '">−</button>'
+                + '<input type="range" min="' + def.min + '" max="' + def.max + '" data-dev-min="' + def.min + '" data-dev-max="' + def.max + '" step="' + def.step + '" data-dev="' + id + '" aria-label="' + label + '">'
+                + '<button type="button" data-command="dev_step" data-dev-step-dir="1" aria-label="Increase ' + label + '">+</button></div>';
+        } else if (def.kind === "select") {
+            html += reset + '</div><div class="sow-hud__dev-seg" role="radiogroup" aria-label="' + label + '">' + (def.options || []).map(function (option) {
+                return '<label><input type="radio" name="dev-' + id + '" value="' + option.value + '" data-dev="' + id + '"><span>' + escapeHudText(option.label) + '</span></label>';
+            }).join("") + '</div>';
+        } else if (def.kind === "color") {
+            html += '<input class="sow-hud__dev-color-picker" type="color" data-dev-picker="' + id + '" data-dev-linear="' + (def.unit === "linear RGB" ? "1" : "0") + '" aria-label="' + label + ' color">' + reset + '</div>'
+                + channel("R", 0, def.min, def.max, def.step, "r") + channel("G", 1, def.min, def.max, def.step, "g") + channel("B", 2, def.min, def.max, def.step, "b")
+                + (def.alpha ? channel("A", 3, 0, 1, 0.01, "a") : "");
+        } else {
+            html += reset + '</div>' + channel("X", 0, def.min, def.max, def.step, "x", true) + channel("Y", 1, def.min, def.max, def.step, "x", true) + channel("Z", 2, def.min, def.max, def.step, "x", true);
+        }
+        return html + '</div>';
+    }
+
+    function buildDevPanel(devTools, sidebar, host) {
+        var bySection = Object.create(null);
+        devTools.schema.forEach(function (def) {
+            (bySection[def.section] || (bySection[def.section] = [])).push(def);
+        });
+        devControlIndex = Object.create(null);
+        var tabs = "";
+        var html = "";
+        devTools.groups.forEach(function (group) {
+            var groupName = escapeHudText(group.name);
+            tabs += '<button type="button" role="tab" data-command="dev_tab" data-dev-tab="' + groupName + '">' + groupName + '<i></i></button>';
+            group.sections.forEach(function (section, index) {
+                var defs = bySection[section.name];
+                if (!defs) return;
+                var sectionName = escapeHudText(section.name);
+                html += '<details class="sow-hud__dev-section" data-dev-group="' + groupName + '" data-dev-name="' + sectionName + '"' + (index === 0 ? " open" : "") + '><summary>'
+                    + '<span class="sow-hud__dev-section-name">' + sectionName + '</span>'
+                    + (section.preview ? '<button type="button" class="sow-hud__dev-play" data-command="dev_preview" data-dev-target="' + section.preview + '" aria-label="Preview ' + sectionName + '"></button>' : '')
+                    + '<button type="button" class="sow-hud__dev-section-reset" data-command="reset_dev_config" data-dev-section="' + sectionName + '">Reset</button></summary>'
+                    + defs.map(devControlMarkup).join("") + '</details>';
+            });
+        });
+        if (Array.isArray(devTools.perf) && devTools.perf.length) {
+            tabs += '<button type="button" role="tab" data-command="dev_tab" data-dev-tab="Perf">Perf<i></i></button>';
+        }
+        sidebar.querySelector("#sow-hud-dev-tabs").innerHTML = tabs;
+        host.innerHTML = html;
+        host.querySelectorAll("[data-dev-control]").forEach(function (control) { devControlIndex[control.dataset.devControl] = control; });
+    }
+
     function renderDevControls(devTools) {
-        var host = hudRefs && hudRefs.devSidebar && hudRefs.devSidebar.querySelector("#sow-hud-dev-controls");
-        if (!host || !Array.isArray(devTools.schema)) return;
-        var key = devTools.schema.map(function (def) { return [def.id, def.kind, def.section, def.label, def.min, def.max, def.step, def.unit].join(":"); }).join("|");
+        var sidebar = hudRefs && hudRefs.devSidebar;
+        var host = sidebar && sidebar.querySelector("#sow-hud-dev-controls");
+        if (!host || !Array.isArray(devTools.schema) || !Array.isArray(devTools.groups)) return;
+        var key = devTools.schema.map(function (def) { return [def.id, def.kind, def.section, def.label, def.min, def.max, def.step, def.unit].join(":"); }).join("|")
+            + "#" + JSON.stringify(devTools.groups) + (Array.isArray(devTools.perf) && devTools.perf.length ? "#perf" : "");
         if (key !== devToolsSchemaKey) {
-            var sections = Object.create(null);
-            devTools.schema.forEach(function (def) {
-                (sections[def.section] || (sections[def.section] = [])).push(def);
-            });
-            var html = '<div class="sow-hud__dev-row sow-hud__dev-bulk"><button type="button" class="sow-hud__dev-reset" data-command="dev_vfx_all" data-on="1">All On</button><button type="button" class="sow-hud__dev-reset" data-command="dev_vfx_all" data-on="0">All Off</button></div>'
-                + '<div class="sow-hud__dev-preview"><b>Effect preview</b><select data-dev-preview="target" aria-label="Preview effect">'
-                + '<option value="1">Attack flash</option><option value="2">Conquest</option><option value="3">Alliance celebration</option><option value="4">Expansion</option><option value="5">Combat haze</option><option value="6">Nuclear fallout</option><option value="7">Dialog highlight</option><option value="8">Screen alert</option>'
-                + '</select><div class="sow-hud__dev-preview-phase"><span>Phase</span><input type="range" min="0" max="1" step="0.01" data-dev-preview="phase"><input type="number" min="0" max="1" step="0.01" data-dev-preview="phase"></div><label><input type="checkbox" data-dev-preview="paused" checked> Pause</label><label><input type="checkbox" data-dev-preview="repeat" checked> Repeat</label><button type="button" class="sow-hud__dev-reset" data-command="replay_dev_vfx_preview">Replay</button></div>';
-            Object.keys(sections).forEach(function (section, sectionIndex) {
-                html += '<details class="sow-hud__dev-section"' + (sectionIndex === 0 ? " open" : "") + '><summary><b>' + escapeHudText(section) + '</b><button type="button" class="sow-hud__dev-reset" data-command="reset_dev_config" data-dev-section="' + escapeHudText(section) + '">Reset</button></summary>';
-                sections[section].forEach(function (def) {
-                    var id = escapeHudText(def.id);
-                    var label = escapeHudText(def.label);
-                    var unit = def.unit ? ' <small>' + escapeHudText(def.unit) + '</small>' : "";
-                    html += '<div class="sow-hud__dev-control" data-dev-control="' + id + '" data-dev-kind="' + def.kind + '" data-dev-search-text="' + escapeHudText((section + " " + def.label + " " + def.id).toLowerCase()) + '"><div class="sow-hud__dev-heading"><span class="sow-hud__dev-label">' + label + unit + '</span><button type="button" class="sow-hud__dev-reset" data-command="reset_dev_config" data-dev-field="' + id + '" aria-label="Reset ' + label + '">Reset</button></div><small class="sow-hud__dev-value" data-dev-meta="' + id + '"></small><div class="sow-hud__dev-inputs">';
-                    if (def.kind === "bool") {
-                        html += '<input type="checkbox" data-dev="' + id + '">';
-                    } else if (def.kind === "number") {
-                        html += '<div class="sow-hud__dev-number"><input type="range" min="' + def.min + '" max="' + def.max + '" data-dev-min="' + def.min + '" data-dev-max="' + def.max + '" step="' + def.step + '" data-dev="' + id + '"><input type="number" step="' + def.step + '" data-dev="' + id + '" aria-label="' + label + ' value"></div>';
-                    } else if (def.kind === "select") {
-                        html += '<select data-dev="' + id + '">' + (def.options || []).map(function (option) {
-                            return '<option value="' + option.value + '">' + escapeHudText(option.label) + '</option>';
-                        }).join("") + '</select>';
-                    } else if (def.kind === "color" || def.kind === "vector") {
-                        var linear = def.unit === "linear RGB";
-                        if (def.kind === "color") html += '<input class="sow-hud__dev-color-picker" type="color" data-dev-picker="' + id + '" data-dev-linear="' + (linear ? "1" : "0") + '" aria-label="' + label + ' color">';
-                        html += '<div class="sow-hud__dev-channels">' + (def.kind === "color" ? ["R", "G", "B", "A"] : ["X", "Y", "Z"]).map(function (channel, index) {
-                            var step = def.kind === "color" && index === 3 ? 0.01 : def.step;
-                            return '<label>' + channel + '<input type="number" step="' + step + '" data-dev="' + id + '" data-dev-channel="' + index + '" aria-label="' + label + ' ' + channel + '"></label>';
-                        }).join("") + '</div>';
-                    }
-                    html += '</div></div>';
-                });
-                html += '</details>';
-            });
-            html += '<button type="button" class="sow-hud__dev-reset" data-command="reset_dev_config">Reset all shader settings</button>';
-            host.innerHTML = html;
+            buildDevPanel(devTools, sidebar, host);
             devToolsSchemaKey = key;
         }
-        var search = hudRefs.devSidebar.querySelector("[data-dev-search]");
+        var perfHost = sidebar.querySelector("#sow-hud-dev-perf");
+        var perf = Array.isArray(devTools.perf) ? devTools.perf : [];
+        if (perfHost) {
+            if (perfHost.children.length !== perf.length || perf.some(function (item, index) { return perfHost.children[index].dataset.devPerf !== item.name; })) {
+                perfHost.innerHTML = perf.map(function (item) {
+                    var name = escapeHudText(item.name);
+                    return '<button type="button" data-command="dev_perf" data-dev-perf="' + name + '">' + name + '</button>';
+                }).join("");
+            }
+            perf.forEach(function (item, index) {
+                var button = perfHost.children[index];
+                if (button.dataset.state !== item.state) button.dataset.state = item.state;
+                button.setAttribute("aria-pressed", item.state === "on" ? "true" : item.state === "mixed" ? "mixed" : "false");
+            });
+        }
+        var tabs = Array.from(sidebar.querySelectorAll("[data-dev-tab]"));
+        if (!tabs.some(function (tab) { return tab.dataset.devTab === devTab; })) {
+            devTab = tabs.length ? tabs[0].dataset.devTab : "";
+            try { var saved = window.localStorage.getItem("sow_dev_tab"); if (saved && tabs.some(function (tab) { return tab.dataset.devTab === saved; })) devTab = saved; } catch (error) { /* storage unavailable */ }
+        }
+        var search = sidebar.querySelector("[data-dev-search]");
         var query = search ? search.value.trim().toLowerCase() : "";
-        host.querySelectorAll("[data-dev-control]").forEach(function (control) {
-            control.hidden = query !== "" && control.dataset.devSearchText.indexOf(query) < 0;
-        });
-        host.querySelectorAll(".sow-hud__dev-section").forEach(function (section) {
-            var visible = Array.from(section.querySelectorAll("[data-dev-control]")).some(function (control) { return !control.hidden; });
-            section.hidden = !visible;
-            if (query && visible) section.open = true;
+        var perfTab = devTab === "Perf" && query === "";
+        if (perfHost) perfHost.hidden = !perfTab;
+        tabs.forEach(function (tab) {
+            var selected = query === "" && tab.dataset.devTab === devTab;
+            tab.classList.toggle("is-active", selected);
+            tab.setAttribute("aria-selected", selected ? "true" : "false");
         });
         var config = devTools.config || {};
+        var dirtyBySection = Object.create(null);
         devTools.schema.forEach(function (def) {
-            var meta = host.querySelector('[data-dev-meta="' + def.id + '"]');
-            if (!meta) return;
+            var control = devControlIndex[def.id];
+            if (!control) return;
             var current = config[def.id];
+            var dirty = devIsDirty(def, current);
+            if (dirty) dirtyBySection[def.section] = (dirtyBySection[def.section] || 0) + 1;
+            var flag = dirty ? "true" : "false";
+            if (control.dataset.dirty !== flag) control.dataset.dirty = flag;
+            if (def.id.indexOf("water.") === 0 && /_limit$/.test(def.id)) {
+                control.dataset.warn = Number(current) > Number(config["water.depth_cap"]) ? "true" : "false";
+            }
             if (def.kind === "number") {
-                var control = host.querySelector('[data-dev-control="' + def.id + '"]');
-                var range = control && control.querySelector('input[type="range"]');
+                var range = control.querySelector('input[type="range"]');
                 var active = document.activeElement;
                 var editingControl = active && active.matches && active.matches("[data-dev]")
                     && active.closest("[data-dev-control]") === control;
@@ -1527,28 +1661,35 @@
                     range.max = String(value > max ? value + margin : max);
                 }
             }
-            var format = function (value) {
-                if (def.kind === "bool") return value ? "On" : "Off";
-                if (def.kind === "select") {
-                    var option = (def.options || []).find(function (item) { return Number(item.value) === Number(value); });
-                    return option ? option.label : String(value);
-                }
-                if (Array.isArray(value)) return "[" + value.map(function (part) { return Number(part).toFixed(3); }).join(", ") + "]";
-                return Number(value).toFixed(3);
-            };
-            var note = "Now " + format(current) + " · Default " + format(def.default);
-            if (def.id.indexOf("water.") === 0 && /_limit$/.test(def.id) && Number(current) > Number(config["water.depth_cap"])) {
-                note += " · above depth limit";
-            }
-            meta.textContent = note;
         });
+        var dirtyByGroup = Object.create(null);
+        host.querySelectorAll(".sow-hud__dev-section").forEach(function (section) {
+            var count = dirtyBySection[section.dataset.devName] || 0;
+            section.dataset.dirty = count ? "true" : "false";
+            if (count) dirtyByGroup[section.dataset.devGroup] = true;
+            var matches = 0;
+            section.querySelectorAll("[data-dev-control]").forEach(function (control) {
+                var hide = query !== "" && control.dataset.devSearchText.indexOf(query) < 0;
+                control.hidden = hide;
+                if (!hide) matches++;
+            });
+            section.hidden = query !== "" ? matches === 0 : perfTab || section.dataset.devGroup !== devTab;
+            if (query && matches) section.open = true;
+        });
+        dirtyByGroup.Perf = perf.some(function (item) { return item.state !== "on"; });
+        tabs.forEach(function (tab) { tab.dataset.dirty = dirtyByGroup[tab.dataset.devTab] ? "true" : "false"; });
         var preview = devTools.preview || {};
-        host.querySelectorAll("[data-dev-preview]").forEach(function (input) {
+        var transport = sidebar.querySelector("#sow-hud-dev-transport");
+        if (transport) transport.hidden = !preview.active;
+        sidebar.querySelectorAll("[data-dev-preview]").forEach(function (input) {
             if (document.activeElement === input) return;
             var value = preview[input.dataset.devPreview];
             if (value == null) return;
             if (input.type === "checkbox") input.checked = Boolean(value);
             else input.value = value;
+        });
+        sidebar.querySelectorAll(".sow-hud__dev-play").forEach(function (button) {
+            button.classList.toggle("is-playing", Boolean(preview.active) && Number(button.dataset.devTarget) === preview.target);
         });
     }
 
@@ -1596,93 +1737,6 @@
             }
         });
         return buildingMetricMarkup(deltas);
-    }
-
-    function buildingPlacementLayout(placement, panelSize, area, docked) {
-        var gap = 8, button = 48;
-        var halfW = Math.max(0, Number(placement.half_width) || Number(placement.half_height) || 0);
-        var halfH = Math.max(0, Number(placement.half_height) || 0);
-        var x = Number(placement.x), y = Number(placement.y);
-        var base = { left: x - halfW, right: x + halfW, top: y - halfH, bottom: y + halfH };
-        var moves = {
-            up: { left: x - button / 2, top: base.top - gap - button },
-            right: { left: base.right + gap, top: y - button / 2 },
-            down: { left: x - button / 2, top: base.bottom + gap },
-            left: { left: base.left - gap - button, top: y - button / 2 }
-        };
-        function fits(rect, width, height) {
-            return rect.left >= area.left && rect.top >= area.top
-                && rect.left + width <= area.right && rect.top + height <= area.bottom;
-        }
-        var width = Math.min(panelSize.width, area.right - area.left);
-        var height = panelSize.height;
-        var left = Math.max(area.left, Math.min(x - width / 2, area.right - width));
-        var top = base.top - button - gap * 2 - height;
-        if (!fits({ left: left, top: top }, width, height)) top = base.bottom + button + gap * 2;
-        var floating = !docked && fits({ left: left, top: top }, width, height)
-            && Object.keys(moves).every(function (direction) { return fits(moves[direction], button, button); });
-        if (!floating) {
-            top = Math.max(area.top, area.bottom - height);
-            var overlapsBase = left < base.right + gap && left + width > base.left - gap
-                && top < base.bottom + gap && top + height > base.top - gap;
-            if (overlapsBase) {
-                if (base.top - gap - height >= area.top) top = base.top - gap - height;
-                else if (base.bottom + gap + height <= area.bottom) top = base.bottom + gap;
-                else if (base.left - gap - width >= area.left) left = base.left - gap - width;
-                else if (base.right + gap + width <= area.right) left = base.right + gap;
-            }
-        }
-        return { docked: !floating, left: left, top: top, moves: moves };
-    }
-
-    function renderBuildingPlacement(placement) {
-        var panel = hudRefs.placement;
-        if (!panel) return;
-        panel.hidden = !placement;
-        if (!placement) return;
-        panel.dataset.siteValid = placement.site_valid ? "true" : "false";
-        panel.dataset.affordable = placement.affordable === false ? "false" : "true";
-        hudRefs.placementConfirm.disabled = !placement.can_confirm;
-        hudRefs.placementCancel.disabled = Boolean(placement.pending);
-        hudRefs.placementInfo.textContent = SOW_t("hud.build_details", {
-            cost: Math.ceil(Number(placement.cost) || 0).toLocaleString(),
-            seconds: Math.ceil(Number(placement.seconds) || 0)
-        });
-        var reason = placement.reason;
-        hudRefs.placementReason.textContent = placement.pending ? SOW_t("hud.build_pending")
-            : reason && reason.key ? SOW_t(reason.key, reason.values || {}) : SOW_t("hud.build_placement_help");
-        var area = { left: 8 + hudSafeArea[3], top: 8 + hudSafeArea[0],
-            right: window.innerWidth - 8 - hudSafeArea[1], bottom: window.innerHeight - 8 - hudSafeArea[2] };
-        // Existing HUD surfaces define the usable map, including landscape safe areas.
-        [hudRefs.topbar, hudRefs.nameplate, hudRefs.dock, hudRefs.railWrap, hudRefs.rightRail].forEach(function (element) {
-            if (!element || element.hidden || !element.getBoundingClientRect) return;
-            var rect = element.getBoundingClientRect();
-            if (!rect.width || !rect.height) return;
-            if (rect.width > window.innerWidth * 0.5) {
-                if (rect.top < window.innerHeight / 3) area.top = Math.max(area.top, rect.bottom + 8);
-                else if (rect.bottom > window.innerHeight * 2 / 3) area.bottom = Math.min(area.bottom, rect.top - 8);
-            } else if (rect.height > window.innerHeight * 0.4) {
-                if (rect.left < window.innerWidth / 4) area.left = Math.max(area.left, rect.right + 8);
-                else if (rect.right > window.innerWidth * 3 / 4) area.right = Math.min(area.right, rect.left - 8);
-            }
-        });
-        panel.dataset.layout = "floating";
-        panel.style.maxWidth = Math.max(48, area.right - area.left) + "px";
-        var layout = buildingPlacementLayout(placement,
-            { width: panel.offsetWidth, height: panel.offsetHeight }, area, false);
-        if (layout.docked) {
-            panel.dataset.layout = "docked";
-            layout = buildingPlacementLayout(placement,
-                { width: panel.offsetWidth, height: panel.offsetHeight }, area, true);
-        }
-        panel.style.left = layout.left + "px";
-        panel.style.top = layout.top + "px";
-        hudRefs.placementMoves.forEach(function (button) {
-            var direction = button.dataset.direction;
-            button.disabled = Boolean(placement.pending) || !placement.can_nudge || !placement.can_nudge[direction];
-            button.style.left = layout.moves[direction].left + "px";
-            button.style.top = layout.moves[direction].top + "px";
-        });
     }
 
     function positionBuildingCard(mapMenu) {
@@ -1916,6 +1970,11 @@
         emblem.textContent = "";
         if (!presentation) return;
 
+        if (presentation.kind === "wilderness") {
+            emblem.innerHTML = statusIcon("wilderness", "sow-hud__avatar-badge");
+            emblem.hidden = false;
+            return;
+        }
         if (presentation.kind === "emblem" && typeof presentation.symbol === "string" && presentation.symbol) {
             emblem.textContent = presentation.symbol;
             emblem.hidden = false;
@@ -2058,7 +2117,6 @@
             : compactHudDensity(width, height);
         compactHudDensityValue = density;
         writeHudDensity(hudRoot, density, false);
-        writeHudDensity(hudDevLayer, density, false);
         writeHudDensity(document.getElementById("sow-story"), density, true);
         if (density < 1) {
             var operationCap = Math.max(0, height * 0.2 / density).toFixed(1) + "px";
@@ -2074,7 +2132,6 @@
     function clearCompactHudDensity() {
         compactHudDensityValue = null;
         writeHudDensity(hudRoot, 1, false);
-        writeHudDensity(hudDevLayer, 1, false);
         writeHudDensity(document.getElementById("sow-story"), 1, true);
         if (hudRoot && hudRoot.style.getPropertyValue("--sow-hud-layout-operations-max-height")) {
             hudRoot.style.removeProperty("--sow-hud-layout-operations-max-height");
@@ -2677,10 +2734,16 @@
                 if (value == null) return;
                 var control = input.closest("[data-dev-control]");
                 if (!control) return;
+                var decimals = Number(control.dataset.devDecimals) || 0;
                 if (control.dataset.devKind === "bool") input.checked = Boolean(value);
+                else if (input.type === "radio") input.checked = Number(input.value) === Number(value);
                 else if (control.dataset.devKind === "color" || control.dataset.devKind === "vector") {
-                    if (input.hasAttribute("data-dev-channel")) input.value = value[Number(input.dataset.devChannel)];
-                } else input.value = value;
+                    if (input.hasAttribute("data-dev-channel")) {
+                        var part = value[Number(input.dataset.devChannel)];
+                        input.value = input.type === "range" ? part : devFormat(part, decimals);
+                        devReadout(input, decimals);
+                    }
+                } else input.value = input.type === "range" ? value : devFormat(value, decimals);
             });
             hudRefs.devSidebar.querySelectorAll("[data-dev-picker]").forEach(function (picker) {
                 var value = devTools.config[picker.dataset.devPicker];
@@ -3012,7 +3075,7 @@
                 surrenderMessage = messages.length ? messages[Math.floor(Math.random() * messages.length)] : "";
             }
             if (tutorialActive) surrenderMessage = null;
-            if (hudRefs.surrenderBanner) hudRefs.surrenderBanner.textContent = tutorialActive
+            if (hudRefs.surrenderTitle) hudRefs.surrenderTitle.textContent = tutorialActive
                 ? SOW_t("endgame.leave_tutorial")
                 : SOW_t("endgame.leave_match");
             if (hudRefs.surrenderDesc) hudRefs.surrenderDesc.textContent = tutorialActive
@@ -3068,7 +3131,6 @@
             }
         }
         var mapMenuOpen = renderMapMenu(hud.map_menu);
-        renderBuildingPlacement(hud.building_placement);
         renderBuildingCard(hud.map_menu, hud.gold);
         var panelStates = { toggle_leaderboard: leaderboardOpen, toggle_inbox: inboxOpen, toggle_settings: settingsOpen, toggle_dev_sidebar: devSidebarOpen };
         hudRefs.panelButtons.forEach(function (button) {
@@ -3105,10 +3167,6 @@
                 : Number(zoom.current) >= Number(zoom.ceiling) - 0.02;
         }
         hudRoot.addEventListener("pointerdown", function (event) {
-            if (event.target.closest && event.target.closest("#sow-hud-placement")) {
-                event.stopPropagation();
-                return;
-            }
             var button = event.target.closest && event.target.closest('[data-command="zoom_in"], [data-command="zoom_out"]');
             if (!button || button.disabled || event.button !== 0) return;
             stopZoomHold();
@@ -3204,9 +3262,32 @@
                     section: btn.dataset.devSection || null,
                     field: btn.dataset.devField || null
                 });
-            } else if (cmd === "replay_dev_vfx_preview") {
+            } else if (cmd === "dev_step") {
+                if (event.detail === 0) devStepOnce(btn);
+            } else if (cmd === "dev_tab") {
+                devTab = btn.dataset.devTab;
+                try { window.localStorage.setItem("sow_dev_tab", devTab); } catch (error) { /* storage unavailable */ }
+                var devSearch = hudRefs.devSidebar.querySelector("[data-dev-search]");
+                if (devSearch) devSearch.value = "";
+                renderDevControls(hudState && hudState.hud && hudState.hud.dev_tools || {});
+                hudRefs.devSidebar.querySelector(".sow-hud__dev-body").scrollTop = 0;
+            } else if (cmd === "dev_menu") {
+                setDevMenu(hudRefs.devSidebar.querySelector("#sow-hud-dev-menu").hidden);
+            } else if (cmd === "dev_preview") {
+                send("set_dev_vfx_preview", { target: Number(btn.dataset.devTarget) });
                 send("replay_dev_vfx_preview");
+            } else if (cmd === "dev_reset_all") {
+                if (devResetTimer) {
+                    setDevMenu(false);
+                    send("reset_dev_config", { section: null, field: null });
+                } else {
+                    btn.textContent = "Tap again to reset all";
+                    devResetTimer = window.setTimeout(disarmDevReset, 3000);
+                }
+            } else if (cmd === "dev_perf") {
+                send("dev_vfx_group", { group: btn.dataset.devPerf, on: btn.dataset.state === "off" });
             } else if (cmd === "dev_vfx_all") {
+                setDevMenu(false);
                 send("dev_vfx_all", { on: btn.dataset.on === "1" });
             } else if (cmd === "clear_emote") {
                 pinEmote = false;
@@ -3295,16 +3376,6 @@
                 send("select_warship");
             } else if (cmd === "select_nuke") {
                 send("select_nuke");
-            } else if (cmd === "nudge_building_placement") {
-                var placement = hudState && hudState.hud && hudState.hud.building_placement;
-                var direction = btn.dataset.direction;
-                if (placement && !placement.pending && placement.can_nudge && placement.can_nudge[direction]) {
-                    send("nudge_building_placement", { direction: direction });
-                }
-            } else if (cmd === "confirm_building_placement") {
-                if (hudState && hudState.hud && hudState.hud.building_placement && hudState.hud.building_placement.can_confirm) send("confirm_building_placement");
-            } else if (cmd === "cancel_building_mode") {
-                send("cancel_building_mode");
             } else if (cmd === "close_building_card") {
                 send("close_map_context_menu");
             } else if (cmd === "confirm_endgame_leave") {
@@ -3355,23 +3426,6 @@
         window.SOW_I18N_READY.then(function () { emoteTextKey = ""; syncEmoteTexts(hudState && hudState.hud); });
     }
     if (hudRoot) hudRoot.addEventListener("keydown", function (event) {
-        if (hudRefs && hudRefs.placement && !hudRefs.placement.hidden && hudRefs.placement.contains(event.target)) {
-            var directions = { ArrowUp: "up", ArrowRight: "right", ArrowDown: "down", ArrowLeft: "left" };
-            var direction = directions[event.key];
-            if (direction || event.key === "Escape") {
-                event.preventDefault();
-                event.stopPropagation();
-                var placement = hudState && hudState.hud && hudState.hud.building_placement;
-                if (placement && !placement.pending) {
-                    if (direction && placement.can_nudge && placement.can_nudge[direction]) send("nudge_building_placement", { direction: direction });
-                    else if (!direction) send("cancel_building_mode");
-                }
-                return;
-            }
-            // Enter and Space activate the focused button exactly once.
-            if (event.key === "Enter" || event.key === " ") event.stopPropagation();
-        }
-
         if (hudRefs && hudRefs.betrayal && !hudRefs.betrayal.classList.contains("hidden")) {
             if (event.key === "Escape") {
                 event.preventDefault();

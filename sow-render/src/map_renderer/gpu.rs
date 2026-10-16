@@ -13,7 +13,6 @@ struct MapShaderData {
     player_skin_styles: PlayerSkinStyles,
     terrain_texture: gpu::TextureView,
     owner_texture: gpu::TextureView,
-    placement_texture: gpu::TextureView,
 }
 
 pub struct MapRenderer {
@@ -23,11 +22,6 @@ pub struct MapRenderer {
     pub owner_texture: gpu::Texture,
     pub owner_view: gpu::TextureView,
     pub owner_buffer: gpu::Buffer,
-    pub placement_texture: gpu::Texture,
-    placement_view: gpu::TextureView,
-    placement_buffer: gpu::Buffer,
-    placement_bounds: [u32; 4],
-    placement_revision: Option<u64>,
     pub pipeline: gpu::RenderPipeline,
     pub width: u32,
     pub height: u32,
@@ -165,39 +159,6 @@ impl MapRenderer {
             memory: gpu::Memory::Upload,
         });
 
-        let placement_texture = context.create_texture(gpu::TextureDesc {
-            name: "building_placement",
-            format: gpu::TextureFormat::R32Uint,
-            size: gpu::Extent {
-                width,
-                height,
-                depth: 1,
-            },
-            dimension: gpu::TextureDimension::D2,
-            array_layer_count: 1,
-            mip_level_count: 1,
-            sample_count: 1,
-            usage: gpu::TextureUsage::COPY | gpu::TextureUsage::RESOURCE,
-            external: None,
-        });
-        let placement_view = context.create_texture_view(
-            placement_texture,
-            gpu::TextureViewDesc {
-                name: "building_placement_view",
-                format: gpu::TextureFormat::R32Uint,
-                dimension: gpu::ViewDimension::D2,
-                subresources: &gpu::TextureSubresources::default(),
-            },
-        );
-        let placement_buffer = context.create_buffer(gpu::BufferDesc {
-            name: "building_placement_raw",
-            size: (owner_bytes_per_row * height) as u64,
-            memory: gpu::Memory::Upload,
-        });
-        unsafe {
-            std::ptr::write_bytes(placement_buffer.data(), 0, placement_buffer.size() as usize);
-        }
-
         // --- Shader & pipeline ---
         let source =
             crate::shader_params::prepare_shader("MAP_", include_str!("../shaders/map.wgsl"));
@@ -258,11 +219,6 @@ impl MapRenderer {
             owner_texture,
             owner_view,
             owner_buffer,
-            placement_texture,
-            placement_view,
-            placement_buffer,
-            placement_bounds: [0; 4],
-            placement_revision: None,
             pipeline,
             width,
             height,
@@ -282,74 +238,6 @@ impl MapRenderer {
             decay_accumulator: 0.0,
             fade_decay_accumulator: 0.0,
         }
-    }
-
-    /// Reuse the placement texture for visible whole-foundation destinations.
-    /// Cached revisions avoid uploads when only the preview or gold changes.
-    pub fn update_building_placement(
-        &mut self,
-        encoder: &mut gpu::CommandEncoder,
-        context: &gpu::Context,
-        bounds: [u32; 4],
-        cells: &[u32],
-        revision: u64,
-    ) {
-        if self.placement_revision == Some(revision) {
-            return;
-        }
-        let stride = self.owner_bytes_per_row / 4;
-        let values = unsafe {
-            std::slice::from_raw_parts_mut(
-                self.placement_buffer.data() as *mut u32,
-                (stride * self.height) as usize,
-            )
-        };
-        let first = if self.placement_revision.is_none() {
-            0
-        } else {
-            self.placement_bounds[1].min(bounds[1])
-        };
-        let last = if self.placement_revision.is_none() {
-            self.height
-        } else {
-            self.placement_bounds[3].max(bounds[3])
-        };
-        for y in self.placement_bounds[1]..self.placement_bounds[3] {
-            for x in self.placement_bounds[0]..self.placement_bounds[2] {
-                values[(y * stride + x) as usize] = 0;
-            }
-        }
-        let width = bounds[2].saturating_sub(bounds[0]);
-        assert_eq!(
-            cells.len(),
-            (width * bounds[3].saturating_sub(bounds[1])) as usize
-        );
-        for y in bounds[1]..bounds[3] {
-            let src = ((y - bounds[1]) * width) as usize;
-            let dst = (y * stride + bounds[0]) as usize;
-            values[dst..dst + width as usize].copy_from_slice(&cells[src..src + width as usize]);
-        }
-        if last > first {
-            let offset = first as u64 * self.owner_bytes_per_row as u64;
-            let size = (last - first) as u64 * self.owner_bytes_per_row as u64;
-            context.sync_buffer(self.placement_buffer, offset, size);
-            let mut target: gpu::TexturePiece = self.placement_texture.into();
-            target.origin = [0, first, 0];
-            encoder
-                .transfer("building_placement_upload")
-                .copy_buffer_to_texture(
-                    self.placement_buffer.at(offset),
-                    self.owner_bytes_per_row,
-                    target,
-                    gpu::Extent {
-                        width: self.width,
-                        height: last - first,
-                        depth: 1,
-                    },
-                );
-        }
-        self.placement_bounds = bounds;
-        self.placement_revision = Some(revision);
     }
 
     /// Upload static terrain texture once. Call after creating the command encoder.
@@ -767,7 +655,6 @@ impl MapRenderer {
                 player_skin_styles,
                 terrain_texture: self.terrain_view,
                 owner_texture: self.owner_view,
-                placement_texture: self.placement_view,
             },
         );
         rc.draw(0, 3, 0, 1);
@@ -780,9 +667,6 @@ impl MapRenderer {
         render_ctx.context.destroy_texture_view(self.owner_view);
         render_ctx.context.destroy_texture(self.owner_texture);
         render_ctx.context.destroy_buffer(self.owner_buffer);
-        render_ctx.context.destroy_texture_view(self.placement_view);
-        render_ctx.context.destroy_texture(self.placement_texture);
-        render_ctx.context.destroy_buffer(self.placement_buffer);
         render_ctx
             .context
             .destroy_render_pipeline(&mut self.pipeline);

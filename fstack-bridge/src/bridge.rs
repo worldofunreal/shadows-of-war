@@ -24,7 +24,6 @@ use crate::ffi::{
 };
 use bytes::{Buf, BytesMut};
 use crossbeam_queue::ArrayQueue;
-use futures_util::task::AtomicWaker;
 use libc::{c_int, c_void, sockaddr_in, socklen_t, timespec, FIONBIO};
 use std::collections::{HashMap, VecDeque};
 use std::io;
@@ -33,8 +32,8 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::pin::Pin;
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, OnceLock};
-use std::task::{Context, Poll};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::task::{Context, Poll, Waker};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{oneshot, Notify};
@@ -302,7 +301,28 @@ static POOL: OnceLock<Arc<BufferPool>> = OnceLock::new();
 static NOTIFY: OnceLock<Arc<Notify>> = OnceLock::new();
 /// Woken by the driver after every TX drain; async writers park here when the
 /// TX ring is full (backpressure for the AsyncWrite side).
-static TX_SPACE: AtomicWaker = AtomicWaker::new();
+static TX_SPACE: TxSpace = TxSpace(Mutex::new(Vec::new()));
+
+/// Every parked writer keeps its own waker. One shared slot let concurrent
+/// connections replace each other's registration, so the loser slept until its
+/// write timeout while its turns and Pongs queued up behind it.
+struct TxSpace(Mutex<Vec<Waker>>);
+
+impl TxSpace {
+    fn register(&self, waker: &Waker) {
+        let mut wakers = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        if !wakers.iter().any(|parked| parked.will_wake(waker)) {
+            wakers.push(waker.clone());
+        }
+    }
+
+    fn wake(&self) {
+        let wakers = mem::take(&mut *self.0.lock().unwrap_or_else(PoisonError::into_inner));
+        for waker in wakers {
+            waker.wake();
+        }
+    }
+}
 
 /// RX deliveries that could not be pushed (ring full) — retried next iteration.
 static mut PENDING_RX: VecDeque<Ev> = VecDeque::new();

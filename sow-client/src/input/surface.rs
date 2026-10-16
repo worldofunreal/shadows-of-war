@@ -101,8 +101,7 @@ impl SowApp {
         }
 
         crate::viewport::Viewport::from_configured(self, sf).sync_to_app(self);
-        let zmin = self.zoom_floor();
-        let zmax = camera_zoom_upper_bound(self.input.screen_w, self.input.screen_h).max(zmin);
+        let (zmin, zmax) = self.camera_zoom_bounds();
         self.input.camera_zoom = self.input.camera_zoom.clamp(zmin, zmax);
         self.input.target_zoom = self.input.target_zoom.clamp(zmin, zmax);
         self.clamp_camera_to_map();
@@ -125,11 +124,18 @@ impl SowApp {
         )
     }
 
+    fn camera_zoom_bounds(&self) -> (f32, f32) {
+        let min = self.zoom_floor();
+        (
+            min,
+            camera_zoom_upper_bound(self.input.screen_w, self.input.screen_h).max(min),
+        )
+    }
+
     pub(crate) fn process_camera_zoom(&mut self, zoom_factor: f32, cx: f32, cy: f32) {
         let old_zoom = self.input.camera_zoom;
-        let zmin = self.zoom_floor();
+        let (zmin, zmax) = self.camera_zoom_bounds();
         self.input.camera_zoom *= zoom_factor;
-        let zmax = camera_zoom_upper_bound(self.input.screen_w, self.input.screen_h).max(zmin);
         self.input.camera_zoom = self.input.camera_zoom.clamp(zmin, zmax);
         self.input.target_zoom = self.input.camera_zoom;
         let map_x = (cx - self.input.camera_x) / old_zoom;
@@ -149,8 +155,7 @@ impl SowApp {
         if self.sim.map_w == 0 || self.sim.map_h == 0 {
             return;
         }
-        let zmin = self.zoom_floor();
-        let zmax = camera_zoom_upper_bound(self.input.screen_w, self.input.screen_h).max(zmin);
+        let (zmin, zmax) = self.camera_zoom_bounds();
         self.input.camera_zoom = self.input.camera_zoom.clamp(zmin, zmax);
         self.input.target_zoom = self.input.target_zoom.clamp(zmin, zmax);
         if self.ui.app.settings_state.free_zoom_out {

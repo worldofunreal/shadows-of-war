@@ -1354,3 +1354,9 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 .sow-purchase-modal.is-reduced-motion .sow-purchase-modal__spend i {
         animation: none;
 }
+
+/* Line icons shared with the HUD (menuIcon). */
+.sow-menu__inline-icon { display: inline-block; width: 1.1em; height: 1.1em; vertical-align: -0.2em; }
+.sow-menu__team-dot { display: inline-block; width: 0.7em; height: 0.7em; margin-inline-end: 0.4em; border-radius: 50%; vertical-align: 0; }
+.sow-menu__team-dot--red { background: rgb(239, 68, 68); }
+.sow-menu__team-dot--blue { background: rgb(59, 130, 246); }

@@ -620,10 +620,10 @@ mod tests {
                     assert!(matches!(
                         game.state.events.last(),
                         Some(crate::game::GameEvent::PlayerEliminated {
-                            gold_bounty: 37,
+                            gold_bounty: 75,
                             assists,
                             ..
-                        }) if assists == &vec![(3, 38)]
+                        }) if assists == &vec![(3, 75)]
                     ));
                 }
                 if matches!(tick, 300 | 1_200 | 3_600 | 6_000) {

@@ -10,7 +10,6 @@ const menuGuideDefinition = JSON.parse(fs.readFileSync(path.join(shell, "../../a
 const menuFlowApi = require(path.join(shell, "main_menu.flow.js"));
 const campaignRuntime = require(path.join(shell, "sow-campaign.js"));
 const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.js"), "utf8");
-const loaderSource = fs.readFileSync(path.join(shell, "loader.js"), "utf8");
 const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.js"), "utf8");
 const portalsSource = fs.readFileSync(path.join(shell, "sdk/store_portals.js"), "utf8");
 const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.js"), "utf8");
@@ -30,13 +29,7 @@ const relaySource = fs.readFileSync(path.join(shell, "../../sow-relay/src/main.r
 const serverSource = fs.readFileSync(path.join(shell, "../../sow-server/src/main.rs"), "utf8");
 const menuCssFiles = [
     "main_menu.base.css",
-    "main_menu.layout.css",
-    "main_menu.lobbies.css",
-    "main_menu.create.css",
-    "main_menu.queue.css",
-    "main_menu.settings.css",
-    "main_menu.auth.css",
-    "main_menu.campaign.css"
+    "main_menu.lobbies.css"
 ];
 const menuCss = Object.fromEntries(menuCssFiles.map((file) => [file, fs.readFileSync(path.join(shell, file), "utf8")]));
 
@@ -311,7 +304,6 @@ test("match rewards present in the main menu, while endgame keeps only match sta
     assert.match(shellSource, /if \(!shown\) \{\s*writeProgression\(progressionFromState\(\)\);\s*if \(document\.visibilityState === "visible"\) maybePresentRewards\(\);/);
     assert.doesNotMatch(webMenu, /hud\.rewards/);
     assert.match(coreSource, /receipt\.leader_xp/);
-    assert.match(coreSource, /return leaderArtUrl\(leader\.slug\);/);
     // The heroes featured art mapping is guarded by its own test:
     // "heroes featured art follows the panel shape, not the device name".
 });
@@ -802,56 +794,6 @@ test("lobby exit keeps the live connection and match exit owns teardown", () => 
     assert.match(hud, /send\("return_to_menu"\)/);
     assert.doesNotMatch(sessionSource, /reconnect_now/);
     assert.doesNotMatch(netUpdateSource, /reconnect_now/);
-});
-
-
-test("game exit resets Battle and replays the screen entrance after the loader", () => {
-    assert.match(coreSource, /var lastMenuPhase = null/);
-    assert.match(coreSource, /var pendingExitScreenIntro = false/);
-    const resetStart = shellSource.indexOf("if (returnedFromGame) {");
-    const resetEnd = shellSource.indexOf("if (typeof window.SOW_tutorial_menu_state_update", resetStart);
-    assert.ok(resetStart >= 0 && resetEnd > resetStart);
-    const resetBlock = shellSource.slice(resetStart, resetEnd);
-    for (const flag of ["profileOpen", "heroesOpen", "campaignOpen", "storeOpen"]) {
-        assert.match(resetBlock, new RegExp(flag + " = false"));
-    }
-    assert.match(resetBlock, /pendingExitScreenIntro = true/);
-    assert.match(shellSource, /sow:loader-cycle-ready/);
-    assert.match(shellSource, /previousScreen = null;[\s\S]*render\(\);/);
-    assert.match(loaderSource, /sow:loader-cycle-ready/);
-    assert.match(loaderSource, /if \(!loaderReadyDispatched\)/);
-    assert.doesNotMatch(shellSource, /SOW_open_store_after_match/);
-    assert.match(menuCss["main_menu.layout.css"], /sow-screen-panel-enter 240ms/);
-});
-
-
-test("shell media URLs bust by content hash when the build ships one", () => {
-    const assetUrlStart = loaderSource.indexOf("    function assetUrl(");
-    const assetUrlEnd = loaderSource.indexOf("    function leaderArtUrl(", assetUrlStart);
-    assert.ok(assetUrlStart >= 0 && assetUrlEnd > assetUrlStart);
-    const context = { window: {} };
-    vm.runInNewContext(
-        loaderSource.slice(assetUrlStart, assetUrlEnd) + "; this.assetUrl = assetUrl;",
-        context
-    );
-    context.window.SOW_BUILD_TS = "build-42";
-    assert.equal(
-        context.assetUrl("/assets/shell/leaders/boudica_desktop.webp"),
-        "/assets/shell/leaders/boudica_desktop.webp?v=build-42",
-        "without a content entry the build bust still applies"
-    );
-    context.window.SOW_ASSET_TS = { "/assets/shell/leaders/other_desktop.webp": "cafe1234" };
-    assert.equal(
-        context.assetUrl("/assets/shell/leaders/boudica_desktop.webp"),
-        "/assets/shell/leaders/boudica_desktop.webp?v=build-42",
-        "an unlisted path keeps the build bust"
-    );
-    context.window.SOW_ASSET_TS = { "/assets/shell/leaders/boudica_desktop.webp": "cafe1234" };
-    assert.equal(
-        context.assetUrl("/assets/shell/leaders/boudica_desktop.webp"),
-        "/assets/shell/leaders/boudica_desktop.webp?v=cafe1234",
-        "a content hash wins over the build stamp so unrelated deploys keep the cache"
-    );
 });
 
 

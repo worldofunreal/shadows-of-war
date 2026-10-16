@@ -66,7 +66,6 @@ impl SowApp {
         self.ui.app.main_menu_state.wait_timer_secs = 0.0;
         self.ui.app.main_menu_state.cached_map = None;
         self.ui.app.main_menu_state.cached_map_key = None;
-        self.net.pending_lobby_rejoin = false;
         self.ui.last_projectiles.clear();
         self.ui.last_projectile_snapshot_tick = None;
         self.ui.detonation_scratch.clear();

@@ -137,3 +137,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { border-color
 .sample-transfer label { display: grid; gap: 3px; }
 .sample-transfer input { width: 100%; min-width: 0; padding: 4px; background: #080d10; color: #fff; }
 .sample-transfer button { padding: 6px; background: #26302f; color: #fff; }
+
+.sample-placement{position:absolute;left:clamp(84px,60%,calc(100% - 84px));top:50%;transform:translate(-50%,-50%);width:152px;height:152px;pointer-events:none}
+.sample-placement-building{position:absolute;left:52px;top:52px;width:48px;height:48px;display:grid;place-items:center;background:#287a3966;border:1px solid #9cffaa;color:white;font-size:32px}
+.sample-placement button{position:absolute;width:48px;height:48px;padding:0;pointer-events:auto;touch-action:manipulation;font-size:28px;color:white;background:#287a39}
+.sample-placement [data-direction=up]{left:52px;top:0}.sample-placement [data-direction=right]{left:104px;top:52px}.sample-placement [data-direction=down]{left:52px;top:104px}.sample-placement [data-direction=left]{left:0;top:52px}
+.sample-placement [data-command=cancel_building_mode]{left:0;top:104px;background:#a83832}.sample-placement [data-command=confirm_building_placement]{left:104px;top:104px}

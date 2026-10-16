@@ -1817,7 +1817,7 @@ pub(crate) mod reward_exit_tests {
     #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
         let saved, currentProfile, completedProfile, releaseReward, tutorialRequests, sockets, exitRequests, exitReady, gameLeaveWrites, gameCloseCode, gameErrors;
         export function setupTutorialExit(initial, completed) {
-            const keys = ['Window', 'window', 'localStorage', 'WebSocket', 'fetch',
+            const keys = ['Window', 'window', 'devicePixelRatio', 'localStorage', 'WebSocket', 'fetch',
                 'matchMedia', 'SOW_MAPS_URL', 'SOW_ASSETS_URL', 'SOW_DATABASE_URL', 'SOW_WS_URL', 'SOW_BUILD_VERSION'];
             saved = keys.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]);
             globalThis.Window = class { static [Symbol.hasInstance](value) { return value === globalThis; } };
@@ -1831,7 +1831,8 @@ pub(crate) mod reward_exit_tests {
                 send() {}
                 close() { this.readyState = 3; this.onclose?.(); }
             };
-            Object.assign(globalThis, { SOW_MAPS_URL: 'https://journey.invalid/maps',
+            Object.assign(globalThis, { devicePixelRatio: 1,
+                SOW_MAPS_URL: 'https://journey.invalid/maps',
                 SOW_ASSETS_URL: 'https://journey.invalid/assets', SOW_DATABASE_URL: 'https://journey.invalid/api',
                 SOW_WS_URL: 'wss://journey.invalid/ws/' });
             currentProfile = initial; completedProfile = completed; tutorialRequests = 0;

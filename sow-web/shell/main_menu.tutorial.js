@@ -244,8 +244,6 @@
                         current: Math.ceil(distance), target: Math.ceil(targetRadius)
                     }) };
                 }
-            } else if (step.trigger && step.trigger.type === "ui" && step.trigger.action === "cancel_building_mode") {
-                context.hintOverride = tr("tutorial.building_mode_exit_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint");
             }
             if (step.guide.gesture === "tap" && step.guide.show_label !== false) {
                 var expansionResumed = step.paused_action === "expand_once_then_resume"
@@ -263,10 +261,6 @@
                 context.hintOverride = tr(hintKey);
                 if (step.guide.gesture === "hover") context.gestureHint = context.hintOverride;
             }
-        }
-        if (step && step.paused_action === "build_until_started" && hud && hud.building_placement) {
-            context.hintOverride = tr("hud.build_placement_help");
-            if (hud.building_placement.can_confirm) context.gestureLabel = tr("hud.build_confirm");
         }
         if (step && step.type === "objective") {
             var guideAction = step.guide ? window.SOWCampaign.guideAction(step) : "";
@@ -515,9 +509,9 @@
     }
 
     function placementGuideView(model, hud) {
-        if (!model || !model.step || model.step.paused_action !== "build_until_started" || !hud || !hud.building_placement || !hud.building_placement.can_confirm) return model;
+        if (!model || !model.step || model.step.paused_action !== "build_until_started" || !hud || !hud.building_placement || hud.building_placement.pending || !hud.building_placement.can_confirm) return model;
         var step = Object.assign({}, model.step, {
-            guide: { kind: "ui", target: "confirm_building_placement", gesture: "tap" }
+            guide: { kind: "world", target: "confirm_building_placement", gesture: "tap" }
         });
         return Object.assign({}, model, { step: step });
     }
@@ -1386,17 +1380,6 @@
         });
         if (changed && runtime.active && runtime.latestHud) update(runtime.latestHud);
     }
-    document.addEventListener("keydown", function (event) {
-        var step = runtime.machine && runtime.machine.view().step;
-        var selected = runtime.latestHud && runtime.latestHud.selected_building;
-        if (event.key !== "Escape" || !selected || !step || !step.trigger
-            || step.trigger.type !== "ui" || step.trigger.action !== "cancel_building_mode") return;
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        send("cancel_building_mode");
-        runtime.uiCounts.cancel_building_mode = (runtime.uiCounts.cancel_building_mode || 0) + 1;
-        update(runtime.latestHud);
-    }, true);
     ["click", "input", "change"].forEach(function (type) { document.addEventListener(type, recordUiAction, true); });
 
     window.SOW_startCampaignEpisode = function (episodeId) { startEpisode(episodeId, false); };

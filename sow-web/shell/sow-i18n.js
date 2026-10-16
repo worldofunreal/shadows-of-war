@@ -13,10 +13,11 @@
     var configuredDefault = String(window.SOW_LOCALE_DEFAULT || "").toLowerCase().replace(/_/g, "-");
     var defaultLocale = "en";
 
-    // Browsers report regional tags (es-MX, pt-PT, ja-JP); the published
-    // codes are bare. Fall back to the base tag, then to the aliases above.
-    function normalizeLocale(value) {
+    // Resolve only published languages so an unsupported browser tag cannot
+    // masquerade as English while scanning the browser's preference list.
+    function supportedLocale(value) {
         var locale = String(value || "").toLowerCase().replace(/_/g, "-");
+        if (!locale) return "";
         if (supported[locale]) return locale;
         var aliases = { zh: "zh-cn", pt: "pt-br", tl: "fil" };
         var alias = aliases[locale];
@@ -25,13 +26,29 @@
         if (supported[base]) return base;
         var baseAlias = aliases[base];
         if (baseAlias && supported[baseAlias]) return baseAlias;
-        return defaultLocale;
+        return "";
+    }
+
+    // Other callers need a usable locale even when their input is unknown.
+    function normalizeLocale(value) {
+        return supportedLocale(value) || defaultLocale;
     }
 
     function browserLanguages() {
-        var list = Array.isArray(navigator.languages) ? navigator.languages.slice() : [];
-        if (navigator.language) list.unshift(navigator.language);
-        return list;
+        try {
+            if (typeof navigator !== "undefined" && navigator && Array.isArray(navigator.languages)) {
+                var languages = navigator.languages.filter(function (language) {
+                    return typeof language === "string" && language.trim();
+                });
+                if (languages.length) return languages;
+            }
+        } catch (error) {}
+        try {
+            if (typeof navigator !== "undefined" && navigator && typeof navigator.language === "string" && navigator.language) {
+                return [navigator.language];
+            }
+        } catch (error) {}
+        return [];
     }
 
     function preferredLocale() {
@@ -41,14 +58,18 @@
         } catch (error) {}
         // An explicit choice (or a build-level default, e.g. a portal) always
         // wins; the browser only decides when nobody has chosen yet.
-        if (stored) return normalizeLocale(stored);
-        if (configuredDefault) return normalizeLocale(configuredDefault);
+        var saved = supportedLocale(stored);
+        if (saved) return saved;
+        var configured = supportedLocale(configuredDefault);
+        // A non-English portal locale is intentional. English is the app's
+        // fallback, so it must not suppress a supported browser preference.
+        if (configured && configured !== defaultLocale) return configured;
         var browser = browserLanguages();
         for (var i = 0; i < browser.length; i++) {
-            var candidate = normalizeLocale(browser[i]);
-            if (candidate !== defaultLocale) return candidate;
+            var candidate = supportedLocale(browser[i]);
+            if (candidate) return candidate;
         }
-        return defaultLocale;
+        return configured || defaultLocale;
     }
 
     var catalogVersion = Number(window.SOW_LOCALE_CATALOG_VERSION || 0);

@@ -88,7 +88,7 @@ impl SowApp {
                     ServerMessage::Start(start_msg) => {
                         crate::store_portals::track_product_event("match_loading_start");
                         log::info!(
-                            "[CLIENT NET] 🎮 Received ServerStartMessage! lobby_id={:?}, player_id={:?}, relay_port={:?}, relay_host={:?}",
+                            "[CLIENT NET] Received ServerStartMessage! lobby_id={:?}, player_id={:?}, relay_port={:?}, relay_host={:?}",
                             start_msg.lobby_id,
                             start_msg.my_player_id,
                             start_msg.relay_port,

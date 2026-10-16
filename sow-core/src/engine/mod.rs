@@ -368,6 +368,8 @@ pub struct SowEngine {
     pub building_grid: BuildingGrid,
     /// Enabled only by the trusted reader of pre-v3 recordings.
     pub legacy_building_rules: bool,
+    /// Preserve pre-v4 elimination payouts while verifying historical recordings.
+    pub legacy_elimination_rewards: bool,
     pub building_aggregates: Vec<BuildingAggregate>,
     pub building_aggregates_dirty: bool,
     pub sea_lanes_dirty: bool,
@@ -480,6 +482,7 @@ impl SowEngine {
             render_defense_dirty: true,
             building_grid: BuildingGrid::default(),
             legacy_building_rules: false,
+            legacy_elimination_rewards: false,
             building_aggregates: Vec::with_capacity(256),
             building_aggregates_dirty: true,
             sea_lanes_dirty: true,
@@ -753,7 +756,8 @@ impl SowEngine {
             return;
         }
 
-        let total_reward = if let Some(gold) = self.campaign_gold_loot_override.get(&victim_id) {
+        let configured_reward = if let Some(gold) = self.campaign_gold_loot_override.get(&victim_id)
+        {
             *gold
         } else {
             base_reward.saturating_add(
@@ -762,6 +766,11 @@ impl SowEngine {
                     .copied()
                     .unwrap_or(0),
             )
+        };
+        let total_reward = if self.legacy_elimination_rewards {
+            configured_reward
+        } else {
+            configured_reward.saturating_mul(2)
         };
 
         // Gather tile conquest contributions (deterministic by player id)
@@ -2016,8 +2025,12 @@ mod tests {
     }
 
     #[test]
-    fn elimination_bounty_is_fixed_by_victim_type_and_keeps_campaign_bonus() {
-        let reward = |victim_type: PlayerType, tick: u64, loot_bonus: Option<u32>| {
+    fn elimination_bounty_doubles_base_and_campaign_loot_but_keeps_legacy_payouts() {
+        let reward = |victim_type: PlayerType,
+                      tick: u64,
+                      loot_bonus: Option<u32>,
+                      loot_override: Option<u32>,
+                      legacy: bool| {
             let config = GameConfig::default();
             let mut state = GameState::new(1, 4, 4, config.clone());
             state.tick = tick;
@@ -2031,6 +2044,10 @@ mod tests {
             if let Some(bonus) = loot_bonus {
                 engine.campaign_gold_loot_bonus.insert(2, bonus);
             }
+            if let Some(override_gold) = loot_override {
+                engine.campaign_gold_loot_override.insert(2, override_gold);
+            }
+            engine.legacy_elimination_rewards = legacy;
             engine.eliminate_player(2, 1, 0, 0, false);
             let bounty = engine
                 .state
@@ -2044,11 +2061,31 @@ mod tests {
             (engine.state.player(1).unwrap().gold, bounty)
         };
 
-        assert_eq!(reward(PlayerType::Bot, 100, None), (125.0, 25));
-        assert_eq!(reward(PlayerType::Bot, 10_000, None), (125.0, 25));
-        assert_eq!(reward(PlayerType::Nation, 1_000, None), (175.0, 75));
-        assert_eq!(reward(PlayerType::Human, 10_000, None), (250.0, 150));
-        assert_eq!(reward(PlayerType::Bot, 100, Some(125)), (250.0, 150));
+        assert_eq!(reward(PlayerType::Bot, 100, None, None, false), (150.0, 50));
+        assert_eq!(
+            reward(PlayerType::Bot, 10_000, None, None, false),
+            (150.0, 50)
+        );
+        assert_eq!(
+            reward(PlayerType::Nation, 1_000, None, None, false),
+            (250.0, 150)
+        );
+        assert_eq!(
+            reward(PlayerType::Human, 10_000, None, None, false),
+            (400.0, 300)
+        );
+        assert_eq!(
+            reward(PlayerType::Bot, 100, Some(125), None, false),
+            (400.0, 300)
+        );
+        assert_eq!(
+            reward(PlayerType::Bot, 100, None, Some(125), false),
+            (350.0, 250)
+        );
+        assert_eq!(
+            reward(PlayerType::Bot, 100, None, Some(125), true),
+            (225.0, 125)
+        );
     }
 
     #[test]
@@ -2075,24 +2112,24 @@ mod tests {
 
         engine.eliminate_player(4, 1, 0, 0, false);
 
-        assert_eq!(engine.state.player(1).unwrap().gold, 12.0);
-        assert_eq!(engine.state.player(2).unwrap().gold, 7.0);
-        assert_eq!(engine.state.player(3).unwrap().gold, 6.0);
+        assert_eq!(engine.state.player(1).unwrap().gold, 25.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 13.0);
+        assert_eq!(engine.state.player(3).unwrap().gold, 12.0);
         assert_eq!(engine.state.player(4).unwrap().gold, 0.0);
         assert_eq!(engine.state.player(5).unwrap().gold, 0.0);
         assert!(matches!(
             engine.state.events.last(),
             Some(GameEvent::PlayerEliminated {
-                gold_bounty: 12,
+                gold_bounty: 25,
                 assists,
                 ..
-            }) if assists == &vec![(2, 7), (3, 6)]
+            }) if assists == &vec![(2, 13), (3, 12)]
         ));
         assert_eq!(
             engine.state.player(1).unwrap().gold
                 + engine.state.player(2).unwrap().gold
                 + engine.state.player(3).unwrap().gold,
-            25.0
+            50.0
         );
     }
 

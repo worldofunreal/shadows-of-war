@@ -407,6 +407,12 @@ struct RewardReceiptsAckRequest {
 }
 
 #[derive(Deserialize)]
+struct StripePriceResponse {
+    currency: String,
+    unit_amount: Option<u64>,
+}
+
+#[derive(Deserialize)]
 struct StripeCheckoutSessionResponse {
     id: Option<String>,
     client_secret: Option<String>,
@@ -426,18 +432,6 @@ async fn handle_store_catalog(
         && state.stripe_publishable_key.is_some()
         && state.stripe_webhook_secret.is_some()
         && state.revenuecat_stripe_api_key.is_some();
-    for leader in &mut catalog.leaders {
-        if stripe_price_id(&leader.direct_product_id).is_none() {
-            leader.direct_product_id.clear();
-            leader.direct_price_label.clear();
-        }
-    }
-    for skin in &mut catalog.skins {
-        if stripe_price_id(&skin.direct_product_id).is_none() {
-            skin.direct_product_id.clear();
-            skin.direct_price_label.clear();
-        }
-    }
     Json(catalog)
 }
 
@@ -483,12 +477,16 @@ fn canonical_store_product_id(product_id: &str) -> Option<String> {
         .into_iter()
         .map(|bundle| bundle.product_id)
         .chain(
-            catalog
-                .leaders
+            sow_data::leaders::Leader::ALL
                 .into_iter()
-                .map(|leader| leader.direct_product_id),
+                .map(sow_data::commerce::direct_leader_product_id),
         )
-        .chain(catalog.skins.into_iter().map(|skin| skin.direct_product_id))
+        .chain(
+            catalog
+                .skins
+                .into_iter()
+                .filter_map(|skin| sow_data::commerce::direct_skin_product_id(&skin.id)),
+        )
         .chain(std::iter::once(
             "sow_offer_genghis_khan_royal_lattice".to_string(),
         ))
@@ -501,7 +499,8 @@ async fn handle_store_checkout(
     Json(payload): Json<StoreCheckoutRequest>,
 ) -> impl IntoResponse {
     let product_id = payload.product_id.trim();
-    if !sow_data::commerce::is_store_product(product_id) {
+    // Only gem packs are sold for money; leaders and skins cost gems or crowns.
+    let Some(bundle) = sow_data::commerce::gem_bundle(product_id) else {
         return (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
@@ -509,7 +508,7 @@ async fn handle_store_checkout(
             }),
         )
             .into_response();
-    }
+    };
     let account_id = match store_account_for_request(
         &state,
         &headers,
@@ -556,6 +555,41 @@ async fn handle_store_checkout(
         )
             .into_response();
     };
+    // The player saw `bundle.price_label`; never charge a different amount.
+    let stripe_amount = match reqwest::Client::new()
+        .get(format!("https://api.stripe.com/v1/prices/{price_id}"))
+        .basic_auth(secret_key, None::<&str>)
+        .send()
+        .await
+    {
+        Ok(response) if response.status().is_success() => response
+            .json::<StripePriceResponse>()
+            .await
+            .ok()
+            .filter(|price| price.currency == "usd")
+            .and_then(|price| price.unit_amount),
+        Ok(response) => {
+            warn!("Stripe price lookup rejected status={}", response.status());
+            None
+        }
+        Err(error) => {
+            error!("Stripe price lookup failed: {error}");
+            None
+        }
+    };
+    if stripe_amount != Some(bundle.price_cents) {
+        error!(
+            "store price mismatch product={product_id} shown_cents={} stripe={stripe_amount:?}",
+            bundle.price_cents
+        );
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "store product is not configured".to_string(),
+            }),
+        )
+            .into_response();
+    }
     let response = match reqwest::Client::new()
         .post("https://api.stripe.com/v1/checkout/sessions")
         .basic_auth(secret_key, None::<&str>)

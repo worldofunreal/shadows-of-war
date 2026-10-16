@@ -33,6 +33,8 @@ pub enum AvatarIdentity {
     Emblem {
         symbol: &'static str,
     },
+    /// Unclaimed land (expansion targets); drawn from `assets/art/badges/wilderness`.
+    Wilderness,
     Fallback,
 }
 

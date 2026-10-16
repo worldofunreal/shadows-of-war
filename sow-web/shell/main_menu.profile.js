@@ -504,7 +504,7 @@
         if (level) level.textContent = data && data.level != null ? data.level : "—";
         var preferred = panel.querySelector("[data-profile-preferred]");
         if (preferred) preferred.innerHTML = profilePreferredCommanderMarkup(data);
-        var hero = heroImage(data && data.preferred_leader);
+        var hero = profileHeroImage(data && data.preferred_leader);
         if (root && root.dataset.hero !== hero) {
             root.style.setProperty("--sow-hero", "url(\"" + hero + "\")");
             root.dataset.hero = hero;

@@ -50,7 +50,7 @@ impl SowApp {
             match res {
                 Ok(client) => {
                     log::info!(
-                        "[CLIENT NET] ✅ Received successfully connected WebSocket client from channel!"
+                        "[CLIENT NET] Received successfully connected WebSocket client from channel!"
                     );
                     self.ui.app.main_menu_state.is_connected = true;
                     self.ui.app.main_menu_state.is_connecting = false;
@@ -78,22 +78,6 @@ impl SowApp {
                         }
                     } else if self.ui.app.phase == crate::ClientPhase::Playing {
                         log::info!("Orchestrator reconnected while the relay session is active");
-                    } else if self.net.pending_lobby_rejoin {
-                        log::info!("Re-sending Join to lobby after hop");
-                        let target = self.sim.my_lobby_id.or(self
-                            .ui
-                            .app
-                            .main_menu_state
-                            .pending_join_lobby_id);
-                        let join_msg = self.make_join_message(target, false, None, None);
-                        if let Some(join_msg) = join_msg
-                            && let Ok(json) = bincode::serialize(&join_msg)
-                        {
-                            client.send(json);
-                            self.net.pending_lobby_rejoin = false;
-                        } else {
-                            self.join_waiting_for_identity = true;
-                        }
                     } else if self.ui.app.main_menu_state.host_private_pending {
                         log::info!("Hosting private lobby from portal instant");
                         let join_msg = self.make_join_message(None, true, None, None);
@@ -281,7 +265,7 @@ impl SowApp {
             self.ui.app.main_menu_state.is_connecting = true;
             let url = self.ui.app.main_menu_state.server_address.clone();
             log::info!(
-                "[CLIENT NET] 🔄 Auto-reconnect triggered: Spawning WS connection task to {}",
+                "[CLIENT NET] Auto-reconnect triggered: Spawning WS connection task to {}",
                 url
             );
             spawn_sow_client_connect(url, &self.net.connect_tx);

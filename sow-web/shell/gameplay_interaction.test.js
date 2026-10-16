@@ -65,17 +65,21 @@ test("gameplay chrome keeps dev tools and separate FPS/ping rows at the bottom o
     assert.match(hud, /var activeHudPanel = null;/);
     assert.match(hud, /function setHudPanel\(panel\)/);
     assert.doesNotMatch(hud, /var (leaderboardOpen|inboxOpen|hudSettingsOpen) = false;/);
-    assert.match(hud, /class="sow-hud__panel sow-hud__settings hidden"/);
-    assert.match(hud, /class="sow-hud__panel sow-hud__leaderboard hidden"/);
+    assert.match(hud, /class="sow-hud__panel sow-hud__settings sow-hud__sheet hidden"/);
+    assert.match(hud, /class="sow-hud__panel sow-hud__leaderboard sow-hud__sheet hidden"/);
+    assert.match(hud, /class="sow-hud__inbox sow-hud__sheet hidden"/);
+    assert.match(hud, /class="sow-hud__sheet sow-hud__dev-sidebar hidden"/);
     assert.match(hud, /setHudPanel\("leaderboard"\)/);
     assert.match(hud, /setHudPanel\("inbox"\)/);
     assert.match(hud, /setHudPanel\("settings"\)/);
+    // Opening any panel closes Dev Tools, so only one sheet is ever open.
+    assert.match(hud, /if \(next && devSidebarOpen\) \{\s*devSidebarOpen = false;\s*send\("toggle_dev_sidebar"\);/);
     assert.match(hudCss, /--sow-hud-toolbar-side-offset: 66px; \/\* 54px toolbar \+ 12px gap \*\//);
-    assert.match(hudCss, /\.sow-hud__panel \{[^}]*top: var\(--sow-hud-top-edge\);[^}]*inset-inline-end: calc\(var\(--sow-hud-right-edge\) \+ var\(--sow-hud-toolbar-side-offset\)\)/);
-    assert.match(hudCss, /@media \(max-width: 720px\)[^]*?\.sow-hud__panel \{[^}]*top: calc\(max\(8px, var\(--sow-sat\)\) \+ 186px\)/);
-    assert.match(hudCss, /#sow-hud\[data-compact="true"\] \.sow-hud__panel \{[^}]*top: calc\(var\(--sow-hud-top-edge\) \+ 50px\)[^}]*bottom: max\(6px, var\(--sow-sab\)\)[^}]*max-height: none/);
-    assert.doesNotMatch(hudCss, /\.sow-hud__leaderboard,\s*\.sow-hud__panel \{ top: 50px/);
-    assert.doesNotMatch(hudCss, /\.sow-hud__leaderboard \{ top: calc\(max\(12px, var\(--sow-sat\)\) \+ 272px\)/);
+    // One shared sheet layout: bottom half on phones, side panel on landscape phones and desktop, never density-scaled.
+    assert.match(hudCss, /\.sow-hud__sheet \{[^}]*bottom: 0;[^}]*height: 52dvh/);
+    assert.match(hudCss, /@media \(min-width: 900px\) and \(min-height: 521px\) \{\s*\.sow-hud__sheet \{[^}]*width: 380px/);
+    assert.match(hudCss, /@media \(orientation: landscape\) and \(max-height: 520px\) \{\s*\.sow-hud__sheet \{[^}]*width: min\(46vw, 420px\)/);
+    assert.doesNotMatch(hudCss, /data-compact="true"\] \.sow-hud__panel|\.sow-hud__leaderboard,\s*\.sow-hud__panel \{ top: 50px/);
     assert.match(campaignView, /objective\.hidden = modal \|\| context\.hideObjective === true/);
 });
 
@@ -126,14 +130,9 @@ test("Dev Tools expose live shader tuning, extended numeric values, resets, and 
     assert.match(shaderParams, /"vfx\.alerts"/);
     assert.match(shaderParams, /"border\.contested\.brightness"/);
     assert.match(shaderParams, /"alert\.edge_softness"/);
-    assert.match(shaderParams, /"threat\.troop_cap"/);
-    assert.match(shaderParams, /"threat\.max_radius"/);
     assert.match(shaderParams, /"territory\.skin\.stripe\.enabled"/);
     assert.match(shaderParams, /"territory\.skin\.grid\.enabled"/);
     assert.match(shaderParams, /"territory\.skin\.diamond\.enabled"/);
-    assert.match(shaderParams, /"expansion\.local\.reach_scale"/);
-    assert.match(shaderParams, /"expansion\.other\.reach_scale"/);
-    assert.match(shaderParams, /"combat\.pvp\.reach_scale"/);
     assert.match(shaderParams, /"mover\.transport\.minimum_px"/);
     assert.match(shaderParams, /"mover\.trade_ship\.minimum_px"/);
     assert.match(shaderParams, /"mover\.warship\.minimum_px"/);
@@ -143,24 +142,42 @@ test("Dev Tools expose live shader tuning, extended numeric values, resets, and 
     assert.match(hud, /range\.max = String\(value > rangeMax \? value \+ margin : rangeMax\)/);
     assert.match(hud, /data-dev-min="' \+ def\.min \+ '" data-dev-max="' \+ def\.max/);
     assert.match(hud, /if \(range && !editingControl\)[\s\S]*var min = Number\(range\.dataset\.devMin\)[\s\S]*range\.min = String\(value < min \? value - margin : min\)/);
-    assert.match(hud, /Now " \+ format\(current\) \+ " · Default " \+ format\(def\.default\)/);
     assert.match(hud, /data-dev-field="' \+ id/);
-    assert.match(hud, /Reset all shader settings/);
+    assert.match(hud, /devIsDirty\(def, current\)/);
     assert.match(hud, /data-dev-preview="phase"/);
-    assert.match(hud, /data-dev-preview="target"/);
-    assert.match(hud, /hudDevLayer\.addEventListener\("change"[\s\S]*?set_dev_vfx_preview/);
+    assert.match(hud, /cmd === "dev_preview"[\s\S]*?set_dev_vfx_preview[\s\S]*?replay_dev_vfx_preview/);
+    assert.match(hud, /cmd === "dev_reset_all"[\s\S]*?reset_dev_config/);
+    assert.doesNotMatch(hud, /Reset all shader settings|Default " \+ format|data-dev-preview="target"|<select data-dev/);
+    assert.match(hud, /data-dev-tab="Perf"/);
+    assert.match(hud, /def\.alpha \? channel\("A"/);
+    assert.doesNotMatch(hud, /<details class="sow-hud__dev-channels"/);
+    assert.match(shaderParams, /pub const SECTION_GROUPS/);
+    assert.match(shaderParams, /every_section_belongs_to_exactly_one_dev_tools_group/);
+    assert.match(webMenu, /payload\["groups"\] = shader_params::SECTION_GROUPS/);
     assert.match(webMenu, /decode_dev_config_value[\s\S]*?if !value\.is_finite\(\)/);
     assert.match(webMenu, /WebMenuCommand::SetDevVfxPreview/);
     assert.match(webMenu, /field: Option<String>/);
     assert.match(appStateSource, /pub struct DevVfxPreview/);
     assert.match(frameSource, /preview_time/);
     assert.match(mapShader, /globals\.preview_effect == 8\.0/);
-    assert.match(mapShader, /__MAP_EXPANSION_LOCAL_REACH_SCALE__/);
-    assert.match(mapShader, /__MAP_EXPANSION_OTHER_REACH_SCALE__/);
-    assert.match(mapShader, /__MAP_COMBAT_PVP_REACH_SCALE__/);
     assert.match(mapShader, /fn ocean_shore_edge\([\s\S]*get_cell_terrain\(get_hex_neighbor\(cell_hex, i\)\)[\s\S]*MAP_WATER_SHORE_STRENGTH/);
 });
 
+
+test("dev tools values show at most two decimals", () => {
+    const start = hud.indexOf("    function devDecimals(");
+    const end = hud.indexOf("\n    function devIsDirty", start);
+    assert.ok(start >= 0 && end > start);
+    const { devDecimals, devFormat } = vm.runInNewContext(hud.slice(start, end) + "\n({ devDecimals, devFormat });");
+    assert.equal(devDecimals(0.001), 2);
+    assert.equal(devDecimals(0.05), 2);
+    assert.equal(devDecimals(0.5), 1);
+    assert.equal(devDecimals(1), 0);
+    assert.equal(devFormat(0.30000000000000004, 2), "0.30");
+    assert.equal(devFormat(0.123456, 2), "0.12");
+    assert.equal(devFormat(0.001, 2), "0.001");
+    assert.equal(devFormat(0, 2), "0.00");
+});
 
 test("compact HUD density follows the available horizontal frame and restores full size", () => {
     const start = hud.indexOf("    function compactHudDensity(");
@@ -342,6 +359,7 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
         asset: name => "/assets/" + name,
         hudIcon: name => name,
         statusIcon: name => name,
+        renderBuildingPlacement() {},
         formatNameplateTroops: String,
         SOW_t: key => locale + ":" + key,
         clearCompactHudDensity() {}, clearMapFeedback() {}, clearNotificationCard() {}
@@ -360,6 +378,7 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
     vm.runInContext(
         hud.slice(hud.indexOf("    function send("), hud.indexOf("    function setHudPanel("))
         + hud.slice(avatarStart, avatarEnd)
+        + hud.slice(hud.indexOf("    function buildingPlacementLayout("), hud.indexOf("    function positionBuildingCard("))
         + hud.slice(rendererStart, renderHudStart)
         + hud.slice(clickStart, clickEnd), context
     );
@@ -381,7 +400,7 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
     vm.runInContext(hud.slice(localeStart, localeEnd), context);
     const operations = [
         { kind: "attack", id: 7, direction: "incoming", player_id: 2, name: "Caesar", troops: 100, avatar: { kind: "portrait", slug: "caesar" }, focus_x: 3, focus_y: 4 },
-        { kind: "attack", id: 8, direction: "outgoing", player_id: 0, neutral: true, troops: 200, avatar: { kind: "emblem", symbol: "🌱" } },
+        { kind: "attack", id: 8, direction: "outgoing", player_id: 0, neutral: true, troops: 200, avatar: { kind: "wilderness" } },
         { kind: "fleet", id: 9, direction: "outgoing", player_id: 3, name: "Ally", troops: 50, avatar: { kind: "emblem", symbol: "🛡️" } }
     ];
     const click = button => context.handleHudClick({ target: button });
@@ -394,7 +413,7 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
     assert.equal(firstRows.length, 3);
     assert.equal(context.hudRefs.operations.hidden, false);
     assert.equal(firstRows[0].children[0].children[0].src, "/assets/gameplay/avatars/caesar.webp");
-    assert.equal(firstRows[1].children[0].children[1].textContent, "🌱");
+    assert.equal(firstRows[1].children[0].children[1].innerHTML, "wilderness", "unclaimed land uses assets/art/badges/wilderness");
     assert.equal(firstRows[2].querySelectorAll('[data-command="recall_fleet"]').length, 1);
     context.renderHud();
     assert.equal(firstList.replacements, 1, "unchanged operations do not remount rows");
@@ -489,8 +508,9 @@ test("all HUD message classes have one explicit presentation", () => {
     assert.ok(!emitters.includes("hud.elimination_bounty"), "gold bounty uses the staged Rust world effect, not a duplicate HUD card");
     assert.ok(!emitters.includes("hud.elimination_assist"), "assist gold uses the staged Rust world effect, not a duplicate HUD card");
     assert.ok(eliminationSource.includes("DeathNameplateReward"));
-    assert.ok(eliminationSource.includes('"+{} Gold"'));
-    assert.ok(eliminationSource.includes('"+{} Gold (Assist)"'));
+    // The gold reward is the coin sprite plus the amount; assists add their own badge.
+    assert.match(eliminationSource, /amount: format!\("\+\{\}", crate::utils::format_number\(gold as f64\)\)/);
+    assert.ok(eliminationSource.includes("is_assist"));
 
 });
 

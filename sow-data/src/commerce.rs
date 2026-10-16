@@ -2,7 +2,7 @@ use crate::leaders::Leader;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
-pub const FREE_ROTATION_SIZE: usize = 8;
+pub const FREE_ROTATION_SIZE: usize = 4;
 pub const ROTATION_PERIOD_SECS: u64 = 7 * 24 * 60 * 60;
 pub const PERMANENTLY_FREE_LEADERS: [Leader; 1] = [Leader::Boudica];
 // ponytail: one balancing constant until real retention data exists; move pricing to live config then.
@@ -16,10 +16,13 @@ pub const WELCOME_GEMS: u64 = 475;
 /// New receipt version intentionally tops up accounts that already have v1.
 pub const WELCOME_GRANT_ID: &str = "welcome_gems_v2";
 
-const GEM_BUNDLES: [(&str, u64); 3] = [
-    ("sow_gems_500", 500),
-    ("sow_gems_1200", 1_200),
-    ("sow_gems_2600", 2_600),
+// (product id, gems, price in US cents). Product ids are frozen in Stripe,
+// RevenueCat and Google Play; the number in an id is not the gem amount.
+// Checkout refuses a pack whose Stripe price differs from `price_cents`.
+const GEM_BUNDLES: [(&str, u64, u64); 3] = [
+    ("sow_gems_500", 500, 199),
+    ("sow_gems_1200", 1_400, 499),
+    ("sow_gems_2600", 3_000, 999),
 ];
 
 // Original SOW cosmetic catalog. The style id is an internal renderer hint;
@@ -61,8 +64,6 @@ pub struct LeaderOffer {
     pub permanently_free: bool,
     pub owned: bool,
     pub available: bool,
-    pub direct_product_id: String,
-    pub direct_price_label: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -74,8 +75,6 @@ pub struct SkinOffer {
     pub cost_gems: u64,
     pub owned: bool,
     pub style: u8,
-    pub direct_product_id: String,
-    pub direct_price_label: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -84,6 +83,10 @@ pub struct GemBundle {
     pub gems: u64,
     pub product_id: String,
     pub asset_path: String,
+    pub price_cents: u64,
+    pub price_label: String,
+    /// Extra gems per dollar versus the smallest pack, rounded.
+    pub bonus_percent: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -218,25 +221,39 @@ pub fn draw_available_leader(owned: &BTreeSet<String>, period: u64) -> Option<Le
 }
 
 pub fn gem_bundles() -> Vec<GemBundle> {
+    let (_, base_gems, base_cents) = GEM_BUNDLES[0];
     GEM_BUNDLES
         .into_iter()
-        .map(|(product_id, gems)| GemBundle {
+        .map(|(product_id, gems, price_cents)| GemBundle {
             id: product_id.to_string(),
             gems,
             product_id: product_id.to_string(),
             asset_path: format!("gameplay/store/gem_bundles/{product_id}.webp"),
+            price_cents,
+            price_label: format!("${}.{:02}", price_cents / 100, price_cents % 100),
+            bonus_percent: (gems * base_cents * 100 + base_gems * price_cents / 2)
+                / (base_gems * price_cents)
+                - 100,
         })
         .collect()
 }
 
-pub fn gem_amount_for_product(product_id: &str) -> Option<u64> {
-    match product_id {
-        "sow_gems_500" | "price_1UBIdc5GjRL6SWJS0cuGDATW" => Some(500),
-        "sow_gems_1200" | "price_1UBIdn5GjRL6SWJSKdxrkoU2" => Some(1_200),
-        "sow_gems_2600" | "price_1UBIdn5GjRL6SWJSMPiDU5pi" => Some(2_600),
-        _ => None,
-    }
+pub fn gem_bundle(product_id: &str) -> Option<GemBundle> {
+    gem_bundles()
+        .into_iter()
+        .find(|bundle| bundle.product_id == product_id)
 }
+
+pub fn gem_amount_for_product(product_id: &str) -> Option<u64> {
+    let product_id = match product_id {
+        "price_1UBIdc5GjRL6SWJS0cuGDATW" => "sow_gems_500",
+        "price_1UBIdn5GjRL6SWJSKdxrkoU2" => "sow_gems_1200",
+        "price_1UBIdn5GjRL6SWJSMPiDU5pi" => "sow_gems_2600",
+        other => other,
+    };
+    gem_bundle(product_id).map(|bundle| bundle.gems)
+}
+
 
 pub fn direct_leader_product_id(leader: Leader) -> String {
     if PERMANENTLY_FREE_LEADERS.contains(&leader) {
@@ -276,23 +293,6 @@ pub fn is_store_product(product_id: &str) -> bool {
         || product_id == "sow_offer_genghis_khan_royal_lattice"
 }
 
-pub fn direct_price_label_for_leader(leader: Leader) -> &'static str {
-    if PERMANENTLY_FREE_LEADERS.contains(&leader) {
-        ""
-    } else {
-        "$5.99"
-    }
-}
-
-pub fn direct_price_label_for_skin(skin_id: &str) -> Option<&'static str> {
-    match skin_id {
-        "ember_vein" => Some("$1.99"),
-        "storm_grid" => Some("$3.99"),
-        "royal_lattice" => Some("$5.99"),
-        _ => None,
-    }
-}
-
 pub fn skins() -> Vec<SkinOffer> {
     SKINS
         .into_iter()
@@ -304,8 +304,6 @@ pub fn skins() -> Vec<SkinOffer> {
             cost_gems,
             owned: false,
             style,
-            direct_product_id: format!("sow_offer_skin_{id}"),
-            direct_price_label: direct_price_label_for_skin(id).unwrap_or("").to_string(),
         })
         .collect()
 }
@@ -383,8 +381,6 @@ pub fn catalog_for_profile(
                 permanently_free,
                 owned,
                 available: permanently_free || free_rotation || owned,
-                direct_product_id: direct_leader_product_id(leader),
-                direct_price_label: direct_price_label_for_leader(leader).to_string(),
             }
         })
         .collect();
@@ -416,7 +412,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rotation_is_eight_and_deterministic() {
+    fn rotation_is_four_and_deterministic() {
         let first = rotation_for_period(7);
         assert_eq!(first.len(), FREE_ROTATION_SIZE);
         assert_eq!(first, rotation_for_period(7));
@@ -475,8 +471,6 @@ mod tests {
         assert!(boudica.available);
         assert_eq!(boudica.cost_crowns, 0);
         assert_eq!(boudica.cost_gems, 0);
-        assert!(boudica.direct_product_id.is_empty());
-        assert!(boudica.direct_price_label.is_empty());
         assert!(!catalog.free_leaders.contains(&"boudica".to_string()));
         assert!(!is_store_product("sow_offer_leader_boudica"));
     }
@@ -484,12 +478,35 @@ mod tests {
     #[test]
     fn gem_products_have_authoritative_amounts() {
         assert_eq!(gem_bundles().len(), 3);
-        assert_eq!(gem_amount_for_product("sow_gems_1200"), Some(1_200));
+        assert_eq!(gem_amount_for_product("sow_gems_1200"), Some(1_400));
         assert_eq!(
             gem_amount_for_product("price_1UBIdn5GjRL6SWJSKdxrkoU2"),
-            Some(1_200)
+            Some(1_400)
         );
         assert_eq!(gem_amount_for_product("unknown"), None);
+    }
+
+    #[test]
+    fn bigger_gem_packs_always_give_more_gems_per_dollar() {
+        let bundles = gem_bundles();
+        let labels: Vec<_> = bundles.iter().map(|b| (b.price_label.as_str(), b.bonus_percent)).collect();
+        assert_eq!(labels, [("$1.99", 0), ("$4.99", 12), ("$9.99", 20)]);
+        for pair in bundles.windows(2) {
+            assert!(pair[1].gems * pair[0].price_cents > pair[0].gems * pair[1].price_cents);
+        }
+    }
+
+    #[test]
+    fn only_gem_packs_are_sold_for_money() {
+        // Checkout sells `gem_bundle` products only.
+        assert!(gem_bundle("sow_gems_500").is_some());
+        assert!(gem_bundle("sow_offer_leader_caesar").is_none());
+        assert!(gem_bundle("sow_offer_skin_ember_vein").is_none());
+        assert!(gem_bundle("price_1UBIdc5GjRL6SWJS0cuGDATW").is_none());
+        // Past direct purchases still deliver (leaders and skins are no
+        // longer sold for money; their old products remain valid receipts).
+        assert!(is_store_product("sow_offer_leader_caesar"));
+        assert!(is_store_product("sow_offer_skin_ember_vein"));
     }
 
     #[test]
@@ -523,7 +540,6 @@ mod tests {
         assert_eq!(LEADER_UNLOCK_COST_CROWNS, 500);
         assert_eq!(LEADER_UNLOCK_COST_GEMS, 450);
         assert_eq!(WELCOME_GEMS, 475);
-        assert!(skins().iter().map(|skin| skin.cost_gems).sum::<u64>() > GEM_BUNDLES[2].1);
     }
 
     #[test]

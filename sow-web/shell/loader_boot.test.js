@@ -8,6 +8,7 @@ const coreSource = fs.readFileSync(path.join(shell, "main_menu.core.js"), "utf8"
 const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.js"), "utf8");
 const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.js"), "utf8");
 const loaderSource = fs.readFileSync(path.join(shell, "loader.js"), "utf8");
+const menuLayoutCss = fs.readFileSync(path.join(shell, "main_menu.layout.css"), "utf8");
 const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.js"), "utf8");
 const sessionSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/session.rs"), "utf8");
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
@@ -581,4 +582,54 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     [...timers.values()][0]();
     timers.clear();
     assert.equal(events.filter(event => event === "sow:loader-ready").length, 1);
+});
+
+
+test("game exit resets Battle and replays the screen entrance after the loader", () => {
+    assert.match(coreSource, /var lastMenuPhase = null/);
+    assert.match(coreSource, /var pendingExitScreenIntro = false/);
+    const resetStart = shellSource.indexOf("if (returnedFromGame) {");
+    const resetEnd = shellSource.indexOf("if (typeof window.SOW_tutorial_menu_state_update", resetStart);
+    assert.ok(resetStart >= 0 && resetEnd > resetStart);
+    const resetBlock = shellSource.slice(resetStart, resetEnd);
+    for (const flag of ["profileOpen", "heroesOpen", "campaignOpen", "storeOpen"]) {
+        assert.match(resetBlock, new RegExp(flag + " = false"));
+    }
+    assert.match(resetBlock, /pendingExitScreenIntro = true/);
+    assert.match(shellSource, /sow:loader-cycle-ready/);
+    assert.match(shellSource, /previousScreen = null;[\s\S]*render\(\);/);
+    assert.match(loaderSource, /sow:loader-cycle-ready/);
+    assert.match(loaderSource, /if \(!loaderReadyDispatched\)/);
+    assert.doesNotMatch(shellSource, /SOW_open_store_after_match/);
+    assert.match(menuLayoutCss, /sow-screen-panel-enter 240ms/);
+});
+
+
+test("shell media URLs bust by content hash when the build ships one", () => {
+    const assetUrlStart = loaderSource.indexOf("    function assetUrl(");
+    const assetUrlEnd = loaderSource.indexOf("    function leaderArtUrl(", assetUrlStart);
+    assert.ok(assetUrlStart >= 0 && assetUrlEnd > assetUrlStart);
+    const context = { window: {} };
+    vm.runInNewContext(
+        loaderSource.slice(assetUrlStart, assetUrlEnd) + "; this.assetUrl = assetUrl;",
+        context
+    );
+    context.window.SOW_BUILD_TS = "build-42";
+    assert.equal(
+        context.assetUrl("/assets/shell/leaders/boudica_desktop.webp"),
+        "/assets/shell/leaders/boudica_desktop.webp?v=build-42",
+        "without a content entry the build bust still applies"
+    );
+    context.window.SOW_ASSET_TS = { "/assets/shell/leaders/other_desktop.webp": "cafe1234" };
+    assert.equal(
+        context.assetUrl("/assets/shell/leaders/boudica_desktop.webp"),
+        "/assets/shell/leaders/boudica_desktop.webp?v=build-42",
+        "an unlisted path keeps the build bust"
+    );
+    context.window.SOW_ASSET_TS = { "/assets/shell/leaders/boudica_desktop.webp": "cafe1234" };
+    assert.equal(
+        context.assetUrl("/assets/shell/leaders/boudica_desktop.webp"),
+        "/assets/shell/leaders/boudica_desktop.webp?v=cafe1234",
+        "a content hash wins over the build stamp so unrelated deploys keep the cache"
+    );
 });

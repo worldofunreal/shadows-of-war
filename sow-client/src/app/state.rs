@@ -1,7 +1,7 @@
-pub(crate) use crate::death_nameplate::local_gold_reward;
 pub use crate::death_nameplate::{
     DeathNameplateAnimation, DeathNameplateReward, MAX_DEATH_NAMEPLATES,
 };
+pub(crate) use crate::death_nameplate::{elimination_visible_to_viewer, local_gold_reward};
 use web_time::{Duration, Instant};
 
 /// Subset of [`sow_core::protocol::ProjectileSnapshot`] for detonation / launch detection.
@@ -211,7 +211,6 @@ pub struct NetState {
     pub ws_connect_fail_backoff_ms: u64,
     pub ws_connect_not_before: web_time::Instant,
     pub ws_reconnect_after_resume: bool,
-    pub pending_lobby_rejoin: bool,
     pub current_ping_ms: Option<u32>,
     pub last_ping_time: web_time::Instant,
     pub load_telemetry: LoadTelemetry,
@@ -325,14 +324,6 @@ pub enum MapContextMenuView {
 }
 
 #[derive(Clone, Debug)]
-pub struct FalloutZone {
-    pub x: f32,
-    pub y: f32,
-    pub radius: f32,
-    pub start_time: web_time::Instant,
-}
-
-#[derive(Clone, Debug)]
 pub struct ClickMarker {
     pub world_x: f32,
     pub world_y: f32,
@@ -427,9 +418,6 @@ impl DevVfxPreview {
     pub const ATTACK_FLASH: u8 = 1;
     pub const CONQUEST: u8 = 2;
     pub const ALLIANCE: u8 = 3;
-    pub const EXPANSION: u8 = 4;
-    pub const COMBAT_HAZE: u8 = 5;
-    pub const NUCLEAR: u8 = 6;
     pub const DIALOG: u8 = 7;
     pub const ALERT: u8 = 8;
 
@@ -450,7 +438,6 @@ impl DevVfxPreview {
             Self::ATTACK_FLASH => config.value("attack.flash.duration")[0],
             Self::CONQUEST => config.conquest_duration,
             Self::ALLIANCE => config.value("alliance.duration")[0],
-            Self::NUCLEAR => config.value("nuke.zone.duration")[0],
             Self::ALERT => config.value("alert.duration")[0],
             _ => 3.0,
         }
@@ -481,7 +468,10 @@ impl DevVfxPreview {
     }
 
     pub fn set_target(&mut self, target: u8, now: web_time::Instant) {
-        if (Self::ATTACK_FLASH..=Self::ALERT).contains(&target) {
+        if matches!(
+            target,
+            Self::ATTACK_FLASH | Self::CONQUEST | Self::ALLIANCE | Self::DIALOG | Self::ALERT
+        ) {
             self.target = target;
             self.phase = 0.0;
             self.active = false;
@@ -552,7 +542,6 @@ pub struct UiState {
     pub is_spectating: bool,
     /// Cached once per turn from the snapshot: true when my player is dead or otherwise observing.
     pub observing: bool,
-    pub fallout_zones: Vec<FalloutZone>,
     pub last_projectiles: std::collections::HashMap<u64, TrackedProjectile>,
     pub last_projectile_snapshot_tick: Option<u64>,
     pub detonation_scratch: Vec<(f32, f32, sow_core::game::ProjectileKind)>,

@@ -1413,6 +1413,12 @@
     font-size: 10px;
 }
 
+.sow-store__bundle small.sow-store__bonus {
+    color: #f3b12b;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
 .sow-store__skin .sow-store__buy,
 .sow-store__bundle .sow-store__buy {
     flex: 0 0 auto;
@@ -1677,6 +1683,11 @@
     font-weight: 900;
     letter-spacing: .14em;
     line-height: 1;
+}
+
+.sow-heroes__rotation[hidden],
+.sow-heroes__perk[hidden] {
+    display: none;
 }
 
 .sow-heroes__featured-copy h2 {

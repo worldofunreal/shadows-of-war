@@ -3,9 +3,9 @@ use crate::text::msdf::{FontAtlas, MsdfChar};
 use crate::text::texture::FontAtlasTexture;
 use crate::text::types::{
     AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC, KIND_BUILDING_SPRITE,
-    KIND_CROSS, KIND_DISC, KIND_EMOJI, KIND_GLYPH, KIND_RECT, KIND_RING, KIND_ROUNDED_RECT,
-    KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite, OutlineStyle,
-    TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
+    KIND_CROSS, KIND_DISC, KIND_EMOJI, KIND_GLYPH, KIND_ICON, KIND_RECT, KIND_RING,
+    KIND_ROUNDED_RECT, KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite,
+    OutlineStyle, TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
 };
 use blade_graphics as gpu;
 
@@ -191,6 +191,26 @@ fn emoji_instance(
     outline: OutlineStyle,
     underlay_softness: f32,
 ) -> TextInstanceGpu {
+    outlined_instance(
+        uv_rect,
+        screen_pos,
+        half_size,
+        tint,
+        outline,
+        underlay_softness,
+        KIND_EMOJI,
+    )
+}
+
+fn outlined_instance(
+    uv_rect: [f32; 4],
+    screen_pos: [f32; 2],
+    half_size: f32,
+    tint: [f32; 4],
+    outline: OutlineStyle,
+    underlay_softness: f32,
+    kind: f32,
+) -> TextInstanceGpu {
     let (screen_pos, size, content_rect) = emoji_geometry(screen_pos, half_size, outline);
     TextInstanceGpu {
         screen_pos,
@@ -203,7 +223,7 @@ fn emoji_instance(
         outline_thickness: outline.thickness,
         underlay_offset_y: outline.shadow_y,
         underlay_softness,
-        kind: KIND_EMOJI,
+        kind,
     }
 }
 
@@ -925,7 +945,34 @@ impl TextRenderer {
         alpha: f32,
         outline: OutlineStyle,
     ) -> bool {
-        self.push_emoji("⚔", screen_pos, half_size, troop_icon_tint(alpha), outline)
+        self.push_icon(
+            NameplateStatusSprite::Troops,
+            screen_pos,
+            half_size,
+            troop_icon_tint(alpha),
+            outline,
+        );
+        true
+    }
+
+    /// Push art from `assets/art/badges` with the same outline and shadow as emoji.
+    pub fn push_icon(
+        &mut self,
+        sprite: NameplateStatusSprite,
+        screen_pos: [f32; 2],
+        half_size: f32,
+        tint: [f32; 4],
+        outline: OutlineStyle,
+    ) {
+        self.push_inst(outlined_instance(
+            sprite.uv_rect(),
+            screen_pos,
+            half_size,
+            tint,
+            outline,
+            0.0,
+            KIND_ICON,
+        ));
     }
 
     /// Push an emoji with standard tactical outline (90% black alpha, 1.5px thickness, 1.5px shadow).

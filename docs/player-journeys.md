@@ -154,8 +154,10 @@ aplicables y error.
 - El loader no espera miniaturas de otras salas. Mantiene el orden: comprobante
   del servidor → recompensas → cada nivel ganado → destino solicitado → guía.
   Esperar un premio nunca abre otra conexión al puerto de la partida.
-- La revancha retirada y los informes locales de premios conservan únicamente
-  sus espacios de comunicación antiguos, sin comportamiento ejecutable.
+- El protocolo activo ya no incluye la orden de revancha ni órdenes del cliente
+  para informar premios. `ReservedClientMessage` solo conserva el número de
+  `JoinWithAuth` en el formato de red; no ejecuta una acción. Las salas
+  personalizadas siguen usando su flujo normal de creación y unión.
   `LIVE_PROTOCOL_VERSION` identifica conexiones actuales por separado de
   `GAMEPLAY_FORMAT_VERSION`, que pertenece a las grabaciones.
 - Cada comprobante nuevo conserva el nivel anterior y posterior, para celebrar
@@ -414,7 +416,7 @@ contra la publicación real. No se acepta el cambio solo por leer fuentes.
   La conexión real de juego termina con código normal 1000 y sin errores.
 - Tres cuentas privadas de auditoría: A sale, B reconecta y luego vence por
   ausencia sin enviar salida, C sigue recibiendo turnos y finalmente sale.
-  La conexión sustituida de B y la revancha retirada no pueden cerrar jugadores.
+  La conexión sustituida de B no puede cerrar al jugador que ya reconectó.
 - La prueba espera el cierre completo, repite solicitudes y presentación, y
   compara los saldos y turno personal de A para impedir un segundo pago.
 - Las comprobaciones de cliente cubren respuesta perdida, puerto cerrado,

@@ -4,15 +4,6 @@ use blade_graphics as gpu;
 
 mod ui;
 
-#[inline]
-fn attack_threat_radius(troops: f32, troop_cap: f32, max_radius: f32) -> f32 {
-    if troop_cap <= 0.0 || max_radius <= 0.0 {
-        0.0
-    } else {
-        (troops / troop_cap).clamp(0.0, 1.0) * max_radius
-    }
-}
-
 impl SowApp {
     pub fn render_frame(&mut self, _event_loop: &dyn winit::event_loop::ActiveEventLoop) {
         #[cfg(target_arch = "wasm32")]
@@ -68,28 +59,16 @@ impl SowApp {
         self.time.last_frame_time = now;
         self.advance_camera(dt);
 
-        if let Some(placement) = self.ui.app.hud_state.building_placement
+        if self
+            .ui
+            .app
+            .hud_state
+            .building_placement
+            .is_some_and(|p| !p.pending)
             && let Some(engine) = self.sim.engine.as_mut()
         {
+            // The preview renderer reads the grid immutably.
             engine.refresh_building_grid();
-            if self.input.camera_zoom / sf.max(0.01) >= 4.0 {
-                let bounds = crate::input::placement::visible_placement_bounds(
-                    (self.sim.map_w, self.sim.map_h),
-                    [self.input.camera_x, self.input.camera_y],
-                    self.input.camera_zoom,
-                    [self.input.screen_w, self.input.screen_h],
-                );
-                self.ui.building_placement_cache.update_visible_sites(
-                    engine,
-                    placement.kind,
-                    self.sim.my_player_id.unwrap_or(0),
-                    bounds,
-                );
-            } else {
-                self.ui.building_placement_cache.clear_visible_sites();
-            }
-        } else {
-            self.ui.building_placement_cache.clear_visible_sites();
         }
 
         if let Some(ref mut s) = self.gfx.surface {
@@ -111,9 +90,6 @@ impl SowApp {
                 if self.gfx.needs_first_upload {
                     render_ctx.command_encoder.init_texture(mr.terrain_texture);
                     render_ctx.command_encoder.init_texture(mr.owner_texture);
-                    render_ctx
-                        .command_encoder
-                        .init_texture(mr.placement_texture);
                     if let Some(ref tr) = self.gfx.text_renderer {
                         tr.init_textures(&mut render_ctx.command_encoder);
                         tr.upload_atlas(&mut render_ctx.command_encoder, &render_ctx.context);
@@ -146,7 +122,7 @@ impl SowApp {
                         }
                     }
 
-                    // Spawns and tracks active fallout zones
+                    // Nuke impact sound
                     let current_time = web_time::Instant::now();
                     for &(dx, dy, kind) in &self.ui.detonation_scratch {
                         if let sow_core::game::ProjectileKind::Nuke { level } = kind {
@@ -155,14 +131,6 @@ impl SowApp {
                                 level,
                                 spatial_audio.params(dx + 0.5, dy + 0.5),
                             );
-
-                            let blast_radius = sow_core::game::nuke_inner_radius(level) as f32;
-                            self.ui.fallout_zones.push(crate::app::FalloutZone {
-                                x: dx,
-                                y: dy,
-                                radius: blast_radius,
-                                start_time: current_time,
-                            });
                         }
                     }
 
@@ -222,8 +190,6 @@ impl SowApp {
                     let territory_opacity = dev.territory_opacity;
                     let blend_mode = dev.blend_mode;
                     let conquest_duration = dev.conquest_duration;
-                    let threat_troop_cap = dev.value("threat.troop_cap")[0];
-                    let threat_max_radius = dev.value("threat.max_radius")[0];
                     let current_time = web_time::Instant::now();
                     let preview_duration = self.ui.dev_vfx_preview.duration(&dev);
                     let preview_phase = self
@@ -259,9 +225,6 @@ impl SowApp {
                             })
                             .map(|player| (player.id, player.centroid_x, player.centroid_y))
                     });
-                    let preview_center = preview_player
-                        .map(|(_, x, y)| [x, y])
-                        .unwrap_or([self.sim.map_w as f32 * 0.5, self.sim.map_h as f32 * 0.5]);
 
                     let dirty = self
                         .sim
@@ -314,104 +277,23 @@ impl SowApp {
                         }
                     }
 
-                    let mut threat_slots = [[0.0f32; 4]; 9];
-                    if let Some(snap) = &self.sim.current_snapshot {
-                        let my_id = self.sim.my_player_id.unwrap_or(0);
-                        let mut slot = 0usize;
-                        for attack in &snap.attacks {
-                            if slot >= 8 {
-                                break;
-                            }
-                            let is_mine = my_id != 0 && attack.owner_id == my_id;
-                            let targets_me = my_id != 0 && attack.target_owner == my_id;
-                            if !(is_mine || targets_me) || attack.troops <= 0.0 {
-                                continue;
-                            }
-                            if attack.front_cx == 0.0 && attack.front_cy == 0.0 {
-                                continue;
-                            }
-                            let radius = attack_threat_radius(
-                                attack.troops as f32,
-                                threat_troop_cap,
-                                threat_max_radius,
+                    let placement_center = self
+                        .ui
+                        .app
+                        .hud_state
+                        .building_placement
+                        .filter(|p| !p.pending && self.sim.map_w > 0)
+                        .map(|p| {
+                            let footprint = sow_core::building::BuildingFootprint::at(
+                                p.kind,
+                                p.tile_idx % self.sim.map_w,
+                                p.tile_idx / self.sim.map_w,
                             );
-                            threat_slots[slot] = [
-                                attack.front_cx,
-                                attack.front_cy,
-                                radius,
-                                attack.target_owner as f32 * 1024.0 + attack.owner_id as f32,
-                            ];
-                            slot += 1;
-                        }
-                    }
-                    if preview_player_id > 0
-                        && matches!(
-                            preview_effect,
-                            crate::app::DevVfxPreview::EXPANSION
-                                | crate::app::DevVfxPreview::COMBAT_HAZE
-                        )
-                    {
-                        let target_id = if preview_effect == crate::app::DevVfxPreview::EXPANSION {
-                            0
-                        } else {
-                            preview_player_id
-                        };
-                        let attacker_id = if preview_effect == crate::app::DevVfxPreview::EXPANSION
-                        {
-                            preview_player_id
-                        } else {
-                            preview_partner
-                                .map(|(id, _, _)| id)
-                                .unwrap_or(preview_player_id)
-                        };
-                        threat_slots[8] = [
-                            preview_center[0],
-                            preview_center[1],
-                            attack_threat_radius(100.0, threat_troop_cap, threat_max_radius),
-                            target_id as f32 * 1024.0 + attacker_id as f32,
-                        ];
-                    }
-
-                    let placement_active = if self.ui.app.hud_state.building_placement.is_some() {
-                        1.0
-                    } else {
-                        0.0
-                    };
-                    let (bounds, sites, revision) =
-                        self.ui.building_placement_cache.visible_sites();
-                    mr.update_building_placement(
-                        &mut render_ctx.command_encoder,
-                        &render_ctx.context,
-                        bounds,
-                        sites,
-                        revision,
-                    );
-
-                    let mut fallout_slots = [[0.0f32; 4]; 9];
-                    {
-                        let mut slot = 0usize;
-                        let duration = dev.value("nuke.zone.duration")[0];
-                        self.ui.fallout_zones.retain(|fz| {
-                            let elapsed = current_time.duration_since(fz.start_time).as_secs_f32();
-                            if duration <= 0.0 || elapsed >= duration {
-                                return false;
-                            }
-                            if slot < 8 {
-                                let alpha_p = (1.0 - elapsed / duration).max(0.0);
-                                fallout_slots[slot] = [fz.x, fz.y, fz.radius, alpha_p];
-                                slot += 1;
-                            }
-                            true
+                            [
+                                footprint.left as f32 + footprint.width as f32 * 0.5,
+                                footprint.top as f32 + footprint.height as f32 * 0.5,
+                            ]
                         });
-                    }
-                    if preview_effect == crate::app::DevVfxPreview::NUCLEAR {
-                        fallout_slots[8] = [
-                            preview_center[0],
-                            preview_center[1],
-                            sow_core::game::nuke_inner_radius(1) as f32,
-                            1.0 - preview_phase,
-                        ];
-                    }
 
                     let mut alliance_celebration_slots = [[0.0f32; 4]; 18];
                     let snapshot = self.sim.current_snapshot.as_ref();
@@ -445,9 +327,11 @@ impl SowApp {
                         slot += 1;
                         true
                     });
+                    let mut alliance_count = slot.min(crate::app::MAX_ALLIANCE_CELEBRATIONS) as f32;
                     if preview_effect == crate::app::DevVfxPreview::ALLIANCE
                         && let Some((first_id, first_x, first_y)) = preview_player
                     {
+                        alliance_count = 9.0;
                         alliance_celebration_slots[16] =
                             [first_id as f32, first_x, first_y, preview_time];
                         if let Some((second_id, second_x, second_y)) = preview_partner {
@@ -608,27 +492,22 @@ impl SowApp {
                         border_darkness,
                         shore_thickness,
                         shore_darkness,
-                        threat_slots,
                         alliance_celebration_slots,
                         effect_shockwave: if dev.vfx_conquer { 1.0 } else { 0.0 },
                         effect_breathe: if dev.vfx_border_breathe { 1.0 } else { 0.0 },
                         effect_energy_flow: if dev.vfx_energy_flow { 1.0 } else { 0.0 },
                         my_player_id: self.sim.my_player_id.unwrap_or(0) as f32,
-                        placement_active,
-                        _placement_pad: [
-                            sf,
-                            if self.input.camera_zoom / sf.max(0.01) >= 4.0 {
-                                1.0
-                            } else {
-                                0.0
-                            },
-                        ],
+                        placement_scale: if placement_center.is_some() {
+                            sf.max(0.01)
+                        } else {
+                            0.0
+                        },
+                        placement_center: placement_center.unwrap_or_default(),
                         territory_opacity,
-                        fallout_slots,
                         blend_mode,
                         effect_heartbeat: if dev.vfx_heartbeat { 1.0 } else { 0.0 },
-                        effect_war_fog: if dev.vfx_war_fog { 1.0 } else { 0.0 },
-                        effect_fallout: if dev.vfx_fallout { 1.0 } else { 0.0 },
+                        alliance_count,
+                        _pad3: 0.0,
                         effect_golden_hour: if dev.vfx_ambient_grade { 1.0 } else { 0.0 },
                         effect_holo_grid: if dev.vfx_holo_grid { 1.0 } else { 0.0 },
                         attack_flash_target,
@@ -765,23 +644,5 @@ impl SowApp {
 
             self.render_frame_ui_and_present(sf, frame, dt);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::attack_threat_radius;
-
-    #[test]
-    fn attack_threat_radius_reaches_full_radius_at_one_thousand_troops() {
-        assert_eq!(attack_threat_radius(0.0, 1_000.0, 100.0), 0.0);
-        assert_eq!(attack_threat_radius(100.0, 1_000.0, 100.0), 10.0);
-        assert_eq!(attack_threat_radius(1_000.0, 1_000.0, 100.0), 100.0);
-        assert_eq!(attack_threat_radius(10_000.0, 1_000.0, 100.0), 100.0);
-        assert_eq!(attack_threat_radius(50_000.0, 1_000.0, 100.0), 100.0);
-        assert_eq!(attack_threat_radius(100_000.0, 1_000.0, 100.0), 100.0);
-        assert_eq!(attack_threat_radius(150_000.0, 1_000.0, 100.0), 100.0);
-        assert_eq!(attack_threat_radius(100.0, 0.0, 100.0), 0.0);
-        assert_eq!(attack_threat_radius(100.0, 1000.0, 0.0), 0.0);
     }
 }

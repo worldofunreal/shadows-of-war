@@ -2075,6 +2075,7 @@ fn verify_replay(
         ), std::collections::HashMap::<u16, [u32; 3]>::new(), 0usize, 0usize, false),
     };
     engine.legacy_building_rules = version < 3;
+    engine.legacy_elimination_rewards = version < 4;
     let mut game_over_preceded_personal_closure = reused_turns == turns.len() && game_over_before_last;
     for (index, turn) in turns.iter().enumerate().skip(reused_turns) {
         if turn.turn_number != index as u64 {

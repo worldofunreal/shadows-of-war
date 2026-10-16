@@ -81,6 +81,11 @@
         napoleon: "Europe"
     };
 
+    // Line icons live in main_menu.hud.js (loaded after the menu, used at render time).
+    function menuIcon(name) {
+        return window.SOW_hudIcon ? window.SOW_hudIcon(name) : "";
+    }
+
     function esc(value) {
         return String(value == null ? "" : value)
             .replace(/&/g, "&amp;")
@@ -278,7 +283,7 @@
         while (pendingCommands.length) window.SOW_menu_command(pendingCommands.shift());
     };
 
-    function heroImage(leaderId) {
+    function heroImage(leaderId, variant) {
         var selected = arguments.length === 0;
         if (selected && state && state.prefer_random_leader && state.phase === "MainMenu" &&
             state.loader_job !== "EnterGame" && state.loader_job !== "ExitGame") {
@@ -292,7 +297,15 @@
             state.loader_job !== "EnterGame" && state.loader_job !== "ExitGame") {
             prepareLeaderArt(leader.slug, state.loader_job === "Boot" ? "low" : "high");
         }
+        if (variant) return leaderArtUrl(leader.slug, variant);
         return leaderArtUrl(leader.slug);
+    }
+
+    // OWNER DECISION: the profile identity banner always uses landscape art,
+    // even on portrait screens. It is a wide banner; never use the viewport
+    // default here or the tall image will be cropped into the profile header.
+    function profileHeroImage(leaderId) {
+        return heroImage(leaderId, "desktop");
     }
 
     function avatarImage(leaderId) {
@@ -347,13 +360,8 @@
                     return [skin.id, skin.owned, skin.cost_gems];
                 }),
                 gem_bundles: (state.store.gem_bundles || []).map(function (bundle) {
-                    return [bundle.id, bundle.product_id, bundle.gems, bundle.asset_path];
-                }),
-                direct_leaders: (state.store.leaders || []).map(function (leader) {
-                    return [leader.id, leader.direct_product_id, leader.direct_price_label];
-                }),
-                direct_skins: (state.store.skins || []).map(function (skin) {
-                    return [skin.id, skin.direct_product_id, skin.direct_price_label];
+                    return [bundle.id, bundle.product_id, bundle.gems, bundle.asset_path,
+                        bundle.price_label, bundle.bonus_percent];
                 })
             },
             account_id: state.account_id,

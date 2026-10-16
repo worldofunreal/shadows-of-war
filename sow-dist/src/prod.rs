@@ -829,6 +829,10 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "building placement cells regression failed",
         ),
         (
+            "render::world::overlays::tests::placement_sprite_keeps_built_scale_and_remains_visible_when_zooming_out",
+            "building placement sprite scale regression failed",
+        ),
+        (
             "render::world::nameplates::emote_tests",
             "nameplate emote lifecycle regression tests failed",
         ),
@@ -2728,9 +2732,11 @@ sudo install -o root -g root -m 0755 {hook_stage} /etc/letsencrypt/renewal-hooks
 credential_stage={credential_stage_arg}
 hook_stage={hook_stage_arg}
 cert_test_stage=
+certbot_cli_stage=
 cleanup() {{
     [ -z "$credential_stage" ] || rm -f "$credential_stage"
     [ -z "$hook_stage" ] || rm -f "$hook_stage"
+    [ -z "$certbot_cli_stage" ] || rm -f "$certbot_cli_stage"
     [ -z "$cert_test_stage" ] || sudo rm -rf -- "$cert_test_stage"
 }}
 trap cleanup EXIT
@@ -2743,23 +2749,42 @@ sudo install -d -o root -g root -m 0755 /etc/letsencrypt/renewal-hooks/deploy
 sudo install -d -o root -g sowrelay -m 0750 /usr/local/etc/sow
 {credential_update}
 {hook_update}
-sudo systemctl enable --now certbot.timer
+dns_cloudflare_propagation_seconds=60
 # Certbot 2.9 deactivates reused dry-run authorizations. Keep each simulation's
 # account state separate so a previous check cannot leave this one unusable.
 cert_test_stage=$(sudo mktemp -d /tmp/sow-relay-cert-test.XXXXXX)
 sudo certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
     --config /dev/null --config-dir "$cert_test_stage/config" --work-dir "$cert_test_stage/work" \
     --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
+    --dns-cloudflare-propagation-seconds "$dns_cloudflare_propagation_seconds" \
     --cert-name relay.shadowsofwar.io -d relay.shadowsofwar.io --dry-run
+certbot_cli_ini=/etc/letsencrypt/cli.ini
+if ! sudo grep -Fxq "dns-cloudflare-propagation-seconds = $dns_cloudflare_propagation_seconds" "$certbot_cli_ini"; then
+    if sudo test -e "$certbot_cli_ini"; then
+        sudo cp -p "$certbot_cli_ini" "$certbot_cli_ini.bak_$(date +%s)"
+    fi
+    certbot_cli_stage=$(mktemp /tmp/sow-relay-certbot-cli.XXXXXX)
+    if sudo test -f "$certbot_cli_ini"; then
+        sudo grep -Ev '^[[:space:]]*dns-cloudflare-propagation-seconds[[:space:]]*=' "$certbot_cli_ini" > "$certbot_cli_stage" || true
+    fi
+    printf '%s\n' "dns-cloudflare-propagation-seconds = $dns_cloudflare_propagation_seconds" >> "$certbot_cli_stage"
+    sudo install -o root -g root -m 0644 "$certbot_cli_stage" "$certbot_cli_ini"
+    rm -f "$certbot_cli_stage"
+    certbot_cli_stage=
+fi
+sudo systemctl enable --now certbot.timer
 renewal=/etc/letsencrypt/renewal/relay.shadowsofwar.io.conf
 if ! sudo test -s "$renewal" \
     || ! sudo grep -Fxq 'authenticator = dns-cloudflare' "$renewal" \
     || ! sudo grep -Fxq 'dns_cloudflare_credentials = /etc/letsencrypt/cloudflare.ini' "$renewal"; then
     sudo certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
         --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
+        --dns-cloudflare-propagation-seconds "$dns_cloudflare_propagation_seconds" \
         --cert-name relay.shadowsofwar.io -d relay.shadowsofwar.io --force-renewal
 else
-    sudo certbot renew --no-random-sleep-on-renew --cert-name relay.shadowsofwar.io
+    sudo certbot renew --no-random-sleep-on-renew \
+        --dns-cloudflare-propagation-seconds "$dns_cloudflare_propagation_seconds" \
+        --cert-name relay.shadowsofwar.io
 fi
 sudo /etc/letsencrypt/renewal-hooks/deploy/50-sow-relay
 sudo openssl x509 -in /usr/local/etc/sow/relay.crt -noout -checkend 2592000 >/dev/null
@@ -2769,6 +2794,7 @@ systemctl is-enabled --quiet certbot.timer
 systemctl is-active --quiet certbot.timer
 sudo grep -Fxq 'authenticator = dns-cloudflare' "$renewal"
 sudo grep -Fxq 'dns_cloudflare_credentials = /etc/letsencrypt/cloudflare.ini' "$renewal"
+sudo grep -Fxq "dns-cloudflare-propagation-seconds = $dns_cloudflare_propagation_seconds" "$certbot_cli_ini"
 "#,
         credential_stage_arg = credential_stage_arg,
         hook_stage_arg = hook_stage_arg,

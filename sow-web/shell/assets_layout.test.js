@@ -38,6 +38,9 @@ test("every art slot the game draws has its file", () => {
             );
         }
     }
+    for (const unit of ["transport-ship", "trade-ship", "warship", "atom-bomb", "sam-missile"]) {
+        assert.ok(fs.existsSync(path.join(art, "units", unit + ".png")), `missing assets/art/units/${unit}.png`);
+    }
     const badges = JSON.parse(fs.readFileSync(path.join(assets, "generated/badges-atlas.json"), "utf8"));
     for (const name of badges.cells) {
         assert.ok(fs.existsSync(path.join(art, "badges", name + ".png")), `missing assets/art/badges/${name}.png`);

@@ -276,6 +276,17 @@ impl SowApp {
         if self.try_tutorial_campaign_nameplate_attack(x, y) {
             return;
         }
+        // Buttons may hang past the map edge, so they resolve before the tile.
+        if let Some(button) = self
+            .placement_controls()
+            .and_then(|controls| controls.button_at(x as f32, y as f32))
+        {
+            match button {
+                super::placement::PlacementButton::Confirm => self.confirm_building_placement(),
+                super::placement::PlacementButton::Cancel => self.clear_placement(),
+            }
+            return;
+        }
 
         let Some((col, row)) = self.mouse_to_tile(x, y) else {
             return;
@@ -515,11 +526,10 @@ impl SowApp {
                 return;
             }
         }
-        let message = match self.map_target(tile_idx) {
-            Some(target) if target.owner == 0 => "No action is available here.".to_string(),
-            Some(target) if target.is_teammate => "Teammates cannot be targeted. 🤝".to_string(),
+        let key = match self.map_target(tile_idx) {
+            Some(target) if target.is_teammate => "hud.fleet_teammate",
             Some(target) if target.owner == target.my_id && !target.is_land => {
-                "Buildings require owned land. 🗺️".to_string()
+                "hud.build_owned_land"
             }
             Some(target) if target.owner == target.my_id => {
                 let building = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
@@ -529,21 +539,13 @@ impl SowApp {
                         .find(|building| building.tile_idx == tile_idx)
                 });
                 match building {
-                    Some(building) if building.under_construction => {
-                        "Building under construction. 🏗️".to_string()
-                    }
-                    Some(building) => format!(
-                        "{} level {} has no available action.",
-                        building.kind.as_str(),
-                        building.level
-                    ),
-                    None => "No construction action is available here.".to_string(),
+                    Some(building) if building.under_construction => "hud.building_in_progress",
+                    _ => "hud.action_unavailable",
                 }
             }
-            Some(_) => "No action is available here.".to_string(),
-            None => "No action is available here.".to_string(),
+            _ => "hud.action_unavailable",
         };
-        self.add_map_feedback(action_notice(&message));
+        self.add_map_feedback(crate::ui::UiText::new(key));
     }
 
     pub(crate) fn map_menu_actions(&mut self, tile_idx: u32) -> Vec<MapMenuAction> {
@@ -844,9 +846,20 @@ impl SowApp {
                     MapMenuAction::BuildFarm => sow_core::game::BuildingKind::Farm,
                     _ => unreachable!(),
                 };
-                if let Some((col, row)) = self.tile_coords(tile_idx) {
-                    self.select_building_kind(kind);
-                    self.move_building_preview(col, row);
+                if !self
+                    .ui
+                    .app
+                    .hud_state
+                    .building_placement
+                    .is_some_and(|p| p.pending)
+                {
+                    self.ui.app.hud_state.building_placement =
+                        Some(crate::ui::hud::state::BuildingPlacement {
+                            kind,
+                            tile_idx,
+                            pending: false,
+                        });
+                    self.confirm_building_placement();
                 }
             }
             MapMenuAction::UpgradeStructure => {
@@ -984,6 +997,7 @@ impl SowApp {
         );
     }
 
+    #[cfg(test)]
     pub(crate) fn building_placement_site_valid(&mut self) -> bool {
         let Some(placement) = self.ui.app.hud_state.building_placement else {
             return false;
@@ -1003,19 +1017,11 @@ impl SowApp {
         let Some(placement) = self.ui.app.hud_state.building_placement else {
             return;
         };
-        if placement.pending
-            || self.ui.observing
-            || self.ui.tutorial_camera_only
-            || self.ui.app.phase != crate::ClientPhase::Playing
-            || self.ui.app.hud_state.sync_state.is_some()
-        {
-            return;
-        }
-        if let Some(reason) = self.building_placement_reason() {
-            self.add_map_feedback(reason);
+        if !self.building_placement_can_confirm() {
             return;
         }
         self.input.building_drag_offset = None;
+        self.input.camera_focus_target = None;
         self.ui
             .app
             .hud_state
@@ -1034,10 +1040,8 @@ impl SowApp {
             .as_mut()
             .filter(|p| p.pending)
         {
-            // A processed paused-tutorial rejection already cleared pending
-            // and supplied its precise reason in finish_building_confirmation.
+            // A processed paused-tutorial rejection already cleared pending.
             placement.pending = false;
-            self.add_map_feedback(crate::ui::UiText::new("hud.action_unavailable"));
         }
     }
 
@@ -1077,11 +1081,21 @@ impl SowApp {
                 .as_mut()
                 .unwrap()
                 .pending = false;
-            let reason = self
-                .building_placement_reason()
-                .unwrap_or_else(|| crate::ui::UiText::new("hud.action_unavailable"));
-            self.add_map_feedback(reason);
         }
+    }
+
+    /// One rule for the drawn confirm button, the tutorial guide and the order itself.
+    pub(crate) fn building_placement_can_confirm(&mut self) -> bool {
+        self.ui
+            .app
+            .hud_state
+            .building_placement
+            .is_some_and(|p| !p.pending)
+            && !self.ui.observing
+            && !self.ui.tutorial_camera_only
+            && self.ui.app.phase == crate::ClientPhase::Playing
+            && self.ui.app.hud_state.sync_state.is_none()
+            && self.building_placement_reason().is_none()
     }
 
     pub(crate) fn building_placement_reason(&mut self) -> Option<crate::ui::UiText> {
@@ -1353,15 +1367,15 @@ impl SowApp {
             return false;
         };
         if target.is_teammate {
-            self.add_action_feedback("Teammates cannot be targeted. 🤝");
+            self.add_map_feedback(crate::ui::UiText::new("hud.fleet_teammate"));
             return false;
         }
         if target.is_allied {
-            self.add_action_feedback("Break the alliance before launching a fleet. 🛡️");
+            self.add_map_feedback(crate::ui::UiText::new("hud.fleet_alliance"));
             return false;
         }
         if target.owner != 0 && !target.is_enemy() {
-            self.add_action_feedback("A fleet cannot target your own territory. 🛡️");
+            self.add_map_feedback(crate::ui::UiText::new("hud.fleet_own_target"));
             return false;
         }
         if let Err(error) = self.fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Path) {
@@ -1370,9 +1384,9 @@ impl SowApp {
         }
         let troops = self.ui.app.hud_state.troops * self.ui.app.hud_state.attack_ratio as f64;
         if troops < self.sim.config.attack_cost_neutral {
-            self.add_action_feedback(format!(
-                "Need at least {} troops for a fleet. 🚢",
-                crate::utils::format_number(self.sim.config.attack_cost_neutral)
+            self.add_map_feedback(crate::ui::UiText::new("hud.fleet_need_troops").with(
+                "troops",
+                crate::utils::format_number(self.sim.config.attack_cost_neutral),
             ));
             return false;
         }
@@ -1388,7 +1402,7 @@ impl SowApp {
             return false;
         };
         if !target.is_friendly() {
-            self.add_action_feedback("Resources can only be sent to allies. ⚖️");
+            self.add_map_feedback(crate::ui::UiText::new("hud.resources_allies_only"));
             return false;
         }
         self.ui.app.hud_state.show_ask_panel = Some(target.owner);
@@ -1424,17 +1438,13 @@ impl SowApp {
     }
 
     fn map_target(&self, tile_idx: u32) -> Option<MapTarget> {
-        let map_len = self.sim.map_w.checked_mul(self.sim.map_h)?;
+        let map = &self.sim.engine.as_ref()?.state.map;
+        let map_len = map.width.checked_mul(map.height)?;
         if tile_idx >= map_len {
             return None;
         }
-        let renderer = self.gfx.map_renderer.as_ref()?;
-        let index = tile_idx as usize;
-        let owner = renderer.owners.get(index).copied().unwrap_or(0);
-        let is_land = renderer
-            .terrain
-            .get(index)
-            .is_some_and(|terrain| terrain & 0x80 != 0);
+        let owner = map.owner_id(tile_idx % map.width, tile_idx / map.width);
+        let is_land = map.terrain.get(tile_idx as usize)?.is_land();
         let my_id = self.sim.my_player_id.unwrap_or(0);
         let snapshot = self.sim.current_snapshot.as_ref()?;
         let me = snapshot.players.iter().find(|player| player.id == my_id);
@@ -1795,28 +1805,15 @@ fn action_notice(message: &str) -> crate::ui::UiText {
     {
         return UiText::new("hud.need_gold").with("cost", cost);
     }
-    if let Some(troops) = message
-        .strip_prefix("Need at least ")
-        .and_then(|value| value.strip_suffix(" troops for a fleet. 🚢"))
-    {
-        return UiText::new("hud.fleet_need_troops").with("troops", troops);
-    }
     match message {
         "No action is available here." | "Action unavailable here." => {
             UiText::new("hud.action_unavailable")
         }
-        "Teammates cannot be targeted. 🤝" => UiText::new("hud.fleet_teammate"),
-        "Break the alliance before launching a fleet. 🛡️" => UiText::new("hud.fleet_alliance"),
-        "A fleet cannot target your own territory. 🛡️" => UiText::new("hud.fleet_own_target"),
-        "Resources can only be sent to allies. ⚖️" => UiText::new("hud.resources_allies_only"),
         "Alliance renewal is already pending." => UiText::new("hud.alliance_renewal_pending"),
         "Alliance request already pending." => UiText::new("hud.alliance_request_pending"),
-        "Buildings require owned land. 🗺️" | "Build inside your own land." => {
-            UiText::new("hud.build_owned_land")
-        }
+        "Build inside your own land." => UiText::new("hud.build_owned_land"),
         "Structures go on land, not water." => UiText::new("hud.build_land"),
         "No space nearby!" => UiText::new("hud.build_no_space"),
-        "Building under construction. 🏗️" => UiText::new("hud.building_in_progress"),
         _ => UiText::new("hud.action_unavailable"),
     }
 }

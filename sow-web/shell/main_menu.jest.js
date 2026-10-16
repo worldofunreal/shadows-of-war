@@ -20,7 +20,7 @@ function renderCommandPanel() {
             "<div class='sow-menu__home-public'>" + renderPublicPanel("home") + "</div>" +
             "<div class='sow-menu__home-actions'>" +
                 "<button class='sow-menu__primary' type='button' data-command='quick_match'>" + esc(SOW_t("menu.quick_match")) + " <span>↗</span></button>" +
-                "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>" + esc(SOW_t("menu.campaign")) + " <span>⚔</span></button>" +
+                "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>" + esc(SOW_t("menu.campaign")) + " " + menuIcon("attack") + "</button>" +
                 "<button class='sow-menu__secondary' type='button' data-command='open_browser'>" + esc(SOW_t("menu.lobby_browser")) + " <span>→</span></button>" +
                 "<form class='sow-menu__join' data-form='join'>" +
                     "<input name='code' inputmode='numeric' autocomplete='off' placeholder='" + esc(SOW_t("menu.lobby_code")) + "' aria-label='" + esc(SOW_t("menu.lobby_code")) + "'>" +

@@ -1544,8 +1544,11 @@ test("construction guidance points to confirmation without advancing on a previe
     const model = { step: { id: "build_city", paused_action: "build_until_started", trigger: { type: "city", value: 1 }, guide: { kind: "world", target: "build_site", gesture: "tap" } } };
     assert.equal(adapt(model, {}), model);
     assert.equal(adapt(model, { building_placement: { can_confirm: false } }), model);
+    assert.equal(adapt(model, { building_placement: { can_confirm: true, pending: true } }), model, "a submitted radial action never opens another confirmation guide");
     const display = adapt(model, { building_placement: { can_confirm: true } });
     assert.equal(display.step.guide.target, "confirm_building_placement");
     assert.equal(display.step.trigger, model.step.trigger);
     assert.equal(model.step.guide.target, "build_site");
+
+
 });

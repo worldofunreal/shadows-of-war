@@ -121,6 +121,8 @@ pub const KIND_ARC: f32 = 8.0;
 pub const KIND_ROUNDED_RECT: f32 = 10.0;
 pub const KIND_BUILDING_SPRITE: f32 = 11.0;
 pub const KIND_STATUS_SPRITE: f32 = 12.0;
+/// Badge-atlas art drawn with the emoji outline and shadow.
+pub const KIND_ICON: f32 = 13.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NameplateStatusSprite {
     Request,
@@ -132,10 +134,22 @@ pub enum NameplateStatusSprite {
     You,
     Disconnected,
     UpgradeSparkle,
+    Wilderness,
+    Troops,
+    Death,
+    Radiation,
+    Construction,
+    Hammer,
+    ArrowUp,
+    ArrowRight,
+    ArrowDown,
+    ArrowLeft,
+    Cancel,
+    Confirm,
 }
 
 impl NameplateStatusSprite {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 21] = [
         Self::Request,
         Self::Allied,
         Self::Traitor,
@@ -145,6 +159,18 @@ impl NameplateStatusSprite {
         Self::You,
         Self::Disconnected,
         Self::UpgradeSparkle,
+        Self::Wilderness,
+        Self::Troops,
+        Self::Death,
+        Self::Radiation,
+        Self::Construction,
+        Self::Hammer,
+        Self::ArrowUp,
+        Self::ArrowRight,
+        Self::ArrowDown,
+        Self::ArrowLeft,
+        Self::Cancel,
+        Self::Confirm,
     ];
 
     /// File name in `assets/art/badges/` and cell name in the generated strip.
@@ -159,6 +185,18 @@ impl NameplateStatusSprite {
             Self::You => "you",
             Self::Disconnected => "disconnected",
             Self::UpgradeSparkle => "upgrade-sparkle",
+            Self::Wilderness => "wilderness",
+            Self::Troops => "troops",
+            Self::Death => "death",
+            Self::Radiation => "radiation",
+            Self::Construction => "construction",
+            Self::Hammer => "hammer",
+            Self::ArrowUp => "arrow-up",
+            Self::ArrowRight => "arrow-right",
+            Self::ArrowDown => "arrow-down",
+            Self::ArrowLeft => "arrow-left",
+            Self::Cancel => "cancel",
+            Self::Confirm => "confirm",
         }
     }
 
@@ -204,7 +242,8 @@ pub const AVATAR_SLOT_COUNT: usize = (AVATAR_COLS * AVATAR_ROWS) as usize;
 
 pub const AVATAR_EXPRESSIONS: usize = 4;
 pub const AVATAR_FALLBACK_SLOT: usize = sow_core::player::Leader::ALL.len() * AVATAR_EXPRESSIONS;
-pub const AVATAR_CAMPAIGN_FIRST_SLOT: usize = AVATAR_FALLBACK_SLOT + 1;
+pub const AVATAR_GOLD_SLOT: usize = AVATAR_FALLBACK_SLOT + 1;
+pub const AVATAR_CAMPAIGN_FIRST_SLOT: usize = AVATAR_GOLD_SLOT + 1;
 
 pub fn leader_avatar_slot(
     leader: sow_core::player::Leader,

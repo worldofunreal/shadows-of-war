@@ -288,7 +288,7 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
 
     assert.match(hudCss, /\.sow-hud__transfer-actions button:active:not\(:disabled\),\s*\.sow-hud__request-actions button:active:not\(:disabled\)\s*\{[^}]*transform:\s*translateY\(1px\)/);
     assert.match(hudCss, /\.sow-hud__transfer-actions button:disabled,\s*\.sow-hud__request-actions button:disabled\s*\{[^}]*opacity:\s*0\.35/);
-    assert.match(hudCss, /\.sow-hud__request-actions button \{[^}]*min-block-size:\s*2\.75rem/);
+    assert.match(hudCss, /\.sow-hud__sheet \.sow-hud__request-actions button \{[^}]*min-block-size:\s*48px/);
     assert.match(hudCss, /\.sow-hud__request-name \{[^}]*overflow-wrap:\s*anywhere/);
 
 

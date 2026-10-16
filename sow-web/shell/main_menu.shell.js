@@ -419,7 +419,7 @@
                         "<span class='sow-menu__progress-cell sow-menu__gems'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("gem")) + "' alt='' aria-hidden='true'><strong data-progression-gems-value>" + esc(gems) + "</strong></span>" +
                     "</div>" +
                     (showSignIn ? signInMarkup : ((window.SOW_PORTAL === "poki" || window.SOW_PORTAL === "jest") ? "<span class='sow-menu__account-label'>" + esc(SOW_t("menu.anonymous")) + "</span>" : "")) +
-                    "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.settings")) + "'>⚙</button>" +
+                    "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.settings")) + "'>" + menuIcon("settings") + "</button>" +
                 "</div>" +
             "</header>";
     }
@@ -431,7 +431,7 @@
                 "<div class='sow-menu__home-public'>" + renderPublicPanel("home") + "</div>" +
                 "<div class='sow-menu__home-actions'>" +
                     "<button class='sow-menu__primary' type='button' data-command='quick_match'>" + esc(SOW_t("menu.quick_match")) + " <span>↗</span></button>" +
-                    "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>" + esc(SOW_t("menu.campaign")) + " <span>⚔</span></button>" +
+                    "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>" + esc(SOW_t("menu.campaign")) + " " + menuIcon("attack") + "</button>" +
                     "<button class='sow-menu__secondary' type='button' data-command='open_browser'>" + esc(SOW_t("menu.lobby_browser")) + " <span>→</span></button>" +
                     "<form class='sow-menu__join' data-form='join'>" +
                         "<input name='code' inputmode='numeric' autocomplete='off' placeholder='" + esc(SOW_t("menu.lobby_code")) + "' aria-label='" + esc(SOW_t("menu.lobby_code")) + "'>" +
@@ -897,7 +897,7 @@
         }
         previousScreen = screen;
         var nextHero = screen === "profile"
-            ? heroImage(profileData && profileData.preferred_leader)
+            ? profileHeroImage(profileData && profileData.preferred_leader)
             : heroImage();
         if (root.dataset.hero !== nextHero) {
             root.style.setProperty("--sow-hero", "url(\"" + nextHero + "\")");
@@ -958,6 +958,9 @@
         }
         updateDynamic();
         if (screen === "store") loadStoreCatalog();
+        if (screen === "store" && screenChanged && typeof window.SOW_trackExperienceEvent === "function") {
+            window.SOW_trackExperienceEvent({ name: "store_open" });
+        }
         if (sameScreen && scrollTop !== null) {
             var nextScrollOwner = screen === "create"
                 ? activeScreenPanel() && activeScreenPanel().querySelector(".sow-create__scroll")
@@ -1594,10 +1597,6 @@
             return;
         }
         /* POKI_SHARED_STORE_ACTIONS_BEGIN */
-        if (command === "open_product_purchase") {
-            openProductPurchase(target.dataset.productId, target.dataset.leaderId, target.dataset.priceLabel, target.dataset.skinId);
-            return;
-        }
         if (command === "buy_product") {
             beginStorePurchase(target.dataset.productId);
             return;
@@ -1964,8 +1963,6 @@
                 if (!(state && state.store_busy)) send("unlock_leader", { leader_id: purchaseModal.leaderId, currency: purchaseModal.currency });
             } else if (purchaseModal.type === "skin") {
                 if (!(state && state.store_busy)) send("unlock_skin", { skin_id: purchaseModal.skinId });
-            } else if (purchaseModal.type === "product") {
-                if (!beginStorePurchase(purchaseModal.productId)) purchaseModal.submitted = false;
             }
             render();
             return;

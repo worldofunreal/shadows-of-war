@@ -171,7 +171,6 @@ impl SowApp {
         self.ui.app.main_menu_state.my_player_id = None;
         self.join_waiting_for_identity = false;
         self.join_matchmaking = false;
-        self.net.pending_lobby_rejoin = false;
         self.ui.app.hud_state.sync_state = None;
         self.sim.my_lobby_id = None;
         self.sim.my_player_id = None;

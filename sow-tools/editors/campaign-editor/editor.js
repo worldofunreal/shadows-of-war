@@ -1614,8 +1614,6 @@
         var transferPanel = $("#sow-hud-transfer");
         if (transferPanel && model.step.id === "boudica_transfer_send") transferPanel.hidden = false;
         else if (transferPanel && previousStep === "boudica_transfer_send") transferPanel.hidden = true;
-        var cancelBuildMode = $("#sow-hud [data-command='cancel_building_mode']");
-        if (cancelBuildMode) cancelBuildMode.hidden = !model.step.trigger || model.step.trigger.action !== "cancel_building_mode";
         var actionRatio = Number.isFinite(model.step.attack_ratio_on_enter) ? model.step.attack_ratio_on_enter : null;
         if (model.step.id !== state.previewActionStep || actionRatio !== state.previewActionRatio) {
             state.previewActionStep = model.step.id;
@@ -2086,6 +2084,49 @@
             host.appendChild(button);
         });
     }
+    function previewBuildingAction(target) {
+        var command = target.closest("[data-command]");
+        var action = target.closest("[data-map-action]");
+        var type = command && command.dataset.command;
+        var direct = action && /^build_(city|factory|port|bunker|farm)$/.exec(action.dataset.mapAction);
+        if (!["select_building", "nudge_building_placement", "cancel_building_mode", "confirm_building_placement"].includes(type) && !direct) return false;
+        var root = $("#sow-hud"), placement = $("#sow-hud-placement");
+        if (type === "nudge_building_placement") {
+            if (!placement) return true;
+            var offset = { up: [0,-8], right: [8,0], down: [0,8], left: [-8,0] }[command.dataset.direction];
+            var rect = placement.getBoundingClientRect(), bounds = root.getBoundingClientRect();
+            if (offset && rect.left + offset[0] >= bounds.left && rect.right + offset[0] <= bounds.right
+                && rect.top + offset[1] >= bounds.top && rect.bottom + offset[1] <= bounds.bottom) {
+                placement.style.left = (rect.left - bounds.left + 76 + offset[0]) + "px";
+                placement.style.top = (rect.top - bounds.top + 76 + offset[1]) + "px";
+            }
+            return true;
+        }
+        var kind = direct ? direct[1][0].toUpperCase() + direct[1].slice(1) : type === "select_building" ? command.dataset.kind : placement && placement.dataset.kind;
+        if (placement) placement.remove();
+        if (type === "select_building") {
+            placement = el("div", { id: "sow-hud-placement", class: "sample-placement", role: "group", "aria-label": "Place " + kind, dataset: { kind: kind } });
+            placement.appendChild(el("span", { class: "sample-placement-building", "aria-label": kind }, "▥"));
+            ["up", "right", "down", "left"].forEach(function (direction, index) {
+                placement.appendChild(el("button", { type: "button", "aria-label": "Move " + direction, dataset: { command: "nudge_building_placement", direction: direction } }, ["↑", "→", "↓", "←"][index]));
+            });
+            placement.appendChild(el("button", { type: "button", "aria-label": "Cancel", dataset: { command: "cancel_building_mode" } }, "×"));
+            placement.appendChild(el("button", { type: "button", "aria-label": "Build", dataset: { command: "confirm_building_placement" } }, "✓"));
+            root.appendChild(placement);
+        } else if (state.machine) {
+            var trigger = state.machine.view().step.trigger;
+            if (trigger && trigger.type === "ui" && trigger.action === type) simulateObjective(1);
+            else if ((direct || type === "confirm_building_placement") && kind
+                && trigger && [kind.toLowerCase(), "building"].includes(trigger.type)) simulateObjective(1);
+        }
+        if (direct) {
+            root.dataset.previewMapMenu = "";
+            root.querySelector(".sample-map-popup").hidden = true;
+        }
+        paintPreview();
+        return true;
+    }
+
     function simulateObjective(amount, sample) {
         if (!state.machine) return;
         var step = state.machine.view().step, trigger = step.trigger;
@@ -2177,6 +2218,7 @@
     }
     function resetPreview() {
         clearPreviewRevealTimer();
+        $("#sow-hud-placement")?.remove();
         state.facts = freshFacts(); state.ui = {}; state.previewFocusActive = false;
         var mapLayer = $("#campaignPreviewLayer");
         ["--map-focus-x", "--map-focus-y", "--map-focus-scale"].forEach(function (property) { mapLayer.style.removeProperty(property); });
@@ -2524,6 +2566,7 @@
             var action = event.target.closest("[data-map-action]");
             var hudRoot = $("#sow-hud");
             if (!hudRoot || !hudRoot.contains(event.target)) return;
+            if (previewBuildingAction(event.target)) return;
             if (back) hudRoot.dataset.previewMapMenu = "";
             else if (group) hudRoot.dataset.previewMapMenu = group.dataset.mapGroup;
             else if (action) hudRoot.dataset.previewMapMenu = "";

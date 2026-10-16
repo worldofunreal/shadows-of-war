@@ -2585,6 +2585,7 @@ fn s16_building_rules_trace(legacy: bool) -> Vec<(u64, u64)> {
     let mut scenario = build_s16_scenario();
     scenario.assert_setup();
     scenario.engine.legacy_building_rules = legacy;
+    scenario.engine.legacy_elimination_rewards = legacy;
     let mut hash = 0xcbf29ce484222325;
     let mut ticks = 0u64;
     let mut checkpoints = Vec::with_capacity(9);
@@ -2622,21 +2623,22 @@ fn s16_building_rules_trace(legacy: bool) -> Vec<(u64, u64)> {
 #[test]
 fn s16_checkpoint_decision_and_state_reference() {
     let checkpoints = s16_building_rules_trace(false);
-    // v3 allows touching foundations; the historical reference is checked separately.
+    // v4 doubles elimination payouts; pre-v4 outcomes are checked by the historical test.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x2e8ea695b8d4f132),
-        (500, 0x84bdecb5d45d61f0),
-        (750, 0x23fcfd7f17face3f),
-        (1000, 0x8bee0a9f03f955b6),
-        (1250, 0x7a36ab35567e29e1),
-        (1500, 0xc07fdecbf5fc7252),
-        (1750, 0xf6a3b7e9634eeac1),
-        (1867, 0x718abeb0d2f147bc),
+        (250, 0x2e31f475ec404951),
+        (500, 0x4d604b7d8b4ba2d4),
+        (750, 0x3cd4ffb963dfe57a),
+        (1000, 0xa9541e5cce9ddf89),
+        (1250, 0x58c5e28b34228ce5),
+        (1500, 0x6adfd3b9fedbf7d2),
+        (1750, 0x58d6a136129640e1),
+        (2000, 0xc687f782d53ead29),
+        (2102, 0x936a2032dc7b234b),
     ];
     assert_eq!(
         checkpoints,
         s16_building_rules_trace(false),
-        "same seed must reproduce v3 checkpoints"
+        "same seed must reproduce v4 checkpoints"
     );
     assert_eq!(
         checkpoints, REFERENCE,

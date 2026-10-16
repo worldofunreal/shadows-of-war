@@ -21,9 +21,7 @@ pub mod dev_config {
         pub vfx_dialog_border: bool,
         pub vfx_energy_flow: bool,
         pub vfx_heartbeat: bool,
-        pub vfx_war_fog: bool,
         pub fog_of_war: bool,
-        pub vfx_fallout: bool,
         pub vfx_ambient_grade: bool,
         pub vfx_screen_vignette: bool,
         pub vfx_holo_grid: bool,
@@ -68,9 +66,7 @@ pub mod dev_config {
                 vfx_dialog_border: true,
                 vfx_energy_flow: true,
                 vfx_heartbeat: true,
-                vfx_war_fog: true,
                 fog_of_war: false,
-                vfx_fallout: true,
                 vfx_ambient_grade: true,
                 vfx_screen_vignette: true,
                 vfx_holo_grid: true,
@@ -138,9 +134,7 @@ pub mod dev_config {
                 "vfx_dialog_border" => [bool_value(self.vfx_dialog_border), 0.0, 0.0, 0.0],
                 "vfx_energy_flow" => [bool_value(self.vfx_energy_flow), 0.0, 0.0, 0.0],
                 "vfx_heartbeat" => [bool_value(self.vfx_heartbeat), 0.0, 0.0, 0.0],
-                "vfx_war_fog" => [bool_value(self.vfx_war_fog), 0.0, 0.0, 0.0],
                 "fog_of_war" => [bool_value(self.fog_of_war), 0.0, 0.0, 0.0],
-                "vfx_fallout" => [bool_value(self.vfx_fallout), 0.0, 0.0, 0.0],
                 "vfx_ambient_grade" => [bool_value(self.vfx_ambient_grade), 0.0, 0.0, 0.0],
                 "vfx_screen_vignette" => [bool_value(self.vfx_screen_vignette), 0.0, 0.0, 0.0],
                 "vfx_holo_grid" => [bool_value(self.vfx_holo_grid), 0.0, 0.0, 0.0],
@@ -183,9 +177,7 @@ pub mod dev_config {
                 "vfx_dialog_border" => self.vfx_dialog_border = value[0] != 0.0,
                 "vfx_energy_flow" => self.vfx_energy_flow = value[0] != 0.0,
                 "vfx_heartbeat" => self.vfx_heartbeat = value[0] != 0.0,
-                "vfx_war_fog" => self.vfx_war_fog = value[0] != 0.0,
                 "fog_of_war" => self.fog_of_war = value[0] != 0.0,
-                "vfx_fallout" => self.vfx_fallout = value[0] != 0.0,
                 "vfx_ambient_grade" => self.vfx_ambient_grade = value[0] != 0.0,
                 "vfx_screen_vignette" => self.vfx_screen_vignette = value[0] != 0.0,
                 "vfx_holo_grid" => self.vfx_holo_grid = value[0] != 0.0,
@@ -218,6 +210,34 @@ pub mod dev_config {
                 return false;
             };
             self.assign(param.id, Self::default().value(param.id))
+        }
+
+        fn switch_ids(group: &str) -> &'static [&'static str] {
+            shader_params::PERF_SWITCHES
+                .iter()
+                .find(|(name, _)| *name == group)
+                .map_or(&[], |(_, ids)| ids)
+        }
+
+        pub fn set_switch_group(&mut self, group: &str, on: bool) {
+            let defaults = Self::default();
+            for id in Self::switch_ids(group) {
+                let value = if on { defaults.value(id) } else { [0.0; 4] };
+                self.assign(id, value);
+            }
+        }
+
+        /// "on" = every id at its default, "off" = every id zero, else "mixed".
+        pub fn switch_group_state(&self, group: &str) -> &'static str {
+            let defaults = Self::default();
+            let ids = Self::switch_ids(group);
+            if ids.iter().all(|id| self.value(id)[0] == defaults.value(id)[0]) {
+                "on"
+            } else if ids.iter().all(|id| self.value(id)[0] == 0.0) {
+                "off"
+            } else {
+                "mixed"
+            }
         }
 
         pub fn fingerprint(&self) -> Vec<u32> {

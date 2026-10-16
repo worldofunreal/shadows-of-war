@@ -59,6 +59,7 @@ function loadRuntime(storedLocale, catalogs, settings) {
     };
     window.CustomEvent = CustomEvent;
     if (settings && settings.window) Object.assign(window, settings.window);
+    const hasNavigatorOverride = settings && Object.prototype.hasOwnProperty.call(settings, "navigator");
     const context = {
         window,
         document,
@@ -66,7 +67,7 @@ function loadRuntime(storedLocale, catalogs, settings) {
         Promise,
         fetch,
         CustomEvent,
-        navigator: (settings && settings.navigator) || { languages: ["en-US"], language: "en-US" },
+        navigator: hasNavigatorOverride ? settings.navigator : { languages: ["en-US"], language: "en-US" },
         console: { error: (...args) => errors.push(args) }
     };
     vm.runInNewContext(runtimeSource, context, { filename: "sow-i18n.js" });
@@ -166,4 +167,71 @@ test("i18n resolves a usable locale from choice, portal default, then browser", 
     });
     await portal.window.SOW_I18N_READY;
     assert.equal(portal.window.SOW_getLocale(), "pt-BR");
+});
+
+test("browser detection keeps English, chooses the first supported preference, and caches it", async () => {
+    const codes = ["en", "es", "pt-br", "ja"];
+    const catalogs = {
+        en: catalog("en", "Settings"),
+        es: catalog("es", "Configuración"),
+        "pt-br": catalog("pt-br", "Configurações"),
+        ja: catalog("ja", "設定")
+    };
+
+    // The game shell's English default is a fallback, not a reason to ignore
+    // English or another supported browser preference.
+    const englishFirst = loadRuntime("", catalogs, {
+        window: { SOW_LOCALE_CODES: codes },
+        navigator: { languages: ["en-US", "es-MX"], language: "en-US" }
+    });
+    await englishFirst.window.SOW_I18N_READY;
+    assert.equal(englishFirst.window.SOW_getLocale(), "en");
+    assert.equal(englishFirst.storage.get("sow_ui_locale"), "en");
+
+    const spanishFirst = loadRuntime("", catalogs, {
+        window: { SOW_LOCALE_CODES: codes },
+        navigator: { languages: ["es-MX", "en-US"], language: "es-MX" }
+    });
+    await spanishFirst.window.SOW_I18N_READY;
+    assert.equal(spanishFirst.window.SOW_getLocale(), "es");
+    assert.equal(spanishFirst.storage.get("sow_ui_locale"), "es");
+
+    const unsupportedThenEnglish = loadRuntime("", catalogs, {
+        window: { SOW_LOCALE_CODES: codes },
+        navigator: { languages: ["nl-NL", "en-US"], language: "nl-NL" }
+    });
+    await unsupportedThenEnglish.window.SOW_I18N_READY;
+    assert.equal(unsupportedThenEnglish.window.SOW_getLocale(), "en");
+
+    const unsupportedOnly = loadRuntime("", catalogs, {
+        window: { SOW_LOCALE_CODES: codes },
+        navigator: { languages: ["nl-NL"], language: "nl-NL" }
+    });
+    await unsupportedOnly.window.SOW_I18N_READY;
+    assert.equal(unsupportedOnly.window.SOW_getLocale(), "en");
+
+    // An empty preference list uses navigator.language when available.
+    const languageFallback = loadRuntime("", catalogs, {
+        window: { SOW_LOCALE_CODES: codes },
+        navigator: { languages: [], language: "es-MX" }
+    });
+    await languageFallback.window.SOW_I18N_READY;
+    assert.equal(languageFallback.window.SOW_getLocale(), "es");
+
+    const noNavigator = loadRuntime("", catalogs, {
+        window: { SOW_LOCALE_CODES: codes },
+        navigator: null
+    });
+    await noNavigator.window.SOW_I18N_READY;
+    assert.equal(noNavigator.window.SOW_getLocale(), "en");
+
+    const inaccessibleNavigator = {};
+    Object.defineProperty(inaccessibleNavigator, "languages", { get() { throw new Error("unavailable"); } });
+    Object.defineProperty(inaccessibleNavigator, "language", { get() { throw new Error("unavailable"); } });
+    const unreadableNavigator = loadRuntime("", catalogs, {
+        window: { SOW_LOCALE_CODES: codes },
+        navigator: inaccessibleNavigator
+    });
+    await unreadableNavigator.window.SOW_I18N_READY;
+    assert.equal(unreadableNavigator.window.SOW_getLocale(), "en");
 });

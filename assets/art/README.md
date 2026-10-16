@@ -19,6 +19,11 @@ Para reemplazar algo, sobrescribe el archivo con el mismo nombre.
 | `badges/` | `you` | marca "eres tú" en tu placa | atlas, celda de 128 px |
 | `badges/` | `disconnected` | jugador sin conexión | atlas, celda de 128 px |
 | `badges/` | `upgrade-sparkle` | destellos al mejorar un edificio | atlas, celda de 128 px |
+| `badges/` | `wilderness` | terreno sin dueño en el panel de ataques | atlas, celda de 128 px |
+| `badges/` | `troops` | espada junto a las tropas en las placas del mapa | atlas, celda de 128 px |
+| `badges/` | `death`, `radiation` | marca al morir un jugador (normal y por bomba) | atlas, celda de 128 px |
+| `badges/` | `construction`, `hammer` | tiempo de construcción y edificio en obra sobre el mapa | atlas, celda de 128 px |
+| `units/` | `transport-ship`, `trade-ship`, `warship`, `atom-bomb`, `sam-missile` | barcos y misiles que se mueven por el mapa | atlas, celda de 64 px |
 | `icons/` | `gold`, `gem`, `crown`, `laurel` | monedas en tienda, HUD y perfil | 128 px |
 | `icons/` | `troops` | tropas en el HUD | 128 px |
 | `icons/` | `tutorial-hand` | mano del tutorial | 256 px |
@@ -26,6 +31,6 @@ Para reemplazar algo, sobrescribe el archivo con el mismo nombre.
 | `store/` | `sow_gems_500`, `sow_gems_1200`, `sow_gems_2600` | paquetes de gemas | 128 px |
 | `brand/`, `loader/`, `skins/`, `music/` | mismo nombre | logo, pantalla de carga, skins, música | sin cambios |
 
-Hoy, las insignias y los edificios que no tienen arte propio usan la imagen del emoji que se veía antes; están marcados en `assets/SOURCES.toml`.
+Hoy, las insignias, las unidades y los edificios que no tienen arte propio usan la imagen del emoji que se veía antes; están marcados en `assets/SOURCES.toml`.
 
 Un archivo con un nombre que no está en esta tabla detiene el build. Así no queda arte olvidado sin publicar. Para agregar un espacio nuevo hay que darlo de alta en `sow-dist` (`ART_ICONS`) o en `sow-tools` (`BADGES`).

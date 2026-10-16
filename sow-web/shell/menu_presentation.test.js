@@ -127,11 +127,40 @@ test("profile presents verified history, career commanders, localized achievemen
     assert.match(profileCss, /\.sow-profile__heading[\s\S]*var\(--sow-hero\)/);
     assert.match(profileCss, /\.sow-profile__match-kda\s*\{\s*grid-column: 3;\s*grid-row: 2;/);
     assert.doesNotMatch(profileCss, /\.sow-profile__match-kda\s*\{\s*display:\s*none/);
-    assert.match(shellSource, /heroImage\(profileData && profileData\.preferred_leader\)/);
+    assert.match(shellSource, /profileHeroImage\(profileData && profileData\.preferred_leader\)/);
+    assert.match(profileSource, /profileHeroImage\(data && data\.preferred_leader\)/);
     assert.doesNotMatch(profileSource.slice(profileSource.indexOf('profileTab === "overview"'), profileSource.indexOf('profileTab === "leaders"')), /profileLeaderCard|profileAchievementsMarkup/);
     assert.doesNotMatch(profileSource, /loadProfileRatings|profileTab === "ranked"|profileRecentLeadersPanel/);
     assert.doesNotMatch(profileCss, /sow-profile__favorites|sow-profile__rating/);
     assert.doesNotMatch(nativeProfileSource, /LoadProfileRatings|ProfileRatingsLoaded|ratings_loaded|ProfileTab::Ranked|ranked records/i);
+});
+
+
+test("profile banner always uses landscape leader art", () => {
+    const start = coreSource.indexOf("function heroImage(");
+    const end = coreSource.indexOf("function avatarImage(", start);
+    assert.ok(start >= 0 && end > start);
+    const context = {
+        state: null,
+        window: {},
+        leaderById: id => ({ slug: String(id).toLowerCase() }),
+        leaderArtUrl: (slug, variant) => `${slug}:${variant || "viewport-default"}`
+    };
+    vm.runInNewContext(coreSource.slice(start, end) + "; this.profileHeroImage = profileHeroImage;", context);
+    assert.equal(context.profileHeroImage("Boudica"), "boudica:desktop");
+    assert.match(coreSource, /OWNER DECISION: the profile identity banner always uses landscape art/);
+});
+
+
+test("desktop navigation stacks battle, heroes, profile, and shop", () => {
+    const layout = menuCss["main_menu.layout.css"];
+    const start = layout.indexOf("@media (min-width: 681px) and (orientation: landscape) {");
+    const end = layout.indexOf("@media (min-width: 681px) and (orientation: landscape) and (max-height: 560px)", start);
+    assert.ok(start >= 0 && end > start);
+    const orders = Array.from(layout.slice(start, end).matchAll(
+        /\.sow-menu__main-nav-item\[data-nav-screen="(battle|heroes|profile|store)"\]\s*\{\s*order:\s*(\d+);\s*\}/g
+    ), match => [match[1], Number(match[2])]);
+    assert.deepEqual(orders, [["battle", 1], ["heroes", 2], ["profile", 3], ["store", 4]]);
 });
 
 
@@ -518,8 +547,10 @@ test("hero purchase stays server-backed, direct, and visually honest", () => {
     assert.match(storeSource, /data-command='unlock_leader'/);
     assert.match(storeSource, /data-command='open_skin_purchase'/);
     assert.match(storeSource, /sow-store__currency-amount--insufficient/);
-    assert.match(storeSource, /command = confirm \? "open_product_purchase" : "buy_product"/);
-    assert.match(storeSource, /skin\.direct_product_id, SOW_t\("store\.buy"\), true/);
+    // One price per item: leaders and skins cost gems or crowns, never dollars.
+    assert.doesNotMatch(storeSource, /direct_product_id|open_product_purchase/);
+    assert.match(storeSource, /data-command='buy_product'/);
+    assert.match(storeSource, /SOW_t\("store\.buy"\) \+ \(!isAndroidTwa\(\) && bundle\.price_label/);
     assert.match(shellSource, /data-menu-overlay='purchase'/);
     assert.match(shellSource, /openLeaderPurchase/);
     assert.match(shellSource, /send\("unlock_leader", \{ leader_id: purchaseModal\.leaderId, currency: purchaseModal\.currency \}\)/);
@@ -618,7 +649,10 @@ test("weekly free rotation is a splash-only status", () => {
     assert.equal(context.isWeeklyFreeRotation({ available: false, free_rotation: true, owned: false }), false);
     assert.equal(context.isWeeklyFreeRotation({ available: true, free_rotation: true, owned: false }), true);
     assert.equal((heroesSource.match(/isWeeklyFreeRotation\(activeLeader\)/g) || []).length, 2);
-    assert.match(profileCss, /\.sow-heroes__rotation/);
+    assert.match(profileCss, /\.sow-heroes__rotation\[hidden\][\s\S]*display:\s*none/);
+    assert.match(profileCss, /\.sow-heroes__perk\[hidden\][\s\S]*display:\s*none/);
+    assert.match(heroesSource, /status\.hidden = randomSelected/);
+    assert.match(heroesSource, /status\.textContent = randomSelected \? ""/);
 });
 
 test("heroes preview never resolves the random option through leader i18n keys", () => {
@@ -635,14 +669,17 @@ test("heroes preview never resolves the random option through leader i18n keys",
 });
 
 
-test("random leader description speaks to the player, not about the server", () => {
+test("random hero keeps a translated label and a short description in every locale", () => {
     for (const locale of ["en", "es", "de", "fr", "it", "pt-br", "ru", "ja", "ko", "zh-cn", "ar", "tr", "vi", "id", "fil"]) {
         const catalog = fs.readFileSync(path.join(shell, `../../sow-i18n/strings/${locale}/web.toml`), "utf8");
         const line = catalog.split("\n").find((entry) => entry.startsWith("random_leader_description"));
         assert.ok(line && line.split("=")[1].trim().length > 2, `heroes.random_leader_description must exist in ${locale}`);
-        assert.doesNotMatch(line, /server|servidor|serveur|Servidor|Server|Serveur|сервер|Сервер|servidor|サーバー|서버|服务器|الخادم|Sunucu|Máy chủ|khí/i,
+        assert.doesNotMatch(line, /server|servidor|serveur|Servidor|Server|Serveur|сервер|Сервер|サーバー|서버|服务器|الخادم|Sunucu|Máy chủ|khí/i,
             `heroes.random_leader_description must not talk about the server in ${locale}`);
+        const label = catalog.split("\n").find((entry) => entry.startsWith("random_leader ="));
+        assert.ok(label && !/hero/i.test(label), `random_leader must be a single word, no HERO, in ${locale}`);
     }
+    assert.match(heroesSource, /SOW_t\("heroes\.random_leader_description"\)/);
 });
 
 

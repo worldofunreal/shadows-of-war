@@ -1,6 +1,7 @@
 //! Shared portrait and hero-expression loading; see docs/nameplates-and-emotes.md.
 use sow_core::player::Leader;
 use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 use web_time::{Duration, Instant};
 
 pub const MAX_AVATAR_FETCHES_IN_FLIGHT: usize = 6;
@@ -58,7 +59,10 @@ impl AssetLoader {
             avatars_fetch_pending: Vec::new(),
             avatars_in_flight: HashSet::new(),
             avatar_retry_state: HashMap::new(),
-            gpu_avatar_cells: Vec::new(),
+            gpu_avatar_cells: vec![(
+                sow_render::text::AVATAR_GOLD_SLOT,
+                gold_icon_cell().to_vec(),
+            )],
             portal_avatar: None,
             portal_avatar_request: None,
             portal_avatar_in_flight: false,
@@ -333,6 +337,15 @@ impl AssetLoader {
     }
 }
 
+fn gold_icon_cell() -> &'static [u8] {
+    static CELL: OnceLock<Vec<u8>> = OnceLock::new();
+    CELL.get_or_init(|| {
+        let image = image::load_from_memory(include_bytes!("../../../../assets/art/icons/gold.webp"))
+            .expect("embedded gold icon must be a valid image");
+        square_avatar_cell(&image.to_rgba8())
+    })
+}
+
 fn square_avatar_cell(image: &image::RgbaImage) -> Vec<u8> {
     let size = image.width().min(image.height()).max(1);
     let square = image::imageops::crop_imm(
@@ -420,8 +433,17 @@ mod tests {
                 std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
             let mut loader = AssetLoader::new();
             loader.ingest_avatar_webp_bytes(key, &bytes).unwrap();
-            assert_eq!(loader.gpu_avatar_cells.len(), 4);
-            for (index, (slot, cell)) in loader.gpu_avatar_cells.iter().enumerate() {
+            assert!(loader.gpu_avatar_cells.iter().any(|(slot, cell)| {
+                *slot == sow_render::text::AVATAR_GOLD_SLOT
+                    && cell.len() == 256 * 256 * 4
+            }));
+            let hero_cells = loader
+                .gpu_avatar_cells
+                .iter()
+                .filter(|entry| entry.0 != sow_render::text::AVATAR_GOLD_SLOT)
+                .collect::<Vec<_>>();
+            assert_eq!(hero_cells.len(), 4);
+            for (index, (slot, cell)) in hero_cells.into_iter().enumerate() {
                 assert_eq!(
                     *slot,
                     sow_render::text::leader_avatar_slot(

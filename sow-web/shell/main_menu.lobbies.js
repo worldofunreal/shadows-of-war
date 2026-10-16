@@ -54,7 +54,7 @@
     }
 
     function renderLobbyCard(lobby) {
-        var lock = lobby.has_password ? "<span class='sow-menu__lobby-lock' aria-label='" + esc(SOW_t("lobbies.password_protected")) + "'>🔒</span>" : "";
+        var lock = lobby.has_password ? "<span class='sow-menu__lobby-lock' aria-label='" + esc(SOW_t("lobbies.password_protected")) + "'>" + menuIcon("lock") + "</span>" : "";
         var label = lobbyLabel(lobby);
         preloadLobbyThumbnail(lobby).catch(function () {});
         return "" +
@@ -100,7 +100,7 @@
         if (status) status.textContent = lobbyStatusText(lobby);
         if (count) count.textContent = lobbyPlayerCount(lobby);
         if (lobby.has_password && !lock) {
-            card.querySelector(".sow-menu__lobby-top").insertAdjacentHTML("beforeend", "<span class='sow-menu__lobby-lock' aria-label='" + esc(SOW_t("lobbies.password_protected")) + "'>🔒</span>");
+            card.querySelector(".sow-menu__lobby-top").insertAdjacentHTML("beforeend", "<span class='sow-menu__lobby-lock' aria-label='" + esc(SOW_t("lobbies.password_protected")) + "'>" + menuIcon("lock") + "</span>");
         } else if (!lobby.has_password && lock) {
             lock.remove();
         }
@@ -380,7 +380,7 @@
                 "<div class='sow-menu__slider-label'><span>" + esc(SOW_t("lobbies.procedural_seed")) + "</span><b data-val-for='seed'>" + esc(config.seed || 42) + "</b></div>" +
                 "<div class='sow-menu__slider-row'>" +
                     "<input class='sow-menu__range' name='seed' type='range' min='1' max='9999' step='1' value='" + esc(config.seed || 42) + "'>" +
-                    "<button class='sow-menu__ghost-mini' type='button' data-command='randomize_seed' aria-label='" + esc(SOW_t("lobbies.randomize_seed")) + "'>🎲</button>" +
+                    "<button class='sow-menu__ghost-mini' type='button' data-command='randomize_seed' aria-label='" + esc(SOW_t("lobbies.randomize_seed")) + "'>" + menuIcon("dice") + "</button>" +
                 "</div>" +
             "</div>" :
             "<div>" +
@@ -399,8 +399,8 @@
                         "<h1>" + esc(SOW_t("lobbies.match_settings")).replace("\n", "<br>") + "</h1>" +
                         "<p class='sow-menu__tagline'>" + esc(SOW_t(isSp ? "lobbies.offline_hint" : "lobbies.online_hint")) + "</p>" +
                         "<div class='sow-menu__mode-switcher'>" +
-                            "<button type='button' class='sow-menu__mode-tab" + (isSp ? " active" : "") + "' data-command='set_session_mode' data-mode='offline'>🎮 " + esc(SOW_t("lobbies.solo_practice")) + "</button>" +
-                            "<button type='button' class='sow-menu__mode-tab" + (!isSp ? " active" : "") + "' data-command='set_session_mode' data-mode='online'>🌐 " + esc(SOW_t("lobbies.online_lobby")) + "</button>" +
+                            "<button type='button' class='sow-menu__mode-tab" + (isSp ? " active" : "") + "' data-command='set_session_mode' data-mode='offline'>" + menuIcon("solo") + " " + esc(SOW_t("lobbies.solo_practice")) + "</button>" +
+                            "<button type='button' class='sow-menu__mode-tab" + (!isSp ? " active" : "") + "' data-command='set_session_mode' data-mode='online'>" + menuIcon("globe") + " " + esc(SOW_t("lobbies.online_lobby")) + "</button>" +
                         "</div>" +
                     "</section>" +
                     "<section class='sow-menu__battlefield sow-create__workspace'>" +
@@ -537,11 +537,11 @@
             return "" +
                 "<div class='sow-menu__teams-roster'>" +
                     "<div class='sow-menu__team-col sow-menu__team-col--red'>" +
-                        "<div class='sow-menu__team-header'>🔴 " + esc(SOW_t("lobbies.red_team", { count: redPlayers.length })) + "</div>" +
+                        "<div class='sow-menu__team-header'><span class='sow-menu__team-dot sow-menu__team-dot--red'></span>" + esc(SOW_t("lobbies.red_team", { count: redPlayers.length })) + "</div>" +
                         "<div class='sow-menu__team-list'>" + redPlayers.map(function (player) { return renderQueuePlayerRow(player, lobby); }).join("") + "</div>" +
                     "</div>" +
                     "<div class='sow-menu__team-col sow-menu__team-col--blue'>" +
-                        "<div class='sow-menu__team-header'>🔵 " + esc(SOW_t("lobbies.blue_team", { count: bluePlayers.length })) + "</div>" +
+                        "<div class='sow-menu__team-header'><span class='sow-menu__team-dot sow-menu__team-dot--blue'></span>" + esc(SOW_t("lobbies.blue_team", { count: bluePlayers.length })) + "</div>" +
                         "<div class='sow-menu__team-list'>" + bluePlayers.map(function (player) { return renderQueuePlayerRow(player, lobby); }).join("") + "</div>" +
                     "</div>" +
                 "</div>";
@@ -613,7 +613,7 @@
                             (isCustom && lobby ? "<div class='sow-menu__info-row' data-info='code'><span>" + esc(SOW_t("lobbies.room_code")) + "</span><div class='sow-menu__code-box'><strong>" + lobby.id + "</strong><button type='button' data-command='copy_lobby_code' data-lobby-id='" + lobby.id + "'>" + esc(SOW_t("lobbies.copy")) + "</button></div></div>" : "") +
                             (lobby && lobby.bot_count > 0 ? "<div class='sow-menu__info-row' data-info='bots'><span>" + esc(SOW_t("lobbies.tribes")) + "</span><strong>" + lobby.bot_count + " (" + esc(lobby.bot_difficulty || SOW_t("lobbies.vanilla")) + ")</strong></div>" : "") +
                             (lobby && lobby.nation_count > 0 ? "<div class='sow-menu__info-row' data-info='nations'><span>" + esc(SOW_t("lobbies.nations")) + "</span><strong>" + lobby.nation_count + "</strong></div>" : "") +
-                            (lobby && lobby.has_password ? "<div class='sow-menu__info-row' data-info='access'><span>" + esc(SOW_t("lobbies.access")) + "</span><strong class='sow-menu__lock-tag'>🔒 " + esc(SOW_t("lobbies.password")) + "</strong></div>" : "") +
+                            (lobby && lobby.has_password ? "<div class='sow-menu__info-row' data-info='access'><span>" + esc(SOW_t("lobbies.access")) + "</span><strong class='sow-menu__lock-tag'>" + menuIcon("lock") + " " + esc(SOW_t("lobbies.password")) + "</strong></div>" : "") +
                         "</div>" +
                         "<div class='sow-menu__queue-action-bar'>" +
                             (isHost ? "<button class='sow-menu__primary sow-menu__queue-start-btn' type='button' data-command='start_private' data-lobby-id='" + lobby.id + "'>" + esc(SOW_t("lobbies.start_game")) + " <span>↗</span></button>" : "") +

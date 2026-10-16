@@ -9,7 +9,7 @@ const SPAWN_LOCAL_SIDE: usize = sow_core::config::SPAWN_RADIUS as usize * 2 + 1;
 const SPAWN_LOCAL_AREA: usize = SPAWN_LOCAL_SIDE * SPAWN_LOCAL_SIDE;
 const HUMAN_AVATAR_SCALE: f32 = 8.0;
 const BOT_AVATAR_SCALE: f32 = 6.0;
-const BADGE_SCALE: f32 = 1.8;
+const BADGE_AVATAR_RATIO: f32 = 0.43;
 const TROOPS_SCALE: f32 = 1.30;
 const NAMEPLATE_SIZE_DEADZONE: f32 = 0.2;
 
@@ -120,7 +120,7 @@ impl NameplateMetrics {
             render_size,
             avatar_diameter,
             avatar_radius: avatar_diameter * 0.5,
-            badge_size: render_size * BADGE_SCALE,
+            badge_size: avatar_diameter * BADGE_AVATAR_RATIO,
             troops_render_size: render_size * TROOPS_SCALE,
         }
     }
@@ -1553,11 +1553,13 @@ mod tests {
         assert_eq!(tribe.avatar_diameter, 14.0 * BOT_AVATAR_SCALE);
         assert_eq!(human.avatar_diameter(), 14.0 * 8.0);
         assert_eq!(tribe.avatar_diameter(), 14.0 * 6.0);
-        assert_eq!(human.badge_size(), 14.0 * BADGE_SCALE);
-        assert_eq!(tribe.badge_size(), 14.0 * BADGE_SCALE);
+        assert!((human.badge_size() - 112.0 * 0.43).abs() < 0.001);
+        assert!((tribe.badge_size() - 84.0 * 0.43).abs() < 0.001);
+        assert!((human.badge_size() - 48.16).abs() < 0.001);
+        assert!((tribe.badge_size() - 36.12).abs() < 0.001);
         assert_eq!(
             NameplateMetrics::compute(14.0, NameplateStyle::Tribe, false).badge_size(),
-            14.0 * BADGE_SCALE
+            0.0
         );
     }
 

@@ -92,8 +92,8 @@ el nombre de archivo a partir del nombre visible del héroe.
 - El retrato del mapa y el de muerte comparten una sola máscara circular, sin un
   fondo cuadrado adicional ni un control para cambiar sus esquinas. Humanos y
   ghosts usan ocho veces el tamaño de texto como diámetro; los avatares de bots
-  visibles usan seis veces. Las insignias se calculan aparte, a 1.8 veces el
-  tamaño de texto, y el ajuste a tierra incluye el círculo y las insignias.
+  visibles usan seis veces. Cada insignia mide el 43 % del diámetro real del
+  avatar y el ajuste a tierra incluye el círculo y todas las insignias.
 - Los iconos de espadas pasan por `TextRenderer::push_troop_icon`, que solo
   permite opacidad y contorno y conserva los colores del atlas. El texto de
   tropas en la placa es blanco; los conteos de ataques salientes son rojos y
@@ -124,7 +124,10 @@ estados. Un evento anterior fijado no vuelve a lanzar su burbuja al reconectar.
   aterriza con dos sacudidas; Celebrar salta el 20 % y añade otro rebote, hasta
   650 ms. El retrato se mueve; nombre, tropas y posición no se mueven.
 - Burbuja: entra entre 80–240 ms, se mantiene hasta 2700 ms y sale hasta 3000 ms.
-  Su caja, punta, sombra y texto respetan el espacio visible y márgenes seguros.
+  El texto, relleno y punta escalan con el avatar. La posición preferida es arriba
+  a la derecha, con la punta unida al borde del retrato; si no cabe, prueba arriba
+  a la izquierda, abajo a la derecha y abajo a la izquierda. Caja, punta, sombra y
+  texto respetan el espacio visible y los márgenes seguros.
 - Repetir parte de la posición actual. Liberar realiza una transición breve
   hacia calma. Morir elimina el efecto; reiniciar o salir limpia sus estados.
 - Movimiento reducido conserva las transiciones de transparencia y evita
@@ -134,9 +137,11 @@ estados. Un evento anterior fijado no vuelve a lanzar su burbuja al reconectar.
   Una burbuja no altera el ajuste de la placa a tierra ni sus zonas del tutorial.
 
 La curva `spring_overshoot` es la misma utilizada por el oro. Muerte conserva
-sus tres espacios independientes: indicador, avatar y nombre limpio. Dura un
-segundo y después presenta el oro durante tres segundos, con la concesión de
-recompensas y sus destinatarios existentes.
+sus tres espacios independientes: indicador, avatar y nombre limpio. Dura
+1.5 segundos; el oro empieza al segundo y permanece tres segundos. Durante el
+medio segundo compartido ambas filas quedan separadas y parten del mismo ancla.
+El oro muestra la cantidad con la moneda; solo lo ve quien recibe el pago. Las
+muertes locales, de aliados o del equipo se muestran; las demás no se encolan.
 
 ## Traición y grabaciones
 
@@ -150,15 +155,18 @@ de turnos guardados. `LIVE_PROTOCOL_VERSION` identifica por separado los mensaje
 de conexión. `gameplay_build_identity` incluye ambos; el servidor rechaza una
 conexión anterior sin cambiar cómo interpreta una grabación histórica.
 
-Las nuevas partidas registran `replay_format = 3` en sus datos de inicio
+Las nuevas partidas registran `replay_format = 4` en sus datos de inicio
 confiables. La ausencia de ese campo significa formato 1. El verificador escoge
 el lector mediante esos datos; el archivo subido no decide su versión.
 
-`sow-server/src/replay.rs` conserva los formatos 1 y 2. El formato 1 mantiene su
-antigua relación entre reacción y ventana de represalia; ambos formatos anteriores
-utilizan las reglas históricas de construcción al comprobar resultados. Las nuevas
-partidas usan bases 4x4 sin separación adicional y aceptan solo la posición confirmada. Respeta el índice de cada
-acción porque también interviene en identificadores de flotas. Cubre
+`sow-server/src/replay.rs` conserva los formatos 1, 2 y 3. El formato 1 mantiene su
+antigua relación entre reacción y ventana de represalia; los formatos anteriores
+mantienen sus pagos históricos al comprobar resultados, y los anteriores a 3
+también conservan sus reglas de construcción. Las nuevas partidas duplican el
+botín de eliminación antes de repartirlo entre el atacante y sus asistentes.
+Las nuevas partidas usan bases 4x4 sin separación adicional y aceptan solo la
+posición confirmada. Respeta el índice de cada acción porque también interviene
+en identificadores de flotas. Cubre
 grabaciones completas y cierres parciales; los reintentos conservan los bytes
 originales. Este lector es una dependencia activa de recompensas pendientes,
 no una segunda ruta de comunicación. No eliminarlo mientras haya registros
@@ -180,7 +188,9 @@ aceptación.
   liberación, muerte, reconexión y expiración a distintas velocidades de dibujo.
   Estas pruebas se ejecutan en WASM mediante el control oficial.
 - `sow-render/src/nameplate.rs`: tierra, escala y prioridad con presupuesto
-  limitado; sus comprobaciones existentes siguen cubriendo el ajuste.
+  limitado; sus comprobaciones cubren proporción de insignias y ajuste del grupo.
+- `sow-client/src/render/world/nameplates.rs`: proporción de la burbuja, frases
+  largas, punta conectada, cuatro posiciones de borde y viewport estrecho.
 - `sow-web/shell/map_interaction.test.js`: capacidades del radial,
   traducciones, sincronización local y ausencia del selector retirado.
 

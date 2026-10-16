@@ -186,11 +186,6 @@ enum WebMenuCommand {
     SelectBuilding {
         kind: sow_core::game::BuildingKind,
     },
-    NudgeBuildingPlacement {
-        direction: crate::input::placement::PlacementDirection,
-    },
-    ConfirmBuildingPlacement,
-    CancelBuildingMode,
     SelectWarship,
     SelectNuke,
     ToggleInbox,
@@ -255,6 +250,10 @@ enum WebMenuCommand {
         field: Option<String>,
     },
     DevVfxAll {
+        on: bool,
+    },
+    DevVfxGroup {
+        group: String,
         on: bool,
     },
     SetShowFpsPing {
@@ -391,7 +390,6 @@ struct HudPublishKey {
     attack_ratio: u32,
     spawn_timer_tenths: i32,
     selected_building: Option<crate::ui::hud::state::BuildingPlacement>,
-    placement_anchor: Option<(i32, i32)>,
     selected_warship_build: bool,
     selected_nuke: u8,
     building_costs: [u64; 9],
@@ -1028,9 +1026,6 @@ impl SowApp {
                         self.select_building_kind(kind);
                     }
                 }
-                WebMenuCommand::NudgeBuildingPlacement { direction } => self.nudge_building_placement(direction),
-            WebMenuCommand::ConfirmBuildingPlacement => self.confirm_building_placement(),
-                WebMenuCommand::CancelBuildingMode => self.clear_placement(),
                 WebMenuCommand::SelectWarship => {
                     if !self.ui.tutorial_camera_only {
                         self.select_warship_build_mode();
@@ -1284,9 +1279,7 @@ impl SowApp {
                             config.vfx_border_breathe = on;
                             config.vfx_energy_flow = on;
                             config.vfx_heartbeat = on;
-                            config.vfx_war_fog = on;
                             config.fog_of_war = on;
-                            config.vfx_fallout = on;
                             config.vfx_ambient_grade = on;
                             config.vfx_screen_vignette = on;
                             config.vfx_holo_grid = on;
@@ -1309,6 +1302,14 @@ impl SowApp {
                     }
                     #[cfg(not(any(feature = "dev", debug_assertions)))]
                     let _ = on;
+                }
+                WebMenuCommand::DevVfxGroup { group, on } => {
+                    #[cfg(any(feature = "dev", debug_assertions))]
+                    crate::theme::dev_config::DevConfig::update(|config| {
+                        config.set_switch_group(&group, on);
+                    });
+                    #[cfg(not(any(feature = "dev", debug_assertions)))]
+                    let _ = (group, on);
                 }
                 WebMenuCommand::ResetDevConfig { section, field } => {
                     #[cfg(any(feature = "dev", debug_assertions))]
@@ -1534,16 +1535,6 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .map(|secs| (secs.max(0.0) * 10.0).round() as i32)
             .unwrap_or(-1),
         selected_building: hud.building_placement,
-        placement_anchor: hud.building_placement.map(|placement| {
-            (
-                (app.input.camera_x
-                    + (placement.tile_idx % app.sim.map_w.max(1)) as f32 * app.input.camera_zoom)
-                    .round() as i32,
-                (app.input.camera_y
-                    + (placement.tile_idx / app.sim.map_w.max(1)) as f32 * app.input.camera_zoom)
-                    .round() as i32,
-            )
-        }),
         selected_warship_build: hud.selected_warship_build,
         selected_nuke: hud
             .selected_nuke_kind
@@ -1678,6 +1669,7 @@ fn dev_tools_payload(app: &SowApp) -> serde_json::Value {
                         ParamKind::Select => "select",
                     },
                     "unit": param.unit,
+                    "alpha": param.alpha,
                     "min": param.min,
                     "max": param.max,
                     "step": param.step,
@@ -1691,6 +1683,27 @@ fn dev_tools_payload(app: &SowApp) -> serde_json::Value {
             .collect::<Vec<_>>();
         payload["config"] = serde_json::Value::Object(values);
         payload["schema"] = serde_json::Value::Array(schema);
+        payload["groups"] = shader_params::SECTION_GROUPS
+            .iter()
+            .map(|(name, sections)| {
+                serde_json::json!({
+                    "name": name,
+                    "sections": sections.iter().map(|section| serde_json::json!({
+                        "name": section,
+                        "preview": shader_params::SECTION_PREVIEWS
+                            .iter()
+                            .find(|(owner, _)| owner == section)
+                            .map(|(_, target)| *target),
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect::<Vec<_>>()
+            .into();
+        payload["perf"] = shader_params::PERF_SWITCHES
+            .iter()
+            .map(|(name, _)| serde_json::json!({ "name": name, "state": config.switch_group_state(name) }))
+            .collect::<Vec<_>>()
+            .into();
         let preview = &app.ui.dev_vfx_preview;
         payload["preview"] = serde_json::json!({
             "target": preview.target,
@@ -2518,6 +2531,13 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         "assault": guide_screen(assault_tile),
         "target_action": guide_screen(target_tile),
         "build_site": build_site_screen,
+        "confirm_building_placement": app
+            .placement_controls()
+            .map(|controls| serde_json::json!({
+                "x": controls.confirm[0] / sf,
+                "y": controls.confirm[1] / sf,
+            }))
+            .unwrap_or(serde_json::Value::Null),
         "upgrade_buildings": upgrade_buildings,
         "upgrading_buildings": upgrading_buildings,
         "nameplate": nameplate_screen,
@@ -3167,10 +3187,7 @@ fn build_combat_operations_payload(
                 attack.target_owner
             };
             let (name, avatar) = if neutral {
-                (
-                    None,
-                    sow_core::player::AvatarIdentity::Emblem { symbol: "🌱" },
-                )
+                (None, sow_core::player::AvatarIdentity::Wilderness)
             } else {
                 player_identity(subject_id)
                     .map(|(name, avatar)| (Some(name), avatar))
@@ -3223,10 +3240,7 @@ fn build_combat_operations_payload(
                 target_owner.unwrap_or(0)
             };
             let (name, avatar) = if neutral {
-                (
-                    None,
-                    sow_core::player::AvatarIdentity::Emblem { symbol: "🌱" },
-                )
+                (None, sow_core::player::AvatarIdentity::Wilderness)
             } else {
                 player_identity(subject_id)
                     .map(|(name, avatar)| (Some(name), avatar))
@@ -3259,34 +3273,11 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         return serde_json::Value::Null;
     }
 
-    let site_valid = app.building_placement_site_valid();
-    let placement_reason = app.building_placement_reason();
-    let placement_gold = app.current_player_gold();
+    let placement_can_confirm = app.building_placement_can_confirm();
     let placement_payload = app.ui.app.hud_state.building_placement.map(|placement| {
-        let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
-        let can_adjust = !placement.pending && !app.ui.observing
-            && !app.ui.tutorial_camera_only && app.ui.app.hud_state.sync_state.is_none();
-        let (footprint_width, footprint_height) = placement.kind.footprint_dimensions();
-        let x = app.input.camera_x + (placement.tile_idx % app.sim.map_w.max(1)) as f32 * app.input.camera_zoom;
-        let y = app.input.camera_y + (placement.tile_idx / app.sim.map_w.max(1)) as f32 * app.input.camera_zoom;
         serde_json::json!({
-            "tile_idx": placement.tile_idx,
-            "x": x / sf, "y": y / sf,
-            "half_height": footprint_height as f32 * 0.5 * app.input.camera_zoom / sf,
-            "half_width": footprint_width as f32 * 0.5 * app.input.camera_zoom / sf,
-            "site_valid": site_valid,
-            "affordable": placement_gold >= app.ui.app.hud_state.building_costs[placement.kind as usize],
-            "can_nudge": {
-                "up": can_adjust && placement.tile_idx / app.sim.map_w.max(1) > 0,
-                "right": can_adjust && placement.tile_idx % app.sim.map_w.max(1) + 1 < app.sim.map_w,
-                "down": can_adjust && placement.tile_idx / app.sim.map_w.max(1) + 1 < app.sim.map_h,
-                "left": can_adjust && placement.tile_idx % app.sim.map_w.max(1) > 0,
-            },
             "pending": placement.pending,
-            "can_confirm": can_adjust && placement_reason.is_none(),
-            "reason": placement_reason.as_ref().map(localized_text_payload),
-            "cost": app.ui.app.hud_state.building_costs[placement.kind as usize],
-            "seconds": placement.kind.construction_duration_ticks() as f64 * app.sim.config.tick_rate_ms as f64 / 1000.0,
+            "can_confirm": placement_can_confirm,
         })
     });
     let tutorial_pid = app
@@ -3302,88 +3293,87 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         .as_object_mut()
         .and_then(|tutorial| tutorial.remove("players"));
     let screen_scale = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
-    let map_menu = app
-        .input
-        .map_context_menu
-        .map(|menu| {
-            let target_player_id = app
-                .gfx
-                .map_renderer
-                .as_ref()
-                .and_then(|renderer| renderer.owners.get(menu.tile_idx as usize).copied())
-                .unwrap_or(0);
-            let (target_name, target_avatar) = app
-                .sim
-                .current_snapshot
-                .as_ref()
-                .and_then(|snapshot| {
-                    snapshot
-                        .players
-                        .iter()
-                        .find(|player| target_player_id != 0 && player.id == target_player_id)
-                })
-                .map(|player| {
-                    (
-                        player.name.clone(),
-                        sow_core::player::avatar_identity(player),
-                    )
-                })
-                .unzip();
-            let alliance_state = app
-                .map_menu_alliance_state(menu.tile_idx)
-                .map(sow_core::diplomacy::AllianceActionState::as_str);
-            let items = app
-                .map_menu_items(menu.tile_idx)
-                .into_iter()
-                .map(|item| {
-                    serde_json::json!({
-                        "action": item.action.name(),
-                        "cost": item.cost,
-                        "level": item.level,
-                        "disabled": item.disabled,
-                        "reason_key": item.reason_key,
-                        "reason_level": item.reason_level,
-                        "reason_seconds": item.reason_seconds,
-                        "reason_troops": item.reason_troops,
+    let map_menu =
+        app.input
+            .map_context_menu
+            .map(|menu| {
+                let target_player_id = app
+                    .gfx
+                    .map_renderer
+                    .as_ref()
+                    .and_then(|renderer| renderer.owners.get(menu.tile_idx as usize).copied())
+                    .unwrap_or(0);
+                let (target_name, target_avatar) =
+                    app.sim
+                        .current_snapshot
+                        .as_ref()
+                        .and_then(|snapshot| {
+                            snapshot.players.iter().find(|player| {
+                                target_player_id != 0 && player.id == target_player_id
+                            })
+                        })
+                        .map(|player| {
+                            (
+                                player.name.clone(),
+                                sow_core::player::avatar_identity(player),
+                            )
+                        })
+                        .unzip();
+                let alliance_state = app
+                    .map_menu_alliance_state(menu.tile_idx)
+                    .map(sow_core::diplomacy::AllianceActionState::as_str);
+                let items = app
+                    .map_menu_items(menu.tile_idx)
+                    .into_iter()
+                    .map(|item| {
+                        serde_json::json!({
+                            "action": item.action.name(),
+                            "cost": item.cost,
+                            "level": item.level,
+                            "disabled": item.disabled,
+                            "reason_key": item.reason_key,
+                            "reason_level": item.reason_level,
+                            "reason_seconds": item.reason_seconds,
+                            "reason_troops": item.reason_troops,
+                        })
                     })
+                    .collect::<Vec<_>>();
+                let actions = items
+                    .iter()
+                    .filter_map(|item| item.get("action").and_then(|action| action.as_str()))
+                    .collect::<Vec<_>>();
+                let building = app
+                    .sim
+                    .current_snapshot
+                    .as_ref()
+                    .and_then(|snapshot| {
+                        snapshot
+                            .buildings
+                            .iter()
+                            .find(|building| building.tile_idx == menu.tile_idx)
+                    })
+                    .map(|building| building_detail_payload(app, building));
+                serde_json::json!({
+                    "open": true,
+                    "view": match menu.view {
+                        MapContextMenuView::BuildingDetails => "building_details",
+                        MapContextMenuView::Radial => "radial",
+                    },
+                    "x": menu.x / screen_scale,
+                    "y": menu.y / screen_scale,
+                    "tile_idx": menu.tile_idx,
+                    "target_player_id": target_player_id,
+                    "session": menu.session,
+                    "actions": actions,
+                    "items": items,
+                    "alliance_state": alliance_state,
+                    "relation": app.map_menu_relation(menu.tile_idx),
+                    "target_name": target_name,
+                    "target_avatar": target_avatar,
+                    "building": building,
                 })
-                .collect::<Vec<_>>();
-            let actions = items
-                .iter()
-                .filter_map(|item| item.get("action").and_then(|action| action.as_str()))
-                .collect::<Vec<_>>();
-            let building = app
-                .sim
-                .current_snapshot
-                .as_ref()
-                .and_then(|snapshot| {
-                    snapshot
-                        .buildings
-                        .iter()
-                        .find(|building| building.tile_idx == menu.tile_idx)
-                })
-                .map(|building| building_detail_payload(app, building));
-            serde_json::json!({
-                "open": true,
-                "view": match menu.view {
-                    MapContextMenuView::BuildingDetails => "building_details",
-                    MapContextMenuView::Radial => "radial",
-                },
-                "x": menu.x / screen_scale,
-                "y": menu.y / screen_scale,
-                "tile_idx": menu.tile_idx,
-                "target_player_id": target_player_id,
-                "session": menu.session,
-                "actions": actions,
-                "items": items,
-                "alliance_state": alliance_state,
-                "relation": app.map_menu_relation(menu.tile_idx),
-                "target_name": target_name,
-                "target_avatar": target_avatar,
-                "building": building,
             })
-        })
-        .unwrap_or(serde_json::Value::Null);
+            .unwrap_or(serde_json::Value::Null);
     let hud = &app.ui.app.hud_state;
     let my_pid = app.sim.my_player_id.unwrap_or(hud.my_player_id);
     let snapshot = app.sim.current_snapshot.as_ref();
@@ -3870,24 +3860,13 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         app.ui.leaderboard_publish_pending = false;
         let rotation_period = ((js_sys::Date::now().max(0.0) / 1000.0) as u64)
             / sow_data::commerce::ROTATION_PERIOD_SECS;
-        let mut store_catalog = sow_data::commerce::catalog_for_profile(
+        let store_catalog = sow_data::commerce::catalog_for_profile(
             &progress.owned_leaders,
             &progress.owned_skins,
             progress.crowns,
             progress.gems,
             rotation_period,
         );
-        // Direct products are enabled only by the authenticated store catalog
-        // endpoint after provider mappings have been verified. Do not render
-        // placeholder purchase buttons during the initial frame.
-        for leader in &mut store_catalog.leaders {
-            leader.direct_product_id.clear();
-            leader.direct_price_label.clear();
-        }
-        for skin in &mut store_catalog.skins {
-            skin.direct_product_id.clear();
-            skin.direct_price_label.clear();
-        }
         let leaders: Vec<serde_json::Value> = sow_core::player::Leader::ALL
             .into_iter()
             .map(|leader| {
@@ -4632,7 +4611,7 @@ mod tests {
         assert_eq!(operations.len(), 5);
         assert_eq!(
             operations.iter().find(|row| row["id"] == 1).unwrap()["avatar"],
-            serde_json::json!({ "kind": "emblem", "symbol": "🌱" })
+            serde_json::json!({ "kind": "wilderness" })
         );
         let human_avatar = &operations.iter().find(|row| row["id"] == 2).unwrap()["avatar"];
         assert_eq!(human_avatar["kind"], "portrait");

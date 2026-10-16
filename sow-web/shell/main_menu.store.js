@@ -1,5 +1,13 @@
 // Store state, rendering, catalog, and purchase actions.
 
+    // Store funnel: store_open -> store_buy_tap -> store_checkout_open (real
+    // money only) -> store_purchase_complete. Taxonomy lives in
+    // experience_events.js and sow-data/src/events.rs.
+    function trackStoreEvent(name, kind, itemId, currency) {
+        if (typeof window.SOW_trackExperienceEvent !== "function") return;
+        window.SOW_trackExperienceEvent({ name: name, props: { kind: kind, item_id: String(itemId || ""), currency: currency } });
+    }
+
     function storeAuth() {
         var creds = selfCreds();
         var headers = { "Content-Type": "application/json", "Accept": "application/json" };
@@ -237,6 +245,7 @@
     function beginBundlePurchasePresentation(attempt) {
         if (!attempt || !state || !profileHasExternalPurchase(attempt)) return;
         clearExternalPurchaseAttempt();
+        trackStoreEvent("store_purchase_complete", "gem_pack", attempt.product_id, "usd");
         purchaseIntent = null;
         purchaseModal = {
             type: "bundle",
@@ -395,22 +404,13 @@
         scheduleExternalPurchasePoll(0);
     }
 
-    function storeProductButton(productId, label, confirm, priceLabel, leaderId, skinId) {
-        var command = confirm ? "open_product_purchase" : "buy_product";
-        var price = priceLabel ? " data-price-label='" + esc(priceLabel) + "'" : "";
-        var leader = leaderId ? " data-leader-id='" + esc(leaderId) + "'" : "";
-        var skin = skinId ? " data-skin-id='" + esc(skinId) + "'" : "";
-        return "<button class='sow-store__buy sow-store__buy--primary' type='button' data-command='" + command + "' data-product-id='" + esc(productId) + "'" + price + leader + skin + ">" + esc(label || SOW_t("store.buy")) + "</button>";
-    }
-
-    function canRenderDirectPurchase(productId) {
-        if (!productId) return false;
-        return !isAndroidTwa() || (typeof window.SOW_androidPurchaseSupports === "function" && window.SOW_androidPurchaseSupports(productId));
+    function storeProductButton(productId, label) {
+        return "<button class='sow-store__buy sow-store__buy--primary' type='button' data-command='buy_product' data-product-id='" + esc(productId) + "'>" + esc(label || SOW_t("store.buy")) + "</button>";
     }
 
     function canRenderProductPurchase(productId) {
         if (!isAndroidTwa()) return !!(state.store && state.store.web_checkout_available);
-        return canRenderDirectPurchase(productId);
+        return typeof window.SOW_androidPurchaseSupports === "function" && window.SOW_androidPurchaseSupports(productId);
     }
 
     function storeLeaderById(id) {
@@ -436,8 +436,7 @@
         var offer = storeLeaderById(leader.id);
         var leaderActions = !offer || offer.owned || offer.permanently_free ? "" :
             renderLeaderCurrencyButton(offer, "crowns") +
-            renderLeaderCurrencyButton(offer, "gems") +
-            (canRenderDirectPurchase(offer.direct_product_id) ? storeProductButton(offer.direct_product_id, SOW_t("store.buy"), true, offer.direct_price_label, offer.id) : "");
+            renderLeaderCurrencyButton(offer, "gems");
         return "<div class='sow-heroes__purchase-actions'>" +
             leaderActions +
             "<button class='sow-store__buy sow-store__buy--primary' type='button' data-command='open_skin_picker'>" + esc(SOW_t("store.skins")) + "</button>" +
@@ -459,6 +458,7 @@
         state.error = null;
         purchaseIntent = { type: "leader", leaderId: offer.id };
         purchaseModal = { type: "leader", leaderId: offer.id, currency: currency, phase: "confirm", submitted: false };
+        trackStoreEvent("store_buy_tap", "leader", offer.id, isGems ? "gems" : "crowns");
         menuOutcomeCounts.leader_purchase_prompt_opened = (menuOutcomeCounts.leader_purchase_prompt_opened || 0) + 1;
         render();
     }
@@ -470,21 +470,28 @@
         state.error = null;
         purchaseIntent = { type: "skin", skinId: skin.id };
         purchaseModal = { type: "skin", skinId: skin.id, currency: "gems", phase: "confirm", submitted: false };
+        trackStoreEvent("store_buy_tap", "skin", skin.id, "gems");
         render();
     }
 
-    function openProductPurchase(productId, leaderId, priceLabel, skinId) {
-        if (!productId || storeCheckoutBusy || (state && state.store_busy)) return;
-        state.error = null;
-        purchaseIntent = leaderId ? { type: "leader", leaderId: leaderId, productId: productId } : { type: "skin", skinId: skinId, productId: productId };
-        purchaseModal = { type: "product", productId: productId, leaderId: leaderId, skinId: skinId, priceLabel: priceLabel || "", phase: "confirm", submitted: false };
-        render();
+    // Web checkout charges the catalog's USD price (the server refuses a
+    // Stripe mismatch). Google Play shows its own local price on Android.
+    function bundleBuyButton(bundle) {
+        if (!canRenderProductPurchase(bundle.product_id)) return "";
+        var label = SOW_t("store.buy") + (!isAndroidTwa() && bundle.price_label ? " " + bundle.price_label : "");
+        return storeProductButton(bundle.product_id, label);
     }
 
-    function renderStoreBundle(bundle) {
-        var action = canRenderProductPurchase(bundle.product_id) ? storeProductButton(bundle.product_id, SOW_t("store.buy")) : "";
+    function bundleBadge(bundle, bundles) {
+        var bonus = Number(bundle.bonus_percent) || 0;
+        if (!bonus) return "";
+        var best = bundles.every(function (other) { return (Number(other.bonus_percent) || 0) <= bonus; });
+        return "<small class='sow-store__bonus'>" + esc(best ? SOW_t("store.best_value") : SOW_t("store.bonus_percent", { amount: bonus })) + "</small>";
+    }
+
+    function renderStoreBundle(bundle, index, bundles) {
         var art = bundle.asset_path ? asset(bundle.asset_path) : asset("gameplay/store/gem_bundles/" + bundle.id + ".webp");
-        return "<article class='sow-store__bundle'><img class='sow-store__bundle-icon' src='" + esc(art) + "' alt='' aria-hidden='true' width='56' height='56' loading='lazy'><div><strong class='sow-store__bundle-price' aria-label='" + esc(SOW_t("store.gems_count", { amount: bundle.gems })) + "'>" + renderCurrencyAmount(bundle.gems, "gem") + "</strong></div>" + action + "</article>";
+        return "<article class='sow-store__bundle'><img class='sow-store__bundle-icon' src='" + esc(art) + "' alt='' aria-hidden='true' width='56' height='56' loading='lazy'><div><strong class='sow-store__bundle-price' aria-label='" + esc(SOW_t("store.gems_count", { amount: bundle.gems })) + "'>" + renderCurrencyAmount(bundle.gems, "gem") + "</strong>" + bundleBadge(bundle, bundles) + "</div>" + bundleBuyButton(bundle) + "</article>";
     }
 
     function renderStoreSkinPromo(skin) {
@@ -499,8 +506,7 @@
                 : "<button class='sow-store__buy' type='button' data-command='equip_skin' data-skin-id='" + esc(skin.id) + "'" + busyDisabled + ">" + esc(SOW_t("store.equip")) + "</button>";
         } else {
             var amountClass = insufficient ? "sow-store__currency-amount--insufficient" : "";
-            action = "<div class='sow-store__buy-row'><button class='sow-store__buy" + (insufficient ? " sow-store__buy--insufficient" : "") + "' type='button' data-command='open_skin_purchase' data-skin-id='" + esc(skin.id) + "'" + disabled + ">" + esc(SOW_t("store.buy")) + " " + renderCurrencyAmount(cost, "gem", amountClass) + "</button>" +
-                (canRenderDirectPurchase(skin.direct_product_id) ? storeProductButton(skin.direct_product_id, SOW_t("store.buy"), true, skin.direct_price_label, null, skin.id) : "") + "</div>";
+            action = "<div class='sow-store__buy-row'><button class='sow-store__buy" + (insufficient ? " sow-store__buy--insufficient" : "") + "' type='button' data-command='open_skin_purchase' data-skin-id='" + esc(skin.id) + "'" + disabled + ">" + esc(SOW_t("store.buy")) + " " + renderCurrencyAmount(cost, "gem", amountClass) + "</button></div>";
         }
         return "<article class='sow-store__skin'><div class='sow-store__skin-art'><img src='" + esc(asset(skin.asset_path)) + "' alt='' width='96' height='96' loading='lazy'></div><div class='sow-store__skin-body'><h3>" + esc(skin.name) + "</h3><p>" + esc(SOW_t("store.territory_pattern")) + "</p>" + action + "</div></article>";
     }
@@ -551,15 +557,13 @@
         var success = purchaseModal.phase === "success";
         var spending = purchaseModal.phase === "spending";
         var processing = purchaseModal.phase === "processing";
-        var checkout = purchaseModal.phase === "confirm" && isProduct && storeCheckoutProduct === purchaseModal.productId;
         var busy = purchaseModal.submitted || storeCheckoutBusy || (state && state.store_busy);
         var itemName = bundle ? SOW_t("store.gems_count", { amount: bundle.gems }) : (skin ? skin.name : leaderDisplayName(leader));
         var heading = bundle
             ? "<span class='sow-purchase-modal__bundle-amount'>" + renderCurrencyAmount(bundle.gems, "gem") + "</span>"
             : esc(itemName);
-        var summary = bundle ? "" : isProduct
-            ? (purchaseModal.priceLabel || SOW_t("store.buy"))
-            : renderCurrencyAmount(
+        // "product" modals only show delivery of an already paid leader/skin.
+        var summary = bundle || isProduct ? "" : renderCurrencyAmount(
                 purchaseModal.currency === "gems" ? (skin ? skin.cost_gems : offer.cost_gems) : offer.cost_crowns,
                 purchaseModal.currency === "gems" ? "gem" : "crown"
             );
@@ -572,8 +576,6 @@
                     : "<div class='sow-purchase-modal__pending' aria-busy='true' aria-hidden='true'><i></i></div>")
                 : spending
                     ? "<div class='sow-purchase-modal__spend' aria-hidden='true'><i></i><i></i><i></i></div>"
-            : checkout
-                ? renderStoreCheckout()
                 : "<div class='sow-menu__modal-actions'><button class='sow-menu__ghost-button' type='button' data-command='cancel_purchase'>" + esc(SOW_t("lobbies.cancel")) + "</button><button class='sow-menu__primary' type='button' data-command='confirm_purchase'" + (busy ? " disabled" : "") + ">" + esc(SOW_t("store.buy")) + "</button></div>";
         var eyebrow = success ? SOW_t("store.unlocked") : SOW_t("store.purchase");
         var price = success || spending || processing || !summary ? "" : "<strong class='sow-purchase-modal__price'>" + summary + "</strong>";
@@ -609,6 +611,9 @@
             storeCheckoutProduct = null;
             storeCheckoutRequestId = null;
             storeCheckoutBusy = false;
+            trackStoreEvent("store_purchase_complete", purchaseModal.type,
+                purchaseModal.type === "skin" ? purchaseModal.skinId : purchaseModal.leaderId,
+                purchaseModal.currency === "gems" ? "gems" : "crowns");
             purchaseModal.phase = "spending";
             purchaseModal.submitted = false;
             purchaseIntent = null;
@@ -626,7 +631,7 @@
         var skins = Array.isArray(store.skins) ? store.skins : [];
         var crowns = store.crowns || 0;
         var featured = bundles.find(function (bundle) { return bundle.product_id === "sow_gems_2600"; }) || bundles[bundles.length - 1];
-        var featuredAction = featured && canRenderProductPurchase(featured.product_id) ? storeProductButton(featured.product_id, SOW_t("store.buy")) : "";
+        var featuredAction = featured ? bundleBuyButton(featured) : "";
         var restoreAction = isAndroidTwa() && state.account_id &&
             typeof window.SOW_requestAndroidRestore === "function" &&
             typeof window.SOW_isAndroidPurchaseBridgeReady === "function" &&
@@ -662,6 +667,7 @@
 
     function beginStorePurchase(productId) {
         if (!productId || storeCheckoutBusy) return false;
+        trackStoreEvent("store_buy_tap", "gem_pack", productId, "usd");
         if (!beginExternalPurchaseAttempt(productId)) return false;
         if (isAndroidTwa()) {
             if (!state.account_id || typeof window.SOW_requestAndroidPurchase !== "function") {
@@ -679,6 +685,7 @@
                 render();
             } else {
                 storeCheckoutRequestId = requestId;
+                trackStoreEvent("store_checkout_open", "gem_pack", productId, "usd");
                 render();
             }
             return !!requestId;
@@ -723,6 +730,7 @@
             if (host) {
                 host.textContent = "";
                 checkout.mount(host);
+                trackStoreEvent("store_checkout_open", "gem_pack", productId, "usd");
             }
         }).catch(function (error) {
             abandonExternalPurchaseAttempt(productId);

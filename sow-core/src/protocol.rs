@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub use sow_data::MAX_MATCH_PARTICIPANTS;
 
 /// Persisted turn recordings; changing live messages must not change this.
-pub const GAMEPLAY_FORMAT_VERSION: u64 = 3;
+pub const GAMEPLAY_FORMAT_VERSION: u64 = 4;
 pub const LIVE_PROTOCOL_VERSION: u64 = 3;
 
 pub fn gameplay_build_identity(public_version: &str) -> String {

@@ -12,23 +12,22 @@ pub struct MapGlobals {
     pub border_darkness: f32,
     pub shore_thickness: f32,
     pub shore_darkness: f32,
-    /// Up to 8 attack threat slots: [front_x, front_y, radius, packed_ids].
-    pub threat_slots: [[f32; 4]; 9],
     /// Up to 8 alliance celebrations, two slots per pair: [player_id, center_x, center_y, age].
     pub alliance_celebration_slots: [[f32; 4]; 18],
     pub effect_shockwave: f32,
     pub effect_breathe: f32,
     pub effect_energy_flow: f32,
     pub my_player_id: f32,
-    pub placement_active: f32,
-    pub _placement_pad: [f32; 2],
+    /// Device pixel ratio while placing a building, 0 otherwise.
+    pub placement_scale: f32,
+    /// Preview foundation center in world tiles; the grid spotlight follows it.
+    pub placement_center: [f32; 2],
     pub territory_opacity: f32,
-    /// Up to 8 fallout zones: [center_col, center_row, radius, alpha_progress].
-    pub fallout_slots: [[f32; 4]; 9],
     pub blend_mode: f32,
     pub effect_heartbeat: f32,
-    pub effect_war_fog: f32,
-    pub effect_fallout: f32,
+    /// Alliance celebration pairs in use (0 = idle); bounds the per-pixel loop.
+    pub alliance_count: f32,
+    pub _pad3: f32,
     pub effect_golden_hour: f32,
     pub effect_holo_grid: f32,
     /// Player ID whose borders should flash red (0 = none).

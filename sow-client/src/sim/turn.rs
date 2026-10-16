@@ -727,6 +727,108 @@ mod tests {
 
     #[wasm_bindgen_test::wasm_bindgen_test]
     #[cfg(target_arch = "wasm32")]
+    async fn radial_builds_the_exact_tile_once_and_recovers_a_rejected_order() {
+        use crate::input::map_click::MapMenuAction;
+        for (paused, reject) in [(false, false), (true, false), (false, true)] {
+            let mut app = building_app(paused);
+            app.ui.app.hud_state.building_placement = None;
+            app.input.camera_zoom = 12.0;
+            app.input.camera_x = 0.0;
+            app.input.camera_y = 0.0;
+            app.sim
+                .engine
+                .as_mut()
+                .unwrap()
+                .state
+                .player_mut(1)
+                .unwrap()
+                .gold = 0.0;
+            app.sim.current_snapshot = Some(app.sim.engine.as_mut().unwrap().build_snapshot());
+            app.open_map_context_menu(72.0, 72.0);
+            let menu = app.input.map_context_menu.unwrap();
+            app.handle_map_menu_action(menu.session, menu.tile_idx, MapMenuAction::BuildCity);
+            assert!(app.sim.offline_intents.is_empty());
+            assert!(app.ui.app.hud_state.building_placement.is_none());
+            app.sim
+                .engine
+                .as_mut()
+                .unwrap()
+                .state
+                .player_mut(1)
+                .unwrap()
+                .gold = 1_000_000.0;
+            app.sim.current_snapshot = Some(app.sim.engine.as_mut().unwrap().build_snapshot());
+            app.open_map_context_menu(72.0, 72.0);
+            let menu = app.input.map_context_menu.unwrap();
+            app.handle_map_menu_action(menu.session + 1, menu.tile_idx, MapMenuAction::BuildCity);
+            assert!(
+                app.sim.offline_intents.is_empty(),
+                "a stale radial session cannot build"
+            );
+            app.handle_map_menu_action(menu.session, menu.tile_idx, MapMenuAction::BuildCity);
+            app.handle_map_menu_action(menu.session, menu.tile_idx, MapMenuAction::BuildCity);
+            app.confirm_building_placement();
+            assert!(app.input.map_context_menu.is_none());
+            assert!(
+                app.input.camera_focus_target.is_none(),
+                "the radial does not open or recenter an adjustment flow"
+            );
+            if !paused {
+                assert_eq!(app.sim.offline_intents.len(), 1);
+                assert!(app.ui.app.hud_state.building_placement.unwrap().pending);
+                if reject {
+                    app.sim
+                        .engine
+                        .as_mut()
+                        .unwrap()
+                        .state
+                        .map
+                        .set_owner_id(7, 6, 2);
+                }
+                let intents = std::mem::take(&mut app.sim.offline_intents)
+                    .into_iter()
+                    .map(|intent| StampedIntent {
+                        player_id: 1,
+                        intent,
+                    })
+                    .collect();
+                app.handle_sim_turn(sow_core::protocol::Turn {
+                    turn_number: 0,
+                    intents,
+                });
+            }
+            let engine = app.sim.engine.as_ref().unwrap();
+            if reject {
+                assert!(engine.buildings.is_empty());
+                let preview = app.ui.app.hud_state.building_placement.unwrap();
+                assert_eq!(preview.tile_idx, menu.tile_idx);
+                assert!(!preview.pending);
+                assert!(!app.building_placement_site_valid());
+                app.clear_placement();
+                let zoom = app.input.camera_zoom;
+                crate::web_menu::sow_menu_command(
+                    serde_json::json!({ "type": "focus_world", "x": 5, "y": 5 }).to_string(),
+                );
+                app.process_web_menu_commands();
+                assert_eq!(
+                    app.input.target_zoom, zoom,
+                    "existing focus callers keep their zoom"
+                );
+                assert_eq!(app.input.camera_focus_target, Some((5.0, 5.0)));
+            } else {
+                assert_eq!(engine.buildings.len(), 1);
+                assert_eq!(engine.buildings[0].tile_idx, menu.tile_idx);
+                assert!(app.ui.app.hud_state.building_placement.is_none());
+            }
+            drop(app);
+            wasm_bindgen_futures::JsFuture::from(crate::app::restore_tutorial_exit())
+                .await
+                .unwrap();
+        }
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    #[cfg(target_arch = "wasm32")]
     async fn adjoining_buildings_share_one_border_without_ambiguous_selection() {
         let mut app = building_app(false);
         app.input.camera_zoom = 12.0;

@@ -374,25 +374,14 @@ impl SowApp {
                     });
                 }
                 if build_tool_selected && (!is_touch || self.input.active_touches.len() == 1) {
-                    if let Some(placement) = self
-                        .ui
-                        .app
-                        .hud_state
-                        .building_placement
-                        .filter(|p| !p.pending)
-                    {
-                        let center_x = self.input.camera_x
-                            + (placement.tile_idx % self.sim.map_w) as f32 * self.input.camera_zoom;
-                        let center_y = self.input.camera_y
-                            + (placement.tile_idx / self.sim.map_w) as f32 * self.input.camera_zoom;
-                        let sf = crate::web_canvas::device_pixel_ratio() as f32;
-                        let half = (2.0 * self.input.camera_zoom).max(24.0 * sf);
-                        if (x as f32 - center_x).abs() <= half
-                            && (y as f32 - center_y).abs() <= half
-                        {
+                    if let Some(controls) = self.placement_controls() {
+                        if controls.button_at(x as f32, y as f32).is_some() {
+                            // Release on the button decides; the press never pans the map.
+                            self.input.dragging = false;
+                        } else if controls.grabs(x as f32, y as f32) {
                             self.input.building_drag_offset = Some((
-                                (x as f32 - center_x) / self.input.camera_zoom,
-                                (y as f32 - center_y) / self.input.camera_zoom,
+                                (x as f32 - controls.center[0]) / self.input.camera_zoom,
+                                (y as f32 - controls.center[1]) / self.input.camera_zoom,
                             ));
                             self.input.dragging = false;
                         }

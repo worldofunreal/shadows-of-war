@@ -1,6 +1,6 @@
 use crate::app::{InputState, SimState, TransportTargetMarker, UiState};
 use crate::death_nameplate::{
-    GOLD_REWARD_DURATION, death_animation, death_emoji, gold_reward_elapsed,
+    GOLD_REWARD_DURATION, death_animation, death_icon, gold_reward_elapsed,
 };
 use crate::render::gpu::TextRenderer;
 use crate::render::motion::spring_overshoot;
@@ -9,6 +9,7 @@ use crate::render::{dev_emoji_outline, dev_text_style};
 use crate::theme::dev_config::DevConfig;
 use sow_core::protocol::{AttackSnapshot, SimSnapshot};
 use sow_render::FontAtlas;
+use sow_render::text::{AVATAR_GOLD_SLOT, NameplateStatusSprite};
 use web_time::Instant;
 
 const CLICK_MARKER_DURATION: f32 = 0.16;
@@ -20,10 +21,15 @@ const TRANSPORT_TARGET_FADE_OUT_SECS: f32 = 0.3;
 const TRANSPORT_TARGET_ROTATIONS_PER_SEC: f32 = 1.0;
 const TRANSPORT_TARGET_ETA_FONT_SIZE: f32 = 11.0;
 const TRANSPORT_IMPACT_DURATION_SECS: f32 = 0.62;
-const DEATH_NAMEPLATE_FONT_SIZE: f32 = 18.0;
+const DEATH_NAMEPLATE_FONT_SIZE: f32 = 24.0;
 const DEATH_NAMEPLATE_RISE: f32 = 5.0;
 const DEATH_NAMEPLATE_ARC_OFFSET: f32 = 0.75;
-const GOLD_REWARD_FONT_SIZE: f32 = 14.0;
+const DEATH_NAMEPLATE_ICON_SIZE: f32 = 24.0;
+const GOLD_REWARD_FONT_SIZE: f32 = 22.0;
+const GOLD_REWARD_COIN_SIZE: f32 = 26.0;
+const GOLD_REWARD_ASSIST_SIZE: f32 = 28.0;
+const GOLD_REWARD_MAX_TEXT_SCALE: f32 = 1.3;
+const DEATH_GOLD_ROW_GAP: f32 = 8.0;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
 const ATTACK_BADGE_UPDATE_SECS: f32 = 0.09;
 const OUTGOING_ATTACK_TEXT_COLOR: [f32; 4] = [1.0, 90.0 / 255.0, 90.0 / 255.0, 1.0];
@@ -389,49 +395,144 @@ fn render_death_nameplates(
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
     let font_scale = dev.font_size_scale.max(0.1);
-    let font_size = DEATH_NAMEPLATE_FONT_SIZE * font_scale;
     let char_spacing = dev.font_char_spacing.max(0.1);
     let campaign_avatar_slots = &ui.app.asset_loader.campaign_avatar_slots;
 
     ui.death_nameplates.retain(|animation| {
         let elapsed = now.duration_since(animation.start_time).as_secs_f32();
-        let Some((_, eased, alpha)) = death_animation(elapsed) else {
-            let Some(reward) = animation.reward.as_ref() else {
-                return false;
-            };
-            let Some(reward_elapsed) = gold_reward_elapsed(elapsed) else {
-                return false;
-            };
-            let Some((progress, rise, scale)) =
-                floating_notice_animation(reward_elapsed, GOLD_REWARD_DURATION)
-            else {
-                return false;
-            };
-            let screen = world_to_screen(reward.world_x, reward.world_y - rise, input, sf);
-            if screen[0] < -150.0
-                || screen[0] > screen_w + 150.0
-                || screen[1] < -150.0
-                || screen[1] > screen_h + 150.0
-            {
-                return true;
-            }
-            let alpha = 1.0 - progress;
-            let base_color = crate::rgb(250, 204, 21);
-            let color = [base_color[0], base_color[1], base_color[2], alpha];
-            text.push_string(
-                &reward.text,
-                [screen[0] * sf, screen[1] * sf],
-                GOLD_REWARD_FONT_SIZE * scale * font_scale * sf,
-                color,
-                dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
-                (0.5, char_spacing, INLINE_EMOJI_SCALE),
-            );
-            return true;
+        death_animation(elapsed).is_some()
+            || (animation.reward.is_some() && gold_reward_elapsed(elapsed).is_some())
+    });
+
+    // Draw local gold first so rewards keep their full row if the shared text buffer is tight.
+    for animation in &mut ui.death_nameplates {
+        let Some((is_assist, amount_len)) = animation
+            .reward
+            .as_ref()
+            .map(|reward| (reward.is_assist, reward.amount.chars().count()))
+        else {
+            continue;
         };
-        if alpha <= 0.0 {
-            return true;
+        let elapsed = now.duration_since(animation.start_time).as_secs_f32();
+        let Some(reward_elapsed) = gold_reward_elapsed(elapsed) else {
+            continue;
+        };
+        let Some((progress, rise, scale)) =
+            floating_notice_animation(reward_elapsed, GOLD_REWARD_DURATION)
+        else {
+            continue;
+        };
+        let mut screen = world_to_screen(animation.world_x, animation.world_y - rise, input, sf);
+        let rough_width = amount_len as f32 * GOLD_REWARD_FONT_SIZE * font_scale
+            + GOLD_REWARD_COIN_SIZE * font_scale
+            + if is_assist {
+                (GOLD_REWARD_ASSIST_SIZE + 2.0 * DEATH_GOLD_ROW_GAP) * font_scale
+            } else {
+                DEATH_GOLD_ROW_GAP * font_scale
+            };
+        if screen[0] < -rough_width
+            || screen[0] > screen_w + rough_width
+            || screen[1] < -256.0
+            || screen[1] > screen_h + 256.0
+        {
+            continue;
         }
 
+        prepare_death_nameplate_text(text, animation, char_spacing);
+        let Some(prepared) = animation.prepared_reward.as_ref() else {
+            continue;
+        };
+        let Some(coin_uv) = text.avatar_uv(AVATAR_GOLD_SLOT) else {
+            continue;
+        };
+        let alpha = 1.0 - progress;
+        let font_size = GOLD_REWARD_FONT_SIZE * scale * font_scale * sf;
+        let measure = prepared.measure_at(font_size);
+        let badge_size = GOLD_REWARD_ASSIST_SIZE * font_scale * sf;
+        let coin_size = GOLD_REWARD_COIN_SIZE * font_scale * sf;
+        let gap = DEATH_GOLD_ROW_GAP * 0.5 * font_scale * sf;
+        let death_font_size = DEATH_NAMEPLATE_FONT_SIZE * font_scale * sf;
+        let death_measure = animation.prepared_name.measure_at(death_font_size);
+        let death_bounds = animation
+            .prepared_name
+            .visual_bounds_at(death_font_size)
+            .unwrap_or([0.0, -death_measure.height * 0.65, 0.0, death_measure.height * 0.35]);
+        let max_reward_font_size =
+            GOLD_REWARD_FONT_SIZE * GOLD_REWARD_MAX_TEXT_SCALE * font_scale * sf;
+        let max_reward_measure = prepared.measure_at(max_reward_font_size);
+        let max_reward_bounds = prepared.visual_bounds_at(max_reward_font_size).unwrap_or([
+            0.0,
+            -max_reward_measure.height * 0.65,
+            0.0,
+            max_reward_measure.height * 0.35,
+        ]);
+        let outline_clearance = (dev.font_outline_thickness.max(0.0)
+            + dev.font_shadow_y.abs()
+            + dev.font_underlay_softness.max(0.0))
+            * sf;
+        let death_baseline = death_measure.height * 0.35;
+        let death_half = DEATH_NAMEPLATE_ICON_SIZE * font_scale * sf * 0.5;
+        let death_bottom = (death_half + outline_clearance)
+            .max(death_baseline + death_bounds[3] + outline_clearance);
+        let gold_half = badge_size.max(coin_size) * 0.5;
+        let reward_baseline = max_reward_measure.height * 0.35;
+        let gold_top = (-gold_half).min(reward_baseline + max_reward_bounds[1] - outline_clearance);
+        let row_separation = death_bottom - gold_top + DEATH_GOLD_ROW_GAP * font_scale * sf;
+        screen[1] += row_separation / sf;
+        let left_count = if is_assist { badge_size + gap } else { 0.0 };
+        let row_width = left_count + coin_size + gap + measure.width;
+        let center_px = [screen[0] * sf, screen[1] * sf];
+        let row_left = center_px[0] - row_width * 0.5;
+        if screen[1] < -64.0 || screen[1] > screen_h + 64.0 {
+            continue;
+        }
+        let required = prepared
+            .instance_count()
+            .saturating_add(1)
+            .saturating_add(usize::from(is_assist));
+        if text.remaining_instance_capacity() < required {
+            continue;
+        }
+
+        let base_color = crate::rgb(250, 204, 21);
+        let tint = [base_color[0], base_color[1], base_color[2], alpha];
+        let mut content_left = row_left;
+        if is_assist {
+            text.push_status_sprite(
+                NameplateStatusSprite::Allied,
+                [content_left + badge_size * 0.5, center_px[1]],
+                badge_size,
+                [1.0, 1.0, 1.0, alpha],
+            );
+            content_left += badge_size + gap;
+        }
+        text.push_sprite(
+            [content_left + coin_size * 0.5, center_px[1]],
+            [coin_size; 2],
+            coin_uv,
+            tint,
+        );
+        let _ = text.push_prepared_text(
+            prepared,
+            [
+                content_left + coin_size + gap,
+                center_px[1] + measure.height * 0.35,
+            ],
+            font_size,
+            tint,
+            dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
+        );
+    }
+
+    for animation in &mut ui.death_nameplates {
+        let elapsed = now.duration_since(animation.start_time).as_secs_f32();
+        let Some((_, eased, alpha)) = death_animation(elapsed) else {
+            continue;
+        };
+        if alpha <= 0.0 {
+            continue;
+        }
+        let font_size = DEATH_NAMEPLATE_FONT_SIZE * font_scale;
         let arc = 4.0 * eased * (1.0 - eased);
         let center = world_to_screen(
             animation.world_x + animation.curve_direction * DEATH_NAMEPLATE_ARC_OFFSET * arc,
@@ -439,31 +540,40 @@ fn render_death_nameplates(
             input,
             sf,
         );
-        let icon_size = font_size * 0.8;
-        let name_measure = text.measure_string(
-            &animation.name,
-            font_size * sf,
-            char_spacing,
-            INLINE_EMOJI_SCALE,
-        );
-        let gap = 3.0 * sf;
-        let icon_block = icon_size * sf + gap;
-        let death_icon = death_emoji(animation.by_nuke);
-        let icon_count = 2;
-        let row_width = icon_block * icon_count as f32 + name_measure.width;
+        let icon_size = DEATH_NAMEPLATE_ICON_SIZE * font_scale;
+        let gap = 3.0 * font_scale;
+        let rough_width =
+            animation.name.chars().count() as f32 * font_size + 2.0 * (icon_size + gap);
+        if center[0] < -(rough_width * 0.5 + 8.0)
+            || center[0] > screen_w + rough_width * 0.5 + 8.0
+            || center[1] < -64.0
+            || center[1] > screen_h + 64.0
+        {
+            continue;
+        }
+
+        prepare_death_nameplate_text(text, animation, char_spacing);
+        let name_measure = animation.prepared_name.measure_at(font_size * sf);
+        let icon_block = icon_size * sf + gap * sf;
+        let death_icon = death_icon(animation.by_nuke);
+        let row_width = icon_block * 2.0 + name_measure.width;
         let margin = row_width * 0.5 + 8.0;
         if center[0] < -margin
             || center[0] > screen_w + margin
             || center[1] < -margin
             || center[1] > screen_h + margin
         {
-            return true;
+            continue;
         }
 
+        let required = animation.prepared_name.instance_count().saturating_add(2);
+        if text.remaining_instance_capacity() < required {
+            continue;
+        }
         let center_px = [center[0] * sf, center[1] * sf];
         let row_left = center_px[0] - row_width * 0.5;
         let emoji_outline = dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]);
-        text.push_emoji(
+        text.push_icon(
             death_icon,
             [row_left + icon_size * sf * 0.5, center_px[1]],
             icon_size * sf * 0.5,
@@ -478,10 +588,10 @@ fn render_death_nameplates(
             icon_size * sf * 0.5,
         );
         crate::render::world::nameplates::paint_prepared_avatar(text, avatar, emoji_outline, alpha);
-        text.push_string(
-            &animation.name,
+        let _ = text.push_prepared_text(
+            &animation.prepared_name,
             [
-                row_left + icon_block * icon_count as f32,
+                row_left + icon_block * 2.0,
                 center_px[1] + name_measure.height * 0.35,
             ],
             font_size * sf,
@@ -492,10 +602,26 @@ fn render_death_nameplates(
                 alpha,
             ],
             dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
-            (0.0, char_spacing, INLINE_EMOJI_SCALE),
         );
-        true
-    });
+    }
+}
+
+fn prepare_death_nameplate_text(
+    text: &TextRenderer,
+    animation: &mut crate::app::DeathNameplateAnimation,
+    char_spacing: f32,
+) {
+    let style_key = char_spacing.to_bits();
+    if animation.text_style_key == Some(style_key) {
+        return;
+    }
+    animation.prepared_name =
+        text.prepare_string(&animation.name, char_spacing, INLINE_EMOJI_SCALE, 0.0);
+    animation.prepared_reward = animation
+        .reward
+        .as_ref()
+        .map(|reward| text.prepare_string(&reward.amount, char_spacing, INLINE_EMOJI_SCALE, 0.0));
+    animation.text_style_key = Some(style_key);
 }
 
 fn render_click_markers(

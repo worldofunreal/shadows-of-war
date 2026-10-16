@@ -872,18 +872,45 @@ test("campaign studio reports each external draft conflict only once per file ve
 
 
 test("campaign studio preview matches the real build submenu and direct nuke action", () => {
+    const editor = campaignEditor, html = campaignEditorHtml;
+    assert.doesNotMatch(html, /CONFIRM BUILD|EXIT BUILD MODE/);
+    const nodes = new Map(), builds = [];
+    const popup = { hidden: false };
+    const root = { dataset: {}, children: [], querySelector: () => popup,
+        appendChild(node) { this.children.push(node); nodes.set("#" + node.id, node); } };
+    nodes.set("#sow-hud", root);
+    const state = { machine: { view: () => ({ step: { trigger: { type: "city" } } }) } };
+    const context = { state, $: selector => nodes.get(selector), paintPreview() {},
+        simulateObjective: amount => builds.push(amount),
+        el: (tag, attrs, text) => ({ ...attrs, textContent: text, children: [],
+            appendChild(node) { this.children.push(node); },
+            remove() { nodes.delete("#" + this.id); root.children.splice(root.children.indexOf(this), 1); } }) };
+    const actionStart = editor.indexOf("    function previewBuildingAction(");
+    const actionEnd = editor.indexOf("    function simulateObjective(", actionStart);
+    vm.runInNewContext(editor.slice(actionStart, actionEnd), context);
+    const previewTarget = dataset => ({ dataset, closest(selector) { return selector === "[data-command]" && dataset.command || selector === "[data-map-action]" && dataset.mapAction ? this : null; } });
+    context.previewBuildingAction(previewTarget({ command: "select_building", kind: "City" }));
+    const adjusting = nodes.get("#sow-hud-placement");
+    assert.deepEqual(adjusting.children.slice(1).map(button => button.textContent), ["↑", "→", "↓", "←", "×", "✓"]);
+    assert.equal(builds.length, 0, "choosing a dock building never counts as construction");
+    const dynamicAttributes = adjusting.children.map(node => Object.entries(node.dataset || {})
+        .map(([key, value]) => 'data-' + key + '="' + value + '"').join(" ")).join(" ");
     const targetBlock = campaignEngine.match(/const UI_TARGETS = \{([\s\S]*?)\n    \};/);
     assert.ok(targetBlock);
     const selectors = [...targetBlock[1].matchAll(/:\s*'([^']+)'/g)].flatMap((match) => match[1].split(","));
     for (const selector of selectors) {
-        const target = selector.trim().replace(/^#sow-(?:hud|menu)\s*/, "");
+        const normalizedSelector = selector.trim();
+        const target = normalizedSelector.replace(/^#sow-(?:hud|menu)\s*/, "");
         const attributes = [...target.matchAll(/\[([^\]]+)\]/g)].map((match) => match[1]);
         const exists = target.startsWith("#")
             ? campaignEditorHtml.includes(`id="${target.slice(1)}"`)
             : attributes.length
-                ? attributes.every((attribute) => campaignEditorHtml.includes(attribute))
+                ? attributes.every((attribute) => campaignEditorHtml.includes(attribute) || dynamicAttributes.includes(attribute))
                 : campaignEditorHtml.includes(target);
-        assert.ok(exists, `Campaign studio preview is missing ${selector.trim()}`);
+        const command = normalizedSelector.match(/\[data-command="([^"]+)"\]/)?.[1];
+        const createdForPlacement = ["confirm_building_placement", "cancel_building_mode"].includes(command)
+            && campaignEditor.includes(`dataset: { command: "${command}" }`);
+        assert.ok(exists || createdForPlacement, `Campaign studio preview is missing ${normalizedSelector}`);
     }
     assert.match(campaignEditorHtml, /data-preview-map-menu="build"[\s\S]*?data-map-action="build_city"/);
     assert.match(campaignEditorHtml, /<button[^>]*data-map-action="nuke"/);
@@ -898,5 +925,17 @@ test("campaign studio preview matches the real build submenu and direct nuke act
     assert.match(campaignEditor, /else if \(group\) hudRoot\.dataset\.previewMapMenu = group\.dataset\.mapGroup;[\s\S]*?paintPreview\(\);/);
     assert.match(campaignEditor, /var menuHint = requiredMenu && \$\("#sow-hud"\)\.dataset\.previewMapMenu !== requiredMenu/);
     assert.match(campaignEditor, /function previewAnchor\(step, facts\)[\s\S]*?target\.getClientRects\(\)\.length/);
+    context.previewBuildingAction(previewTarget({ command: "confirm_building_placement" }));
+    context.previewBuildingAction(previewTarget({ command: "confirm_building_placement" }));
+    assert.deepEqual(builds, [1]);
+    assert.equal(nodes.has("#sow-hud-placement"), false);
+    context.previewBuildingAction(previewTarget({ mapAction: "build_city" }));
+    assert.deepEqual(builds, [1, 1], "radial builds immediately without a second confirmation");
+    assert.equal(nodes.has("#sow-hud-placement"), false);
+    assert.equal(popup.hidden, true);
+    context.previewBuildingAction(previewTarget({ command: "select_building", kind: "City" }));
+    context.previewBuildingAction(previewTarget({ command: "cancel_building_mode" }));
+    assert.equal(nodes.has("#sow-hud-placement"), false);
+    assert.deepEqual(builds, [1, 1], "cancel never constructs a building");
 });
 

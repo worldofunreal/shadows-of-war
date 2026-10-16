@@ -159,7 +159,7 @@ impl Paths {
 }
 
 /// Icons and store art: (file stem in assets/art/<dir>/, published path, max side in px).
-const ART_ICONS: [(&str, &str, &str, u32); 13] = [
+const ART_ICONS: [(&str, &str, &str, u32); 14] = [
     ("icons", "gold", "gameplay/currency/gold.webp", 128),
     ("icons", "gem", "gameplay/currency/gem.webp", 128),
     ("icons", "crown", "gameplay/currency/crown.webp", 128),
@@ -174,6 +174,12 @@ const ART_ICONS: [(&str, &str, &str, u32); 13] = [
         "icons",
         "tutorial-hand",
         "gameplay/icons/tutorial_hand.webp",
+        256,
+    ),
+    (
+        "icons",
+        "surrender",
+        "gameplay/icons/surrender_flag.webp",
         256,
     ),
     ("icons", "nav-battle", "shell/mobile-nav/battle.webp", 128),
@@ -871,10 +877,16 @@ fn run_wasm_opt(path: &Path, cache: &Path, compress: bool) -> Result<()> {
         fs::copy(&c, path)?;
         // Keeps the entry alive for retain_local_builds.
         let now = std::time::SystemTime::now();
-        fs::File::options().append(true).open(&c)?.set_modified(now)?;
+        fs::File::options()
+            .append(true)
+            .open(&c)?
+            .set_modified(now)?;
         if compress {
             if cb.is_file() {
-                fs::File::options().append(true).open(&cb)?.set_modified(now)?;
+                fs::File::options()
+                    .append(true)
+                    .open(&cb)?
+                    .set_modified(now)?;
                 fs::copy(&cb, &br)?;
             } else {
                 compress_brotli(path, &br)?;
@@ -4205,6 +4217,7 @@ fn local_file_requires_wasm(paths: &Paths, path: &Path) -> bool {
     }
     if path.starts_with(paths.root.join("assets/art/buildings"))
         || path.starts_with(paths.root.join("assets/art/badges"))
+        || path.starts_with(paths.root.join("assets/art/units"))
     {
         return true;
     }

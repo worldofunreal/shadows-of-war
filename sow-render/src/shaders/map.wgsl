@@ -1,3 +1,17 @@
+// ── PERFORMANCE POLICY (read before adding any effect) ───────────────────────
+// This is one full-screen fragment shader: every line below runs for EVERY
+// pixel, every frame, on the oldest phones we support. Rules:
+//  1. Nothing per-pixel that does not depend on that pixel's own data. Never
+//     walk "slots" per pixel unless the CPU says how many are in use.
+//  2. Any loop longer than 4 iterations takes its bound from a CPU-supplied
+//     `globals.*_count` (0 when idle). Never iterate empty slots.
+//  3. An effect's on/off flag must cut BEFORE the work (outside the loop),
+//     never inside it: a flag checked inside a loop saves nothing.
+//  4. The CPU sends no data for effects that are off or inactive (count = 0).
+//  5. A new effect ships only after measuring on the old phone with the
+//     Dev Tools "Effects" switch. Effects nobody notices get deleted.
+// The test `map_shader_loops_follow_perf_policy` in shader_params.rs enforces 2.
+
 struct Globals {
     camera_pos: vec2<f32>,
     zoom: f32,
@@ -8,21 +22,20 @@ struct Globals {
     border_darkness: f32,
     shore_thickness: f32,
     shore_darkness: f32,
-    threat_slots: array<vec4<f32>, 9>,
     alliance_celebration_slots: array<vec4<f32>, 18>,
     effect_shockwave: f32,
     effect_breathe: f32,
     effect_energy_flow: f32,
     my_player_id: f32,
-    placement_active: f32,
-    placement_pad_x: f32,
-    placement_pad_y: f32,
+    // Device pixel ratio while placing a building, 0 otherwise.
+    placement_scale: f32,
+    placement_center_x: f32,
+    placement_center_y: f32,
     territory_opacity: f32,
-    fallout_slots: array<vec4<f32>, 9>,
     blend_mode: f32,
     effect_heartbeat: f32,
-    effect_war_fog: f32,
-    effect_fallout: f32,
+    alliance_count: f32,
+    _pad3: f32,
     effect_golden_hour: f32,
     effect_holo_grid: f32,
     attack_flash_target: f32,
@@ -54,7 +67,6 @@ var<uniform> player_colors: PlayerColors;
 var<uniform> player_skin_styles: PlayerSkinStyles;
 var terrain_texture: texture_2d<f32>;
 var owner_texture: texture_2d<u32>;
-var placement_texture: texture_2d<u32>;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -85,13 +97,7 @@ fn get_cell_terrain(hex: vec2<i32>) -> u32 {
     return u32(textureLoad(terrain_texture, vec2<i32>(hex.x, hex.y), 0).x * 255.0 + 0.5);
 }
 
-fn placement_site(cell: vec2<i32>) -> u32 {
-    if (cell.x < 0 || cell.y < 0 || cell.x >= i32(globals.map_size.x) || cell.y >= i32(globals.map_size.y)) { return 0u; }
-    return textureLoad(placement_texture, cell, 0).x;
-}
-
-fn placement_own(cell: vec2<i32>, detailed: bool) -> bool {
-    if (detailed) { return (placement_site(cell) & 1u) != 0u; }
+fn placement_own(cell: vec2<i32>) -> bool {
     return get_cell_owner(cell) == u32(globals.my_player_id) && (get_cell_terrain(cell) & 128u) != 0u;
 }
 
@@ -615,7 +621,7 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
 
     // ── Bilateral alliance celebration: wave + territorial shimmer ──
     if owner_id > 0u && is_land {
-        for (var ai = 0; ai < 9; ai = ai + 1) {
+        for (var ai = 0; ai < i32(globals.alliance_count); ai = ai + 1) {
             let first = globals.alliance_celebration_slots[ai * 2];
             let second = globals.alliance_celebration_slots[ai * 2 + 1];
             if first.x > 0.0 && u32(round(first.x)) == owner_id {
@@ -636,262 +642,6 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
                     globals.shader_params[__MAP_ALLIANCE_PARTNER_COLOR__].rgb,
                     is_border
                 );
-            }
-        }
-    }
-
-    // ── WAR FOG + FRONTIER GLOW ──
-    if (globals.effect_war_fog > 0.0) {
-        let world_pos_hex = hex_to_world(cell_hex);
-        let threat_time = select(
-            globals.time,
-            globals.preview_time,
-            globals.preview_effect == 4.0 || globals.preview_effect == 5.0
-        );
-        for (var ti = 0; ti < 9; ti = ti + 1) {
-            let slot = globals.threat_slots[ti];
-            let packed = u32(slot.w + 0.5);
-            let target_id = packed / 1024u;
-            let attacker_id = packed % 1024u;
-            var radius_scale = globals.shader_params[__MAP_COMBAT_PVP_REACH_SCALE__].x;
-            if target_id == 0u {
-                radius_scale = globals.shader_params[__MAP_EXPANSION_OTHER_REACH_SCALE__].x;
-                if attacker_id == u32(globals.my_player_id + 0.5) {
-                    radius_scale = globals.shader_params[__MAP_EXPANSION_LOCAL_REACH_SCALE__].x;
-                }
-            }
-            let radius = slot.z * radius_scale;
-            if radius <= 0.0 { continue; }
-            if target_id != owner_id { continue; }
-
-            let front_world = vec2<f32>(
-                slot.x + 0.5,
-                slot.y + 0.5
-            );
-            let dist = distance(world_pos_hex, front_world);
-            let threat = 1.0 - smoothstep_safe(0.0, radius, dist);
-            if threat <= 0.0 { continue; }
-
-            if target_id == 0u && globals.shader_params[__MAP_EXPANSION_ENABLED__].x > 0.5 {
-                let is_player = (attacker_id == u32(globals.my_player_id + 0.5));
-                if is_player {
-                    // ── PLAYER WILDERNESS EXPANSION: Special High-Tech Resonance ──
-                    let player_color = owner_albedo(attacker_id);
-                    let cyan_core = player_color * vec3<f32>(globals.shader_params[__MAP_EXPANSION_LOCAL_CYAN_RED__].x, globals.shader_params[__MAP_EXPANSION_LOCAL_CYAN_GREEN__].x, globals.shader_params[__MAP_EXPANSION_LOCAL_CYAN_BLUE__].x) + globals.shader_params[__MAP_EXPANSION_LOCAL_CYAN_LIFT__].rgb;
-                    let indigo_glow = player_color * vec3<f32>(globals.shader_params[__MAP_EXPANSION_LOCAL_DARK_RED__].x, globals.shader_params[__MAP_EXPANSION_LOCAL_DARK_GREEN__].x, globals.shader_params[__MAP_EXPANSION_LOCAL_DARK_BLUE__].x) + globals.shader_params[__MAP_EXPANSION_LOCAL_DARK_LIFT__].rgb;
-
-                    // Gentle base radial glow
-                    let glow_color = mix(indigo_glow, cyan_core, threat);
-                    let glow_blend = threat * globals.shader_params[__MAP_EXPANSION_LOCAL_GLOW__].x;
-
-                    // Sharp scanning pulse ring propagating outwards
-                    let wave_phase = dist * globals.shader_params[__MAP_EXPANSION_LOCAL_WAVE_SCALE__].x - threat_time * globals.shader_params[__MAP_EXPANSION_LOCAL_WAVE_SPEED__].x;
-                    let scan_line = max(0.0, sin(wave_phase));
-                    let pulse = pow(scan_line, globals.shader_params[__MAP_EXPANSION_LOCAL_WAVE_SHARPNESS__].x) * threat * globals.shader_params[__MAP_EXPANSION_LOCAL_WAVE_STRENGTH__].x;
-
-                    // High-frequency subtle radar ripples
-                    let ripple_phase = dist * globals.shader_params[__MAP_EXPANSION_LOCAL_RIPPLE_SCALE__].x - threat_time * globals.shader_params[__MAP_EXPANSION_LOCAL_RIPPLE_SPEED__].x;
-                    let ripple = (sin(ripple_phase) + 1.0) * 0.5;
-                    let ripple_glow = ripple * threat * threat * globals.shader_params[__MAP_EXPANSION_LOCAL_RIPPLE_STRENGTH__].x;
-
-                    // Sharp leading edge at 90% of the radius
-                    let edge_dist = abs(dist - radius * globals.shader_params[__MAP_EXPANSION_LOCAL_EDGE_POSITION__].x);
-                    let edge_width = max(globals.shader_params[__MAP_EXPANSION_LOCAL_EDGE_WIDTH__].x, 0.001);
-                    let edge = (1.0 - smoothstep_safe(0.0, edge_width, edge_dist)) * globals.shader_params[__MAP_EXPANSION_LOCAL_EDGE_STRENGTH__].x;
-
-                    base_color = mix(base_color, glow_color, glow_blend);
-                    base_color += cyan_core * pulse;
-                    base_color += cyan_core * edge;
-                    base_color += cyan_core * ripple_glow;
-                } else {
-                    // ── OTHER EMPIRES: Default Frontier Glow ──
-                    let atk_color = owner_albedo(attacker_id);
-                    let gold = globals.shader_params[__MAP_EXPANSION_OTHER_FRONTIER__].rgb;
-                    let frontier_bright = mix(atk_color, gold, globals.shader_params[__MAP_EXPANSION_OTHER_BRIGHT_MIX__].x) * globals.shader_params[__MAP_EXPANSION_OTHER_BRIGHT_GAIN__].x + vec3<f32>(globals.shader_params[__MAP_EXPANSION_OTHER_BRIGHT_LIFT__].x);
-                    let frontier_dark = mix(atk_color, gold, globals.shader_params[__MAP_EXPANSION_OTHER_DARK_MIX__].x) * globals.shader_params[__MAP_EXPANSION_OTHER_DARK_GAIN__].x;
-
-                    // Gentle radial glow
-                    let glow_color = mix(frontier_dark, frontier_bright, threat);
-                    let glow_blend = threat * globals.shader_params[__MAP_EXPANSION_OTHER_GLOW__].x;
-
-                    // Slower, wider expansion ripples
-                    let wave_phase = dist * globals.shader_params[__MAP_EXPANSION_OTHER_WAVE_SCALE__].x - threat_time * globals.shader_params[__MAP_EXPANSION_OTHER_WAVE_SPEED__].x;
-                    let ripple = (sin(wave_phase) + 1.0) * 0.5;
-                    let ripple_glow = ripple * threat * globals.shader_params[__MAP_EXPANSION_OTHER_RIPPLE__].x;
-
-                    // Soft leading edge (no aggressive corona)
-                    let edge_dist = abs(dist - radius * globals.shader_params[__MAP_EXPANSION_OTHER_EDGE_POSITION__].x);
-                    let edge_width = max(globals.shader_params[__MAP_EXPANSION_OTHER_EDGE_WIDTH__].x, 0.001);
-                    let edge = (1.0 - smoothstep_safe(0.0, edge_width, edge_dist)) * globals.shader_params[__MAP_EXPANSION_OTHER_EDGE_STRENGTH__].x;
-                    let edge_color = min(frontier_bright, vec3<f32>(1.0));
-
-                    base_color = mix(base_color, glow_color, glow_blend);
-                    base_color += edge_color * edge;
-                    base_color += frontier_bright * ripple_glow;
-                }
-            } else if target_id != 0u && globals.shader_params[__MAP_COMBAT_HAZE_ENABLED__].x > 0.5 {
-                // ── WAR FOG: PvP attack ──
-                let atk_color = owner_albedo(attacker_id);
-                let atk_bright = atk_color * globals.shader_params[__MAP_COMBAT_PVP_BRIGHT_GAIN__].x + vec3<f32>(globals.shader_params[__MAP_COMBAT_PVP_BRIGHT_LIFT__].x);
-                let atk_dark = atk_color * globals.shader_params[__MAP_COMBAT_PVP_DARK_GAIN__].x;
-
-                // Desaturation — territory drains to grey
-                let lum = dot(base_color, vec3<f32>(0.299, 0.587, 0.114));
-                let desat = mix(base_color, vec3<f32>(lum), threat * globals.shader_params[__MAP_COMBAT_PVP_DESATURATION__].x);
-
-                // Attacker smoke
-                let smoke_color = mix(atk_dark, atk_bright, threat * threat) * globals.shader_params[__MAP_COMBAT_PVP_SMOKE_COLOR__].rgb;
-                let smoke_blend = threat * globals.shader_params[__MAP_COMBAT_PVP_SMOKE__].x;
-
-                // Ripple waves
-                let wave_phase = dist * globals.shader_params[__MAP_COMBAT_PVP_WAVE_SCALE__].x - threat_time * globals.shader_params[__MAP_COMBAT_PVP_WAVE_SPEED__].x;
-                let ripple = (sin(wave_phase) + 1.0) * 0.5;
-                let ripple_phase = dist * globals.shader_params[__MAP_COMBAT_PVP_RIPPLE_SCALE__].x - threat_time * globals.shader_params[__MAP_COMBAT_PVP_RIPPLE_SPEED__].x;
-                let ripple_value = (sin(ripple_phase) + 1.0) * 0.5;
-                let ripple_intensity = ripple_value * threat * threat * globals.shader_params[__MAP_COMBAT_PVP_RIPPLE__].x;
-
-                // Corona front
-                let corona_dist = abs(dist - radius * globals.shader_params[__MAP_COMBAT_PVP_CORONA_POSITION__].x);
-                let corona_width = max(globals.shader_params[__MAP_COMBAT_PVP_CORONA_WIDTH__].x, 0.001);
-                let corona = (1.0 - smoothstep_safe(0.0, corona_width, corona_dist)) * globals.shader_params[__MAP_COMBAT_PVP_CORONA_STRENGTH__].x;
-                let corona_color = min(atk_color * globals.shader_params[__MAP_COMBAT_PVP_CORONA_COLOR_GAIN__].x + vec3<f32>(globals.shader_params[__MAP_COMBAT_PVP_CORONA_COLOR_LIFT__].x), vec3<f32>(1.0));
-
-                var war_color = mix(desat, smoke_color, smoke_blend);
-                war_color += corona_color * corona;
-                war_color += atk_bright * ripple_intensity;
-                base_color = war_color;
-            }
-        }
-    }
-
-    // ── NUCLEAR FALLOUT CONTAMINATION ZONES ──
-    if (globals.effect_fallout > 0.0) {
-        let cell_world = hex_to_world(cell_hex);
-        for (var fi = 0; fi < 9; fi = fi + 1) {
-            let slot = globals.fallout_slots[fi];
-            var f_radius = slot.z;
-            if f_radius <= 0.0 { continue; }
-
-            let alpha_p = slot.w;
-            let nuke_time = select(globals.time, globals.preview_time, globals.preview_effect == 6.0);
-            let f_center = vec2<f32>(
-                slot.x + 0.5,
-                slot.y + 0.5
-            );
-            let dist = distance(cell_world, f_center);
-            f_radius *= globals.shader_params[__MAP_NUKE_FALLOUT_RADIUS__].x;
-            if f_radius <= 0.0 || dist > f_radius { continue; }
-
-            let elapsed = (1.0 - alpha_p) * globals.shader_params[__MAP_NUKE_ZONE_DURATION__].x;
-
-            // 1. SCORCHED EARTH (CRATER / BURN)
-            let burn_radius = f_radius * globals.shader_params[__MAP_NUKE_BURN_RADIUS__].x;
-            if globals.shader_params[__MAP_NUKE_BURN_ENABLED__].x > 0.5 && burn_radius > 0.0 && dist <= burn_radius {
-                let burn_factor = (1.0 - dist / max(burn_radius, 0.0001)) * globals.shader_params[__MAP_NUKE_BURN_STRENGTH__].x * alpha_p;
-                let charcoal = globals.shader_params[__MAP_NUKE_BURN_COLOR__].rgb;
-                base_color = mix(base_color, charcoal, burn_factor);
-            }
-
-            // 2. ACTIVE EXPLOSION & STAGGERED SHOCKWAVE (First 3.0 seconds)
-            if globals.shader_params[__MAP_NUKE_EXPLOSION_ENABLED__].x > 0.5 && elapsed < globals.shader_params[__MAP_NUKE_ACTIVE_DURATION__].x {
-                let p_exp = elapsed / globals.shader_params[__MAP_NUKE_ACTIVE_DURATION__].x;
-                let shockwave_r = p_exp * f_radius;
-
-                let fire_noise = fract(sin(world_x * globals.shader_params[__MAP_NUKE_FIRE_NOISE_X__].x + world_y * globals.shader_params[__MAP_NUKE_FIRE_NOISE_Y__].x - nuke_time * globals.shader_params[__MAP_NUKE_FIRE_NOISE_SPEED__].x) * 43758.5453);
-
-                // --- A. Rising Mushroom Cloud & Stem ---
-                let rise = p_exp * f_radius * globals.shader_params[__MAP_NUKE_CLOUD_RISE__].x;
-                let cap_center = f_center - vec2<f32>(0.0, rise);
-                let dist_cap = distance(cell_world, cap_center);
-                let cap_radius = f_radius * globals.shader_params[__MAP_NUKE_CLOUD_RADIUS__].x * (globals.shader_params[__MAP_NUKE_CLOUD_INITIAL__].x + globals.shader_params[__MAP_NUKE_CLOUD_GROWTH__].x * p_exp);
-                let cap_r = max(cap_radius, 0.0001);
-
-                let dist_stem = abs(cell_world.x - f_center.x);
-                let stem_width = f_radius * globals.shader_params[__MAP_NUKE_STEM_WIDTH__].x * (1.0 - p_exp * globals.shader_params[__MAP_NUKE_STEM_TAPER__].x) * (1.0 + globals.shader_params[__MAP_NUKE_STEM_WOBBLE__].x * sin(cell_world.y * globals.shader_params[__MAP_NUKE_STEM_WAVE_SCALE__].x - nuke_time * globals.shader_params[__MAP_NUKE_STEM_WAVE_SPEED__].x));
-                let stem_w = max(stem_width, 0.0001);
-                let is_in_stem = stem_width > 0.0 && cell_world.y >= cap_center.y && cell_world.y <= f_center.y && dist_stem <= stem_width;
-                let is_in_cap = cap_radius > 0.0 && dist_cap <= cap_radius;
-
-                if is_in_cap || is_in_stem {
-                    let age_fade = 1.0 - p_exp;
-
-                    var dist_factor = 0.0;
-                    if is_in_cap {
-                        dist_factor = 1.0 - dist_cap / cap_r;
-                    } else {
-                        dist_factor = 1.0 - dist_stem / stem_w;
-                    }
-
-                    let fire_white = globals.shader_params[__MAP_NUKE_FIRE_WHITE__].rgb;
-                    let fire_yellow = globals.shader_params[__MAP_NUKE_FIRE_YELLOW__].rgb;
-                    let fire_red = globals.shader_params[__MAP_NUKE_FIRE_RED__].rgb;
-                    let smoke = globals.shader_params[__MAP_NUKE_SMOKE_COLOR__].rgb;
-
-                    let heat = clamp(age_fade * globals.shader_params[__MAP_NUKE_HEAT_AGE__].x - (1.0 - dist_factor) * globals.shader_params[__MAP_NUKE_HEAT_DISTANCE__].x + (fire_noise - 0.5) * globals.shader_params[__MAP_NUKE_HEAT_NOISE__].x, 0.0, 1.0);
-
-                    var fire_rgb = vec3<f32>(0.0);
-                    let white_threshold = globals.shader_params[__MAP_NUKE_WHITE_THRESHOLD__].x;
-                    let red_threshold = min(globals.shader_params[__MAP_NUKE_RED_THRESHOLD__].x, white_threshold - 0.001);
-                    if heat > white_threshold {
-                        fire_rgb = mix(fire_yellow, fire_white, (heat - white_threshold) / max(1.0 - white_threshold, 0.001));
-                    } else if heat > red_threshold {
-                        fire_rgb = mix(fire_red, fire_yellow, (heat - red_threshold) / max(white_threshold - red_threshold, 0.001));
-                    } else {
-                        fire_rgb = mix(smoke, fire_red, heat / max(red_threshold, 0.001));
-                    }
-
-                    base_color = mix(base_color, fire_rgb, smoothstep_safe(0.0, globals.shader_params[__MAP_NUKE_FIRE_BLEND__].x, heat) * age_fade);
-                }
-
-                // --- B. Blinding Ground-Zero Flash ---
-            }
-
-            if globals.shader_params[__MAP_NUKE_FLASH_ENABLED__].x > 0.5 && elapsed < globals.shader_params[__MAP_NUKE_FLASH_DURATION__].x {
-                let flash_fade = 1.0 - elapsed / globals.shader_params[__MAP_NUKE_FLASH_DURATION__].x;
-                let flash_radius = f_radius * globals.shader_params[__MAP_NUKE_FLASH_RADIUS__].x;
-                if flash_radius > 0.0 && dist <= flash_radius {
-                    let flash_intensity = (1.0 - dist / max(flash_radius, 0.0001)) * flash_fade * globals.shader_params[__MAP_NUKE_FLASH_STRENGTH__].x;
-                    base_color += globals.shader_params[__MAP_NUKE_FLASH_COLOR__].rgb * flash_intensity;
-                }
-            }
-
-            // --- Expanding shockwave can be tuned independently from the fireball. ---
-            if globals.shader_params[__MAP_NUKE_SHOCKWAVE_ENABLED__].x > 0.5 && elapsed < globals.shader_params[__MAP_NUKE_ACTIVE_DURATION__].x {
-                let p_exp = elapsed / globals.shader_params[__MAP_NUKE_ACTIVE_DURATION__].x;
-                let shockwave_r = p_exp * f_radius;
-                let wave_width = globals.shader_params[__MAP_NUKE_WAVE_WIDTH__].x;
-                let edge_dist = abs(dist - shockwave_r);
-                if edge_dist < wave_width {
-                    let wave_factor = 1.0 - edge_dist / wave_width;
-                    let wave_pulse = wave_factor * wave_factor * (1.0 - p_exp);
-                    base_color += globals.shader_params[__MAP_NUKE_WAVE_COLOR__].rgb * wave_pulse * globals.shader_params[__MAP_NUKE_WAVE_STRENGTH__].x;
-                }
-            }
-
-            // 3. TOXIC RADIOACTIVE FALLOUT (Pulsing, boiling green sludge)
-            if globals.shader_params[__MAP_NUKE_FALLOUT_ENABLED__].x > 0.5 && dist <= f_radius {
-                let falloff = 1.0 - dist / f_radius;
-                let pulse = sin(nuke_time * globals.shader_params[__MAP_NUKE_FALLOUT_PULSE_RATE__].x) * globals.shader_params[__MAP_NUKE_FALLOUT_PULSE_AMOUNT__].x + globals.shader_params[__MAP_NUKE_FALLOUT_PULSE_BASE__].x;
-
-                let n1 = fract(sin(world_x * globals.shader_params[__MAP_NUKE_NOISE1_X__].x + world_y * globals.shader_params[__MAP_NUKE_NOISE1_Y__].x + nuke_time * globals.shader_params[__MAP_NUKE_NOISE1_SPEED__].x) * 43758.5453);
-                let n2 = fract(sin(world_x * globals.shader_params[__MAP_NUKE_NOISE2_X__].x - world_y * globals.shader_params[__MAP_NUKE_NOISE2_Y__].x + nuke_time * globals.shader_params[__MAP_NUKE_NOISE2_SPEED__].x) * 23421.631);
-                let noise = (n1 + n2) * 0.5;
-
-                let bubbles = sin(world_x * globals.shader_params[__MAP_NUKE_BUBBLE_SCALE_X__].x + sin(nuke_time * globals.shader_params[__MAP_NUKE_BUBBLE_SCALE_X__].x + world_y) * globals.shader_params[__MAP_NUKE_BUBBLE_WARP__].x) * cos(world_y * globals.shader_params[__MAP_NUKE_BUBBLE_SCALE_Y__].x + cos(nuke_time * globals.shader_params[__MAP_NUKE_BUBBLE_SCALE_Y__].x - world_x) * globals.shader_params[__MAP_NUKE_BUBBLE_WARP__].x);
-                let bubble_threshold = min(globals.shader_params[__MAP_NUKE_BUBBLE_THRESHOLD__].x, 0.999);
-                let bubble_glow = smoothstep_safe(bubble_threshold, 1.0, bubbles) * pulse * globals.shader_params[__MAP_NUKE_BUBBLE_STRENGTH__].x * alpha_p;
-
-                let toxic_green = globals.shader_params[__MAP_NUKE_FALLOUT_GREEN__].rgb;
-                let toxic_bright = globals.shader_params[__MAP_NUKE_FALLOUT_BRIGHT__].rgb;
-                let glow_color = mix(toxic_green, toxic_bright, noise * globals.shader_params[__MAP_NUKE_FALLOUT_NOISE_MIX__].x) * globals.shader_params[__MAP_NUKE_FALLOUT_COLOR_GAIN__].x;
-
-                let intensity = falloff * falloff * alpha_p * pulse;
-                let core_edge = max(globals.shader_params[__MAP_NUKE_FALLOUT_CORE_EDGE__].x, 0.001);
-                let core_mix = smoothstep_safe(0.0, core_edge, falloff * alpha_p);
-
-                base_color = mix(base_color, glow_color, core_mix * globals.shader_params[__MAP_NUKE_FALLOUT_CORE_BLEND__].x);
-                base_color += glow_color * intensity * globals.shader_params[__MAP_NUKE_FALLOUT_GLOW__].x;
-                base_color += globals.shader_params[__MAP_NUKE_BUBBLE_COLOR__].rgb * bubble_glow * globals.shader_params[__MAP_NUKE_BUBBLE_MIX__].x;
             }
         }
     }
@@ -951,45 +701,32 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
         base_color = mix(base_color, globals.alert_color.rgb, intensity * globals.alert_color.a);
     }
 
-    // Placement is a semantic layer after lighting, nation skins and fog.
-    // One neutral grid; bright snap points mean the entire selected base fits.
-    if (globals.placement_active > 0.0) {
+    // Placement keeps the world's own colors (Supercell edit mode): land you
+    // cannot build on dims a little, a faint grid lights up only around the
+    // preview, and a white line marks where your territory ends.
+    if (globals.placement_scale > 0.0) {
         let world_pos = vec2<f32>(world_x, world_y);
-        let css_zoom = globals.zoom / max(globals.placement_pad_x, 0.01);
+        let css_zoom = globals.zoom / globals.placement_scale;
         let readable = smoothstep_safe(4.0, 8.0, css_zoom);
-        let detailed = globals.placement_pad_y > 0.0;
-        let site = textureLoad(placement_texture, cell_hex, 0).x;
-        let own_land = select(is_land && owner_id == u32(globals.my_player_id),
-            (site & 1u) != 0u, detailed);
+        let own_land = placement_own(cell_hex);
         if (!own_land) {
-            base_color = mix(base_color, vec3<f32>(0.025, 0.035, 0.045), 0.62);
+            base_color = mix(base_color, vec3<f32>(0.025, 0.035, 0.045), 0.3);
         } else {
-            base_color = mix(base_color, vec3<f32>(0.24, 0.31, 0.30), 0.68);
+            let center = vec2<f32>(globals.placement_center_x, globals.placement_center_y);
+            let spotlight = 1.0 - smoothstep_safe(6.0, 12.0, length(world_pos - center));
             let edge_width = max(fwidth(min_dist_to_edge), 0.001);
             let edge = 1.0 - smoothstep_safe(0.0, edge_width, min_dist_to_edge);
-            base_color = mix(base_color, vec3<f32>(0.78, 0.85, 0.84), edge * readable * 0.55);
-            if ((site & 4u) != 0u) {
-                let stripe = step(0.5, fract((world_pos.x + world_pos.y) * 2.0));
-                base_color = mix(base_color, vec3<f32>(0.10, 0.12, 0.13), 0.32 + stripe * 0.24);
-            }
+            base_color = mix(base_color, vec3<f32>(1.0, 1.0, 1.0), edge * readable * spotlight * 0.35);
         }
-        let anchor = vec2<i32>(round(world_pos));
-        let anchor_valid = (placement_site(anchor) & 2u) != 0u;
-        let distance_to_anchor = length(world_pos - round(world_pos)) * globals.zoom;
-        let snap_point = 1.0 - smoothstep_safe(1.0, 2.0, distance_to_anchor / max(globals.placement_pad_x, 0.01));
-        if (anchor_valid) {
-            base_color = mix(base_color, vec3<f32>(0.84, 0.98, 0.88), snap_point * readable * 0.92);
-        }
-        // White territorial boundary remains readable at overview zoom as well.
-        let west = placement_own(cell_hex + vec2<i32>(-1, 0), detailed);
-        let east = placement_own(cell_hex + vec2<i32>(1, 0), detailed);
-        let north = placement_own(cell_hex + vec2<i32>(0, -1), detailed);
-        let south = placement_own(cell_hex + vec2<i32>(0, 1), detailed);
+        let west = placement_own(cell_hex + vec2<i32>(-1, 0));
+        let east = placement_own(cell_hex + vec2<i32>(1, 0));
+        let north = placement_own(cell_hex + vec2<i32>(0, -1));
+        let south = placement_own(cell_hex + vec2<i32>(0, 1));
         let cell_uv = fract(world_pos);
         let border_distance = min(min(select(1.0, cell_uv.x, own_land != west),
             select(1.0, 1.0 - cell_uv.x, own_land != east)),
             min(select(1.0, cell_uv.y, own_land != north), select(1.0, 1.0 - cell_uv.y, own_land != south)));
-        let boundary = 1.0 - smoothstep_safe(0.7, 2.0, border_distance * globals.zoom / max(globals.placement_pad_x, 0.01));
+        let boundary = 1.0 - smoothstep_safe(0.7, 2.0, border_distance * css_zoom);
         base_color = mix(base_color, vec3<f32>(0.96, 0.98, 1.0), boundary * 0.92);
     }
     return base_color;

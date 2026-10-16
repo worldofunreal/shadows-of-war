@@ -48,6 +48,10 @@ pub const EVENT_NAMES: &[&str] = &[
     "tutorial_dialog_choice",
     "tutorial_exit_early",
     "campaign_episode_complete",
+    "store_open",
+    "store_buy_tap",
+    "store_checkout_open",
+    "store_purchase_complete",
 ];
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -220,6 +224,16 @@ fn valid_props(name: &str, props: &serde_json::Value) -> bool {
                 .get("episode_id")
                 .and_then(serde_json::Value::as_str)
                 .is_some_and(is_episode_id);
+    }
+    if matches!(
+        name,
+        "store_buy_tap" | "store_checkout_open" | "store_purchase_complete"
+    ) {
+        let text = |key| props.get(key).and_then(serde_json::Value::as_str);
+        return props.len() == 3
+            && matches!(text("kind"), Some("gem_pack" | "leader" | "skin"))
+            && text("item_id").is_some_and(is_episode_id)
+            && matches!(text("currency"), Some("usd" | "gems" | "crowns"));
     }
     if props.len() != 1 {
         return false;
@@ -689,6 +703,18 @@ mod tests {
             "player_name": "not-allowed"
         }));
         assert_eq!(event.validate(NOW_MS), Err("unsupported event properties"));
+    }
+
+    #[test]
+    fn store_funnel_accepts_only_closed_item_properties() {
+        assert!(sample("store_open").validate(NOW_MS).is_ok());
+        let mut event = sample("store_buy_tap");
+        event.props = Some(serde_json::json!({ "kind": "gem_pack", "item_id": "sow_gems_500", "currency": "usd" }));
+        assert!(event.validate(NOW_MS).is_ok());
+        event.props = Some(serde_json::json!({ "kind": "leader", "item_id": "sun_tzu", "currency": "eur" }));
+        assert!(event.validate(NOW_MS).is_err());
+        event.props = Some(serde_json::json!({ "kind": "skin", "item_id": "ember_vein", "currency": "gems", "email": "x" }));
+        assert!(event.validate(NOW_MS).is_err());
     }
 
     #[test]

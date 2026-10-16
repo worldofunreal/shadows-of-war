@@ -28,6 +28,8 @@ pub struct ParamDef {
     pub max: f32,
     pub step: f32,
     pub unit: &'static str,
+    /// True when the fourth color channel is a live opacity, not a fixed 1.0.
+    pub alpha: bool,
     /// Names a live WGSL slot. Slots are assigned from this catalog in order.
     pub shader_token: Option<&'static str>,
     pub options: &'static [ParamOption],
@@ -65,6 +67,7 @@ macro_rules! number {
             max: $max,
             step: $step,
             unit: $unit,
+            alpha: false,
             shader_token: Some($token),
             options: NO_OPTIONS,
         }
@@ -82,6 +85,7 @@ macro_rules! color {
             max: 1.0,
             step: 0.004,
             unit: "sRGB",
+            alpha: false,
             shader_token: Some($token),
             options: NO_OPTIONS,
         }
@@ -99,6 +103,7 @@ macro_rules! linear_color {
             max: 4.0,
             step: 0.004,
             unit: "linear RGB",
+            alpha: false,
             shader_token: Some($token),
             options: NO_OPTIONS,
         }
@@ -116,6 +121,7 @@ macro_rules! linear_rgba {
             max: 4.0,
             step: 0.004,
             unit: "linear RGB",
+            alpha: true,
             shader_token: Some($token),
             options: NO_OPTIONS,
         }
@@ -133,6 +139,7 @@ macro_rules! vector {
             max: $max,
             step: $step,
             unit: $unit,
+            alpha: false,
             shader_token: Some($token),
             options: NO_OPTIONS,
         }
@@ -150,6 +157,7 @@ macro_rules! flag {
             max: 1.0,
             step: 1.0,
             unit: "",
+            alpha: false,
             shader_token: Some($token),
             options: NO_OPTIONS,
         }
@@ -167,6 +175,7 @@ macro_rules! legacy_number {
             max: $max,
             step: $step,
             unit: $unit,
+            alpha: false,
             shader_token: None,
             options: NO_OPTIONS,
         }
@@ -184,6 +193,7 @@ macro_rules! legacy_bool {
             max: 1.0,
             step: 1.0,
             unit: "",
+            alpha: false,
             shader_token: None,
             options: NO_OPTIONS,
         }
@@ -201,6 +211,7 @@ macro_rules! selection {
             max: 3.0,
             step: 1.0,
             unit: "",
+            alpha: false,
             shader_token: None,
             options: $options,
         }
@@ -352,63 +363,7 @@ pub static PARAMS: &[ParamDef] = &[
         true
     ),
     legacy_bool!("vfx_heartbeat", "Territory pulse", "Territories", true),
-    legacy_bool!(
-        "vfx_war_fog",
-        "Combat haze and expansion",
-        "Combat haze",
-        true
-    ),
-    flag!(
-        "vfx.expansion",
-        "Territory expansion",
-        "Expansion",
-        1.0,
-        "MAP_EXPANSION_ENABLED"
-    ),
-    flag!(
-        "vfx.combat_haze",
-        "Combat haze",
-        "Combat haze",
-        1.0,
-        "MAP_COMBAT_HAZE_ENABLED"
-    ),
     legacy_bool!("fog_of_war", "Visibility shading", "Fog of war", false),
-    legacy_bool!("vfx_fallout", "Nuclear effects", "Nuclear effects", true),
-    flag!(
-        "vfx.nuke.burn",
-        "Scorched ground",
-        "Nuclear effects",
-        1.0,
-        "MAP_NUKE_BURN_ENABLED"
-    ),
-    flag!(
-        "vfx.nuke.explosion",
-        "Active explosion",
-        "Nuclear effects",
-        1.0,
-        "MAP_NUKE_EXPLOSION_ENABLED"
-    ),
-    flag!(
-        "vfx.nuke.fallout",
-        "Radioactive fallout",
-        "Nuclear effects",
-        1.0,
-        "MAP_NUKE_FALLOUT_ENABLED"
-    ),
-    flag!(
-        "vfx.nuke.flash",
-        "Ground-zero flash",
-        "Nuclear effects",
-        1.0,
-        "MAP_NUKE_FLASH_ENABLED"
-    ),
-    flag!(
-        "vfx.nuke.shockwave",
-        "Expanding shockwave",
-        "Nuclear effects",
-        1.0,
-        "MAP_NUKE_SHOCKWAVE_ENABLED"
-    ),
     legacy_bool!("vfx_ambient_grade", "Warm color cycle", "Lighting", true),
     legacy_bool!(
         "vfx_screen_vignette",
@@ -1275,28 +1230,6 @@ pub static PARAMS: &[ParamDef] = &[
         "MAP_ATTACK_FLASH_MAX"
     ),
     number!(
-        "threat.troop_cap",
-        "Troops at maximum visual reach",
-        "Threat reach",
-        1000.0,
-        1.0,
-        1000000.0,
-        1.0,
-        "troops",
-        "MAP_THREAT_TROOP_CAP"
-    ),
-    number!(
-        "threat.max_radius",
-        "Maximum threat visual reach",
-        "Threat reach",
-        100.0,
-        0.0,
-        1000.0,
-        0.5,
-        "cells",
-        "MAP_THREAT_MAX_RADIUS"
-    ),
-    number!(
         "border.contested.rate",
         "Contested shimmer speed",
         "Borders",
@@ -1978,1150 +1911,7 @@ pub static PARAMS: &[ParamDef] = &[
         "MAP_ALLIANCE_BORDER_WAVE"
     ),
     // Expansion, frontline combat haze, and attacks use independent visual controls.
-    number!(
-        "expansion.local.reach_scale",
-        "Local expansion visual reach",
-        "Expansion",
-        1.0,
-        0.0,
-        4.0,
-        0.01,
-        "×",
-        "MAP_EXPANSION_LOCAL_REACH_SCALE"
-    ),
-    number!(
-        "expansion.local.glow",
-        "Local expansion glow",
-        "Expansion",
-        0.40,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_EXPANSION_LOCAL_GLOW"
-    ),
-    number!(
-        "expansion.local.cyan_red",
-        "Local cyan red gain",
-        "Expansion",
-        1.6,
-        0.0,
-        4.0,
-        0.01,
-        "×",
-        "MAP_EXPANSION_LOCAL_CYAN_RED"
-    ),
-    number!(
-        "expansion.local.cyan_green",
-        "Local cyan green gain",
-        "Expansion",
-        0.25,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_EXPANSION_LOCAL_CYAN_GREEN"
-    ),
-    number!(
-        "expansion.local.cyan_blue",
-        "Local cyan blue gain",
-        "Expansion",
-        0.5,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_EXPANSION_LOCAL_CYAN_BLUE"
-    ),
-    number!(
-        "expansion.local.dark_red",
-        "Local dark red gain",
-        "Expansion",
-        0.15,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_EXPANSION_LOCAL_DARK_RED"
-    ),
-    number!(
-        "expansion.local.dark_green",
-        "Local dark green gain",
-        "Expansion",
-        0.02,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_EXPANSION_LOCAL_DARK_GREEN"
-    ),
-    number!(
-        "expansion.local.dark_blue",
-        "Local dark blue gain",
-        "Expansion",
-        0.12,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_EXPANSION_LOCAL_DARK_BLUE"
-    ),
-    linear_color!(
-        "expansion.local.cyan_lift",
-        "Local cyan color lift",
-        "Expansion",
-        [0.0, 0.25, 0.5],
-        "MAP_EXPANSION_LOCAL_CYAN_LIFT"
-    ),
-    linear_color!(
-        "expansion.local.dark_lift",
-        "Local indigo color lift",
-        "Expansion",
-        [0.0, 0.02, 0.12],
-        "MAP_EXPANSION_LOCAL_DARK_LIFT"
-    ),
-    number!(
-        "expansion.local.wave.scale",
-        "Local wave spacing",
-        "Expansion",
-        2.5,
-        0.0,
-        20.0,
-        0.05,
-        "",
-        "MAP_EXPANSION_LOCAL_WAVE_SCALE"
-    ),
-    number!(
-        "expansion.local.wave.speed",
-        "Local wave speed",
-        "Expansion",
-        3.5,
-        0.0,
-        20.0,
-        0.05,
-        "rad/s",
-        "MAP_EXPANSION_LOCAL_WAVE_SPEED"
-    ),
-    number!(
-        "expansion.local.wave.sharpness",
-        "Local pulse sharpness",
-        "Expansion",
-        8.0,
-        0.1,
-        32.0,
-        0.1,
-        "×",
-        "MAP_EXPANSION_LOCAL_WAVE_SHARPNESS"
-    ),
-    number!(
-        "expansion.local.wave.strength",
-        "Local pulse strength",
-        "Expansion",
-        0.35,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_EXPANSION_LOCAL_WAVE_STRENGTH"
-    ),
-    number!(
-        "expansion.local.ripple.scale",
-        "Local ripple spacing",
-        "Expansion",
-        6.0,
-        0.0,
-        30.0,
-        0.05,
-        "",
-        "MAP_EXPANSION_LOCAL_RIPPLE_SCALE"
-    ),
-    number!(
-        "expansion.local.ripple.speed",
-        "Local ripple speed",
-        "Expansion",
-        4.5,
-        0.0,
-        20.0,
-        0.05,
-        "rad/s",
-        "MAP_EXPANSION_LOCAL_RIPPLE_SPEED"
-    ),
-    number!(
-        "expansion.local.ripple.strength",
-        "Local ripple strength",
-        "Expansion",
-        0.10,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_EXPANSION_LOCAL_RIPPLE_STRENGTH"
-    ),
-    number!(
-        "expansion.local.edge.position",
-        "Local edge position",
-        "Expansion",
-        0.90,
-        0.0,
-        1.0,
-        0.01,
-        "radius",
-        "MAP_EXPANSION_LOCAL_EDGE_POSITION"
-    ),
-    number!(
-        "expansion.local.edge.width",
-        "Local edge width",
-        "Expansion",
-        1.2,
-        0.0,
-        10.0,
-        0.05,
-        "cells",
-        "MAP_EXPANSION_LOCAL_EDGE_WIDTH"
-    ),
-    number!(
-        "expansion.local.edge.strength",
-        "Local edge strength",
-        "Expansion",
-        0.5,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_EXPANSION_LOCAL_EDGE_STRENGTH"
-    ),
-    number!(
-        "expansion.other.reach_scale",
-        "Other empire expansion visual reach",
-        "Expansion",
-        1.0,
-        0.0,
-        4.0,
-        0.01,
-        "×",
-        "MAP_EXPANSION_OTHER_REACH_SCALE"
-    ),
-    linear_color!(
-        "expansion.other.frontier_color",
-        "Other empire frontier",
-        "Expansion",
-        [0.95, 0.85, 0.30],
-        "MAP_EXPANSION_OTHER_FRONTIER"
-    ),
-    number!(
-        "expansion.other.bright_mix",
-        "Frontier bright mix",
-        "Expansion",
-        0.5,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_EXPANSION_OTHER_BRIGHT_MIX"
-    ),
-    number!(
-        "expansion.other.bright_gain",
-        "Frontier bright gain",
-        "Expansion",
-        1.2,
-        0.0,
-        4.0,
-        0.01,
-        "×",
-        "MAP_EXPANSION_OTHER_BRIGHT_GAIN"
-    ),
-    number!(
-        "expansion.other.bright_lift",
-        "Frontier bright lift",
-        "Expansion",
-        0.15,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_EXPANSION_OTHER_BRIGHT_LIFT"
-    ),
-    number!(
-        "expansion.other.dark_mix",
-        "Frontier dark mix",
-        "Expansion",
-        0.3,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_EXPANSION_OTHER_DARK_MIX"
-    ),
-    number!(
-        "expansion.other.dark_gain",
-        "Frontier dark gain",
-        "Expansion",
-        0.2,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_EXPANSION_OTHER_DARK_GAIN"
-    ),
-    number!(
-        "expansion.other.glow",
-        "Other expansion glow",
-        "Expansion",
-        0.35,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_EXPANSION_OTHER_GLOW"
-    ),
-    number!(
-        "expansion.other.wave.scale",
-        "Other wave spacing",
-        "Expansion",
-        2.0,
-        0.0,
-        20.0,
-        0.05,
-        "",
-        "MAP_EXPANSION_OTHER_WAVE_SCALE"
-    ),
-    number!(
-        "expansion.other.wave.speed",
-        "Other wave speed",
-        "Expansion",
-        2.0,
-        0.0,
-        20.0,
-        0.05,
-        "rad/s",
-        "MAP_EXPANSION_OTHER_WAVE_SPEED"
-    ),
-    number!(
-        "expansion.other.ripple.strength",
-        "Other ripple strength",
-        "Expansion",
-        0.15,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_EXPANSION_OTHER_RIPPLE"
-    ),
-    number!(
-        "expansion.other.edge.position",
-        "Other edge position",
-        "Expansion",
-        0.85,
-        0.0,
-        1.0,
-        0.01,
-        "radius",
-        "MAP_EXPANSION_OTHER_EDGE_POSITION"
-    ),
-    number!(
-        "expansion.other.edge.width",
-        "Other edge width",
-        "Expansion",
-        2.5,
-        0.0,
-        10.0,
-        0.05,
-        "cells",
-        "MAP_EXPANSION_OTHER_EDGE_WIDTH"
-    ),
-    number!(
-        "expansion.other.edge.strength",
-        "Other edge strength",
-        "Expansion",
-        0.3,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_EXPANSION_OTHER_EDGE_STRENGTH"
-    ),
-    number!(
-        "combat.pvp.reach_scale",
-        "Combat haze visual reach",
-        "Combat haze",
-        1.0,
-        0.0,
-        4.0,
-        0.01,
-        "×",
-        "MAP_COMBAT_PVP_REACH_SCALE"
-    ),
-    number!(
-        "combat.pvp.desaturation",
-        "Territory desaturation",
-        "Combat haze",
-        0.60,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_COMBAT_PVP_DESATURATION"
-    ),
-    number!(
-        "combat.pvp.smoke_mix",
-        "Attacker smoke blend",
-        "Combat haze",
-        0.55,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_COMBAT_PVP_SMOKE"
-    ),
-    linear_color!(
-        "combat.pvp.smoke_color",
-        "Combat smoke tint",
-        "Combat haze",
-        [1.0, 1.0, 1.0],
-        "MAP_COMBAT_PVP_SMOKE_COLOR"
-    ),
-    number!(
-        "combat.pvp.attacker_bright_gain",
-        "Attacker bright gain",
-        "Combat haze",
-        1.4,
-        0.0,
-        4.0,
-        0.01,
-        "×",
-        "MAP_COMBAT_PVP_BRIGHT_GAIN"
-    ),
-    number!(
-        "combat.pvp.attacker_bright_lift",
-        "Attacker bright lift",
-        "Combat haze",
-        0.3,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_COMBAT_PVP_BRIGHT_LIFT"
-    ),
-    number!(
-        "combat.pvp.attacker_dark_gain",
-        "Attacker dark gain",
-        "Combat haze",
-        0.15,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_COMBAT_PVP_DARK_GAIN"
-    ),
-    number!(
-        "combat.pvp.wave.scale",
-        "Combat wave spacing",
-        "Combat haze",
-        3.0,
-        0.0,
-        30.0,
-        0.05,
-        "",
-        "MAP_COMBAT_PVP_WAVE_SCALE"
-    ),
-    number!(
-        "combat.pvp.wave.speed",
-        "Combat wave speed",
-        "Combat haze",
-        4.0,
-        0.0,
-        20.0,
-        0.05,
-        "rad/s",
-        "MAP_COMBAT_PVP_WAVE_SPEED"
-    ),
-    number!(
-        "combat.pvp.ripple.strength",
-        "Combat ripple strength",
-        "Combat haze",
-        0.25,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_COMBAT_PVP_RIPPLE"
-    ),
-    number!(
-        "combat.pvp.ripple.scale",
-        "Combat ripple spacing",
-        "Combat haze",
-        3.0,
-        0.0,
-        30.0,
-        0.05,
-        "",
-        "MAP_COMBAT_PVP_RIPPLE_SCALE"
-    ),
-    number!(
-        "combat.pvp.ripple.speed",
-        "Combat ripple speed",
-        "Combat haze",
-        4.0,
-        0.0,
-        20.0,
-        0.05,
-        "rad/s",
-        "MAP_COMBAT_PVP_RIPPLE_SPEED"
-    ),
-    number!(
-        "combat.pvp.corona.position",
-        "Combat corona position",
-        "Combat haze",
-        0.15,
-        0.0,
-        1.0,
-        0.01,
-        "radius",
-        "MAP_COMBAT_PVP_CORONA_POSITION"
-    ),
-    number!(
-        "combat.pvp.corona.width",
-        "Combat corona width",
-        "Combat haze",
-        1.5,
-        0.0,
-        10.0,
-        0.05,
-        "cells",
-        "MAP_COMBAT_PVP_CORONA_WIDTH"
-    ),
-    number!(
-        "combat.pvp.corona.strength",
-        "Combat corona strength",
-        "Combat haze",
-        0.7,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_COMBAT_PVP_CORONA_STRENGTH"
-    ),
-    number!(
-        "combat.pvp.corona.color_gain",
-        "Combat corona color gain",
-        "Combat haze",
-        2.0,
-        0.0,
-        4.0,
-        0.01,
-        "×",
-        "MAP_COMBAT_PVP_CORONA_COLOR_GAIN"
-    ),
-    number!(
-        "combat.pvp.corona.color_lift",
-        "Combat corona color lift",
-        "Combat haze",
-        0.5,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_COMBAT_PVP_CORONA_COLOR_LIFT"
-    ),
     // Nuclear fallout color, spread, pulse and blast lighting.
-    linear_color!(
-        "nuke.burn.color",
-        "Scorched ground",
-        "Nuclear effects",
-        [0.08, 0.08, 0.1],
-        "MAP_NUKE_BURN_COLOR"
-    ),
-    number!(
-        "nuke.burn.radius",
-        "Burn radius",
-        "Nuclear effects",
-        0.65,
-        0.0,
-        1.5,
-        0.01,
-        "of zone",
-        "MAP_NUKE_BURN_RADIUS"
-    ),
-    number!(
-        "nuke.burn.strength",
-        "Burn strength",
-        "Nuclear effects",
-        0.85,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_NUKE_BURN_STRENGTH"
-    ),
-    number!(
-        "nuke.active.duration",
-        "Explosion duration",
-        "Nuclear effects",
-        3.0,
-        0.1,
-        10.0,
-        0.05,
-        "s",
-        "MAP_NUKE_ACTIVE_DURATION"
-    ),
-    number!(
-        "nuke.zone.duration",
-        "Contamination fade duration",
-        "Nuclear effects",
-        5.0,
-        0.1,
-        30.0,
-        0.1,
-        "s",
-        "MAP_NUKE_ZONE_DURATION"
-    ),
-    number!(
-        "nuke.cloud.rise",
-        "Cloud rise",
-        "Nuclear effects",
-        0.45,
-        0.0,
-        1.5,
-        0.01,
-        "of zone",
-        "MAP_NUKE_CLOUD_RISE"
-    ),
-    number!(
-        "nuke.cloud.radius",
-        "Cloud cap radius",
-        "Nuclear effects",
-        0.42,
-        0.0,
-        1.0,
-        0.01,
-        "of zone",
-        "MAP_NUKE_CLOUD_RADIUS"
-    ),
-    number!(
-        "nuke.cloud.initial_radius",
-        "Cloud initial size",
-        "Nuclear effects",
-        0.35,
-        0.0,
-        1.0,
-        0.01,
-        "×",
-        "MAP_NUKE_CLOUD_INITIAL"
-    ),
-    number!(
-        "nuke.cloud.growth",
-        "Cloud growth",
-        "Nuclear effects",
-        0.65,
-        0.0,
-        1.0,
-        0.01,
-        "×",
-        "MAP_NUKE_CLOUD_GROWTH"
-    ),
-    number!(
-        "nuke.stem.width",
-        "Cloud column width",
-        "Nuclear effects",
-        0.09,
-        0.0,
-        0.5,
-        0.005,
-        "of zone",
-        "MAP_NUKE_STEM_WIDTH"
-    ),
-    number!(
-        "nuke.stem.taper",
-        "Column taper",
-        "Nuclear effects",
-        0.4,
-        0.0,
-        1.0,
-        0.01,
-        "×",
-        "MAP_NUKE_STEM_TAPER"
-    ),
-    number!(
-        "nuke.stem.wobble",
-        "Column wobble",
-        "Nuclear effects",
-        0.15,
-        0.0,
-        1.0,
-        0.01,
-        "×",
-        "MAP_NUKE_STEM_WOBBLE"
-    ),
-    number!(
-        "nuke.stem.wave_scale",
-        "Column wave spacing",
-        "Nuclear effects",
-        1.5,
-        0.0,
-        20.0,
-        0.05,
-        "",
-        "MAP_NUKE_STEM_WAVE_SCALE"
-    ),
-    number!(
-        "nuke.stem.wave_speed",
-        "Column wave speed",
-        "Nuclear effects",
-        4.0,
-        0.0,
-        20.0,
-        0.05,
-        "rad/s",
-        "MAP_NUKE_STEM_WAVE_SPEED"
-    ),
-    number!(
-        "nuke.fire.noise_scale.x",
-        "Fire noise X frequency",
-        "Nuclear effects",
-        12.3,
-        0.0,
-        40.0,
-        0.05,
-        "",
-        "MAP_NUKE_FIRE_NOISE_X"
-    ),
-    number!(
-        "nuke.fire.noise_scale.y",
-        "Fire noise Y frequency",
-        "Nuclear effects",
-        17.7,
-        0.0,
-        40.0,
-        0.05,
-        "",
-        "MAP_NUKE_FIRE_NOISE_Y"
-    ),
-    number!(
-        "nuke.fire.noise_speed",
-        "Fire noise speed",
-        "Nuclear effects",
-        5.0,
-        0.0,
-        30.0,
-        0.05,
-        "rad/s",
-        "MAP_NUKE_FIRE_NOISE_SPEED"
-    ),
-    linear_color!(
-        "nuke.fire.white",
-        "Hot center",
-        "Nuclear effects",
-        [2.5, 2.5, 2.5],
-        "MAP_NUKE_FIRE_WHITE"
-    ),
-    linear_color!(
-        "nuke.fire.yellow",
-        "Fire yellow",
-        "Nuclear effects",
-        [2.2, 1.8, 0.3],
-        "MAP_NUKE_FIRE_YELLOW"
-    ),
-    linear_color!(
-        "nuke.fire.red",
-        "Fire red",
-        "Nuclear effects",
-        [1.8, 0.3, 0.05],
-        "MAP_NUKE_FIRE_RED"
-    ),
-    linear_color!(
-        "nuke.smoke.color",
-        "Smoke",
-        "Nuclear effects",
-        [0.05, 0.05, 0.05],
-        "MAP_NUKE_SMOKE_COLOR"
-    ),
-    number!(
-        "nuke.fire.white_threshold",
-        "White heat threshold",
-        "Nuclear effects",
-        0.8,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_NUKE_WHITE_THRESHOLD"
-    ),
-    number!(
-        "nuke.fire.red_threshold",
-        "Red heat threshold",
-        "Nuclear effects",
-        0.4,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_NUKE_RED_THRESHOLD"
-    ),
-    number!(
-        "nuke.fire.age_gain",
-        "Heat fade gain",
-        "Nuclear effects",
-        1.45,
-        0.0,
-        4.0,
-        0.01,
-        "×",
-        "MAP_NUKE_HEAT_AGE"
-    ),
-    number!(
-        "nuke.fire.distance_falloff",
-        "Heat edge falloff",
-        "Nuclear effects",
-        0.45,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_NUKE_HEAT_DISTANCE"
-    ),
-    number!(
-        "nuke.fire.noise",
-        "Heat noise",
-        "Nuclear effects",
-        0.35,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_NUKE_HEAT_NOISE"
-    ),
-    number!(
-        "nuke.fire.blend",
-        "Fire blend softness",
-        "Nuclear effects",
-        0.2,
-        0.001,
-        1.0,
-        0.01,
-        "",
-        "MAP_NUKE_FIRE_BLEND"
-    ),
-    number!(
-        "nuke.flash.duration",
-        "Ground flash duration",
-        "Nuclear effects",
-        0.35,
-        0.01,
-        2.0,
-        0.01,
-        "s",
-        "MAP_NUKE_FLASH_DURATION"
-    ),
-    number!(
-        "nuke.flash.radius",
-        "Ground flash reach",
-        "Nuclear effects",
-        1.1,
-        0.0,
-        3.0,
-        0.01,
-        "of zone",
-        "MAP_NUKE_FLASH_RADIUS"
-    ),
-    number!(
-        "nuke.flash.strength",
-        "Ground flash brightness",
-        "Nuclear effects",
-        0.85,
-        0.0,
-        3.0,
-        0.01,
-        "×",
-        "MAP_NUKE_FLASH_STRENGTH"
-    ),
-    linear_color!(
-        "nuke.flash.color",
-        "Ground flash color",
-        "Nuclear effects",
-        [2.5, 2.4, 2.2],
-        "MAP_NUKE_FLASH_COLOR"
-    ),
-    number!(
-        "nuke.wave.width",
-        "Shockwave width",
-        "Nuclear effects",
-        2.0,
-        0.0,
-        10.0,
-        0.05,
-        "cells",
-        "MAP_NUKE_WAVE_WIDTH"
-    ),
-    number!(
-        "nuke.wave.strength",
-        "Shockwave brightness",
-        "Nuclear effects",
-        1.1,
-        0.0,
-        3.0,
-        0.01,
-        "×",
-        "MAP_NUKE_WAVE_STRENGTH"
-    ),
-    linear_color!(
-        "nuke.wave.color",
-        "Shockwave color",
-        "Nuclear effects",
-        [2.5, 2.2, 1.8],
-        "MAP_NUKE_WAVE_COLOR"
-    ),
-    number!(
-        "nuke.fallout.radius_scale",
-        "Contamination reach",
-        "Nuclear effects",
-        1.0,
-        0.0,
-        2.0,
-        0.01,
-        "of zone",
-        "MAP_NUKE_FALLOUT_RADIUS"
-    ),
-    number!(
-        "nuke.fallout.pulse.rate",
-        "Contamination pulse speed",
-        "Nuclear effects",
-        3.5,
-        0.0,
-        20.0,
-        0.05,
-        "rad/s",
-        "MAP_NUKE_FALLOUT_PULSE_RATE"
-    ),
-    number!(
-        "nuke.fallout.pulse.amount",
-        "Contamination pulse amount",
-        "Nuclear effects",
-        0.15,
-        0.0,
-        1.0,
-        0.01,
-        "×",
-        "MAP_NUKE_FALLOUT_PULSE_AMOUNT"
-    ),
-    number!(
-        "nuke.fallout.pulse.base",
-        "Contamination pulse base",
-        "Nuclear effects",
-        0.85,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_NUKE_FALLOUT_PULSE_BASE"
-    ),
-    number!(
-        "nuke.noise.scale1.x",
-        "Noise 1 X frequency",
-        "Nuclear effects",
-        8.3,
-        0.0,
-        40.0,
-        0.05,
-        "",
-        "MAP_NUKE_NOISE1_X"
-    ),
-    number!(
-        "nuke.noise.scale1.y",
-        "Noise 1 Y frequency",
-        "Nuclear effects",
-        14.7,
-        0.0,
-        40.0,
-        0.05,
-        "",
-        "MAP_NUKE_NOISE1_Y"
-    ),
-    number!(
-        "nuke.noise.speed1",
-        "Noise 1 speed",
-        "Nuclear effects",
-        0.9,
-        0.0,
-        10.0,
-        0.01,
-        "rad/s",
-        "MAP_NUKE_NOISE1_SPEED"
-    ),
-    number!(
-        "nuke.noise.scale2.x",
-        "Noise 2 X frequency",
-        "Nuclear effects",
-        21.1,
-        0.0,
-        40.0,
-        0.05,
-        "",
-        "MAP_NUKE_NOISE2_X"
-    ),
-    number!(
-        "nuke.noise.scale2.y",
-        "Noise 2 Y frequency",
-        "Nuclear effects",
-        12.3,
-        0.0,
-        40.0,
-        0.05,
-        "",
-        "MAP_NUKE_NOISE2_Y"
-    ),
-    number!(
-        "nuke.noise.speed2",
-        "Noise 2 speed",
-        "Nuclear effects",
-        1.4,
-        0.0,
-        10.0,
-        0.01,
-        "rad/s",
-        "MAP_NUKE_NOISE2_SPEED"
-    ),
-    number!(
-        "nuke.bubbles.scale.x",
-        "Bubble X frequency",
-        "Nuclear effects",
-        2.0,
-        0.0,
-        20.0,
-        0.05,
-        "",
-        "MAP_NUKE_BUBBLE_SCALE_X"
-    ),
-    number!(
-        "nuke.bubbles.scale.y",
-        "Bubble Y frequency",
-        "Nuclear effects",
-        2.0,
-        0.0,
-        20.0,
-        0.05,
-        "",
-        "MAP_NUKE_BUBBLE_SCALE_Y"
-    ),
-    number!(
-        "nuke.bubbles.warp",
-        "Bubble warp",
-        "Nuclear effects",
-        2.5,
-        0.0,
-        20.0,
-        0.05,
-        "",
-        "MAP_NUKE_BUBBLE_WARP"
-    ),
-    number!(
-        "nuke.bubbles.threshold",
-        "Bubble threshold",
-        "Nuclear effects",
-        0.85,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_NUKE_BUBBLE_THRESHOLD"
-    ),
-    number!(
-        "nuke.bubbles.strength",
-        "Bubble brightness",
-        "Nuclear effects",
-        0.5,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_NUKE_BUBBLE_STRENGTH"
-    ),
-    linear_color!(
-        "nuke.fallout.green",
-        "Contamination base",
-        "Nuclear effects",
-        [0.05, 0.90, 0.15],
-        "MAP_NUKE_FALLOUT_GREEN"
-    ),
-    linear_color!(
-        "nuke.fallout.bright",
-        "Contamination highlight",
-        "Nuclear effects",
-        [0.20, 1.00, 0.45],
-        "MAP_NUKE_FALLOUT_BRIGHT"
-    ),
-    number!(
-        "nuke.fallout.noise_mix",
-        "Contamination color noise",
-        "Nuclear effects",
-        0.6,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_NUKE_FALLOUT_NOISE_MIX"
-    ),
-    number!(
-        "nuke.fallout.color_gain",
-        "Contamination color gain",
-        "Nuclear effects",
-        1.6,
-        0.0,
-        4.0,
-        0.01,
-        "×",
-        "MAP_NUKE_FALLOUT_COLOR_GAIN"
-    ),
-    number!(
-        "nuke.fallout.core_edge",
-        "Contamination core edge",
-        "Nuclear effects",
-        0.8,
-        0.0,
-        2.0,
-        0.01,
-        "",
-        "MAP_NUKE_FALLOUT_CORE_EDGE"
-    ),
-    number!(
-        "nuke.fallout.core_blend",
-        "Contamination core blend",
-        "Nuclear effects",
-        0.6,
-        0.0,
-        1.0,
-        0.01,
-        "",
-        "MAP_NUKE_FALLOUT_CORE_BLEND"
-    ),
-    number!(
-        "nuke.fallout.glow",
-        "Contamination glow",
-        "Nuclear effects",
-        0.45,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_NUKE_FALLOUT_GLOW"
-    ),
-    number!(
-        "nuke.fallout.bubble_mix",
-        "Bubble alpha",
-        "Nuclear effects",
-        0.5,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_NUKE_BUBBLE_MIX"
-    ),
-    linear_color!(
-        "nuke.bubbles.color",
-        "Bubble light",
-        "Nuclear effects",
-        [0.3, 1.0, 0.5],
-        "MAP_NUKE_BUBBLE_COLOR"
-    ),
     // Lighting, screen atmosphere, and build placement.
     vector!(
         "lighting.direction",
@@ -4225,6 +3015,106 @@ pub fn definition(id: &str) -> Option<&'static ParamDef> {
     PARAMS.iter().find(|param| param.id == id)
 }
 
+/// Dev Tools tabs in display order. Every `PARAMS` section belongs to exactly one group.
+pub const SECTION_GROUPS: &[(&str, &[&str])] = &[
+    (
+        "World",
+        &[
+            "Terrain",
+            "Ocean water",
+            "Inland water",
+            "Coast",
+            "Map",
+            "Lighting",
+            "Fog of war",
+            "Screen atmosphere",
+        ],
+    ),
+    (
+        "Territory",
+        &[
+            "Territories",
+            "Borders",
+            "Skin patterns",
+            "Tutorial highlight",
+        ],
+    ),
+    ("Combat", &["Conquest"]),
+    (
+        "Effects",
+        &["Alliance celebration", "Screen alerts", "Dialog highlight"],
+    ),
+    ("Units", &["Movers", "Mover trails", "Placement grid"]),
+    (
+        "Text & Icons",
+        &[
+            "World text",
+            "Text",
+            "Emoji",
+            "Avatars",
+            "Icons",
+            "Drawn shapes",
+        ],
+    ),
+];
+
+/// Section that owns each effect preview, as `DevVfxPreview` target ids.
+pub const SECTION_PREVIEWS: &[(&str, u8)] = &[
+    ("Borders", 1),
+    ("Conquest", 2),
+    ("Alliance celebration", 3),
+    ("Dialog highlight", 7),
+    ("Screen alerts", 8),
+];
+
+/// One-tap switches for isolating frame cost. "On" restores each id's default;
+/// "off" zeroes it (a bool goes false, a width goes to 0).
+pub const PERF_SWITCHES: &[(&str, &[&str])] = &[
+    (
+        "Content",
+        &[
+            "vfx_movers",
+            "vfx_mover_trails",
+            "vfx_nameplate_names",
+            "vfx_nameplate_troops",
+            "vfx_bot_avatars",
+            "vfx_world_buildings",
+            "vfx_attack_badges",
+            "vfx_click_markers",
+        ],
+    ),
+    (
+        "Effects",
+        &[
+            "vfx_conquer",
+            "vfx_border_breathe",
+            "vfx_energy_flow",
+            "vfx_heartbeat",
+            "vfx_ambient_grade",
+            "vfx_screen_vignette",
+            "vfx_holo_grid",
+            "vfx_dialog_border",
+            "vfx_tutorial_highlight",
+            "vfx.alerts",
+            "vfx.attack_flash",
+            "vfx.alliance_celebration",
+            "territory.skin.stripe.enabled",
+            "territory.skin.grid.enabled",
+            "territory.skin.diamond.enabled",
+        ],
+    ),
+    ("Shore", &["water.shore_band_width"]),
+    (
+        "Lighting",
+        &[
+            "lighting.relief.enabled",
+            "lighting.diffuse.enabled",
+            "lighting.specular.enabled",
+            "fog_of_war",
+        ],
+    ),
+];
+
 pub fn shader_slot(id: &str) -> Option<usize> {
     let target = definition(id)?.shader_token?;
     Some(
@@ -4301,6 +3191,62 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join(" ");
             assert!(!prepare_shader(prefix, &source).contains("__"));
+        }
+    }
+
+    #[test]
+    fn every_section_belongs_to_exactly_one_dev_tools_group() {
+        for param in PARAMS {
+            let owners = SECTION_GROUPS
+                .iter()
+                .filter(|(_, sections)| sections.contains(&param.section))
+                .count();
+            assert_eq!(
+                owners, 1,
+                "section '{}' needs exactly one group",
+                param.section
+            );
+        }
+        for (_, sections) in SECTION_GROUPS {
+            for section in *sections {
+                assert!(
+                    PARAMS.iter().any(|param| param.section == *section),
+                    "group lists unknown section '{section}'"
+                );
+            }
+        }
+        for (section, _) in SECTION_PREVIEWS {
+            assert!(PARAMS.iter().any(|param| param.section == *section));
+        }
+        for (name, ids) in PERF_SWITCHES {
+            for id in *ids {
+                assert!(
+                    definition(id).is_some(),
+                    "perf switch '{name}' lists unknown id '{id}'"
+                );
+            }
+        }
+    }
+
+    /// Perf policy in `map.wgsl`: a per-pixel loop is either tiny (<= 4) or
+    /// bounded by a CPU-supplied `globals.*_count`, so idle slots cost nothing.
+    #[test]
+    fn map_shader_loops_follow_perf_policy() {
+        for line in include_str!("shaders/map.wgsl")
+            .lines()
+            .filter(|line| line.trim_start().starts_with("for (var"))
+        {
+            let bound = line.split("; ").nth(1).unwrap_or_default();
+            let tiny = bound
+                .split("< ")
+                .nth(1)
+                .and_then(|n| n.trim().parse::<u32>().ok())
+                .is_some_and(|n| n <= 4);
+            let counted = bound.contains("globals.") && bound.contains("_count");
+            assert!(
+                tiny || counted,
+                "map.wgsl loop breaks the perf policy: {line}"
+            );
         }
     }
 

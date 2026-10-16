@@ -14,7 +14,8 @@
     "menu_lobby_browser_open", "menu_custom_create_open", "menu_leader_confirm", "matchmaking_joined",
     "lobby_joined", "lobby_join_failed", "match_exit", "match_loading_start", "match_started_client", "match_ended_client",
     "tutorial_start", "tutorial_step",
-    "tutorial_objective_complete", "tutorial_dialog_choice", "tutorial_exit_early", "campaign_episode_complete"
+    "tutorial_objective_complete", "tutorial_dialog_choice", "tutorial_exit_early", "campaign_episode_complete",
+    "store_open", "store_buy_tap", "store_checkout_open", "store_purchase_complete"
   ]);
   const isGameShell = Boolean(document.getElementById("blade"));
   const isAndroidTwa = () => {
@@ -132,6 +133,13 @@
       return { stage: props.stage };
     }
     if (name === "boot_route_decision" && ["menu", "intro"].includes(props.route)) return { route: props.route };
+    if (["store_buy_tap", "store_checkout_open", "store_purchase_complete"].includes(name)
+      && Object.keys(props).length === 3
+      && ["gem_pack", "leader", "skin"].includes(props.kind)
+      && typeof props.item_id === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(props.item_id)
+      && ["usd", "gems", "crowns"].includes(props.currency)) {
+      return { kind: props.kind, item_id: props.item_id, currency: props.currency };
+    }
     if (name === "tutorial_step") {
       if (Object.keys(props).length === 1 && Number.isInteger(props.step_index) && props.step_index >= 0 && props.step_index < 512) {
         return { step_index: props.step_index };
