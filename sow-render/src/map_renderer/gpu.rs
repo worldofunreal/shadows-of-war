@@ -13,7 +13,7 @@ struct MapShaderData {
     player_skin_styles: PlayerSkinStyles,
     terrain_texture: gpu::TextureView,
     owner_texture: gpu::TextureView,
-    occupancy_texture: gpu::TextureView,
+    placement_texture: gpu::TextureView,
 }
 
 pub struct MapRenderer {
@@ -23,11 +23,11 @@ pub struct MapRenderer {
     pub owner_texture: gpu::Texture,
     pub owner_view: gpu::TextureView,
     pub owner_buffer: gpu::Buffer,
-    pub occupancy_texture: gpu::Texture,
-    occupancy_view: gpu::TextureView,
-    occupancy_buffer: gpu::Buffer,
-    occupancy_sites: Vec<(u64, u32, sow_core::game::BuildingKind)>,
-    occupancy_initialized: bool,
+    pub placement_texture: gpu::Texture,
+    placement_view: gpu::TextureView,
+    placement_buffer: gpu::Buffer,
+    placement_bounds: [u32; 4],
+    placement_revision: Option<u64>,
     pub pipeline: gpu::RenderPipeline,
     pub width: u32,
     pub height: u32,
@@ -165,8 +165,8 @@ impl MapRenderer {
             memory: gpu::Memory::Upload,
         });
 
-        let occupancy_texture = context.create_texture(gpu::TextureDesc {
-            name: "building_occupancy",
+        let placement_texture = context.create_texture(gpu::TextureDesc {
+            name: "building_placement",
             format: gpu::TextureFormat::R32Uint,
             size: gpu::Extent {
                 width,
@@ -180,22 +180,22 @@ impl MapRenderer {
             usage: gpu::TextureUsage::COPY | gpu::TextureUsage::RESOURCE,
             external: None,
         });
-        let occupancy_view = context.create_texture_view(
-            occupancy_texture,
+        let placement_view = context.create_texture_view(
+            placement_texture,
             gpu::TextureViewDesc {
-                name: "building_occupancy_view",
+                name: "building_placement_view",
                 format: gpu::TextureFormat::R32Uint,
                 dimension: gpu::ViewDimension::D2,
                 subresources: &gpu::TextureSubresources::default(),
             },
         );
-        let occupancy_buffer = context.create_buffer(gpu::BufferDesc {
-            name: "building_occupancy_raw",
+        let placement_buffer = context.create_buffer(gpu::BufferDesc {
+            name: "building_placement_raw",
             size: (owner_bytes_per_row * height) as u64,
             memory: gpu::Memory::Upload,
         });
         unsafe {
-            std::ptr::write_bytes(occupancy_buffer.data(), 0, occupancy_buffer.size() as usize);
+            std::ptr::write_bytes(placement_buffer.data(), 0, placement_buffer.size() as usize);
         }
 
         // --- Shader & pipeline ---
@@ -258,11 +258,11 @@ impl MapRenderer {
             owner_texture,
             owner_view,
             owner_buffer,
-            occupancy_texture,
-            occupancy_view,
-            occupancy_buffer,
-            occupancy_sites: Vec::new(),
-            occupancy_initialized: false,
+            placement_texture,
+            placement_view,
+            placement_buffer,
+            placement_bounds: [0; 4],
+            placement_revision: None,
             pipeline,
             width,
             height,
@@ -284,116 +284,72 @@ impl MapRenderer {
         }
     }
 
-    /// Update only rows affected by added, removed or moved 4x4 foundations.
-    /// Level, owner and construction-progress changes do not alter occupancy.
-    pub fn update_building_occupancy(
+    /// Reuse the placement texture for visible whole-foundation destinations.
+    /// Cached revisions avoid uploads when only the preview or gold changes.
+    pub fn update_building_placement(
         &mut self,
         encoder: &mut gpu::CommandEncoder,
         context: &gpu::Context,
-        buildings: &[sow_core::protocol::BuildingSnapshot],
+        bounds: [u32; 4],
+        cells: &[u32],
+        revision: u64,
     ) {
-        if self.occupancy_initialized
-            && self
-                .occupancy_sites
-                .iter()
-                .copied()
-                .eq(buildings.iter().map(|b| (b.id, b.tile_idx, b.kind)))
-        {
+        if self.placement_revision == Some(revision) {
             return;
         }
         let stride = self.owner_bytes_per_row / 4;
         let values = unsafe {
             std::slice::from_raw_parts_mut(
-                self.occupancy_buffer.data() as *mut u32,
+                self.placement_buffer.data() as *mut u32,
                 (stride * self.height) as usize,
             )
         };
-        let mut dirty = vec![!self.occupancy_initialized; self.height as usize];
-        let mut update = |tile: u32, kind: sow_core::game::BuildingKind, add: bool| {
-            if self.width == 0 {
-                return;
-            }
-            let footprint = sow_core::building::BuildingFootprint::at(
-                kind,
-                tile % self.width,
-                tile / self.width,
-            );
-            for y in footprint.top.max(0)
-                ..(footprint.top + footprint.height as i32).min(self.height as i32)
-            {
-                for x in footprint.left.max(0)
-                    ..(footprint.left + footprint.width as i32).min(self.width as i32)
-                {
-                    let value = &mut values[(y as u32 * stride + x as u32) as usize];
-                    *value = if add {
-                        value.saturating_add(1)
-                    } else {
-                        value.saturating_sub(1)
-                    };
-                    dirty[y as usize] = true;
-                }
-            }
+        let first = if self.placement_revision.is_none() {
+            0
+        } else {
+            self.placement_bounds[1].min(bounds[1])
         };
-        let (mut old, mut new) = (0, 0);
-        while old < self.occupancy_sites.len() || new < buildings.len() {
-            let previous = self.occupancy_sites.get(old).copied();
-            let next = buildings.get(new).map(|b| (b.id, b.tile_idx, b.kind));
-            match (previous, next) {
-                (Some(a), Some(b)) if a.0 == b.0 => {
-                    if a != b {
-                        update(a.1, a.2, false);
-                        update(b.1, b.2, true);
-                    }
-                    old += 1;
-                    new += 1;
-                }
-                (Some(a), Some(b)) if a.0 < b.0 => {
-                    update(a.1, a.2, false);
-                    old += 1;
-                }
-                (Some(a), None) => {
-                    update(a.1, a.2, false);
-                    old += 1;
-                }
-                (_, Some(b)) => {
-                    update(b.1, b.2, true);
-                    new += 1;
-                }
-                _ => break,
+        let last = if self.placement_revision.is_none() {
+            self.height
+        } else {
+            self.placement_bounds[3].max(bounds[3])
+        };
+        for y in self.placement_bounds[1]..self.placement_bounds[3] {
+            for x in self.placement_bounds[0]..self.placement_bounds[2] {
+                values[(y * stride + x) as usize] = 0;
             }
         }
-        self.occupancy_sites.clear();
-        self.occupancy_sites
-            .extend(buildings.iter().map(|b| (b.id, b.tile_idx, b.kind)));
-        let mut row = 0;
-        while row < self.height as usize {
-            if !dirty[row] {
-                row += 1;
-                continue;
-            }
-            let first = row;
-            while row < self.height as usize && dirty[row] {
-                row += 1;
-            }
+        let width = bounds[2].saturating_sub(bounds[0]);
+        assert_eq!(
+            cells.len(),
+            (width * bounds[3].saturating_sub(bounds[1])) as usize
+        );
+        for y in bounds[1]..bounds[3] {
+            let src = ((y - bounds[1]) * width) as usize;
+            let dst = (y * stride + bounds[0]) as usize;
+            values[dst..dst + width as usize].copy_from_slice(&cells[src..src + width as usize]);
+        }
+        if last > first {
             let offset = first as u64 * self.owner_bytes_per_row as u64;
-            let size = (row - first) as u64 * self.owner_bytes_per_row as u64;
-            context.sync_buffer(self.occupancy_buffer, offset, size);
-            let mut target: gpu::TexturePiece = self.occupancy_texture.into();
-            target.origin = [0, first as u32, 0];
+            let size = (last - first) as u64 * self.owner_bytes_per_row as u64;
+            context.sync_buffer(self.placement_buffer, offset, size);
+            let mut target: gpu::TexturePiece = self.placement_texture.into();
+            target.origin = [0, first, 0];
             encoder
-                .transfer("building_occupancy_upload")
+                .transfer("building_placement_upload")
                 .copy_buffer_to_texture(
-                    self.occupancy_buffer.at(offset),
+                    self.placement_buffer.at(offset),
                     self.owner_bytes_per_row,
                     target,
                     gpu::Extent {
                         width: self.width,
-                        height: (row - first) as u32,
+                        height: last - first,
                         depth: 1,
                     },
                 );
         }
-        self.occupancy_initialized = true;
+        self.placement_bounds = bounds;
+        self.placement_revision = Some(revision);
     }
 
     /// Upload static terrain texture once. Call after creating the command encoder.
@@ -811,7 +767,7 @@ impl MapRenderer {
                 player_skin_styles,
                 terrain_texture: self.terrain_view,
                 owner_texture: self.owner_view,
-                occupancy_texture: self.occupancy_view,
+                placement_texture: self.placement_view,
             },
         );
         rc.draw(0, 3, 0, 1);
@@ -824,9 +780,9 @@ impl MapRenderer {
         render_ctx.context.destroy_texture_view(self.owner_view);
         render_ctx.context.destroy_texture(self.owner_texture);
         render_ctx.context.destroy_buffer(self.owner_buffer);
-        render_ctx.context.destroy_texture_view(self.occupancy_view);
-        render_ctx.context.destroy_texture(self.occupancy_texture);
-        render_ctx.context.destroy_buffer(self.occupancy_buffer);
+        render_ctx.context.destroy_texture_view(self.placement_view);
+        render_ctx.context.destroy_texture(self.placement_texture);
+        render_ctx.context.destroy_buffer(self.placement_buffer);
         render_ctx
             .context
             .destroy_render_pipeline(&mut self.pipeline);

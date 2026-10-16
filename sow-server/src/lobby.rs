@@ -429,25 +429,6 @@ pub fn join_player(
     } else if let Some(req) = target_lobby_id {
         match resolve_join_target(Some(req), games) {
             Some(id) => id,
-            None if req >= 100000000 => {
-                // Rematch room doesn't exist yet, we must be the first to arrive! Create it.
-                log::info!("[JOIN] Creating rematch Custom lobby id={}", req);
-                spawn_waiting_lobby(
-                    games,
-                    next_id,
-                    SpawnLobbyOpts {
-                        game_mode: "FFA".to_string(),
-                        kind: LobbyKind::Custom,
-                        is_private: true,
-                        config_override: None,
-                        password: None,
-                        host_name: String::new(),
-                    },
-                );
-                let new_lobby = games.last_mut().unwrap();
-                new_lobby.id = req; // Override the ID to match the rematch ID
-                req
-            }
             None if games
                 .iter()
                 .any(|g| g.id == req && g.kind == LobbyKind::Matchmaking) =>
@@ -635,7 +616,6 @@ fn lobby_closed_json(lobby_id: u64, reason: &str) -> Option<Vec<u8>> {
     let msg = sow_core::protocol::ServerLobbyClosedMessage {
         lobby_id,
         reason: reason.to_string(),
-        rematch_lobby_id: None,
     };
     match bincode::serialize(&sow_core::protocol::ServerMessage::LobbyClosed(msg)) {
         Ok(json) => Some(json),
@@ -924,7 +904,6 @@ pub fn master_tick(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
                             let closed_msg = sow_core::protocol::ServerLobbyClosedMessage {
                                 lobby_id: lobby.id,
                                 reason: "Sync timeout. Requeueing...".to_string(),
-                                rematch_lobby_id: None,
                             };
                             if let Ok(closed_json) = bincode::serialize(
                                 &sow_core::protocol::ServerMessage::LobbyClosed(closed_msg),
@@ -1408,6 +1387,90 @@ mod name_tests {
 
         assert_eq!(result.unwrap_err(), "Lobby is not accepting joins");
         assert!(games[0].players.is_empty());
+    }
+
+    #[test]
+    fn missing_high_id_does_not_create_a_lobby() {
+        let mut games = vec![queue_lobby(20, LobbyKind::Matchmaking, "FFA")];
+        let mut next_id = 30;
+
+        let result = join_player(
+            &mut games,
+            &mut next_id,
+            join_options(Some(100_000_001), channel_sender()),
+        );
+
+        assert_eq!(result.unwrap_err(), "Lobby is not accepting joins");
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].id, 20);
+        assert_eq!(next_id, 30);
+    }
+
+    #[test]
+    fn existing_high_id_custom_lobby_still_accepts_invite_join() {
+        let id = 100_000_001;
+        let mut games = vec![queue_lobby(id, LobbyKind::Custom, "Teams")];
+        let mut next_id = id + 1;
+        let (client_tx, _client_rx) = tokio::sync::mpsc::channel(1);
+
+        let result = join_player(
+            &mut games,
+            &mut next_id,
+            join_options(Some(id), client_tx),
+        )
+        .expect("an invite to an existing custom lobby must still work");
+
+        assert_eq!(result.0, id);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].kind, LobbyKind::Custom);
+        assert_eq!(games[0].players.len(), 1);
+    }
+
+    #[test]
+    fn private_custom_host_still_creates_a_private_lobby() {
+        let mut games = Vec::new();
+        let mut next_id = 1;
+        let (client_tx, _client_rx) = tokio::sync::mpsc::channel(1);
+        let mut options = join_options(None, client_tx);
+        options.host_private = true;
+        options.host_config = Some(Box::new(GameConfig {
+            game_mode: "Teams".to_string(),
+            max_players: 12,
+            ..Default::default()
+        }));
+
+        let result = join_player(&mut games, &mut next_id, options)
+            .expect("private custom lobby hosting must still work");
+
+        assert_eq!(games.len(), 1);
+        assert_eq!(result.0, games[0].id);
+        assert_eq!(games[0].kind, LobbyKind::Custom);
+        assert!(games[0].is_private);
+        assert_eq!(games[0].game_mode, "Teams");
+        assert_eq!(games[0].config.max_players, 12);
+    }
+
+    #[test]
+    fn public_custom_host_still_creates_configured_lobby() {
+        let mut games = Vec::new();
+        let mut next_id = 1;
+        let (client_tx, _client_rx) = tokio::sync::mpsc::channel(1);
+        let mut options = join_options(None, client_tx);
+        options.host_config = Some(Box::new(GameConfig {
+            game_mode: "Teams".to_string(),
+            max_players: 20,
+            ..Default::default()
+        }));
+
+        let result = join_player(&mut games, &mut next_id, options)
+            .expect("public custom lobby hosting must still work");
+
+        assert_eq!(games.len(), 1);
+        assert_eq!(result.0, games[0].id);
+        assert_eq!(games[0].kind, LobbyKind::Custom);
+        assert!(!games[0].is_private);
+        assert_eq!(games[0].game_mode, "Teams");
+        assert_eq!(games[0].config.max_players, 20);
     }
 
     #[test]

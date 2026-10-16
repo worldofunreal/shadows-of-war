@@ -777,7 +777,6 @@ async fn main() {
                     let closed_msg = sow_core::protocol::ServerLobbyClosedMessage {
                         lobby_id: rc.lobby_id,
                         reason: format!("DB_REGISTRATION_FAILED: {e}"),
-                        rematch_lobby_id: None,
                     };
                     if let Ok(closed_json) = bincode::serialize(
                         &sow_core::protocol::ServerMessage::LobbyClosed(closed_msg),
@@ -881,7 +880,6 @@ async fn main() {
                         let closed_msg = sow_core::protocol::ServerLobbyClosedMessage {
                             lobby_id: rc.lobby_id,
                             reason: format!("RELAY_REGISTRATION_FAILED: {}", e),
-                            rematch_lobby_id: None,
                         };
                         if let Ok(closed_json) = bincode::serialize(
                             &sow_core::protocol::ServerMessage::LobbyClosed(closed_msg),
@@ -1530,11 +1528,10 @@ async fn main() {
                                                 let json = bincode::serialize(&pong).unwrap();
                                                 let _ = direct_tx.try_send(json);
                                             }
-                                            sow_core::protocol::ClientMessage::ReservedRematchRequest { .. } => {
-                                                // Retired wire slot; intentionally ignored.
+                                            sow_core::protocol::ClientMessage::ReservedClientMessage => {
+                                                log::warn!("[SERVER] Client used a reserved protocol message slot; closing connection");
+                                                break;
                                             }
-                                            sow_core::protocol::ClientMessage::SubmitStatsWithLeader { .. }
-                                            | sow_core::protocol::ClientMessage::SubmitMatchReport { .. } => {}
                                         }
                                         continue;
                                     }

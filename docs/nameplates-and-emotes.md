@@ -178,7 +178,7 @@ aceptación.
   Estas pruebas se ejecutan en WASM mediante el control oficial.
 - `sow-render/src/nameplate.rs`: tierra, escala y prioridad con presupuesto
   limitado; sus comprobaciones existentes siguen cubriendo el ajuste.
-- `sow-web/shell/gameplay_interaction.test.js`: capacidades del radial,
+- `sow-web/shell/map_interaction.test.js`: capacidades del radial,
   traducciones, sincronización local y ausencia del selector retirado.
 
 La calidad visual final requiere revisión del usuario en escritorio y móvil:

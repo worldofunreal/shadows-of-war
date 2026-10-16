@@ -1,4 +1,3 @@
-use super::placement::PlacementQuery;
 use crate::app::{MapContextMenu, MapContextMenuView, SowApp};
 use serde::Deserialize;
 
@@ -947,6 +946,50 @@ impl SowApp {
         }
     }
 
+    pub(crate) fn nudge_building_placement(
+        &mut self,
+        direction: super::placement::PlacementDirection,
+    ) {
+        if self.ui.observing
+            || self.ui.tutorial_camera_only
+            || self.ui.app.phase != crate::ClientPhase::Playing
+            || self.ui.app.hud_state.sync_state.is_some()
+            || self.sim.map_w == 0
+        {
+            return;
+        }
+        let Some(placement) = self
+            .ui
+            .app
+            .hud_state
+            .building_placement
+            .filter(|p| !p.pending)
+        else {
+            return;
+        };
+        let (dx, dy) = direction.offset();
+        self.input.building_drag_offset = None;
+        self.move_building_preview(
+            (placement.tile_idx % self.sim.map_w) as i32 + dx,
+            (placement.tile_idx / self.sim.map_w) as i32 + dy,
+        );
+    }
+
+    pub(crate) fn building_placement_site_valid(&mut self) -> bool {
+        let Some(placement) = self.ui.app.hud_state.building_placement else {
+            return false;
+        };
+        if self.sim.map_w == 0 {
+            return false;
+        }
+        self.resolve_building_target(
+            placement.kind,
+            (placement.tile_idx % self.sim.map_w) as i32,
+            (placement.tile_idx / self.sim.map_w) as i32,
+        )
+        .is_ok()
+    }
+
     pub(crate) fn confirm_building_placement(&mut self) {
         let Some(placement) = self.ui.app.hud_state.building_placement else {
             return;
@@ -1571,34 +1614,17 @@ impl SowApp {
             as i32)
             .min(self.sim.map_h as i32 - 2);
         let mut best = None;
-        if let Some(renderer) = self.gfx.map_renderer.as_ref()
-            && let Some(snapshot) = self.sim.current_snapshot.as_ref()
-        {
+        if let Some(engine) = self.sim.engine.as_mut() {
+            engine.refresh_building_grid();
             let my_id = self.sim.my_player_id.unwrap_or(0);
             for row in min_y..=max_y {
                 for col in min_x..=max_x {
                     let distance = (col as i64 - center_x as i64).pow(2)
                         + (row as i64 - center_y as i64).pow(2);
-                    if best.is_some_and(|(d, _)| d <= distance) {
-                        continue;
-                    }
+                    if best.is_some_and(|(d, _)| d <= distance) { continue; }
                     let tile = row as u32 * self.sim.map_w + col as u32;
-                    let query = PlacementQuery {
-                        kind,
-                        click_x: col,
-                        click_y: row,
-                        map_w: self.sim.map_w,
-                        map_h: self.sim.map_h,
-                        owners: &renderer.owners,
-                        terrain: &renderer.terrain,
-                        my_id,
-                        buildings: &snapshot.buildings,
-                    };
-                    if self
-                        .ui
-                        .building_placement_cache
-                        .is_legal_site(snapshot.tick, &query, tile)
-                    {
+                    if sow_core::building::validate_structure_site(&engine.state.map,
+                        my_id, kind, tile, &engine.building_grid).is_ok() {
                         best = Some((distance, tile));
                     }
                 }
@@ -1608,6 +1634,10 @@ impl SowApp {
             center_y.clamp(0, self.sim.map_h.saturating_sub(1) as i32) as u32 * self.sim.map_w
                 + center_x.clamp(0, self.sim.map_w.saturating_sub(1) as i32) as u32
         });
+        self.input.key_pan_up = false;
+        self.input.key_pan_down = false;
+        self.input.key_pan_left = false;
+        self.input.key_pan_right = false;
         self.ui.app.hud_state.building_placement = Some(crate::ui::hud::state::BuildingPlacement {
             kind,
             tile_idx: tile,

@@ -303,17 +303,12 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         },
     )
     .await;
-    ws_send(
-        &mut survivor_write,
-        &ClientMessage::ReservedRematchRequest { lobby_id: match_id },
-    )
-    .await;
     assert!(
         matches!(
             recv(&mut survivor_read, 5).await,
             ServerMessage::Turn(_) | ServerMessage::Pong { .. }
         ),
-        "the retired rematch message cannot eject another player"
+        "an active player continues receiving match traffic"
     );
     let still_playing = profile(&http, base, Some(&second), "Exit Audit Two").await;
     assert!(
@@ -369,6 +364,9 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         .spawn()
         .unwrap();
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(180);
+    let mut child_poll = tokio::time::interval(std::time::Duration::from_millis(20));
+    child_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut last_relay_message = tokio::time::Instant::now();
     let status = loop {
         if let Some(status) = client.try_wait().unwrap() {
             break status;
@@ -378,24 +376,47 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
             "real WASM return exceeded its deadline"
         );
         let message = tokio::select! {
-            message = recv(&mut other_read, 5) => message,
-            message = recv(&mut survivor_read, 5) => message,
+            message = recv(&mut other_read, 5) => Some(message),
+            message = recv(&mut survivor_read, 5) => Some(message),
+            _ = child_poll.tick() => None,
         };
-        assert!(
-            matches!(
-                message,
-                ServerMessage::Turn(_)
-                    | ServerMessage::RelayReconnectTicket { .. }
-                    | ServerMessage::Pong { .. }
-            ),
-            "other players must keep receiving turns during the first exit"
-        );
+        if let Some(message) = message {
+            last_relay_message = tokio::time::Instant::now();
+            assert!(
+                matches!(
+                    message,
+                    ServerMessage::Turn(_)
+                        | ServerMessage::RelayReconnectTicket { .. }
+                        | ServerMessage::Pong { .. }
+                ),
+                "other players must keep receiving turns during the first exit"
+            );
+        } else {
+            assert!(
+                tokio::time::Instant::now().duration_since(last_relay_message)
+                    < std::time::Duration::from_secs(5),
+                "other players stopped receiving match traffic during the first exit"
+            );
+        }
     };
     assert!(status.success(), "actual WASM client exit failed");
-    assert!(matches!(
-        recv(&mut other_read, 5).await,
-        ServerMessage::Turn(_) | ServerMessage::Pong { .. }
-    ));
+    let client_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64();
+    ws_send(
+        &mut other_write,
+        &ClientMessage::Ping { client_time },
+    )
+    .await;
+    assert!(
+        match recv(&mut other_read, 5).await {
+            ServerMessage::Turn(_) => true,
+            ServerMessage::Pong { client_time: echoed } => echoed == client_time,
+            _ => false,
+        },
+        "the other player must receive a turn or the matching relay pong after the first exit"
+    );
     let settled_first = profile(&http, base, Some(&first), "Exit Audit One").await;
     for _ in 0..3 {
         let repeated = exit(&http, base, &first, match_id).await;

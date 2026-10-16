@@ -95,7 +95,7 @@ impl SowApp {
                             self.join_waiting_for_identity = true;
                         }
                     } else if self.ui.app.main_menu_state.host_private_pending {
-                        log::info!("Hosting private lobby (portal instant / play again)");
+                        log::info!("Hosting private lobby from portal instant");
                         let join_msg = self.make_join_message(None, true, None, None);
                         if let Some(join_msg) = join_msg
                             && let Ok(json) = bincode::serialize(&join_msg)

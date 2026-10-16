@@ -3784,7 +3784,7 @@ fn package_jest(
 
     copy_poki_assets(&play_dir.join("assets"), &out.join("assets"))?;
     copy_poki_maps(&play_dir.join("maps"), &out.join("maps"))?;
-    copy_dir(&paths.root.join("sow-web/site/fonts"), &out.join("fonts"))?;
+    copy_web_fonts(&paths.root.join("sow-web/site/fonts"), &out.join("fonts"))?;
     copy_shell(paths, out, WebTarget::Jest)?;
     fs::write(
         out.join("manifest.webmanifest"),

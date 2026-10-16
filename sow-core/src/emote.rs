@@ -247,7 +247,7 @@ mod tests {
     #[test]
     fn live_wire_identity_and_message_audience_are_explicit() {
         let current = crate::protocol::gameplay_build_identity("0.1.3");
-        assert_eq!(current, "0.1.3/turns-3/net-2");
+        assert_eq!(current, "0.1.3/turns-3/net-3");
         assert_ne!(current, "0.1.3");
         let mut engine = engine();
         let config = engine.state.config.clone();

@@ -172,6 +172,30 @@ impl SowApp {
         let winit::keyboard::PhysicalKey::Code(code) = key else {
             return;
         };
+        #[cfg(target_arch = "wasm32")]
+        if crate::web_canvas::ui_has_keyboard_focus() {
+            self.input.key_pan_up = false;
+            self.input.key_pan_down = false;
+            self.input.key_pan_left = false;
+            self.input.key_pan_right = false;
+            return;
+        }
+        if self.ui.app.hud_state.building_placement.is_some() && !self.ui.tutorial_camera_only {
+            use super::placement::PlacementDirection;
+            let direction = match code {
+                winit::keyboard::KeyCode::ArrowUp => Some(PlacementDirection::Up),
+                winit::keyboard::KeyCode::ArrowRight => Some(PlacementDirection::Right),
+                winit::keyboard::KeyCode::ArrowDown => Some(PlacementDirection::Down),
+                winit::keyboard::KeyCode::ArrowLeft => Some(PlacementDirection::Left),
+                _ => None,
+            };
+            if let Some(direction) = direction {
+                if pressed {
+                    self.nudge_building_placement(direction);
+                }
+                return;
+            }
+        }
         let pan_key_was_pressed = match code {
             winit::keyboard::KeyCode::KeyW | winit::keyboard::KeyCode::ArrowUp => {
                 self.input.key_pan_up
@@ -619,6 +643,59 @@ mod tests {
             tile_idx: 20 * 64 + 20,
             pending: false,
         });
+        use crate::input::placement::PlacementDirection;
+        use winit::keyboard::{KeyCode, PhysicalKey};
+        for key in [
+            KeyCode::ArrowUp,
+            KeyCode::ArrowRight,
+            KeyCode::ArrowDown,
+            KeyCode::ArrowLeft,
+        ] {
+            let before = app.ui.app.hud_state.building_placement.unwrap().tile_idx;
+            app.handle_key_event(true, PhysicalKey::Code(key));
+            assert_ne!(
+                app.ui.app.hud_state.building_placement.unwrap().tile_idx,
+                before
+            );
+            assert!(
+                !app.input.key_pan_up
+                    && !app.input.key_pan_left
+                    && !app.input.key_pan_right
+                    && !app.input.key_pan_down
+            );
+        }
+        assert_eq!(
+            app.ui.app.hud_state.building_placement.unwrap().tile_idx,
+            20 * 64 + 20
+        );
+        app.handle_key_event(true, PhysicalKey::Code(KeyCode::KeyW));
+        assert!(app.input.key_pan_up);
+        app.handle_key_event(false, PhysicalKey::Code(KeyCode::KeyW));
+        app.ui
+            .app
+            .hud_state
+            .building_placement
+            .as_mut()
+            .unwrap()
+            .tile_idx = 0;
+        app.nudge_building_placement(PlacementDirection::Left);
+        app.nudge_building_placement(PlacementDirection::Up);
+        assert_eq!(app.ui.app.hud_state.building_placement.unwrap().tile_idx, 0);
+        app.nudge_building_placement(PlacementDirection::Right);
+        app.nudge_building_placement(PlacementDirection::Down);
+        assert_eq!(
+            app.ui.app.hud_state.building_placement.unwrap().tile_idx,
+            65,
+            "invalid sites remain explorable"
+        );
+        app.ui
+            .app
+            .hud_state
+            .building_placement
+            .as_mut()
+            .unwrap()
+            .tile_idx = 20 * 64 + 20;
+        assert!(app.sim.offline_intents.is_empty());
         let left = ButtonSource::Mouse(MouseButton::Left);
         app.handle_pointer_button(true, left.clone(), 240.0, 240.0, true);
         app.handle_pointer_move(PointerSource::Mouse, 300.0, 240.0, true);
@@ -679,6 +756,11 @@ mod tests {
             .as_mut()
             .unwrap()
             .pending = true;
+        app.nudge_building_placement(PlacementDirection::Right);
+        assert_eq!(
+            app.ui.app.hud_state.building_placement.unwrap().tile_idx,
+            tile
+        );
         app.confirm_building_placement();
         app.confirm_building_placement();
         assert!(app.sim.offline_intents.is_empty());

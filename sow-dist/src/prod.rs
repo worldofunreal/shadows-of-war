@@ -692,9 +692,14 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "--test",
             "sow-web/site/site_interaction.test.js",
             "sow-web/shell/menu_flow.test.js",
+            "sow-web/shell/menu_presentation.test.js",
+            "sow-web/shell/loader_boot.test.js",
             "sow-web/shell/campaign_runtime.test.js",
+            "sow-web/shell/campaign_view.test.js",
             "sow-tools/editors/campaign-editor/editor_interaction.test.js",
             "sow-web/shell/gameplay_interaction.test.js",
+            "sow-web/shell/gameplay_ui.test.js",
+            "sow-web/shell/map_interaction.test.js",
             "sow-web/shell/sow-i18n.test.js",
             "sow-web/shell/experience_events.test.js",
             "sow-web/site/analytics.test.js",
@@ -798,6 +803,10 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
         (
             "web_menu::tests::player_dialogs_",
             "player dialog identity regression tests failed",
+        ),
+        (
+            "web_menu::tests::loader_art_",
+            "loader art identity regression tests failed",
         ),
         (
             "input::map_click::tests",

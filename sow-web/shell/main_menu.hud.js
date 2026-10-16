@@ -107,26 +107,22 @@
         return asset("gameplay/currency/" + kind + ".webp");
     }
 
+    // One icon per concept: painted art for resources, the shared pixel
+    // atlases for relationships and buildings, white glyphs for actions.
     var HUD_ICONS = {
-        city: "gameplay/icons/city_temple_cutout.webp",
-        factory: "gameplay/icons/industry_forge_cutout.webp",
-        port: "gameplay/icons/port_gate_1to1.webp",
-        bunker: "gameplay/icons/defense_bunker_concrete_1to1.webp",
-        farm: "gameplay/icons/battle_icon_cutout.webp",
         troops: "gameplay/icons/battle_icon_cutout.webp",
-        alliance: "gameplay/icons/alliance_flag_1to1.webp",
-        betray: "gameplay/icons/betray_dagger_1to1.webp",
-        nuke: "gameplay/icons/silo_tower_1to1.webp",
-        surrender: "gameplay/icons/surrender_flag_1to1.webp",
-        warship: "gameplay/icons/port_galley_1to1.webp"
+        gold: "gameplay/currency/gold.webp"
     };
 
-    var BUILDING_EMOJIS = {
-        city: "🏕️",
-        factory: "🛠️",
-        port: "⚓",
-        bunker: "👁️",
-        farm: "🌱"
+    // Same atlas and cell order as NameplateStatusSprite (sow-render/src/text/types.rs).
+    var STATUS_CELLS = { request: 0, allied: 1, traitor: 2 };
+
+    var BUILDING_GLYPHS = {
+        city: "city",
+        factory: "factory",
+        port: "anchor",
+        bunker: "defense",
+        farm: "farm"
     };
 
     var HUD_GLYPHS = {
@@ -143,7 +139,7 @@
         attack: '<path d="m5 4 14 16M19 4 5 20M3 6l3-3 3 3M15 18l3 3 3-3M3 18l3 3 3-3M15 6l3-3 3 3"/>',
         fleet: '<path d="M3 15h18l-3 5H7l-4-5ZM6 12l6-9 6 9M12 3v12M2 21c2 1 3 1 5 0s3-1 5 0 3 1 5 0 3-1 5 0"/>',
         transfer: '<path d="M4 7h15l-3-3M20 17H5l3 3M19 7l-3 3M5 17l3-3"/>',
-        alliance: '<path d="M8 12 5 9a3 3 0 0 1 4-4l3 3 3-3a3 3 0 0 1 4 4l-3 3M8 12l4 4 4-4M5 15l4 4M19 15l-4 4M12 8v8"/>',
+        city: '<path d="M3 21h18M5 21V10l7-6 7 6v11M9 21v-6h6v6"/>',
         nuke: '<path d="M12 22V9M9 12l3-3 3 3M12 9l5-5M17 4h4M17 4V1M7 21h10M9 18h6"/>',
         upgrade: '<path d="m12 3 2.2 5.2L20 10l-4.4 3.5L17 19l-5-3-5 3 1.4-5.5L4 10l5.8-1.8L12 3Z"/>',
         anchor: '<path d="M12 3v12M8 7a4 4 0 1 0 8 0M4 13a8 8 0 0 0 16 0M2 13h4M18 13h4"/>',
@@ -151,7 +147,6 @@
         warship: '<path d="M3 15h18l-3 5H7l-4-5ZM7 12V7h10v5M10 7V4h4v3M2 21c2 1 3 1 5 0s3-1 5 0 3 1 5 0 3-1 5 0"/>',
         trade_ship: '<path d="M3 15h18l-3 5H7l-4-5ZM6 12l6-9 6 9M12 3v12M2 21c2 1 3 1 5 0s3-1 5 0 3 1 5 0 3-1 5 0M8 10h8"/>',
         farm: '<path d="M12 21V8M12 12c-4-1-6-3-6-6 4 0 6 2 6 6ZM12 15c4-1 6-3 6-6-4 0-6 2-6 6Z"/>',
-        gold: '<circle cx="12" cy="12" r="8"/><path d="M14.5 8.5c-.6-.6-1.4-.9-2.5-.9-1.4 0-2.4.7-2.4 1.8 0 2.9 4.8 1.1 4.8 4 0 1.2-1 2-2.5 2-1 0-2-.4-2.7-1.1M12 6v12"/>',
         defense: '<path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/>',
         range: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M22 12h-3M12 22v-3M2 12h3"/>',
         speed: '<path d="m13 2-3 8h7l-6 12 1-9H5l8-11Z"/>',
@@ -162,16 +157,19 @@
     };
 
     function hudIcon(name, cls) {
-        if (HUD_GLYPHS[name]) return '<svg class="' + (cls || "sow-hud__action-icon") + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + HUD_GLYPHS[name] + '</svg>';
+        var glyph = HUD_GLYPHS[BUILDING_GLYPHS[name] || name];
+        if (glyph) return '<svg class="' + (cls || "sow-hud__action-icon") + '" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g class="sow-hud__glyph-ink">' + glyph + '</g><g class="sow-hud__glyph-face">' + glyph + '</g></svg>';
         if (!HUD_ICONS[name]) return "";
         return '<img class="' + (cls || "sow-hud__action-icon") + '" src="' + asset(HUD_ICONS[name]) + '" alt="" aria-hidden="true">';
     }
 
-    function emojiIcon(emoji, cls) {
-        return '<span class="' + cls + ' is-emoji" aria-hidden="true">' + emoji + '</span>';
+    function statusIcon(kind, cls) {
+        var style = 'background-image:url(&quot;' + escapeHudText(asset("gameplay/icons/nameplate_status_atlas.webp")) + '&quot;);'
+            + 'background-position:' + (STATUS_CELLS[kind] || 0) * 50 + '% 0;';
+        return '<span class="' + (cls || "sow-hud__action-icon") + ' sow-hud__status-icon" style="' + style + '" aria-hidden="true"></span>';
     }
 
-    function buildingIcon(kind, level) {
+    function buildingIcon(kind, level, cls) {
         var name = String(kind || "");
         var art = window.SOW_BUILDING_ART;
         var canonical = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
@@ -185,10 +183,10 @@
             var style = 'background-image:url(&quot;' + escapeHudText(asset(art.atlas)) + '&quot;);'
                 + 'background-size:' + backgroundWidth + '% ' + backgroundHeight + '%;'
                 + 'background-position:' + positionX + '% ' + positionY + '%;';
-            return '<span class="sow-hud__building-icon is-pixel-art" style="' + style + '" aria-hidden="true"></span>';
+            return '<span class="' + (cls || "sow-hud__building-icon") + ' is-pixel-art" style="' + style + '" aria-hidden="true"></span>';
         }
-        var emoji = BUILDING_EMOJIS[name.toLowerCase()];
-        return emoji ? emojiIcon(emoji, "sow-hud__building-icon") : "";
+        var glyph = BUILDING_GLYPHS[name.toLowerCase()];
+        return glyph ? hudIcon(glyph, cls || "sow-hud__building-icon") : "";
     }
 
     function leaderById(id) {
@@ -397,7 +395,7 @@
             + '  </div></div>'
             + '</div>'
             + '<div class="sow-hud__hover-card hidden" id="sow-hud-hover-card">'
-            + '  <div class="sow-hud__hover-header"><span id="sow-hud-hover-avatar">👑</span> <b id="sow-hud-hover-name">' + SOW_t("hud.territory") + '</b></div>'
+            + '  <div class="sow-hud__hover-header"><b id="sow-hud-hover-name">' + SOW_t("hud.territory") + '</b></div>'
             + '  <div class="sow-hud__hover-stats">'
             + '    <span><b id="sow-hud-hover-pct">0%</b> ' + SOW_t("hud.land") + '</span>'
             + '    <span><b id="sow-hud-hover-troops">0</b> ' + hudIcon("troops", "sow-hud__inline-icon") + '</span>'
@@ -455,9 +453,9 @@
             + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Farm" aria-label="Farm">' + buildingIcon("Farm") + '</button>'
             + '      </div>'
             + '      <div class="sow-hud__fleet-strip" id="sow-hud-fleet-strip">'
-            + '        <span class="sow-hud__building-btn sow-hud__fleet-status" data-fleet-kind="trade" role="img" aria-label="' + SOW_t("hud.map_action_fleet") + '">' + emojiIcon("⛵", "sow-hud__building-icon") + '</span>'
-            + '        <button type="button" class="sow-hud__building-btn" data-command="select_warship" data-fleet-kind="warship" aria-label="' + SOW_t("hud.map_action_build_warship") + '" title="' + SOW_t("hud.map_action_build_warship") + '">' + emojiIcon("🚢", "sow-hud__building-icon") + '</button>'
-            + '        <button type="button" class="sow-hud__building-btn" data-command="select_nuke" data-fleet-kind="nuke" aria-label="' + SOW_t("hud.map_action_nuke") + '" title="' + SOW_t("hud.map_action_nuke") + '">' + emojiIcon("🚀", "sow-hud__building-icon") + '</button>'
+            + '        <span class="sow-hud__building-btn sow-hud__fleet-status" data-fleet-kind="trade" role="img" aria-label="' + SOW_t("hud.map_action_fleet") + '">' + hudIcon("trade_ship", "sow-hud__building-icon") + '</span>'
+            + '        <button type="button" class="sow-hud__building-btn" data-command="select_warship" data-fleet-kind="warship" aria-label="' + SOW_t("hud.map_action_build_warship") + '" title="' + SOW_t("hud.map_action_build_warship") + '">' + hudIcon("warship", "sow-hud__building-icon") + '</button>'
+            + '        <button type="button" class="sow-hud__building-btn" data-command="select_nuke" data-fleet-kind="nuke" aria-label="' + SOW_t("hud.map_action_nuke") + '" title="' + SOW_t("hud.map_action_nuke") + '">' + hudIcon("nuke", "sow-hud__building-icon") + '</button>'
             + '      </div>'
             + '    </div>'
             + '  </div>'
@@ -467,8 +465,14 @@
             + '</aside>'
             + '</div>'
             + '<aside class="sow-hud__placement" id="sow-hud-placement" role="group" aria-label="' + SOW_t("hud.build_placement") + '" hidden>'
+            + '  <div class="sow-hud__placement-moves">'
+            + '  <button type="button" class="sow-hud__placement-move" data-command="nudge_building_placement" data-direction="up" aria-label="' + SOW_t("hud.build_move_up") + '"><span aria-hidden="true">↑</span></button>'
+            + '  <button type="button" class="sow-hud__placement-move" data-command="nudge_building_placement" data-direction="right" aria-label="' + SOW_t("hud.build_move_right") + '"><span aria-hidden="true">→</span></button>'
+            + '  <button type="button" class="sow-hud__placement-move" data-command="nudge_building_placement" data-direction="down" aria-label="' + SOW_t("hud.build_move_down") + '"><span aria-hidden="true">↓</span></button>'
+            + '  <button type="button" class="sow-hud__placement-move" data-command="nudge_building_placement" data-direction="left" aria-label="' + SOW_t("hud.build_move_left") + '"><span aria-hidden="true">←</span></button>'
+            + '  </div>'
             + '  <div class="sow-hud__placement-info" id="sow-hud-placement-info"></div>'
-            + '  <div class="sow-hud__placement-actions"><button type="button" class="sow-hud__placement-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '">×</button><button type="button" class="sow-hud__placement-confirm" data-command="confirm_building_placement"><span aria-hidden="true">✓</span><span>' + SOW_t("hud.build_confirm") + '</span></button></div>'
+            + '  <div class="sow-hud__placement-actions"><button type="button" class="sow-hud__placement-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '">×</button><button type="button" class="sow-hud__placement-confirm" data-command="confirm_building_placement" aria-label="' + SOW_t("hud.build_confirm") + '"><span aria-hidden="true">✓</span><span>' + SOW_t("hud.build_confirm") + '</span></button></div>'
             + '  <div class="sow-hud__placement-reason" id="sow-hud-placement-reason" role="status" aria-live="polite"></div>'
             + '</aside>'
             + '<aside class="sow-hud__panel sow-hud__leaderboard hidden" id="sow-hud-leaderboard">'
@@ -492,13 +496,13 @@
             + '    <label><span><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' + currencyAsset("gold") + '" alt="">' + SOW_t("hud.gold") + '</span><input id="sow-hud-transfer-gold" type="number" inputmode="numeric" min="0" step="1" value="0"></label>'
             + '  </div>'
             + '  </div>'
-            + '  <div class="sow-hud__transfer-actions"><button class="sow-hud__transfer-send" type="button" data-command="send_resources"><span>' + SOW_t("hud.send") + '</span><span aria-hidden="true">↗</span></button><button class="sow-hud__transfer-request" type="button" data-command="request_resources">' + SOW_t("hud.request") + '</button></div>'
+            + '  <div class="sow-hud__transfer-actions"><button class="sow-hud__transfer-send" type="button" data-command="send_resources"><span>' + SOW_t("hud.send") + '</span><span aria-hidden="true">→</span></button><button class="sow-hud__transfer-request" type="button" data-command="request_resources">' + SOW_t("hud.request") + '</button></div>'
             + '</aside>'
             + '<div class="sow-hud__modal-backdrop sow-hud__betrayal-backdrop hidden" id="sow-hud-betrayal-modal">'
             + '  <section class="sow-hud__dialog sow-hud__betrayal" role="dialog" aria-modal="true" aria-labelledby="sow-hud-betrayal-title" aria-describedby="sow-hud-betrayal-copy">'
-            + '    <div class="sow-hud__transfer-header"><span class="sow-hud__transfer-icon sow-hud__betrayal-mark" aria-hidden="true">' + hudIcon("betray", "sow-hud__inline-icon") + '</span><h3 id="sow-hud-betrayal-title">' + SOW_t("hud.break_alliance") + '</h3><button class="sow-hud__close-btn" id="sow-hud-betrayal-close" type="button" data-command="cancel_betrayal" aria-label="' + SOW_t("endgame.cancel") + '">✕</button></div>'
+            + '    <div class="sow-hud__transfer-header"><span class="sow-hud__transfer-icon sow-hud__betrayal-mark" aria-hidden="true">' + statusIcon("traitor", "sow-hud__inline-icon") + '</span><h3 id="sow-hud-betrayal-title">' + SOW_t("hud.break_alliance") + '</h3><button class="sow-hud__close-btn" id="sow-hud-betrayal-close" type="button" data-command="cancel_betrayal" aria-label="' + SOW_t("endgame.cancel") + '">✕</button></div>'
             + '    <div class="sow-hud__dialog-body"><div class="sow-hud__dialog-participant" id="sow-hud-betrayal-target"></div><p class="sow-hud__betrayal-copy" id="sow-hud-betrayal-copy">' + SOW_t("hud.break_alliance_body") + '</p></div>'
-            + '    <div class="sow-hud__transfer-actions sow-hud__betrayal-actions"><button class="sow-hud__transfer-request" id="sow-hud-betrayal-cancel" type="button" data-command="cancel_betrayal">' + SOW_t("hud.keep_alliance") + '</button><button class="sow-hud__betrayal-confirm" id="sow-hud-betrayal-confirm" type="button" data-command="confirm_betrayal">' + hudIcon("betray", "sow-hud__inline-icon") + SOW_t("hud.attack") + '</button></div>'
+            + '    <div class="sow-hud__transfer-actions sow-hud__betrayal-actions"><button class="sow-hud__transfer-request" id="sow-hud-betrayal-cancel" type="button" data-command="cancel_betrayal">' + SOW_t("hud.keep_alliance") + '</button><button class="sow-hud__betrayal-confirm" id="sow-hud-betrayal-confirm" type="button" data-command="confirm_betrayal">' + statusIcon("traitor", "sow-hud__inline-icon") + SOW_t("hud.attack") + '</button></div>'
             + '  </section>'
             + '</div>'
             + '<div class="sow-hud__endgame-backdrop hidden" id="sow-hud-surrender-modal">'
@@ -508,7 +512,7 @@
             + '        <img class="sow-hud__endgame-portrait" id="sow-hud-surrender-portrait" src="" alt="' + SOW_t("hud.leader_avatar") + '" />'
             + '      </div>'
             + '      <div class="sow-hud__endgame-hero-copy">'
-            + '        <h2 class="sow-hud__endgame-banner" id="sow-hud-surrender-banner">' + hudIcon("surrender", "sow-hud__inline-icon") + ' ' + SOW_t("endgame.leave_match") + '</h2>'
+            + '        <h2 class="sow-hud__endgame-banner" id="sow-hud-surrender-banner">' + hudIcon("leave", "sow-hud__inline-icon") + ' ' + SOW_t("endgame.leave_match") + '</h2>'
             + '        <p class="sow-hud__endgame-desc" id="sow-hud-surrender-desc">' + SOW_t("endgame.your_battle_will_end") + '</p>'
             + '      </div>'
             + '    </div>'
@@ -529,7 +533,7 @@
             + '        <img class="sow-hud__endgame-portrait" id="sow-hud-endgame-portrait" src="" alt="' + SOW_t("hud.leader_avatar") + '" />'
             + '      </div>'
             + '      <div class="sow-hud__endgame-hero-copy">'
-            + '        <div class="sow-hud__endgame-kicker"><span class="sow-hud__endgame-icon" id="sow-hud-endgame-icon" aria-hidden="true">⚔</span><span>' + SOW_t("hud.match_result") + '</span></div>'
+            + '        <div class="sow-hud__endgame-kicker"><span class="sow-hud__endgame-icon" id="sow-hud-endgame-icon" aria-hidden="true">' + hudIcon("attack", "sow-hud__inline-icon") + '</span><span>' + SOW_t("hud.match_result") + '</span></div>'
             + '        <h2 class="sow-hud__endgame-banner" id="sow-hud-endgame-banner">' + SOW_t("hud.defeat") + '</h2>'
             + '        <h3 class="sow-hud__endgame-title" id="sow-hud-endgame-title">' + SOW_t("hud.match_lost") + '</h3>'
             + '        <p class="sow-hud__endgame-desc" id="sow-hud-endgame-desc">' + SOW_t("hud.match_ended") + '</p>'
@@ -577,7 +581,6 @@
             plateTroopRate: document.getElementById("sow-hud-nameplate-troop-rate"),
             inboxCount: document.getElementById("sow-hud-inbox-count"),
             hoverCard: document.getElementById("sow-hud-hover-card"),
-            hoverAvatar: document.getElementById("sow-hud-hover-avatar"),
             hoverName: document.getElementById("sow-hud-hover-name"),
             hoverPct: document.getElementById("sow-hud-hover-pct"),
             hoverTroops: document.getElementById("sow-hud-hover-troops"),
@@ -603,6 +606,7 @@
             placementInfo: document.getElementById("sow-hud-placement-info"),
             placementReason: document.getElementById("sow-hud-placement-reason"),
             placementConfirm: hudRoot.querySelector('[data-command="confirm_building_placement"]'),
+            placementMoves: Array.prototype.slice.call(hudRoot.querySelectorAll('[data-command="nudge_building_placement"]')),
             placementCancel: hudRoot.querySelector('[data-command="cancel_building_mode"]'),
             panelButtons: Array.prototype.slice.call(hudRoot.querySelectorAll(".sow-hud__topbar [data-command^='toggle_']")),
             leaderboard: document.getElementById("sow-hud-leaderboard"),
@@ -790,27 +794,27 @@
 
     var mapActionLabels = {
         emote: { icon: "emote", key: "hud.map_action_emote" },
-        spawn: { icon: "spawn", emoji: "🌱", key: "hud.map_action_deploy" },
-        attack: { icon: "attack", emoji: "⚔️", key: "hud.map_action_attack" },
-        fleet: { icon: "fleet", emoji: "⛵", key: "hud.map_action_fleet" },
-        transfer: { icon: "transfer", emoji: "📦", key: "hud.map_action_transfer" },
-        alliance: { icon: "alliance", emoji: "🤝", key: "hud.map_action_alliance" },
+        spawn: { icon: "spawn", key: "hud.map_action_deploy" },
+        attack: { icon: "attack", key: "hud.map_action_attack" },
+        fleet: { icon: "fleet", key: "hud.map_action_fleet" },
+        transfer: { icon: "transfer", key: "hud.map_action_transfer" },
+        alliance: { status: "allied", key: "hud.map_action_alliance" },
         build_city: { key: "hud.map_action_city" },
         build_factory: { key: "hud.map_action_factory" },
         build_port: { key: "hud.map_action_port" },
         build_bunker: { key: "hud.map_action_bunker" },
         build_farm: { text: "Farm" },
         upgrade_structure: { icon: "upgrade", text: "Upgrade" },
-        nuke: { icon: "nuke", emoji: "🚀", key: "hud.map_action_nuke" },
+        nuke: { icon: "nuke", key: "hud.map_action_nuke" },
         build_warship: { icon: "warship", key: "hud.map_action_build_warship" }
     };
 
     var allianceActionLabels = {
-        request: { state: "request", key: "hud.map_action_request_alliance", emoji: "🤝", disabled: false },
-        accept: { state: "accept", key: "hud.map_action_accept_alliance", emoji: "🤝", disabled: false },
-        pending: { state: "pending", key: "hud.map_action_alliance_pending", emoji: "⏳", disabled: true },
-        active: { state: "active", key: "hud.map_action_alliance_active", emoji: "🛡️", disabled: true },
-        renew: { state: "renew", key: "hud.map_action_renew_alliance", emoji: "🔄", disabled: false }
+        request: { state: "request", key: "hud.map_action_request_alliance", status: "allied", disabled: false },
+        accept: { state: "accept", key: "hud.map_action_accept_alliance", status: "allied", disabled: false },
+        pending: { state: "pending", key: "hud.map_action_alliance_pending", status: "request", disabled: true },
+        active: { state: "active", key: "hud.map_action_alliance_active", status: "allied", disabled: true },
+        renew: { state: "renew", key: "hud.map_action_renew_alliance", status: "allied", disabled: false }
     };
 
     var buildMenuActions = {
@@ -957,11 +961,10 @@
         var buildingKind = action.indexOf("build_") === 0 ? action.slice(6) : "";
         buildingKind = buildingKind.charAt(0).toUpperCase() + buildingKind.slice(1);
         var buildingImg = buildingKind ? buildingIcon(buildingKind) : "";
-        var icon = presentation && presentation.emoji
-            ? emojiIcon(presentation.emoji, "sow-hud__map-action-icon")
-            : label.emoji
-                ? emojiIcon(label.emoji, "sow-hud__map-action-icon")
-                : buildingImg || (label.icon ? hudIcon(label.icon, "sow-hud__map-action-icon") : "•");
+        var status = presentation && presentation.status || label.status;
+        var icon = status
+            ? statusIcon(status, "sow-hud__map-action-icon")
+            : buildingImg || (label.icon ? hudIcon(label.icon, "sow-hud__map-action-icon") : "•");
         var actionName = presentation ? SOW_t(presentation.key) : mapLabel(action);
         button.dataset.mapActionLabel = actionName;
         if (item.reason_key) button.dataset.reasonKey = item.reason_key;
@@ -1132,7 +1135,7 @@
                     var item = items.find(function (candidate) { return candidate.action === action; });
                     if (item) sectors.push({ item: item, kind: action });
                 });
-                if (buildItems.length) sectors.push({ group: "build", icon: emojiIcon("🏗️", "sow-hud__map-action-icon"), label: SOW_t("hud.map_action_build") });
+                if (buildItems.length) sectors.push({ group: "build", icon: hudIcon("construction", "sow-hud__map-action-icon"), label: SOW_t("hud.map_action_build") });
                 if (nukeItem) sectors.push({ item: nukeItem, kind: "nuke" });
                 sectors.forEach(function (sector, index) {
                     if (sector.group) mapGroupSector(radial, items, index, sectors.length, sector.group, sector.icon, sector.label);
@@ -1146,7 +1149,7 @@
                 header.className = "sow-hud__map-submenu-header";
                 var heading = document.createElement("span");
                 heading.className = "sow-hud__map-submenu-icon";
-                heading.innerHTML = mapMenuView === "emote" ? hudIcon("emote") : emojiIcon("🏗️", "sow-hud__map-action-icon");
+                heading.innerHTML = mapMenuView === "emote" ? hudIcon("emote") : hudIcon("construction", "sow-hud__map-action-icon");
                 heading.setAttribute("aria-hidden", "true");
                 header.appendChild(heading);
                 var back = document.createElement("button");
@@ -1425,11 +1428,50 @@
         return buildingMetricMarkup(deltas);
     }
 
+    function buildingPlacementLayout(placement, panelSize, area, docked) {
+        var gap = 8, button = 48;
+        var halfW = Math.max(0, Number(placement.half_width) || Number(placement.half_height) || 0);
+        var halfH = Math.max(0, Number(placement.half_height) || 0);
+        var x = Number(placement.x), y = Number(placement.y);
+        var base = { left: x - halfW, right: x + halfW, top: y - halfH, bottom: y + halfH };
+        var moves = {
+            up: { left: x - button / 2, top: base.top - gap - button },
+            right: { left: base.right + gap, top: y - button / 2 },
+            down: { left: x - button / 2, top: base.bottom + gap },
+            left: { left: base.left - gap - button, top: y - button / 2 }
+        };
+        function fits(rect, width, height) {
+            return rect.left >= area.left && rect.top >= area.top
+                && rect.left + width <= area.right && rect.top + height <= area.bottom;
+        }
+        var width = Math.min(panelSize.width, area.right - area.left);
+        var height = panelSize.height;
+        var left = Math.max(area.left, Math.min(x - width / 2, area.right - width));
+        var top = base.top - button - gap * 2 - height;
+        if (!fits({ left: left, top: top }, width, height)) top = base.bottom + button + gap * 2;
+        var floating = !docked && fits({ left: left, top: top }, width, height)
+            && Object.keys(moves).every(function (direction) { return fits(moves[direction], button, button); });
+        if (!floating) {
+            top = Math.max(area.top, area.bottom - height);
+            var overlapsBase = left < base.right + gap && left + width > base.left - gap
+                && top < base.bottom + gap && top + height > base.top - gap;
+            if (overlapsBase) {
+                if (base.top - gap - height >= area.top) top = base.top - gap - height;
+                else if (base.bottom + gap + height <= area.bottom) top = base.bottom + gap;
+                else if (base.left - gap - width >= area.left) left = base.left - gap - width;
+                else if (base.right + gap + width <= area.right) left = base.right + gap;
+            }
+        }
+        return { docked: !floating, left: left, top: top, moves: moves };
+    }
+
     function renderBuildingPlacement(placement) {
         var panel = hudRefs.placement;
         if (!panel) return;
         panel.hidden = !placement;
         if (!placement) return;
+        panel.dataset.siteValid = placement.site_valid ? "true" : "false";
+        panel.dataset.affordable = placement.affordable === false ? "false" : "true";
         hudRefs.placementConfirm.disabled = !placement.can_confirm;
         hudRefs.placementCancel.disabled = Boolean(placement.pending);
         hudRefs.placementInfo.textContent = SOW_t("hud.build_details", {
@@ -1439,13 +1481,38 @@
         var reason = placement.reason;
         hudRefs.placementReason.textContent = placement.pending ? SOW_t("hud.build_pending")
             : reason && reason.key ? SOW_t(reason.key, reason.values || {}) : SOW_t("hud.build_placement_help");
-        var gap = 10, margin = 8;
-        var width = panel.offsetWidth, height = panel.offsetHeight;
-        var left = Number(placement.x) - width / 2;
-        var top = Number(placement.y) - Number(placement.half_height) - height - gap;
-        if (top < margin) top = Number(placement.y) + Number(placement.half_height) + gap;
-        panel.style.left = Math.max(margin, Math.min(left, window.innerWidth - width - margin)) + "px";
-        panel.style.top = Math.max(margin, Math.min(top, window.innerHeight - height - margin)) + "px";
+        var area = { left: 8 + hudSafeArea[3], top: 8 + hudSafeArea[0],
+            right: window.innerWidth - 8 - hudSafeArea[1], bottom: window.innerHeight - 8 - hudSafeArea[2] };
+        // Existing HUD surfaces define the usable map, including landscape safe areas.
+        [hudRefs.topbar, hudRefs.nameplate, hudRefs.dock, hudRefs.railWrap, hudRefs.rightRail].forEach(function (element) {
+            if (!element || element.hidden || !element.getBoundingClientRect) return;
+            var rect = element.getBoundingClientRect();
+            if (!rect.width || !rect.height) return;
+            if (rect.width > window.innerWidth * 0.5) {
+                if (rect.top < window.innerHeight / 3) area.top = Math.max(area.top, rect.bottom + 8);
+                else if (rect.bottom > window.innerHeight * 2 / 3) area.bottom = Math.min(area.bottom, rect.top - 8);
+            } else if (rect.height > window.innerHeight * 0.4) {
+                if (rect.left < window.innerWidth / 4) area.left = Math.max(area.left, rect.right + 8);
+                else if (rect.right > window.innerWidth * 3 / 4) area.right = Math.min(area.right, rect.left - 8);
+            }
+        });
+        panel.dataset.layout = "floating";
+        panel.style.maxWidth = Math.max(48, area.right - area.left) + "px";
+        var layout = buildingPlacementLayout(placement,
+            { width: panel.offsetWidth, height: panel.offsetHeight }, area, false);
+        if (layout.docked) {
+            panel.dataset.layout = "docked";
+            layout = buildingPlacementLayout(placement,
+                { width: panel.offsetWidth, height: panel.offsetHeight }, area, true);
+        }
+        panel.style.left = layout.left + "px";
+        panel.style.top = layout.top + "px";
+        hudRefs.placementMoves.forEach(function (button) {
+            var direction = button.dataset.direction;
+            button.disabled = Boolean(placement.pending) || !placement.can_nudge || !placement.can_nudge[direction];
+            button.style.left = layout.moves[direction].left + "px";
+            button.style.top = layout.moves[direction].top + "px";
+        });
     }
 
     function positionBuildingCard(mapMenu) {
@@ -1572,7 +1639,6 @@
                 var card = document.createElement("div");
                 var left = document.createElement("div");
                 var rank = document.createElement("span");
-                var status = document.createElement("span");
                 var name = document.createElement("b");
                 var right = document.createElement("div");
                 var territory = document.createElement("span");
@@ -1592,14 +1658,13 @@
                 territory.className = "sow-hud__player-land";
                 troops.className = "sow-hud__player-troops";
                 left.appendChild(rank);
-                left.appendChild(status);
                 left.appendChild(name);
                 right.appendChild(territory);
                 right.appendChild(troops);
                 right.appendChild(transfer);
                 card.appendChild(left);
                 card.appendChild(right);
-                row = { card: card, rank: rank, status: status, name: name, territory: territory, troops: troops, key: "" };
+                row = { card: card, rank: rank, name: name, territory: territory, troops: troops, key: "" };
             }
 
             var displayName = player.name || SOW_t("hud.player_name");
@@ -1610,10 +1675,9 @@
                 row.card.classList.toggle("is-dead", !player.is_alive);
                 var displayRank = Number.isFinite(Number(player.rank)) ? Number(player.rank) : idx + 1;
                 row.rank.textContent = "#" + displayRank;
-                row.status.textContent = player.is_alive ? (displayRank === 1 ? "👑" : "🛡️") : "💀";
                 row.name.textContent = displayName;
                 row.territory.textContent = Math.round((player.territory_pct || 0) * 100) + "%";
-                row.troops.textContent = (player.troops > 1000 ? (player.troops / 1000).toFixed(1) + "k" : Math.floor(player.troops)) + " ⚔";
+                row.troops.innerHTML = escapeHudText(player.troops > 1000 ? (player.troops / 1000).toFixed(1) + "k" : Math.floor(player.troops)) + " " + hudIcon("troops", "sow-hud__inline-icon");
             }
             fragment.appendChild(row.card);
             nextRows[key] = row;
@@ -1715,11 +1779,11 @@
 
     function notificationIcon(key) {
         if (key.indexOf("nuke") >= 0) return hudIcon("nuke", "sow-hud__notification-icon");
-        if (key.indexOf("betrayal") >= 0) return hudIcon("betray", "sow-hud__notification-icon");
+        if (key.indexOf("betrayal") >= 0) return statusIcon("traitor", "sow-hud__notification-icon");
         if (/attack|elimination/.test(key)) return hudIcon("attack", "sow-hud__notification-icon");
         if (key.indexOf("fleet") >= 0) return hudIcon("fleet", "sow-hud__notification-icon");
         if (key.indexOf("request") >= 0) return hudIcon("inbox", "sow-hud__notification-icon");
-        if (key.indexOf("alliance") >= 0) return hudIcon("alliance", "sow-hud__notification-icon");
+        if (key.indexOf("alliance") >= 0) return statusIcon("allied", "sow-hud__notification-icon");
         if (key.indexOf("resource") >= 0) return hudIcon("transfer", "sow-hud__notification-icon");
         if (/build|building|gold/.test(key)) return hudIcon("tools", "sow-hud__notification-icon");
         return '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v10M7 12h10"></path></svg>';
@@ -2531,11 +2595,11 @@
                 if (hudRefs.hoverGold) hudRefs.hoverGold.textContent = Math.floor(hov.gold || 0).toLocaleString();
                 if (hudRefs.hoverBlds) {
                     var bldText = [];
-                    if (hov.cities > 0) bldText.push(hudIcon("city", "sow-hud__inline-icon") + " x" + hov.cities);
-                    if (hov.factories > 0) bldText.push(hudIcon("factory", "sow-hud__inline-icon") + " x" + hov.factories);
-                    if (hov.ports > 0) bldText.push(hudIcon("port", "sow-hud__inline-icon") + " x" + hov.ports);
-                    if (hov.bunkers > 0) bldText.push(hudIcon("bunker", "sow-hud__inline-icon") + " x" + hov.bunkers);
-                    if (hov.farms > 0) bldText.push(hudIcon("farm", "sow-hud__inline-icon") + " x" + hov.farms);
+                    if (hov.cities > 0) bldText.push(buildingIcon("City", 1, "sow-hud__inline-icon") + " x" + hov.cities);
+                    if (hov.factories > 0) bldText.push(buildingIcon("Factory", 1, "sow-hud__inline-icon") + " x" + hov.factories);
+                    if (hov.ports > 0) bldText.push(buildingIcon("Port", 1, "sow-hud__inline-icon") + " x" + hov.ports);
+                    if (hov.bunkers > 0) bldText.push(buildingIcon("Bunker", 1, "sow-hud__inline-icon") + " x" + hov.bunkers);
+                    if (hov.farms > 0) bldText.push(buildingIcon("Farm", 1, "sow-hud__inline-icon") + " x" + hov.farms);
                     hudRefs.hoverBlds.innerHTML = bldText.join(" ");
                 }
             } else {
@@ -2811,7 +2875,7 @@
                 var result = isWinner ? "victory" : "defeat";
                 var kdaText = [kda.kills || 0, kda.deaths || 0, kda.assists || 0].join(" / ");
                 if (hudRefs.endgameCard) hudRefs.endgameCard.dataset.result = result;
-                if (hudRefs.endgameIcon) hudRefs.endgameIcon.textContent = isWinner ? "♛" : "⚔";
+                if (hudRefs.endgameIcon) hudRefs.endgameIcon.innerHTML = hudIcon(isWinner ? "upgrade" : "attack", "sow-hud__inline-icon");
                 if (hudRefs.endgameBanner) hudRefs.endgameBanner.textContent = isWinner ? SOW_t("hud.victory") : SOW_t("hud.defeat");
                 if (hudRefs.endgameTitle) hudRefs.endgameTitle.textContent = isWinner ? SOW_t("hud.match_won") : SOW_t("hud.match_lost");
                 if (hudRefs.endgameDesc) hudRefs.endgameDesc.textContent = isWinner
@@ -2871,6 +2935,10 @@
                 : Number(zoom.current) >= Number(zoom.ceiling) - 0.02;
         }
         hudRoot.addEventListener("pointerdown", function (event) {
+            if (event.target.closest && event.target.closest("#sow-hud-placement")) {
+                event.stopPropagation();
+                return;
+            }
             var button = event.target.closest && event.target.closest('[data-command="zoom_in"], [data-command="zoom_out"]');
             if (!button || button.disabled || event.button !== 0) return;
             stopZoomHold();
@@ -3045,6 +3113,12 @@
                 send("select_warship");
             } else if (cmd === "select_nuke") {
                 send("select_nuke");
+            } else if (cmd === "nudge_building_placement") {
+                var placement = hudState && hudState.hud && hudState.hud.building_placement;
+                var direction = btn.dataset.direction;
+                if (placement && !placement.pending && placement.can_nudge && placement.can_nudge[direction]) {
+                    send("nudge_building_placement", { direction: direction });
+                }
             } else if (cmd === "confirm_building_placement") {
                 if (hudState && hudState.hud && hudState.hud.building_placement && hudState.hud.building_placement.can_confirm) send("confirm_building_placement");
             } else if (cmd === "cancel_building_mode") {
@@ -3098,6 +3172,23 @@
         window.SOW_I18N_READY.then(function () { emoteTextKey = ""; syncEmoteTexts(hudState && hudState.hud); });
     }
     if (hudRoot) hudRoot.addEventListener("keydown", function (event) {
+        if (hudRefs && hudRefs.placement && !hudRefs.placement.hidden && hudRefs.placement.contains(event.target)) {
+            var directions = { ArrowUp: "up", ArrowRight: "right", ArrowDown: "down", ArrowLeft: "left" };
+            var direction = directions[event.key];
+            if (direction || event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                var placement = hudState && hudState.hud && hudState.hud.building_placement;
+                if (placement && !placement.pending) {
+                    if (direction && placement.can_nudge && placement.can_nudge[direction]) send("nudge_building_placement", { direction: direction });
+                    else if (!direction) send("cancel_building_mode");
+                }
+                return;
+            }
+            // Enter and Space activate the focused button exactly once.
+            if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+        }
+
         if (hudRefs && hudRefs.betrayal && !hudRefs.betrayal.classList.contains("hidden")) {
             if (event.key === "Escape") {
                 event.preventDefault();

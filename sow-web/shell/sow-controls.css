@@ -1,4 +1,11 @@
 :root {
+    /* The one action accent shared by menu, HUD and story overlay. */
+    --sow-accent: #f59e0b;
+    --sow-accent-bright: #ffc061;
+    /* Outlined white text used by the HUD and story overlay. */
+    --sow-text-ink: #1b1108;
+    --sow-text-outline: .18em var(--sow-text-ink);
+    --sow-text-outline-shadow: 0 .09em 0 var(--sow-text-ink);
     --sow-button-radius: 8px;
     --sow-button-weight: 800;
     --sow-button-tracking: 0.08em;

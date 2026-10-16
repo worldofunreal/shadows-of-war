@@ -11,6 +11,48 @@ pub struct PlacementQuery<'a> {
     pub buildings: &'a [sow_core::protocol::BuildingSnapshot],
 }
 
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum PlacementDirection {
+    Up,
+    Right,
+    Down,
+    Left,
+}
+
+impl PlacementDirection {
+    pub(crate) fn offset(self) -> (i32, i32) {
+        match self {
+            Self::Up => (0, -1),
+            Self::Right => (1, 0),
+            Self::Down => (0, 1),
+            Self::Left => (-1, 0),
+        }
+    }
+}
+
+// Shader values: owned land, valid whole foundation, occupied physical cell.
+const SITE_OWN_LAND: u32 = 1;
+const SITE_VALID: u32 = 2;
+const SITE_OCCUPIED: u32 = 4;
+
+pub(crate) fn visible_placement_bounds(
+    map: (u32, u32),
+    camera: [f32; 2],
+    zoom: f32,
+    screen: [f32; 2],
+) -> [u32; 4] {
+    if !zoom.is_finite() || zoom <= 0.0 {
+        return [0; 4];
+    }
+    [
+        ((-camera[0] / zoom).floor() - 1.0).clamp(0.0, map.0 as f32) as u32,
+        ((-camera[1] / zoom).floor() - 1.0).clamp(0.0, map.1 as f32) as u32,
+        (((screen[0] - camera[0]) / zoom).ceil() + 1.0).clamp(0.0, map.0 as f32) as u32,
+        (((screen[1] - camera[1]) / zoom).ceil() + 1.0).clamp(0.0, map.1 as f32) as u32,
+    ]
+}
+
 const PLACEMENT_CELL_SIZE: u32 = sow_core::building::core::BUILDING_GRID_CELL_SIZE;
 
 #[derive(Default)]
@@ -21,9 +63,86 @@ pub struct BuildingPlacementCache {
     grid_w: u32,
     cells: Vec<Vec<usize>>,
     buildings_identity: (usize, usize),
+    sites_key: Option<(usize, u64, sow_core::game::BuildingKind, u16, [u32; 4])>,
+    sites_buildings: Vec<(u64, u32, sow_core::game::BuildingKind)>,
+    sites_bounds: [u32; 4],
+    sites: Vec<u32>,
+    sites_revision: u64,
 }
 
 impl BuildingPlacementCache {
+    /// Recompute only visible anchors when their spatial inputs change. Preview
+    /// movement and gold do not invalidate this map of possible destinations.
+    pub(crate) fn update_visible_sites(
+        &mut self,
+        engine: &mut sow_core::engine::SowEngine,
+        kind: sow_core::game::BuildingKind,
+        owner: u16,
+        bounds: [u32; 4],
+    ) {
+        let key = (
+            engine.state.map.terrain.as_ptr() as usize,
+            engine.state.map.ownership_revision(),
+            kind,
+            owner,
+            bounds,
+        );
+        if self.sites_key == Some(key)
+            && self
+                .sites_buildings
+                .iter()
+                .copied()
+                .eq(engine.buildings.iter().map(|b| (b.id, b.tile_idx, b.kind)))
+        {
+            return;
+        }
+        engine.refresh_building_grid();
+        self.sites_key = Some(key);
+        self.sites_buildings.clear();
+        self.sites_buildings
+            .extend(engine.buildings.iter().map(|b| (b.id, b.tile_idx, b.kind)));
+        self.sites_bounds = bounds;
+        self.sites.clear();
+        let map = &engine.state.map;
+        for y in bounds[1]..bounds[3] {
+            for x in bounds[0]..bounds[2] {
+                let own_land = owner != 0
+                    && map.owner_id(x, y) == owner
+                    && map.terrain[map.ref_id(x, y)].as_byte() & 0x80 != 0;
+                let valid = sow_core::building::validate_structure_site(
+                    map,
+                    owner,
+                    kind,
+                    y * map.width + x,
+                    &engine.building_grid,
+                )
+                .is_ok();
+                let occupied = engine.building_grid.iter_all_in_range(x, y, 3).any(|b| {
+                    sow_core::building::BuildingFootprint::at(b.kind, b.x, b.y)
+                        .contains(x as i32, y as i32)
+                });
+                self.sites.push(
+                    u32::from(own_land) * SITE_OWN_LAND
+                        | u32::from(valid) * SITE_VALID
+                        | u32::from(occupied) * SITE_OCCUPIED,
+                );
+            }
+        }
+        self.sites_revision = self.sites_revision.wrapping_add(1);
+    }
+
+    pub(crate) fn clear_visible_sites(&mut self) {
+        if self.sites_key.take().is_some() {
+            self.sites.clear();
+            self.sites_bounds = [0; 4];
+            self.sites_revision = self.sites_revision.wrapping_add(1);
+        }
+    }
+
+    pub(crate) fn visible_sites(&self) -> ([u32; 4], &[u32], u64) {
+        (self.sites_bounds, &self.sites, self.sites_revision)
+    }
+
     pub fn resolve(&mut self, tick: u64, query: &PlacementQuery) -> Result<u32, &'static str> {
         self.rebuild_index(tick, query);
         resolve_building_placement_tile_indexed(query, Some(self))
@@ -183,6 +302,95 @@ fn resolve_building_placement_tile_indexed(
 mod tests {
     use super::*;
     use sow_core::game::BuildingKind;
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn visible_destinations_match_confirmation_and_invalidate_only_spatial_changes() {
+        use sow_core::{
+            engine::SowEngine, game::GameState, game_config::GameConfig, map::MapTile,
+            water_components::WaterComponents,
+        };
+        let mut state = GameState::new(42, 32, 32, GameConfig::default());
+        for y in 0..32 {
+            for x in 0..32 {
+                state.map.set_owner_id(x, y, 1);
+            }
+        }
+        for y in 0..32 {
+            state.map.terrain[(y * 32) as usize] = MapTile::from_byte(0);
+        }
+        state.map.terrain[8 * 32 + 8] = MapTile::from_byte(0x80 | 12);
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        let mut cache = BuildingPlacementCache::default();
+        let bounds = [0, 0, 32, 32];
+        for kind in BuildingKind::ALL {
+            cache.update_visible_sites(&mut engine, kind, 1, bounds);
+            let (_, sites, _) = cache.visible_sites();
+            for (tile, site) in sites.iter().enumerate() {
+                assert_eq!(
+                    site & SITE_VALID != 0,
+                    sow_core::building::validate_structure_site(
+                        &engine.state.map,
+                        1,
+                        kind,
+                        tile as u32,
+                        &engine.building_grid
+                    )
+                    .is_ok(),
+                    "visible destination and confirmation differ at {tile}"
+                );
+            }
+        }
+        cache.update_visible_sites(&mut engine, BuildingKind::City, 1, bounds);
+        let revision = cache.visible_sites().2;
+        engine.state.tick += 1;
+        cache.update_visible_sites(&mut engine, BuildingKind::City, 1, bounds);
+        assert_eq!(
+            cache.visible_sites().2,
+            revision,
+            "time alone does not rebuild destinations"
+        );
+        engine.state.map.set_owner_id(24, 24, 2);
+        cache.update_visible_sites(&mut engine, BuildingKind::City, 1, bounds);
+        assert_ne!(
+            cache.visible_sites().2,
+            revision,
+            "ownership invalidates within the same tick"
+        );
+        assert_eq!(cache.visible_sites().1[24 * 32 + 24] & SITE_VALID, 0);
+        engine.buildings.push(sow_core::building::Building {
+            id: 1,
+            owner_id: 1,
+            tile_idx: 16 * 32 + 16,
+            kind: BuildingKind::City,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+        });
+        engine.building_grid.mark_dirty();
+        cache.update_visible_sites(&mut engine, BuildingKind::City, 1, bounds);
+        let sites = cache.visible_sites().1;
+        assert_eq!(
+            sites[16 * 32 + 17] & SITE_VALID,
+            0,
+            "partial overlap is blocked"
+        );
+        assert_ne!(
+            sites[16 * 32 + 20] & SITE_VALID,
+            0,
+            "touching edges remain legal"
+        );
+        assert_ne!(sites[16 * 32 + 16] & SITE_OCCUPIED, 0);
+        let cropped = visible_placement_bounds((32, 32), [-96.0, -96.0], 12.0, [48.0, 48.0]);
+        assert_eq!(cropped, [7, 7, 13, 13]);
+        cache.update_visible_sites(&mut engine, BuildingKind::Farm, 1, cropped);
+        assert_eq!(
+            cache.visible_sites().1.len(),
+            36,
+            "only visible anchors are computed"
+        );
+        cache.clear_visible_sites();
+        assert!(cache.visible_sites().1.is_empty());
+    }
 
     #[wasm_bindgen_test::wasm_bindgen_test]
     fn placement_index_limits_checks_to_local_buildings() {

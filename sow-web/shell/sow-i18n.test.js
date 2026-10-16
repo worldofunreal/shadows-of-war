@@ -125,3 +125,45 @@ test("i18n rejects an incompatible catalog and returns to English", async () => 
     assert.equal(runtime.localeEvents.length, 1);
     assert.ok(runtime.errors.length >= 1);
 });
+
+test("i18n resolves a usable locale from choice, portal default, then browser", async () => {
+    const codes = ["en", "es", "pt-br", "ja"];
+    const catalogs = {
+        en: catalog("en", "Settings"),
+        es: catalog("es", "Configuración"),
+        "pt-br": catalog("pt-br", "Configurações"),
+        ja: catalog("ja", "設定")
+    };
+
+    // A regional browser tag falls back to the published base code.
+    const regional = loadRuntime("", catalogs, {
+        window: { SOW_LOCALE_CODES: codes, SOW_LOCALE_DEFAULT: "" },
+        navigator: { languages: ["es-MX"], language: "es-MX" }
+    });
+    await regional.window.SOW_I18N_READY;
+    assert.equal(regional.window.SOW_getLocale(), "es");
+
+    // ...even when the base tag only exists as an alias (pt-PT -> pt-br).
+    const portugal = loadRuntime("pt-PT", catalogs, {
+        window: { SOW_LOCALE_CODES: codes, SOW_LOCALE_DEFAULT: "" },
+        navigator: { languages: ["ja-JP"], language: "ja-JP" }
+    });
+    await portugal.window.SOW_I18N_READY;
+    assert.equal(portugal.window.SOW_getLocale(), "pt-BR");
+
+    // An explicit choice always beats the browser.
+    const chosen = loadRuntime("es", catalogs, {
+        window: { SOW_LOCALE_CODES: codes, SOW_LOCALE_DEFAULT: "" },
+        navigator: { languages: ["ja-JP"], language: "ja-JP" }
+    });
+    await chosen.window.SOW_I18N_READY;
+    assert.equal(chosen.window.SOW_getLocale(), "es");
+
+    // A build-level default (portal) beats the browser until someone chooses.
+    const portal = loadRuntime("", catalogs, {
+        window: { SOW_LOCALE_CODES: codes, SOW_LOCALE_DEFAULT: "pt-BR" },
+        navigator: { languages: ["ja-JP"], language: "ja-JP" }
+    });
+    await portal.window.SOW_I18N_READY;
+    assert.equal(portal.window.SOW_getLocale(), "pt-BR");
+});

@@ -160,6 +160,22 @@ impl PlacementError {
     }
 }
 
+/// Shared per-cell rules also identify the exact conflicts in a selected foundation.
+pub fn validate_building_cell(
+    kind: BuildingKind,
+    owner_id: u16,
+    tile_owner: u16,
+    terrain: u8,
+) -> Result<(), PlacementError> {
+    if owner_id == 0 || tile_owner != owner_id || terrain & 0x80 == 0 {
+        return Err(PlacementError::OwnLand);
+    }
+    if kind == BuildingKind::Farm && terrain & 0x1f >= 10 {
+        return Err(PlacementError::LowlandRequired);
+    }
+    Ok(())
+}
+
 /// One placement rule for simulation, preview and guides. Adjoining bases are legal.
 pub fn validate_building_site(
     kind: BuildingKind,
@@ -188,12 +204,7 @@ pub fn validate_building_site(
         for fx in footprint.left..footprint.left + footprint.width as i32 {
             let (fx, fy) = (fx as u32, fy as u32);
             let terrain = terrain_at(fx, fy);
-            if owner_id == 0 || owner_at(fx, fy) != owner_id || terrain & 0x80 == 0 {
-                return Err(PlacementError::OwnLand);
-            }
-            if kind == BuildingKind::Farm && terrain & 0x1f >= 10 {
-                return Err(PlacementError::LowlandRequired);
-            }
+            validate_building_cell(kind, owner_id, owner_at(fx, fy), terrain)?;
         }
     }
     if occupied(footprint) {

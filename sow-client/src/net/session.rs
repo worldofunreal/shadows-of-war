@@ -233,6 +233,7 @@ impl SowApp {
             self.complete_boudica_tutorial();
         }
         let exit_leader = self.ui.app.splash_state.loader_leader;
+        let exit_random_art = self.ui.app.splash_state.use_random_art;
         // Keep only this authenticated game socket until the durable acknowledgment.
         // Menu connection and result observation proceed independently.
         self.net.closing_game = if voluntary && reward_match_id.is_some() && self.ws_on_relay() {
@@ -270,6 +271,7 @@ impl SowApp {
             self.ui.app.phase = ClientPhase::Splash;
             self.ui.app.splash_state.reset_anim(SplashJob::ExitGame);
             self.ui.app.splash_state.loader_leader = exit_leader;
+            self.ui.app.splash_state.use_random_art = exit_random_art;
         } else {
             self.ui.app.phase = ClientPhase::MainMenu;
         }

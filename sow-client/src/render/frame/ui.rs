@@ -48,16 +48,7 @@ fn focus_camera_step(
 }
 
 impl SowApp {
-    pub(super) fn render_frame_ui_and_present(&mut self, sf: f32, frame: blade_graphics::Frame) {
-        self.ui.app.splash_state.frames_drawn =
-            self.ui.app.splash_state.frames_drawn.saturating_add(1);
-        let now = Instant::now();
-        let dt = now
-            .duration_since(self.time.last_frame_time)
-            .as_secs_f32()
-            .min(0.1);
-        self.time.last_frame_time = now;
-
+    pub(super) fn advance_camera(&mut self, dt: f32) {
         if self.ui.app.phase == ClientPhase::Playing && !self.input.input_focused {
             let dx = self.input.key_pan_left as i32 as f32 - self.input.key_pan_right as i32 as f32;
             let dy = self.input.key_pan_up as i32 as f32 - self.input.key_pan_down as i32 as f32;
@@ -135,7 +126,17 @@ impl SowApp {
                 self.clamp_camera_to_map();
             }
         }
+    }
 
+    pub(super) fn render_frame_ui_and_present(
+        &mut self,
+        sf: f32,
+        frame: blade_graphics::Frame,
+        dt: f32,
+    ) {
+        self.ui.app.splash_state.frames_drawn =
+            self.ui.app.splash_state.frames_drawn.saturating_add(1);
+        let now = Instant::now();
         self.ui.app.main_menu_state.wait_timer_secs =
             (self.ui.app.main_menu_state.wait_timer_secs - dt).max(0.0);
         if let Some(timer) = &mut self.ui.app.hud_state.spawn_timer_secs {

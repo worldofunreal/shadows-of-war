@@ -203,7 +203,7 @@
     }
 
     function showBootSplash(key) {
-        if (!bootSplashPicture || !root) {
+        if (loaderReadyDispatched || !bootSplashPicture || !root) {
             clearLoaderPicture(key);
             return;
         }
@@ -216,6 +216,10 @@
     }
 
     function applySplashArt() {
+        if (loaderReadyDispatched) {
+            clearLoaderPicture(null);
+            return;
+        }
         const desktopSplash = assetUrl(assetPathVariants('sow-splash-desktop.webp')[0]);
         const mobileSplash = assetUrl(assetPathVariants('sow-splash-mobile.webp')[0]);
         const { picture, image } = replaceLoaderPicture(BOOT_SPLASH_MEDIA, mobileSplash);
@@ -227,6 +231,7 @@
 
     function leaderSlugForState(state) {
         const selected = String(state && state.loader_leader || '');
+        if (selected === 'random') return 'random';
         const leaders = state && Array.isArray(state.leaders) ? state.leaders : [];
         const leader = leaders.find((entry) =>
             String(entry && entry.id || '') === selected
@@ -544,6 +549,7 @@
             finishingLoaderCycleId = -1;
             completedLoaderCycleId = cycleId;
             clearLoaderPicture(null);
+            bootSplashPicture = null;
             if (latestLoaderState && latestLoaderState.loader_job === 'ExitGame') {
                 activeMatchArt = null;
                 pendingExitArt = null;
@@ -573,7 +579,6 @@
         if (finishing && finishingLoaderCycleId === cycleId) return;
         latestLoaderState = state;
         if (state.loader_done === true && state.loader_job !== 'ExitGame') {
-            if (state.loader_job === 'EnterGame') syncLoaderArt(state);
             finish(cycleId);
             return;
         }

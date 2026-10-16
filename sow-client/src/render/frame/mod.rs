@@ -59,6 +59,39 @@ impl SowApp {
         let sf = wanted.as_ref().map(|v| v.scale_factor).unwrap_or(1.0);
         crate::viewport::Viewport::from_configured(self, sf).sync_to_app(self);
 
+        // Camera, map grid, world sprites and DOM anchors use one frame transform.
+        let now = web_time::Instant::now();
+        let dt = now
+            .duration_since(self.time.last_frame_time)
+            .as_secs_f32()
+            .min(0.1);
+        self.time.last_frame_time = now;
+        self.advance_camera(dt);
+
+        if let Some(placement) = self.ui.app.hud_state.building_placement
+            && let Some(engine) = self.sim.engine.as_mut()
+        {
+            engine.refresh_building_grid();
+            if self.input.camera_zoom / sf.max(0.01) >= 4.0 {
+                let bounds = crate::input::placement::visible_placement_bounds(
+                    (self.sim.map_w, self.sim.map_h),
+                    [self.input.camera_x, self.input.camera_y],
+                    self.input.camera_zoom,
+                    [self.input.screen_w, self.input.screen_h],
+                );
+                self.ui.building_placement_cache.update_visible_sites(
+                    engine,
+                    placement.kind,
+                    self.sim.my_player_id.unwrap_or(0),
+                    bounds,
+                );
+            } else {
+                self.ui.building_placement_cache.clear_visible_sites();
+            }
+        } else {
+            self.ui.building_placement_cache.clear_visible_sites();
+        }
+
         if let Some(ref mut s) = self.gfx.surface {
             let mut render_ctx = match self.gfx.render_ctx.take() {
                 Some(ctx) => ctx,
@@ -80,7 +113,7 @@ impl SowApp {
                     render_ctx.command_encoder.init_texture(mr.owner_texture);
                     render_ctx
                         .command_encoder
-                        .init_texture(mr.occupancy_texture);
+                        .init_texture(mr.placement_texture);
                     if let Some(ref tr) = self.gfx.text_renderer {
                         tr.init_textures(&mut render_ctx.command_encoder);
                         tr.upload_atlas(&mut render_ctx.command_encoder, &render_ctx.context);
@@ -344,13 +377,15 @@ impl SowApp {
                     } else {
                         0.0
                     };
-                    if let Some(snapshot) = &self.sim.current_snapshot {
-                        mr.update_building_occupancy(
-                            &mut render_ctx.command_encoder,
-                            &render_ctx.context,
-                            &snapshot.buildings,
-                        );
-                    }
+                    let (bounds, sites, revision) =
+                        self.ui.building_placement_cache.visible_sites();
+                    mr.update_building_placement(
+                        &mut render_ctx.command_encoder,
+                        &render_ctx.context,
+                        bounds,
+                        sites,
+                        revision,
+                    );
 
                     let mut fallout_slots = [[0.0f32; 4]; 9];
                     {
@@ -580,7 +615,14 @@ impl SowApp {
                         effect_energy_flow: if dev.vfx_energy_flow { 1.0 } else { 0.0 },
                         my_player_id: self.sim.my_player_id.unwrap_or(0) as f32,
                         placement_active,
-                        _placement_pad: [0.0; 2],
+                        _placement_pad: [
+                            sf,
+                            if self.input.camera_zoom / sf.max(0.01) >= 4.0 {
+                                1.0
+                            } else {
+                                0.0
+                            },
+                        ],
                         territory_opacity,
                         fallout_slots,
                         blend_mode,
@@ -721,7 +763,7 @@ impl SowApp {
             // put/re-take, so UI painting continues recording into it.
             self.gfx.render_ctx = Some(render_ctx);
 
-            self.render_frame_ui_and_present(sf, frame);
+            self.render_frame_ui_and_present(sf, frame, dt);
         }
     }
 }

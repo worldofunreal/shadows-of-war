@@ -186,6 +186,9 @@ enum WebMenuCommand {
     SelectBuilding {
         kind: sow_core::game::BuildingKind,
     },
+    NudgeBuildingPlacement {
+        direction: crate::input::placement::PlacementDirection,
+    },
     ConfirmBuildingPlacement,
     CancelBuildingMode,
     SelectWarship,
@@ -1025,7 +1028,8 @@ impl SowApp {
                         self.select_building_kind(kind);
                     }
                 }
-                WebMenuCommand::ConfirmBuildingPlacement => self.confirm_building_placement(),
+                WebMenuCommand::NudgeBuildingPlacement { direction } => self.nudge_building_placement(direction),
+            WebMenuCommand::ConfirmBuildingPlacement => self.confirm_building_placement(),
                 WebMenuCommand::CancelBuildingMode => self.clear_placement(),
                 WebMenuCommand::SelectWarship => {
                     if !self.ui.tutorial_camera_only {
@@ -1530,10 +1534,16 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .map(|secs| (secs.max(0.0) * 10.0).round() as i32)
             .unwrap_or(-1),
         selected_building: hud.building_placement,
-        placement_anchor: hud.building_placement.map(|placement| (
-            (app.input.camera_x + (placement.tile_idx % app.sim.map_w.max(1)) as f32 * app.input.camera_zoom).round() as i32,
-            (app.input.camera_y + (placement.tile_idx / app.sim.map_w.max(1)) as f32 * app.input.camera_zoom).round() as i32,
-        )),
+        placement_anchor: hud.building_placement.map(|placement| {
+            (
+                (app.input.camera_x
+                    + (placement.tile_idx % app.sim.map_w.max(1)) as f32 * app.input.camera_zoom)
+                    .round() as i32,
+                (app.input.camera_y
+                    + (placement.tile_idx / app.sim.map_w.max(1)) as f32 * app.input.camera_zoom)
+                    .round() as i32,
+            )
+        }),
         selected_warship_build: hud.selected_warship_build,
         selected_nuke: hud
             .selected_nuke_kind
@@ -3249,17 +3259,31 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         return serde_json::Value::Null;
     }
 
+    let site_valid = app.building_placement_site_valid();
     let placement_reason = app.building_placement_reason();
+    let placement_gold = app.current_player_gold();
     let placement_payload = app.ui.app.hud_state.building_placement.map(|placement| {
         let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
+        let can_adjust = !placement.pending && !app.ui.observing
+            && !app.ui.tutorial_camera_only && app.ui.app.hud_state.sync_state.is_none();
+        let (footprint_width, footprint_height) = placement.kind.footprint_dimensions();
         let x = app.input.camera_x + (placement.tile_idx % app.sim.map_w.max(1)) as f32 * app.input.camera_zoom;
         let y = app.input.camera_y + (placement.tile_idx / app.sim.map_w.max(1)) as f32 * app.input.camera_zoom;
         serde_json::json!({
             "tile_idx": placement.tile_idx,
             "x": x / sf, "y": y / sf,
-            "half_height": 2.0 * app.input.camera_zoom / sf,
+            "half_height": footprint_height as f32 * 0.5 * app.input.camera_zoom / sf,
+            "half_width": footprint_width as f32 * 0.5 * app.input.camera_zoom / sf,
+            "site_valid": site_valid,
+            "affordable": placement_gold >= app.ui.app.hud_state.building_costs[placement.kind as usize],
+            "can_nudge": {
+                "up": can_adjust && placement.tile_idx / app.sim.map_w.max(1) > 0,
+                "right": can_adjust && placement.tile_idx % app.sim.map_w.max(1) + 1 < app.sim.map_w,
+                "down": can_adjust && placement.tile_idx / app.sim.map_w.max(1) + 1 < app.sim.map_h,
+                "left": can_adjust && placement.tile_idx % app.sim.map_w.max(1) > 0,
+            },
             "pending": placement.pending,
-            "can_confirm": !placement.pending && placement_reason.is_none() && !app.ui.observing && app.ui.app.hud_state.sync_state.is_none(),
+            "can_confirm": can_adjust && placement_reason.is_none(),
             "reason": placement_reason.as_ref().map(localized_text_payload),
             "cost": app.ui.app.hud_state.building_costs[placement.kind as usize],
             "seconds": placement.kind.construction_duration_ticks() as f64 * app.sim.config.tick_rate_ms as f64 / 1000.0,
@@ -3397,13 +3421,15 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     } else {
         None
     };
-    let selected_building = hud.building_placement.map(|placement| match placement.kind {
-        sow_core::game::BuildingKind::City => "City",
-        sow_core::game::BuildingKind::Bunker => "Bunker",
-        sow_core::game::BuildingKind::Factory => "Factory",
-        sow_core::game::BuildingKind::Port => "Port",
-        sow_core::game::BuildingKind::Farm => "Farm",
-    });
+    let selected_building = hud
+        .building_placement
+        .map(|placement| match placement.kind {
+            sow_core::game::BuildingKind::City => "City",
+            sow_core::game::BuildingKind::Bunker => "Bunker",
+            sow_core::game::BuildingKind::Factory => "Factory",
+            sow_core::game::BuildingKind::Port => "Port",
+            sow_core::game::BuildingKind::Farm => "Farm",
+        });
     let selected_nuke = hud.selected_nuke_kind.map(|kind| match kind {
         sow_core::game::NukeKind::AtomBomb => "AtomBomb",
     });
@@ -3654,6 +3680,14 @@ fn leader_id(leader: sow_core::player::Leader) -> String {
         .unwrap_or_else(|| leader.name().replace(' ', ""))
 }
 
+fn loader_leader_id(splash: &crate::ui::loading_screen::SplashState) -> Option<String> {
+    if splash.use_random_art {
+        Some("random".to_string())
+    } else {
+        splash.loader_leader.map(leader_id)
+    }
+}
+
 fn notice_name(notice: Option<crate::LobbyNotice>) -> Option<&'static str> {
     match notice {
         Some(crate::LobbyNotice::HostLeft) => Some("host_left"),
@@ -3791,7 +3825,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "account_id": app.progress_account_id,
             "loader_cycle_id": app.ui.app.splash_state.cycle_id,
             "loader_job": splash_job_name(&app.ui.app.splash_state.job),
-            "loader_leader": app.ui.app.splash_state.loader_leader.map(leader_id),
+            "loader_leader": loader_leader_id(&app.ui.app.splash_state),
             "loader_progress": app.ui.app.splash_state.progress.clamp(0.0, 1.0),
             "loader_done": app.ui.app.splash_state.done,
             "hud": hud_payload,
@@ -3909,7 +3943,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "phase": phase_name(app.ui.app.phase),
             "loader_cycle_id": app.ui.app.splash_state.cycle_id,
             "loader_job": splash_job_name(&app.ui.app.splash_state.job),
-            "loader_leader": app.ui.app.splash_state.loader_leader.map(leader_id),
+            "loader_leader": loader_leader_id(&app.ui.app.splash_state),
             "loader_progress": app.ui.app.splash_state.progress.clamp(0.0, 1.0),
             "loader_done": app.ui.app.splash_state.done,
             "boot_campaign": app.boot_campaign_pending.clone(),
@@ -4033,6 +4067,28 @@ mod tests {
     use sow_core::player::{Civilization, Leader, PlayerType};
     use sow_core::protocol::{PlayerSnapshot, SimSnapshot};
     use std::sync::Arc;
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn loader_art_random_keeps_the_real_leader_and_campaign_reset() {
+        let mut splash = crate::ui::loading_screen::SplashState::default();
+        assert_eq!(loader_leader_id(&splash), None);
+        splash.transition_anim(
+            crate::ui::loading_screen::SplashJob::EnterGame,
+            Leader::Caesar,
+        );
+        assert_eq!(loader_leader_id(&splash).as_deref(), Some("Caesar"));
+
+        splash.use_random_art = true;
+        assert_eq!(loader_leader_id(&splash).as_deref(), Some("random"));
+        assert_eq!(splash.loader_leader, Some(Leader::Caesar));
+
+        splash.transition_anim(
+            crate::ui::loading_screen::SplashJob::EnterGame,
+            Leader::Boudica,
+        );
+        assert_eq!(loader_leader_id(&splash).as_deref(), Some("Boudica"));
+        assert_eq!(splash.loader_leader, Some(Leader::Boudica));
+    }
 
     fn test_player(id: u16, tile_count: u32, troops: f64) -> PlayerSnapshot {
         PlayerSnapshot {

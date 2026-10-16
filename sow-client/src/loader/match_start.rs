@@ -190,7 +190,8 @@ impl SowApp {
             config.player_leader
         } else if self.ui.app.main_menu_state.prefer_random_leader {
             let period = sow_data::commerce::current_rotation_period();
-            let available = sow_data::commerce::available_leaders(&self.progress.owned_leaders, period);
+            let available =
+                sow_data::commerce::available_leaders(&self.progress.owned_leaders, period);
             if available.is_empty() {
                 self.ui.app.main_menu_state.selected_leader
             } else {
@@ -219,6 +220,8 @@ impl SowApp {
         self.net.client = None;
         self.net.current_ping_ms = None;
         self.begin_enter_game_loader(leader);
+        self.ui.app.splash_state.use_random_art =
+            !tutorial && self.ui.app.main_menu_state.prefer_random_leader;
         self.sim.my_player_id = Some(1);
         self.sim.my_lobby_id = Some(0);
         // Ride the tutorial signal in the match config. Engine initialization derives the active

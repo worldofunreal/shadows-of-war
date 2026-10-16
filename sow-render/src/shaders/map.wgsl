@@ -54,7 +54,7 @@ var<uniform> player_colors: PlayerColors;
 var<uniform> player_skin_styles: PlayerSkinStyles;
 var terrain_texture: texture_2d<f32>;
 var owner_texture: texture_2d<u32>;
-var occupancy_texture: texture_2d<u32>;
+var placement_texture: texture_2d<u32>;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -83,6 +83,16 @@ fn get_cell_terrain(hex: vec2<i32>) -> u32 {
         return 0u;
     }
     return u32(textureLoad(terrain_texture, vec2<i32>(hex.x, hex.y), 0).x * 255.0 + 0.5);
+}
+
+fn placement_site(cell: vec2<i32>) -> u32 {
+    if (cell.x < 0 || cell.y < 0 || cell.x >= i32(globals.map_size.x) || cell.y >= i32(globals.map_size.y)) { return 0u; }
+    return textureLoad(placement_texture, cell, 0).x;
+}
+
+fn placement_own(cell: vec2<i32>, detailed: bool) -> bool {
+    if (detailed) { return (placement_site(cell) & 1u) != 0u; }
+    return get_cell_owner(cell) == u32(globals.my_player_id) && (get_cell_terrain(cell) & 128u) != 0u;
 }
 
 fn world_to_hex(world_pos: vec2<f32>) -> vec2<i32> {
@@ -920,18 +930,6 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
         base_color = base_color * mix(globals.shader_params[__MAP_VIGNETTE_EDGE_GAIN__].x, globals.shader_params[__MAP_VIGNETTE_CENTER_GAIN__].x, vignette);
     }
 
-    // Construction grid shows real occupied cells; the selected 4x4 base is
-    // validated and drawn by Rust, so free individual cells never promise a fit.
-    if (globals.placement_active > 0.0 && is_land && owner_id == u32(globals.my_player_id)) {
-        let occupied = textureLoad(occupancy_texture, cell_hex, 0).x > 0u;
-        let color = select(vec3<f32>(0.78, 0.86, 0.82), vec3<f32>(0.7, 0.35, 0.3), occupied);
-        let edge_width = max(fwidth(min_dist_to_edge), 0.001);
-        let edge = 1.0 - smoothstep_safe(0.0, edge_width, min_dist_to_edge);
-        let readable = smoothstep_safe(2.0, 5.0, globals.zoom);
-        base_color = mix(base_color, color, edge * readable * select(select(0.20, 0.28, globals.effect_holo_grid > 0.0), 0.42, occupied));
-        base_color = mix(base_color, vec3<f32>(0.12, 0.08, 0.08), select(0.0, 0.22, occupied));
-    }
-
     // ── Fog of War shading ──
     if (globals.fog_of_war > 0.0) {
         let vision_fade = f32((owner_packed >> 26u) & 0x3Fu) / 63.0;
@@ -953,6 +951,47 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
         base_color = mix(base_color, globals.alert_color.rgb, intensity * globals.alert_color.a);
     }
 
+    // Placement is a semantic layer after lighting, nation skins and fog.
+    // One neutral grid; bright snap points mean the entire selected base fits.
+    if (globals.placement_active > 0.0) {
+        let world_pos = vec2<f32>(world_x, world_y);
+        let css_zoom = globals.zoom / max(globals.placement_pad_x, 0.01);
+        let readable = smoothstep_safe(4.0, 8.0, css_zoom);
+        let detailed = globals.placement_pad_y > 0.0;
+        let site = textureLoad(placement_texture, cell_hex, 0).x;
+        let own_land = select(is_land && owner_id == u32(globals.my_player_id),
+            (site & 1u) != 0u, detailed);
+        if (!own_land) {
+            base_color = mix(base_color, vec3<f32>(0.025, 0.035, 0.045), 0.62);
+        } else {
+            base_color = mix(base_color, vec3<f32>(0.24, 0.31, 0.30), 0.68);
+            let edge_width = max(fwidth(min_dist_to_edge), 0.001);
+            let edge = 1.0 - smoothstep_safe(0.0, edge_width, min_dist_to_edge);
+            base_color = mix(base_color, vec3<f32>(0.78, 0.85, 0.84), edge * readable * 0.55);
+            if ((site & 4u) != 0u) {
+                let stripe = step(0.5, fract((world_pos.x + world_pos.y) * 2.0));
+                base_color = mix(base_color, vec3<f32>(0.10, 0.12, 0.13), 0.32 + stripe * 0.24);
+            }
+        }
+        let anchor = vec2<i32>(round(world_pos));
+        let anchor_valid = (placement_site(anchor) & 2u) != 0u;
+        let distance_to_anchor = length(world_pos - round(world_pos)) * globals.zoom;
+        let snap_point = 1.0 - smoothstep_safe(1.0, 2.0, distance_to_anchor / max(globals.placement_pad_x, 0.01));
+        if (anchor_valid) {
+            base_color = mix(base_color, vec3<f32>(0.84, 0.98, 0.88), snap_point * readable * 0.92);
+        }
+        // White territorial boundary remains readable at overview zoom as well.
+        let west = placement_own(cell_hex + vec2<i32>(-1, 0), detailed);
+        let east = placement_own(cell_hex + vec2<i32>(1, 0), detailed);
+        let north = placement_own(cell_hex + vec2<i32>(0, -1), detailed);
+        let south = placement_own(cell_hex + vec2<i32>(0, 1), detailed);
+        let cell_uv = fract(world_pos);
+        let border_distance = min(min(select(1.0, cell_uv.x, own_land != west),
+            select(1.0, 1.0 - cell_uv.x, own_land != east)),
+            min(select(1.0, cell_uv.y, own_land != north), select(1.0, 1.0 - cell_uv.y, own_land != south)));
+        let boundary = 1.0 - smoothstep_safe(0.7, 2.0, border_distance * globals.zoom / max(globals.placement_pad_x, 0.01));
+        base_color = mix(base_color, vec3<f32>(0.96, 0.98, 1.0), boundary * 0.92);
+    }
     return base_color;
 }
 

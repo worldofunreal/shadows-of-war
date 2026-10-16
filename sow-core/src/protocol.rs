@@ -9,7 +9,7 @@ pub use sow_data::MAX_MATCH_PARTICIPANTS;
 
 /// Persisted turn recordings; changing live messages must not change this.
 pub const GAMEPLAY_FORMAT_VERSION: u64 = 3;
-pub const LIVE_PROTOCOL_VERSION: u64 = 2;
+pub const LIVE_PROTOCOL_VERSION: u64 = 3;
 
 pub fn gameplay_build_identity(public_version: &str) -> String {
     format!("{public_version}/turns-{GAMEPLAY_FORMAT_VERSION}/net-{LIVE_PROTOCOL_VERSION}")
@@ -188,47 +188,15 @@ pub enum ClientMessage {
     Ping {
         client_time: f64,
     },
-    /// Retired wire slot. No handler may act on this message.
-    ReservedRematchRequest {
-        lobby_id: u64,
-    },
+    /// Keeps the authenticated join discriminant stable across live protocol versions.
+    /// This is not a client command.
+    #[doc(hidden)]
+    ReservedClientMessage,
     /// Identity-proving join. Authentication is required before a player can
     /// enter an online lobby.
     JoinWithAuth {
         join: Box<JoinPayload>,
         auth: AuthProof,
-    },
-    /// Deprecated client report. Kept in place to preserve bincode indexes;
-    /// servers and relays ignore it.
-    SubmitStatsWithLeader {
-        kills: u32,
-        deaths: u32,
-        assists: u32,
-        #[serde(default)]
-        players_defeated: u32,
-        #[serde(default)]
-        empires_defeated: u32,
-        #[serde(default)]
-        tribes_defeated: u32,
-        leader: String,
-    },
-    /// Deprecated client report. Kept in place to preserve bincode indexes;
-    /// servers and relays ignore it.
-    SubmitMatchReport {
-        kills: u32,
-        deaths: u32,
-        assists: u32,
-        #[serde(default)]
-        players_defeated: u32,
-        #[serde(default)]
-        empires_defeated: u32,
-        #[serde(default)]
-        tribes_defeated: u32,
-        leader: String,
-        winner_player_id: Option<u16>,
-        #[serde(default)]
-        winning_team: Option<Team>,
-        tick: u64,
     },
 }
 
@@ -370,7 +338,36 @@ pub struct ServerJoinFailedMessage {
 pub struct ServerLobbyClosedMessage {
     pub lobby_id: u64,
     pub reason: String,
-    pub rematch_lobby_id: Option<u64>,
+}
+
+#[cfg(test)]
+mod protocol_tests {
+    use super::*;
+
+    #[test]
+    fn authenticated_join_keeps_its_wire_discriminant() {
+        let message = ClientMessage::JoinWithAuth {
+            join: Box::new(JoinPayload {
+                name: String::new(),
+                target_lobby_id: None,
+                host_private: false,
+                build_version: String::new(),
+                clan_tag: String::new(),
+                civilization: crate::player::Civilization::Rome,
+                leader: crate::player::Leader::Caesar,
+                random_leader: false,
+                host_config: None,
+                password: None,
+            }),
+            auth: AuthProof {
+                provider: String::new(),
+                account_id: None,
+                token: String::new(),
+            },
+        };
+        let bytes = bincode::serialize(&message).unwrap();
+        assert_eq!(&bytes[..4], &12_u32.to_le_bytes());
+    }
 }
 
 // ─── Server Messages (Server → Client) ─────────────────────────────────────

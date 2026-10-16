@@ -683,6 +683,10 @@ mod tests {
         let mut app = building_app(false);
         let engine = app.sim.engine.as_mut().unwrap();
         engine.state.player_mut(1).unwrap().gold = 0.0;
+        assert!(
+            app.building_placement_site_valid(),
+            "a lack of gold does not invalidate owned clear land"
+        );
         app.sim.current_snapshot = Some(engine.build_snapshot());
         app.confirm_building_placement();
         assert!(app.sim.offline_intents.is_empty());

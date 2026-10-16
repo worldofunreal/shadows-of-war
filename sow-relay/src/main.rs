@@ -3187,7 +3187,6 @@ async fn tick_task(
                         &ServerMessage::LobbyClosed(ServerLobbyClosedMessage {
                             lobby_id: state.id,
                             reason,
-                            rematch_lobby_id: None,
                         }),
                     ) {
                         let frame = Arc::new(json);

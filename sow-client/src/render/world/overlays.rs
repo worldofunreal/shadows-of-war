@@ -694,11 +694,11 @@ fn render_building_selection_focus(
 
 fn render_building_placement_preview(
     text: &mut TextRenderer,
-    snapshot: &SimSnapshot,
+    _snapshot: &SimSnapshot,
     sim: &SimState,
     ui: &mut UiState,
     input: &InputState,
-    map_renderer: Option<&crate::render::gpu::MapRenderer>,
+    _map_renderer: Option<&crate::render::gpu::MapRenderer>,
     dev: &DevConfig,
     sf: f32,
     _time_secs: f32,
@@ -711,39 +711,21 @@ fn render_building_placement_preview(
     if sim.map_w == 0 {
         return;
     };
-    let Some(map_renderer) = map_renderer else {
-        return;
-    };
     if !input.camera_zoom.is_finite() || input.camera_zoom <= 0.0 {
         return;
     }
-
-    let (col, row) = (
-        (placement.tile_idx % sim.map_w) as i32,
-        (placement.tile_idx / sim.map_w) as i32,
-    );
-    let target = ui.building_placement_cache.resolve(
-        snapshot.tick,
-        &crate::input::placement::PlacementQuery {
-            kind,
-            click_x: col,
-            click_y: row,
-            map_w: sim.map_w,
-            map_h: sim.map_h,
-            owners: &map_renderer.owners,
-            terrain: &map_renderer.terrain,
-            my_id: sim.my_player_id.unwrap_or(0),
-            buildings: &snapshot.buildings,
-        },
-    );
+    let Some(engine) = sim.engine.as_ref() else {
+        return;
+    };
+    let can_place = sow_core::building::validate_structure_site(
+        &engine.state.map,
+        sim.my_player_id.unwrap_or(0),
+        kind,
+        placement.tile_idx,
+        &engine.building_grid,
+    )
+    .is_ok();
     let preview_tile = placement.tile_idx;
-    let cost_index = sow_core::game::BuildingKind::ALL
-        .iter()
-        .position(|candidate| *candidate == kind)
-        .unwrap_or(0);
-    let cost = ui.app.hud_state.building_costs[cost_index];
-    let has_gold = ui.app.hud_state.gold >= cost;
-    let can_place = target.is_ok() && has_gold;
     let footprint = sow_core::building::BuildingFootprint::at(
         kind,
         preview_tile % sim.map_w,
@@ -776,24 +758,86 @@ fn render_building_placement_preview(
     text.push_rect(
         footprint_top_left,
         footprint_size_px,
-        [color[0], color[1], color[2], 0.16],
+        [color[0], color[1], color[2], 0.68],
     );
-    let grid_line = (1.0 * sf).max(1.0);
-    for col in 0..=footprint.width {
-        let x = footprint_top_left[0] + col as f32 * input.camera_zoom;
-        text.push_rect(
-            [x - grid_line * 0.5, footprint_top_left[1]],
-            [grid_line, footprint_size_px[1]],
-            [color[0], color[1], color[2], 0.58],
-        );
+    if input.camera_zoom / sf >= 4.0 {
+        let line = sf.max(1.0);
+        for x in 1..footprint.width {
+            text.push_rect(
+                [
+                    footprint_top_left[0] + x as f32 * input.camera_zoom - line * 0.5,
+                    footprint_top_left[1],
+                ],
+                [line, footprint_size_px[1]],
+                [1.0, 1.0, 1.0, 0.24],
+            );
+        }
+        for y in 1..footprint.height {
+            text.push_rect(
+                [
+                    footprint_top_left[0],
+                    footprint_top_left[1] + y as f32 * input.camera_zoom - line * 0.5,
+                ],
+                [footprint_size_px[0], line],
+                [1.0, 1.0, 1.0, 0.24],
+            );
+        }
+        // Mark actual conflicting cells with the same per-cell rule as confirmation.
+        for y in footprint.top..footprint.top + footprint.height as i32 {
+            for x in footprint.left..footprint.left + footprint.width as i32 {
+                let map = &engine.state.map;
+                let outside = !map.is_valid_coord(x, y);
+                let conflict = outside
+                    || sow_core::building::validate_building_cell(
+                        kind,
+                        sim.my_player_id.unwrap_or(0),
+                        map.owner_id(x as u32, y as u32),
+                        map.terrain[map.ref_id(x as u32, y as u32)].as_byte(),
+                    )
+                    .is_err()
+                    || engine
+                        .building_grid
+                        .iter_all_in_range(
+                            placement.tile_idx % sim.map_w,
+                            placement.tile_idx / sim.map_w,
+                            3,
+                        )
+                        .any(|b| {
+                            sow_core::building::BuildingFootprint::at(b.kind, b.x, b.y)
+                                .contains(x, y)
+                        });
+                if conflict {
+                    text.push_rect(
+                        [
+                            input.camera_x + x as f32 * input.camera_zoom + line,
+                            input.camera_y + y as f32 * input.camera_zoom + line,
+                        ],
+                        [(input.camera_zoom - 2.0 * line).max(0.0); 2],
+                        [0.65, 0.02, 0.04, 0.82],
+                    );
+                }
+            }
+        }
     }
-    for row in 0..=footprint.height {
-        let y = footprint_top_left[1] + row as f32 * input.camera_zoom;
+    // A continuous outside border makes the sixteen cells read as one building.
+    for (thickness, outline) in [
+        (5.0 * sf, [0.02, 0.04, 0.03, 0.95]),
+        (2.5 * sf, [color[0], color[1], color[2], 1.0]),
+    ] {
+        let [x, y] = footprint_top_left;
+        let [w, h] = footprint_size_px;
         text.push_rect(
-            [footprint_top_left[0], y - grid_line * 0.5],
-            [footprint_size_px[0], grid_line],
-            [color[0], color[1], color[2], 0.58],
+            [x - thickness * 0.5, y - thickness * 0.5],
+            [w + thickness, thickness],
+            outline,
         );
+        text.push_rect(
+            [x - thickness * 0.5, y + h - thickness * 0.5],
+            [w + thickness, thickness],
+            outline,
+        );
+        text.push_rect([x - thickness * 0.5, y], [thickness, h], outline);
+        text.push_rect([x + w - thickness * 0.5, y], [thickness, h], outline);
     }
     let dragging = input.building_drag_offset.is_some();
     let sprite_scale = BUILDING_FOOTPRINT_FILL * BUILDING_FOOTPRINT_FILL;
@@ -814,7 +858,7 @@ fn render_building_placement_preview(
                 footprint_size_px[1] * sprite_scale,
             ],
             uv_rect,
-            [1.0, 1.0, 1.0, if can_place { 0.78 } else { 0.42 }],
+            [1.0, 1.0, 1.0, if can_place { 0.94 } else { 0.78 }],
         );
     } else {
         let icon_half_size = footprint_size_px[0].min(footprint_size_px[1]) * sprite_scale * 0.5;
@@ -822,25 +866,15 @@ fn render_building_placement_preview(
             building_kind_emoji(kind, 1),
             sprite_center,
             icon_half_size,
-            [1.0, 1.0, 1.0, if can_place { 0.78 } else { 0.42 }],
+            [1.0, 1.0, 1.0, if can_place { 0.94 } else { 0.78 }],
             crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.75]),
         );
     }
     if kind == BuildingKind::Bunker {
-        let (anchor_x, anchor_y) =
-            crate::render::world::movers::tile_to_world(preview_tile, sim.map_w);
-        let anchor_center = world_to_screen_values(
-            anchor_x,
-            anchor_y,
-            input.camera_x,
-            input.camera_y,
-            input.camera_zoom,
-            sf,
-        );
         text.push_ring(
-            [anchor_center[0] * sf, anchor_center[1] * sf],
+            center_px,
             sim.config.bunker_range as f32 * input.camera_zoom,
-            [0.94, 0.27, 0.27, 0.38],
+            [0.75, 0.85, 1.0, 0.32],
             (1.5 * sf).max(1.0),
         );
     }

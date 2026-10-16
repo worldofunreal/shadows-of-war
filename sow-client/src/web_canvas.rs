@@ -137,3 +137,20 @@ pub fn install_viewport_listeners() {
         request_resize.forget();
     }
 }
+
+/// DOM controls keep their normal keyboard behavior; the map owns keys only
+/// while the canvas (or page background) has focus.
+pub(crate) fn ui_has_keyboard_focus() -> bool {
+    web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.active_element())
+        .is_some_and(|active| {
+            active
+                .closest(
+                    "button, input, textarea, select, [contenteditable='true'], [role='slider']",
+                )
+                .ok()
+                .flatten()
+                .is_some()
+        })
+}
