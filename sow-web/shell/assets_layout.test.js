@@ -24,7 +24,7 @@ test("art lives only in assets/art; tools write only assets/generated", () => {
         .map((file) => path.relative(assets, file))
         .filter((rel) => !allowed.includes(rel.split(path.sep)[0]));
     assert.deepEqual(stray, [], "media outside the fixed asset folders");
-    for (const legacy of ["assets/gameplay", "assets/shell", "sow-tools/assets"]) {
+    for (const legacy of ["assets/gameplay", "assets/shell", "sow-tools/assets", "assets/art/badges"]) {
         assert.equal(fs.existsSync(path.join(root, legacy)), false, legacy + " must not come back");
     }
 });
@@ -43,7 +43,7 @@ test("every art slot the game draws has its file", () => {
     }
     const badges = JSON.parse(fs.readFileSync(path.join(assets, "generated/badges-atlas.json"), "utf8"));
     for (const name of badges.cells) {
-        assert.ok(fs.existsSync(path.join(art, "badges", name + ".png")), `missing assets/art/badges/${name}.png`);
+        assert.ok(["png", "webp"].some((ext) => fs.existsSync(path.join(art, "icons", `${name}.${ext}`))), `missing assets/art/icons/${name}.png`);
     }
     const commerce = fs.readFileSync(path.join(root, "sow-data/src/commerce.rs"), "utf8");
     const leaderIds = commerce.slice(commerce.indexOf("pub fn leader_id"), commerce.indexOf("pub fn leader_wire_id"));

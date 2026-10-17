@@ -14,7 +14,7 @@ const ART_MARGIN_PX: u32 = 2;
 /// Every building and level needs art: `assets/art/buildings/<kind>-<level>.png`.
 const BUILDING_KINDS: [&str; 5] = ["City", "Factory", "Port", "Bunker", "Farm"];
 const BUILDING_LEVELS: u8 = 4;
-/// Nameplate and HUD badges, one strip in this order: `assets/art/badges/<name>.png`.
+/// Nameplate and HUD badges, one strip in this order: `assets/art/icons/<name>.png`.
 /// The cell order is read by sow-render (`badge_atlas::CELLS`) and the HUD (`STATUS_CELLS`).
 pub const BADGES: [&str; 21] = [
     "request",
@@ -180,7 +180,7 @@ fn pack_badges(args: &PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send 
         Rgba([0, 0, 0, 0]),
     );
     for (index, name) in BADGES.iter().enumerate() {
-        let source = art_source(&args.art_root.join("badges"), name)?;
+        let source = art_source(&args.art_root.join("icons"), name)?;
         let image = image::load_from_memory(&fs::read(&source)?)?.to_rgba8();
         let cell = pixel_cell(&image, BADGE_CELL_PX)?;
         image::imageops::overlay(

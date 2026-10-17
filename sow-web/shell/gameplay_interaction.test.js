@@ -413,7 +413,7 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
     assert.equal(firstRows.length, 3);
     assert.equal(context.hudRefs.operations.hidden, false);
     assert.equal(firstRows[0].children[0].children[0].src, "/assets/gameplay/avatars/caesar.webp");
-    assert.equal(firstRows[1].children[0].children[1].innerHTML, "wilderness", "unclaimed land uses assets/art/badges/wilderness");
+    assert.equal(firstRows[1].children[0].children[1].innerHTML, "wilderness", "unclaimed land uses assets/art/icons/wilderness");
     assert.equal(firstRows[2].querySelectorAll('[data-command="recall_fleet"]').length, 1);
     context.renderHud();
     assert.equal(firstList.replacements, 1, "unchanged operations do not remount rows");

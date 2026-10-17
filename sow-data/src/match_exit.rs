@@ -160,97 +160,206 @@ pub(super) async fn handle_progress(State(state): State<Arc<AppState>>, headers:
         Ok(decoded) => decoded,
         Err(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
-    let result = async {
-        if batch.match_id.parse::<u64>().is_err() || batch.replay_data.len() > sow_data::MAX_MATCH_CHUNK_BYTES
-            || batch.replay_data.len() < 8 || hex::encode(Sha256::digest(batch.signing_bytes()?)) != batch.sha256 {
-            return Err("invalid journal delivery".into());
-        }
-        let _guard = state.match_artifact_lock.lock().await;
-        let start = state.db.match_start_record(&batch.match_id)?.ok_or("trusted match registration unavailable")?;
-        let tick_rate = start.metadata.pointer("/config/tick_rate_ms").and_then(serde_json::Value::as_f64)
-            .ok_or("trusted clock missing")? as f32;
-        let count = u64::from_le_bytes(batch.replay_data[..8].try_into().unwrap());
-        if !tick_rate.is_finite() || tick_rate <= 0.0 || count > sow_data::max_match_turns(tick_rate)
-            || batch.first_turn.saturating_add(count) > sow_data::max_match_turns(tick_rate) {
-            return Err("invalid journal duration".into());
-        }
-        let canonical = progress_path(&batch.match_id, batch.sequence);
-        let legacy = progress_path_with_extension(&batch.match_id, batch.sequence, "json");
-        let path = if canonical.exists() { canonical } else if legacy.exists() { legacy }
-            else if binary { canonical } else { legacy };
-        let existing = tokio::fs::read(&path).await;
-        match existing {
-            Ok(bytes) => {
-                let (saved, _) = decode_progress(&bytes)?;
-                if saved != batch { return Err("journal delivery conflicts with saved state".into()); }
-                if !marker_matches(&path.with_extension("done"),&saved.sha256)? {
-                    let job = state.db.queue_match_work(progress_work(&batch))?;
-                    wake(&state,job.work.key());
-                } else if batch.finished && !marker_matches(&path.with_extension("archived"),&batch.sha256)? {
-                    let job = state.db.queue_match_work(archive_work(&batch))?;
-                    wake(&state,job.work.key());
-                }
-                // The completion marker distinguishes an ACK retry from a
-                // crash between the artifact rename and the queue commit.
-                return Ok(serde_json::json!({"match_id":batch.match_id,"sequence":batch.sequence,"sha256":batch.sha256}));
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                if batch.finished && marker_matches(&path.with_extension("archived"),&batch.sha256)? {
-                    return Ok(serde_json::json!({"match_id":batch.match_id,"sequence":batch.sequence,"sha256":batch.sha256}));
-                }
-                if let Some(index) = read_progress_index(&batch.match_id).await? {
-                    let saved = index.match_id == batch.match_id && index.chunks.iter().any(|chunk|
-                        chunk.sequence == batch.sequence && chunk.first_turn == batch.first_turn
-                            && chunk.previous_sha256 == batch.previous_sha256 && chunk.sha256 == batch.sha256
-                            && chunk.finished == batch.finished);
-                    let archived = if let Some(chunk) = index.chunks.last() {
-                        marker_matches(&progress_path(&batch.match_id,chunk.sequence).with_extension("archived"),&chunk.sha256)?
-                    } else { false };
-                    if saved && archived {
-                        return Ok(serde_json::json!({"match_id":batch.match_id,"sequence":batch.sequence,"sha256":batch.sha256}));
-                    }
-                    return Err("journal delivery conflicts with its archived record".into());
-                }
-            }
-            Err(e) => return Err(e.into()),
-        }
-        if batch.sequence == 0 {
-            if batch.first_turn != 0 || !batch.previous_sha256.is_empty() { return Err("journal must start at turn zero".into()); }
-        } else {
-            let bytes = tokio::fs::read(existing_progress_path(&batch.match_id,batch.sequence-1)).await?;
-            let (previous, _) = decode_progress(&bytes)?;
-            let previous_count = u64::from_le_bytes(previous.replay_data[..8].try_into().unwrap());
-            if previous.sha256 != batch.previous_sha256 || previous.first_turn + previous_count != batch.first_turn || previous.finished {
-                return Err("journal delivery conflicts with saved sequence".into());
-            }
-        }
-        for closure in &batch.participant_closures {
-            state.db.registered_human_participant(&batch.match_id, &closure.account_id)?;
-            if closure.turn_number >= batch.first_turn + count || !matches!(closure.reason.as_str(), "voluntary" | "timeout" | "match_ended" | "defeated") {
-                return Err("invalid journal closure".into());
-            }
-        }
-        let parent = path.parent().ok_or("journal directory missing")?;
-        tokio::fs::create_dir_all(parent).await?;
-        let temporary = path.with_extension(format!("{}.tmp", path.extension().and_then(|value|value.to_str()).unwrap_or("bin")));
-        let mut file = tokio::fs::File::create(&temporary).await?;
-        let encoded = if binary { bincode::serialize(&batch)? } else { serde_json::to_vec(&batch)? };
-        file.write_all(&encoded).await?;
-        file.sync_all().await?;
-        drop(file);
-        tokio::fs::rename(temporary,&path).await?;
-        std::fs::File::open(parent)?.sync_all()?;
-        let job = state.db.queue_match_work(progress_work(&batch))?;
-        wake(&state, job.work.key());
-        Ok(serde_json::json!({"match_id":batch.match_id,"sequence":batch.sequence,"sha256":batch.sha256}))
-    }.await;
+    let match_id = batch.match_id.clone();
+    let result = store_progress(&state, batch, binary).await;
     match result {
         Ok::<_,Box<dyn std::error::Error+Send+Sync>>(ack) => (StatusCode::ACCEPTED,Json(ack)).into_response(),
         Err(e) => {
-            warn!("[rewards] journal intake pending match={}: {e}", batch.match_id);
+            warn!("[rewards] journal intake pending match={match_id}: {e}");
             (StatusCode::SERVICE_UNAVAILABLE,Json(ErrorResponse { error:e.to_string() })).into_response()
         }
     }
+}
+
+pub(super) async fn handle_relay_progress(State(state): State<Arc<AppState>>, headers: HeaderMap,
+    body: Bytes) -> axum::response::Response {
+    if !verify_internal_auth(&headers, &state.relay_settlement_secret) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let incoming: sow_data::profile::RelayMatchProgress = match bincode::deserialize(&body) {
+        Ok(batch) => batch,
+        Err(binary_error) => match serde_json::from_slice(&body) {
+            Ok(batch) => batch,
+            Err(_) => {
+                warn!("[rewards] invalid relay progress request: {binary_error}");
+                return StatusCode::BAD_REQUEST.into_response();
+            }
+        },
+    };
+    if incoming.match_id.parse::<u64>().is_err() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let result = async {
+        let _guard = state.match_artifact_lock.lock().await;
+        if incoming.recording_failed {
+            return reject_relay_recording(&state, &incoming).await;
+        }
+        if incoming.replay_data.len() < 8
+            || incoming.replay_data.len() > sow_data::MAX_MATCH_CHUNK_BYTES
+        {
+            return Err("invalid relay turn batch".into());
+        }
+        let count = u64::from_le_bytes(incoming.replay_data[..8].try_into().unwrap());
+        let previous_sha256 = previous_progress_hash(&incoming.match_id, incoming.sequence).await?;
+        let mut batch = sow_data::profile::MatchProgress {
+            match_id: incoming.match_id.clone(),
+            sequence: incoming.sequence,
+            first_turn: incoming.first_turn,
+            previous_sha256,
+            sha256: String::new(),
+            replay_data: incoming.replay_data.clone(),
+            participant_closures: incoming.participant_closures.clone(),
+            finished: incoming.finished,
+        };
+        batch.sha256 = hex::encode(Sha256::digest(batch.signing_bytes()?));
+        store_progress_locked(&state, batch, true, count).await
+    }.await;
+    match result {
+        Ok(ack) => (StatusCode::ACCEPTED, Json(ack)).into_response(),
+        Err(error) => {
+            warn!("[rewards] relay progress intake pending match={}: {error}", incoming.match_id);
+            (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error:error.to_string() })).into_response()
+        }
+    }
+}
+
+async fn store_progress(
+    state: &AppState,
+    batch: sow_data::profile::MatchProgress,
+    binary: bool,
+) -> WorkResult<serde_json::Value> {
+    let _guard = state.match_artifact_lock.lock().await;
+    let count = u64::from_le_bytes(batch.replay_data[..8].try_into().map_err(|_| "invalid turn count")?);
+    store_progress_locked(state, batch, binary, count).await
+}
+
+async fn store_progress_locked(
+    state: &AppState,
+    batch: sow_data::profile::MatchProgress,
+    binary: bool,
+    count: u64,
+) -> WorkResult<serde_json::Value> {
+    if batch.match_id.parse::<u64>().is_err() || batch.replay_data.len() > sow_data::MAX_MATCH_CHUNK_BYTES
+        || batch.replay_data.len() < 8 || hex::encode(Sha256::digest(batch.signing_bytes()?)) != batch.sha256 {
+        return Err("invalid journal delivery".into());
+    }
+    let start = state.db.match_start_record(&batch.match_id)?.ok_or("trusted match registration unavailable")?;
+    let tick_rate = start.metadata.pointer("/config/tick_rate_ms").and_then(serde_json::Value::as_f64)
+        .ok_or("trusted clock missing")? as f32;
+    if !tick_rate.is_finite() || tick_rate <= 0.0 || count > sow_data::max_match_turns(tick_rate)
+        || batch.first_turn.saturating_add(count) > sow_data::max_match_turns(tick_rate) {
+        return Err("invalid journal duration".into());
+    }
+    let canonical = progress_path(&batch.match_id, batch.sequence);
+    let legacy = progress_path_with_extension(&batch.match_id, batch.sequence, "json");
+    let path = if canonical.exists() { canonical } else if legacy.exists() { legacy }
+        else if binary { canonical } else { legacy };
+    let existing = tokio::fs::read(&path).await;
+    match existing {
+        Ok(bytes) => {
+            let (saved, _) = decode_progress(&bytes)?;
+            if saved != batch { return Err("journal delivery conflicts with saved state".into()); }
+            if !marker_matches(&path.with_extension("done"),&saved.sha256)? {
+                let job = state.db.queue_match_work(progress_work(&batch))?;
+                wake(state,job.work.key());
+            } else if batch.finished && !marker_matches(&path.with_extension("archived"),&batch.sha256)? {
+                let job = state.db.queue_match_work(archive_work(&batch))?;
+                wake(state,job.work.key());
+            }
+            return Ok(serde_json::json!({"match_id":batch.match_id,"sequence":batch.sequence,"sha256":batch.sha256}));
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            if batch.finished && marker_matches(&path.with_extension("archived"),&batch.sha256)? {
+                return Ok(serde_json::json!({"match_id":batch.match_id,"sequence":batch.sequence,"sha256":batch.sha256}));
+            }
+            if let Some(index) = read_progress_index(&batch.match_id).await? {
+                let saved = index.match_id == batch.match_id && index.chunks.iter().any(|chunk|
+                    chunk.sequence == batch.sequence && chunk.first_turn == batch.first_turn
+                        && chunk.previous_sha256 == batch.previous_sha256 && chunk.sha256 == batch.sha256
+                        && chunk.finished == batch.finished);
+                let archived = if let Some(chunk) = index.chunks.last() {
+                    marker_matches(&progress_path(&batch.match_id,chunk.sequence).with_extension("archived"),&chunk.sha256)?
+                } else { false };
+                if saved && archived {
+                    return Ok(serde_json::json!({"match_id":batch.match_id,"sequence":batch.sequence,"sha256":batch.sha256}));
+                }
+                return Err("journal delivery conflicts with its archived record".into());
+            }
+        }
+        Err(e) => return Err(e.into()),
+    }
+    if batch.sequence == 0 {
+        if batch.first_turn != 0 || !batch.previous_sha256.is_empty() { return Err("journal must start at turn zero".into()); }
+    } else {
+        let bytes = tokio::fs::read(existing_progress_path(&batch.match_id,batch.sequence-1)).await?;
+        let (previous, _) = decode_progress(&bytes)?;
+        let previous_count = u64::from_le_bytes(previous.replay_data[..8].try_into().unwrap());
+        if previous.sha256 != batch.previous_sha256 || previous.first_turn + previous_count != batch.first_turn || previous.finished {
+            return Err("journal delivery conflicts with saved sequence".into());
+        }
+    }
+    for closure in &batch.participant_closures {
+        state.db.registered_human_participant(&batch.match_id, &closure.account_id)?;
+        if closure.turn_number >= batch.first_turn + count || !matches!(closure.reason.as_str(), "voluntary" | "timeout" | "match_ended" | "defeated") {
+            return Err("invalid journal closure".into());
+        }
+    }
+    let parent = path.parent().ok_or("journal directory missing")?;
+    tokio::fs::create_dir_all(parent).await?;
+    let temporary = path.with_extension(format!("{}.tmp", path.extension().and_then(|value|value.to_str()).unwrap_or("bin")));
+    let mut file = tokio::fs::File::create(&temporary).await?;
+    let encoded = if binary { bincode::serialize(&batch)? } else { serde_json::to_vec(&batch)? };
+    file.write_all(&encoded).await?;
+    file.sync_all().await?;
+    drop(file);
+    tokio::fs::rename(temporary,&path).await?;
+    std::fs::File::open(parent)?.sync_all()?;
+    let job = state.db.queue_match_work(progress_work(&batch))?;
+    wake(state, job.work.key());
+    Ok(serde_json::json!({"match_id":batch.match_id,"sequence":batch.sequence,"sha256":batch.sha256}))
+}
+
+async fn previous_progress_hash(match_id: &str, sequence: u64) -> WorkResult<String> {
+    if sequence == 0 { return Ok(String::new()); }
+    if let Some(index) = read_progress_index(match_id).await? {
+        if index.match_id != match_id { return Err("progress index belongs to another match".into()); }
+        if let Some(previous) = index.chunks.get(sequence.saturating_sub(1) as usize) {
+            return Ok(previous.sha256.clone());
+        }
+    }
+    let bytes = tokio::fs::read(existing_progress_path(match_id, sequence - 1)).await?;
+    let (previous, _) = decode_progress(&bytes)?;
+    Ok(previous.sha256)
+}
+
+async fn reject_relay_recording(
+    state: &AppState,
+    incoming: &sow_data::profile::RelayMatchProgress,
+) -> WorkResult<serde_json::Value> {
+    let start = state.db.match_start_record(&incoming.match_id)?.ok_or("trusted match registration unavailable")?;
+    for closure in &incoming.participant_closures {
+        state.db.registered_human_participant(&incoming.match_id, &closure.account_id)?;
+        if closure.turn_number > sow_data::max_match_turns(
+            start.metadata.pointer("/config/tick_rate_ms").and_then(serde_json::Value::as_f64)
+                .ok_or("trusted clock missing")? as f32,
+        ) || !matches!(closure.reason.as_str(), "voluntary" | "timeout" | "match_ended" | "defeated") {
+            return Err("invalid failed-recording closure".into());
+        }
+    }
+    if start.replay_status == ReplayVerificationStatus::Pending {
+        if incoming.finished {
+            state.db.finalize_match_with_lobby(&incoming.match_id, None).await?;
+        }
+        super::reject_queued_replay(state, &incoming.match_id).await?;
+    }
+    settle_rejected_progress_closures(state, &sow_data::profile::MatchProgress {
+        match_id:incoming.match_id.clone(), sequence:incoming.sequence, first_turn:incoming.first_turn,
+        previous_sha256:String::new(), sha256:String::new(), replay_data:Vec::new(),
+        participant_closures:incoming.participant_closures.clone(), finished:incoming.finished,
+    }, &[]).await?;
+    durable_marker(&match_result_path(&incoming.match_id), &incoming.match_id).await?;
+    let _ = state.match_results.send(incoming.match_id.clone());
+    Ok(serde_json::json!({"match_id":incoming.match_id,"sequence":incoming.sequence,"recording_failed":true}))
 }
 
 fn progress_work(batch: &sow_data::profile::MatchProgress) -> MatchWork {

@@ -347,6 +347,20 @@ pub struct MatchProgress {
     pub finished: bool,
 }
 
+/// Opaque turn batch forwarded by the relay. The data service assigns its
+/// hash-chain position and durably records it before acknowledging the relay.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RelayMatchProgress {
+    pub match_id: String,
+    pub sequence: u64,
+    pub first_turn: u64,
+    pub replay_data: Vec<u8>,
+    pub participant_closures: Vec<ProgressClosure>,
+    pub finished: bool,
+    #[serde(default)]
+    pub recording_failed: bool,
+}
+
 impl MatchProgress {
     pub fn signing_bytes(&self) -> Result<Vec<u8>, serde_json::Error> {
         serde_json::to_vec(&(&self.match_id, self.sequence, self.first_turn,

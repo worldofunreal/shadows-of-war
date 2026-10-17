@@ -955,7 +955,7 @@ impl TextRenderer {
         true
     }
 
-    /// Push art from `assets/art/badges` with the same outline and shadow as emoji.
+    /// Push art from `assets/art/icons` with the same outline and shadow as emoji.
     pub fn push_icon(
         &mut self,
         sprite: NameplateStatusSprite,

@@ -123,7 +123,7 @@
         surrender: "gameplay/icons/surrender_flag.webp"
     };
 
-    // Cell order of the badge strip packed from assets/art/badges (assets/generated/badges-atlas.json).
+    // Cell order of the badge strip packed from assets/art/icons (assets/generated/badges-atlas.json).
     var STATUS_CELLS = ["request", "allied", "traitor", "rank-1", "rank-2", "rank-3", "you", "disconnected", "upgrade-sparkle", "wilderness", "troops", "death", "radiation", "construction", "hammer", "arrow-up", "arrow-right", "arrow-down", "arrow-left", "cancel", "confirm"];
 
     var BUILDING_GLYPHS = {

@@ -8,7 +8,7 @@ Regla general:
 
 | Carpeta | Qué es | Por qué está aquí | Quién la usa |
 |---|---|---|---|
-| `art/` | Todo el arte: líderes, edificios, insignias, íconos, tienda, marca, pantalla de carga, skins y música. Los espacios están en `art/README.md`. | Es el único lugar donde el owner deja o reemplaza arte. | `sow-dist` lo optimiza y lo publica; `sow-tools` arma los atlas de edificios e insignias. |
+| `art/` | Todo el arte: líderes, edificios, íconos (incluye las insignias), unidades, tienda, marca, pantalla de carga, skins y música. Los espacios están en `art/README.md`. | Es el único lugar donde el owner deja o reemplaza arte. | `sow-dist` lo optimiza y lo publica; `sow-tools` arma los atlas de edificios, íconos y unidades. |
 | `generated/` | Archivos que arman las herramientas: atlas de edificios, atlas de insignias, atlas de unidades, atlas de emojis (`emoji/`, con su `cache/` de imágenes Twemoji descargadas) y atlas de letras del mapa (`msdf-atlas`). | El juego los mete dentro del programa al compilar, así que tienen que existir antes del build. Están separados para que nadie los edite a mano. | Edificios, insignias y unidades: `pack-building-atlas`, en cada `./sow p`. Emojis: `pack-emoji-atlas`, solo para los emblemas de tribus y naciones que quedan. Letras: `generate_font_atlas`, solo cuando una traducción trae caracteres nuevos. |
 | `fonts/` | Work Sans en TTF. | Es la fuente del atlas de letras del mapa. | `generate_font_atlas`. |
 | `maps/` | Los mapas jugables (`map.bin`, miniaturas y `catalog.bin`), con su `NOTICE` y `SOURCES.toml` de licencias. | Es la biblioteca única de mapas que usan el servidor y el cliente. | Servidor, cliente y `sow-dist`. Antes de tocarla, lee las reglas de mapas en `AGENTS.md`. |

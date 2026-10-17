@@ -1591,7 +1591,7 @@ fn paint_prepared_nameplate(
         paint_prepared_avatar(text, avatar, plan.emoji_outline, 1.0);
     }
     for badge in plan.badges[..plan.badge_count].iter().flatten() {
-        // Every badge is a cell of the art/badges strip; none is a system emoji.
+        // Every badge is a cell of the art/icons strip; none is a system emoji.
         let sprite = match badge.kind {
             BadgeKind::Request => NameplateStatusSprite::Request,
             BadgeKind::Allied => NameplateStatusSprite::Allied,

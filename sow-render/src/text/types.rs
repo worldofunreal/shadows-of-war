@@ -173,7 +173,7 @@ impl NameplateStatusSprite {
         Self::Confirm,
     ];
 
-    /// File name in `assets/art/badges/` and cell name in the generated strip.
+    /// File name in `assets/art/icons/` and cell name in the generated strip.
     pub const fn art_name(self) -> &'static str {
         match self {
             Self::Request => "request",

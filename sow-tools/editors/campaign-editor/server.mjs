@@ -12,6 +12,7 @@ const root = path.resolve(editorDir, "../../..");
 const campaignDir = path.join(root, "assets/campaign");
 const guideDir = path.join(root, "assets/guides");
 const mapsDir = path.join(root, "assets/maps");
+const leaderArtDir = path.join(root, "assets/art/leaders");
 const entityCatalogFile = path.join(root, "assets/geo_entities.json");
 const distLocaleDir = path.join(root, "dist/web/locales");
 const campaignRequire = createRequire(import.meta.url);
@@ -62,6 +63,22 @@ function safeFile(base, relative) {
   return file === base || file.startsWith(base + path.sep) ? file : null;
 }
 
+function leaderArt(slug, stem) {
+  if (!avatarId.test(slug)) return null;
+  const folder = slug === "null" ? "_fallback" : slug;
+  return ["webp", "png", "jpg", "jpeg"]
+    .map(ext => path.join(leaderArtDir, folder, `${stem}.${ext}`))
+    .find(existsSync) || null;
+}
+
+async function listAvatarIds() {
+  const entries = await fs.readdir(leaderArtDir, { withFileTypes: true });
+  return [...new Set(entries
+    .filter(entry => entry.isDirectory() && (entry.name === "_fallback" || avatarId.test(entry.name)))
+    .map(entry => entry.name === "_fallback" ? "null" : entry.name)
+    .filter(id => leaderArt(id, "portrait")))].sort();
+}
+
 function staticFile(pathname) {
   if (pathname === "/tools/campaign-editor/atlas") return path.join(editorDir, "atlas.html");
   if (pathname === "/tools/campaign-editor/map-rosters") return path.join(editorDir, "map-rosters.html");
@@ -72,6 +89,14 @@ function staticFile(pathname) {
   if (pathname.startsWith("/assets/campaign/")) return safeFile(campaignDir, pathname.slice("/assets/campaign/".length));
   if (pathname.startsWith("/assets/guides/")) return safeFile(guideDir, pathname.slice("/assets/guides/".length));
   if (pathname.startsWith("/assets/maps/")) return safeFile(path.join(root, "assets/maps"), pathname.slice("/assets/maps/".length));
+  if (pathname.startsWith("/assets/gameplay/avatars/")) {
+    const relative = pathname.slice("/assets/gameplay/avatars/".length);
+    const portrait = /^([a-z][a-z0-9_]*)\.webp$/.exec(relative);
+    if (portrait) return leaderArt(portrait[1], "portrait");
+    const expressions = /^spritesheets\/([a-z][a-z0-9_]*)\.webp$/.exec(relative);
+    if (expressions) return leaderArt(expressions[1], "expressions");
+    return null;
+  }
   if (pathname.startsWith("/assets/gameplay/")) return safeFile(path.join(root, "assets/gameplay"), pathname.slice("/assets/gameplay/".length));
   if (pathname.startsWith("/assets/map_sources/")) return safeFile(path.join(root, "assets/map_sources"), pathname.slice("/assets/map_sources/".length));
   if (pathname.startsWith("/fonts/")) return safeFile(path.join(root, "sow-web/site/fonts"), pathname.slice("/fonts/".length));
@@ -140,8 +165,7 @@ async function validatePair(episodeId, roster, definition) {
       || !Number.isFinite(faction.x) || !Number.isFinite(faction.y)) throw new Error("Invalid or repeated faction in map.");
     ids.add(faction.id); names.add(faction.name);
   }
-  const avatarFiles = new Set((await fs.readdir(path.join(root, "assets/gameplay/avatars")))
-    .filter(name => /^[a-z][a-z0-9_]*\.webp$/.test(name)).map(name => name.slice(0, -5)));
+  const avatarFiles = new Set(await listAvatarIds());
   const result = loadCampaignRuntime().validate(definition, roster, {
     hasText: key => hasText(key, definition),
     hasAvatar: avatar => avatarFiles.has(avatar),
@@ -154,8 +178,7 @@ async function validateEntityCatalog(value) {
   if (!value || value.version !== 1 || !Array.isArray(value.entities) || value.entities.length > 10000) throw new Error("Invalid entity catalog.");
   const ids = new Set();
   const names = new Set();
-  const avatarFiles = new Set((await fs.readdir(path.join(root, "assets/gameplay/avatars")))
-    .filter(name => /^[a-z][a-z0-9_]*\.webp$/.test(name)).map(name => name.slice(0, -5)));
+  const avatarFiles = new Set(await listAvatarIds());
   const kinds = new Set(["tribe", "city_state", "kingdom", "empire", "country", "state_region"]);
   const eras = new Set(["unspecified", "ancient", "classical", "medieval", "early_modern", "modern"]);
   const regions = new Set(["unassigned", "europe", "africa", "asia", "americas", "oceania"]);
@@ -411,9 +434,7 @@ async function handle(req, res) {
     return;
   }
   if (req.method === "GET" && url.pathname === "/__avatars") {
-    const avatars = (await fs.readdir(path.join(root, "assets/gameplay/avatars")))
-      .filter(name => /^[a-z][a-z0-9_]*\.webp$/.test(name))
-      .map(name => name.slice(0, -5)).sort();
+    const avatars = await listAvatarIds();
     reply(res, 200, JSON.stringify(avatars), "application/json; charset=utf-8");
     return;
   }

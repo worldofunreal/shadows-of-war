@@ -1862,6 +1862,8 @@ async fn main() {
         )
         .route("/internal/match-progress", post(match_exit::handle_progress)
             .layer(DefaultBodyLimit::max(sow_data::MAX_MATCH_CHUNK_BYTES * 5)))
+        .route("/internal/match-turns", post(match_exit::handle_relay_progress)
+            .layer(DefaultBodyLimit::max(sow_data::MAX_MATCH_CHUNK_BYTES * 5)))
         .route("/internal/match-finalize", post(handle_match_finalize))
         .route("/internal/save", post(handle_direct_save))
         .route("/internal/stats", get(handle_internal_stats))

@@ -1,267 +1,294 @@
-//! Bounded delivery of the existing durable journal, outside the game tick.
+//! Forward opaque turn batches to the durable server-side recorder.
 use super::*;
-use sow_data::profile::{MatchProgress, ProgressClosure};
-use tokio::io::AsyncReadExt;
+use sow_data::profile::{ProgressClosure, RelayMatchProgress};
 
-static DELIVERY: tokio::sync::Notify = tokio::sync::Notify::const_new();
+enum Command {
+    Append(Turn),
+    Flush {
+        closures: Vec<ProgressClosure>,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
+    Finish {
+        closures: Vec<ProgressClosure>,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
+}
 
-fn decode_batch(bytes:&[u8]) -> Result<(MatchProgress,bool),String> {
-    match bincode::deserialize(bytes) {
-        Ok(batch) => Ok((batch,true)),
-        Err(binary_error) => match serde_json::from_slice(bytes) {
-            Ok(batch) => Ok((batch,false)),
-            Err(json_error) => Err(format!("invalid journal chunk (binary: {binary_error}; JSON: {json_error})")),
-        },
+pub(super) struct Forwarder {
+    live: Arc<StdMutex<VecDeque<Turn>>>,
+    tx: mpsc::Sender<Command>,
+    failed: Arc<AtomicBool>,
+}
+
+impl Forwarder {
+    pub fn new(match_id: u64) -> Arc<Self> {
+        let (tx, rx) = mpsc::channel(REPLAY_QUEUE_CAP);
+        let failed = Arc::new(AtomicBool::new(false));
+        tokio::spawn(run(match_id.to_string(), rx, failed.clone()));
+        Arc::new(Self {
+            live: Arc::new(StdMutex::new(VecDeque::with_capacity(LIVE_HISTORY_CAP))),
+            tx,
+            failed,
+        })
+    }
+
+    pub fn append(&self, turn: Turn) -> Result<(), String> {
+        {
+            let mut live = self.live.lock().map_err(|_| "live turn history lock failed")?;
+            live.push_back(turn.clone());
+            while live.len() > LIVE_HISTORY_CAP {
+                live.pop_front();
+            }
+        }
+        if self.failed.load(Ordering::Acquire) {
+            return Err("server turn recording has failed".into());
+        }
+        match self.tx.try_send(Command::Append(turn)) {
+            Ok(()) => Ok(()),
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                self.failed.store(true, Ordering::Release);
+                Err("server forwarding queue is full".into())
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                self.failed.store(true, Ordering::Release);
+                Err("server forwarding task stopped".into())
+            }
+        }
+    }
+
+    pub fn snapshot(&self) -> Result<Vec<Turn>, String> {
+        self.live
+            .lock()
+            .map(|turns| turns.iter().cloned().collect())
+            .map_err(|_| "live turn history lock failed".into())
+    }
+
+    pub async fn flush(&self, closures: Vec<ProgressClosure>) -> Result<(), String> {
+        let (reply, response) = oneshot::channel();
+        self.tx
+            .send(Command::Flush { closures, reply })
+            .await
+            .map_err(|_| "server forwarding task stopped".to_string())?;
+        response
+            .await
+            .map_err(|_| "server forwarding acknowledgment lost".to_string())?
+    }
+
+    pub async fn finish(&self, closures: Vec<ProgressClosure>) -> Result<(), String> {
+        let (reply, response) = oneshot::channel();
+        self.tx
+            .send(Command::Finish { closures, reply })
+            .await
+            .map_err(|_| "server forwarding task stopped".to_string())?;
+        response
+            .await
+            .map_err(|_| "server forwarding acknowledgment lost".to_string())?
     }
 }
 
-pub(super) struct Stream {
-    id: String,
+struct Stream {
+    match_id: String,
     sequence: u64,
     first_turn: u64,
-    previous: String,
     turns: Vec<Turn>,
-    pub bytes: usize,
+    bytes: usize,
+    failed: bool,
 }
 
 impl Stream {
-    pub fn new(id:String) -> Self {
-        Self { id, sequence:0, first_turn:0, previous:String::new(), turns:Vec::new(), bytes:8 }
+    fn new(match_id: String) -> Self {
+        Self {
+            match_id,
+            sequence: 0,
+            first_turn: 0,
+            turns: Vec::new(),
+            bytes: 8,
+            failed: false,
+        }
     }
-    pub fn append(&mut self, turn:Turn, bytes:usize) {
-        self.bytes += bytes;
+
+    fn append(&mut self, turn: Turn) -> Result<bool, String> {
+        let turn_bytes = bincode::serialized_size(&turn).map_err(|error| error.to_string())? as usize;
+        if turn_bytes + 8 > sow_data::MAX_MATCH_CHUNK_BYTES {
+            return Err("one turn exceeds the server batch limit".into());
+        }
+        if self.bytes + turn_bytes > sow_data::MAX_MATCH_CHUNK_BYTES {
+            return Err("turn batch exceeded the server limit before flush".into());
+        }
+        self.bytes += turn_bytes;
         self.turns.push(turn);
+        Ok(self.bytes >= sow_data::MAX_MATCH_CHUNK_BYTES / 2)
     }
-    pub async fn seal(&mut self, file:&mut tokio::fs::File, journal:&Path, metadata:&ReplaySpoolMetadata, finished:bool) -> Result<(),String> {
-        if self.turns.is_empty() && !finished { return Ok(()); }
-        if self.bytes > sow_data::MAX_MATCH_CHUNK_BYTES { return Err("one turn exceeds the journal delivery limit".into()); }
-        file.flush().await.map_err(|e|e.to_string())?;
-        file.sync_all().await.map_err(|e|e.to_string())?;
+
+    async fn seal(
+        &mut self,
+        closures: &[ProgressClosure],
+        finished: bool,
+        failed: bool,
+    ) -> Result<(), String> {
+        if failed || self.failed {
+            return self.reject(closures, finished).await;
+        }
+        if self.turns.is_empty() && !finished {
+            return Ok(());
+        }
+        let replay_data = bincode::serialize(&self.turns).map_err(|error| error.to_string())?;
+        if replay_data.len() > sow_data::MAX_MATCH_CHUNK_BYTES {
+            return Err("turn batch exceeded the server limit after encoding".into());
+        }
         let count = self.turns.len() as u64;
-        let mut batch = MatchProgress { match_id:self.id.clone(),sequence:self.sequence,first_turn:self.first_turn,
-            previous_sha256:self.previous.clone(),sha256:String::new(),replay_data:bincode::serialize(&self.turns).map_err(|e|e.to_string())?,
-            participant_closures:metadata.participant_closures.iter().filter(|c| c.turn_number < self.first_turn+count).map(|c| ProgressClosure {
-                account_id:c.account_id.clone(), turn_number:c.turn_number,
-                reason:serde_json::to_value(c.reason).unwrap().as_str().unwrap().to_string() }).collect(), finished };
-        batch.sha256 = hex::encode(Sha256::digest(batch.signing_bytes().map_err(|e|e.to_string())?));
-        let path = journal.with_file_name(format!("{}.progress.{:010}.bin",self.id,self.sequence));
-        let _claim = claim_result(path.clone()).await?;
-        let temporary = path.with_extension("bin.tmp");
-        let mut output = tokio::fs::File::create(&temporary).await.map_err(|e|e.to_string())?;
-        output.write_all(&bincode::serialize(&batch).map_err(|e|e.to_string())?).await.map_err(|e|e.to_string())?;
-        output.sync_all().await.map_err(|e|e.to_string())?;
-        drop(output);
-        tokio::fs::rename(temporary,&path).await.map_err(|e|e.to_string())?;
-        std::fs::File::open(path.parent().unwrap()).and_then(|d|d.sync_all()).map_err(|e|e.to_string())?;
-        self.previous = batch.sha256;
+        let end_turn = self.first_turn.saturating_add(count);
+        if closures.iter().any(|closure| closure.turn_number >= end_turn && closure.turn_number >= self.first_turn) {
+            return Err("exit closure is newer than the forwarded turns".into());
+        }
+        let batch = RelayMatchProgress {
+            match_id: self.match_id.clone(),
+            sequence: self.sequence,
+            first_turn: self.first_turn,
+            replay_data,
+            participant_closures: closures
+                .iter()
+                .filter(|closure| closure.turn_number < end_turn)
+                .cloned()
+                .collect(),
+            finished,
+            recording_failed: false,
+        };
+        let ack = deliver_until_accepted(&batch).await?;
+        if ack.get("match_id").and_then(Value::as_str) != Some(self.match_id.as_str())
+            || ack.get("sequence").and_then(Value::as_u64) != Some(self.sequence)
+            || ack.get("sha256").and_then(Value::as_str).is_none()
+        {
+            self.failed = true;
+            return self.reject(closures, finished).await;
+        }
         self.sequence += 1;
-        self.first_turn += count;
+        self.first_turn = end_turn;
         self.turns.clear();
         self.bytes = 8;
-        DELIVERY.notify_one();
+        Ok(())
+    }
+
+    async fn reject(&mut self, closures: &[ProgressClosure], finished: bool) -> Result<(), String> {
+        self.failed = true;
+        let batch = RelayMatchProgress {
+            match_id: self.match_id.clone(),
+            sequence: self.sequence,
+            first_turn: self.first_turn,
+            replay_data: Vec::new(),
+            participant_closures: closures.to_vec(),
+            finished,
+            recording_failed: true,
+        };
+        let ack = deliver_until_accepted(&batch).await?;
+        if ack.get("match_id").and_then(Value::as_str) != Some(self.match_id.as_str())
+            || ack.get("sequence").and_then(Value::as_u64) != Some(self.sequence)
+            || ack.get("recording_failed").and_then(Value::as_bool) != Some(true)
+        {
+            return Err("server did not acknowledge failed recording".into());
+        }
+        self.turns.clear();
+        self.bytes = 8;
         Ok(())
     }
 }
 
-async fn files() -> Result<Vec<PathBuf>,String> {
-    let mut entries = match tokio::fs::read_dir(replay_spool_dir()).await {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(e.to_string()),
-    };
-    let mut paths = Vec::new();
-    while let Some(entry) = entries.next_entry().await.map_err(|e|e.to_string())? {
-        let path = entry.path();
-        if path.file_name().is_some_and(|n| n.to_string_lossy().contains(".progress."))
-            && matches!(path.extension().and_then(|e|e.to_str()),Some("bin" | "json" | "acked")) { paths.push(path); }
-    }
-    paths.sort();
-    Ok(paths)
-}
-
-async fn deliver(path:&Path) -> Result<(),String> {
-    let _claim = claim_result(path.to_path_buf()).await?;
-    let bytes = match tokio::fs::read(path).await {
-        Ok(bytes) => bytes,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e.to_string()),
-    };
-    let (batch,binary) = decode_batch(&bytes)?;
-    let db = configured_db_url()?;
-    let secret = std::env::var("SOW_RELAY_SETTLEMENT_SECRET").map_err(|e|e.to_string())?;
-    let started = Instant::now();
-    let response = db_client(&db)?.post(format!("{}/internal/match-progress",db.trim_end_matches('/')))
-        .bearer_auth(secret).header("Content-Type",if binary { "application/octet-stream" } else { "application/json" }).body(bytes).send().await.map_err(|e|e.to_string())?;
-    if !response.status().is_success() { return Err(format!("journal delivery HTTP {}: {}",response.status(),response.text().await.map_err(|e|e.to_string())?)); }
-    let ack: serde_json::Value = response.json().await.map_err(|e|e.to_string())?;
-    if ack.get("match_id").and_then(|v|v.as_str()) != Some(batch.match_id.as_str())
-        || ack.get("sequence").and_then(|v|v.as_u64()) != Some(batch.sequence)
-        || ack.get("sha256").and_then(|v|v.as_str()) != Some(batch.sha256.as_str()) {
-        return Err("journal acknowledgment identity mismatch".into());
-    }
-    tokio::fs::rename(path,path.with_extension("acked")).await.map_err(|e|e.to_string())?;
-    std::fs::File::open(path.parent().unwrap()).and_then(|d|d.sync_all()).map_err(|e|e.to_string())?;
-    info!("[exit-timing] journal delivered match={} sequence={} first_turn={} delivery_ms={}",batch.match_id,batch.sequence,batch.first_turn,started.elapsed().as_millis());
-    Ok(())
-}
-
-async fn deliver_match(id:&str) -> Result<(),String> {
-    let prefix = format!("{id}.progress.");
-    for path in files().await? {
-        if path.file_name().unwrap().to_string_lossy().starts_with(&prefix)
-            && matches!(path.extension().and_then(|e|e.to_str()),Some("bin" | "json")) { deliver(&path).await?; }
-    }
-    Ok(())
-}
-
-pub(super) async fn finish_delivery(replay:&Path) -> Result<(),String> {
-    let id = replay.file_stem().unwrap().to_string_lossy().to_string();
-    let complete = replay.with_extension("progress.complete");
-    if !tokio::fs::try_exists(&complete).await.map_err(|e|e.to_string())? {
-        deliver_match(&id).await?;
-        let prefix = format!("{id}.progress.");
-        let mut segments = files().await?.into_iter().filter(|path| {
-            path.file_name().unwrap().to_string_lossy().starts_with(&prefix)
-                && path.extension().and_then(|e|e.to_str()) == Some("acked")
-        }).collect::<Vec<_>>();
-        segments.sort();
-        let mut first_turn = 0u64;
-        let mut previous = String::new();
-        let mut finished = false;
-        for (sequence, path) in segments.iter().enumerate() {
-            let suffix = path.file_name().unwrap().to_string_lossy().strip_prefix(&prefix).ok_or("invalid journal filename")?.to_string();
-            let saved_sequence = suffix.strip_suffix(".acked").ok_or("unacknowledged journal chunk remains")?.parse::<usize>().map_err(|e|e.to_string())?;
-            if saved_sequence != sequence || finished { return Err("durable journal has a missing or trailing chunk".into()); }
-            let (batch,_) = decode_batch(&tokio::fs::read(path).await.map_err(|e|e.to_string())?)?;
-            if batch.match_id != id || batch.sequence != sequence as u64 || batch.first_turn != first_turn
-                || batch.previous_sha256 != previous || batch.replay_data.len() < 8
-                || hex::encode(Sha256::digest(batch.signing_bytes().map_err(|e|e.to_string())?)) != batch.sha256 {
-                return Err("durable journal sequence or checksum is invalid".into());
+async fn deliver_until_accepted(batch: &RelayMatchProgress) -> Result<Value, String> {
+    let db_url = configured_db_url()?;
+    let secret = std::env::var("SOW_RELAY_SETTLEMENT_SECRET")
+        .map_err(|error| error.to_string())?;
+    let url = format!("{}/internal/match-turns", db_url.trim_end_matches('/'));
+    let body = bincode::serialize(batch).map_err(|error| error.to_string())?;
+    let client = db_client(&db_url)?;
+    let mut attempt = 0u64;
+    loop {
+        attempt += 1;
+        match client
+            .post(&url)
+            .bearer_auth(&secret)
+            .header("Content-Type", "application/octet-stream")
+            .body(body.clone())
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => {
+                return response.json().await.map_err(|error| error.to_string());
             }
-            first_turn += u64::from_le_bytes(batch.replay_data[..8].try_into().unwrap());
-            previous = batch.sha256;
-            finished = batch.finished;
+            Ok(response) if response.status().is_client_error() && response.status().as_u16() != 429 => {
+                let status = response.status();
+                let reason = response.text().await.unwrap_or_default();
+                return Err(format!("server rejected match {} sequence {}: HTTP {status}: {reason}", batch.match_id, batch.sequence));
+            }
+            Ok(response) => {
+                if attempt == 1 || attempt % 10 == 0 {
+                    warn!("[rewards] server turn delivery pending match={} sequence={} http={} attempt={attempt}",
+                        batch.match_id, batch.sequence, response.status());
+                }
+            }
+            Err(error) => {
+                if attempt == 1 || attempt % 10 == 0 {
+                    warn!("[rewards] server turn delivery pending match={} sequence={} error={error} attempt={attempt}",
+                        batch.match_id, batch.sequence);
+                }
+            }
         }
-        if segments.is_empty() || !finished { return Err("durable journal has no acknowledged final chunk".into()); }
-        let temporary = complete.with_extension("complete.tmp");
-        let mut file = tokio::fs::File::create(&temporary).await.map_err(|e|e.to_string())?;
-        file.write_all(previous.as_bytes()).await.map_err(|e|e.to_string())?;
-        file.sync_all().await.map_err(|e|e.to_string())?;
-        drop(file);
-        tokio::fs::rename(temporary,&complete).await.map_err(|e|e.to_string())?;
-        std::fs::File::open(complete.parent().unwrap()).and_then(|directory|directory.sync_all()).map_err(|e|e.to_string())?;
+        tokio::time::sleep(Duration::from_secs(1)).await;
     }
-    let prefix = format!("{id}.progress.");
-    for path in files().await? {
-        if path.file_name().unwrap().to_string_lossy().starts_with(&prefix) {
-            tokio::fs::remove_file(path).await.map_err(|e|e.to_string())?;
-        }
-    }
-    cleanup_result_spool(replay,&replay.with_extension("json")).await?;
-    tokio::fs::remove_file(&complete).await.map_err(|e|e.to_string())?;
-    std::fs::File::open(complete.parent().unwrap()).and_then(|directory|directory.sync_all()).map_err(|e|e.to_string())?;
-    Ok(())
 }
 
-pub(super) async fn delivery_worker() {
-    let mut timer = interval(Duration::from_secs(1));
-    let mut running = HashSet::new();
-    let mut tasks = tokio::task::JoinSet::new();
+async fn run(match_id: String, mut rx: mpsc::Receiver<Command>, failed: Arc<AtomicBool>) {
+    let mut stream = Stream::new(match_id);
+    let mut closures = Vec::new();
+    let mut flush = interval(Duration::from_secs(sow_data::MATCH_PROGRESS_INTERVAL_SECONDS));
+    flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
-            _ = timer.tick() => {},
-            _ = DELIVERY.notified() => {},
-            Some(result) = tasks.join_next() => match result {
-                Ok((id,result)) => { running.remove(&id); if let Err(error) = result { warn!("journal delivery pending match={id}: {error}"); } },
-                Err(error) => error!("journal delivery task failed: {error}"),
-            },
-        }
-        let paths = match files().await { Ok(paths)=>paths,Err(error)=>{ warn!("journal delivery scan: {error}"); continue; } };
-        for path in paths {
-            if !matches!(path.extension().and_then(|e|e.to_str()),Some("bin" | "json")) { continue; }
-            let id = path.file_name().unwrap().to_string_lossy().split('.').next().unwrap().to_string();
-            if running.len() >= 8 || !running.insert(id.clone()) { continue; }
-            tasks.spawn(async move { let result = deliver_match(&id).await; (id,result) });
-        }
-    }
-}
-
-pub(super) async fn recover(journal:&Path, metadata:&mut ReplaySpoolMetadata) -> Result<bool,String> {
-    let id = journal.file_stem().unwrap().to_string_lossy().to_string();
-    let prefix = format!("{id}.progress.");
-    let latest = files().await?.into_iter().filter(|p|p.file_name().unwrap().to_string_lossy().starts_with(&prefix)).last();
-    let mut stream = Stream::new(id.clone());
-    let mut already_finished = false;
-    if let Some(path) = latest {
-        let (saved,_) = decode_batch(&tokio::fs::read(path).await.map_err(|e|e.to_string())?)?;
-        if saved.replay_data.len() < 8 { return Err("saved journal chunk is incomplete".into()); }
-        stream.sequence = saved.sequence + 1;
-        stream.first_turn = saved.first_turn + u64::from_le_bytes(saved.replay_data[..8].try_into().unwrap());
-        stream.previous = saved.sha256;
-        already_finished = saved.finished;
-    }
-    if !tokio::fs::try_exists(journal).await.map_err(|e|e.to_string())? {
-        if already_finished {
-            // The final chunk is the durable proof. A crash may occur after
-            // the journal rename but before the metadata phase is updated.
-            metadata.phase = ReplayPhase::StreamFinalized;
-            persist_replay_metadata(&journal.with_extension("json"),metadata).await?;
-            return Ok(true);
-        }
-        return Err("streaming match has no journal or final chunk".into());
-    }
-    let mut input = tokio::fs::File::open(journal).await.map_err(|e|e.to_string())?;
-    let mut output = tokio::fs::OpenOptions::new().append(true).open(journal).await.map_err(|e|e.to_string())?;
-    let mut next = 0;
-    let mut valid_bytes = 0u64;
-    let mut resigned = HashSet::new();
-    if !already_finished {
-        loop {
-            let mut length = [0;4];
-            match input.read_exact(&mut length).await {
-                Ok(_) => {},
-                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
-                Err(e) => return Err(e.to_string()),
+            command = rx.recv() => {
+                let Some(command) = command else { break; };
+                match command {
+                    Command::Append(turn) => {
+                        if failed.load(Ordering::Acquire) { stream.failed = true; }
+                        if stream.failed { continue; }
+                        match stream.append(turn) {
+                            Ok(true) => if let Err(error) = stream.seal(&closures, false, false).await {
+                                stream.failed = true;
+                                error!("[rewards] server turn delivery failed match={}: {error}", stream.match_id);
+                                if let Err(failure) = stream.reject(&closures, false).await {
+                                    error!("[rewards] failed recording remains unacknowledged match={}: {failure}", stream.match_id);
+                                }
+                            },
+                            Ok(false) => {},
+                            Err(error) => {
+                                stream.failed = true;
+                                error!("[rewards] server turn batch failed match={}: {error}", stream.match_id);
+                                if let Err(failure) = stream.reject(&closures, false).await {
+                                    error!("[rewards] failed recording remains unacknowledged match={}: {failure}", stream.match_id);
+                                }
+                            }
+                        }
+                    }
+                    Command::Flush { closures: latest, reply } => {
+                        closures = latest;
+                        let result = stream.seal(&closures, false, failed.load(Ordering::Acquire)).await;
+                        let _ = reply.send(result);
+                    }
+                    Command::Finish { closures: latest, reply } => {
+                        closures = latest;
+                        let result = stream.seal(&closures, true, failed.load(Ordering::Acquire)).await;
+                        let _ = reply.send(result);
+                        break;
+                    }
+                }
             }
-            let length = u32::from_le_bytes(length) as usize;
-            if length > sow_data::MAX_MATCH_CHUNK_BYTES { return Err("recovery journal turn exceeds limit".into()); }
-            let mut bytes = vec![0;length];
-            match input.read_exact(&mut bytes).await {
-                Ok(_) => {},
-                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
-                Err(e) => return Err(e.to_string()),
-            }
-            let turn: Turn = bincode::deserialize(&bytes).map_err(|e|e.to_string())?;
-            if turn.turn_number != next { return Err("recovery journal sequence mismatch".into()); }
-            next += 1;
-            valid_bytes += 4 + length as u64;
-            for intent in &turn.intents { if matches!(intent.intent,GameplayIntent::Resign) { resigned.insert(intent.player_id); } }
-            if turn.turn_number >= stream.first_turn {
-                if stream.bytes + bytes.len() > sow_data::MAX_MATCH_CHUNK_BYTES { stream.seal(&mut output,journal,metadata,false).await?; }
-                stream.append(turn,bytes.len());
+            _ = flush.tick() => {
+                if let Err(error) = stream.seal(&closures, false, failed.load(Ordering::Acquire)).await {
+                    stream.failed = true;
+                    error!("[rewards] periodic server turn delivery failed match={}: {error}", stream.match_id);
+                    if let Err(failure) = stream.reject(&closures, false).await {
+                        error!("[rewards] failed recording remains unacknowledged match={}: {failure}", stream.match_id);
+                    }
+                }
             }
         }
-        output.set_len(valid_bytes).await.map_err(|e|e.to_string())?;
-        let roster: RegisterBody = serde_json::from_str(&metadata.lobby_json).map_err(|e|e.to_string())?;
-        let mut intents = Vec::new();
-        for player in roster.players.iter().filter(|p|!p.is_internal) {
-            if resigned.contains(&player.player_id) || player.database_account_id.as_ref().is_some_and(|a|metadata.participant_closures.iter().any(|c| &c.account_id == a)) { continue; }
-            intents.push(StampedIntent { player_id:player.player_id,intent:GameplayIntent::Resign });
-            if let Some(account) = &player.database_account_id {
-                metadata.participant_closures.push(ParticipantClosure { account_id:account.clone(),turn_number:next,reason:ExitReason::MatchEnded });
-            }
-        }
-        if !intents.is_empty() {
-            let turn = Turn { turn_number:next,intents };
-            let bytes = bincode::serialize(&turn).map_err(|e|e.to_string())?;
-            output.write_all(&(bytes.len() as u32).to_le_bytes()).await.map_err(|e|e.to_string())?;
-            output.write_all(&bytes).await.map_err(|e|e.to_string())?;
-            stream.append(turn,bytes.len());
-        }
-        stream.seal(&mut output,journal,metadata,true).await?;
     }
-    metadata.phase = ReplayPhase::StreamFinalized;
-    tokio::fs::rename(journal,journal.with_extension("replay")).await.map_err(|e|e.to_string())?;
-    persist_replay_metadata(&journal.with_extension("json"),metadata).await?;
-    Ok(true)
 }

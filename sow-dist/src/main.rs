@@ -182,7 +182,7 @@ const ART_ICONS: [(&str, &str, &str, u32); 14] = [
         "gameplay/icons/surrender_flag.webp",
         256,
     ),
-    ("icons", "nav-battle", "shell/mobile-nav/battle.webp", 128),
+    ("icons", "troops", "shell/mobile-nav/battle.webp", 128),
     ("icons", "nav-heroes", "shell/mobile-nav/heroes.webp", 128),
     ("icons", "nav-profile", "shell/mobile-nav/profile.webp", 128),
     ("icons", "nav-store", "shell/mobile-nav/store.webp", 128),
@@ -297,6 +297,16 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
         }
     }
     let mut known_icons = std::collections::BTreeSet::new();
+    // Badge icons are packed by sow-tools into badges-atlas, not published one by one.
+    let badges: serde_json::Value =
+        serde_json::from_slice(&fs::read(generated.join("badges-atlas.json"))?)?;
+    for cell in badges["cells"].as_array().into_iter().flatten() {
+        let stem = cell.as_str().unwrap_or_default();
+        known_icons.insert(
+            source_named(&art.join("icons"), stem)
+                .with_context(|| format!("missing art: assets/art/icons/{stem}.png"))?,
+        );
+    }
     for (dir, stem, rel, max) in ART_ICONS {
         let src = source_named(&art.join(dir), stem)
             .with_context(|| format!("missing art: assets/art/{dir}/{stem}.png"))?;
@@ -1764,7 +1774,11 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
         {
             bail!("public page {relative} must select its locale in the head");
         }
-        let prefix = if relative == "index.html" { "./" } else { "../" };
+        let prefix = if relative == "index.html" {
+            "./"
+        } else {
+            "../"
+        };
         let locale_bootstrap = format!(
             "<script data-cfasync=\"false\">window.SOW_LOCALE_BEFORE_PAINT = true; window.SOW_LOCALE_CATALOG_VERSION = {}; window.SOW_LOCALE_CODES = {locale_codes}; window.SOW_ASSET_TS = {locale_versions};</script>\n  <script data-cfasync=\"false\" src=\"{prefix}sow-i18n.js\"></script>",
             sow_i18n::WEB_CATALOG_VERSION,
@@ -2777,7 +2791,9 @@ fn verify_layout(dir: &Path) -> Result<()> {
     }
     for relative in PUBLIC_SITE_PAGES {
         let html = fs::read_to_string(dir.join(relative))?;
-        let (head, _) = html.split_once("</head>").context("public page has no head")?;
+        let (head, _) = html
+            .split_once("</head>")
+            .context("public page has no head")?;
         if !head.contains("window.SOW_LOCALE_BEFORE_PAINT = true")
             || !head.contains("window.SOW_LOCALE_CODES = [")
             || !head.contains("data-cfasync=\"false\" src=\"")
@@ -4250,7 +4266,7 @@ fn local_file_requires_wasm(paths: &Paths, path: &Path) -> bool {
         return path.extension().and_then(|extension| extension.to_str()) == Some("wgsl");
     }
     if path.starts_with(paths.root.join("assets/art/buildings"))
-        || path.starts_with(paths.root.join("assets/art/badges"))
+        || path.starts_with(paths.root.join("assets/art/icons"))
         || path.starts_with(paths.root.join("assets/art/units"))
     {
         return true;
