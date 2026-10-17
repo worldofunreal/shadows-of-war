@@ -81,7 +81,6 @@ function renderLeaderPurchase() { return ""; }
 function loadStoreCatalog() {}
 function beginStorePurchase() {}
 function beginStoreRestore() {}
-function closeStoreCheckout() {}
 
 document.addEventListener("click", function (event) {
     var target = event.target && event.target.closest ? event.target.closest("[data-command='jest_login']") : null;

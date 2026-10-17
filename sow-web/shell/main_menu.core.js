@@ -52,15 +52,10 @@
     var createPassword = "";
     var passwordLobbyId = null;
     var passwordDraft = "";
-    var storeCheckoutProduct = null;
     var storeCheckoutRequestId = null;
     var storeCheckoutBusy = false;
-    var storeCheckoutInstance = null;
     var purchaseModal = null;
     var purchaseIntent = null;
-    /* POKI_STRIPE_STATE_BEGIN */
-    var stripePromise = null;
-    /* POKI_STRIPE_STATE_END */
     var storeCatalogLoading = false;
     var storeCatalogLoaded = false;
     var storeCatalogRetryAt = 0;
@@ -255,6 +250,12 @@
         return (state && state.lobbies || []).find(function (lobby) { return lobby.id === id; }) || null;
     }
 
+    // Email and social login are offered only on the owned site and Android;
+    // Poki, Jest and CrazyGames supply their own account system.
+    function portalOffersSignIn() {
+        return ["poki", "jest", "crazygames"].indexOf(window.SOW_PORTAL) === -1;
+    }
+
     function currentScreen() {
         if (!state) return "boot";
         if (profileOpen) return "profile";
@@ -361,7 +362,7 @@
                 }),
                 gem_bundles: (state.store.gem_bundles || []).map(function (bundle) {
                     return [bundle.id, bundle.product_id, bundle.gems, bundle.asset_path,
-                        bundle.price_label, bundle.bonus_percent];
+                        bundle.bonus_percent];
                 })
             },
             account_id: state.account_id,

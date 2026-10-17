@@ -33,6 +33,16 @@ async fn join(
     target: Option<u64>,
     version: &str,
 ) -> (Writer, Reader, sow_core::protocol::ServerJoinAckMessage) {
+    join_with_win_threshold(url, account, target, version, None).await
+}
+
+async fn join_with_win_threshold(
+    url: &Url,
+    account: &Value,
+    target: Option<u64>,
+    version: &str,
+    win_threshold: Option<f32>,
+) -> (Writer, Reader, sow_core::protocol::ServerJoinAckMessage) {
     let (socket, _) = tokio_tungstenite::connect_async(url.as_str())
         .await
         .unwrap();
@@ -40,7 +50,10 @@ async fn join(
     let mut config = sow_core::game_config::GameConfig::default();
     config.map_name = "world".into();
     config.bot_count = 0;
-    config.nation_count = 2;
+    config.nation_count = if win_threshold.is_some() { 0 } else { 2 };
+    if let Some(threshold) = win_threshold {
+        config.map_control_win_percentage = threshold;
+    }
     let command = ClientMessage::JoinWithAuth {
         join: Box::new(sow_core::protocol::JoinPayload {
             name: account["display_name"].as_str().unwrap().into(),
@@ -90,6 +103,24 @@ async fn started(read: &mut Reader) -> (sow_core::protocol::ServerStartMessage, 
             _ => {}
         }
     }
+}
+
+async fn natural_finish(read: &mut Reader, match_id: u64) {
+    tokio::time::timeout(std::time::Duration::from_secs(90), async {
+        loop {
+            match recv(read, 90).await {
+                ServerMessage::MatchFinished {
+                    match_id: finished, ..
+                } if finished == match_id => return,
+                ServerMessage::Turn(_) | ServerMessage::Pong { .. } => {}
+                message => fail(&format!(
+                    "match ended unexpectedly while waiting for automatic settlement: {message:?}"
+                )),
+            }
+        }
+    })
+    .await
+    .unwrap_or_else(|_| fail("natural finish was not delivered within 90 seconds"));
 }
 
 async fn ready_relay(url: &Url, message: ClientMessage) -> (Writer, Reader, String) {
@@ -629,9 +660,138 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         after_closure["profile"]["reward_receipts"][&receipt]["personal_closure_turn"],
         settled_first["profile"]["reward_receipts"][&receipt]["personal_closure_turn"]
     );
+    drop(first_write);
+    drop(first_read);
+    drop(second_write);
+    drop(second_read);
+    drop(third_write);
+    drop(third_read);
+
+    // A zero map-control threshold makes the server simulation finish the
+    // match on its first turn. No client result hint or exit is sent.
+    let (mut finish_host_write, mut finish_host_read, finish_host_join) =
+        join_with_win_threshold(url, &first, None, version.trim(), Some(0.0)).await;
+    let finish_match_id = finish_host_join.lobby_id;
+    let (mut finish_second_write, mut finish_second_read, finish_second_join) =
+        join(url, &second, Some(finish_match_id), version.trim()).await;
+    let (mut finish_third_write, mut finish_third_read, finish_third_join) =
+        join(url, &third, Some(finish_match_id), version.trim()).await;
+    for (write, id) in [
+        (&mut finish_host_write, finish_host_join.player_id),
+        (&mut finish_second_write, finish_second_join.player_id),
+        (&mut finish_third_write, finish_third_join.player_id),
+    ] {
+        ws_send(
+            write,
+            &ClientMessage::MapDownloadProgress {
+                lobby_id: finish_match_id,
+                player_id: id,
+                progress: 100,
+            },
+        )
+        .await;
+        ws_send(
+            write,
+            &ClientMessage::LobbyReady {
+                lobby_id: finish_match_id,
+                player_id: id,
+            },
+        )
+        .await;
+    }
+    ws_send(
+        &mut finish_host_write,
+        &ClientMessage::ForceStart {
+            lobby_id: finish_match_id,
+            player_id: finish_host_join.player_id,
+        },
+    )
+    .await;
+    let (finish_start, finish_host_ticket) = started(&mut finish_host_read).await;
+    let (_, finish_second_ticket) = started(&mut finish_second_read).await;
+    let (_, finish_third_ticket) = started(&mut finish_third_read).await;
+    let finish_relay_url = direct_relay_url(
+        url,
+        finish_start.relay_host.as_deref().unwrap(),
+        finish_start.relay_port.unwrap(),
+    )
+    .unwrap();
+    let (mut finish_host_relay, mut finish_host_game, _) = ready_relay(
+        &finish_relay_url,
+        ClientMessage::ReadyWithTicket {
+            lobby_id: finish_match_id,
+            player_id: finish_start.my_player_id.unwrap(),
+            ticket: finish_host_ticket,
+        },
+    )
+    .await;
+    let (mut finish_second_relay, mut finish_second_game, _) = ready_relay(
+        &finish_relay_url,
+        ClientMessage::ReadyWithTicket {
+            lobby_id: finish_match_id,
+            player_id: finish_second_join.player_id,
+            ticket: finish_second_ticket,
+        },
+    )
+    .await;
+    let (mut finish_third_relay, mut finish_third_game, _) = ready_relay(
+        &finish_relay_url,
+        ClientMessage::ReadyWithTicket {
+            lobby_id: finish_match_id,
+            player_id: finish_third_join.player_id,
+            ticket: finish_third_ticket,
+        },
+    )
+    .await;
+    let host = finish_start
+        .players
+        .iter()
+        .find(|player| Some(player.id) == finish_start.my_player_id)
+        .expect("natural finish host must be in the registered start roster");
+    ws_send(
+        &mut finish_host_relay,
+        &ClientMessage::Gameplay {
+            intent: sow_core::protocol::GameplayIntent::Spawn {
+                x: host.spawn_x,
+                y: host.spawn_y,
+            },
+        },
+    )
+    .await;
+    tokio::join!(
+        natural_finish(&mut finish_host_game, finish_match_id),
+        natural_finish(&mut finish_second_game, finish_match_id),
+        natural_finish(&mut finish_third_game, finish_match_id),
+    );
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(120);
+    for account in [&first, &second, &third] {
+        loop {
+            let observed = result(&http, base, account, finish_match_id).await;
+            if observed["state"] == "confirmed" {
+                break;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "natural GameOver did not settle without a client exit"
+            );
+        }
+    }
+    for write in [
+        &mut finish_host_relay,
+        &mut finish_second_relay,
+        &mut finish_third_relay,
+    ] {
+        let _ = write.close().await;
+    }
+    drop(finish_host_write);
+    drop(finish_host_read);
+    drop(finish_second_write);
+    drop(finish_second_read);
+    drop(finish_third_write);
+    drop(finish_third_read);
     std::fs::remove_file(fixture_path).unwrap();
     std::fs::remove_file(state_path).unwrap();
     pass(&format!(
-        "real WASM exit, permanent server confirmation, presentation, relay timeout and three-player closure verified for match {match_id}"
+        "real WASM exit, automatic natural finish without a client hint, permanent confirmation, presentation, relay timeout and three-player closure verified for matches {match_id} and {finish_match_id}"
     ));
 }

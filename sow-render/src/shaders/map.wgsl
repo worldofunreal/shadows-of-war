@@ -29,8 +29,6 @@ struct Globals {
     my_player_id: f32,
     // Device pixel ratio while placing a building, 0 otherwise.
     placement_scale: f32,
-    placement_center_x: f32,
-    placement_center_y: f32,
     territory_opacity: f32,
     blend_mode: f32,
     effect_heartbeat: f32,
@@ -668,9 +666,6 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
         base_color = base_color * warm_tint;
     }
 
-    // Hex SDF reused by building-placement grid
-    let min_dist_to_edge = 0.5 - max(abs(local_pos.x), abs(local_pos.y));
-
     // ── Screen Vignetting (Soft shading at screen edges) ──
     if (globals.effect_vignette > 0.0) {
         let d_center = length(in.uv - 0.5);
@@ -701,28 +696,18 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
         base_color = mix(base_color, globals.alert_color.rgb, intensity * globals.alert_color.a);
     }
 
-    // Placement keeps the world's own colors (Supercell edit mode): land you
-    // cannot build on dims a little, a faint grid lights up only around the
-    // preview, and a white line marks where your territory ends.
+    // Placement dims foreign land while keeping the owned-territory edge visible.
     if (globals.placement_scale > 0.0) {
-        let world_pos = vec2<f32>(world_x, world_y);
         let css_zoom = globals.zoom / globals.placement_scale;
-        let readable = smoothstep_safe(4.0, 8.0, css_zoom);
         let own_land = placement_own(cell_hex);
         if (!own_land) {
             base_color = mix(base_color, vec3<f32>(0.025, 0.035, 0.045), 0.3);
-        } else {
-            let center = vec2<f32>(globals.placement_center_x, globals.placement_center_y);
-            let spotlight = 1.0 - smoothstep_safe(6.0, 12.0, length(world_pos - center));
-            let edge_width = max(fwidth(min_dist_to_edge), 0.001);
-            let edge = 1.0 - smoothstep_safe(0.0, edge_width, min_dist_to_edge);
-            base_color = mix(base_color, vec3<f32>(1.0, 1.0, 1.0), edge * readable * spotlight * 0.35);
         }
         let west = placement_own(cell_hex + vec2<i32>(-1, 0));
         let east = placement_own(cell_hex + vec2<i32>(1, 0));
         let north = placement_own(cell_hex + vec2<i32>(0, -1));
         let south = placement_own(cell_hex + vec2<i32>(0, 1));
-        let cell_uv = fract(world_pos);
+        let cell_uv = fract(vec2<f32>(world_x, world_y));
         let border_distance = min(min(select(1.0, cell_uv.x, own_land != west),
             select(1.0, 1.0 - cell_uv.x, own_land != east)),
             min(select(1.0, cell_uv.y, own_land != north), select(1.0, 1.0 - cell_uv.y, own_land != south)));

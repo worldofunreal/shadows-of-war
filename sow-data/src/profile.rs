@@ -309,6 +309,7 @@ pub enum MatchWork {
     },
     Replay { match_id: String },
     Progress { match_id: String, sequence: u64, sha256: String, closing: bool },
+    Archive { match_id: String, sequence: u64, sha256: String },
 }
 
 impl MatchWork {
@@ -316,6 +317,7 @@ impl MatchWork {
         match self {
             Self::RecoveryExit { match_id, .. } | Self::Participant { match_id, .. }
                 | Self::Replay { match_id } | Self::Progress { match_id, .. } => match_id,
+            Self::Archive { match_id, .. } => match_id,
         }
     }
 
@@ -326,6 +328,7 @@ impl MatchWork {
             // Numeric keys preserve the existing durable whole-replay queue.
             Self::Replay { match_id } => match_id.clone(),
             Self::Progress { match_id, sequence, .. } => format!("progress:{match_id}:{sequence:010}"),
+            Self::Archive { match_id, .. } => format!("archive:{match_id}"),
         }
     }
 }

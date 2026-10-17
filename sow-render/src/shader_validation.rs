@@ -62,6 +62,44 @@ fn avatar_sprite_mask_stays_circular_without_an_adjustable_corner_control() {
 }
 
 #[test]
+fn rect_shader_uses_local_quad_coordinates_for_coverage() {
+    let source = include_str!("shaders/text_glow.wgsl");
+    let rect = source
+        .split_once("fn shade_rect(in: VertexOutput) -> vec4<f32> {")
+        .and_then(|(_, body)| body.split_once("\n}\n\nfn shade_rounded_rect"))
+        .map(|(body, _)| body)
+        .expect("rectangle shader body is present");
+    assert!(rect.contains("fwidth(in.local_uv)"));
+    assert!(!rect.contains("in.uv"));
+}
+
+#[test]
+fn placement_map_keeps_territory_signals_without_a_circular_highlight() {
+    let source = include_str!("shaders/map.wgsl");
+    let placement = source
+        .split_once("if (globals.placement_scale > 0.0) {")
+        .and_then(|(_, body)| body.split_once("\n    }\n    return base_color"))
+        .map(|(body, _)| body)
+        .expect("placement map block is present");
+    assert!(placement.contains("if (!own_land)"));
+    assert!(placement.contains("boundary"));
+    assert!(!placement.contains("spotlight"));
+    assert!(!placement.contains("length("));
+}
+
+#[test]
+fn status_sprite_shader_supports_individual_grayscale_tint() {
+    let source = include_str!("shaders/text_glow.wgsl");
+    let status = source
+        .split_once("fn shade_status_sprite(in: VertexOutput) -> vec4<f32> {")
+        .and_then(|(_, body)| body.split_once("\n}\n\n// Anti-aliased filled rectangle"))
+        .map(|(body, _)| body)
+        .expect("status sprite shader body is present");
+    assert!(status.contains("clamp(in.face_dilate, 0.0, 1.0)"));
+    assert!(status.contains("mix(tinted, vec3<f32>(luminance)"));
+}
+
+#[test]
 fn mover_shaders_parse_and_match_globals_layout() {
     let sprite_source =
         crate::shader_params::prepare_shader("MOVER_", include_str!("shaders/mover_sprites.wgsl"));

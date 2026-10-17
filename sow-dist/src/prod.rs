@@ -76,7 +76,6 @@ impl ComponentPlan {
 pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     let config = Config::load();
     ensure_shared_identity_secret()?;
-    require_stripe_config()?;
     require_secret("SOW_DB_SECRET")?;
     require_secret("SOW_RELAY_CONTROL_SECRET")?;
     require_secret("SOW_RELAY_SETTLEMENT_SECRET")?;
@@ -183,8 +182,8 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
         println!("  runtime env drift: Play Games Services configuration");
         plan.database = true;
     }
-    if stripe_config_drift(&config)? {
-        println!("  runtime env drift: Stripe/RevenueCat checkout configuration");
+    if stripe_env_leftover(&config)? {
+        println!("  runtime env drift: retired Stripe checkout keys still on the server");
         plan.database = true;
     }
     if relay_settlement_auth_drift(&config)? {
@@ -323,26 +322,6 @@ fn require_secret(key: &str) -> Result<()> {
         env::var(key).with_context(|| format!("{key} must be provided via sow-dist/.env"))?;
     if value.trim().is_empty() {
         bail!("{key} must not be empty");
-    }
-    Ok(())
-}
-
-fn require_stripe_config() -> Result<()> {
-    const KEYS: [(&str, &str); 4] = [
-        ("SOW_STRIPE_SECRET_KEY", "sk_live_"),
-        ("SOW_STRIPE_PUBLISHABLE_KEY", "pk_live_"),
-        ("SOW_STRIPE_WEBHOOK_SECRET", "whsec_"),
-        ("SOW_REVENUECAT_STRIPE_API_KEY", "strp_"),
-    ];
-    for (key, prefix) in KEYS {
-        let value = env::var(key)
-            .with_context(|| format!("production checkout requires {key} in sow-dist/.env"))?;
-        if value.trim().is_empty() {
-            bail!("production checkout requires {key} to be non-empty");
-        }
-        if !value.starts_with(prefix) {
-            bail!("{key} must use the live {prefix} format");
-        }
     }
     Ok(())
 }
@@ -1254,33 +1233,27 @@ for spec in 'host:/usr/local/etc/sow/sow.env' 'server:/zroot/jails/sow-server/us
     else
         printf '%s=missing\n' "$label"
     fi
-done
-db_pid=$(sudo jexec sow-database pgrep -xo sow-database)
-db_value=$(sudo procstat -e "$db_pid" | tr ' ' '\n' | sed -n 's/^SOW_RELAY_SETTLEMENT_SECRET=//p' | head -1)
-server_pid=$(sudo jexec sow-server pgrep -xo sow-server)
-server_value=$(sudo procstat -e "$server_pid" | tr ' ' '\n' | sed -n 's/^SOW_RELAY_SETTLEMENT_SECRET=//p' | head -1)
-for pair in "database_process:$db_value" "server_process:$server_value"; do
-    label=${pair%%:*}
-    value=${pair#*:}
-    if [ -n "$value" ]; then
-        hash=$(printf %s "$value" | sha256 -q)
-        printf '%s=%s\n' "$label" "$hash"
-    else
-        printf '%s=missing\n' "$label"
-    fi
 done"#;
     let control = output("ssh", &[&config.control_host, control_command])?;
-    let expected_control = format!(
-        "host=missing\nserver=missing\ndatabase={expected}\ndatabase_process={expected}\nserver_process=missing"
-    );
+    let expected_control = format!("host=missing\nserver=missing\ndatabase={expected}");
 
-    let worker_count = relay_worker_count()?;
-    let ids = (0..worker_count)
+    let relay_env = RelayEnv::load()?;
+    let ids = (0..relay_env.count)
         .map(|id| id.to_string())
         .collect::<Vec<_>>()
         .join(" ");
+    let url = url::Url::parse(&relay_env.db_url)?;
+    let host = url.host_str().context("SOW_DB_URL has no hostname")?;
+    let port = url
+        .port_or_known_default()
+        .context("SOW_DB_URL has no port")?;
+    let base = url.join("/")?.to_string();
+    let base = base.trim_end_matches('/');
+    let resolve = format!("{host}:{port}:{}", relay_env.db_resolve_ip);
     let relay_command = format!(
         r#"set -eu
+base={base}
+resolve={resolve}
 for id in {ids}; do
     unit="sow-relay@$id.service"
     pid=$(sudo systemctl show "$unit" -p MainPID --value)
@@ -1297,16 +1270,35 @@ for id in {ids}; do
         printf 'worker%s=missing\n' "$id"
     fi
     printf 'worker%s_shared=%s\n' "$id" "$shared"
-done"#
+done
+pid=$(sudo systemctl show sow-relay@0.service -p MainPID --value)
+probe=missing-worker
+if [ "$pid" -gt 1 ] && sudo test -r "/proc/$pid/environ"; then
+    secret=$(sudo cat "/proc/$pid/environ" | tr '\0' '\n' | awk -F= '$1 == "SOW_RELAY_SETTLEMENT_SECRET" {{ sub(/^[^=]*=/, ""); print; exit }}')
+    if [ -n "$secret" ]; then
+        probe=$(printf 'header = "Authorization: Bearer %s"\n' "$secret" | curl --noproxy '*' -sS --max-time 10 --config - --resolve "$resolve" -o /dev/null -w '%{{http_code}}|%{{remote_ip}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "$base/internal/match-progress" || true)
+        probe=${{probe:-unreachable}}
+    else
+        probe=missing-secret
+    fi
+fi
+printf 'active_match_progress=%s\n' "$probe"
+"#,
+        base = shell_quote(base),
+        resolve = shell_quote(&resolve),
     );
     let relay = output("ssh", &[&config.relay_host, &relay_command])?;
-    let expected_relay = (0..worker_count)
+    let expected_relay = (0..relay_env.count)
         .flat_map(|id| {
             [
                 format!("worker{id}={expected}"),
                 format!("worker{id}_shared=missing"),
             ]
         })
+        .chain(std::iter::once(format!(
+            "active_match_progress=400|{}",
+            relay_env.db_resolve_ip
+        )))
         .collect::<Vec<_>>()
         .join("\n");
     Ok(control.trim() != expected_control || relay.trim() != expected_relay)
@@ -1334,7 +1326,7 @@ origin_ip={origin_ip}
 pid=$(systemctl show sow-relay@0.service -p MainPID --value)
 secret=$(sudo cat "/proc/$pid/environ" | tr '\0' '\n' | sed -n 's/^SOW_RELAY_SETTLEMENT_SECRET=//p')
 test -n "$secret"
-for route in match-participant-settle/invalid/invalid/0 match-finalize; do
+for route in match-participant-settle/invalid/invalid/0 match-progress match-finalize; do
     status=$(printf 'header = "Authorization: Bearer %s"\n' "$secret" | curl --noproxy '*' -sS --max-time 10 --config - --resolve "$resolve" -o /dev/null -w '%{{http_code}}|%{{remote_ip}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "$base/internal/$route")
     if [ "$status" != "400|$origin_ip" ]; then echo "relay result route rejected its dedicated credential or did not reach the pinned origin: $route ($status)" >&2; exit 1; fi
     status=$(curl --noproxy '*' -sS --max-time 10 --resolve "$resolve" -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "$base/internal/$route")
@@ -1352,7 +1344,7 @@ base={base}
 resolve={resolve}
 shared=$(sudo awk -F= '$1 == "SOW_DB_SECRET" {{ sub(/^[^=]*=/, ""); print; exit }}' /zroot/jails/sow-server/usr/local/etc/sow/sow.env)
 test -n "$shared"
-for route in match-participant-settle/invalid/invalid/0 match-finalize; do
+for route in match-participant-settle/invalid/invalid/0 match-progress match-finalize; do
     status=$(printf 'header = "Authorization: Bearer %s"\n' "$shared" | curl --noproxy '*' -sS --max-time 10 --config - -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "http://{database_ip}:25585/internal/$route")
     if [ "$status" != 401 ]; then echo "result route accepted the server's general database credential: $route ($status)" >&2; exit 1; fi
     status=$(curl --noproxy '*' -sS --max-time 10 --resolve "$resolve" -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "$base/internal/$route")
@@ -1365,7 +1357,7 @@ done"#,
     run("ssh", &[&config.control_host, &control_command], None)
         .context("relay result route isolation failed")?;
     println!(
-        "  relay result routes use the pinned origin and reject missing, server, and non-relay access"
+        "  relay reward routes use the pinned origin and reject missing, server, and non-relay access"
     );
     Ok(())
 }
@@ -2831,73 +2823,19 @@ done
     Ok(())
 }
 
-fn stripe_config_drift(config: &Config) -> Result<bool> {
-    const KEYS: [&str; 4] = [
-        "SOW_STRIPE_SECRET_KEY",
-        "SOW_STRIPE_PUBLISHABLE_KEY",
-        "SOW_STRIPE_WEBHOOK_SECRET",
-        "SOW_REVENUECAT_STRIPE_API_KEY",
-    ];
-    let values = KEYS
-        .iter()
-        .map(|key| {
-            env::var(key)
-                .ok()
-                .filter(|value| !value.trim().is_empty())
-                .map(|value| (*key, value))
-        })
-        .collect::<Vec<_>>();
-    let configured = values.iter().filter(|value| value.is_some()).count();
-    if configured == 0 {
-        return Ok(false);
-    }
-    if configured != KEYS.len() {
-        bail!(
-            "SOW_STRIPE_SECRET_KEY, SOW_STRIPE_PUBLISHABLE_KEY, SOW_STRIPE_WEBHOOK_SECRET, and SOW_REVENUECAT_STRIPE_API_KEY must be configured together"
-        );
-    }
+/// Web checkout was retired (gem packs are sold only through Google Play);
+/// the old Stripe keys must not stay in the runtime env files.
+const STRIPE_ENV_KEYS: &str = "^(SOW_STRIPE_[A-Z_]+|SOW_REVENUECAT_STRIPE_API_KEY)=";
 
-    let expected = values
-        .into_iter()
-        .flatten()
-        .map(|(key, value)| format!("{key}={:x}", Sha256::digest(value.as_bytes())))
-        .collect::<Vec<_>>();
-    let command = r#"set -eu
-for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do
-    if sudo test -f "$f"; then
-        printf 'FILE=%s\n' "$f"
-        for key in SOW_STRIPE_SECRET_KEY SOW_STRIPE_PUBLISHABLE_KEY SOW_STRIPE_WEBHOOK_SECRET SOW_REVENUECAT_STRIPE_API_KEY; do
-            value=$(sudo awk -F= -v k="$key" '$1 == k { sub(/^[^=]*=/, ""); print; exit }' "$f")
-            if [ -n "$value" ]; then
-                printf '%s=' "$key"
-                printf %s "$value" | sha256 -q
-            else
-                printf '%s=missing\n' "$key"
-            fi
-        done
-    else
-        printf 'FILE=%s\nmissing\n' "$f"
-    fi
-done"#;
-    let remote = output("ssh", &[&config.control_host, command])?;
-    let mut matched_files = 0usize;
-    let mut file_hasher = false;
-    for line in remote.lines() {
-        if line.starts_with("FILE=") {
-            if file_hasher {
-                matched_files += 1;
-            }
-            file_hasher = true;
-            continue;
-        }
-        if !expected.iter().any(|entry| entry == line) {
-            file_hasher = false;
-        }
-    }
-    if file_hasher {
-        matched_files += 1;
-    }
-    Ok(matched_files != 3)
+fn stripe_env_leftover(config: &Config) -> Result<bool> {
+    let command = format!(
+        r#"for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do
+    if sudo test -f "$f" && sudo grep -qE '{STRIPE_ENV_KEYS}' "$f"; then echo "$f"; fi
+done"#
+    );
+    Ok(!output("ssh", &[&config.control_host, &command])?
+        .trim()
+        .is_empty())
 }
 
 fn maps_catalog_path_drift(config: &Config) -> Result<bool> {
@@ -3054,55 +2992,6 @@ fn activate_control_host(
     } else {
         None
     };
-    let stripe_secret = env::var("SOW_STRIPE_SECRET_KEY")
-        .ok()
-        .filter(|value| !value.trim().is_empty());
-    let stripe_publishable = env::var("SOW_STRIPE_PUBLISHABLE_KEY")
-        .ok()
-        .filter(|value| !value.trim().is_empty());
-    let stripe_webhook_secret = env::var("SOW_STRIPE_WEBHOOK_SECRET")
-        .ok()
-        .filter(|value| !value.trim().is_empty());
-    let revenuecat_stripe_key = env::var("SOW_REVENUECAT_STRIPE_API_KEY")
-        .ok()
-        .filter(|value| !value.trim().is_empty());
-    let stripe_values_present = stripe_secret.is_some()
-        || stripe_publishable.is_some()
-        || stripe_webhook_secret.is_some()
-        || revenuecat_stripe_key.is_some();
-    let stripe_values_complete = stripe_secret.is_some()
-        && stripe_publishable.is_some()
-        && stripe_webhook_secret.is_some()
-        && revenuecat_stripe_key.is_some();
-    if stripe_values_present && !stripe_values_complete {
-        bail!(
-            "SOW_STRIPE_SECRET_KEY, SOW_STRIPE_PUBLISHABLE_KEY, SOW_STRIPE_WEBHOOK_SECRET, and SOW_REVENUECAT_STRIPE_API_KEY must be configured together"
-        );
-    }
-    let stripe_secret_file = if stripe_values_complete {
-        let value = stripe_secret.as_deref().unwrap();
-        let path = format!("/tmp/sow-stripe-secret-{}", std::process::id());
-        stage_secret(&config.control_host, value, &path)?;
-        Some(path)
-    } else {
-        None
-    };
-    let stripe_webhook_file = if stripe_values_complete {
-        let value = stripe_webhook_secret.as_deref().unwrap();
-        let path = format!("/tmp/sow-stripe-webhook-{}", std::process::id());
-        stage_secret(&config.control_host, value, &path)?;
-        Some(path)
-    } else {
-        None
-    };
-    let revenuecat_stripe_file = if stripe_values_complete {
-        let value = revenuecat_stripe_key.as_deref().unwrap();
-        let path = format!("/tmp/sow-revenuecat-stripe-{}", std::process::id());
-        stage_secret(&config.control_host, value, &path)?;
-        Some(path)
-    } else {
-        None
-    };
     let play_games_web_client_secret_file = if runtime_env {
         let secret = env::var("SOW_PLAY_GAMES_WEB_CLIENT_SECRET")?;
         let path = format!("/tmp/sow-play-games-client-secret-{}", std::process::id());
@@ -3212,18 +3101,17 @@ done"#,
     } else {
         ":".to_string()
     };
-    let stripe_update = if let (Some(secret_file), Some(webhook_file), Some(rc_file)) = (
-        stripe_secret_file.as_deref(),
-        stripe_webhook_file.as_deref(),
-        revenuecat_stripe_file.as_deref(),
-    ) {
-        let publishable = shell_quote(stripe_publishable.as_deref().unwrap());
+    let stripe_scrub = if runtime_env {
         format!(
-            "for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do if sudo test -f \"$f\"; then sudo cp -p \"$f\" \"$f.bak_$(date +%s)\"; fi; t=$(mktemp /tmp/sow.env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v -E '^(SOW_STRIPE_SECRET_KEY|SOW_STRIPE_PUBLISHABLE_KEY|SOW_STRIPE_WEBHOOK_SECRET|SOW_REVENUECAT_STRIPE_API_KEY)=' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s' 'SOW_STRIPE_SECRET_KEY=' | sudo tee -a \"$t\" >/dev/null; sudo cat {secret_file} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s\\n' 'SOW_STRIPE_PUBLISHABLE_KEY={publishable}' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_STRIPE_WEBHOOK_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {webhook_file} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_REVENUECAT_STRIPE_API_KEY=' | sudo tee -a \"$t\" >/dev/null; sudo cat {rc_file} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done; rm -f {secret_file} {webhook_file} {rc_file}",
-            secret_file = shell_quote(secret_file),
-            publishable = publishable,
-            webhook_file = shell_quote(webhook_file),
-            rc_file = shell_quote(rc_file),
+            r#"for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do
+    if sudo test -f "$f" && sudo grep -qE '{STRIPE_ENV_KEYS}' "$f"; then
+        sudo cp -p "$f" "$f.bak_$(date +%s)"
+        t=$(mktemp /tmp/sow.env.XXXXXX)
+        sudo grep -vE '{STRIPE_ENV_KEYS}' "$f" > "$t" || true
+        sudo install -o root -g wheel -m 0600 "$t" "$f"
+        rm -f "$t"
+    fi
+done"#
         )
     } else {
         ":".to_string()
@@ -3233,9 +3121,6 @@ done"#,
         control_secret_file.as_deref(),
         settlement_secret_file.as_deref(),
         revenuecat_webhook_file.as_deref(),
-        stripe_secret_file.as_deref(),
-        stripe_webhook_file.as_deref(),
-        revenuecat_stripe_file.as_deref(),
         play_games_web_client_secret_file.as_deref(),
         wou_identity_secret_file.as_deref(),
     ]
@@ -3338,7 +3223,7 @@ __ENV_BACKUPS__
 __ENV_UPDATE__
 __SETTLEMENT_SECRET_UPDATE__
 __REVENUECAT_UPDATE__
-__STRIPE_UPDATE__
+__STRIPE_SCRUB__
 __DATABASE_SECRET_SCRUB__
 __RESOLVER_UPDATE__
 if __DB_RESTART__; then
@@ -3389,7 +3274,7 @@ __SECRET_CLEANUP__
         ("__SETTLEMENT_SECRET_UPDATE__", settlement_secret_update),
         ("__ENV_BACKUPS__", env_backups),
         ("__REVENUECAT_UPDATE__", revenuecat_update),
-        ("__STRIPE_UPDATE__", stripe_update),
+        ("__STRIPE_SCRUB__", stripe_scrub),
         ("__DATABASE_SECRET_SCRUB__", database_secret_scrub),
         ("__RESOLVER_UPDATE__", resolver_update),
         (

@@ -1093,7 +1093,7 @@ mod name_tests {
             is_private: false,
             phase: LobbyPhase::Waiting,
             countdown_secs: 0.0,
-                players: Vec::new(),
+            players: Vec::new(),
             ready_players: std::collections::HashSet::new(),
             seed: 0,
             config: GameConfig {
@@ -1411,12 +1411,8 @@ mod name_tests {
         let mut next_id = id + 1;
         let (client_tx, _client_rx) = tokio::sync::mpsc::channel(1);
 
-        let result = join_player(
-            &mut games,
-            &mut next_id,
-            join_options(Some(id), client_tx),
-        )
-        .expect("an invite to an existing custom lobby must still work");
+        let result = join_player(&mut games, &mut next_id, join_options(Some(id), client_tx))
+            .expect("an invite to an existing custom lobby must still work");
 
         assert_eq!(result.0, id);
         assert_eq!(games.len(), 1);

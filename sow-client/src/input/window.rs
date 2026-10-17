@@ -627,6 +627,28 @@ mod tests {
         app.input.camera_y = 0.0;
         app.input.screen_w = 800.0;
         app.input.screen_h = 600.0;
+        let mut state = sow_core::game::GameState::new(
+            42,
+            64,
+            64,
+            sow_core::game_config::GameConfig::default(),
+        );
+        for y in 0..64 {
+            for x in 0..64 {
+                state.map.set_owner_id(x, y, 1);
+            }
+        }
+        // A water channel the arrows must jump over.
+        for y in 0..64 {
+            for x in 50..52 {
+                state.map.terrain[(y * 64 + x) as usize] = sow_core::map::MapTile::from_byte(0);
+            }
+        }
+        app.sim.engine = Some(sow_core::engine::SowEngine::new(
+            state,
+            sow_core::water_components::WaterComponents::default(),
+        ));
+        app.sim.my_player_id = Some(1);
         app.ui.app.hud_state.building_placement = Some(BuildingPlacement {
             kind: sow_core::game::BuildingKind::City,
             tile_idx: 20 * 64 + 20,
@@ -674,8 +696,34 @@ mod tests {
         app.nudge_building_placement(PlacementDirection::Down);
         assert_eq!(
             app.ui.app.hud_state.building_placement.unwrap().tile_idx,
-            65,
-            "invalid sites remain explorable"
+            0,
+            "a line without legal foundations never moves the preview"
+        );
+        app.ui
+            .app
+            .hud_state
+            .building_placement
+            .as_mut()
+            .unwrap()
+            .tile_idx = 20 * 64 + 48;
+        app.nudge_building_placement(PlacementDirection::Right);
+        assert_eq!(
+            app.ui.app.hud_state.building_placement.unwrap().tile_idx,
+            20 * 64 + 54,
+            "arrows jump over water to the next legal foundation"
+        );
+        app.move_building_preview(50, 20);
+        let snapped = app.ui.app.hud_state.building_placement.unwrap().tile_idx;
+        assert!(
+            sow_core::building::validate_structure_site(
+                &app.sim.engine.as_ref().unwrap().state.map,
+                1,
+                sow_core::game::BuildingKind::City,
+                snapped,
+                &app.sim.engine.as_ref().unwrap().building_grid,
+            )
+            .is_ok(),
+            "drag over water snaps to a legal foundation"
         );
         app.ui
             .app

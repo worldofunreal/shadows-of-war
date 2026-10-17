@@ -20,8 +20,6 @@ pub struct MapGlobals {
     pub my_player_id: f32,
     /// Device pixel ratio while placing a building, 0 otherwise.
     pub placement_scale: f32,
-    /// Preview foundation center in world tiles; the grid spotlight follows it.
-    pub placement_center: [f32; 2],
     pub territory_opacity: f32,
     pub blend_mode: f32,
     pub effect_heartbeat: f32,
@@ -40,6 +38,8 @@ pub struct MapGlobals {
     /// Player ID highlighted by the active tutorial objective (0 = none).
     pub tutorial_target_player: f32,
     pub _pad2: f32,
+    /// Align the following host array to WGSL's 16-byte `vec4` boundary.
+    pub _pad_alert_color: [f32; 2],
     /// Viewport alert vignette color: [r, g, b, a].
     pub alert_color: [f32; 4],
     /// Entity requesting terms in the open tutorial dialog: [player_id, age_secs, 0, 0].

@@ -3,6 +3,10 @@ use serde::Deserialize;
 
 pub(crate) const TOUCH_HOLD_MS: u128 = 300;
 const MAP_CLICK_MAX_DISTANCE_SQ: f64 = 400.0;
+/// Drag and tap snap the preview to a legal foundation within this many tiles.
+const PLACEMENT_SNAP_RADIUS: i32 = 6;
+/// Arrow keys look this far ahead for the next legal foundation.
+const PLACEMENT_NUDGE_REACH: i32 = 8;
 
 enum FleetRouteCheck {
     Access,
@@ -282,7 +286,15 @@ impl SowApp {
             .and_then(|controls| controls.button_at(x as f32, y as f32))
         {
             match button {
-                super::placement::PlacementButton::Confirm => self.confirm_building_placement(),
+                super::placement::PlacementButton::Confirm => {
+                    // A greyed confirm explains itself instead of doing nothing.
+                    if !self.building_placement_can_confirm()
+                        && let Some(reason) = self.building_placement_reason()
+                    {
+                        self.add_map_feedback(reason);
+                    }
+                    self.confirm_building_placement();
+                }
                 super::placement::PlacementButton::Cancel => self.clear_placement(),
             }
             return;
@@ -956,15 +968,33 @@ impl SowApp {
         });
     }
 
+    /// Drag and tap: the preview rests on the closest legal foundation, or stays put.
     pub(crate) fn move_building_preview(&mut self, col: i32, row: i32) {
-        if let Some(placement) = self.ui.app.hud_state.building_placement.as_mut()
-            && !placement.pending
-            && col >= 0
-            && row >= 0
-            && col < self.sim.map_w as i32
-            && row < self.sim.map_h as i32
+        let Some(placement) = self
+            .ui
+            .app
+            .hud_state
+            .building_placement
+            .filter(|p| !p.pending)
+        else {
+            return;
+        };
+        let my_id = self.sim.my_player_id.unwrap_or(0);
+        let Some(engine) = self.sim.engine.as_mut() else {
+            return;
+        };
+        engine.refresh_building_grid();
+        if let Some(tile) = sow_core::building::nearest_structure_site(
+            &engine.state.map,
+            my_id,
+            placement.kind,
+            col,
+            row,
+            PLACEMENT_SNAP_RADIUS,
+            &engine.building_grid,
+        ) && let Some(placement) = self.ui.app.hud_state.building_placement.as_mut()
         {
-            placement.tile_idx = row as u32 * self.sim.map_w + col as u32;
+            placement.tile_idx = tile;
         }
     }
 
@@ -991,10 +1021,36 @@ impl SowApp {
         };
         let (dx, dy) = direction.offset();
         self.input.building_drag_offset = None;
-        self.move_building_preview(
-            (placement.tile_idx % self.sim.map_w) as i32 + dx,
-            (placement.tile_idx / self.sim.map_w) as i32 + dy,
+        let my_id = self.sim.my_player_id.unwrap_or(0);
+        let Some(engine) = self.sim.engine.as_mut() else {
+            return;
+        };
+        engine.refresh_building_grid();
+        let map = &engine.state.map;
+        let (x, y) = (
+            (placement.tile_idx % map.width) as i32,
+            (placement.tile_idx / map.width) as i32,
         );
+        // Arrows jump over blocked tiles to the next legal foundation.
+        let next = (1..=PLACEMENT_NUDGE_REACH)
+            .map(|step| (x + dx * step, y + dy * step))
+            .take_while(|&(nx, ny)| map.is_valid_coord(nx, ny))
+            .map(|(nx, ny)| ny as u32 * map.width + nx as u32)
+            .find(|&tile| {
+                sow_core::building::validate_structure_site(
+                    map,
+                    my_id,
+                    placement.kind,
+                    tile,
+                    &engine.building_grid,
+                )
+                .is_ok()
+            });
+        if let Some(tile) = next
+            && let Some(placement) = self.ui.app.hud_state.building_placement.as_mut()
+        {
+            placement.tile_idx = tile;
+        }
     }
 
     #[cfg(test)]
@@ -1110,14 +1166,18 @@ impl SowApp {
         if self.campaign_building_max_level(placement.kind) < 1 {
             return Some(crate::ui::UiText::new("hud.campaign_unlock_required"));
         }
-        let cost = self.ui.app.hud_state.building_costs[placement.kind as usize];
-        if !cost.is_finite() || self.current_player_gold() < cost {
-            return Some(
-                crate::ui::UiText::new("hud.need_gold")
-                    .with("cost", crate::utils::format_number(cost)),
-            );
-        }
-        None
+        self.building_gold_shortfall(placement.kind)
+    }
+
+    /// One gold rule for the dock, hotkeys and the confirm button.
+    fn building_gold_shortfall(
+        &self,
+        kind: sow_core::game::BuildingKind,
+    ) -> Option<crate::ui::UiText> {
+        let cost = self.ui.app.hud_state.building_costs[kind as usize];
+        (!cost.is_finite() || self.current_player_gold() < cost).then(|| {
+            crate::ui::UiText::new("hud.need_gold").with("cost", crate::utils::format_number(cost))
+        })
     }
 
     fn resolve_building_target(
@@ -1617,48 +1677,31 @@ impl SowApp {
             self.clear_placement();
             return;
         }
-        let center_x =
-            ((self.input.screen_w * 0.5 - self.input.camera_x) / self.input.camera_zoom) as i32;
-        let center_y =
-            ((self.input.screen_h * 0.45 - self.input.camera_y) / self.input.camera_zoom) as i32;
-        let min_x = ((-self.input.camera_x / self.input.camera_zoom).floor() as i32).max(2);
-        let min_y = ((-self.input.camera_y / self.input.camera_zoom).floor() as i32).max(2);
-        let max_x = (((self.input.screen_w - self.input.camera_x) / self.input.camera_zoom).ceil()
-            as i32)
-            .min(self.sim.map_w as i32 - 2);
-        let max_y = (((self.input.screen_h - self.input.camera_y) / self.input.camera_zoom).ceil()
-            as i32)
-            .min(self.sim.map_h as i32 - 2);
-        let mut best = None;
-        if let Some(engine) = self.sim.engine.as_mut() {
-            engine.refresh_building_grid();
-            let my_id = self.sim.my_player_id.unwrap_or(0);
-            for row in min_y..=max_y {
-                for col in min_x..=max_x {
-                    let distance = (col as i64 - center_x as i64).pow(2)
-                        + (row as i64 - center_y as i64).pow(2);
-                    if best.is_some_and(|(d, _)| d <= distance) {
-                        continue;
-                    }
-                    let tile = row as u32 * self.sim.map_w + col as u32;
-                    if sow_core::building::validate_structure_site(
-                        &engine.state.map,
-                        my_id,
-                        kind,
-                        tile,
-                        &engine.building_grid,
-                    )
-                    .is_ok()
-                    {
-                        best = Some((distance, tile));
-                    }
-                }
-            }
+        if let Some(shortfall) = self.building_gold_shortfall(kind) {
+            self.add_map_feedback(shortfall);
+            return;
         }
-        let tile = best.map(|(_, tile)| tile).unwrap_or_else(|| {
-            center_y.clamp(0, self.sim.map_h.saturating_sub(1) as i32) as u32 * self.sim.map_w
-                + center_x.clamp(0, self.sim.map_w.saturating_sub(1) as i32) as u32
+        let zoom = self.input.camera_zoom.max(0.01);
+        let center_x = ((self.input.screen_w * 0.5 - self.input.camera_x) / zoom) as i32;
+        let center_y = ((self.input.screen_h * 0.45 - self.input.camera_y) / zoom) as i32;
+        let radius = (self.input.screen_w.max(self.input.screen_h) * 0.5 / zoom).ceil() as i32;
+        let my_id = self.sim.my_player_id.unwrap_or(0);
+        let site = self.sim.engine.as_mut().and_then(|engine| {
+            engine.refresh_building_grid();
+            sow_core::building::nearest_structure_site(
+                &engine.state.map,
+                my_id,
+                kind,
+                center_x,
+                center_y,
+                radius,
+                &engine.building_grid,
+            )
         });
+        let Some(tile) = site else {
+            self.add_map_feedback(crate::ui::UiText::new("hud.build_no_space"));
+            return;
+        };
         self.input.key_pan_up = false;
         self.input.key_pan_down = false;
         self.input.key_pan_left = false;

@@ -69,7 +69,7 @@ pub(crate) fn render_overlays(
     if dev.vfx_world_buildings {
         render_buildings(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled, now);
     }
-    render_building_placement_preview(text, sim, ui, input, sf);
+    render_building_placement_preview(text, sim, ui, input, sf, placement_can_confirm);
     let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
     let leaderboard_top_three = ui.leaderboard_top_three;
     super::nameplates::render_nameplates(
@@ -671,12 +671,87 @@ fn render_building_selection_focus(
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct PlacementPreviewColors {
+    fill: [f32; 4],
+    line: [f32; 4],
+    building: [f32; 4],
+}
+
+const PLACEMENT_CONFLICT_COLOR: [f32; 4] = [0.35, 0.02, 0.03, 1.0];
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct PlacementFootprintGeometry {
+    top_left: [f32; 2],
+    center: [f32; 2],
+    size: [f32; 2],
+}
+
+fn placement_footprint_geometry(
+    footprint: sow_core::building::BuildingFootprint,
+    camera: [f32; 2],
+    zoom: f32,
+) -> PlacementFootprintGeometry {
+    let top_left = [
+        camera[0] + footprint.left as f32 * zoom,
+        camera[1] + footprint.top as f32 * zoom,
+    ];
+    let size = [
+        footprint.width as f32 * zoom,
+        footprint.height as f32 * zoom,
+    ];
+    PlacementFootprintGeometry {
+        top_left,
+        center: [top_left[0] + size[0] * 0.5, top_left[1] + size[1] * 0.5],
+        size,
+    }
+}
+
+fn placement_preview_colors(site_valid: bool, can_confirm: bool) -> PlacementPreviewColors {
+    if !site_valid {
+        PlacementPreviewColors {
+            fill: [0.75, 0.10, 0.08, 1.0],
+            line: [1.0, 0.55, 0.48, 1.0],
+            building: [1.0, 0.28, 0.28, 0.94],
+        }
+    } else if can_confirm {
+        PlacementPreviewColors {
+            fill: [0.035, 0.26, 0.06, 1.0],
+            line: [0.66, 0.97, 0.45, 1.0],
+            building: [1.0, 1.0, 1.0, 0.94],
+        }
+    } else {
+        PlacementPreviewColors {
+            fill: [0.32, 0.36, 0.38, 1.0],
+            line: [0.75, 0.80, 0.82, 1.0],
+            building: [1.0, 1.0, 1.0, 0.94],
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct PlacementGridMetrics {
+    inner_line_px: f32,
+    outer_border_px: f32,
+    draw_inner_grid: bool,
+}
+
+fn placement_grid_metrics(zoom: f32, sf: f32) -> PlacementGridMetrics {
+    let sf = sf.max(0.01);
+    PlacementGridMetrics {
+        inner_line_px: sf,
+        outer_border_px: 2.0 * sf,
+        draw_inner_grid: zoom / sf >= 4.0,
+    }
+}
+
 fn render_building_placement_preview(
     text: &mut TextRenderer,
     sim: &SimState,
     ui: &UiState,
     input: &InputState,
     sf: f32,
+    can_confirm: bool,
 ) {
     let Some(placement) = ui.app.hud_state.building_placement.filter(|p| !p.pending) else {
         return;
@@ -689,7 +764,7 @@ fn render_building_placement_preview(
         return;
     };
     let my_id = sim.my_player_id.unwrap_or(0);
-    let can_place = sow_core::building::validate_structure_site(
+    let site_valid = sow_core::building::validate_structure_site(
         &engine.state.map,
         my_id,
         kind,
@@ -703,35 +778,21 @@ fn render_building_placement_preview(
         placement.tile_idx / sim.map_w,
     );
     let footprint = sow_core::building::BuildingFootprint::at(kind, tile_x, tile_y);
-    let center_px = [
-        input.camera_x + (footprint.left as f32 + footprint.width as f32 * 0.5) * zoom,
-        input.camera_y + (footprint.top as f32 + footprint.height as f32 * 0.5) * zoom,
-    ];
-    let footprint_size_px = [
-        footprint.width as f32 * zoom,
-        footprint.height as f32 * zoom,
-    ];
-    let footprint_top_left = [
-        input.camera_x + footprint.left as f32 * zoom,
-        input.camera_y + footprint.top as f32 * zoom,
-    ];
-    // Clash-style foundation: opaque light rim and grout around tinted tiles,
-    // red when it cannot go here. Only the tile centers let the ground through.
-    let (light, fill) = if can_place {
-        ([0.66, 0.97, 0.45, 1.0], [0.10, 0.55, 0.16, 0.55])
-    } else {
-        ([1.0, 0.55, 0.48, 1.0], [0.75, 0.10, 0.08, 0.55])
-    };
-    let rim = (2.0 * sf).max(1.0);
-    let detailed = zoom / sf >= 4.0;
-    let grout = (zoom * 0.08).max(sf);
+    let geometry = placement_footprint_geometry(footprint, [input.camera_x, input.camera_y], zoom);
+    let center_px = geometry.center;
+    let footprint_size_px = geometry.size;
+    let footprint_top_left = geometry.top_left;
+    let colors = placement_preview_colors(site_valid, can_confirm);
+    let metrics = placement_grid_metrics(zoom, sf);
+    let rim = metrics.outer_border_px;
+    let grout = metrics.inner_line_px;
     let map = &engine.state.map;
-    for y in footprint.top..footprint.top + footprint.height as i32 {
-        for x in footprint.left..footprint.left + footprint.width as i32 {
-            // Mark actual conflicting cells with the same per-cell rule as confirmation.
-            let conflict = detailed
-                && !can_place
-                && (!map.is_valid_coord(x, y)
+    text.push_rect(footprint_top_left, footprint_size_px, colors.fill);
+    if metrics.draw_inner_grid && !site_valid {
+        for y in footprint.top..footprint.top + footprint.height as i32 {
+            for x in footprint.left..footprint.left + footprint.width as i32 {
+                // Mark only cells rejected by the same ownership, terrain, or overlap rules.
+                let conflict = !map.is_valid_coord(x, y)
                     || sow_core::building::validate_building_cell(
                         kind,
                         my_id,
@@ -745,46 +806,39 @@ fn render_building_placement_preview(
                         .any(|b| {
                             sow_core::building::BuildingFootprint::at(b.kind, b.x, b.y)
                                 .contains(x, y)
-                        }));
-            text.push_rect(
-                [
-                    input.camera_x + x as f32 * zoom,
-                    input.camera_y + y as f32 * zoom,
-                ],
-                [zoom; 2],
+                        });
                 if conflict {
-                    [0.35, 0.02, 0.03, 0.85]
-                } else {
-                    fill
-                },
-            );
+                    text.push_rect(
+                        [
+                            input.camera_x + x as f32 * zoom,
+                            input.camera_y + y as f32 * zoom,
+                        ],
+                        [zoom; 2],
+                        PLACEMENT_CONFLICT_COLOR,
+                    );
+                }
+            }
         }
     }
     let [left, top] = footprint_top_left;
     let [width, height] = footprint_size_px;
-    if detailed {
+    if metrics.draw_inner_grid {
         for i in 1..footprint.width {
             let x = left + i as f32 * zoom - grout * 0.5;
-            text.push_rect([x, top], [grout, height], light);
+            text.push_rect([x, top], [grout, height], colors.line);
         }
         for i in 1..footprint.height {
             let y = top + i as f32 * zoom - grout * 0.5;
-            text.push_rect([left, y], [width, grout], light);
+            text.push_rect([left, y], [width, grout], colors.line);
         }
     }
     for (pos, size) in [
-        ([left - rim, top - rim], [width + 2.0 * rim, 2.0 * rim]),
-        (
-            [left - rim, top + height - rim],
-            [width + 2.0 * rim, 2.0 * rim],
-        ),
-        ([left - rim, top + rim], [2.0 * rim, height - 2.0 * rim]),
-        (
-            [left + width - rim, top + rim],
-            [2.0 * rim, height - 2.0 * rim],
-        ),
+        ([left - rim, top - rim], [width + 2.0 * rim, rim]),
+        ([left - rim, top + height], [width + 2.0 * rim, rim]),
+        ([left - rim, top], [rim, height]),
+        ([left + width, top], [rim, height]),
     ] {
-        text.push_rect(pos, size, light);
+        text.push_rect(pos, size, colors.line);
     }
     let dragging = input.building_drag_offset.is_some();
     let sprite_size = building_footprint_marker_size(kind, zoom / sf, BUILDING_MIN_MARKER_SIZE)
@@ -799,16 +853,7 @@ fn render_building_placement_preview(
     }
     let sprite_center = [center_px[0], center_px[1] - lift];
     if let Some(uv_rect) = crate::render::gpu::building_sprite_uv(kind, 1) {
-        text.push_building_sprite(
-            sprite_center,
-            sprite_size,
-            uv_rect,
-            if can_place {
-                [1.0, 1.0, 1.0, 0.94]
-            } else {
-                [1.0, 0.28, 0.28, 0.94]
-            },
-        );
+        text.push_building_sprite(sprite_center, sprite_size, uv_rect, colors.building);
     }
     if kind == BuildingKind::Bunker {
         text.push_ring(
@@ -859,16 +904,21 @@ fn render_building_placement_controls(
         controls.button,
         [1.0; 4],
     );
-    text.push_status_sprite(
-        NameplateStatusSprite::Confirm,
-        controls.confirm,
-        controls.button,
-        if can_confirm {
-            [1.0; 4]
-        } else {
-            [0.5, 0.5, 0.5, 0.75]
-        },
-    );
+    if can_confirm {
+        text.push_status_sprite(
+            NameplateStatusSprite::Confirm,
+            controls.confirm,
+            controls.button,
+            [1.0; 4],
+        );
+    } else {
+        text.push_status_sprite_desaturated(
+            NameplateStatusSprite::Confirm,
+            controls.confirm,
+            controls.button,
+            [0.5, 0.5, 0.5, 0.75],
+        );
+    }
 }
 
 /// Corner badge: the hammer icon while building, then the level and cluster count.
@@ -1114,6 +1164,19 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn placement_sprite_keeps_built_scale_and_remains_visible_when_zooming_out() {
         for kind in BuildingKind::ALL {
+            let footprint = sow_core::building::BuildingFootprint::at(kind, 17, 23);
+            assert_eq!([footprint.width, footprint.height], [4, 4]);
+            for zoom in [0.5, 4.0, 12.0] {
+                let geometry = placement_footprint_geometry(footprint, [31.0, -12.0], zoom);
+                assert_eq!(geometry.size, [4.0 * zoom, 4.0 * zoom]);
+                assert_eq!(
+                    geometry.center,
+                    [
+                        geometry.top_left[0] + geometry.size[0] * 0.5,
+                        geometry.top_left[1] + geometry.size[1] * 0.5,
+                    ]
+                );
+            }
             let building = RenderedBuilding {
                 bx: 0.0,
                 by: 0.0,
@@ -1141,6 +1204,30 @@ mod tests {
                 );
             }
         }
+
+        for (zoom, sf, expected_grid) in [
+            (3.99, 1.0, false),
+            (4.0, 1.0, true),
+            (6.0, 2.0, false),
+            (8.0, 2.0, true),
+        ] {
+            let metrics = placement_grid_metrics(zoom, sf);
+            assert_eq!(metrics.inner_line_px, sf);
+            assert_eq!(metrics.outer_border_px, 2.0 * sf);
+            assert_eq!(metrics.draw_inner_grid, expected_grid);
+        }
+
+        let ready = placement_preview_colors(true, true);
+        assert_eq!(ready.fill, [0.035, 0.26, 0.06, 1.0]);
+        assert_eq!(ready.line, [0.66, 0.97, 0.45, 1.0]);
+        assert_eq!(ready.building, [1.0, 1.0, 1.0, 0.94]);
+        let invalid = placement_preview_colors(false, true);
+        assert_eq!(invalid.fill, [0.75, 0.10, 0.08, 1.0]);
+        assert_eq!(invalid.building, [1.0, 0.28, 0.28, 0.94]);
+        let blocked = placement_preview_colors(true, false);
+        assert_eq!(blocked.fill, [0.32, 0.36, 0.38, 1.0]);
+        assert_eq!(blocked.line, [0.75, 0.80, 0.82, 1.0]);
+        assert_eq!(blocked.building, [1.0, 1.0, 1.0, 0.94]);
     }
 
     #[test]

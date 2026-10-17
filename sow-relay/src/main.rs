@@ -636,11 +636,6 @@ fn redis_shared() -> Arc<std::sync::Mutex<Option<redis::Connection>>> {
 
 enum ReplayCommand {
     Append(Turn),
-    Checkpoint {
-        through_turn: u64,
-        participant_closures: Vec<ParticipantClosure>,
-        reply: oneshot::Sender<Result<Vec<u8>, String>>,
-    },
     Flush { participant_closures:Vec<ParticipantClosure>, reply:oneshot::Sender<Result<(),String>> },
     Finalize {
         metadata: ReplaySpoolMetadata,
@@ -836,31 +831,6 @@ impl ReplayJournal {
         self.live.lock().await.iter().cloned().collect()
     }
 
-    async fn checkpoint(
-        &self,
-        through_turn: u64,
-        participant_closures: Vec<ParticipantClosure>,
-    ) -> Result<Vec<u8>, String> {
-        if self.finalized.load(Ordering::Acquire) {
-            return Err("replay journal already finalized".to_string());
-        }
-        if self.failed.load(Ordering::Acquire) {
-            return Err("replay writer failed".to_string());
-        }
-        let (reply, result) = oneshot::channel();
-        self.tx
-            .send(ReplayCommand::Checkpoint {
-                through_turn,
-                participant_closures,
-                reply,
-            })
-            .await
-            .map_err(|_| "replay writer stopped".to_string())?;
-        result
-            .await
-            .map_err(|_| "replay writer dropped checkpoint response".to_string())?
-    }
-
     async fn flush(&self, participant_closures:Vec<ParticipantClosure>) -> Result<(),String> {
         let (reply, receive) = oneshot::channel();
         self.tx.send(ReplayCommand::Flush { participant_closures, reply }).await.map_err(|_| "journal writer stopped".to_string())?;
@@ -970,35 +940,16 @@ async fn replay_writer(
                 }.await;
                 let _ = reply.send(result);
             }
-            ReplayCommand::Checkpoint {
-                through_turn,
-                participant_closures,
-                reply,
-            } => {
-                let result = async {
-                    file.flush().await.map_err(|e| e.to_string())?;
-                    file.sync_all().await.map_err(|e| e.to_string())?;
-                    let bytes = tokio::fs::read(&journal_path)
-                        .await
-                        .map_err(|e| e.to_string())?;
-                    let history = decode_replay_journal(&bytes, false)?;
-                    let prefix = replay_prefix_through(&history, through_turn)?;
-                    metadata.participant_closures = participant_closures;
-                    persist_replay_metadata(&journal_path.with_extension("json"), &metadata)
-                        .await?;
-                    Ok(prefix)
-                }
-                .await;
-                let _ = reply.send(result);
-            }
             ReplayCommand::Finalize { reply, mut metadata } => {
                 if streaming {
                     let result = async {
                         stream.seal(&mut file, &journal_path, &metadata, true).await?;
-                        metadata.phase = ReplayPhase::StreamFinalized;
-                        persist_replay_metadata(&journal_path.with_extension("json"), &metadata).await?;
                         let replay_path = journal_path.with_extension("replay");
                         tokio::fs::rename(&journal_path, &replay_path).await.map_err(|e|e.to_string())?;
+                        std::fs::File::open(replay_path.parent().ok_or("replay directory missing")?)
+                            .and_then(|directory| directory.sync_all()).map_err(|e|e.to_string())?;
+                        metadata.phase = ReplayPhase::StreamFinalized;
+                        persist_replay_metadata(&replay_path.with_extension("json"), &metadata).await?;
                         Ok(replay_path)
                     }.await;
                     let _ = reply.send(result);
@@ -1090,14 +1041,6 @@ fn decode_replay_journal(
     Ok(history)
 }
 
-fn replay_prefix_through(history: &[Turn], through_turn: u64) -> Result<Vec<u8>, String> {
-    let end = history
-        .iter()
-        .rposition(|turn| turn.turn_number == through_turn)
-        .ok_or_else(|| format!("replay closure turn {through_turn} is missing"))?;
-    bincode::serialize(&history[..=end]).map_err(|error| error.to_string())
-}
-
 fn finalize_gate() -> Arc<Semaphore> {
     static GATE: OnceLock<Arc<Semaphore>> = OnceLock::new();
     GATE.get_or_init(|| Arc::new(Semaphore::new(1))).clone()
@@ -1140,14 +1083,20 @@ fn lock_result(path: &Path, flags: c_int) -> std::io::Result<std::fs::File> {
 
 async fn post_replay_finalize(replay_path: &Path) -> Result<(), String> {
     let _claim = claim_result(replay_path.to_path_buf()).await?;
-    if !tokio::fs::try_exists(replay_path)
-        .await
-        .map_err(|error| error.to_string())?
-    {
-        cleanup_result_spool(replay_path, &replay_path.with_extension("json")).await?;
-        return Ok(()); // Another worker already delivered and removed this result.
-    }
     let metadata_path = replay_path.with_extension("json");
+    if !tokio::fs::try_exists(replay_path).await.map_err(|error| error.to_string())? {
+        let bytes = match tokio::fs::read(&metadata_path).await {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error.to_string()),
+        };
+        let metadata = serde_json::from_slice::<ReplaySpoolMetadataCompat>(&bytes)
+            .map_err(|error| error.to_string())?.into_current();
+        if metadata.phase == ReplayPhase::StreamFinalized {
+            return progress::finish_delivery(replay_path).await;
+        }
+        return Err("finalized match lost its durable replay journal".into());
+    }
     let metadata = tokio::fs::read(&metadata_path)
         .await
         .map_err(|error| error.to_string())?;
@@ -1321,7 +1270,6 @@ async fn recover_detached_exit(
     .await
     .map_err(|error| error.to_string())?
     .map_err(|error| format!("journal still owned or unavailable: {error}"))?;
-    if current.phase == ReplayPhase::Streaming { return progress::recover(&journal,metadata).await; }
     let history = match tokio::fs::read(&journal).await {
         Ok(bytes) => decode_replay_journal(&bytes, true),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -1876,9 +1824,29 @@ async fn recover_recording(
     let current = serde_json::from_slice::<ReplaySpoolMetadataCompat>(&current)
         .map_err(|error| error.to_string())?
         .into_current();
-    if matches!(current.phase, ReplayPhase::Finalized | ReplayPhase::StreamFinalized) {
+    if current.phase == ReplayPhase::Streaming {
+        *metadata = current;
+        return progress::recover(&journal, metadata).await;
+    }
+    if current.phase == ReplayPhase::Finalized {
         *metadata = current;
         return Ok(true);
+    }
+    if current.phase == ReplayPhase::StreamFinalized {
+        let replay = path.with_extension("replay");
+        if tokio::fs::try_exists(&replay).await.map_err(|error| error.to_string())? {
+            *metadata = current;
+            return Ok(true);
+        }
+        if tokio::fs::try_exists(&journal).await.map_err(|error| error.to_string())? {
+            tokio::fs::rename(&journal, &replay).await.map_err(|error| error.to_string())?;
+            std::fs::File::open(replay.parent().ok_or("replay directory missing")?)
+                .and_then(|directory| directory.sync_all()).map_err(|error| error.to_string())?;
+            *metadata = current;
+            return Ok(true);
+        }
+        *metadata = current;
+        return progress::recover(&journal, metadata).await;
     }
     let history = match tokio::fs::read(&journal).await {
         Ok(bytes) => decode_replay_journal(&bytes, true),
@@ -2025,7 +1993,7 @@ async fn recover_replay_spool() {
                 continue;
             }
         };
-        if matches!(metadata.phase, ReplayPhase::Recording | ReplayPhase::Streaming) {
+        if matches!(metadata.phase, ReplayPhase::Recording | ReplayPhase::Streaming | ReplayPhase::StreamFinalized) {
             match recover_recording(&metadata_path, &mut metadata).await {
                 Ok(true) => {}
                 Ok(false) => continue, // Native lock proves that its writer is still alive.
@@ -2131,6 +2099,12 @@ impl MatchTracker {
                 Participation::Closing { .. } | Participation::Closed { .. }
             )
         })
+    }
+
+    fn can_reconnect(&self,player_id:u16) -> bool {
+        matches!(self.participants.get(&player_id),Some(Participation::Active
+            | Participation::Disconnected { .. }
+            | Participation::Closed { reason:ExitReason::Defeated, .. }))
     }
 
     fn disconnect(&mut self, player_id: u16, now: Instant) {
@@ -3216,7 +3190,8 @@ async fn tick_task(
     let max_match_secs: u64 = std::env::var("SOW_RELAY_MATCH_MAX_SECS")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(sow_data::MAX_MATCH_SECONDS);
+        .unwrap_or(sow_data::MAX_MATCH_SECONDS)
+        .clamp(1, sow_data::MAX_MATCH_SECONDS);
 
     loop {
         tokio::select! {
@@ -3464,16 +3439,19 @@ async fn tick_task(
                                 if tracker.closure(&closure.account_id).is_none_or(|(turn,_)| closure.turn_number <= turn) {
                                     tracker.participants.insert(id,Participation::Closed { turn:closure.turn_number,reason });
                                 }
+                                let (closure_turn,reason) = tracker.closure(&closure.account_id).unwrap_or((closure.turn_number,reason));
                                 if let Some(client) = clients.get(&id) {
-                                    if let Ok(bytes) = bincode::serialize(&ServerMessage::ExitRecorded { account_id:closure.account_id.clone(),match_id:state.id,closure_turn:closure.turn_number,reason }) {
+                                    if let Ok(bytes) = bincode::serialize(&ServerMessage::ExitRecorded { account_id:closure.account_id.clone(),match_id:state.id,closure_turn,reason }) {
                                         let _ = client.sender.try_send(Arc::new(bytes));
                                     }
                                 }
-                                acknowledge_exit(&mut exit_replies,&closure.account_id,closure.turn_number);
+                                acknowledge_exit(&mut exit_replies,&closure.account_id,closure_turn);
                             }
                         }
                         if let Some(turn) = command.terminal_turn {
                             natural_end = Some(turn);
+                            pending_intents.retain(|intent| matches!(intent.intent,
+                                GameplayIntent::Resign | GameplayIntent::MarkDisconnected { .. }));
                             info!("[exit-timing] natural finish confirmed match={} turn={turn}",state.id);
                         }
                     }
@@ -3506,6 +3484,7 @@ async fn tick_task(
                         let clients = state.clients.lock().await;
                         if !clients.get(&player_id).is_some_and(|client| client.generation == generation)
                             || state.tracker.lock().unwrap().is_sealed(player_id) { continue; }
+                        if natural_end.is_some() && !matches!(intent,GameplayIntent::Resign | GameplayIntent::MarkDisconnected { .. }) { continue; }
                         if !admit_gameplay_intent(player_id, &intent, tick_number, tick_rate_ms as f32,
                             spawn_phase_end_tick, &mut spawn_rate_limits) { continue; }
                         pending_intents.push(StampedIntent { player_id, intent });
@@ -4199,9 +4178,9 @@ async fn try_register_with_admission(
     }
     // Same lock order as the tick owner: reconnect and sealing cannot race.
     let mut clients = lobby.clients.lock().await;
-    if lobby.tracker.lock().unwrap().is_sealed(player_id) {
+    if !lobby.tracker.lock().unwrap().can_reconnect(player_id) {
         warn!(
-            "[relay] rejected reconnect after participation sealed lobby={} player={}",
+            "[relay] rejected reconnect after participation closed lobby={} player={}",
             lobby_id, player_id
         );
         return None;
@@ -4703,7 +4682,7 @@ mod dispatcher_tests {
         AdmissionState, IpAdmissionState, MatchTracker, ParticipantClosure,
         ParticipantSettlementPayload, Participation, RECONNECT_GRACE, RelayAdmissionPolicy, Turn,
         admit_gameplay_intent, deployment_end_tick, participant_replay_path,
-        persist_participant_spool, replay_prefix_through, ticket_matches,
+        persist_participant_spool, ticket_matches,
     };
     use sha2::{Digest, Sha256};
     use sow_core::game_config::GameConfig;
@@ -5043,6 +5022,10 @@ mod dispatcher_tests {
         assert_eq!(tracker.expired(now + RECONNECT_GRACE), vec![2]);
         assert!(!tracker.reconnect(2, now + RECONNECT_GRACE));
         assert!(!tracker.is_sealed(3), "other players remain active");
+        tracker.participants.insert(3,Participation::Closed { turn:90,reason:ExitReason::Defeated });
+        assert!(tracker.can_reconnect(3));
+        assert!(tracker.reconnect(3,now + Duration::from_secs(1)),"a defeated teammate can keep observing");
+        assert!(tracker.is_sealed(3),"a defeated teammate may observe but cannot act");
         assert!(tracker.record_exit(2, 90, ExitReason::Timeout).0);
         assert!(!tracker.record_exit(2, 91, ExitReason::Voluntary).0);
     }
@@ -5140,34 +5123,6 @@ mod dispatcher_tests {
             participant_replay_path(temp_record),
             PathBuf::from("/spool/match-account.participant.replay")
         );
-    }
-
-    #[test]
-    fn personal_checkpoint_contains_only_the_committed_prefix() {
-        let history = vec![
-            Turn {
-                turn_number: 10,
-                intents: Vec::new(),
-            },
-            Turn {
-                turn_number: 11,
-                intents: Vec::new(),
-            },
-            Turn {
-                turn_number: 12,
-                intents: Vec::new(),
-            },
-        ];
-        let prefix = replay_prefix_through(&history, 11).unwrap();
-        let decoded: Vec<Turn> = bincode::deserialize(&prefix).unwrap();
-        assert_eq!(
-            decoded
-                .iter()
-                .map(|turn| turn.turn_number)
-                .collect::<Vec<_>>(),
-            vec![10, 11]
-        );
-        assert!(replay_prefix_through(&history, 99).is_err());
     }
 
     #[test]

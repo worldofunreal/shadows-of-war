@@ -5,6 +5,16 @@ use tokio::io::AsyncReadExt;
 
 static DELIVERY: tokio::sync::Notify = tokio::sync::Notify::const_new();
 
+fn decode_batch(bytes:&[u8]) -> Result<(MatchProgress,bool),String> {
+    match bincode::deserialize(bytes) {
+        Ok(batch) => Ok((batch,true)),
+        Err(binary_error) => match serde_json::from_slice(bytes) {
+            Ok(batch) => Ok((batch,false)),
+            Err(json_error) => Err(format!("invalid journal chunk (binary: {binary_error}; JSON: {json_error})")),
+        },
+    }
+}
+
 pub(super) struct Stream {
     id: String,
     sequence: u64,
@@ -34,11 +44,11 @@ impl Stream {
                 account_id:c.account_id.clone(), turn_number:c.turn_number,
                 reason:serde_json::to_value(c.reason).unwrap().as_str().unwrap().to_string() }).collect(), finished };
         batch.sha256 = hex::encode(Sha256::digest(batch.signing_bytes().map_err(|e|e.to_string())?));
-        let path = journal.with_file_name(format!("{}.progress.{:010}.json",self.id,self.sequence));
+        let path = journal.with_file_name(format!("{}.progress.{:010}.bin",self.id,self.sequence));
         let _claim = claim_result(path.clone()).await?;
-        let temporary = path.with_extension("json.tmp");
+        let temporary = path.with_extension("bin.tmp");
         let mut output = tokio::fs::File::create(&temporary).await.map_err(|e|e.to_string())?;
-        output.write_all(&serde_json::to_vec(&batch).map_err(|e|e.to_string())?).await.map_err(|e|e.to_string())?;
+        output.write_all(&bincode::serialize(&batch).map_err(|e|e.to_string())?).await.map_err(|e|e.to_string())?;
         output.sync_all().await.map_err(|e|e.to_string())?;
         drop(output);
         tokio::fs::rename(temporary,&path).await.map_err(|e|e.to_string())?;
@@ -63,7 +73,7 @@ async fn files() -> Result<Vec<PathBuf>,String> {
     while let Some(entry) = entries.next_entry().await.map_err(|e|e.to_string())? {
         let path = entry.path();
         if path.file_name().is_some_and(|n| n.to_string_lossy().contains(".progress."))
-            && matches!(path.extension().and_then(|e|e.to_str()),Some("json" | "acked")) { paths.push(path); }
+            && matches!(path.extension().and_then(|e|e.to_str()),Some("bin" | "json" | "acked")) { paths.push(path); }
     }
     paths.sort();
     Ok(paths)
@@ -76,12 +86,12 @@ async fn deliver(path:&Path) -> Result<(),String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(e) => return Err(e.to_string()),
     };
-    let batch: MatchProgress = serde_json::from_slice(&bytes).map_err(|e|e.to_string())?;
+    let (batch,binary) = decode_batch(&bytes)?;
     let db = configured_db_url()?;
     let secret = std::env::var("SOW_RELAY_SETTLEMENT_SECRET").map_err(|e|e.to_string())?;
     let started = Instant::now();
     let response = db_client(&db)?.post(format!("{}/internal/match-progress",db.trim_end_matches('/')))
-        .bearer_auth(secret).header("Content-Type","application/json").body(bytes).send().await.map_err(|e|e.to_string())?;
+        .bearer_auth(secret).header("Content-Type",if binary { "application/octet-stream" } else { "application/json" }).body(bytes).send().await.map_err(|e|e.to_string())?;
     if !response.status().is_success() { return Err(format!("journal delivery HTTP {}: {}",response.status(),response.text().await.map_err(|e|e.to_string())?)); }
     let ack: serde_json::Value = response.json().await.map_err(|e|e.to_string())?;
     if ack.get("match_id").and_then(|v|v.as_str()) != Some(batch.match_id.as_str())
@@ -99,21 +109,58 @@ async fn deliver_match(id:&str) -> Result<(),String> {
     let prefix = format!("{id}.progress.");
     for path in files().await? {
         if path.file_name().unwrap().to_string_lossy().starts_with(&prefix)
-            && path.extension().and_then(|e|e.to_str()) == Some("json") { deliver(&path).await?; }
+            && matches!(path.extension().and_then(|e|e.to_str()),Some("bin" | "json")) { deliver(&path).await?; }
     }
     Ok(())
 }
 
 pub(super) async fn finish_delivery(replay:&Path) -> Result<(),String> {
     let id = replay.file_stem().unwrap().to_string_lossy().to_string();
-    deliver_match(&id).await?;
+    let complete = replay.with_extension("progress.complete");
+    if !tokio::fs::try_exists(&complete).await.map_err(|e|e.to_string())? {
+        deliver_match(&id).await?;
+        let prefix = format!("{id}.progress.");
+        let mut segments = files().await?.into_iter().filter(|path| {
+            path.file_name().unwrap().to_string_lossy().starts_with(&prefix)
+                && path.extension().and_then(|e|e.to_str()) == Some("acked")
+        }).collect::<Vec<_>>();
+        segments.sort();
+        let mut first_turn = 0u64;
+        let mut previous = String::new();
+        let mut finished = false;
+        for (sequence, path) in segments.iter().enumerate() {
+            let suffix = path.file_name().unwrap().to_string_lossy().strip_prefix(&prefix).ok_or("invalid journal filename")?.to_string();
+            let saved_sequence = suffix.strip_suffix(".acked").ok_or("unacknowledged journal chunk remains")?.parse::<usize>().map_err(|e|e.to_string())?;
+            if saved_sequence != sequence || finished { return Err("durable journal has a missing or trailing chunk".into()); }
+            let (batch,_) = decode_batch(&tokio::fs::read(path).await.map_err(|e|e.to_string())?)?;
+            if batch.match_id != id || batch.sequence != sequence as u64 || batch.first_turn != first_turn
+                || batch.previous_sha256 != previous || batch.replay_data.len() < 8
+                || hex::encode(Sha256::digest(batch.signing_bytes().map_err(|e|e.to_string())?)) != batch.sha256 {
+                return Err("durable journal sequence or checksum is invalid".into());
+            }
+            first_turn += u64::from_le_bytes(batch.replay_data[..8].try_into().unwrap());
+            previous = batch.sha256;
+            finished = batch.finished;
+        }
+        if segments.is_empty() || !finished { return Err("durable journal has no acknowledged final chunk".into()); }
+        let temporary = complete.with_extension("complete.tmp");
+        let mut file = tokio::fs::File::create(&temporary).await.map_err(|e|e.to_string())?;
+        file.write_all(previous.as_bytes()).await.map_err(|e|e.to_string())?;
+        file.sync_all().await.map_err(|e|e.to_string())?;
+        drop(file);
+        tokio::fs::rename(temporary,&complete).await.map_err(|e|e.to_string())?;
+        std::fs::File::open(complete.parent().unwrap()).and_then(|directory|directory.sync_all()).map_err(|e|e.to_string())?;
+    }
     let prefix = format!("{id}.progress.");
     for path in files().await? {
         if path.file_name().unwrap().to_string_lossy().starts_with(&prefix) {
             tokio::fs::remove_file(path).await.map_err(|e|e.to_string())?;
         }
     }
-    cleanup_result_spool(replay,&replay.with_extension("json")).await
+    cleanup_result_spool(replay,&replay.with_extension("json")).await?;
+    tokio::fs::remove_file(&complete).await.map_err(|e|e.to_string())?;
+    std::fs::File::open(complete.parent().unwrap()).and_then(|directory|directory.sync_all()).map_err(|e|e.to_string())?;
+    Ok(())
 }
 
 pub(super) async fn delivery_worker() {
@@ -131,7 +178,7 @@ pub(super) async fn delivery_worker() {
         }
         let paths = match files().await { Ok(paths)=>paths,Err(error)=>{ warn!("journal delivery scan: {error}"); continue; } };
         for path in paths {
-            if path.extension().and_then(|e|e.to_str()) != Some("json") { continue; }
+            if !matches!(path.extension().and_then(|e|e.to_str()),Some("bin" | "json")) { continue; }
             let id = path.file_name().unwrap().to_string_lossy().split('.').next().unwrap().to_string();
             if running.len() >= 8 || !running.insert(id.clone()) { continue; }
             tasks.spawn(async move { let result = deliver_match(&id).await; (id,result) });
@@ -146,11 +193,22 @@ pub(super) async fn recover(journal:&Path, metadata:&mut ReplaySpoolMetadata) ->
     let mut stream = Stream::new(id.clone());
     let mut already_finished = false;
     if let Some(path) = latest {
-        let saved: MatchProgress = serde_json::from_slice(&tokio::fs::read(path).await.map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
+        let (saved,_) = decode_batch(&tokio::fs::read(path).await.map_err(|e|e.to_string())?)?;
+        if saved.replay_data.len() < 8 { return Err("saved journal chunk is incomplete".into()); }
         stream.sequence = saved.sequence + 1;
         stream.first_turn = saved.first_turn + u64::from_le_bytes(saved.replay_data[..8].try_into().unwrap());
         stream.previous = saved.sha256;
         already_finished = saved.finished;
+    }
+    if !tokio::fs::try_exists(journal).await.map_err(|e|e.to_string())? {
+        if already_finished {
+            // The final chunk is the durable proof. A crash may occur after
+            // the journal rename but before the metadata phase is updated.
+            metadata.phase = ReplayPhase::StreamFinalized;
+            persist_replay_metadata(&journal.with_extension("json"),metadata).await?;
+            return Ok(true);
+        }
+        return Err("streaming match has no journal or final chunk".into());
     }
     let mut input = tokio::fs::File::open(journal).await.map_err(|e|e.to_string())?;
     let mut output = tokio::fs::OpenOptions::new().append(true).open(journal).await.map_err(|e|e.to_string())?;

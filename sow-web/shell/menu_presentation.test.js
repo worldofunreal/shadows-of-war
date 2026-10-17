@@ -550,7 +550,9 @@ test("hero purchase stays server-backed, direct, and visually honest", () => {
     // One price per item: leaders and skins cost gems or crowns, never dollars.
     assert.doesNotMatch(storeSource, /direct_product_id|open_product_purchase/);
     assert.match(storeSource, /data-command='buy_product'/);
-    assert.match(storeSource, /SOW_t\("store\.buy"\) \+ \(!isAndroidTwa\(\) && bundle\.price_label/);
+    // Real money is taken only by Google Play in the Android app: no web checkout.
+    assert.doesNotMatch(storeSource, /stripe|initEmbeddedCheckout|\/store\/checkout|price_label/i);
+    assert.match(storeSource, /return isAndroidTwa\(\) && typeof window\.SOW_androidPurchaseSupports/);
     assert.match(shellSource, /data-menu-overlay='purchase'/);
     assert.match(shellSource, /openLeaderPurchase/);
     assert.match(shellSource, /send\("unlock_leader", \{ leader_id: purchaseModal\.leaderId, currency: purchaseModal\.currency \}\)/);
@@ -621,13 +623,20 @@ test("leader display names use the catalog translation keys for every leader", (
 });
 
 
+test("portals with their own accounts never offer email or social login", () => {
+    // CrazyGames forbids external login options, Poki and Jest supply accounts.
+    assert.match(coreSource, /\["poki", "jest", "crazygames"\]\.indexOf\(window\.SOW_PORTAL\) === -1/);
+    assert.equal(shellSource.match(/portalOffersSignIn\(\) &&/g).length, 2);
+    assert.doesNotMatch(shellSource, /SOW_PORTAL !== "poki" && window\.SOW_PORTAL !== "jest" && !\(auth/);
+});
+
 test("direct purchases wait for delivery before celebrating", () => {
     assert.match(storeSource, /EXTERNAL_PURCHASE_POLL_MS = 3000/);
     assert.match(storeSource, /EXTERNAL_PURCHASE_WAIT_MS = 120000/);
     assert.match(storeSource, /sow_pending_store_purchase_v1/);
     assert.match(storeSource, /profileApi\("\/store\/purchases"\)/);
     assert.match(storeSource, /record\.status === "granted"/);
-    assert.match(storeSource, /onComplete: function \(\) \{\s*completeExternalPurchase\(productId\);/);
+    assert.match(shellSource, /sow:android-purchase-result[\s\S]*completeExternalPurchase\(attempt\.product_id\)/);
     assert.match(storeSource, /purchaseModal\.type === "product"[\s\S]*attempt\.delivery_id[\s\S]*profileHasExternalPurchase/);
     assert.match(storeSource, /purchaseModal\.type === "bundle"[\s\S]*beginBundlePurchasePresentation/);
     assert.match(storeSource, /purchaseModal\.phase === "spending" \|\| purchaseModal\.phase === "success"/);

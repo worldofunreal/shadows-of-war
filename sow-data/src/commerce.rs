@@ -16,9 +16,8 @@ pub const WELCOME_GEMS: u64 = 475;
 /// New receipt version intentionally tops up accounts that already have v1.
 pub const WELCOME_GRANT_ID: &str = "welcome_gems_v2";
 
-// (product id, gems, price in US cents). Product ids are frozen in Stripe,
-// RevenueCat and Google Play; the number in an id is not the gem amount.
-// Checkout refuses a pack whose Stripe price differs from `price_cents`.
+// (product id, gems, price in US cents). Product ids are frozen in Google Play
+// and RevenueCat; the number in an id is not the gem amount.
 const GEM_BUNDLES: [(&str, u64, u64); 3] = [
     ("sow_gems_500", 500, 199),
     ("sow_gems_1200", 1_400, 499),
@@ -84,7 +83,6 @@ pub struct GemBundle {
     pub product_id: String,
     pub asset_path: String,
     pub price_cents: u64,
-    pub price_label: String,
     /// Extra gems per dollar versus the smallest pack, rounded.
     pub bonus_percent: u64,
 }
@@ -96,8 +94,6 @@ pub struct StoreCatalog {
     pub leaders: Vec<LeaderOffer>,
     pub skins: Vec<SkinOffer>,
     pub gem_bundles: Vec<GemBundle>,
-    #[serde(default)]
-    pub web_checkout_available: bool,
     pub crowns: u64,
     pub gems: u64,
 }
@@ -230,7 +226,6 @@ pub fn gem_bundles() -> Vec<GemBundle> {
             product_id: product_id.to_string(),
             asset_path: format!("gameplay/store/gem_bundles/{product_id}.webp"),
             price_cents,
-            price_label: format!("${}.{:02}", price_cents / 100, price_cents % 100),
             bonus_percent: (gems * base_cents * 100 + base_gems * price_cents / 2)
                 / (base_gems * price_cents)
                 - 100,
@@ -245,52 +240,13 @@ pub fn gem_bundle(product_id: &str) -> Option<GemBundle> {
 }
 
 pub fn gem_amount_for_product(product_id: &str) -> Option<u64> {
-    let product_id = match product_id {
-        "price_1UBIdc5GjRL6SWJS0cuGDATW" => "sow_gems_500",
-        "price_1UBIdn5GjRL6SWJSKdxrkoU2" => "sow_gems_1200",
-        "price_1UBIdn5GjRL6SWJSMPiDU5pi" => "sow_gems_2600",
-        other => other,
-    };
     gem_bundle(product_id).map(|bundle| bundle.gems)
 }
 
 
-pub fn direct_leader_product_id(leader: Leader) -> String {
-    if PERMANENTLY_FREE_LEADERS.contains(&leader) {
-        String::new()
-    } else {
-        format!("sow_offer_leader_{}", leader_id(leader))
-    }
-}
-
-pub fn direct_skin_product_id(skin_id: &str) -> Option<String> {
-    skin_by_id(skin_id).map(|_| format!("sow_offer_skin_{skin_id}"))
-}
-
-pub fn direct_leader_for_product(product_id: &str) -> Option<Leader> {
-    product_id
-        .strip_prefix("sow_offer_leader_")
-        .and_then(leader_from_id)
-}
-
-pub fn direct_skin_for_product(product_id: &str) -> Option<SkinOffer> {
-    product_id
-        .strip_prefix("sow_offer_skin_")
-        .and_then(direct_skin_product_id)
-        .filter(|expected| expected == product_id)
-        .and_then(|_| {
-            product_id
-                .strip_prefix("sow_offer_skin_")
-                .and_then(skin_by_id)
-        })
-}
-
+/// Real money buys gem packs only; leaders and skins cost gems or crowns.
 pub fn is_store_product(product_id: &str) -> bool {
-    gem_amount_for_product(product_id).is_some()
-        || direct_leader_for_product(product_id)
-            .is_some_and(|leader| !PERMANENTLY_FREE_LEADERS.contains(&leader))
-        || direct_skin_for_product(product_id).is_some()
-        || product_id == "sow_offer_genghis_khan_royal_lattice"
+    gem_bundle(product_id).is_some()
 }
 
 pub fn skins() -> Vec<SkinOffer> {
@@ -401,7 +357,6 @@ pub fn catalog_for_profile(
         leaders,
         skins,
         gem_bundles: gem_bundles(),
-        web_checkout_available: false,
         crowns,
         gems,
     }
@@ -479,18 +434,14 @@ mod tests {
     fn gem_products_have_authoritative_amounts() {
         assert_eq!(gem_bundles().len(), 3);
         assert_eq!(gem_amount_for_product("sow_gems_1200"), Some(1_400));
-        assert_eq!(
-            gem_amount_for_product("price_1UBIdn5GjRL6SWJSKdxrkoU2"),
-            Some(1_400)
-        );
         assert_eq!(gem_amount_for_product("unknown"), None);
     }
 
     #[test]
     fn bigger_gem_packs_always_give_more_gems_per_dollar() {
         let bundles = gem_bundles();
-        let labels: Vec<_> = bundles.iter().map(|b| (b.price_label.as_str(), b.bonus_percent)).collect();
-        assert_eq!(labels, [("$1.99", 0), ("$4.99", 12), ("$9.99", 20)]);
+        let prices: Vec<_> = bundles.iter().map(|b| (b.price_cents, b.bonus_percent)).collect();
+        assert_eq!(prices, [(199, 0), (499, 12), (999, 20)]);
         for pair in bundles.windows(2) {
             assert!(pair[1].gems * pair[0].price_cents > pair[0].gems * pair[1].price_cents);
         }
@@ -498,15 +449,10 @@ mod tests {
 
     #[test]
     fn only_gem_packs_are_sold_for_money() {
-        // Checkout sells `gem_bundle` products only.
-        assert!(gem_bundle("sow_gems_500").is_some());
-        assert!(gem_bundle("sow_offer_leader_caesar").is_none());
-        assert!(gem_bundle("sow_offer_skin_ember_vein").is_none());
-        assert!(gem_bundle("price_1UBIdc5GjRL6SWJS0cuGDATW").is_none());
-        // Past direct purchases still deliver (leaders and skins are no
-        // longer sold for money; their old products remain valid receipts).
-        assert!(is_store_product("sow_offer_leader_caesar"));
-        assert!(is_store_product("sow_offer_skin_ember_vein"));
+        assert!(is_store_product("sow_gems_500"));
+        assert!(!is_store_product("sow_offer_leader_caesar"));
+        assert!(!is_store_product("sow_offer_skin_ember_vein"));
+        assert!(!is_store_product("price_1UBIdc5GjRL6SWJS0cuGDATW"));
     }
 
     #[test]

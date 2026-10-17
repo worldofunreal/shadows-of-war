@@ -395,7 +395,7 @@
         var crowns = state.crowns || 0;
         var laurels = state.laurels || 0;
         var gems = state.gems || 0;
-        var showSignIn = window.SOW_PORTAL !== "poki" && window.SOW_PORTAL !== "jest" && !(auth.linked || auth.pending);
+        var showSignIn = portalOffersSignIn() && !(auth.linked || auth.pending);
         var signInMarkup = "";
         /* POKI_SHARED_SIGNIN_MARKUP_BEGIN */
         signInMarkup = "<button class='sow-menu__signin' type='button' data-command='sign_in'>" + esc(SOW_t("menu.sign_in")) + "</button>";
@@ -418,7 +418,7 @@
                         "<span class='sow-menu__progress-cell sow-menu__laurels' aria-label='" + esc(SOW_t("profile.laurels")) + "'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("laurel")) + "' alt='' aria-hidden='true'><strong data-progression-laurels-value>" + esc(laurels) + "</strong></span>" +
                         "<span class='sow-menu__progress-cell sow-menu__gems'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("gem")) + "' alt='' aria-hidden='true'><strong data-progression-gems-value>" + esc(gems) + "</strong></span>" +
                     "</div>" +
-                    (showSignIn ? signInMarkup : ((window.SOW_PORTAL === "poki" || window.SOW_PORTAL === "jest") ? "<span class='sow-menu__account-label'>" + esc(SOW_t("menu.anonymous")) + "</span>" : "")) +
+                    (showSignIn ? signInMarkup : (!portalOffersSignIn() ? "<span class='sow-menu__account-label'>" + esc(SOW_t("menu.anonymous")) + "</span>" : "")) +
                     "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.settings")) + "'>" + menuIcon("settings") + "</button>" +
                 "</div>" +
             "</header>";
@@ -809,7 +809,7 @@
         /* POKI_SHARED_AUTH_LOOKUP_BEGIN */
         auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() || {} : {};
         /* POKI_SHARED_AUTH_LOOKUP_END */
-        var showSignIn = window.SOW_PORTAL !== "poki" && window.SOW_PORTAL !== "jest" && !(auth.linked || auth.pending);
+        var showSignIn = portalOffersSignIn() && !(auth.linked || auth.pending);
         var actions = topbar.querySelector(".sow-menu__top-actions");
         var settingsButton = actions && actions.querySelector("[data-command='toggle_settings']");
         var signIn = actions && actions.querySelector(".sow-menu__signin");
@@ -1605,18 +1605,9 @@
             beginStoreRestore();
             return;
         }
-        if (command === "close_store_checkout") {
-            closeStoreCheckout();
-            return;
-        }
         /* POKI_SHARED_STORE_ACTIONS_END */
         if (command === "main_nav") {
             var navScreen = target.dataset.navScreen || "battle";
-            if (storeCheckoutInstance && typeof storeCheckoutInstance.destroy === "function") {
-                storeCheckoutInstance.destroy();
-            }
-            storeCheckoutInstance = null;
-            storeCheckoutProduct = null;
             storeCheckoutRequestId = null;
             storeCheckoutBusy = false;
             purchaseModal = null;
@@ -1974,16 +1965,13 @@
             if (purchaseModal && purchaseModal.type === "leader" && purchaseModal.phase === "confirm" && !purchaseModal.submitted) {
                 menuOutcomeCounts.leader_purchase_cancelled = (menuOutcomeCounts.leader_purchase_cancelled || 0) + 1;
             }
-            if (storeCheckoutProduct || storeCheckoutInstance) closeStoreCheckout();
+            if (typeof canDismissPurchaseModal === "function" && !canDismissPurchaseModal()) return;
+            if (typeof dismissPurchaseModal === "function") dismissPurchaseModal();
             else {
-                if (typeof canDismissPurchaseModal === "function" && !canDismissPurchaseModal()) return;
-                if (typeof dismissPurchaseModal === "function") dismissPurchaseModal();
-                else {
-                    purchaseModal = null;
-                    purchaseIntent = null;
-                }
-                render();
+                purchaseModal = null;
+                purchaseIntent = null;
             }
+            render();
             return;
         }
         if (command === "unlock_skin" || command === "equip_skin") {
@@ -2293,16 +2281,13 @@
         }
         if (event.key === "Escape" && purchaseModal) {
             event.preventDefault();
-            if (storeCheckoutProduct || storeCheckoutInstance) closeStoreCheckout();
+            if (typeof canDismissPurchaseModal === "function" && !canDismissPurchaseModal()) return;
+            if (typeof dismissPurchaseModal === "function") dismissPurchaseModal();
             else {
-                if (typeof canDismissPurchaseModal === "function" && !canDismissPurchaseModal()) return;
-                if (typeof dismissPurchaseModal === "function") dismissPurchaseModal();
-                else {
-                    purchaseModal = null;
-                    purchaseIntent = null;
-                }
-                render();
+                purchaseModal = null;
+                purchaseIntent = null;
             }
+            render();
             return;
         }
         if (event.key === "Escape" && (skinPickerOpen || heroInfoOpen)) {

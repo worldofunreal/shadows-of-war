@@ -9,11 +9,11 @@
 
 use std::sync::LazyLock;
 
+#[cfg(test)]
 pub const BOT_NAME_COUNT: usize = 7199;
 
-pub static BOT_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
-    include_str!("names.txt").lines().collect()
-});
+pub static BOT_NAMES: LazyLock<Vec<&'static str>> =
+    LazyLock::new(|| include_str!("names.txt").lines().collect());
 
 #[cfg(test)]
 mod tests {

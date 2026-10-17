@@ -27,6 +27,7 @@ const identitySource = fs.readFileSync(path.join(shell, "../../sow-client/src/an
 const assetSource = fs.readFileSync(path.join(shell, "../../sow-client/src/asset.rs"), "utf8");
 const relaySource = fs.readFileSync(path.join(shell, "../../sow-relay/src/main.rs"), "utf8");
 const serverSource = fs.readFileSync(path.join(shell, "../../sow-server/src/main.rs"), "utf8");
+const verificationSource = fs.readFileSync(path.join(shell, "../../sow-server/src/verification.rs"), "utf8");
 const menuCssFiles = [
     "main_menu.base.css",
     "main_menu.lobbies.css"
@@ -722,7 +723,9 @@ test("return observation and recovery have separate owners", () => {
 
 test("missing replay maps warn and unacknowledged results remain recoverable", () => {
     assert.match(serverSource, /MissingMap\(String\),/);
-    assert.match(serverSource, /ReplayVerificationError::MissingMap\(format!\("map read failed/);
+    const mapLoader = verificationSource.slice(verificationSource.indexOf("pub(super) fn match_map_bytes"), verificationSource.indexOf("pub(super) async fn register_map"));
+    assert.match(mapLoader, /std::fs::metadata[\s\S]*?map_err[\s\S]*?ReplayVerificationError::MissingMap/);
+    assert.match(mapLoader, /std::fs::read\(path\)[\s\S]*?map_err[\s\S]*?ReplayVerificationError::MissingMap/);
     assert.match(serverSource, /replay map unavailable, will retry after a later release/);
     assert.match(serverSource, /"error": "replay map unavailable"/);
     assert.doesNotMatch(relaySource, /permanently rejected by database.*dropping spool entry/);

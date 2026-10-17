@@ -239,6 +239,51 @@ mod tests {
     }
 
     #[test]
+    fn nearest_structure_site_only_returns_legal_closest_foundations() {
+        let (w, h, owner) = (32u32, 32u32, 1u16);
+        let mut map = GameMap::new(w, h);
+        for y in 0..h {
+            for x in 0..w {
+                map.set_owner_id(x, y, if x < 24 { owner } else { 2 });
+            }
+        }
+        // Water in the first two columns gives ports a coast.
+        for y in 0..h {
+            for x in 0..2 {
+                map.terrain[(y * w + x) as usize] = crate::map::MapTile::from_byte(0);
+            }
+        }
+        let mut grid = BuildingGrid::default();
+        grid.rebuild_from_pairs(w, h, &[(12, 16)]);
+        for (kind, x, y) in [
+            (BuildingKind::City, 12, 16),
+            (BuildingKind::City, 28, 16),
+            (BuildingKind::Port, 16, 16),
+            (BuildingKind::Farm, 0, 0),
+        ] {
+            let site = nearest_structure_site(&map, owner, kind, x, y, 12, &grid)
+                .unwrap_or_else(|| panic!("{kind:?} near ({x}, {y})"));
+            assert!(validate_structure_site(&map, owner, kind, site, &grid).is_ok());
+            let (sx, sy) = idx_xy(site, w);
+            let best = euclid_sq(sx as i64, sy as i64, x as i64, y as i64);
+            for tile in 0..w * h {
+                let (tx, ty) = idx_xy(tile, w);
+                if euclid_sq(tx as i64, ty as i64, x as i64, y as i64) < best {
+                    assert!(
+                        validate_structure_site(&map, owner, kind, tile, &grid).is_err(),
+                        "{kind:?}: closer legal site {tile} skipped"
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            nearest_structure_site(&map, owner, BuildingKind::City, 30, 16, 2, &grid),
+            None,
+            "foreign land has no site within the radius"
+        );
+    }
+
+    #[test]
     fn adjoining_city_is_a_valid_site() {
         let (w, h) = (32u32, 32u32);
         let mut m = GameMap::new(w, h);

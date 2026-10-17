@@ -2303,6 +2303,34 @@ pub(crate) mod reward_exit_tests {
     }
 
     #[wasm_bindgen_test]
+    async fn natural_finish_keeps_endgame_open_until_the_player_returns() {
+        let account = "0123456789abcdef0123456789abcdef";
+        let initial = serde_json::json!({"account_id":account,"display_name":"Audit","profile":PlayerProgress::default()}).to_string();
+        let completed = serde_json::json!({"account_id":account,"display_name":"Audit",
+            "profile":profile_with("42",Some(ReplayVerificationStatus::Verified),RewardSettlementStatus::Applied)}).to_string();
+        setup_multiplayer_exit(&initial,&completed);
+        let mut app = crate::app::SowApp::new();
+        app.ui.app.phase = crate::ClientPhase::Playing;
+        app.net.is_offline = false;
+        app.sim.my_lobby_id = Some(42);
+        app.progress_account_id = Some(account.into());
+        app.menu_return = Some(MenuReturnContext {
+            account_id:Some(account.into()),cycle_id:7,source:"multiplayer".into(),match_id:Some("42".into()),
+            receipt_ids:Vec::new(),status:"waiting".into(),requested_screen:None,voluntary_exit:Some(false),
+            preparation_only:true,match_finished:false,exit_recorded:false,server_state:None,recording_deadline:None,
+            result_request_id:None,recovery_request_id:None,recovery_accepted:false,started_at:None,
+        });
+        app.handle_result_notifications(None,Some(701));
+        assert_eq!(app.ui.app.phase,crate::ClientPhase::Playing);
+        assert!(app.finished_relay_match());
+        assert!(app.menu_return.as_ref().unwrap().match_finished);
+        assert!(app.menu_return.as_ref().unwrap().preparation_only);
+        assert_eq!(multiplayer_exit_requests(),0,"natural completion must not request a new exit");
+        drop(app);
+        wasm_bindgen_futures::JsFuture::from(restore_tutorial_exit()).await.unwrap();
+    }
+
+    #[wasm_bindgen_test]
     async fn connection_loss_observes_relay_closure_without_ordering_exit() {
         let account_id = "0123456789abcdef0123456789abcdef";
         let mut initial_progress = PlayerProgress::default();

@@ -516,6 +516,21 @@ impl SowApp {
         } // end if !ws_disconnected
         // end if let Some(c)
 
+        self.handle_result_notifications(natural_closure,natural_finish);
+        ProcessWsResult {
+            ws_disconnected,
+            switch_to_relay,
+            exit_to_menu_after_net,
+            lobby_exit_to_menu,
+            relay_session_resumed,
+        }
+    }
+
+    pub(crate) fn handle_result_notifications(
+        &mut self,
+        natural_closure:Option<(u64,sow_core::protocol::ExitReason)>,
+        natural_finish:Option<u64>,
+    ) {
         if natural_closure.is_some() || natural_finish.is_some() {
             if !self.menu_return.as_ref().is_some_and(|c|c.preparation_only) {
                 self.prepare_match_result(natural_finish.unwrap_or(0));
@@ -527,13 +542,6 @@ impl SowApp {
             self.save_menu_return_context();
             if let Some((turn,reason)) = natural_closure { log::info!("[exit-timing] natural closure turn={turn} reason={reason:?}"); }
             if let Some(turn) = natural_finish { log::info!("[exit-timing] match finished turn={turn}; retaining endgame panel"); }
-        }
-        ProcessWsResult {
-            ws_disconnected,
-            switch_to_relay,
-            exit_to_menu_after_net,
-            lobby_exit_to_menu,
-            relay_session_resumed,
         }
     }
 }

@@ -1173,6 +1173,28 @@ impl TextRenderer {
         diameter: f32,
         tint: [f32; 4],
     ) {
+        self.push_status_sprite_with_desaturation(sprite, center, diameter, tint, 0.0);
+    }
+
+    /// Push a disabled status sprite with grayscale color while preserving its alpha.
+    pub fn push_status_sprite_desaturated(
+        &mut self,
+        sprite: NameplateStatusSprite,
+        center: [f32; 2],
+        diameter: f32,
+        tint: [f32; 4],
+    ) {
+        self.push_status_sprite_with_desaturation(sprite, center, diameter, tint, 1.0);
+    }
+
+    fn push_status_sprite_with_desaturation(
+        &mut self,
+        sprite: NameplateStatusSprite,
+        center: [f32; 2],
+        diameter: f32,
+        tint: [f32; 4],
+        desaturation: f32,
+    ) {
         let diameter = diameter.max(0.0);
         self.push_inst(TextInstanceGpu {
             screen_pos: [center[0] - diameter * 0.5, center[1] - diameter * 0.5],
@@ -1181,7 +1203,7 @@ impl TextRenderer {
             content_rect: [0.0, 0.0, 1.0, 1.0],
             color: tint,
             outline_color: [0.0; 4],
-            face_dilate: 0.0,
+            face_dilate: desaturation.clamp(0.0, 1.0),
             outline_thickness: 0.0,
             underlay_offset_y: 0.0,
             underlay_softness: 0.0,

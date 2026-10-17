@@ -815,9 +815,19 @@ test("build mode controls live in the world renderer, not the HTML HUD", () => {
     const clickBody = mapClick.slice(clickStart, mapClick.indexOf("fn try_tutorial_campaign_nameplate_attack", clickStart));
     assert.ok(clickBody.indexOf("button_at(") < clickBody.indexOf("self.mouse_to_tile(x, y)"), "buttons resolve before the tile");
     assert.match(windowInput, /controls\.button_at\([\s\S]*?controls\.grabs\(/);
+    // Poka-yoke: every move lands on a legal foundation; no gold or no room never enters build mode.
+    assert.match(mapClick, /fn move_building_preview[\s\S]*?nearest_structure_site\(/);
+    assert.match(mapClick, /fn nudge_building_placement[\s\S]*?validate_structure_site\(/);
+    const selectStart = mapClick.indexOf("pub(crate) fn select_building_kind");
+    const selectBody = mapClick.slice(selectStart, mapClick.indexOf("pub(crate) fn select_warship_build_mode", selectStart));
+    assert.ok(selectBody.indexOf("building_gold_shortfall(kind)") < selectBody.indexOf("nearest_structure_site("));
+    assert.match(selectBody, /hud\.build_no_space/);
     assert.doesNotMatch(mapShader, /snap_point|anchor_valid|site & 4u/);
     assert.doesNotMatch(windowInput, /begin_hold_build|pump_hold_build|hold_build_active/);
     assert.doesNotMatch(mapShader, /nobuild_slots/);
     assert.doesNotMatch(mapShader, /placement_texture/, "placement reads the live owner texture");
-    assert.match(mapShader, /let own_land = placement_own\(cell_hex\);[\s\S]*?length\(world_pos - center\)/);
+    const placementStart = mapShader.indexOf("if (globals.placement_scale > 0.0) {");
+    const placementShader = mapShader.slice(placementStart, mapShader.indexOf("return base_color", placementStart));
+    assert.match(placementShader, /let own_land = placement_own\(cell_hex\);[\s\S]*?let border_distance =[\s\S]*?let boundary = 1\.0 - smoothstep_safe/);
+    assert.doesNotMatch(placementShader, /spotlight|length\(/);
 });

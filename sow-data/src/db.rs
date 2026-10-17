@@ -2642,6 +2642,13 @@ impl PlayerDb {
             .get("leader")
             .and_then(serde_json::Value::as_str)
             .and_then(crate::rewards::canonical_leader_name);
+        let existing = self.account_by_id(account_id).await?;
+        let closure_was_saved = existing.profile.reward_receipts.get(match_id)
+            .is_some_and(|receipt| receipt.personal_closure_turn == Some(closure_turn))
+            && self.load_match_record(match_id)?.is_some_and(|record| record.participants.iter()
+                .any(|participant| participant.account_id == account_id
+                    && participant.personal_closure_turn == Some(closure_turn)));
+        if closure_was_saved { return Ok(existing); }
         let account = self
             .record_match_participation(account_id, leader.clone(), match_id)
             .await?;
@@ -2932,6 +2939,49 @@ impl PlayerDb {
             .iter()
             .find(|participant| participant.account_id == account_id)
             .ok_or("invalid verified result: closed participant is missing")?;
+        let existing_account = self.account_by_id(account_id).await?;
+        let base_receipt = existing_account.profile.reward_receipts.get(&result.match_id);
+        let bonus_receipt = existing_account.profile.reward_receipts.get(&format!("verified_bonus:{}",result.match_id));
+        let earned = crate::rewards::calculate(crate::rewards::RewardInput {
+            won:participant.won, players_defeated:participant.players_defeated,
+            empires_defeated:participant.empires_defeated, tribes_defeated:participant.tribes_defeated,
+            kills:participant.kills, assists:participant.assists, ..Default::default()
+        });
+        let participation = crate::rewards::calculate(crate::rewards::RewardInput::default());
+        let expected_bonus = crate::rewards::MatchReward {
+            xp:earned.xp.saturating_sub(participation.xp),
+            leader_xp:earned.leader_xp.saturating_sub(participation.leader_xp),
+            crowns:earned.crowns.saturating_sub(participation.crowns),
+            laurels:earned.laurels.saturating_sub(participation.laurels),
+        };
+        let history_matches = self.load_match_record(&result.match_id)?.is_some_and(|record| {
+            record.participants.iter().find(|entry| entry.account_id == account_id).is_some_and(|entry| {
+                entry.personal_closure_turn == Some(closure_turn)
+                    && entry.won == participant.won && entry.kills == participant.kills
+                    && entry.deaths == participant.deaths && entry.assists == participant.assists
+                    && entry.players_defeated == participant.players_defeated
+                    && entry.empires_defeated == participant.empires_defeated
+                    && entry.tribes_defeated == participant.tribes_defeated
+                    && entry.placement == if participant.won { 1 } else { 0 }
+                    && entry.xp == earned.xp && entry.leader_xp == earned.leader_xp
+                    && entry.crowns == earned.crowns && entry.laurels == earned.laurels
+            })
+        });
+        if base_receipt.is_some_and(|receipt| receipt.personal_closure_turn == Some(closure_turn)
+                && receipt.verification_status == Some(ReplayVerificationStatus::Verified))
+            && bonus_receipt.is_some_and(|receipt| receipt.match_id == result.match_id
+                && receipt.xp == expected_bonus.xp && receipt.leader_xp == expected_bonus.leader_xp
+                && receipt.crowns == expected_bonus.crowns && receipt.laurels == expected_bonus.laurels)
+            && history_matches
+        {
+            let outcome = PlayGamesMatchOutcome {
+                account_id:existing_account.id.clone(), won:participant.won,
+                wins:existing_account.profile.verified_wins,
+                sync_revision:existing_account.profile.playgames_sync_revision,
+                unlocked_achievements:existing_account.profile.unlocked_achievements.iter().cloned().collect(),
+            };
+            return Ok(Some((outcome,existing_account)));
+        }
         let account = self
             .apply_verified_participant_reward(result, participant, Some(closure_turn))
             .await?
@@ -3620,35 +3670,6 @@ impl PlayerDb {
                     .insert(event_id.to_string());
                 if let Some(gems) = crate::commerce::gem_amount_for_product(product_id) {
                     account.profile.gems = account.profile.gems.saturating_add(gems);
-                } else if let Some(leader) = crate::commerce::direct_leader_for_product(product_id)
-                {
-                    let leader_id = crate::commerce::leader_id(leader).to_string();
-                    if !account.profile.owned_leaders.contains(&leader_id) {
-                        account.profile.owned_leaders.insert(leader_id.clone());
-                        account.profile.purchased_leaders.insert(leader_id);
-                    }
-                } else if let Some(skin) = crate::commerce::direct_skin_for_product(product_id) {
-                    if !account.profile.owned_skins.contains(&skin.id) {
-                        account.profile.owned_skins.insert(skin.id.clone());
-                        account.profile.purchased_skins.insert(skin.id);
-                    }
-                } else if product_id == "sow_offer_genghis_khan_royal_lattice" {
-                    let leader_id =
-                        crate::commerce::leader_id(crate::leaders::Leader::GenghisKhan).to_string();
-                    if !account.profile.owned_leaders.contains(&leader_id) {
-                        account.profile.owned_leaders.insert(leader_id.clone());
-                        account.profile.purchased_leaders.insert(leader_id);
-                    }
-                    if !account.profile.owned_skins.contains("royal_lattice") {
-                        account
-                            .profile
-                            .owned_skins
-                            .insert("royal_lattice".to_string());
-                        account
-                            .profile
-                            .purchased_skins
-                            .insert("royal_lattice".to_string());
-                    }
                 }
                 account.profile.purchase_history.insert(
                     delivery_key.clone(),
@@ -3699,60 +3720,6 @@ impl PlayerDb {
         let mut con = self.get_connection().await?;
         let account = Self::load_account(&mut con, account_id).await?;
         Ok(account.profile.purchase_history.get(purchase_id).cloned())
-    }
-
-    pub async fn record_stripe_purchase(
-        &self,
-        purchase_user_id: &str,
-        session_id: &str,
-        product_id: &str,
-        status: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let account_id = self
-            .account_id_from_reference(purchase_user_id)
-            .await?
-            .ok_or("Stripe purchase user is unknown")?;
-        let session_id = session_id.trim();
-        if session_id.is_empty() || session_id.len() > 256 {
-            return Err("Stripe session id is invalid".into());
-        }
-        if !crate::commerce::is_store_product(product_id) {
-            return Err("unknown Stripe product".into());
-        }
-        let purchase_id = format!("stripe:{session_id}");
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let mut con = self.get_connection().await?;
-        let account =
-            Self::update_account_atomic(&mut con, &Self::account_key(&account_id), |account| {
-                if let Some(existing) = account.profile.purchase_history.get_mut(&purchase_id) {
-                    if existing.status == "granted" || existing.status == "revoked" {
-                        return;
-                    }
-                    existing.status = status.to_string();
-                    existing.updated_at = now;
-                    return;
-                }
-                account.profile.purchase_history.insert(
-                    purchase_id.clone(),
-                    PurchaseRecord {
-                        id: purchase_id.clone(),
-                        provider: "stripe".to_string(),
-                        environment: "PRODUCTION".to_string(),
-                        product_id: product_id.to_string(),
-                        transaction_id: Some(session_id.to_string()),
-                        status: status.to_string(),
-                        acquired_at: now,
-                        updated_at: now,
-                    },
-                );
-                account.updated_at = now;
-            })
-            .await?;
-        self.save_player_account_to_redb(&account);
-        Ok(())
     }
 
     pub async fn revoke_revenuecat_product(
@@ -3810,35 +3777,6 @@ impl PlayerDb {
                 }
                 if let Some(gems) = crate::commerce::gem_amount_for_product(product_id) {
                     account.profile.gems = account.profile.gems.saturating_sub(gems);
-                } else if let Some(leader) = crate::commerce::direct_leader_for_product(product_id)
-                {
-                    let leader_id = crate::commerce::leader_id(leader).to_string();
-                    if account.profile.purchased_leaders.remove(&leader_id) {
-                        let earned = crate::campaign::earned_leader(&account.profile.completed_episodes)
-                            .is_some_and(|earned| crate::commerce::leader_id(earned) == leader_id);
-                        if !earned {
-                            account.profile.owned_leaders.remove(&leader_id);
-                        }
-                    }
-                } else if let Some(skin) = crate::commerce::direct_skin_for_product(product_id) {
-                    if account.profile.purchased_skins.remove(&skin.id) {
-                        account.profile.owned_skins.remove(&skin.id);
-                        if account.profile.selected_skin.as_deref() == Some(skin.id.as_str()) {
-                            account.profile.selected_skin = None;
-                        }
-                    }
-                } else if product_id == "sow_offer_genghis_khan_royal_lattice" {
-                    let leader_id =
-                        crate::commerce::leader_id(crate::leaders::Leader::GenghisKhan).to_string();
-                    if account.profile.purchased_leaders.remove(&leader_id) {
-                        account.profile.owned_leaders.remove(&leader_id);
-                    }
-                    if account.profile.purchased_skins.remove("royal_lattice") {
-                        account.profile.owned_skins.remove("royal_lattice");
-                        if account.profile.selected_skin.as_deref() == Some("royal_lattice") {
-                            account.profile.selected_skin = None;
-                        }
-                    }
                 }
                 account.profile.purchase_history.insert(
                     delivery_key.clone(),
@@ -4722,7 +4660,8 @@ impl PlayerDb {
                 | crate::profile::MatchWork::Participant { match_id, account_id, .. } => {
                 self.registered_human_participant(match_id, account_id)?;
             }
-            crate::profile::MatchWork::Replay { match_id } | crate::profile::MatchWork::Progress { match_id, .. } => {
+            crate::profile::MatchWork::Replay { match_id } | crate::profile::MatchWork::Progress { match_id, .. }
+                | crate::profile::MatchWork::Archive { match_id, .. } => {
                 self.match_start_record(match_id)?.ok_or("trusted match registration unavailable")?;
             }
         }
@@ -4807,16 +4746,18 @@ impl PlayerDb {
             crate::profile::MatchWork::Participant { .. } => 1,
             crate::profile::MatchWork::Replay { .. } => 2,
             crate::profile::MatchWork::Progress { .. } => if job.urgent { 1 } else { 3 },
+            crate::profile::MatchWork::Archive { .. } => 4,
         }, job.queued_at_ms));
         // Reserve room for both owners: a backlog of exits must not hide the
         // result needed to finish them, or vice versa.
-        let (mut exits, mut checks, mut progress) = (0, 0, 0);
+        let (mut exits, mut checks, mut progress, mut archives) = (0, 0, 0, 0);
         jobs.retain(|job| {
             let count = if matches!(job.work, crate::profile::MatchWork::RecoveryExit { .. }) { &mut exits }
                 else if matches!(job.work, crate::profile::MatchWork::Progress { .. }) && !job.urgent { &mut progress }
+                else if matches!(job.work, crate::profile::MatchWork::Archive { .. }) { &mut archives }
                 else { &mut checks };
             *count += 1;
-            *count <= 32
+            *count <= if matches!(job.work, crate::profile::MatchWork::Archive { .. }) { 1 } else { 32 }
         });
         Ok(jobs)
     }

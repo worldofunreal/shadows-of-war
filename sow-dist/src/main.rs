@@ -1502,11 +1502,6 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "/* POKI_RENDER_REPLACEMENT_BEGIN */",
             "/* POKI_RENDER_REPLACEMENT_END */",
         )?;
-        menu_js = strip_marked_section(
-            &menu_js,
-            "/* POKI_STRIPE_STATE_BEGIN */",
-            "/* POKI_STRIPE_STATE_END */",
-        )?;
         for (begin, end) in [
             (
                 "/* POKI_SHARED_STORE_ACTIONS_BEGIN */",

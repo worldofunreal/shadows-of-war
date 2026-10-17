@@ -93,13 +93,19 @@ aplicables y error.
   con una estimación local.
 - Recargar conserva el regreso pendiente. Cambiar de cuenta separa todos sus
   pendientes, comprobantes y recorridos.
-- Salir voluntariamente de multijugador confirma lo ganado hasta la salida
-  registrada. Una desconexión temporal no equivale a abandonar. El cierre
-  posterior de la partida no vuelve a pagar lo ya cerrado.
-- Recorrido normal: **jugador → relay → servidor → jugador**. El botón del HUD,
-  final de partida y destino Tienda convergen en `UiAction::ReturnToMenu` y
-  `begin_exit_to_main_menu`. Ese responsable envía una sola orden `Leave` a la
-  conexión autenticada de la partida. No envía otra orden al servidor.
+- Durante la partida, el cliente puede enviar `PrepareResult` al detectar el
+  final local. Solo adelanta la comprobación: mantiene abierto el panel y no
+  sale ni concede premios. El relay también guarda y entrega turnos nuevos cada
+  cinco segundos, aunque no reciba ese aviso.
+- Salir voluntariamente cierra el resultado en el turno guardado por el relay.
+  Una derrota natural la detecta la simulación del servidor; si quedan aliados
+  vivos, el jugador eliminado sigue conectado para observar y su recibo se
+  confirma al terminar la partida. Una desconexión temporal no equivale a
+  abandonar.
+- El regreso solicitado desde el HUD y el botón de salida convergen en
+  `UiAction::ReturnToMenu` y `begin_exit_to_main_menu`. Si el resultado ya fue
+  confirmado mientras el panel seguía abierto, usa ese mismo recibo y no crea
+  otra salida.
 - `MatchTracker`, en `sow-relay/src/main.rs`, es el único responsable de la
   participación: `Active`, `Disconnected`, `Closing`, `Closed`. La identidad
   viene de la conexión y su generación vigente. Una conexión sustituida no
@@ -112,11 +118,19 @@ aplicables y error.
   El relay completa el cierre normal de WebSocket después de responder; no
   corta directamente el transporte y espera la despedida del cliente con el
   mismo límite de tiempo que sus escrituras.
-- El relay entrega el registro al servidor por HTTPS directo al origen,
-  autenticado con su clave exclusiva. No calcula XP, coronas ni laureles.
-  `verify_replay` reconstruye el motor con los datos registrados por el servidor;
-  `PlayerDb` guarda el comprobante y el historial. El cierre posterior no paga
-  de nuevo una participación cerrada.
+- El relay guarda cada tramo en disco antes de entregarlo al servidor por HTTPS,
+  autenticado con su clave exclusiva. `MatchWork::Progress` reutiliza la cola
+  duradera; un solo responsable comprueba el primer tramo pendiente por partida.
+  El servidor conserva el avance de cada partida, comprueba en tramos de hasta
+  100 ms y guarda una copia recuperable cada 30 segundos y en cada cierre.
+  `PlayerDb` sigue siendo el único dueño del comprobante y del pago.
+- El reloj registrado limita cada partida a cuatro horas. Los estados completos
+  del motor incluyen generadores aleatorios, flotas, temporizadores y cursores;
+  si una copia guardada está dañada o pertenece a otra versión, el servidor
+  reconstruye desde los tramos duraderos. Los formatos históricos conservan su
+  lector anterior.
+- La partida terminada crea un trabajo separado para empaquetar el registro
+  público. Ese empaquetado no bloquea el pago ni el avance de otras partidas.
 - `POST /profile/match-result` autentica al dueño y **solo observa** su resultado.
   Nunca crea un trabajo de salida ni llama al relay. Mantiene abierta la
   solicitud hasta 20 segundos y responde al guardarse el comprobante; si sigue
@@ -138,16 +152,15 @@ aplicables y error.
   confirmaciones y destino. El comprobante exacto y el estado final del servidor
   son necesarios para liberar el loader; un saldo visible no lo sustituye.
   Las respuestas de consultas anteriores no sustituyen ese estado.
-- El registro existente `<partida>.json` se guarda al registrar la partida con
-  fase `recording` y pasa a `finalized` al terminar. Tras un reinicio, un bloqueo
-  nativo compartido por los cuatro procesos demuestra que su escritor terminó
-  antes de recuperar los turnos y cierres. Un puerto cerrado no prueba pérdida.
-  Los lectores aislados conservan las grabaciones y trabajos históricos.
-- El verificador retiene como máximo un motor comprobado. Solo reutiliza su
-  prefijo si coinciden partida, datos iniciales confiables, mapa y huella de los
-  turnos. Un reinicio, otra partida o bytes distintos obliga a reconstruir.
-  El cierre completo libera ese motor. Los formatos históricos conservan sus
-  reglas originales y no reutilizan ese avance.
+- El registro existente `<partida>.json` conserva fase, cierres y turnos. Tras
+  un reinicio, el bloqueo nativo compartido demuestra que el escritor terminó;
+  la recuperación continúa desde el último tramo duradero y no borra una
+  grabación por un renombre interrumpido.
+- El verificador mantiene avances separados por partida dentro de un máximo de
+  2 GiB de memoria. Solo reutiliza un tramo si coinciden la partida, los datos
+  iniciales, la copia exacta del mapa y la huella de cada turno. Si falta ese
+  avance, reconstruye desde el primer tramo; las otras partidas alternan su
+  turno de comprobación.
 - Rankings y logros de plataformas externas se sincronizan después mediante
   revisiones persistentes del perfil; un fallo externo no retiene el premio.
   CrazyGames guarda su pendiente junto al perfil y lo reintenta por separado.

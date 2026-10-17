@@ -277,24 +277,6 @@ impl SowApp {
                         }
                     }
 
-                    let placement_center = self
-                        .ui
-                        .app
-                        .hud_state
-                        .building_placement
-                        .filter(|p| !p.pending && self.sim.map_w > 0)
-                        .map(|p| {
-                            let footprint = sow_core::building::BuildingFootprint::at(
-                                p.kind,
-                                p.tile_idx % self.sim.map_w,
-                                p.tile_idx / self.sim.map_w,
-                            );
-                            [
-                                footprint.left as f32 + footprint.width as f32 * 0.5,
-                                footprint.top as f32 + footprint.height as f32 * 0.5,
-                            ]
-                        });
-
                     let mut alliance_celebration_slots = [[0.0f32; 4]; 18];
                     let snapshot = self.sim.current_snapshot.as_ref();
                     let mut slot = 0usize;
@@ -497,12 +479,17 @@ impl SowApp {
                         effect_breathe: if dev.vfx_border_breathe { 1.0 } else { 0.0 },
                         effect_energy_flow: if dev.vfx_energy_flow { 1.0 } else { 0.0 },
                         my_player_id: self.sim.my_player_id.unwrap_or(0) as f32,
-                        placement_scale: if placement_center.is_some() {
+                        placement_scale: if self
+                            .ui
+                            .app
+                            .hud_state
+                            .building_placement
+                            .is_some_and(|placement| !placement.pending && self.sim.map_w > 0)
+                        {
                             sf.max(0.01)
                         } else {
                             0.0
                         },
-                        placement_center: placement_center.unwrap_or_default(),
                         territory_opacity,
                         blend_mode,
                         effect_heartbeat: if dev.vfx_heartbeat { 1.0 } else { 0.0 },
@@ -522,6 +509,7 @@ impl SowApp {
                             0.0
                         },
                         _pad2: 0.0,
+                        _pad_alert_color: [0.0; 2],
                         alert_color,
                         dialog_border: if dev.vfx_dialog_border {
                             dialog_border

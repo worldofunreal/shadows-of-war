@@ -203,16 +203,18 @@ fn shade_status_sprite(in: VertexOutput) -> vec4<f32> {
         status_sampler,
         clamp(in.uv, in.uv_rect.xy, in.uv_rect.zw),
     );
-    return vec4<f32>(tex.rgb * in.color.rgb * globals.shader_params[__TEXT_STATUS_TINT__].rgb, tex.a * in.color.a * globals.shader_params[__TEXT_STATUS_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x);
+    let tinted = tex.rgb * in.color.rgb * globals.shader_params[__TEXT_STATUS_TINT__].rgb;
+    let luminance = dot(tinted, vec3<f32>(0.2126, 0.7152, 0.0722));
+    let rgb = mix(tinted, vec3<f32>(luminance), clamp(in.face_dilate, 0.0, 1.0));
+    return vec4<f32>(rgb, tex.a * in.color.a * globals.shader_params[__TEXT_STATUS_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x);
 }
 
-// Anti-aliased filled rectangle (KIND_RECT). `uv_rect` is unused; `in.uv` is the local
-// 0..1 quad coordinate. `color` is the fill color; alpha is modulated by the coverage of
-// the rect's four edges via smoothstep, giving sub-pixel anti-aliasing.
+// Anti-aliased filled rectangle (KIND_RECT). Its atlas UVs are constant; local_uv is the
+// 0..1 quad coordinate used to calculate edge coverage and keep the fill visible.
 fn shade_rect(in: VertexOutput) -> vec4<f32> {
-    let aa = max(fwidth(in.uv), vec2<f32>(1e-5));
-    let x_alpha = smoothstep(0.0, aa.x, in.uv.x) * (1.0 - smoothstep(1.0 - aa.x, 1.0, in.uv.x));
-    let y_alpha = smoothstep(0.0, aa.y, in.uv.y) * (1.0 - smoothstep(1.0 - aa.y, 1.0, in.uv.y));
+    let aa = max(fwidth(in.local_uv), vec2<f32>(1e-5));
+    let x_alpha = smoothstep(0.0, aa.x, in.local_uv.x) * (1.0 - smoothstep(1.0 - aa.x, 1.0, in.local_uv.x));
+    let y_alpha = smoothstep(0.0, aa.y, in.local_uv.y) * (1.0 - smoothstep(1.0 - aa.y, 1.0, in.local_uv.y));
     let alpha = x_alpha * y_alpha * in.color.a * globals.shader_params[__TEXT_RECT_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x;
     return vec4<f32>(in.color.rgb * globals.shader_params[__TEXT_SHAPE_FILL_TINT__].rgb, alpha);
 }

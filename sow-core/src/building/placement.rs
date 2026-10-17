@@ -427,6 +427,33 @@ pub fn find_structure_site_near(
     best.map(|(_, idx)| idx)
 }
 
+/// Closest legal foundation to (x, y) within `radius` tiles under the live
+/// rule, so a preview can only ever rest on a site the simulation accepts.
+pub fn nearest_structure_site(
+    map: &GameMap,
+    owner_id: u16,
+    kind: BuildingKind,
+    x: i32,
+    y: i32,
+    radius: i32,
+    existing: &BuildingGrid,
+) -> Option<u32> {
+    let mut best: Option<(i64, u32)> = None;
+    for row in (y - radius).max(0)..=(y + radius).min(map.height as i32 - 1) {
+        for col in (x - radius).max(0)..=(x + radius).min(map.width as i32 - 1) {
+            let distance = euclid_sq(col as i64, row as i64, x as i64, y as i64);
+            let tile = xy_idx(col as u32, row as u32, map.width);
+            if best.is_some_and(|current| current <= (distance, tile)) {
+                continue;
+            }
+            if validate_structure_site(map, owner_id, kind, tile, existing).is_ok() {
+                best = Some((distance, tile));
+            }
+        }
+    }
+    best.map(|(_, tile)| tile)
+}
+
 /// Resolve final spawn tile index for `kind` at `click_idx`, or `None` if illegal.
 pub fn resolve_structure_spawn_tile(
     map: &GameMap,
