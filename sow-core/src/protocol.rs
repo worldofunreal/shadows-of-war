@@ -9,7 +9,7 @@ pub use sow_data::MAX_MATCH_PARTICIPANTS;
 
 /// Persisted turn recordings; changing live messages must not change this.
 pub const GAMEPLAY_FORMAT_VERSION: u64 = 4;
-pub const LIVE_PROTOCOL_VERSION: u64 = 3;
+pub const LIVE_PROTOCOL_VERSION: u64 = 4;
 
 pub fn gameplay_build_identity(public_version: &str) -> String {
     format!("{public_version}/turns-{GAMEPLAY_FORMAT_VERSION}/net-{LIVE_PROTOCOL_VERSION}")
@@ -198,6 +198,8 @@ pub enum ClientMessage {
         join: Box<JoinPayload>,
         auth: AuthProof,
     },
+    /// Requests an early journal flush. The verifier alone determines results.
+    PrepareResult { through_turn: u64 },
 }
 
 /// Fields of an authenticated join.
@@ -266,6 +268,7 @@ pub enum ServerMessage {
         closure_turn: u64,
         reason: ExitReason,
     },
+    MatchFinished { match_id: u64, terminal_turn: u64 },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -275,6 +278,7 @@ pub enum ExitReason {
     Voluntary,
     Timeout,
     MatchEnded,
+    Defeated,
 }
 
 /// Classifies a lobby so every code path can branch on it explicitly instead of

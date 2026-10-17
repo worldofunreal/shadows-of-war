@@ -55,7 +55,7 @@ test("mobile menu renders its language selector after locale bootstrap", async (
     const menu = { classList: { toggle() {} }, setAttribute() {}, querySelectorAll: () => [] };
     const menuToggle = { setAttribute() {}, addEventListener() {} };
     const document = {
-        documentElement: {},
+        documentElement: { dataset: {} },
         querySelectorAll: selector => selector === "[data-locale-select]" ? controls : [],
         querySelector: selector => selector === "#mobile-menu" ? menu : selector === "[data-menu-toggle]" ? menuToggle : null,
         addEventListener() {}

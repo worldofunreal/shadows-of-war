@@ -29,7 +29,7 @@ pub fn alliance_can_renew(is_allied: bool, remaining_ticks: Option<u32>) -> bool
     is_allied && remaining_ticks.is_some_and(|ticks| ticks <= ALLIANCE_RENEWAL_WINDOW_TICKS)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AllianceProposal {
     pub proposer: PlayerId,
     pub target: PlayerId,

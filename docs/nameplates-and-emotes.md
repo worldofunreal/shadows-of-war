@@ -124,9 +124,11 @@ estados. Un evento anterior fijado no vuelve a lanzar su burbuja al reconectar.
   aterriza con dos sacudidas; Celebrar salta el 20 % y añade otro rebote, hasta
   650 ms. El retrato se mueve; nombre, tropas y posición no se mueven.
 - Burbuja: entra entre 80–240 ms, se mantiene hasta 2700 ms y sale hasta 3000 ms.
-  El texto, relleno y punta escalan con el avatar. La posición preferida es arriba
-  a la derecha, con la punta unida al borde del retrato; si no cabe, prueba arriba
-  a la izquierda, abajo a la derecha y abajo a la izquierda. Caja, punta, sombra y
+  El texto, relleno y punta escalan con el avatar; el texto conserva un mínimo
+  legible en pantallas pequeñas y se reduce si una frase larga no cabe. El cuerpo
+  se desplaza al cuadrante elegido y la punta ancha queda unida al retrato. La
+  posición preferida es arriba a la derecha; si no cabe, prueba arriba a la
+  izquierda, abajo a la derecha y abajo a la izquierda. Caja, punta, sombra y
   texto respetan el espacio visible y los márgenes seguros.
 - Repetir parte de la posición actual. Liberar realiza una transición breve
   hacia calma. Morir elimina el efecto; reiniciar o salir limpia sus estados.

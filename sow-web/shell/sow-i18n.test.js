@@ -4,6 +4,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const runtimeSource = fs.readFileSync(__dirname + "/sow-i18n.js", "utf8");
+const siteChromeSource = fs.readFileSync(__dirname + "/../site/site-chrome.js", "utf8");
 
 function catalog(locale, settings, version = 11) {
     return {
@@ -28,7 +29,10 @@ function loadRuntime(storedLocale, catalogs, settings) {
     const listeners = Object.create(null);
     const document = {
         currentScript: { src: "https://example.test/play/sow-i18n.js" },
-        documentElement: { lang: "", dir: "", dataset: {} }
+        documentElement: { lang: "", dir: "", dataset: {} },
+        querySelectorAll: () => [],
+        querySelector: () => null,
+        addEventListener() {}
     };
     const window = {
         SOW_LOCALE_DEFAULT: "en",
@@ -54,6 +58,7 @@ function loadRuntime(storedLocale, catalogs, settings) {
     const fetch = async url => {
         const code = String(url).match(/\/([^/?]+)(?:\?|$)/)[1];
         requests.push(code);
+        if (settings && settings.beforeResponse) await settings.beforeResponse(code);
         if (!catalogs[code]) return { ok: false, status: 404 };
         return { ok: true, json: async () => structuredClone(catalogs[code]) };
     };
@@ -68,11 +73,80 @@ function loadRuntime(storedLocale, catalogs, settings) {
         fetch,
         CustomEvent,
         navigator: hasNavigatorOverride ? settings.navigator : { languages: ["en-US"], language: "en-US" },
+        AbortController,
+        setTimeout,
+        clearTimeout,
         console: { error: (...args) => errors.push(args) }
     };
+    if (settings && settings.context) Object.assign(context, settings.context);
     vm.runInNewContext(runtimeSource, context, { filename: "sow-i18n.js" });
-    return { window, document, storage, errors, requests, localeEvents };
+    return { window, document, storage, errors, requests, localeEvents, context };
 }
+
+test("public site resolves its language before revealing translated text", async () => {
+    let finishSpanish;
+    const spanishDownload = new Promise(resolve => { finishSpanish = resolve; });
+    const runtime = loadRuntime("", {
+        en: catalog("en", "Settings"),
+        es: catalog("es", "Configuración")
+    }, {
+        window: { SOW_LOCALE_BEFORE_PAINT: true, SOW_LOCALE_CODES: ["en", "es"] },
+        navigator: { languages: ["es-MX", "en-US"] },
+        beforeResponse: code => code === "es" ? spanishDownload : undefined
+    });
+    const text = { dataset: { i18n: "menu.settings" }, textContent: "Settings" };
+    runtime.document.querySelectorAll = selector => selector === "[data-i18n]" ? [text] : [];
+    vm.runInNewContext(siteChromeSource, runtime.context);
+
+    assert.equal(runtime.document.documentElement.lang, "es");
+    assert.equal(runtime.document.documentElement.dataset.sowLocalePending, "true");
+    await new Promise(setImmediate);
+    assert.deepEqual(runtime.requests, ["en", "es"]);
+    assert.equal(text.textContent, "Settings");
+    assert.equal(runtime.document.documentElement.dataset.sowLocalePending, "true");
+
+    finishSpanish();
+    await runtime.window.SOW_I18N_READY;
+    await new Promise(setImmediate);
+    assert.equal(text.textContent, "Configuración");
+    assert.equal(runtime.document.documentElement.dataset.sowLocalePending, undefined);
+    assert.equal(runtime.storage.get("sow_ui_locale"), "es");
+});
+
+test("public site reveals English when translations fail or time out", async () => {
+    for (const failure of ["es", "en", "timeout"]) {
+        const catalogs = { en: catalog("en", "Settings"), es: catalog("es", "Configuración") };
+        delete catalogs[failure];
+        const timeouts = [];
+        const context = failure === "timeout" ? {
+            setTimeout: callback => { timeouts.push(callback); return callback; },
+            clearTimeout() {},
+            fetch: (url, options) => new Promise((resolve, reject) => {
+                options.signal.addEventListener("abort", () => reject(new Error("download timed out")));
+            })
+        } : {};
+        const runtime = loadRuntime("", catalogs, {
+            window: { SOW_LOCALE_BEFORE_PAINT: true, SOW_LOCALE_CODES: ["en", "es"] },
+            navigator: { languages: ["es-MX", "en-US"] },
+            context
+        });
+        const text = { dataset: { i18n: "menu.settings" }, textContent: "Settings" };
+        runtime.document.querySelectorAll = selector => selector === "[data-i18n]" ? [text] : [];
+        vm.runInNewContext(siteChromeSource, runtime.context);
+        if (failure === "timeout") {
+            await new Promise(setImmediate);
+            assert.equal(timeouts.length, 2);
+            timeouts.forEach(callback => callback());
+        }
+        if (failure === "es") await runtime.window.SOW_I18N_READY;
+        else await assert.rejects(runtime.window.SOW_I18N_READY);
+        await new Promise(setImmediate);
+        assert.equal(runtime.document.documentElement.lang, "en", failure);
+        assert.equal(runtime.document.documentElement.dataset.sowLocalePending, undefined, failure);
+        assert.equal(text.textContent, "Settings", failure);
+        assert.ok(runtime.errors.length > 0, failure);
+    }
+});
 
 test("i18n runtime falls back, caches, persists, and updates direction", async () => {
     const runtime = loadRuntime("es", {

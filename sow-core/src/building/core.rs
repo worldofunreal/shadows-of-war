@@ -51,7 +51,7 @@ pub fn income_level_weight(level: u8) -> f64 {
 }
 
 /// Per-player totals for income / fleet gates (only **ready** structures count).
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct BuildingAggregate {
     pub city_levels: u32,
     pub bunker_levels: u32,
@@ -165,7 +165,7 @@ impl DefenseInfluence {
     };
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 struct DefenseTower {
     owner_id: u16,
     x: u32,
@@ -175,7 +175,7 @@ struct DefenseTower {
 }
 
 /// A spatial grid that limits defense queries to nearby cells.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DefenseGrid {
     cells: Vec<Vec<DefenseTower>>,
     pub grid_w: u32,
@@ -391,7 +391,7 @@ impl DefenseGrid {
 /// Spatial index cell size. This is not a minimum construction distance.
 pub const BUILDING_GRID_CELL_SIZE: u32 = 6;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BuildingGridEntry {
     pub x: u32,
     pub y: u32,
@@ -399,7 +399,7 @@ pub struct BuildingGridEntry {
 }
 
 /// Spatial grid of structure tile coordinates `(x, y)` for O(local) minimum-distance checks during placement.
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct BuildingGrid {
     /// City positions, kept separate because cities use the larger spacing rule.
     pub cells: Vec<Vec<BuildingGridEntry>>,

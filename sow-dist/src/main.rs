@@ -1741,6 +1741,18 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
         .trim()
         .to_string();
     let marker = "<!-- SOW_SITE_HEADER -->";
+    let locale_marker = "<!-- SOW_SITE_LOCALE -->";
+    let locale_codes = serde_json::to_string(
+        &sow_i18n::Language::published_registry()
+            .map(|(_, code, _)| code)
+            .collect::<Vec<_>>(),
+    )?;
+    let mut locale_versions = asset_versions(paths, &out.join("locales"))?;
+    locale_versions
+        .as_object_mut()
+        .context("invalid asset-version map")?
+        .retain(|key, _| key.starts_with("/locales/"));
+    let locale_versions = serde_json::to_string(&locale_versions)?;
     for relative in PUBLIC_SITE_PAGES {
         let path = out.join(relative);
         let source = fs::read_to_string(&path)
@@ -1751,7 +1763,23 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
                 path.display()
             );
         }
-        fs::write(&path, source.replace(marker, &header))?;
+        let head_end = source.find("</head>").context("public page has no head")?;
+        if source.matches(locale_marker).count() != 1
+            || source.find(locale_marker).is_none_or(|at| at > head_end)
+        {
+            bail!("public page {relative} must select its locale in the head");
+        }
+        let prefix = if relative == "index.html" { "./" } else { "../" };
+        let locale_bootstrap = format!(
+            "<script data-cfasync=\"false\">window.SOW_LOCALE_BEFORE_PAINT = true; window.SOW_LOCALE_CATALOG_VERSION = {}; window.SOW_LOCALE_CODES = {locale_codes}; window.SOW_ASSET_TS = {locale_versions};</script>\n  <script data-cfasync=\"false\" src=\"{prefix}sow-i18n.js\"></script>",
+            sow_i18n::WEB_CATALOG_VERSION,
+        );
+        fs::write(
+            &path,
+            source
+                .replace(marker, &header)
+                .replace(locale_marker, &locale_bootstrap),
+        )?;
     }
     Ok(())
 }
@@ -2751,6 +2779,17 @@ fn verify_layout(dir: &Path) -> Result<()> {
     }
     if dir.join("admin").exists() {
         bail!("webroot must not contain admin/ (dashboard was removed)");
+    }
+    for relative in PUBLIC_SITE_PAGES {
+        let html = fs::read_to_string(dir.join(relative))?;
+        let (head, _) = html.split_once("</head>").context("public page has no head")?;
+        if !head.contains("window.SOW_LOCALE_BEFORE_PAINT = true")
+            || !head.contains("window.SOW_LOCALE_CODES = [")
+            || !head.contains("data-cfasync=\"false\" src=\"")
+            || !head.contains("sow-i18n.js?v=")
+        {
+            bail!("public page {relative} is missing its early locale bootstrap");
+        }
     }
     let play_html = fs::read_to_string(dir.join("play/index.html"))?;
     // Self-hosted web externalizes the menu bundle next to the page; the

@@ -34,6 +34,10 @@ const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
 const ATTACK_BADGE_UPDATE_SECS: f32 = 0.09;
 const OUTGOING_ATTACK_TEXT_COLOR: [f32; 4] = [1.0, 90.0 / 255.0, 90.0 / 255.0, 1.0];
 
+fn death_gold_row_offset(death_bottom: f32, gold_top: f32, sf: f32) -> f32 {
+    death_bottom - gold_top + DEATH_GOLD_ROW_GAP * sf.max(0.01)
+}
+
 fn troop_label_instance_requirement(amount_text: &str) -> usize {
     amount_text.chars().count().saturating_add(1)
 }
@@ -456,7 +460,12 @@ fn render_death_nameplates(
         let death_bounds = animation
             .prepared_name
             .visual_bounds_at(death_font_size)
-            .unwrap_or([0.0, -death_measure.height * 0.65, 0.0, death_measure.height * 0.35]);
+            .unwrap_or([
+                0.0,
+                -death_measure.height * 0.65,
+                0.0,
+                death_measure.height * 0.35,
+            ]);
         let max_reward_font_size =
             GOLD_REWARD_FONT_SIZE * GOLD_REWARD_MAX_TEXT_SCALE * font_scale * sf;
         let max_reward_measure = prepared.measure_at(max_reward_font_size);
@@ -477,7 +486,7 @@ fn render_death_nameplates(
         let gold_half = badge_size.max(coin_size) * 0.5;
         let reward_baseline = max_reward_measure.height * 0.35;
         let gold_top = (-gold_half).min(reward_baseline + max_reward_bounds[1] - outline_clearance);
-        let row_separation = death_bottom - gold_top + DEATH_GOLD_ROW_GAP * font_scale * sf;
+        let row_separation = death_gold_row_offset(death_bottom, gold_top, sf);
         screen[1] += row_separation / sf;
         let left_count = if is_assist { badge_size + gap } else { 0.0 };
         let row_width = left_count + coin_size + gap + measure.width;
@@ -802,6 +811,19 @@ fn attack_badge_text_color(attack: &AttackSnapshot, my_id: u16) -> Option<[f32; 
 mod tests {
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[test]
+    fn death_and_gold_rows_keep_eight_logical_pixels_between_visual_bounds() {
+        for sf in [0.5, 1.0, 2.0] {
+            for font_scale in [0.1, 0.5, 1.0, 2.0] {
+                let death_bottom = 11.0 * font_scale * sf;
+                let gold_top = -7.0 * font_scale * sf;
+                let offset = death_gold_row_offset(death_bottom, gold_top, sf);
+                let gap = (offset + gold_top - death_bottom) / sf;
+                assert!(gap >= 7.9999, "sf={sf}, font_scale={font_scale}, gap={gap}");
+            }
+        }
+    }
 
     #[test]
     fn transport_eta_baseline_centers_short_and_wide_numbers() {

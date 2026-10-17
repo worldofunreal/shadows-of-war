@@ -63,7 +63,14 @@ pub struct DeathNameplateAnimation {
 impl DeathNameplateAnimation {
     pub fn enqueue(queue: &mut Vec<Self>, animation: Self) {
         if queue.len() >= MAX_DEATH_NAMEPLATES {
-            queue.remove(0);
+            let evict = queue
+                .iter()
+                .position(|queued| queued.reward.is_none())
+                .or_else(|| animation.reward.as_ref().map(|_| 0));
+            let Some(evict) = evict else {
+                return;
+            };
+            queue.remove(evict);
         }
         queue.push(animation);
     }
@@ -207,6 +214,8 @@ mod tests {
         assert!(elimination_visible_to_viewer(&players, 1, 4, 1, false));
         assert!(elimination_visible_to_viewer(&players, 1, 1, 4, false));
         assert!(elimination_visible_to_viewer(&players, 1, 2, 4, false));
+        assert!(elimination_visible_to_viewer(&players, 1, 5, 2, false));
+        assert!(elimination_visible_to_viewer(&players, 1, 3, 4, false));
         assert!(elimination_visible_to_viewer(&players, 1, 5, 3, false));
         assert!(elimination_visible_to_viewer(&players, 1, 4, 5, true));
         assert!(!elimination_visible_to_viewer(&players, 1, 4, 5, false));
@@ -220,15 +229,75 @@ mod tests {
     }
 
     #[test]
-    fn queue_caps_at_sixty_four_and_evicts_the_oldest() {
+    fn queue_caps_at_sixty_four_and_evicts_the_oldest_unrewarded_entry() {
         let mut queue = Vec::with_capacity(MAX_DEATH_NAMEPLATES);
         for index in 0..=MAX_DEATH_NAMEPLATES {
             let mut entry = animation();
             entry.name = format!("Event {index}");
+            if index == 0 {
+                entry.reward = Some(DeathNameplateReward {
+                    amount: "+50".into(),
+                    is_assist: false,
+                });
+            }
             DeathNameplateAnimation::enqueue(&mut queue, entry);
         }
+        assert_eq!(MAX_DEATH_NAMEPLATES, 64);
         assert_eq!(queue.len(), MAX_DEATH_NAMEPLATES);
-        assert_eq!(queue.first().unwrap().name, "Event 1");
+        assert_eq!(queue.first().unwrap().name, "Event 0");
+        assert!(queue.iter().any(|entry| entry.reward.is_some()));
         assert!(queue.capacity() >= MAX_DEATH_NAMEPLATES);
+    }
+
+    #[test]
+    fn full_queue_keeps_local_rewards_ahead_of_unrewarded_entries() {
+        let mut queue = Vec::with_capacity(MAX_DEATH_NAMEPLATES);
+        for index in 0..MAX_DEATH_NAMEPLATES {
+            let mut entry = animation();
+            entry.name = format!("Event {index}");
+            if index == 0 {
+                entry.reward = Some(DeathNameplateReward {
+                    amount: "+50".into(),
+                    is_assist: false,
+                });
+            }
+            DeathNameplateAnimation::enqueue(&mut queue, entry);
+        }
+
+        let mut rewarded = animation();
+        rewarded.reward = Some(DeathNameplateReward {
+            amount: "+25".into(),
+            is_assist: true,
+        });
+        DeathNameplateAnimation::enqueue(&mut queue, rewarded);
+        assert_eq!(queue.len(), MAX_DEATH_NAMEPLATES);
+        assert_eq!(
+            queue.iter().filter(|entry| entry.reward.is_some()).count(),
+            2
+        );
+
+        let mut all_rewards = vec![animation(); MAX_DEATH_NAMEPLATES];
+        for entry in &mut all_rewards {
+            entry.reward = Some(DeathNameplateReward {
+                amount: "+50".into(),
+                is_assist: false,
+            });
+        }
+        DeathNameplateAnimation::enqueue(&mut all_rewards, animation());
+        assert_eq!(all_rewards.len(), MAX_DEATH_NAMEPLATES);
+        assert!(all_rewards.iter().all(|entry| entry.reward.is_some()));
+
+        let mut newest_reward = animation();
+        newest_reward.reward = Some(DeathNameplateReward {
+            amount: "+300".into(),
+            is_assist: false,
+        });
+        DeathNameplateAnimation::enqueue(&mut all_rewards, newest_reward);
+        assert_eq!(all_rewards.len(), MAX_DEATH_NAMEPLATES);
+        assert!(all_rewards.iter().all(|entry| entry.reward.is_some()));
+        assert_eq!(
+            all_rewards.last().unwrap().reward.as_ref().unwrap().amount,
+            "+300"
+        );
     }
 }

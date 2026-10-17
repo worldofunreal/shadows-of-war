@@ -147,12 +147,19 @@
         }
     }
 
+    function fetchCatalog(url) {
+        var controller = new AbortController();
+        // A public page must be able to show its English HTML if a download stalls.
+        var timeout = setTimeout(function () { controller.abort(); }, 8000);
+        return fetch(url, { credentials: "same-origin", signal: controller.signal }).then(function (response) {
+            if (!response.ok) throw new Error("locale request returned " + response.status);
+            return response.json();
+        }).finally(function () { clearTimeout(timeout); });
+    }
+
     function loadRegistry() {
         if (hasConfiguredCodes && catalogVersion > 0) return Promise.resolve();
-        return fetch(registryUrl(), { credentials: "same-origin" }).then(function (response) {
-            if (!response.ok) throw new Error("locale registry returned " + response.status);
-            return response.json();
-        }).then(function (payload) {
+        return fetchCatalog(registryUrl()).then(function (payload) {
             var registryVersion = Number(payload && payload.version);
             if (!payload || payload.schema !== 1 || !Number.isInteger(registryVersion) || registryVersion < 1 || !Array.isArray(payload.languages)) {
                 throw new Error("locale registry has incompatible metadata");
@@ -174,10 +181,7 @@
     function load(locale) {
         var code = normalizeLocale(locale);
         if (cache[code]) return cache[code];
-        cache[code] = fetch(catalogUrl(code), { credentials: "same-origin" }).then(function (response) {
-            if (!response.ok) throw new Error("locale " + code + " returned " + response.status);
-            return response.json();
-        }).then(function (payload) {
+        cache[code] = fetchCatalog(catalogUrl(code)).then(function (payload) {
             var payloadVersion = Number(payload && payload.version);
             if (!payload || payload.schema !== 1 || !Number.isInteger(payloadVersion) || payloadVersion < 1 || (catalogVersion > 0 && payloadVersion !== catalogVersion) || payload.locale !== code) {
                 throw new Error("locale " + code + " has incompatible catalog metadata");
@@ -286,19 +290,27 @@
     };
 
     window.SOW_LOCALE = defaultLocale;
-    var initialLocale = defaultLocale;
+    var initialLocale = hasConfiguredCodes && catalogVersion > 0 ? preferredLocale() : defaultLocale;
+    if (window.SOW_LOCALE_BEFORE_PAINT && document.documentElement) {
+        document.documentElement.lang = localeTag(initialLocale);
+        document.documentElement.dir = localeDirection(initialLocale);
+        // The shared selector runs in the head. Site chrome reveals the page
+        // only after applying its translations, so English cannot flash first.
+        if (!hasConfiguredCodes || catalogVersion < 1 || initialLocale !== defaultLocale) {
+            document.documentElement.dataset.sowLocalePending = "true";
+        }
+    }
     window.SOW_I18N_READY = loadRegistry().then(function () {
         initialLocale = preferredLocale();
-        return load(defaultLocale);
-    }).then(function (strings) {
-        englishStrings = strings;
-        englishReady = true;
-        if (initialLocale === defaultLocale) return activate(defaultLocale, strings, false);
-        return load(initialLocale).then(function (selected) {
-            return activate(initialLocale, selected, false);
-        }).catch(function (error) {
+        var english = load(defaultLocale);
+        var selected = initialLocale === defaultLocale ? Promise.resolve(null) : load(initialLocale).catch(function (error) {
             report("locale." + initialLocale, error);
-            return activate(defaultLocale, strings, false);
+            return null;
         });
+        return Promise.all([english, selected]);
+    }).then(function (catalogs) {
+        englishStrings = catalogs[0];
+        englishReady = true;
+        return activate(catalogs[1] ? initialLocale : defaultLocale, catalogs[1] || englishStrings, false);
     });
 })();

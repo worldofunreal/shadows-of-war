@@ -826,6 +826,11 @@ pub(crate) struct MenuReturnContext {
     /// None is the isolated reader for older persisted explicit exits.
     #[serde(default)]
     pub voluntary_exit: Option<bool>,
+    /// Preparation never requests navigation or a surrender recovery.
+    #[serde(default)]
+    pub preparation_only: bool,
+    #[serde(default)]
+    pub match_finished: bool,
     #[serde(default)]
     pub exit_recorded: bool,
     #[serde(default)]

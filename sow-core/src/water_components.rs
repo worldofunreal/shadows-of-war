@@ -32,7 +32,7 @@ fn for_each_cardinal_neighbor(
 ///   water tile belongs to (deterministic tie-break). This lets callers ask
 ///   "does my shore and the target's shore touch the same water body?" in O(1).
 /// - Any other tile → `0` (no water component, not launchable, not landable).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct WaterComponents {
     pub components: Vec<u32>,
     pub count: u32,

@@ -151,7 +151,11 @@
 
   window.addEventListener('sow:locale-change', applyLocale);
   if (window.SOW_I18N_READY && typeof window.SOW_I18N_READY.then === 'function') {
-    window.SOW_I18N_READY.then(applyLocale).catch(() => {});
+    window.SOW_I18N_READY.then(applyLocale).catch(error => {
+      console.error('[SOW site] translations unavailable; showing English', error);
+      root.lang = 'en';
+      root.dir = 'ltr';
+    }).finally(() => { delete root.dataset.sowLocalePending; });
   }
 
   const menu = document.querySelector('#mobile-menu');

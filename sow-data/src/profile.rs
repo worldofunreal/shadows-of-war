@@ -308,13 +308,14 @@ pub enum MatchWork {
         rejected: bool,
     },
     Replay { match_id: String },
+    Progress { match_id: String, sequence: u64, sha256: String, closing: bool },
 }
 
 impl MatchWork {
     pub fn match_id(&self) -> &str {
         match self {
             Self::RecoveryExit { match_id, .. } | Self::Participant { match_id, .. }
-                | Self::Replay { match_id } => match_id,
+                | Self::Replay { match_id } | Self::Progress { match_id, .. } => match_id,
         }
     }
 
@@ -324,8 +325,63 @@ impl MatchWork {
             Self::Participant { match_id, account_id, .. } => format!("participant:{match_id}:{account_id}"),
             // Numeric keys preserve the existing durable whole-replay queue.
             Self::Replay { match_id } => match_id.clone(),
+            Self::Progress { match_id, sequence, .. } => format!("progress:{match_id}:{sequence:010}"),
         }
     }
+}
+
+/// Authenticated relay journal delivery. Turn bytes keep sow-data independent
+/// of the simulation crate; only the server's trusted replay reader decodes them.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct MatchProgress {
+    pub match_id: String,
+    pub sequence: u64,
+    pub first_turn: u64,
+    pub previous_sha256: String,
+    pub sha256: String,
+    pub replay_data: Vec<u8>,
+    pub participant_closures: Vec<ProgressClosure>,
+    pub finished: bool,
+}
+
+impl MatchProgress {
+    pub fn signing_bytes(&self) -> Result<Vec<u8>, serde_json::Error> {
+        serde_json::to_vec(&(&self.match_id, self.sequence, self.first_turn,
+            &self.previous_sha256, &self.replay_data, &self.participant_closures, self.finished))
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct MatchResultControl {
+    pub match_id: String,
+    pub terminal_turn: Option<u64>,
+    pub participant_closures: Vec<ProgressClosure>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ProgressClosure {
+    pub account_id: String,
+    pub turn_number: u64,
+    pub reason: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct VerifiedProgress {
+    pub match_id: String,
+    pub sequence: u64,
+    pub sha256: String,
+    pub complete: bool,
+    pub verified_turns: u64,
+    pub terminal_turn: Option<u64>,
+    pub participants: Vec<VerifiedParticipantClosure>,
+    pub result: Option<VerifiedMatchResult>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct VerifiedParticipantClosure {
+    pub account_id: String,
+    pub reason: String,
+    pub result: VerifiedMatchResult,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -336,12 +392,14 @@ pub struct MatchWorkRecord {
     pub last_error: Option<String>,
     #[serde(default)]
     pub queued_at_ms: u64,
+    #[serde(default)]
+    pub urgent: bool,
 }
 
 impl MatchWorkRecord {
     pub fn new(work: MatchWork) -> Self {
         Self { work, state: MatchExitState::Requested, retry_at: 0, last_error: None,
-            queued_at_ms:std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64 }
+            queued_at_ms:std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64, urgent:false }
     }
 
     pub fn decode(key: &str, bytes: &[u8]) -> Result<Self, serde_json::Error> {

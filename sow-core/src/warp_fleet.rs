@@ -12,7 +12,7 @@ use crate::pathfinding::WaterPathfinderScratch;
 use crate::water_components::WaterComponents;
 
 /// Resolved water-only route for a transport launch (spawn shore → landing shore).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FleetRoute {
     pub src_tile: u32,
     pub landing_tile: u32,
@@ -424,7 +424,7 @@ pub fn best_shore_spawn_for_transport(
 pub const TRANSPORT_BASE_SPEED_TILES_PER_SECOND: f64 = 4.5;
 
 /// Moving fleet over water.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WarpFleet {
     pub id: u64,
     pub owner_id: u16,

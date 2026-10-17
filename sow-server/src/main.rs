@@ -5,6 +5,7 @@ mod map_catalog;
 mod map_playlist;
 mod matchmaking_population;
 mod replay;
+mod verification;
 
 use axum::body::Bytes;
 use futures_util::{SinkExt, StreamExt};
@@ -38,9 +39,9 @@ const RELAY_TICKET_TTL_SECS: u64 = 900;
 const RELAY_HANDOFF_SEND_TIMEOUT_SECS: u64 = 10;
 const DEFAULT_MAX_CONNECTIONS: usize = 32_768;
 const HANDSHAKE_TIMEOUT_SECS: u64 = 10;
-const MAX_REPLAY_BYTES: usize = 16 * 1024 * 1024;
-const MAX_REPLAY_TURNS: usize = 50_000;
-const MAX_REPLAY_INTENTS: usize = 1_000_000;
+const MAX_REPLAY_BYTES: usize = sow_data::MAX_MATCH_ARCHIVE_BYTES;
+
+const MAX_REPLAY_INTENTS: usize = sow_data::MAX_MATCH_ARCHIVE_BYTES / 8;
 const MAX_REPLAY_INTENTS_PER_TURN: usize = 4_096;
 type HmacSha256 = Hmac<Sha256>;
 
@@ -416,11 +417,13 @@ async fn register_match_start(rc: &RelayCandidate) -> Result<(), String> {
             })
         })
         .collect::<Vec<_>>();
+    let map_sha256 = verification::register_map(&rc.config).await?;
     let payload = serde_json::json!({
         "match_id": rc.lobby_id.to_string(),
         "player_ids": rc.player_ids,
         "metadata": {
             "replay_format": sow_core::protocol::GAMEPLAY_FORMAT_VERSION,
+            "map_sha256": map_sha256,
             "relay_worker_index": rc.worker_index,
             "relay_port": rc.relay_port,
             "seed": rc.seed,
@@ -1218,10 +1221,14 @@ async fn main() {
             db_url: db_url_http,
             db_secret: db_secret_http,
             replay_verification: Arc::new(Semaphore::new(1)),
-            verified_prefix: Arc::new(std::sync::Mutex::new(None)),
+            verified_prefix: Arc::new(std::sync::Mutex::new(verification::Sessions::new())),
             replay_http,
         };
         let catalog_route = axum::Router::new()
+            .route("/internal/match/result", axum::routing::post(verification::handle_result)
+                .layer(axum::extract::DefaultBodyLimit::max(64 * 1024)))
+            .route("/internal/match/progress", axum::routing::post(verification::handle_progress)
+                .layer(axum::extract::DefaultBodyLimit::max(sow_data::MAX_MATCH_CHUNK_BYTES * 5)))
             .route("/internal/match/exit", axum::routing::post(handle_match_exit)
                 .layer(axum::extract::DefaultBodyLimit::max(4096)))
             .route(
@@ -1525,6 +1532,7 @@ async fn main() {
                                                 let json = bincode::serialize(&pong).unwrap();
                                                 let _ = direct_tx.try_send(json);
                                             }
+                                            sow_core::protocol::ClientMessage::PrepareResult { .. } => {},
                                             sow_core::protocol::ClientMessage::ReservedClientMessage => {
                                                 log::warn!("[SERVER] Client used a reserved protocol message slot; closing connection");
                                                 break;
@@ -1600,7 +1608,7 @@ struct AppState {
     db_url: String,
     db_secret: String,
     replay_verification: Arc<Semaphore>,
-    verified_prefix: Arc<std::sync::Mutex<Option<VerifiedPrefix>>>,
+    verified_prefix: Arc<std::sync::Mutex<verification::Sessions>>,
     replay_http: reqwest::Client,
 }
 
@@ -1849,20 +1857,14 @@ async fn verify_match_replay(
     let verified_prefix = state.verified_prefix.clone();
     match tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        let mut progress = verified_prefix.lock().map_err(|_| ReplayVerificationError::Unavailable("verifier progress unavailable".into()))?;
-        verify_replay(
-            &match_id_for_task,
-            &replay,
-            &start,
-            &map_root,
-            personal_closure,
-            &mut progress,
-        )
+        let mut sessions = verified_prefix.lock().map_err(|_| ReplayVerificationError::Unavailable("verifier progress unavailable".into()))?;
+        sessions.legacy(&match_id_for_task, &replay, &start, &map_root, personal_closure)
+
     })
     .await
     {
-        Ok(Ok(result)) => axum::response::IntoResponse::into_response((
-            axum::http::StatusCode::OK,
+        Ok(Ok((result, complete))) => axum::response::IntoResponse::into_response((
+            if complete { axum::http::StatusCode::OK } else { axum::http::StatusCode::ACCEPTED },
             axum::response::Json(result),
         )),
         Ok(Err(ReplayVerificationError::Invalid(error))) => {
@@ -1898,8 +1900,7 @@ async fn verify_match_replay(
     }
 }
 
-// ponytail: one engine retained behind the existing single verifier; a bounded
-// per-match cache is justified only if measurements show frequent eviction.
+#[derive(serde::Serialize, serde::Deserialize)]
 struct VerifiedPrefix {
     identity: [u8; 32],
     turns: usize,
@@ -1908,6 +1909,12 @@ struct VerifiedPrefix {
     defeats: std::collections::HashMap<u16, [u32; 3]>,
     total_intents: usize,
     game_over_before_last: bool,
+    #[serde(default)]
+    turn_hashes: Vec<[u8; 32]>,
+    #[serde(default)]
+    outcomes: std::collections::BTreeMap<String, sow_data::profile::VerifiedParticipantClosure>,
+    terminal_turn: Option<u64>,
+    legacy: Option<replay::LegacyReplay>,
 }
 
 fn verify_replay(
@@ -1933,12 +1940,16 @@ fn verify_replay(
         .map_err(|error| {
             ReplayVerificationError::Invalid(format!("replay decode failed: {error}"))
         })?;
-    if turns.len() > MAX_REPLAY_TURNS {
-        return Err(ReplayVerificationError::Invalid(
-            "replay has too many turns".to_string(),
-        ));
-    }
+    advance_replay(match_id, &turns, version, legacy_replay.take(), start, maps_root, personal_closure, progress, None).map(|value| value.0)
+}
 
+fn advance_replay(
+    match_id: &str, turns: &[sow_core::protocol::Turn], version: u64,
+    mut legacy_replay: Option<replay::LegacyReplay>,
+    start: &sow_data::profile::MatchStartRecord, maps_root: &Path,
+    personal_closure: Option<(String, u64)>, progress: &mut Option<VerifiedPrefix>,
+    budget: Option<std::time::Duration>,
+) -> Result<(sow_data::profile::VerifiedMatchResult, bool), ReplayVerificationError> {
     let metadata = &start.metadata;
     let seed = metadata
         .get("seed")
@@ -2026,31 +2037,34 @@ fn verify_replay(
             .map_err(ReplayVerificationError::Invalid)?;
     }
 
-    let map_key = sow_core::maps::map_key(&config.map_name);
-    if map_key.is_empty() {
-        return Err(ReplayVerificationError::MissingMap(
-            "trusted map name is invalid".to_string(),
-        ));
+    let started = std::time::Instant::now();
+    if turns.len() as u64 > sow_data::max_match_turns(config.tick_rate_ms)
+        || turns.last().is_some_and(|turn| turn.turn_number >= sow_data::max_match_turns(config.tick_rate_ms)) {
+        return Err(ReplayVerificationError::Invalid("match duration exceeds registered clock limit".into()));
     }
-    let map_dir = maps_root.join(map_key);
-    let map_path = map_dir.join("map.bin");
-    let compressed_path = map_dir.join("map.bin.br");
-    let map_path = if map_path.is_file() {
-        map_path
-    } else {
-        compressed_path
-    };
-    let map_len = std::fs::metadata(&map_path)
-        .map_err(|error| ReplayVerificationError::MissingMap(format!("map read failed: {error}")))?
-        .len();
-    if map_len > 32 * 1024 * 1024 {
-        return Err(ReplayVerificationError::MissingMap(
-            "map file exceeds size limit".to_string(),
-        ));
+    let trusted_identity = serde_json::to_vec(&(match_id, &start.player_ids, &start.metadata, BUILD_EPOCH))
+        .map_err(|e| ReplayVerificationError::Unavailable(e.to_string()))?;
+    let identity: [u8; 32] = Sha256::digest(trusted_identity).into();
+    let first_turn = turns.first().map_or(progress.as_ref().map_or(0, |p| p.turns as u64), |t| t.turn_number) as usize;
+    if turns.iter().enumerate().any(|(offset, turn)| turn.turn_number != (first_turn + offset) as u64) {
+        *progress = None;
+        return Err(ReplayVerificationError::Invalid("replay turn sequence is broken".into()));
     }
-    let map_bytes = std::fs::read(&map_path).map_err(|error| {
-        ReplayVerificationError::MissingMap(format!("map read failed: {error}"))
-    })?;
+    let mut prior = progress.take();
+    if prior.as_ref().is_some_and(|p| p.identity != identity) { prior = None; }
+    if let Some(saved) = &prior {
+        for turn in turns.iter().take_while(|t| (t.turn_number as usize) < saved.turns) {
+            let hash: [u8; 32] = Sha256::digest(bincode::serialize(turn).map_err(|e| ReplayVerificationError::Invalid(e.to_string()))?).into();
+            if saved.turn_hashes.get(turn.turn_number as usize) != Some(&hash) {
+                return Err(ReplayVerificationError::Invalid("recorded turn conflicts with verified history".into()));
+            }
+        }
+    }
+    if prior.as_ref().map_or(0, |p| p.turns) < first_turn {
+        return Err(ReplayVerificationError::Unavailable("verified history required".into()));
+    }
+    if prior.is_none() {
+        let map_bytes = verification::match_map_bytes(&config,start,maps_root)?;
     let map_file = sow_core::maps::load_map_from_payload(&map_bytes).map_err(|error| {
         ReplayVerificationError::MissingMap(format!("map parse failed: {error}"))
     })?;
@@ -2059,25 +2073,26 @@ fn verify_replay(
             "map dimensions do not match match config".to_string(),
         ));
     }
-    let started = std::time::Instant::now();
-    let trusted_identity = serde_json::to_vec(&(match_id, &start.player_ids, &start.metadata, Sha256::digest(&map_bytes).as_slice()))
-        .map_err(|error| ReplayVerificationError::Unavailable(error.to_string()))?;
-    let identity: [u8; 32] = Sha256::digest(trusted_identity).into();
-    let prior = progress.take().filter(|prior| version == sow_core::protocol::GAMEPLAY_FORMAT_VERSION
-        && prior.identity == identity && prior.turns <= turns.len()
-        && bincode::serialize(&turns[..prior.turns]).is_ok_and(|bytes|
-            <[u8; 32]>::from(Sha256::digest(bytes)) == prior.prefix_sha256));
-    let (mut engine, mut defeats, mut total_intents, reused_turns, mut game_over_before_last) = match prior {
-        Some(prior) => (prior.engine, prior.defeats, prior.total_intents, prior.turns, prior.game_over_before_last),
-        None => (sow_core::engine::initialize_match_engine(
-            config.clone(), seed, &map_bytes, players,
-            map_file.spawns.clone(), map_file.geo_bounds.clone(), map_file.rosters.clone(), map_file.num_land_tiles,
-        ), std::collections::HashMap::<u16, [u32; 3]>::new(), 0usize, 0usize, false),
-    };
+
+        prior = Some(VerifiedPrefix { identity, turns:0, prefix_sha256:[0;32],
+            engine:sow_core::engine::initialize_match_engine(config.clone(), seed, &map_bytes, players,
+                map_file.spawns.clone(), map_file.geo_bounds.clone(), map_file.rosters.clone(), map_file.num_land_tiles),
+            defeats:std::collections::HashMap::new(), total_intents:0, game_over_before_last:false,
+            turn_hashes:Vec::new(), outcomes:std::collections::BTreeMap::new(), terminal_turn:None, legacy:legacy_replay.take() });
+    }
+    let mut saved = prior.unwrap();
+    if saved.legacy.is_some() { legacy_replay = saved.legacy.take(); }
+    let reused_turns = saved.turns;
+    let engine = &mut saved.engine;
+    let defeats = &mut saved.defeats;
+    let mut total_intents = saved.total_intents;
+    let mut game_over_before_last = saved.game_over_before_last;
     engine.legacy_building_rules = version < 3;
     engine.legacy_elimination_rewards = version < 4;
     let mut game_over_preceded_personal_closure = reused_turns == turns.len() && game_over_before_last;
-    for (index, turn) in turns.iter().enumerate().skip(reused_turns) {
+    for turn in turns.iter().filter(|turn| turn.turn_number as usize >= reused_turns) {
+        let index = saved.turns;
+        if index > reused_turns && budget.is_some_and(|limit| started.elapsed() >= limit) { break; }
         if turn.turn_number != index as u64 {
             return Err(ReplayVerificationError::Invalid(
                 "replay turn sequence is broken".to_string(),
@@ -2121,6 +2136,8 @@ fn verify_replay(
                     "replay contains an unregistered sender".to_string(),
                 ));
             }
+            saved.turns = index + 1;
+            saved.turn_hashes.push(Sha256::digest(bincode::serialize(turn).map_err(|e| ReplayVerificationError::Invalid(e.to_string()))?).into());
             continue;
         }
         if turn
@@ -2132,7 +2149,7 @@ fn verify_replay(
                 "replay contains an unregistered sender".to_string(),
             ));
         }
-        replay::apply_turn(&mut engine, turn, index, &mut legacy_replay);
+        replay::apply_turn(engine, turn, index, &mut legacy_replay);
         for event in &engine.state.events {
             let sow_core::game::GameEvent::PlayerEliminated {
                 player_id,
@@ -2159,10 +2176,44 @@ fn verify_replay(
                 }
             }
         }
+        saved.turns = index + 1;
+        saved.turn_hashes.push(Sha256::digest(bincode::serialize(turn).map_err(|e| ReplayVerificationError::Invalid(e.to_string()))?).into());
+        let game_over = engine.state.phase == sow_core::game::GamePhase::GameOver;
+        if game_over && saved.terminal_turn.is_none() { saved.terminal_turn = Some(turn.turn_number); }
+        for human in relay_players.iter().filter(|p| !p.is_internal) {
+            let Some(account) = &human.database_account_id else { continue; };
+            if saved.outcomes.contains_key(account) { continue; }
+            let resigned = turn.intents.iter().any(|i| i.player_id == human.player_id && matches!(i.intent, sow_core::protocol::GameplayIntent::Resign));
+            let dead = engine.state.players.iter().any(|p| p.id == human.player_id && !p.alive && p.has_spawned);
+            // An eliminated team member can still win with living teammates.
+            let team_still_playing = human.team.is_some_and(|team| engine.state.players.iter().any(|p| p.team == Some(team) && p.alive));
+            if resigned || (dead && (!team_still_playing || game_over)) {
+                let result = replay_result(match_id, engine, defeats, &relay_players, &config,
+                    Some(turn.turn_number), game_over_before_turn || (game_over && !resigned))?;
+                saved.outcomes.insert(account.clone(), sow_data::profile::VerifiedParticipantClosure {
+                    account_id:account.clone(), reason:if resigned { "voluntary" } else { "defeated" }.into(), result });
+            }
+        }
+
     }
 
+    let complete = turns.last().is_none_or(|turn| saved.turns > turn.turn_number as usize);
+    let result = replay_result(match_id, engine, defeats, &relay_players, &config,
+        personal_closure.as_ref().map(|(_, turn)| *turn), personal_closure.is_none() || game_over_preceded_personal_closure)?;
+    saved.total_intents = total_intents;
+    saved.game_over_before_last = game_over_before_last;
+    saved.legacy = legacy_replay;
+    log::info!("[exit-timing] verified match={match_id} turns={} reused_turns={reused_turns} calculate_ms={} personal={}", saved.turns, started.elapsed().as_millis(), personal_closure.is_some());
+    *progress = Some(saved);
+    Ok((result, complete))
+}
+
+fn replay_result(match_id: &str, engine: &sow_core::engine::SowEngine,
+    defeats: &std::collections::HashMap<u16, [u32;3]>, relay_players: &[ReplayStartPlayer],
+    config: &GameConfig, closure_turn: Option<u64>, allow_winner: bool,
+) -> Result<sow_data::profile::VerifiedMatchResult, ReplayVerificationError> {
     let (winner_player_id, winning_team) =
-        if personal_closure.is_some() && !game_over_preceded_personal_closure {
+        if !allow_winner {
             (None, None)
         } else {
             (
@@ -2172,7 +2223,7 @@ fn verify_replay(
         };
     let mut participants = Vec::with_capacity(relay_players.len());
     for relay_player in relay_players {
-        let Some(account_id) = relay_player.database_account_id else {
+        let Some(account_id) = relay_player.database_account_id.clone() else {
             continue;
         };
         let player = engine
@@ -2213,19 +2264,8 @@ fn verify_replay(
     let duration_seconds = ((engine.state.tick as f64 * f64::from(config.tick_rate_ms)) / 1000.0)
         .round()
         .clamp(0.0, f64::from(u32::MAX)) as u32;
-    log::info!("[exit-timing] verified match={match_id} turns={} reused_turns={reused_turns} calculate_ms={} personal={}", turns.len(), started.elapsed().as_millis(), personal_closure.is_some());
-    if personal_closure.is_some() && version == sow_core::protocol::GAMEPLAY_FORMAT_VERSION {
-        let prefix_sha256: [u8; 32] = Sha256::digest(bincode::serialize(&turns).map_err(|error| ReplayVerificationError::Unavailable(error.to_string()))?).into();
-        *progress = Some(VerifiedPrefix { identity, turns:turns.len(), prefix_sha256, engine, defeats, total_intents, game_over_before_last });
-    }
-    Ok(sow_data::profile::VerifiedMatchResult {
-        match_id: match_id.to_string(),
-        duration_seconds,
-        winner_player_id,
-        winning_team,
-        personal_closure_turn: personal_closure.map(|(_, turn)| turn),
-        participants,
-    })
+    Ok(sow_data::profile::VerifiedMatchResult { match_id:match_id.to_string(), duration_seconds,
+        winner_player_id, winning_team, personal_closure_turn:closure_turn, participants })
 }
 
 fn validate_personal_replay_closure(
@@ -2536,7 +2576,7 @@ mod relay_worker_tests {
         let now = std::time::Instant::now();
         let warm = super::verify_replay("424242", &full, &start, &root, None, &mut progress).unwrap();
         let warm_ms = now.elapsed().as_millis();
-        assert!(progress.is_none(), "completed matches release the retained engine");
+        assert!(progress.is_some(), "completed matches keep checked state for concurrent finalization retries");
         let now = std::time::Instant::now();
         let cold = super::verify_replay("424242", &full, &start, &root, None, &mut None).unwrap();
         let cold_ms = now.elapsed().as_millis();

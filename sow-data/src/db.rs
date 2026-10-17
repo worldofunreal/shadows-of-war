@@ -4722,7 +4722,7 @@ impl PlayerDb {
                 | crate::profile::MatchWork::Participant { match_id, account_id, .. } => {
                 self.registered_human_participant(match_id, account_id)?;
             }
-            crate::profile::MatchWork::Replay { match_id } => {
+            crate::profile::MatchWork::Replay { match_id } | crate::profile::MatchWork::Progress { match_id, .. } => {
                 self.match_start_record(match_id)?.ok_or("trusted match registration unavailable")?;
             }
         }
@@ -4782,22 +4782,59 @@ impl PlayerDb {
         for entry in table.iter()? {
             let (key, value) = entry?;
             let job = crate::profile::MatchWorkRecord::decode(key.value(), value.value())?;
-            if job.retry_at <= now { jobs.push(job); }
+            jobs.push(job);
         }
-        jobs.sort_by_key(|job| match job.work {
+        // Only the earliest pending chunk may advance a match. A later
+        // closure promotes that match's remaining prefix, never skips it.
+        let mut owners = std::collections::HashMap::<String,(u64,bool)>::new();
+        for job in &jobs {
+            if let crate::profile::MatchWork::Progress { match_id,sequence,closing,.. } = &job.work {
+                let owner = owners.entry(match_id.clone()).or_insert((*sequence,false));
+                owner.0 = owner.0.min(*sequence);
+                owner.1 |= closing;
+            }
+        }
+        jobs.retain_mut(|job| {
+            if let crate::profile::MatchWork::Progress { match_id,sequence,.. } = &job.work {
+                let (first,urgent) = owners[match_id];
+                job.urgent = urgent;
+                if *sequence != first { return false; }
+            }
+            job.retry_at <= now
+        });
+        jobs.sort_by_key(|job| (match job.work {
             crate::profile::MatchWork::RecoveryExit { .. } => 0,
             crate::profile::MatchWork::Participant { .. } => 1,
             crate::profile::MatchWork::Replay { .. } => 2,
-        });
+            crate::profile::MatchWork::Progress { .. } => if job.urgent { 1 } else { 3 },
+        }, job.queued_at_ms));
         // Reserve room for both owners: a backlog of exits must not hide the
         // result needed to finish them, or vice versa.
-        let (mut exits, mut checks) = (0, 0);
+        let (mut exits, mut checks, mut progress) = (0, 0, 0);
         jobs.retain(|job| {
-            let count = if matches!(job.work, crate::profile::MatchWork::RecoveryExit { .. }) { &mut exits } else { &mut checks };
+            let count = if matches!(job.work, crate::profile::MatchWork::RecoveryExit { .. }) { &mut exits }
+                else if matches!(job.work, crate::profile::MatchWork::Progress { .. }) && !job.urgent { &mut progress }
+                else { &mut checks };
             *count += 1;
             *count <= 32
         });
         Ok(jobs)
+    }
+
+    pub fn pending_match_progress(&self, match_id:&str) -> Result<Vec<u64>,Box<dyn std::error::Error+Send+Sync>> {
+        let db = self.metadata_db.as_ref().ok_or("match metadata database unavailable")?;
+        let txn = db.begin_read()?;
+        let table = txn.open_table(PENDING_REPLAY_VERIFICATIONS_TABLE)?;
+        let prefix = format!("progress:{match_id}:");
+        let mut pending = Vec::new();
+        for entry in table.range(prefix.as_str()..)? {
+            let (key,value) = entry?;
+            if !key.value().starts_with(&prefix) { break; }
+            if let crate::profile::MatchWork::Progress { sequence,.. } = crate::profile::MatchWorkRecord::decode(key.value(),value.value())?.work {
+                pending.push(sequence);
+            }
+        }
+        Ok(pending)
     }
 
     pub fn pending_replay_verifications(

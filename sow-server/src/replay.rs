@@ -110,7 +110,7 @@ enum IntentV1 {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct ReactionV1 {
     emoji: String,
     pinned: bool,
@@ -208,7 +208,7 @@ impl IntentV1 {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 struct ExpressionV1 {
     dagger: bool,
     pinned: bool,
@@ -226,6 +226,7 @@ impl ExpressionV1 {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct LegacyReplay {
     reactions: HashMap<(usize, usize), ReactionV1>,
     expressions: BTreeMap<u16, ExpressionV1>,

@@ -121,6 +121,10 @@ impl GameMap {
         self.ownership_revision
     }
 
+    pub(crate) fn restore_ownership_revision(&mut self, revision: u64) {
+        self.ownership_revision = revision;
+    }
+
     #[inline(always)]
     pub fn ref_id(&self, x: u32, y: u32) -> usize {
         (y * self.width + x) as usize

@@ -56,8 +56,11 @@ impl SowApp {
         // The relay/database own online results; the database owns the one-time
         // Boudica tutorial reward.
         if server_owned_match {
+            if !self.net.is_offline {
+                self.prepare_match_result(snap.tick.saturating_sub(1));
+            }
             log::info!(
-                "Server-owned match ended (winner={winner_id}); profile will sync from sow-database on menu return"
+                "Server-owned result detected (winner={winner_id}); preparing rewards while the endgame panel remains open"
             );
             return;
         }

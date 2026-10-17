@@ -1,4 +1,4 @@
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct FlowField {
     pub target: u32,
     pub width: u32,
@@ -86,7 +86,7 @@ impl FlowField {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FlowFieldCache {
     pub fields: std::collections::HashMap<u32, FlowField>,
     pub access_order: std::collections::VecDeque<u32>,

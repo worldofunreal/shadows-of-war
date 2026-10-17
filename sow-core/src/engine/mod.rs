@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 const CAMPAIGN_ASSAULT_PHASES: u8 = 4;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CampaignAssaultState {
     pub root_target: PlayerId,
     pub team: crate::protocol::Team,
@@ -338,29 +338,32 @@ pub(crate) struct BotWorkCounters {
     pub nuke_history_lookups: u64,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct BotNavalCursor {
     pub source_cursor: u32,
     pub next_component: usize,
     pub components: Vec<BotNavalComponentCursor>,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct BotNavalComponentCursor {
     pub water_component: u32,
     pub source_tile: u32,
     pub shoreline_cursor: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct SowEngine {
+    #[serde(with = "checkpoint::state")]
     pub state: GameState,
     pub attacks: Vec<AttackExecution>,
     pub fleets: Vec<WarpFleet>,
     pub buildings: Vec<Building>,
     pub water: WaterComponents,
+    #[serde(skip)]
     pub path_scratch: WaterPathfinderScratch,
     pub flow_field_cache: crate::pathfinding::FlowFieldCache,
+    #[serde(skip)]
     pub placement_scratch: PlacementScratch,
     pub defense_grid: DefenseGrid,
     pub defense_grid_dirty: bool,
@@ -426,8 +429,10 @@ pub struct SowEngine {
     pub(crate) bot_naval_cursors: Vec<BotNavalCursor>,
     pub(crate) bot_naval_shore_sample: Vec<u32>,
     pub(crate) bot_naval_slots_used: Vec<u32>,
+    #[serde(skip)]
     pub(crate) bot_work: BotWorkCounters,
     #[cfg(test)]
+    #[serde(skip)]
     pub(crate) test_last_ai_intents: Vec<crate::protocol::StampedIntent>,
 }
 
@@ -2030,7 +2035,8 @@ mod tests {
                       tick: u64,
                       loot_bonus: Option<u32>,
                       loot_override: Option<u32>,
-                      legacy: bool| {
+                      legacy: bool,
+                      is_ghost: bool| {
             let config = GameConfig::default();
             let mut state = GameState::new(1, 4, 4, config.clone());
             state.tick = tick;
@@ -2039,6 +2045,7 @@ mod tests {
             state.register_player(human);
             let mut victim = Player::new_human(2, "Outpost".into(), [0.5; 3], &config);
             victim.player_type = victim_type;
+            victim.is_ai_controlled = is_ghost;
             state.register_player(victim);
             let mut engine = SowEngine::new(state, WaterComponents::default());
             if let Some(bonus) = loot_bonus {
@@ -2061,29 +2068,60 @@ mod tests {
             (engine.state.player(1).unwrap().gold, bounty)
         };
 
-        assert_eq!(reward(PlayerType::Bot, 100, None, None, false), (150.0, 50));
         assert_eq!(
-            reward(PlayerType::Bot, 10_000, None, None, false),
+            reward(PlayerType::Bot, 100, None, None, false, false),
             (150.0, 50)
         );
         assert_eq!(
-            reward(PlayerType::Nation, 1_000, None, None, false),
+            reward(PlayerType::Bot, 100, None, None, true, false),
+            (125.0, 25)
+        );
+        assert_eq!(
+            reward(PlayerType::Bot, 10_000, None, None, false, false),
+            (150.0, 50)
+        );
+        assert_eq!(
+            reward(PlayerType::Nation, 1_000, None, None, false, false),
             (250.0, 150)
         );
         assert_eq!(
-            reward(PlayerType::Human, 10_000, None, None, false),
+            reward(PlayerType::Nation, 1_000, None, None, true, false),
+            (175.0, 75)
+        );
+        assert_eq!(
+            reward(PlayerType::Human, 10_000, None, None, false, false),
             (400.0, 300)
         );
         assert_eq!(
-            reward(PlayerType::Bot, 100, Some(125), None, false),
+            reward(PlayerType::Human, 10_000, None, None, true, false),
+            (250.0, 150)
+        );
+        assert_eq!(
+            reward(PlayerType::Human, 10_000, None, None, false, true),
             (400.0, 300)
         );
         assert_eq!(
-            reward(PlayerType::Bot, 100, None, Some(125), false),
+            reward(PlayerType::Human, 10_000, None, None, true, true),
+            (250.0, 150)
+        );
+        assert_eq!(
+            reward(PlayerType::Bot, 100, Some(125), None, false, false),
+            (400.0, 300)
+        );
+        assert_eq!(
+            reward(PlayerType::Bot, 100, None, Some(200), false, false),
+            (500.0, 400)
+        );
+        assert_eq!(
+            reward(PlayerType::Bot, 100, None, Some(200), true, false),
+            (300.0, 200)
+        );
+        assert_eq!(
+            reward(PlayerType::Bot, 100, None, Some(125), false, false),
             (350.0, 250)
         );
         assert_eq!(
-            reward(PlayerType::Bot, 100, None, Some(125), true),
+            reward(PlayerType::Bot, 100, None, Some(125), true, false),
             (225.0, 125)
         );
     }
@@ -2811,3 +2849,5 @@ mod tests {
         assert_eq!(engine.state.winner, Some(1));
     }
 }
+
+mod checkpoint;

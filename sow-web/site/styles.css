@@ -43,7 +43,8 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; background: var(--bg); }
+html[data-sow-locale-pending] body { visibility: hidden; }
 body {
   margin: 0;
   background: var(--bg);

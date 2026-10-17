@@ -22,6 +22,8 @@
 //! The per-lobby game loop (ticks, intents, missed-tick drop, MatchTracker,
 //! finalize upload) is the sow-relay logic, now keyed by registry lookup.
 
+mod progress;
+
 use fstack_bridge::bridge::{self, Ev};
 use futures_util::{SinkExt, StreamExt};
 use hmac::{Hmac, Mac};
@@ -283,6 +285,15 @@ fn configured_db_url() -> Result<String, String> {
 }
 
 fn db_client(db_url: &str) -> Result<reqwest::Client, String> {
+    static CLIENT: OnceLock<std::sync::Mutex<Option<(String,reqwest::Client)>>> = OnceLock::new();
+    let mut pool = CLIENT.get_or_init(||std::sync::Mutex::new(None)).lock().map_err(|e|e.to_string())?;
+    if let Some((url,client)) = &*pool { if url == db_url { return Ok(client.clone()); } }
+    let client = build_db_client(db_url)?;
+    *pool = Some((db_url.to_string(),client.clone()));
+    Ok(client)
+}
+
+fn build_db_client(db_url: &str) -> Result<reqwest::Client, String> {
     let parsed =
         reqwest::Url::parse(db_url).map_err(|e| format!("invalid database URL {db_url}: {e}"))?;
     let mut builder = reqwest::Client::builder()
@@ -567,7 +578,7 @@ const LIVE_HISTORY_CAP: usize = 512;
 /// Hard ceiling for one replay artifact. The current production replays are
 /// below 1 MiB; this keeps a malformed or runaway match from becoming a RAM
 /// or disk amplification vector.
-const MAX_REPLAY_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_REPLAY_BYTES: u64 = sow_data::MAX_MATCH_ARCHIVE_BYTES as u64;
 
 // ---- relay event plumbing ---------------------------------------------------
 
@@ -593,6 +604,9 @@ enum RelayEvent {
         peer: SocketAddr,
     },
     EndMatch,
+    PrepareResult { player_id:u16, generation:u64, through_turn:u64 },
+    ClosuresRecorded { closures:Vec<(String,u64)>, result:Result<(),String> },
+    VerifiedResult(sow_data::profile::MatchResultControl),
 }
 
 struct ClientChannel {
@@ -627,6 +641,7 @@ enum ReplayCommand {
         participant_closures: Vec<ParticipantClosure>,
         reply: oneshot::Sender<Result<Vec<u8>, String>>,
     },
+    Flush { participant_closures:Vec<ParticipantClosure>, reply:oneshot::Sender<Result<(),String>> },
     Finalize {
         metadata: ReplaySpoolMetadata,
         reply: oneshot::Sender<Result<PathBuf, String>>,
@@ -691,6 +706,8 @@ struct ReplaySpoolMetadata {
 #[serde(rename_all = "snake_case")]
 enum ReplayPhase {
     Recording,
+    Streaming,
+    StreamFinalized,
     // Older metadata was written only at finalization.
     #[default]
     Finalized,
@@ -769,7 +786,7 @@ impl ReplayJournal {
         file.sync_all().await.map_err(|error| error.to_string())?;
         let metadata = ReplaySpoolMetadata {
             lobby_json: lobby_json.to_string(),
-            phase: ReplayPhase::Recording,
+            phase: ReplayPhase::Streaming,
             participant_closures: Vec::new(),
             rejected: false,
         };
@@ -844,6 +861,12 @@ impl ReplayJournal {
             .map_err(|_| "replay writer dropped checkpoint response".to_string())?
     }
 
+    async fn flush(&self, participant_closures:Vec<ParticipantClosure>) -> Result<(),String> {
+        let (reply, receive) = oneshot::channel();
+        self.tx.send(ReplayCommand::Flush { participant_closures, reply }).await.map_err(|_| "journal writer stopped".to_string())?;
+        receive.await.map_err(|_| "journal flush reply lost".to_string())?
+    }
+
     async fn finalize(
         &self,
         lobby_json: &str,
@@ -886,7 +909,19 @@ async fn replay_writer(
     mut metadata: ReplaySpoolMetadata,
 ) {
     let mut journal_bytes = 0u64;
-    while let Some(command) = rx.recv().await {
+    let streaming = metadata.phase == ReplayPhase::Streaming;
+    let mut stream = progress::Stream::new(journal_path.file_stem().unwrap().to_string_lossy().to_string());
+    let mut flush = interval(Duration::from_secs(sow_data::MATCH_PROGRESS_INTERVAL_SECONDS));
+    loop {
+        let command = tokio::select! {
+            command = rx.recv() => match command { Some(command) => command, None => break },
+            _ = flush.tick(), if streaming => {
+                if let Err(error) = stream.seal(&mut file, &journal_path, &metadata, false).await {
+                    error!("[rewards] periodic journal save failed: {error}");
+                }
+                continue;
+            }
+        };
         match command {
             ReplayCommand::Append(turn) => {
                 let encoded = match bincode::serialize(&turn) {
@@ -915,6 +950,25 @@ async fn replay_writer(
                     break;
                 }
                 journal_bytes = journal_bytes.saturating_add(record_bytes);
+                if streaming {
+                    stream.append(turn, encoded.len());
+                    if stream.bytes >= sow_data::MAX_MATCH_CHUNK_BYTES / 2 {
+                        if let Err(error) = stream.seal(&mut file, &journal_path, &metadata, false).await {
+                            error!("[rewards] full journal chunk save failed: {error}");
+                            failed.store(true, Ordering::Release);
+                            break;
+                        }
+                    }
+                }
+            }
+            ReplayCommand::Flush { participant_closures, reply } => {
+                metadata.participant_closures = participant_closures;
+                let result = async {
+                    stream.seal(&mut file, &journal_path, &metadata, false).await?;
+                    file.sync_all().await.map_err(|e|e.to_string())?;
+                    persist_replay_metadata(&journal_path.with_extension("json"), &metadata).await
+                }.await;
+                let _ = reply.send(result);
             }
             ReplayCommand::Checkpoint {
                 through_turn,
@@ -937,7 +991,19 @@ async fn replay_writer(
                 .await;
                 let _ = reply.send(result);
             }
-            ReplayCommand::Finalize { reply, metadata } => {
+            ReplayCommand::Finalize { reply, mut metadata } => {
+                if streaming {
+                    let result = async {
+                        stream.seal(&mut file, &journal_path, &metadata, true).await?;
+                        metadata.phase = ReplayPhase::StreamFinalized;
+                        persist_replay_metadata(&journal_path.with_extension("json"), &metadata).await?;
+                        let replay_path = journal_path.with_extension("replay");
+                        tokio::fs::rename(&journal_path, &replay_path).await.map_err(|e|e.to_string())?;
+                        Ok(replay_path)
+                    }.await;
+                    let _ = reply.send(result);
+                    break;
+                }
                 let result = async {
                     file.flush().await.map_err(|e| e.to_string())?;
                     file.sync_all().await.map_err(|e| e.to_string())?;
@@ -1088,6 +1154,9 @@ async fn post_replay_finalize(replay_path: &Path) -> Result<(), String> {
     let metadata = serde_json::from_slice::<ReplaySpoolMetadataCompat>(&metadata)
         .map_err(|error| error.to_string())?
         .into_current();
+    if metadata.phase == ReplayPhase::StreamFinalized {
+        return progress::finish_delivery(replay_path).await;
+    }
     if metadata.phase != ReplayPhase::Finalized {
         return Err("replay is still recording".into());
     }
@@ -1252,6 +1321,7 @@ async fn recover_detached_exit(
     .await
     .map_err(|error| error.to_string())?
     .map_err(|error| format!("journal still owned or unavailable: {error}"))?;
+    if current.phase == ReplayPhase::Streaming { return progress::recover(&journal,metadata).await; }
     let history = match tokio::fs::read(&journal).await {
         Ok(bytes) => decode_replay_journal(&bytes, true),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -1806,7 +1876,7 @@ async fn recover_recording(
     let current = serde_json::from_slice::<ReplaySpoolMetadataCompat>(&current)
         .map_err(|error| error.to_string())?
         .into_current();
-    if current.phase == ReplayPhase::Finalized {
+    if matches!(current.phase, ReplayPhase::Finalized | ReplayPhase::StreamFinalized) {
         *metadata = current;
         return Ok(true);
     }
@@ -1955,7 +2025,7 @@ async fn recover_replay_spool() {
                 continue;
             }
         };
-        if metadata.phase == ReplayPhase::Recording {
+        if matches!(metadata.phase, ReplayPhase::Recording | ReplayPhase::Streaming) {
             match recover_recording(&metadata_path, &mut metadata).await {
                 Ok(true) => {}
                 Ok(false) => continue, // Native lock proves that its writer is still alive.
@@ -2074,7 +2144,7 @@ impl MatchTracker {
             return false;
         };
         match state {
-            Participation::Active => true,
+            Participation::Active | Participation::Closed { reason:ExitReason::Defeated, .. } => true,
             Participation::Disconnected { since }
                 if now.duration_since(*since) < RECONNECT_GRACE =>
             {
@@ -2381,6 +2451,7 @@ fn main() {
             .build()
             .expect("tokio runtime");
         rt.spawn(replay_spool_worker());
+        rt.spawn(progress::delivery_worker());
         rt.spawn(mgmt_http(registry.clone(), mport));
         rt.spawn(bridge_worker(registry.clone()));
 
@@ -2648,6 +2719,20 @@ async fn handle_http(
     body: &[u8],
 ) -> (&'static str, serde_json::Value) {
     match (method, path) {
+        ("POST", "/internal/match/result") => {
+            let command = match serde_json::from_slice::<sow_data::profile::MatchResultControl>(body) {
+                Ok(command) if command.match_id.parse::<u64>().is_ok() => command,
+                _ => return ("400 Bad Request",serde_json::json!({"error":"invalid result identity"})),
+            };
+            let id = command.match_id.parse::<u64>().unwrap();
+            let lobby = registry.read().await.get(&id).cloned();
+            if let Some(lobby) = lobby {
+                if lobby.ev_tx.send(RelayEvent::VerifiedResult(command)).await.is_err() {
+                    return ("503 Service Unavailable",serde_json::json!({"error":"match control unavailable"}));
+                }
+            }
+            ("200 OK",serde_json::json!({"match_id":id.to_string()}))
+        }
         ("POST", "/internal/match/exit") => {
             let command = match serde_json::from_slice::<sow_data::profile::MatchExitCommand>(body)
             {
@@ -2710,7 +2795,7 @@ async fn handle_http(
                                 serde_json::from_slice::<ReplaySpoolMetadataCompat>(&bytes)
                                     .map_err(|error| error.to_string())?
                                     .into_current();
-                            if metadata.phase == ReplayPhase::Recording {
+                            if matches!(metadata.phase, ReplayPhase::Recording | ReplayPhase::Streaming) {
                                 recover_recording(&metadata_path, &mut metadata).await?;
                             }
                             Ok::<_, String>(())
@@ -3116,6 +3201,8 @@ async fn tick_task(
     let mut exit_replies = ExitReplies::new();
     let mut replay_recording_failed = false;
     let mut end_requested = false;
+    let mut natural_end: Option<u64> = None;
+    let mut closure_flushes = 0usize;
     let (settlement_result_tx, mut settlement_result_rx) = mpsc::unbounded_channel();
     let mut spawn_rate_limits = HashMap::<u16, SpawnIntentRateLimit>::new();
     let mut total_ticks: u64 = 0;
@@ -3129,7 +3216,7 @@ async fn tick_task(
     let max_match_secs: u64 = std::env::var("SOW_RELAY_MATCH_MAX_SECS")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(1800);
+        .unwrap_or(sow_data::MAX_MATCH_SECONDS);
 
     loop {
         tokio::select! {
@@ -3149,7 +3236,7 @@ async fn tick_task(
 
                 let now = Instant::now();
                 let ending = end_requested || match_started.elapsed().as_secs() >= max_match_secs;
-                let expired = if ending {
+                let expired = if natural_end.is_some() { Vec::new() } else if ending {
                     state.tracker.lock().unwrap().participants.keys().copied().collect()
                 } else { state.tracker.lock().unwrap().expired(now) };
                 for player_id in expired {
@@ -3170,12 +3257,13 @@ async fn tick_task(
                 // LobbyClosed so clients exit cleanly, finalize the replay to
                 // the database, then drop the lobby from the registry. The
                 // complete replay is already on disk; only live history is RAM.
-                let is_finalized = already_finalized;
-                let is_timed_out = ending;
+                let is_finalized = already_finalized && clients.is_empty();
+                let is_timed_out = ending || natural_end.is_some();
                 if (is_finalized || is_timed_out)
                     && pending_intents.is_empty()
                     && pending_closures.is_empty()
                     && pending_participant_settlements.is_empty()
+                    && closure_flushes == 0
                 {
                     let reason = if is_finalized {
                         "Match finalized".to_string()
@@ -3183,12 +3271,9 @@ async fn tick_task(
                         format!("Match duration limit reached ({}s)", max_match_secs)
                     };
                     info!("[relay] lobby {} ending: {}, finalizing & cleaning up", state.id, reason);
-                    if let Ok(json) = bincode::serialize(
-                        &ServerMessage::LobbyClosed(ServerLobbyClosedMessage {
-                            lobby_id: state.id,
-                            reason,
-                        }),
-                    ) {
+                    let closing = natural_end.map_or_else(|| ServerMessage::LobbyClosed(ServerLobbyClosedMessage {
+                        lobby_id:state.id, reason }), |terminal_turn| ServerMessage::MatchFinished { match_id:state.id, terminal_turn });
+                    if let Ok(json) = bincode::serialize(&closing) {
                         let frame = Arc::new(json);
                         for client in clients.values() {
                             let _ = client.sender.try_send(frame.clone());
@@ -3239,84 +3324,17 @@ async fn tick_task(
                     }
                     pending_closure_checkpoint_since.clear();
                 } else {
-                    let mut closure_groups = std::collections::BTreeMap::<u64, Vec<String>>::new();
-                    for (account_id, closure_turn) in &pending_closures {
-                        closure_groups
-                            .entry(*closure_turn)
-                            .or_default()
-                            .push(account_id.clone());
-                    }
-                    for (closure_turn, accounts) in closure_groups {
-                        let closures = state.tracker.lock().unwrap().participant_closures().into_iter()
-                            .filter(|closure| closure.turn_number <= closure_turn).collect();
-                        match state.journal.checkpoint(closure_turn, closures).await {
-                            Ok(replay_bytes) => {
-                                pending_closures
-                                    .retain(|(_, turn_number)| *turn_number != closure_turn);
-                                let record_started = pending_closure_checkpoint_since.remove(&closure_turn);
-                                for account_id in accounts {
-                                    match prepare_participant_settlement(
-                                        state.id,
-                                        account_id.clone(),
-                                        closure_turn,
-                                        replay_bytes.clone(),
-                                        false,
-                                    ) {
-                                        Ok(job) => {
-                                            state.tracker.lock().unwrap().record_committed_closure(account_id.clone(), closure_turn);
-                                            info!("[exit-timing] recorded match={} account={} turn={} record_ms={}", state.id, account_id, closure_turn,
-                                                record_started.map_or(0, |since| since.elapsed().as_millis()));
-                                            acknowledge_exit(&mut exit_replies, &account_id, closure_turn);
-                                            dispatch_participant_settlements(vec![job]);
-                                        }
-                                        Err(error) => {
-                                            error!("[rewards] lobby {} participant spool failed; retrying while match stays active: {error}", state.id);
-                                            pending_participant_settlements.push(
-                                                PendingParticipantSettlement {
-                                                    account_id,
-                                                    closure_turn,
-                                                    replay_bytes: replay_bytes.clone(),
-                                                    rejected: false,
-                                                    retry_count: 1,
-                                                    direct_in_flight: false,
-                                                    direct_retry_after: None,
-                                                    queued_at: Instant::now(),
-                                                },
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                            Err(error) => {
-                                warn!("[replay] lobby {} exit checkpoint failed; retrying: {error}", state.id);
-                                let exhausted = pending_closure_checkpoint_since
-                                    .get(&closure_turn)
-                                    .is_some_and(|since| {
-                                        since.elapsed().as_secs()
-                                            >= PARTICIPANT_CHECKPOINT_RETRY_SECS
-                                    });
-                                if exhausted {
-                                    warn!("[rewards] lobby {} personal prefix could not be recorded; recording explicit participant rejection", state.id);
-                                    pending_closures
-                                        .retain(|(_, turn_number)| *turn_number != closure_turn);
-                                    pending_closure_checkpoint_since.remove(&closure_turn);
-                                    for account_id in accounts {
-                                        pending_participant_settlements.push(
-                                            PendingParticipantSettlement {
-                                                account_id,
-                                                closure_turn,
-                                                replay_bytes: Vec::new(),
-                                                rejected: true,
-                                                retry_count: 0,
-                                                direct_in_flight: false,
-                                                direct_retry_after: None,
-                                                queued_at: Instant::now(),
-                                            },
-                                        );
-                                    }
-                                }
-                            }
-                        }
+                    if !pending_closures.is_empty() {
+                        closure_flushes += 1;
+                        let closures = std::mem::take(&mut pending_closures);
+                        pending_closure_checkpoint_since.clear();
+                        let recorded = state.tracker.lock().unwrap().participant_closures();
+                        let journal = state.journal.clone();
+                        let events = state.ev_tx.clone();
+                        tokio::spawn(async move {
+                            let result = journal.flush(recorded).await;
+                            let _ = events.send(RelayEvent::ClosuresRecorded { closures, result }).await;
+                        });
                     }
                 }
 
@@ -3418,6 +3436,47 @@ async fn tick_task(
             Some(event) = ev_rx.recv() => {
                 match event {
                     RelayEvent::EndMatch => { end_requested = true; }
+                    RelayEvent::PrepareResult { player_id, generation, through_turn } => {
+                        let clients = state.clients.lock().await;
+                        if through_turn <= tick_number && clients.get(&player_id).is_some_and(|c| c.generation == generation) {
+                            let closures = state.tracker.lock().unwrap().participant_closures();
+                            let journal = state.journal.clone();
+                            tokio::spawn(async move { if let Err(error) = journal.flush(closures).await { warn!("result preparation save: {error}"); } });
+                        }
+                    }
+                    RelayEvent::ClosuresRecorded { closures, result } => {
+                        closure_flushes = closure_flushes.saturating_sub(1);
+                        match result {
+                            Ok(()) => for (account, turn) in closures {
+                                state.tracker.lock().unwrap().record_committed_closure(account.clone(),turn);
+                                acknowledge_exit(&mut exit_replies,&account,turn);
+                                info!("[exit-timing] journal closure recorded match={} account={} turn={}",state.id,account,turn);
+                            },
+                            Err(error) => { error!("[rewards] closure save pending match={}: {error}",state.id); pending_closures.extend(closures); }
+                        }
+                    }
+                    RelayEvent::VerifiedResult(command) => {
+                        let clients = state.clients.lock().await;
+                        let mut tracker = state.tracker.lock().unwrap();
+                        for closure in command.participant_closures {
+                            if let Some(id) = tracker.player_accounts.iter().find(|(_,account)| **account == closure.account_id).map(|(id,_)|*id) {
+                                let reason: ExitReason = match serde_json::from_value(serde_json::Value::String(closure.reason)) { Ok(r)=>r,Err(_)=>continue };
+                                if tracker.closure(&closure.account_id).is_none_or(|(turn,_)| closure.turn_number <= turn) {
+                                    tracker.participants.insert(id,Participation::Closed { turn:closure.turn_number,reason });
+                                }
+                                if let Some(client) = clients.get(&id) {
+                                    if let Ok(bytes) = bincode::serialize(&ServerMessage::ExitRecorded { account_id:closure.account_id.clone(),match_id:state.id,closure_turn:closure.turn_number,reason }) {
+                                        let _ = client.sender.try_send(Arc::new(bytes));
+                                    }
+                                }
+                                acknowledge_exit(&mut exit_replies,&closure.account_id,closure.turn_number);
+                            }
+                        }
+                        if let Some(turn) = command.terminal_turn {
+                            natural_end = Some(turn);
+                            info!("[exit-timing] natural finish confirmed match={} turn={turn}",state.id);
+                        }
+                    }
                     RelayEvent::ExitRequested { account_id, reply } => {
                         let mut clients = state.clients.lock().await;
                         let mut tracker = state.tracker.lock().unwrap();
@@ -3456,6 +3515,15 @@ async fn tick_task(
                         if !clients.get(&player_id).is_some_and(|client| client.generation == generation) {
                             warn!("[relay] stale exit ignored lobby={} player={} peer={} generation={}", state.id, player_id, peer, generation);
                             let _ = reply.send(Err("stale game connection".into()));
+                            continue;
+                        }
+                        let saved = {
+                            let tracker = state.tracker.lock().unwrap();
+                            tracker.player_accounts.get(&player_id).and_then(|account| tracker.closure(account))
+                        };
+                        if let Some((turn,_)) = saved {
+                            clients.remove(&player_id);
+                            let _ = reply.send(Ok(turn));
                             continue;
                         }
                         let (new_exit, account_id) = state.tracker.lock().unwrap().record_exit(player_id, tick_number, ExitReason::Voluntary);
@@ -3866,6 +3934,7 @@ async fn ws_task(
     ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut frames_out: u64 = 0;
     let mut voluntary_leave_sent = false;
+    let mut result_hint_sent = false;
 
     loop {
         tokio::select! {
@@ -3884,6 +3953,14 @@ async fn ws_task(
                         if msg.is_binary() {
                             if let Ok(cmsg) = bincode::deserialize::<ClientMessage>(&msg.into_data()) {
                                 match cmsg {
+                                    ClientMessage::PrepareResult { through_turn } => {
+                                        if !result_hint_sent {
+                                            if let (Some(lobby),Some(player_id)) = (&my_lobby,my_player_id) {
+                                                let _ = lobby.ev_tx.send(RelayEvent::PrepareResult { player_id,generation,through_turn }).await;
+                                                result_hint_sent = true;
+                                            }
+                                        }
+                                    }
                                     ClientMessage::ReadyWithTicket { lobby_id: l_id, player_id, ticket } => {
                                         warn!("[relay] rejected mid-session initial ticket replay lobby={} player={} fd={} ticket_len={}", l_id, player_id, fd, ticket.len());
                                     }

@@ -262,7 +262,8 @@ impl SowApp {
                     context.result_request_id = None;
                     context.server_state = Some(state);
                     context.exit_recorded |= closure_recorded;
-                    if closure_recorded && self.ui.app.phase == crate::ClientPhase::Playing {
+                    let preparing = context.preparation_only;
+                    if closure_recorded && !preparing && self.ui.app.phase == crate::ClientPhase::Playing {
                         self.begin_relay_closed_return();
                     }
                     if let Some(progress) = progress {
@@ -271,10 +272,10 @@ impl SowApp {
                             sow_data::profile::MatchExitState::Confirmed
                                 | sow_data::profile::MatchExitState::Rejected
                         ) {
-                            if self.ui.app.phase == crate::ClientPhase::Playing
+                            if !preparing && (self.ui.app.phase == crate::ClientPhase::Playing
                                 || (self.ui.app.phase == crate::ClientPhase::Splash
                                     && self.ui.app.splash_state.job
-                                        == crate::ui::loading_screen::SplashJob::EnterGame)
+                                        == crate::ui::loading_screen::SplashJob::EnterGame))
                             {
                                 self.begin_relay_closed_return();
                                 if let Some(context) = &mut self.menu_return {

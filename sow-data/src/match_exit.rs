@@ -20,6 +20,183 @@ fn participant_path(match_id: &str, account_id: &str) -> PathBuf {
         .join(format!("{match_id}-{account_id}.participant.replay"))
 }
 
+fn progress_path(match_id: &str, sequence: u64) -> PathBuf {
+    participant_path(match_id, "").with_file_name(format!("{match_id}.progress.{sequence:010}.json"))
+}
+
+pub(super) async fn handle_progress(State(state): State<Arc<AppState>>, headers: HeaderMap,
+    Json(batch): Json<sow_data::profile::MatchProgress>) -> axum::response::Response {
+    if !verify_internal_auth(&headers, &state.relay_settlement_secret) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let result = async {
+        if batch.match_id.parse::<u64>().is_err() || batch.replay_data.len() > sow_data::MAX_MATCH_CHUNK_BYTES
+            || batch.replay_data.len() < 8 || hex::encode(Sha256::digest(batch.signing_bytes()?)) != batch.sha256 {
+            return Err("invalid journal delivery".into());
+        }
+        let _guard = state.match_artifact_lock.lock().await;
+        let start = state.db.match_start_record(&batch.match_id)?.ok_or("trusted match registration unavailable")?;
+        let tick_rate = start.metadata.pointer("/config/tick_rate_ms").and_then(serde_json::Value::as_f64)
+            .ok_or("trusted clock missing")? as f32;
+        let count = u64::from_le_bytes(batch.replay_data[..8].try_into().unwrap());
+        if !tick_rate.is_finite() || tick_rate <= 0.0 || count > sow_data::max_match_turns(tick_rate)
+            || batch.first_turn.saturating_add(count) > sow_data::max_match_turns(tick_rate) {
+            return Err("invalid journal duration".into());
+        }
+        let path = progress_path(&batch.match_id, batch.sequence);
+        let existing = tokio::fs::read(&path).await;
+        match existing {
+            Ok(bytes) => {
+                let saved: sow_data::profile::MatchProgress = serde_json::from_slice(&bytes)?;
+                if saved != batch { return Err("journal delivery conflicts with saved state".into()); }
+                if !tokio::fs::try_exists(path.with_extension("done")).await? {
+                    let job = state.db.queue_match_work(progress_work(&batch))?;
+                    wake(&state,job.work.key());
+                }
+                // The completion marker distinguishes an ACK retry from a
+                // crash between the artifact rename and the queue commit.
+                return Ok(serde_json::json!({"match_id":batch.match_id,"sequence":batch.sequence,"sha256":batch.sha256}));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {},
+            Err(e) => return Err(e.into()),
+        }
+        if batch.sequence == 0 {
+            if batch.first_turn != 0 || !batch.previous_sha256.is_empty() { return Err("journal must start at turn zero".into()); }
+        } else {
+            let bytes = tokio::fs::read(progress_path(&batch.match_id,batch.sequence-1)).await?;
+            let previous: sow_data::profile::MatchProgress = serde_json::from_slice(&bytes)?;
+            let previous_count = u64::from_le_bytes(previous.replay_data[..8].try_into().unwrap());
+            if previous.sha256 != batch.previous_sha256 || previous.first_turn + previous_count != batch.first_turn || previous.finished {
+                return Err("journal delivery conflicts with saved sequence".into());
+            }
+        }
+        for closure in &batch.participant_closures {
+            state.db.registered_human_participant(&batch.match_id, &closure.account_id)?;
+            if closure.turn_number >= batch.first_turn + count || !matches!(closure.reason.as_str(), "voluntary" | "timeout" | "match_ended" | "defeated") {
+                return Err("invalid journal closure".into());
+            }
+        }
+        let parent = path.parent().ok_or("journal directory missing")?;
+        tokio::fs::create_dir_all(parent).await?;
+        let temporary = path.with_extension("json.tmp");
+        let mut file = tokio::fs::File::create(&temporary).await?;
+        file.write_all(&serde_json::to_vec(&batch)?).await?;
+        file.sync_all().await?;
+        drop(file);
+        tokio::fs::rename(temporary,&path).await?;
+        std::fs::File::open(parent)?.sync_all()?;
+        let job = state.db.queue_match_work(progress_work(&batch))?;
+        wake(&state, job.work.key());
+        Ok(serde_json::json!({"match_id":batch.match_id,"sequence":batch.sequence,"sha256":batch.sha256}))
+    }.await;
+    match result {
+        Ok::<_,Box<dyn std::error::Error+Send+Sync>>(ack) => (StatusCode::ACCEPTED,Json(ack)).into_response(),
+        Err(e) => {
+            warn!("[rewards] journal intake pending match={}: {e}", batch.match_id);
+            (StatusCode::SERVICE_UNAVAILABLE,Json(ErrorResponse { error:e.to_string() })).into_response()
+        }
+    }
+}
+
+fn progress_work(batch: &sow_data::profile::MatchProgress) -> MatchWork {
+    MatchWork::Progress { match_id:batch.match_id.clone(), sequence:batch.sequence, sha256:batch.sha256.clone(),
+        closing:batch.finished || !batch.participant_closures.is_empty() }
+}
+
+async fn verify_progress(state: &AppState, work: &MatchWork) -> WorkResult<bool> {
+    let MatchWork::Progress { match_id, sequence, sha256, .. } = work else { return Err("invalid journal work".into()); };
+    let bytes = tokio::fs::read(progress_path(match_id,*sequence)).await?;
+    let batch: sow_data::profile::MatchProgress = serde_json::from_slice(&bytes)?;
+    if &batch.sha256 != sha256 || hex::encode(Sha256::digest(batch.signing_bytes()?)) != *sha256 {
+        return Err("saved journal checksum mismatch".into());
+    }
+    let base = std::env::var("SOW_SERVER_HTTP_URL").unwrap_or_else(|_| "http://127.0.0.1:25566".into());
+    let response = state.replay_verification_client.post(format!("{}/internal/match/progress",base.trim_end_matches('/')))
+        .bearer_auth(&state.secret_token).header("Content-Type","application/json").body(bytes).send().await?;
+    if response.status() == reqwest::StatusCode::CONFLICT {
+        // A restart can restore an earlier checkpoint. Requeue durable chunks;
+        // checked turn hashes skip the prefix still held by the verifier.
+        for prior in 0..*sequence {
+            let bytes = tokio::fs::read(progress_path(match_id,prior)).await?;
+            let saved: sow_data::profile::MatchProgress = serde_json::from_slice(&bytes)?;
+            state.db.queue_match_work(progress_work(&saved))?;
+        }
+        return Err("verifier is restoring saved journal history".into());
+    }
+    if !response.status().is_success() { return Err(format!("journal verifier HTTP {}: {}", response.status(),response.text().await?).into()); }
+    let checked = response.json::<sow_data::profile::VerifiedProgress>().await?;
+    if checked.match_id != *match_id || checked.sequence != *sequence || checked.sha256 != *sha256 {
+        return Err("verifier returned another journal delivery".into());
+    }
+    let mut closures = Vec::new();
+    for outcome in &checked.participants {
+        if outcome.result.match_id != *match_id { return Err("verifier returned another match".into()); }
+        let turn = outcome.result.personal_closure_turn.ok_or("verified closure turn missing")?;
+        state.db.note_match_participant_closure(match_id,&outcome.account_id,turn).await?;
+        state.db.apply_verified_match_participant_result(&outcome.result,&outcome.account_id,turn).await?;
+        closures.push(sow_data::profile::ProgressClosure { account_id:outcome.account_id.clone(),turn_number:turn,reason:outcome.reason.clone() });
+    }
+    if let Some(result) = &checked.result {
+        state.db.finalize_match_with_lobby(match_id,None).await?;
+        state.db.apply_verified_match_result(result).await?;
+        state.db.finish_replay_verification(match_id,ReplayVerificationStatus::Verified)?;
+    }
+    let paid = progress_path(match_id,*sequence).with_extension("paid");
+    let mut file = tokio::fs::File::create(&paid).await?;
+    file.write_all(checked.verified_turns.to_string().as_bytes()).await?;
+    file.sync_all().await?;
+    std::fs::File::open(paid.parent().unwrap())?.sync_all()?;
+    let _ = state.match_results.send(match_id.clone());
+    if checked.terminal_turn.is_some() || !closures.is_empty() {
+        let response = state.replay_verification_client.post(format!("{}/internal/match/result",base.trim_end_matches('/')))
+            .bearer_auth(&state.secret_token).json(&sow_data::profile::MatchResultControl {
+                match_id:match_id.clone(),terminal_turn:checked.terminal_turn,participant_closures:closures }).send().await?;
+        if !response.status().is_success() { return Err(format!("verified result delivery HTTP {}",response.status()).into()); }
+    }
+    if checked.complete && batch.finished {
+        // Packing the public recording follows payment and uses bounded chunks.
+        archive_progress(state,&batch).await?;
+    }
+    if checked.complete {
+        let path = progress_path(match_id,*sequence).with_extension("done");
+        let mut file = tokio::fs::File::create(&path).await?;
+        file.write_all(batch.sha256.as_bytes()).await?;
+        file.sync_all().await?;
+        std::fs::File::open(path.parent().unwrap())?.sync_all()?;
+    }
+    Ok(checked.complete)
+}
+
+async fn archive_progress(state: &AppState, last: &sow_data::profile::MatchProgress) -> WorkResult<()> {
+    use tokio::io::AsyncSeekExt;
+    let path = participant_path(&last.match_id, "").with_file_name(format!("{}.replay",last.match_id));
+    let temporary = path.with_extension("replay.tmp");
+    let mut file = tokio::fs::File::create(&temporary).await?;
+    file.write_all(&0u64.to_le_bytes()).await?;
+    let mut turns = 0u64;
+    for sequence in 0..=last.sequence {
+        let bytes = tokio::fs::read(progress_path(&last.match_id,sequence)).await?;
+        let batch: sow_data::profile::MatchProgress = serde_json::from_slice(&bytes)?;
+        turns += u64::from_le_bytes(batch.replay_data[..8].try_into().unwrap());
+        file.write_all(&batch.replay_data[8..]).await?;
+    }
+    file.seek(std::io::SeekFrom::Start(0)).await?;
+    file.write_all(&turns.to_le_bytes()).await?;
+    file.sync_all().await?;
+    drop(file);
+    tokio::fs::rename(temporary,&path).await?;
+    let start = state.db.match_start_record(&last.match_id)?.ok_or("trusted match registration missing")?;
+    let meta = path.with_extension("json");
+    let temporary = meta.with_extension("json.tmp");
+    let mut file = tokio::fs::File::create(&temporary).await?;
+    file.write_all(&serde_json::to_vec(&start.metadata)?).await?;
+    file.sync_all().await?;
+    drop(file);
+    tokio::fs::rename(temporary,meta).await?;
+    std::fs::File::open(path.parent().unwrap())?.sync_all()?;
+    Ok(())
+}
+
 fn terminal(receipt: Option<&sow_data::profile::RewardReceipt>) -> Option<MatchExitState> {
     let receipt = receipt?;
     if !matches!(
@@ -43,6 +220,11 @@ fn committed_terminal(
     let receipt = account.profile.reward_receipts.get(match_id);
     let phase = terminal(receipt);
     if phase.is_some() {
+        for sequence in state.db.pending_match_progress(match_id)? {
+            if !progress_path(match_id,sequence).with_extension("paid").try_exists()? {
+                return Ok(None);
+            }
+        }
         if state
             .db
             .match_work(&format!("participant:{match_id}:{}", account.id))?
@@ -331,6 +513,11 @@ async fn dispatch_recovery_exit(state: &AppState, work: &MatchWork) -> WorkResul
     {
         return Ok(false);
     }
+    for sequence in state.db.pending_match_progress(match_id)? {
+        let bytes = tokio::fs::read(progress_path(match_id,sequence)).await?;
+        let batch: sow_data::profile::MatchProgress = serde_json::from_slice(&bytes)?;
+        if batch.finished || batch.participant_closures.iter().any(|c| c.account_id == *account_id) { return Ok(false); }
+    }
     let base = std::env::var("SOW_SERVER_HTTP_URL")
         .unwrap_or_else(|_| "http://127.0.0.1:25566".to_string());
     let response = state
@@ -414,6 +601,7 @@ async fn verify_participant(state: &AppState, work: &MatchWork) -> WorkResult<bo
         .body(bytes)
         .send()
         .await?;
+    if response.status() == reqwest::StatusCode::ACCEPTED { return Ok(false); }
     if response.status() == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
         reject_participant_settlement(&state.db, match_id, account_id, *closure_turn).await?;
         return Ok(true);
@@ -463,6 +651,7 @@ pub(super) async fn worker(
         tokio::sync::mpsc::unbounded_channel::<(MatchWorkRecord, WorkResult<bool>)>();
     let mut exits = HashSet::new();
     let mut verifier: Option<String> = None;
+    let mut closure_streak = 0u8;
     let mut retry = tokio::time::interval(Duration::from_secs(1));
     loop {
         tokio::select! {
@@ -480,7 +669,8 @@ pub(super) async fn worker(
                     }
                     Ok(false) => {
                         job.state = MatchExitState::AwaitingResult;
-                        job.retry_at = now() + 5;
+                        job.retry_at = if matches!(job.work, MatchWork::RecoveryExit { .. }) { now() + 5 } else { 0 };
+                        job.queued_at_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
                         job.last_error = None;
                         if let Err(error) = state.db.save_match_work(&job) { error!("[rewards] work {key} state save failed: {error}"); }
                     }
@@ -493,13 +683,21 @@ pub(super) async fn worker(
                 }
             }
         }
-        let jobs = match state.db.pending_match_work(now()) {
+        let mut jobs = match state.db.pending_match_work(now()) {
             Ok(jobs) => jobs,
             Err(error) => {
                 error!("[rewards] durable queue read failed: {error}");
                 continue;
             }
         };
+        // Closures get four slices, then the oldest active match gets one.
+        if closure_streak >= 4 {
+            if let Some(index) = jobs.iter().position(|job| matches!(job.work, MatchWork::Progress { .. }) && !job.urgent) {
+                let progress = jobs.remove(index);
+                jobs.insert(0, progress);
+            }
+            closure_streak = 0;
+        }
         for mut job in jobs {
             let key = job.work.key();
             let is_exit = matches!(job.work, MatchWork::RecoveryExit { .. });
@@ -513,6 +711,7 @@ pub(super) async fn worker(
                     continue;
                 }
                 verifier = Some(key.clone());
+                if !matches!(job.work, MatchWork::Progress { .. }) || job.urgent { closure_streak = closure_streak.saturating_add(1); }
                 job.state = MatchExitState::Verifying;
                 if let Err(error) = state.db.save_match_work(&job) {
                     error!("[rewards] work {key} cannot enter verification: {error}");
@@ -541,6 +740,7 @@ pub(super) async fn worker(
                         dispatch_recovery_exit(&state, &job.work).await
                     }
                     MatchWork::Participant { .. } => verify_participant(&state, &job.work).await,
+                    MatchWork::Progress { .. } => verify_progress(&state, &job.work).await,
                     MatchWork::Replay { match_id } => {
                         verify_queued_replay(&state, match_id).await;
                         match state.db.match_work(match_id) {

@@ -27,6 +27,8 @@ impl SowApp {
         let mut exit_to_menu_after_net = false;
         let mut lobby_exit_to_menu = false;
         let mut relay_session_resumed = false;
+        let mut natural_closure = None;
+        let mut natural_finish = None;
 
         // Process network messages
         if let Some(c) = self.net.client.as_ref()
@@ -56,10 +58,13 @@ impl SowApp {
                 };
 
                 match server_msg {
-                    ServerMessage::ExitRecorded { .. } => {
-                        log::warn!(
-                            "[CLIENT NET] Exit acknowledgment outside an explicit exit ignored"
-                        );
+                    ServerMessage::ExitRecorded { account_id,match_id,closure_turn,reason } => {
+                        if self.sim.my_lobby_id == Some(match_id) && self.progress_account_id.as_deref() == Some(account_id.as_str()) {
+                            natural_closure = Some((closure_turn,reason));
+                        }
+                    }
+                    ServerMessage::MatchFinished { match_id,terminal_turn } => {
+                        if self.sim.my_lobby_id == Some(match_id) { natural_finish = Some(terminal_turn); }
                     }
                     ServerMessage::RelayTicket {
                         lobby_id,
@@ -511,6 +516,18 @@ impl SowApp {
         } // end if !ws_disconnected
         // end if let Some(c)
 
+        if natural_closure.is_some() || natural_finish.is_some() {
+            if !self.menu_return.as_ref().is_some_and(|c|c.preparation_only) {
+                self.prepare_match_result(natural_finish.unwrap_or(0));
+            }
+            if let Some(context) = &mut self.menu_return {
+                context.exit_recorded = true;
+                context.match_finished |= natural_finish.is_some();
+            }
+            self.save_menu_return_context();
+            if let Some((turn,reason)) = natural_closure { log::info!("[exit-timing] natural closure turn={turn} reason={reason:?}"); }
+            if let Some(turn) = natural_finish { log::info!("[exit-timing] match finished turn={turn}; retaining endgame panel"); }
+        }
         ProcessWsResult {
             ws_disconnected,
             switch_to_relay,

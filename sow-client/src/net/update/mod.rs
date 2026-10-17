@@ -159,6 +159,12 @@ impl SowApp {
             relay_session_resumed,
         } = self.process_ws_messages();
 
+        if self.finished_relay_match() {
+            ws_disconnected = false;
+            self.net.client = None;
+            self.ui.app.main_menu_state.is_connecting = false;
+        }
+
         if relay_session_resumed {
             self.clear_disconnect_observation();
         }
@@ -257,6 +263,7 @@ impl SowApp {
         let allow_ws_spawn = self.wasm_doc_was_visible;
 
         if allow_ws_spawn
+            && !self.finished_relay_match()
             && self.net.client.is_none()
             && !self.ui.app.main_menu_state.is_connecting
             && now >= self.net.ws_connect_not_before

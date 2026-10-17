@@ -15,7 +15,7 @@ pub mod sam;
 /// Fraction of refunded troops lost when retreating from an attack on another player.
 pub const RETREAT_PENALTY_VS_PLAYER: f64 = 0.25;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PrioritizedTile {
     pub priority: i64,   // Lower is processed first
     pub insert_seq: u32, // Deterministic BFS tie-breaker
@@ -52,7 +52,7 @@ impl PartialOrd for PrioritizedTile {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct AttackExecution {
     pub id: u64,
     pub owner_id: u16,

@@ -31,15 +31,17 @@ const SPAWN_SETTLE_DURATION: Duration = Duration::from_millis(180);
 const LOD_DOT_RADIUS: f32 = 2.0;
 const CATEGORY_EMOJI_DIAMETER_SCALE: f32 = 0.70;
 const AVATAR_PLACEHOLDER_COLOR: [f32; 4] = [0.16, 0.18, 0.20, 1.0];
-const EMOTE_BUBBLE_FONT_RATIO: f32 = 0.14;
-const EMOTE_BUBBLE_HORIZONTAL_PADDING_RATIO: f32 = 0.12;
-const EMOTE_BUBBLE_VERTICAL_PADDING_RATIO: f32 = 0.10;
-const EMOTE_BUBBLE_MIN_HEIGHT_RATIO: f32 = 0.35;
+const EMOTE_BUBBLE_FONT_RATIO: f32 = 0.22;
+const EMOTE_BUBBLE_MIN_FONT_SIZE: f32 = 9.0;
+const EMOTE_BUBBLE_HORIZONTAL_PADDING_RATIO: f32 = 0.16;
+const EMOTE_BUBBLE_VERTICAL_PADDING_RATIO: f32 = 0.12;
+const EMOTE_BUBBLE_MIN_HEIGHT_RATIO: f32 = 0.46;
 const EMOTE_BUBBLE_MAX_WIDTH_RATIO: f32 = 2.5;
-const EMOTE_BUBBLE_TAIL_WIDTH_RATIO: f32 = 0.22;
-const EMOTE_BUBBLE_TAIL_LENGTH_RATIO: f32 = 0.13;
-const EMOTE_BUBBLE_INNER_TAIL_WIDTH_RATIO: f32 = 0.15;
-const EMOTE_BUBBLE_INNER_TAIL_LENGTH_RATIO: f32 = 0.09;
+const EMOTE_BUBBLE_TAIL_WIDTH_RATIO: f32 = 0.30;
+const EMOTE_BUBBLE_TAIL_LENGTH_RATIO: f32 = 0.22;
+const EMOTE_BUBBLE_INNER_TAIL_WIDTH_RATIO: f32 = 0.23;
+const EMOTE_BUBBLE_INNER_TAIL_LENGTH_RATIO: f32 = 0.16;
+const EMOTE_BUBBLE_BODY_OFFSET_RATIO: f32 = 0.35;
 pub(crate) const INLINE_EMOJI_SCALE: f32 = 1.4;
 
 #[derive(Clone, Debug)]
@@ -1084,7 +1086,8 @@ mod emote_tests {
             layout.center[1] - layout.size[1] * 0.5
         };
         assert!((tail_base_y - body_edge_y).abs() < 0.001);
-        assert!(layout.outer_tail_size[0] > 12.0);
+        assert!(layout.outer_tail_size[0] > 24.0);
+        assert!(layout.outer_tail_size[1].abs() > 20.0);
     }
 
     fn assert_bubble_quadrant(
@@ -1121,9 +1124,9 @@ mod emote_tests {
     }
 
     #[wasm_bindgen_test]
-    fn bubble_content_scales_with_avatar_and_fits_long_text() {
+    fn bubble_content_scales_with_avatar_and_keeps_small_text_readable() {
         let avatar_diameter = 112.0;
-        let base_font = avatar_diameter * EMOTE_BUBBLE_FONT_RATIO;
+        let base_font = emote_bubble_base_font_size(avatar_diameter, 1.0);
         let short = size_emote_bubble_content(
             avatar_diameter,
             base_font,
@@ -1132,9 +1135,17 @@ mod emote_tests {
             280.0,
         )
         .unwrap();
-        assert!((short.font_size - 15.68).abs() < 0.001);
-        assert!((short.width - 106.88).abs() < 0.01);
-        assert!((short.height - 39.2).abs() < 0.01);
+        assert!((short.font_size - 24.64).abs() < 0.001);
+        assert!((short.width - 115.84).abs() < 0.01);
+        assert!((short.height - 51.52).abs() < 0.01);
+
+        let mobile_font = emote_bubble_base_font_size(32.0, 1.0);
+        assert!((mobile_font - 9.0).abs() < 0.001);
+        let mobile =
+            size_emote_bubble_content(32.0, mobile_font, 30.0, [-15.0, -4.0, 15.0, 4.0], 80.0)
+                .unwrap();
+        assert!((mobile.font_size - 9.0).abs() < 0.001);
+        assert!(mobile.height >= 32.0 * EMOTE_BUBBLE_MIN_HEIGHT_RATIO);
 
         let long = size_emote_bubble_content(
             avatar_diameter,
@@ -1154,6 +1165,7 @@ mod emote_tests {
         let screen = [400.0, 300.0];
         let upper_right = bubble_layout_at([200.0, 150.0], screen, [110.0, 40.0]);
         assert_bubble_quadrant(upper_right, [200.0, 150.0], EmoteBubbleQuadrant::UpperRight);
+        assert!(upper_right.center[0] > upper_right.outer_tail_center[0] + 10.0);
 
         let upper_left = bubble_layout_at([390.0, 150.0], screen, [110.0, 40.0]);
         assert_bubble_quadrant(upper_left, [390.0, 150.0], EmoteBubbleQuadrant::UpperLeft);
@@ -1664,10 +1676,13 @@ pub(crate) fn paint_prepared_avatar(
 #[derive(Clone, Copy)]
 struct EmoteBubbleContent {
     font_size: f32,
-    text_scale: f32,
     width: f32,
     height: f32,
     text_bounds: [f32; 4],
+}
+
+fn emote_bubble_base_font_size(avatar_diameter: f32, sf: f32) -> f32 {
+    (avatar_diameter * EMOTE_BUBBLE_FONT_RATIO).max(EMOTE_BUBBLE_MIN_FONT_SIZE * sf)
 }
 
 fn size_emote_bubble_content(
@@ -1703,7 +1718,6 @@ fn size_emote_bubble_content(
 
     Some(EmoteBubbleContent {
         font_size: base_font_size * text_scale,
-        text_scale,
         width,
         height,
         text_bounds: visual_bounds.map(|value| value * text_scale),
@@ -1820,7 +1834,10 @@ fn emote_bubble_candidate(
         return None;
     }
 
-    let ideal_center = [tip[0], tip[1] + y_sign * (tail_length + half_height)];
+    let ideal_center = [
+        tip[0] + x_sign * half_width * EMOTE_BUBBLE_BODY_OFFSET_RATIO,
+        tip[1] + y_sign * (tail_length + half_height),
+    ];
     let center = [
         ideal_center[0].clamp(min_center_x, max_center_x),
         ideal_center[1].clamp(min_center_y, max_center_y),
@@ -1866,7 +1883,7 @@ fn paint_emote_bubble(
     let safe = insets.map(|value| value * sf + 8.0 * sf);
     let max_width = (avatar_diameter * EMOTE_BUBBLE_MAX_WIDTH_RATIO)
         .min((input.screen_w - safe[1] - safe[3] - 4.0 * sf).max(1.0));
-    let base_font_size = avatar_diameter * EMOTE_BUBBLE_FONT_RATIO;
+    let base_font_size = emote_bubble_base_font_size(avatar_diameter, sf);
     let measured = prepared.measure_at(base_font_size);
     let Some(base_bounds) = prepared.visual_bounds_at(base_font_size) else {
         return;
