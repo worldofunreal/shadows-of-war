@@ -661,7 +661,7 @@ match_message_5 = "Matatapos na ang inyong laban, at tiyak na bahagi ito ng plan
 
 [site]
 title = "Shadows of War — Estratehiya ng Multiplayer"
-description = "Pumili ng 1 sa 12 lider, sakupin ang lupa, magtayo ng mga lungsod at daungan, at bumuo ng alyansa o magtaksil sa mga digmaang teritoryal na nagaganap nang real time."
+description = "Pumili ng isang makasaysayang lider, sakupin ang lupa, magtayo ng mga lungsod at daungan, at bumuo ng alyansa o magtaksil sa mga digmaang teritoryal na nagaganap nang real time."
 home = "Pangunahing pahina ng Shadows of War"
 main_navigation = "Pangunahing menu"
 nav_leaders = "Mga Lider"
@@ -672,7 +672,7 @@ close_navigation = "Isara ang nabigasyon"
 play_now = "MAGLARO NGAYON"
 hero_command = "KONTROLIN"
 hero_map = "ANG MAPA."
-hero_lede = "Pumili ng 1 sa 12 lider. Sakupin ang lupa, magtayo ng mga lungsod, pabrika, daungan at bunker, at ipaglaban ang mapa. 12 na ang puwedeng piliin ngayon, at patuloy pang nadaragdagan."
+hero_lede = "Pumili ng isang makasaysayang lider. Sakupin ang lupa, magtayo ng mga lungsod, pabrika, daungan at bunker, at ipaglaban ang mapa. Patuloy na nadaragdagan ang mga bagong lider."
 leader_artwork = "Artwork ng lider na si {name}"
 select_leader = "Pumili {name}"
 inspect_leader = "Tingnan si {name}"

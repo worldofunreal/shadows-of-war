@@ -661,7 +661,7 @@ match_message_5 = "Savaşın sona erecek. Bu kesinlikle planın bir parçasıyd�
 
 [site]
 title = "Shadows of War — Çok Oyunculu Strateji"
-description = "12 liderden 1'ini seç, toprak al, şehir ve liman kur, gerçek zamanlı toprak savaşlarında ittifak kur ve ihanet et."
+description = "Tarihi bir lider seç, toprak al, şehir ve liman kur, gerçek zamanlı toprak savaşlarında ittifak kur ve ihanet et."
 home = "Shadows of War ana sayfası"
 main_navigation = "Ana navigasyon"
 nav_leaders = "Liderler"
@@ -672,7 +672,7 @@ close_navigation = "Navigasyonu kapat"
 play_now = "ŞİMDİ OYNA"
 hero_command = "HARİTAYA"
 hero_map = "HÜKMET."
-hero_lede = "12 liderden 1'ini seç. Toprak al, şehir, fabrika, liman ve sığınak kur, harita için savaş. Şu anda 12 lider seçilebilir, yenileri eklenecek."
+hero_lede = "Tarihi bir lider seç. Toprak al, şehir, fabrika, liman ve sığınak kur, harita için savaş. Yeni liderler eklenmeye devam ediyor."
 leader_artwork = "{name} lider görseli"
 select_leader = "{name} seç"
 inspect_leader = "{name} incele"

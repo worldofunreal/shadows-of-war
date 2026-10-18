@@ -664,7 +664,7 @@ match_message_5 = "Tu batalla terminará. Esto definitivamente era parte del pla
 
 [site]
 title = "Shadows of War — Estrategia multijugador"
-description = "Elige 1 de 12 líderes, toma tierra, construye ciudades y puertos, alíate y traiciona en guerras de territorio en vivo."
+description = "Elige un líder histórico, toma tierra, construye ciudades y puertos, alíate y traiciona en guerras de territorio en vivo."
 home = "Inicio de Shadows of War"
 main_navigation = "Navegación principal"
 nav_leaders = "Líderes"
@@ -675,7 +675,7 @@ close_navigation = "Cerrar navegación"
 play_now = "JUGAR AHORA"
 hero_command = "DOMINA"
 hero_map = "EL MAPA."
-hero_lede = "Elige 1 de 12 líderes. Toma tierra, construye ciudades, fábricas, puertos y búnkeres, y pelea por el mapa. 12 en juego, vienen más."
+hero_lede = "Elige un líder histórico. Toma tierra, construye ciudades, fábricas, puertos y búnkeres, y pelea por el mapa. Siguen llegando líderes nuevos."
 leader_artwork = "Arte del líder {name}"
 select_leader = "Seleccionar a {name}"
 inspect_leader = "Ver a {name}"

@@ -661,7 +661,7 @@ match_message_5 = "あなたの戦いは終わります。これは間違いな�
 
 [site]
 title = "Shadows of War — マルチプレイヤー戦略"
-description = "12人のリーダーから1人を選び、土地を奪い、都市や港を建て、リアルタイムの領土戦争で同盟や裏切りを繰り広げる。"
+description = "歴史上のリーダーを選び、土地を奪い、都市や港を建て、リアルタイムの領土戦争で同盟や裏切りを繰り広げる。"
 home = "Shadows of War ホーム"
 main_navigation = "メインナビゲーション"
 nav_leaders = "リーダー"
@@ -672,7 +672,7 @@ close_navigation = "ナビゲーションを閉じる"
 play_now = "今すぐプレイ"
 hero_command = "マップを"
 hero_map = "支配せよ。"
-hero_lede = "12人のリーダーから1人を選ぼう。土地を奪い、都市、工場、港、バンカーを建てて、マップを奪い合おう。現在12人が選択可能で、今後も追加予定。"
+hero_lede = "歴史上のリーダーを選ぼう。土地を奪い、都市、工場、港、バンカーを建てて、マップを奪い合おう。新しいリーダーが続々登場。"
 leader_artwork = "{name}のリーダーアート"
 select_leader = "選択する {name}"
 inspect_leader = "{name}を見る"

@@ -661,7 +661,7 @@ match_message_5 = "당신의 전투가 끝났습니다. 이것은 확실히 계�
 
 [site]
 title = "Shadows of War — 멀티플레이어 전략"
-description = "12명의 리더 중 1명을 선택해 땅을 차지하고 도시와 항구를 건설하며, 실시간 영토 전쟁에서 동맹과 배신을 결정하세요."
+description = "역사 속 리더를 선택해 땅을 차지하고 도시와 항구를 건설하며, 실시간 영토 전쟁에서 동맹과 배신을 결정하세요."
 home = "Shadows of War 홈"
 main_navigation = "주요 내비게이션"
 nav_leaders = "영웅"
@@ -672,7 +672,7 @@ close_navigation = "탐색 메뉴 닫기"
 play_now = "지금 플레이"
 hero_command = "지도를"
 hero_map = "지배하세요."
-hero_lede = "12명의 리더 중 1명을 선택하세요. 땅을 차지하고 도시, 공장, 항구, 벙커를 건설해 맵을 두고 싸우세요. 현재 12명의 지도자를 선택할 수 있고, 앞으로 더 추가될 예정입니다."
+hero_lede = "역사 속 리더를 선택하세요. 땅을 차지하고 도시, 공장, 항구, 벙커를 건설해 맵을 두고 싸우세요. 새로운 지도자가 계속 추가됩니다."
 leader_artwork = "{name} 영웅 아트"
 select_leader = "{name} 선택"
 inspect_leader = "{name} 살펴보기"

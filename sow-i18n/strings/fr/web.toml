@@ -661,7 +661,7 @@ match_message_5 = "Votre bataille va se terminer. Cela faisait certainement part
 
 [site]
 title = "Shadows of War — Stratégie multijoueur"
-description = "Choisis 1 dirigeant parmi 12, conquiers des terres, construis des villes et des ports, forme des alliances puis trahis-les dans des guerres territoriales en temps réel."
+description = "Choisis un dirigeant historique, conquiers des terres, construis des villes et des ports, forme des alliances puis trahis-les dans des guerres territoriales en temps réel."
 home = "Accueil de Shadows of War"
 main_navigation = "Navigation principale"
 nav_leaders = "Chefs"
@@ -672,7 +672,7 @@ close_navigation = "Fermer la navigation"
 play_now = "JOUER"
 hero_command = "DOMINE"
 hero_map = "LA CARTE."
-hero_lede = "Choisis 1 dirigeant parmi 12. Conquiers des terres, construis des villes, usines, ports et bunkers, et bats-toi pour la carte. 12 sont disponibles, d'autres arrivent."
+hero_lede = "Choisis un dirigeant historique. Conquiers des terres, construis des villes, usines, ports et bunkers, et bats-toi pour la carte. De nouveaux dirigeants arrivent régulièrement."
 leader_artwork = "Illustration du chef {name}"
 select_leader = "Choisir {name}"
 inspect_leader = "Inspecter {name}"
