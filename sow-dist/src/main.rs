@@ -5485,25 +5485,12 @@ mod tests {
     }
 
     #[test]
-    fn test_index_html_prerenders_all_twelve_leaders() -> Result<()> {
+    fn test_index_html_prerenders_every_hero() -> Result<()> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .canonicalize()?;
         let index_html = fs::read_to_string(root.join("sow-web/site/index.html"))?;
-        for leader_id in [
-            "caesar",
-            "cleopatra",
-            "ragnar",
-            "suntzu",
-            "alexander",
-            "genghiskhan",
-            "richard",
-            "vercingetorix",
-            "boudica",
-            "ladysixsky",
-            "leonidas",
-            "napoleon",
-        ] {
+        for leader_id in sow_core::player::Leader::all().map(sow_core::player::Leader::id) {
             assert!(
                 index_html.contains(&format!("data-leader-id=\"{leader_id}\"")),
                 "index.html missing prerendered card for leader id: {leader_id}"
