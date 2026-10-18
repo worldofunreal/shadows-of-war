@@ -90,22 +90,21 @@ test("building actions choose the selected tile, filter invalid placement, and a
 });
 
 
-test("building upgrade uses snapshot gold and closes the card after sending", () => {
+test("building panel is drawn by the game: one-tap upgrade, radial opens it, seconds while building", () => {
     assert.match(simUpdateSource, /pub\(crate\) fn current_player_gold\(&self\)[\s\S]*?player\.gold[\s\S]*?unwrap_or\(self\.ui\.app\.hud_state\.gold\)/);
-    assert.ok(webMenu.includes("let has_gold = app.current_player_gold() >= cost"));
-    assert.match(hud, /renderBuildingCard\(hud\.map_menu, hud\.gold\)/);
-    assert.match(hud, /id="sow-hud-building-card-upgrade" data-map-action="upgrade_structure"/);
-    assert.doesNotMatch(hud, /remaining_seconds/);
-    assert.doesNotMatch(webMenu, /"remaining_seconds"/);
-    assert.match(hud, /return !\(mapMenu\.building && mapMenu\.building\.under_construction\)/);
+    assert.doesNotMatch(hud, /renderBuildingCard|sow-hud-building-card|close_building_card|buildingMetricMarkup/);
+    assert.doesNotMatch(hudCss, /sow-hud__building-card/);
+    assert.doesNotMatch(webMenu, /building_benefit_label|"next_metrics"|Troop capacity/);
+    assert.match(buildingOverlaySource, /fn render_building_panel[\s\S]*?NameplateStatusSprite::ArrowUp[\s\S]*?NameplateStatusSprite::Gold[\s\S]*?NameplateStatusSprite::Clock/);
     const actionStart = mapClick.indexOf("pub(crate) fn handle_map_menu_action");
     const actionEnd = mapClick.indexOf("pub(crate) fn move_selected_warships", actionStart);
     const actionBody = mapClick.slice(actionStart, actionEnd);
-    assert.match(actionBody, /self\.current_player_gold\(\) < cost/);
-    assert.match(actionBody, /let keep_building_card_open = action == MapMenuAction::UpgradeStructure/);
     assert.ok(actionBody.indexOf("self.current_player_gold() < cost") < actionBody.indexOf("GameplayIntent::UpgradeStructure"));
-    assert.ok(actionBody.trimEnd().endsWith("self.close_map_context_menu();\n    }"));
-    assert.match(mapClick.slice(mapClick.indexOf("fn select_owned_building"), mapClick.indexOf("pub(crate) fn open_map_context_menu")), /building\.under_construction[\s\S]*?close_map_context_menu\(\)[\s\S]*?return true/);
+    assert.ok(actionBody.indexOf("MapContextMenuView::Radial") < actionBody.indexOf("GameplayIntent::UpgradeStructure"), "the radial opens the panel");
+    assert.ok(actionBody.trimEnd().endsWith("if !keep_building_panel_open {\n            self.close_map_context_menu();\n        }\n    }"));
+    const selectBody = mapClick.slice(mapClick.indexOf("fn select_owned_building"), mapClick.indexOf("pub(crate) fn open_map_context_menu"));
+    assert.doesNotMatch(selectBody, /under_construction/, "buildings under construction open the panel too");
+    assert.match(windowInput, /building_panel_button_at\(x as f32, y as f32\);\s*if !panel_button \{\s*self\.close_map_context_menu\(\);/);
 });
 
 
@@ -126,167 +125,6 @@ test("tutorial HUD evaluates campaign availability without private campaign glob
     assert.equal(availability.campaignAllowsAction(unlocked, "warship"), true);
     assert.equal(availability.campaignAllowsBuilding(null, "City", 1), true);
     assert.equal(availability.campaignAllowsAction(null, "warship"), true);
-});
-
-
-test("building upgrade sends the selected card identity instead of the radial menu", () => {
-    const handler = hud.indexOf("function handleHudClick(event) {");
-    const start = hud.indexOf("            var mapButton = event.target.closest(\"[data-map-action]\");", handler);
-    const end = hud.indexOf('            var btn = event.target.closest("[data-command]");', start);
-    const calls = [];
-    const card = { dataset: { session: "12", tileIdx: "240" } };
-    const button = {
-        dataset: { mapAction: "upgrade_structure" }, disabled: false,
-        getAttribute() { return null; },
-        closest(selector) { return selector === ".sow-hud__building-card" ? card : null; }
-    };
-    const click = vm.runInNewContext("(function (event) {" + hud.slice(start, end) + "})", {
-        hudRefs: { mapMenu: { dataset: { session: "3", tileIdx: "99" } } },
-        send: (command, payload) => calls.push({ command, payload })
-    });
-    click({ target: { closest: selector => selector === "[data-map-action]" ? button : null }, preventDefault() {}, stopPropagation() {} });
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].payload.session, 12);
-    assert.equal(calls[0].payload.tile_idx, 240);
-    assert.equal(calls[0].payload.action, "upgrade_structure");
-});
-
-
-test("building card anchors to the building and shows compact visual stats", () => {
-    const renderStart = hud.indexOf("    function escapeHudText(value) {");
-    const renderEnd = hud.indexOf("\n    function updateLeaderboard", renderStart);
-    assert.ok(renderStart >= 0 && renderEnd > renderStart);
-
-    const element = () => {
-        const classes = new Set();
-        return {
-            dataset: {},
-            style: {},
-            innerHTML: "",
-            textContent: "",
-            disabled: false,
-            hidden: false,
-            title: "",
-            offsetWidth: 180,
-            offsetHeight: 120,
-            classes,
-            attributes: {},
-            setAttribute(name, value) { this.attributes[name] = value; },
-            classList: {
-                toggle(name, force) {
-                    if (force) classes.add(name);
-                    else classes.delete(name);
-                }
-            }
-        };
-    };
-    const hudRefs = {
-        buildingCard: element(),
-        buildingCardIcon: element(),
-        buildingCardKind: element(),
-        buildingCardLevel: element(),
-        buildingCardBenefit: element(),
-        buildingCardNext: element(),
-        buildingCardGold: element(),
-        buildingCardUpgrade: element(),
-        buildingCardUpgradeLevel: element()
-    };
-    const renderBuildingCard = vm.runInNewContext(
-        hud.slice(renderStart, renderEnd) + "\nrenderBuildingCard;",
-        {
-            hudRefs,
-            window: { innerWidth: 400, innerHeight: 300 },
-            SOW_t: key => key,
-            hudIcon: (name) => "<svg data-icon=\"" + name + "\"></svg>",
-            buildingIcon: (kind) => "<img data-building=\"" + kind + "\">"
-        }
-    );
-    const menu = (building, view = "building_details") => ({
-        open: true, view, session: 4, tile_idx: 12, x: 90, y: 100, building
-    });
-
-    renderBuildingCard(menu({
-        name: "Bunker",
-        kind: "Bunker",
-        level: 0,
-        under_construction: true,
-        can_upgrade: false
-    }));
-    assert.equal(hudRefs.buildingCard.classes.has("hidden"), true);
-
-    renderBuildingCard(menu({
-        name: "Bastion",
-        kind: "Bunker",
-        level: 2,
-        benefit_label: "Raises enemy losses by 10% within range 16.",
-        metrics: [
-            { icon: "defense", label: "Enemy attack losses", value: 10, prefix: "+", unit: "%" },
-            { icon: "range", label: "Defense range", value: 16 }
-        ],
-        next_level: 3,
-        next_benefit_label: "Raises enemy losses by 15% within range 18.",
-        next_metrics: [
-            { icon: "defense", label: "Enemy attack losses", value: 15, prefix: "+", unit: "%" },
-            { icon: "range", label: "Defense range", value: 18 }
-        ],
-        duration_seconds: 6,
-        cost: 150,
-        owns: true,
-        can_upgrade: true
-    }), 120);
-    assert.match(hudRefs.buildingCardLevel.innerHTML, /Lv 2/);
-    assert.equal(hudRefs.buildingCardBenefit.hidden, true);
-    assert.doesNotMatch(hudRefs.buildingCardNext.innerHTML, /Lv 3|15%|18/);
-    assert.match(hudRefs.buildingCardNext.innerHTML, /5%/);
-    assert.match(hudRefs.buildingCardNext.innerHTML, /2/);
-    assert.match(hudRefs.buildingCardNext.innerHTML, /6s/);
-    assert.match(hudRefs.buildingCardGold.innerHTML, /120/);
-    assert.match(hudRefs.buildingCardGold.innerHTML, /150/);
-    assert.equal(hudRefs.buildingCardGold.classes.has("is-short"), true);
-    assert.equal(hudRefs.buildingCardUpgrade.attributes["aria-label"], "Upgrade to level 3");
-    assert.equal(hudRefs.buildingCardUpgrade.hidden, false);
-    assert.equal(hudRefs.buildingCardUpgrade.disabled, true);
-    renderBuildingCard(menu({
-        kind: "Bunker",
-        level: 2,
-        next_level: 3,
-        metrics: [{ icon: "defense", label: "Enemy attack losses", value: 10, prefix: "+", unit: "%" }],
-        next_metrics: [{ icon: "defense", label: "Enemy attack losses", value: 15, prefix: "+", unit: "%" }],
-        cost: 150,
-        can_upgrade: true
-    }), 200);
-    assert.equal(hudRefs.buildingCardGold.classes.has("is-short"), false);
-    assert.equal(hudRefs.buildingCardUpgrade.disabled, false);
-    assert.equal(hudRefs.buildingCard.style.left, "104px");
-    assert.equal(hudRefs.buildingCard.style.top, "40px");
-
-    renderBuildingCard(menu({
-        kind: "Factory",
-        level: 1,
-        metrics: [{ icon: "gold", label: "Gold income", value: 10, prefix: "+", unit: "/s" }],
-        next_level: 2,
-        next_metrics: [{ icon: "gold", label: "Gold income", value: 20, prefix: "+", unit: "/s" }],
-        cost: 50,
-        can_upgrade: true
-    }), 200);
-    assert.doesNotMatch(hudRefs.buildingCardNext.innerHTML, /Requires a level 3 City/);
-    assert.equal(hudRefs.buildingCardUpgrade.disabled, false);
-
-    renderBuildingCard(menu({
-        kind: "Bunker",
-        level: 2,
-        metrics: [{ icon: "defense", label: "Enemy attack losses", value: 10, prefix: "+", unit: "%" }],
-        campaign_upgrade_locked: true,
-        can_upgrade: false
-    }));
-    assert.equal(hudRefs.buildingCardNext.hidden, true);
-    assert.equal(hudRefs.buildingCardNext.textContent, "");
-    assert.equal(hudRefs.buildingCardUpgrade.hidden, true);
-
-    renderBuildingCard(menu({ kind: "Bunker", level: 2 }, "radial"));
-    assert.equal(hudRefs.buildingCard.classes.has("hidden"), true);
-    renderBuildingCard(null);
-    assert.equal(hudRefs.buildingCard.classes.has("hidden"), true);
 });
 
 
@@ -316,7 +154,6 @@ test("primary click selects owned buildings without changing other map gestures"
     assert.match(windowInput, /pub\(crate\) fn poll_pointer_hold[\s\S]*?self\.open_map_context_menu\(x, y\)/);
     assert.match(webMenu, /"view": match menu\.view[\s\S]*?"building_details"[\s\S]*?"radial"/);
     assert.match(hud, /var showRadial = Boolean\(open && mapMenu\.view === "radial"\)/);
-    assert.match(hud, /mapMenu\.view === "building_details" && detail/);
     assert.match(hud, /send\("close_map_context_menu"\)/);
     assert.match(webMenu, /WebMenuCommand::CloseMapContextMenu => self\.close_map_context_menu\(\)/);
     assert.match(mapClick, /pub\(crate\) fn close_map_context_menu\(&mut self\)\s*\{\s*self\.input\.map_context_menu = None;/);
@@ -565,7 +402,6 @@ test("building menus use generated pixel-art sprites with white glyph fallback",
     assert.match(hud, /hudIcon\(slot\.group === "emote" \? "emote" : "construction", "sow-hud__ring-icon"\)/);
     assert.doesNotMatch(hud, /mapDisabledSector/);
     assert.match(hud, /buildingIcon\(action\.slice\(6\), 1, "sow-hud__building-icon sow-hud__ring-icon"\)/);
-    assert.match(hud, /buildingIcon\(detail\.kind, detail\.level\)/);
     assert.match(hudCss, /\.sow-hud__building-icon[\s\S]*?font-size: 30px/);
     assert.doesNotMatch(hudCss, /is-emoji/);
 

@@ -87,8 +87,7 @@
                 String(leaderHistoricalName(leader) || "").toLowerCase().indexOf(query) !== -1 ||
                 String(leader.name || "").toLowerCase().indexOf(query) !== -1 ||
                 String(leaderCivilization(leader) || "").toLowerCase().indexOf(query) !== -1;
-            var regionKey = String(leader.slug || leader.id || "").toLowerCase();
-            var matchesRegion = heroesRegionFilter === "all" || LEADER_REGIONS[regionKey] === heroesRegionFilter;
+            var matchesRegion = heroesRegionFilter === "all" || leader.region === heroesRegionFilter;
             return matchesQuery && matchesRegion;
         });
     }
@@ -102,10 +101,10 @@
             className: "sow-heroes__region",
             options: [
                 { value: "all", label: SOW_t("heroes.all_regions") },
-                { value: "Europe", label: SOW_t("heroes.europe") },
-                { value: "Africa", label: SOW_t("heroes.africa") },
-                { value: "Asia", label: SOW_t("heroes.asia") },
-                { value: "Americas", label: SOW_t("heroes.americas") }
+                { value: "europe", label: SOW_t("heroes.europe") },
+                { value: "africa", label: SOW_t("heroes.africa") },
+                { value: "asia", label: SOW_t("heroes.asia") },
+                { value: "americas", label: SOW_t("heroes.americas") }
             ]
         });
     }

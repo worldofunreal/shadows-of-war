@@ -213,7 +213,8 @@ const ART_FOLDERS: [(&str, &str); 4] = [
     ("music", "gameplay/music"),
 ];
 /// Tool output in assets/generated: (file, published path).
-const GENERATED_FILES: [(&str, &str); 3] = [
+const GENERATED_FILES: [(&str, &str); 4] = [
+    ("bot-portraits.webp", "gameplay/avatars/bot-portraits.webp"),
     ("buildings-atlas.webp", "gameplay/buildings/atlas.webp"),
     ("buildings-atlas.json", "gameplay/buildings/atlas.json"),
     (
@@ -335,7 +336,12 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
             publish(&file, &format!("{rel_dir}/{name}"), None)?;
         }
     }
+    // A fresh checkout may not have the packed atlases yet: `pack_art_atlases`
+    // writes them and stages again, and fails if any is still missing.
     for (name, rel) in GENERATED_FILES {
+        if !generated.join(name).is_file() {
+            continue;
+        }
         publish(&generated.join(name), rel, None)?;
     }
 
@@ -819,6 +825,14 @@ fn pack_art_atlases(paths: &Paths) -> Result<()> {
             "pack-building-atlas",
         ],
         Some(&paths.root),
+    )?;
+    let generated = paths.root.join("assets/generated");
+    for (name, _) in GENERATED_FILES {
+        require_file(&generated.join(name), "packed atlas")?;
+    }
+    stage_runtime_assets(
+        &paths.root,
+        &paths.root.join("dist/.sow-state/runtime-assets"),
     )
 }
 
@@ -2013,6 +2027,9 @@ fn validate_web_node(
 
 fn web_key_is_intentionally_english(key: &str) -> bool {
     key.starts_with("menu.language_")
+        // Hero names are proper names in every language.
+        || (key.starts_with("heroes.leader_")
+            && (key.ends_with("_name") || key.ends_with("_historical")))
         || matches!(
             key,
             "auth.discord_provider"
@@ -2025,32 +2042,8 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
                 | "heroes.americas"
                 | "heroes.random_leader"
                 | "heroes.asia"
-                | "heroes.civilization_sparta"
+                | "heroes.leader_leonidas_civilization"
                 | "heroes.europe"
-                | "heroes.leader_alexander_historical"
-                | "heroes.leader_alexander_name"
-                | "heroes.leader_boudica_historical"
-                | "heroes.leader_boudica_name"
-                | "heroes.leader_caesar_historical"
-                | "heroes.leader_caesar_name"
-                | "heroes.leader_cleopatra_historical"
-                | "heroes.leader_cleopatra_name"
-                | "heroes.leader_genghiskhan_historical"
-                | "heroes.leader_genghiskhan_name"
-                | "heroes.leader_ladysixsky_historical"
-                | "heroes.leader_ladysixsky_name"
-                | "heroes.leader_leonidas_historical"
-                | "heroes.leader_leonidas_name"
-                | "heroes.leader_napoleon_historical"
-                | "heroes.leader_napoleon_name"
-                | "heroes.leader_ragnar_historical"
-                | "heroes.leader_ragnar_name"
-                | "heroes.leader_richard_historical"
-                | "heroes.leader_richard_name"
-                | "heroes.leader_suntzu_historical"
-                | "heroes.leader_suntzu_name"
-                | "heroes.leader_vercingetorix_historical"
-                | "heroes.leader_vercingetorix_name"
                 | "hud.fps"
                 | "hud.fps_ping"
                 | "hud.nuke_struck"
@@ -2084,23 +2077,8 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
         )
 }
 
-const LEADER_SLUGS: [&str; 12] = [
-    "caesar",
-    "cleopatra",
-    "ragnar",
-    "suntzu",
-    "alexander",
-    "genghiskhan",
-    "richard",
-    "vercingetorix",
-    "boudica",
-    "ladysixsky",
-    "leonidas",
-    "napoleon",
-];
-
 fn validate_leader_display_names(catalog: &serde_json::Value) -> Result<()> {
-    for slug in LEADER_SLUGS {
+    for slug in sow_core::player::Leader::all().map(sow_core::player::Leader::id) {
         let key = format!("heroes.leader_{slug}_name");
         let value = web_catalog_value(catalog, &key)
             .and_then(serde_json::Value::as_str)
@@ -2231,9 +2209,12 @@ fn validate_dynamic_web_keys(catalog: &serde_json::Value) -> Result<()> {
             }
         }
     }
-    for slug in LEADER_SLUGS {
-        for suffix in ["name", "historical"] {
-            let key = format!("heroes.leader_{slug}_{suffix}");
+    for slug in sow_core::player::Leader::all().map(sow_core::player::Leader::id) {
+        for key in ["name", "historical", "civilization"]
+            .map(|suffix| format!("heroes.leader_{slug}_{suffix}"))
+            .into_iter()
+            .chain(["ability", "description"].map(|suffix| format!("site.leader_{slug}_{suffix}")))
+        {
             if web_catalog_value(catalog, &key).is_none() {
                 bail!("dynamic localization key is missing: {key}");
             }

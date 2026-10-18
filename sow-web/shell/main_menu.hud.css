@@ -120,9 +120,9 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     .sow-hud__army-allocation strong, .sow-hud__deploy-title, .sow-hud__deploy-timer, .sow-hud__ring-readout strong,
     .sow-hud__panel-header h3, .sow-hud__transfer-header h3, .sow-hud__player-rank,
     .sow-hud__player-identity b, .sow-hud__player-land, .sow-hud__player-troops, .sow-hud__hover-header b,
-    .sow-hud__hover-stats b, .sow-hud__building-card-title, .sow-hud__building-metric b, .sow-hud__endgame-banner,
+    .sow-hud__hover-stats b, .sow-hud__endgame-banner,
     .sow-hud__endgame-title, .sow-hud__endgame-stat b, .sow-hud__fps, .sow-hud__ping,
-    .sow-hud__endgame-primary, .sow-hud__endgame-secondary, .sow-hud__building-card-upgrade, .sow-hud__row-action,
+    .sow-hud__endgame-primary, .sow-hud__endgame-secondary, .sow-hud__row-action,
     .sow-hud__transfer-actions button, .sow-hud__request-actions button) {
     -webkit-text-stroke: var(--sow-text-outline);
     paint-order: stroke fill;
@@ -1431,191 +1431,6 @@ html[dir="rtl"] .sow-hud__dev-play::before { transform: scaleX(-1); }
     margin-top: 0;
 }
 
-.sow-hud__building-card {
-    position: fixed;
-    left: 0;
-    top: 0;
-    z-index: 205;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
-    width: min(252px, calc(100vw - 16px));
-    padding: 9px;
-    transform: none;
-    border: 1px solid var(--sow-line);
-    border-top-color: color-mix(in srgb, var(--sow-gold) 58%, transparent);
-    border-radius: 8px 8px 12px 4px;
-    background: var(--sow-panel);
-    box-shadow: var(--sow-surface-shadow);
-    pointer-events: auto;
-    animation: sow-building-card-in 140ms ease-out both;
-}
-
-.sow-hud__building-card::before {
-    position: absolute;
-    top: calc(50% - 5px);
-    width: 9px;
-    height: 9px;
-    content: "";
-    background: var(--sow-panel);
-    transform: rotate(45deg);
-}
-
-.sow-hud__building-card[data-anchor-side="right"]::before {
-    left: -5px;
-    border-bottom: 1px solid var(--sow-gold);
-    border-left: 1px solid var(--sow-gold);
-}
-
-.sow-hud__building-card[data-anchor-side="left"]::before {
-    right: -5px;
-    border-top: 1px solid var(--sow-gold);
-    border-right: 1px solid var(--sow-gold);
-}
-
-@keyframes sow-building-card-in {
-    from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: none; }
-}
-
-.sow-hud__building-card.hidden {
-    display: none !important;
-}
-
-.sow-hud__building-card-head {
-    grid-column: 1 / -1;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    color: var(--sow-gold-bright);
-    font-size: 13px;
-    font-weight: 800;
-}
-
-.sow-hud__building-card-title,
-.sow-hud__building-level,
-.sow-hud__building-metric,
-.sow-hud__building-requirement {
-    display: inline-flex;
-    align-items: center;
-}
-
-.sow-hud__building-card-title { min-width: 0; gap: 7px; }
-.sow-hud__building-card-icon,
-.sow-hud__building-card-icon img { width: 21px; height: 21px; flex: 0 0 auto; object-fit: contain; }
-.sow-hud__building-card-icon .sow-hud__building-icon { width: 21px; height: 21px; font-size: 19px; }
-
-.sow-hud__building-card-level {
-    margin-inline-start: 2px;
-}
-
-.sow-hud__building-level {
-    min-height: 22px;
-    padding: 3px 7px;
-    gap: 4px;
-    border: 1px solid color-mix(in srgb, var(--sow-gold) 32%, transparent);
-    border-radius: 4px;
-    background: color-mix(in srgb, var(--sow-gold) 9%, transparent);
-    color: var(--sow-gold-bright);
-    font-size: 11px;
-    font-weight: 800;
-}
-
-.sow-hud__building-level--max { color: var(--sow-green); }
-
-.sow-hud__building-card-benefit,
-.sow-hud__building-card-next {
-    grid-column: 1 / -1;
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin: 0;
-}
-
-.sow-hud__building-card-next {
-    padding-top: 8px;
-    border-top: 1px solid var(--sow-line);
-}
-
-.sow-hud__building-card-gold {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    align-content: center;
-    gap: 4px 8px;
-    margin: 0;
-    padding: 0;
-    color: var(--sow-gold-bright);
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-}
-
-.sow-hud__building-card-gold[hidden] { display: none; }
-.sow-hud__building-gold-balance,
-.sow-hud__building-gold-cost { display: inline-flex; align-items: center; gap: 5px; }
-.sow-hud__building-gold-arrow { color: var(--sow-muted); }
-.sow-hud__building-card-gold.is-short .sow-hud__building-gold-balance { color: var(--sow-red); }
-
-.sow-hud__building-card-benefit[hidden],
-.sow-hud__building-card-next[hidden] { display: none; }
-
-.sow-hud__building-metric {
-    min-height: 22px;
-    padding: 2px 4px;
-    gap: 4px;
-    border: 1px solid rgb(255 255 255 / 9%);
-    border-radius: 4px;
-    background: rgb(255 255 255 / 4%);
-    color: #f1eee7;
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-}
-
-.sow-hud__building-metric-icon {
-    width: 14px;
-    height: 14px;
-    flex: 0 0 auto;
-    object-fit: contain;
-}
-
-.sow-hud__building-requirement {
-    gap: 4px;
-    color: var(--sow-red);
-    font-size: 10px;
-}
-
-.sow-hud__building-card-upgrade {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 82px;
-    min-height: 48px;
-    margin: 0;
-    padding: 0 10px;
-    gap: 7px;
-    border: 1px solid color-mix(in srgb, var(--sow-gold) 66%, transparent);
-    border-radius: 5px;
-    background: color-mix(in srgb, var(--sow-gold) 14%, transparent);
-    color: var(--sow-gold-bright);
-    font: inherit;
-    font-weight: 800;
-    cursor: pointer;
-    touch-action: manipulation;
-}
-
-.sow-hud__building-card-upgrade span {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.sow-hud__building-card-upgrade:disabled {
-    cursor: default;
-    opacity: .42;
-}
-
 /* Command ring: one fixed six-slot shape for every context and submenu.
    Wedges are drawn in SVG; slot buttons sit on the icon radius for focus,
    screen readers and tutorial targets. Pointer input is resolved by angle in JS. */
@@ -2852,11 +2667,6 @@ html[dir="rtl"] .sow-hud__dev-play::before { transform: scaleX(-1); }
         --sow-hud-right-edge: max(8px, var(--sow-sar));
     }
 
-    .sow-hud__building-card {
-        width: min(252px, calc(100vw - 16px));
-        padding: 9px;
-    }
-
     .sow-hud__topbar {
         top: var(--sow-hud-top-edge);
         inset-inline: max(8px, var(--sow-sal)) var(--sow-hud-right-edge);
@@ -3208,7 +3018,6 @@ html[dir="rtl"] .sow-hud__dev-play::before { transform: scaleX(-1); }
     #sow-hud[data-compact="true"][data-overlay-open="true"] .sow-hud__left-rail,
     #sow-hud[data-compact="true"][data-overlay-open="true"] .sow-hud__right-rail,
     #sow-hud[data-compact="true"][data-overlay-open="true"] .sow-hud__hover-card { display: none; }
-    #sow-hud[data-compact="true"] .sow-hud__building-card { max-height: calc(100dvh - var(--sow-hud-layout-top-reserve, 72px) - 8px); overflow: auto; }
 }
 
 /* Compact desktop windows use the same available-space state as touch layouts. */

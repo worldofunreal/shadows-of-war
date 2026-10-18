@@ -254,8 +254,8 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
             .into_iter()
             .map(|(account_id, display_name, _)| (account_id, display_name))
         {
-            let leader = Leader::ALL[rng.gen_range(0..Leader::ALL.len())];
-            let civilization = leader.civilization();
+            let leader = Leader::nth(rng.gen_range(0..Leader::count()))
+                .expect("index drawn below the hero count");
             let player_id = g
                 .players
                 .iter()
@@ -298,7 +298,6 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
                 player_id,
                 tx: dummy_tx,
                 download_progress: 100,
-                civilization,
                 leader,
                 random_leader: false,
                 skin_style: 0,

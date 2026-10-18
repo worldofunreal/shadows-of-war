@@ -119,14 +119,6 @@ pub enum DbEvent {
         request_id: u64,
         status: Option<u16>,
     },
-    ExitRecovery {
-        account_id: String,
-        match_id: String,
-        cycle_id: u32,
-        request_id: u64,
-        accepted: bool,
-        status: Option<u16>,
-    },
     ProfileLoaded {
         progress: PlayerProgress,
         account_id: String,
@@ -400,7 +392,7 @@ mod tests {
     #[test]
     fn random_match_reward_uses_the_resolved_leader_without_changing_preference() {
         let mut progress = PlayerProgress {
-            preferred_leader: Some(Leader::Boudica),
+            preferred_leader: Some(Leader::of("boudica")),
             prefer_random_leader: true,
             ..Default::default()
         };
@@ -410,18 +402,18 @@ mod tests {
             0,
             0,
             0,
-            Leader::Napoleon,
+            Leader::of("napoleon"),
         );
         assert_eq!(progress.leader_xp.get("Napoleon"), Some(&120));
         assert!(!progress.leader_xp.contains_key("Boudica"));
-        assert_eq!(progress.preferred_leader, Some(Leader::Boudica));
+        assert_eq!(progress.preferred_leader, Some(Leader::of("boudica")));
         assert!(progress.prefer_random_leader);
     }
 
     #[test]
     fn random_selection_survives_reload_and_cloud_profile_merge() {
         let local = PlayerProgress {
-            preferred_leader: Some(Leader::Boudica),
+            preferred_leader: Some(Leader::of("boudica")),
             prefer_random_leader: true,
             leader_selection_pending: true,
             ..Default::default()
@@ -429,10 +421,10 @@ mod tests {
         let mut reloaded: PlayerProgress =
             serde_json::from_str(&serde_json::to_string(&local).unwrap()).unwrap();
         reloaded.merge_boot_profile(PlayerProgress {
-            preferred_leader: Some(Leader::Caesar),
+            preferred_leader: Some(Leader::of("caesar")),
             ..Default::default()
         });
-        assert_eq!(reloaded.preferred_leader, Some(Leader::Boudica));
+        assert_eq!(reloaded.preferred_leader, Some(Leader::of("boudica")));
         assert!(reloaded.prefer_random_leader);
         assert!(reloaded.leader_selection_pending);
     }
@@ -457,7 +449,7 @@ mod tests {
     #[test]
     fn assigned_leader_does_not_make_a_new_profile_have_history() {
         let progress = PlayerProgress {
-            preferred_leader: Some(Leader::Caesar),
+            preferred_leader: Some(Leader::of("caesar")),
             ..Default::default()
         };
         assert!(!progress.has_history());
@@ -471,7 +463,7 @@ mod tests {
             ..Default::default()
         };
         local.merge_boot_profile(PlayerProgress {
-            preferred_leader: Some(Leader::Caesar),
+            preferred_leader: Some(Leader::of("caesar")),
             ..Default::default()
         });
         assert_eq!(local.intro_completed, Some(true));

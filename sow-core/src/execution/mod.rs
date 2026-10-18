@@ -7,6 +7,8 @@ use std::collections::BinaryHeap;
 use wyrand::WyRand;
 
 pub mod combat;
+#[cfg(test)]
+mod hero_ability_tests;
 pub mod income;
 pub mod income_rates;
 pub mod nukes;

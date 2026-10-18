@@ -59,14 +59,11 @@ impl SowEngine {
                 self.state.players[idx].player_type == crate::player::PlayerType::Bot;
 
             let leader = self.state.players[idx].leader;
-            let richard_mult = if leader == crate::player::Leader::RichardTheLionheart {
-                1.50
-            } else {
-                1.0
-            };
             let mut max_tr = config.max_troops_base
                 + max_troops_bonus * config.max_troops_scale
-                + agg.city_levels as f64 * config.city_max_troops * richard_mult;
+                + agg.city_levels as f64
+                    * config.city_max_troops
+                    * leader.city_troop_capacity_multiplier();
             if is_standard_bot {
                 max_tr /= 1.5;
             }

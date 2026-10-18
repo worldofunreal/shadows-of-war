@@ -51,5 +51,6 @@ sha2 = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 
 [dev-dependencies]
+sow-core = { workspace = true }
 tempfile = { workspace = true }
 serde_json = { workspace = true }

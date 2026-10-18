@@ -25,12 +25,8 @@ impl SowApp {
         let victim_type = victim
             .map(|p| p.player_type)
             .unwrap_or(sow_core::player::PlayerType::Bot);
-        let reward_data = crate::app::local_gold_reward(
-            my_id,
-            conqueror_id,
-            info.gold_bounty,
-            info.assists,
-        );
+        let reward_data =
+            crate::app::local_gold_reward(my_id, conqueror_id, info.gold_bounty, info.assists);
         let show_animation = crate::app::elimination_visible_to_viewer(
             &snap.players,
             my_id,
@@ -57,9 +53,7 @@ impl SowApp {
             tile_found = true;
         }
 
-        if !tile_found
-            && let Some(conqueror) = snap.players.iter().find(|p| p.id == conqueror_id)
-        {
+        if !tile_found && let Some(conqueror) = snap.players.iter().find(|p| p.id == conqueror_id) {
             wx = conqueror.centroid_x + 0.5;
             wy = conqueror.centroid_y + 0.5;
         }
@@ -70,13 +64,9 @@ impl SowApp {
 
         if show_animation {
             let name = victim
-                .map(|p| sow_core::player::nameplate_display_name(p.id, &p.name, p.player_type))
+                .map(|p| sow_core::player::display_name(p.id, &p.name, p.player_type))
                 .unwrap_or_else(|| format!("Player {player_id}"));
-            let [anim_x, anim_y] = self
-                .ui
-                .nameplates
-                .anchor_for(player_id)
-                .unwrap_or([wx, wy]);
+            let [anim_x, anim_y] = self.ui.nameplates.anchor_for(player_id).unwrap_or([wx, wy]);
             let color = victim
                 .map(crate::render::world::nameplates::player_color)
                 .unwrap_or([0.85, 0.85, 0.85, 1.0]);
@@ -126,7 +116,7 @@ impl SowApp {
 
         if conqueror_id == my_id && my_id != 0 && info.gold_bounty == 0 {
             let name = victim
-                .map(|p| sow_core::player::nameplate_display_name(p.id, &p.name, p.player_type))
+                .map(|p| sow_core::player::display_name(p.id, &p.name, p.player_type))
                 .unwrap_or_else(|| format!("Player {player_id}"));
             self.ui.app.hud_state.push_notification_for_players(
                 crate::ui::UiText::new("hud.elimination").with("victim", name),

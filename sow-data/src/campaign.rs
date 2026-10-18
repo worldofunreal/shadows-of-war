@@ -4,27 +4,51 @@ use crate::leaders::Leader;
 pub struct CampaignEpisode {
     pub id: &'static str,
     pub prerequisite: Option<&'static str>,
-    pub advisor: Leader,
+    /// Catalog id of the hero who narrates the episode.
+    pub advisor_id: &'static str,
+}
+
+impl CampaignEpisode {
+    pub fn advisor(&self) -> Leader {
+        Leader::of(self.advisor_id)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CampaignSeries {
     pub id: &'static str,
     pub episodes: &'static [&'static str],
-    pub reward_leader: Leader,
+    /// Catalog id of the hero unlocked by finishing the series.
+    pub reward_leader_id: &'static str,
 }
 
 pub const CAMPAIGN_EPISODES: &[CampaignEpisode] = &[
-    CampaignEpisode { id: "boudica", prerequisite: None, advisor: Leader::Boudica },
-    CampaignEpisode { id: "six_sky_ep1", prerequisite: None, advisor: Leader::LadySixSky },
-    CampaignEpisode { id: "six_sky_ep2", prerequisite: Some("six_sky_ep1"), advisor: Leader::LadySixSky },
-    CampaignEpisode { id: "six_sky_ep3", prerequisite: Some("six_sky_ep2"), advisor: Leader::LadySixSky },
+    CampaignEpisode {
+        id: "boudica",
+        prerequisite: None,
+        advisor_id: "boudica",
+    },
+    CampaignEpisode {
+        id: "six_sky_ep1",
+        prerequisite: None,
+        advisor_id: "lady_six_sky",
+    },
+    CampaignEpisode {
+        id: "six_sky_ep2",
+        prerequisite: Some("six_sky_ep1"),
+        advisor_id: "lady_six_sky",
+    },
+    CampaignEpisode {
+        id: "six_sky_ep3",
+        prerequisite: Some("six_sky_ep2"),
+        advisor_id: "lady_six_sky",
+    },
 ];
 
 pub const CAMPAIGN_SERIES: &[CampaignSeries] = &[CampaignSeries {
     id: "lady_six_sky",
     episodes: &["six_sky_ep1", "six_sky_ep2", "six_sky_ep3"],
-    reward_leader: Leader::LadySixSky,
+    reward_leader_id: "lady_six_sky",
 }];
 
 // Six Sky is not published yet. Keep its episode access and server rewards
@@ -51,14 +75,21 @@ pub fn prerequisite_satisfied(
 }
 
 pub fn series_for_episode(id: &str) -> Option<&'static CampaignSeries> {
-    CAMPAIGN_SERIES.iter().find(|series| series.episodes.contains(&id))
+    CAMPAIGN_SERIES
+        .iter()
+        .find(|series| series.episodes.contains(&id))
 }
 
 pub fn earned_leader(completed_episodes: &std::collections::BTreeSet<String>) -> Option<Leader> {
     CAMPAIGN_SERIES
         .iter()
-        .find(|series| series.episodes.iter().all(|id| completed_episodes.contains(*id)))
-        .map(|series| series.reward_leader)
+        .find(|series| {
+            series
+                .episodes
+                .iter()
+                .all(|id| completed_episodes.contains(*id))
+        })
+        .map(|series| Leader::of(series.reward_leader_id))
 }
 
 #[cfg(test)]
@@ -67,8 +98,14 @@ mod tests {
 
     #[test]
     fn six_sky_unlock_requires_every_episode_and_remains_unpublished() {
-        assert_eq!(episode("six_sky_ep2").unwrap().prerequisite, Some("six_sky_ep1"));
-        assert_eq!(episode("six_sky_ep3").unwrap().prerequisite, Some("six_sky_ep2"));
+        assert_eq!(
+            episode("six_sky_ep2").unwrap().prerequisite,
+            Some("six_sky_ep1")
+        );
+        assert_eq!(
+            episode("six_sky_ep3").unwrap().prerequisite,
+            Some("six_sky_ep2")
+        );
         assert!(!episode_is_published("six_sky_ep1"));
         assert!(!episode_is_published("six_sky_ep2"));
         assert!(!episode_is_published("six_sky_ep3"));
@@ -83,6 +120,19 @@ mod tests {
         completed.insert("six_sky_ep2".to_string());
         assert_eq!(earned_leader(&completed), None);
         completed.insert("six_sky_ep3".to_string());
-        assert_eq!(earned_leader(&completed), Some(Leader::LadySixSky));
+        assert_eq!(earned_leader(&completed), Some(Leader::of("lady_six_sky")));
+    }
+
+    #[test]
+    fn campaign_heroes_exist_in_the_catalog() {
+        for episode in CAMPAIGN_EPISODES {
+            assert_eq!(episode.advisor().id(), episode.advisor_id);
+        }
+        for series in CAMPAIGN_SERIES {
+            assert_eq!(
+                Leader::of(series.reward_leader_id).id(),
+                series.reward_leader_id
+            );
+        }
     }
 }

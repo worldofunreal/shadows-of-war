@@ -17,15 +17,14 @@ pub fn troop_income_per_second(
     leader: Leader,
     cfg: &GameConfig,
 ) -> f64 {
-    let vercingetorix_mult = if leader == Leader::Vercingetorix {
-        1.50
-    } else {
-        1.0
-    };
-
+    use crate::geo_entities::{District, Resource};
     cfg.troop_base_income
-        + cfg.city_troop_income * agg.city_levels as f64 * vercingetorix_mult
-        + cfg.farm_troop_income * agg.farm_income_level_weight
+        + cfg.city_troop_income
+            * agg.city_levels as f64
+            * leader.district_income_multiplier(District::City, Resource::Troops)
+        + cfg.farm_troop_income
+            * agg.farm_income_level_weight
+            * leader.district_income_multiplier(District::Farm, Resource::Troops)
         + territory_rate(
             tiles_owned,
             cfg.territory_troop_amount,
@@ -40,11 +39,17 @@ pub fn gold_income_per_second(
     leader: Leader,
     cfg: &GameConfig,
 ) -> f64 {
-    let ragnar_mult = if leader == Leader::Ragnar { 1.50 } else { 1.0 };
+    use crate::geo_entities::{District, Resource};
     cfg.gold_base_income
-        + cfg.factory_gold_income * agg.factory_levels as f64
-        + cfg.farm_gold_income * agg.farm_income_level_weight
-        + cfg.port_gold_income * agg.port_income_level_weight * ragnar_mult
+        + cfg.factory_gold_income
+            * agg.factory_levels as f64
+            * leader.district_income_multiplier(District::Factory, Resource::Gold)
+        + cfg.farm_gold_income
+            * agg.farm_income_level_weight
+            * leader.district_income_multiplier(District::Farm, Resource::Gold)
+        + cfg.port_gold_income
+            * agg.port_income_level_weight
+            * leader.district_income_multiplier(District::Port, Resource::Gold)
         + territory_rate(tiles, cfg.territory_gold_amount, cfg.territory_gold_tiles)
 }
 
@@ -67,11 +72,11 @@ mod tests {
         let cfg = default_cfg();
         let agg = BuildingAggregate::default();
         assert_eq!(
-            troop_income_per_second(0, agg, Leader::Caesar, &cfg),
+            troop_income_per_second(0, agg, Leader::of("caesar"), &cfg),
             cfg.troop_base_income
         );
         assert_eq!(
-            gold_income_per_second(0, agg, Leader::Caesar, &cfg),
+            gold_income_per_second(0, agg, Leader::of("caesar"), &cfg),
             cfg.gold_base_income
         );
     }
@@ -81,19 +86,19 @@ mod tests {
         let cfg = default_cfg();
         let agg = BuildingAggregate::default();
         assert_eq!(
-            gold_income_per_second(128, agg, Leader::Caesar, &cfg),
+            gold_income_per_second(128, agg, Leader::of("caesar"), &cfg),
             cfg.gold_base_income + 0.0625
         );
         assert_eq!(
-            gold_income_per_second(2_048, agg, Leader::Caesar, &cfg),
+            gold_income_per_second(2_048, agg, Leader::of("caesar"), &cfg),
             cfg.gold_base_income + 1.0
         );
         assert_eq!(
-            gold_income_per_second(20_480, agg, Leader::Caesar, &cfg),
+            gold_income_per_second(20_480, agg, Leader::of("caesar"), &cfg),
             cfg.gold_base_income + 10.0
         );
         assert_eq!(
-            troop_income_per_second(400, agg, Leader::Caesar, &cfg),
+            troop_income_per_second(400, agg, Leader::of("caesar"), &cfg),
             cfg.troop_base_income + 400.0 / 24.0
         );
     }
@@ -130,7 +135,7 @@ mod tests {
             city_levels: 2,
             ..Default::default()
         };
-        let rate = troop_income_per_second(0, agg, Leader::Caesar, &cfg);
+        let rate = troop_income_per_second(0, agg, Leader::of("caesar"), &cfg);
         assert_eq!(rate, cfg.troop_base_income + 50.0);
     }
 
@@ -142,8 +147,8 @@ mod tests {
             farm_income_level_weight: 2.0,
             ..Default::default()
         };
-        let base = troop_income_per_second(0, agg, Leader::Caesar, &cfg);
-        let verc = troop_income_per_second(0, agg, Leader::Vercingetorix, &cfg);
+        let base = troop_income_per_second(0, agg, Leader::of("caesar"), &cfg);
+        let verc = troop_income_per_second(0, agg, Leader::of("vercingetorix"), &cfg);
         let city_bonus = cfg.city_troop_income * 2.0;
         let farm_bonus = cfg.farm_troop_income * 2.0;
         assert_eq!(base, cfg.troop_base_income + city_bonus + farm_bonus);
@@ -158,12 +163,12 @@ mod tests {
             port_income_level_weight: 4.75,
             ..Default::default()
         };
-        let troop_rate = troop_income_per_second(0, agg, Leader::Caesar, &cfg);
-        let gold_rate = gold_income_per_second(0, agg, Leader::Caesar, &cfg);
+        let troop_rate = troop_income_per_second(0, agg, Leader::of("caesar"), &cfg);
+        let gold_rate = gold_income_per_second(0, agg, Leader::of("caesar"), &cfg);
         assert!((troop_rate - (175.0 + 4.75 * 40.0 / 21.0)).abs() < 1e-12);
         assert!((gold_rate - (1.0 + 4.75 * (4.0 + 12.0) / 21.0)).abs() < 1e-12);
 
-        let ragnar_gold = gold_income_per_second(0, agg, Leader::Ragnar, &cfg);
+        let ragnar_gold = gold_income_per_second(0, agg, Leader::of("ragnar"), &cfg);
         assert!((ragnar_gold - (1.0 + 4.75 * (4.0 + 18.0) / 21.0)).abs() < 1e-12);
     }
 
@@ -175,11 +180,11 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            troop_income_per_second(0, agg, Leader::Caesar, &cfg),
+            troop_income_per_second(0, agg, Leader::of("caesar"), &cfg),
             cfg.troop_base_income
         );
         assert_eq!(
-            troop_income_per_second(0, agg, Leader::Ragnar, &cfg),
+            troop_income_per_second(0, agg, Leader::of("ragnar"), &cfg),
             cfg.troop_base_income
         );
     }

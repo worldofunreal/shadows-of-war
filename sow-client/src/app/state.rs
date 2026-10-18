@@ -826,9 +826,12 @@ pub(crate) struct MenuReturnContext {
     /// None is the isolated reader for older persisted explicit exits.
     #[serde(default)]
     pub voluntary_exit: Option<bool>,
-    /// Preparation never requests navigation or a surrender recovery.
+    /// Preparation records progress without leaving the active match.
     #[serde(default)]
     pub preparation_only: bool,
+    /// Client-side timing only; persists across the later menu exit.
+    #[serde(default)]
+    pub preparation_started_at_ms: Option<u64>,
     #[serde(default)]
     pub match_finished: bool,
     #[serde(default)]
@@ -836,13 +839,7 @@ pub(crate) struct MenuReturnContext {
     #[serde(default)]
     pub server_state: Option<sow_data::profile::MatchExitState>,
     #[serde(skip)]
-    pub recording_deadline: Option<web_time::Instant>,
-    #[serde(skip)]
     pub result_request_id: Option<u64>,
-    #[serde(skip)]
-    pub recovery_request_id: Option<u64>,
-    #[serde(skip)]
-    pub recovery_accepted: bool,
     #[serde(skip)]
     pub started_at: Option<web_time::Instant>,
 }

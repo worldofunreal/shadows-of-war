@@ -124,7 +124,7 @@
     };
 
     // Cell order of the badge strip packed from assets/art/icons (assets/generated/badges-atlas.json).
-    var STATUS_CELLS = ["request", "allied", "traitor", "rank-1", "rank-2", "rank-3", "you", "disconnected", "upgrade-sparkle", "wilderness", "troops", "death", "radiation", "construction", "hammer", "arrow-up", "arrow-right", "arrow-down", "arrow-left", "cancel", "confirm"];
+    var STATUS_CELLS = ["request", "allied", "traitor", "rank-1", "rank-2", "rank-3", "you", "disconnected", "upgrade-sparkle", "wilderness", "troops", "death", "radiation", "construction", "hammer", "arrow-up", "arrow-right", "arrow-down", "arrow-left", "cancel", "confirm", "gold", "boat", "clock", "shield", "range", "speed"];
 
     var BUILDING_GLYPHS = {
         city: "city",
@@ -574,14 +574,7 @@
             + '    </div>'
             + '  </section>'
             + '</div>'
-            + '<div class="sow-hud__map-menu hidden" id="sow-hud-map-menu" role="menu" aria-label="' + SOW_t("hud.map_actions") + '"></div>'
-            + '<aside class="sow-hud__building-card hidden" id="sow-hud-building-card" aria-live="polite">'
-            + '  <div class="sow-hud__building-card-head"><span class="sow-hud__building-card-title"><span class="sow-hud__building-card-icon" id="sow-hud-building-card-icon"></span><span id="sow-hud-building-card-kind"></span><span class="sow-hud__building-card-level" id="sow-hud-building-card-level"></span></span><button type="button" class="sow-hud__close-btn" data-command="close_building_card" aria-label="Close">✕</button></div>'
-            + '  <div class="sow-hud__building-card-benefit" id="sow-hud-building-card-benefit"></div>'
-            + '  <div class="sow-hud__building-card-next" id="sow-hud-building-card-next"></div>'
-            + '  <div class="sow-hud__building-card-gold" id="sow-hud-building-card-gold" hidden></div>'
-            + '  <button type="button" class="sow-hud__building-card-upgrade" id="sow-hud-building-card-upgrade" data-map-action="upgrade_structure"><span aria-hidden="true">↑</span><span id="sow-hud-building-card-upgrade-level"></span></button>'
-            + '</aside>';
+            + '<div class="sow-hud__map-menu hidden" id="sow-hud-map-menu" role="menu" aria-label="' + SOW_t("hud.map_actions") + '"></div>';
 
         if (hudDevLayer) {
             hudDevLayer.appendChild(hudRoot.querySelector("#sow-hud-dev-sidebar"));
@@ -673,15 +666,6 @@
             operationRows: document.getElementById("sow-hud-operations-list"),
             combatOperationRows: Object.create(null),
             combatOperationsOrderKey: "",
-            buildingCard: document.getElementById("sow-hud-building-card"),
-            buildingCardIcon: document.getElementById("sow-hud-building-card-icon"),
-            buildingCardKind: document.getElementById("sow-hud-building-card-kind"),
-            buildingCardLevel: document.getElementById("sow-hud-building-card-level"),
-            buildingCardBenefit: document.getElementById("sow-hud-building-card-benefit"),
-            buildingCardNext: document.getElementById("sow-hud-building-card-next"),
-            buildingCardGold: document.getElementById("sow-hud-building-card-gold"),
-            buildingCardUpgrade: document.getElementById("sow-hud-building-card-upgrade"),
-            buildingCardUpgradeLevel: document.getElementById("sow-hud-building-card-upgrade-level"),
             notifications: document.createElement("div"),
             topbar: hudRoot.querySelector(".sow-hud__topbar"),
             dock: document.getElementById("sow-hud-dock"),
@@ -1319,7 +1303,6 @@
             ring.hot = -1;
             ring.press = null;
             ringHoldCancel(null);
-            if (open && mapMenu.view === "building_details") return !(mapMenu.building && mapMenu.building.under_construction);
             return false;
         }
         var hud = hudState && hudState.hud || {};
@@ -1693,155 +1676,6 @@
         });
     }
 
-    function buildingMetricMarkup(metrics) {
-        if (!Array.isArray(metrics)) return "";
-        return metrics.map(function (metric) {
-            var icon = String(metric.icon || "upgrade");
-            var label = String(metric.label || "");
-            var rawValue = metric.value;
-            var value = typeof rawValue === "number" && Number.isFinite(rawValue)
-                ? rawValue.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                : String(rawValue == null ? "" : rawValue);
-            value = String(metric.prefix || "") + value + String(metric.unit || "");
-            var safeLabel = escapeHudText(label);
-            var safeValue = escapeHudText(value);
-            return '<span class="sow-hud__building-metric" title="' + safeLabel + '" aria-label="' + safeLabel + ': ' + safeValue + '">'
-                + hudIcon(icon, "sow-hud__building-metric-icon") + '<b>' + safeValue + '</b></span>';
-        }).join("");
-    }
-
-    function buildingMetricDeltaMarkup(currentMetrics, nextMetrics) {
-        if (!Array.isArray(nextMetrics)) return "";
-        var currentByKey = Object.create(null);
-        (Array.isArray(currentMetrics) ? currentMetrics : []).forEach(function (metric) {
-            currentByKey[String(metric.icon || "upgrade") + "|" + String(metric.label || "")] = metric;
-        });
-        var deltas = [];
-        nextMetrics.forEach(function (metric) {
-            var previous = currentByKey[String(metric.icon || "upgrade") + "|" + String(metric.label || "")];
-            var before = previous && Number(previous.value);
-            var after = Number(metric.value);
-            if (previous && Number.isFinite(before) && Number.isFinite(after)) {
-                var difference = after - before;
-                if (Math.abs(difference) < 0.000001) return;
-                deltas.push(Object.assign({}, metric, {
-                    value: Math.abs(difference),
-                    prefix: difference < 0 ? "−" : (metric.prefix || "+")
-                }));
-            } else if (!previous) {
-                deltas.push(Object.assign({}, metric, {
-                    prefix: metric.prefix || (Number.isFinite(after) ? "+" : "")
-                }));
-            } else if (String(previous.value) !== String(metric.value)) {
-                deltas.push(metric);
-            }
-        });
-        return buildingMetricMarkup(deltas);
-    }
-
-    function positionBuildingCard(mapMenu) {
-        var card = hudRefs.buildingCard;
-        var width = card.offsetWidth;
-        var height = card.offsetHeight;
-        var anchorX = Number(mapMenu.x) || 0;
-        var anchorY = Number(mapMenu.y) || 0;
-        var gap = 14;
-        var side = anchorX + gap + width <= window.innerWidth - 8 ? "right" : "left";
-        var left = side === "right" ? anchorX + gap : anchorX - width - gap;
-        var top = anchorY - height * 0.5;
-        left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
-        top = Math.max(8, Math.min(top, window.innerHeight - height - 8));
-        card.dataset.anchorSide = side;
-        card.style.left = left + "px";
-        card.style.top = top + "px";
-        card.style.bottom = "auto";
-    }
-
-    function renderBuildingCard(mapMenu, playerGold) {
-        if (!hudRefs || !hudRefs.buildingCard) return;
-        var detail = mapMenu && mapMenu.building;
-        var open = Boolean(mapMenu && mapMenu.open && mapMenu.view === "building_details" && detail && !detail.under_construction);
-        hudRefs.buildingCard.classList.toggle("hidden", !open);
-        if (!open) return;
-        hudRefs.buildingCard.dataset.session = String(mapMenu.session);
-        hudRefs.buildingCard.dataset.tileIdx = String(mapMenu.tile_idx);
-        hudRefs.buildingCardIcon.innerHTML = buildingIcon(detail.kind, detail.level);
-        hudRefs.buildingCardKind.textContent = detail.name || detail.kind || "Building";
-        hudRefs.buildingCardLevel.innerHTML = '<span class="sow-hud__building-level">Lv ' + escapeHudText(detail.level || 1) + '</span>';
-        var activeMetrics = Array.isArray(detail.metrics) ? detail.metrics.slice() : [];
-        if (detail.boat_slots) {
-            activeMetrics.push({
-                icon: "port",
-                label: "Boats in use / capacity",
-                value: String(detail.boat_slots.used) + "/" + String(detail.boat_slots.total)
-            });
-            activeMetrics.push({
-                icon: "speed",
-                label: "Combined boat speed",
-                value: Number(detail.boat_slots.speed_percent) || 0,
-                prefix: "+",
-                unit: "%"
-            });
-        }
-        hudRefs.buildingCardBenefit.innerHTML = buildingMetricMarkup(activeMetrics);
-        hudRefs.buildingCardBenefit.setAttribute("aria-label", detail.benefit_label || "Building effects");
-        hudRefs.buildingCardBenefit.hidden = !activeMetrics.length;
-        var unmet = Array.isArray(detail.requirements) ? detail.requirements.filter(function (item) { return !item.met; }) : [];
-        if (detail.next_level) {
-            var nextMetrics = Array.isArray(detail.next_metrics) ? detail.next_metrics : [];
-            var deltaMarkup = buildingMetricDeltaMarkup(activeMetrics, nextMetrics);
-            var requirementLabel = unmet.length ? SOW_t(unmet[0].key || "hud.action_unavailable") : "";
-            var requirementMarkup = unmet.length
-                ? '<span class="sow-hud__building-requirement" title="' + escapeHudText(requirementLabel) + '" aria-label="' + escapeHudText(requirementLabel) + '">'
-                    + hudIcon("lock", "sow-hud__building-metric-icon") + '</span>'
-                : "";
-            var duration = Number(detail.duration_seconds);
-            var durationMarkup = Number.isFinite(duration)
-                ? buildingMetricMarkup([{ icon: "clock", label: "Upgrade time", value: Math.max(0, duration), unit: "s" }])
-                : "";
-            hudRefs.buildingCardBenefit.hidden = true;
-            hudRefs.buildingCardNext.innerHTML = deltaMarkup + durationMarkup + requirementMarkup;
-            hudRefs.buildingCardNext.setAttribute("aria-label", detail.next_benefit_label || "Upgrade effects");
-            hudRefs.buildingCardNext.hidden = !deltaMarkup && !durationMarkup && !requirementMarkup;
-            var cost = Math.floor(Number(detail.cost) || 0).toLocaleString();
-            var availableGold = Number(playerGold);
-            if (!Number.isFinite(availableGold)) availableGold = 0;
-            var goldText = Math.floor(availableGold).toLocaleString();
-            var enoughGold = availableGold >= Number(detail.cost);
-            hudRefs.buildingCardGold.innerHTML = '<span class="sow-hud__building-gold-balance">'
-                + hudIcon("gold", "sow-hud__building-metric-icon") + '<b>' + escapeHudText(goldText) + '</b></span>'
-                + '<span class="sow-hud__building-gold-arrow" aria-hidden="true">→</span>'
-                + '<span class="sow-hud__building-gold-cost" title="Upgrade cost">'
-                + hudIcon("gold", "sow-hud__building-metric-icon") + '<b>' + escapeHudText(cost) + '</b></span>';
-            hudRefs.buildingCardGold.classList.toggle("is-short", !enoughGold);
-            hudRefs.buildingCardGold.setAttribute("aria-label", "Gold: " + goldText + ". Upgrade cost: " + cost);
-            hudRefs.buildingCardGold.hidden = false;
-            var upgradeLevel = "Lv " + detail.next_level;
-            if (hudRefs.buildingCardUpgradeLevel.textContent !== upgradeLevel) {
-                hudRefs.buildingCardUpgradeLevel.textContent = upgradeLevel;
-            }
-            hudRefs.buildingCardUpgrade.setAttribute("aria-label", "Upgrade to level " + detail.next_level);
-            hudRefs.buildingCardUpgrade.title = "Upgrade to level " + detail.next_level;
-            hudRefs.buildingCardUpgrade.disabled = !detail.can_upgrade || !enoughGold;
-            hudRefs.buildingCardUpgrade.hidden = false;
-        } else {
-            hudRefs.buildingCardGold.hidden = true;
-            hudRefs.buildingCardBenefit.hidden = !activeMetrics.length;
-            hudRefs.buildingCardBenefit.innerHTML = buildingMetricMarkup(activeMetrics);
-            if (detail.campaign_upgrade_locked) {
-                hudRefs.buildingCardNext.innerHTML = "";
-                hudRefs.buildingCardNext.textContent = "";
-                hudRefs.buildingCardNext.hidden = true;
-            } else {
-                hudRefs.buildingCardNext.innerHTML = '<span class="sow-hud__building-level sow-hud__building-level--max" title="Maximum level">MAX</span>';
-                hudRefs.buildingCardNext.hidden = false;
-            }
-            hudRefs.buildingCardUpgrade.hidden = true;
-        }
-        positionBuildingCard(mapMenu);
-    }
-
-
     function updateLeaderboard(players) {
         if (!hudRefs || !hudRefs.rows) return;
         if (Array.isArray(players)) {
@@ -1972,11 +1806,6 @@
 
         if (presentation.kind === "wilderness") {
             emblem.innerHTML = statusIcon("wilderness", "sow-hud__avatar-badge");
-            emblem.hidden = false;
-            return;
-        }
-        if (presentation.kind === "emblem" && typeof presentation.symbol === "string" && presentation.symbol) {
-            emblem.textContent = presentation.symbol;
             emblem.hidden = false;
             return;
         }
@@ -3131,7 +2960,6 @@
             }
         }
         var mapMenuOpen = renderMapMenu(hud.map_menu);
-        renderBuildingCard(hud.map_menu, hud.gold);
         var panelStates = { toggle_leaderboard: leaderboardOpen, toggle_inbox: inboxOpen, toggle_settings: settingsOpen, toggle_dev_sidebar: devSidebarOpen };
         hudRefs.panelButtons.forEach(function (button) {
             var expanded = Boolean(panelStates[button.dataset.command]);
@@ -3211,7 +3039,7 @@
             if (mapButton || mapGroup || mapBack) {
                 event.preventDefault();
                 event.stopPropagation();
-                var mapMenu = hudRefs && (mapButton && mapButton.closest(".sow-hud__building-card") || hudRefs.mapMenu);
+                var mapMenu = hudRefs && hudRefs.mapMenu;
                 if (!mapMenu) return;
                 if (mapBack) {
                     var fromGroup = mapMenuView;
@@ -3376,8 +3204,6 @@
                 send("select_warship");
             } else if (cmd === "select_nuke") {
                 send("select_nuke");
-            } else if (cmd === "close_building_card") {
-                send("close_map_context_menu");
             } else if (cmd === "confirm_endgame_leave") {
                 send("return_to_menu");
             } else if (cmd === "open_store") {

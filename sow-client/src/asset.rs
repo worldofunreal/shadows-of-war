@@ -263,7 +263,10 @@ impl SowApp {
                     context.server_state = Some(state);
                     context.exit_recorded |= closure_recorded;
                     let preparing = context.preparation_only;
-                    if closure_recorded && !preparing && self.ui.app.phase == crate::ClientPhase::Playing {
+                    if closure_recorded
+                        && !preparing
+                        && self.ui.app.phase == crate::ClientPhase::Playing
+                    {
                         self.begin_relay_closed_return();
                     }
                     if let Some(progress) = progress {
@@ -272,10 +275,11 @@ impl SowApp {
                             sow_data::profile::MatchExitState::Confirmed
                                 | sow_data::profile::MatchExitState::Rejected
                         ) {
-                            if !preparing && (self.ui.app.phase == crate::ClientPhase::Playing
-                                || (self.ui.app.phase == crate::ClientPhase::Splash
-                                    && self.ui.app.splash_state.job
-                                        == crate::ui::loading_screen::SplashJob::EnterGame))
+                            if !preparing
+                                && (self.ui.app.phase == crate::ClientPhase::Playing
+                                    || (self.ui.app.phase == crate::ClientPhase::Splash
+                                        && self.ui.app.splash_state.job
+                                            == crate::ui::loading_screen::SplashJob::EnterGame))
                             {
                                 self.begin_relay_closed_return();
                                 if let Some(context) = &mut self.menu_return {
@@ -315,35 +319,6 @@ impl SowApp {
                         "[menu-flow] result observation failed match={match_id} cycle={cycle_id} status={status:?}"
                     );
                     self.schedule_reward_profile_retry();
-                }
-                crate::player_progress::DbEvent::ExitRecovery {
-                    account_id,
-                    match_id,
-                    cycle_id,
-                    request_id,
-                    accepted,
-                    status,
-                } => {
-                    if !self.matches_exit_response(&account_id, &match_id, cycle_id)
-                        || self
-                            .menu_return
-                            .as_ref()
-                            .and_then(|context| context.recovery_request_id)
-                            != Some(request_id)
-                    {
-                        continue;
-                    }
-                    let context = self.menu_return.as_mut().unwrap();
-                    context.recovery_request_id = None;
-                    context.recovery_accepted = accepted;
-                    context.recording_deadline =
-                        Some(web_time::Instant::now() + web_time::Duration::from_secs(1));
-                    if !accepted {
-                        log::warn!(
-                            "[menu-flow] exit recovery remains pending match={match_id} status={status:?}"
-                        );
-                    }
-                    self.save_menu_return_context();
                 }
                 crate::player_progress::DbEvent::ProfileLoaded {
                     progress,

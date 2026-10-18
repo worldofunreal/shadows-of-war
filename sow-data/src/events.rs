@@ -709,11 +709,16 @@ mod tests {
     fn store_funnel_accepts_only_closed_item_properties() {
         assert!(sample("store_open").validate(NOW_MS).is_ok());
         let mut event = sample("store_buy_tap");
-        event.props = Some(serde_json::json!({ "kind": "gem_pack", "item_id": "sow_gems_500", "currency": "usd" }));
+        event.props = Some(
+            serde_json::json!({ "kind": "gem_pack", "item_id": "sow_gems_500", "currency": "usd" }),
+        );
         assert!(event.validate(NOW_MS).is_ok());
-        event.props = Some(serde_json::json!({ "kind": "leader", "item_id": "sun_tzu", "currency": "eur" }));
+        event.props =
+            Some(serde_json::json!({ "kind": "leader", "item_id": "sun_tzu", "currency": "eur" }));
         assert!(event.validate(NOW_MS).is_err());
-        event.props = Some(serde_json::json!({ "kind": "skin", "item_id": "ember_vein", "currency": "gems", "email": "x" }));
+        event.props = Some(
+            serde_json::json!({ "kind": "skin", "item_id": "ember_vein", "currency": "gems", "email": "x" }),
+        );
         assert!(event.validate(NOW_MS).is_err());
     }
 

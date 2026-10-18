@@ -1,7 +1,6 @@
 use crate::bitset::DenseBitSet;
 use crate::rng::NextIntExt;
 use serde::{Deserialize, Serialize};
-use sow_data::leader_for_civilization;
 
 mod colors;
 
@@ -9,7 +8,7 @@ pub use colors::{
     bot_territory_color, campaign_relation_rgb, human_shader_territory_rgb, premium_color,
     team_territory_rgb,
 };
-pub use sow_data::{Civilization, Leader, NamedColor, PREMIUM_COLORS};
+pub use sow_data::{Leader, NamedColor, PREMIUM_COLORS};
 
 use wyrand::WyRand;
 
@@ -30,9 +29,6 @@ pub enum AvatarIdentity {
         #[serde(skip)]
         leader: Option<Leader>,
     },
-    Emblem {
-        symbol: &'static str,
-    },
     /// Unclaimed land (expansion targets); drawn from `assets/art/icons/wilderness`.
     Wilderness,
     Fallback,
@@ -44,12 +40,11 @@ pub enum AvatarIdentityRef<'a> {
         slug: &'a str,
         leader: Option<Leader>,
     },
-    Emblem {
-        symbol: &'static str,
-    },
     Fallback,
 }
 
+/// Humans show their hero; every bot carries its catalog portrait in
+/// `campaign_avatar`, and a bot without one shows the shared fallback portrait.
 pub fn avatar_identity_ref(player: &crate::protocol::PlayerSnapshot) -> AvatarIdentityRef<'_> {
     if let Some(slug) = player.campaign_avatar.as_deref() {
         if slug.is_empty() || slug == "null" {
@@ -63,12 +58,7 @@ pub fn avatar_identity_ref(player: &crate::protocol::PlayerSnapshot) -> AvatarId
             slug: sow_data::commerce::leader_id(player.leader),
             leader: Some(player.leader),
         },
-        PlayerType::Bot => AvatarIdentityRef::Emblem {
-            symbol: tribe_animal(player.id, &player.name),
-        },
-        PlayerType::Nation => AvatarIdentityRef::Emblem {
-            symbol: empire_emoji(player.id, &player.name),
-        },
+        PlayerType::Bot | PlayerType::Nation => AvatarIdentityRef::Fallback,
     }
 }
 
@@ -78,7 +68,6 @@ pub fn avatar_identity(player: &crate::protocol::PlayerSnapshot) -> AvatarIdenti
             slug: slug.to_owned(),
             leader,
         },
-        AvatarIdentityRef::Emblem { symbol } => AvatarIdentity::Emblem { symbol },
         AvatarIdentityRef::Fallback => AvatarIdentity::Fallback,
     }
 }
@@ -168,8 +157,6 @@ pub struct Player {
     #[serde(default)]
     pub traitor_tick: u32,
     #[serde(default)]
-    pub civilization: Civilization,
-    #[serde(default)]
     pub leader: Leader,
     #[serde(default)]
     pub skin_style: u8,
@@ -224,8 +211,7 @@ impl Player {
             betrayal_retaliation_ticks: 0,
             traitor: false,
             traitor_tick: 0,
-            civilization: Civilization::Rome,
-            leader: Leader::Caesar,
+            leader: Leader::default(),
             skin_style: 0,
             kills: 0,
             deaths: 0,
@@ -244,8 +230,8 @@ impl Player {
         // food). Single flat band — no id-based tiers, which used to mint
         // accidental "élite" tribes (id%100) that out-ranked nations.
         let iq = rng.next_int(50, 86) as u32;
-        let civ = Civilization::ALL[rng.next_int(0, Civilization::ALL.len() as i32) as usize];
-        let leader = leader_for_civilization(civ);
+        let leader = Leader::nth(rng.next_int(0, Leader::count() as i32) as usize)
+            .expect("index drawn below the hero count");
         let starting_troops = config.starting_troops * 0.5; // ponytail: tribes get half
         let starting_gold = if iq >= 130 {
             config.starting_gold
@@ -284,7 +270,6 @@ impl Player {
             betrayal_retaliation_ticks: 0,
             traitor: false,
             traitor_tick: 0,
-            civilization: civ,
             leader,
             skin_style: 0,
             kills: 0,
@@ -303,8 +288,8 @@ impl Player {
         // Nation (PlayerType::Nation) = second tier on the food chain
         // (mid-game food). Strictly below ghosts and above tribes. Band 130-159.
         let iq = rng.next_int(130, 160) as u32;
-        let civ = Civilization::ALL[rng.next_int(0, Civilization::ALL.len() as i32) as usize];
-        let leader = leader_for_civilization(civ);
+        let leader = Leader::nth(rng.next_int(0, Leader::count() as i32) as usize)
+            .expect("index drawn below the hero count");
         let final_color = color;
         Self {
             id,
@@ -336,7 +321,6 @@ impl Player {
             betrayal_retaliation_ticks: 0,
             traitor: false,
             traitor_tick: 0,
-            civilization: civ,
             leader,
             skin_style: 0,
             kills: 0,
@@ -363,52 +347,12 @@ impl Player {
     }
 }
 
-pub fn tribe_animal(id: u16, name: &str) -> &'static str {
+/// Name shown for a player; bots always carry their catalog name.
+pub fn display_name(id: u16, name: &str, _player_type: PlayerType) -> String {
     if name.is_empty() {
-        sow_data::animal_for_id(id)
+        format!("Player {id}")
     } else {
-        sow_data::animal_for_name(name)
-    }
-}
-
-/// Empire/nation emoji — same selection scheme as [`tribe_animal`] but a distinct category.
-pub fn empire_emoji(id: u16, name: &str) -> &'static str {
-    if name.is_empty() {
-        sow_data::empire_emoji_for_id(id)
-    } else {
-        sow_data::empire_emoji_for_name(name)
-    }
-}
-
-pub fn display_name(id: u16, name: &str, player_type: PlayerType) -> String {
-    if name.is_empty() {
-        match player_type {
-            PlayerType::Bot => format!(
-                "{} Tribe {}",
-                tribe_animal(id, name),
-                id.saturating_sub(199)
-            ),
-            PlayerType::Nation => format!("Nation {}", id.saturating_sub(103)),
-            PlayerType::Human => format!("Player {}", id),
-        }
-    } else {
-        match player_type {
-            PlayerType::Bot => format!("{} {}", tribe_animal(id, name), name),
-            _ => name.to_string(),
-        }
-    }
-}
-
-pub fn nameplate_display_name(id: u16, name: &str, player_type: PlayerType) -> String {
-    let formatted = display_name(id, name, player_type);
-    if player_type == PlayerType::Bot {
-        formatted
-            .strip_prefix(tribe_animal(id, name))
-            .unwrap_or(&formatted)
-            .trim_start()
-            .to_owned()
-    } else {
-        formatted
+        name.to_string()
     }
 }
 
@@ -447,8 +391,7 @@ mod avatar_identity_tests {
             can_express_emote: false,
             can_retaliate: false,
             traitor: false,
-            civilization: Civilization::Rome,
-            leader: Leader::Caesar,
+            leader: Leader::default(),
             campaign_avatar: campaign_avatar.map(str::to_owned),
             is_campaign_faction: false,
             skin_style: 0,
@@ -465,8 +408,8 @@ mod avatar_identity_tests {
     #[test]
     fn resolves_each_entity_from_its_own_identity_and_falls_back_only_when_missing() {
         let human = player(1, "Player", PlayerType::Human, None);
-        let tribe = player(2, "Trinovantes", PlayerType::Bot, None);
-        let nation = player(3, "Rome", PlayerType::Nation, None);
+        let tribe = player(2, "Mzilikazi", PlayerType::Bot, Some("tribe_ndebele"));
+        let nation = player(3, "Hatshepsut", PlayerType::Nation, None);
         let campaign = player(4, "Tutorial", PlayerType::Bot, Some("boudica_campaign"));
         let missing_campaign = player(5, "Tutorial", PlayerType::Human, Some("null"));
         let players = [human, tribe, nation, campaign, missing_campaign];
@@ -475,20 +418,19 @@ mod avatar_identity_tests {
             avatar_identity_ref(&players[0]),
             AvatarIdentityRef::Portrait {
                 slug: "caesar",
-                leader: Some(Leader::Caesar),
+                leader: Some(Leader::of("caesar")),
             }
         );
         assert_eq!(
             avatar_identity_ref(&players[1]),
-            AvatarIdentityRef::Emblem {
-                symbol: tribe_animal(2, "Trinovantes"),
+            AvatarIdentityRef::Portrait {
+                slug: "tribe_ndebele",
+                leader: None,
             }
         );
         assert_eq!(
             avatar_identity_ref(&players[2]),
-            AvatarIdentityRef::Emblem {
-                symbol: empire_emoji(3, "Rome"),
-            }
+            AvatarIdentityRef::Fallback
         );
         assert_eq!(
             avatar_identity_ref(&players[3]),
@@ -506,20 +448,19 @@ mod avatar_identity_tests {
             avatar_identity_for_player_id(&players, 1),
             AvatarIdentity::Portrait {
                 slug: "caesar".into(),
-                leader: Some(Leader::Caesar)
+                leader: Some(Leader::of("caesar"))
             }
         );
         assert_eq!(
             avatar_identity_for_player_id(&players, 2),
-            AvatarIdentity::Emblem {
-                symbol: tribe_animal(2, "Trinovantes")
+            AvatarIdentity::Portrait {
+                slug: "tribe_ndebele".into(),
+                leader: None
             }
         );
         assert_eq!(
             avatar_identity_for_player_id(&players, 3),
-            AvatarIdentity::Emblem {
-                symbol: empire_emoji(3, "Rome")
-            }
+            AvatarIdentity::Fallback
         );
         assert_eq!(
             avatar_identity_for_player_id(&players, 4),
@@ -539,33 +480,26 @@ mod avatar_identity_tests {
         let repeated = notification_avatar_identities(&players, [Some(2), Some(2)]);
         assert_eq!(
             repeated[0],
-            Some(AvatarIdentity::Emblem {
-                symbol: tribe_animal(2, "Trinovantes")
+            Some(AvatarIdentity::Portrait {
+                slug: "tribe_ndebele".into(),
+                leader: None
             })
         );
         assert_eq!(repeated[1], None);
         assert_eq!(
             notification_avatar_identities(&players, [None, Some(3)])[1],
-            Some(AvatarIdentity::Emblem {
-                symbol: empire_emoji(3, "Rome")
-            })
+            Some(AvatarIdentity::Fallback)
         );
     }
 
     #[test]
-    fn nameplate_display_name_omits_the_tribe_avatar_prefix_only() {
-        let bot_name = "Trinovantes";
-        let prefix = tribe_animal(2, bot_name);
-        assert!(display_name(2, bot_name, PlayerType::Bot).starts_with(prefix));
+    fn display_name_is_the_catalog_name_without_decorations() {
+        assert_eq!(display_name(2, "Mzilikazi", PlayerType::Bot), "Mzilikazi");
         assert_eq!(
-            nameplate_display_name(2, bot_name, PlayerType::Bot),
-            bot_name
+            display_name(3, "Hatshepsut", PlayerType::Nation),
+            "Hatshepsut"
         );
-        assert_eq!(nameplate_display_name(201, "", PlayerType::Bot), "Tribe 2");
-        assert_eq!(
-            nameplate_display_name(3, "Rome", PlayerType::Nation),
-            display_name(3, "Rome", PlayerType::Nation)
-        );
+        assert_eq!(display_name(7, "", PlayerType::Human), "Player 7");
     }
 
     #[test]
@@ -573,14 +507,14 @@ mod avatar_identity_tests {
         assert_eq!(
             serde_json::to_value(AvatarIdentity::Portrait {
                 slug: "caesar".into(),
-                leader: Some(Leader::Caesar),
+                leader: Some(Leader::of("caesar")),
             })
             .unwrap(),
             serde_json::json!({ "kind": "portrait", "slug": "caesar" })
         );
         assert_eq!(
-            serde_json::to_value(AvatarIdentity::Emblem { symbol: "🐺" }).unwrap(),
-            serde_json::json!({ "kind": "emblem", "symbol": "🐺" })
+            serde_json::to_value(AvatarIdentity::Wilderness).unwrap(),
+            serde_json::json!({ "kind": "wilderness" })
         );
         assert_eq!(
             serde_json::to_value(AvatarIdentity::Fallback).unwrap(),

@@ -161,7 +161,14 @@ async fn main() {
     let args = Args::parse();
     let url = args.url;
     if args.verify_rewards {
-        reward_return::verify(&url, args.database_url.as_ref().expect("--database-url is required for reward verification"), args.audit_accounts_file.as_deref()).await;
+        reward_return::verify(
+            &url,
+            args.database_url
+                .as_ref()
+                .expect("--database-url is required for reward verification"),
+            args.audit_accounts_file.as_deref(),
+        )
+        .await;
         return;
     }
     let auth = AuthProof {
@@ -196,8 +203,7 @@ async fn main() {
             host_private: false,
             build_version: sow_core::protocol::gameplay_build_identity(&version),
             clan_tag: "".to_string(),
-            civilization: sow_core::player::Civilization::Rome,
-            leader: sow_core::player::Leader::Caesar,
+            leader: sow_core::player::Leader::of("caesar"),
             random_leader: false,
             host_config: None,
             password: None,

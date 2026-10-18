@@ -141,18 +141,7 @@ impl SowApp {
             .duration_since(web_time::SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64;
-        let (leader, civilization) = match campaign {
-            crate::campaign::CampaignId::Boudica => (
-                sow_core::player::Leader::Boudica,
-                sow_core::player::Civilization::Iceni,
-            ),
-            crate::campaign::CampaignId::SixSkyEp1
-            | crate::campaign::CampaignId::SixSkyEp2
-            | crate::campaign::CampaignId::SixSkyEp3 => (
-                sow_core::player::Leader::LadySixSky,
-                sow_core::player::Civilization::Maya,
-            ),
-        };
+        let leader = campaign.advisor();
         self.ui.tutorial_campaign = campaign;
         crate::campaign::log_plan_for(
             campaign.menu_title(),
@@ -168,7 +157,6 @@ impl SowApp {
                 seed,
                 random_spawn: true,
                 player_leader: leader,
-                player_civilization: civilization,
                 scripted_spawns: crate::campaign::to_scripted(&factions),
                 player_spawn: Some(player_spawn),
                 player_team: None,
@@ -206,7 +194,6 @@ impl SowApp {
             self.ui.app.main_menu_state.selected_leader
         };
         config.player_leader = leader;
-        config.player_civilization = leader.civilization();
         self.net.is_offline = true;
         self.ui.campaign_session_id = self.ui.campaign_session_id.wrapping_add(1).max(1);
         self.sim.offline_tick_timer = 0.0;
@@ -293,7 +280,6 @@ impl SowApp {
                 }),
                 spawn_x: 0,
                 spawn_y: 0,
-                civilization: leader.civilization(),
                 leader,
                 skin_style: sow_data::commerce::skin_style_for_profile(
                     &self.progress.owned_skins,

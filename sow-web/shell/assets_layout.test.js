@@ -45,15 +45,6 @@ test("every art slot the game draws has its file", () => {
     for (const name of badges.cells) {
         assert.ok(["png", "webp"].some((ext) => fs.existsSync(path.join(art, "icons", `${name}.${ext}`))), `missing assets/art/icons/${name}.png`);
     }
-    const commerce = fs.readFileSync(path.join(root, "sow-data/src/commerce.rs"), "utf8");
-    const leaderIds = commerce.slice(commerce.indexOf("pub fn leader_id"), commerce.indexOf("pub fn leader_wire_id"));
-    const slugs = [...leaderIds.matchAll(/=> "([a-z_]+)"/g)].map((match) => match[1]);
-    assert.ok(slugs.length >= 12);
-    for (const slug of slugs) {
-        for (const slot of ["portrait", "expressions", "scene-desktop", "scene-mobile"]) {
-            assert.ok(fs.existsSync(path.join(art, "leaders", slug, slot + ".webp")), `missing ${slug}/${slot}`);
-        }
-    }
     const slots = new Set(["portrait", "expressions", "scene-desktop", "scene-mobile"]);
     for (const leader of fs.readdirSync(path.join(art, "leaders"))) {
         for (const file of fs.readdirSync(path.join(art, "leaders", leader))) {
@@ -80,3 +71,42 @@ test("SOURCES.toml only names folders that exist", () => {
         assert.ok(fs.existsSync(path.join(root, rel)), "SOURCES.toml names a missing folder: " + rel);
     }
 });
+
+test("the game draws no emoji: every icon and portrait is art from assets/art", () => {
+    // Emoji look different on every device and clash with the pixel art.
+    // Tools and the deploy pipeline may print them; the game itself may not.
+    const emoji = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{26FF}\u{FE0F}]/u;
+    const gameCrates = ["sow-audio", "sow-client", "sow-core", "sow-data", "sow-i18n", "sow-map", "sow-net", "sow-relay", "sow-render", "sow-server"];
+    const sources = [
+        ...gameCrates.flatMap((crate) => files(path.join(root, crate, "src")).filter((file) => file.endsWith(".rs"))),
+        ...files(path.join(root, "sow-web/shell")).filter((file) => /\.(js|css)$/.test(file) && !file.endsWith(".test.js")),
+        ...files(path.join(root, "sow-i18n/strings")).filter((file) => file.endsWith(".toml")),
+    ];
+    const hits = sources.flatMap((file) =>
+        fs.readFileSync(file, "utf8").split("\n").flatMap((line, index) =>
+            emoji.test(line) ? [`${path.relative(root, file)}:${index + 1}`] : []
+        )
+    );
+    assert.deepEqual(hits, []);
+});
+
+test("every playable hero is complete: ability, art and texts in every language", () => {
+    const catalog = JSON.parse(fs.readFileSync(path.join(assets, "geo_entities.json"), "utf8")).entities;
+    const locales = fs.readdirSync(path.join(root, "sow-i18n/strings"));
+    const heroes = catalog.filter((entity) => entity.hero).map((entity) => entity.id);
+    assert.ok(heroes.length >= 12);
+    for (const hero of heroes) {
+        const entry = catalog.find((entity) => entity.id === hero);
+        assert.ok(entry.hero.ability && entry.hero.name, `${hero} needs a catalog name and ability`);
+        for (const slot of ["portrait", "expressions", "scene-desktop", "scene-mobile"]) {
+            assert.ok(fs.existsSync(path.join(art, "leaders", hero, slot + ".webp")), `${hero} needs ${slot}`);
+        }
+        for (const locale of locales) {
+            const strings = fs.readFileSync(path.join(root, "sow-i18n/strings", locale, "web.toml"), "utf8");
+            for (const field of ["name", "historical", "civilization", "ability", "description"]) {
+                assert.match(strings, new RegExp(`^leader_${hero}_${field} = "(?:[^"\\\\]|\\\\.)+"$`, "m"), `${locale}: ${hero} needs leader_${hero}_${field}`);
+            }
+        }
+    }
+});
+

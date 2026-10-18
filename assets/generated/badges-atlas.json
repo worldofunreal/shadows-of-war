@@ -22,7 +22,13 @@
     "arrow-down",
     "arrow-left",
     "cancel",
-    "confirm"
+    "confirm",
+    "gold",
+    "boat",
+    "clock",
+    "shield",
+    "range",
+    "speed"
   ],
   "schema_version": 1
 }

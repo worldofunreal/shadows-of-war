@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn elimination_animation_is_limited_to_local_participants_and_allies() {
-        use sow_core::player::{Civilization, Leader, PlayerType};
+        use sow_core::player::{Leader, PlayerType};
         use sow_core::protocol::{PlayerSnapshot, Team};
 
         fn player(id: u16) -> PlayerSnapshot {
@@ -189,8 +189,7 @@ mod tests {
                 can_express_emote: false,
                 can_retaliate: false,
                 traitor: false,
-                civilization: Civilization::Rome,
-                leader: Leader::Caesar,
+                leader: Leader::of("caesar"),
                 campaign_avatar: None,
                 is_campaign_faction: false,
                 skin_style: 0,

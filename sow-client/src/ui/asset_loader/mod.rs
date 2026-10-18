@@ -11,7 +11,12 @@ pub enum AvatarFetchKey {
     Fallback,
     Leader(Leader),
     LeaderPortrait(Leader),
-    Campaign { slug: String, slot: usize },
+    Campaign {
+        slug: String,
+        slot: usize,
+    },
+    /// One image holding every catalog bot's portrait.
+    BotPortraits,
 }
 
 #[derive(Clone, Debug)]
@@ -34,6 +39,9 @@ pub struct AssetLoader {
     pub avatars_in_flight: HashSet<AvatarFetchKey>,
     avatar_retry_state: HashMap<AvatarFetchKey, Retry>,
     pub gpu_avatar_cells: Vec<(usize, Vec<u8>)>,
+    /// Decoded bot portrait atlas waiting for the renderer: (width, height, RGBA).
+    pub bot_portraits: Option<(u32, u32, Vec<u8>)>,
+    bot_portraits_received: bool,
     pub portal_avatar: Option<Vec<u8>>,
     pub portal_avatar_request: Option<String>,
     pub portal_avatar_in_flight: bool,
@@ -63,6 +71,8 @@ impl AssetLoader {
                 sow_render::text::AVATAR_GOLD_SLOT,
                 gold_icon_cell().to_vec(),
             )],
+            bot_portraits: None,
+            bot_portraits_received: false,
             portal_avatar: None,
             portal_avatar_request: None,
             portal_avatar_in_flight: false,
@@ -84,6 +94,7 @@ impl AssetLoader {
                 format!("{}.webp", sow_data::commerce::leader_id(*leader))
             }
             AvatarFetchKey::Campaign { slug, .. } => format!("{slug}.webp"),
+            AvatarFetchKey::BotPortraits => "bot-portraits.webp".into(),
         }
     }
 
@@ -106,10 +117,7 @@ impl AssetLoader {
         if slug == "null" || !valid_avatar_id(slug) {
             return;
         }
-        if let Some(&leader) = Leader::ALL
-            .iter()
-            .find(|leader| sow_data::commerce::leader_id(**leader) == slug)
-        {
+        if let Some(leader) = Leader::all().find(|leader| leader.id() == slug) {
             self.campaign_avatar_slots.insert(
                 slug.to_owned(),
                 sow_render::text::leader_avatar_slot(
@@ -120,15 +128,21 @@ impl AssetLoader {
             self.queue_leader_avatar(leader, false);
             return;
         }
+        // A campaign avatar matching a built-in leader shares that leader's
+        // expression sheet, even when a bot uses the same portrait slug.
+        if sow_data::geo_entities::bot_portrait_index(slug).is_some() {
+            self.queue_avatar_fetch(AvatarFetchKey::BotPortraits, false);
+            return;
+        }
         let slot = if let Some(slot) = self.campaign_avatar_slots.get(slug) {
             *slot
         } else {
             let static_count = self
                 .campaign_avatar_slots
                 .values()
-                .filter(|slot| **slot >= sow_render::text::AVATAR_CAMPAIGN_FIRST_SLOT)
+                .filter(|slot| **slot >= sow_render::text::avatar_campaign_first_slot())
                 .count();
-            let slot = sow_render::text::AVATAR_CAMPAIGN_FIRST_SLOT + static_count;
+            let slot = sow_render::text::avatar_campaign_first_slot() + static_count;
             if slot >= sow_render::text::AVATAR_SLOT_COUNT {
                 log::error!("Avatar atlas exhausted while allocating {slug}");
                 return;
@@ -170,6 +184,7 @@ impl AssetLoader {
                 self.avatars.contains_key(&leader)
             }
             AvatarFetchKey::Campaign { slug, .. } => self.campaign_avatars.contains_key(slug),
+            AvatarFetchKey::BotPortraits => self.bot_portraits_received,
         }
     }
 
@@ -255,6 +270,12 @@ impl AssetLoader {
         let image = image::load_from_memory(bytes)
             .map_err(|error| format!("decode avatar: {error}"))?
             .to_rgba8();
+        if key == AvatarFetchKey::BotPortraits {
+            let (width, height) = image.dimensions();
+            self.bot_portraits = Some((width, height, image.into_raw()));
+            self.bot_portraits_received = true;
+            return Ok(());
+        }
         let cells = match key {
             AvatarFetchKey::Leader(leader) => hero_avatar_cells(&image)?
                 .into_iter()
@@ -286,6 +307,7 @@ impl AssetLoader {
                 square_avatar_cell(&image),
             )],
             AvatarFetchKey::Campaign { slot, .. } => vec![(slot, square_avatar_cell(&image))],
+            AvatarFetchKey::BotPortraits => unreachable!("handled above"),
         };
         for (slot, cell) in cells {
             self.gpu_avatar_cells
@@ -300,6 +322,7 @@ impl AssetLoader {
             AvatarFetchKey::Campaign { slug, .. } => {
                 self.campaign_avatars.insert(slug, bytes.to_vec());
             }
+            AvatarFetchKey::BotPortraits => {}
         }
         Ok(())
     }
@@ -340,8 +363,9 @@ impl AssetLoader {
 fn gold_icon_cell() -> &'static [u8] {
     static CELL: OnceLock<Vec<u8>> = OnceLock::new();
     CELL.get_or_init(|| {
-        let image = image::load_from_memory(include_bytes!("../../../../assets/art/icons/gold.webp"))
-            .expect("embedded gold icon must be a valid image");
+        let image =
+            image::load_from_memory(include_bytes!("../../../../assets/art/icons/gold.webp"))
+                .expect("embedded gold icon must be a valid image");
         square_avatar_cell(&image.to_rgba8())
     })
 }
@@ -423,7 +447,7 @@ mod tests {
 
     #[test]
     fn all_playable_hero_sheets_exist_and_have_four_distinct_frames() {
-        for leader in Leader::ALL {
+        for leader in Leader::all() {
             let key = AvatarFetchKey::Leader(leader);
             let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../assets/art/leaders")
@@ -434,8 +458,7 @@ mod tests {
             let mut loader = AssetLoader::new();
             loader.ingest_avatar_webp_bytes(key, &bytes).unwrap();
             assert!(loader.gpu_avatar_cells.iter().any(|(slot, cell)| {
-                *slot == sow_render::text::AVATAR_GOLD_SLOT
-                    && cell.len() == 256 * 256 * 4
+                *slot == sow_render::text::AVATAR_GOLD_SLOT && cell.len() == 256 * 256 * 4
             }));
             let hero_cells = loader
                 .gpu_avatar_cells
@@ -470,19 +493,22 @@ mod tests {
         assert_eq!(
             loader.campaign_avatar_slot("boudica"),
             Some(sow_render::text::leader_avatar_slot(
-                Leader::Boudica,
+                Leader::of("boudica"),
                 sow_core::emote::AvatarExpression::Calm
             ))
         );
-        loader.note_avatar_fetch_failed(AvatarFetchKey::Leader(Leader::Boudica), "HTTP 404");
+        loader.note_avatar_fetch_failed(AvatarFetchKey::Leader(Leader::of("boudica")), "HTTP 404");
         assert!(
             loader
                 .avatars_fetch_pending
-                .contains(&AvatarFetchKey::LeaderPortrait(Leader::Boudica))
+                .contains(&AvatarFetchKey::LeaderPortrait(Leader::of("boudica")))
         );
         assert!(
             loader
-                .ingest_avatar_webp_bytes(AvatarFetchKey::Leader(Leader::Boudica), b"broken sheet")
+                .ingest_avatar_webp_bytes(
+                    AvatarFetchKey::Leader(Leader::of("boudica")),
+                    b"broken sheet"
+                )
                 .is_err()
         );
     }
@@ -490,7 +516,9 @@ mod tests {
     #[test]
     fn avatar_slots_cover_builtin_and_geo_entity_portraits_without_dropping_them() {
         let mut loader = AssetLoader::new();
+        // Nation and tribe bots draw from the bot portrait atlas, not campaign slots.
         let mut entity_avatars = sow_data::geo_entities::all()
+            .filter(|entity| entity.role == sow_data::geo_entities::Role::Campaign)
             .filter_map(|entity| entity.avatar.clone())
             .collect::<HashSet<_>>();
         fn collect_avatars(value: &serde_json::Value, out: &mut HashSet<String>) {
@@ -528,7 +556,7 @@ mod tests {
         }
         entity_avatars.remove("null");
         assert!(
-            entity_avatars.len() + sow_render::text::AVATAR_CAMPAIGN_FIRST_SLOT
+            entity_avatars.len() + sow_render::text::avatar_campaign_first_slot()
                 <= sow_render::text::AVATAR_SLOT_COUNT
         );
         for avatar in &entity_avatars {

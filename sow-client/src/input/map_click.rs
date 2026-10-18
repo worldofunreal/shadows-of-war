@@ -281,6 +281,16 @@ impl SowApp {
             return;
         }
         // Buttons may hang past the map edge, so they resolve before the tile.
+        if self.building_panel_button_at(x as f32, y as f32)
+            && let Some(menu) = self.input.map_context_menu
+        {
+            self.handle_map_menu_action(
+                menu.session,
+                menu.tile_idx,
+                MapMenuAction::UpgradeStructure,
+            );
+            return;
+        }
         if let Some(button) = self
             .placement_controls()
             .and_then(|controls| controls.button_at(x as f32, y as f32))
@@ -392,15 +402,7 @@ impl SowApp {
         if target.my_id == 0 || !target.is_land || target.owner != target.my_id {
             return false;
         }
-        if self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
-            snapshot
-                .buildings
-                .iter()
-                .any(|building| building.tile_idx == tile_idx && building.under_construction)
-        }) {
-            self.close_map_context_menu();
-            return true;
-        }
+        // Buildings under construction open the same panel with the seconds left.
         self.set_map_context_menu(x, y, tile_idx, MapContextMenuView::BuildingDetails);
         true
     }
@@ -799,14 +801,25 @@ impl SowApp {
         if menu.session != session || menu.tile_idx != tile_idx {
             return;
         }
-        let keep_building_card_open = action == MapMenuAction::UpgradeStructure
+        // The radial's upgrade opens the same panel instead of a second flow.
+        if action == MapMenuAction::UpgradeStructure && menu.view == MapContextMenuView::Radial {
+            self.set_map_context_menu(
+                f64::from(menu.x),
+                f64::from(menu.y),
+                tile_idx,
+                MapContextMenuView::BuildingDetails,
+            );
+            return;
+        }
+        // The panel stays open after an upgrade and shows the seconds left.
+        let keep_building_panel_open = action == MapMenuAction::UpgradeStructure
             && self
                 .input
                 .map_context_menu
                 .is_some_and(|menu| menu.view == MapContextMenuView::BuildingDetails);
         if !self.map_menu_actions(tile_idx).contains(&action) {
             self.show_map_menu_unavailable(tile_idx);
-            if !keep_building_card_open {
+            if !keep_building_panel_open {
                 self.close_map_context_menu();
             }
             return;
@@ -820,7 +833,7 @@ impl SowApp {
                 "Action unavailable here.".to_string()
             };
             self.add_action_feedback(message);
-            if !keep_building_card_open {
+            if !keep_building_panel_open {
                 self.close_map_context_menu();
             }
             return;
@@ -889,7 +902,9 @@ impl SowApp {
                 self.launch_nuke_at(sow_core::game::NukeKind::AtomBomb, tile_idx);
             }
         }
-        self.close_map_context_menu();
+        if !keep_building_panel_open {
+            self.close_map_context_menu();
+        }
     }
 
     pub(crate) fn move_selected_warships(&mut self, x: f64, y: f64) -> bool {
@@ -1686,17 +1701,49 @@ impl SowApp {
         let center_y = ((self.input.screen_h * 0.45 - self.input.camera_y) / zoom) as i32;
         let radius = (self.input.screen_w.max(self.input.screen_h) * 0.5 / zoom).ceil() as i32;
         let my_id = self.sim.my_player_id.unwrap_or(0);
-        let site = self.sim.engine.as_mut().and_then(|engine| {
-            engine.refresh_building_grid();
-            sow_core::building::nearest_structure_site(
-                &engine.state.map,
-                my_id,
-                kind,
-                center_x,
-                center_y,
-                radius,
-                &engine.building_grid,
-            )
+        let tutorial_site = if self.ui.tutorial_active
+            && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica
+            && kind == sow_core::game::BuildingKind::City
+        {
+            self.sim
+                .current_snapshot
+                .as_ref()
+                .filter(|snapshot| {
+                    !snapshot
+                        .buildings
+                        .iter()
+                        .any(|building| building.owner_id == my_id && building.kind == kind)
+                })
+                .and_then(|snapshot| {
+                    let observation = &self.sim.tutorial_observation;
+                    (self.sim.map_w > 0
+                        && observation.guide_tick == snapshot.tick
+                        && observation.guide_build_site_kind == Some(kind))
+                    .then(|| {
+                        observation
+                            .guide_build_site_candidates
+                            .iter()
+                            .max_by_key(|candidate| (candidate.0, candidate.3 % self.sim.map_w))
+                            .map(|candidate| candidate.3)
+                    })
+                    .flatten()
+                })
+        } else {
+            None
+        };
+        let site = tutorial_site.or_else(|| {
+            self.sim.engine.as_mut().and_then(|engine| {
+                engine.refresh_building_grid();
+                sow_core::building::nearest_structure_site(
+                    &engine.state.map,
+                    my_id,
+                    kind,
+                    center_x,
+                    center_y,
+                    radius,
+                    &engine.building_grid,
+                )
+            })
         });
         let Some(tile) = site else {
             self.add_map_feedback(crate::ui::UiText::new("hud.build_no_space"));

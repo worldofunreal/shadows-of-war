@@ -679,11 +679,13 @@ test("menu shell honors the requested store return before releasing the first-ma
 });
 
 
-test("participation receipt stays synced until replay verification resolves", () => {
+test("participation receipt stays synced until match verification resolves", () => {
     assert.match(dataDbSource, /pub async fn mark_match_reward_verification_status/);
     assert.match(dataDbSource, /receipt\.verification_status = Some\(ReplayVerificationStatus::Verified\)/);
-    assert.match(dataMainSource, /async fn reject_queued_replay/);
-    assert.match(dataMainSource, /else if let Err\(error\) = reject_queued_replay\(&state, &payload\.match_id\)\.await/);
+    const rejectStart = dataMainSource.indexOf("async fn reject_match_verification");
+    const rejectEnd = dataMainSource.indexOf("async fn handle_bot_pool_seed", rejectStart);
+    assert.ok(rejectStart >= 0 && rejectEnd > rejectStart);
+    assert.match(dataMainSource.slice(rejectStart, rejectEnd), /mark_match_reward_verification_status[\s\S]*ReplayVerificationStatus::Rejected[\s\S]*finish_match_verification/);
     assert.match(accountSource, /receipt\.verification_status\s*!=\s*Some\(sow_data::profile::ReplayVerificationStatus::Pending\)/);
     assert.match(accountSource, /receipt\.verification_status\s*==\s*Some\(sow_data::profile::ReplayVerificationStatus::Pending\)/);
     assert.match(coreSource, /receipt\.verification_status/);
@@ -701,13 +703,18 @@ test("participation receipt stays synced until replay verification resolves", ()
 });
 
 
-test("return observation and recovery have separate owners", () => {
+test("return observation cannot issue a second exit command", () => {
     const dataExit = fs.readFileSync(path.join(shell, "../../sow-data/src/match_exit.rs"), "utf8");
-    const observe = dataExit.slice(dataExit.indexOf("async fn handle_result"), dataExit.indexOf("async fn handle_exit"));
-    assert.ok(observe.includes("committed_terminal"));
-    assert.doesNotMatch(observe, /queue_match_work|dispatch_recovery_exit|internal\/match\/exit/);
-    assert.match(accountSource, /profile\/match-result/);
-    assert.match(accountSource, /voluntary_exit\.unwrap_or\(true\)[\s\S]*!context\.exit_recorded/);
+    const observe = dataExit.slice(dataExit.indexOf("async fn handle_result"), dataExit.indexOf("pub(super) async fn worker"));
+    assert.match(observe, /account_with_events\(&account_id, &\[&request\.match_id\]\)[\s\S]*terminal\(account\.profile\.reward_receipts\.get\(&request\.match_id\)\)/);
+    assert.doesNotMatch(observe, /queue_match_work|dispatch_recovery_exit|internal\/match\/exit|MatchWork::/);
+    assert.doesNotMatch(dataMainSource, /\/profile\/match-exit|match_exit::handle_exit/);
+    assert.doesNotMatch(serverSource, /\/internal\/match\/exit|handle_match_exit|verify_match_participant_replay_handler/);
+    assert.doesNotMatch(relaySource, /\/internal\/match\/exit|RelayEvent::ExitRequested/);
+    const observeClient = accountSource.slice(accountSource.indexOf("fn fetch_match_result"), accountSource.indexOf("pub(crate) fn observe_relay_exit_recording"));
+    assert.match(observeClient, /profile\/match-result/);
+    assert.doesNotMatch(observeClient, /profile\/match-exit/);
+    assert.match(accountSource, /context\.exit_recorded \|\| context\.voluntary_exit\.unwrap_or\(true\)/);
     assert.doesNotMatch(accountSource, /ExitRewardWait/);
     assert.doesNotMatch(shellSource, /waitForExitMenuArt|exitMenuAssets/);
     const loaderSync = shellSource.slice(shellSource.indexOf("    function syncWebLoaderForState("), shellSource.indexOf("    function scheduleRewardPresentation("));
@@ -721,16 +728,23 @@ test("return observation and recovery have separate owners", () => {
     assert.doesNotMatch(relaySource, /active_empty_secs/);
 });
 
-test("missing replay maps warn and unacknowledged results remain recoverable", () => {
+test("missing maps stay retryable and turn batches wait for server acceptance", () => {
     assert.match(serverSource, /MissingMap\(String\),/);
     const mapLoader = verificationSource.slice(verificationSource.indexOf("pub(super) fn match_map_bytes"), verificationSource.indexOf("pub(super) async fn register_map"));
     assert.match(mapLoader, /std::fs::metadata[\s\S]*?map_err[\s\S]*?ReplayVerificationError::MissingMap/);
     assert.match(mapLoader, /std::fs::read\(path\)[\s\S]*?map_err[\s\S]*?ReplayVerificationError::MissingMap/);
-    assert.match(serverSource, /replay map unavailable, will retry after a later release/);
-    assert.match(serverSource, /"error": "replay map unavailable"/);
-    assert.doesNotMatch(relaySource, /permanently rejected by database.*dropping spool entry/);
-    assert.match(relaySource, /remains unacknowledged/);
-    assert.match(relaySource, /database did not acknowledge.*retaining spool/);
+    const handleProgress = verificationSource.slice(verificationSource.indexOf("pub(super) async fn handle_progress"), verificationSource.indexOf("pub(super) async fn handle_result"));
+    assert.match(handleProgress, /let invalid = matches!\(&error, ReplayVerificationError::Invalid\(_\)\)/);
+    assert.match(handleProgress, /if invalid\s*\{\s*StatusCode::UNPROCESSABLE_ENTITY\s*\} else \{\s*StatusCode::SERVICE_UNAVAILABLE/);
+    const dataExit = fs.readFileSync(path.join(shell, "../../sow-data/src/match_exit.rs"), "utf8");
+    const permanentRejection = dataExit.slice(dataExit.indexOf("fn permanent_progress_rejection"), dataExit.indexOf("fn invalid_verified_result"));
+    assert.match(permanentRejection, /reqwest::StatusCode::BAD_REQUEST \| reqwest::StatusCode::UNPROCESSABLE_ENTITY/);
+    assert.doesNotMatch(permanentRejection, /SERVICE_UNAVAILABLE/);
+    const relayProgress = fs.readFileSync(path.join(shell, "../../sow-relay/src/progress.rs"), "utf8");
+    assert.match(relayProgress, /async fn deliver_until_accepted/);
+    assert.match(relayProgress, /server turn delivery pending/);
+    assert.match(relayProgress, /response\.status\(\)\.is_client_error\(\)/);
+    assert.doesNotMatch(relaySource, /ReplayJournal|recover_detached_exit|post_participant_settle/);
 });
 
 

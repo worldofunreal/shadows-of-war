@@ -1,6 +1,9 @@
 //! Forward opaque turn batches to the durable server-side recorder.
 use super::*;
+use serde_json::Value;
 use sow_data::profile::{ProgressClosure, RelayMatchProgress};
+use std::collections::{HashSet, VecDeque};
+use std::sync::{Arc, Mutex as StdMutex, atomic::AtomicBool};
 
 enum Command {
     Append(Turn),
@@ -22,7 +25,7 @@ pub(super) struct Forwarder {
 
 impl Forwarder {
     pub fn new(match_id: u64) -> Arc<Self> {
-        let (tx, rx) = mpsc::channel(REPLAY_QUEUE_CAP);
+        let (tx, rx) = mpsc::channel(PROGRESS_QUEUE_CAP);
         let failed = Arc::new(AtomicBool::new(false));
         tokio::spawn(run(match_id.to_string(), rx, failed.clone()));
         Arc::new(Self {
@@ -34,7 +37,10 @@ impl Forwarder {
 
     pub fn append(&self, turn: Turn) -> Result<(), String> {
         {
-            let mut live = self.live.lock().map_err(|_| "live turn history lock failed")?;
+            let mut live = self
+                .live
+                .lock()
+                .map_err(|_| "live turn history lock failed")?;
             live.push_back(turn.clone());
             while live.len() > LIVE_HISTORY_CAP {
                 live.pop_front();
@@ -61,6 +67,51 @@ impl Forwarder {
             .lock()
             .map(|turns| turns.iter().cloned().collect())
             .map_err(|_| "live turn history lock failed".into())
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_history(turns: Vec<Turn>) -> Arc<Self> {
+        let (tx, _rx) = mpsc::channel(PROGRESS_QUEUE_CAP);
+        Arc::new(Self {
+            live: Arc::new(StdMutex::new(
+                turns
+                    .into_iter()
+                    .rev()
+                    .take(LIVE_HISTORY_CAP)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect(),
+            )),
+            tx,
+            failed: Arc::new(AtomicBool::new(false)),
+        })
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_manual_final_ack() -> (
+        Arc<Self>,
+        mpsc::Receiver<oneshot::Sender<Result<(), String>>>,
+    ) {
+        let (tx, mut rx) = mpsc::channel(PROGRESS_QUEUE_CAP);
+        let (acks, responses) = mpsc::channel(2);
+        tokio::spawn(async move {
+            while let Some(command) = rx.recv().await {
+                if let Command::Finish { reply, .. } = command {
+                    if acks.send(reply).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+        (
+            Arc::new(Self {
+                live: Arc::new(StdMutex::new(VecDeque::new())),
+                tx,
+                failed: Arc::new(AtomicBool::new(false)),
+            }),
+            responses,
+        )
     }
 
     pub async fn flush(&self, closures: Vec<ProgressClosure>) -> Result<(), String> {
@@ -93,6 +144,7 @@ struct Stream {
     turns: Vec<Turn>,
     bytes: usize,
     failed: bool,
+    delivered_closures: HashSet<(String, u64)>,
 }
 
 impl Stream {
@@ -104,11 +156,23 @@ impl Stream {
             turns: Vec::new(),
             bytes: 8,
             failed: false,
+            delivered_closures: HashSet::new(),
         }
     }
 
     fn append(&mut self, turn: Turn) -> Result<bool, String> {
-        let turn_bytes = bincode::serialized_size(&turn).map_err(|error| error.to_string())? as usize;
+        let expected_turn = self
+            .first_turn
+            .checked_add(self.turns.len() as u64)
+            .ok_or("turn sequence overflow")?;
+        if turn.turn_number != expected_turn {
+            return Err(format!(
+                "expected turn {expected_turn}, received {}",
+                turn.turn_number
+            ));
+        }
+        let turn_bytes =
+            bincode::serialized_size(&turn).map_err(|error| error.to_string())? as usize;
         if turn_bytes + 8 > sow_data::MAX_MATCH_CHUNK_BYTES {
             return Err("one turn exceeds the server batch limit".into());
         }
@@ -125,32 +189,48 @@ impl Stream {
         closures: &[ProgressClosure],
         finished: bool,
         failed: bool,
-    ) -> Result<(), String> {
+    ) -> Result<bool, String> {
         if failed || self.failed {
-            return self.reject(closures, finished).await;
+            self.reject(closures, finished).await?;
+            return Ok(true);
         }
-        if self.turns.is_empty() && !finished {
-            return Ok(());
+        let end_turn = self.first_turn.saturating_add(self.turns.len() as u64);
+        let deliver_closures = closures
+            .iter()
+            .filter(|closure| {
+                closure.turn_number < end_turn
+                    && !self
+                        .delivered_closures
+                        .contains(&(closure.account_id.clone(), closure.turn_number))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let closures_pending = closures.iter().any(|closure| {
+            closure.turn_number >= end_turn
+                || !self
+                    .delivered_closures
+                    .contains(&(closure.account_id.clone(), closure.turn_number))
+                    && !deliver_closures.iter().any(|delivered| {
+                        delivered.account_id == closure.account_id
+                            && delivered.turn_number == closure.turn_number
+                    })
+        });
+        if finished && closures_pending {
+            return Ok(false);
+        }
+        if self.turns.is_empty() && deliver_closures.is_empty() && !finished {
+            return Ok(!closures_pending);
         }
         let replay_data = bincode::serialize(&self.turns).map_err(|error| error.to_string())?;
         if replay_data.len() > sow_data::MAX_MATCH_CHUNK_BYTES {
             return Err("turn batch exceeded the server limit after encoding".into());
-        }
-        let count = self.turns.len() as u64;
-        let end_turn = self.first_turn.saturating_add(count);
-        if closures.iter().any(|closure| closure.turn_number >= end_turn && closure.turn_number >= self.first_turn) {
-            return Err("exit closure is newer than the forwarded turns".into());
         }
         let batch = RelayMatchProgress {
             match_id: self.match_id.clone(),
             sequence: self.sequence,
             first_turn: self.first_turn,
             replay_data,
-            participant_closures: closures
-                .iter()
-                .filter(|closure| closure.turn_number < end_turn)
-                .cloned()
-                .collect(),
+            participant_closures: deliver_closures.clone(),
             finished,
             recording_failed: false,
         };
@@ -160,13 +240,18 @@ impl Stream {
             || ack.get("sha256").and_then(Value::as_str).is_none()
         {
             self.failed = true;
-            return self.reject(closures, finished).await;
+            self.reject(closures, finished).await?;
+            return Ok(true);
+        }
+        for closure in deliver_closures {
+            self.delivered_closures
+                .insert((closure.account_id, closure.turn_number));
         }
         self.sequence += 1;
         self.first_turn = end_turn;
         self.turns.clear();
         self.bytes = 8;
-        Ok(())
+        Ok(!closures_pending)
     }
 
     async fn reject(&mut self, closures: &[ProgressClosure], finished: bool) -> Result<(), String> {
@@ -195,8 +280,7 @@ impl Stream {
 
 async fn deliver_until_accepted(batch: &RelayMatchProgress) -> Result<Value, String> {
     let db_url = configured_db_url()?;
-    let secret = std::env::var("SOW_RELAY_SETTLEMENT_SECRET")
-        .map_err(|error| error.to_string())?;
+    let secret = std::env::var("SOW_RELAY_SETTLEMENT_SECRET").map_err(|error| error.to_string())?;
     let url = format!("{}/internal/match-turns", db_url.trim_end_matches('/'));
     let body = bincode::serialize(batch).map_err(|error| error.to_string())?;
     let client = db_client(&db_url)?;
@@ -214,21 +298,32 @@ async fn deliver_until_accepted(batch: &RelayMatchProgress) -> Result<Value, Str
             Ok(response) if response.status().is_success() => {
                 return response.json().await.map_err(|error| error.to_string());
             }
-            Ok(response) if response.status().is_client_error() && response.status().as_u16() != 429 => {
+            Ok(response)
+                if response.status().is_client_error() && response.status().as_u16() != 429 =>
+            {
                 let status = response.status();
                 let reason = response.text().await.unwrap_or_default();
-                return Err(format!("server rejected match {} sequence {}: HTTP {status}: {reason}", batch.match_id, batch.sequence));
+                return Err(format!(
+                    "server rejected match {} sequence {}: HTTP {status}: {reason}",
+                    batch.match_id, batch.sequence
+                ));
             }
             Ok(response) => {
                 if attempt == 1 || attempt % 10 == 0 {
-                    warn!("[rewards] server turn delivery pending match={} sequence={} http={} attempt={attempt}",
-                        batch.match_id, batch.sequence, response.status());
+                    warn!(
+                        "[rewards] server turn delivery pending match={} sequence={} http={} attempt={attempt}",
+                        batch.match_id,
+                        batch.sequence,
+                        response.status()
+                    );
                 }
             }
             Err(error) => {
                 if attempt == 1 || attempt % 10 == 0 {
-                    warn!("[rewards] server turn delivery pending match={} sequence={} error={error} attempt={attempt}",
-                        batch.match_id, batch.sequence);
+                    warn!(
+                        "[rewards] server turn delivery pending match={} sequence={} error={error} attempt={attempt}",
+                        batch.match_id, batch.sequence
+                    );
                 }
             }
         }
@@ -239,7 +334,9 @@ async fn deliver_until_accepted(batch: &RelayMatchProgress) -> Result<Value, Str
 async fn run(match_id: String, mut rx: mpsc::Receiver<Command>, failed: Arc<AtomicBool>) {
     let mut stream = Stream::new(match_id);
     let mut closures = Vec::new();
-    let mut flush = interval(Duration::from_secs(sow_data::MATCH_PROGRESS_INTERVAL_SECONDS));
+    let mut flush = interval(Duration::from_secs(
+        sow_data::MATCH_PROGRESS_INTERVAL_SECONDS,
+    ));
     flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
@@ -269,14 +366,17 @@ async fn run(match_id: String, mut rx: mpsc::Receiver<Command>, failed: Arc<Atom
                     }
                     Command::Flush { closures: latest, reply } => {
                         closures = latest;
-                        let result = stream.seal(&closures, false, failed.load(Ordering::Acquire)).await;
+                        let result = stream.seal(&closures, false, failed.load(Ordering::Acquire)).await
+                            .and_then(|committed| if committed { Ok(()) } else { Err("exit closure awaits its server turn".into()) });
                         let _ = reply.send(result);
                     }
                     Command::Finish { closures: latest, reply } => {
                         closures = latest;
-                        let result = stream.seal(&closures, true, failed.load(Ordering::Acquire)).await;
+                        let result = stream.seal(&closures, true, failed.load(Ordering::Acquire)).await
+                            .and_then(|committed| if committed { Ok(()) } else { Err("final exit closure awaits its server turn".into()) });
+                        let completed = result.is_ok();
                         let _ = reply.send(result);
-                        break;
+                        if completed { break; }
                     }
                 }
             }

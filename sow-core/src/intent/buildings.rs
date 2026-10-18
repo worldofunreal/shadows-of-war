@@ -7,7 +7,7 @@ impl SowEngine {
     pub fn tutorial_city_upgrade_is_free(&self, player_id: u16, building_id: u64) -> bool {
         if !self.state.config.tutorial
             || !self.state.config.buildings_enabled
-            || self.state.config.player_leader != crate::player::Leader::Boudica
+            || self.state.config.player_leader.id() != "boudica"
         {
             return false;
         }
@@ -224,9 +224,9 @@ mod tests {
             tutorial,
             buildings_enabled: true,
             player_leader: if tutorial {
-                crate::player::Leader::Boudica
+                crate::player::Leader::of("boudica")
             } else {
-                crate::player::Leader::Caesar
+                crate::player::Leader::of("caesar")
             },
             ..GameConfig::default()
         };

@@ -3,7 +3,6 @@ use std::error::Error;
 use std::path::PathBuf;
 
 mod building_atlas;
-mod emoji_atlas;
 mod exporter;
 mod image_map;
 mod map_audit;
@@ -50,9 +49,6 @@ enum Commands {
     /// Update an existing map.bin roster from the local editor's stdin payload.
     #[command(name = "save-map-rosters")]
     SaveMapRosters(SaveMapRostersArgs),
-    /// Pack pixel emoji atlas + generated manifest (pixel set + moji CDN fallback).
-    #[command(name = "pack-emoji-atlas")]
-    PackEmojiAtlas(PackEmojiAtlasArgs),
     /// Pack supplied building art into the pixelated WebP atlas used by Rust and the HUD.
     #[command(name = "pack-building-atlas")]
     PackBuildingAtlas(PackBuildingAtlasArgs),
@@ -90,14 +86,6 @@ struct StampGeoArgs {
     /// Actually write map.bin/map.bin.br (report-only otherwise)
     #[arg(long, default_value_t = false)]
     yes: bool,
-}
-
-#[derive(Parser, Debug)]
-struct PackEmojiAtlasArgs {
-    #[arg(long, default_value = "assets/generated/emoji/atlas.webp")]
-    out_atlas: PathBuf,
-    #[arg(long, default_value = "sow-data/src/emoji/manifest.rs")]
-    out_manifest: PathBuf,
 }
 
 #[derive(Parser, Debug)]
@@ -247,20 +235,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             dry_run: args.dry_run,
             yes: args.yes,
         }),
-        Some(Commands::PackEmojiAtlas(args)) => {
-            let repo_root = std::env::current_dir()?;
-            let pack_args = emoji_atlas::PackEmojiAtlasArgs {
-                repo_root,
-                out_atlas: args.out_atlas,
-                out_manifest: args.out_manifest,
-            };
-            // reqwest::blocking + #[tokio::main] — run off the async runtime.
-            match std::thread::spawn(move || emoji_atlas::pack(pack_args)).join() {
-                Ok(Ok(())) => Ok(()),
-                Ok(Err(e)) => Err(e.to_string().into()),
-                Err(_) => Err("pack-emoji-atlas thread panicked".into()),
-            }
-        }
         Some(Commands::PackBuildingAtlas(args)) => {
             let repo_root = std::env::current_dir()?;
             building_atlas::pack(building_atlas::PackBuildingAtlasArgs {

@@ -8,8 +8,6 @@ use sow_render::text::NameplateStatusSprite;
 use std::collections::HashMap;
 use web_time::{Duration, Instant};
 
-pub(crate) const INLINE_EMOJI_SCALE: f32 = 1.4;
-
 const BUILDING_CULL_FLOOR: f32 = 0.25;
 const BUILDING_FULL_DETAIL_SIZE: f32 = 28.0;
 const BUILDING_MIN_MARKER_SIZE: f32 = 14.0;
@@ -57,6 +55,10 @@ pub(crate) fn render_overlays(
     sf: f32,
     now: Instant,
     placement_can_confirm: bool,
+    building_panel: Option<&(
+        crate::ui::building_panel::BuildingPanel,
+        crate::ui::building_panel::BuildingPanelLayout,
+    )>,
 ) {
     let Some(snapshot) = sim.current_snapshot.as_ref() else {
         return;
@@ -92,6 +94,9 @@ pub(crate) fn render_overlays(
     );
     feedback::render(text, snapshot, sim, ui, input, &dev, sf, now);
     render_building_placement_controls(text, sim, ui, input, sf, placement_can_confirm);
+    if let Some((panel, layout)) = building_panel {
+        render_building_panel(text, panel, layout, &dev, sf);
+    }
 
     if !ui.tutorial_active {
         ui.tutorial_marker_player_id = None;
@@ -962,14 +967,9 @@ fn push_icon_label(
     let width = if label.is_empty() {
         0.0
     } else {
-        text.measure_string(label, font_size, char_spacing, INLINE_EMOJI_SCALE)
-            .width
+        text.measure_string(label, font_size, char_spacing).width
     };
-    let (icon_px, gap) = match icon {
-        Some(_) if label.is_empty() => (font_size, 0.0),
-        Some(_) => (font_size, font_size * 0.25),
-        None => (0.0, 0.0),
-    };
+    let (icon_px, gap) = icon_label_spacing(icon.is_some(), label, font_size);
     let left = center[0] - (icon_px + gap + width) * 0.5;
     if let Some(icon) = icon {
         text.push_icon(
@@ -987,9 +987,156 @@ fn push_icon_label(
             font_size,
             [1.0; 4],
             style,
-            (0.5, char_spacing, INLINE_EMOJI_SCALE),
+            (0.5, char_spacing),
         );
     }
+}
+
+fn icon_label_spacing(has_icon: bool, label: &str, font_size: f32) -> (f32, f32) {
+    match (has_icon, label.is_empty()) {
+        (true, true) => (font_size, 0.0),
+        (true, false) => (font_size, font_size * 0.25),
+        (false, _) => (0.0, 0.0),
+    }
+}
+
+/// Full width `push_icon_label` draws for this icon and label.
+fn icon_label_width(
+    text: &mut TextRenderer,
+    has_icon: bool,
+    label: &str,
+    font_size: f32,
+    char_spacing: f32,
+) -> f32 {
+    let (icon_px, gap) = icon_label_spacing(has_icon, label, font_size);
+    let width = if label.is_empty() {
+        0.0
+    } else {
+        text.measure_string(label, font_size, char_spacing).width
+    };
+    icon_px + gap + width
+}
+
+/// Lays `items` out side by side, centered on `center` with `gap` between them.
+#[allow(clippy::too_many_arguments)]
+fn push_icon_label_row(
+    text: &mut TextRenderer,
+    items: &[(NameplateStatusSprite, String)],
+    center: [f32; 2],
+    font_size: f32,
+    gap: f32,
+    pill: Option<(f32, f32, [f32; 4], [f32; 4])>,
+    dev: &DevConfig,
+    sf: f32,
+) {
+    let spacing = dev.font_char_spacing.max(0.1);
+    let style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]);
+    let outline = crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]);
+    let padding = pill.map_or(0.0, |(padding, ..)| padding);
+    let widths: Vec<f32> = items
+        .iter()
+        .map(|(_, label)| icon_label_width(text, true, label, font_size, spacing) + 2.0 * padding)
+        .collect();
+    let total = widths.iter().sum::<f32>() + gap * items.len().saturating_sub(1) as f32;
+    let mut left = center[0] - total * 0.5;
+    for ((icon, label), width) in items.iter().zip(widths) {
+        let item_center = [left + width * 0.5, center[1]];
+        if let Some((_, height, fill, edge)) = pill {
+            text.push_rounded_rect(item_center, [width, height], 0.5, fill, edge, 1.5 * sf);
+        }
+        push_icon_label(
+            text,
+            Some(*icon),
+            label,
+            [item_center[0], item_center[1] + font_size * 0.3],
+            font_size,
+            style,
+            spacing,
+            outline,
+        );
+        left += width + gap;
+    }
+}
+
+/// What the next level adds, and the one-tap upgrade button, under your tapped
+/// building. While it builds, the row shows the seconds left instead.
+fn render_building_panel(
+    text: &mut TextRenderer,
+    panel: &crate::ui::building_panel::BuildingPanel,
+    layout: &crate::ui::building_panel::BuildingPanelLayout,
+    dev: &DevConfig,
+    sf: f32,
+) {
+    let scale = dev.font_size_scale.max(0.1);
+    let mut chips: Vec<(NameplateStatusSprite, String)> = panel
+        .remaining_seconds
+        .map(|seconds| {
+            (
+                NameplateStatusSprite::Clock,
+                format!("{}s", seconds.ceil().max(0.0)),
+            )
+        })
+        .into_iter()
+        .collect();
+    chips.extend(
+        panel
+            .chips
+            .iter()
+            .map(|metric| (metric.icon, metric.label())),
+    );
+    if !chips.is_empty() {
+        push_icon_label_row(
+            text,
+            &chips,
+            layout.chips_center,
+            15.0 * sf * scale,
+            6.0 * sf,
+            Some((
+                8.0 * sf,
+                layout.chip_height,
+                [0.13, 0.09, 0.05, 0.9],
+                [0.86, 0.66, 0.28, 1.0],
+            )),
+            dev,
+            sf,
+        );
+    }
+    let Some(offer) = panel.upgrade else {
+        return;
+    };
+    let (fill, edge) = if offer.enabled {
+        ([0.98, 0.74, 0.22, 1.0], [0.36, 0.2, 0.05, 1.0])
+    } else {
+        ([0.52, 0.5, 0.47, 1.0], [0.2, 0.19, 0.18, 1.0])
+    };
+    text.push_rounded_rect(
+        layout.button_center,
+        layout.button_size,
+        0.3,
+        fill,
+        edge,
+        3.0 * sf,
+    );
+    push_icon_label_row(
+        text,
+        &[
+            (NameplateStatusSprite::ArrowUp, offer.next_level.to_string()),
+            (
+                NameplateStatusSprite::Gold,
+                crate::utils::format_number(offer.cost),
+            ),
+            (
+                NameplateStatusSprite::Clock,
+                format!("{}s", offer.seconds.ceil()),
+            ),
+        ],
+        layout.button_center,
+        18.0 * sf * scale,
+        14.0 * sf,
+        None,
+        dev,
+        sf,
+    );
 }
 
 fn render_building_preview_badge(
@@ -1001,12 +1148,7 @@ fn render_building_preview_badge(
     sf: f32,
 ) {
     let font_size = 14.0 * dev.font_size_scale.max(0.1) * sf;
-    let measure = text.measure_string(
-        label,
-        font_size,
-        dev.font_char_spacing.max(0.1),
-        INLINE_EMOJI_SCALE,
-    );
+    let measure = text.measure_string(label, font_size, dev.font_char_spacing.max(0.1));
     let padding = 8.0 * sf;
     // Construction icon + gap before the time.
     let width = font_size * 1.25 + measure.width + padding * 2.0;

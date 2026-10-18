@@ -1,5 +1,6 @@
 pub mod app;
 pub mod asset_loader;
+pub mod building_panel;
 pub mod hud;
 pub mod loading_screen;
 pub mod main_menu;

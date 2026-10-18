@@ -48,7 +48,7 @@ async fn player_db_reuses_one_connection_for_many_operations() {
 
     let before = total_connections_received(&url).await;
 
-    // No redb mirror required: these calls only touch Valkey.
+    // These analytics calls use Valkey; account storage is not involved.
     let db = PlayerDb::new(&url, None, None);
     db.warm_connection()
         .await

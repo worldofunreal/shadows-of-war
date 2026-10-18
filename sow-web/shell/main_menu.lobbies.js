@@ -287,6 +287,12 @@
         "</main>";
     }
 
+    // One bot per catalog character: the sliders stop at the catalog size.
+    function botLimit(role, fallback) {
+        var limit = state.bot_limits && Number(state.bot_limits[role]);
+        return limit > 0 ? limit : fallback;
+    }
+
     function cloneConfig() {
         return JSON.parse(JSON.stringify(state.custom_game_config || {}));
     }
@@ -444,11 +450,11 @@
                                             "</div>" +
                                             "<div class='sow-menu__slider-field'>" +
                                                 "<div class='sow-menu__slider-label'><span>" + esc(SOW_t("lobbies.neutral_bots")) + "</span><b data-val-for='bot_count'>" + (config.bot_count != null ? config.bot_count : 128) + "</b></div>" +
-                                                "<input class='sow-menu__range' name='bot_count' type='range' min='0' max='1000' step='8' value='" + (config.bot_count != null ? config.bot_count : 128) + "'>" +
+                                                "<input class='sow-menu__range' name='bot_count' type='range' min='0' max='" + botLimit("tribes", 400) + "' step='8' value='" + (config.bot_count != null ? config.bot_count : 128) + "'>" +
                                             "</div>" +
                                             "<div class='sow-menu__slider-field'>" +
                                                 "<div class='sow-menu__slider-label'><span>" + esc(SOW_t("lobbies.complex_ai")) + "</span><b data-val-for='nation_count'>" + (config.nation_count != null ? config.nation_count : 32) + "</b></div>" +
-                                                "<input class='sow-menu__range' name='nation_count' type='range' min='0' max='400' step='4' value='" + (config.nation_count != null ? config.nation_count : 32) + "'>" +
+                                                "<input class='sow-menu__range' name='nation_count' type='range' min='0' max='" + botLimit("nations", 200) + "' step='4' value='" + (config.nation_count != null ? config.nation_count : 32) + "'>" +
                                             "</div>" +
                                         "</section>" +
                                         renderFeedback() +

@@ -55,11 +55,9 @@ impl SowApp {
         password: Option<String>,
     ) -> Option<sow_core::protocol::ClientMessage> {
         let selected_leader = self.ui.app.main_menu_state.selected_leader;
-        let selected_civilization = self.ui.app.main_menu_state.selected_civilization;
         let random_leader = self.ui.app.main_menu_state.prefer_random_leader;
         let host_config = host_config.map(|mut config| {
             config.player_leader = selected_leader;
-            config.player_civilization = selected_civilization;
             config
         });
         let payload = sow_core::protocol::JoinPayload {
@@ -68,7 +66,6 @@ impl SowApp {
             host_private,
             build_version: get_build_version(),
             clan_tag: self.ui.app.main_menu_state.clan_tag.clone(),
-            civilization: selected_civilization,
             leader: selected_leader,
             random_leader,
             host_config,
@@ -233,10 +230,15 @@ impl SowApp {
         }
         let exit_leader = self.ui.app.splash_state.loader_leader;
         let exit_random_art = self.ui.app.splash_state.use_random_art;
-        let prepared = self.menu_return.take().filter(|context| context.source == "multiplayer"
-            && context.account_id == self.progress_account_id
-            && context.match_id == reward_match_id.map(|id|id.to_string()));
-        let voluntary = voluntary && !prepared.as_ref().is_some_and(|c| c.exit_recorded || c.match_finished);
+        let prepared = self.menu_return.take().filter(|context| {
+            context.source == "multiplayer"
+                && context.account_id == self.progress_account_id
+                && context.match_id == reward_match_id.map(|id| id.to_string())
+        });
+        let voluntary = voluntary
+            && !prepared
+                .as_ref()
+                .is_some_and(|c| c.exit_recorded || c.match_finished);
         // Keep only this authenticated game socket until the durable acknowledgment.
         // Menu connection and result observation proceed independently.
         self.net.closing_game = if voluntary && reward_match_id.is_some() && self.ws_on_relay() {
@@ -303,7 +305,6 @@ impl SowApp {
             prepared.cycle_id = self.ui.app.splash_state.cycle_id;
             prepared.preparation_only = false;
             prepared.result_request_id = None;
-            prepared.recovery_request_id = None;
             prepared.started_at = Some(web_time::Instant::now());
             self.menu_return = Some(prepared);
         }
@@ -311,14 +312,6 @@ impl SowApp {
             let context = self.menu_return.as_mut().unwrap();
             context.voluntary_exit = Some(voluntary);
             context.exit_recorded |= !voluntary;
-            context.recording_deadline = Some(
-                web_time::Instant::now()
-                    + if self.net.closing_game.is_some() {
-                        web_time::Duration::from_secs(1)
-                    } else {
-                        web_time::Duration::ZERO
-                    },
-            );
             self.save_menu_return_context();
         }
 

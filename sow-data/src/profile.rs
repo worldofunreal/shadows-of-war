@@ -1,8 +1,8 @@
 //! Durable public-profile records.
 //!
-//! Account aggregates remain in Valkey/`PLAYERS_TABLE`.  This module stores
-//! the append-only pieces that cannot be reconstructed from an aggregate:
-//! match history, public identity indexes, seasons, and ladder ratings.
+//! Account hot fields live in Redb's `PLAYERS_TABLE`; reward, purchase, and
+//! provider-event histories live in its keyed account-event table. This module
+//! defines the durable profile records and their public views.
 
 use serde::{Deserialize, Serialize};
 
@@ -51,13 +51,13 @@ pub struct RewardReceipt {
     pub level_before: Option<u32>,
     #[serde(default)]
     pub level_after: Option<u32>,
-    /// Last committed replay turn included when this player voluntarily left.
-    /// A later whole-match result must not replace this player's personal result.
+    /// Server-verified turn at which this participant's closure was recorded.
+    /// A later whole-match result must preserve the participant's result.
     #[serde(default)]
     pub personal_closure_turn: Option<u64>,
     pub created_at: u64,
-    /// Applied is written atomically with the balance update. Pending lives
-    /// in the relay's durable participant/replay spool until the server accepts it.
+    /// Applied is written atomically with the balance update. Pending progress
+    /// stays on the relay until the server accepts the saved turns.
     #[serde(default)]
     pub status: RewardSettlementStatus,
     /// Presentation acknowledgement only. It never controls whether the
@@ -67,6 +67,9 @@ pub struct RewardReceipt {
     /// Replay verification is independent of presentation and settlement.
     #[serde(default)]
     pub verification_status: Option<ReplayVerificationStatus>,
+    /// Binds an applied match bonus to the exact server-verified participant result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified_result_sha256: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -106,8 +109,12 @@ pub fn merge_menu_guide_progress(
 ) -> MenuGuideProgress {
     let mut merged = incoming.clone();
     if let Some(saved) = saved {
-        merged.completed_steps.extend(saved.completed_steps.iter().cloned());
-        if !incoming.completed_steps.is_superset(&saved.completed_steps) || saved.status.is_terminal() {
+        merged
+            .completed_steps
+            .extend(saved.completed_steps.iter().cloned());
+        if !incoming.completed_steps.is_superset(&saved.completed_steps)
+            || saved.status.is_terminal()
+        {
             merged.current_step = saved.current_step.clone();
         }
         if saved.status.is_terminal() {
@@ -128,10 +135,9 @@ pub fn validate_menu_guide_progress(
     guide_id: &str,
     progress: &MenuGuideProgress,
 ) -> Result<(), String> {
-    let catalog: serde_json::Value = serde_json::from_str(include_str!(
-        "../../assets/guides/menu.triggers.json"
-    ))
-    .map_err(|error| format!("menu guide definitions are invalid: {error}"))?;
+    let catalog: serde_json::Value =
+        serde_json::from_str(include_str!("../../assets/guides/menu.triggers.json"))
+            .map_err(|error| format!("menu guide definitions are invalid: {error}"))?;
     let guide = catalog
         .get("menu_guides")
         .and_then(|guides| guides.get(guide_id))
@@ -152,7 +158,11 @@ pub fn validate_menu_guide_progress(
     {
         return Err("unknown menu guide step".to_string());
     }
-    if progress.current_step.as_deref().is_some_and(|step| !steps.contains(step)) {
+    if progress
+        .current_step
+        .as_deref()
+        .is_some_and(|step| !steps.contains(step))
+    {
         return Err("unknown current menu guide step".to_string());
     }
     if progress.status == MenuGuideStatus::Completed
@@ -228,12 +238,6 @@ pub struct MatchParticipantRecord {
     pub personal_closure_turn: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
-pub struct MatchParticipantClosure {
-    pub account_id: String,
-    pub turn_number: u64,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct MatchRecord {
     pub schema_version: u8,
@@ -272,8 +276,7 @@ pub struct MatchStartRecord {
     pub replay_status: ReplayVerificationStatus,
 }
 
-/// Server-owned return progress. Receiving an exit and verifying its reward
-/// are separate operations; neither depends on the lifetime of a game socket.
+/// Current server status for a relay-recorded multiplayer result.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum MatchExitState {
@@ -284,57 +287,52 @@ pub enum MatchExitState {
     Rejected,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct MatchExitCommand {
-    pub match_id: String,
-    pub account_id: String,
-    #[serde(default)]
-    pub player_id: Option<u16>,
-    #[serde(default)]
-    pub owner_verified: bool,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MatchWork {
-    // Keep the persisted tag so pending recoveries survive the rollout.
-    #[serde(rename = "exit")]
-    RecoveryExit { match_id: String, account_id: String },
-    Participant {
+    Progress {
         match_id: String,
-        account_id: String,
-        closure_turn: u64,
-        replay_sha256: String,
-        rejected: bool,
+        sequence: u64,
+        sha256: String,
+        closing: bool,
     },
-    Replay { match_id: String },
-    Progress { match_id: String, sequence: u64, sha256: String, closing: bool },
-    Archive { match_id: String, sequence: u64, sha256: String },
+    Archive {
+        match_id: String,
+        sequence: u64,
+        sha256: String,
+    },
+    Notify {
+        command: MatchResultControl,
+    },
 }
 
 impl MatchWork {
     pub fn match_id(&self) -> &str {
         match self {
-            Self::RecoveryExit { match_id, .. } | Self::Participant { match_id, .. }
-                | Self::Replay { match_id } | Self::Progress { match_id, .. } => match_id,
+            Self::Progress { match_id, .. } => match_id,
             Self::Archive { match_id, .. } => match_id,
+            Self::Notify { command } => &command.match_id,
         }
     }
 
     pub fn key(&self) -> String {
         match self {
-            Self::RecoveryExit { match_id, account_id } => format!("exit:{match_id}:{account_id}"),
-            Self::Participant { match_id, account_id, .. } => format!("participant:{match_id}:{account_id}"),
-            // Numeric keys preserve the existing durable whole-replay queue.
-            Self::Replay { match_id } => match_id.clone(),
-            Self::Progress { match_id, sequence, .. } => format!("progress:{match_id}:{sequence:010}"),
+            Self::Progress {
+                match_id, sequence, ..
+            } => format!("progress:{match_id}:{sequence:010}"),
             Self::Archive { match_id, .. } => format!("archive:{match_id}"),
+            Self::Notify { command } => format!(
+                "notify:{}:{}",
+                command.match_id,
+                blake3::hash(&serde_json::to_vec(command).expect("result command serializes"))
+                    .to_hex()
+            ),
         }
     }
 }
 
-/// Authenticated relay journal delivery. Turn bytes keep sow-data independent
-/// of the simulation crate; only the server's trusted replay reader decodes them.
+/// Durable server turn batch. Opaque bytes keep storage independent of the
+/// simulation crate; only the authoritative server decodes the turns.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MatchProgress {
     pub match_id: String,
@@ -363,12 +361,19 @@ pub struct RelayMatchProgress {
 
 impl MatchProgress {
     pub fn signing_bytes(&self) -> Result<Vec<u8>, serde_json::Error> {
-        serde_json::to_vec(&(&self.match_id, self.sequence, self.first_turn,
-            &self.previous_sha256, &self.replay_data, &self.participant_closures, self.finished))
+        serde_json::to_vec(&(
+            &self.match_id,
+            self.sequence,
+            self.first_turn,
+            &self.previous_sha256,
+            &self.replay_data,
+            &self.participant_closures,
+            self.finished,
+        ))
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MatchResultControl {
     pub match_id: String,
     pub terminal_turn: Option<u64>,
@@ -415,15 +420,16 @@ pub struct MatchWorkRecord {
 
 impl MatchWorkRecord {
     pub fn new(work: MatchWork) -> Self {
-        Self { work, state: MatchExitState::Requested, retry_at: 0, last_error: None,
-            queued_at_ms:std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64, urgent:false }
-    }
-
-    pub fn decode(key: &str, bytes: &[u8]) -> Result<Self, serde_json::Error> {
-        if bytes == b"1" && key.parse::<u64>().is_ok() {
-            Ok(Self::new(MatchWork::Replay { match_id: key.to_string() }))
-        } else {
-            serde_json::from_slice(bytes)
+        Self {
+            work,
+            state: MatchExitState::Requested,
+            retry_at: 0,
+            last_error: None,
+            queued_at_ms: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64,
+            urgent: false,
         }
     }
 }
@@ -434,7 +440,7 @@ pub struct VerifiedMatchResult {
     pub duration_seconds: u32,
     pub winner_player_id: Option<u16>,
     pub winning_team: Option<String>,
-    /// Set only by the verifier's personal-exit path.
+    /// Turn of the server-verified participant closure, when present.
     #[serde(default)]
     pub personal_closure_turn: Option<u64>,
     pub participants: Vec<VerifiedMatchParticipant>,

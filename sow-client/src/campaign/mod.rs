@@ -2,7 +2,7 @@
 //! roster to the engine as `GameConfig.scripted_spawns`.
 
 use sow_core::game_config::ScriptedSpawn;
-use sow_core::player::{Civilization, Leader};
+use sow_core::player::Leader;
 use sow_core::protocol::{CampaignRelation, Team};
 
 /// Which scripted campaign the running tutorial match belongs to. Boudica is
@@ -105,12 +105,9 @@ impl CampaignId {
     }
 
     pub fn advisor(self) -> Leader {
-        match self {
-            CampaignId::Boudica => Leader::Boudica,
-            CampaignId::SixSkyEp1 | CampaignId::SixSkyEp2 | CampaignId::SixSkyEp3 => {
-                Leader::LadySixSky
-            }
-        }
+        sow_data::campaign::episode(self.episode_id())
+            .expect("every campaign has an episode entry")
+            .advisor()
     }
 }
 
@@ -125,7 +122,6 @@ pub struct Faction {
     pub team: Option<Team>,
     pub can_request_alliance: bool,
     pub color: [f32; 3],
-    pub civ: Civilization,
     /// Bot intelligence override; `None` = engine default. Only the JSON loader sets it.
     pub iq: Option<u32>,
     pub leader: Leader,
@@ -198,7 +194,6 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
             color: f.color,
             team: f.team,
             leader: f.leader,
-            civilization: f.civ,
             troops: Some(f.starting_troops as f64),
             iq: f.iq,
             campaign_avatar: Some(f.avatar.clone().unwrap_or_else(|| "null".into())),
@@ -291,26 +286,13 @@ pub(crate) fn tutorial_camera_frame(
     Some((center, fit_zoom.max(min_zoom)))
 }
 
-/// Resolve a civilization from its roster value (`"maya"`, `"Maya"`,
-/// `"Maya Civilization"`, …).
-fn civ_from_id(value: &str) -> Option<Civilization> {
-    let normalized: String = value
-        .chars()
+/// Romans are the Boudica story's enemy: a roster `civ` naming the Roman
+/// Empire (`"Roman Empire"`, `"roman-empire"`, …) cannot be neutral.
+fn is_roman(civ: &str) -> bool {
+    civ.chars()
         .filter(|c| c.is_ascii_alphanumeric())
         .map(|c| c.to_ascii_lowercase())
-        .collect();
-    Civilization::ALL.into_iter().find(|civ| {
-        [civ.name()]
-            .into_iter()
-            .map(|candidate| {
-                candidate
-                    .chars()
-                    .filter(|c| c.is_ascii_alphanumeric())
-                    .map(|c| c.to_ascii_lowercase())
-                    .collect::<String>()
-            })
-            .any(|candidate| candidate == normalized)
-    })
+        .eq("romanempire".chars())
 }
 
 /// Parse an episode roster from JSON text. `None` on any problem (invalid identity, empty
@@ -344,8 +326,8 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             Some(color) => parse_campaign_color(color)?,
             None => NEUTRAL_PALETTE[index % NEUTRAL_PALETTE.len()],
         };
-        let civ = civ_from_id(&e.civ)?;
-        if civ == Civilization::Rome && e.relation == CampaignRelation::Neutral {
+        if e.civ.trim().is_empty() || (is_roman(&e.civ) && e.relation == CampaignRelation::Neutral)
+        {
             return None;
         }
         let leader = sow_data::commerce::leader_from_id(&e.leader)?;
@@ -366,7 +348,6 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             team: e.team,
             can_request_alliance: e.can_request_alliance.unwrap_or(true),
             color,
-            civ,
             iq: e.iq,
             leader,
             avatar: e.avatar.clone(),

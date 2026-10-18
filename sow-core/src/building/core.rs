@@ -208,6 +208,20 @@ impl DefenseGrid {
         cell_size: u32,
         cfg: &crate::game_config::GameConfig,
     ) {
+        self.rebuild_with_range(buildings, map_width, map_height, cell_size, cfg, |_| 1.0);
+    }
+
+    /// Like [`Self::rebuild`], scaling each bunker's range by its owner's
+    /// multiplier (hero bunker-range ability).
+    pub fn rebuild_with_range(
+        &mut self,
+        buildings: &[Building],
+        map_width: u32,
+        map_height: u32,
+        cell_size: u32,
+        cfg: &crate::game_config::GameConfig,
+        range_multiplier: impl Fn(u16) -> f64,
+    ) {
         let grid_w = map_width.div_ceil(cell_size);
         let grid_h = map_height.div_ceil(cell_size);
 
@@ -230,7 +244,8 @@ impl DefenseGrid {
                 let cx = bx / cell_size;
                 let cy = by / cell_size;
                 let active_level = b.active_level();
-                let range = b.defense_range_cfg(cfg);
+                let range = (f64::from(b.defense_range_cfg(cfg)) * range_multiplier(b.owner_id))
+                    .round() as i32;
                 if range > 0 && cx < grid_w && cy < grid_h {
                     self.cells[(cy * grid_w + cx) as usize].push(DefenseTower {
                         owner_id: b.owner_id,

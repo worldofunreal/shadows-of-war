@@ -1,7 +1,7 @@
 mod match_exit;
 
 use sow_data::crazygames;
-use sow_data::db::{PlayerDb, PlayerProfile};
+use sow_data::db::PlayerDb;
 
 use axum::{
     Json, Router,
@@ -23,8 +23,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
 use tower_http::cors::{Any, CorsLayer};
 
-const MAX_REPLAY_BYTES: usize = 16 * 1024 * 1024;
-const MAX_REPLAY_REQUEST_BYTES: usize = 32 * 1024 * 1024;
+const MAX_INTERNAL_REQUEST_BYTES: usize = 32 * 1024 * 1024;
 const MAX_ANALYTICS_REQUEST_BYTES: usize = 256 * 1024;
 const MAX_ANALYTICS_BATCH_EVENTS: usize = 100;
 
@@ -152,23 +151,6 @@ struct MatchStartRequest {
     match_id: String,
     player_ids: Vec<String>,
     metadata: serde_json::Value,
-}
-
-#[derive(Deserialize)]
-struct MatchFinalizeRequest {
-    match_id: String,
-    #[serde(default)]
-    lobby_json: Option<String>,
-    #[serde(default)]
-    replay_data: Option<Vec<u8>>,
-    #[serde(default)]
-    participant_closures: Vec<sow_data::profile::MatchParticipantClosure>,
-}
-
-#[derive(Deserialize)]
-struct DirectSaveRequest {
-    account_id: String,
-    profile: PlayerProfile,
 }
 
 #[derive(Deserialize)]
@@ -1260,11 +1242,22 @@ async fn handle_internal_verify(
                 &account_id,
                 payload.requested_leader.as_deref(),
                 payload.random_leader,
-            ).await {
+            )
+            .await
+            {
                 Ok(leader) => leader,
                 Err(error) => {
-                    error!("[identity] leader resolution failed account={} error={error}", account_hint(Some(&account_id)));
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "leader resolution unavailable".to_string() })).into_response();
+                    error!(
+                        "[identity] leader resolution failed account={} error={error}",
+                        account_hint(Some(&account_id))
+                    );
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: "leader resolution unavailable".to_string(),
+                        }),
+                    )
+                        .into_response();
                 }
             };
             let skin_style = match state.db.selected_skin_style_for_account(&account_id).await {
@@ -1372,11 +1365,19 @@ async fn handle_internal_identity_resolve(
         &account.id,
         payload.requested_leader.as_deref(),
         payload.random_leader,
-    ).await {
+    )
+    .await
+    {
         Ok(leader) => leader,
         Err(error) => {
             error!("verified identity leader resolution failed: {error}");
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "leader resolution unavailable".to_string() })).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "leader resolution unavailable".to_string(),
+                }),
+            )
+                .into_response();
         }
     };
     let skin_style = sow_data::commerce::skin_style_for_profile(
@@ -1621,7 +1622,7 @@ async fn main() {
     // Initialize logging
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
-    info!("Starting SOW-DATABASE microservice with Valkey...");
+    info!("Starting SOW-DATABASE microservice with Redb accounts and Valkey analytics...");
 
     // Read environment variables
     let port: u16 = std::env::var("SOW_DB_PORT")
@@ -1679,15 +1680,8 @@ async fn main() {
     {
         std::fs::create_dir_all(dir).expect("Failed to create REDB data directory");
     }
-    let redb_db =
-        sow_data::init_database(&redb_path).expect("Failed to initialize REDB metadata database");
+    let redb_db = sow_data::init_database(&redb_path).expect("Failed to initialize Redb database");
     let redb_db_arc = Arc::new(redb_db);
-
-    // Seed Valkey RAM from REDB on boot
-    info!("Seeding Valkey RAM cache from REDB...");
-    if let Err(e) = sow_data::metadata_db::seed_valkey_from_redb(&redb_db_arc, &valkey_url) {
-        error!("Failed to seed Valkey on startup: {e}");
-    }
 
     // Initialize database connector
     let player_db = PlayerDb::new(
@@ -1695,11 +1689,11 @@ async fn main() {
         crazygames_api_key,
         Some(Arc::clone(&redb_db_arc)),
     );
-    // Open the single shared multiplexed connection now, so connectivity
-    // problems fail loudly at boot instead of as first-request latency.
-    if let Err(error) = player_db.warm_connection().await {
-        error!("Failed to establish the shared Valkey connection at startup: {error}");
-    }
+    // Establish Redb account storage and Valkey analytics before accepting requests.
+    player_db
+        .warm_connection()
+        .await
+        .expect("Failed to initialize the Redb account authority");
     player_db
         .ensure_current_season()
         .expect("Failed to initialize current profile season");
@@ -1840,7 +1834,6 @@ async fn main() {
             post(handle_tutorial_complete),
         )
         .route("/profile/tutorial-complete", post(handle_tutorial_complete))
-        .route("/profile/match-exit", post(match_exit::handle_exit))
         .route("/profile/match-result", post(match_exit::handle_result))
         .route("/profile/campaign-complete", post(handle_campaign_complete))
         .route("/profile/leader-selection", post(handle_leader_selection))
@@ -1857,15 +1850,10 @@ async fn main() {
             get(handle_internal_match_start),
         )
         .route(
-            "/internal/match-participant-settle/{match_id}/{account_id}/{closure_turn}",
-            post(handle_match_participant_settle),
+            "/internal/match-turns",
+            post(match_exit::handle_relay_progress)
+                .layer(DefaultBodyLimit::max(sow_data::MAX_MATCH_CHUNK_BYTES * 5)),
         )
-        .route("/internal/match-progress", post(match_exit::handle_progress)
-            .layer(DefaultBodyLimit::max(sow_data::MAX_MATCH_CHUNK_BYTES * 5)))
-        .route("/internal/match-turns", post(match_exit::handle_relay_progress)
-            .layer(DefaultBodyLimit::max(sow_data::MAX_MATCH_CHUNK_BYTES * 5)))
-        .route("/internal/match-finalize", post(handle_match_finalize))
-        .route("/internal/save", post(handle_direct_save))
         .route("/internal/stats", get(handle_internal_stats))
         .route("/internal/verify", post(handle_internal_verify))
         .route(
@@ -1885,7 +1873,7 @@ async fn main() {
             post(handle_internal_profile_reset_test_data),
         )
         .route("/internal/bot-pool/seed", post(handle_bot_pool_seed))
-        .layer(DefaultBodyLimit::max(MAX_REPLAY_REQUEST_BYTES))
+        .layer(DefaultBodyLimit::max(MAX_INTERNAL_REQUEST_BYTES))
         .layer(cors)
         .with_state(state);
 
@@ -2689,17 +2677,26 @@ async fn handle_campaign_complete(
         &headers,
         &payload.account_id,
         payload.auth_secret.as_deref(),
-    ).await {
+    )
+    .await
+    {
         Ok(account_id) => account_id,
         Err(response) => return response.into_response(),
     };
-    match state.db.complete_campaign_episode(&account_id, payload.episode_id.trim()).await {
+    match state
+        .db
+        .complete_campaign_episode(&account_id, payload.episode_id.trim())
+        .await
+    {
         Ok(account) => {
             let sync_state = Arc::clone(&state);
             let sync_account_id = account.id.clone();
             tokio::spawn(async move {
                 if let Err(error) = sync_state.sync_playgames_profile(&sync_account_id).await {
-                    warn!("Play Games campaign sync failed for account={}: {error}", account_hint(Some(&sync_account_id)));
+                    warn!(
+                        "Play Games campaign sync failed for account={}: {error}",
+                        account_hint(Some(&sync_account_id))
+                    );
                 }
             });
             (StatusCode::OK, Json(account.without_auth_secret())).into_response()
@@ -2731,19 +2728,28 @@ async fn handle_leader_selection(
         &headers,
         &payload.account_id,
         payload.auth_secret.as_deref(),
-    ).await {
+    )
+    .await
+    {
         Ok(account_id) => account_id,
         Err(response) => return response.into_response(),
     };
-    match state.db.update_leader_selection(
-        &account_id,
-        payload.preferred_leader.as_deref(),
-        payload.prefer_random_leader,
-    ).await {
+    match state
+        .db
+        .update_leader_selection(
+            &account_id,
+            payload.preferred_leader.as_deref(),
+            payload.prefer_random_leader,
+        )
+        .await
+    {
         Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
         Err(error) => {
             let message = error.to_string();
-            let status = if message.starts_with("unknown") || message.contains("not available") || message.contains("required") {
+            let status = if message.starts_with("unknown")
+                || message.contains("not available")
+                || message.contains("required")
+            {
                 StatusCode::BAD_REQUEST
             } else if message.contains("Account not found") {
                 StatusCode::NOT_FOUND
@@ -2805,55 +2811,6 @@ async fn handle_menu_guide_progress(
     }
 }
 
-/// POST /internal/match-participant-settle — the relay is the only caller.
-/// The client never supplies a reward amount, outcome, or statistics.
-async fn handle_match_participant_settle(
-    State(state): State<Arc<AppState>>,
-    Path((match_id, account_id, closure_turn)): Path<(String, String, u64)>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> impl IntoResponse {
-    if !verify_internal_auth(&headers, &state.relay_settlement_secret) {
-        warn!("Unauthorized access attempt to /internal/match-participant-settle");
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "Unauthorized".to_string(),
-            }),
-        )
-            .into_response();
-    }
-    let account_id = account_id.trim();
-    if !valid_match_participant_settlement_params(&match_id, account_id) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "match_id and account_id are invalid".to_string(),
-            }),
-        )
-            .into_response();
-    }
-    if body.len() > MAX_REPLAY_BYTES {
-        return (
-            StatusCode::PAYLOAD_TOO_LARGE,
-            Json(ErrorResponse {
-                error: "personal replay prefix is too large".to_string(),
-            }),
-        )
-            .into_response();
-    }
-    match match_exit::accept_participant(&state, &match_id, account_id, closure_turn, body).await {
-        Ok(ack) => (StatusCode::ACCEPTED, Json(ack)).into_response(),
-        Err(error) => {
-            let message = error.to_string();
-            warn!("[rewards] participant intake remains unacknowledged match={match_id}: {message}");
-            let status = if message.contains("conflicts with its saved state") { StatusCode::CONFLICT }
-                else { participant_closure_error_status(&message) };
-            (status, Json(ErrorResponse { error: message })).into_response()
-        }
-    }
-}
-
 fn valid_match_participant_settlement_params(match_id: &str, account_id: &str) -> bool {
     match_id.parse::<u64>().is_ok() && sow_data::profile::is_valid_account_id(account_id)
 }
@@ -2899,8 +2856,7 @@ async fn reject_participant_settlement(
 #[cfg(test)]
 mod participant_closure_http_tests {
     use super::{
-        StatusCode, participant_closure_error_status,
-        valid_match_participant_settlement_params,
+        StatusCode, participant_closure_error_status, valid_match_participant_settlement_params,
     };
 
     #[test]
@@ -3660,16 +3616,29 @@ async fn handle_get_profile(
 
 /// POST /match/start (internal matchmaking registration)
 async fn handle_match_id_seed(
-    State(state): State<Arc<AppState>>, headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
     if !verify_internal_auth(&headers, &state.secret_token) {
-        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error":"Unauthorized"}))).into_response();
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error":"Unauthorized"})),
+        )
+            .into_response();
     }
     match state.db.next_match_id_seed() {
-        Ok(next_match_id) => (StatusCode::OK, Json(serde_json::json!({"next_match_id":next_match_id}))).into_response(),
+        Ok(next_match_id) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"next_match_id":next_match_id})),
+        )
+            .into_response(),
         Err(error) => {
             error!("match ID recovery failed: {error}");
-            (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"match IDs unavailable"}))).into_response()
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({"error":"match IDs unavailable"})),
+            )
+                .into_response()
         }
     }
 }
@@ -3742,276 +3711,7 @@ async fn handle_internal_match_start(
     }
 }
 
-/// POST /internal/match-finalize (relay submits the completed replay)
-async fn handle_match_finalize(
-    State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
-    Json(payload): Json<MatchFinalizeRequest>,
-) -> impl IntoResponse {
-    if !verify_internal_auth(&headers, &state.relay_settlement_secret) {
-        warn!("Unauthorized access attempt to /internal/match-finalize");
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "Unauthorized".to_string(),
-            }),
-        )
-            .into_response();
-    }
-
-    if payload.match_id.parse::<u64>().is_err() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "match_id is invalid".to_string(),
-            }),
-        )
-            .into_response();
-    }
-
-    let _guard = state.match_artifact_lock.lock().await;
-    match state.db.match_start_record(&payload.match_id) {
-        Ok(Some(start)) => {
-            match state.db.match_work(&payload.match_id) {
-                Ok(pending) if pending.is_some() || start.replay_status != sow_data::profile::ReplayVerificationStatus::Pending => {
-                    return (StatusCode::ACCEPTED, Json(serde_json::json!({"status":"queued", "match_id":payload.match_id}))).into_response();
-                }
-                Ok(_) => {},
-                Err(error) => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: error.to_string() })).into_response(),
-            }
-        }
-        Ok(None) => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error:"trusted match registration unavailable".into() })).into_response(),
-        Err(error) => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error:error.to_string() })).into_response(),
-    }
-
-    // Commit the replay before finalizing statistics. The bounded request and
-    // replay sizes prevent a malformed match from becoming an unbounded
-    // allocation, while fsync+rename prevents a stats ACK from preceding a
-    // durable replay.
-    if let Some(ref replay_bytes) = payload.replay_data {
-        if replay_bytes.len() > MAX_REPLAY_BYTES {
-            return (
-                StatusCode::PAYLOAD_TOO_LARGE,
-                Json(ErrorResponse {
-                    error: format!("replay exceeds {} byte limit", MAX_REPLAY_BYTES),
-                }),
-            )
-                .into_response();
-        }
-        let replay_dir = std::env::var("SOW_REPLAY_DIR").unwrap_or_else(|_| "replays".to_string());
-        let file_path =
-            std::path::Path::new(&replay_dir).join(format!("{}.replay", payload.match_id));
-
-        if let Some(parent) = file_path.parent()
-            && let Err(e) = tokio::fs::create_dir_all(parent).await
-        {
-            error!("Failed to create replay directory {:?}: {}", parent, e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "replay directory unavailable".to_string(),
-                }),
-            )
-                .into_response();
-        }
-
-        let temp_path = file_path.with_extension("replay.tmp");
-        let write_result = async {
-            let mut file = tokio::fs::File::create(&temp_path).await?;
-            file.write_all(replay_bytes).await?;
-            file.sync_all().await?;
-            drop(file);
-            tokio::fs::rename(&temp_path, &file_path).await?;
-            std::fs::File::open(&replay_dir)?.sync_all()
-        }
-        .await;
-        match write_result {
-            Ok(()) => {
-                info!(
-                    "Successfully committed raw replay for match {} to durable storage: {:?}",
-                    payload.match_id, file_path
-                );
-            }
-            Err(e) => {
-                error!(
-                    "Failed to commit raw replay file for match {} to disk: {}",
-                    payload.match_id, e
-                );
-                let _ = tokio::fs::remove_file(&temp_path).await;
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        error: "replay storage unavailable".to_string(),
-                    }),
-                )
-                    .into_response();
-            }
-        }
-    }
-
-    // ponytail: Write lobby metadata JSON if provided alongside the replay
-    if let Some(ref lobby_json) = payload.lobby_json {
-        let replay_dir = std::env::var("SOW_REPLAY_DIR").unwrap_or_else(|_| "replays".to_string());
-        let meta_path =
-            std::path::Path::new(&replay_dir).join(format!("{}.json", payload.match_id));
-
-        if let Some(parent) = meta_path.parent()
-            && let Err(e) = tokio::fs::create_dir_all(parent).await
-        {
-            error!("Failed to create metadata directory {:?}: {}", parent, e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "metadata directory unavailable".to_string(),
-                }),
-            )
-                .into_response();
-        }
-
-        let temp_path = meta_path.with_extension("json.tmp");
-        let write_result = async {
-            let mut file = tokio::fs::File::create(&temp_path).await?;
-            file.write_all(lobby_json.as_bytes()).await?;
-            file.sync_all().await?;
-            drop(file);
-            tokio::fs::rename(&temp_path, &meta_path).await?;
-            std::fs::File::open(&replay_dir)?.sync_all()
-        }
-        .await;
-        if let Err(e) = write_result {
-            error!(
-                "Failed to commit metadata JSON for match {} to disk: {}",
-                payload.match_id, e
-            );
-            let _ = tokio::fs::remove_file(&temp_path).await;
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "metadata storage unavailable".to_string(),
-                }),
-            )
-                .into_response();
-        }
-    }
-
-    let mut closure_accounts = std::collections::BTreeSet::new();
-    for closure in &payload.participant_closures {
-        if !closure_accounts.insert(closure.account_id.as_str()) {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "duplicate participant closure".to_string(),
-                }),
-            )
-                .into_response();
-        }
-    }
-    for closure in &payload.participant_closures {
-        if let Err(error) = state
-            .db
-            .note_match_participant_closure(
-                &payload.match_id,
-                &closure.account_id,
-                closure.turn_number,
-            )
-            .await
-        {
-            let message = error.to_string();
-            warn!(
-                "match {} participant closure rejected account={} error={message}",
-                payload.match_id,
-                account_hint(Some(&closure.account_id))
-            );
-            return (
-                participant_closure_error_status(&message),
-                Json(ErrorResponse { error: message }),
-            )
-                .into_response();
-        }
-    }
-
-    // Keep analytics and match history on the immutable roster registered before relay handoff.
-    let _participants = match state
-        .db
-        .match_participants_with_lobby(&payload.match_id, payload.lobby_json.as_deref())
-        .await
-    {
-        Ok(participants) => participants,
-        Err(error) => {
-            error!(
-                "match {} participant snapshot failed before finalize: {error}",
-                payload.match_id
-            );
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse {
-                    error: "match participant state unavailable".to_string(),
-                }),
-            )
-                .into_response();
-        }
-    };
-
-    match state
-        .db
-        .finalize_match_with_lobby(&payload.match_id, payload.lobby_json.as_deref())
-        .await
-    {
-        Ok(_playgames_outcomes) => {
-            if payload.replay_data.is_some() {
-                if let Err(error) = state.db.queue_replay_verification(&payload.match_id) {
-                    error!("match {} replay queueing failed: {error}", payload.match_id);
-                    return (
-                        StatusCode::SERVICE_UNAVAILABLE,
-                        Json(ErrorResponse {
-                            error: "replay verification queue unavailable".to_string(),
-                        }),
-                    )
-                        .into_response();
-                }
-                if let Err(error) = state
-                    .replay_verification_tx
-                    .try_send(payload.match_id.clone())
-                {
-                    warn!(
-                        "match {} replay verifier notification deferred: {error}",
-                        payload.match_id
-                    );
-                }
-                let _ = state.match_results.send(payload.match_id.clone());
-            } else if let Err(error) = reject_queued_replay(&state, &payload.match_id).await {
-                error!(
-                    "match {} without replay could not close verification: {error}",
-                    payload.match_id
-                );
-                return (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    Json(ErrorResponse {
-                        error: "match verification state unavailable".to_string(),
-                    }),
-                )
-                    .into_response();
-            }
-            (
-                StatusCode::OK,
-                Json(serde_json::json!({ "status": "finalized", "match_id": payload.match_id })),
-            )
-                .into_response()
-        }
-        Err(e) => {
-            error!("Failed to finalize match {}: {}", payload.match_id, e);
-            (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-                .into_response()
-        }
-    }
-}
-
-async fn reject_queued_replay(
+async fn reject_match_verification(
     state: &AppState,
     match_id: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -4020,7 +3720,7 @@ async fn reject_queued_replay(
         .match_start_record(match_id)?
         .ok_or("trusted match registration unavailable")?;
     if start.replay_status == sow_data::profile::ReplayVerificationStatus::Verified {
-        state.db.finish_replay_verification(
+        state.db.finish_match_verification(
             match_id,
             sow_data::profile::ReplayVerificationStatus::Verified,
         )?;
@@ -4033,165 +3733,11 @@ async fn reject_queued_replay(
             sow_data::profile::ReplayVerificationStatus::Rejected,
         )
         .await?;
-    state.db.finish_replay_verification(
+    state.db.finish_match_verification(
         match_id,
         sow_data::profile::ReplayVerificationStatus::Rejected,
     )?;
     Ok(())
-}
-
-async fn verify_queued_replay(state: &AppState, match_id: &str) {
-    let start = match state.db.match_start_record(match_id) {
-        Ok(Some(start)) => start,
-        Ok(None) => {
-            error!("queued replay {match_id} has no trusted match registration");
-            return;
-        }
-        Err(error) => {
-            error!("queued replay {match_id} registration read failed: {error}");
-            return;
-        }
-    };
-    if start.replay_status == sow_data::profile::ReplayVerificationStatus::Rejected {
-        if let Err(error) = reject_queued_replay(state, match_id).await {
-            error!("queued replay {match_id} receipt rejection failed: {error}");
-        }
-        return;
-    }
-    if start.replay_status == sow_data::profile::ReplayVerificationStatus::Verified {
-        if let Err(error) = state
-            .db
-            .mark_match_reward_verification_status(
-                match_id,
-                sow_data::profile::ReplayVerificationStatus::Verified,
-            )
-            .await
-        {
-            error!("queued replay {match_id} verified receipt sync failed: {error}");
-            return;
-        }
-        if let Err(error) = state
-            .db
-            .finish_replay_verification(match_id, start.replay_status)
-        {
-            error!("queued replay {match_id} cleanup failed: {error}");
-        }
-        return;
-    }
-    if match_id.parse::<u64>().is_err() {
-        error!("queued replay has an invalid match id");
-        if let Err(error) = reject_queued_replay(state, match_id).await {
-            error!("queued replay rejection could not be saved: {error}");
-        }
-        return;
-    }
-    let replay_dir = std::env::var("SOW_REPLAY_DIR").unwrap_or_else(|_| "replays".to_string());
-    let replay_path = std::path::Path::new(&replay_dir).join(format!("{match_id}.replay"));
-    let length = match tokio::fs::metadata(&replay_path).await {
-        Ok(metadata) => metadata.len(),
-        Err(error) => {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                warn!("queued replay {match_id} file is missing; rejecting bonuses");
-                if let Err(save_error) = reject_queued_replay(state, match_id).await {
-                    error!("replay {match_id} rejection could not be saved: {save_error}");
-                }
-            } else {
-                warn!("queued replay {match_id} file unavailable: {error}");
-            }
-            return;
-        }
-    };
-    if length == 0 || length > MAX_REPLAY_BYTES as u64 {
-        warn!("queued replay {match_id} rejected: replay file size is invalid");
-        if let Err(error) = reject_queued_replay(state, match_id).await {
-            error!("replay {match_id} rejection could not be saved: {error}");
-        }
-        return;
-    }
-    let replay = match tokio::fs::read(&replay_path).await {
-        Ok(bytes) => bytes,
-        Err(error) => {
-            warn!("queued replay {match_id} read failed: {error}");
-            return;
-        }
-    };
-    let verifier_url = std::env::var("SOW_SERVER_HTTP_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:25566".to_string());
-    let url = format!(
-        "{}/internal/replay/verify/{match_id}",
-        verifier_url.trim_end_matches('/')
-    );
-    let response = match state
-        .replay_verification_client
-        .post(url)
-        .bearer_auth(&state.secret_token)
-        .header("Content-Type", "application/octet-stream")
-        .body(replay)
-        .send()
-        .await
-    {
-        Ok(response) => response,
-        Err(error) => {
-            warn!("replay {match_id} verifier request failed: {error}");
-            return;
-        }
-    };
-    if response.status() == reqwest::StatusCode::ACCEPTED { return; }
-    if response.status() == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
-        warn!("replay {match_id} was rejected by the deterministic verifier");
-        if let Err(error) = reject_queued_replay(state, match_id).await {
-            error!("replay {match_id} rejection could not be saved: {error}");
-        }
-        return;
-    }
-    if !response.status().is_success() {
-        let status = response.status();
-        let reason = response.text().await.unwrap_or_else(|error| format!("response unavailable: {error}"));
-        warn!("replay {match_id} verifier returned HTTP {status}: {reason}");
-        return;
-    }
-    let result = match response
-        .json::<sow_data::profile::VerifiedMatchResult>()
-        .await
-    {
-        Ok(result) if result.match_id == match_id => result,
-        Ok(_) => {
-            error!("replay {match_id} verifier returned a different match id");
-            if let Err(error) = reject_queued_replay(state, match_id).await {
-                error!("replay {match_id} rejection could not be saved: {error}");
-            }
-            return;
-        }
-        Err(error) => {
-            error!("replay {match_id} verifier response was invalid: {error}");
-            if let Err(save_error) = reject_queued_replay(state, match_id).await {
-                error!("replay {match_id} rejection could not be saved: {save_error}");
-            }
-            return;
-        }
-    };
-    let _applied = match state.db.apply_verified_match_result(&result).await {
-        Ok(applied) => applied,
-        Err(error) => {
-            if error.to_string().starts_with("invalid verified result:") {
-                error!("replay {match_id} verifier result rejected: {error}");
-                if let Err(reject_error) = reject_queued_replay(state, match_id).await {
-                    error!("replay {match_id} rejection could not be saved: {reject_error}");
-                }
-            } else {
-                error!("replay {match_id} verified result apply failed: {error}");
-            }
-            return;
-        }
-    };
-    if let Err(error) = state.db.finish_replay_verification(
-        match_id,
-        sow_data::profile::ReplayVerificationStatus::Verified,
-    ) {
-        error!("verified replay {match_id} queue completion failed: {error}");
-        return;
-    }
-    info!("replay {match_id} verified and server rewards updated");
 }
 
 /// POST /internal/bot-pool/seed — resolve or create persistent bot accounts
@@ -4228,56 +3774,58 @@ async fn handle_bot_pool_seed(
             .into_response(),
     }
 }
-
-/// POST /internal/save handler (authenticated server-to-server only)
-async fn handle_direct_save(
+async fn handle_internal_stats(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
-    Json(payload): Json<DirectSaveRequest>,
-) -> impl IntoResponse {
+    Query(query): Query<HashMap<String, String>>,
+) -> axum::response::Response {
     if !verify_internal_auth(&headers, &state.secret_token) {
-        warn!("Unauthorized access attempt to /internal/save");
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "Unauthorized".to_string(),
-            }),
-        )
-            .into_response();
+        return StatusCode::UNAUTHORIZED.into_response();
     }
-
-    match state
-        .db
-        .update_profile(&payload.account_id, payload.profile)
-        .await
-    {
-        Ok(account) => (StatusCode::OK, Json(account)).into_response(),
-        Err(e) => (
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-            .into_response(),
-    }
-}
-
-async fn handle_internal_stats(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+    let (calculations, payments) = match state.db.pending_reward_calculations() {
+        Ok(pending) => pending,
+        Err(error) => {
+            error!("[rewards] pending calculation inventory failed: {error}");
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+    };
+    let checkpoint = if let Some(id) = query.get("match_id") {
+        if id.len() > 20 || id.parse::<u64>().is_err() {
+            return StatusCode::BAD_REQUEST.into_response();
+        }
+        match match_exit::checkpoint_rewards_terminal(&state, id).await {
+            Ok(terminal) => Some(serde_json::json!({"match_id":id,"rewards_terminal":terminal})),
+            Err(error) => {
+                error!("[rewards] checkpoint receipt inventory failed match={id}: {error}");
+                return StatusCode::SERVICE_UNAVAILABLE.into_response();
+            }
+        }
+    } else {
+        None
+    };
     let db_path = std::path::Path::new(&state.redb_path);
     let file_size = std::fs::metadata(db_path).map(|m| m.len()).unwrap_or(0);
-    let season_rating_rows = state.db.metadata_db.as_ref().and_then(|db| {
+    let season_rating_rows = state.db.redb_db.as_ref().and_then(|db| {
         let read_txn = db.begin_read().ok()?;
         let table = read_txn
-            .open_table(sow_data::metadata_db::SEASON_RATINGS_TABLE)
+            .open_table(sow_data::redb_store::SEASON_RATINGS_TABLE)
             .ok()?;
         table.len().ok()
     });
 
     Json(serde_json::json!({
+        "checkpoint":checkpoint,
         "redb": {
             "path": state.redb_path,
             "file_size_bytes": file_size,
             "season_rating_rows": season_rating_rows,
+        },
+        "rewards": {
+            "pending_calculations": calculations.len(),
+            "pending_payments": payments.len(),
+            "match_ids": calculations,
+            "closing_match_ids": payments,
         }
     }))
+    .into_response()
 }

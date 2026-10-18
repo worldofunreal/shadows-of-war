@@ -1,220 +1,240 @@
-use serde::{Deserialize, Serialize};
+//! Playable heroes. A hero is a catalog character (`assets/geo_entities.json`)
+//! with a `hero` entry: adding one there adds it to the game, the store and
+//! the menu, and `hero_ability_tests` proves its ability works.
+use crate::geo_entities::{self, Ability, GeoEntity};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::sync::OnceLock;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub enum Civilization {
-    #[default]
-    Rome,
-    Egypt,
-    Vikings,
-    China,
-    Macedon,
-    Mongols,
-    Angevin,
-    Gallic,
-    Iceni,
-    Maya,
-    Sparta,
-    France,
+/// A playable hero, numbered by its position among the catalog's heroes.
+/// The first hero (Caesar) is the default.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+pub struct Leader(u16);
+
+struct HeroEntry {
+    character: &'static GeoEntity,
+    /// Saved in profiles and messages: `sun_tzu` → `SunTzu`.
+    wire_id: String,
 }
 
-impl Civilization {
-    pub const ALL: [Civilization; 12] = [
-        Civilization::Rome,
-        Civilization::Egypt,
-        Civilization::Vikings,
-        Civilization::China,
-        Civilization::Macedon,
-        Civilization::Mongols,
-        Civilization::Angevin,
-        Civilization::Gallic,
-        Civilization::Iceni,
-        Civilization::Maya,
-        Civilization::Sparta,
-        Civilization::France,
-    ];
-
-    pub fn name(self) -> &'static str {
-        match self {
-            Civilization::Rome => "Roman Empire",
-            Civilization::Egypt => "Egyptian Empire",
-            Civilization::Vikings => "Norse Kingdom",
-            Civilization::China => "Chinese Empire",
-            Civilization::Macedon => "Macedonian Empire",
-            Civilization::Mongols => "Mongol Horde",
-            Civilization::Angevin => "Angevin Empire",
-            Civilization::Gallic => "Gallic Tribes",
-            Civilization::Iceni => "Iceni Kingdom",
-            Civilization::Maya => "Maya Civilization",
-            Civilization::Sparta => "Sparta",
-            Civilization::France => "Kingdom of France",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub enum Leader {
-    #[default]
-    Caesar,
-    Cleopatra,
-    Ragnar,
-    SunTzu,
-    Alexander,
-    GenghisKhan,
-    RichardTheLionheart,
-    Vercingetorix,
-    Boudica,
-    LadySixSky,
-    Leonidas,
-    Napoleon,
+fn heroes() -> &'static [HeroEntry] {
+    static HEROES: OnceLock<Vec<HeroEntry>> = OnceLock::new();
+    HEROES.get_or_init(|| {
+        let heroes: Vec<HeroEntry> = geo_entities::all()
+            .filter(|character| character.hero.is_some())
+            .map(|character| HeroEntry {
+                character,
+                wire_id: character
+                    .id
+                    .split('_')
+                    .map(|word| {
+                        let mut letters = word.chars();
+                        letters.next().map_or_else(String::new, |first| {
+                            first.to_ascii_uppercase().to_string() + letters.as_str()
+                        })
+                    })
+                    .collect(),
+            })
+            .collect();
+        assert!(
+            !heroes.is_empty() && heroes.len() <= usize::from(u16::MAX),
+            "the catalog needs between 1 and {} heroes",
+            u16::MAX
+        );
+        heroes
+    })
 }
 
 impl Leader {
-    pub const ALL: [Leader; 12] = [
-        Leader::Caesar,
-        Leader::Cleopatra,
-        Leader::Ragnar,
-        Leader::SunTzu,
-        Leader::Alexander,
-        Leader::GenghisKhan,
-        Leader::RichardTheLionheart,
-        Leader::Vercingetorix,
-        Leader::Boudica,
-        Leader::LadySixSky,
-        Leader::Leonidas,
-        Leader::Napoleon,
-    ];
-
-    pub fn menu_emoji(self) -> &'static str {
-        match self {
-            Leader::Caesar => "🏛️",
-            Leader::Cleopatra => "👑",
-            Leader::Ragnar => "🪓",
-            Leader::SunTzu => "📜",
-            Leader::Alexander => "🛡️",
-            Leader::GenghisKhan => "🐺",
-            Leader::RichardTheLionheart => "🦁",
-            Leader::Vercingetorix => "⚔️",
-            Leader::Boudica => "🔥",
-            Leader::LadySixSky => "🌙",
-            Leader::Leonidas => "🪖",
-            Leader::Napoleon => "🎖️",
-        }
+    pub fn all() -> impl Iterator<Item = Leader> {
+        (0..heroes().len()).map(|index| Leader(index as u16))
     }
 
-    pub fn filler_rgb(self) -> [f32; 3] {
-        match self {
-            Leader::Caesar => [0.75, 0.15, 0.18],
-            Leader::Cleopatra => [0.85, 0.65, 0.15],
-            Leader::Ragnar => [0.15, 0.35, 0.65],
-            Leader::SunTzu => [0.15, 0.55, 0.42],
-            Leader::Alexander => [0.22, 0.45, 0.78],
-            Leader::GenghisKhan => [0.55, 0.42, 0.22],
-            Leader::RichardTheLionheart => [0.72, 0.18, 0.15],
-            Leader::Vercingetorix => [0.28, 0.52, 0.22],
-            Leader::Boudica => [0.88, 0.42, 0.12],
-            Leader::LadySixSky => [0.12, 0.58, 0.52],
-            Leader::Leonidas => [0.62, 0.42, 0.22],
-            Leader::Napoleon => [0.18, 0.28, 0.68],
-        }
+    pub fn count() -> usize {
+        heroes().len()
+    }
+
+    /// Position among the catalog's heroes (stable for a given catalog).
+    pub fn index(self) -> usize {
+        usize::from(self.0)
+    }
+
+    pub fn nth(index: usize) -> Option<Leader> {
+        (index < heroes().len()).then_some(Leader(index as u16))
+    }
+
+    /// The hero with this catalog id, for ids fixed in code (campaign
+    /// advisors, tests). Panics when the catalog lost that hero.
+    pub fn of(id: &str) -> Leader {
+        Leader::all()
+            .find(|leader| leader.id() == id)
+            .unwrap_or_else(|| panic!("the catalog has no hero {id:?}"))
+    }
+
+    fn entry(self) -> &'static HeroEntry {
+        &heroes()[self.index()]
+    }
+
+    pub fn character(self) -> &'static GeoEntity {
+        self.entry().character
+    }
+
+    fn hero(self) -> &'static geo_entities::Hero {
+        self.character()
+            .hero
+            .as_ref()
+            .expect("catalog heroes have a hero entry")
+    }
+
+    /// Catalog id, saved in the database (`caesar`).
+    pub fn id(self) -> &'static str {
+        &self.character().id
+    }
+
+    /// Id in game messages and profiles (`Caesar`, `SunTzu`).
+    pub fn wire_id(self) -> &'static str {
+        &self.entry().wire_id
     }
 
     pub fn name(self) -> &'static str {
-        match self {
-            Leader::Caesar => "Caesar",
-            Leader::Cleopatra => "Cleopatra",
-            Leader::Ragnar => "Ragnar",
-            Leader::SunTzu => "Sun Tzu",
-            Leader::Alexander => "Alexander",
-            Leader::GenghisKhan => "Genghis Khan",
-            Leader::RichardTheLionheart => "Richard the Lionheart",
-            Leader::Vercingetorix => "Vercingetorix",
-            Leader::Boudica => "Boudica",
-            Leader::LadySixSky => "Lady Six Sky",
-            Leader::Leonidas => "Leonidas",
-            Leader::Napoleon => "Napoleon",
+        &self.hero().name
+    }
+
+    /// The people or realm the hero leads.
+    pub fn civilization(self) -> &'static str {
+        &self.character().entity
+    }
+
+    pub fn filler_rgb(self) -> [f32; 3] {
+        self.character()
+            .territory_color_rgb()
+            .expect("catalog heroes have a territory color")
+    }
+
+    /// Always playable without buying it.
+    pub fn always_free(self) -> bool {
+        self.hero().free
+    }
+
+    /// Canonical NFTROPOLY/WOU-ID card token; heroes not registered there have none.
+    pub fn card_token_id(self) -> Option<&'static str> {
+        self.hero().card.as_deref()
+    }
+
+    pub fn ability(self) -> Ability {
+        self.hero().ability
+    }
+
+    /// `1 + percent/100` when this hero's ability matches, else `1`.
+    fn ability_multiplier(self, applies: impl Fn(Ability) -> bool) -> f64 {
+        let ability = self.ability();
+        if applies(ability) {
+            1.0 + f64::from(ability.percent()) / 100.0
+        } else {
+            1.0
         }
     }
 
     pub fn troop_strength_multiplier(self) -> f64 {
-        match self {
-            Leader::Caesar => 1.10,
-            _ => 1.0,
-        }
+        self.ability_multiplier(|a| matches!(a, Ability::CombatStrength { .. }))
     }
 
-    pub fn perk_description(self) -> &'static str {
-        match self {
-            Leader::Caesar => {
-                "Legions of Rome: Armies fight 10% stronger (lower losses, faster conquest)."
-            }
-            Leader::Cleopatra => "Gift of the Nile: Factory districts generate +50% Gold.",
-            Leader::Ragnar => "Longship Raid: Ports generate +50% Gold.",
-            Leader::SunTzu => "Art of War: Factory districts produce troops 20% faster.",
-            Leader::Alexander => "Great Conquest: Territory-conquering troops expand 15% faster.",
-            Leader::GenghisKhan => "Horde Momentum: Gain 10% of gold spent by defeated enemies.",
-            Leader::RichardTheLionheart => {
-                "Crusader Fortresses: City districts grant +50% max troop capacity."
-            }
-            Leader::Vercingetorix => "Hillfort Gaul: City districts generate +50% troop income.",
-            Leader::Boudica => "Iceni Revolt: City districts generate +50% Gold.",
-            Leader::LadySixSky => "Temple of the Sky: Factory districts generate +50% Gold.",
-            Leader::Leonidas => "Spartan Phalanx: Armory districts grant +50% max troop capacity.",
-            Leader::Napoleon => "Grande Armée: Territory-conquering troops expand 20% faster.",
-        }
+    pub fn expansion_speed_multiplier(self) -> f64 {
+        self.ability_multiplier(|a| matches!(a, Ability::ExpansionSpeed { .. }))
     }
 
-    pub fn civilization(self) -> Civilization {
-        match self {
-            Leader::Caesar => Civilization::Rome,
-            Leader::Cleopatra => Civilization::Egypt,
-            Leader::Ragnar => Civilization::Vikings,
-            Leader::SunTzu => Civilization::China,
-            Leader::Alexander => Civilization::Macedon,
-            Leader::GenghisKhan => Civilization::Mongols,
-            Leader::RichardTheLionheart => Civilization::Angevin,
-            Leader::Vercingetorix => Civilization::Gallic,
-            Leader::Boudica => Civilization::Iceni,
-            Leader::LadySixSky => Civilization::Maya,
-            Leader::Leonidas => Civilization::Sparta,
-            Leader::Napoleon => Civilization::France,
-        }
+    pub fn district_income_multiplier(
+        self,
+        district: geo_entities::District,
+        resource: geo_entities::Resource,
+    ) -> f64 {
+        self.ability_multiplier(|a| {
+            matches!(a, Ability::DistrictIncome { district: d, resource: r, .. }
+                if d == district && r == resource)
+        })
     }
 
-    /// Canonical NFTROPOLY/WOU-ID card token for this commander. These ids
-    /// are registered in the `sow` collection and rendered by nftropoly;
-    /// they intentionally do not follow `leader_id()` (richard, not
-    /// richard_the_lionheart), so they are mapped, not derived.
-    pub fn card_token_id(self) -> &'static str {
-        match self {
-            Leader::Caesar => "sow-caesar",
-            Leader::Cleopatra => "sow-cleopatra",
-            Leader::Ragnar => "sow-ragnar",
-            Leader::SunTzu => "sow-sun-tzu",
-            Leader::Alexander => "sow-alexander",
-            Leader::GenghisKhan => "sow-genghis-khan",
-            Leader::RichardTheLionheart => "sow-richard",
-            Leader::Vercingetorix => "sow-vercingetorix",
-            Leader::Boudica => "sow-boudica",
-            Leader::LadySixSky => "sow-lady-six-sky",
-            Leader::Leonidas => "sow-leonidas",
-            Leader::Napoleon => "sow-napoleon",
-        }
+    pub fn city_troop_capacity_multiplier(self) -> f64 {
+        self.ability_multiplier(|a| matches!(a, Ability::CityTroopCapacity { .. }))
+    }
+
+    pub fn bunker_range_multiplier(self) -> f64 {
+        self.ability_multiplier(|a| matches!(a, Ability::BunkerRange { .. }))
+    }
+
+    pub fn bunker_defense_multiplier(self) -> f64 {
+        self.ability_multiplier(|a| matches!(a, Ability::BunkerDefense { .. }))
+    }
+
+    pub fn elimination_gold_multiplier(self) -> f64 {
+        self.ability_multiplier(|a| matches!(a, Ability::EliminationGold { .. }))
     }
 }
 
-pub fn leader_for_civilization(civ: Civilization) -> Leader {
-    match civ {
-        Civilization::Rome => Leader::Caesar,
-        Civilization::Egypt => Leader::Cleopatra,
-        Civilization::Vikings => Leader::Ragnar,
-        Civilization::China => Leader::SunTzu,
-        Civilization::Macedon => Leader::Alexander,
-        Civilization::Mongols => Leader::GenghisKhan,
-        Civilization::Angevin => Leader::RichardTheLionheart,
-        Civilization::Gallic => Leader::Vercingetorix,
-        Civilization::Iceni => Leader::Boudica,
-        Civilization::Maya => Leader::LadySixSky,
-        Civilization::Sparta => Leader::Leonidas,
-        Civilization::France => Leader::Napoleon,
+impl std::fmt::Debug for Leader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.wire_id())
+    }
+}
+
+impl Serialize for Leader {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.wire_id())
+    }
+}
+
+impl<'de> Deserialize<'de> for Leader {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        crate::commerce::leader_from_id(&value)
+            .ok_or_else(|| serde::de::Error::custom(format!("unknown hero {value:?}")))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn saved_hero_ids_stay_readable() {
+        for (wire, id, name) in [
+            ("Caesar", "caesar", "Caesar"),
+            ("SunTzu", "sun_tzu", "Sun Tzu"),
+            (
+                "RichardTheLionheart",
+                "richard_the_lionheart",
+                "Richard the Lionheart",
+            ),
+            ("LadySixSky", "lady_six_sky", "Lady Six Sky"),
+        ] {
+            let leader: Leader = serde_json::from_value(serde_json::json!(wire)).unwrap();
+            assert_eq!(
+                (leader.wire_id(), leader.id(), leader.name()),
+                (wire, id, name)
+            );
+            assert_eq!(
+                serde_json::to_value(leader).unwrap(),
+                serde_json::json!(wire)
+            );
+        }
+        assert_eq!(Leader::default().id(), "caesar");
+    }
+
+    #[test]
+    fn every_hero_is_complete_in_the_catalog() {
+        let mut names = std::collections::HashSet::new();
+        for leader in Leader::all() {
+            assert!(
+                names.insert(leader.name()),
+                "{leader:?} repeats a hero name"
+            );
+            assert!(
+                !leader.civilization().is_empty(),
+                "{leader:?} needs an entity"
+            );
+            assert!(
+                leader.character().territory_color_rgb().is_some(),
+                "{leader:?} needs a territory_color"
+            );
+        }
     }
 }

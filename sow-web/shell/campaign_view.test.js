@@ -1434,8 +1434,11 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     const campaignSource = fs.readFileSync(path.join(shell, "sow-campaign.js"), "utf8");
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
     const requested = [
-        "boudica_transfer_choose", "boudica_transfer_send", "boudica_choose_city", "boudica_structure_upgrade"
+        "boudica_transfer_choose", "boudica_transfer_send", "boudica_choose_city"
     ];
+    // The upgrade button is drawn by the game, so its hand points at a world spot.
+    const upgradeGuide = definition.steps.find(step => step.id === "boudica_structure_upgrade").guide;
+    assert.deepEqual(upgradeGuide, { kind: "world", target: "upgrade_structure", gesture: "tap" });
     const uiSteps = definition.steps.filter(step => step.guide && step.guide.kind === "ui").map(step => step.id).sort();
     const ratioStepId = "boudica_ninth_legion_set_attack_ratio";
     assert.deepEqual(uiSteps, ["boudica_camera_home", ...requested, ratioStepId].sort());

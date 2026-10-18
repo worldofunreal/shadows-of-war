@@ -855,7 +855,6 @@ impl serde::Serialize for S16TracePlayer<'_> {
         field!(betrayal_retaliation_ticks);
         field!(traitor);
         field!(traitor_tick);
-        field!(civilization);
         field!(leader);
         field!(kills);
         field!(deaths);
@@ -951,7 +950,6 @@ impl serde::Serialize for S16TraceConfig<'_> {
             ),
             (
                 &config.nuke_cost,
-                &config.player_civilization,
                 &config.player_leader,
                 &config.scripted_spawns,
                 &config.player_spawn,
@@ -2327,8 +2325,7 @@ fn s13_team_members_spawn_clustered() {
             name: format!("B{id}"),
             color: [0.2, 0.5, 1.0],
             team: Some(Team::Blue),
-            civilization: crate::player::Leader::Caesar.civilization(),
-            leader: crate::player::Leader::Caesar,
+            leader: crate::player::Leader::of("caesar"),
             skin_style: 0,
             is_ai_controlled: false,
         });
@@ -2339,8 +2336,7 @@ fn s13_team_members_spawn_clustered() {
             name: format!("R{id}"),
             color: [1.0, 0.2, 0.2],
             team: Some(Team::Red),
-            civilization: crate::player::Leader::Boudica.civilization(),
-            leader: crate::player::Leader::Boudica,
+            leader: crate::player::Leader::of("boudica"),
             skin_style: 0,
             is_ai_controlled: false,
         });
@@ -2623,17 +2619,18 @@ fn s16_building_rules_trace(legacy: bool) -> Vec<(u64, u64)> {
 #[test]
 fn s16_checkpoint_decision_and_state_reference() {
     let checkpoints = s16_building_rules_trace(false);
-    // v4 doubles elimination payouts; pre-v4 outcomes are checked by the historical test.
+    // Heroes read from the catalog (saved as text, no civilization field) changed the state bytes;
+    // pre-v4 rules are checked by the historical test.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x2e31f475ec404951),
-        (500, 0x4d604b7d8b4ba2d4),
-        (750, 0x3cd4ffb963dfe57a),
-        (1000, 0xa9541e5cce9ddf89),
-        (1250, 0x58c5e28b34228ce5),
-        (1500, 0x6adfd3b9fedbf7d2),
-        (1750, 0x58d6a136129640e1),
-        (2000, 0xc687f782d53ead29),
-        (2102, 0x936a2032dc7b234b),
+        (250, 0x873a3f67560c9f52),
+        (500, 0xe5ec6cfb9df55c91),
+        (750, 0x142767f39dd74c63),
+        (1000, 0xaabd2a4d88a62924),
+        (1250, 0x4cab6fe334bdb3fa),
+        (1500, 0x33222d12b720a676),
+        (1750, 0xb9f4991d7b966300),
+        (2000, 0x6836877bfce135b6),
+        (2102, 0x85c1a2078c8a4596),
     ];
     assert_eq!(
         checkpoints,
@@ -2650,15 +2647,15 @@ fn s16_checkpoint_decision_and_state_reference() {
 fn historical_s16_building_rules_keep_recorded_results() {
     let checkpoints = s16_building_rules_trace(true);
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0xfd4c_71eb_6368_374c),
-        (500, 0x7234_7a30_5390_e14f),
-        (750, 0xf7c1_e26f_5d30_2f31),
-        (1000, 0xd295_5755_c260_f4b1),
-        (1250, 0x15eb_a8b6_3e11_d49d),
-        (1500, 0xda8d_e066_8046_bc06),
-        (1750, 0x38df_da8c_58bd_dbdc),
-        (2000, 0x6814_c2b1_5d98_5b4c),
-        (2102, 0xaff9_ae00_1c44_275b),
+        (250, 0xbf31_4b41_f503_01ec),
+        (500, 0x4805_52db_0c41_233e),
+        (750, 0x60fb_84c1_3800_e2c6),
+        (1000, 0xa892_8123_d0de_d8c5),
+        (1250, 0xbda5_9bae_0128_e960),
+        (1500, 0x0576_786a_c359_f9e5),
+        (1750, 0x8efd_c0d0_1bb9_4b53),
+        (2000, 0x5576_87b1_997c_bd82),
+        (2102, 0xb6ec_474e_56d5_0489),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

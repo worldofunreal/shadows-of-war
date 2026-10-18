@@ -77,7 +77,10 @@ mod tests {
         assert_eq!(splash.cycle_id, 0);
         assert!(!splash.use_random_art);
 
-        splash.transition_anim(SplashJob::EnterGame, sow_core::player::Leader::Boudica);
+        splash.transition_anim(
+            SplashJob::EnterGame,
+            sow_core::player::Leader::of("boudica"),
+        );
         let enter_cycle = splash.cycle_id;
         assert_eq!(enter_cycle, 1);
         splash.use_random_art = true;
@@ -92,7 +95,10 @@ mod tests {
         assert!(!splash.use_random_art);
 
         splash.use_random_art = true;
-        splash.transition_anim(SplashJob::EnterGame, sow_core::player::Leader::Boudica);
+        splash.transition_anim(
+            SplashJob::EnterGame,
+            sow_core::player::Leader::of("boudica"),
+        );
         assert!(!splash.use_random_art);
     }
 }

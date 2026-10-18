@@ -151,8 +151,16 @@ impl SowApp {
         }
 
         let placement_can_confirm = self.building_placement_can_confirm();
+        let building_panel = self.building_panel_layout();
         if let Some(text) = &mut self.gfx.text_renderer {
             text.begin_frame();
+            if let Some((width, height, rgba)) = self.ui.app.asset_loader.bot_portraits.take()
+                && !text.upload_bot_portraits(width, height, &rgba)
+            {
+                log::error!(
+                    "bot portrait atlas {width}x{height} does not match the catalog layout"
+                );
+            }
             for &(slot, ref cell) in &self.ui.app.asset_loader.gpu_avatar_cells {
                 if text.avatar_uv(slot).is_none() {
                     text.upload_avatar(slot, cell);
@@ -170,6 +178,7 @@ impl SowApp {
                     sf,
                     now,
                     placement_can_confirm,
+                    building_panel.as_ref(),
                 );
                 self.ui.app.asset_loader.campaign_avatar_slots = campaign_avatar_slots;
             }

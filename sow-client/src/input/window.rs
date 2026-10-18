@@ -344,16 +344,22 @@ impl SowApp {
                 // handler. Keep the original press so release still resolves
                 // the tile that was clicked instead of turning the gesture
                 // into a new click at every move.
-                self.close_map_context_menu();
+                // A press on the building panel's button keeps the panel open.
+                let panel_button = self.building_panel_button_at(x as f32, y as f32);
+                if !panel_button {
+                    self.close_map_context_menu();
+                }
                 if !is_touch && !pointer_was_down {
                     self.input.tutorial_camera_drag_recorded = false;
                 }
-                self.input.dragging = self.ui.tutorial_camera_only
-                    || (!warship_tool_selected
-                        && self.ui.app.hud_state.selected_nuke_kind.is_none());
+                self.input.dragging = !panel_button
+                    && (self.ui.tutorial_camera_only
+                        || (!warship_tool_selected
+                            && self.ui.app.hud_state.selected_nuke_kind.is_none()));
                 if !is_touch {
                     let action_sent = !self.ui.tutorial_camera_only
                         && !build_tool_selected
+                        && !panel_button
                         && self.try_attack_at(x, y);
                     self.input.map_pointer_start = Some(MapPointerStart {
                         started_at: web_time::Instant::now(),

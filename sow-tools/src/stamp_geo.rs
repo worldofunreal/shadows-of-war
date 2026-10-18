@@ -115,11 +115,20 @@ struct CorrectionManifest {
 #[derive(Deserialize, Default)]
 struct CorrectionRecipe {
     #[serde(default)]
-    land_entity_corrections: Vec<String>,
+    land_point_corrections: Vec<LandPoint>,
+}
+
+/// A small island forced to land so its people can spawn there; kept in
+/// assets/maps/SOURCES.toml so the map stays reproducible.
+#[derive(Deserialize, Clone, Debug)]
+pub(crate) struct LandPoint {
+    pub id: String,
+    pub lat: f64,
+    pub lon: f64,
 }
 
 pub fn run(args: StampGeoArgs) -> Result<(), Box<dyn Error>> {
-    let corrections = load_land_entity_corrections(&args.maps_root)?;
+    let corrections = load_land_point_corrections(&args.maps_root)?;
     let keys: Vec<String> = match &args.map {
         Some(key) => vec![key.clone()],
         None => {
@@ -187,12 +196,14 @@ pub fn run(args: StampGeoArgs) -> Result<(), Box<dyn Error>> {
             println!("{key}: geographic bounds already up to date");
         }
 
-        let entity_corrections = corrections.get(key).map_or(&[][..], |ids| ids.as_slice());
-        let corrected_tiles = apply_land_entity_corrections(&mut map, entity_corrections)?;
-        if !entity_corrections.is_empty() {
+        let point_corrections = corrections
+            .get(key)
+            .map_or(&[][..], |points| points.as_slice());
+        let corrected_tiles = apply_land_point_corrections(&mut map, point_corrections)?;
+        if !point_corrections.is_empty() {
             println!(
-                "{key}: {} curated entity locations, {} map tiles corrected",
-                entity_corrections.len(),
+                "{key}: {} curated land points, {} map tiles corrected",
+                point_corrections.len(),
                 corrected_tiles
             );
         }
@@ -217,9 +228,9 @@ pub fn run(args: StampGeoArgs) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn load_land_entity_corrections(
+fn load_land_point_corrections(
     maps_root: &Path,
-) -> Result<BTreeMap<String, Vec<String>>, Box<dyn Error>> {
+) -> Result<BTreeMap<String, Vec<LandPoint>>, Box<dyn Error>> {
     let path = maps_root.join("SOURCES.toml");
     if !path.is_file() {
         return Ok(BTreeMap::new());
@@ -229,18 +240,18 @@ fn load_land_entity_corrections(
         .recipes
         .into_iter()
         .filter_map(|(key, recipe)| {
-            (!recipe.land_entity_corrections.is_empty())
-                .then_some((key, recipe.land_entity_corrections))
+            (!recipe.land_point_corrections.is_empty())
+                .then_some((key, recipe.land_point_corrections))
         })
         .collect())
 }
 
-fn apply_land_entity_corrections(
+fn apply_land_point_corrections(
     map: &mut MapFile,
-    ids: &[String],
+    points: &[LandPoint],
 ) -> Result<usize, Box<dyn Error>> {
     let Some(bounds) = map.geo_bounds else {
-        if ids.is_empty() {
+        if points.is_empty() {
             return Ok(0);
         }
         return Err("land entity corrections require geographic map bounds".into());
@@ -248,15 +259,10 @@ fn apply_land_entity_corrections(
 
     let mut changed_tiles = HashSet::new();
     let mut corrected_centers = HashSet::new();
-    for id in ids {
-        let entity = sow_core::geo_entities::by_id(id)
-            .ok_or_else(|| format!("unknown geographic entity correction: {id}"))?;
-        let (Some(lat), Some(lon)) = (entity.lat, entity.lon) else {
-            return Err(format!("geographic entity {id} has no coordinates").into());
-        };
+    for point in points {
         let (x, y) = bounds
-            .project(lat as f64, lon as f64, map.width, map.height)
-            .ok_or_else(|| format!("geographic entity {id} is outside this map"))?;
+            .project(point.lat, point.lon, map.width, map.height)
+            .ok_or_else(|| format!("land point {} is outside this map", point.id))?;
         let center = (y * map.width + x) as usize;
         if !corrected_centers.insert(center) {
             continue;
@@ -500,7 +506,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn entity_land_corrections_keep_catalog_coordinates_and_are_repeatable() {
+    fn land_point_corrections_keep_their_coordinates_and_are_repeatable() {
         let mut map = MapFile {
             display_name: "world".into(),
             width: 1000,
@@ -512,20 +518,25 @@ mod tests {
             rosters: Vec::new(),
             terrain: vec![OCEAN_BIT | 31; 500_000],
         };
-        let ids = vec!["tahitians".into(), "kingdom_of_tahiti".into()];
+        let points = vec![
+            LandPoint {
+                id: "tahitians".into(),
+                lat: -17.65,
+                lon: -149.43,
+            },
+            LandPoint {
+                id: "marquesans".into(),
+                lat: -9.0,
+                lon: -139.5,
+            },
+        ];
 
-        assert!(apply_land_entity_corrections(&mut map, &ids).unwrap() > 0);
-        for id in [&ids[0], &ids[1]] {
-            let entity = sow_core::geo_entities::by_id(id).unwrap();
+        assert!(apply_land_point_corrections(&mut map, &points).unwrap() > 0);
+        for point in &points {
             let (x, y) = map
                 .geo_bounds
                 .unwrap()
-                .project(
-                    entity.lat.unwrap() as f64,
-                    entity.lon.unwrap() as f64,
-                    map.width,
-                    map.height,
-                )
+                .project(point.lat, point.lon, map.width, map.height)
                 .unwrap();
             assert_eq!(
                 map.terrain[(y * map.width + x) as usize] & (LAND_BIT | SHORE_BIT),
@@ -533,6 +544,6 @@ mod tests {
             );
         }
         assert_eq!(map.num_land_tiles, 2);
-        assert_eq!(apply_land_entity_corrections(&mut map, &ids).unwrap(), 0);
+        assert_eq!(apply_land_point_corrections(&mut map, &points).unwrap(), 0);
     }
 }

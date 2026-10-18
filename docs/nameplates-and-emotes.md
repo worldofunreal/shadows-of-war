@@ -29,7 +29,7 @@ Clic derecho / mantener pulsado sobre territorio propio
 | Vida del efecto y preparación compartida del avatar | `sow-client/src/render/world/nameplates.rs`: `NameplateSystem`, `avatar_plan`, `paint_prepared_avatar` |
 | Curvas de movimiento compartidas con oro | `sow-client/src/render/motion.rs`, `render/world/feedback.rs` |
 | Avisos agrupados | `sow-client/src/sim/snapshot_fx.rs`, `ui/hud/state.rs` |
-| Lectura de grabaciones anteriores | `sow-server/src/replay.rs`; registro de versión en `register_match_start` |
+| Lectura de grabaciones actuales | `sow-server/src/replay.rs`; registro de versión en `register_match_start` |
 
 No añadir otro selector, renderizador de placas, textura por jugador, catálogo
 de mensajes ni ruta de red para comunicar estas cuatro acciones.
@@ -71,17 +71,20 @@ de mensajes ni ruta de red para comunicar estas cuatro acciones.
 Cada líder tiene su carpeta `assets/art/leaders/<slug>/`: `portrait.*` sirve
 perfiles, diálogos y avisos, y `expressions.*` sirve las expresiones del mapa.
 El pipeline las publica en `/assets/gameplay/avatars/<slug>.webp` y
-`/assets/gameplay/avatars/spritesheets/<slug>.webp`. Ambos usan `sow_data::commerce::leader_id`; no se construye
-el nombre de archivo a partir del nombre visible del héroe.
+`/assets/gameplay/avatars/spritesheets/<slug>.webp`. El `<slug>` es el `id` del héroe en
+`assets/geo_entities.json` (`Leader::id`); no se construye el nombre de archivo a partir del
+nombre visible del héroe.
 
-- Una hoja por cada héroe de `Leader::ALL`; orden de lectura: Happy, Calm,
+- Una hoja por cada héroe del catálogo (`Leader::all`); orden de lectura: Happy, Calm,
   Fear, Angry. Se recorta un margen del 1 % para retirar separadores, después
   un cuadrado centrado por cuadrante y finalmente se ajusta a 256 × 256.
   Las hojas no cuadradas o con dimensiones impares son válidas.
-- La textura compartida tiene 8 × 16 espacios de 256 px (32 MiB RGBA). Cada héroe
-  reserva cuatro. Después vienen respaldo y retratos estáticos de campaña.
+- La textura compartida tiene 8 × 16 espacios de 256 px (32 MiB RGBA). Primero van
+  el respaldo y la moneda; después cada héroe reserva cuatro, en el orden del
+  catálogo, y al final los retratos estáticos de campaña. Una prueba de
+  `sow-render` falla si los héroes no dejan lugar para las campañas.
 - Los consumidores utilizan `leader_avatar_slot`, `AVATAR_FALLBACK_SLOT` y
-  `AVATAR_CAMPAIGN_FIRST_SLOT`. Un identificador de campaña que coincide con un
+  `avatar_campaign_first_slot()`. Un identificador de campaña que coincide con un
   héroe comparte su bloque; no ocupa otro retrato.
 - El héroe seleccionado y los presentes se cargan primero. Se conserva el
   máximo de seis descargas simultáneas y sus reintentos. Si la hoja no existe,
@@ -157,15 +160,11 @@ de turnos guardados. `LIVE_PROTOCOL_VERSION` identifica por separado los mensaje
 de conexión. `gameplay_build_identity` incluye ambos; el servidor rechaza una
 conexión anterior sin cambiar cómo interpreta una grabación histórica.
 
-Las nuevas partidas registran `replay_format = 4` en sus datos de inicio
-confiables. La ausencia de ese campo significa formato 1. El verificador escoge
-el lector mediante esos datos; el archivo subido no decide su versión.
-
-`sow-server/src/replay.rs` conserva los formatos 1, 2 y 3. El formato 1 mantiene su
-antigua relación entre reacción y ventana de represalia; los formatos anteriores
-mantienen sus pagos históricos al comprobar resultados, y los anteriores a 3
-también conservan sus reglas de construcción. Las nuevas partidas duplican el
-botín de eliminación antes de repartirlo entre el atacante y sus asistentes.
+Las partidas registran `replay_format = GAMEPLAY_FORMAT_VERSION` en sus datos de inicio confiables.
+`sow-server/src/replay.rs` solo lee ese formato. La ausencia del campo y las
+versiones anteriores se rechazan; el archivo entregado no decide su versión.
+El botín de eliminación se duplica antes de repartirlo entre el atacante y
+sus asistentes.
 Las nuevas partidas usan bases 4x4 sin separación adicional y aceptan solo la
 posición confirmada. Respeta el índice de cada acción porque también interviene
 en identificadores de flotas. Cubre
@@ -182,8 +181,8 @@ publicación. `./sow l` sirve para la revisión visual local y no sustituye esa
 aceptación.
 
 - `sow-core/src/emote.rs`: códigos, condiciones, repetición, fijado y traición.
-- `sow-server/src/replay.rs` y `tests/fixtures/emotes-v1.bin`: formato congelado,
-  fijado anterior, reemplazo, cierre parcial y formato nuevo.
+- `sow-server/src/replay.rs`: solo lee el formato de grabación actual; las
+  grabaciones de versiones anteriores se rechazan con un mensaje claro.
 - `sow-client/tests/nameplate_emotes.rs`: curvas, cuadrantes, los doce héroes,
   respaldo, reutilización y capacidad de todos los retratos referenciados.
 - `sow-client/src/render/world/nameplates.rs`: eventos inmediatos, repetición,

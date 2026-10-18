@@ -2531,6 +2531,14 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         "assault": guide_screen(assault_tile),
         "target_action": guide_screen(target_tile),
         "build_site": build_site_screen,
+        "upgrade_structure": app
+            .building_panel_layout()
+            .filter(|(panel, _)| panel.upgrade.is_some())
+            .map(|(_, layout)| serde_json::json!({
+                "x": layout.button_center[0] / sf,
+                "y": layout.button_center[1] / sf,
+            }))
+            .unwrap_or(serde_json::Value::Null),
         "confirm_building_placement": app
             .placement_controls()
             .map(|controls| serde_json::json!({
@@ -2629,8 +2637,7 @@ fn player_json(
         "is_me": player.id == my_pid,
         "leader": leader_id(player.leader),
         "avatar": &player.campaign_avatar,
-        "civilization": player.civilization.name(),
-        "team": player.team,
+                "team": player.team,
         "active_emote": player.active_emote,
         "disconnected": player.disconnected,
         "traitor": player.traitor,
@@ -2847,251 +2854,12 @@ fn build_inbox(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) -> serde
     serde_json::Value::Array(requests)
 }
 
-fn building_benefit_label(
-    kind: sow_core::game::BuildingKind,
-    level: u8,
-    leader: sow_core::player::Leader,
-    config: &sow_core::game_config::GameConfig,
-) -> String {
-    use sow_core::game::BuildingKind as Kind;
-    let per_minute = config.global_speed_multiplier * 60.0;
-    let level_weight = sow_core::building::income_level_weight(level);
-    match kind {
-        Kind::City => format!(
-            "Adds +{:.0} troop capacity and +{:.0} troops/min{}.",
-            config.city_max_troops * f64::from(level),
-            config.city_troop_income * f64::from(level) * per_minute,
-            if level == Kind::City.max_level() {
-                "; unlocks nuclear attacks"
-            } else {
-                ""
-            },
-        ),
-        Kind::Port => format!(
-            "Adds {level} boat slots, +{level}% boat speed, +{:.0} port gold/min and up to +{:.0} merchant gold/min with routes.",
-            config.port_gold_income
-                * level_weight
-                * if leader == sow_core::player::Leader::Ragnar {
-                    1.5
-                } else {
-                    1.0
-                }
-                * per_minute,
-            config.trade_ship_gold_income * f64::from(level) * per_minute,
-        ),
-        Kind::Factory => format!(
-            "Produces +{:.0} gold/min.",
-            config.factory_gold_income * f64::from(level) * per_minute
-        ),
-        Kind::Bunker => {
-            let range = (config.bunker_range.round() as u32
-                + u32::from(level.saturating_sub(1)) * 2)
-                .min(20);
-            let defense = u32::from(level) * 5;
-            if level >= sow_core::game::BuildingKind::Bunker.max_level() {
-                format!(
-                    "Raises nearby enemy attack losses by up to {defense}% within range {range}; intercepts nuclear bombs. Combined defense stops at 50%."
-                )
-            } else {
-                format!(
-                    "Raises nearby enemy attack losses by up to {defense}% within range {range}. Combined defense stops at 50%."
-                )
-            }
-        }
-        Kind::Farm => format!(
-            "This plot produces +{:.0} troops/min and +{:.0} gold/min.",
-            config.farm_troop_income * level_weight * per_minute,
-            config.farm_gold_income * level_weight * per_minute,
-        ),
-    }
-}
-
-fn building_metric(
-    icon: &'static str,
-    label: &'static str,
-    value: f64,
-    prefix: &'static str,
-    unit: &'static str,
-) -> serde_json::Value {
-    serde_json::json!({ "icon": icon, "label": label, "value": value, "prefix": prefix, "unit": unit })
-}
-
-fn building_metrics(
-    kind: sow_core::game::BuildingKind,
-    level: u8,
-    leader: sow_core::player::Leader,
-    config: &sow_core::game_config::GameConfig,
-) -> Vec<serde_json::Value> {
-    use sow_core::game::BuildingKind as Kind;
-    if level == 0 {
-        return Vec::new();
-    }
-    let level_weight = sow_core::building::income_level_weight(level);
-    let level = f64::from(level);
-    let per_minute = config.global_speed_multiplier * 60.0;
-    let metrics = match kind {
-        Kind::City => vec![
-            building_metric(
-                "troops",
-                "Troop capacity",
-                config.city_max_troops * level,
-                "+",
-                "",
-            ),
-            building_metric(
-                "troops",
-                "Troop income",
-                config.city_troop_income * level * per_minute,
-                "+",
-                "/min",
-            ),
-        ],
-        Kind::Port => vec![
-            building_metric("port", "Boat slots", level, "+", ""),
-            building_metric("speed", "Boat speed", level, "+", "%"),
-            building_metric(
-                "gold",
-                "Port gold income",
-                config.port_gold_income
-                    * level_weight
-                    * if leader == sow_core::player::Leader::Ragnar {
-                        1.5
-                    } else {
-                        1.0
-                    }
-                    * per_minute,
-                "+",
-                "/min",
-            ),
-            building_metric(
-                "gold",
-                "Merchant income with routes",
-                config.trade_ship_gold_income * level * per_minute,
-                "up to +",
-                "/min",
-            ),
-        ],
-        Kind::Factory => vec![building_metric(
-            "gold",
-            "Gold income",
-            config.factory_gold_income * level * per_minute,
-            "+",
-            "/min",
-        )],
-        Kind::Bunker => {
-            let range = (config.bunker_range.round() as u32 + (level as u32 - 1) * 2).min(20);
-            let mut stats = vec![
-                building_metric("defense", "Enemy attack losses", level * 5.0, "+", "%"),
-                building_metric("range", "Defense range", f64::from(range), "", ""),
-            ];
-            if level as u8 >= Kind::Bunker.max_level() {
-                stats.push(serde_json::json!({
-                    "icon": "nuke",
-                    "label": "Nuclear interception",
-                    "value": "✓",
-                }));
-            }
-            stats
-        }
-        Kind::Farm => vec![
-            building_metric(
-                "troops",
-                "Troop income",
-                config.farm_troop_income * level_weight * per_minute,
-                "+",
-                "/min",
-            ),
-            building_metric(
-                "gold",
-                "Gold income",
-                config.farm_gold_income * level_weight * per_minute,
-                "+",
-                "/min",
-            ),
-        ],
-    };
-    metrics
-}
-
-fn building_detail_payload(
-    app: &SowApp,
-    building: &sow_core::protocol::BuildingSnapshot,
-) -> serde_json::Value {
-    let active_level = building.active_level();
-    let next_level = active_level.saturating_add(1);
-    let my_id = app
-        .sim
-        .my_player_id
-        .unwrap_or(app.ui.app.hud_state.my_player_id);
-    let owns = building.owner_id == my_id;
-    let snapshot = app.sim.current_snapshot.as_ref();
-    let leader = snapshot
-        .and_then(|snapshot| {
-            snapshot
-                .players
-                .iter()
-                .find(|player| player.id == building.owner_id)
-        })
-        .map(|player| player.leader)
-        .unwrap_or_default();
-    let cost = app
-        .map_menu_cost(
-            crate::input::map_click::MapMenuAction::UpgradeStructure,
-            building.tile_idx,
-        )
-        .0
-        .unwrap_or_default();
-    let has_gold = app.current_player_gold() >= cost;
-    let maxed = next_level > building.kind.max_level();
-    let campaign_upgrade_locked =
-        !maxed && next_level > app.campaign_building_max_level(building.kind);
-    let duration_ticks =
-        sow_core::building::structure_upgrade_duration_ticks(building.kind, next_level);
-    let boat_slots = snapshot.and_then(|snapshot| {
-        snapshot
-            .players
-            .iter()
-            .find(|player| player.id == my_id)
-            .map(|player| {
-                let port_levels = snapshot
-                    .buildings
-                    .iter()
-                    .filter(|candidate| {
-                        candidate.owner_id == my_id
-                            && candidate.kind == sow_core::game::BuildingKind::Port
-                    })
-                    .map(|candidate| u32::from(candidate.active_level()))
-                    .sum::<u32>();
-                serde_json::json!({
-                    "used": player.boats_in_use,
-                    "total": player.boat_capacity,
-                    "speed_percent": port_levels.min(30),
-                })
-            })
-    });
+fn building_detail_payload(building: &sow_core::protocol::BuildingSnapshot) -> serde_json::Value {
+    // The panel itself is drawn in the world; the shell only needs the kind
+    // for the radial icon and the tutorial's building_selected fact.
     serde_json::json!({
-        "id": building.id,
         "kind": building.kind.as_str(),
-        "level": active_level,
-        "name": if active_level == 0 {
-            building.kind.as_str()
-        } else {
-            building.kind.level_name(active_level)
-        },
-        "benefit_label": building_benefit_label(building.kind, active_level, leader, &app.sim.config),
-        "metrics": building_metrics(building.kind, active_level, leader, &app.sim.config),
-        "next_level": (!building.under_construction && !maxed && !campaign_upgrade_locked).then_some(next_level),
-        "next_benefit_label": (!building.under_construction && !maxed && !campaign_upgrade_locked)
-            .then(|| building_benefit_label(building.kind, next_level, leader, &app.sim.config)),
-        "next_metrics": (!building.under_construction && !maxed && !campaign_upgrade_locked)
-            .then(|| building_metrics(building.kind, next_level, leader, &app.sim.config)),
-        "cost": cost,
-        "duration_seconds": (!building.under_construction && !maxed && !campaign_upgrade_locked).then_some(duration_ticks as f64 * app.sim.config.tick_rate_ms as f64 / 1000.0),
-        "under_construction": building.under_construction,
-        "campaign_upgrade_locked": campaign_upgrade_locked,
-        "boat_slots": (building.kind == sow_core::game::BuildingKind::Port).then_some(boat_slots).flatten(),
-        "owns": owns,
-        "can_upgrade": owns && !building.under_construction && !maxed && !campaign_upgrade_locked && has_gold
+        "level": building.active_level(),
     })
 }
 
@@ -3352,7 +3120,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                             .iter()
                             .find(|building| building.tile_idx == menu.tile_idx)
                     })
-                    .map(|building| building_detail_payload(app, building));
+                    .map(building_detail_payload);
                 serde_json::json!({
                     "open": true,
                     "view": match menu.view {
@@ -3683,10 +3451,7 @@ fn splash_job_name(job: &crate::ui::loading_screen::SplashJob) -> &'static str {
 }
 
 fn leader_id(leader: sow_core::player::Leader) -> String {
-    serde_json::to_value(leader)
-        .ok()
-        .and_then(|value| value.as_str().map(ToOwned::to_owned))
-        .unwrap_or_else(|| leader.name().replace(' ', ""))
+    leader.wire_id().to_string()
 }
 
 fn loader_leader_id(splash: &crate::ui::loading_screen::SplashState) -> Option<String> {
@@ -3867,14 +3632,9 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             progress.gems,
             rotation_period,
         );
-        let leaders: Vec<serde_json::Value> = sow_core::player::Leader::ALL
-            .into_iter()
+        let leaders: Vec<serde_json::Value> = sow_core::player::Leader::all()
             .map(|leader| {
-                let slug = sow_data::commerce::leader_id(leader);
-                let perk_slug = match leader {
-                    sow_core::player::Leader::RichardTheLionheart => "richard".to_string(),
-                    _ => slug.replace('_', ""),
-                };
+                let slug = leader.id();
                 let offer = store_catalog
                     .leaders
                     .iter()
@@ -3883,27 +3643,10 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                 serde_json::json!({
                     "id": leader_id(leader),
                     "name": leader.name(),
-                    "civilization_key": format!(
-                        "heroes.civilization_{}",
-                        match leader.civilization() {
-                            sow_core::player::Civilization::Rome => "rome",
-                            sow_core::player::Civilization::Egypt => "egypt",
-                            sow_core::player::Civilization::Vikings => "vikings",
-                            sow_core::player::Civilization::China => "china",
-                            sow_core::player::Civilization::Macedon => "macedon",
-                            sow_core::player::Civilization::Mongols => "mongols",
-                            sow_core::player::Civilization::Angevin => "angevin",
-                            sow_core::player::Civilization::Gallic => "gallic",
-                            sow_core::player::Civilization::Iceni => "iceni",
-                            sow_core::player::Civilization::Maya => "maya",
-                            sow_core::player::Civilization::Sparta => "sparta",
-                            sow_core::player::Civilization::France => "france",
-                        }
-                    ),
-                    "perk_key": format!(
-                        "site.leader_{}_description",
-                        perk_slug
-                    ),
+                    "civilization": leader.civilization(),
+                    "civilization_key": format!("heroes.leader_{slug}_civilization"),
+                    "perk_key": format!("site.leader_{slug}_description"),
+                    "region": leader.character().region,
                     "slug": slug,
                     "free_rotation": offer.free_rotation,
                     "permanently_free": offer.permanently_free,
@@ -3951,7 +3694,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "player_name": state.player_name,
             "selected_leader": leader_id(state.selected_leader),
             "selected_leader_name": state.selected_leader.name(),
-            "selected_civilization": state.selected_civilization.name(),
+            "selected_civilization": state.selected_leader.civilization(),
             "prefer_random_leader": state.prefer_random_leader,
             "show_browser": matches!(
                 state.visible_route(),
@@ -4009,6 +3752,10 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "leaders": leaders,
             "map_catalog": map_catalog,
             "custom_game_config": &*state.custom_game_config,
+            "bot_limits": {
+                "tribes": sow_core::game_config::GameConfig::max_tribe_bots(),
+                "nations": sow_core::game_config::GameConfig::max_nation_bots(),
+            },
             "custom_game_is_private": state.custom_game_is_private,
             "custom_game_is_sp": state.custom_game_is_sp,
             "hud": serde_json::Value::Null,
@@ -4062,7 +3809,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
 mod tests {
     use super::*;
     use sow_core::game::GamePhase;
-    use sow_core::player::{Civilization, Leader, PlayerType};
+    use sow_core::player::{Leader, PlayerType};
     use sow_core::protocol::{PlayerSnapshot, SimSnapshot};
     use std::sync::Arc;
 
@@ -4072,20 +3819,20 @@ mod tests {
         assert_eq!(loader_leader_id(&splash), None);
         splash.transition_anim(
             crate::ui::loading_screen::SplashJob::EnterGame,
-            Leader::Caesar,
+            Leader::of("caesar"),
         );
         assert_eq!(loader_leader_id(&splash).as_deref(), Some("Caesar"));
 
         splash.use_random_art = true;
         assert_eq!(loader_leader_id(&splash).as_deref(), Some("random"));
-        assert_eq!(splash.loader_leader, Some(Leader::Caesar));
+        assert_eq!(splash.loader_leader, Some(Leader::of("caesar")));
 
         splash.transition_anim(
             crate::ui::loading_screen::SplashJob::EnterGame,
-            Leader::Boudica,
+            Leader::of("boudica"),
         );
         assert_eq!(loader_leader_id(&splash).as_deref(), Some("Boudica"));
-        assert_eq!(splash.loader_leader, Some(Leader::Boudica));
+        assert_eq!(splash.loader_leader, Some(Leader::of("boudica")));
     }
 
     fn test_player(id: u16, tile_count: u32, troops: f64) -> PlayerSnapshot {
@@ -4113,8 +3860,7 @@ mod tests {
             can_express_emote: false,
             can_retaliate: false,
             traitor: false,
-            civilization: Civilization::Rome,
-            leader: Leader::Caesar,
+            leader: Leader::of("caesar"),
             campaign_avatar: None,
             is_campaign_faction: false,
             skin_style: 0,
@@ -4585,7 +4331,7 @@ mod tests {
 
         let mut human = test_player(1, 5, 100.0);
         human.player_type = PlayerType::Human;
-        human.leader = Leader::Caesar;
+        human.leader = Leader::of("caesar");
         let bot = test_player(2, 5, 100.0);
         let mut nation = test_player(3, 5, 100.0);
         nation.player_type = PlayerType::Nation;
@@ -4616,16 +4362,12 @@ mod tests {
         let human_avatar = &operations.iter().find(|row| row["id"] == 2).unwrap()["avatar"];
         assert_eq!(human_avatar["kind"], "portrait");
         assert_eq!(human_avatar["slug"], "caesar");
+        // Bots without a catalog portrait show the shared fallback, never an emoji.
         let bot_avatar = &operations.iter().find(|row| row["id"] == 3).unwrap()["avatar"];
-        assert_eq!(bot_avatar["kind"], "emblem");
-        assert!(
-            bot_avatar["symbol"]
-                .as_str()
-                .is_some_and(|symbol| !symbol.is_empty())
-        );
+        assert_eq!(bot_avatar["kind"], "fallback");
         assert_eq!(
             operations.iter().find(|row| row["id"] == 4).unwrap()["avatar"]["kind"],
-            "emblem"
+            "fallback"
         );
         assert_eq!(
             operations.iter().find(|row| row["id"] == 5).unwrap()["avatar"],
@@ -4717,69 +4459,6 @@ mod tests {
         assert_eq!(
             combat_operations_snapshot_tick(&snapshot, 1, Some(&engine)),
             0
-        );
-    }
-
-    #[test]
-    fn building_metrics_keep_effect_values_compact_and_accurate() {
-        let port = building_metrics(
-            sow_core::game::BuildingKind::Port,
-            2,
-            sow_core::player::Leader::Caesar,
-            &sow_core::game_config::GameConfig::default(),
-        );
-        assert!(
-            port.iter()
-                .any(|metric| { metric["icon"] == "port" && metric["value"] == 2.0 })
-        );
-        assert!(port.iter().any(|metric| {
-            metric["label"] == "Port gold income"
-                && metric["value"] == 30.0
-                && metric["unit"] == "/min"
-        }));
-        assert!(port.iter().any(|metric| {
-            metric["label"] == "Merchant income with routes" && metric["value"] == 24.0
-        }));
-        let ragnar_port = building_metrics(
-            sow_core::game::BuildingKind::Port,
-            2,
-            sow_core::player::Leader::Ragnar,
-            &sow_core::game_config::GameConfig::default(),
-        );
-        assert!(
-            ragnar_port
-                .iter()
-                .any(|metric| { metric["label"] == "Port gold income" && metric["value"] == 45.0 })
-        );
-        let farm = building_metrics(
-            sow_core::game::BuildingKind::Farm,
-            2,
-            sow_core::player::Leader::Caesar,
-            &sow_core::game_config::GameConfig::default(),
-        );
-        assert!(
-            farm.iter()
-                .any(|metric| { metric["label"] == "Troop income" && metric["value"] == 100.0 })
-        );
-        assert!(
-            farm.iter()
-                .any(|metric| { metric["label"] == "Gold income" && metric["value"] == 10.0 })
-        );
-        let bunker = building_metrics(
-            sow_core::game::BuildingKind::Bunker,
-            2,
-            sow_core::player::Leader::Caesar,
-            &sow_core::game_config::GameConfig::default(),
-        );
-        assert!(
-            bunker
-                .iter()
-                .any(|metric| { metric["icon"] == "defense" && metric["value"] == 10.0 })
-        );
-        assert!(
-            bunker
-                .iter()
-                .any(|metric| { metric["icon"] == "range" && metric["value"] == 16.0 })
         );
     }
 

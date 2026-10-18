@@ -7,7 +7,6 @@ mod matchmaking_population;
 mod replay;
 mod verification;
 
-use axum::body::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use hmac::{Hmac, Mac};
 use lobby::{
@@ -39,7 +38,6 @@ const RELAY_TICKET_TTL_SECS: u64 = 900;
 const RELAY_HANDOFF_SEND_TIMEOUT_SECS: u64 = 10;
 const DEFAULT_MAX_CONNECTIONS: usize = 32_768;
 const HANDSHAKE_TIMEOUT_SECS: u64 = 10;
-const MAX_REPLAY_BYTES: usize = sow_data::MAX_MATCH_ARCHIVE_BYTES;
 
 const MAX_REPLAY_INTENTS: usize = sow_data::MAX_MATCH_ARCHIVE_BYTES / 8;
 const MAX_REPLAY_INTENTS_PER_TURN: usize = 4_096;
@@ -170,6 +168,16 @@ fn relay_mgmt_headers(
 /// management NIC. The game hostname and management route intentionally use
 /// different network interfaces on the two-NIC relay VM.
 fn relay_mgmt_client(mgmt_url: &str) -> Result<reqwest::Client, String> {
+    static CLIENTS: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<String, reqwest::Client>>,
+    > = std::sync::OnceLock::new();
+    let mut clients = CLIENTS
+        .get_or_init(Default::default)
+        .lock()
+        .map_err(|_| "relay management client registry lock failed".to_string())?;
+    if let Some(client) = clients.get(mgmt_url) {
+        return Ok(client.clone());
+    }
     let mut builder = reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none());
@@ -190,9 +198,11 @@ fn relay_mgmt_client(mgmt_url: &str) -> Result<reqwest::Client, String> {
             builder = builder.resolve(host, SocketAddr::new(ip, port));
         }
     }
-    builder
+    let client = builder
         .build()
-        .map_err(|e| format!("build relay management client: {e}"))
+        .map_err(|e| format!("build relay management client: {e}"))?;
+    clients.insert(mgmt_url.to_string(), client.clone());
+    Ok(client)
 }
 
 fn validate_runtime_security() -> Result<(), String> {
@@ -425,6 +435,7 @@ async fn register_match_start(rc: &RelayCandidate) -> Result<(), String> {
         "player_ids": rc.player_ids,
         "metadata": {
             "replay_format": sow_core::protocol::GAMEPLAY_FORMAT_VERSION,
+            "simulation_rules_id": sow_core::SIMULATION_RULES_ID,
             "map_sha256": map_sha256,
             "relay_worker_index": rc.worker_index,
             "relay_port": rc.relay_port,
@@ -956,7 +967,6 @@ async fn main() {
                                         team: p.team,
                                         spawn_x: 0,
                                         spawn_y: 0,
-                                        civilization: p.civilization,
                                         leader: p.leader,
                                         skin_style: p.skin_style,
                                         is_ai_controlled: p.is_internal_bot,
@@ -1222,8 +1232,11 @@ async fn main() {
             maps_root: root.clone(),
             db_url: db_url_http,
             db_secret: db_secret_http,
-            replay_verification: Arc::new(Semaphore::new(1)),
-            verified_prefix: Arc::new(std::sync::Mutex::new(verification::Sessions::new())),
+            replay_verification: Arc::new(Semaphore::new(
+                std::thread::available_parallelism()
+                    .map_or(1, |n| n.get().saturating_sub(1).max(1)),
+            )),
+            verified_prefix: Arc::new(verification::Sessions::new()),
             replay_http,
         };
         let catalog_route = axum::Router::new()
@@ -1237,21 +1250,6 @@ async fn main() {
                 axum::routing::post(verification::handle_progress).layer(
                     axum::extract::DefaultBodyLimit::max(sow_data::MAX_MATCH_CHUNK_BYTES * 5),
                 ),
-            )
-            .route(
-                "/internal/match/exit",
-                axum::routing::post(handle_match_exit)
-                    .layer(axum::extract::DefaultBodyLimit::max(4096)),
-            )
-            .route(
-                "/internal/replay/verify/{match_id}",
-                axum::routing::post(verify_match_replay_handler)
-                    .layer(axum::extract::DefaultBodyLimit::max(MAX_REPLAY_BYTES)),
-            )
-            .route(
-                "/internal/replay/verify/{match_id}/participant/{account_id}/{closure_turn}",
-                axum::routing::post(verify_match_participant_replay_handler)
-                    .layer(axum::extract::DefaultBodyLimit::max(MAX_REPLAY_BYTES)),
             )
             .route(
                 "/maps/catalog.bin",
@@ -1620,7 +1618,7 @@ struct AppState {
     db_url: String,
     db_secret: String,
     replay_verification: Arc<Semaphore>,
-    verified_prefix: Arc<std::sync::Mutex<verification::Sessions>>,
+    verified_prefix: Arc<verification::Sessions>,
     replay_http: reqwest::Client,
 }
 
@@ -1640,6 +1638,10 @@ struct ReplayStartPlayer {
 #[derive(Debug)]
 enum ReplayVerificationError {
     Invalid(String),
+    HistoryRequired {
+        expected_sequence: u64,
+        verified_turns: u64,
+    },
     Unavailable(String),
     /// The match map is not on disk. This is retryable: a later release may
     /// ship the map (campaign maps once missed a release this way). It logs
@@ -1647,432 +1649,52 @@ enum ReplayVerificationError {
     MissingMap(String),
 }
 
-use sow_data::profile::MatchExitCommand;
-
-/// The database owns the durable command. This hop only authenticates and
-/// delivers it to the permanent management listener of the owning relay.
-async fn handle_match_exit(
-    axum::extract::State(state): axum::extract::State<AppState>,
-    headers: axum::http::HeaderMap,
-    axum::Json(mut command): axum::Json<MatchExitCommand>,
-) -> axum::response::Response {
-    use axum::response::IntoResponse;
-    if !admin_request_authorized(&headers, &state.db_secret) {
-        return (
-            axum::http::StatusCode::UNAUTHORIZED,
-            axum::Json(serde_json::json!({"error":"Unauthorized"})),
-        )
-            .into_response();
-    }
-    if command.match_id.parse::<u64>().is_err()
-        || !sow_data::profile::is_valid_account_id(&command.account_id)
-    {
-        return (
-            axum::http::StatusCode::BAD_REQUEST,
-            axum::Json(serde_json::json!({"error":"invalid participant"})),
-        )
-            .into_response();
-    }
-    let result = async {
-        let start = state
-            .replay_http
-            .get(format!(
-                "{}/internal/match-start/{}",
-                state.db_url.trim_end_matches('/'),
-                command.match_id
-            ))
-            .bearer_auth(&state.db_secret)
-            .send()
-            .await
-            .map_err(|error| error.to_string())?
-            .error_for_status()
-            .map_err(|error| error.to_string())?
-            .json::<sow_data::profile::MatchStartRecord>()
-            .await
-            .map_err(|error| error.to_string())?;
-        let human = start
-            .metadata
-            .get("relay_players")
-            .and_then(serde_json::Value::as_array)
-            .and_then(|players| {
-                players.iter().find(|player| {
-                    player
-                        .get("database_account_id")
-                        .and_then(serde_json::Value::as_str)
-                        == Some(command.account_id.as_str())
-                        && player
-                            .get("is_internal")
-                            .and_then(serde_json::Value::as_bool)
-                            != Some(true)
-                })
-            });
-        let human = human
-            .filter(|_| start.player_ids.contains(&command.account_id))
-            .ok_or("account is not a registered human participant")?;
-        command.player_id = Some(
-            human
-                .get("player_id")
-                .and_then(serde_json::Value::as_u64)
-                .and_then(|id| u16::try_from(id).ok())
-                .ok_or("registered player id is missing")?,
-        );
-        let workers = relay_workers()?;
-        let mut owner = start
-            .metadata
-            .get("relay_worker_index")
-            .and_then(serde_json::Value::as_u64);
-        let secret = std::env::var("SOW_RELAY_CONTROL_SECRET")
-            .map_err(|_| "relay control secret unavailable".to_string())?;
-        if owner.is_none() {
-            // Legacy registrations have no worker route. Prove all workers are
-            // reachable before treating a journal as detached from a live game.
-            for worker in &workers {
-                let path = "/internal/lobbies";
-                let url = format!("{}{}", worker.mgmt_url.trim_end_matches('/'), path);
-                let (timestamp, nonce, signature) = relay_mgmt_headers(&secret, "GET", path, &[])?;
-                let response = relay_mgmt_client(&url)?
-                    .get(&url)
-                    .timeout(Duration::from_secs(3))
-                    .header("X-SOW-Timestamp", timestamp)
-                    .header("X-SOW-Nonce", nonce)
-                    .header("X-SOW-Signature", signature)
-                    .send()
-                    .await
-                    .map_err(|error| error.to_string())?
-                    .error_for_status()
-                    .map_err(|error| error.to_string())?;
-                let response = response
-                    .json::<serde_json::Value>()
-                    .await
-                    .map_err(|error| error.to_string())?;
-                if response
-                    .get("lobbies")
-                    .and_then(serde_json::Value::as_array)
-                    .is_some_and(|lobbies| {
-                        lobbies.iter().any(|lobby| {
-                            lobby
-                                .get("lobby_id")
-                                .and_then(serde_json::Value::as_u64)
-                                .is_some_and(|id| id.to_string() == command.match_id)
-                        })
-                    })
-                {
-                    owner = Some(worker.id as u64);
-                    break;
-                }
+impl std::fmt::Display for ReplayVerificationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Invalid(reason) | Self::Unavailable(reason) | Self::MissingMap(reason) => {
+                f.write_str(reason)
             }
-            if owner.is_none() {
-                owner = workers.first().map(|worker| worker.id as u64);
-            }
-        }
-        command.owner_verified =
-            owner.is_some_and(|owner| workers.iter().any(|worker| worker.id as u64 == owner));
-        if !command.owner_verified {
-            return Err("registered relay owner is not configured".into());
-        }
-        let path = "/internal/match/exit";
-        let body = serde_json::to_vec(&command).map_err(|error| error.to_string())?;
-        let mut last_error = "registered match is awaiting relay result".to_string();
-        for worker in workers
-            .iter()
-            .filter(|worker| owner.is_none_or(|owner| owner == worker.id as u64))
-        {
-            let url = format!("{}{}", worker.mgmt_url.trim_end_matches('/'), path);
-            let (timestamp, nonce, signature) = relay_mgmt_headers(&secret, "POST", path, &body)?;
-            let response = relay_mgmt_client(&url)?
-                .post(&url)
-                .timeout(Duration::from_secs(6))
-                .header("Content-Type", "application/json")
-                .header("X-SOW-Timestamp", timestamp)
-                .header("X-SOW-Nonce", nonce)
-                .header("X-SOW-Signature", signature)
-                .body(body.clone())
-                .send()
-                .await;
-            match response {
-                Ok(response) if response.status().is_success() => {
-                    let ack = response
-                        .json::<serde_json::Value>()
-                        .await
-                        .map_err(|error| error.to_string())?;
-                    if ack.get("match_id").and_then(serde_json::Value::as_str)
-                        != Some(command.match_id.as_str())
-                        || ack.get("account_id").and_then(serde_json::Value::as_str)
-                            != Some(command.account_id.as_str())
-                    {
-                        return Err("relay acknowledged a different participant".into());
-                    }
-                    return Ok(ack);
-                }
-                Ok(response) => {
-                    let status = response.status();
-                    last_error = format!(
-                        "relay exit control HTTP {status}: {}",
-                        response.text().await.map_err(|error| error.to_string())?
-                    );
-                }
-                Err(error) => last_error = format!("relay exit control unavailable: {error}"),
-            }
-        }
-        Err(last_error)
-    }
-    .await;
-    match result {
-        Ok(ack) => (axum::http::StatusCode::OK, axum::Json(ack)).into_response(),
-        Err(error) => {
-            log::warn!(
-                "[rewards] exit control remains pending match={}: {error}",
-                command.match_id
-            );
-            (
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                axum::Json(serde_json::json!({"error":error})),
-            )
-                .into_response()
-        }
-    }
-}
-
-async fn verify_match_replay_handler(
-    axum::extract::State(state): axum::extract::State<AppState>,
-    axum::extract::Path(match_id): axum::extract::Path<String>,
-    headers: axum::http::HeaderMap,
-    body: Bytes,
-) -> axum::response::Response {
-    verify_match_replay(state, match_id, headers, body, None).await
-}
-
-async fn verify_match_participant_replay_handler(
-    axum::extract::State(state): axum::extract::State<AppState>,
-    axum::extract::Path((match_id, account_id, closure_turn)): axum::extract::Path<(
-        String,
-        String,
-        u64,
-    )>,
-    headers: axum::http::HeaderMap,
-    body: Bytes,
-) -> axum::response::Response {
-    verify_match_replay(
-        state,
-        match_id,
-        headers,
-        body,
-        Some((account_id, closure_turn)),
-    )
-    .await
-}
-
-async fn verify_match_replay(
-    state: AppState,
-    match_id: String,
-    headers: axum::http::HeaderMap,
-    body: Bytes,
-    personal_closure: Option<(String, u64)>,
-) -> axum::response::Response {
-    let presented = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "))
-        .map(str::trim);
-    if state.db_secret.is_empty() || presented != Some(state.db_secret.as_str()) {
-        return axum::response::IntoResponse::into_response((
-            axum::http::StatusCode::UNAUTHORIZED,
-            axum::response::Json(serde_json::json!({"error": "Unauthorized"})),
-        ));
-    }
-    if match_id.parse::<u64>().is_err() || body.is_empty() || body.len() > MAX_REPLAY_BYTES {
-        return axum::response::IntoResponse::into_response((
-            axum::http::StatusCode::UNPROCESSABLE_ENTITY,
-            axum::response::Json(serde_json::json!({"error": "invalid replay request"})),
-        ));
-    }
-    let permit = match Arc::clone(&state.replay_verification).try_acquire_owned() {
-        Ok(permit) => permit,
-        Err(_) => {
-            return axum::response::IntoResponse::into_response((
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                axum::response::Json(serde_json::json!({"error": "replay verifier busy"})),
-            ));
-        }
-    };
-
-    let metadata_url = format!(
-        "{}/internal/match-start/{match_id}",
-        state.db_url.trim_end_matches('/')
-    );
-    let start = match state
-        .replay_http
-        .get(metadata_url)
-        .bearer_auth(&state.db_secret)
-        .send()
-        .await
-    {
-        Ok(response) if response.status().is_success() => {
-            match response.json::<sow_data::profile::MatchStartRecord>().await {
-                Ok(start) if start.match_id == match_id => start,
-                Ok(_) => {
-                    return axum::response::IntoResponse::into_response((
-                        axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                        axum::response::Json(
-                            serde_json::json!({"error": "match metadata mismatch"}),
-                        ),
-                    ));
-                }
-                Err(error) => {
-                    log::error!("replay {match_id} metadata decode failed: {error}");
-                    return axum::response::IntoResponse::into_response((
-                        axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                        axum::response::Json(
-                            serde_json::json!({"error": "match metadata unavailable"}),
-                        ),
-                    ));
-                }
-            }
-        }
-        Ok(response) => {
-            log::warn!(
-                "replay {match_id} metadata request returned {}",
-                response.status()
-            );
-            return axum::response::IntoResponse::into_response((
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                axum::response::Json(serde_json::json!({"error": "match metadata unavailable"})),
-            ));
-        }
-        Err(error) => {
-            log::warn!("replay {match_id} metadata request failed: {error}");
-            return axum::response::IntoResponse::into_response((
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                axum::response::Json(serde_json::json!({"error": "match metadata unavailable"})),
-            ));
-        }
-    };
-    if (personal_closure.is_none()
-        && start.replay_status != sow_data::profile::ReplayVerificationStatus::Pending)
-        || (personal_closure.is_some()
-            && start.replay_status == sow_data::profile::ReplayVerificationStatus::Rejected)
-    {
-        return axum::response::IntoResponse::into_response((
-            axum::http::StatusCode::CONFLICT,
-            axum::response::Json(
-                serde_json::json!({"error": "replay is not eligible for verification"}),
+            Self::HistoryRequired {
+                expected_sequence,
+                verified_turns,
+            } => write!(
+                f,
+                "verified history required: sequence={expected_sequence} turns={verified_turns}"
             ),
-        ));
+        }
     }
+}
 
-    let map_root = state.maps_root.clone();
-    let match_id_for_task = match_id.clone();
-    let replay = body.to_vec();
-    let verified_prefix = state.verified_prefix.clone();
-    match tokio::task::spawn_blocking(move || {
-        let _permit = permit;
-        let mut sessions = verified_prefix.lock().map_err(|_| {
-            ReplayVerificationError::Unavailable("verifier progress unavailable".into())
-        })?;
-        sessions.legacy(
-            &match_id_for_task,
-            &replay,
-            &start,
-            &map_root,
-            personal_closure,
-        )
-    })
-    .await
-    {
-        Ok(Ok((result, complete))) => axum::response::IntoResponse::into_response((
-            if complete {
-                axum::http::StatusCode::OK
-            } else {
-                axum::http::StatusCode::ACCEPTED
-            },
-            axum::response::Json(result),
-        )),
-        Ok(Err(ReplayVerificationError::Invalid(error))) => {
-            log::warn!("match {match_id} replay rejected: {error}");
-            axum::response::IntoResponse::into_response((
-                axum::http::StatusCode::UNPROCESSABLE_ENTITY,
-                axum::response::Json(serde_json::json!({"error": "replay rejected"})),
-            ))
-        }
-        Ok(Err(ReplayVerificationError::Unavailable(error))) => {
-            log::error!("match {match_id} replay verification unavailable: {error}");
-            axum::response::IntoResponse::into_response((
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                axum::response::Json(serde_json::json!({"error": "replay verifier unavailable"})),
-            ))
-        }
-        Ok(Err(ReplayVerificationError::MissingMap(error))) => {
-            log::warn!(
-                "match {match_id} replay map unavailable, will retry after a later release: {error}"
-            );
-            axum::response::IntoResponse::into_response((
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                axum::response::Json(serde_json::json!({"error": "replay map unavailable"})),
-            ))
-        }
-        Err(error) => {
-            log::error!("match {match_id} replay verifier task failed: {error}");
-            axum::response::IntoResponse::into_response((
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                axum::response::Json(serde_json::json!({"error": "replay verifier unavailable"})),
-            ))
-        }
-    }
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ProgressCursor {
+    sequence: u64,
+    sha256: String,
+    next_turn: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ActiveProgress {
+    sequence: u64,
+    first_turn: u64,
+    end_turn: u64,
+    previous_sha256: String,
+    sha256: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct VerifiedPrefix {
     identity: [u8; 32],
     turns: usize,
-    prefix_sha256: [u8; 32],
     engine: sow_core::engine::SowEngine,
     defeats: std::collections::HashMap<u16, [u32; 3]>,
     total_intents: usize,
-    game_over_before_last: bool,
-    #[serde(default)]
-    turn_hashes: Vec<[u8; 32]>,
     #[serde(default)]
     outcomes: std::collections::BTreeMap<String, sow_data::profile::VerifiedParticipantClosure>,
     terminal_turn: Option<u64>,
-    legacy: Option<replay::LegacyReplay>,
-}
-
-#[cfg(test)]
-fn verify_replay(
-    match_id: &str,
-    replay_bytes: &[u8],
-    start: &sow_data::profile::MatchStartRecord,
-    maps_root: &Path,
-    personal_closure: Option<(String, u64)>,
-    progress: &mut Option<VerifiedPrefix>,
-) -> Result<sow_data::profile::VerifiedMatchResult, ReplayVerificationError> {
-    if replay_bytes.len() > MAX_REPLAY_BYTES {
-        return Err(ReplayVerificationError::Invalid(
-            "replay exceeds size limit".to_string(),
-        ));
-    }
-    let version = match start.metadata.get("replay_format") {
-        None => 1,
-        Some(value) => value.as_u64().ok_or_else(|| {
-            ReplayVerificationError::Unavailable("trusted replay format is invalid".into())
-        })?,
-    };
-    let (turns, mut legacy_replay) = replay::decode(replay_bytes, version, MAX_REPLAY_BYTES as u64)
-        .map_err(|error| {
-            ReplayVerificationError::Invalid(format!("replay decode failed: {error}"))
-        })?;
-    advance_replay(
-        match_id,
-        &turns,
-        version,
-        legacy_replay.take(),
-        start,
-        maps_root,
-        personal_closure,
-        progress,
-        None,
-    )
-    .map(|value| value.0)
+    progress_cursor: Option<ProgressCursor>,
+    active_progress: Option<ActiveProgress>,
+    last_progress_reply: Option<sow_data::profile::VerifiedProgress>,
 }
 
 fn participant_closure_reason(
@@ -2090,18 +1712,29 @@ fn participant_closure_reason(
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    static VERIFIED_TURN_EXECUTIONS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 fn advance_replay(
     match_id: &str,
     turns: &[sow_core::protocol::Turn],
-    version: u64,
-    mut legacy_replay: Option<replay::LegacyReplay>,
     start: &sow_data::profile::MatchStartRecord,
     maps_root: &Path,
-    personal_closure: Option<(String, u64)>,
     progress: &mut Option<VerifiedPrefix>,
     budget: Option<std::time::Duration>,
 ) -> Result<(sow_data::profile::VerifiedMatchResult, bool), ReplayVerificationError> {
     let metadata = &start.metadata;
+    if metadata
+        .get("simulation_rules_id")
+        .and_then(serde_json::Value::as_str)
+        != Some(sow_core::SIMULATION_RULES_ID)
+    {
+        return Err(ReplayVerificationError::Unavailable(
+            "match requires its originally registered simulation worker".into(),
+        ));
+    }
     let seed = metadata
         .get("seed")
         .and_then(serde_json::Value::as_u64)
@@ -2175,19 +1808,15 @@ fn advance_replay(
             external_player_ids.insert(player.player_id);
         }
     }
-    if players
+    let engine_player_ids = players
         .iter()
-        .any(|player| !player_ids.contains(&player.id))
-    {
+        .map(|player| player.id)
+        .collect::<std::collections::BTreeSet<_>>();
+    if engine_player_ids.len() != players.len() || engine_player_ids != player_ids {
         return Err(ReplayVerificationError::Unavailable(
             "trusted engine roster mismatch".to_string(),
         ));
     }
-    if let Some((account_id, closure_turn)) = &personal_closure {
-        validate_personal_replay_closure(&turns, &relay_players, account_id, *closure_turn)
-            .map_err(ReplayVerificationError::Invalid)?;
-    }
-
     let started = std::time::Instant::now();
     if turns.len() as u64 > sow_data::max_match_turns(config.tick_rate_ms)
         || turns
@@ -2198,9 +1827,13 @@ fn advance_replay(
             "match duration exceeds registered clock limit".into(),
         ));
     }
-    let trusted_identity =
-        serde_json::to_vec(&(match_id, &start.player_ids, &start.metadata, BUILD_EPOCH))
-            .map_err(|e| ReplayVerificationError::Unavailable(e.to_string()))?;
+    let trusted_identity = serde_json::to_vec(&(
+        match_id,
+        &start.player_ids,
+        &start.metadata,
+        sow_core::SIMULATION_RULES_ID,
+    ))
+    .map_err(|e| ReplayVerificationError::Unavailable(e.to_string()))?;
     let identity: [u8; 32] = Sha256::digest(trusted_identity).into();
     let first_turn = turns
         .first()
@@ -2212,37 +1845,48 @@ fn advance_replay(
         .enumerate()
         .any(|(offset, turn)| turn.turn_number != (first_turn + offset) as u64)
     {
-        *progress = None;
         return Err(ReplayVerificationError::Invalid(
             "replay turn sequence is broken".into(),
         ));
     }
-    let mut prior = progress.take();
-    if prior.as_ref().is_some_and(|p| p.identity != identity) {
-        prior = None;
+    if progress.as_ref().is_some_and(|p| p.identity != identity) {
+        return Err(ReplayVerificationError::Unavailable(
+            "registered simulation identity changed".into(),
+        ));
     }
-    if let Some(saved) = &prior {
-        for turn in turns
-            .iter()
-            .take_while(|t| (t.turn_number as usize) < saved.turns)
-        {
-            let hash: [u8; 32] = Sha256::digest(
-                bincode::serialize(turn)
-                    .map_err(|e| ReplayVerificationError::Invalid(e.to_string()))?,
-            )
-            .into();
-            if saved.turn_hashes.get(turn.turn_number as usize) != Some(&hash) {
-                return Err(ReplayVerificationError::Invalid(
-                    "recorded turn conflicts with verified history".into(),
-                ));
-            }
-        }
-    }
-    if prior.as_ref().map_or(0, |p| p.turns) < first_turn {
+    let reused_turns = progress.as_ref().map_or(0, |p| p.turns);
+    if reused_turns < first_turn {
         return Err(ReplayVerificationError::Unavailable(
             "verified history required".into(),
         ));
     }
+    let mut submitted_intents = progress.as_ref().map_or(0, |p| p.total_intents);
+    for turn in turns
+        .iter()
+        .filter(|turn| turn.turn_number as usize >= reused_turns)
+    {
+        if turn.intents.len() > MAX_REPLAY_INTENTS_PER_TURN {
+            return Err(ReplayVerificationError::Invalid(
+                "too many intents in one turn".into(),
+            ));
+        }
+        submitted_intents = submitted_intents.saturating_add(turn.intents.len());
+        if submitted_intents > MAX_REPLAY_INTENTS {
+            return Err(ReplayVerificationError::Invalid(
+                "replay has too many intents".into(),
+            ));
+        }
+        if turn
+            .intents
+            .iter()
+            .any(|intent| !external_player_ids.contains(&intent.player_id))
+        {
+            return Err(ReplayVerificationError::Invalid(
+                "replay contains an unregistered sender".into(),
+            ));
+        }
+    }
+    let mut prior = progress.take();
     if prior.is_none() {
         let map_bytes = verification::match_map_bytes(&config, start, maps_root)?;
         let map_file = sow_core::maps::load_map_from_payload(&map_bytes).map_err(|error| {
@@ -2257,7 +1901,6 @@ fn advance_replay(
         prior = Some(VerifiedPrefix {
             identity,
             turns: 0,
-            prefix_sha256: [0; 32],
             engine: sow_core::engine::initialize_match_engine(
                 config.clone(),
                 seed,
@@ -2270,26 +1913,18 @@ fn advance_replay(
             ),
             defeats: std::collections::HashMap::new(),
             total_intents: 0,
-            game_over_before_last: false,
-            turn_hashes: Vec::new(),
             outcomes: std::collections::BTreeMap::new(),
             terminal_turn: None,
-            legacy: legacy_replay.take(),
+            progress_cursor: None,
+            active_progress: None,
+            last_progress_reply: None,
         });
     }
     let mut saved = prior.unwrap();
-    if saved.legacy.is_some() {
-        legacy_replay = saved.legacy.take();
-    }
     let reused_turns = saved.turns;
     let engine = &mut saved.engine;
     let defeats = &mut saved.defeats;
     let mut total_intents = saved.total_intents;
-    let mut game_over_before_last = saved.game_over_before_last;
-    engine.legacy_building_rules = version < 3;
-    engine.legacy_elimination_rewards = version < 4;
-    let mut game_over_preceded_personal_closure =
-        reused_turns == turns.len() && game_over_before_last;
     for turn in turns
         .iter()
         .filter(|turn| turn.turn_number as usize >= reused_turns)
@@ -2303,55 +1938,15 @@ fn advance_replay(
                 "replay turn sequence is broken".to_string(),
             ));
         }
-        if turn.intents.len() > MAX_REPLAY_INTENTS_PER_TURN {
-            return Err(ReplayVerificationError::Invalid(
-                "too many intents in one turn".to_string(),
-            ));
-        }
         total_intents = total_intents.saturating_add(turn.intents.len());
-        if total_intents > MAX_REPLAY_INTENTS {
-            return Err(ReplayVerificationError::Invalid(
-                "replay has too many intents".to_string(),
-            ));
-        }
         let game_over_before_turn = engine.state.phase == sow_core::game::GamePhase::GameOver;
-        game_over_before_last = game_over_before_turn;
-        if personal_closure
-            .as_ref()
-            .is_some_and(|(_, closure_turn)| *closure_turn == turn.turn_number)
-        {
-            game_over_preceded_personal_closure = game_over_before_turn;
-        }
         if engine.state.phase == sow_core::game::GamePhase::GameOver {
-            if turn
-                .intents
-                .iter()
-                .any(|intent| !external_player_ids.contains(&intent.player_id))
-            {
-                return Err(ReplayVerificationError::Invalid(
-                    "replay contains an unregistered sender".to_string(),
-                ));
-            }
             saved.turns = index + 1;
-            saved.turn_hashes.push(
-                Sha256::digest(
-                    bincode::serialize(turn)
-                        .map_err(|e| ReplayVerificationError::Invalid(e.to_string()))?,
-                )
-                .into(),
-            );
             continue;
         }
-        if turn
-            .intents
-            .iter()
-            .any(|intent| !external_player_ids.contains(&intent.player_id))
-        {
-            return Err(ReplayVerificationError::Invalid(
-                "replay contains an unregistered sender".to_string(),
-            ));
-        }
-        replay::apply_turn(engine, turn, index, &mut legacy_replay);
+        #[cfg(test)]
+        VERIFIED_TURN_EXECUTIONS.with(|count| count.set(count.get() + 1));
+        replay::apply_turn(engine, turn);
         for event in &engine.state.events {
             let sow_core::game::GameEvent::PlayerEliminated {
                 player_id,
@@ -2379,13 +1974,6 @@ fn advance_replay(
             }
         }
         saved.turns = index + 1;
-        saved.turn_hashes.push(
-            Sha256::digest(
-                bincode::serialize(turn)
-                    .map_err(|e| ReplayVerificationError::Invalid(e.to_string()))?,
-            )
-            .into(),
-        );
         let game_over = engine.state.phase == sow_core::game::GamePhase::GameOver;
         if game_over && saved.terminal_turn.is_none() {
             saved.terminal_turn = Some(turn.turn_number);
@@ -2423,7 +2011,7 @@ fn advance_replay(
                     defeats,
                     &relay_players,
                     &config,
-                    Some(turn.turn_number),
+                    Some((turn.turn_number, human.player_id)),
                     game_over_before_turn || (game_over && !resigned),
                 )?;
                 saved.outcomes.insert(
@@ -2447,17 +2035,14 @@ fn advance_replay(
         defeats,
         &relay_players,
         &config,
-        personal_closure.as_ref().map(|(_, turn)| *turn),
-        personal_closure.is_none() || game_over_preceded_personal_closure,
+        None,
+        true,
     )?;
     saved.total_intents = total_intents;
-    saved.game_over_before_last = game_over_before_last;
-    saved.legacy = legacy_replay;
     log::info!(
-        "[exit-timing] verified match={match_id} turns={} reused_turns={reused_turns} calculate_ms={} personal={}",
+        "[exit-timing] verified match={match_id} turns={} reused_turns={reused_turns} calculate_ms={}",
         saved.turns,
-        started.elapsed().as_millis(),
-        personal_closure.is_some()
+        started.elapsed().as_millis()
     );
     *progress = Some(saved);
     Ok((result, complete))
@@ -2469,7 +2054,7 @@ fn replay_result(
     defeats: &std::collections::HashMap<u16, [u32; 3]>,
     relay_players: &[ReplayStartPlayer],
     config: &GameConfig,
-    closure_turn: Option<u64>,
+    closure: Option<(u64, u16)>,
     allow_winner: bool,
 ) -> Result<sow_data::profile::VerifiedMatchResult, ReplayVerificationError> {
     let (winner_player_id, winning_team) = verified_winner_identity(
@@ -2478,8 +2063,15 @@ fn replay_result(
         relay_players,
         allow_winner,
     );
-    let mut participants = Vec::with_capacity(relay_players.len());
+    let mut participants = Vec::with_capacity(if closure.is_some() {
+        1
+    } else {
+        relay_players.len()
+    });
     for relay_player in relay_players {
+        if closure.is_some_and(|(_, player_id)| player_id != relay_player.player_id) {
+            continue;
+        }
         let Some(account_id) = relay_player.database_account_id.clone() else {
             continue;
         };
@@ -2526,7 +2118,7 @@ fn replay_result(
         duration_seconds,
         winner_player_id,
         winning_team,
-        personal_closure_turn: closure_turn,
+        personal_closure_turn: closure.map(|(turn, _)| turn),
         participants,
     })
 }
@@ -2561,30 +2153,6 @@ fn verified_winner_identity(
     (winner, None)
 }
 
-fn validate_personal_replay_closure(
-    turns: &[sow_core::protocol::Turn],
-    relay_players: &[ReplayStartPlayer],
-    account_id: &str,
-    closure_turn: u64,
-) -> Result<u16, String> {
-    let last_turn = turns
-        .last()
-        .filter(|turn| turn.turn_number == closure_turn)
-        .ok_or_else(|| "personal replay prefix does not end at the closure turn".to_string())?;
-    let player = relay_players
-        .iter()
-        .find(|player| player.database_account_id.as_deref() == Some(account_id))
-        .filter(|player| !player.is_internal)
-        .ok_or_else(|| "personal closure account is not a registered human player".to_string())?;
-    if !last_turn.intents.iter().any(|intent| {
-        intent.player_id == player.player_id
-            && matches!(&intent.intent, sow_core::protocol::GameplayIntent::Resign)
-    }) {
-        return Err("personal closure turn has no registered Resign intent".to_string());
-    }
-    Ok(player.player_id)
-}
-
 async fn admin_status(
     axum::extract::State(state): axum::extract::State<AppState>,
     headers: axum::http::HeaderMap,
@@ -2609,7 +2177,7 @@ async fn admin_status(
                 "player_id": p.player_id,
                 "name": p.name,
                 "clan_tag": p.clan_tag,
-                "civilization": format!("{:?}", p.civilization),
+                "civilization": p.leader.civilization(),
                 "leader": format!("{:?}", p.leader),
                 "download_progress": p.download_progress,
                 "ip": p.ip,
@@ -2811,154 +2379,8 @@ async fn catalog_json_handler() -> impl axum::response::IntoResponse {
 mod relay_worker_tests {
     use super::{
         DEFAULT_RELAY_WORKER_COUNT, RELAY_PORT_MAX, RELAY_PORT_MIN, RelayPortAllocator,
-        ReplayStartPlayer, parse_relay_worker, send_relay_handoff_frame,
-        validate_personal_replay_closure, verified_winner_identity,
+        ReplayStartPlayer, parse_relay_worker, send_relay_handoff_frame, verified_winner_identity,
     };
-
-    #[test]
-    fn ten_minute_recording_reuses_only_the_verified_prefix() {
-        use sow_core::protocol::{GameplayIntent, PlayerInfo, StampedIntent, Turn};
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/maps");
-        let bytes = std::fs::read(root.join("world/map.bin"))
-            .or_else(|_| std::fs::read(root.join("world/map.bin.br")))
-            .unwrap();
-        let map = sow_core::maps::load_map_from_payload(&bytes).unwrap();
-        let mut config = sow_core::game_config::GameConfig::default();
-        config.map_name = "world".into();
-        config.map_width = map.width;
-        config.map_height = map.height;
-        config.bot_count = 0;
-        config.nation_count = 0;
-        config.random_spawn = true;
-        config.map_control_win_percentage = 0.99;
-        let players = (1u16..=27)
-            .map(|id| PlayerInfo {
-                id,
-                name: format!("Audit {id}"),
-                player_type: sow_core::player::PlayerType::Human,
-                color: [0.5; 3],
-                team: None,
-                spawn_x: 0,
-                spawn_y: 0,
-                civilization: sow_core::player::Civilization::Rome,
-                leader: sow_core::player::Leader::Caesar,
-                skin_style: 0,
-                is_ai_controlled: id != 1,
-            })
-            .collect::<Vec<_>>();
-        let account = "0123456789abcdef0123456789abcdef";
-        let roster = players.iter().map(|player| serde_json::json!({
-            "player_id":player.id, "leader":player.leader, "is_internal":player.is_ai_controlled,
-            "database_account_id":if player.id == 1 { Some(account) } else { None },
-        })).collect::<Vec<_>>();
-        let start = sow_data::profile::MatchStartRecord {
-            match_id: "424242".into(),
-            player_ids: vec![account.into()],
-            metadata: serde_json::json!({"seed":20473,"config":config,"players":players,"relay_players":roster,
-                "replay_format":sow_core::protocol::GAMEPLAY_FORMAT_VERSION}),
-            ..Default::default()
-        };
-        let mut turns = (0..=6000)
-            .map(|turn_number| Turn {
-                turn_number,
-                intents: Vec::new(),
-            })
-            .collect::<Vec<_>>();
-        turns[6000].intents.push(StampedIntent {
-            player_id: 1,
-            intent: GameplayIntent::Resign,
-        });
-        let personal = bincode::serialize(&turns).unwrap();
-        let mut progress = None;
-        let now = std::time::Instant::now();
-        let personal_result = super::verify_replay(
-            "424242",
-            &personal,
-            &start,
-            &root,
-            Some((account.into(), 6000)),
-            &mut progress,
-        )
-        .unwrap();
-        let personal_ms = now.elapsed().as_millis();
-        assert!(
-            personal_result.duration_seconds >= 599,
-            "the fixture must actually simulate ten minutes"
-        );
-        assert_eq!(progress.as_ref().unwrap().turns, 6001);
-        assert_eq!(progress.as_ref().unwrap().engine.state.players.len(), 27);
-        turns.push(Turn {
-            turn_number: 6001,
-            intents: Vec::new(),
-        });
-        turns.push(Turn {
-            turn_number: 6002,
-            intents: Vec::new(),
-        });
-        let full = bincode::serialize(&turns).unwrap();
-        let now = std::time::Instant::now();
-        let warm =
-            super::verify_replay("424242", &full, &start, &root, None, &mut progress).unwrap();
-        let warm_ms = now.elapsed().as_millis();
-        assert!(
-            progress.is_some(),
-            "completed matches keep checked state for concurrent finalization retries"
-        );
-        let now = std::time::Instant::now();
-        let cold = super::verify_replay("424242", &full, &start, &root, None, &mut None).unwrap();
-        let cold_ms = now.elapsed().as_millis();
-        assert_eq!(
-            warm, cold,
-            "reused verification must produce the same server result"
-        );
-        assert!(
-            warm_ms < cold_ms,
-            "reusing 6001 turns must improve measured verification time"
-        );
-        let report = serde_json::json!({"match_seconds":personal_result.duration_seconds,"map":"world","humans":1,"internal_bots":26,
-            "turns_reused":6001,"personal_ms":personal_ms,"full_cold_ms":cold_ms,"full_reused_ms":warm_ms});
-        let output = root
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("dist/.sow-state/exit-verification-benchmark.json");
-        std::fs::create_dir_all(output.parent().unwrap()).unwrap();
-        std::fs::write(&output, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
-        // Changed bytes cannot inherit a verified engine, even for the same match.
-        super::verify_replay(
-            "424242",
-            &personal,
-            &start,
-            &root,
-            Some((account.into(), 6000)),
-            &mut progress,
-        )
-        .unwrap();
-        turns[100].turn_number = 99;
-        assert!(
-            super::verify_replay(
-                "424242",
-                &bincode::serialize(&turns).unwrap(),
-                &start,
-                &root,
-                None,
-                &mut progress
-            )
-            .is_err()
-        );
-        assert!(progress.is_none());
-    }
-
-    fn personal_closure_turn(turn_number: u64) -> sow_core::protocol::Turn {
-        sow_core::protocol::Turn {
-            turn_number,
-            intents: vec![sow_core::protocol::StampedIntent {
-                player_id: 7,
-                intent: sow_core::protocol::GameplayIntent::Resign,
-            }],
-        }
-    }
 
     fn registered_human() -> ReplayStartPlayer {
         ReplayStartPlayer {
@@ -3010,62 +2432,6 @@ mod relay_worker_tests {
                 true
             ),
             (Some(7), Some("Red".into())),
-        );
-    }
-
-    #[test]
-    fn personal_prefix_must_end_with_that_registered_players_resign() {
-        let player = registered_human();
-        let turns = [
-            sow_core::protocol::Turn {
-                turn_number: 0,
-                intents: Vec::new(),
-            },
-            personal_closure_turn(1),
-        ];
-        assert_eq!(
-            validate_personal_replay_closure(
-                &turns,
-                std::slice::from_ref(&player),
-                "0123456789abcdef0123456789abcdef",
-                1,
-            ),
-            Ok(7)
-        );
-        assert!(
-            validate_personal_replay_closure(
-                &turns,
-                std::slice::from_ref(&player),
-                "0123456789abcdef0123456789abcdef",
-                0,
-            )
-            .is_err()
-        );
-
-        let no_resign = [sow_core::protocol::Turn {
-            turn_number: 1,
-            intents: Vec::new(),
-        }];
-        assert!(
-            validate_personal_replay_closure(
-                &no_resign,
-                std::slice::from_ref(&player),
-                "0123456789abcdef0123456789abcdef",
-                1,
-            )
-            .is_err()
-        );
-        assert!(
-            validate_personal_replay_closure(
-                &turns,
-                &[ReplayStartPlayer {
-                    is_internal: true,
-                    ..registered_human()
-                }],
-                "0123456789abcdef0123456789abcdef",
-                1,
-            )
-            .is_err()
         );
     }
 

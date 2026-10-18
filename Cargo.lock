@@ -3640,6 +3640,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "bitfield",
+ "blake3",
  "brotli",
  "libm",
  "log",
@@ -3669,6 +3670,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "sow-core",
  "tempfile",
  "tokio",
  "tower-http",
@@ -3789,7 +3791,6 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "bincode",
- "brotli",
  "env_logger",
  "futures-util",
  "hex",

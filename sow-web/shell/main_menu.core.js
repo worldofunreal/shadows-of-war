@@ -61,21 +61,6 @@
     var storeCatalogRetryAt = 0;
     var pendingCommands = [];
 
-    var LEADER_REGIONS = {
-        caesar: "Europe",
-        cleopatra: "Africa",
-        ragnar: "Europe",
-        sun_tzu: "Asia",
-        alexander: "Europe",
-        genghis_khan: "Asia",
-        richard_the_lionheart: "Europe",
-        vercingetorix: "Europe",
-        boudica: "Europe",
-        lady_six_sky: "Americas",
-        leonidas: "Europe",
-        napoleon: "Europe"
-    };
-
     // Line icons live in main_menu.hud.js (loaded after the menu, used at render time).
     function menuIcon(name) {
         return window.SOW_hudIcon ? window.SOW_hudIcon(name) : "";
@@ -151,7 +136,7 @@
         var found = leaders.find(function (leader) { return normalize(leader.id) === wanted; });
         if (found) return found;
         return leaders[0] || {
-            id: "Caesar", name: "Caesar", civilization_key: "heroes.civilization_rome", perk_key: "site.leader_caesar_description", slug: "caesar"
+            id: "Caesar", name: "Caesar", civilization_key: "heroes.leader_caesar_civilization", perk_key: "site.leader_caesar_description", slug: "caesar", region: "europe"
         };
     }
 
@@ -174,8 +159,7 @@
     }
 
     function leaderTranslationSlug(leader) {
-        var rawSlug = leader && leader.slug ? String(leader.slug) : "";
-        return rawSlug === "richard_the_lionheart" ? "richard" : rawSlug.replace(/_/g, "");
+        return leader && leader.slug ? String(leader.slug) : "";
     }
 
     function leaderDisplayName(leader) {

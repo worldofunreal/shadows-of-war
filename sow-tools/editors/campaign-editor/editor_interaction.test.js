@@ -618,13 +618,16 @@ test("campaign story preview uses the selected episode map and faction positions
     assert.equal(islandGuides.coordinate_reference, "WGS84 longitude,latitude");
     assert.ok(islandGuides.sources.some(source => source.name === "Natural Earth 10m Land"));
     assert.ok(islandGuides.sources.some(source => source.name === "Natural Earth 10m Minor Islands"));
-    const entities = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/geo_entities.json"), "utf8")).entities;
+    // Island land points live with the map recipe (assets/maps/SOURCES.toml).
+    const mapSources = fs.readFileSync(path.join(shell, "../../assets/maps/SOURCES.toml"), "utf8");
+    const landPoints = [...mapSources.matchAll(/\{ id = "([a-z_]+)", lat = (-?[\d.]+), lon = (-?[\d.]+) \}/g)]
+        .map(([, id, lat, lon]) => ({ id, lat: Number(lat), lon: Number(lon) }));
     for (const id of ["rapa_nui", "tahitians", "marquesans"]) {
-        const entity = entities.find(item => item.id === id);
+        const entity = landPoints.find(item => item.id === id);
         const rings = islandGuides.features.filter(feature => feature.properties.entity_ids.includes(id)).map(feature => feature.geometry.coordinates);
         assert.ok(entity && rings.length, `${id} has a sourced island outline`);
         const nearestVertex = Math.min(...rings.flatMap(ring => ring.map(([lon, lat]) => Math.hypot(lon - entity.lon, lat - entity.lat))));
-        assert.ok(nearestVertex < 0.2, `${id} outline remains anchored to its catalog coordinates`);
+        assert.ok(nearestVertex < 0.2, `${id} outline remains anchored to its map land point`);
     }
 });
 

@@ -110,7 +110,6 @@ impl Default for TextPaintStyle {
 }
 
 pub const KIND_GLYPH: f32 = 0.0;
-pub const KIND_EMOJI: f32 = 1.0;
 pub const KIND_DISC: f32 = 2.0;
 pub const KIND_RING: f32 = 3.0;
 pub const KIND_SPRITE: f32 = 4.0;
@@ -123,6 +122,8 @@ pub const KIND_BUILDING_SPRITE: f32 = 11.0;
 pub const KIND_STATUS_SPRITE: f32 = 12.0;
 /// Badge-atlas art drawn with the emoji outline and shadow.
 pub const KIND_ICON: f32 = 13.0;
+/// Circular portrait from the bot portrait atlas.
+pub const KIND_BOT_SPRITE: f32 = 14.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NameplateStatusSprite {
     Request,
@@ -146,10 +147,16 @@ pub enum NameplateStatusSprite {
     ArrowLeft,
     Cancel,
     Confirm,
+    Gold,
+    Boat,
+    Clock,
+    Shield,
+    Range,
+    Speed,
 }
 
 impl NameplateStatusSprite {
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 27] = [
         Self::Request,
         Self::Allied,
         Self::Traitor,
@@ -171,6 +178,12 @@ impl NameplateStatusSprite {
         Self::ArrowLeft,
         Self::Cancel,
         Self::Confirm,
+        Self::Gold,
+        Self::Boat,
+        Self::Clock,
+        Self::Shield,
+        Self::Range,
+        Self::Speed,
     ];
 
     /// File name in `assets/art/icons/` and cell name in the generated strip.
@@ -197,6 +210,12 @@ impl NameplateStatusSprite {
             Self::ArrowLeft => "arrow-left",
             Self::Cancel => "cancel",
             Self::Confirm => "confirm",
+            Self::Gold => "gold",
+            Self::Boat => "boat",
+            Self::Clock => "clock",
+            Self::Shield => "shield",
+            Self::Range => "range",
+            Self::Speed => "speed",
         }
     }
 
@@ -235,26 +254,58 @@ mod badge_atlas_tests {
 
 // Four 256px expressions per hero, plus shared static campaign portraits.
 // See docs/nameplates-and-emotes.md; capacity is checked against referenced assets.
+/// Bot portraits: one `BOT_PORTRAIT_CELL` square per catalog bot, packed by
+/// sow-tools in `sow_data::geo_entities::bot_portrait_index` order.
+pub const BOT_PORTRAIT_CELL: u32 = 64;
+pub const BOT_PORTRAIT_COLS: u32 = 32;
+
+pub fn bot_portrait_count() -> usize {
+    sow_data::geo_entities::bot_portrait_count()
+}
+
+pub fn bot_portrait_rows() -> u32 {
+    (bot_portrait_count() as u32)
+        .div_ceil(BOT_PORTRAIT_COLS)
+        .max(1)
+}
+
+pub fn bot_portrait_uv(index: usize) -> [f32; 4] {
+    let (w, h) = (
+        (BOT_PORTRAIT_COLS * BOT_PORTRAIT_CELL) as f32,
+        (bot_portrait_rows() * BOT_PORTRAIT_CELL) as f32,
+    );
+    let x = (index as u32 % BOT_PORTRAIT_COLS * BOT_PORTRAIT_CELL) as f32;
+    let y = (index as u32 / BOT_PORTRAIT_COLS * BOT_PORTRAIT_CELL) as f32;
+    let cell = BOT_PORTRAIT_CELL as f32;
+    [
+        (x + 0.5) / w,
+        (y + 0.5) / h,
+        (x + cell - 0.5) / w,
+        (y + cell - 0.5) / h,
+    ]
+}
+
 pub const AVATAR_CELL: u32 = 256;
 pub const AVATAR_COLS: u32 = 8;
 pub const AVATAR_ROWS: u32 = 16;
 pub const AVATAR_SLOT_COUNT: usize = (AVATAR_COLS * AVATAR_ROWS) as usize;
 
 pub const AVATAR_EXPRESSIONS: usize = 4;
-pub const AVATAR_FALLBACK_SLOT: usize = sow_core::player::Leader::ALL.len() * AVATAR_EXPRESSIONS;
-pub const AVATAR_GOLD_SLOT: usize = AVATAR_FALLBACK_SLOT + 1;
-pub const AVATAR_CAMPAIGN_FIRST_SLOT: usize = AVATAR_GOLD_SLOT + 1;
+pub const AVATAR_FALLBACK_SLOT: usize = 0;
+pub const AVATAR_GOLD_SLOT: usize = 1;
+/// Hero expression blocks start after the fixed slots, in catalog order.
+const AVATAR_FIRST_HERO_SLOT: usize = 2;
 
 pub fn leader_avatar_slot(
     leader: sow_core::player::Leader,
     expression: sow_core::emote::AvatarExpression,
 ) -> usize {
-    sow_core::player::Leader::ALL
-        .iter()
-        .position(|value| *value == leader)
-        .expect("every leader has an atlas block")
-        * AVATAR_EXPRESSIONS
-        + expression as usize
+    AVATAR_FIRST_HERO_SLOT + leader.index() * AVATAR_EXPRESSIONS + expression as usize
+}
+
+/// Campaign portraits fill the atlas after every hero's block.
+pub fn avatar_campaign_first_slot() -> usize {
+    AVATAR_FIRST_HERO_SLOT + sow_core::player::Leader::count() * AVATAR_EXPRESSIONS
 }
 
 pub fn avatar_slot_uv(slot: usize) -> [f32; 4] {
@@ -297,12 +348,22 @@ pub struct TextShaderData {
     pub globals: TextGlobals,
     pub font_atlas: gpu::TextureView,
     pub font_sampler: gpu::Sampler,
-    pub emoji_atlas: gpu::TextureView,
-    pub emoji_sampler: gpu::Sampler,
+    pub bot_portraits: gpu::TextureView,
+    pub bot_portraits_sampler: gpu::Sampler,
     pub avatar_atlas: gpu::TextureView,
     pub avatar_sampler: gpu::Sampler,
     pub building_atlas: gpu::TextureView,
     pub building_sampler: gpu::Sampler,
     pub status_atlas: gpu::TextureView,
     pub status_sampler: gpu::Sampler,
+}
+
+#[cfg(test)]
+mod avatar_atlas_tests {
+    /// Campaign portraits need room after the hero blocks: a catalog with too
+    /// many heroes must grow the atlas (`AVATAR_ROWS`) instead of overflowing it.
+    #[test]
+    fn every_hero_fits_the_avatar_atlas_with_room_for_campaigns() {
+        assert!(super::avatar_campaign_first_slot() + 16 <= super::AVATAR_SLOT_COUNT);
+    }
 }

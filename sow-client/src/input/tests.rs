@@ -43,8 +43,7 @@ mod placement_tests {
             terrain: &terrain,
             my_id,
             buildings: &buildings,
-        })
-        ;
+        });
 
         assert_eq!(resolved, Err("hud.build_occupied"));
     }

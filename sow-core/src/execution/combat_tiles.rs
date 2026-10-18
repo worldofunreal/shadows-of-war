@@ -112,20 +112,16 @@ impl SowEngine {
             let mut budget = base_budget * (self.state.config.tick_rate_ms as f64 / 100.0);
             budget *= self.state.config.global_speed_multiplier;
 
-            // Apply leader speed modifiers
-            if let Some(player) = self.state.player(execution.owner_id) {
-                match player.leader {
-                    crate::player::Leader::Alexander => budget *= 1.15,
-                    crate::player::Leader::Napoleon => budget *= 1.20,
-                    _ => {}
-                }
-            }
-
             // Clamp budget with scaled max_cap
             let scaled_max_cap = max_cap
                 * (self.state.config.tick_rate_ms as f64 / 100.0)
                 * self.state.config.global_speed_multiplier;
             budget = budget.min(scaled_max_cap);
+
+            // Hero expansion-speed ability, after the cap so long fronts keep it.
+            if let Some(player) = self.state.player(execution.owner_id) {
+                budget *= player.leader.expansion_speed_multiplier();
+            }
 
             let mut stale_pops = 0u32;
             let max_stale_pops = 256;
@@ -238,6 +234,11 @@ impl SowEngine {
                     } else {
                         // PvP: Combat resolution
                         let mut def_loss = 0.0;
+                        // Hero bunker-defense ability scales the bunkers' extra losses.
+                        let bunker_defense = self
+                            .state
+                            .player(execution.target_owner)
+                            .map_or(1.0, |player| player.leader.bunker_defense_multiplier());
                         if let Some(target_player) = self.state.player(execution.target_owner)
                             && target_player.tile_count > 0
                         {
@@ -252,7 +253,9 @@ impl SowEngine {
                         // Defense posts increase attacker losses slightly
                         let atk_loss = (self.state.config.attack_cost_enemy
                             * terrain_multiplier
-                            * defense.attacker_loss_multiplier)
+                            * (defense.attacker_loss_multiplier
+                                + (defense.attacker_loss_multiplier - 1.0)
+                                    * (bunker_defense - 1.0)))
                             / troop_strength;
 
                         execution.troops -= atk_loss;
@@ -463,11 +466,12 @@ mod tests {
             * terrain_capture_speed(TerrainType::Land)
             * current_influence.capture_multiplier;
         let mut base_budget = 1.5;
-        match engine.state.player(1).unwrap().leader {
-            crate::player::Leader::Alexander => base_budget *= 1.15,
-            crate::player::Leader::Napoleon => base_budget *= 1.20,
-            _ => {}
-        }
+        base_budget *= engine
+            .state
+            .player(1)
+            .unwrap()
+            .leader
+            .expansion_speed_multiplier();
         engine.state.config.global_speed_multiplier = (tile_cost / base_budget) * (1.0 - 1e-8);
         let troops = 10_000.0;
         let speed = engine

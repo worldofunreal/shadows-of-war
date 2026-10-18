@@ -341,19 +341,23 @@ impl SowEngine {
     fn check_ffa_winner(&mut self, win_threshold: u32) {
         let mut alive_players = 0;
         let mut last_alive_id = None;
-        let mut map_control_winner = None;
+        let mut map_control_winner: Option<(u32, u16)> = None;
 
         for p in &self.state.players {
             if p.alive && p.tile_count > 0 {
                 alive_players += 1;
                 last_alive_id = Some(p.id);
-                if p.tile_count >= win_threshold {
-                    map_control_winner = Some(p.id);
+                if p.tile_count >= win_threshold
+                    && map_control_winner.is_none_or(|(tiles, id)| {
+                        p.tile_count > tiles || (p.tile_count == tiles && p.id < id)
+                    })
+                {
+                    map_control_winner = Some((p.tile_count, p.id));
                 }
             }
         }
 
-        if let Some(wid) = map_control_winner {
+        if let Some((_, wid)) = map_control_winner {
             self.end_game(wid, None);
         } else if alive_players == 1 {
             if let Some(wid) = last_alive_id {
@@ -366,10 +370,10 @@ impl SowEngine {
 
     pub(crate) fn check_team_winner(&mut self, win_threshold: u32) {
         use crate::protocol::Team;
-        use std::collections::HashMap;
+        use std::collections::BTreeMap;
 
-        let mut team_tiles: HashMap<Team, u32> = HashMap::new();
-        let mut best_player_on_team: HashMap<Team, (u16, u32)> = HashMap::new();
+        let mut team_tiles: BTreeMap<Team, u32> = BTreeMap::new();
+        let mut best_player_on_team: BTreeMap<Team, (u16, u32)> = BTreeMap::new();
         let mut unaffiliated_with_land = 0;
 
         for p in &self.state.players {
@@ -384,7 +388,9 @@ impl SowEngine {
             best_player_on_team
                 .entry(team)
                 .and_modify(|(best_id, best_tiles)| {
-                    if p.tile_count > *best_tiles {
+                    if p.tile_count > *best_tiles
+                        || (p.tile_count == *best_tiles && p.id < *best_id)
+                    {
                         *best_id = p.id;
                         *best_tiles = p.tile_count;
                     }
@@ -392,7 +398,7 @@ impl SowEngine {
                 .or_insert((p.id, p.tile_count));
         }
 
-        let mut map_control_team = None;
+        let mut map_control_team: Option<(u32, Team)> = None;
         let mut teams_with_land = 0;
         let mut last_team_with_land = None;
 
@@ -402,12 +408,16 @@ impl SowEngine {
             }
             teams_with_land += 1;
             last_team_with_land = Some(team);
-            if tiles >= win_threshold {
-                map_control_team = Some(team);
+            if tiles >= win_threshold
+                && map_control_team.is_none_or(|(best_tiles, best_team)| {
+                    tiles > best_tiles || (tiles == best_tiles && team < best_team)
+                })
+            {
+                map_control_team = Some((tiles, team));
             }
         }
 
-        if let Some(team) = map_control_team {
+        if let Some((_, team)) = map_control_team {
             if let Some(&(wid, _)) = best_player_on_team.get(&team) {
                 self.end_game(wid, Some(team));
             }
@@ -725,6 +735,42 @@ mod tests {
         assert!(engine.state.player(3).unwrap().alliances.is_empty());
         assert!(!engine.campaign_support_next_tick.contains_key(&2));
         assert!(!engine.campaign_support_next_tick.contains_key(&3));
+    }
+
+    #[test]
+    fn simultaneous_victory_candidates_have_a_stable_winner() {
+        for mode in ["FFA", "Teams", "HumansVsNations"] {
+            for reverse in [false, true] {
+                let config = GameConfig {
+                    game_mode: mode.into(),
+                    map_control_win_percentage: 0.5,
+                    ..Default::default()
+                };
+                let mut state = GameState::new(42, 10, 10, config);
+                state.total_land_tiles = 100;
+                for (id, team, tiles) in
+                    [(1, Team::Blue, 50), (3, Team::Red, 25), (2, Team::Red, 25)]
+                {
+                    let mut player =
+                        Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
+                    player.team = Some(team);
+                    player.tile_count = tiles;
+                    player.alive = true;
+                    player.has_spawned = true;
+                    state.register_player(player);
+                }
+                if reverse {
+                    state.players.reverse();
+                }
+                let mut engine = SowEngine::new(state, WaterComponents::default());
+                engine.check_winner();
+                assert_eq!(engine.state.winner, Some(if mode == "FFA" { 1 } else { 2 }));
+                assert_eq!(
+                    engine.state.winning_team,
+                    (mode != "FFA").then_some(Team::Red)
+                );
+            }
+        }
     }
 
     #[test]

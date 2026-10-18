@@ -236,11 +236,7 @@ impl SowApp {
                 notifications.push((
                     crate::ui::UiText::emote_notice(event.kind).with(
                         "name",
-                        sow_core::player::nameplate_display_name(
-                            player.id,
-                            &player.name,
-                            player.player_type,
-                        ),
+                        sow_core::player::display_name(player.id, &player.name, player.player_type),
                     ),
                     [Some(player.id), None],
                     1,
@@ -420,7 +416,7 @@ fn new_mutual_alliances(
 #[cfg(test)]
 mod nuke_alert_tests {
     use super::new_mutual_alliances;
-    use sow_core::player::{Civilization, Leader, PlayerType};
+    use sow_core::player::{Leader, PlayerType};
     use sow_core::protocol::PlayerSnapshot;
 
     fn player(id: u16, alliances: &[u16]) -> PlayerSnapshot {
@@ -448,8 +444,7 @@ mod nuke_alert_tests {
             can_express_emote: false,
             can_retaliate: false,
             traitor: false,
-            civilization: Civilization::Rome,
-            leader: Leader::Caesar,
+            leader: Leader::of("caesar"),
             campaign_avatar: None,
             is_campaign_faction: false,
             skin_style: 0,

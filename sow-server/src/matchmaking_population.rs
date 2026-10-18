@@ -49,6 +49,7 @@ pub fn finalize_for_start(config: &mut GameConfig, human_side_players: u32) -> b
         return false;
     }
     config.nation_count = human_side_players;
+    config.clamp_bot_counts();
     true
 }
 

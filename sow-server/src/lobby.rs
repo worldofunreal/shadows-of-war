@@ -22,7 +22,6 @@ pub struct PlayerConnection {
     pub player_id: u16,
     pub tx: mpsc::Sender<Vec<u8>>,
     pub download_progress: u8,
-    pub civilization: sow_core::player::Civilization,
     pub leader: sow_core::player::Leader,
     pub random_leader: bool,
     pub skin_style: u8,
@@ -113,6 +112,26 @@ pub struct SpawnLobbyOpts {
     pub host_name: String,
 }
 
+/// Only the settings exposed by the custom-lobby form cross this boundary.
+/// Combat, rewards, the simulation clock and campaign rules remain server-owned.
+fn custom_game_config(host: GameConfig) -> GameConfig {
+    let mut config = GameConfig {
+        map_name: host.map_name,
+        map_roster_preset: host.map_roster_preset,
+        game_mode: host.game_mode,
+        max_players: host
+            .max_players
+            .clamp(2, sow_core::protocol::MAX_MATCH_PARTICIPANTS as u32),
+        bot_count: host.bot_count,
+        nation_count: host.nation_count,
+        bot_difficulty: host.bot_difficulty,
+        random_spawn: host.random_spawn,
+        ..GameConfig::default()
+    };
+    config.clamp_bot_counts();
+    config
+}
+
 fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: SpawnLobbyOpts) {
     let game_mode = opts.game_mode;
     let kind = opts.kind;
@@ -122,7 +141,8 @@ fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: Sp
     let host_name = opts.host_name;
     let id = *next_id;
     *next_id += 1;
-    let (mut config, map_entry) = if let Some(mut c) = config_override {
+    let (mut config, map_entry) = if let Some(host) = config_override {
+        let mut c = custom_game_config(host);
         // Resolve map dimensions from catalog when host provides a config.
         // Custom lobbies keep the host's population settings.
         let entry = crate::map_catalog::lookup(&c.map_name);
@@ -159,6 +179,7 @@ fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: Sp
         config.max_players = population.max_players;
         config.bot_count = population.bot_count;
         config.nation_count = population.nation_count;
+        config.clamp_bot_counts();
     }
 
     log::info!(
@@ -367,6 +388,14 @@ pub fn join_player(
     let host_private = opts.host_private;
     let database_account_id = opts.database_account_id;
     let host_config = opts.host_config;
+    if host_config.as_ref().is_some_and(|config| {
+        !matches!(
+            config.game_mode.as_str(),
+            "FFA" | "Teams" | "HumansVsNations"
+        )
+    }) {
+        return Err("Unsupported custom game mode".to_string());
+    }
     let password = opts.password;
     let ip = opts.ip;
     let session_id = opts.session_id;
@@ -505,12 +534,10 @@ pub fn join_player(
         p.clan_tag = clan_tag;
         if !(random_leader && p.random_leader) {
             p.leader = leader;
-            p.civilization = leader.civilization();
         }
         p.random_leader = random_leader;
         if Some(p.player_id) == first_player_id {
             lobby.config.player_leader = p.leader;
-            lobby.config.player_civilization = p.civilization;
         }
         p.ip = ip;
         let pid = p.player_id;
@@ -545,7 +572,6 @@ pub fn join_player(
 
     if lobby.players.is_empty() {
         lobby.config.player_leader = leader;
-        lobby.config.player_civilization = leader.civilization();
     }
 
     // Teams mode: drop the joiner into whichever team is smaller (Red on a tie).
@@ -574,7 +600,6 @@ pub fn join_player(
         player_id,
         tx: client_tx,
         download_progress: 0,
-        civilization: leader.civilization(),
         leader,
         random_leader,
         skin_style,
@@ -1083,7 +1108,7 @@ mod name_tests {
         spawn_waiting_lobby,
     };
     use sow_core::game_config::GameConfig;
-    use sow_core::player::{Civilization, Leader};
+    use sow_core::player::Leader;
     use sow_core::protocol::Team;
 
     fn queue_lobby(id: u64, kind: LobbyKind, mode: &str) -> ServerLobby {
@@ -1119,7 +1144,7 @@ mod name_tests {
         JoinPlayerOpts {
             name: "Commander".to_string(),
             clan_tag: String::new(),
-            leader: Leader::Caesar,
+            leader: Leader::of("caesar"),
             random_leader: false,
             skin_style: 0,
             client_tx,
@@ -1226,6 +1251,11 @@ mod name_tests {
             max_players: 37,
             bot_count: 11,
             nation_count: 19,
+            tutorial: true,
+            tick_rate_ms: 1.0,
+            map_control_win_percentage: 0.0,
+            global_speed_multiplier: 1000.0,
+            cost_city: 0.0,
             ..Default::default()
         };
         let mut games = Vec::new();
@@ -1245,6 +1275,18 @@ mod name_tests {
         assert_eq!(games[0].config.max_players, 37);
         assert_eq!(games[0].config.bot_count, 11);
         assert_eq!(games[0].config.nation_count, 19);
+        let rules = GameConfig::default();
+        assert!(!games[0].config.tutorial);
+        assert_eq!(games[0].config.tick_rate_ms, rules.tick_rate_ms);
+        assert_eq!(
+            games[0].config.map_control_win_percentage,
+            rules.map_control_win_percentage
+        );
+        assert_eq!(
+            games[0].config.global_speed_multiplier,
+            rules.global_speed_multiplier
+        );
+        assert_eq!(games[0].config.cost_city, rules.cost_city);
     }
 
     #[test]
@@ -1494,7 +1536,7 @@ mod name_tests {
             JoinPlayerOpts {
                 name: "Commander".to_string(),
                 clan_tag: String::new(),
-                leader: sow_core::player::Leader::Caesar,
+                leader: sow_core::player::Leader::of("caesar"),
                 random_leader: false,
                 skin_style: 0,
                 client_tx,
@@ -1523,8 +1565,7 @@ mod name_tests {
             player_id,
             tx,
             download_progress: 0,
-            civilization: Civilization::Rome,
-            leader: Leader::Caesar,
+            leader: Leader::of("caesar"),
             random_leader: false,
             skin_style: 0,
             database_account_id: None,

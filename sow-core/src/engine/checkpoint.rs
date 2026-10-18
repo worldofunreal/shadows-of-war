@@ -94,8 +94,7 @@ mod tests {
                 team: None,
                 spawn_x: 0,
                 spawn_y: 0,
-                civilization: crate::player::Civilization::Rome,
-                leader: crate::player::Leader::Caesar,
+                leader: crate::player::Leader::default(),
                 skin_style: 0,
                 is_ai_controlled: false,
             })

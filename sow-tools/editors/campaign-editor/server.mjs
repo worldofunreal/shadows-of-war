@@ -175,21 +175,23 @@ async function validatePair(episodeId, roster, definition) {
 }
 
 async function validateEntityCatalog(value) {
-  if (!value || value.version !== 1 || !Array.isArray(value.entities) || value.entities.length > 10000) throw new Error("Invalid entity catalog.");
+  if (!value || value.version !== 2 || !Array.isArray(value.entities) || value.entities.length > 10000) throw new Error("Invalid entity catalog.");
   const ids = new Set();
   const names = new Set();
   const avatarFiles = new Set(await listAvatarIds());
-  const kinds = new Set(["tribe", "city_state", "kingdom", "empire", "country", "state_region"]);
-  const eras = new Set(["unspecified", "ancient", "classical", "medieval", "early_modern", "modern"]);
+  const roles = new Set(["nation", "tribe", "campaign"]);
+  const genders = new Set(["female", "male"]);
   const regions = new Set(["unassigned", "europe", "africa", "asia", "americas", "oceania"]);
-  const poolOrders = [new Set(), new Set()];
   for (const entity of value.entities) {
     if (!entity || typeof entity.id !== "string" || !entityId.test(entity.id) || ids.has(entity.id)
       || typeof entity.name !== "string" || !entity.name.trim() || entity.name.length > 120
-      || !kinds.has(entity.kind) || !eras.has(entity.era) || !regions.has(entity.region)
-      || typeof entity.flag !== "string" || (entity.flag && !/^[a-z]{2}$/.test(entity.flag))
-      || (entity.territory_color != null && (typeof entity.territory_color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(entity.territory_color)))
-      || !Array.isArray(entity.maps) || entity.maps.some(id => typeof id !== "string" || !mapId.test(id))) throw new Error("Invalid or duplicate entity.");
+      || !roles.has(entity.role) || !regions.has(entity.region)
+      || (entity.entity != null && typeof entity.entity !== "string")
+      || (entity.gender != null && !genders.has(entity.gender))
+      || (entity.wikipedia != null && (typeof entity.wikipedia !== "string" || !/^https:\/\/[a-z-]+\.wikipedia\.org\/wiki\//.test(entity.wikipedia)))
+      || (entity.territory_color != null && (typeof entity.territory_color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(entity.territory_color)))) throw new Error("Invalid or duplicate entity.");
+    // Bots need a home and a portrait folder; the portrait itself may arrive later.
+    if (entity.role !== "campaign" && (entity.lat == null || typeof entity.avatar !== "string")) throw new Error(`Bot needs a home and a portrait folder: ${entity.id}`);
     ids.add(entity.id);
     const normalizedName = entity.name.trim().toLocaleLowerCase();
     if (names.has(normalizedName)) throw new Error(`Duplicate entity name: ${entity.name}`);
@@ -197,12 +199,7 @@ async function validateEntityCatalog(value) {
     if ((entity.lat == null) !== (entity.lon == null)
       || (entity.lat != null && (!Number.isFinite(entity.lat) || entity.lat < -90 || entity.lat > 90
         || !Number.isFinite(entity.lon) || entity.lon < -180 || entity.lon > 180))) throw new Error(`Invalid coordinates: ${entity.id}`);
-    if (entity.avatar != null && (typeof entity.avatar !== "string" || !avatarId.test(entity.avatar) || !avatarFiles.has(entity.avatar))) throw new Error(`Missing avatar: ${entity.id}`);
-    for (const [field, used] of [["fallback_nation_order", poolOrders[0]], ["fallback_tribe_order", poolOrders[1]]]) {
-      const order = entity[field];
-      if (order != null && (!Number.isSafeInteger(order) || order < 0 || used.has(order))) throw new Error(`Invalid ${field}: ${entity.id}`);
-      if (order != null) used.add(order);
-    }
+    if (entity.avatar != null && (typeof entity.avatar !== "string" || !avatarId.test(entity.avatar) || (entity.role === "campaign" && !avatarFiles.has(entity.avatar)))) throw new Error(`Missing avatar: ${entity.id}`);
   }
 }
 

@@ -2,7 +2,7 @@
 
 ## Estado y alcance
 
-Contrato de conexión de los sistemas, revisado el 14 de octubre de 2026.
+Contrato de conexión de los sistemas, revisado el 17 de octubre de 2026.
 La evidencia de aceptación se registra al final; la comprobación de las
 respuestas y transiciones se distingue de la revisión visual del jugador.
 
@@ -31,8 +31,8 @@ Las rutas siguientes son relativas a la raíz del proyecto.
 
 | Sistema | Dueño que se reutiliza | Responsabilidad |
 | --- | --- | --- |
-| Resultado y concesión | `sow-relay/src/main.rs`, `sow-server/src/main.rs`, `sow-data/src/db.rs` y `sow-data/src/main.rs` | Registrar participación, comprobar resultado y guardar premios una sola vez. |
-| Solicitud y comprobación recuperables | `sow-data/src/match_exit.rs`, cola existente en `sow-data/src/db.rs` | Guardar salida y resultado antes de responder, entregar la salida por administración privada y comprobar cada resultado una vez. |
+| Resultado y concesión | `sow-relay/src/main.rs`, `sow-server/src/verification.rs`, `sow-server/src/main.rs`, `sow-data/src/db.rs` y `sow-data/src/main.rs` | Registrar participación, comprobar resultado y guardar premios una sola vez. |
+| Registro y comprobación recuperables | `sow-data/src/match_exit.rs`, cola existente en `sow-data/src/db.rs` | Guardar bloques del relay, continuar el cálculo compartido, reintentar entregas pendientes y consultar el recibo de cada jugador. |
 | Datos compartidos | `sow-data/src/profile.rs` | Definir comprobantes de premios y progreso de recorridos. |
 | Regreso y espera | `sow-client/src/app/account.rs`, `sow-client/src/net/session.rs`, `sow-client/src/loader/engine.rs` | Conservar el regreso pendiente, esperar la respuesta correcta y recuperarse de errores. |
 | Conexión con el menú | `sow-client/src/web_menu.rs`, `sow-client/src/asset.rs` | Publicar datos confirmados y resultados de acciones; recibir comandos. |
@@ -96,7 +96,7 @@ aplicables y error.
 - Durante la partida, el cliente puede enviar `PrepareResult` al detectar el
   final local. Solo adelanta la comprobación: mantiene abierto el panel y no
   sale ni concede premios. El relay también guarda y entrega turnos nuevos cada
-  cinco segundos, aunque no reciba ese aviso.
+  segundo, aunque no reciba ese aviso.
 - Salir voluntariamente cierra el resultado en el turno guardado por el relay.
   Una derrota natural la detecta la simulación del servidor; si quedan aliados
   vivos, el jugador eliminado sigue conectado para observar y su recibo se
@@ -118,49 +118,64 @@ aplicables y error.
   El relay completa el cierre normal de WebSocket después de responder; no
   corta directamente el transporte y espera la despedida del cliente con el
   mismo límite de tiempo que sus escrituras.
-- El relay guarda cada tramo en disco antes de entregarlo al servidor por HTTPS,
-  autenticado con su clave exclusiva. `MatchWork::Progress` reutiliza la cola
+- El relay entrega los turnos al servidor por HTTPS, autenticado con su clave
+  exclusiva. El servidor los guarda antes de confirmar la entrega. `MatchWork::Progress` reutiliza la cola
   duradera; un solo responsable comprueba el primer tramo pendiente por partida.
   El servidor conserva el avance de cada partida, comprueba en tramos de hasta
   100 ms y guarda una copia recuperable cada 30 segundos y en cada cierre.
   `PlayerDb` sigue siendo el único dueño del comprobante y del pago.
+- Cada cierre comparte el motor ya avanzado de su partida. El checkpoint nuevo
+  guarda el turno y el último bloque confirmado; no guarda una huella por turno.
+  Tras un reinicio, se vuelven a entregar solo los bloques desde ese punto. El
+  formato de guardado es 4 y solo existe su lector actual. Los bloques conservan
+  su cadena de huellas y se validan antes de avanzar la simulación.
 - El reloj registrado limita cada partida a cuatro horas. Los estados completos
-  del motor incluyen generadores aleatorios, flotas, temporizadores y cursores;
-  si una copia guardada está dañada o pertenece a otra versión, el servidor
-  reconstruye desde los tramos duraderos. Los formatos históricos conservan su
-  lector anterior.
+  del motor incluyen generadores aleatorios, flotas, temporizadores y cursores.
+  Si la copia principal está dañada, el servidor intenta su copia anterior.
+  Si ambas faltan, reconstruye desde los bloques duraderos de la versión actual.
+  Si existen copias pero ninguna es legible con las reglas actuales, aplaza el
+  cálculo. No existe un lector histórico para pagar partidas antiguas con las
+  reglas actuales.
 - La partida terminada crea un trabajo separado para empaquetar el registro
   público. Ese empaquetado no bloquea el pago ni el avance de otras partidas.
 - `POST /profile/match-result` autentica al dueño y **solo observa** su resultado.
-  Nunca crea un trabajo de salida ni llama al relay. Mantiene abierta la
-  solicitud hasta 20 segundos y responde al guardarse el comprobante; si sigue
-  pendiente, el cliente observa de nuevo tras un segundo. Las desconexiones
-  durante el juego pueden recibir antes la confirmación de cierre del relay
-  aceptada por el servidor, para dejar de reconectar y esperar su premio.
-- `POST /profile/match-exit` es exclusivamente recuperación de una salida
-  voluntaria sin confirmación después de un segundo, o sin conexión de juego.
-  Guarda la orden del dueño antes de responder. `MatchWork::RecoveryExit`
-  reutiliza la cola existente; su etiqueta guardada `exit` conserva pendientes
-  anteriores. Una conexión perdida no crea esta orden.
+  Nunca crea trabajo ni ordena una salida. Mantiene abierta la solicitud hasta
+  20 segundos; mientras siga pendiente, el cliente vuelve a consultar cada
+  segundo.
+- Una salida voluntaria llega al relay por el WebSocket de juego. El relay
+  valida la conexión activa, registra el cierre y entrega el turno al servidor.
+  El servidor comprueba la partida y calcula el premio; el relay solo recibe la
+  confirmación para avisar al jugador. No existe una orden HTTP para que el
+  cliente o el servidor pidan al relay sacar a una persona.
+- La derrota individual se detecta al comprobar los turnos enviados cada
+  segundo: el servidor guarda el cierre y calcula el premio aunque el jugador
+  siga viendo la pantalla final. El fin natural de la partida usa el mismo
+  flujo y no espera a que alguien pulse Salir.
 - El relay concede **60 segundos reales por jugador** desde la detección de
   desconexión; reconectar antes del vencimiento cancela el cierre. Los errores
   de conexión no reinician ese reloj. Los 45 segundos de silencio detectan un
-  socket muerto; los pings son cada 15 segundos. Ya no existe un contador de
+  socket muerto; el cliente envía un ping cada segundo. Ya no existe un contador de
   sala vacía basado en turnos ni un límite del cliente que decida abandonar.
   La caducidad de la entrada inicial no caduca la reconexión de una partida activa.
 - `MenuReturnContext` concentra el pendiente, identidad, partida, ciclo,
   confirmaciones y destino. El comprobante exacto y el estado final del servidor
   son necesarios para liberar el loader; un saldo visible no lo sustituye.
   Las respuestas de consultas anteriores no sustituyen ese estado.
-- El registro existente `<partida>.json` conserva fase, cierres y turnos. Tras
-  un reinicio, el bloqueo nativo compartido demuestra que el escritor terminó;
-  la recuperación continúa desde el último tramo duradero y no borra una
-  grabación por un renombre interrumpido.
-- El verificador mantiene avances separados por partida dentro de un máximo de
-  2 GiB de memoria. Solo reutiliza un tramo si coinciden la partida, los datos
-  iniciales, la copia exacta del mapa y la huella de cada turno. Si falta ese
-  avance, reconstruye desde el primer tramo; las otras partidas alternan su
-  turno de comprobación.
+- El servidor conserva los bloques binarios, su cadena y la cola en Redb.
+  El relay mantiene la partida registrada durante la entrega final; solo libera
+  su registro y puerto al recibir la confirmación de guardado o rechazo.
+- Antes de reemplazar el servidor, la base o el relay, `./sow p` pausa nuevas
+  partidas y exige cero partidas activas o cerrándose y cero cálculos o pagos
+  pendientes. La consulta autenticada `/internal/stats` incluye los trabajos
+  aplazados. Un error restablece la admisión; no autoriza el reemplazo.
+  Antes de retirar estados guardados, consulta la misma ruta por partida y
+  comprueba el recibo de cada humano. Solo después archiva esas copias y cambia
+  el servidor; una partida pendiente conserva su estado y aplaza la publicación.
+- El verificador mantiene un motor por partida dentro de un máximo de 2 GiB de
+  memoria. Valida la partida, los datos iniciales, la copia exacta del mapa y la
+  secuencia autenticada de bloques. Si falta un tramo, solicita desde el último
+  bloque guardado; solo reconstruye desde el principio cuando no existe una
+  copia recuperable. Las otras partidas alternan su turno de comprobación.
 - Rankings y logros de plataformas externas se sincronizan después mediante
   revisiones persistentes del perfil; un fallo externo no retiene el premio.
   CrazyGames guarda su pendiente junto al perfil y lo reintenta por separado.
@@ -258,29 +273,7 @@ Si la bienvenida sigue pendiente, no ejecutar dos manitas a la vez. Conservar
 ambos avances y terminar u omitir la bienvenida antes del siguiente recorrido.
 El recorrido de primera partida se inicia una sola vez por cuenta.
 
-## Orden de implementación
-
-### 1. Asegurar el regreso y los premios
-
-Completar resultado personal confirmado, identidad tardía, recuperación de
-pendientes, estados del loader y comprobantes de nivel. Conectar el responsable
-del orden a todas las salidas: tutorial, menú de partida, final de partida y
-botón de tienda. Retirar los disparadores anteriores cuando estén sustituidos.
-
-### 2. Completar la conexión de recorridos
-
-Conectar hechos confirmados, guardado por cuenta y reanudación. Validar que los
-identificadores enviados existen en la definición publicada. Ninguna definición
-de guía puede autorizar por sí misma el paso del loader o la presentación.
-
-### 3. Completar ambos contenidos y el editor
-
-Cerrar los huecos de navegación de bienvenida y primera partida. Cargar,
-editar, guardar y previsualizar ambos en Campaign Studio usando los mismos
-pasos y resultados que el juego. Rechazar pasos sin salida, destinos
-desconocidos y condiciones que ningún sistema publica.
-
-### 4. Comprobar el recorrido completo
+## Comprobación obligatoria
 
 Usar comprobaciones que ejecuten las transiciones, no solo busquen palabras
 en archivos. Cubrir cuenta tardía, resultado demorado/rechazado, respuesta de
@@ -436,14 +429,17 @@ contra la publicación real. No se acepta el cambio solo por leer fuentes.
   recarga, cuenta tardía y respuestas de otra cuenta, partida, ciclo o solicitud.
 - El proceso de datos se detiene y reinicia con pendientes aceptados, y vuelve
   a arrancar sin su caché. La observación no deja órdenes de salida guardadas.
-- El relay recupera un registro con última escritura incompleta únicamente
-  tras detenerse su escritor; cuatro procesos comparten la entrega y un rechazo
-  de acceso conserva el resultado hasta recibir su confirmación correcta.
-- `ten_minute_recording_reuses_only_the_verified_prefix` mide una simulación de
-  diez minutos en world, con un humano y 26 bots internos. Compara comprobación
-  completa nueva frente a reutilizada y exige resultados idénticos. Su informe
-  está en `dist/.sow-state/exit-verification-benchmark.json`; es una medición
-  automatizada del verificador, separada de los tiempos reales del recorrido.
+- El cierre del relay se prueba con una confirmación perdida: conserva la
+  partida registrada durante el reintento y la retira solo al confirmar.
+- `two_hour_128_human_accounts_share_simulation_and_twenty_concurrent_payments`
+  usa 128 cuentas humanas de Redb, sin bots. Simula dos horas y cierra 20
+  participantes en un turno compartido; comprueba que repetir sus entregas
+  concurrentemente no ejecuta turnos adicionales ni cambia los saldos.
+  El informe está en `dist/.sow-state/two-hour-human-exit-benchmark.json`.
+- `four_hour_active_matches_interleave_spill_restore_and_only_check_the_closing_tail`
+  mide dos partidas de cuatro horas, la copia recuperable y el tiempo de cerrar
+  tras reiniciar. El informe está en
+  `dist/.sow-state/progressive-verification-benchmark.json`.
 - Los registros `[exit-timing]` identifican solicitud, guardado y entrega del
   relay, espera de comprobación, cálculo, guardado del premio y recepción.
 - La aceptación termina con salud de servicios, identidad de los archivos

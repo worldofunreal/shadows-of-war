@@ -62,7 +62,7 @@
             selected = entity;
             input.value = entity.name;
             results.replaceChildren();
-            status.textContent = `Selected: ${entity.name} · ${entity.kind.replaceAll("_", " ")} · ${entity.region.replaceAll("_", " ")}`;
+            status.textContent = `Selected: ${entity.name} · ${entity.role} · ${entity.region.replaceAll("_", " ")}`;
             input.setAttribute("aria-expanded", "false");
             onChange(entity);
         }
@@ -97,7 +97,7 @@
                     name.textContent = entity.name;
                     const meta = document.createElement("span");
                     meta.className = "atlas-picker__meta";
-                    meta.textContent = `${entity.kind.replaceAll("_", " ")} · ${entity.region.replaceAll("_", " ")} · ${entity.id}`;
+                    meta.textContent = `${entity.role} · ${entity.region.replaceAll("_", " ")} · ${entity.id}`;
                     option.append(name, meta);
                     option.addEventListener("click", () => choose(entity));
                     results.append(option);

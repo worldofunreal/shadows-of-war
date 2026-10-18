@@ -4,13 +4,16 @@ use crate::death_nameplate::{
 };
 use crate::render::gpu::TextRenderer;
 use crate::render::motion::spring_overshoot;
-use crate::render::world::overlays::{INLINE_EMOJI_SCALE, world_to_screen};
+use crate::render::world::overlays::world_to_screen;
 use crate::render::{dev_emoji_outline, dev_text_style};
 use crate::theme::dev_config::DevConfig;
 use sow_core::protocol::{AttackSnapshot, SimSnapshot};
 use sow_render::FontAtlas;
 use sow_render::text::{AVATAR_GOLD_SLOT, NameplateStatusSprite};
 use web_time::Instant;
+
+/// Troop icon diameter relative to the notice font size.
+const TROOP_NOTICE_ICON_SCALE: f32 = 0.91;
 
 const CLICK_MARKER_DURATION: f32 = 0.16;
 const ATTACK_LAUNCH_NOTICE_DURATION: f32 = 1.5;
@@ -126,11 +129,10 @@ fn render_attack_launch_notices(
             alpha,
         ];
         let outline = dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]);
-        let emoji_scale = INLINE_EMOJI_SCALE * 0.65;
         let font_size = ATTACK_LAUNCH_NOTICE_FONT_SIZE * scale * font_scale * sf;
-        let icon_diameter = font_size * emoji_scale;
+        let icon_diameter = font_size * TROOP_NOTICE_ICON_SCALE;
         let gap = 3.0 * sf;
-        let measure = text.measure_string(&notice.amount_text, font_size, char_spacing, 1.0);
+        let measure = text.measure_string(&notice.amount_text, font_size, char_spacing);
         let required = troop_label_instance_requirement(&notice.amount_text);
         if text.remaining_instance_capacity() < required {
             return true;
@@ -151,7 +153,7 @@ fn render_attack_launch_notices(
             font_size,
             color,
             outline,
-            (0.0, char_spacing, emoji_scale),
+            (0.0, char_spacing),
         );
         true
     });
@@ -318,7 +320,7 @@ fn render_transport_targets(
                 font_size,
                 [1.0, 1.0, 1.0, alpha],
                 dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
-                (0.5, dev.font_char_spacing.max(0.1), INLINE_EMOJI_SCALE),
+                (0.5, dev.font_char_spacing.max(0.1)),
             );
         }
         true
@@ -596,7 +598,7 @@ fn render_death_nameplates(
             [row_left + icon_block + icon_size * sf * 0.5, center_px[1]],
             icon_size * sf * 0.5,
         );
-        crate::render::world::nameplates::paint_prepared_avatar(text, avatar, emoji_outline, alpha);
+        crate::render::world::nameplates::paint_prepared_avatar(text, avatar, alpha);
         let _ = text.push_prepared_text(
             &animation.prepared_name,
             [
@@ -624,12 +626,11 @@ fn prepare_death_nameplate_text(
     if animation.text_style_key == Some(style_key) {
         return;
     }
-    animation.prepared_name =
-        text.prepare_string(&animation.name, char_spacing, INLINE_EMOJI_SCALE, 0.0);
+    animation.prepared_name = text.prepare_string(&animation.name, char_spacing, 0.0);
     animation.prepared_reward = animation
         .reward
         .as_ref()
-        .map(|reward| text.prepare_string(&reward.amount, char_spacing, INLINE_EMOJI_SCALE, 0.0));
+        .map(|reward| text.prepare_string(&reward.amount, char_spacing, 0.0));
     animation.text_style_key = Some(style_key);
 }
 
@@ -745,8 +746,7 @@ fn render_attack_badges(
         });
         if needs_update {
             let label = crate::utils::format_number(attack.troops);
-            let measure =
-                text.measure_string(&label, font_size * sf, char_spacing, INLINE_EMOJI_SCALE);
+            let measure = text.measure_string(&label, font_size * sf, char_spacing);
             ui.attack_badge_labels.insert(
                 attack.id,
                 crate::app::AttackBadgeLabel {
@@ -789,7 +789,7 @@ fn render_attack_badges(
             font_size * sf,
             text_color,
             text_style,
-            (0.0, char_spacing, INLINE_EMOJI_SCALE),
+            (0.0, char_spacing),
         );
     }
 }

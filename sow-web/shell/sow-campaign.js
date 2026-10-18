@@ -18,7 +18,7 @@
         camera_drag: "camera_drag_events", camera_key_pan: "camera_key_pan_events", hover: "hover_events",
         zoom_out_complete: "zoom_out_complete", zoom_in_complete: "zoom_in_complete", camera_target: "camera_target"
     };
-    const WORLD_TARGETS = ["expand", "assault", "target_action", "player", "nameplate", "build_site", "upgrade_building"];
+    const WORLD_TARGETS = ["expand", "assault", "target_action", "player", "nameplate", "build_site", "upgrade_building", "upgrade_structure"];
     const STRUCTURE_LEVEL_LIMITS = { City: 4, Farm: 4, Factory: 4, Bunker: 4, Port: 4 };
     const CAMPAIGN_ACTIONS = ["transport_fleet", "trade_ship", "warship", "nuke"];
     const CAMPAIGN_ACTION_BUILDING_REQUIREMENTS = Object.freeze({
@@ -196,7 +196,6 @@
         dock_trade_ship: '#sow-hud [data-fleet-kind="trade"]',
         dock_warship: '#sow-hud [data-command="select_warship"]',
         dock_nuke: '#sow-hud [data-command="select_nuke"]',
-        upgrade_structure: "#sow-hud-building-card-upgrade",
         transfer_gold: "#sow-hud-transfer-gold",
         transfer_troops: "#sow-hud-transfer-troops",
         transfer_send: '#sow-hud-transfer [data-command="send_resources"]',
@@ -262,7 +261,6 @@
             if (trigger.action === "map_transfer" || target === "transfer_send") return target === "transfer_send" ? "send" : "select";
             if (target === "hud_center_camera") return "home";
             if (target === "menu_lobby") return "return";
-            if (target === "upgrade_structure") return "upgrade";
             if (/^dock_/.test(target || "")) return "build";
             return "select";
         }

@@ -70,7 +70,6 @@ pub struct MainMenuState {
     pub show_leader_picker: bool,
     pub clan_tag: String,
     pub selected_leader: sow_core::player::Leader,
-    pub selected_civilization: sow_core::player::Civilization,
     pub prefer_random_leader: bool,
     leader_selection_dirty: bool,
     pub error_message: Option<crate::ui::UiText>,
@@ -93,20 +92,8 @@ impl Default for MainMenuState {
             .duration_since(web_time::SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis();
-        let leader = match ms % 12 {
-            0 => sow_core::player::Leader::Caesar,
-            1 => sow_core::player::Leader::Cleopatra,
-            2 => sow_core::player::Leader::Ragnar,
-            3 => sow_core::player::Leader::SunTzu,
-            4 => sow_core::player::Leader::Alexander,
-            5 => sow_core::player::Leader::GenghisKhan,
-            6 => sow_core::player::Leader::RichardTheLionheart,
-            7 => sow_core::player::Leader::Vercingetorix,
-            8 => sow_core::player::Leader::Boudica,
-            9 => sow_core::player::Leader::LadySixSky,
-            10 => sow_core::player::Leader::Leonidas,
-            _ => sow_core::player::Leader::Napoleon,
-        };
+        let leader = sow_core::player::Leader::nth(ms as usize % sow_core::player::Leader::count())
+            .unwrap_or_default();
         let empty_leaders = BTreeSet::new();
         let empty_skins = BTreeSet::new();
         Self {
@@ -126,7 +113,6 @@ impl Default for MainMenuState {
             custom_game_config: Box::new(sow_core::game_config::GameConfig {
                 seed: ms as u64,
                 player_leader: leader,
-                player_civilization: leader.civilization(),
                 ..Default::default()
             }),
             custom_game_password: String::new(),
@@ -143,7 +129,6 @@ impl Default for MainMenuState {
             show_leader_picker: false,
             clan_tag: String::new(),
             selected_leader: leader,
-            selected_civilization: leader.civilization(),
             prefer_random_leader: false,
             leader_selection_dirty: false,
             error_message: None,
@@ -225,9 +210,7 @@ impl MainMenuState {
         explicit_user_choice: bool,
     ) {
         self.selected_leader = leader;
-        self.selected_civilization = leader.civilization();
         self.custom_game_config.player_leader = leader;
-        self.custom_game_config.player_civilization = leader.civilization();
         if explicit_user_choice {
             self.prefer_random_leader = false;
             self.leader_selection_dirty = true;
@@ -258,10 +241,10 @@ mod tests {
     #[test]
     fn choosing_random_keeps_the_last_concrete_leader_as_backup() {
         let mut state = MainMenuState::default();
-        state.set_selected_leader(Leader::Boudica, false);
+        state.set_selected_leader(Leader::of("boudica"), false);
         state.set_random_leader(true, true);
 
-        assert_eq!(state.selected_leader, Leader::Boudica);
+        assert_eq!(state.selected_leader, Leader::of("boudica"));
         assert!(state.prefer_random_leader);
     }
 
@@ -269,9 +252,9 @@ mod tests {
     fn choosing_a_concrete_leader_clears_random() {
         let mut state = MainMenuState::default();
         state.set_random_leader(true, true);
-        state.set_selected_leader(Leader::Napoleon, true);
+        state.set_selected_leader(Leader::of("napoleon"), true);
 
-        assert_eq!(state.selected_leader, Leader::Napoleon);
+        assert_eq!(state.selected_leader, Leader::of("napoleon"));
         assert!(!state.prefer_random_leader);
     }
 
@@ -279,9 +262,9 @@ mod tests {
     fn syncing_a_concrete_backup_does_not_cancel_random_selection() {
         let mut state = MainMenuState::default();
         state.set_random_leader(true, true);
-        state.set_selected_leader(Leader::Boudica, false);
+        state.set_selected_leader(Leader::of("boudica"), false);
 
-        assert_eq!(state.selected_leader, Leader::Boudica);
+        assert_eq!(state.selected_leader, Leader::of("boudica"));
         assert!(state.prefer_random_leader);
     }
 }

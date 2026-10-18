@@ -1036,7 +1036,8 @@ test("campaign hides unavailable actions instead of rendering lock-label UI", ()
     assert.match(hud, /fleetTrade\.hidden = hideTrade/);
     assert.match(hud, /fleetWarship\.hidden = hideWarship/);
     assert.match(hud, /fleetNuke\.hidden = hideNuke/);
-    assert.match(hud, /buildingCardNext\.hidden = true/);
+    assert.match(fs.readFileSync(path.join(shell, "../../sow-client/src/ui/building_panel.rs"), "utf8"),
+        /next_level > building\.kind\.max_level\(\)\s*\|\| next_level > self\.campaign_building_max_level/, "locked upgrades hide the button");
     assert.doesNotMatch(hud, /campaign_unlock_required/);
     assert.doesNotMatch(hudCss, /\.sow-hud__map-sector \.sow-hud__map-action-reason/);
     assert.doesNotMatch(mapClick, /fleet_no_port|NoPort|completed port/);

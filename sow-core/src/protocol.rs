@@ -8,11 +8,15 @@ use serde::{Deserialize, Serialize};
 pub use sow_data::MAX_MATCH_PARTICIPANTS;
 
 /// Persisted turn recordings; changing live messages must not change this.
-pub const GAMEPLAY_FORMAT_VERSION: u64 = 4;
+/// 5: bots spread over all land and take catalog characters (no older replays).
+pub const GAMEPLAY_FORMAT_VERSION: u64 = 5;
 pub const LIVE_PROTOCOL_VERSION: u64 = 4;
 
 pub fn gameplay_build_identity(public_version: &str) -> String {
-    format!("{public_version}/turns-{GAMEPLAY_FORMAT_VERSION}/net-{LIVE_PROTOCOL_VERSION}")
+    format!(
+        "{public_version}/turns-{GAMEPLAY_FORMAT_VERSION}/net-{LIVE_PROTOCOL_VERSION}/rules-{}",
+        crate::SIMULATION_RULES_ID
+    )
 }
 
 // ─── Intents (Client → Server) ─────────────────────────────────────────────
@@ -198,8 +202,11 @@ pub enum ClientMessage {
         join: Box<JoinPayload>,
         auth: AuthProof,
     },
-    /// Requests an early journal flush. The verifier alone determines results.
-    PrepareResult { through_turn: u64 },
+    /// Requests an early journal flush. The verifier alone determines results;
+    /// the relay uses this as a flush signal and ignores the turn hint.
+    PrepareResult {
+        through_turn: u64,
+    },
 }
 
 /// Fields of an authenticated join.
@@ -210,7 +217,6 @@ pub struct JoinPayload {
     pub host_private: bool,
     pub build_version: String,
     pub clan_tag: String,
-    pub civilization: crate::player::Civilization,
     pub leader: crate::player::Leader,
     #[serde(default)]
     pub random_leader: bool,
@@ -268,7 +274,10 @@ pub enum ServerMessage {
         closure_turn: u64,
         reason: ExitReason,
     },
-    MatchFinished { match_id: u64, terminal_turn: u64 },
+    MatchFinished {
+        match_id: u64,
+        terminal_turn: u64,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -357,8 +366,7 @@ mod protocol_tests {
                 host_private: false,
                 build_version: String::new(),
                 clan_tag: String::new(),
-                civilization: crate::player::Civilization::Rome,
-                leader: crate::player::Leader::Caesar,
+                leader: crate::player::Leader::default(),
                 random_leader: false,
                 host_config: None,
                 password: None,
@@ -391,7 +399,7 @@ pub struct ServerStartMessage {
     pub relay_host: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Copy, Hash)]
 pub enum Team {
     Red,
     Blue,
@@ -415,8 +423,6 @@ pub struct PlayerInfo {
     pub team: Option<Team>,
     pub spawn_x: u32,
     pub spawn_y: u32,
-    #[serde(default)]
-    pub civilization: crate::player::Civilization,
     #[serde(default)]
     pub leader: crate::player::Leader,
     #[serde(default)]
@@ -506,7 +512,6 @@ pub struct PlayerSnapshot {
     pub can_retaliate: bool,
     #[serde(default)]
     pub traitor: bool,
-    pub civilization: crate::player::Civilization,
     pub leader: crate::player::Leader,
     #[serde(default)]
     pub campaign_avatar: Option<String>,

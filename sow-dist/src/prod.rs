@@ -12,7 +12,6 @@ const RELAY_GROUP: &str = "sowrelay";
 const RELAY_EXEC: &str = "/usr/local/libexec/sow-relay/sow-relay";
 const RELAY_CONFIG: &str = "/usr/local/etc/sow/echo-vf.ini";
 const RELAY_STATE: &str = "/var/lib/sow-relay";
-const RELAY_REPLAYS: &str = "/var/lib/sow-relay/replays";
 const RELAY_MANIFEST: &str = "/var/lib/sow-relay/manifest.json";
 const RELAY_STAGE: &str = "/home/azureuser/.sow-deploy/relay";
 const FSTACK_LOCAL_REPO: &str = "/home/bizkit/Github/infra/f-stack";
@@ -70,6 +69,112 @@ struct ComponentPlan {
 impl ComponentPlan {
     fn any(&self) -> bool {
         self.web || self.maps || self.server || self.database || self.ops || self.relay
+    }
+}
+
+struct RelayAdmissionPause<'a> {
+    config: &'a Config,
+    paused: bool,
+}
+
+impl<'a> RelayAdmissionPause<'a> {
+    fn acquire(config: &'a Config) -> Result<Self> {
+        if relay_workers_stopped(config)? {
+            verify_no_pending_reward_calculations(config)?;
+            return Ok(Self {
+                config,
+                paused: false,
+            });
+        }
+        if !relay_supports_lobby_drain(config)? {
+            bail!("backend update requires relay matchmaking pause support");
+        }
+        if let Err(error) = relay_set_lobby_drain(config, true) {
+            return Err(resume_relay_after_error(config, error));
+        }
+        let pause = Self {
+            config,
+            paused: true,
+        };
+        let active = relay_active_lobbies(config)?;
+        if active != 0 {
+            bail!(
+                "backend update postponed: {active} active or closing match(es) still depend on the running server"
+            );
+        }
+        verify_no_pending_reward_calculations(config)?;
+        Ok(pause)
+    }
+
+    fn resume(&mut self) -> Result<()> {
+        if self.paused {
+            relay_set_lobby_drain(self.config, false)?;
+            self.paused = false;
+        }
+        Ok(())
+    }
+}
+
+fn verify_no_pending_reward_calculations(config: &Config) -> Result<()> {
+    let script = r#"set -eu
+secret=$(sudo awk -F= '$1 == "SOW_DB_SECRET" { sub(/^[^=]*=/, ""); print; exit }' /zroot/jails/sow-database/usr/local/etc/sow/sow.env)
+test -n "$secret"
+printf 'header = "Authorization: Bearer %s"\n' "$secret" | curl --noproxy '*' -fsS --max-time 10 --config - http://127.0.0.1:25585/internal/stats"#;
+    let stats: serde_json::Value =
+        serde_json::from_str(&output("ssh", &[&config.control_host, script])?)?;
+    let pending = stats["rewards"]["pending_calculations"]
+        .as_u64()
+        .context("database did not confirm its pending reward calculations")?;
+    let payments = stats["rewards"]["pending_payments"]
+        .as_u64()
+        .context("database did not confirm its pending reward payments")?;
+    if pending != 0 || payments != 0 {
+        bail!(
+            "backend update postponed: {pending} match calculations and {payments} closing match payments remain; matches={}",
+            stats["rewards"]["match_ids"]
+        );
+    }
+    verify_settled_verifier_checkpoints(config)
+}
+
+fn verify_settled_verifier_checkpoints(config: &Config) -> Result<()> {
+    let script = r#"sudo python3 - <<'VERIFY_SAVED_ENGINES'
+import json, re, subprocess, urllib.request
+
+def jail(name, *args):
+    return subprocess.check_output(["jexec", name, *args], text=True)
+
+listing = jail("sow-server", "/bin/sh", "-c", '''
+set -eu
+. /usr/local/etc/sow/sow.env
+root=${SOW_VERIFIER_DIR:-$(dirname "$SOW_MAPS_CATALOG_PATH")/verified}
+for file in "$root"/*.checkpoint "$root"/*.checkpoint.previous; do
+    [ ! -f "$file" ] || basename "$file"
+done
+''').splitlines()
+ids = sorted({re.fullmatch(r"([0-9]+)\.checkpoint(?:\.previous)?", name).group(1) for name in listing})
+if ids:
+    secret = jail("sow-database", "/bin/sh", "-c", '. /usr/local/etc/sow/sow.env; printf "%s" "$SOW_DB_SECRET"')
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    for match_id in ids:
+        request = urllib.request.Request("http://127.0.0.1:25585/internal/stats?match_id=" + match_id,
+            headers={"Authorization": "Bearer " + secret})
+        with opener.open(request, timeout=10) as response:
+            proof = json.load(response).get("checkpoint", {})
+        if proof.get("match_id") != match_id or proof.get("rewards_terminal") is not True:
+            raise RuntimeError("saved match still requires its running verifier: " + match_id)
+    print("  verified every human receipt for",len(ids),"saved match engines")
+VERIFY_SAVED_ENGINES
+"#;
+    run("ssh", &[&config.control_host, script], None)
+        .context("backend update postponed: a saved match still requires its running verifier")
+}
+
+impl Drop for RelayAdmissionPause<'_> {
+    fn drop(&mut self) {
+        if let Err(error) = self.resume() {
+            eprintln!("failed to restore relay matchmaking after deployment: {error:#}");
+        }
     }
 }
 
@@ -193,6 +298,15 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     }
     println!("  plan: {plan:?}");
 
+    if plan.server || plan.database || plan.maps || plan.ops || plan.relay {
+        let active = relay_active_lobbies(&config)?;
+        if active > 0 {
+            bail!(
+                "refusing relay replacement while {active} match(es) are active; the current relay cannot hand live matches to a new process"
+            );
+        }
+    }
+
     if !plan.any() {
         println!("  no production component changed; no restart performed");
         renew_and_verify_control_certificates(&config)?;
@@ -204,6 +318,7 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
         verify_control_runtime_secret(&config)?;
         verify_relay_settlement_auth(&config)?;
         verify_relay_control_path(&config)?;
+        verify_relay_safe_lobby_drain(&config)?;
         verify_relay_identity(&config, &release)?;
         retain_releases(&config)?;
         retain_local_builds(paths)?;
@@ -225,13 +340,18 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     }
 
     println!("==> 6/8 Activate changed components only");
+    let mut admission = if plan.server || plan.database || plan.maps || plan.ops || plan.relay {
+        Some(RelayAdmissionPause::acquire(&config)?)
+    } else {
+        None
+    };
     activate_control_host(paths, &config, &release, &plan)?;
+    verify_relay_settlement_auth(&config)?;
     renew_and_verify_control_certificates(&config)?;
     verify_origin_tls_from_relay(&config)?;
     ensure_relay_certificate_automation(paths, &config)?;
-    // Relay last: its worker swap force-kills active games (user-authorized
-    // drain mode until a non-destructive drain exists), so the control host
-    // must already be healthy before any relay worker is touched.
+    // Relay last, and only after the registry is empty, so live games survive
+    // deployment and the control host is healthy before relay workers change.
     if plan.relay {
         activate_relay_host(&config, &release)?;
     }
@@ -243,6 +363,10 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     verify_control_runtime_secret(&config)?;
     verify_relay_settlement_auth(&config)?;
     verify_relay_control_path(&config)?;
+    if let Some(pause) = admission.as_mut() {
+        pause.resume()?;
+    }
+    verify_relay_safe_lobby_drain(&config)?;
     verify_relay_identity(&config, &release)?;
     retain_releases(&config)?;
     retain_local_builds(paths)?;
@@ -1276,13 +1400,13 @@ probe=missing-worker
 if [ "$pid" -gt 1 ] && sudo test -r "/proc/$pid/environ"; then
     secret=$(sudo cat "/proc/$pid/environ" | tr '\0' '\n' | awk -F= '$1 == "SOW_RELAY_SETTLEMENT_SECRET" {{ sub(/^[^=]*=/, ""); print; exit }}')
     if [ -n "$secret" ]; then
-        probe=$(printf 'header = "Authorization: Bearer %s"\n' "$secret" | curl --noproxy '*' -sS --max-time 10 --config - --resolve "$resolve" -o /dev/null -w '%{{http_code}}|%{{remote_ip}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "$base/internal/match-progress" || true)
+        probe=$(printf 'header = "Authorization: Bearer %s"\n' "$secret" | curl --noproxy '*' -sS --max-time 10 --config - --resolve "$resolve" -o /dev/null -w '%{{http_code}}|%{{remote_ip}}' -H 'Content-Type: application/octet-stream' --data-binary 'invalid' "$base/internal/match-turns" || true)
         probe=${{probe:-unreachable}}
     else
         probe=missing-secret
     fi
 fi
-printf 'active_match_progress=%s\n' "$probe"
+printf 'active_match_turns=%s\n' "$probe"
 "#,
         base = shell_quote(base),
         resolve = shell_quote(&resolve),
@@ -1296,7 +1420,7 @@ printf 'active_match_progress=%s\n' "$probe"
             ]
         })
         .chain(std::iter::once(format!(
-            "active_match_progress=400|{}",
+            "active_match_turns=400|{}",
             relay_env.db_resolve_ip
         )))
         .collect::<Vec<_>>()
@@ -1326,11 +1450,11 @@ origin_ip={origin_ip}
 pid=$(systemctl show sow-relay@0.service -p MainPID --value)
 secret=$(sudo cat "/proc/$pid/environ" | tr '\0' '\n' | sed -n 's/^SOW_RELAY_SETTLEMENT_SECRET=//p')
 test -n "$secret"
-for route in match-participant-settle/invalid/invalid/0 match-progress match-finalize; do
-    status=$(printf 'header = "Authorization: Bearer %s"\n' "$secret" | curl --noproxy '*' -sS --max-time 10 --config - --resolve "$resolve" -o /dev/null -w '%{{http_code}}|%{{remote_ip}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "$base/internal/$route")
-    if [ "$status" != "400|$origin_ip" ]; then echo "relay result route rejected its dedicated credential or did not reach the pinned origin: $route ($status)" >&2; exit 1; fi
-    status=$(curl --noproxy '*' -sS --max-time 10 --resolve "$resolve" -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "$base/internal/$route")
-    if [ "$status" != 401 ]; then echo "relay result route accepted a missing credential: $route ($status)" >&2; exit 1; fi
+for route in match-turns; do
+    status=$(printf 'header = "Authorization: Bearer %s"\n' "$secret" | curl --noproxy '*' -sS --max-time 10 --config - --resolve "$resolve" -o /dev/null -w '%{{http_code}}|%{{remote_ip}}' -H 'Content-Type: application/octet-stream' --data-binary 'invalid' "$base/internal/$route")
+    if [ "$status" != "400|$origin_ip" ]; then echo "relay reward route rejected its dedicated credential or did not reach the pinned origin: $route ($status)" >&2; exit 1; fi
+    status=$(curl --noproxy '*' -sS --max-time 10 --resolve "$resolve" -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/octet-stream' --data-binary 'invalid' "$base/internal/$route")
+    if [ "$status" != 401 ]; then echo "relay reward route accepted a missing credential: $route ($status)" >&2; exit 1; fi
 done"#,
         base = shell_quote(base),
         resolve = shell_quote(&resolve),
@@ -1344,11 +1468,11 @@ base={base}
 resolve={resolve}
 shared=$(sudo awk -F= '$1 == "SOW_DB_SECRET" {{ sub(/^[^=]*=/, ""); print; exit }}' /zroot/jails/sow-server/usr/local/etc/sow/sow.env)
 test -n "$shared"
-for route in match-participant-settle/invalid/invalid/0 match-progress match-finalize; do
-    status=$(printf 'header = "Authorization: Bearer %s"\n' "$shared" | curl --noproxy '*' -sS --max-time 10 --config - -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "http://{database_ip}:25585/internal/$route")
-    if [ "$status" != 401 ]; then echo "result route accepted the server's general database credential: $route ($status)" >&2; exit 1; fi
-    status=$(curl --noproxy '*' -sS --max-time 10 --resolve "$resolve" -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/json' --data-binary '{{"match_id":"invalid"}}' "$base/internal/$route")
-    if [ "$status" != 403 ]; then echo "result route allowed a non-relay network source: $route ($status)" >&2; exit 1; fi
+for route in match-turns; do
+    status=$(printf 'header = "Authorization: Bearer %s"\n' "$shared" | curl --noproxy '*' -sS --max-time 10 --config - -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/octet-stream' --data-binary 'invalid' "http://{database_ip}:25585/internal/$route")
+    if [ "$status" != 401 ]; then echo "reward route accepted the server's general database credential: $route ($status)" >&2; exit 1; fi
+    status=$(curl --noproxy '*' -sS --max-time 10 --resolve "$resolve" -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/octet-stream' --data-binary 'invalid' "$base/internal/$route")
+    if [ "$status" != 403 ]; then echo "reward route allowed a non-relay network source: $route ($status)" >&2; exit 1; fi
 done"#,
         base = shell_quote(base),
         resolve = shell_quote(&format!("{host}:{port}:127.0.0.1")),
@@ -1356,6 +1480,11 @@ done"#,
     );
     run("ssh", &[&config.control_host, &control_command], None)
         .context("relay result route isolation failed")?;
+    run("ssh", &[&config.control_host, r#"set -eu
+for retired in 25585/internal/match-legacy-journal/invalid 25566/internal/replay/verify/invalid; do
+    status=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:$retired")
+    test "$status" = 404 || { echo "retired reward route still exists: $retired ($status)" >&2; exit 1; }
+done"#], None).context("retired reward routes are still reachable")?;
     println!(
         "  relay reward routes use the pinned origin and reject missing, server, and non-relay access"
     );
@@ -1366,6 +1495,19 @@ done"#,
 /// the control host (the only host the Azure NSG lets through). Returns one
 /// response body per worker, in worker-id order.
 fn relay_authed_get(config: &Config, path: &str) -> Result<Vec<(usize, String)>> {
+    relay_authed_request(config, "GET", path, "")
+}
+
+fn relay_authed_post_json(config: &Config, path: &str, body: &str) -> Result<Vec<(usize, String)>> {
+    relay_authed_request(config, "POST", path, body)
+}
+
+fn relay_authed_request(
+    config: &Config,
+    method: &str,
+    path: &str,
+    body: &str,
+) -> Result<Vec<(usize, String)>> {
     type HmacSha256 = Hmac<Sha256>;
 
     let secret = env::var("SOW_RELAY_CONTROL_SECRET")?;
@@ -1382,22 +1524,35 @@ fn relay_authed_get(config: &Config, path: &str) -> Result<Vec<(usize, String)>>
         let nonce = hex::encode(nonce_bytes);
         let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
             .map_err(|_| anyhow::anyhow!("invalid relay control secret"))?;
-        mac.update(b"GET\n");
+        mac.update(method.as_bytes());
+        mac.update(b"\n");
         mac.update(path.as_bytes());
         mac.update(b"\n");
         mac.update(timestamp.as_bytes());
         mac.update(b"\n");
         mac.update(nonce.as_bytes());
         mac.update(b"\n");
+        mac.update(body.as_bytes());
         let signature = hex::encode(mac.finalize().into_bytes());
         let url = format!("https://{host}:{port}{path}");
         let resolve = format!("{host}:{port}:{resolve_ip}");
+        let request = if method == "GET" {
+            String::new()
+        } else {
+            format!(
+                " -X {} -H {} --data-binary {}",
+                shell_quote(method),
+                shell_quote("Content-Type: application/json"),
+                shell_quote(body)
+            )
+        };
         let command = format!(
-            "curl --noproxy '*' -fsS --max-time 5 --resolve {} -H {} -H {} -H {} {}",
+            "curl --noproxy '*' -fsS --max-time 5 --resolve {} -H {} -H {} -H {}{} {}",
             shell_quote(&resolve),
             shell_quote(&format!("X-SOW-Timestamp: {timestamp}")),
             shell_quote(&format!("X-SOW-Nonce: {nonce}")),
             shell_quote(&format!("X-SOW-Signature: {signature}")),
+            request,
             shell_quote(&url),
         );
         let response = output("ssh", &[&config.control_host, &command])
@@ -1407,25 +1562,65 @@ fn relay_authed_get(config: &Config, path: &str) -> Result<Vec<(usize, String)>>
     Ok(responses)
 }
 
-/// Total live relay-player connections across all workers (drain report).
-/// Informational only: the current drain mode is an authorized force-kill.
-fn relay_active_connections(config: &Config) -> Result<usize> {
+fn relay_active_lobbies(config: &Config) -> Result<usize> {
+    if relay_workers_stopped(config)? {
+        return Ok(0);
+    }
     let mut total = 0usize;
     for (worker_id, body) in relay_authed_get(config, "/internal/lobbies")? {
         let value: serde_json::Value = serde_json::from_str(&body)
             .with_context(|| format!("worker port {worker_id} returned invalid lobbies"))?;
-        if let Some(lobbies) = value.get("lobbies").and_then(serde_json::Value::as_array) {
-            for lobby in lobbies {
-                if let Some(count) = lobby
-                    .get("active_relay_connections")
-                    .and_then(serde_json::Value::as_u64)
-                {
-                    total += count as usize;
-                }
-            }
-        }
+        let lobbies = value
+            .get("lobbies")
+            .and_then(serde_json::Value::as_array)
+            .with_context(|| {
+                format!("worker {worker_id} did not confirm its active or closing matches")
+            })?;
+        total += lobbies.len();
     }
     Ok(total)
+}
+
+fn relay_supports_lobby_drain(config: &Config) -> Result<bool> {
+    let mut supported = Vec::new();
+    for (worker_id, body) in relay_authed_get(config, "/internal/metrics")? {
+        let metrics: serde_json::Value = serde_json::from_str(&body)
+            .with_context(|| format!("worker port {worker_id} returned invalid metrics"))?;
+        supported.push(
+            metrics
+                .get("lobby_drain_supported")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+        );
+    }
+    if supported.iter().all(|value| *value) {
+        return Ok(true);
+    }
+    if supported.iter().all(|value| !*value) {
+        return Ok(false);
+    }
+    bail!("relay workers disagree about safe matchmaking pause support")
+}
+
+fn relay_set_lobby_drain(config: &Config, draining: bool) -> Result<()> {
+    let body = serde_json::json!({"draining":draining}).to_string();
+    for (worker_id, response) in relay_authed_post_json(config, "/internal/drain", &body)? {
+        let value: serde_json::Value = serde_json::from_str(&response)
+            .with_context(|| format!("worker port {worker_id} returned invalid drain status"))?;
+        if value.get("draining").and_then(serde_json::Value::as_bool) != Some(draining) {
+            bail!("relay worker port {worker_id} did not apply matchmaking drain={draining}");
+        }
+    }
+    Ok(())
+}
+
+fn resume_relay_after_error(config: &Config, error: anyhow::Error) -> anyhow::Error {
+    if let Err(resume_error) = relay_set_lobby_drain(config, false) {
+        return error.context(format!(
+            "failed to resume relay matchmaking after deployment precondition failed: {resume_error:#}"
+        ));
+    }
+    error
 }
 
 fn verify_relay_control_path(config: &Config) -> Result<()> {
@@ -1451,6 +1646,15 @@ fn verify_relay_control_path(config: &Config) -> Result<()> {
     Ok(())
 }
 
+fn verify_relay_safe_lobby_drain(config: &Config) -> Result<()> {
+    if !relay_supports_lobby_drain(config)? {
+        bail!("relay workers do not support safe matchmaking pause");
+    }
+    relay_set_lobby_drain(config, false)?;
+    println!("  authenticated relay matchmaking pause verified");
+    Ok(())
+}
+
 fn stage_relay(config: &Config, release: &Release) -> Result<()> {
     let source = format!("{}/", release.dir.join("relay").display());
     let destination = format!("{}:{}", config.relay_host, RELAY_STAGE);
@@ -1470,19 +1674,13 @@ fn stage_relay(config: &Config, release: &Release) -> Result<()> {
     Ok(())
 }
 
-/// Activate the relay component on the Azure host. Drain mode is an
-/// authorized force-kill (user GO 2026-08-21: lobbies never drain on their
-/// own, so workers are stopped and started individually — never the group
-/// unit — and the kill is registered in the manifest).
+/// Activate the relay only after its active match registry is empty.
 fn activate_relay_host(config: &Config, release: &Release) -> Result<()> {
-    let active = if relay_workers_stopped(config)? {
-        0
-    } else {
-        relay_active_connections(config)?
-    };
-    println!(
-        "  relay drain: {active} active client connection(s) across workers — force-kill (registered)"
-    );
+    let active_lobbies = relay_active_lobbies(config)?;
+    if active_lobbies > 0 {
+        bail!("refusing relay replacement while {active_lobbies} match(es) are active");
+    }
+    println!("  relay replacement: no active matches");
     let env = RelayEnv::load()?;
     let revision = output("git", &["rev-parse", "--short=12", "HEAD"])?;
     let relay_fstack = fstack_version(config)?;
@@ -1523,7 +1721,33 @@ done
 if ! getent group {group} >/dev/null; then sudo groupadd --system {group}; fi
 if ! id -u {user} >/dev/null 2>&1; then sudo useradd --system --gid {group} --home-dir /nonexistent --shell /usr/sbin/nologin {user}; fi
 sudo install -d -o root -g {group} -m 0750 /usr/local/libexec/sow-relay /usr/local/etc/sow
-sudo install -d -o {user} -g {group} -m 0750 {state} {replays}
+sudo install -d -o {user} -g {group} -m 0750 {state}
+restore_workers() {{
+  for id in {ids}; do
+    sudo systemctl start "sow-relay@$id.service" || true
+    port=$((8080+id)); i=0
+    until curl -kfsS --max-time 5 "https://127.0.0.1:$port/healthz" >/dev/null; do
+      i=$((i+1)); if [ "$i" -ge 60 ]; then echo "old relay worker $id failed recovery" >&2; exit 78; fi
+      sleep 1
+    done
+  done
+}}
+for id in {ids}; do
+  if ! sudo systemctl stop "sow-relay@$id.service" 2>/dev/null; then
+    restore_workers
+    rm -f {control_path} {settlement_path}
+    echo "relay worker $id failed to stop; old workers were restored" >&2
+    exit 78
+  fi
+done
+for id in {ids}; do
+  if sudo systemctl is-active --quiet "sow-relay@$id.service"; then
+    restore_workers
+    rm -f {control_path} {settlement_path}
+    echo "relay worker $id did not stop; old workers were restored" >&2
+    exit 78
+  fi
+done
 sudo install -d -o {user} -g {group} -m 0700 /var/run/dpdk
 sudo chown -R {user}:{group} /var/run/dpdk /dev/hugepages 2>/dev/null || true
 sudo tee /etc/tmpfiles.d/sow-relay.conf >/dev/null <<'EOF'
@@ -1553,7 +1777,6 @@ sudo test -s /usr/local/etc/sow/relay.key
 sudo openssl x509 -in /usr/local/etc/sow/relay.crt -noout -checkend 86400 >/dev/null
 sudo systemctl daemon-reload
 sudo systemctl enable sow-relay.service >/dev/null
-for id in {ids}; do sudo systemctl stop "sow-relay@$id.service" 2>/dev/null || true; done
 for id in {ids}; do
   sudo systemctl start "sow-relay@$id.service"
   port=$((8080+id))
@@ -1574,7 +1797,7 @@ for u in {units}; do
   test "$(systemctl show "$u" -p ExecMainStatus --value)" = 0
 done
 sudo tee {manifest} >/dev/null <<EOF
-{{"version":"{version}","release":"{release_id}","git":"{revision}","fstack":"{relay_fstack}","relay_sha256":"{relay_component}","relay_bin_sha256":"{relay_bin_sha}","ws_write_timeout_ms":{knob},"drain":"force-kill (user-authorized 2026-08-21; non-destructive drain pending)","deployed_at":"$ts"}}
+{{"version":"{version}","release":"{release_id}","git":"{revision}","fstack":"{relay_fstack}","relay_sha256":"{relay_component}","relay_bin_sha256":"{relay_bin_sha}","ws_write_timeout_ms":{knob},"drain":"only when no active lobbies","deployed_at":"$ts"}}
 EOF
 sudo chown root:root {manifest}
 sudo chmod 0644 {manifest}
@@ -1585,10 +1808,9 @@ sudo chmod 0644 {manifest}
         group = RELAY_GROUP,
         user = RELAY_USER,
         state = RELAY_STATE,
-        replays = RELAY_REPLAYS,
+        settlement_path = shell_quote(&settlement_path),
         manifest = RELAY_MANIFEST,
         control_path = control_path,
-        settlement_path = settlement_path,
         ids = ids,
         units = units,
         version = release.version,
@@ -1856,7 +2078,6 @@ struct RelayEnv {
     handshakes_per_ip: String,
     db_url: String,
     db_resolve_ip: String,
-    replay_spool: String,
     knob: u64,
 }
 
@@ -1896,7 +2117,6 @@ impl RelayEnv {
             handshakes_per_ip: handshakes_per_ip.to_string(),
             db_url,
             db_resolve_ip,
-            replay_spool: RELAY_REPLAYS.to_string(),
             knob: relay_knob_ms(),
         })
     }
@@ -2226,7 +2446,6 @@ fn assemble_release(
         ),
         ("__SOW_DB_URL__", env.db_url.clone()),
         ("__SOW_DB_RESOLVE_IP__", env.db_resolve_ip.clone()),
-        ("__SOW_REPLAY_SPOOL_DIR__", env.replay_spool.clone()),
         ("__SOW_WS_WRITE_TIMEOUT_MS__", env.knob.to_string()),
         ("__SOW_RELAY_GIT__", revision.clone()),
         ("__SOW_FSTACK_VERSION__", relay_fstack.clone()),
@@ -2323,7 +2542,7 @@ fn assemble_release(
                 "bin_sha256": relay_bin_sha,
                 "fstack": relay_fstack,
                 "ws_write_timeout_ms": env.knob,
-                "drain": "force-kill (user-authorized 2026-08-21; non-destructive drain pending)",
+                "drain": "only when no active lobbies",
             }),
         }))?,
     )?;
@@ -3186,6 +3405,24 @@ sudo chown -R root:sow "$target"
 sudo find "$target" -type d -exec chmod 0755 {} +
 sudo find "$target" -type f -exec chmod 0644 {} +
 sudo chmod 0550 "$target"/bin/*
+if __SERVER_RESTART__; then
+    sudo jexec sow-server service sow_server stop || rollback
+    if ! sudo jexec sow-server /bin/sh -s <<'ARCHIVE_SETTLED_STATES'
+set -eu
+. /usr/local/etc/sow/sow.env
+root=${SOW_VERIFIER_DIR:-$(dirname "$SOW_MAPS_CATALOG_PATH")/verified}
+archive="$root/retired_$(date +%s)"
+created=false
+for file in "$root"/*.checkpoint "$root"/*.checkpoint.previous; do
+    [ -f "$file" ] || continue
+    if [ "$created" = false ]; then mkdir -m 0700 "$archive"; created=true; fi
+    mv "$file" "$archive/"
+done
+ARCHIVE_SETTLED_STATES
+    then
+        rollback
+    fi
+fi
 sudo install -o root -g wheel -m 0555 "$target/ops/rc.d/sow_server" /zroot/jails/sow-server/usr/local/etc/rc.d/sow_server
 sudo install -o root -g wheel -m 0555 "$target/ops/rc.d/sow_database" /zroot/jails/sow-database/usr/local/etc/rc.d/sow_database
 link="/srv/sow/.current.$$"

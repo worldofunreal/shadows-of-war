@@ -85,7 +85,6 @@ impl SowEngine {
                     can_express_emote: crate::emote::can_express(p, &emote_phase),
                     can_retaliate: crate::diplomacy::can_retaliate_against(p),
                     traitor: p.traitor,
-                    civilization: p.civilization,
                     leader: p.leader,
                     campaign_avatar: self.campaign_avatars.get(&p.id).cloned(),
                     is_campaign_faction: self.campaign_faction_ids.contains_key(&p.id),

@@ -2,23 +2,13 @@ use crate::context::RenderContext;
 use crate::text::msdf::{FontAtlas, MsdfChar};
 use crate::text::texture::FontAtlasTexture;
 use crate::text::types::{
-    AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC, KIND_BUILDING_SPRITE,
-    KIND_CROSS, KIND_DISC, KIND_EMOJI, KIND_GLYPH, KIND_ICON, KIND_RECT, KIND_RING,
-    KIND_ROUNDED_RECT, KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite,
-    OutlineStyle, TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
+    AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, BOT_PORTRAIT_CELL, BOT_PORTRAIT_COLS,
+    KIND_ARC, KIND_BOT_SPRITE, KIND_BUILDING_SPRITE, KIND_CROSS, KIND_DISC, KIND_GLYPH, KIND_ICON,
+    KIND_RECT, KIND_RING, KIND_ROUNDED_RECT, KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE,
+    NameplateStatusSprite, OutlineStyle, TextGlobals, TextInstanceGpu, TextPaintStyle,
+    TextShaderData, avatar_slot_uv, bot_portrait_count, bot_portrait_rows, bot_portrait_uv,
 };
 use blade_graphics as gpu;
-
-pub fn emoji_uv_opt(emoji: &str) -> Option<[f32; 4]> {
-    sow_data::emoji::lookup(emoji).map(|r| {
-        [
-            r.x as f32 / sow_data::emoji::ATLAS_WIDTH as f32,
-            r.y as f32 / sow_data::emoji::ATLAS_HEIGHT as f32,
-            (r.x + r.w) as f32 / sow_data::emoji::ATLAS_WIDTH as f32,
-            (r.y + r.h) as f32 / sow_data::emoji::ATLAS_HEIGHT as f32,
-        ]
-    })
-}
 
 pub fn building_sprite_uv(kind: sow_core::game::BuildingKind, level: u8) -> Option<[f32; 4]> {
     crate::text::building_atlas::uv_rect(kind, level)
@@ -56,14 +46,7 @@ pub struct TextMeasure {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum PreparedTextKind {
-    Glyph,
-    Emoji,
-}
-
-#[derive(Clone, Copy, Debug)]
 struct PreparedTextItem {
-    kind: PreparedTextKind,
     offset: [f32; 2],
     size: [f32; 2],
     uv_rect: [f32; 4],
@@ -99,7 +82,7 @@ impl PreparedText {
         }
     }
 
-    /// Bounds of the exact glyph and inline-emoji quads emitted at this size,
+    /// Bounds of the exact glyph quads emitted at this size,
     /// relative to the same anchor passed to `push_prepared_text`.
     pub fn visual_bounds_at(&self, font_size: f32) -> Option<[f32; 4]> {
         let scale = font_size.max(0.0) / self.font_size;
@@ -148,16 +131,7 @@ fn prepared_text_bounds(
     bounds[0].is_finite().then_some(bounds)
 }
 
-#[inline]
-fn text_measure_height(font_size: f32, emoji_scale: f32, has_emoji: bool) -> f32 {
-    if has_emoji {
-        font_size.max(font_size * emoji_scale)
-    } else {
-        font_size
-    }
-}
-
-fn emoji_geometry(
+fn outlined_geometry(
     screen_pos: [f32; 2],
     half_size: f32,
     outline: OutlineStyle,
@@ -183,25 +157,6 @@ fn emoji_geometry(
     )
 }
 
-fn emoji_instance(
-    uv_rect: [f32; 4],
-    screen_pos: [f32; 2],
-    half_size: f32,
-    tint: [f32; 4],
-    outline: OutlineStyle,
-    underlay_softness: f32,
-) -> TextInstanceGpu {
-    outlined_instance(
-        uv_rect,
-        screen_pos,
-        half_size,
-        tint,
-        outline,
-        underlay_softness,
-        KIND_EMOJI,
-    )
-}
-
 fn outlined_instance(
     uv_rect: [f32; 4],
     screen_pos: [f32; 2],
@@ -211,7 +166,7 @@ fn outlined_instance(
     underlay_softness: f32,
     kind: f32,
 ) -> TextInstanceGpu {
-    let (screen_pos, size, content_rect) = emoji_geometry(screen_pos, half_size, outline);
+    let (screen_pos, size, content_rect) = outlined_geometry(screen_pos, half_size, outline);
     TextInstanceGpu {
         screen_pos,
         size,
@@ -231,44 +186,40 @@ fn troop_icon_tint(alpha: f32) -> [f32; 4] {
     [1.0, 1.0, 1.0, alpha]
 }
 
+/// Shapes `text` with the msdf atlas; characters the atlas lacks are skipped.
 fn shape_text(
     atlas: &FontAtlas,
     text: &str,
     char_spacing: f32,
-    emoji_scale: f32,
     mut emit: impl FnMut(PreparedTextItem),
-) -> (f32, bool, usize) {
-    shape_text_inner(atlas, text, char_spacing, emoji_scale, &mut emit)
+) -> (f32, usize) {
+    shape_text_inner(atlas, text, char_spacing, &mut emit)
 }
 
 fn shape_text_inner(
     atlas: &FontAtlas,
     text: &str,
     char_spacing: f32,
-    emoji_scale: f32,
     emit: &mut dyn FnMut(PreparedTextItem),
-) -> (f32, bool, usize) {
+) -> (f32, usize) {
     if text.chars().any(is_arabic_character) {
-        return shape_bidi_text(atlas, text, char_spacing, emoji_scale, emit);
+        return shape_bidi_text(atlas, text, char_spacing, emit);
     }
 
     let atlas_width = atlas.atlas.common.scale_w.max(1) as f32;
     let atlas_height = atlas.atlas.common.scale_h.max(1) as f32;
     let base = atlas.atlas.common.base as f32;
     let mut advance = 0.0f32;
-    let mut has_emoji = false;
     let mut item_count = 0usize;
     let mut prev_char = Option::<char>::None;
-    let mut chars = text.char_indices().peekable();
 
-    while let Some((byte_idx, ch)) = chars.next() {
+    for ch in text.chars() {
         if let Some(glyph) = atlas.char_map.get(&ch) {
             let kern = prev_char
                 .and_then(|previous| atlas.kerning_map.get(&(previous, ch)))
                 .copied()
                 .unwrap_or(0) as f32;
             emit(PreparedTextItem {
-                kind: PreparedTextKind::Glyph,
                 offset: [
                     advance + glyph.xoffset as f32 + kern * char_spacing,
                     -base + glyph.yoffset as f32,
@@ -287,39 +238,9 @@ fn shape_text_inner(
             continue;
         }
 
-        let has_selector = chars.peek().is_some_and(|&(_, next)| next == '\u{fe0f}');
-        let character_bytes = ch.len_utf8();
-        let text_bytes = if has_selector {
-            character_bytes + '\u{fe0f}'.len_utf8()
-        } else {
-            character_bytes
-        };
-        let candidate = &text[byte_idx..byte_idx + text_bytes];
-        let emoji = if has_selector {
-            &text[byte_idx..byte_idx + character_bytes]
-        } else {
-            candidate
-        };
-        if let Some(uv_rect) = emoji_uv_opt(emoji) {
-            let size = atlas.atlas.info.size as f32 * emoji_scale;
-            emit(PreparedTextItem {
-                kind: PreparedTextKind::Emoji,
-                offset: [advance, -size],
-                size: [size; 2],
-                uv_rect,
-            });
-            item_count = item_count.saturating_add(1);
-            advance += size * char_spacing;
-            has_emoji = true;
-            prev_char = None;
-            if has_selector {
-                chars.next();
-            }
-        } else {
-            prev_char = None;
-        }
+        prev_char = None;
     }
-    (advance, has_emoji, item_count)
+    (advance, item_count)
 }
 
 fn is_arabic_character(ch: char) -> bool {
@@ -333,16 +254,14 @@ fn shape_bidi_text(
     atlas: &FontAtlas,
     text: &str,
     char_spacing: f32,
-    emoji_scale: f32,
     emit: &mut dyn FnMut(PreparedTextItem),
-) -> (f32, bool, usize) {
+) -> (f32, usize) {
     let bidi = unicode_bidi::BidiInfo::new(text, None);
     let Some(paragraph) = bidi.paragraphs.first() else {
-        return (0.0, false, 0);
+        return (0.0, 0);
     };
     let (levels, runs) = bidi.visual_runs(paragraph, 0..text.len());
     let mut advance = 0.0;
-    let mut has_emoji = false;
     let mut item_count = 0usize;
 
     for run in runs {
@@ -360,22 +279,16 @@ fn shape_bidi_text(
             item_count = item_count.saturating_add(count);
         } else {
             let run_start = advance;
-            let (run_advance, run_has_emoji, count) = shape_text_inner(
-                atlas,
-                run_text,
-                char_spacing,
-                emoji_scale,
-                &mut |mut item| {
+            let (run_advance, count) =
+                shape_text_inner(atlas, run_text, char_spacing, &mut |mut item| {
                     item.offset[0] += run_start;
                     emit(item);
-                },
-            );
+                });
             advance += run_advance;
-            has_emoji |= run_has_emoji;
             item_count = item_count.saturating_add(count);
         }
     }
-    (advance, has_emoji, item_count)
+    (advance, item_count)
 }
 
 fn shape_arabic_run(
@@ -451,7 +364,6 @@ fn shape_arabic_run(
         let glyph = glyph.map(|(glyph, _)| glyph);
         if let Some(glyph) = glyph {
             emit(PreparedTextItem {
-                kind: PreparedTextKind::Glyph,
                 offset: [
                     pen_x + glyph.xoffset as f32 + position.x_offset as f32 * font_scale,
                     -base + glyph.yoffset as f32 - position.y_offset as f32 * font_scale,
@@ -489,33 +401,19 @@ fn emit_prepared_text(
         let offset_x = item.offset[0] * font_scale - align_offset;
         let offset_y = item.offset[1] * font_scale;
         let size = [item.size[0] * font_scale, item.size[1] * font_scale];
-        match item.kind {
-            PreparedTextKind::Glyph => instances.push(TextInstanceGpu {
-                screen_pos: [pos[0] + offset_x, pos[1] + offset_y],
-                size,
-                uv_rect: item.uv_rect,
-                content_rect: [0.0, 0.0, 1.0, 1.0],
-                color,
-                outline_color: settings.outline.color,
-                face_dilate: settings.face_dilate,
-                outline_thickness: settings.outline.thickness,
-                underlay_offset_y: settings.outline.shadow_y,
-                underlay_softness: settings.underlay_softness,
-                kind: KIND_GLYPH,
-            }),
-            PreparedTextKind::Emoji => {
-                let half_size = size[0] * 0.5;
-                let center = [pos[0] + offset_x + half_size, pos[1] + offset_y + half_size];
-                instances.push(emoji_instance(
-                    item.uv_rect,
-                    center,
-                    half_size,
-                    color,
-                    settings.outline,
-                    settings.underlay_softness,
-                ));
-            }
-        }
+        instances.push(TextInstanceGpu {
+            screen_pos: [pos[0] + offset_x, pos[1] + offset_y],
+            size,
+            uv_rect: item.uv_rect,
+            content_rect: [0.0, 0.0, 1.0, 1.0],
+            color,
+            outline_color: settings.outline.color,
+            face_dilate: settings.face_dilate,
+            outline_thickness: settings.outline.thickness,
+            underlay_offset_y: settings.outline.shadow_y,
+            underlay_softness: settings.underlay_softness,
+            kind: KIND_GLYPH,
+        });
     }
 }
 
@@ -582,7 +480,10 @@ fn cross_geometry(center: [f32; 2], half_size: f32) -> ([f32; 2], [f32; 2], [f32
 pub struct TextRenderer {
     pub font_atlas_desc: FontAtlas,
     pub font_atlas_tex: FontAtlasTexture,
-    emoji_atlas_tex: FontAtlasTexture,
+    /// Every catalog bot's portrait, one fetched image (see `bot_portrait_index`).
+    bot_portraits_tex: FontAtlasTexture,
+    bot_portraits_loaded: bool,
+    bot_portraits_dirty: bool,
     avatar_atlas_tex: FontAtlasTexture,
     building_atlas_tex: FontAtlasTexture,
     status_atlas_tex: FontAtlasTexture,
@@ -592,7 +493,7 @@ pub struct TextRenderer {
     pipeline: gpu::RenderPipeline,
     buffer: gpu::Buffer,
     sampler: gpu::Sampler,
-    emoji_sampler: gpu::Sampler,
+    bot_portraits_sampler: gpu::Sampler,
     avatar_sampler: gpu::Sampler,
     building_sampler: gpu::Sampler,
     status_sampler: gpu::Sampler,
@@ -603,18 +504,19 @@ impl TextRenderer {
     pub fn new(context: &gpu::Context, surface_format: gpu::TextureFormat) -> Self {
         let font_atlas_desc = FontAtlas::load_static();
         let font_atlas_tex = FontAtlasTexture::new(context);
-        let emoji_atlas_tex = FontAtlasTexture::from_bytes(
+        let bot_portraits_tex = FontAtlasTexture::blank(
             context,
-            crate::EMOJI_ATLAS_BYTES,
-            "emoji_atlas",
-            gpu::TextureFormat::Rgba8UnormSrgb, // ponytail: hardware sRGB decode
+            BOT_PORTRAIT_COLS * BOT_PORTRAIT_CELL,
+            bot_portrait_rows() * BOT_PORTRAIT_CELL,
+            "bot_portraits",
+            gpu::TextureFormat::Rgba8UnormSrgb,
         );
         let avatar_atlas_tex = FontAtlasTexture::blank(
             context,
             AVATAR_COLS * AVATAR_CELL,
             AVATAR_ROWS * AVATAR_CELL,
             "avatar_atlas",
-            gpu::TextureFormat::Rgba8UnormSrgb, // portraits are sRGB color, like emoji
+            gpu::TextureFormat::Rgba8UnormSrgb, // portraits are sRGB color
         );
         let building_atlas_tex = FontAtlasTexture::from_bytes(
             context,
@@ -693,8 +595,8 @@ impl TextRenderer {
             ..Default::default()
         });
 
-        let emoji_sampler = context.create_sampler(gpu::SamplerDesc {
-            name: "emoji_atlas_sampler",
+        let bot_portraits_sampler = context.create_sampler(gpu::SamplerDesc {
+            name: "bot_portraits_sampler",
             mag_filter: gpu::FilterMode::Linear,
             min_filter: gpu::FilterMode::Linear,
             ..Default::default()
@@ -724,7 +626,9 @@ impl TextRenderer {
         Self {
             font_atlas_desc,
             font_atlas_tex,
-            emoji_atlas_tex,
+            bot_portraits_tex,
+            bot_portraits_loaded: false,
+            bot_portraits_dirty: false,
             avatar_atlas_tex,
             building_atlas_tex,
             status_atlas_tex,
@@ -734,7 +638,7 @@ impl TextRenderer {
             pipeline,
             buffer,
             sampler,
-            emoji_sampler,
+            bot_portraits_sampler,
             avatar_sampler,
             building_sampler,
             status_sampler,
@@ -746,7 +650,7 @@ impl TextRenderer {
     /// (alongside `upload_atlas`) before any draw.
     pub fn init_textures(&self, encoder: &mut gpu::CommandEncoder) {
         encoder.init_texture(self.font_atlas_tex.texture);
-        encoder.init_texture(self.emoji_atlas_tex.texture);
+        encoder.init_texture(self.bot_portraits_tex.texture);
         encoder.init_texture(self.avatar_atlas_tex.texture);
         encoder.init_texture(self.building_atlas_tex.texture);
         encoder.init_texture(self.status_atlas_tex.texture);
@@ -754,7 +658,7 @@ impl TextRenderer {
 
     pub fn upload_atlas(&self, encoder: &mut gpu::CommandEncoder, context: &gpu::Context) {
         self.font_atlas_tex.upload(encoder, context);
-        self.emoji_atlas_tex.upload(encoder, context);
+        self.bot_portraits_tex.upload(encoder, context);
         self.avatar_atlas_tex.upload(encoder, context);
         self.building_atlas_tex.upload(encoder, context);
         self.status_atlas_tex.upload(encoder, context);
@@ -770,44 +674,29 @@ impl TextRenderer {
         }
     }
 
-    /// Internal: push a glyph or emoji instance, respecting buffer limits.
+    /// Internal: push an instance, respecting buffer limits.
     fn push_inst(&mut self, inst: TextInstanceGpu) {
         if self.upload_instances.len() < MAX_TEXT_GLYPHS {
             self.upload_instances.push(inst);
         }
     }
 
-    pub fn prepare_string(
-        &self,
-        text: &str,
-        char_spacing: f32,
-        emoji_scale: f32,
-        align_x: f32,
-    ) -> PreparedText {
+    pub fn prepare_string(&self, text: &str, char_spacing: f32, align_x: f32) -> PreparedText {
         let font_size = self.font_atlas_desc.atlas.info.size.max(1) as f32;
         let mut items = Vec::with_capacity(text.chars().count().min(MAX_TEXT_GLYPHS));
-        let (advance_width, has_emoji, item_count) = shape_text(
-            &self.font_atlas_desc,
-            text,
-            char_spacing,
-            emoji_scale,
-            |item| {
+        let (advance_width, item_count) =
+            shape_text(&self.font_atlas_desc, text, char_spacing, |item| {
                 if items.len() < MAX_TEXT_GLYPHS {
                     items.push(item);
                 }
-            },
-        );
+            });
         let visual_bounds = prepared_text_bounds(&items, advance_width, align_x);
         PreparedText {
             items,
             advance_width,
             align_x,
             font_size,
-            line_height: if text.is_empty() {
-                0.0
-            } else {
-                text_measure_height(font_size, emoji_scale, has_emoji)
-            },
+            line_height: if text.is_empty() { 0.0 } else { font_size },
             visual_bounds,
             complete: item_count <= MAX_TEXT_GLYPHS,
         }
@@ -854,9 +743,9 @@ impl TextRenderer {
         font_size: f32,
         color: [f32; 4],
         settings: TextPaintStyle,
-        layout: (f32, f32, f32),
+        layout: (f32, f32),
     ) {
-        let (align_x, char_spacing, emoji_scale) = layout;
+        let (align_x, char_spacing) = layout;
         let font_unit = self.font_atlas_desc.atlas.info.size.max(1) as f32;
         let TextRenderer {
             font_atlas_desc,
@@ -865,12 +754,11 @@ impl TextRenderer {
             ..
         } = self;
         prepared_text_scratch.clear();
-        let (advance_width, _, item_count) =
-            shape_text(font_atlas_desc, text, char_spacing, emoji_scale, |item| {
-                if prepared_text_scratch.len() < MAX_TEXT_GLYPHS {
-                    prepared_text_scratch.push(item);
-                }
-            });
+        let (advance_width, item_count) = shape_text(font_atlas_desc, text, char_spacing, |item| {
+            if prepared_text_scratch.len() < MAX_TEXT_GLYPHS {
+                prepared_text_scratch.push(item);
+            }
+        });
         if item_count > MAX_TEXT_GLYPHS {
             return;
         }
@@ -888,53 +776,15 @@ impl TextRenderer {
     }
 
     /// Measure `text` in the same units as `font_size`, using the exact advance math
-    /// `push_string` emits. The height expands for an emoji only when the string actually
-    /// contains an atlas emoji, so ASCII names do not reserve emoji-sized vertical space.
-    pub fn measure_string(
-        &self,
-        text: &str,
-        font_size: f32,
-        char_spacing: f32,
-        emoji_scale: f32,
-    ) -> TextMeasure {
-        let (advance_width, has_emoji, _) = shape_text(
-            &self.font_atlas_desc,
-            text,
-            char_spacing,
-            emoji_scale,
-            |_| {},
-        );
+    /// `push_string` emits.
+    pub fn measure_string(&self, text: &str, font_size: f32, char_spacing: f32) -> TextMeasure {
+        let (advance_width, _) = shape_text(&self.font_atlas_desc, text, char_spacing, |_| {});
         let font_unit = self.font_atlas_desc.atlas.info.size.max(1) as f32;
         let scale = font_size / font_unit;
         TextMeasure {
             width: advance_width * scale,
-            height: if text.is_empty() {
-                0.0
-            } else {
-                text_measure_height(font_size, emoji_scale, has_emoji)
-            },
+            height: if text.is_empty() { 0.0 } else { font_size },
         }
-    }
-
-    /// Push a screen-space emoji with alpha-dilated outline + drop shadow.
-    /// `screen_pos` is the center in physical pixels, `half_size` the logical content half-extent;
-    /// the submitted quad grows only by the size-adjusted effect padding.
-    /// Returns `false` if the emoji isn't in the atlas.
-    pub fn push_emoji(
-        &mut self,
-        emoji: &str,
-        screen_pos: [f32; 2],
-        half_size: f32,
-        tint: [f32; 4],
-        outline: OutlineStyle,
-    ) -> bool {
-        let Some(emoji_uv) = emoji_uv_opt(emoji) else {
-            return false;
-        };
-        self.push_inst(emoji_instance(
-            emoji_uv, screen_pos, half_size, tint, outline, 0.0,
-        ));
-        true
     }
 
     /// Push the troop sword with its atlas colors and only the requested opacity.
@@ -955,7 +805,7 @@ impl TextRenderer {
         true
     }
 
-    /// Push art from `assets/art/icons` with the same outline and shadow as emoji.
+    /// Push art from `assets/art/icons` with an alpha-dilated outline and drop shadow.
     pub fn push_icon(
         &mut self,
         sprite: NameplateStatusSprite,
@@ -973,22 +823,6 @@ impl TextRenderer {
             0.0,
             KIND_ICON,
         ));
-    }
-
-    /// Push an emoji with standard tactical outline (90% black alpha, 1.5px thickness, 1.5px shadow).
-    pub fn push_emoji_tactical(
-        &mut self,
-        emoji: &str,
-        screen_pos: [f32; 2],
-        half_size: f32,
-    ) -> bool {
-        self.push_emoji(
-            emoji,
-            screen_pos,
-            half_size,
-            [1.0, 1.0, 1.0, 1.0],
-            OutlineStyle::TACTICAL,
-        )
     }
 
     /// Push a filled, anti-aliased disc. `center`/`size` are physical pixels.
@@ -1284,6 +1118,49 @@ impl TextRenderer {
         self.avatar_loaded[slot] = true;
     }
 
+    /// Replace the whole bot portrait atlas (decoded RGBA of the published image).
+    /// Returns `false`, uploading nothing, when the size does not match the catalog layout.
+    pub fn upload_bot_portraits(&mut self, width: u32, height: u32, rgba: &[u8]) -> bool {
+        let (w, h) = (self.bot_portraits_tex.width, self.bot_portraits_tex.height);
+        if width != w || height != h || rgba.len() != (w * h * 4) as usize {
+            return false;
+        }
+        let dst = unsafe {
+            std::slice::from_raw_parts_mut(self.bot_portraits_tex.buffer.data(), rgba.len())
+        };
+        dst.copy_from_slice(rgba);
+        self.bot_portraits_dirty = true;
+        self.bot_portraits_loaded = true;
+        true
+    }
+
+    /// Circular portrait of a catalog bot; `false` until the atlas has arrived.
+    pub fn push_bot_portrait(
+        &mut self,
+        center: [f32; 2],
+        size: [f32; 2],
+        index: usize,
+        tint: [f32; 4],
+    ) -> bool {
+        if !self.bot_portraits_loaded || index >= bot_portrait_count() {
+            return false;
+        }
+        self.push_inst(TextInstanceGpu {
+            screen_pos: [center[0] - size[0] * 0.5, center[1] - size[1] * 0.5],
+            size,
+            uv_rect: bot_portrait_uv(index),
+            content_rect: [0.0, 0.0, 1.0, 1.0],
+            color: tint,
+            outline_color: [0.0; 4],
+            face_dilate: 0.0,
+            outline_thickness: 0.0,
+            underlay_offset_y: 0.0,
+            underlay_softness: 0.0,
+            kind: KIND_BOT_SPRITE,
+        });
+        true
+    }
+
     /// UV rect for a loaded avatar slot, or `None` if that slot hasn't been uploaded yet.
     pub fn avatar_uv(&self, slot: usize) -> Option<[f32; 4]> {
         if slot < AVATAR_SLOT_COUNT && self.avatar_loaded[slot] {
@@ -1320,6 +1197,9 @@ impl TextRenderer {
 
         self.write_buffers(context);
 
+        if std::mem::take(&mut self.bot_portraits_dirty) {
+            self.bot_portraits_tex.upload(encoder, context);
+        }
         // The atlas was initialized by upload_atlas; update only cells that just arrived.
         for slot in self.avatar_dirty_slots.drain(..) {
             let cell = AVATAR_CELL as usize;
@@ -1355,8 +1235,8 @@ impl TextRenderer {
             globals,
             font_atlas: self.font_atlas_tex.view,
             font_sampler: self.sampler,
-            emoji_atlas: self.emoji_atlas_tex.view,
-            emoji_sampler: self.emoji_sampler,
+            bot_portraits: self.bot_portraits_tex.view,
+            bot_portraits_sampler: self.bot_portraits_sampler,
             avatar_atlas: self.avatar_atlas_tex.view,
             avatar_sampler: self.avatar_sampler,
             building_atlas: self.building_atlas_tex.view,
@@ -1377,7 +1257,9 @@ impl TextRenderer {
             .destroy_render_pipeline(&mut self.pipeline);
         render_ctx.context.destroy_buffer(self.buffer);
         render_ctx.context.destroy_sampler(self.sampler);
-        render_ctx.context.destroy_sampler(self.emoji_sampler);
+        render_ctx
+            .context
+            .destroy_sampler(self.bot_portraits_sampler);
         render_ctx.context.destroy_sampler(self.avatar_sampler);
         render_ctx.context.destroy_sampler(self.building_sampler);
         render_ctx.context.destroy_sampler(self.status_sampler);
@@ -1392,13 +1274,13 @@ impl TextRenderer {
             .destroy_buffer(self.font_atlas_tex.buffer);
         render_ctx
             .context
-            .destroy_texture_view(self.emoji_atlas_tex.view);
+            .destroy_texture_view(self.bot_portraits_tex.view);
         render_ctx
             .context
-            .destroy_texture(self.emoji_atlas_tex.texture);
+            .destroy_texture(self.bot_portraits_tex.texture);
         render_ctx
             .context
-            .destroy_buffer(self.emoji_atlas_tex.buffer);
+            .destroy_buffer(self.bot_portraits_tex.buffer);
         render_ctx
             .context
             .destroy_texture_view(self.avatar_atlas_tex.view);
@@ -1451,15 +1333,14 @@ mod tests {
     ) -> PreparedText {
         let font_size = atlas.atlas.info.size.max(1) as f32;
         let mut items = Vec::new();
-        let (advance_width, has_emoji, item_count) =
-            shape_text(atlas, text, spacing, 1.4, |item| items.push(item));
+        let (advance_width, item_count) = shape_text(atlas, text, spacing, |item| items.push(item));
         PreparedText {
             visual_bounds: prepared_text_bounds(&items, advance_width, align_x),
             items,
             advance_width,
             align_x,
             font_size,
-            line_height: text_measure_height(font_size, 1.4, has_emoji),
+            line_height: if text.is_empty() { 0.0 } else { font_size },
             complete: item_count <= MAX_TEXT_GLYPHS,
         }
     }
@@ -1698,14 +1579,14 @@ mod tests {
     }
 
     #[test]
-    fn emoji_geometry_keeps_logical_size_and_reserves_effect_room() {
+    fn outlined_geometry_keeps_logical_size_and_reserves_effect_room() {
         let outline = OutlineStyle {
             color: [0.0, 0.0, 0.0, 1.0],
             thickness: 3.0,
             shadow_y: 5.0,
             reference_diameter: 0.0,
         };
-        let (screen_pos, size, content_rect) = emoji_geometry([100.0, 50.0], 12.0, outline);
+        let (screen_pos, size, content_rect) = outlined_geometry([100.0, 50.0], 12.0, outline);
         let content_size = [
             size[0] * (content_rect[2] - content_rect[0]),
             size[1] * (content_rect[3] - content_rect[1]),
@@ -1718,9 +1599,9 @@ mod tests {
     }
 
     #[test]
-    fn emoji_geometry_does_not_expand_without_effects() {
+    fn outlined_geometry_does_not_expand_without_effects() {
         let (screen_pos, size, content_rect) =
-            emoji_geometry([10.0, 20.0], 7.0, OutlineStyle::NONE);
+            outlined_geometry([10.0, 20.0], 7.0, OutlineStyle::NONE);
 
         assert_eq!(screen_pos, [3.0, 13.0]);
         assert_eq!(size, [14.0, 14.0]);
@@ -1728,33 +1609,27 @@ mod tests {
     }
 
     #[test]
-    fn inline_emoji_preserves_outline_settings_for_shader_scaling() {
+    fn icon_instances_preserve_outline_settings_for_shader_scaling() {
         let outline = OutlineStyle {
             color: [0.0, 0.0, 0.0, 0.8],
             thickness: 2.25,
             shadow_y: 3.5,
             reference_diameter: OutlineStyle::EMOJI_REFERENCE_DIAMETER,
         };
-        let instance = emoji_instance(
+        let instance = outlined_instance(
             [0.0, 0.0, 1.0, 1.0],
             [0.0, 0.0],
             4.0,
             [1.0; 4],
             outline,
             0.25,
+            KIND_ICON,
         );
 
         assert_eq!(instance.outline_color, outline.color);
         assert_eq!(instance.outline_thickness, outline.thickness);
         assert_eq!(instance.underlay_offset_y, outline.shadow_y);
         assert_eq!(instance.underlay_softness, 0.25);
-    }
-
-    #[test]
-    fn text_measure_height_only_expands_for_real_emoji() {
-        assert_eq!(text_measure_height(48.0, 1.4, false), 48.0);
-        assert_eq!(text_measure_height(48.0, 1.4, true), 67.2);
-        assert_eq!(text_measure_height(48.0, 0.8, true), 48.0);
     }
 
     #[test]
@@ -1787,7 +1662,7 @@ mod tests {
     #[test]
     fn prepared_text_measurement_uses_the_same_shaped_advances_as_drawing() {
         let atlas = FontAtlas::load_static();
-        let prepared = prepared_test_text(&atlas, "Ação 123 🏅", 0.95);
+        let prepared = prepared_test_text(&atlas, "Ação 123", 0.95);
         let measure = prepared.measure_at(24.0);
         let expected_advance = prepared.advance_width * 24.0 / prepared.font_size;
         assert!((measure.width - expected_advance).abs() < 1e-4);
@@ -1805,7 +1680,7 @@ mod tests {
             ..TextPaintStyle::default()
         };
 
-        for value in ["Li", "Ação 42 🏅", "Alexandria de Todos os Mundos 123"] {
+        for value in ["Li", "Ação 42", "Alexandria de Todos os Mundos 123"] {
             let prepared = prepared_test_text(&atlas, value, 0.95);
             for scale in [1.0, 0.75, 0.5, 0.25] {
                 let font_size = 32.0 * scale;
@@ -1841,7 +1716,7 @@ mod tests {
         };
 
         let atlas = FontAtlas::load_static();
-        let name = prepared_test_text(&atlas, "Ação 42 🏅", 0.95);
+        let name = prepared_test_text(&atlas, "Ação 42", 0.95);
         let troops = prepared_test_text_aligned(&atlas, "1 234 567", 0.95, 0.0);
         let center = ScreenPoint([100.0, 90.0]);
         let metrics = NameplateMetrics::compute(16.0, NameplateStyle::HumanGhost, true);
@@ -1929,7 +1804,6 @@ mod tests {
     #[test]
     fn prepared_text_emission_is_all_or_nothing_at_the_instance_limit() {
         let item = PreparedTextItem {
-            kind: PreparedTextKind::Glyph,
             offset: [0.0; 2],
             size: [10.0; 2],
             uv_rect: [0.0, 0.0, 1.0, 1.0],

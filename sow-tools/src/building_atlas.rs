@@ -1,4 +1,4 @@
-use crate::emoji_atlas::{encode_webp, pack_grid};
+use image::ImageEncoder;
 use image::imageops::FilterType;
 use image::{ImageBuffer, Rgba, RgbaImage};
 use serde_json::json;
@@ -16,7 +16,8 @@ const BUILDING_KINDS: [&str; 5] = ["City", "Factory", "Port", "Bunker", "Farm"];
 const BUILDING_LEVELS: u8 = 4;
 /// Nameplate and HUD badges, one strip in this order: `assets/art/icons/<name>.png`.
 /// The cell order is read by sow-render (`badge_atlas::CELLS`) and the HUD (`STATUS_CELLS`).
-pub const BADGES: [&str; 21] = [
+// ponytail: one 128px strip, 27 cells = 3456px; switch to a grid before it passes 4096px.
+pub const BADGES: [&str; 27] = [
     "request",
     "allied",
     "traitor",
@@ -38,6 +39,12 @@ pub const BADGES: [&str; 21] = [
     "arrow-left",
     "cancel",
     "confirm",
+    "gold",
+    "boat",
+    "clock",
+    "shield",
+    "range",
+    "speed",
 ];
 /// Map movers, `assets/art/units/<name>.png`, packed 4x2 in sow-render
 /// `MoverSpriteId` order (embedded in the game, never published).
@@ -141,16 +148,72 @@ pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sy
 
     pack_badges(&args)?;
     pack_units(&args)?;
+    pack_bot_portraits(&args)?;
     println!(
-        "✅ Atlases ready: {} ({}x{}, {} building levels), {} badges and {} units",
+        "✅ Atlases ready: {} ({}x{}, {} building levels), {} badges, {} units and {} bot portraits",
         atlas_path.display(),
         packed.atlas.width(),
         packed.atlas.height(),
         entries.len(),
         BADGES.len(),
-        UNITS.len()
+        UNITS.len(),
+        sow_core::geo_entities::bot_portrait_count()
     );
     Ok(())
+}
+
+/// Every catalog bot's portrait in `bot_portrait_index` order, 64px cells,
+/// 32 per row; a bot without `assets/art/leaders/<id>/portrait` gets the
+/// shared `_fallback` portrait until its art arrives. Lossy WebP via
+/// ImageMagick (already required by the pipeline) keeps the download small.
+fn pack_bot_portraits(args: &PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sync>> {
+    const CELL: u32 = 64;
+    const COLUMNS: u32 = 32;
+    let leaders = args.art_root.join("leaders");
+    let fallback = art_source(&leaders.join("_fallback"), "portrait")?;
+    let characters: Vec<_> = sow_core::geo_entities::bot_portraits().collect();
+    let rows = (characters.len() as u32).div_ceil(COLUMNS).max(1);
+    let mut atlas = ImageBuffer::from_pixel(CELL * COLUMNS, CELL * rows, Rgba([0, 0, 0, 0]));
+    for (index, character) in characters.iter().enumerate() {
+        let folder = character.avatar.as_deref().unwrap_or(&character.id);
+        let source =
+            art_source(&leaders.join(folder), "portrait").unwrap_or_else(|_| fallback.clone());
+        let image = image::load_from_memory(&fs::read(&source)?)?.to_rgba8();
+        let side = image.width().min(image.height());
+        let square = image::imageops::crop_imm(
+            &image,
+            (image.width() - side) / 2,
+            (image.height() - side) / 2,
+            side,
+            side,
+        )
+        .to_image();
+        let cell = image::imageops::resize(&square, CELL, CELL, FilterType::Lanczos3);
+        let index = index as u32;
+        image::imageops::overlay(
+            &mut atlas,
+            &cell,
+            i64::from(index % COLUMNS * CELL),
+            i64::from(index / COLUMNS * CELL),
+        );
+    }
+    let target = args.generated_root.join("bot-portraits.webp");
+    let png = std::env::temp_dir().join(format!("sow-bot-portraits-{}.png", std::process::id()));
+    atlas.save(&png)?;
+    let encoded =
+        std::env::temp_dir().join(format!("sow-bot-portraits-{}.webp", std::process::id()));
+    let status = std::process::Command::new("magick")
+        .arg(&png)
+        .args(["-quality", "82", "-define", "webp:method=6"])
+        .arg(&encoded)
+        .status()?;
+    let _ = fs::remove_file(&png);
+    if !status.success() {
+        return Err("magick failed to encode the bot portrait atlas".into());
+    }
+    let bytes = fs::read(&encoded)?;
+    let _ = fs::remove_file(&encoded);
+    write_if_changed(&target, &bytes)
 }
 
 fn pack_units(args: &PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -279,7 +342,7 @@ fn sha256(bytes: &[u8]) -> String {
 }
 
 fn rust_registry(
-    rects: &[crate::emoji_atlas::PackedGlyph],
+    rects: &[PackedGlyph],
     atlas_width: u32,
     atlas_height: u32,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
@@ -323,4 +386,61 @@ fn rust_registry(
         atlas_height = atlas_height,
         slots = slots
     ))
+}
+
+pub(crate) struct PackedGlyph {
+    pub(crate) name: String,
+    pub(crate) x: u32,
+    pub(crate) y: u32,
+    pub(crate) w: u32,
+    pub(crate) h: u32,
+}
+
+pub(crate) struct PackAtlasResult {
+    pub(crate) atlas: RgbaImage,
+    pub(crate) rects: Vec<PackedGlyph>,
+}
+
+pub(crate) fn pack_grid(
+    entries: &[(String, RgbaImage)],
+    cell: u32,
+    gutter: u32,
+) -> Result<PackAtlasResult, Box<dyn std::error::Error + Send + Sync>> {
+    let n = entries.len() as u32;
+    let cols = (n as f32).sqrt().ceil() as u32;
+    let rows = n.div_ceil(cols);
+    let tile = cell + gutter * 2;
+    let w = cols * tile;
+    let h = rows * tile;
+    let mut atlas: RgbaImage = ImageBuffer::from_pixel(w, h, Rgba([0, 0, 0, 0]));
+    let mut rects = Vec::new();
+    for (i, (name, img)) in entries.iter().enumerate() {
+        let col = (i as u32) % cols;
+        let row = (i as u32) / cols;
+        let x = col * tile + gutter;
+        let y = row * tile + gutter;
+        image::imageops::overlay(&mut atlas, img, x.into(), y.into());
+        rects.push(PackedGlyph {
+            name: name.clone(),
+            x,
+            y,
+            w: cell,
+            h: cell,
+        });
+    }
+    Ok(PackAtlasResult { atlas, rects })
+}
+
+pub(crate) fn encode_webp(
+    atlas: &RgbaImage,
+) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+    let mut bytes = Vec::new();
+    let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut bytes);
+    encoder.write_image(
+        atlas.as_raw(),
+        atlas.width(),
+        atlas.height(),
+        image::ExtendedColorType::Rgba8,
+    )?;
+    Ok(bytes)
 }

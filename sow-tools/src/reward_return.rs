@@ -33,15 +33,16 @@ async fn join(
     target: Option<u64>,
     version: &str,
 ) -> (Writer, Reader, sow_core::protocol::ServerJoinAckMessage) {
-    join_with_win_threshold(url, account, target, version, None).await
+    join_with_match_setup(url, account, target, version, 2, false).await
 }
 
-async fn join_with_win_threshold(
+async fn join_with_match_setup(
     url: &Url,
     account: &Value,
     target: Option<u64>,
     version: &str,
-    win_threshold: Option<f32>,
+    nation_count: u32,
+    random_spawn: bool,
 ) -> (Writer, Reader, sow_core::protocol::ServerJoinAckMessage) {
     let (socket, _) = tokio_tungstenite::connect_async(url.as_str())
         .await
@@ -50,10 +51,8 @@ async fn join_with_win_threshold(
     let mut config = sow_core::game_config::GameConfig::default();
     config.map_name = "world".into();
     config.bot_count = 0;
-    config.nation_count = if win_threshold.is_some() { 0 } else { 2 };
-    if let Some(threshold) = win_threshold {
-        config.map_control_win_percentage = threshold;
-    }
+    config.nation_count = nation_count;
+    config.random_spawn = random_spawn;
     let command = ClientMessage::JoinWithAuth {
         join: Box::new(sow_core::protocol::JoinPayload {
             name: account["display_name"].as_str().unwrap().into(),
@@ -61,8 +60,7 @@ async fn join_with_win_threshold(
             host_private: target.is_none(),
             build_version: sow_core::protocol::gameplay_build_identity(version),
             clan_tag: String::new(),
-            civilization: sow_core::player::Civilization::Rome,
-            leader: sow_core::player::Leader::Caesar,
+            leader: sow_core::player::Leader::of("caesar"),
             random_leader: true,
             host_config: target.is_none().then(|| Box::new(config)),
             password: None,
@@ -105,14 +103,36 @@ async fn started(read: &mut Reader) -> (sow_core::protocol::ServerStartMessage, 
     }
 }
 
-async fn natural_finish(read: &mut Reader, match_id: u64) {
+async fn natural_finish(
+    read: &mut Reader,
+    match_id: u64,
+) -> (u64, tokio::time::Instant, tokio::time::Instant) {
     tokio::time::timeout(std::time::Duration::from_secs(90), async {
+        let mut recent_turns = std::collections::VecDeque::with_capacity(256);
         loop {
             match recv(read, 90).await {
                 ServerMessage::MatchFinished {
-                    match_id: finished, ..
-                } if finished == match_id => return,
-                ServerMessage::Turn(_) | ServerMessage::Pong { .. } => {}
+                    match_id: finished,
+                    terminal_turn,
+                } if finished == match_id => {
+                    let terminal_turn_at = recent_turns
+                        .iter()
+                        .find(|(turn, _)| *turn == terminal_turn)
+                        .map(|(_, received_at)| *received_at)
+                        .unwrap_or_else(|| {
+                            fail(&format!(
+                                "terminal turn {terminal_turn} was not observed before MatchFinished"
+                            ))
+                        });
+                    return (terminal_turn, terminal_turn_at, tokio::time::Instant::now());
+                }
+                ServerMessage::Turn(turn) => {
+                    recent_turns.push_back((turn.turn.turn_number, tokio::time::Instant::now()));
+                    if recent_turns.len() > 256 {
+                        recent_turns.pop_front();
+                    }
+                }
+                ServerMessage::Pong { .. } => {}
                 message => fail(&format!(
                     "match ended unexpectedly while waiting for automatic settlement: {message:?}"
                 )),
@@ -120,7 +140,27 @@ async fn natural_finish(read: &mut Reader, match_id: u64) {
         }
     })
     .await
-    .unwrap_or_else(|_| fail("natural finish was not delivered within 90 seconds"));
+    .unwrap_or_else(|_| fail("natural finish was not delivered within 90 seconds"))
+}
+
+async fn voluntary_exit_recorded(read: &mut Reader, account_id: &str, match_id: u64) {
+    loop {
+        match recv(read, 20).await {
+            ServerMessage::ExitRecorded {
+                account_id: recorded_account,
+                match_id: recorded_match,
+                reason,
+                ..
+            } if recorded_account == account_id && recorded_match == match_id => {
+                assert_eq!(reason, sow_core::protocol::ExitReason::Voluntary);
+                return;
+            }
+            ServerMessage::Turn(_) | ServerMessage::Pong { .. } => {}
+            message => fail(&format!(
+                "unexpected response while waiting for exit receipt: {message:?}"
+            )),
+        }
+    }
 }
 
 async fn ready_relay(url: &Url, message: ClientMessage) -> (Writer, Reader, String) {
@@ -143,12 +183,6 @@ async fn ready_relay(url: &Url, message: ClientMessage) -> (Writer, Reader, Stri
             _ => {}
         }
     }
-}
-
-async fn exit(http: &reqwest::Client, base: &Url, account: &Value, match_id: u64) -> Value {
-    http.post(format!("{}/profile/match-exit", base.as_str().trim_end_matches('/')))
-        .json(&json!({"account_id":account["account_id"],"auth_secret":account["auth_secret"],"match_id":match_id.to_string()}))
-        .send().await.unwrap().error_for_status().unwrap().json().await.unwrap()
 }
 
 async fn result(http: &reqwest::Client, base: &Url, account: &Value, match_id: u64) -> Value {
@@ -348,12 +382,22 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
             .is_none(),
         "temporary disconnect must not settle an exit"
     );
-    for endpoint in ["match-exit", "match-result"] {
-        let forbidden = http.post(format!("{}/profile/{endpoint}", base.as_str().trim_end_matches('/')))
-            .json(&json!({"account_id":second["account_id"],"auth_secret":first["auth_secret"],"match_id":match_id.to_string()}))
-            .send().await.unwrap();
-        assert_eq!(forbidden.status(), reqwest::StatusCode::UNAUTHORIZED);
-    }
+    let removed_exit_command = http
+        .post(format!("{}/profile/match-exit", base.as_str().trim_end_matches('/')))
+        .json(&json!({"account_id":second["account_id"],"auth_secret":first["auth_secret"],"match_id":match_id.to_string()}))
+        .send().await.unwrap();
+    assert_eq!(
+        removed_exit_command.status(),
+        reqwest::StatusCode::NOT_FOUND
+    );
+    let wrong_account_observation = http
+        .post(format!("{}/profile/match-result", base.as_str().trim_end_matches('/')))
+        .json(&json!({"account_id":second["account_id"],"auth_secret":first["auth_secret"],"match_id":match_id.to_string(),"closure_known":true}))
+        .send().await.unwrap();
+    assert_eq!(
+        wrong_account_observation.status(),
+        reqwest::StatusCode::UNAUTHORIZED
+    );
     let fixture_path = std::env::temp_dir().join(format!(
         "sow-match-exit-{:016x}.json",
         rand::random::<u64>()
@@ -473,7 +517,7 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
     }
     let settled_first = profile(&http, base, Some(&first), "Exit Audit One").await;
     for _ in 0..3 {
-        let repeated = exit(&http, base, &first, match_id).await;
+        let repeated = result(&http, base, &first, match_id).await;
         assert_eq!(repeated["state"], "confirmed");
         assert_eq!(repeated["profile"]["xp"], settled_first["profile"]["xp"]);
         assert_eq!(
@@ -648,7 +692,8 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         );
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
-    let after_closure = profile(&http, base, Some(&first), "Exit Audit One").await;
+    let after_closure = result(&http, base, &first, match_id).await;
+    assert_eq!(after_closure["state"], "confirmed");
     for field in ["xp", "crowns", "laurels"] {
         assert_eq!(
             after_closure["profile"][field], settled_first["profile"][field],
@@ -667,10 +712,11 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
     drop(third_write);
     drop(third_read);
 
-    // A zero map-control threshold makes the server simulation finish the
-    // match on its first turn. No client result hint or exit is sent.
+    // The server owns win rules. Start a normal three-player match, let two
+    // players leave through the relay, and verify the remaining player gets
+    // the server-detected GameOver without requesting an exit.
     let (mut finish_host_write, mut finish_host_read, finish_host_join) =
-        join_with_win_threshold(url, &first, None, version.trim(), Some(0.0)).await;
+        join_with_match_setup(url, &first, None, version.trim(), 0, true).await;
     let finish_match_id = finish_host_join.lobby_id;
     let (mut finish_second_write, mut finish_second_read, finish_second_join) =
         join(url, &second, Some(finish_match_id), version.trim()).await;
@@ -743,46 +789,57 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         },
     )
     .await;
-    let host = finish_start
-        .players
-        .iter()
-        .find(|player| Some(player.id) == finish_start.my_player_id)
-        .expect("natural finish host must be in the registered start roster");
-    ws_send(
-        &mut finish_host_relay,
-        &ClientMessage::Gameplay {
-            intent: sow_core::protocol::GameplayIntent::Spawn {
-                x: host.spawn_x,
-                y: host.spawn_y,
-            },
-        },
-    )
-    .await;
+    ws_send(&mut finish_second_relay, &ClientMessage::Leave {}).await;
+    ws_send(&mut finish_third_relay, &ClientMessage::Leave {}).await;
     tokio::join!(
-        natural_finish(&mut finish_host_game, finish_match_id),
-        natural_finish(&mut finish_second_game, finish_match_id),
-        natural_finish(&mut finish_third_game, finish_match_id),
+        voluntary_exit_recorded(
+            &mut finish_second_game,
+            second["account_id"].as_str().unwrap(),
+            finish_match_id,
+        ),
+        voluntary_exit_recorded(
+            &mut finish_third_game,
+            third["account_id"].as_str().unwrap(),
+            finish_match_id,
+        ),
     );
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(120);
+    let _ = finish_second_relay.close().await;
+    let _ = finish_third_relay.close().await;
+
+    let host_finish = natural_finish(&mut finish_host_game, finish_match_id).await;
+    let automatic_result_started = host_finish.1;
+    let automatic_result_deadline = automatic_result_started + std::time::Duration::from_secs(5);
+    let natural_finish_ms = host_finish
+        .2
+        .duration_since(automatic_result_started)
+        .as_millis();
+    assert!(
+        natural_finish_ms <= 5_000,
+        "natural GameOver confirmation exceeded 5 seconds after the terminal turn"
+    );
     for account in [&first, &second, &third] {
         loop {
-            let observed = result(&http, base, account, finish_match_id).await;
+            let observed = tokio::time::timeout_at(
+                automatic_result_deadline,
+                result(&http, base, account, finish_match_id),
+            )
+            .await
+            .unwrap_or_else(|_| fail("natural GameOver reward was not confirmed within 5 seconds"));
             if observed["state"] == "confirmed" {
                 break;
             }
             assert!(
-                tokio::time::Instant::now() < deadline,
-                "natural GameOver did not settle without a client exit"
+                tokio::time::Instant::now() < automatic_result_deadline,
+                "natural GameOver did not settle without a client exit within 5 seconds"
             );
         }
     }
-    for write in [
-        &mut finish_host_relay,
-        &mut finish_second_relay,
-        &mut finish_third_relay,
-    ] {
-        let _ = write.close().await;
-    }
+    let natural_rewards_ms = automatic_result_started.elapsed().as_millis();
+    assert!(
+        natural_rewards_ms <= 5_000,
+        "natural GameOver rewards were not confirmed within 5 seconds of the terminal turn"
+    );
+    let _ = finish_host_relay.close().await;
     drop(finish_host_write);
     drop(finish_host_read);
     drop(finish_second_write);
@@ -792,6 +849,6 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
     std::fs::remove_file(fixture_path).unwrap();
     std::fs::remove_file(state_path).unwrap();
     pass(&format!(
-        "real WASM exit, automatic natural finish without a client hint, permanent confirmation, presentation, relay timeout and three-player closure verified for matches {match_id} and {finish_match_id}"
+        "real WASM voluntary exit and three-player GameOver with automatic survivor reward verified for matches {match_id} and {finish_match_id}; terminal_turn_to_match_finished_ms={natural_finish_ms} terminal_turn_to_all_rewards_ms={natural_rewards_ms}"
     ));
 }

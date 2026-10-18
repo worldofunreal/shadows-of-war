@@ -79,7 +79,7 @@ notes = "Web fonts served by the site and shell; the Noto faces are also embedde
 [generated]
 path = "assets/generated/"
 source = "generated"
-notes = "Written only by sow-tools: buildings-atlas and badges-atlas (pack-building-atlas), emoji atlas (pack-emoji-atlas, Twemoji 14.0.2 CC-BY-4.0, cache/ holds the downloaded glyphs) and msdf-atlas (generate_font_atlas)."
+notes = "Written only by sow-tools: buildings-atlas, badges-atlas, units-atlas and bot-portraits (pack-building-atlas, on every ./sow p) and msdf-atlas (generate_font_atlas)."
 
 [site_media]
 path = "assets/site/media/"

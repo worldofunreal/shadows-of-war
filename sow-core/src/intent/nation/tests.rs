@@ -1479,8 +1479,7 @@ mod bot_iq_alliance_tests {
             name: "ghost".into(),
             color: [1.0, 0.0, 0.0],
             team: None,
-            civilization: crate::player::Civilization::ALL[0],
-            leader: crate::player::Leader::ALL[0],
+            leader: crate::player::Leader::default(),
             skin_style: 0,
             is_ai_controlled: true,
         });

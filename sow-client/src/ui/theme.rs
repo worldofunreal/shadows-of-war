@@ -231,7 +231,10 @@ pub mod dev_config {
         pub fn switch_group_state(&self, group: &str) -> &'static str {
             let defaults = Self::default();
             let ids = Self::switch_ids(group);
-            if ids.iter().all(|id| self.value(id)[0] == defaults.value(id)[0]) {
+            if ids
+                .iter()
+                .all(|id| self.value(id)[0] == defaults.value(id)[0])
+            {
                 "on"
             } else if ids.iter().all(|id| self.value(id)[0] == 0.0) {
                 "off"

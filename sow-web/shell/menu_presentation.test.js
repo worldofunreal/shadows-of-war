@@ -607,10 +607,7 @@ test("leader display names use the catalog translation keys for every leader", (
         "caesar", "cleopatra", "ragnar", "sun_tzu", "alexander", "genghis_khan",
         "richard_the_lionheart", "vercingetorix", "boudica", "lady_six_sky", "leonidas", "napoleon"
     ];
-    const expectedSlugs = [
-        "caesar", "cleopatra", "ragnar", "suntzu", "alexander", "genghiskhan",
-        "richard", "vercingetorix", "boudica", "ladysixsky", "leonidas", "napoleon"
-    ];
+    const expectedSlugs = slugs;
     for (let i = 0; i < slugs.length; i++) {
         const expectedKey = "heroes.leader_" + expectedSlugs[i] + "_name";
         assert.equal(context.leaderDisplayName({ slug: slugs[i], name: "Fallback" }), "translated:" + expectedKey);
@@ -618,7 +615,7 @@ test("leader display names use the catalog translation keys for every leader", (
     }
     assert.equal(
         context.leaderHistoricalName({ slug: "richard_the_lionheart", name: "Richard the Lionheart" }),
-        "translated:heroes.leader_richard_historical"
+        "translated:heroes.leader_richard_the_lionheart_historical"
     );
 });
 

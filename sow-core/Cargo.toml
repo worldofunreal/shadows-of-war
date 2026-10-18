@@ -20,6 +20,9 @@ libm = { workspace = true }
 brotli = { workspace = true }
 sow-data = { workspace = true }
 
+[build-dependencies]
+blake3 = "1"
+
 [dev-dependencies]
 bincode = { workspace = true }
 serde_json = { workspace = true }

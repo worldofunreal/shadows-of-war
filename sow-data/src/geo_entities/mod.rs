@@ -1,26 +1,14 @@
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// What a catalog character is in a random match. `Campaign` entries only
+/// appear through campaign scripts and map rosters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum EntityKind {
+pub enum Role {
+    Nation,
     Tribe,
-    CityState,
-    Kingdom,
-    Empire,
-    Country,
-    StateRegion,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Era {
-    Unspecified,
-    Ancient,
-    Classical,
-    Medieval,
-    EarlyModern,
-    Modern,
+    Campaign,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -34,29 +22,115 @@ pub enum Region {
     Oceania,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Gender {
+    Female,
+    Male,
+}
+
+/// A building that produces income.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum District {
+    City,
+    Factory,
+    Port,
+    Farm,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Resource {
+    Gold,
+    Troops,
+}
+
+/// A playable hero's ability. The list is closed on purpose: every kind is
+/// programmed once in sow-core, and the hero ability test exercises each
+/// hero through the real game formulas, so a hero cannot ship an ability
+/// that does nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Ability {
+    /// Armies fight stronger (fewer losses, faster conquest).
+    CombatStrength { percent: u32 },
+    /// Attacks capture territory faster.
+    ExpansionSpeed { percent: u32 },
+    /// One district type produces more of one resource.
+    DistrictIncome {
+        district: District,
+        resource: Resource,
+        percent: u32,
+    },
+    /// Cities raise the troop cap more.
+    CityTroopCapacity { percent: u32 },
+    /// Bunkers defend a wider area.
+    BunkerRange { percent: u32 },
+    /// Bunkers make attackers lose more troops.
+    BunkerDefense { percent: u32 },
+    /// More gold for eliminating a player.
+    EliminationGold { percent: u32 },
+}
+
+impl Ability {
+    pub fn percent(self) -> u32 {
+        match self {
+            Ability::CombatStrength { percent }
+            | Ability::ExpansionSpeed { percent }
+            | Ability::DistrictIncome { percent, .. }
+            | Ability::CityTroopCapacity { percent }
+            | Ability::BunkerRange { percent }
+            | Ability::BunkerDefense { percent }
+            | Ability::EliminationGold { percent } => percent,
+        }
+    }
+}
+
+/// Fields only playable heroes have.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Hero {
+    /// Short name. Saved as the key of each player's hero XP: never rename.
+    pub name: String,
+    pub ability: Ability,
+    /// NFTROPOLY/WOU-ID card token, only for heroes registered there.
+    #[serde(default)]
+    pub card: Option<String>,
+    /// Always playable without buying it.
+    #[serde(default)]
+    pub free: bool,
+}
+
+/// One character of the shared catalog (`assets/geo_entities.json`): every
+/// nation and tribe bot, the playable heroes and the campaign factions.
+/// `lat`/`lon` is the character's home; bots spawn spread over all land and
+/// each spawn takes the free character whose home is closest.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeoEntity {
     pub id: String,
+    /// Shown on the map (the leader's name for nations and tribes).
     pub name: String,
-    pub kind: EntityKind,
-    pub era: Era,
+    /// The people or realm the character leads.
+    #[serde(default)]
+    pub entity: String,
+    pub role: Role,
     pub region: Region,
     #[serde(default)]
     pub lat: Option<f32>,
     #[serde(default)]
     pub lon: Option<f32>,
     #[serde(default)]
-    pub flag: String,
+    pub gender: Option<Gender>,
+    #[serde(default)]
+    pub wikipedia: Option<String>,
+    /// Folder in `assets/art/leaders/` holding the portrait.
     #[serde(default)]
     pub avatar: Option<String>,
     #[serde(default)]
     pub territory_color: Option<String>,
+    /// Present only on playable heroes.
     #[serde(default)]
-    pub maps: Vec<String>,
-    #[serde(default)]
-    pub fallback_nation_order: Option<u32>,
-    #[serde(default)]
-    pub fallback_tribe_order: Option<u32>,
+    pub hero: Option<Hero>,
 }
 
 impl GeoEntity {
@@ -91,7 +165,7 @@ fn catalog() -> &'static CatalogFile {
         let catalog: CatalogFile =
             serde_json::from_str(include_str!("../../../assets/geo_entities.json"))
                 .expect("invalid assets/geo_entities.json");
-        assert_eq!(catalog.version, 1, "unsupported entity catalog version");
+        assert_eq!(catalog.version, 2, "unsupported entity catalog version");
         catalog
     })
 }
@@ -109,32 +183,34 @@ pub fn by_name(name: &str) -> Option<&'static GeoEntity> {
     all().find(|entity| entity.name.eq_ignore_ascii_case(name))
 }
 
-pub fn flag_for_name(name: &str) -> Option<&'static str> {
-    by_name(name)
-        .map(|entity| entity.flag.as_str())
-        .filter(|flag| !flag.is_empty())
+/// Cell of a bot's portrait (by portrait folder) in the packed bot portrait
+/// atlas: nation and tribe characters in catalog order (sow-tools packs the
+/// same order).
+pub fn bot_portrait_index(avatar: &str) -> Option<usize> {
+    static INDEX: OnceLock<std::collections::HashMap<&'static str, usize>> = OnceLock::new();
+    INDEX
+        .get_or_init(|| {
+            bot_portraits()
+                .enumerate()
+                .filter_map(|(index, character)| Some((character.avatar.as_deref()?, index)))
+                .collect()
+        })
+        .get(avatar)
+        .copied()
 }
 
-pub fn fallback_nations() -> Vec<&'static GeoEntity> {
-    ordered_pool(|entity| {
-        if entity.kind == EntityKind::StateRegion {
-            None
-        } else {
-            entity.fallback_nation_order
-        }
-    })
+/// Every character packed into the bot portrait atlas, in cell order.
+pub fn bot_portraits() -> impl Iterator<Item = &'static GeoEntity> {
+    all().filter(|entity| entity.role != Role::Campaign)
 }
 
-pub fn fallback_tribes() -> Vec<&'static GeoEntity> {
-    ordered_pool(|entity| entity.fallback_tribe_order)
+pub fn bot_portrait_count() -> usize {
+    bot_portraits().count()
 }
 
-fn ordered_pool(order: impl Fn(&GeoEntity) -> Option<u32>) -> Vec<&'static GeoEntity> {
-    let mut entries: Vec<_> = all()
-        .filter_map(|entity| order(entity).map(|position| (position, entity)))
-        .collect();
-    entries.sort_unstable_by_key(|(position, _)| *position);
-    entries.into_iter().map(|(_, entity)| entity).collect()
+/// Nation or tribe bots in catalog order (the order is stable across clients).
+pub fn bots(role: Role) -> impl Iterator<Item = &'static GeoEntity> {
+    all().filter(move |entity| entity.role == role)
 }
 
 #[cfg(test)]
@@ -145,16 +221,14 @@ mod tests {
     fn catalog_entries_are_valid_and_stable() {
         let mut ids = std::collections::HashSet::new();
         let mut names = std::collections::HashSet::new();
-        let entities: Vec<_> = all().collect();
-        assert!(entities.len() >= 1840, "catalog entity list shrank");
-
-        for entity in &entities {
-            assert!(!entity.id.is_empty());
+        for entity in all() {
             assert!(
-                entity
-                    .id
-                    .bytes()
-                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+                !entity.id.is_empty()
+                    && entity.id.bytes().all(|byte| byte.is_ascii_lowercase()
+                        || byte.is_ascii_digit()
+                        || byte == b'_'),
+                "invalid ID {}",
+                entity.id
             );
             assert!(ids.insert(entity.id.as_str()), "duplicate ID {}", entity.id);
             assert!(
@@ -177,29 +251,38 @@ mod tests {
                     avatar
                 );
             }
+            // Every bot needs a home (spawn assignment), a portrait folder,
+            // a gender, a real region and a name of its own.
+            if entity.role != Role::Campaign {
+                assert!(
+                    entity.lat.is_some(),
+                    "{} has no home coordinates",
+                    entity.id
+                );
+                assert!(
+                    entity.avatar.is_some(),
+                    "{} has no portrait folder",
+                    entity.id
+                );
+                assert!(entity.gender.is_some(), "{} has no gender", entity.id);
+                assert_ne!(entity.region, Region::Unassigned, "{}", entity.id);
+                assert!(
+                    !entity.entity.is_empty(),
+                    "{} has no people/realm",
+                    entity.id
+                );
+            }
         }
-
-        let nations = fallback_nations();
-        let tribes = fallback_tribes();
-        assert!(nations.len() >= 229);
-        assert!(tribes.len() >= 670);
-        assert!(
-            nations
-                .iter()
-                .all(|entity| entity.kind != EntityKind::StateRegion)
-        );
-        assert!(
-            nations
-                .iter()
-                .enumerate()
-                .all(|(i, e)| e.fallback_nation_order == Some(i as u32))
-        );
-        assert!(
-            tribes
-                .iter()
-                .enumerate()
-                .all(|(i, e)| e.fallback_tribe_order == Some(i as u32))
-        );
+        let mut portraits = std::collections::HashSet::new();
+        for character in bot_portraits() {
+            assert!(
+                portraits.insert(character.avatar.as_deref()),
+                "{} shares a portrait folder with another bot",
+                character.id
+            );
+        }
+        assert!(bots(Role::Nation).count() >= 200, "nation roster shrank");
+        assert!(bots(Role::Tribe).count() >= 400, "tribe roster shrank");
     }
 
     #[test]

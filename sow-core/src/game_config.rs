@@ -85,7 +85,6 @@ pub struct ScriptedSpawn {
     pub color: [f32; 3],
     pub team: Option<crate::protocol::Team>,
     pub leader: crate::player::Leader,
-    pub civilization: crate::player::Civilization,
     #[serde(default)]
     pub troops: Option<f64>,
     /// Bot intelligence override (`Player.iq`). `None` = engine default. AI tiers unlock at 100 and
@@ -290,8 +289,6 @@ pub struct GameConfig {
     pub nuke_cost: f64,
 
     #[serde(default)]
-    pub player_civilization: crate::player::Civilization,
-    #[serde(default)]
     pub player_leader: crate::player::Leader,
 
     #[serde(default)]
@@ -321,6 +318,21 @@ pub struct GameConfig {
 }
 
 impl GameConfig {
+    /// Most bots a match can hold: one per catalog character of that role,
+    /// so bots never repeat. Applied wherever a lobby sets its counts.
+    pub fn max_tribe_bots() -> u32 {
+        crate::geo_entities::bots(crate::geo_entities::Role::Tribe).count() as u32
+    }
+
+    pub fn max_nation_bots() -> u32 {
+        crate::geo_entities::bots(crate::geo_entities::Role::Nation).count() as u32
+    }
+
+    pub fn clamp_bot_counts(&mut self) {
+        self.bot_count = self.bot_count.min(Self::max_tribe_bots());
+        self.nation_count = self.nation_count.min(Self::max_nation_bots());
+    }
+
     /// Convert a per-second rate to a per-tick rate, applying the global speed multiplier.
     /// This is the **single source of truth** for time scaling. Every system uses this.
     #[inline]
@@ -399,8 +411,7 @@ impl Default for GameConfig {
             cost_scale_cap_multiplier: 10.0,
             nuke_cost: 500.0,
 
-            player_civilization: crate::player::Civilization::Rome,
-            player_leader: crate::player::Leader::Caesar,
+            player_leader: crate::player::Leader::default(),
 
             scripted_spawns: Vec::new(),
             player_spawn: None,

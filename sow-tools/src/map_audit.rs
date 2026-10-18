@@ -63,7 +63,7 @@ struct RecipeRecord {
     map_bin_br_sha256: String,
     thumbnail_sha256: String,
     #[serde(default)]
-    land_entity_corrections: Vec<String>,
+    land_point_corrections: Vec<crate::stamp_geo::LandPoint>,
 }
 
 pub fn run(args: MapAuditArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -200,7 +200,7 @@ fn audit_map(
             && thumbnail_sha256.as_deref() == Some(record.thumbnail_sha256.as_str())
     });
     let unlanded_entity_corrections = recipe
-        .map(|record| find_unlanded_entity_corrections(&map, &record.land_entity_corrections))
+        .map(|record| find_unlanded_entity_corrections(&map, &record.land_point_corrections))
         .unwrap_or_default();
     let land_entity_corrections_valid = recipe.map(|_| unlanded_entity_corrections.is_empty());
     let valid = map.num_land_tiles as usize == land_tiles
@@ -245,22 +245,22 @@ fn audit_map(
     })
 }
 
-fn find_unlanded_entity_corrections(map: &map_file::MapFile, ids: &[String]) -> Vec<String> {
-    ids.iter()
-        .filter(|id| {
-            let Some(entity) = sow_core::geo_entities::by_id(id) else {
+fn find_unlanded_entity_corrections(
+    map: &map_file::MapFile,
+    points: &[crate::stamp_geo::LandPoint],
+) -> Vec<String> {
+    points
+        .iter()
+        .filter(|point| {
+            let Some(bounds) = map.geo_bounds else {
                 return true;
             };
-            let (Some(lat), Some(lon), Some(bounds)) = (entity.lat, entity.lon, map.geo_bounds)
-            else {
-                return true;
-            };
-            let Some((x, y)) = bounds.project(lat as f64, lon as f64, map.width, map.height) else {
+            let Some((x, y)) = bounds.project(point.lat, point.lon, map.width, map.height) else {
                 return true;
             };
             map.terrain[(y * map.width + x) as usize] & LAND_BIT == 0
         })
-        .cloned()
+        .map(|point| point.id.clone())
         .collect()
 }
 

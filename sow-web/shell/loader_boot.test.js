@@ -90,7 +90,7 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.doesNotMatch(offlineStart, /set_selected_leader\(/,
         "starting a tutorial match keeps its leader separate from menu selection");
     assert.match(offlineStart, /color: leader\.filler_rgb\(\)/);
-    assert.match(offlineStart, /civilization: leader\.civilization\(\),\s*leader,/,
+    assert.match(offlineStart, /spawn_y: 0,\s*leader,/,
         "the tutorial's actual game player still uses its campaign leader");
     const serverStartStart = netMessagesSource.indexOf("ServerMessage::Start(start_msg) =>");
     const serverStartEnd = netMessagesSource.indexOf("self.tasks.engine_init_queued_msg = Some(*start_msg);", serverStartStart);

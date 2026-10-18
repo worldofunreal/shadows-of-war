@@ -291,11 +291,26 @@ water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
 small_lake_policy = "remove-under-16-tiles"
 downscale_policy = "water-wins"
-land_entity_corrections = [
-  "maldives", "ryukyu_kingdom", "carib", "samoa", "tonga", "palau",
-  "micronesia", "marshall_islands", "kiribati", "chamorro", "tahitians",
-  "marquesans", "rapa_nui", "nan_madol", "kingdom_of_tahiti",
-  "tui_tonga_empire", "moriori", "frisii", "chauci",
+land_point_corrections = [
+  { id = "maldives", lat = 3.2, lon = 73.2 },
+  { id = "ryukyu_kingdom", lat = 26.2, lon = 127.7 },
+  { id = "carib", lat = 15.4, lon = -61.3 },
+  { id = "samoa", lat = -13.8, lon = -172.1 },
+  { id = "tonga", lat = -21.2, lon = -175.2 },
+  { id = "palau", lat = 7.5, lon = 134.6 },
+  { id = "micronesia", lat = 6.9, lon = 158.2 },
+  { id = "marshall_islands", lat = 7.1, lon = 171.2 },
+  { id = "kiribati", lat = 1.35, lon = 173 },
+  { id = "chamorro", lat = 13.45, lon = 144.75 },
+  { id = "tahitians", lat = -17.65, lon = -149.42 },
+  { id = "marquesans", lat = -9.780858015429843, lon = -139.04818795465007 },
+  { id = "rapa_nui", lat = -27.11, lon = -109.35 },
+  { id = "nan_madol", lat = 6.84, lon = 158.33 },
+  { id = "kingdom_of_tahiti", lat = -17.53, lon = -149.56 },
+  { id = "tui_tonga_empire", lat = -21.14, lon = -175.2 },
+  { id = "moriori", lat = -44, lon = -176.5 },
+  { id = "frisii", lat = 53.2, lon = 5.8 },
+  { id = "chauci", lat = 54.465840355712885, lon = 9.00368466377435 },
 ]
 map_bin_sha256 = "c59857a4493c48c5b02178c2a17a107d007bcac88a57024aecf0373b5d2eccd4"
 map_bin_br_sha256 = "136b8a223c44ab8ed8eec9fe5d814ea025ea37b9090ac67cd03eea405d7416bf"

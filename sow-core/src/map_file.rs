@@ -129,6 +129,16 @@ impl GeoBounds {
             y.min(height.saturating_sub(1)),
         ))
     }
+
+    /// Tile center → (lat, lon); the inverse of [`Self::project`]. Longitudes
+    /// of antimeridian maps come back in [-180, 180]. Basic f64 ops only.
+    pub fn unproject(&self, x: u32, y: u32, width: u32, height: u32) -> (f64, f64) {
+        let lon_span = self.max_lon() - self.min_lon();
+        let lat_span = self.max_lat() - self.min_lat();
+        let lon = self.min_lon() + (x as f64 + 0.5) / width.max(1) as f64 * lon_span;
+        let lat = self.max_lat() - (y as f64 + 0.5) / height.max(1) as f64 * lat_span;
+        (lat, if lon > 180.0 { lon - 360.0 } else { lon })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -939,7 +949,7 @@ mod tests {
             id: "historical".into(),
             name: "Historical".into(),
             entries: vec![MapRosterEntry {
-                entity_id: "iceland".into(),
+                entity_id: "nationbot_hatshepsut".into(),
                 role: MapRosterRole::Nation,
                 x: 2,
                 y: 3,

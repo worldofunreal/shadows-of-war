@@ -710,7 +710,7 @@
         "target": "player"
       },
       "guide": {
-        "kind": "ui",
+        "kind": "world",
         "target": "upgrade_structure",
         "gesture": "tap"
       },

@@ -12,7 +12,8 @@ Para reemplazar algo, sobrescribe el archivo con el mismo nombre.
 | `leaders/<nombre>/` | `portrait` | HUD, placas de nombre, perfil, diálogos | 256 px |
 | `leaders/<nombre>/` | `expressions` | caras del héroe sobre el mapa (solo héroes jugables) | igual |
 | `leaders/<nombre>/` | `scene-desktop`, `scene-mobile` | menú y pantalla de carga | comprimido (máx. 400 KB) |
-| `leaders/_fallback/` | `portrait` | jugador sin retrato | 256 px |
+| `leaders/<carpeta>/` | `portrait` | naciones y tribus de los bots (carpeta = columna "Carpeta del retrato" de `outputs/identidades/`) | 256 px y atlas de retratos de bots (64 px) |
+| `leaders/_fallback/` | `portrait` | jugador sin retrato, y cara provisional de cada bot que todavía no tiene la suya | 256 px |
 | `buildings/` | `city-1` … `city-4`, `factory-1` … `factory-4`, `port-1` … `port-4`, `bunker-1` … `bunker-4`, `farm-1` … `farm-4` | edificio en el mapa y botón del HUD | atlas, celda de 64 px |
 | `icons/` | `troops` | tropas en el HUD, en la barra del menú (Batalla) y junto a las tropas en el mapa | 128 px y atlas |
 | `icons/` | `gold`, `gem`, `crown`, `laurel` | monedas en tienda, HUD y perfil | 128 px |
@@ -34,6 +35,14 @@ Para reemplazar algo, sobrescribe el archivo con el mismo nombre.
 
 "atlas" quiere decir que `./sow p` los junta solo en una imagen (celdas de 128 px; unidades de 64 px). Tú solo cambias el archivo.
 
-Hoy, los íconos, las unidades y los edificios que no tienen arte propio usan la imagen del emoji que se veía antes; están marcados en `assets/SOURCES.toml`.
+Hoy, los íconos, las unidades y los edificios que no tienen arte propio usan una imagen provisional; están marcados en `assets/SOURCES.toml`. Las tribus sin retrato usan `_fallback`; las naciones usan los retratos provisionales `nationbot_*`.
+
+## Agregar un héroe jugable
+
+1. En `assets/geo_entities.json`, al personaje se le agrega `hero` con `name` (nombre corto; queda guardado en la experiencia de cada jugador, no se cambia después), `ability` (una de las clases de efecto que ya existen) y, si tiene carta registrada, `card`. `free: true` lo deja gratis para siempre. También necesita `territory_color`.
+2. Su carpeta `leaders/<id>/` con `portrait`, `expressions`, `scene-desktop` y `scene-mobile`.
+3. En los 15 idiomas (`sow-i18n/strings/*/web.toml`): `leader_<id>_name`, `leader_<id>_historical` y `leader_<id>_civilization` en `[heroes]`; `leader_<id>_ability` y `leader_<id>_description` en `[site]`.
+
+El menú, la tienda, la rotación gratis y el juego lo toman solos. `./sow p` se detiene si falta algo o si su habilidad no cambia el juego.
 
 Un archivo con un nombre que no está en esta tabla detiene el build. Así no queda arte olvidado sin publicar. Para agregar un espacio nuevo hay que darlo de alta en `sow-dist` (`ART_ICONS`) o en `sow-tools` (`BADGES`).

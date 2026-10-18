@@ -29,7 +29,6 @@ const NAMEPLATE_MAX_CATCHUP_TICKS: u64 = NAMEPLATE_SAMPLE_TICKS * 2;
 const SPAWN_STICKY_HOLD: Duration = Duration::from_millis(120);
 const SPAWN_SETTLE_DURATION: Duration = Duration::from_millis(180);
 const LOD_DOT_RADIUS: f32 = 2.0;
-const CATEGORY_EMOJI_DIAMETER_SCALE: f32 = 0.70;
 const AVATAR_PLACEHOLDER_COLOR: [f32; 4] = [0.16, 0.18, 0.20, 1.0];
 const EMOTE_BUBBLE_FONT_RATIO: f32 = 0.22;
 const EMOTE_BUBBLE_MIN_FONT_SIZE: f32 = 9.0;
@@ -42,7 +41,6 @@ const EMOTE_BUBBLE_TAIL_LENGTH_RATIO: f32 = 0.22;
 const EMOTE_BUBBLE_INNER_TAIL_WIDTH_RATIO: f32 = 0.23;
 const EMOTE_BUBBLE_INNER_TAIL_LENGTH_RATIO: f32 = 0.16;
 const EMOTE_BUBBLE_BODY_OFFSET_RATIO: f32 = 0.35;
-pub(crate) const INLINE_EMOJI_SCALE: f32 = 1.4;
 
 #[derive(Clone, Debug)]
 pub(crate) struct NameplateVisualState {
@@ -156,7 +154,8 @@ impl AvatarPlan {
 #[derive(Clone, Copy)]
 enum AvatarContent {
     Sprite([f32; 4]),
-    Emblem(&'static str),
+    /// Cell in the bot portrait atlas (`sow_data::geo_entities::bot_portrait_index`).
+    BotPortrait(usize),
     None,
 }
 
@@ -395,7 +394,7 @@ impl NameplateSystem {
                     &self.emote_texts[index]
                 };
                 self.prepared_emotes[index] =
-                    text.prepare_string(source, nameplate_char_spacing(dev), 1.0, 0.5);
+                    text.prepare_string(source, nameplate_char_spacing(dev), 0.5);
             }
             self.emote_text_style_key = Some(style_key);
         }
@@ -951,7 +950,7 @@ fn refresh_nameplate_text_cache(
         state.source_name = player.name.clone();
         state.player_type = player.player_type;
         state.display_name =
-            sow_core::player::nameplate_display_name(player.id, &player.name, player.player_type);
+            sow_core::player::display_name(player.id, &player.name, player.player_type);
     }
     let troops_bits = player.troops.to_bits();
     let mut troops_text_changed = false;
@@ -964,20 +963,12 @@ fn refresh_nameplate_text_cache(
         }
     }
     if identity_changed || state.text_style_key != Some(style_key) {
-        state.prepared_name = text.prepare_string(
-            &state.display_name,
-            nameplate_char_spacing(dev),
-            INLINE_EMOJI_SCALE,
-            0.5,
-        );
+        state.prepared_name =
+            text.prepare_string(&state.display_name, nameplate_char_spacing(dev), 0.5);
     }
     if troops_text_changed || state.text_style_key != Some(style_key) {
-        state.prepared_troops = text.prepare_string(
-            &state.troops_text,
-            nameplate_char_spacing(dev),
-            INLINE_EMOJI_SCALE,
-            0.0,
-        );
+        state.prepared_troops =
+            text.prepare_string(&state.troops_text, nameplate_char_spacing(dev), 0.0);
     }
     state.text_style_key = Some(style_key);
 }
@@ -1475,9 +1466,6 @@ pub(crate) fn prepare_death_avatar(
                 leader: *leader,
             }
         }
-        sow_core::player::AvatarIdentity::Emblem { symbol } => {
-            sow_core::player::AvatarIdentityRef::Emblem { symbol }
-        }
         sow_core::player::AvatarIdentity::Wilderness
         | sow_core::player::AvatarIdentity::Fallback => {
             sow_core::player::AvatarIdentityRef::Fallback
@@ -1500,11 +1488,19 @@ fn resolve_avatar_content(
 ) -> AvatarContent {
     match identity {
         sow_core::player::AvatarIdentityRef::Portrait { slug, leader: None } => {
-            let slot = Leader::ALL
-                .iter()
-                .find(|leader| sow_data::commerce::leader_id(**leader) == slug)
-                .map(|leader| leader_avatar_slot(*leader, expression))
-                .or_else(|| campaign_avatar_slots.get(slug).copied())
+            if let Some(leader) = Leader::all().find(|leader| leader.id() == slug) {
+                let slot = leader_avatar_slot(leader, expression);
+                return text
+                    .avatar_uv(slot)
+                    .or_else(|| text.avatar_uv(AVATAR_FALLBACK_SLOT))
+                    .map_or(AvatarContent::None, AvatarContent::Sprite);
+            }
+            if let Some(index) = sow_data::geo_entities::bot_portrait_index(slug) {
+                return AvatarContent::BotPortrait(index);
+            }
+            let slot = campaign_avatar_slots
+                .get(slug)
+                .copied()
                 .unwrap_or(AVATAR_FALLBACK_SLOT);
             text.avatar_uv(slot)
                 .or_else(|| text.avatar_uv(AVATAR_FALLBACK_SLOT))
@@ -1517,7 +1513,6 @@ fn resolve_avatar_content(
             .avatar_uv(leader_avatar_slot(leader, expression))
             .or_else(|| text.avatar_uv(AVATAR_FALLBACK_SLOT))
             .map_or(AvatarContent::None, AvatarContent::Sprite),
-        sow_core::player::AvatarIdentityRef::Emblem { symbol } => AvatarContent::Emblem(symbol),
         sow_core::player::AvatarIdentityRef::Fallback => text
             .avatar_uv(AVATAR_FALLBACK_SLOT)
             .map_or(AvatarContent::None, AvatarContent::Sprite),
@@ -1588,7 +1583,7 @@ fn paint_prepared_nameplate(
 ) {
     let before = text.instance_count();
     if let Some(avatar) = plan.avatar {
-        paint_prepared_avatar(text, avatar, plan.emoji_outline, 1.0);
+        paint_prepared_avatar(text, avatar, 1.0);
     }
     for badge in plan.badges[..plan.badge_count].iter().flatten() {
         // Every badge is a cell of the art/icons strip; none is a system emoji.
@@ -1634,12 +1629,7 @@ fn paint_prepared_nameplate(
     );
 }
 
-pub(crate) fn paint_prepared_avatar(
-    text: &mut TextRenderer,
-    avatar: AvatarPlan,
-    outline: sow_render::text::OutlineStyle,
-    alpha: f32,
-) {
+pub(crate) fn paint_prepared_avatar(text: &mut TextRenderer, avatar: AvatarPlan, alpha: f32) {
     let tint = [1.0, 1.0, 1.0, alpha];
     match avatar.content {
         AvatarContent::Sprite(uv) => {
@@ -1651,14 +1641,13 @@ pub(crate) fn paint_prepared_avatar(
                 text.push_sprite(avatar.center, size, uv, tint);
             }
         }
-        AvatarContent::Emblem(glyph) => {
-            let _ = text.push_emoji(
-                glyph,
-                avatar.center,
-                avatar.radius * CATEGORY_EMOJI_DIAMETER_SCALE,
-                tint,
-                outline,
-            );
+        AvatarContent::BotPortrait(index) => {
+            let size = avatar.scale.map(|scale| avatar.radius * 2.0 * scale);
+            if !text.push_bot_portrait(avatar.center, size, index, tint)
+                && let Some(uv) = text.avatar_uv(AVATAR_FALLBACK_SLOT)
+            {
+                text.push_sprite(avatar.center, size, uv, tint);
+            }
         }
         AvatarContent::None => text.push_disc(
             avatar.center,

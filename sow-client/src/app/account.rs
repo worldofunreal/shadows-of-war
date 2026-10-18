@@ -238,8 +238,10 @@ impl SowApp {
             .unwrap_or_else(|| account_id.clone());
         let mut desired: Vec<String> = Vec::new();
         for leader_id in &self.progress.owned_leaders {
-            if let Some(leader) = sow_data::commerce::leader_from_id(leader_id) {
-                desired.push(leader.card_token_id().to_string());
+            if let Some(card) = sow_data::commerce::leader_from_id(leader_id)
+                .and_then(sow_core::player::Leader::card_token_id)
+            {
+                desired.push(card.to_string());
             }
         }
         for skin_id in &self.progress.owned_skins {
@@ -380,30 +382,49 @@ impl SowApp {
         self.save_menu_return_context();
     }
 
-    pub(crate) fn prepare_match_result(&mut self, through_turn:u64) {
-        if self.net.is_offline { return; }
-        let Some(id) = self.sim.my_lobby_id else { return; };
+    pub(crate) fn prepare_match_result(&mut self, through_turn: u64) {
+        if self.net.is_offline {
+            return;
+        }
+        let Some(id) = self.sim.my_lobby_id else {
+            return;
+        };
         let id = id.to_string();
-        if !self.menu_return.as_ref().is_some_and(|c| c.source == "multiplayer" && c.match_id.as_deref() == Some(id.as_str())) {
-            self.prepare_menu_return("multiplayer",Some(id.clone()));
+        if !self.menu_return.as_ref().is_some_and(|c| {
+            c.source == "multiplayer" && c.match_id.as_deref() == Some(id.as_str())
+        }) {
+            self.prepare_menu_return("multiplayer", Some(id.clone()));
         }
         let context = self.menu_return.as_mut().unwrap();
         context.preparation_only = true;
         context.voluntary_exit = Some(false);
-        context.recording_deadline = None;
+        if context.preparation_started_at_ms.is_none() {
+            context.preparation_started_at_ms = Some(
+                web_time::SystemTime::now()
+                    .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64,
+            );
+        }
         if let Some(client) = &self.net.client {
-            if let Ok(bytes) = bincode::serialize(&sow_core::protocol::ClientMessage::PrepareResult { through_turn }) {
+            if let Ok(bytes) =
+                bincode::serialize(&sow_core::protocol::ClientMessage::PrepareResult {
+                    through_turn,
+                })
+            {
                 client.send(bytes);
             }
         }
         self.save_menu_return_context();
-        self.begin_reward_profile_sync(Some(id),true);
+        self.begin_reward_profile_sync(Some(id), true);
     }
 
     pub(crate) fn finished_relay_match(&self) -> bool {
-        self.menu_return.as_ref().is_some_and(|c| c.match_finished
-            && c.match_id == self.sim.my_lobby_id.map(|id|id.to_string())
-            && self.ui.app.phase == crate::ClientPhase::Playing)
+        self.menu_return.as_ref().is_some_and(|c| {
+            c.match_finished
+                && c.match_id == self.sim.my_lobby_id.map(|id| id.to_string())
+                && self.ui.app.phase == crate::ClientPhase::Playing
+        })
     }
 
     pub(crate) fn save_menu_return_context(&self) {
@@ -420,7 +441,7 @@ impl SowApp {
     }
 
     pub(crate) fn poll_reward_profile_sync(&mut self, now: Instant) {
-        self.poll_exit_recording(now);
+        self.observe_relay_exit_recording();
         if self.pending_reward_receipt_ids.is_empty() && !self.waiting_menu_return() {
             return;
         }
@@ -669,7 +690,7 @@ impl SowApp {
         true
     }
 
-    pub(crate) fn poll_exit_recording(&mut self, now: Instant) {
+    pub(crate) fn observe_relay_exit_recording(&mut self) {
         if !self.waiting_menu_return() {
             self.net.closing_game = None;
             return;
@@ -703,72 +724,15 @@ impl SowApp {
             self.net.closing_game = None;
             self.save_menu_return_context();
         }
-        let recover = self.menu_return.as_ref().is_some_and(|context| {
-            context.source == "multiplayer"
-                && !context.preparation_only
-                && context.voluntary_exit.unwrap_or(true)
-                && !context.exit_recorded
-                && !context.recovery_accepted
-                && context.recovery_request_id.is_none()
-                && context
-                    .recording_deadline
-                    .is_none_or(|deadline| deadline <= now)
-        });
-        if !recover {
-            return;
-        }
-        let Some(account_id) = self.progress_account_id.clone() else {
-            return;
-        };
-        let Some(match_id) = self
-            .menu_return
-            .as_ref()
-            .and_then(|context| context.match_id.clone())
-        else {
-            return;
-        };
-        let cycle_id = self.menu_return.as_ref().unwrap().cycle_id;
-        let request_id = self.next_identity_request_id();
-        let auth_secret = (self.progress_provider == "anonymous")
-            .then(crate::anonymous_identity::load_account_secret)
-            .flatten();
-        let body = serde_json::json!({"account_id":account_id,"match_id":match_id,"auth_secret":auth_secret});
-        let mut request = ehttp::Request::post(
-            format!(
-                "{}/profile/match-exit",
-                self.asset_config.database_base.trim_end_matches('/')
-            ),
-            serde_json::to_vec(&body).expect("serializable recovery request"),
-        );
-        request.headers.insert("Content-Type", "application/json");
-        Self::apply_platform_auth(&mut request);
-        self.menu_return.as_mut().unwrap().recovery_request_id = Some(request_id);
-        self.net.closing_game = None;
-        let tx = self.tasks.db_tx.clone();
-        log::warn!(
-            "[menu-flow] recovering unacknowledged voluntary exit match={match_id} cycle={cycle_id}"
-        );
-        ehttp::fetch(request, move |result| {
-            let status = result.as_ref().ok().map(|response| response.status);
-            let accepted = result.is_ok_and(|response| {
-                response.ok
-                    && serde_json::from_slice::<serde_json::Value>(&response.bytes).is_ok_and(
-                        |value| value["account_id"] == account_id && value["match_id"] == match_id,
-                    )
-            });
-            let _ = tx.send(crate::player_progress::DbEvent::ExitRecovery {
-                account_id,
-                match_id,
-                cycle_id,
-                request_id,
-                accepted,
-                status,
-            });
-        });
     }
 
     pub(crate) fn observe_disconnected_match(&mut self) {
-        if self.waiting_menu_return() || self.menu_return.as_ref().is_some_and(|c|c.preparation_only) {
+        if self.waiting_menu_return()
+            || self
+                .menu_return
+                .as_ref()
+                .is_some_and(|c| c.preparation_only)
+        {
             return;
         }
         let Some(match_id) = self.sim.my_lobby_id else {
@@ -783,7 +747,8 @@ impl SowApp {
     pub(crate) fn clear_disconnect_observation(&mut self) {
         if self.ui.app.phase == crate::ClientPhase::Playing
             && self.menu_return.as_ref().is_some_and(|context| {
-                context.source == "multiplayer" && context.voluntary_exit == Some(false)
+                context.source == "multiplayer"
+                    && context.voluntary_exit == Some(false)
                     && !context.preparation_only
             })
         {
@@ -1080,6 +1045,20 @@ impl SowApp {
         crate::anonymous_identity::clear_legacy_exit_relay_proof(&account_id);
         if apply_menu_return_profile(&mut self.menu_return, &account_id, &cloud) {
             self.net.closing_game = None;
+            if let Some((Some(match_id), prepared_at_ms)) =
+                self.menu_return.as_ref().and_then(|context| {
+                    Some((context.match_id.clone(), context.preparation_started_at_ms?))
+                })
+            {
+                let confirmed_at_ms = web_time::SystemTime::now()
+                    .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                log::info!(
+                    "[rewards-timing] match={match_id} stage=prepare_to_receipt elapsed_ms={}",
+                    confirmed_at_ms.saturating_sub(prepared_at_ms)
+                );
+            }
             log::info!(
                 "[exit-timing] server confirmed account={} cycle={} return_ms={}",
                 account_hint(Some(&account_id)),
@@ -1843,7 +1822,7 @@ pub(crate) mod reward_exit_tests {
     // browser APIs and delayed database response are replaced; no preconfirmed
     // menu state is injected into the return path.
     #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
-        let saved, currentProfile, completedProfile, releaseReward, tutorialRequests, sockets, exitRequests, exitReady, gameLeaveWrites, gameCloseCode, gameErrors;
+        let saved, currentProfile, completedProfile, releaseReward, tutorialRequests, sockets, removedExitRouteRequests, resultRequests, resultReady, gameLeaveWrites, prepareResultWriteCount, gameCloseCode, gameErrors;
         export function setupTutorialExit(initial, completed) {
             const keys = ['Window', 'window', 'devicePixelRatio', 'localStorage', 'WebSocket', 'fetch',
                 'matchMedia', 'SOW_MAPS_URL', 'SOW_ASSETS_URL', 'SOW_DATABASE_URL', 'SOW_WS_URL', 'SOW_BUILD_VERSION'];
@@ -1858,7 +1837,11 @@ pub(crate) mod reward_exit_tests {
                 constructor(url) { this.url = url; sockets.push(this); this.readyState = 0; queueMicrotask(() => { this.readyState = 1; this.onopen?.(); }); }
                 send(data) {
                     const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
-                    if (bytes?.byteLength >= 4 && new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength).getUint32(0,true) === 2) gameLeaveWrites++;
+                    if (bytes?.byteLength >= 4) {
+                        const kind = new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength).getUint32(0,true);
+                        if (kind === 2) gameLeaveWrites++;
+                        if (kind === 13) prepareResultWriteCount++;
+                    }
                 }
                 close() { this.readyState = 3; this.onclose?.(); }
             };
@@ -1867,7 +1850,7 @@ pub(crate) mod reward_exit_tests {
                 SOW_ASSETS_URL: 'https://journey.invalid/assets', SOW_DATABASE_URL: 'https://journey.invalid/api',
                 SOW_WS_URL: 'wss://journey.invalid/ws/' });
             currentProfile = initial; completedProfile = completed; tutorialRequests = 0;
-            sockets = []; exitRequests = 0; exitReady = false; gameLeaveWrites = 0; gameCloseCode = 0; gameErrors = 0;
+            sockets = []; removedExitRouteRequests = 0; resultRequests = 0; resultReady = false; gameLeaveWrites = 0; prepareResultWriteCount = 0; gameCloseCode = 0; gameErrors = 0;
             globalThis.fetch = request => {
                 if (request.url.endsWith('/profile/tutorial-complete')) {
                     tutorialRequests++;
@@ -1893,24 +1876,29 @@ pub(crate) mod reward_exit_tests {
         export function setupMultiplayerExit(initial, completed) {
             const accountId = setupTutorialExit(initial, completed);
             globalThis.fetch = async request => {
-                if (request.url.endsWith('/profile/match-exit') || request.url.endsWith('/profile/match-result')) {
-                    const recovery = request.url.endsWith('/profile/match-exit');
-                    if (recovery) exitRequests++;
+                if (request.url.endsWith('/profile/match-exit')) {
+                    removedExitRouteRequests++;
+                    return Promise.resolve(new Response('{}', { status: 404 }));
+                }
+                if (request.url.endsWith('/profile/match-result')) {
+                    resultRequests++;
                     const command = await request.json();
-                    if (recovery && exitRequests === 1) throw new Error('simulated lost response after accepting exit');
-                    return Promise.resolve(new Response(JSON.stringify({ ...JSON.parse(exitReady ? completedProfile : currentProfile),
-                        match_id: command.match_id, state: exitReady ? 'confirmed' : 'awaiting_result' }), { status: exitReady ? 200 : 202 }));
+                    if (resultRequests === 1) throw new Error('simulated lost result observation');
+                    return Promise.resolve(new Response(JSON.stringify({ ...JSON.parse(resultReady ? completedProfile : currentProfile),
+                        match_id: command.match_id, state: resultReady ? 'confirmed' : 'awaiting_result' }), { status: resultReady ? 200 : 202 }));
                 }
                 return Promise.resolve(new Response(currentProfile, { status: 200 }));
             };
             return accountId;
         }
-        export function multiplayerExitRequests() { return exitRequests; }
+        export function removedExitRouteRequestCount() { return removedExitRouteRequests; }
+        export function multiplayerResultRequests() { return resultRequests; }
+        export function prepareResultWrites() { return prepareResultWriteCount; }
         export function relayConnections() { return sockets.filter(socket => socket.url.includes('relay.invalid')).length; }
         export function closeMultiplayerRelay() {
             for (const socket of sockets.filter(socket => socket.url.includes('relay.invalid'))) socket.close();
         }
-        export function releaseMultiplayerReward() { exitReady = true; currentProfile = completedProfile; }
+        export function releaseMultiplayerReward() { resultReady = true; currentProfile = completedProfile; }
         export function liveExitFixture() {
             const file = globalThis.process?.env?.SOW_LIVE_MATCH_EXIT_FILE;
             return file ? globalThis.process.getBuiltinModule('fs').readFileSync(file, 'utf8') : '';
@@ -1930,13 +1918,16 @@ pub(crate) mod reward_exit_tests {
                 }
                 send(data) {
                     const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
-                    if (this.url === config.relay_url && bytes?.byteLength >= 4
-                        && new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0, true) === 2) gameLeaveWrites++;
+                    if (this.url === config.relay_url && bytes?.byteLength >= 4) {
+                        const kind = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0, true);
+                        if (kind === 2) gameLeaveWrites++;
+                        if (kind === 13) prepareResultWriteCount++;
+                    }
                     return super.send(data);
                 }
             };
             globalThis.fetch = (request, ...args) => {
-                if ((request.url ?? String(request)).endsWith('/profile/match-exit')) exitRequests++;
+                if ((request.url ?? String(request)).endsWith('/profile/match-exit')) removedExitRouteRequests++;
                 return transport.fetch(request, ...args);
             };
             Object.assign(globalThis, { SOW_MAPS_URL: config.maps_base, SOW_ASSETS_URL: config.assets_base,
@@ -1969,8 +1960,12 @@ pub(crate) mod reward_exit_tests {
         fn reward_request_count() -> u32;
         #[wasm_bindgen::prelude::wasm_bindgen(js_name = setupMultiplayerExit)]
         fn setup_multiplayer_exit(initial: &str, completed: &str) -> String;
-        #[wasm_bindgen::prelude::wasm_bindgen(js_name = multiplayerExitRequests)]
-        fn multiplayer_exit_requests() -> u32;
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = removedExitRouteRequestCount)]
+        fn removed_exit_route_request_count() -> u32;
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = multiplayerResultRequests)]
+        fn multiplayer_result_requests() -> u32;
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = prepareResultWrites)]
+        fn prepare_result_writes() -> u32;
         #[wasm_bindgen::prelude::wasm_bindgen(js_name = relayConnections)]
         fn relay_connections() -> u32;
         #[wasm_bindgen::prelude::wasm_bindgen(js_name = closeMultiplayerRelay)]
@@ -1999,6 +1994,73 @@ pub(crate) mod reward_exit_tests {
         pub(crate) fn next_tutorial_turn() -> js_sys::Promise;
         #[wasm_bindgen::prelude::wasm_bindgen(js_name = restoreTutorialExit)]
         pub(crate) fn restore_tutorial_exit() -> js_sys::Promise;
+    }
+
+    fn defeated_match_snapshot(tick: u64) -> sow_core::protocol::SimSnapshot {
+        use sow_core::{
+            game::GamePhase,
+            player::{Leader, PlayerType},
+            protocol::{PlayerSnapshot, SimSnapshot, Team},
+        };
+
+        let player = |id, alive| PlayerSnapshot {
+            id,
+            name: format!("Player {id}"),
+            troops: 0.0,
+            max_troops: 100.0,
+            gold: 100.0,
+            tile_count: 0,
+            centroid_x: 0.0,
+            centroid_y: 0.0,
+            player_type: PlayerType::Human,
+            color: [0.5; 3],
+            team: Some(Team::Red),
+            has_spawned: true,
+            alive,
+            iq: 100,
+            alliances: Vec::new(),
+            alliance_timers: std::collections::HashMap::new(),
+            alliance_requests: Vec::new(),
+            resource_requests: Vec::new(),
+            disconnected: false,
+            active_emote: None,
+            can_express_emote: false,
+            can_retaliate: false,
+            traitor: false,
+            leader: Leader::of("caesar"),
+            campaign_avatar: None,
+            is_campaign_faction: false,
+            skin_style: 0,
+            kills: 0,
+            deaths: 0,
+            assists: 0,
+            boats_in_use: 0,
+            boat_capacity: 3,
+            nuke_available: false,
+            nuke_cooldown_ticks: 0,
+        };
+        SimSnapshot {
+            tick,
+            phase: GamePhase::Playing,
+            spawn_timer_secs: None,
+            players: vec![player(1, false), player(2, true)],
+            dirty_tiles: Vec::new(),
+            fleets: Vec::new(),
+            attacks: Vec::new(),
+            buildings: Vec::new(),
+            projectiles: Vec::new(),
+            nuke_alerts: Vec::new(),
+            resource_transfers: Vec::new(),
+            resource_rejections: Vec::new(),
+            resource_transfer_rejections: Vec::new(),
+            winner: None,
+            winning_team: None,
+            defense_posts: Vec::new(),
+            defense_dirty: false,
+            total_land_tiles: 10_000,
+            sea_lanes: std::sync::Arc::new(Vec::new()),
+            debug_mem_info: String::new(),
+        }
     }
 
     #[wasm_bindgen_test]
@@ -2195,8 +2257,13 @@ pub(crate) mod reward_exit_tests {
             app.update_assets();
         }
         assert!(
-            multiplayer_exit_requests() > 0,
-            "the actual exit must reach the permanent server API"
+            multiplayer_result_requests() > 0,
+            "return waits through read-only server observation"
+        );
+        assert_eq!(
+            removed_exit_route_request_count(),
+            0,
+            "the server has no exit command endpoint"
         );
         assert_eq!(
             relay_connections(),
@@ -2248,18 +2315,22 @@ pub(crate) mod reward_exit_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn preparation_keeps_playing_and_observing_without_leave_or_recovery() {
+    async fn preparation_keeps_playing_and_observing_without_leave_or_exit_command() {
         let account = "0123456789abcdef0123456789abcdef";
         let mut progress = PlayerProgress::default();
         progress.intro_completed = Some(true);
         let initial = serde_json::json!({"account_id":account,"auth_secret":"audit-proof","display_name":"Audit","profile":progress}).to_string();
         let completed = serde_json::json!({"account_id":account,"display_name":"Audit","profile":profile_with("42",Some(ReplayVerificationStatus::Verified),RewardSettlementStatus::Applied)}).to_string();
-        setup_multiplayer_exit(&initial,&completed);
+        setup_multiplayer_exit(&initial, &completed);
         let mut app = crate::app::SowApp::new();
         for _ in 0..200 {
-            wasm_bindgen_futures::JsFuture::from(next_tutorial_turn()).await.unwrap();
+            wasm_bindgen_futures::JsFuture::from(next_tutorial_turn())
+                .await
+                .unwrap();
             app.update_assets();
-            if app.profile_last_applied_request > 0 { break; }
+            if app.profile_last_applied_request > 0 {
+                break;
+            }
         }
         app.ui.app.phase = crate::ClientPhase::Playing;
         app.net.is_offline = false;
@@ -2267,39 +2338,87 @@ pub(crate) mod reward_exit_tests {
         app.sim.my_lobby_id = Some(42);
         app.sim.my_player_id = Some(1);
         app.net.ws_url = "wss://relay.invalid:25594/ws/".into();
-        app.net.client = Some(sow_net::client::SowClient::connect(&app.net.ws_url).await.unwrap());
+        app.net.client = Some(
+            sow_net::client::SowClient::connect(&app.net.ws_url)
+                .await
+                .unwrap(),
+        );
         let connections = relay_connections();
-        app.prepare_match_result(700);
+        let defeated = defeated_match_snapshot(701);
+        app.maybe_record_match_progress(
+            &defeated,
+            defeated.winner,
+            defeated.winning_team,
+            Some(sow_core::protocol::Team::Red),
+        );
+        assert!(app.progress_match_recorded);
+        assert_eq!(
+            prepare_result_writes(),
+            1,
+            "defeat sends one preparation hint"
+        );
+        let preparation_started_at_ms = app
+            .menu_return
+            .as_ref()
+            .unwrap()
+            .preparation_started_at_ms
+            .expect("result preparation must start its timing record");
         for _ in 0..8 {
-            app.poll_reward_profile_sync(web_time::Instant::now()+web_time::Duration::from_secs(120));
-            wasm_bindgen_futures::JsFuture::from(next_tutorial_turn()).await.unwrap();
+            app.poll_reward_profile_sync(
+                web_time::Instant::now() + web_time::Duration::from_secs(120),
+            );
+            wasm_bindgen_futures::JsFuture::from(next_tutorial_turn())
+                .await
+                .unwrap();
             app.update_assets();
-            assert_eq!(app.ui.app.phase,crate::ClientPhase::Playing);
+            assert_eq!(app.ui.app.phase, crate::ClientPhase::Playing);
             assert!(app.net.closing_game.is_none());
-            assert_eq!(multiplayer_exit_requests(),0);
-            assert_eq!(live_game_leave_writes(),0);
+            assert_eq!(removed_exit_route_request_count(), 0);
+            assert_eq!(live_game_leave_writes(), 0);
+            assert_eq!(
+                prepare_result_writes(),
+                1,
+                "preparation is not resent while observing"
+            );
         }
         app.ui.is_spectating = true;
         release_multiplayer_reward();
         for _ in 0..200 {
-            app.poll_reward_profile_sync(web_time::Instant::now()+web_time::Duration::from_secs(240));
-            wasm_bindgen_futures::JsFuture::from(next_tutorial_turn()).await.unwrap();
+            app.poll_reward_profile_sync(
+                web_time::Instant::now() + web_time::Duration::from_secs(240),
+            );
+            wasm_bindgen_futures::JsFuture::from(next_tutorial_turn())
+                .await
+                .unwrap();
             app.update_assets();
-            if !app.waiting_menu_return() { break; }
+            if !app.waiting_menu_return() {
+                break;
+            }
         }
-        assert_eq!(app.menu_return.as_ref().unwrap().status,"confirmed");
-        assert_eq!(app.ui.app.phase,crate::ClientPhase::Playing);
+        assert_eq!(app.menu_return.as_ref().unwrap().status, "confirmed");
+        assert_eq!(app.ui.app.phase, crate::ClientPhase::Playing);
         assert!(app.ui.is_spectating);
-        assert_eq!(multiplayer_exit_requests(),0);
-        assert_eq!(live_game_leave_writes(),0);
+        assert_eq!(removed_exit_route_request_count(), 0);
+        assert_eq!(live_game_leave_writes(), 0);
         app.menu_return.as_mut().unwrap().exit_recorded = true;
         app.process_ui_actions(Some(crate::UiAction::ReturnToMenu));
         assert!(!app.menu_return.as_ref().unwrap().preparation_only);
-        assert_eq!(app.menu_return.as_ref().unwrap().status,"confirmed");
-        assert_eq!(relay_connections(),connections);
-        assert_eq!(live_game_leave_writes(),0,"prepared closure must not send a new surrender");
+        assert_eq!(
+            app.menu_return.as_ref().unwrap().preparation_started_at_ms,
+            Some(preparation_started_at_ms),
+            "returning to the menu must preserve the time when result preparation began"
+        );
+        assert_eq!(app.menu_return.as_ref().unwrap().status, "confirmed");
+        assert_eq!(relay_connections(), connections);
+        assert_eq!(
+            live_game_leave_writes(),
+            0,
+            "prepared closure must not send a new surrender"
+        );
         drop(app);
-        wasm_bindgen_futures::JsFuture::from(restore_tutorial_exit()).await.unwrap();
+        wasm_bindgen_futures::JsFuture::from(restore_tutorial_exit())
+            .await
+            .unwrap();
     }
 
     #[wasm_bindgen_test]
@@ -2308,26 +2427,49 @@ pub(crate) mod reward_exit_tests {
         let initial = serde_json::json!({"account_id":account,"display_name":"Audit","profile":PlayerProgress::default()}).to_string();
         let completed = serde_json::json!({"account_id":account,"display_name":"Audit",
             "profile":profile_with("42",Some(ReplayVerificationStatus::Verified),RewardSettlementStatus::Applied)}).to_string();
-        setup_multiplayer_exit(&initial,&completed);
+        setup_multiplayer_exit(&initial, &completed);
         let mut app = crate::app::SowApp::new();
         app.ui.app.phase = crate::ClientPhase::Playing;
         app.net.is_offline = false;
         app.sim.my_lobby_id = Some(42);
         app.progress_account_id = Some(account.into());
-        app.menu_return = Some(MenuReturnContext {
-            account_id:Some(account.into()),cycle_id:7,source:"multiplayer".into(),match_id:Some("42".into()),
-            receipt_ids:Vec::new(),status:"waiting".into(),requested_screen:None,voluntary_exit:Some(false),
-            preparation_only:true,match_finished:false,exit_recorded:false,server_state:None,recording_deadline:None,
-            result_request_id:None,recovery_request_id:None,recovery_accepted:false,started_at:None,
-        });
-        app.handle_result_notifications(None,Some(701));
-        assert_eq!(app.ui.app.phase,crate::ClientPhase::Playing);
+        app.net.ws_url = "wss://relay.invalid:25594/ws/".into();
+        app.net.client = Some(
+            sow_net::client::SowClient::connect(&app.net.ws_url)
+                .await
+                .unwrap(),
+        );
+        app.menu_return = None;
+        app.handle_result_notifications(None, Some(701));
+        for _ in 0..8 {
+            wasm_bindgen_futures::JsFuture::from(next_tutorial_turn())
+                .await
+                .unwrap();
+            app.update_assets();
+        }
+        assert_eq!(app.ui.app.phase, crate::ClientPhase::Playing);
         assert!(app.finished_relay_match());
         assert!(app.menu_return.as_ref().unwrap().match_finished);
         assert!(app.menu_return.as_ref().unwrap().preparation_only);
-        assert_eq!(multiplayer_exit_requests(),0,"natural completion must not request a new exit");
+        assert_eq!(
+            prepare_result_writes(),
+            1,
+            "natural finish sends one preparation hint"
+        );
+        assert_eq!(
+            live_game_leave_writes(),
+            0,
+            "natural finish does not send Leave"
+        );
+        assert_eq!(
+            removed_exit_route_request_count(),
+            0,
+            "natural completion must not request a new exit"
+        );
         drop(app);
-        wasm_bindgen_futures::JsFuture::from(restore_tutorial_exit()).await.unwrap();
+        wasm_bindgen_futures::JsFuture::from(restore_tutorial_exit())
+            .await
+            .unwrap();
     }
 
     #[wasm_bindgen_test]
@@ -2385,7 +2527,7 @@ pub(crate) mod reward_exit_tests {
                 crate::ClientPhase::Playing,
                 "local elapsed time cannot abandon the player"
             );
-            assert_eq!(multiplayer_exit_requests(), 0);
+            assert_eq!(removed_exit_route_request_count(), 0);
         }
         assert_eq!(
             app.menu_return.as_ref().unwrap().voluntary_exit,
@@ -2407,7 +2549,7 @@ pub(crate) mod reward_exit_tests {
         assert_eq!(app.ui.app.phase, crate::ClientPhase::Splash);
         assert_eq!(app.menu_return.as_ref().unwrap().status, "confirmed");
         assert_eq!(
-            multiplayer_exit_requests(),
+            removed_exit_route_request_count(),
             0,
             "a relay-decided exit never creates a voluntary command"
         );
@@ -2513,13 +2655,24 @@ pub(crate) mod reward_exit_tests {
                 .unwrap();
         }
         assert_eq!(app.menu_return.as_ref().unwrap().status, "confirmed");
+        let return_elapsed = app
+            .menu_return
+            .as_ref()
+            .and_then(|context| context.started_at)
+            .expect("live return timing must start when the player exits")
+            .elapsed();
+        assert!(
+            return_elapsed <= web_time::Duration::from_secs(2),
+            "live WASM exit receipt exceeded 2 seconds: {} ms",
+            return_elapsed.as_millis()
+        );
         assert_eq!(
             live_game_leave_writes(),
             1,
             "the actual HUD exit sends one relay command"
         );
         assert_eq!(
-            multiplayer_exit_requests(),
+            removed_exit_route_request_count(),
             0,
             "normal exit must never order exit through the server"
         );

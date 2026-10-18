@@ -7,6 +7,8 @@
 //! The single entry point is [`SowEngine::tick()`], which advances the
 //! simulation by exactly one deterministic step.
 
+pub const SIMULATION_RULES_ID: &str = env!("SOW_SIMULATION_RULES_ID");
+
 pub mod bitset;
 pub mod building;
 pub mod campaign;
@@ -32,7 +34,6 @@ pub mod warp_fleet;
 
 pub mod maps;
 pub mod protocol;
-pub mod tribes;
 pub mod water_components;
 
 pub use sow_data::commerce;
@@ -43,4 +44,4 @@ macro_rules! repo_asset_bytes {
         include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/", $path))
     };
 }
-pub use sow_data::{Civilization, Leader, NamedColor, PREMIUM_COLORS, leader_for_civilization};
+pub use sow_data::{Leader, NamedColor, PREMIUM_COLORS};
