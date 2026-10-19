@@ -261,7 +261,7 @@ impl SowApp {
             _ => None,
         };
         if let Some(kind) = building {
-            self.select_building_kind(kind);
+            self.select_building_kind_from_pointer(kind);
         }
         if code == winit::keyboard::KeyCode::Enter || code == winit::keyboard::KeyCode::NumpadEnter
         {
@@ -633,15 +633,18 @@ mod tests {
         app.input.camera_y = 0.0;
         app.input.screen_w = 800.0;
         app.input.screen_h = 600.0;
-        let mut state = sow_core::game::GameState::new(
-            42,
-            64,
-            64,
-            sow_core::game_config::GameConfig::default(),
-        );
+        let config = sow_core::game_config::GameConfig::default();
+        let mut state = sow_core::game::GameState::new(42, 64, 64, config.clone());
+        state.phase = sow_core::game::GamePhase::Playing;
+        let mut player =
+            sow_core::player::Player::new_human(1, "Builder".into(), [1.0; 3], &config);
+        player.has_spawned = true;
+        player.gold = 1_000_000.0;
+        state.register_player(player);
         for y in 0..64 {
             for x in 0..64 {
                 state.map.set_owner_id(x, y, 1);
+                state.map.terrain[(y * 64 + x) as usize] = sow_core::map::MapTile::from_byte(0x80);
             }
         }
         // A water channel the arrows must jump over.
@@ -650,18 +653,149 @@ mod tests {
                 state.map.terrain[(y * 64 + x) as usize] = sow_core::map::MapTile::from_byte(0);
             }
         }
-        app.sim.engine = Some(sow_core::engine::SowEngine::new(
+        let mut engine = sow_core::engine::SowEngine::new(
             state,
             sow_core::water_components::WaterComponents::default(),
-        ));
+        );
+        app.sim.current_snapshot = Some(engine.build_snapshot());
+        app.sim.engine = Some(engine);
         app.sim.my_player_id = Some(1);
+        app.sim.config = config;
+        app.net.is_offline = true;
+
+        use crate::app::HoverPointer;
+        use winit::keyboard::{KeyCode, PhysicalKey};
+        let pointer_position = (240.0, 240.0);
+        let (pointer_col, pointer_row) = app
+            .mouse_to_tile(pointer_position.0, pointer_position.1)
+            .unwrap();
+        app.input.last_mouse_x = pointer_position.0;
+        app.input.last_mouse_y = pointer_position.1;
+        app.input.hover_pointer = HoverPointer::Mouse;
+        app.handle_key_event(true, PhysicalKey::Code(KeyCode::Digit2));
+        let placement = app.ui.app.hud_state.building_placement.unwrap();
+        assert_eq!(placement.kind, sow_core::game::BuildingKind::Factory);
+        assert_eq!(
+            placement.tile_idx,
+            (pointer_row * 64 + pointer_col) as u32,
+            "a building hotkey starts on the legal map tile under the mouse"
+        );
+
+        let water_position = (600.0, 240.0);
+        let (water_col, water_row) = app
+            .mouse_to_tile(water_position.0, water_position.1)
+            .unwrap();
+        let zoom = app.input.camera_zoom.max(0.01);
+        let radius = (app.input.screen_w.max(app.input.screen_h) * 0.5 / zoom).ceil() as i32;
+        let nearest_legal = {
+            let engine = app.sim.engine.as_mut().unwrap();
+            engine.refresh_building_grid();
+            sow_core::building::nearest_structure_site(
+                &engine.state.map,
+                1,
+                sow_core::game::BuildingKind::Farm,
+                water_col,
+                water_row,
+                radius,
+                &engine.building_grid,
+            )
+            .unwrap()
+        };
+        app.input.last_mouse_x = water_position.0;
+        app.input.last_mouse_y = water_position.1;
+        app.handle_key_event(true, PhysicalKey::Code(KeyCode::Digit5));
+        let placement = app.ui.app.hud_state.building_placement.unwrap();
+        assert_eq!(placement.kind, sow_core::game::BuildingKind::Farm);
+        assert_eq!(placement.tile_idx, nearest_legal);
+        assert_ne!(placement.tile_idx, (water_row * 64 + water_col) as u32);
+
+        let camera_center = (
+            ((app.input.screen_w * 0.5 - app.input.camera_x) / zoom) as i32,
+            ((app.input.screen_h * 0.45 - app.input.camera_y) / zoom) as i32,
+        );
+        let center_site = {
+            let engine = app.sim.engine.as_mut().unwrap();
+            engine.refresh_building_grid();
+            sow_core::building::nearest_structure_site(
+                &engine.state.map,
+                1,
+                sow_core::game::BuildingKind::City,
+                camera_center.0,
+                camera_center.1,
+                radius,
+                &engine.building_grid,
+            )
+            .unwrap()
+        };
+        app.select_building_kind(sow_core::game::BuildingKind::City);
+        assert_eq!(
+            app.ui.app.hud_state.building_placement.unwrap().tile_idx,
+            center_site,
+            "the HUD selector keeps its camera-centered placement origin"
+        );
+
+        app.input.hover_pointer = HoverPointer::None;
+        app.input.last_mouse_x = 120.0;
+        app.input.last_mouse_y = 120.0;
+        let bunker_center_site = {
+            let engine = app.sim.engine.as_mut().unwrap();
+            engine.refresh_building_grid();
+            sow_core::building::nearest_structure_site(
+                &engine.state.map,
+                1,
+                sow_core::game::BuildingKind::Bunker,
+                camera_center.0,
+                camera_center.1,
+                radius,
+                &engine.building_grid,
+            )
+            .unwrap()
+        };
+        app.handle_key_event(true, PhysicalKey::Code(KeyCode::Digit4));
+        assert_eq!(
+            app.ui.app.hud_state.building_placement.unwrap().tile_idx,
+            bunker_center_site,
+            "a hotkey without a current map pointer preserves the old camera-center behavior"
+        );
+
+        app.clear_placement();
+        {
+            let engine = app.sim.engine.as_mut().unwrap();
+            for terrain in &mut engine.state.map.terrain {
+                *terrain = sow_core::map::MapTile::from_byte(0);
+            }
+            engine.refresh_building_grid();
+        }
+        app.input.hover_pointer = HoverPointer::Mouse;
+        app.input.last_mouse_x = pointer_position.0;
+        app.input.last_mouse_y = pointer_position.1;
+        app.handle_key_event(true, PhysicalKey::Code(KeyCode::Digit5));
+        assert!(app.ui.app.hud_state.building_placement.is_none());
+        assert_eq!(
+            app.ui.app.hud_state.map_feedback.as_ref().unwrap().text.key,
+            "hud.build_no_space"
+        );
+
+        {
+            let engine = app.sim.engine.as_mut().unwrap();
+            for (index, terrain) in engine.state.map.terrain.iter_mut().enumerate() {
+                let col = index as u32 % 64;
+                *terrain = if (50..52).contains(&col) {
+                    sow_core::map::MapTile::from_byte(0)
+                } else {
+                    sow_core::map::MapTile::from_byte(0x80)
+                };
+            }
+            engine.refresh_building_grid();
+        }
+        app.input.camera_focus_target = None;
+        app.input.camera_focus_waiting_for_input_release = false;
         app.ui.app.hud_state.building_placement = Some(BuildingPlacement {
             kind: sow_core::game::BuildingKind::City,
             tile_idx: 20 * 64 + 20,
             pending: false,
         });
         use crate::input::placement::PlacementDirection;
-        use winit::keyboard::{KeyCode, PhysicalKey};
         for key in [
             KeyCode::ArrowUp,
             KeyCode::ArrowRight,

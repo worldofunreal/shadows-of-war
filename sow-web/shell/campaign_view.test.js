@@ -519,10 +519,10 @@ test("Boudica spoken cards and contact responses require named existing portrait
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definitionPath = path.join(shell, "../../assets/campaign/boudica.triggers.json");
     const rosterPath = path.join(shell, "../../assets/campaign/boudica.json");
-    const leadersDir = path.join(shell, "../../assets/art/leaders");
+    const avatarsDir = path.join(shell, "../../assets/art/avatars");
     const definition = JSON.parse(fs.readFileSync(definitionPath, "utf8"));
     const roster = JSON.parse(fs.readFileSync(rosterPath, "utf8"));
-    const options = { hasText: () => true, hasAvatar: avatar => fs.existsSync(path.join(leadersDir, avatar, "portrait.webp")) };
+    const options = { hasText: () => true, hasAvatar: avatar => ["heroes", "nations", "tribes"].some(folder => fs.existsSync(path.join(avatarsDir, folder, avatar + ".webp"))) };
     const report = value => campaign.validate(value, roster, options);
     assert.equal(definition.require_speaker_portraits, true);
     assert.deepEqual(report(definition).errors, []);

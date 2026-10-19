@@ -125,6 +125,8 @@ struct Paths {
     native_web: PathBuf,
     wasm_input: PathBuf,
     wasm_cache: PathBuf,
+    site_media: PathBuf,
+    runtime_assets: PathBuf,
 }
 
 impl Paths {
@@ -141,6 +143,7 @@ impl Paths {
         Ok(Self {
             wasm_input: t.join("wasm32-unknown-unknown/wasm-release/sow_client.wasm"),
             wasm_cache: s.join("wasm-opt-cache"),
+            site_media: runtime_assets.join("site/media"),
             shell: root.join("sow-web/shell"),
             assets_shell: runtime_assets.join("shell"),
             assets_gameplay: runtime_assets.join("gameplay"),
@@ -154,6 +157,7 @@ impl Paths {
             native_web: t.join("sow-native-dev/web"),
             target_dir: t,
             root,
+            runtime_assets,
         })
     }
 }
@@ -223,6 +227,32 @@ const GENERATED_FILES: [(&str, &str); 4] = [
     ),
 ];
 const PORTRAIT_PX: u32 = 256;
+/// Landing shots (assets/site/media/<stem>.<png|jpg|webp>): until the owner drops a
+/// capture, each slot publishes current game art (dir, stem) so nothing stale shows.
+const SITE_STILLS: [(&str, (&str, &str)); 3] = [
+    ("step-expand", ("assets/maps/world", "thumbnail")),
+    (
+        "step-build",
+        ("assets/art/heroes", "richard_the_lionheart_desktop"),
+    ),
+    ("step-war", ("assets/art/heroes", "leonidas_desktop")),
+];
+/// Landing videos (assets/site/media/<stem>.<mp4|mov|webm|mkv>), published as webm,
+/// mp4 and a poster. Optional: the page shows a still while a slot is empty.
+const SITE_VIDEOS: [&str; 2] = ["hero-loop", "gameplay"];
+const SITE_VIDEO_SOURCES: [&str; 4] = ["mp4", "mov", "webm", "mkv"];
+const SITE_BADGES: [&str; 2] = ["testflight-badge.svg", "google-play-badge.svg"];
+const SITE_SOURCE_ONLY_MEDIA: [&str; 8] = [
+    "session-battle.webp",
+    "session-conflict.webp",
+    "session-expansion.webp",
+    "session-late-map.webp",
+    "session-leader.webp",
+    "session-world.webp",
+    "shadows-of-war-gameplay.mp4",
+    "shadowsofwar-scroll.vp9.webm",
+];
+const SITE_STILL_PX: u32 = 1600;
 
 /// The owner edits only assets/art; the tools write assets/generated. This is the
 /// single place that turns them into the published tree (/assets/shell, /assets/gameplay)
@@ -268,34 +298,60 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
             .find(|path| path.is_file())
     };
 
-    let mut leaders: Vec<_> = fs::read_dir(art.join("leaders"))?.collect::<Result<_, _>>()?;
-    leaders.sort_by_key(|entry| entry.file_name());
-    for entry in leaders {
-        let folder = entry.file_name().to_string_lossy().into_owned();
-        let slug = if folder == "_fallback" {
-            "null"
-        } else {
-            folder.as_str()
-        };
-        for file in fs::read_dir(entry.path())? {
-            let file = file?.path();
-            let stem = file
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .into_owned();
-            let (rel, max) = match stem.as_str() {
-                "portrait" => (format!("gameplay/avatars/{slug}.webp"), Some(PORTRAIT_PX)),
-                "expressions" => (format!("gameplay/avatars/spritesheets/{slug}.webp"), None),
-                "scene-desktop" => (format!("shell/leaders/{slug}_desktop.webp"), None),
-                "scene-mobile" => (format!("shell/leaders/{slug}_mobile.webp"), None),
-                _ => bail!(
-                    "unknown leader art {}: use portrait, expressions, scene-desktop or scene-mobile",
+    // Avatars: one file per character, named by its catalog `avatar` id. The folder only
+    // organizes the owner's art; a name in two folders would publish to the same URL.
+    let mut avatar_sources = std::collections::BTreeMap::new();
+    for folder in ["heroes", "nations", "tribes"] {
+        for file in sorted_files(&art.join("avatars").join(folder))? {
+            let stem = file_stem(&file);
+            if folder == "heroes" && expression_part(&stem).is_some() {
+                continue;
+            }
+            if let Some(first) = avatar_sources.insert(stem.clone(), file.clone()) {
+                bail!(
+                    "avatar {stem} is in two folders: {} and {}",
+                    first.display(),
                     file.display()
-                ),
-            };
-            publish(&file, &rel, max)?;
+                );
+            }
+            publish(
+                &file,
+                &format!("gameplay/avatars/{stem}.webp"),
+                Some(PORTRAIT_PX),
+            )?;
         }
+    }
+    publish(
+        &art.join("avatars/default.webp"),
+        "gameplay/avatars/null.webp",
+        Some(PORTRAIT_PX),
+    )?;
+    // A hero's four expression quadrants (`<id>_1` .. `<id>_4`) join into one 2 x 2 sheet.
+    let mut sheets: std::collections::BTreeMap<String, Vec<PathBuf>> = Default::default();
+    for file in sorted_files(&art.join("avatars/heroes"))? {
+        if let Some(base) = expression_part(&file_stem(&file)) {
+            sheets.entry(base.to_owned()).or_default().push(file);
+        }
+    }
+    for (base, parts) in sheets {
+        if parts.len() != 4 {
+            bail!("hero {base} needs {base}_1 to {base}_4 in assets/art/avatars/heroes");
+        }
+        let rel = format!("gameplay/avatars/spritesheets/{base}.webp");
+        let dst = out.join(&rel);
+        compose_expression_sheet(&parts, &dst)?;
+        publish(&dst, &rel, None)?;
+    }
+    // Hero scenes for the menu and the loader: `<id>_desktop` and `<id>_mobile`.
+    for file in sorted_files(&art.join("heroes"))? {
+        let stem = file_stem(&file);
+        if !stem.ends_with("_desktop") && !stem.ends_with("_mobile") {
+            bail!(
+                "unknown hero scene {}: use <id>_desktop or <id>_mobile",
+                file.display()
+            );
+        }
+        publish(&file, &format!("shell/leaders/{stem}.webp"), None)?;
     }
     let mut known_icons = std::collections::BTreeSet::new();
     // Badge icons are packed by sow-tools into badges-atlas, not published one by one.
@@ -343,6 +399,47 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
             continue;
         }
         publish(&generated.join(name), rel, None)?;
+    }
+    let media = root.join("assets/site/media");
+    for badge in SITE_BADGES {
+        publish(&media.join(badge), &format!("site/media/{badge}"), None)?;
+    }
+    for (stem, (dir, provisional)) in SITE_STILLS {
+        let src = source_named(&media, stem)
+            .or_else(|| source_named(&root.join(dir), provisional))
+            .with_context(|| format!("landing shot {stem} has no capture and no art"))?;
+        publish(
+            &src,
+            &format!("site/media/{stem}.webp"),
+            Some(SITE_STILL_PX),
+        )?;
+    }
+    for file in fs::read_dir(&media)? {
+        let file = file?.path();
+        let name = file.file_name().unwrap_or_default().to_string_lossy();
+        let stem = file.file_stem().unwrap_or_default().to_string_lossy();
+        let ext = file.extension().unwrap_or_default().to_string_lossy();
+        let known = SITE_BADGES.contains(&name.as_ref())
+            || SITE_SOURCE_ONLY_MEDIA.contains(&name.as_ref())
+            || (SITE_STILLS.iter().any(|(still, _)| *still == stem)
+                && ["webp", "png", "jpg", "jpeg"].contains(&ext.as_ref()))
+            || (SITE_VIDEOS.contains(&stem.as_ref()) && SITE_VIDEO_SOURCES.contains(&ext.as_ref()));
+        if !known {
+            bail!(
+                "unregistered site media {}: add it to SITE_STILLS, SITE_VIDEOS or SITE_SOURCE_ONLY_MEDIA",
+                file.display()
+            );
+        }
+    }
+    for stem in SITE_VIDEOS {
+        let Some(src) = SITE_VIDEO_SOURCES
+            .iter()
+            .map(|ext| media.join(format!("{stem}.{ext}")))
+            .find(|path| path.is_file())
+        else {
+            continue;
+        };
+        produced.extend(publish_site_video(&src, &out.join("site/media"), stem)?);
     }
 
     for entry in walkdir::WalkDir::new(out).contents_first(true) {
@@ -500,6 +597,151 @@ fn optimize_webp(src: &Path, dst: &Path, geometry: &str, quality: u32) -> Result
         bail!("webp optimization failed for {}", src.display());
     }
     Ok(())
+}
+
+/// Files directly inside `dir`, sorted by name.
+fn sorted_files(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut files = fs::read_dir(dir)
+        .with_context(|| format!("read art {}", dir.display()))?
+        .map(|entry| Ok(entry?.path()))
+        .collect::<Result<Vec<_>>>()?;
+    files.retain(|path| path.is_file());
+    files.sort();
+    Ok(files)
+}
+
+fn file_stem(path: &Path) -> String {
+    path.file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// `<id>_1` .. `<id>_4` name one expression quadrant of a hero; returns the hero id.
+fn expression_part(stem: &str) -> Option<&str> {
+    let (base, index) = stem.rsplit_once('_')?;
+    matches!(index, "1" | "2" | "3" | "4").then_some(base)
+}
+
+/// Joins a hero's four expression quadrants (Happy, Calm, Fear, Angry; 2 x 2) into the
+/// sheet the client reads. Rebuilt only when a quadrant is newer than the sheet.
+fn compose_expression_sheet(parts: &[PathBuf], dst: &Path) -> Result<()> {
+    let newest = parts
+        .iter()
+        .filter_map(|part| fs::metadata(part).ok()?.modified().ok())
+        .max();
+    let built = fs::metadata(dst).ok().and_then(|meta| meta.modified().ok());
+    if built.is_some() && built >= newest {
+        return Ok(());
+    }
+    if let Some(parent) = dst.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let status = Command::new("magick")
+        .arg("montage")
+        .args(parts)
+        .args([
+            "-tile",
+            "2x2",
+            "-geometry",
+            "+0+0",
+            "-strip",
+            "-quality",
+            "85",
+        ])
+        .args(["-define", "webp:method=6"])
+        .arg(dst)
+        .status()
+        .with_context(|| "expression sheets require ImageMagick (magick)")?;
+    if !status.success() {
+        bail!("expression sheet failed for {}", dst.display());
+    }
+    Ok(())
+}
+
+/// A landing capture becomes `<stem>.webm` (VP9), `<stem>.mp4` (H.264) and a
+/// `<stem>.webp` poster. Encoding is slow, so outputs newer than the capture are kept.
+fn publish_site_video(src: &Path, dir: &Path, stem: &str) -> Result<Vec<PathBuf>> {
+    fs::create_dir_all(dir)?;
+    let webm = dir.join(format!("{stem}.webm"));
+    let mp4 = dir.join(format!("{stem}.mp4"));
+    let poster = dir.join(format!("{stem}.webp"));
+    let outputs = vec![webm.clone(), mp4.clone(), poster.clone()];
+    let source_time = fs::metadata(src)?.modified()?;
+    let fresh = outputs.iter().all(|path| {
+        fs::metadata(path)
+            .and_then(|meta| meta.modified())
+            .is_ok_and(|time| time >= source_time)
+    });
+    if fresh {
+        return Ok(outputs);
+    }
+    // The background loop plays muted; the gameplay video keeps its sound.
+    let audio = stem != "hero-loop";
+    let scale = "scale='min(1920,iw)':-2";
+    let ffmpeg = |args: &[&str], dst: &Path| -> Result<()> {
+        let status = Command::new("ffmpeg")
+            .args(["-y", "-loglevel", "error", "-i"])
+            .arg(src)
+            .args(args)
+            .arg(dst)
+            .status()
+            .with_context(|| "landing videos require ffmpeg")?;
+        if !status.success() {
+            bail!("ffmpeg failed for {} -> {}", src.display(), dst.display());
+        }
+        Ok(())
+    };
+    let webm_audio: &[&str] = if audio {
+        &["-c:a", "libopus", "-b:a", "96k"]
+    } else {
+        &["-an"]
+    };
+    let mp4_audio: &[&str] = if audio {
+        &["-c:a", "aac", "-b:a", "128k"]
+    } else {
+        &["-an"]
+    };
+    let mut args = vec![
+        "-vf",
+        scale,
+        "-c:v",
+        "libvpx-vp9",
+        "-b:v",
+        "0",
+        "-crf",
+        "34",
+        "-row-mt",
+        "1",
+    ];
+    args.extend_from_slice(webm_audio);
+    ffmpeg(&args, &webm)?;
+    let mut args = vec![
+        "-vf",
+        scale,
+        "-c:v",
+        "libx264",
+        "-crf",
+        "26",
+        "-preset",
+        "slow",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+    ];
+    args.extend_from_slice(mp4_audio);
+    ffmpeg(&args, &mp4)?;
+    let frame = dir.join(format!("{stem}.poster.png"));
+    ffmpeg(&["-vf", scale, "-frames:v", "1"], &frame)?;
+    optimize_webp(
+        &frame,
+        &poster,
+        &format!("{SITE_STILL_PX}x{SITE_STILL_PX}>"),
+        80,
+    )?;
+    fs::remove_file(&frame)?;
+    Ok(outputs)
 }
 
 /// Full-bleed loader/menu leader art ships recompressed: the repo masters are
@@ -1776,6 +2018,11 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
         let path = out.join(relative);
         let source = fs::read_to_string(&path)
             .with_context(|| format!("read public page {}", path.display()))?;
+        let source = if relative == "index.html" {
+            expand_landing(&source, out)?
+        } else {
+            source
+        };
         if source.matches(marker).count() != 1 {
             bail!(
                 "public page {} must contain one site header marker",
@@ -1805,6 +2052,151 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
         )?;
     }
     Ok(())
+}
+
+/// Landing sections built from data at publish time: the hero roster from the
+/// character catalog, the maps in rotation and the optional captured videos.
+/// A hero or map added to the game appears here without touching the page.
+fn expand_landing(source: &str, out: &Path) -> Result<String> {
+    let english = serde_json::to_value(sow_i18n::web(sow_i18n::Language::English))?;
+    let media = out.join("assets/site/media");
+    let sections = [
+        ("<!-- SOW_SITE_HERO_MEDIA -->", landing_hero_media(&media)),
+        (
+            "<!-- SOW_SITE_LEADER_SHOWCASE -->",
+            landing_leader_showcase(&english)?,
+        ),
+        ("<!-- SOW_SITE_LEADERS -->", landing_leaders(&english)?),
+        ("<!-- SOW_SITE_MAPS -->", landing_maps(&out.join("maps"))?),
+        (
+            "<!-- SOW_SITE_TRAILER -->",
+            landing_trailer(&media, &english)?,
+        ),
+    ];
+    let mut page = source.to_string();
+    for (marker, html) in sections {
+        if page.matches(marker).count() != 1 {
+            bail!("the landing page must contain one {marker}");
+        }
+        page = page.replace(marker, &html);
+    }
+    Ok(page)
+}
+
+fn html_text(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+/// English fallback shown before the visitor's language loads.
+fn english_text(english: &serde_json::Value, key: &str) -> Result<String> {
+    web_catalog_value(english, key)
+        .and_then(serde_json::Value::as_str)
+        .map(html_text)
+        .with_context(|| format!("English text is missing: {key}"))
+}
+
+fn landing_hero_media(media: &Path) -> String {
+    if media.join("hero-loop.webm").is_file() {
+        r#"<video class="hero-video" loop muted playsinline preload="metadata" aria-hidden="true" poster="/assets/site/media/hero-loop.webp"><source src="/assets/site/media/hero-loop.webm" type="video/webm"><source src="/assets/site/media/hero-loop.mp4" type="video/mp4"></video>"#.to_string()
+    } else {
+        r#"<picture class="hero-still"><source media="(max-width: 700px)" srcset="/assets/shell/loader/sow-splash-mobile.webp"><img src="/assets/shell/loader/sow-splash-desktop.webp" alt="" fetchpriority="high" decoding="async"></picture>"#.to_string()
+    }
+}
+
+fn landing_leader_showcase(english: &serde_json::Value) -> Result<String> {
+    let id = sow_core::player::Leader::default().id();
+    let name = english_text(english, &format!("heroes.leader_{id}_name"))?;
+    let historical = english_text(english, &format!("heroes.leader_{id}_historical"))?;
+    Ok(format!(
+        r#"<picture class="showcase-art"><source media="(max-width: 700px)" srcset="/assets/shell/leaders/{id}_mobile.webp" data-detail-image-mobile><img data-detail-image src="/assets/shell/leaders/{id}_desktop.webp" alt="{name}" decoding="async"></picture>
+          <div class="showcase-copy">
+            <p class="eyebrow" data-detail-civ data-i18n="heroes.leader_{id}_civilization">{civ}</p>
+            <h3 data-detail-name data-i18n="heroes.leader_{id}_name">{name}</h3>
+            <p class="showcase-historical" data-detail-historical data-i18n="heroes.leader_{id}_historical"{hidden}>{historical}</p>
+            <p class="showcase-label" data-i18n="site.command_trait">Command trait</p>
+            <p class="showcase-ability" data-detail-ability data-i18n="site.leader_{id}_ability">{ability}</p>
+            <p class="showcase-description" data-detail-description data-i18n="site.leader_{id}_description">{description}</p>
+          </div>"#,
+        civ = english_text(english, &format!("heroes.leader_{id}_civilization"))?,
+        hidden = if historical == name { " hidden" } else { "" },
+        ability = english_text(english, &format!("site.leader_{id}_ability"))?,
+        description = english_text(english, &format!("site.leader_{id}_description"))?,
+    ))
+}
+
+fn landing_leaders(english: &serde_json::Value) -> Result<String> {
+    let mut html = String::new();
+    for leader in sow_core::player::Leader::all() {
+        let id = leader.id();
+        let active = leader == sow_core::player::Leader::default();
+        html += &format!(
+            r#"<button class="roster-card{class}" type="button" aria-pressed="{active}" data-leader-id="{id}" data-name="{name}" data-civ="{civ}" data-historical="{historical}" data-ability="{ability}" data-description="{description}"><img src="/assets/gameplay/avatars/{id}.webp" alt="" width="128" height="128" loading="lazy" decoding="async"><span data-i18n="heroes.leader_{id}_name">{name}</span></button>
+"#,
+            class = if active { " is-active" } else { "" },
+            name = english_text(english, &format!("heroes.leader_{id}_name"))?,
+            civ = english_text(english, &format!("heroes.leader_{id}_civilization"))?,
+            historical = english_text(english, &format!("heroes.leader_{id}_historical"))?,
+            ability = english_text(english, &format!("site.leader_{id}_ability"))?,
+            description = english_text(english, &format!("site.leader_{id}_description"))?,
+        );
+    }
+    Ok(html)
+}
+
+fn landing_maps(maps: &Path) -> Result<String> {
+    let catalog = sow_core::map_file::parse_catalog(&fs::read(maps.join("catalog.bin"))?)
+        .map_err(|error| anyhow::anyhow!("read map catalog: {error}"))?;
+    let bust = thumbnail_cache_bust(maps)?;
+    let html: String = catalog
+        .entries
+        .iter()
+        .filter(|entry| {
+            entry.multiplayer_frequency > 0 && maps.join(&entry.key).join("thumbnail.webp").is_file()
+        })
+        .map(|entry| {
+            format!(
+                r#"<li class="map-card"><img src="/maps/{key}/thumbnail.webp?v={bust}" alt="{name}" width="512" height="288" loading="lazy" decoding="async"><span>{name}</span></li>
+"#,
+                key = html_text(&entry.key),
+                name = html_text(&entry.display_name),
+            )
+        })
+        .collect();
+    if html.is_empty() {
+        bail!("no map in rotation has a thumbnail for the landing page");
+    }
+    Ok(html)
+}
+
+fn landing_trailer(media: &Path, english: &serde_json::Value) -> Result<String> {
+    if !media.join("gameplay.webm").is_file() {
+        return Ok(String::new());
+    }
+    Ok(format!(
+        r#"<section class="landing-section trailer" id="media">
+      <div class="container">
+        <header class="section-head">
+          <p class="eyebrow" data-i18n="site.gameplay">{eyebrow}</p>
+          <h2><span data-i18n="site.watch">{watch}</span> <em data-i18n="site.the_game">{game}</em></h2>
+          <p data-i18n="site.media_summary">{summary}</p>
+        </header>
+        <video class="trailer-video" controls playsinline preload="none" poster="/assets/site/media/gameplay.webp" aria-label="{label}" data-i18n="site.gameplay_capture" data-i18n-attr="aria-label">
+          <source src="/assets/site/media/gameplay.webm" type="video/webm">
+          <source src="/assets/site/media/gameplay.mp4" type="video/mp4">
+        </video>
+      </div>
+    </section>"#,
+        eyebrow = english_text(english, "site.gameplay")?,
+        watch = english_text(english, "site.watch")?,
+        game = english_text(english, "site.the_game")?,
+        summary = english_text(english, "site.media_summary")?,
+        label = english_text(english, "site.gameplay_capture")?,
+    ))
 }
 
 fn write_sw(out: &Path, version: &str, js: &str, wasm: &str, ts: &str) -> Result<()> {
@@ -3258,7 +3650,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         &assets.join("campaign"),
     )?;
     copy_dir(&paths.root.join("assets/guides"), &assets.join("guides"))?;
-    copy_dir(&paths.assets_site.join("media"), &assets.join("site/media"))?;
+    copy_dir(&paths.site_media, &assets.join("site/media"))?;
     let maps = out.join("maps");
     fs::create_dir_all(&maps)?;
     if paths.assets_maps.is_dir() {
@@ -3519,7 +3911,7 @@ fn package_native_web(
             &assets.join("campaign"),
         )?;
         copy_dir(&paths.root.join("assets/guides"), &assets.join("guides"))?;
-        copy_dir(&paths.assets_site.join("media"), &assets.join("site/media"))?;
+        copy_dir(&paths.site_media, &assets.join("site/media"))?;
         copy_dir(&paths.assets_maps, &out.join("maps"))?;
         refresh_map_thumbnails(&out.join("maps"), &paths.map_sources)?;
         copy_shell(paths, out, WebTarget::Native)?;
@@ -4249,6 +4641,7 @@ fn local_file_requires_wasm(paths: &Paths, path: &Path) -> bool {
     if path.starts_with(paths.root.join("assets/art/buildings"))
         || path.starts_with(paths.root.join("assets/art/icons"))
         || path.starts_with(paths.root.join("assets/art/units"))
+        || path.starts_with(paths.root.join("assets/art/avatars"))
     {
         return true;
     }
@@ -4437,6 +4830,8 @@ fn start_local_server(port: u16, webroot: &str) -> Result<LocalPreviewServer> {
 }
 
 fn build_local_preview(paths: &Paths, version: &str, compile: bool) -> Result<()> {
+    // Art can change while the preview runs: publish it again before packaging.
+    stage_runtime_assets(&paths.root, &paths.runtime_assets)?;
     if compile {
         compile_wasm(paths, true)?;
     }
@@ -5014,7 +5409,7 @@ mod tests {
         fs::create_dir_all(&leaders)?;
         let master = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
-            .join("assets/art/leaders/boudica/scene-desktop.webp");
+            .join("assets/art/heroes/boudica_desktop.webp");
         let original = fs::metadata(&master)?.len();
         fs::copy(&master, leaders.join("boudica_desktop.webp"))?;
         fs::write(leaders.join("boudica_mobile.webp"), b"not-an-image")?;
@@ -5485,17 +5880,30 @@ mod tests {
     }
 
     #[test]
-    fn test_index_html_prerenders_every_hero() -> Result<()> {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .canonicalize()?;
-        let index_html = fs::read_to_string(root.join("sow-web/site/index.html"))?;
+    fn landing_roster_lists_every_catalog_hero() -> Result<()> {
+        let english = serde_json::to_value(sow_i18n::web(sow_i18n::Language::English))?;
+        let roster = landing_leaders(&english)?;
         for leader_id in sow_core::player::Leader::all().map(sow_core::player::Leader::id) {
             assert!(
-                index_html.contains(&format!("data-leader-id=\"{leader_id}\"")),
-                "index.html missing prerendered card for leader id: {leader_id}"
+                roster.contains(&format!("data-leader-id=\"{leader_id}\"")),
+                "landing roster is missing {leader_id}"
             );
         }
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        let index_html = fs::read_to_string(root.join("sow-web/site/index.html"))?;
+        for marker in [
+            "<!-- SOW_SITE_HERO_MEDIA -->",
+            "<!-- SOW_SITE_LEADER_SHOWCASE -->",
+            "<!-- SOW_SITE_LEADERS -->",
+            "<!-- SOW_SITE_MAPS -->",
+            "<!-- SOW_SITE_TRAILER -->",
+        ] {
+            assert_eq!(index_html.matches(marker).count(), 1, "{marker}");
+        }
+        assert!(
+            !index_html.contains("data-leader-id"),
+            "heroes come from the catalog"
+        );
         Ok(())
     }
 

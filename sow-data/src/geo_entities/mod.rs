@@ -123,7 +123,7 @@ pub struct GeoEntity {
     pub gender: Option<Gender>,
     #[serde(default)]
     pub wikipedia: Option<String>,
-    /// Folder in `assets/art/leaders/` holding the portrait.
+    /// Name of the portrait file in `assets/art/avatars/*/` (see assets/art/README.md).
     #[serde(default)]
     pub avatar: Option<String>,
     #[serde(default)]
@@ -183,7 +183,7 @@ pub fn by_name(name: &str) -> Option<&'static GeoEntity> {
     all().find(|entity| entity.name.eq_ignore_ascii_case(name))
 }
 
-/// Cell of a bot's portrait (by portrait folder) in the packed bot portrait
+/// Cell of a bot's portrait (by avatar name) in the packed bot portrait
 /// atlas: nation and tribe characters in catalog order (sow-tools packs the
 /// same order).
 pub fn bot_portrait_index(avatar: &str) -> Option<usize> {
@@ -259,11 +259,7 @@ mod tests {
                     "{} has no home coordinates",
                     entity.id
                 );
-                assert!(
-                    entity.avatar.is_some(),
-                    "{} has no portrait folder",
-                    entity.id
-                );
+                assert!(entity.avatar.is_some(), "{} has no avatar name", entity.id);
                 assert!(entity.gender.is_some(), "{} has no gender", entity.id);
                 assert_ne!(entity.region, Region::Unassigned, "{}", entity.id);
                 assert!(
@@ -277,7 +273,7 @@ mod tests {
         for character in bot_portraits() {
             assert!(
                 portraits.insert(character.avatar.as_deref()),
-                "{} shares a portrait folder with another bot",
+                "{} shares an avatar with another bot",
                 character.id
             );
         }

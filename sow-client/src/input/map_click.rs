@@ -1660,6 +1660,23 @@ impl SowApp {
     }
 
     pub(crate) fn select_building_kind(&mut self, kind: sow_core::game::BuildingKind) {
+        self.select_building_kind_from(kind, None);
+    }
+
+    pub(crate) fn select_building_kind_from_pointer(&mut self, kind: sow_core::game::BuildingKind) {
+        let origin = if self.input.hover_pointer == crate::app::HoverPointer::Mouse {
+            self.mouse_to_tile(self.input.last_mouse_x, self.input.last_mouse_y)
+        } else {
+            None
+        };
+        self.select_building_kind_from(kind, origin);
+    }
+
+    fn select_building_kind_from(
+        &mut self,
+        kind: sow_core::game::BuildingKind,
+        origin: Option<(i32, i32)>,
+    ) {
         if self.ui.observing
             || self.ui.tutorial_camera_only
             || self.ui.app.phase != crate::ClientPhase::Playing
@@ -1697,8 +1714,11 @@ impl SowApp {
             return;
         }
         let zoom = self.input.camera_zoom.max(0.01);
-        let center_x = ((self.input.screen_w * 0.5 - self.input.camera_x) / zoom) as i32;
-        let center_y = ((self.input.screen_h * 0.45 - self.input.camera_y) / zoom) as i32;
+        let camera_center = (
+            ((self.input.screen_w * 0.5 - self.input.camera_x) / zoom) as i32,
+            ((self.input.screen_h * 0.45 - self.input.camera_y) / zoom) as i32,
+        );
+        let (origin_x, origin_y) = origin.unwrap_or(camera_center);
         let radius = (self.input.screen_w.max(self.input.screen_h) * 0.5 / zoom).ceil() as i32;
         let my_id = self.sim.my_player_id.unwrap_or(0);
         let tutorial_site = if self.ui.tutorial_active
@@ -1738,8 +1758,8 @@ impl SowApp {
                     &engine.state.map,
                     my_id,
                     kind,
-                    center_x,
-                    center_y,
+                    origin_x,
+                    origin_y,
                     radius,
                     &engine.building_grid,
                 )

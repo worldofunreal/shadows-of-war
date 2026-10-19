@@ -12,7 +12,8 @@ const root = path.resolve(editorDir, "../../..");
 const campaignDir = path.join(root, "assets/campaign");
 const guideDir = path.join(root, "assets/guides");
 const mapsDir = path.join(root, "assets/maps");
-const leaderArtDir = path.join(root, "assets/art/leaders");
+const avatarArtDir = path.join(root, "assets/art/avatars");
+const avatarFolders = ["heroes", "nations", "tribes"];
 const entityCatalogFile = path.join(root, "assets/geo_entities.json");
 const distLocaleDir = path.join(root, "dist/web/locales");
 const campaignRequire = createRequire(import.meta.url);
@@ -63,20 +64,24 @@ function safeFile(base, relative) {
   return file === base || file.startsWith(base + path.sep) ? file : null;
 }
 
-function leaderArt(slug, stem) {
+function avatarFile(slug) {
   if (!avatarId.test(slug)) return null;
-  const folder = slug === "null" ? "_fallback" : slug;
-  return ["webp", "png", "jpg", "jpeg"]
-    .map(ext => path.join(leaderArtDir, folder, `${stem}.${ext}`))
+  if (slug === "null") return path.join(avatarArtDir, "default.webp");
+  return avatarFolders
+    .map(folder => path.join(avatarArtDir, folder, `${slug}.webp`))
     .find(existsSync) || null;
 }
 
 async function listAvatarIds() {
-  const entries = await fs.readdir(leaderArtDir, { withFileTypes: true });
-  return [...new Set(entries
-    .filter(entry => entry.isDirectory() && (entry.name === "_fallback" || avatarId.test(entry.name)))
-    .map(entry => entry.name === "_fallback" ? "null" : entry.name)
-    .filter(id => leaderArt(id, "portrait")))].sort();
+  const ids = new Set(["null"]);
+  for (const folder of avatarFolders) {
+    for (const entry of await fs.readdir(path.join(avatarArtDir, folder))) {
+      const id = entry.endsWith(".webp") ? entry.slice(0, -".webp".length) : "";
+      // A hero's expression quadrants (<id>_1 .. <id>_4) are parts of one avatar, not avatars.
+      if (avatarId.test(id) && !(folder === "heroes" && /_[1-4]$/.test(id))) ids.add(id);
+    }
+  }
+  return [...ids].sort();
 }
 
 function staticFile(pathname) {
@@ -90,12 +95,8 @@ function staticFile(pathname) {
   if (pathname.startsWith("/assets/guides/")) return safeFile(guideDir, pathname.slice("/assets/guides/".length));
   if (pathname.startsWith("/assets/maps/")) return safeFile(path.join(root, "assets/maps"), pathname.slice("/assets/maps/".length));
   if (pathname.startsWith("/assets/gameplay/avatars/")) {
-    const relative = pathname.slice("/assets/gameplay/avatars/".length);
-    const portrait = /^([a-z][a-z0-9_]*)\.webp$/.exec(relative);
-    if (portrait) return leaderArt(portrait[1], "portrait");
-    const expressions = /^spritesheets\/([a-z][a-z0-9_]*)\.webp$/.exec(relative);
-    if (expressions) return leaderArt(expressions[1], "expressions");
-    return null;
+    const portrait = /^([a-z][a-z0-9_]*)\.webp$/.exec(pathname.slice("/assets/gameplay/avatars/".length));
+    return portrait ? avatarFile(portrait[1]) : null;
   }
   if (pathname.startsWith("/assets/gameplay/")) return safeFile(path.join(root, "assets/gameplay"), pathname.slice("/assets/gameplay/".length));
   if (pathname.startsWith("/assets/map_sources/")) return safeFile(path.join(root, "assets/map_sources"), pathname.slice("/assets/map_sources/".length));

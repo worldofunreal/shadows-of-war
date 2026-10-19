@@ -162,22 +162,28 @@ pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sy
     Ok(())
 }
 
+/// The portrait file of an avatar name, in whichever folder holds it (assets/art/avatars).
+fn avatar_source(art_root: &Path, name: &str) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
+    let avatars = art_root.join("avatars");
+    ["heroes", "nations", "tribes"]
+        .iter()
+        .find_map(|folder| art_source(&avatars.join(folder), name).ok())
+        .ok_or_else(|| format!("missing avatar art: assets/art/avatars/*/{name}.webp").into())
+}
+
 /// Every catalog bot's portrait in `bot_portrait_index` order, 64px cells,
-/// 32 per row; a bot without `assets/art/leaders/<id>/portrait` gets the
-/// shared `_fallback` portrait until its art arrives. Lossy WebP via
-/// ImageMagick (already required by the pipeline) keeps the download small.
+/// 32 per row. A bot without its avatar file fails the pack: there is no shared
+/// stand-in. Lossy WebP via ImageMagick (already required by the pipeline) keeps
+/// the download small.
 fn pack_bot_portraits(args: &PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sync>> {
     const CELL: u32 = 64;
     const COLUMNS: u32 = 32;
-    let leaders = args.art_root.join("leaders");
-    let fallback = art_source(&leaders.join("_fallback"), "portrait")?;
     let characters: Vec<_> = sow_core::geo_entities::bot_portraits().collect();
     let rows = (characters.len() as u32).div_ceil(COLUMNS).max(1);
     let mut atlas = ImageBuffer::from_pixel(CELL * COLUMNS, CELL * rows, Rgba([0, 0, 0, 0]));
     for (index, character) in characters.iter().enumerate() {
-        let folder = character.avatar.as_deref().unwrap_or(&character.id);
-        let source =
-            art_source(&leaders.join(folder), "portrait").unwrap_or_else(|_| fallback.clone());
+        let name = character.avatar.as_deref().unwrap_or(&character.id);
+        let source = avatar_source(&args.art_root, name)?;
         let image = image::load_from_memory(&fs::read(&source)?)?.to_rgba8();
         let side = image.width().min(image.height());
         let square = image::imageops::crop_imm(

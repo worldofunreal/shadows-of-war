@@ -940,6 +940,10 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "nameplate emote lifecycle regression tests failed",
         ),
         (
+            "render::world::nameplates::status_badge_tests",
+            "nameplate status badge lifecycle regression tests failed",
+        ),
+        (
             "input::intents::tests::repeated_attacks_each_get_a_notice_even_for_the_same_target",
             "attack launch amount notice regression tests failed",
         ),

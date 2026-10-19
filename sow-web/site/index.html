@@ -58,260 +58,98 @@
   <!-- SOW_SITE_HEADER -->
 
   <main>
-    <section class="hero section-rule">
-      <div class="hero-wash" aria-hidden="true">
-        <video class="hero-video" loop muted playsinline preload="metadata" aria-hidden="true"
-          poster="/assets/shell/loader/sow-splash-desktop.webp">
-          <source src="/assets/site/media/shadowsofwar-scroll.vp9.webm" type="video/webm;codecs=vp9">
-        </video>
-      </div>
-      <div class="container hero-grid">
-        <div class="hero-copy">
-          <h1><span data-i18n="site.hero_command">Command</span><br><em data-i18n="site.hero_map">the map.</em></h1>
-          <p class="hero-lede" data-i18n="site.hero_lede">Pick a historical leader. Take land, build cities,
-            factories, ports and bunkers, and fight for the map. New leaders keep joining the roster.</p>
-          <div class="hero-actions">
-            <a class="button button-orange" href="/play/"><span data-i18n="site.play">Play</span></a>
-            <a class="button button-outline" href="#media"><span data-i18n="site.watch_gameplay">Watch gameplay</span>
-              <span aria-hidden="true">▶</span></a>
-          </div>
-          <div class="hero-alpha" role="group" aria-labelledby="hero-alpha-label">
-            <p class="hero-alpha-label" id="hero-alpha-label" data-i18n="site.mobile_alpha_testing">Mobile alpha testing</p>
-            <div class="hero-alpha-links">
-              <a class="hero-alpha-badge hero-alpha-badge--testflight" href="https://testflight.apple.com/join/Y8fu4zch" target="_blank" rel="noopener">
-                <img class="hero-alpha-icon hero-alpha-icon--testflight" src="/assets/site/media/testflight-badge.svg" width="30" height="30" alt="" aria-hidden="true">
-                <span class="hero-alpha-copy"><small data-i18n="site.testflight_badge_action">Join on</small><b>TestFlight</b></span>
-              </a>
-              <a class="hero-alpha-badge" href="https://play.google.com/apps/testing/com.shadowsofwar" target="_blank" rel="noopener">
-                <img class="hero-alpha-icon hero-alpha-icon--google-play" src="/assets/site/media/google-play-badge.svg" width="30" height="30" alt="" aria-hidden="true">
-                <span class="hero-alpha-copy"><small data-i18n="site.google_play_badge_action">Get it on</small><b>Google Play</b></span>
-              </a>
-            </div>
+    <section class="hero" id="top">
+      <div class="hero-media" aria-hidden="true"><!-- SOW_SITE_HERO_MEDIA --></div>
+      <div class="container">
+        <h1><span data-i18n="site.hero_command">Command</span> <em data-i18n="site.hero_map">the map.</em></h1>
+        <p class="hero-lede" data-i18n="site.hero_lede">Pick a historical leader. Take land, build cities,
+          factories, ports and bunkers, and fight for the map. New leaders keep joining the roster.</p>
+        <div class="hero-actions">
+          <a class="button button-orange" href="/play/"><span data-i18n="site.play">Play</span></a>
+          <a class="hero-link" href="#game" data-i18n="site.how_matches_work">How matches work</a>
+        </div>
+        <div class="hero-alpha" role="group" aria-labelledby="hero-alpha-label">
+          <p class="hero-alpha-label" id="hero-alpha-label" data-i18n="site.mobile_alpha_testing">Mobile alpha testing</p>
+          <div class="hero-alpha-links">
+            <a class="hero-alpha-badge hero-alpha-badge--testflight" href="https://testflight.apple.com/join/Y8fu4zch" target="_blank" rel="noopener">
+              <img class="hero-alpha-icon hero-alpha-icon--testflight" src="/assets/site/media/testflight-badge.svg" width="30" height="30" alt="" aria-hidden="true">
+              <span class="hero-alpha-copy"><small data-i18n="site.testflight_badge_action">Join on</small><b>TestFlight</b></span>
+            </a>
+            <a class="hero-alpha-badge" href="https://play.google.com/apps/testing/com.shadowsofwar" target="_blank" rel="noopener">
+              <img class="hero-alpha-icon hero-alpha-icon--google-play" src="/assets/site/media/google-play-badge.svg" width="30" height="30" alt="" aria-hidden="true">
+              <span class="hero-alpha-copy"><small data-i18n="site.google_play_badge_action">Get it on</small><b>Google Play</b></span>
+            </a>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="section section-rule" id="game">
+    <section class="landing-section steps" id="game">
       <div class="container">
-        <div class="section-heading split-heading">
-          <div>
-            <p class="eyebrow" data-i18n="site.how_matches_work">How matches work</p>
-            <h2><span data-i18n="site.build_expand">Build, expand,</span><br><em data-i18n="site.fight">fight.</em></h2>
-          </div>
+        <header class="section-head">
+          <p class="eyebrow" data-i18n="site.how_matches_work">How matches work</p>
+          <h2><span data-i18n="site.build_expand">Build, expand,</span> <em data-i18n="site.fight">fight.</em></h2>
           <p data-i18n="site.game_summary">Start small, turn territory into an economy, and decide when cooperation ends. Any alliance can break at
             any time; whoever holds most of the map wins.</p>
-        </div>
-        <div class="gameplay-grid">
-          <article class="gameplay-card gameplay-large">
-            <img src="/assets/site/media/session-leader.webp"
-              alt="King Leonidas leader selection screen in Shadows of War" loading="lazy">
-            <div class="card-overlay"><span class="card-number">01</span>
-              <div>
-                <h3 data-i18n="site.choose_your_legend">Choose your leader</h3>
-                <p data-i18n="site.choose_your_legend_body">Each gives one bonus. Pick yours.</p>
-              </div>
-            </div>
-          </article>
-          <article class="gameplay-card">
-            <img src="/assets/site/media/session-expansion.webp" alt="Territory expansion gameplay in Shadows of War"
-              loading="lazy">
-            <div class="card-overlay"><span class="card-number">02</span>
-              <div>
-                <h3 data-i18n="site.build_momentum">Take land</h3>
-                <p data-i18n="site.build_momentum_body">Every tile you hold pays gold and troops.</p>
-              </div>
-            </div>
-          </article>
-          <article class="gameplay-card">
-            <img src="/assets/site/media/session-world.webp"
-              alt="Several empires competing on the world map in Shadows of War" loading="lazy">
-            <div class="card-overlay"><span class="card-number">03</span>
-              <div>
-                <h3 data-i18n="site.break_frontier">Break the frontier</h3>
-                <p data-i18n="site.break_frontier_body">Attack, ally, betray. Hold the map to win.</p>
-              </div>
-            </div>
-          </article>
-        </div>
+        </header>
+        <ol class="step-list">
+          <li class="step">
+            <img src="/assets/site/media/step-expand.webp" alt="" loading="lazy" decoding="async">
+            <h3 data-i18n="site.build_momentum">Take land</h3>
+            <p data-i18n="site.build_momentum_body">Every tile you hold pays gold and troops.</p>
+          </li>
+          <li class="step">
+            <img src="/assets/site/media/step-build.webp" alt="" loading="lazy" decoding="async">
+            <h3 data-i18n="site.step_build">Build districts</h3>
+            <p data-i18n="site.step_build_body">Cities, factories, ports and bunkers turn land into troops and gold.</p>
+          </li>
+          <li class="step">
+            <img src="/assets/site/media/step-war.webp" alt="" loading="lazy" decoding="async">
+            <h3 data-i18n="site.break_frontier">Break the frontier</h3>
+            <p data-i18n="site.break_frontier_body">Attack, ally, betray. Hold the map to win.</p>
+          </li>
+        </ol>
       </div>
     </section>
 
-    <section class="section leaders-section section-rule" id="leaders">
+    <section class="landing-section leaders" id="leaders">
       <div class="container">
-        <div class="section-heading split-heading">
-          <div>
-            <p class="eyebrow" data-i18n="site.leaders">Leaders</p>
-            <h2><span data-i18n="site.choose">Choose</span><br><em data-i18n="site.a_leader">a leader.</em></h2>
-          </div>
+        <header class="section-head">
+          <p class="eyebrow" data-i18n="site.leaders">Leaders</p>
+          <h2><span data-i18n="site.choose">Choose</span> <em data-i18n="site.a_leader">a leader.</em></h2>
           <p data-i18n="site.leaders_summary">Choose a leader that matches how you play: economy, expansion, defense, production, or border pressure.</p>
+        </header>
+        <div class="showcase" data-leader-detail aria-live="polite">
+          <!-- SOW_SITE_LEADER_SHOWCASE -->
         </div>
-        <div class="leaders-layout">
-          <div class="leaders-grid" data-leaders-grid>
-            <button class="leader-card is-active" type="button" aria-pressed="true" aria-label="Inspect Julius Caesar"
-              data-leader-id="caesar" data-name="Julius Caesar" data-civ="Roman Empire" data-civ-key="heroes.leader_caesar_civilization" data-code="ROM"
-              data-ability-key="site.leader_caesar_ability" data-description-key="site.leader_caesar_description" data-image="caesar">
-              <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/caesar_mobile.webp">
-                <img src="/assets/shell/leaders/caesar_desktop.webp" alt="Julius Caesar Roman Empire artwork" loading="lazy">
-              </picture>
-              <span class="leader-card-info"><b data-i18n="heroes.leader_caesar_name">Julius Caesar</b><span data-i18n="heroes.leader_caesar_civilization">Roman Empire</span></span>
-            </button>
-            <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Cleopatra VII"
-              data-leader-id="cleopatra" data-name="Cleopatra VII" data-civ="Egyptian Empire" data-civ-key="heroes.leader_cleopatra_civilization" data-code="EGY"
-              data-ability-key="site.leader_cleopatra_ability" data-description-key="site.leader_cleopatra_description"
-              data-image="cleopatra">
-              <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/cleopatra_mobile.webp">
-                <img src="/assets/shell/leaders/cleopatra_desktop.webp" alt="Cleopatra VII Egyptian Empire artwork" loading="lazy">
-              </picture>
-              <span class="leader-card-info"><b data-i18n="heroes.leader_cleopatra_name">Cleopatra VII</b><span data-i18n="heroes.leader_cleopatra_civilization">Egyptian Empire</span></span>
-            </button>
-            <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Ragnar Lothbrok"
-              data-leader-id="ragnar" data-name="Ragnar Lothbrok" data-civ="Norse Kingdom" data-civ-key="heroes.leader_ragnar_civilization" data-code="NOR"
-              data-ability-key="site.leader_ragnar_ability" data-description-key="site.leader_ragnar_description" data-image="ragnar">
-              <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/ragnar_mobile.webp">
-                <img src="/assets/shell/leaders/ragnar_desktop.webp" alt="Ragnar Lothbrok Norse Kingdom artwork" loading="lazy">
-              </picture>
-              <span class="leader-card-info"><b data-i18n="heroes.leader_ragnar_name">Ragnar Lothbrok</b><span data-i18n="heroes.leader_ragnar_civilization">Norse Kingdom</span></span>
-            </button>
-            <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Sun Tzu"
-              data-leader-id="sun_tzu" data-name="Sun Tzu" data-civ="Chinese Empire" data-civ-key="heroes.leader_sun_tzu_civilization" data-code="CHN"
-              data-ability-key="site.leader_sun_tzu_ability" data-description-key="site.leader_sun_tzu_description"
-              data-image="sun_tzu">
-              <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/sun_tzu_mobile.webp">
-                <img src="/assets/shell/leaders/sun_tzu_desktop.webp" alt="Sun Tzu Chinese Empire artwork" loading="lazy">
-              </picture>
-              <span class="leader-card-info"><b data-i18n="heroes.leader_sun_tzu_name">Sun Tzu</b><span data-i18n="heroes.leader_sun_tzu_civilization">Chinese Empire</span></span>
-            </button>
-            <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Alexander the Great"
-              data-leader-id="alexander" data-name="Alexander the Great" data-civ="Macedonian Empire" data-civ-key="heroes.leader_alexander_civilization" data-code="MAC"
-              data-ability-key="site.leader_alexander_ability" data-description-key="site.leader_alexander_description"
-              data-image="alexander">
-              <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/alexander_mobile.webp">
-                <img src="/assets/shell/leaders/alexander_desktop.webp" alt="Alexander the Great Macedonian Empire artwork" loading="lazy">
-              </picture>
-              <span class="leader-card-info"><b data-i18n="heroes.leader_alexander_name">Alexander the Great</b><span data-i18n="heroes.leader_alexander_civilization">Macedonian Empire</span></span>
-            </button>
-            <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Genghis Khan"
-              data-leader-id="genghis_khan" data-name="Genghis Khan" data-civ="Mongol Horde" data-civ-key="heroes.leader_genghis_khan_civilization" data-code="MON"
-              data-ability-key="site.leader_genghis_khan_ability" data-description-key="site.leader_genghis_khan_description"
-              data-image="genghis_khan">
-              <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/genghis_khan_mobile.webp">
-                <img src="/assets/shell/leaders/genghis_khan_desktop.webp" alt="Genghis Khan Mongol Horde artwork" loading="lazy">
-              </picture>
-              <span class="leader-card-info"><b data-i18n="heroes.leader_genghis_khan_name">Genghis Khan</b><span data-i18n="heroes.leader_genghis_khan_civilization">Mongol Horde</span></span>
-            </button>
-            <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Richard the Lionheart"
-              data-leader-id="richard_the_lionheart" data-name="Richard the Lionheart" data-civ="Angevin Empire" data-civ-key="heroes.leader_richard_the_lionheart_civilization" data-code="ENG"
-              data-ability-key="site.leader_richard_the_lionheart_ability" data-description-key="site.leader_richard_the_lionheart_description"
-              data-image="richard_the_lionheart">
-              <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/richard_the_lionheart_mobile.webp">
-                <img src="/assets/shell/leaders/richard_the_lionheart_desktop.webp" alt="Richard the Lionheart Angevin Empire artwork" loading="lazy">
-              </picture>
-              <span class="leader-card-info"><b data-i18n="heroes.leader_richard_the_lionheart_name">Richard the Lionheart</b><span data-i18n="heroes.leader_richard_the_lionheart_civilization">Angevin Empire</span></span>
-            </button>
-            <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Vercingetorix"
-              data-leader-id="vercingetorix" data-name="Vercingetorix" data-civ="Gallic Tribes" data-civ-key="heroes.leader_vercingetorix_civilization" data-code="GAL"
-              data-ability-key="site.leader_vercingetorix_ability" data-description-key="site.leader_vercingetorix_description"
-              data-image="vercingetorix">
-              <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/vercingetorix_mobile.webp">
-                <img src="/assets/shell/leaders/vercingetorix_desktop.webp" alt="Vercingetorix Gallic Tribes artwork" loading="lazy">
-              </picture>
-              <span class="leader-card-info"><b data-i18n="heroes.leader_vercingetorix_name">Vercingetorix</b><span data-i18n="heroes.leader_vercingetorix_civilization">Gallic Tribes</span></span>
-            </button>
-            <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Boudica"
-              data-leader-id="boudica" data-name="Boudica" data-civ="Iceni Kingdom" data-civ-key="heroes.leader_boudica_civilization" data-code="ICE"
-              data-ability-key="site.leader_boudica_ability" data-description-key="site.leader_boudica_description" data-image="boudica">
-              <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/boudica_mobile.webp">
-                <img src="/assets/shell/leaders/boudica_desktop.webp" alt="Boudica Iceni Kingdom artwork" loading="lazy">
-              </picture>
-              <span class="leader-card-info"><b data-i18n="heroes.leader_boudica_name">Boudica</b><span data-i18n="heroes.leader_boudica_civilization">Iceni Kingdom</span></span>
-            </button>
-            <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Lady Six Sky"
-              data-leader-id="lady_six_sky" data-name="Lady Six Sky" data-civ="Maya Civilization" data-civ-key="heroes.leader_lady_six_sky_civilization" data-code="MAY"
-              data-ability-key="site.leader_lady_six_sky_ability" data-description-key="site.leader_lady_six_sky_description"
-              data-image="lady_six_sky">
-              <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/lady_six_sky_mobile.webp">
-                <img src="/assets/shell/leaders/lady_six_sky_desktop.webp" alt="Lady Six Sky Maya Civilization artwork" loading="lazy">
-              </picture>
-              <span class="leader-card-info"><b data-i18n="heroes.leader_lady_six_sky_name">Lady Six Sky</b><span data-i18n="heroes.leader_lady_six_sky_civilization">Maya Civilization</span></span>
-            </button>
-            <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect King Leonidas"
-              data-leader-id="leonidas" data-name="King Leonidas" data-civ="Sparta" data-civ-key="heroes.leader_leonidas_civilization" data-code="SPA"
-              data-ability-key="site.leader_leonidas_ability" data-description-key="site.leader_leonidas_description"
-              data-image="leonidas">
-              <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/leonidas_mobile.webp">
-                <img src="/assets/shell/leaders/leonidas_desktop.webp" alt="King Leonidas Sparta artwork" loading="lazy">
-              </picture>
-              <span class="leader-card-info"><b data-i18n="heroes.leader_leonidas_name">King Leonidas</b><span data-i18n="heroes.leader_leonidas_civilization">Sparta</span></span>
-            </button>
-            <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Napoleon Bonaparte"
-              data-leader-id="napoleon" data-name="Napoleon Bonaparte" data-civ="Kingdom of France" data-civ-key="heroes.leader_napoleon_civilization" data-code="FRA"
-              data-ability-key="site.leader_napoleon_ability" data-description-key="site.leader_napoleon_description"
-              data-image="napoleon">
-              <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/napoleon_mobile.webp">
-                <img src="/assets/shell/leaders/napoleon_desktop.webp" alt="Napoleon Bonaparte Kingdom of France artwork" loading="lazy">
-              </picture>
-              <span class="leader-card-info"><b data-i18n="heroes.leader_napoleon_name">Napoleon Bonaparte</b><span data-i18n="heroes.leader_napoleon_civilization">Kingdom of France</span></span>
-            </button>
-          </div>
-          <aside class="leader-detail" data-leader-detail aria-live="polite">
-            <div class="detail-image"><picture>
-                <img data-detail-image src="/assets/shell/leaders/caesar_desktop.webp" alt="Julius Caesar artwork"
-                  data-i18n="site.leader_artwork" data-i18n-values='{"name":"heroes.leader_caesar_name"}'
-                  data-i18n-attr="alt" loading="lazy" decoding="async">
-              </picture></div>
-            <div class="detail-body">
-              <p class="mono-label" data-detail-code>ROM · 01</p>
-              <h3 data-detail-name data-i18n="heroes.leader_caesar_name">Julius Caesar</h3>
-              <p class="detail-historical" data-detail-historical hidden></p>
-              <p data-detail-civ data-i18n="heroes.leader_caesar_civilization">Roman Empire</p>
-              <div class="detail-rule"></div>
-              <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
-              <p class="detail-ability" data-detail-ability>Legions of Rome</p>
-              <p class="detail-description" data-detail-description>Armies fight 10% stronger.</p>
-            </div>
-          </aside>
+        <div class="roster" data-leaders-grid>
+<!-- SOW_SITE_LEADERS -->
         </div>
       </div>
     </section>
 
-    <section class="section media-section section-rule" id="media">
+    <section class="landing-section maps" id="maps">
       <div class="container">
-        <div class="section-heading split-heading">
-          <div>
-            <p class="eyebrow" data-i18n="site.gameplay">Gameplay</p>
-            <h2><span data-i18n="site.watch">Watch</span><br><em data-i18n="site.the_game">the game.</em></h2>
-          </div>
-          <p data-i18n="site.media_summary">One match, start to end: land, buildings, broken alliances, final borders.</p>
-        </div>
-        <div class="media-grid">
-          <div class="trailer-card">
-            <video controls muted playsinline preload="metadata" poster="/assets/site/media/session-expansion.webp"
-              aria-label="Shadows of War gameplay capture" data-i18n="site.gameplay_capture" data-i18n-attr="aria-label">
-              <source src="/assets/site/media/shadows-of-war-gameplay.mp4" type="video/mp4">
-              <span data-i18n="site.video_unsupported">Your browser does not support embedded video.</span>
-            </video>
-            <div class="media-caption"><span data-i18n="site.gameplay_label">GAMEPLAY · 00:28</span></div>
-          </div>
-          <div class="gallery-grid">
-            <img src="/assets/site/media/session-conflict.webp" alt="A contested frontier in Shadows of War" data-i18n="site.contested_frontier" data-i18n-attr="alt"
-              loading="lazy">
-            <img src="/assets/site/media/session-late-map.webp" alt="A late-game empire on the world map" data-i18n="site.late_game_empire" data-i18n-attr="alt"
-              loading="lazy">
-          </div>
-        </div>
+        <header class="section-head">
+          <p class="eyebrow" data-i18n="site.maps">Maps</p>
+          <h2><span data-i18n="site.maps_fight_on">Fight on</span> <em data-i18n="site.maps_every_continent">every continent.</em></h2>
+          <p data-i18n="site.maps_summary">Matchmaking rotates through the world and regional maps, from Europe to the Pacific.</p>
+        </header>
       </div>
+      <ul class="map-strip">
+<!-- SOW_SITE_MAPS -->
+      </ul>
     </section>
 
-    <section class="section faq-section section-rule" id="faq">
+    <!-- SOW_SITE_TRAILER -->
+
+    <section class="landing-section faq" id="faq">
       <div class="container">
-        <div class="section-heading split-heading">
-          <div>
-            <p class="eyebrow" data-i18n="site.game_systems">Game systems</p>
-            <h2><span data-i18n="site.matches">How matches</span><br><em data-i18n="site.work">work.</em></h2>
-          </div>
+        <header class="section-head">
+          <p class="eyebrow" data-i18n="site.game_systems">Game systems</p>
+          <h2><span data-i18n="site.matches">How matches</span> <em data-i18n="site.work">work.</em></h2>
           <p data-i18n="site.rules_summary">Land control wins, districts pay, terrain punishes attackers, modes rotate.</p>
-        </div>
+        </header>
         <div class="faq-list">
           <details class="faq-item" name="faq" open>
             <summary data-i18n="site.faq_start">How do I start a match?</summary>
@@ -337,21 +175,12 @@
       </div>
     </section>
 
-    <section class="section play-section section-rule" id="play">
-      <div class="container play-callout">
-        <div>
-          <p class="eyebrow" data-i18n="site.are_you_ready">Are you ready?</p>
-          <h2><span data-i18n="site.play_now_title">Play</span><br><em data-i18n="site.now">now!</em></h2>
-          <p data-i18n="site.play_now_body">Join a lobby, ally, betray, and take the map.</p>
-        </div>
-        <div class="platform-stack">
-          <a class="platform-card platform-live" href="/play/"><span class="platform-icon">◎</span><span><b data-i18n="site.open_game">Open
-                game</b><small>shadowsofwar.io</small></span></a>
-          <a class="platform-card" href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener"><span
-              class="platform-icon">◌</span><span><b data-i18n="site.discord">Discord</b><small data-i18n="site.community">Community</small></span></a>
-          <a class="platform-card" href="https://t.me/shadowsofwario" target="_blank" rel="noopener"><span
-              class="platform-icon">✈</span><span><b data-i18n="site.telegram">Telegram</b><small data-i18n="site.official_group">Official Group</small></span></a>
-        </div>
+    <section class="landing-section closing" id="play">
+      <div class="container">
+        <p class="eyebrow" data-i18n="site.are_you_ready">Are you ready?</p>
+        <h2><span data-i18n="site.play_now_title">Play</span> <em data-i18n="site.now">now!</em></h2>
+        <p data-i18n="site.play_now_body">Join a lobby, ally, betray, and take the map.</p>
+        <a class="button button-orange" href="/play/"><span data-i18n="site.open_game">Open game</span></a>
       </div>
     </section>
   </main>

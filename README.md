@@ -24,7 +24,7 @@
 
 ## The game
 
-![World map](assets/site/media/session-world.webp)
+![World map](assets/maps/world/thumbnail.webp)
 
 Shadows of War is a multiplayer strategy game about taking territory and turning it into power.
 
@@ -34,9 +34,9 @@ Shadows of War is a multiplayer strategy game about taking territory and turning
 - Forge alliances, betray rivals and fight for control of the map.
 - Join online matches or play local battles against bots.
 
-| Territory | Battles | Expansion | Leaders |
+| Europe | Asia | Leaders | Campaign |
 | --- | --- | --- | --- |
-| ![Territory](assets/site/media/session-world.webp) | ![Battle](assets/site/media/session-battle.webp) | ![Expansion](assets/site/media/session-expansion.webp) | ![Leaders](assets/site/media/session-leader.webp) |
+| ![Europe map](assets/maps/europe/thumbnail.webp) | ![Asia map](assets/maps/asia/thumbnail.webp) | ![Julius Caesar](assets/art/heroes/caesar_desktop.webp) | ![Boudica](assets/art/heroes/boudica_desktop.webp) |
 
 ## Run locally
 

@@ -276,6 +276,26 @@ impl AssetLoader {
             self.bot_portraits_received = true;
             return Ok(());
         }
+        self.store_avatar_cells(key.clone(), image)?;
+        match key {
+            AvatarFetchKey::Fallback => self.avatar_fallback = Some(bytes.to_vec()),
+            AvatarFetchKey::Leader(leader) | AvatarFetchKey::LeaderPortrait(leader) => {
+                self.avatars.insert(leader, bytes.to_vec());
+            }
+            AvatarFetchKey::Campaign { slug, .. } => {
+                self.campaign_avatars.insert(slug, bytes.to_vec());
+            }
+            AvatarFetchKey::BotPortraits => {}
+        }
+        Ok(())
+    }
+
+    /// The GPU cells a decoded avatar fills: hero expressions, one portrait or a campaign slot.
+    fn store_avatar_cells(
+        &mut self,
+        key: AvatarFetchKey,
+        image: image::RgbaImage,
+    ) -> Result<(), String> {
         let cells = match key {
             AvatarFetchKey::Leader(leader) => hero_avatar_cells(&image)?
                 .into_iter()
@@ -313,16 +333,6 @@ impl AssetLoader {
             self.gpu_avatar_cells
                 .retain(|(loaded_slot, _)| *loaded_slot != slot);
             self.gpu_avatar_cells.push((slot, cell));
-        }
-        match key {
-            AvatarFetchKey::Fallback => self.avatar_fallback = Some(bytes.to_vec()),
-            AvatarFetchKey::Leader(leader) | AvatarFetchKey::LeaderPortrait(leader) => {
-                self.avatars.insert(leader, bytes.to_vec());
-            }
-            AvatarFetchKey::Campaign { slug, .. } => {
-                self.campaign_avatars.insert(slug, bytes.to_vec());
-            }
-            AvatarFetchKey::BotPortraits => {}
         }
         Ok(())
     }
@@ -447,16 +457,30 @@ mod tests {
 
     #[test]
     fn all_playable_hero_sheets_exist_and_have_four_distinct_frames() {
+        let avatars =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/art/avatars/heroes");
         for leader in Leader::all() {
             let key = AvatarFetchKey::Leader(leader);
-            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../assets/art/leaders")
-                .join(sow_data::commerce::leader_id(leader))
-                .join("expressions.webp");
-            let bytes =
-                std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+            let id = sow_data::commerce::leader_id(leader);
+            // The pipeline joins the four expression quadrants (Happy, Calm, Fear, Angry)
+            // into one 2 x 2 sheet; the test builds the same sheet from the real files.
+            let quadrants = (1..=4)
+                .map(|n| {
+                    let path = avatars.join(format!("{id}_{n}.webp"));
+                    image::open(&path)
+                        .unwrap_or_else(|error| panic!("{}: {error}", path.display()))
+                        .to_rgba8()
+                })
+                .collect::<Vec<_>>();
+            let (width, height) = quadrants[0].dimensions();
+            let mut sheet = image::RgbaImage::new(width * 2, height * 2);
+            for (index, quadrant) in quadrants.iter().enumerate() {
+                let x = (index as u32 % 2) * width;
+                let y = (index as u32 / 2) * height;
+                image::imageops::replace(&mut sheet, quadrant, i64::from(x), i64::from(y));
+            }
             let mut loader = AssetLoader::new();
-            loader.ingest_avatar_webp_bytes(key, &bytes).unwrap();
+            loader.store_avatar_cells(key, sheet).unwrap();
             assert!(loader.gpu_avatar_cells.iter().any(|(slot, cell)| {
                 *slot == sow_render::text::AVATAR_GOLD_SLOT && cell.len() == 256 * 256 * 4
             }));

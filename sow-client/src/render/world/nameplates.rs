@@ -2,7 +2,7 @@
 use super::overlays::world_to_screen_values;
 use crate::app::{InputState, SimState};
 use crate::render::gpu::TextRenderer;
-use crate::render::motion::{EmoteMotion, emote_motion, smoothstep};
+use crate::render::motion::{EmoteMotion, emote_motion, smoothstep, spring_overshoot};
 use crate::theme::dev_config::DevConfig;
 use sow_core::emote::{ActiveEmote, AvatarExpression, EMOTE_DURATION_SECS, EMOTES};
 use sow_core::player::{Leader, PlayerType};
@@ -41,6 +41,12 @@ const EMOTE_BUBBLE_TAIL_LENGTH_RATIO: f32 = 0.22;
 const EMOTE_BUBBLE_INNER_TAIL_WIDTH_RATIO: f32 = 0.23;
 const EMOTE_BUBBLE_INNER_TAIL_LENGTH_RATIO: f32 = 0.16;
 const EMOTE_BUBBLE_BODY_OFFSET_RATIO: f32 = 0.35;
+const STATUS_BADGE_COUNT: usize = 4;
+const STATUS_BADGE_ENTER_SECS: f32 = 0.25;
+const STATUS_BADGE_EXIT_SECS: f32 = 0.35;
+const STATUS_BADGE_EXIT_SCALE: f32 = 1.35;
+const STATUS_BADGE_MAX_SCALE: f32 = 1.45;
+const NAMEPLATE_RENDER_BADGE_CAPACITY: usize = NAMEPLATE_MAX_BADGES + STATUS_BADGE_COUNT;
 
 #[derive(Clone, Debug)]
 pub(crate) struct NameplateVisualState {
@@ -76,6 +82,7 @@ pub(crate) struct NameplateSystem {
     frame_plans: Vec<PreparedNameplate>,
     tutorial_target_hit_bounds: Option<(u16, [f32; 4])>,
     emote_visuals: HashMap<u16, AvatarEmote>,
+    badge_animations: HashMap<u16, PlayerStatusBadgeAnimations>,
     emote_tick: Option<u64>,
     emote_tick_at: Option<Instant>,
     emote_texts: [String; 4],
@@ -123,7 +130,7 @@ struct LodDot {
 struct FullNameplate {
     player_id: u16,
     avatar: Option<AvatarPlan>,
-    badges: [Option<BadgePlan>; NAMEPLATE_MAX_BADGES],
+    badges: [Option<BadgePlan>; NAMEPLATE_RENDER_BADGE_CAPACITY],
     badge_count: usize,
     name: Option<TextPlan>,
     troops: Option<TroopsPlan>,
@@ -243,6 +250,113 @@ struct BadgePlan {
     center: [f32; 2],
     diameter: f32,
     tint: [f32; 4],
+}
+
+#[derive(Clone, Copy)]
+struct BadgeAnimation {
+    started_at: Instant,
+    duration_secs: f32,
+    from_scale: f32,
+    from_alpha: f32,
+    to_scale: f32,
+    to_alpha: f32,
+}
+
+impl BadgeAnimation {
+    fn values(self, now: Instant, reduced_motion: bool) -> (f32, f32) {
+        let progress = (now.duration_since(self.started_at).as_secs_f32()
+            / self.duration_secs.max(f32::EPSILON))
+        .clamp(0.0, 1.0);
+        if progress >= 1.0 {
+            return (self.to_scale, self.to_alpha);
+        }
+        let alpha_progress = smoothstep(progress);
+        let alpha = self.from_alpha + (self.to_alpha - self.from_alpha) * alpha_progress;
+        if reduced_motion {
+            return (1.0, alpha.clamp(0.0, 1.0));
+        }
+        let scale_progress = spring_overshoot(progress);
+        let scale = self.from_scale + (self.to_scale - self.from_scale) * scale_progress;
+        (
+            scale.clamp(0.0, STATUS_BADGE_MAX_SCALE),
+            alpha.clamp(0.0, 1.0),
+        )
+    }
+
+    fn is_finished(self, now: Instant) -> bool {
+        now.duration_since(self.started_at).as_secs_f32() >= self.duration_secs
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct BadgeGeometry {
+    center_from_avatar: [f32; 2],
+    diameter: f32,
+    tint: [f32; 4],
+}
+
+#[derive(Clone, Copy, Default)]
+struct StatusBadgeAnimation {
+    present: bool,
+    animation: Option<BadgeAnimation>,
+    geometry: Option<BadgeGeometry>,
+}
+
+#[derive(Clone, Copy, Default)]
+struct PlayerStatusBadgeAnimations {
+    observed: bool,
+    badges: [StatusBadgeAnimation; STATUS_BADGE_COUNT],
+}
+
+impl PlayerStatusBadgeAnimations {
+    fn observe(&mut self, present: [bool; STATUS_BADGE_COUNT], now: Instant, reduced_motion: bool) {
+        if !self.observed {
+            self.observed = true;
+            for (badge, is_present) in self.badges.iter_mut().zip(present) {
+                badge.present = is_present;
+            }
+            return;
+        }
+
+        for (badge, is_present) in self.badges.iter_mut().zip(present) {
+            if badge.present != is_present {
+                let (from_scale, from_alpha) = badge.animation.map_or(
+                    if badge.present {
+                        (1.0, 1.0)
+                    } else {
+                        (0.0, 0.0)
+                    },
+                    |animation| animation.values(now, reduced_motion),
+                );
+                let entering = is_present;
+                badge.animation = Some(BadgeAnimation {
+                    started_at: now,
+                    duration_secs: if entering {
+                        STATUS_BADGE_ENTER_SECS
+                    } else {
+                        STATUS_BADGE_EXIT_SECS
+                    },
+                    from_scale,
+                    from_alpha,
+                    to_scale: if entering {
+                        1.0
+                    } else {
+                        STATUS_BADGE_EXIT_SCALE
+                    },
+                    to_alpha: if entering { 1.0 } else { 0.0 },
+                });
+                badge.present = is_present;
+            } else if badge
+                .animation
+                .is_some_and(|animation| animation.is_finished(now))
+            {
+                badge.animation = None;
+                if !badge.present {
+                    badge.geometry = None;
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -384,6 +498,34 @@ impl NameplateSystem {
         }
     }
 
+    fn observe_status_badges(
+        &mut self,
+        snapshot: &SimSnapshot,
+        my_id: u16,
+        now: Instant,
+        reduced_motion: bool,
+    ) {
+        let active_ids = &self.active_ids;
+        self.badge_animations
+            .retain(|player_id, _| active_ids.contains(player_id));
+        let my_player = snapshot.players.iter().find(|player| player.id == my_id);
+        for &player_index in &self.order {
+            let player = &snapshot.players[player_index];
+            let other_me = my_player.filter(|me| me.id != player.id);
+            let present = [
+                other_me.is_some_and(|me| me.alliance_requests.contains(&player.id)),
+                other_me.is_some_and(|me| me.alliances.contains(&player.id)),
+                player.traitor,
+                player.disconnected,
+            ];
+            self.badge_animations.entry(player.id).or_default().observe(
+                present,
+                now,
+                reduced_motion,
+            );
+        }
+    }
+
     fn prepare_emote_texts(&mut self, text: &TextRenderer, dev: &DevConfig) {
         let style_key = nameplate_metrics_style_key(dev);
         if self.emote_text_style_key != Some(style_key) {
@@ -435,6 +577,13 @@ pub(super) fn render_nameplates(
     reduced_motion: bool,
 ) {
     let sf = if sf.is_finite() { sf.max(0.01) } else { 1.0 };
+    if system.order_my_id.is_some_and(|previous| previous != my_id)
+        || system
+            .sample_tick
+            .is_some_and(|previous| snapshot.tick < previous)
+    {
+        system.badge_animations.clear();
+    }
     system.observe_emotes(
         snapshot,
         (sim.config.tick_rate_ms / 1000.0).max(0.001),
@@ -444,6 +593,7 @@ pub(super) fn render_nameplates(
     system.prepare_emote_texts(text, dev);
     system.tutorial_target_hit_bounds = None;
     sample_nameplates(text, snapshot, sim, system, dev, sf, my_id, now);
+    system.observe_status_badges(snapshot, my_id, now, reduced_motion);
 
     let my_player = snapshot.players.iter().find(|player| player.id == my_id);
     let mut full_labels_drawn = 0usize;
@@ -457,7 +607,12 @@ pub(super) fn render_nameplates(
     let emote_fraction = system.emote_tick_at.map_or(0.0, |at| {
         now.duration_since(at).as_secs_f32().min(tick_secs)
     });
-    let (order, visuals, frame_plans) = (&system.order, &system.visuals, &mut system.frame_plans);
+    let (order, visuals, frame_plans, badge_animations) = (
+        &system.order,
+        &system.visuals,
+        &mut system.frame_plans,
+        &mut system.badge_animations,
+    );
     frame_plans.clear();
     for &player_index in order.iter() {
         let player = &snapshot.players[player_index];
@@ -615,7 +770,10 @@ pub(super) fn render_nameplates(
             style,
             dev,
             campaign_avatar_slots,
+            badge_animations.entry(player.id).or_default(),
             sf,
+            now,
+            reduced_motion,
         );
         let tutorial_hit_bounds = (tutorial_target_player == Some(player.id)).then(|| {
             let [half_width, half_height] = layout_bounds.extents_about(center);
@@ -758,7 +916,9 @@ fn sample_nameplates(
 
     let Some(engine) = sim.engine.as_ref() else {
         system.order.clear();
+        system.active_ids.clear();
         system.visuals.clear();
+        system.badge_animations.clear();
         system.land_cache = NameplateLandCache::default();
         return;
     };
@@ -771,7 +931,9 @@ fn sample_nameplates(
         && !system.land_cache.rebuild(&engine.state.map, snapshot.tick)
     {
         system.order.clear();
+        system.active_ids.clear();
         system.visuals.clear();
+        system.badge_animations.clear();
         return;
     }
     let animate_local_spawn = if let Some((tick, x, y)) = local_spawn {
@@ -1393,7 +1555,10 @@ fn prepare_full_nameplate(
     style: NameplateStyle,
     dev: &DevConfig,
     campaign_avatar_slots: &std::collections::HashMap<String, usize>,
+    badge_animations: &mut PlayerStatusBadgeAnimations,
     sf: f32,
+    now: Instant,
+    reduced_motion: bool,
 ) -> FullNameplate {
     let layout = layout.scaled_about(center, fit_scale);
     let font_scale = font_size_scale(dev.font_size_scale);
@@ -1411,7 +1576,7 @@ fn prepare_full_nameplate(
     let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]).scaled(fit_scale);
     let avatar = (layout.avatar_radius() > 0.0)
         .then(|| prepare_avatar(text, player, campaign_avatar_slots, layout, sf));
-    let (badges, badge_count) = prepare_badges(layout, sf);
+    let (badges, badge_count) = prepare_badges(layout, sf, badge_animations, now, reduced_motion);
     let name = dev.vfx_nameplate_names.then_some(TextPlan {
         position: {
             let anchor = layout.name_anchor(center);
@@ -1562,18 +1727,95 @@ fn apply_emote_avatar_motion(mut avatar: AvatarPlan, motion: EmoteMotion) -> Ava
 fn prepare_badges(
     layout: NameplateLayout,
     sf: f32,
-) -> ([Option<BadgePlan>; NAMEPLATE_MAX_BADGES], usize) {
-    (
-        (*layout.badges()).map(|badge| {
-            badge.map(|badge| BadgePlan {
-                kind: badge.kind(),
-                center: [badge.center().0[0] * sf, badge.center().0[1] * sf],
-                diameter: badge.diameter() * sf,
-                tint: badge.tint(),
-            })
-        }),
-        layout.badge_count(),
-    )
+    animations: &mut PlayerStatusBadgeAnimations,
+    now: Instant,
+    reduced_motion: bool,
+) -> ([Option<BadgePlan>; NAMEPLATE_RENDER_BADGE_CAPACITY], usize) {
+    let mut plans = [None; NAMEPLATE_RENDER_BADGE_CAPACITY];
+    if layout.avatar_radius() <= 0.0 {
+        return (plans, 0);
+    }
+    let avatar_center = layout.avatar_center().0;
+    let mut count = 0;
+    for badge in layout.badges().iter().flatten() {
+        let kind = badge.kind();
+        let mut diameter = badge.diameter();
+        let mut tint = badge.tint();
+        if let Some(index) = status_badge_index(kind) {
+            let visual = &mut animations.badges[index];
+            visual.geometry = Some(BadgeGeometry {
+                center_from_avatar: [
+                    badge.center().0[0] - avatar_center[0],
+                    badge.center().0[1] - avatar_center[1],
+                ],
+                diameter,
+                tint,
+            });
+            if let Some(animation) = visual.animation {
+                let (scale, alpha) = animation.values(now, reduced_motion);
+                diameter *= scale;
+                tint[3] *= alpha;
+            }
+        }
+        plans[count] = Some(BadgePlan {
+            kind,
+            center: [badge.center().0[0] * sf, badge.center().0[1] * sf],
+            diameter: diameter * sf,
+            tint,
+        });
+        count += 1;
+    }
+
+    for index in 0..STATUS_BADGE_COUNT {
+        let visual = animations.badges[index];
+        if visual.present {
+            continue;
+        }
+        let (Some(animation), Some(geometry)) = (visual.animation, visual.geometry) else {
+            continue;
+        };
+        let (scale, alpha) = animation.values(now, reduced_motion);
+        if alpha <= 0.0 {
+            continue;
+        }
+        let kind = status_badge_kind(index);
+        plans[count] = Some(BadgePlan {
+            kind,
+            center: [
+                (avatar_center[0] + geometry.center_from_avatar[0]) * sf,
+                (avatar_center[1] + geometry.center_from_avatar[1]) * sf,
+            ],
+            diameter: geometry.diameter * sf * scale,
+            tint: [
+                geometry.tint[0],
+                geometry.tint[1],
+                geometry.tint[2],
+                geometry.tint[3] * alpha,
+            ],
+        });
+        count += 1;
+    }
+    (plans, count)
+}
+
+fn status_badge_index(kind: BadgeKind) -> Option<usize> {
+    match kind {
+        BadgeKind::Request => Some(0),
+        BadgeKind::Allied => Some(1),
+        BadgeKind::Traitor => Some(2),
+        BadgeKind::Disconnected => Some(3),
+        BadgeKind::Rank1 | BadgeKind::Rank2 | BadgeKind::Rank3 | BadgeKind::Star => None,
+    }
+}
+
+fn status_badge_kind(index: usize) -> BadgeKind {
+    match index {
+        0 => BadgeKind::Request,
+        1 => BadgeKind::Allied,
+        2 => BadgeKind::Traitor,
+        3 => BadgeKind::Disconnected,
+        _ => unreachable!("status badge index is bounded by STATUS_BADGE_COUNT"),
+    }
 }
 
 fn paint_prepared_nameplate(
@@ -1627,6 +1869,183 @@ fn paint_prepared_nameplate(
         text.instance_count().saturating_sub(before)
             <= plan.instance_count + plan.avatar.map_or(0, AvatarPlan::transition_instance_count)
     );
+}
+
+#[cfg(test)]
+mod status_badge_tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    fn snapshot(player_ids: &[u16]) -> SimSnapshot {
+        let config = sow_core::game_config::GameConfig::default();
+        let mut state = sow_core::game::GameState::new(7, 4, 4, config.clone());
+        state.phase = sow_core::game::GamePhase::Playing;
+        state.tick = 1;
+        for &id in player_ids {
+            let mut player =
+                sow_core::player::Player::new_human(id, format!("Player {id}"), [1.0; 3], &config);
+            player.has_spawned = true;
+            state.register_player(player);
+        }
+        let mut engine = sow_core::engine::SowEngine::new(
+            state,
+            sow_core::water_components::WaterComponents::default(),
+        );
+        engine.build_snapshot()
+    }
+
+    #[wasm_bindgen_test]
+    fn initial_badges_seed_without_animation() {
+        let now = Instant::now();
+        let mut player = PlayerStatusBadgeAnimations::default();
+        player.observe([true, false, true, false], now, false);
+
+        assert!(player.badges[0].present);
+        assert!(player.badges[2].present);
+        assert!(player.badges[0].animation.is_none());
+        assert!(player.badges[2].animation.is_none());
+    }
+
+    #[wasm_bindgen_test]
+    fn entry_bounces_and_exit_bursts_then_fades() {
+        let now = Instant::now();
+        let mut player = PlayerStatusBadgeAnimations::default();
+        player.observe([false; STATUS_BADGE_COUNT], now, false);
+        let enter_started = now + Duration::from_millis(10);
+        player.observe([true, false, false, false], enter_started, false);
+        let enter = player.badges[0].animation.unwrap();
+
+        assert_eq!(enter.values(enter_started, false), (0.0, 0.0));
+        let entering = enter.values(enter_started + Duration::from_millis(125), false);
+        assert!(entering.0 > 1.0, "entry should overshoot before settling");
+        assert!((0.0..1.0).contains(&entering.1));
+        assert_eq!(
+            enter.values(enter_started + Duration::from_millis(250), false),
+            (1.0, 1.0)
+        );
+
+        let exit_started = enter_started + Duration::from_millis(250);
+        player.observe([false; STATUS_BADGE_COUNT], exit_started, false);
+        let exit = player.badges[0].animation.unwrap();
+        assert_eq!(exit.values(exit_started, false), (1.0, 1.0));
+        let exiting = exit.values(exit_started + Duration::from_millis(175), false);
+        assert!(exiting.0 > 1.0, "exit should burst outward");
+        assert!(exiting.1 < 1.0, "exit should fade while expanding");
+        assert_eq!(
+            exit.values(exit_started + Duration::from_millis(350), false),
+            (STATUS_BADGE_EXIT_SCALE, 0.0)
+        );
+        player.observe(
+            [false; STATUS_BADGE_COUNT],
+            exit_started + Duration::from_millis(350),
+            false,
+        );
+        assert!(player.badges[0].animation.is_none());
+        assert!(player.badges[0].geometry.is_none());
+    }
+
+    #[wasm_bindgen_test]
+    fn reentry_continues_smoothly_and_reduced_motion_only_fades() {
+        let now = Instant::now();
+        let mut player = PlayerStatusBadgeAnimations::default();
+        player.observe([false; STATUS_BADGE_COUNT], now, false);
+        player.observe([true, false, false, false], now, false);
+        player.observe(
+            [false; STATUS_BADGE_COUNT],
+            now + Duration::from_millis(50),
+            false,
+        );
+        let exiting = player.badges[0].animation.unwrap();
+        let at_reentry = now + Duration::from_millis(120);
+        let visible_before_reentry = exiting.values(at_reentry, false);
+
+        player.observe([true, false, false, false], at_reentry, false);
+        let reentering = player.badges[0].animation.unwrap();
+        assert_eq!(reentering.values(at_reentry, false), visible_before_reentry);
+
+        let reduced = reentering.values(at_reentry + Duration::from_millis(100), true);
+        assert_eq!(reduced.0, 1.0);
+        assert!((0.0..1.0).contains(&reduced.1));
+    }
+
+    #[wasm_bindgen_test]
+    fn replacing_a_badge_exits_the_old_one_while_the_new_one_enters() {
+        let now = Instant::now();
+        let mut player = PlayerStatusBadgeAnimations::default();
+        player.observe([false; STATUS_BADGE_COUNT], now, false);
+        let request_started = now + Duration::from_millis(10);
+        player.observe([true, false, false, false], request_started, false);
+
+        let replaced_at = request_started + Duration::from_millis(80);
+        let outgoing_before = player.badges[0]
+            .animation
+            .unwrap()
+            .values(replaced_at, false);
+        player.observe([false, true, false, false], replaced_at, false);
+
+        let outgoing = player.badges[0].animation.unwrap();
+        let incoming = player.badges[1].animation.unwrap();
+        assert_eq!((outgoing.from_scale, outgoing.from_alpha), outgoing_before);
+        assert_eq!(incoming.values(replaced_at, false), (0.0, 0.0));
+        assert_eq!(outgoing.duration_secs, STATUS_BADGE_EXIT_SECS);
+        assert_eq!(incoming.duration_secs, STATUS_BADGE_ENTER_SECS);
+    }
+
+    #[wasm_bindgen_test]
+    fn badge_values_depend_on_elapsed_time_not_sample_count() {
+        let started_at = Instant::now();
+        let animation = BadgeAnimation {
+            started_at,
+            duration_secs: STATUS_BADGE_ENTER_SECS,
+            from_scale: 0.0,
+            from_alpha: 0.0,
+            to_scale: 1.0,
+            to_alpha: 1.0,
+        };
+        let sample_at = started_at + Duration::from_millis(100);
+        let expected = animation.values(sample_at, false);
+
+        for frame in 1..=100 {
+            let _ = animation.values(started_at + Duration::from_millis(frame), false);
+        }
+
+        assert_eq!(animation.values(sample_at, false), expected);
+    }
+
+    #[wasm_bindgen_test]
+    fn departed_players_and_match_reset_release_badge_state() {
+        let now = Instant::now();
+        let mut system = NameplateSystem::default();
+        system
+            .badge_animations
+            .insert(1, PlayerStatusBadgeAnimations::default());
+        system
+            .badge_animations
+            .insert(2, PlayerStatusBadgeAnimations::default());
+        system.active_ids.insert(1);
+        let snapshot = snapshot(&[1, 2]);
+        system.order.push(
+            snapshot
+                .players
+                .iter()
+                .position(|player| player.id == 1)
+                .unwrap(),
+        );
+
+        system.observe_status_badges(&snapshot, 1, now, false);
+        assert!(system.badge_animations.contains_key(&1));
+        assert!(!system.badge_animations.contains_key(&2));
+
+        system.reset();
+        assert!(system.badge_animations.is_empty());
+    }
+
+    #[wasm_bindgen_test]
+    fn draw_capacity_covers_six_current_and_four_outgoing_badges() {
+        assert_eq!(NAMEPLATE_MAX_BADGES, 6);
+        assert_eq!(STATUS_BADGE_COUNT, 4);
+        assert_eq!(NAMEPLATE_RENDER_BADGE_CAPACITY, 10);
+    }
 }
 
 pub(crate) fn paint_prepared_avatar(text: &mut TextRenderer, avatar: AvatarPlan, alpha: f32) {

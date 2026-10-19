@@ -11,6 +11,7 @@ const licenseJestSource = fs.readFileSync(path.join(shell, "main_menu.jest.js"),
 const licenseMenuLayout = fs.readFileSync(path.join(shell, "main_menu.layout.css"), "utf8");
 const landingHtml = fs.readFileSync(path.join(shell, "../../sow-web/site/index.html"), "utf8");
 const siteDistSource = fs.readFileSync(path.join(shell, "../../sow-dist/src/main.rs"), "utf8");
+const readme = fs.readFileSync(path.join(shell, "../../README.md"), "utf8");
 const siteHeader = fs.readFileSync(path.join(shell, "../../sow-web/site/site-header.html"), "utf8");
 const siteChrome = fs.readFileSync(path.join(shell, "../../sow-web/site/site-chrome.js"), "utf8");
 const gameControlsCss = fs.readFileSync(path.join(shell, "sow-controls.css"), "utf8");
@@ -22,28 +23,30 @@ const siteFooterPages = ["support", "privacy", "terms", "cookies"].map((page) =>
 const siteRedirectConfig = fs.readFileSync(path.join(shell, "../../sow-dist/deploy/freebsd/conf.d/shadowsofwar.io.conf"), "utf8");
 const indexTemplate = fs.readFileSync(path.join(shell, "index.html.template"), "utf8");
 
-test("public landing keeps the video hero, interactive leader roster, community links, and FAQ", () => {
-    assert.match(landingHtml, /<section class="hero section-rule">[\s\S]*class="hero-video"[\s\S]*class="hero-copy"[\s\S]*href="\/play\/"[\s\S]*href="#media"[\s\S]*<\/section>/);
-    assert.doesNotMatch(landingHtml, /hero-stage|data-leader-rail/);
+test("public landing builds heroes, maps and videos from game data at publish time", () => {
+    assert.match(landingHtml, /<section class="hero" id="top">[\s\S]*<!-- SOW_SITE_HERO_MEDIA -->[\s\S]*href="\/play\/"[\s\S]*href="#game"[\s\S]*<\/section>/);
+    for (const marker of ["SOW_SITE_HERO_MEDIA", "SOW_SITE_LEADER_SHOWCASE", "SOW_SITE_LEADERS", "SOW_SITE_MAPS", "SOW_SITE_TRAILER"]) {
+        assert.equal(landingHtml.split(`<!-- ${marker} -->`).length, 2, `${marker} must appear once`);
+        assert.ok(siteDistSource.includes(`"<!-- ${marker} -->"`), `sow-dist does not fill ${marker}`);
+    }
+    assert.doesNotMatch(landingHtml, /data-leader-id|1 of 12|twelve/i, "heroes come from the catalog and no count is written by hand");
+    assert.match(siteDistSource, /fn landing_leaders\([\s\S]*?sow_core::player::Leader::all\(\)/);
+    assert.match(siteDistSource, /fn landing_maps\([\s\S]*?multiplayer_frequency > 0/);
+    for (const shot of ["step-expand", "step-build", "step-war"]) {
+        assert.ok(landingHtml.includes(`/assets/site/media/${shot}.webp`), `landing does not show ${shot}`);
+        assert.match(siteDistSource, new RegExp(`\\(\\s*"${shot}",\\s*\\(`), `${shot} has no provisional art`);
+    }
     assert.match(siteApp, /new IntersectionObserver\(/);
     assert.match(siteApp, /document\.visibilityState === 'hidden' \|\| !heroVisible/);
-    assert.match(siteApp, /const cards = \$\$\('\.leader-card\[data-leader-id\]'\)/);
-    assert.match(siteApp, /const leaders = cards\.map/);
+    assert.match(siteApp, /const cards = \$\$\('\.roster-card\[data-leader-id\]'\)/);
+    assert.match(siteApp, /element\.setAttribute\('data-i18n', textKey\(leader, field\)\)/);
     assert.match(landingHtml, /id="faq"[\s\S]*class="faq-list"/);
     const updates = landingHtml.slice(landingHtml.indexOf('<div class="footer-updates">'), landingHtml.indexOf('<div class="footer-top">'));
     assert.match(updates, /href="https:\/\/discord\.gg\//);
     assert.match(updates, /href="https:\/\/t\.me\//);
     assert.doesNotMatch(updates, /disabled|type="email"/);
-    assert.match(siteCss, /\.hero-grid[^\n]*760px/);
-    assert.match(siteCss, /\.faq-list \{ display: grid; grid-template-columns: 1fr;/);
-});
-
-
-test("landing featured leader stays horizontal on mobile while gallery cards keep mobile art", () => {
-    assert.match(landingHtml, /<div class="detail-image"><picture>\s*<img data-detail-image src="\/assets\/shell\/leaders\/caesar_desktop\.webp"/);
-    assert.doesNotMatch(landingHtml, /data-detail-mobile/);
-    assert.match(siteApp, /detailImage\.src = asset\(leader\)/);
-    assert.match(landingHtml, /<picture><source media="\(max-width: 700px\)" srcset="\/assets\/shell\/leaders\/caesar_mobile\.webp">/);
+    assert.match(siteCss, /@supports \(animation-timeline: scroll\(\)\) \{\s*@media \(prefers-reduced-motion: no-preference\)/);
+    assert.doesNotMatch(siteCss, /gameplay-card|leader-card|proof-grid|platform-card/);
 });
 
 
@@ -110,7 +113,10 @@ test("landing alpha badges link to the iOS and Android tests in every locale", (
     }
     const playMark = fs.readFileSync(path.join(siteMedia, "google-play-badge.svg"), "utf8");
     for (const color of ["#4285F4", "#34A853", "#FBBC04", "#EA4335"]) assert.ok(playMark.includes(color), `Google Play mark is missing ${color}`);
-    assert.match(siteDistSource, /copy_dir\(&paths\.assets_site\.join\("media"\), &assets\.join\("site\/media"\)\)/);
+    assert.match(siteDistSource, /for badge in SITE_BADGES \{\s*publish\(&media\.join\(badge\), &format!\("site\/media\/\{badge\}"\), None\)\?/);
+    for (const [, asset] of readme.matchAll(/assets\/site\/media\/([^\s)]+)/g)) {
+        assert.ok(siteDistSource.includes(`"${asset}"`), `README media is not accounted for by the asset pipeline: ${asset}`);
+    }
     assert.match(siteCss, /\.hero-alpha-links \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
     assert.match(siteCss, /\.hero-alpha-links \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); gap: 6\.5px; max-width: 299px; \}/);
     assert.match(siteCss, /\.hero-alpha-badge \{ display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 46px;/);

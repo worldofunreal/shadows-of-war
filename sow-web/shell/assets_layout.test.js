@@ -45,11 +45,24 @@ test("every art slot the game draws has its file", () => {
     for (const name of badges.cells) {
         assert.ok(["png", "webp"].some((ext) => fs.existsSync(path.join(art, "icons", `${name}.${ext}`))), `missing assets/art/icons/${name}.png`);
     }
-    const slots = new Set(["portrait", "expressions", "scene-desktop", "scene-mobile"]);
-    for (const leader of fs.readdirSync(path.join(art, "leaders"))) {
-        for (const file of fs.readdirSync(path.join(art, "leaders", leader))) {
-            assert.ok(slots.has(path.parse(file).name), `unknown leader art ${leader}/${file}`);
+    // One file per avatar name, in exactly one folder; hero faces are <id>_1 .. <id>_4.
+    const avatarFolders = ["heroes", "nations", "tribes"];
+    const avatarNames = new Map();
+    for (const folder of avatarFolders) {
+        for (const file of fs.readdirSync(path.join(art, "avatars", folder))) {
+            const name = path.parse(file).name;
+            assert.ok(path.extname(file) === ".webp" && /^[a-z][a-z0-9_]*$/.test(name), `avatars/${folder}/${file} must be <name>.webp`);
+            assert.ok(!avatarNames.has(name), `${name} is in two avatar folders`);
+            avatarNames.set(name, folder);
         }
+    }
+    assert.ok(fs.existsSync(path.join(art, "avatars/default.webp")), "avatars/default.webp is the face of a player without a portrait");
+    const catalog = JSON.parse(fs.readFileSync(path.join(assets, "geo_entities.json"), "utf8")).entities;
+    for (const entity of catalog) {
+        if (entity.avatar) assert.ok(avatarNames.has(entity.avatar), `${entity.id} needs avatars/*/${entity.avatar}.webp`);
+    }
+    for (const file of fs.readdirSync(path.join(art, "heroes"))) {
+        assert.match(path.parse(file).name, /^[a-z][a-z0-9_]*_(desktop|mobile)$/, `unknown hero scene heroes/${file}`);
     }
 });
 
@@ -98,8 +111,9 @@ test("every playable hero is complete: ability, art and texts in every language"
     for (const hero of heroes) {
         const entry = catalog.find((entity) => entity.id === hero);
         assert.ok(entry.hero.ability && entry.hero.name, `${hero} needs a catalog name and ability`);
-        for (const slot of ["portrait", "expressions", "scene-desktop", "scene-mobile"]) {
-            assert.ok(fs.existsSync(path.join(art, "leaders", hero, slot + ".webp")), `${hero} needs ${slot}`);
+        const heroFiles = [`avatars/heroes/${hero}.webp`, ...[1, 2, 3, 4].map((n) => `avatars/heroes/${hero}_${n}.webp`), `heroes/${hero}_desktop.webp`, `heroes/${hero}_mobile.webp`];
+        for (const file of heroFiles) {
+            assert.ok(fs.existsSync(path.join(art, file)), `${hero} needs assets/art/${file}`);
         }
         for (const locale of locales) {
             const strings = fs.readFileSync(path.join(root, "sow-i18n/strings", locale, "web.toml"), "utf8");
