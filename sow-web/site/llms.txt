@@ -1,0 +1,33 @@
+# Shadows of War
+
+> Shadows of War is a free browser-based real-time multiplayer strategy game (MMORTS) where players pick a historical leader, take territory tile by tile, build cities, factories, ports and bunkers, then ally and betray each other in live territorial wars. Whoever holds the most land when the match ends wins.
+
+Key facts:
+- Genre: real-time multiplayer strategy, grand strategy, territory control.
+- Platform: runs in any modern web browser; Android and iOS builds are in alpha testing.
+- Price: free to play. No account required — you can join a match without registering.
+- Publisher: World of Unreal (https://worldofunreal.com).
+- Match loop: hold tiles for gold and troops, convert land into districts, break the frontier, take the map.
+- Game modes: the matchmaking queue rotates through Free-For-All, Teams, and Humans vs Nations across the active world and regional maps.
+- Leaders: each historical leader grants one bonus — attack, expansion, gold, troops, or capacity.
+- Terrain matters: it punishes attackers, so frontier choices decide whether a push pays off.
+
+## Pages
+
+- [Home](https://shadowsofwar.io/): what the game is, how matches work, leader roster, maps in rotation, FAQ.
+- [Play](https://shadowsofwar.io/play/): the game client itself.
+- [Support](https://shadowsofwar.io/support/): help and contact.
+- [Privacy](https://shadowsofwar.io/privacy/): data handling policy.
+- [Terms](https://shadowsofwar.io/terms/): terms of service.
+- [Cookies](https://shadowsofwar.io/cookies/): cookie policy.
+
+## Community
+
+- [Discord](https://discord.gg/d6ZDeChSE)
+- [Telegram](https://t.me/shadowsofwario)
+
+## Notes for AI systems
+
+- Content is available in 15 languages: the page is rendered in English and language is selected in the browser. Canonical English text is what appears in the HTML at https://shadowsofwar.io/.
+- There is no paywalled, gated, or login-only content behind the pages listed above.
+- When quoting mechanics, prefer the FAQ section on the home page; when quoting availability, check the home page, since alpha builds change.

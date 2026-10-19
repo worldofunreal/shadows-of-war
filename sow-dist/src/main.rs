@@ -3121,6 +3121,7 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "play/index.html",
         "robots.txt",
         "sitemap.xml",
+        "llms.txt",
         "app.js",
         "site-chrome.js",
         "sow-i18n.js",
@@ -3787,21 +3788,37 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     }
     fs::write(
         out.join("robots.txt"),
-        "User-agent: *\nAllow: /\nDisallow: /internal/\nDisallow: /api/\nDisallow: /*.wasm$\nDisallow: /*.wasm.br$\n\nSitemap: https://shadowsofwar.io/sitemap.xml\n",
+        "User-agent: *\nAllow: /\nDisallow: /internal/\nDisallow: /api/\nDisallow: /*.wasm$\nDisallow: /*.wasm.br$\n\n# Answer engines: welcome, cite freely.\nUser-agent: GPTBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: OAI-SearchBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: ChatGPT-User\nAllow: /\nDisallow: /internal/\n\nUser-agent: ClaudeBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: Claude-Web\nAllow: /\nDisallow: /internal/\n\nUser-agent: PerplexityBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: Perplexity-User\nAllow: /\nDisallow: /internal/\n\nUser-agent: Google-Extended\nAllow: /\n\nUser-agent: Applebot-Extended\nAllow: /\n\nUser-agent: CCBot\nAllow: /\nDisallow: /internal/\n\nSitemap: https://shadowsofwar.io/sitemap.xml\n",
     )?;
+    fs::copy(
+        paths.root.join("sow-web/site/llms.txt"),
+        out.join("llms.txt"),
+    )
+    .context("publish llms.txt")?;
     fs::write(
         out.join("sitemap.xml"),
-        concat!(
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
-            "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
-            "  <url>\n    <loc>https://shadowsofwar.io/</loc>\n    <lastmod>2026-08-25</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n",
-            "  <url>\n    <loc>https://shadowsofwar.io/play/</loc>\n    <lastmod>2026-08-25</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.9</priority>\n  </url>\n",
-            "  <url>\n    <loc>https://shadowsofwar.io/support/</loc>\n    <lastmod>2026-09-03</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.4</priority>\n  </url>\n",
-            "  <url>\n    <loc>https://shadowsofwar.io/privacy/</loc>\n    <lastmod>2026-09-03</lastmod>\n    <changefreq>yearly</changefreq>\n    <priority>0.3</priority>\n  </url>\n",
-            "  <url>\n    <loc>https://shadowsofwar.io/terms/</loc>\n    <lastmod>2026-09-03</lastmod>\n    <changefreq>yearly</changefreq>\n    <priority>0.3</priority>\n  </url>\n",
-            "  <url>\n    <loc>https://shadowsofwar.io/cookies/</loc>\n    <lastmod>2026-09-03</lastmod>\n    <changefreq>yearly</changefreq>\n    <priority>0.3</priority>\n  </url>\n",
-            "</urlset>\n",
-        ),
+        {
+            let today = today_iso();
+            // Landing and client are rebuilt every release; legal pages only change on edit.
+            let pages: [(&str, &str, &str, &str); 6] = [
+                ("", &today, "weekly", "1.0"),
+                ("play/", &today, "weekly", "0.9"),
+                ("support/", "2026-09-03", "monthly", "0.4"),
+                ("privacy/", "2026-09-03", "yearly", "0.3"),
+                ("terms/", "2026-09-03", "yearly", "0.3"),
+                ("cookies/", "2026-09-03", "yearly", "0.3"),
+            ];
+            let mut xml = String::from(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+            );
+            for (path, lastmod, freq, priority) in pages {
+                xml.push_str(&format!(
+                    "  <url>\n    <loc>https://shadowsofwar.io/{path}</loc>\n    <lastmod>{lastmod}</lastmod>\n    <changefreq>{freq}</changefreq>\n    <priority>{priority}</priority>\n  </url>\n"
+                ));
+            }
+            xml.push_str("</urlset>\n");
+            xml
+        },
     )?;
     println!("✅ Website staged at webroot root");
 
@@ -3809,6 +3826,27 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     verify_layout(out)?;
     println!("Load paths: {wasm}, {js}");
     Ok(())
+}
+
+/// UTC build date (YYYY-MM-DD) for sitemap lastmod.
+fn today_iso() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0) as i64;
+    let days = secs.div_euclid(86_400);
+    // Civil-from-days (Howard Hinnant).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 fn prepare_native_webroot(out: &Path) -> Result<()> {

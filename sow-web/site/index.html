@@ -34,22 +34,75 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "VideoGame",
-    "name": "Shadows of War",
-    "description": "Pick a historical leader, take land, build cities and ports, ally and betray in live territory wars.",
-    "genre": ["Strategy", "MMORTS", "Real-Time Strategy", "Grand Strategy"],
-    "gamePlatform": ["Web Browser", "Android"],
-    "operatingSystem": "Any",
-    "applicationCategory": "Game",
-    "playMode": "MultiPlayer",
-    "url": "https://shadowsofwar.io/",
-    "image": "https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "publisher": {
-      "@type": "Organization",
-      "name": "World of Unreal",
-      "url": "https://worldofunreal.com"
-    }
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://shadowsofwar.io/#organization",
+        "name": "World of Unreal",
+        "url": "https://worldofunreal.com",
+        "sameAs": [
+          "https://discord.gg/d6ZDeChSE",
+          "https://t.me/shadowsofwario"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://shadowsofwar.io/#website",
+        "url": "https://shadowsofwar.io/",
+        "name": "Shadows of War",
+        "inLanguage": "en",
+        "publisher": { "@id": "https://shadowsofwar.io/#organization" },
+        "about": { "@id": "https://shadowsofwar.io/#game" }
+      },
+      {
+        "@type": "VideoGame",
+        "@id": "https://shadowsofwar.io/#game",
+        "name": "Shadows of War",
+        "description": "Free browser-based real-time multiplayer strategy game. Pick a historical leader, take land tile by tile, build cities, factories, ports and bunkers, then ally and betray in live territory wars.",
+        "genre": ["Strategy", "MMORTS", "Real-Time Strategy", "Grand Strategy"],
+        "gamePlatform": ["Web Browser", "Android", "iOS"],
+        "operatingSystem": "Any",
+        "applicationCategory": "Game",
+        "playMode": "MultiPlayer",
+        "url": "https://shadowsofwar.io/",
+        "image": "https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp",
+        "inLanguage": ["ar", "de", "en", "es", "fil", "fr", "id", "it", "ja", "ko", "pt-BR", "ru", "tr", "vi", "zh-CN"],
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "publisher": { "@id": "https://shadowsofwar.io/#organization" }
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://shadowsofwar.io/#faq",
+        "isPartOf": { "@id": "https://shadowsofwar.io/#website" },
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How do I start a match?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Open the game, choose a leader, and join an active lobby." }
+          },
+          {
+            "@type": "Question",
+            "name": "What happens during a match?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Take land, build cities, factories, ports and bunkers, ally, attack, and hold the map." }
+          },
+          {
+            "@type": "Question",
+            "name": "Which game modes are available?",
+            "acceptedAnswer": { "@type": "Answer", "text": "The matchmaking queue rotates through Free-For-All, Teams, and Humans vs Nations on active maps." }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need an account?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. You can join a match without registering." }
+          },
+          {
+            "@type": "Question",
+            "name": "What do leaders change?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Each gives one bonus: attack, expansion, gold, troops, or capacity." }
+          }
+        ]
+      }
+    ]
   }
   </script>
 </head>
