@@ -401,7 +401,7 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
     const operations = [
         { kind: "attack", id: 7, direction: "incoming", player_id: 2, name: "Caesar", troops: 100, avatar: { kind: "portrait", slug: "caesar" }, focus_x: 3, focus_y: 4 },
         { kind: "attack", id: 8, direction: "outgoing", player_id: 0, neutral: true, troops: 200, avatar: { kind: "wilderness" } },
-        { kind: "fleet", id: 9, direction: "outgoing", player_id: 3, name: "Ally", troops: 50, avatar: { kind: "portrait", slug: "tribe_queruscos" } }
+        { kind: "fleet", id: 9, direction: "outgoing", player_id: 3, name: "Ally", troops: 50, avatar: { kind: "portrait", slug: "queruscos" } }
     ];
     const click = button => context.handleHudClick({ target: button });
     const counters = () => calls.filter(call => call.type === "counter_attack");
@@ -633,14 +633,14 @@ test("HUD notifications coalesce, prioritize, reuse both entity avatars, and exp
     assert.ok(cards.every(parts => parts.card.hidden), "expired cards release their visible slots");
 
     add(108, "hud.attack_incoming", 4, "tribe-attack", {}, [
-        { kind: "portrait", slug: "tribe_ndebele" }, { kind: "portrait", slug: "tribe_queruscos" }
+        { kind: "portrait", slug: "ndebele" }, { kind: "portrait", slug: "queruscos" }
     ]);
     const botCard = cards.find(parts => !parts.card.hidden);
     assert.deepEqual(botCard.avatars.map(item => item.emblem.hidden), [true, true]);
     assert.deepEqual(botCard.avatars.map(item => item.image.hidden), [false, false]);
     assert.deepEqual(botCard.avatars.map(item => item.image.src), [
-        "/assets/gameplay/avatars/tribe_ndebele.webp",
-        "/assets/gameplay/avatars/tribe_queruscos.webp"
+        "/assets/gameplay/avatars/ndebele.webp",
+        "/assets/gameplay/avatars/queruscos.webp"
     ]);
     assert.match(botCard.avatars[1].wrapper.className, /--overlap/);
 
@@ -686,11 +686,11 @@ test("HUD notifications coalesce, prioritize, reuse both entity avatars, and exp
     add(114, "hud.alliance_request_sent", 3, "alliance:8", { name: "Caesar" });
     assert.equal(context.activeNotifications[0].entry.id, 113, "a routine event cannot erase an urgent attack");
     assert.equal(timers.length, portraitTimerCount, "ignored events cannot extend the alert");
-    add(115, "hud.betrayal", 4, "betrayal:8", {}, [null, { kind: "portrait", slug: "tribe_ndebele" }]);
+    add(115, "hud.betrayal", 4, "betrayal:8", {}, [null, { kind: "portrait", slug: "ndebele" }]);
     assert.equal(context.activeNotifications[0].entry.id, 115);
     assert.strictEqual(cards.find(parts => !parts.card.hidden), recycledCard, "the next event recycles the same DOM card");
     assert.deepEqual(recycledCard.avatars.map(item => item.wrapper.hidden), [true, false]);
-    assert.equal(recycledCard.avatars[1].image.src, "/assets/gameplay/avatars/tribe_ndebele.webp");
+    assert.equal(recycledCard.avatars[1].image.src, "/assets/gameplay/avatars/ndebele.webp");
 
     now += 5000;
     timers.at(-1).callback();
@@ -774,7 +774,7 @@ test("notification cards render typed avatars, recover failed art, and clear reu
             id: 1, key: "hud.attack_incoming", values: {},
             avatars: [
                 { kind: "portrait", slug: "boudica" },
-                { kind: "portrait", slug: "tribe_ndebele" }
+                { kind: "portrait", slug: "ndebele" }
             ]
         },
         priority: 4
@@ -783,7 +783,7 @@ test("notification cards render typed avatars, recover failed art, and clear reu
     assert.equal(parts.avatars[0].image.src, "/assets/gameplay/avatars/boudica.webp");
     assert.equal(parts.avatars[0].emblem.hidden, true);
     assert.equal(parts.avatars[1].emblem.hidden, true);
-    assert.equal(parts.avatars[1].image.src, "/assets/gameplay/avatars/tribe_ndebele.webp");
+    assert.equal(parts.avatars[1].image.src, "/assets/gameplay/avatars/ndebele.webp");
     assert.match(parts.avatars[1].wrapper.className, /--overlap/);
 
     parts.avatars[0].image.onerror.call(parts.avatars[0].image);

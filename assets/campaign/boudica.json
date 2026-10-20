@@ -35,7 +35,8 @@
       "civ": "Iceni Kingdom",
       "leader": "Boudica",
       "support_interval_seconds": 15,
-      "avatar": "snettisham"
+      "avatar": "snettisham",
+      "can_attack_player": false
     },
     {
       "id": "thetford",

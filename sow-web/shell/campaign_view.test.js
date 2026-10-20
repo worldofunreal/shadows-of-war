@@ -509,9 +509,9 @@ test("cinematic waits for the loader and swaps in hashed WebM+MP4 sources with a
 });
 
 
-test("campaign dialogue starts each new beat at the top of its scroll panel", () => {
-    assert.match(campaignView, /if \(renderKey !== key\) \{\s*renderKey = key;\s*conversation\.scrollTop = 0;\s*scrollContent\.scrollTop = 0;\s*actions\.scrollTop = 0;/);
-    assert.match(storyCss, /\.sow-story__scroll\s*\{[^}]*overflow-y: auto/);
+test("campaign dialogue starts each new beat at the top of its single scroll panel", () => {
+    assert.match(campaignView, /if \(renderKey !== key\) \{\s*renderKey = key;\s*dialog\.scrollTop = 0;/);
+    assert.match(storyCss, /\.sow-story__body\s*\{[^}]*white-space: normal/);
 });
 
 
@@ -541,7 +541,8 @@ test("Boudica spoken cards and contact responses require named existing portrait
     assert.ok(report(missingPortrait).errors.some(issue => issue.field === "speakers" || issue.field === "speaker"));
 
     const missingDynamicRole = structuredClone(definition);
-    delete missingDynamicRole.reactions.find(reaction => reaction.id === "neutral_contact_terms").speaker_role_key;
+    const dynamicReaction = missingDynamicRole.reactions.find(reaction => reaction.id === "contact_stonea");
+    delete dynamicReaction.speaker;
     assert.ok(report(missingDynamicRole).errors.some(issue => issue.field === "reactions.speaker"));
 
     const missingFactionPortrait = structuredClone(definition);
@@ -549,10 +550,16 @@ test("Boudica spoken cards and contact responses require named existing portrait
     assert.ok(report(missingFactionPortrait).errors.some(issue => issue.field === "speaker" && /portrait/.test(issue.message)));
     roster.factions.find(faction => faction.id === "stonea").avatar = "stonea";
 
-    const completion = definition.steps.find(step => step.id === "boudica_complete");
-    assert.equal(completion.type, "end");
-    assert.equal(completion.body_key, undefined);
-    assert.equal(completion.speaker, undefined, "the technical completion card remains unvoiced");
+    for (const id of ["boudica_poison_end", "boudica_end"]) {
+        const completion = definition.steps.find(step => step.id === id);
+        assert.equal(completion.type, "end");
+        assert.equal(completion.presentation, "chapter");
+        assert.ok(completion.body_key);
+        assert.equal(completion.speaker, undefined, "the epilogue is narration without a portrait");
+        const spokenEnding = structuredClone(definition);
+        spokenEnding.steps.find(step => step.id === id).presentation = "dialogue";
+        assert.ok(report(spokenEnding).errors.some(issue => issue.step === id && issue.field === "speaker"));
+    }
 
     assert.match(campaignView, /data:image\/svg\+xml/);
     assert.match(campaignView, /sow_portrait_retry=1/);
@@ -610,6 +617,7 @@ test("campaign view recovers portraits and renders compact objective guidance", 
         querySelectorAll() { return []; }
         replaceChildren(...children) { this.children = children; }
         appendChild(child) { this.children.push(child); return child; }
+        append(...children) { this.children.push(...children); }
         contains(child) { return this.children.includes(child) || [...this.queries.values()].includes(child); }
         getBoundingClientRect() { return { width: 100, height: 40 }; }
         focus() { this.ownerDocument.activeElement = this; }
@@ -772,6 +780,9 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     renderer.render(objectiveModel, { anchor: { x: 220, y: 360 }, gestureLabel: "Expand the frontier" });
     assert.equal(root.querySelector(".sow-story__objective").hidden, false, "normal desktop retains the quest card");
     assert.equal(root.querySelector(".sow-story__gesture-metric").hidden, true, "desktop keeps its existing quest-card progress instead of duplicating it");
+    const defense = { ...objective, id: "defense", trigger: { type: "territory", scope: "total", comparison: "lte", value: 5000 } };
+    renderer.render({ ...objectiveModel, step: defense, line: defense, progress: { current: 0, target: 5000 } }, {});
+    assert.equal(root.querySelector(".sow-story__objective").querySelector(".sow-story__meter").hidden, true, "defense never presents territory loss as a progress goal");
 
     const mapSurface = { closest: () => null };
     const pausedObjective = { ...objectiveModel, paused: true };
@@ -787,6 +798,19 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     assert.equal(mapTapDuringScene.defaultPrevented, true, "dialogue modals continue to block clicks outside the scene");
     assert.equal(mapTapDuringScene.propagationStopped, true, "dialogue modals continue to stop outside propagation");
     assert.equal(continueCalls, 0, "an outside map tap cannot skip a scene");
+    const choice = { id: "pay", label_key: "Feed their families", body_key: "Pay 200 gold. Form an alliance.", gold_cost: 200, gold_available: 300 };
+    const decision = { id: "terms", type: "choice", title_key: "Terms" };
+    renderer.render({ ...pausedObjective, step: decision, line: decision, choices: [choice] }, {});
+    const button = root.querySelector(".sow-story__choices").children[0];
+    const copy = button.children[1];
+    assert.equal(copy.children[1].tagName, "small");
+    assert.equal(copy.children[1].textContent, choice.body_key, "choices display the authored consequence");
+    assert.match(button.getAttribute("aria-label"), /Pay 200 gold\. Form an alliance\./);
+    const ending = { id: "epilogue", type: "end", title_key: "Epilogue", body_key: "The cup was empty.", presentation: "chapter" };
+    renderer.render({ ...pausedObjective, step: ending, line: ending }, {});
+    assert.equal(root.querySelector(".sow-story__portrait").hidden, true);
+    assert.equal(root.querySelector(".sow-story__body").textContent, ending.body_key);
+    assert.equal(root.querySelector("[data-story-continue]").querySelector("span").textContent, "hud.back_to_menu");
     renderer.destroy();
 });
 
@@ -862,21 +886,26 @@ test("campaign dialogue resolves story copy through the shared catalog", () => {
 
 test("mobile chapter dialogue hugs its copy while docked at the bottom", () => {
     const mobileStory = storyCss.slice(storyCss.indexOf("@container (max-width: 640px)"), storyCss.indexOf("@container (max-width: 380px)"));
-    assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__main \{[^}]*flex: 0 1 auto;[^}]*padding-block: 8px/);
+    assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__main \{[^}]*padding-block: 8px 0/);
     assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__conversation \{ padding-block: 0; \}/);
     assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__dialog \{ bottom: var\(--story-safe-bottom\); transform: none; \}/);
     assert.match(storyCss, /\.sow-story\.is-chapter \.sow-story__dialog \{ bottom: 50%; transform: translateY\(50%\)/);
 });
 
 
-test("mobile story dialogs scroll long text and choices while keeping speaker controls reachable", () => {
+test("mobile story dialogs use one scroll area and keep copy attached to choices", () => {
     const mobileStory = storyCss.slice(storyCss.indexOf("@container (max-width: 640px)"), storyCss.indexOf("@container (max-width: 380px)"));
-    assert.match(mobileStory, /\.sow-story__main \{[^}]*flex: 0 1 auto/);
+    assert.match(mobileStory, /\.sow-story__dialog \{[\s\S]*?display: block;[\s\S]*?overflow-y: auto/);
+    assert.match(mobileStory, /\.sow-story__main \{[^}]*display: grid;[^}]*padding: [^;]* 0/);
     assert.match(storyCss, /@container \(max-width: 640px\) \{[\s\S]*?max-height: min\(calc\(100% - var\(--story-safe-top\) - var\(--story-safe-bottom\)\), 60svh\)/);
-    assert.match(storyCss, /#sow-story\[data-compact="true"\] \.sow-story__dialog \{[\s\S]*?max-height: min\(calc\(100% - var\(--story-safe-top\) - var\(--story-safe-bottom\)\), 72svh\)/);
+    assert.match(storyCss, /#sow-story\[data-compact="true"\] \.sow-story__dialog \{[\s\S]*?display: block;[\s\S]*?max-height: min\(calc\(100% - var\(--story-safe-top\) - var\(--story-safe-bottom\)\), 72svh\)[\s\S]*?overflow-y: auto/);
     assert.match(storyCss, /\.sow-story__portrait img \{[^}]*width: 100%; height: 100%;[^}]*object-fit: cover/);
-    assert.match(storyCss, /\.sow-story__scroll\s*\{[^}]*flex: 1 1 auto; min-height: 0; overflow-y: auto/);
-    assert.match(storyCss, /\.sow-story__actions \{[^}]*overflow-y: auto/);
+    assert.match(mobileStory, /\.sow-story__scroll\s*\{[^}]*flex: 0 0 auto; min-height: 0; overflow: visible/);
+    assert.match(mobileStory, /\.sow-story__actions \{[^}]*min-height: 0; overflow: visible; padding: 0 [^;]*; border-top: 0/);
+    assert.match(mobileStory, /\.sow-story__main \{[^}]*padding: [^;]* 0/);
+    assert.match(storyCss, /#sow-story\[data-compact="true"\] \.sow-story__main \{[^}]*display: grid;[^}]*padding: [^;]* 0/);
+    assert.match(storyCss, /#sow-story\[data-compact="true"\] \.sow-story__scroll \{[^}]*overflow: visible/);
+    assert.match(storyCss, /#sow-story\[data-compact="true"\] \.sow-story__actions \{[^}]*min-height: 0; overflow: visible; padding: 0 [^;]*; border-top: 0/);
     assert.match(storyCss, /\.sow-story__choices \{ grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 280px\), 1fr\)\)/);
     assert.match(campaignView, /<div class="sow-story__main"><div class="sow-story__portrait"[\s\S]*?<div class="sow-story__conversation">[\s\S]*?<header class="sow-story__heading"[\s\S]*?data-story-dismiss[\s\S]*?<div class="sow-story__scroll"><h2[\s\S]*?<p class="sow-story__body"[\s\S]*?<\/div><\/div><\/div>'\s*\+\s*'<div class="sow-story__actions"><div class="sow-story__choices"><\/div><footer class="sow-story__footer"[\s\S]*?data-story-continue/);
     assert.match(campaignView, /footer\.hidden = step\.type === "choice"/);
@@ -1010,7 +1039,7 @@ test("campaign scene transitions are brief, shared, and disabled for reduced mot
 });
 
 
-test("Boudica dialogue follows the next mission and source copy exists in English", () => {
+test("Boudica follows the reviewed English script with direct objectives and one epilogue per ending", () => {
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
     const catalogValue = (catalog, key) => {
         const shortKey = key.replace(/^tutorial\./, "");
@@ -1019,23 +1048,53 @@ test("Boudica dialogue follows the next mission and source copy exists in Englis
         return JSON.parse(match[1]);
     };
     const step = id => definition.steps.find(item => item.id === id);
-    assert.equal(step("boudica_outpost_colonia_veterans_scene").next, "boudica_outpost_tax_collectors");
-    assert.equal(step("boudica_outpost_tax_collectors_scene").next, "boudica_outpost_roman_supply_depot");
-    assert.equal(step("boudica_outpost_roman_supply_depot_scene").next, "boudica_trinovantes_contact");
-    assert.match(catalogValue(webCatalogEn, step("boudica_outpost_colonia_veterans_scene").body_key), /tax collectors/i);
-    assert.match(catalogValue(webCatalogEn, step("boudica_outpost_tax_collectors_scene").body_key), /supply depot/i);
-    assert.match(catalogValue(webCatalogEn, step("boudica_outpost_roman_supply_depot_scene").body_key), /Trinovantes/i);
+    assert.equal(step(definition.entry).next, "boudica_attack_roman_outpost");
+    assert.match(catalogValue(webCatalogEn, step(definition.entry).body_key), /^Rome had me flogged\./);
+    assert.equal(step("boudica_outpost_colonia_veterans").next, "boudica_outpost_tax_collectors");
+    assert.equal(step("boudica_outpost_tax_collectors").next, "boudica_outpost_roman_supply_depot");
+    assert.equal(step("boudica_outpost_roman_supply_depot").next, "boudica_trinovantes_contact");
+    assert.equal(definition.speakers.council, undefined);
+    assert.equal(definition.steps.some(item => item.speaker === "council"), false);
+    const endings = definition.steps.filter(item => item.type === "end");
+    assert.equal(endings.length, 2);
+    assert.equal(step("boudica_final_choice").choices.find(choice => choice.id === "poison").next, "boudica_poison_end");
+    assert.equal(step("boudica_last_stand_resist").next, "boudica_end");
+    for (const ending of endings) {
+        assert.equal(ending.speaker, undefined);
+        assert.equal(ending.next, undefined);
+        assert.ok(catalogValue(webCatalogEn, ending.body_key));
+    }
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    for (const choice of step("boudica_final_choice").choices) {
+        const machine = campaign.create(definition, "boudica_final_choice");
+        machine.update({}, {});
+        assert.equal(machine.advance(choice.id, "boudica_final_choice"), true);
+        if (choice.id === "fight") {
+            assert.equal(machine.view().step.id, "boudica_last_stand_resist");
+            machine.update({ eliminated_faction_ids: ["player"] }, {});
+        }
+        assert.equal(machine.view().step.id, choice.id === "poison" ? "boudica_poison_end" : "boudica_end");
+        assert.equal(machine.view().done, false, "the epilogue stays open until the player continues");
+        assert.equal(machine.advance(null, machine.view().step.id), true);
+        assert.equal(machine.view().done, true, "each epilogue completes the episode without another card");
+    }
+    for (const item of [...definition.steps, ...definition.reactions]) {
+        for (const field of ["title_key", "body_key", "hint_key"]) {
+            if (item[field]) assert.ok(catalogValue(webCatalogEn, item[field]));
+        }
+        for (const choice of item.choices || []) {
+            assert.ok(catalogValue(webCatalogEn, choice.label_key));
+            assert.ok(catalogValue(webCatalogEn, choice.body_key));
+        }
+    }
     assert.equal(step("boudica_last_stand").trigger.comparison, "lte");
     assert.equal(step("boudica_last_stand").trigger.value, 5000);
-    assert.match(catalogValue(webCatalogEn, step("boudica_last_stand").hint_key), /5,000/);
-    assert.equal(step("boudica_poison_end").speaker, "council");
-    assert.equal(step("boudica_end").speaker, "council");
-    assert.doesNotMatch(catalogValue(webCatalogEn, step("boudica_poison_end").body_key), /Boudica chooses/i);
+    assert.doesNotMatch(catalogValue(webCatalogEn, step("boudica_last_stand").hint_key), /5,000|until.*territory/i);
     assert.equal(definition.reactions.find(item => item.id === "contact_snettisham").choices[1].relation, "enemy");
     assert.equal(definition.reactions.find(item => item.id === "contact_snettisham").choices[1].gold_cost, 0);
     assert.equal(definition.reactions.find(item => item.id === "contact_thetford").choices[1].relation, "enemy");
     assert.equal(definition.reactions.find(item => item.id === "contact_thetford").choices[1].gold_cost, 0);
-    assert.equal(definition.reactions.find(item => item.id === "neutral_contact_terms").choices[0].gold_cost, 200);
+    assert.equal(definition.reactions.some(item => item.id === "neutral_contact_terms"), false);
 });
 test("a marked campaign decision smoothly focuses its player target once on entry", async () => {
     const commands = [], root = { hidden: true, isConnected: false };
@@ -1391,7 +1450,7 @@ test("campaign tap guides use shared action labels and localized fallback", () =
         .map(step => ({ definition, step })));
     assert.ok(tapSteps.length > 0, "campaigns must contain tap guides to check");
     const categories = new Set(tapSteps.map(({ step }) => campaign.guideAction(step)));
-    assert.deepEqual([...categories].sort(), ["attack", "build", "contact", "expand", "home", "select", "send", "upgrade", "upgrade_progress"].sort());
+    assert.deepEqual([...categories].sort(), ["attack", "build", "expand", "home", "select", "send", "upgrade", "upgrade_progress"].sort());
     assert.equal(campaign.guideAction({ guide: { kind: "world", target: "expand", gesture: "tap" }, trigger: { type: "contact" } }), "expand");
     assert.equal(campaign.guideAction({ guide: { kind: "world", target: "target_action", gesture: "tap" }, trigger: { type: "contact" } }), "contact");
     assert.equal(campaign.guideAction({ guide: { kind: "world", target: "upgrade_building", gesture: "tap" }, trigger: { type: "structure_level" } }), "upgrade_progress");
@@ -1452,7 +1511,8 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
         .map(step => ({ id: step.id, ratio: step.attack_ratio_on_enter }));
     assert.deepEqual(ratioOverrides, [{ id: definition.entry, ratio: 0.25 }]);
     assert.equal(entry.attack_ratio_on_enter, 0.25);
-    assert.equal(intro.next, ratioStepId);
+    assert.equal(intro.next, "boudica_select_city_upgrade");
+    assert.equal(definition.steps.find(step => step.id === "boudica_city_upgrade_wait").next, ratioStepId);
     assert.equal(intro.attack_ratio_on_enter, undefined, "the Ninth intro preserves the 25% tutorial allocation");
     assert.equal(ratioStep.next, strikeDialog.id);
     assert.equal(strikeDialog.type, "scene");
@@ -1486,8 +1546,8 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     const english = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
     assert.match(english, /campaign_boudica_boudica_ninth_set_attack_ratio_title = "Commit the Full Host"/);
     assert.match(english, /campaign_boudica_boudica_ninth_set_attack_ratio_body = "[^"]*100%/);
-    assert.match(english, /campaign_boudica_boudica_ninth_strike_title = "No Escape for the Ninth"/);
-    assert.match(english, /campaign_boudica_boudica_ninth_strike_body = "The Ninth is Rome’s answer to Camulodunum\.[^"]*leave Cerialis no chance to regroup\./);
+    assert.match(english, /campaign_boudica_boudica_ninth_strike_title = "Before the Charge"/);
+    assert.match(english, /campaign_boudica_boudica_ninth_strike_body = "Look at their faces\.[^"]*Make them tell the next legion what they found\./);
     assert.match(campaignView, /anchor\.dimOutside \|\| step\.guide\.kind === "ui"/);
     assert.match(campaignView, /root\.dataset\.guideTarget = "attack_ratio"/);
     assert.doesNotMatch(storyCss, /data-guide-target="attack_ratio"\] \.sow-story__objective/);

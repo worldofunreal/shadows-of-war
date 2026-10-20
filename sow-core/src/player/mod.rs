@@ -408,7 +408,7 @@ mod avatar_identity_tests {
     #[test]
     fn resolves_each_entity_from_its_own_identity_and_falls_back_only_when_missing() {
         let human = player(1, "Player", PlayerType::Human, None);
-        let tribe = player(2, "Mzilikazi", PlayerType::Bot, Some("tribe_ndebele"));
+        let tribe = player(2, "Mzilikazi", PlayerType::Bot, Some("ndebele"));
         let nation = player(3, "Hatshepsut", PlayerType::Nation, None);
         let campaign = player(4, "Tutorial", PlayerType::Bot, Some("boudica_campaign"));
         let missing_campaign = player(5, "Tutorial", PlayerType::Human, Some("null"));
@@ -424,7 +424,7 @@ mod avatar_identity_tests {
         assert_eq!(
             avatar_identity_ref(&players[1]),
             AvatarIdentityRef::Portrait {
-                slug: "tribe_ndebele",
+                slug: "ndebele",
                 leader: None,
             }
         );
@@ -454,7 +454,7 @@ mod avatar_identity_tests {
         assert_eq!(
             avatar_identity_for_player_id(&players, 2),
             AvatarIdentity::Portrait {
-                slug: "tribe_ndebele".into(),
+                slug: "ndebele".into(),
                 leader: None
             }
         );
@@ -481,7 +481,7 @@ mod avatar_identity_tests {
         assert_eq!(
             repeated[0],
             Some(AvatarIdentity::Portrait {
-                slug: "tribe_ndebele".into(),
+                slug: "ndebele".into(),
                 leader: None
             })
         );

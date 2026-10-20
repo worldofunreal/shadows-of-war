@@ -197,7 +197,7 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
         + hud.slice(clickStart, clickEnd), context
     );
     const alliance = { kind: "alliance", requester_id: 2, name: "Caesar", active: true, avatar: { kind: "portrait", slug: "caesar" } };
-    const resources = { kind: "resources", requester_id: 3, name: "Trinovantes", active: true, gold: 1234.9, troops: 56.8, avatar: { kind: "portrait", slug: "tribe_ndebele" } };
+    const resources = { kind: "resources", requester_id: 3, name: "Trinovantes", active: true, gold: 1234.9, troops: 56.8, avatar: { kind: "portrait", slug: "ndebele" } };
     const campaign = { kind: "resources", requester_id: 4, name: "<img onerror=alert(1)>", active: true, gold: 5, troops: 0, avatar: { kind: "portrait", slug: "boudica" } };
     const eliminated = { kind: "resources", requester_id: 5, name: "Defeated", active: false, gold: 10, troops: 10 };
     let requests = [alliance, resources, campaign, eliminated];
@@ -205,7 +205,7 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
     const refs = context.hudRefs, cards = refs.inboxRequests;
     assert.equal(refs.inboxRows.children.length, 4);
     assert.equal(cards["alliance:2"].portrait.src, "/assets/gameplay/avatars/caesar.webp");
-    assert.equal(cards["resources:3"].portrait.src, "/assets/gameplay/avatars/tribe_ndebele.webp");
+    assert.equal(cards["resources:3"].portrait.src, "/assets/gameplay/avatars/ndebele.webp");
     assert.equal(cards["resources:3"].emblem.hidden, true);
     assert.equal(cards["resources:3"].amounts.gold.value.textContent, "1,234");
     assert.equal(cards["resources:3"].amounts.troops.value.textContent, "56");
@@ -689,17 +689,17 @@ test("player dialogs share identities, preserve drafts and focus, and prioritize
     assert.equal(doc.activeElement, canvas);
     update({ transfer });
     assert.equal(context.hudRefs.transferGold.value, "12", "reopening the same target starts a fresh draft");
-    update({ transfer: { ...transfer, target_id: 3, target_name: "Trinovantes", target_avatar: { kind: "portrait", slug: "tribe_ndebele" }, suggested_gold: 7 } });
+    update({ transfer: { ...transfer, target_id: 3, target_name: "Trinovantes", target_avatar: { kind: "portrait", slug: "ndebele" }, suggested_gold: 7 } });
     assert.equal(context.hudRefs.transferGold.value, "7");
-    assert.equal(context.hudRefs.transferIdentity.portrait.src, "/assets/gameplay/avatars/tribe_ndebele.webp");
+    assert.equal(context.hudRefs.transferIdentity.portrait.src, "/assets/gameplay/avatars/ndebele.webp");
     assert.equal(context.hudRefs.transferIdentity.emblem.hidden, true);
     update({ transfer: { ...transfer, target_avatar: { kind: "portrait", slug: "boudica" } } });
     assert.equal(context.hudRefs.transferIdentity.portrait.src, "/assets/gameplay/avatars/boudica.webp");
     update({ transfer: null });
-    const betrayal = { ally_id: 3, ally_name: "Ally".repeat(30), ally_avatar: { kind: "portrait", slug: "tribe_ndebele" } };
+    const betrayal = { ally_id: 3, ally_name: "Ally".repeat(30), ally_avatar: { kind: "portrait", slug: "ndebele" } };
     update({ betrayal });
     const refs = context.hudRefs;
-    assert.equal(refs.betrayalIdentity.portrait.src, "/assets/gameplay/avatars/tribe_ndebele.webp");
+    assert.equal(refs.betrayalIdentity.portrait.src, "/assets/gameplay/avatars/ndebele.webp");
     assert.equal(refs.betrayalIdentity.name.textContent, betrayal.ally_name);
     assert.equal(doc.activeElement, refs.betrayalCancel, "the destructive action is never focused by default");
     const commandCount = calls.length;

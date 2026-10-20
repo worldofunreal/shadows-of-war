@@ -87,43 +87,12 @@
       "outcome": "allied",
       "title_key": "tutorial.campaign_boudica_boudica_trinovantes_offer_title",
       "body_key": "tutorial.campaign_boudica_boudica_trinovantes_offer_body"
-    },
-    {
-      "id": "neutral_contact_terms",
-      "when": {
-        "type": "contact",
-        "relation": "neutral"
-      },
-      "speaker_role_key": "tutorial.campaign_boudica_speaker_clan_envoy",
-      "title_key": "tutorial.campaign_boudica_neutral_contact_terms_title",
-      "body_key": "tutorial.campaign_boudica_neutral_contact_terms_body",
-      "choices": [
-        {
-          "id": "accept",
-          "label_key": "tutorial.campaign_boudica_neutral_terms_accept",
-          "body_key": "tutorial.campaign_boudica_neutral_terms_accept_detail",
-          "relation": "allied",
-          "gold_cost": 200
-        },
-        {
-          "id": "refuse",
-          "label_key": "tutorial.campaign_boudica_neutral_terms_refuse",
-          "body_key": "tutorial.campaign_boudica_neutral_terms_refuse_detail",
-          "relation": "enemy",
-          "gold_cost": 0
-        }
-      ],
-      "after": "boudica_outpost_roman_supply_depot"
     }
   ],
   "speakers": {
     "boudica": {
       "name": "Boudica",
       "avatar": "boudica"
-    },
-    "council": {
-      "name_key": "tutorial.campaign_boudica_boudica_council_speaker",
-      "avatar": "iceni_council"
     },
     "snettisham": {
       "name_key": "tutorial.campaign_boudica_speaker_elder",
@@ -152,35 +121,7 @@
       "presentation": "cinematic",
       "video_src": "/assets/campaign/boudica/intro.720p.555d0500.webm",
       "attack_ratio_on_enter": 0.25,
-      "next": "boudica_council_decision"
-    },
-    {
-      "id": "boudica_council_decision",
-      "type": "choice",
-      "title_key": "tutorial.campaign_boudica_boudica_decision_title",
-      "body_key": "tutorial.campaign_boudica_boudica_decision_body",
-      "speaker": "boudica",
-      "choices": [
-        {
-          "id": "attack",
-          "label_key": "tutorial.campaign_boudica_boudica_decision_attack",
-          "next": "boudica_attack_roman_outpost"
-        },
-        {
-          "id": "wait",
-          "label_key": "tutorial.campaign_boudica_boudica_decision_wait",
-          "next": "boudica_council_refusal"
-        }
-      ]
-    },
-    {
-      "id": "boudica_council_refusal",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_refusal_title",
-      "body_key": "tutorial.campaign_boudica_boudica_refusal_body",
-      "speaker": "council",
-      "presentation": "dialogue",
-      "next": "boudica_council_decision"
+      "next": "boudica_attack_roman_outpost"
     },
     {
       "id": "boudica_attack_roman_outpost",
@@ -224,16 +165,6 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_first_victory_scene"
-    },
-    {
-      "id": "boudica_first_victory_scene",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_victory_title",
-      "body_key": "tutorial.campaign_boudica_boudica_victory_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "wait_before": true,
       "next": "boudica_first_expansion"
     },
     {
@@ -361,18 +292,6 @@
         "target": "player",
         "gesture": "zoom_in"
       },
-      "next": "boudica_found_suetonius"
-    },
-    {
-      "id": "boudica_found_suetonius",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_found_suetonius_title",
-      "body_key": "tutorial.campaign_boudica_boudica_found_suetonius_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "marker": {
-        "target": "suetonius_paulinus"
-      },
       "next": "boudica_camera_home"
     },
     {
@@ -454,12 +373,14 @@
         {
           "id": "share",
           "label_key": "tutorial.campaign_boudica_boudica_aid_choice_share",
-          "next": "boudica_transfer_target"
+          "next": "boudica_transfer_target",
+          "body_key": "tutorial.campaign_boudica_boudica_aid_choice_share_detail"
         },
         {
           "id": "keep",
           "label_key": "tutorial.campaign_boudica_boudica_aid_choice_keep",
-          "next": "boudica_aid_kept"
+          "next": "boudica_aid_kept",
+          "body_key": "tutorial.campaign_boudica_boudica_aid_choice_keep_detail"
         }
       ]
     },
@@ -531,24 +452,24 @@
     {
       "id": "boudica_share_sent",
       "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_share_sent_title",
-      "body_key": "tutorial.campaign_boudica_boudica_share_sent_body",
+      "title_key": "tutorial.campaign_boudica_boudica_camulodunum_title",
+      "body_key": "tutorial.campaign_boudica_boudica_camulodunum_body",
       "speaker": "boudica",
-      "presentation": "celebration",
+      "presentation": "dialogue",
       "campaign_assault_on_enter": {
         "attacker_team": "Blue",
         "target": "camulodunum"
       },
-      "next": "boudica_camulodunum_intro"
+      "next": "boudica_camulodunum"
     },
     {
       "id": "boudica_aid_kept",
       "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_aid_kept_title",
-      "body_key": "tutorial.campaign_boudica_boudica_aid_kept_body",
+      "title_key": "tutorial.campaign_boudica_boudica_camulodunum_title",
+      "body_key": "tutorial.campaign_boudica_boudica_camulodunum_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_camulodunum_intro"
+      "next": "boudica_camulodunum"
     },
     {
       "id": "boudica_choose_city",
@@ -612,16 +533,6 @@
       "marker": {
         "target": "player"
       },
-      "next": "boudica_city_ready"
-    },
-    {
-      "id": "boudica_city_ready",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_city_ready_title",
-      "body_key": "tutorial.campaign_boudica_boudica_city_ready_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "wait_before": true,
       "next": "boudica_first_contact"
     },
     {
@@ -735,17 +646,7 @@
         "target": "upgrade_building",
         "gesture": "tap"
       },
-      "next": "boudica_city_upgrade_ready"
-    },
-    {
-      "id": "boudica_city_upgrade_ready",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_city_upgrade_ready_title",
-      "body_key": "tutorial.campaign_boudica_boudica_city_upgrade_ready_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "wait_before": true,
-      "next": "boudica_ninth_legion_intro"
+      "next": "boudica_ninth_legion_set_attack_ratio"
     },
     {
       "id": "boudica_trinovantes_contact",
@@ -788,16 +689,6 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_outpost_colonia_veterans_scene"
-    },
-    {
-      "id": "boudica_outpost_colonia_veterans_scene",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_outpost_colonia_veterans_scene_title",
-      "body_key": "tutorial.campaign_boudica_boudica_outpost_colonia_veterans_scene_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "wait_before": true,
       "next": "boudica_outpost_tax_collectors"
     },
     {
@@ -819,16 +710,6 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_outpost_tax_collectors_scene"
-    },
-    {
-      "id": "boudica_outpost_tax_collectors_scene",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_outpost_tax_collectors_scene_title",
-      "body_key": "tutorial.campaign_boudica_boudica_outpost_tax_collectors_scene_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "wait_before": true,
       "next": "boudica_outpost_roman_supply_depot"
     },
     {
@@ -850,26 +731,7 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_outpost_roman_supply_depot_scene"
-    },
-    {
-      "id": "boudica_outpost_roman_supply_depot_scene",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_outpost_roman_supply_depot_scene_title",
-      "body_key": "tutorial.campaign_boudica_boudica_outpost_roman_supply_depot_scene_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "wait_before": true,
       "next": "boudica_trinovantes_contact"
-    },
-    {
-      "id": "boudica_camulodunum_intro",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_camulodunum_title",
-      "body_key": "tutorial.campaign_boudica_boudica_camulodunum_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "next": "boudica_camulodunum"
     },
     {
       "id": "boudica_camulodunum",
@@ -890,7 +752,7 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_select_city_upgrade"
+      "next": "boudica_ninth_legion_intro"
     },
     {
       "id": "boudica_londinium_intro",
@@ -958,7 +820,7 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_pact_choice"
+      "next": "boudica_final_battle_intro"
     },
     {
       "id": "boudica_ninth_legion_intro",
@@ -967,7 +829,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_ninth_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_ninth_legion_set_attack_ratio"
+      "next": "boudica_select_city_upgrade"
     },
     {
       "id": "boudica_ninth_legion_set_attack_ratio",
@@ -1022,57 +884,16 @@
       "next": "boudica_londinium_intro"
     },
     {
-      "id": "boudica_pact_choice",
-      "type": "choice",
-      "title_key": "tutorial.campaign_boudica_boudica_pact_choice_title",
-      "body_key": "tutorial.campaign_boudica_boudica_pact_choice_body",
-      "speaker": "council",
-      "choices": [
-        {
-          "id": "offer",
-          "label_key": "tutorial.campaign_boudica_boudica_pact_choice_offer",
-          "next": "boudica_pact_offer"
-        },
-        {
-          "id": "march",
-          "label_key": "tutorial.campaign_boudica_boudica_pact_choice_skip",
-          "next": "boudica_final_battle_intro"
-        }
-      ]
-    },
-    {
-      "id": "boudica_pact_offer",
-      "type": "guide",
-      "title_key": "tutorial.campaign_boudica_boudica_pact_target_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_pact_target_hint",
-      "speaker": "council",
-      "trigger": {
-        "type": "contact",
-        "target": "catuvellauni",
-        "value": 1,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "catuvellauni"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "target_action",
-        "gesture": "tap"
-      },
-      "next": "boudica_final_battle_intro"
-    },
-    {
       "id": "boudica_final_battle_intro",
       "type": "scene",
       "title_key": "tutorial.campaign_boudica_boudica_final_title",
       "body_key": "tutorial.campaign_boudica_boudica_final_body",
       "speaker": "boudica",
-      "presentation": "cinematic",
+      "presentation": "dialogue",
       "marker": {
         "target": "suetonius_paulinus"
       },
-      "next": "boudica_last_stand_intro"
+      "next": "boudica_last_stand"
     },
     {
       "id": "boudica_final_choice",
@@ -1087,48 +908,23 @@
         {
           "id": "poison",
           "label_key": "tutorial.campaign_boudica_boudica_final_choice_poison",
-          "next": "boudica_poison_end"
+          "next": "boudica_poison_end",
+          "body_key": "tutorial.campaign_boudica_boudica_final_choice_poison_detail"
         },
         {
           "id": "fight",
           "label_key": "tutorial.campaign_boudica_boudica_final_choice_fight",
-          "next": "boudica_postumus_notice"
+          "next": "boudica_last_stand_resist",
+          "body_key": "tutorial.campaign_boudica_boudica_final_choice_fight_detail"
         }
       ]
     },
     {
-      "id": "boudica_postumus_notice",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_postumus_notice_title",
-      "body_key": "tutorial.campaign_boudica_boudica_postumus_notice_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "marker": {
-        "target": "legio_ii_augusta"
-      },
-      "campaign_attack_on_enter": {
-        "faction_id": "legio_ii_augusta",
-        "can_attack_player": true
-      },
-      "next": "boudica_last_stand_resist"
-    },
-    {
       "id": "boudica_poison_end",
-      "type": "scene",
+      "type": "end",
       "title_key": "tutorial.campaign_boudica_boudica_poison_end_title",
       "body_key": "tutorial.campaign_boudica_boudica_poison_end_body",
-      "speaker": "council",
-      "presentation": "dialogue",
-      "next": "boudica_end"
-    },
-    {
-      "id": "boudica_last_stand_intro",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_last_stand_intro_title",
-      "body_key": "tutorial.campaign_boudica_boudica_last_stand_intro_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "next": "boudica_last_stand"
+      "presentation": "chapter"
     },
     {
       "id": "boudica_last_stand",
@@ -1176,21 +972,17 @@
         "scope": "total",
         "value": 1
       },
-      "next": "boudica_end"
+      "next": "boudica_end",
+      "campaign_attack_on_enter": {
+        "faction_id": "legio_ii_augusta",
+        "can_attack_player": true
+      }
     },
     {
       "id": "boudica_end",
-      "type": "scene",
+      "type": "end",
       "title_key": "tutorial.campaign_boudica_boudica_end_title",
       "body_key": "tutorial.campaign_boudica_boudica_end_body",
-      "speaker": "council",
-      "presentation": "chapter",
-      "next": "boudica_complete"
-    },
-    {
-      "id": "boudica_complete",
-      "type": "end",
-      "title_key": "tutorial.complete",
       "presentation": "chapter"
     }
   ],
@@ -1199,20 +991,8 @@
       "x": 70,
       "y": 70
     },
-    "boudica_council_decision": {
-      "x": 350,
-      "y": 70
-    },
-    "boudica_council_refusal": {
-      "x": 630,
-      "y": 70
-    },
     "boudica_first_victory": {
       "x": 70,
-      "y": 260
-    },
-    "boudica_first_victory_scene": {
-      "x": 350,
       "y": 260
     },
     "boudica_first_expansion": {
@@ -1238,10 +1018,6 @@
     "boudica_camera_hover": {
       "x": 1190,
       "y": 450
-    },
-    "boudica_found_suetonius": {
-      "x": 1190,
-      "y": 700
     },
     "boudica_camera_home": {
       "x": 1470,
@@ -1303,20 +1079,8 @@
       "x": 1470,
       "y": 2350
     },
-    "boudica_city_upgrade_ready": {
-      "x": 1750,
-      "y": 2350
-    },
     "boudica_outpost_colonia_veterans": {
       "x": 910,
-      "y": 2540
-    },
-    "boudica_outpost_colonia_veterans_scene": {
-      "x": 1190,
-      "y": 2540
-    },
-    "boudica_camulodunum_intro": {
-      "x": 1470,
       "y": 2540
     },
     "boudica_camulodunum": {
@@ -1355,21 +1119,9 @@
       "x": 1190,
       "y": 2730
     },
-    "boudica_pact_choice": {
-      "x": 70,
-      "y": 2920
-    },
-    "boudica_pact_offer": {
-      "x": 350,
-      "y": 2920
-    },
     "boudica_final_battle_intro": {
       "x": 630,
       "y": 3680
-    },
-    "boudica_postumus_notice": {
-      "x": 1470,
-      "y": 3880
     },
     "boudica_final_choice": {
       "x": 1470,
@@ -1378,10 +1130,6 @@
     "boudica_poison_end": {
       "x": 1750,
       "y": 3480
-    },
-    "boudica_last_stand_intro": {
-      "x": 910,
-      "y": 3680
     },
     "boudica_last_stand": {
       "x": 1190,
@@ -1393,10 +1141,6 @@
     },
     "boudica_end": {
       "x": 2030,
-      "y": 3680
-    },
-    "boudica_complete": {
-      "x": 2310,
       "y": 3680
     },
     "boudica_outpost_tax_collectors": {

@@ -59,20 +59,24 @@ test("Boudica keeps open neutral clans, makes every Roman enemy, and orders the 
     const stepsById = new Map(definition.steps.map(step => [step.id, step]));
     const recordedTargets = [];
     let current = stepsById.get("boudica_camulodunum");
-    assert.equal(current.next, "boudica_select_city_upgrade", "defeating Camulodunum opens the paused City upgrade sequence");
+    assert.equal(current.next, "boudica_ninth_legion_intro", "the Ninth warning introduces the City upgrade before the attack");
+    assert.equal(stepsById.get("boudica_ninth_legion_intro").next, "boudica_select_city_upgrade");
     assert.equal(stepsById.get("boudica_ninth_legion").next, "boudica_londinium_intro",
         "defeating the Ninth continues to Londinium, not the City upgrade");
-    while (current && current.id !== "boudica_pact_choice") {
+    while (current && current.id !== "boudica_final_battle_intro") {
         if (current.trigger && current.trigger.type === "defeated" && targets.includes(current.trigger.target)) recordedTargets.push(current.trigger.target);
         current = stepsById.get(current.next);
     }
-    assert.deepEqual(recordedTargets, targets, "follow the authored mission links before the pact and final battle");
-    const postumus = definition.steps.find(step => step.id === "boudica_postumus_notice");
-    assert.deepEqual(postumus.marker, { target: "legio_ii_augusta" });
-    assert.deepEqual(postumus.campaign_attack_on_enter, { faction_id: "legio_ii_augusta", can_attack_player: true });
-    assert.equal(definition.steps.find(step => step.id === "boudica_final_choice").choices.find(choice => choice.id === "fight").next, postumus.id);
-    const neutralTerms = definition.reactions.find(reaction => reaction.id === "neutral_contact_terms");
-    assert.equal(neutralTerms.choices.find(choice => choice.id === "accept").gold_cost, 200);
+    assert.deepEqual(recordedTargets, targets, "follow the authored mission links before the final battle");
+    const resistance = stepsById.get("boudica_last_stand_resist");
+    assert.deepEqual(resistance.campaign_attack_on_enter, { faction_id: "legio_ii_augusta", can_attack_player: true });
+    assert.equal(stepsById.get("boudica_final_choice").choices.find(choice => choice.id === "fight").next, resistance.id);
+    assert.equal(stepsById.has("boudica_postumus_notice"), false);
+    assert.equal(definition.reactions.some(reaction => reaction.id === "neutral_contact_terms"), false);
+    const snettisham = definition.reactions.find(reaction => reaction.id === "contact_snettisham");
+    assert.equal(snettisham.choices.find(choice => choice.id === "accept").gold_cost, 200);
+    assert.equal(byName.get("Snettisham").can_attack_player, false);
+    assert.notEqual(byName.get("Thetford").can_attack_player, false);
     const invalidRomanNeutral = structuredClone(roster);
     invalidRomanNeutral.factions.find(faction => faction.id === "legio_xiv_gemina").relation = "neutral";
     assert.ok(campaign.validate(definition, invalidRomanNeutral, { hasText: () => true, hasAvatar: () => true }).errors.some(issue => issue.field === "roster.factions.relation"));
@@ -120,15 +124,15 @@ test("Boudica reveal beats share a fixed 1.1-second wait while tribal contact st
     const waitSteps = definition.steps.filter(step => step.wait_before === true).map(step => step.id);
     assert.equal(campaign.WAIT_MS, 1100);
     assert.deepEqual(waitSteps, [
-        "boudica_first_victory_scene", "boudica_city_intro", "boudica_aid_choice",
-        "boudica_city_ready", "boudica_city_upgrade_ready", "boudica_outpost_colonia_veterans_scene",
-        "boudica_outpost_tax_collectors_scene", "boudica_outpost_roman_supply_depot_scene",
-        "boudica_ninth_strike"
+        "boudica_city_intro", "boudica_aid_choice", "boudica_ninth_strike"
     ]);
     const next = id => definition.steps.find(step => step.id === id).next;
-    assert.equal(next("boudica_share_sent"), "boudica_camulodunum_intro");
-    assert.equal(next("boudica_aid_kept"), "boudica_camulodunum_intro");
-    assert.equal(next("boudica_outpost_colonia_veterans_scene"), "boudica_outpost_tax_collectors");
+    assert.equal(next("boudica_share_sent"), "boudica_camulodunum");
+    assert.equal(next("boudica_aid_kept"), "boudica_camulodunum");
+    assert.equal(next("boudica_outpost_colonia_veterans"), "boudica_outpost_tax_collectors");
+    assert.deepEqual(definition.steps.find(step => step.id === "boudica_share_sent").campaign_assault_on_enter,
+        { attacker_team: "Blue", target: "camulodunum" });
+    assert.equal(definition.steps.find(step => step.id === "boudica_aid_kept").campaign_assault_on_enter, undefined);
     assert.equal(definition.steps.some(step => /factory|bunker/.test(step.id)), false);
     assert.equal(definition.steps.some(step => Object.hasOwn(step, "start_delay_seconds") || Object.hasOwn(step, "advance_delay_seconds")), false);
     assert.doesNotMatch(campaignEditor, /start_delay_seconds|advance_delay_seconds/);

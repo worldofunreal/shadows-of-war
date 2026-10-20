@@ -15,6 +15,8 @@ La columna "Material de arte" dice qué imágenes ya existen en tu compu (en `Do
 
 ## `tribus-400.csv`: 400 tribus, cada una con su líder
 
+Lista compacta para encargar retratos, una identidad por línea: [tribus-400-encargo.txt](tribus-400-encargo.txt).
+
 - 200 mujeres y 200 hombres, con el mismo reparto por región: Asia 112, América 96, África 80, Europa 80 y Oceanía 32.
 - "Tipo de líder":
   - **Histórico** (260): una persona con registro histórico.
@@ -24,7 +26,7 @@ La columna "Material de arte" dice qué imágenes ya existen en tu compu (en `Do
   - 256 líderes tienen página.
   - 338 tribus tienen página.
   - Los inventados no tienen página propia, pero su tribu sí, cuando existe.
-- **Material de arte:** 22 tribus ya tienen imágenes.
+- **Material de arte:** 43 tribus tienen al menos un archivo de imagen disponible localmente.
   - Para aprovechar arte que ya tenías, se cambiaron 9 tribus o líderes:
     - Hiawatha (onondaga)
     - Burebista (dacios)

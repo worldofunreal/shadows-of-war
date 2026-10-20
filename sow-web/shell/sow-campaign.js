@@ -770,7 +770,8 @@
                     if (line.speaker && !own(speakers, line.speaker)) issue(step, "lines", "Unknown speaking character.");
                 });
             }
-            if (requireSpeakerPortraits && (step.type === "scene" || step.type === "choice" || step.type === "end" && (step.body_key || step.lines))) {
+            const narratedEnding = step.type === "end" && step.presentation === "chapter" && !step.speaker;
+            if (requireSpeakerPortraits && !narratedEnding && (step.type === "scene" || step.type === "choice" || step.type === "end" && (step.body_key || step.lines))) {
                 if (step.type === "scene" && Array.isArray(step.lines) && step.lines.length) {
                     step.lines.forEach(line => checkDialogueSpeaker(step, line && (line.speaker || step.speaker)));
                 } else checkDialogueSpeaker(step, step.speaker);
