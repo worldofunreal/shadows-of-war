@@ -116,6 +116,10 @@ pub enum GameplayIntent {
         gold_cost: f64,
     },
     ClearEmote,
+    /// Holds or releases the player's current emote without restarting it.
+    SetEmotePinned {
+        pinned: bool,
+    },
 }
 
 /// Boat control frame for INK TIDE lockstep turns.

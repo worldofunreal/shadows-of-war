@@ -478,7 +478,7 @@
             runtime.episodeId = episodeId;
             runtime.roster = data.roster;
             runtime.definition = data.definition;
-            runtime.machine = window.SOWCampaign.create(data.definition, undefined, data.roster);
+            runtime.machine = window.SOWCampaign.create(data.definition, undefined, data.roster, undefined, { onStepComplete: applyStepEmote });
             runtime.active = true;
             window.SOW_emote_text_overrides = data.definition.emote_texts || {};
             runtime.lastUnlockCommand = null;
@@ -1260,10 +1260,16 @@
 
     window.SOW_menu_guide = { update: updateMenuGuide, pause: pauseMenuGuide };
 
+    // Each step's emote directive runs when that step completes: a named emote is shown
+    // (pinned when emote_pinned), and "clear" releases the current one.
+    function applyStepEmote(step) {
+        if (!step.emote) return;
+        send("tutorial_emote", { kind: step.emote === "clear" ? null : step.emote, pinned: step.emote_pinned === true });
+    }
+
     function continueScene() {
         if (!runtime.machine) return;
         var step = runtime.machine.view().step;
-        if (step.emote) send("tutorial_emote", { kind: step.emote });
         if (runtime.machine.advance(null, step.id)) update(runtime.latestHud);
     }
 

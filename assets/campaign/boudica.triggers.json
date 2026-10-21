@@ -4,7 +4,8 @@
   "text_namespace": "tutorial.campaign_boudica_",
   "require_speaker_portraits": true,
   "emote_texts": {
-    "threat": "tutorial.campaign_boudica_boudica_council_strike"
+    "threat": "tutorial.campaign_boudica_boudica_council_strike",
+    "celebrate": "tutorial.campaign_boudica_boudica_victory_celebrate"
   },
   "settings": {
     "campaign_support": {
@@ -124,6 +125,7 @@
       "portrait_expression": "angry",
       "continue_key": "tutorial.campaign_boudica_boudica_council_strike",
       "emote": "threat",
+      "emote_pinned": true,
       "presentation": "cinematic",
       "video_src": "/assets/campaign/boudica/intro.720p.555d0500.webm",
       "attack_ratio_on_enter": 0.25,
@@ -158,6 +160,8 @@
       "title_key": "tutorial.campaign_boudica_boudica_first_victory_title",
       "hint_key": "tutorial.campaign_boudica_boudica_first_victory_hint",
       "speaker": "boudica",
+      "emote": "celebrate",
+      "emote_pinned": true,
       "trigger": {
         "type": "defeated",
         "target": "roman_outpost",
@@ -171,6 +175,16 @@
         "target": "target_action",
         "gesture": "tap"
       },
+      "next": "boudica_victory_council"
+    },
+    {
+      "id": "boudica_victory_council",
+      "type": "scene",
+      "body_key": "tutorial.campaign_boudica_boudica_victory_council_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "portrait_expression": "happy",
+      "emote": "clear",
       "next": "boudica_first_expansion"
     },
     {

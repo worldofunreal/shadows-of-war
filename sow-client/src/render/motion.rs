@@ -43,12 +43,17 @@ fn hop(age: f32, start: f32, apex: f32, end: f32, height: f32) -> f32 {
     -height * (1.0 - spring_overshoot(t * 1.7)) * (1.0 - smoothstep(t))
 }
 
-pub(crate) fn emote_motion(kind: EmoteKind, age: f32, reduced: bool) -> EmoteMotion {
-    if !age.is_finite() || age < 0.0 || age >= EMOTE_DURATION_SECS {
+pub(crate) fn emote_motion(kind: EmoteKind, age: f32, reduced: bool, pinned: bool) -> EmoteMotion {
+    if !age.is_finite() || age < 0.0 || (!pinned && age >= EMOTE_DURATION_SECS) {
         return EmoteMotion::default();
     }
     let entry = smoothstep((age - 0.08) / 0.16);
-    let exit = 1.0 - smoothstep((age - (EMOTE_DURATION_SECS - 0.3)) / 0.3);
+    // A pinned emote holds its bubble until it is released; only unpinned ones fade out by time.
+    let exit = if pinned {
+        1.0
+    } else {
+        1.0 - smoothstep((age - (EMOTE_DURATION_SECS - 0.3)) / 0.3)
+    };
     let mut motion = EmoteMotion {
         bubble_alpha: entry * exit,
         ..EmoteMotion::default()
@@ -95,9 +100,9 @@ mod tests {
     #[test]
     fn emote_phases_are_bounded_continuous_and_settle() {
         for definition in sow_core::emote::EMOTES {
-            let mut previous = emote_motion(definition.kind, 0.0, false);
+            let mut previous = emote_motion(definition.kind, 0.0, false, false);
             for ms in 1..=3100 {
-                let current = emote_motion(definition.kind, ms as f32 / 1000.0, false);
+                let current = emote_motion(definition.kind, ms as f32 / 1000.0, false, false);
                 assert!(
                     current.bubble_alpha.is_finite() && (0.0..=1.0).contains(&current.bubble_alpha)
                 );
@@ -109,10 +114,11 @@ mod tests {
                 previous = current;
             }
             assert_eq!(
-                emote_motion(definition.kind, 3.0, false),
+                emote_motion(definition.kind, 3.0, false, false),
                 EmoteMotion::default()
             );
-            let reduced = emote_motion(definition.kind, 0.18, true);
+            assert_eq!(emote_motion(definition.kind, 3.0, false, true).bubble_alpha, 1.0);
+            let reduced = emote_motion(definition.kind, 0.18, true, false);
             assert_eq!(reduced.offset, [0.0; 2]);
             assert_eq!(reduced.scale, [1.0; 2]);
             assert!(reduced.bubble_alpha > 0.0);

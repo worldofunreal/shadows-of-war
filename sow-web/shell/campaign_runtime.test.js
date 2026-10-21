@@ -912,3 +912,20 @@ test("campaign episode 1 stays locked so only the tutorial can be replayed", () 
 
 
 
+
+test("a step's emote directive fires once, when that step completes", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const completed = [];
+    const machine = campaign.create({
+        entry: "a",
+        steps: [
+            { id: "a", type: "scene", emote: "threat", emote_pinned: true, next: "b" },
+            { id: "b", type: "scene", emote: "clear", next: "c" },
+            { id: "c", type: "end", presentation: "chapter" },
+        ],
+    }, undefined, undefined, undefined, { onStepComplete: step => completed.push(step.id) });
+    assert.equal(machine.advance(null, "a"), true);
+    assert.deepEqual(completed, ["a"]);
+    assert.equal(machine.advance(null, "b"), true);
+    assert.deepEqual(completed, ["a", "b"]);
+});

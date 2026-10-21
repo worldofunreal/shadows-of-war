@@ -197,7 +197,7 @@ impl AvatarEmote {
                 bubble_scale: self.from_motion.bubble_scale,
             };
         }
-        let mut motion = emote_motion(self.event.kind, age, reduced);
+        let mut motion = emote_motion(self.event.kind, age, reduced, self.event.pinned);
         if !reduced {
             let continuity = 1.0 - smoothstep(age / 0.07);
             for axis in 0..2 {
@@ -446,7 +446,9 @@ impl NameplateSystem {
             let old = self.emote_visuals.get(&player.id).copied();
             if let Some(event) = player.active_emote {
                 if old.is_some_and(|old| {
-                    old.event.event_id == event.event_id && old.release_at.is_none()
+                    old.event.event_id == event.event_id
+                        && old.event.pinned == event.pinned
+                        && old.release_at.is_none()
                 }) {
                     continue;
                 }
@@ -607,11 +609,7 @@ pub(super) fn render_nameplates(
     let emote_fraction = system.emote_tick_at.map_or(0.0, |at| {
         let elapsed = now.duration_since(at).as_secs_f32();
         // A paused sim stops ticking, so an emote's clock must follow real time or it freezes.
-        if sim.paused {
-            elapsed
-        } else {
-            elapsed.min(tick_secs)
-        }
+        if sim.paused { elapsed } else { elapsed.min(tick_secs) }
     });
     let (order, visuals, frame_plans, badge_animations) = (
         &system.order,

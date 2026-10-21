@@ -274,11 +274,11 @@ enum WebMenuCommand {
         session: u64,
         tile_idx: u32,
         kind: sow_core::emote::EmoteKind,
-        #[serde(default)]
-        pinned: bool,
     },
     TutorialEmote {
-        kind: sow_core::emote::EmoteKind,
+        kind: Option<sow_core::emote::EmoteKind>,
+        #[serde(default)]
+        pinned: bool,
     },
     ClearEmote,
     SetEmotePinned {
@@ -455,6 +455,7 @@ struct MyPlayerSummary {
     nuke_cooldown_ticks: u32,
     boats_in_use: u32,
     boat_capacity: u32,
+    emote_active: bool,
     emote_pinned: bool,
 }
 
@@ -487,6 +488,7 @@ fn my_player_summary(app: &SowApp, snapshot_tick: u64, my_pid: u16) -> Option<My
                 nuke_cooldown_ticks: player.nuke_cooldown_ticks,
                 boats_in_use: player.boats_in_use,
                 boat_capacity: player.boat_capacity,
+                emote_active: player.active_emote.is_some(),
                 emote_pinned: player.active_emote.is_some_and(|event| event.pinned),
             });
         *cache = Some((snapshot_tick, my_pid, summary));
@@ -1347,32 +1349,18 @@ impl SowApp {
                     self.ui.app.settings_state.show_fps_ping = value;
                     self.ui.app.settings_state.persist_local();
                 }
-                WebMenuCommand::TutorialEmote { kind } => {
-                    // Scripted campaign emote: the tutorial is paused until the first attack, and the
-                    // map-menu path drops intents while paused, so this one turn is sent directly.
-                    if self.ui.tutorial_active
-                        && self.net.is_offline
-                        && let Some(player_id) = self.sim.my_player_id
-                    {
-                        self.dispatch_sim_command(sow_core::protocol::SimCommand::Turn(
-                            sow_core::protocol::Turn {
-                                turn_number: 0,
-                                intents: vec![sow_core::protocol::StampedIntent {
-                                    player_id,
-                                    intent: sow_core::protocol::GameplayIntent::ExpressEmote {
-                                        kind,
-                                        pinned: false,
-                                    },
-                                }],
-                            },
-                        ));
-                    }
+                WebMenuCommand::TutorialEmote { kind, pinned } => {
+                    // Campaign step directive: `None` releases the current emote.
+                    let intent = match kind {
+                        Some(kind) => sow_core::protocol::GameplayIntent::ExpressEmote { kind, pinned },
+                        None => sow_core::protocol::GameplayIntent::ClearEmote,
+                    };
+                    self.send_intent(intent);
                 }
                 WebMenuCommand::ExpressEmote {
                     session,
                     tile_idx,
                     kind,
-                    pinned,
                 } => {
                     let matches_menu = self
                         .input
@@ -1383,23 +1371,18 @@ impl SowApp {
                             .map_menu_actions(tile_idx)
                             .contains(&crate::input::map_click::MapMenuAction::Emote)
                     {
-                        self.ui.app.hud_state.pin_emote = pinned;
                         self.send_intent(sow_core::protocol::GameplayIntent::ExpressEmote {
                             kind,
-                            pinned,
+                            pinned: false,
                         });
                         self.close_map_context_menu();
                     }
                 }
                 WebMenuCommand::ClearEmote => {
-                    self.ui.app.hud_state.pin_emote = false;
                     self.send_intent(sow_core::protocol::GameplayIntent::ClearEmote);
                 }
                 WebMenuCommand::SetEmotePinned { pinned } => {
-                    self.ui.app.hud_state.pin_emote = pinned;
-                    if !pinned {
-                        self.send_intent(sow_core::protocol::GameplayIntent::ClearEmote);
-                    }
+                    self.send_intent(sow_core::protocol::GameplayIntent::SetEmotePinned { pinned });
                 }
                 WebMenuCommand::SetEmoteTexts { texts, safe_area } => {
                     self.ui.nameplates.set_emote_texts(texts, safe_area);
@@ -3369,8 +3352,8 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "port": costs[3],
             "farm": costs[4],
         },
-        "pin_emote": hud.pin_emote,
         "emotes": sow_core::emote::EMOTES,
+        "emote_active": me.is_some_and(|player| player.emote_active),
         "emote_pinned": me.is_some_and(|player| player.emote_pinned),
         "fps": (app.time.current_fps > 0).then_some(app.time.current_fps),
         "ping": app.net.current_ping_ms,

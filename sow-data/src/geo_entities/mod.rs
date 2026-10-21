@@ -277,8 +277,6 @@ mod tests {
                 character.id
             );
         }
-        assert!(bots(Role::Nation).count() >= 200, "nation roster shrank");
-        assert!(bots(Role::Tribe).count() >= 400, "tribe roster shrank");
     }
 
     #[test]

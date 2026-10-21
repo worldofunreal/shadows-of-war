@@ -2337,9 +2337,9 @@ mod tests {
                     entry("nationbot_hatshepsut", Nation, 15),
                     entry("nationbot_mansa_musa", Nation, 45),
                     entry("nationbot_amanirenas", Nation, 75),
-                    entry("tribe_queruscos", Tribe, 115),
-                    entry("tribe_marcomanos", Tribe, 145),
-                    entry("tribe_suevos", Tribe, 175),
+                    entry("tribe_cherusci", Tribe, 115),
+                    entry("tribe_marcomanni", Tribe, 145),
+                    entry("tribe_suebi", Tribe, 175),
                 ],
             };
             let width = 220;

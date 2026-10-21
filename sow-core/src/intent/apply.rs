@@ -511,6 +511,13 @@ impl SowEngine {
                     player.active_emote = None;
                 }
             }
+            GameplayIntent::SetEmotePinned { pinned } => {
+                if let Some(player) = self.state.player_mut(stamped.player_id)
+                    && let Some(event) = player.active_emote.as_mut()
+                {
+                    event.pinned = *pinned;
+                }
+            }
             GameplayIntent::ProposeAlliance { target_player } => {
                 let proposer = stamped.player_id;
                 let target = *target_player;

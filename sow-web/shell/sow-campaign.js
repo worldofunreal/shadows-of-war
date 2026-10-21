@@ -669,10 +669,10 @@
             } else if (!Object.values(METRICS).concat(["tiles", "contacts", "defeated", "touch_controls"]).includes(when.fact) || !Number.isFinite(when.gte)) issue(step, "routes", "Invalid game fact condition.");
         }
         const stepFields = {
-            scene: ["id", "type", "title_key", "body_key", "speaker", "portrait_expression", "continue_key", "emote", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
-            choice: ["id", "type", "title_key", "body_key", "speaker", "marker", "choices", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
-            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
-            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
+            scene: ["id", "type", "title_key", "body_key", "speaker", "portrait_expression", "continue_key", "emote", "emote_pinned", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
+            choice: ["id", "type", "title_key", "body_key", "speaker", "emote", "emote_pinned", "marker", "choices", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
+            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "emote", "emote_pinned", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
+            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "emote", "emote_pinned", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
             end: ["id", "type", "title_key", "body_key", "speaker", "presentation", "attack_ratio_on_enter", "pause_game", "unlocks"]
         };
         steps.filter(object).forEach(step => {
@@ -761,7 +761,8 @@
             if (step.presentation && (!["dialogue", "chapter", "celebration", "cinematic"].includes(step.presentation) || step.presentation === "cinematic" && step.type !== "scene")) issue(step, "presentation", "Choose a presentation supported by this step.");
             if (own(step, "portrait_expression") && !["happy", "calm", "fear", "angry"].includes(step.portrait_expression)) issue(step, "portrait_expression", "Choose a portrait expression: happy, calm, fear or angry.");
             text(step, "continue_key", step.continue_key, false);
-            if (own(step, "emote") && !["greet", "help", "threat", "celebrate"].includes(step.emote)) issue(step, "emote", "Choose a known emote.");
+            if (own(step, "emote") && !["greet", "help", "threat", "celebrate", "clear"].includes(step.emote)) issue(step, "emote", "Choose a known emote or clear.");
+            if (own(step, "emote_pinned") && (typeof step.emote_pinned !== "boolean" || !own(step, "emote") || step.emote === "clear")) issue(step, "emote_pinned", "Pin only a named emote, with true or false.");
             if (step.video_src != null) {
                 const prefix = "/assets/campaign/" + definition.episode_id + "/";
                 const relative = typeof step.video_src === "string" && step.video_src.startsWith(prefix) ? step.video_src.slice(prefix.length) : "";
@@ -1169,7 +1170,7 @@
         return { errors, warnings: [] };
     }
 
-    function create(definition, entry, roster, clock) {
+    function create(definition, entry, roster, clock, hooks) {
         // Each run owns its definition; editor changes cannot mutate an active game.
         definition = copy(definition);
         const byId = new Map(definition.steps.map(step => [step.id, step]));
@@ -1410,6 +1411,8 @@
             }
             if (!byId.has(destination)) return false;
             if (!state.completed.includes(step.id)) state.completed.push(step.id);
+            // A step's emote directive takes effect exactly when the step completes.
+            if (hooks && typeof hooks.onStepComplete === "function") hooks.onStepComplete(step);
             enter(destination);
             return true;
         }

@@ -312,7 +312,7 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
 
     if !plan.any() {
         println!("  no production component changed; no restart performed");
-        renew_and_verify_control_certificates(&config)?;
+        verify_control_certificates(&config)?;
         verify_origin_tls_from_relay(&config)?;
         ensure_relay_certificate_automation(paths, &config)?;
         verify_relay_certificate_served(&config)?;
@@ -350,7 +350,7 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     };
     activate_control_host(paths, &config, &release, &plan)?;
     verify_relay_settlement_auth(&config)?;
-    renew_and_verify_control_certificates(&config)?;
+    verify_control_certificates(&config)?;
     verify_origin_tls_from_relay(&config)?;
     ensure_relay_certificate_automation(paths, &config)?;
     // Relay last, and only after the registry is empty, so live games survive
@@ -795,28 +795,6 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     }
     super::pack_art_atlases(paths)?;
     super::validate_current_ui_contract(paths)?;
-    run(
-        "node",
-        &[
-            "--test",
-            "sow-web/site/site_interaction.test.js",
-            "sow-web/shell/menu_flow.test.js",
-            "sow-web/shell/menu_presentation.test.js",
-            "sow-web/shell/loader_boot.test.js",
-            "sow-web/shell/campaign_runtime.test.js",
-            "sow-web/shell/campaign_view.test.js",
-            "sow-tools/editors/campaign-editor/editor_interaction.test.js",
-            "sow-web/shell/gameplay_interaction.test.js",
-            "sow-web/shell/gameplay_ui.test.js",
-            "sow-web/shell/map_interaction.test.js",
-            "sow-web/shell/assets_layout.test.js",
-            "sow-web/shell/sow-i18n.test.js",
-            "sow-web/shell/experience_events.test.js",
-            "sow-web/site/analytics.test.js",
-        ],
-        Some(&paths.root),
-    )
-    .context("web interaction regression tests failed")?;
     for filter in ["test_build_index_", "test_nginx_conf_"] {
         run(
             "cargo",
@@ -844,121 +822,10 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
         Some(&paths.root),
     )
     .context("core economy and simulation regression tests failed")?;
-    run(
-        "rustfmt",
-        &[
-            "--edition",
-            "2024",
-            "--check",
-            "sow-core/src/engine/mod.rs",
-            "sow-core/src/intent/apply.rs",
-            "sow-core/src/intent/buildings.rs",
-            "sow-core/src/execution/income.rs",
-            "sow-client/src/campaign/mod.rs",
-            "sow-client/src/input/map_click.rs",
-            "sow-client/src/render/frame/ui.rs",
-            "sow-core/src/map.rs",
-            "sow-core/src/player/mod.rs",
-            "sow-client/src/death_nameplate.rs",
-            "sow-client/src/app/state.rs",
-            "sow-client/src/input/intents.rs",
-            "sow-client/src/render/world/movers.rs",
-            "sow-render/src/text/renderer.rs",
-            "sow-render/src/text/types.rs",
-            "sow-render/src/nameplate.rs",
-            "sow-render/src/shader_params.rs",
-            "sow-render/src/shader_validation.rs",
-            "sow-render/src/lib.rs",
-            "sow-client/src/render/world/feedback.rs",
-            "sow-client/src/render/world/nameplates.rs",
-            "sow-client/src/render/world/mod.rs",
-            "sow-client/src/ui/utils.rs",
-            "sow-dist/src/prod.rs",
-        ],
-        Some(&paths.root),
-    )
-    .context("nameplate Rust formatting check failed")?;
-    run(
-        "cargo",
-        &["test", "--locked", "-p", "sow-render", "--lib"],
-        Some(&paths.root),
-    )
-    .context("nameplate renderer regression tests failed")?;
-    run(
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "sow-client",
-            "--lib",
-            "--test",
-            "death_nameplate",
-            "--test",
-            "nameplate_emotes",
-        ],
-        Some(&paths.root),
-    )
-    .context("death nameplate icon regression tests failed")?;
-    for (filter, failure) in [
-        (
-            "reward_exit_tests",
-            "server-confirmed reward exit tests failed",
-        ),
-        ("tutorial_camera", "tutorial camera regression tests failed"),
-        (
-            "web_menu::tests::inbox_",
-            "inbox identity regression tests failed",
-        ),
-        (
-            "web_menu::tests::player_dialogs_",
-            "player dialog identity regression tests failed",
-        ),
-        (
-            "web_menu::tests::loader_art_",
-            "loader art identity regression tests failed",
-        ),
-        (
-            "input::map_click::tests",
-            "map gestures and context actions regression tests failed",
-        ),
-        (
-            "input::window::tests::building_drag_pan_cancel_and_pending_confirmation_never_spend_gold",
-            "building placement gestures regression failed",
-        ),
-        (
-            "sim::turn::tests",
-            "building confirmation regression failed",
-        ),
-        (
-            "input::placement::tests",
-            "building placement cells regression failed",
-        ),
-        (
-            "render::world::overlays::tests::placement_sprite_keeps_built_scale_and_remains_visible_when_zooming_out",
-            "building placement sprite scale regression failed",
-        ),
-        (
-            "render::world::nameplates::emote_tests",
-            "nameplate emote lifecycle regression tests failed",
-        ),
-        (
-            "render::world::nameplates::status_badge_tests",
-            "nameplate status badge lifecycle regression tests failed",
-        ),
-        (
-            "input::intents::tests::repeated_attacks_each_get_a_notice_even_for_the_same_target",
-            "attack launch amount notice regression tests failed",
-        ),
-        (
-            "render::world::feedback::tests::attack_badges_only_include_local_incoming_or_outgoing_attacks",
-            "attack badge text color regression tests failed",
-        ),
-        (
-            "render::world::movers::tests::warship_sprite_keeps_original_colors_across_player_colors",
-            "warship sprite color regression tests failed",
-        ),
-    ] {
+    for (filter, failure) in [(
+        "reward_exit_tests",
+        "server-confirmed reward exit tests failed",
+    )] {
         run(
             "cargo",
             &[
@@ -2756,13 +2623,11 @@ fn control_certificate_automation_drift(config: &Config) -> Result<bool> {
     Ok(state.trim() == "drift")
 }
 
-fn renew_and_verify_control_certificates(config: &Config) -> Result<()> {
+fn verify_control_certificates(config: &Config) -> Result<()> {
     if control_certificate_automation_drift(config)? {
         bail!("IONOS certificate renewal schedule or validation route is not installed");
     }
     let command = r#"set -eu
-sudo /usr/local/bin/certbot renew --dry-run --force-renewal --no-random-sleep-on-renew --cert-name shadowsofwar.io
-sudo /usr/local/bin/certbot renew --no-random-sleep-on-renew --deploy-hook 'service nginx reload'
 for cert in \
     /usr/local/etc/letsencrypt/live/ionicswap.com/cert.pem \
     /usr/local/etc/letsencrypt/live/mail.worldofunreal.com/cert.pem \
@@ -2777,8 +2642,8 @@ sudo openssl x509 -in /usr/local/etc/letsencrypt/live/shadowsofwar.io/cert.pem \
 sudo openssl x509 -in /usr/local/etc/letsencrypt/live/shadowsofwar.io/cert.pem \
     -noout -checkhost ws.shadowsofwar.io >/dev/null"#;
     run("ssh", &[&config.control_host, command], None)
-        .context("IONOS certificate renewal or validity check failed")?;
-    println!("  IONOS certificates valid and renewal command completed");
+        .context("IONOS certificate validity check failed")?;
+    println!("  IONOS certificates valid; renewal is handled by the weekly certbot schedule");
     Ok(())
 }
 

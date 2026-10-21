@@ -2701,7 +2701,7 @@
    "avatar": "gokturks"
   },
   {
-   "id": "tribe_uigures",
+   "id": "tribe_uyghurs",
    "name": "Uyghurs (khaganate)",
    "entity": "Uyghurs (khaganate)",
    "role": "tribe",
@@ -2709,7 +2709,7 @@
    "lat": 35.8447,
    "lon": 103.4519,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Etnia_uigur",
+   "wikipedia": "https://en.wikipedia.org/wiki/Uyghurs",
    "avatar": "uyghurs"
   },
   {
@@ -2721,11 +2721,11 @@
    "lat": 36.7581,
    "lon": 66.8989,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Kujula_Kadphises",
+   "wikipedia": "https://en.wikipedia.org/wiki/Kujula_Kadphises",
    "avatar": "yuezhi"
   },
   {
-   "id": "tribe_heftalitas",
+   "id": "tribe_hephthalites",
    "name": "Hephthalites",
    "entity": "Hephthalites",
    "role": "tribe",
@@ -2769,7 +2769,7 @@
    "lat": 41.702,
    "lon": 124.858,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Nurhaci",
+   "wikipedia": "https://en.wikipedia.org/wiki/Nurhaci",
    "avatar": "jianzhou"
   },
   {
@@ -2785,7 +2785,7 @@
    "avatar": "oirates"
   },
   {
-   "id": "tribe_keraitas",
+   "id": "tribe_keraites",
    "name": "Keraites",
    "entity": "Keraites",
    "role": "tribe",
@@ -2797,7 +2797,7 @@
    "avatar": "keraites"
   },
   {
-   "id": "tribe_naimanos",
+   "id": "tribe_naimans",
    "name": "Naimans",
    "entity": "Naimans",
    "role": "tribe",
@@ -2809,7 +2809,7 @@
    "avatar": "naimans"
   },
   {
-   "id": "tribe_tartaros",
+   "id": "tribe_tatars",
    "name": "Tatars (steppe)",
    "entity": "Tatars (steppe)",
    "role": "tribe",
@@ -2817,11 +2817,11 @@
    "lat": 48.5,
    "lon": 115.0,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/T%C3%A1rtaros",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tatars",
    "avatar": "tatars"
   },
   {
-   "id": "tribe_merkitas",
+   "id": "tribe_merkits",
    "name": "Merkits",
    "entity": "Merkits",
    "role": "tribe",
@@ -2829,11 +2829,11 @@
    "lat": 51.5,
    "lon": 107.0,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Merkit",
+   "wikipedia": "https://en.wikipedia.org/wiki/Merkit",
    "avatar": "merkits"
   },
   {
-   "id": "tribe_kazajos_pequena_horda",
+   "id": "tribe_kazakhs_little_horde",
    "name": "Kazakhs (Little Horde)",
    "entity": "Kazakhs (Little Horde)",
    "role": "tribe",
@@ -2845,7 +2845,7 @@
    "avatar": "kazakhs_little_horde"
   },
   {
-   "id": "tribe_calmucos",
+   "id": "tribe_kalmyks",
    "name": "Kalmyks",
    "entity": "Kalmyks",
    "role": "tribe",
@@ -2865,7 +2865,7 @@
    "lat": 39.0311,
    "lon": 43.3597,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Qara_Yusuf",
+   "wikipedia": "https://en.wikipedia.org/wiki/Qara_Yusuf",
    "avatar": "kara_koyunlu"
   },
   {
@@ -2877,11 +2877,11 @@
    "lat": 37.9108,
    "lon": 40.2367,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Uz%C3%BAn_Has%C3%A1n",
+   "wikipedia": "https://en.wikipedia.org/wiki/Uzun_Hasan",
    "avatar": "ak_koyunlu"
   },
   {
-   "id": "tribe_oguz_selyucidas",
+   "id": "tribe_oghuz_seljuks",
    "name": "Oghuz Seljuks",
    "entity": "Oghuz Seljuks",
    "role": "tribe",
@@ -2901,11 +2901,11 @@
    "lat": 38.7542,
    "lon": 42.4877,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ertu%C4%9Frul",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ertu%C4%9Frul",
    "avatar": "kay"
   },
   {
-   "id": "tribe_abdalies",
+   "id": "tribe_abdalis",
    "name": "Abdalis (Durrani)",
    "entity": "Abdalis (Durrani)",
    "role": "tribe",
@@ -2913,11 +2913,11 @@
    "lat": 34.3419,
    "lon": 62.2031,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ahmad_Shah_Durrani",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ahmad_Shah_Durrani",
    "avatar": "abdalis"
   },
   {
-   "id": "tribe_baluchis_de_kalat",
+   "id": "tribe_baluchis_of_kalat",
    "name": "Baluchis of Kalat",
    "entity": "Baluchis of Kalat",
    "role": "tribe",
@@ -2941,7 +2941,7 @@
    "avatar": "banu_shayban"
   },
   {
-   "id": "tribe_nabateos",
+   "id": "tribe_nabataeans",
    "name": "Nabataeans",
    "entity": "Nabataeans",
    "role": "tribe",
@@ -2949,7 +2949,7 @@
    "lat": 30.3286,
    "lon": 35.4419,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Aretas_IV",
+   "wikipedia": "https://en.wikipedia.org/wiki/Aretas_IV_Philopatris",
    "avatar": "nabataeans"
   },
   {
@@ -2965,7 +2965,7 @@
    "avatar": "kinda"
   },
   {
-   "id": "tribe_lajmidas",
+   "id": "tribe_lakhmids",
    "name": "Lakhmids",
    "entity": "Lakhmids",
    "role": "tribe",
@@ -2973,11 +2973,11 @@
    "lat": 31.8833,
    "lon": 44.45,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Al-Mundhir_III_ibn_al-Nu%27man",
+   "wikipedia": "https://en.wikipedia.org/wiki/Al-Mundhir_III_ibn_al-Nu%27man",
    "avatar": "lakhmids"
   },
   {
-   "id": "tribe_gasanidas",
+   "id": "tribe_ghassanids",
    "name": "Ghassanids",
    "entity": "Ghassanids",
    "role": "tribe",
@@ -2985,11 +2985,11 @@
    "lat": 33.0,
    "lon": 36.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Al-Harith_ibn_Jabalah",
+   "wikipedia": "https://en.wikipedia.org/wiki/Al-Harith_ibn_Jabalah",
    "avatar": "ghassanids"
   },
   {
-   "id": "tribe_himyaritas",
+   "id": "tribe_himyarites",
    "name": "Himyarites",
    "entity": "Himyarites",
    "role": "tribe",
@@ -2997,11 +2997,11 @@
    "lat": 14.5,
    "lon": 44.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Himyar",
+   "wikipedia": "https://en.wikipedia.org/wiki/Himyar",
    "avatar": "himyarites"
   },
   {
-   "id": "tribe_medos",
+   "id": "tribe_medes",
    "name": "Medes",
    "entity": "Medes",
    "role": "tribe",
@@ -3009,11 +3009,11 @@
    "lat": 37,
    "lon": 47,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Deyoces",
+   "wikipedia": "https://en.wikipedia.org/wiki/Deioces",
    "avatar": "medes"
   },
   {
-   "id": "tribe_parnos",
+   "id": "tribe_parni",
    "name": "Parni (Parthians)",
    "entity": "Parni (Parthians)",
    "role": "tribe",
@@ -3021,7 +3021,7 @@
    "lat": 33.0936,
    "lon": 44.5808,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Arsaces_I",
+   "wikipedia": "https://en.wikipedia.org/wiki/Arsaces_I_of_Parthia",
    "avatar": "parni"
   },
   {
@@ -3037,7 +3037,7 @@
    "avatar": "sakas"
   },
   {
-   "id": "tribe_cimerios",
+   "id": "tribe_cimmerians",
    "name": "Cimmerians",
    "entity": "Cimmerians",
    "role": "tribe",
@@ -3057,7 +3057,7 @@
    "lat": 35,
    "lon": 136,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Shakushain",
+   "wikipedia": "https://en.wikipedia.org/wiki/Shakushain",
    "avatar": "ainu"
   },
   {
@@ -3073,7 +3073,7 @@
    "avatar": "emishi"
   },
   {
-   "id": "tribe_pueblo_de_mactan",
+   "id": "tribe_mactan",
    "name": "Mactan",
    "entity": "Mactan",
    "role": "tribe",
@@ -3081,7 +3081,7 @@
    "lat": 10.3,
    "lon": 123.9667,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Lapulapu",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lapulapu",
    "avatar": "mactan"
   },
   {
@@ -3093,7 +3093,7 @@
    "lat": 7.1333,
    "lon": 124.3,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Sult%C3%A1n_Kudarat",
+   "wikipedia": "https://en.wikipedia.org/wiki/Sultan_Kudarat%2C_Maguindanao_del_Norte",
    "avatar": "maguindanao"
   },
   {
@@ -3133,7 +3133,7 @@
    "avatar": "minangkabau"
   },
   {
-   "id": "tribe_makasar",
+   "id": "tribe_makassar",
    "name": "Makassar",
    "entity": "Makassar",
    "role": "tribe",
@@ -3145,7 +3145,7 @@
    "avatar": "makassar"
   },
   {
-   "id": "tribe_gond_de_garha",
+   "id": "tribe_gonds_of_garha",
    "name": "Gonds of Garha",
    "entity": "Gonds of Garha",
    "role": "tribe",
@@ -3193,7 +3193,7 @@
    "avatar": "khasi"
   },
   {
-   "id": "tribe_tibetanos_de_yarlung",
+   "id": "tribe_yarlung_tibetans",
    "name": "Yarlung Tibetans",
    "entity": "Yarlung Tibetans",
    "role": "tribe",
@@ -3201,7 +3201,7 @@
    "lat": 29.6458,
    "lon": 91.1408,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Songtsen_Gampo",
+   "wikipedia": "https://en.wikipedia.org/wiki/Songtsen_Gampo",
    "avatar": "yarlung_tibetans"
   },
   {
@@ -3217,7 +3217,7 @@
    "avatar": "zhuang"
   },
   {
-   "id": "tribe_saja",
+   "id": "tribe_sakha",
    "name": "Sakha (Yakuts)",
    "entity": "Sakha (Yakuts)",
    "role": "tribe",
@@ -3229,7 +3229,7 @@
    "avatar": "sakha"
   },
   {
-   "id": "tribe_uzbecos_shaibanidas",
+   "id": "tribe_shaybanid_uzbeks",
    "name": "Shaybanid Uzbeks",
    "entity": "Shaybanid Uzbeks",
    "role": "tribe",
@@ -3237,11 +3237,11 @@
    "lat": 45.3,
    "lon": 63.9,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Muhammad_Shaybani",
+   "wikipedia": "https://en.wikipedia.org/wiki/Muhammad_Shaybani",
    "avatar": "shaybanid_uzbeks"
   },
   {
-   "id": "tribe_circasianos",
+   "id": "tribe_circassians",
    "name": "Circassians",
    "entity": "Circassians",
    "role": "tribe",
@@ -3253,7 +3253,7 @@
    "avatar": "circassians"
   },
   {
-   "id": "tribe_chechenos",
+   "id": "tribe_chechens",
    "name": "Chechens",
    "entity": "Chechens",
    "role": "tribe",
@@ -3261,11 +3261,11 @@
    "lat": 66.4167,
    "lon": 94.25,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Mansur_Ushurma",
+   "wikipedia": "https://en.wikipedia.org/wiki/Sheikh_Mansur",
    "avatar": "chechens"
   },
   {
-   "id": "tribe_avaros_del_caucaso",
+   "id": "tribe_caucasian_avars",
    "name": "Caucasian Avars",
    "entity": "Caucasian Avars",
    "role": "tribe",
@@ -3273,11 +3273,11 @@
    "lat": 42.7578,
    "lon": 46.8422,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Shamil",
+   "wikipedia": "https://en.wikipedia.org/wiki/Imam_Shamil",
    "avatar": "caucasian_avars"
   },
   {
-   "id": "tribe_galatas_tectosagos",
+   "id": "tribe_tectosages",
    "name": "Tectosages (Galatians)",
    "entity": "Tectosages (Galatians)",
    "role": "tribe",
@@ -3285,7 +3285,7 @@
    "lat": 39.2667,
    "lon": 32.9833,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Dey%C3%B3taro",
+   "wikipedia": "https://en.wikipedia.org/wiki/Deiotarus",
    "avatar": "tectosages"
   },
   {
@@ -3301,7 +3301,7 @@
    "avatar": "hazaras"
   },
   {
-   "id": "tribe_bugis_de_bone",
+   "id": "tribe_bugis_of_bone",
    "name": "Bugis of Bone",
    "entity": "Bugis of Bone",
    "role": "tribe",
@@ -3313,7 +3313,7 @@
    "avatar": "bugis_of_bone"
   },
   {
-   "id": "tribe_tagalos",
+   "id": "tribe_tagalogs",
    "name": "Tagalogs",
    "entity": "Tagalogs",
    "role": "tribe",
@@ -3333,11 +3333,11 @@
    "lat": 66.0,
    "lon": 175.0,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Chukchi",
+   "wikipedia": "https://en.wikipedia.org/wiki/Chukchi_people",
    "avatar": "chukchis"
   },
   {
-   "id": "tribe_masagetas",
+   "id": "tribe_massagetae",
    "name": "Massagetae",
    "entity": "Massagetae",
    "role": "tribe",
@@ -3345,11 +3345,11 @@
    "lat": 45.3,
    "lon": 63.9,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Tomiris",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tomyris",
    "avatar": "massagetae"
   },
   {
-   "id": "tribe_sakas_de_asia_central",
+   "id": "tribe_central_asian_sakas",
    "name": "Central Asian Sakas",
    "entity": "Central Asian Sakas",
    "role": "tribe",
@@ -3357,11 +3357,11 @@
    "lat": 43.3667,
    "lon": 27.1167,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Zar",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tsar",
    "avatar": "central_asian_sakas"
   },
   {
-   "id": "tribe_tolistobogios",
+   "id": "tribe_tolistoboii",
    "name": "Tolistoboii (Galatians)",
    "entity": "Tolistoboii (Galatians)",
    "role": "tribe",
@@ -3369,11 +3369,11 @@
    "lat": 39.9,
    "lon": 32.8,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Chiomara",
+   "wikipedia": "https://en.wikipedia.org/wiki/Chiomara_%28butterfly%29",
    "avatar": "tolistoboii"
   },
   {
-   "id": "tribe_tanujidas",
+   "id": "tribe_tanukhids",
    "name": "Tanukhids",
    "entity": "Tanukhids",
    "role": "tribe",
@@ -3381,11 +3381,11 @@
    "lat": 35.7833,
    "lon": 37.4833,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Mavia",
+   "wikipedia": "https://en.wikipedia.org/wiki/Mawiyya",
    "avatar": "tanukhids"
   },
   {
-   "id": "tribe_qedaritas",
+   "id": "tribe_qedarites",
    "name": "Qedarites (Arabs)",
    "entity": "Qedarites (Arabs)",
    "role": "tribe",
@@ -3393,7 +3393,7 @@
    "lat": 30.0,
    "lon": 38.0,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Samsi",
+   "wikipedia": "https://en.wikipedia.org/wiki/%C5%A0am%C5%A1i",
    "avatar": "qedarites"
   },
   {
@@ -3417,7 +3417,7 @@
    "lat": 25.0,
    "lon": 47.0,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Sajah",
+   "wikipedia": "https://en.wikipedia.org/wiki/Sajah",
    "avatar": "banu_tamim"
   },
   {
@@ -3429,7 +3429,7 @@
    "lat": 46,
    "lon": 105,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Hoelun",
+   "wikipedia": "https://en.wikipedia.org/wiki/H%C3%B6%27el%C3%BCn",
    "avatar": "olkhunut"
   },
   {
@@ -3441,11 +3441,11 @@
    "lat": 48,
    "lon": 110.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Borte",
+   "wikipedia": "https://en.wikipedia.org/wiki/B%C3%B6rte",
    "avatar": "onggirat"
   },
   {
-   "id": "tribe_ulus_de_kaidu",
+   "id": "tribe_ulus_of_kaidu",
    "name": "Ulus of Kaidu",
    "entity": "Ulus of Kaidu",
    "role": "tribe",
@@ -3457,7 +3457,7 @@
    "avatar": "ulus_of_kaidu"
   },
   {
-   "id": "tribe_kazajos_gran_horda",
+   "id": "tribe_kazakhs_great_horde",
    "name": "Kazakhs (Great Horde)",
    "entity": "Kazakhs (Great Horde)",
    "role": "tribe",
@@ -3465,11 +3465,11 @@
    "lat": 48,
    "lon": 68,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Kazajos",
+   "wikipedia": "https://en.wikipedia.org/wiki/Kazakhs",
    "avatar": "kazakhs_great_horde"
   },
   {
-   "id": "tribe_kitan",
+   "id": "tribe_khitans",
    "name": "Khitans",
    "entity": "Khitans",
    "role": "tribe",
@@ -3501,7 +3501,7 @@
    "lat": -1.6167,
    "lon": 34.0833,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Himiko",
+   "wikipedia": "https://en.wikipedia.org/wiki/Himiko",
    "avatar": "wa"
   },
   {
@@ -3513,11 +3513,11 @@
    "lat": 17.486,
    "lon": 120.4344,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Gabriela_Silang",
+   "wikipedia": "https://en.wikipedia.org/wiki/Gabriela_Silang",
    "avatar": "ilocanos"
   },
   {
-   "id": "tribe_pangasinenses",
+   "id": "tribe_pangasinan",
    "name": "Pangasinan",
    "entity": "Pangasinan",
    "role": "tribe",
@@ -3529,7 +3529,7 @@
    "avatar": "pangasinan"
   },
   {
-   "id": "tribe_achenenses",
+   "id": "tribe_achaemenids",
    "name": "Achaemenids",
    "entity": "Achaemenids",
    "role": "tribe",
@@ -3541,7 +3541,7 @@
    "avatar": "achaemenids"
   },
   {
-   "id": "tribe_bugis_de_tanete",
+   "id": "tribe_bugis_of_tanete",
    "name": "Bugis of Tanete",
    "entity": "Bugis of Tanete",
    "role": "tribe",
@@ -3565,7 +3565,7 @@
    "avatar": "zeliangrong"
   },
   {
-   "id": "tribe_kolis_de_jhansi",
+   "id": "tribe_kolis_of_jhansi",
    "name": "Kolis of Jhansi",
    "entity": "Kolis of Jhansi",
    "role": "tribe",
@@ -3577,7 +3577,7 @@
    "avatar": "kolis_of_jhansi"
   },
   {
-   "id": "tribe_santales",
+   "id": "tribe_santals",
    "name": "Santals",
    "entity": "Santals",
    "role": "tribe",
@@ -3613,7 +3613,7 @@
    "avatar": "mizos"
   },
   {
-   "id": "tribe_pashtunes_de_maiwand",
+   "id": "tribe_pashtuns_of_maiwand",
    "name": "Pashtuns of Maiwand",
    "entity": "Pashtuns of Maiwand",
    "role": "tribe",
@@ -3633,11 +3633,11 @@
    "lat": 34.607,
    "lon": 45.3133,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Jaf",
+   "wikipedia": "https://en.wikipedia.org/wiki/Jaff",
    "avatar": "jaf"
   },
   {
-   "id": "tribe_calmucos_torgutos",
+   "id": "tribe_torghut_kalmyks",
    "name": "Torghut Kalmyks",
    "entity": "Torghut Kalmyks",
    "role": "tribe",
@@ -3661,7 +3661,7 @@
    "avatar": "tuyuhun"
   },
   {
-   "id": "tribe_kirguises_del_yenisei",
+   "id": "tribe_yenisei_kyrgyz",
    "name": "Yenisei Kyrgyz",
    "entity": "Yenisei Kyrgyz",
    "role": "tribe",
@@ -3669,11 +3669,11 @@
    "lat": 41,
    "lon": 75,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Kirguises",
+   "wikipedia": "https://en.wikipedia.org/wiki/Kyrgyz_people",
    "avatar": "yenisei_kyrgyz"
   },
   {
-   "id": "tribe_buriatos",
+   "id": "tribe_buryats",
    "name": "Buryats",
    "entity": "Buryats",
    "role": "tribe",
@@ -3681,11 +3681,11 @@
    "lat": 66.4167,
    "lon": 94.25,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Pueblo_buriato",
+   "wikipedia": "https://en.wikipedia.org/wiki/Buryats",
    "avatar": "buryats"
   },
   {
-   "id": "tribe_evenkis",
+   "id": "tribe_evenks",
    "name": "Evenks",
    "entity": "Evenks",
    "role": "tribe",
@@ -3693,7 +3693,7 @@
    "lat": 35.8447,
    "lon": 103.4519,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Etnia_evenki",
+   "wikipedia": "https://en.wikipedia.org/wiki/Evenki_people",
    "avatar": "evenks"
   },
   {
@@ -3705,7 +3705,7 @@
    "lat": 66.4167,
    "lon": 94.25,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/N%C3%A9nets",
+   "wikipedia": "https://en.wikipedia.org/wiki/Nenets",
    "avatar": "nenets"
   },
   {
@@ -3721,7 +3721,7 @@
    "avatar": "janty"
   },
   {
-   "id": "tribe_itelmenos",
+   "id": "tribe_itelmens",
    "name": "Itelmens (Kamchatka)",
    "entity": "Itelmens (Kamchatka)",
    "role": "tribe",
@@ -3729,7 +3729,7 @@
    "lat": 56.0,
    "lon": 159.0,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Itelmenos",
+   "wikipedia": "https://en.wikipedia.org/wiki/Itelmens",
    "avatar": "itelmens"
   },
   {
@@ -3741,11 +3741,11 @@
    "lat": 66.4,
    "lon": 129.1667,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Hezhen",
+   "wikipedia": "https://en.wikipedia.org/wiki/Nanai_people",
    "avatar": "nanai"
   },
   {
-   "id": "tribe_ainu_de_sajalin",
+   "id": "tribe_ainu_of_sakhalin",
    "name": "Ainu of Sakhalin",
    "entity": "Ainu of Sakhalin",
    "role": "tribe",
@@ -3793,7 +3793,7 @@
    "avatar": "atayal"
   },
   {
-   "id": "tribe_igorotes",
+   "id": "tribe_igorots",
    "name": "Igorots",
    "entity": "Igorots",
    "role": "tribe",
@@ -3801,7 +3801,7 @@
    "lat": 17.1667,
    "lon": 121.1667,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Igorrote",
+   "wikipedia": "https://en.wikipedia.org/wiki/Igorot_people",
    "avatar": "igorots"
   },
   {
@@ -3813,7 +3813,7 @@
    "lat": 7.8,
    "lon": 125.0,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Manobos",
+   "wikipedia": "https://en.wikipedia.org/wiki/Manobo",
    "avatar": "manobo"
   },
   {
@@ -3837,7 +3837,7 @@
    "lat": -3.75,
    "lon": 120,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Toraya",
+   "wikipedia": "https://en.wikipedia.org/wiki/Torajan_people",
    "avatar": "toraja"
   },
   {
@@ -3873,7 +3873,7 @@
    "lat": 26.5,
    "lon": 107.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Pueblo_hmong",
+   "wikipedia": "https://en.wikipedia.org/wiki/Hmong_people",
    "avatar": "hmong"
   },
   {
@@ -3889,7 +3889,7 @@
    "avatar": "yi"
   },
   {
-   "id": "tribe_bai_de_dali",
+   "id": "tribe_bai_of_dali",
    "name": "Bai of Dali",
    "entity": "Bai of Dali",
    "role": "tribe",
@@ -3925,7 +3925,7 @@
    "avatar": "li"
   },
   {
-   "id": "tribe_sabeos",
+   "id": "tribe_sabaeans",
    "name": "Sabaeans",
    "entity": "Sabaeans",
    "role": "tribe",
@@ -3945,11 +3945,11 @@
    "lat": 30.8572,
    "lon": 32.3506,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Tyaru",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tjaru",
    "avatar": "tharu"
   },
   {
-   "id": "tribe_todas",
+   "id": "tribe_toda",
    "name": "Toda (Nilgiri)",
    "entity": "Toda (Nilgiri)",
    "role": "tribe",
@@ -3997,7 +3997,7 @@
    "avatar": "lepchas"
   },
   {
-   "id": "tribe_baluchis_marri",
+   "id": "tribe_marri_baluchis",
    "name": "Marri Baluchis",
    "entity": "Marri Baluchis",
    "role": "tribe",
@@ -4041,7 +4041,7 @@
    "lat": 41.4,
    "lon": -72.0,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Sassacus",
+   "wikipedia": "https://en.wikipedia.org/wiki/Sassacus",
    "avatar": "pequot"
   },
   {
@@ -4053,7 +4053,7 @@
    "lat": 39.8282,
    "lon": -98.5795,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Uncas",
+   "wikipedia": "https://en.wikipedia.org/wiki/Uncas",
    "avatar": "mohegan"
   },
   {
@@ -4065,7 +4065,7 @@
    "lat": 56,
    "lon": -109,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Cornplanter",
+   "wikipedia": "https://en.wikipedia.org/wiki/Cornplanter",
    "avatar": "seneca"
   },
   {
@@ -4089,7 +4089,7 @@
    "lat": 43.085,
    "lon": -75.6533,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Skenandoa",
+   "wikipedia": "https://en.wikipedia.org/wiki/Skenandoa",
    "avatar": "oneida"
   },
   {
@@ -4149,11 +4149,11 @@
    "lat": 35.6,
    "lon": -95.9,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Menawa",
+   "wikipedia": "https://en.wikipedia.org/wiki/Menawa",
    "avatar": "muscogee"
   },
   {
-   "id": "tribe_seminolas",
+   "id": "tribe_seminoles",
    "name": "Seminoles",
    "entity": "Seminoles",
    "role": "tribe",
@@ -4161,7 +4161,7 @@
    "lat": 33,
    "lon": -83.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Osceola",
+   "wikipedia": "https://en.wikipedia.org/wiki/Osceola",
    "avatar": "seminoles"
   },
   {
@@ -4209,7 +4209,7 @@
    "lat": 39.8282,
    "lon": -98.5795,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Quanah_Parker",
+   "wikipedia": "https://en.wikipedia.org/wiki/Quanah_Parker",
    "avatar": "comanches"
   },
   {
@@ -4221,11 +4221,11 @@
    "lat": 37.4367,
    "lon": -100.988,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Satanta",
+   "wikipedia": "https://en.wikipedia.org/wiki/Satanta%2C_Kansas",
    "avatar": "kiowa"
   },
   {
-   "id": "tribe_cheyenne_del_norte",
+   "id": "tribe_northern_cheyenne",
    "name": "Northern Cheyenne",
    "entity": "Northern Cheyenne",
    "role": "tribe",
@@ -4233,7 +4233,7 @@
    "lat": -33,
    "lon": -71,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Morning_Star_Sport_Club",
+   "wikipedia": "https://en.wikipedia.org/wiki/Northern_Cheyenne",
    "avatar": "northern_cheyenne"
   },
   {
@@ -4293,11 +4293,11 @@
    "lat": 39.5,
    "lon": -111.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Manuelito",
+   "wikipedia": "https://en.wikipedia.org/wiki/Manuelito",
    "avatar": "navajo"
   },
   {
-   "id": "tribe_pueblos",
+   "id": "tribe_pueblo",
    "name": "Pueblo (Ohkay Owingeh)",
    "entity": "Pueblo (Ohkay Owingeh)",
    "role": "tribe",
@@ -4305,7 +4305,7 @@
    "lat": 34,
    "lon": -106,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Pop%C3%A9",
+   "wikipedia": "https://en.wikipedia.org/wiki/Po%27pay",
    "avatar": "pueblo"
   },
   {
@@ -4317,7 +4317,7 @@
    "lat": 39.5,
    "lon": -111.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ouray",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ouray%2C_Colorado",
    "avatar": "ute"
   },
   {
@@ -4329,7 +4329,7 @@
    "lat": 42.6915,
    "lon": -121.9733,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Kintpuash",
+   "wikipedia": "https://en.wikipedia.org/wiki/Kintpuash",
    "avatar": "modoc"
   },
   {
@@ -4353,11 +4353,11 @@
    "lat": 53.25,
    "lon": -132.1,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Haida",
+   "wikipedia": "https://en.wikipedia.org/wiki/Haida_people",
    "avatar": "haida"
   },
   {
-   "id": "tribe_cree_de_las_llanuras",
+   "id": "tribe_plains_cree",
    "name": "Plains Cree",
    "entity": "Plains Cree",
    "role": "tribe",
@@ -4417,7 +4417,7 @@
    "avatar": "abenaki"
   },
   {
-   "id": "tribe_yaquis",
+   "id": "tribe_yaqui",
    "name": "Yaqui",
    "entity": "Yaqui",
    "role": "tribe",
@@ -4429,7 +4429,7 @@
    "avatar": "yaqui"
   },
   {
-   "id": "tribe_purepechas",
+   "id": "tribe_purepecha",
    "name": "Purépecha",
    "entity": "Purépecha",
    "role": "tribe",
@@ -4441,7 +4441,7 @@
    "avatar": "purepecha"
   },
   {
-   "id": "tribe_tlaxcaltecas",
+   "id": "tribe_tlaxcalans",
    "name": "Tlaxcalans",
    "entity": "Tlaxcalans",
    "role": "tribe",
@@ -4453,7 +4453,7 @@
    "avatar": "tlaxcalans"
   },
   {
-   "id": "tribe_mixtecos",
+   "id": "tribe_mixtec",
    "name": "Mixtec",
    "entity": "Mixtec",
    "role": "tribe",
@@ -4461,11 +4461,11 @@
    "lat": 23,
    "lon": -102,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ocho-Venado",
+   "wikipedia": "https://en.wikipedia.org/wiki/Eight_Deer_Jaguar_Claw",
    "avatar": "mixtec"
   },
   {
-   "id": "tribe_zapotecos",
+   "id": "tribe_zapotec",
    "name": "Zapotec",
    "entity": "Zapotec",
    "role": "tribe",
@@ -4473,11 +4473,11 @@
    "lat": 23,
    "lon": -102,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Cocijoeza",
+   "wikipedia": "https://en.wikipedia.org/wiki/Cosijoeza",
    "avatar": "zapotec"
   },
   {
-   "id": "tribe_itzaes",
+   "id": "tribe_itza",
    "name": "Itza",
    "entity": "Itza",
    "role": "tribe",
@@ -4485,7 +4485,7 @@
    "lat": 23,
    "lon": -102,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Canek",
+   "wikipedia": "https://en.wikipedia.org/wiki/Kan_Ek%CA%BC",
    "avatar": "itza"
   },
   {
@@ -4497,11 +4497,11 @@
    "lat": 15.5,
    "lon": -90.25,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Tec%C3%BAn_Um%C3%A1n",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tecun_Uman",
    "avatar": "k_iche"
   },
   {
-   "id": "tribe_lencas",
+   "id": "tribe_lenca",
    "name": "Lenca",
    "entity": "Lenca",
    "role": "tribe",
@@ -4513,7 +4513,7 @@
    "avatar": "lenca"
   },
   {
-   "id": "tribe_nicaraos",
+   "id": "tribe_nicarao",
    "name": "Nicarao",
    "entity": "Nicarao",
    "role": "tribe",
@@ -4521,11 +4521,11 @@
    "lat": 13,
    "lon": -85,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Nicarao",
+   "wikipedia": "https://en.wikipedia.org/wiki/Nicarao_%28cacique%29",
    "avatar": "nicarao"
   },
   {
-   "id": "tribe_muiscas",
+   "id": "tribe_muisca",
    "name": "Muisca",
    "entity": "Muisca",
    "role": "tribe",
@@ -4533,11 +4533,11 @@
    "lat": 5,
    "lon": -74.15,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Tisquesusa",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tisquesusa",
    "avatar": "muisca"
   },
   {
-   "id": "tribe_calchaquies",
+   "id": "tribe_calchaqui",
    "name": "Calchaquí (Diaguita)",
    "entity": "Calchaquí (Diaguita)",
    "role": "tribe",
@@ -4545,11 +4545,11 @@
    "lat": -13.5167,
    "lon": -71.9667,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Juan_Calchaqu%C3%AD",
+   "wikipedia": "https://en.wikipedia.org/wiki/Calchaqu%C3%AD",
    "avatar": "calchaqui"
   },
   {
-   "id": "tribe_guaranies_de_las_misiones",
+   "id": "tribe_guarani_of_the_missions",
    "name": "Guaraní of the Missions",
    "entity": "Guaraní of the Missions",
    "role": "tribe",
@@ -4557,7 +4557,7 @@
    "lat": -28.4078,
    "lon": -54.9608,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Sep%C3%A9_Tiaray%C3%BA",
+   "wikipedia": "https://en.wikipedia.org/wiki/Sep%C3%A9_Tiaraju",
    "avatar": "guarani_of_the_missions"
   },
   {
@@ -4569,7 +4569,7 @@
    "lat": -14,
    "lon": -53,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Cunhambebe",
+   "wikipedia": "https://en.wikipedia.org/wiki/Cunhambebe",
    "avatar": "tupinamba"
   },
   {
@@ -4593,7 +4593,7 @@
    "lat": 41.9,
    "lon": -71.0903,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Weetamoo",
+   "wikipedia": "https://en.wikipedia.org/wiki/Weetamoo",
    "avatar": "pocasset"
   },
   {
@@ -4605,7 +4605,7 @@
    "lat": 44.2056,
    "lon": -70.3064,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Awashonks",
+   "wikipedia": "https://en.wikipedia.org/wiki/Awashonks",
    "avatar": "sakonnet"
   },
   {
@@ -4633,7 +4633,7 @@
    "avatar": "pamunkey"
   },
   {
-   "id": "tribe_tainos_de_boriken",
+   "id": "tribe_taino",
    "name": "Taíno (Borikén)",
    "entity": "Taíno (Borikén)",
    "role": "tribe",
@@ -4657,7 +4657,7 @@
    "avatar": "potiguara"
   },
   {
-   "id": "tribe_chichimecas_guachichiles",
+   "id": "tribe_chichimecs_guachichil",
    "name": "Chichimecs (Guachichil)",
    "entity": "Chichimecs (Guachichil)",
    "role": "tribe",
@@ -4677,7 +4677,7 @@
    "lat": 42.9,
    "lon": -76.7,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Cayuga",
+   "wikipedia": "https://en.wikipedia.org/wiki/Cayuga_people",
    "avatar": "cayuga"
   },
   {
@@ -4689,7 +4689,7 @@
    "lat": 39.8282,
    "lon": -98.5795,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Tuscarora",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tuscarora_people",
    "avatar": "tuscarora"
   },
   {
@@ -4713,11 +4713,11 @@
    "lat": 32.2,
    "lon": -81.0,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Yamasi",
+   "wikipedia": "https://en.wikipedia.org/wiki/Yamasee",
    "avatar": "yamasee"
   },
   {
-   "id": "tribe_timucuas",
+   "id": "tribe_timucua",
    "name": "Timucua",
    "entity": "Timucua",
    "role": "tribe",
@@ -4737,7 +4737,7 @@
    "lat": 26.6,
    "lon": -81.9,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Calusa",
+   "wikipedia": "https://en.wikipedia.org/wiki/Calusa",
    "avatar": "calusa"
   },
   {
@@ -4749,7 +4749,7 @@
    "lat": 35.5,
    "lon": -98,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Pawnee",
+   "wikipedia": "https://en.wikipedia.org/wiki/Pawnee_people",
    "avatar": "pawnee"
   },
   {
@@ -4773,7 +4773,7 @@
    "lat": 50.5,
    "lon": -104.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Assiniboine",
+   "wikipedia": "https://en.wikipedia.org/wiki/Assiniboine",
    "avatar": "assiniboine"
   },
   {
@@ -4785,11 +4785,11 @@
    "lat": 56,
    "lon": -109,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Inuit",
+   "wikipedia": "https://en.wikipedia.org/wiki/Inuit",
    "avatar": "inuit"
   },
   {
-   "id": "tribe_inuit_del_labrador",
+   "id": "tribe_labrador_inuit",
    "name": "Labrador Inuit",
    "entity": "Labrador Inuit",
    "role": "tribe",
@@ -4821,7 +4821,7 @@
    "lat": 15.4167,
    "lon": -61.3333,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Kalinago",
+   "wikipedia": "https://en.wikipedia.org/wiki/Kalinago",
    "avatar": "kalinago"
   },
   {
@@ -4833,11 +4833,11 @@
    "lat": 11.55,
    "lon": -72.35,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Pueblo_way%C3%BA",
+   "wikipedia": "https://en.wikipedia.org/wiki/Wayuu_people",
    "avatar": "wayuu"
   },
   {
-   "id": "tribe_tehuelches",
+   "id": "tribe_tehuelche",
    "name": "Tehuelche",
    "entity": "Tehuelche",
    "role": "tribe",
@@ -4845,7 +4845,7 @@
    "lat": -41.8102,
    "lon": -68.9063,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Tehuelches",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tehuelche_people",
    "avatar": "tehuelche"
   },
   {
@@ -4857,11 +4857,11 @@
    "lat": -34,
    "lon": -64,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Lola_Kiepja",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lola_Kiepja",
    "avatar": "selk_nam"
   },
   {
-   "id": "tribe_yamanas",
+   "id": "tribe_yaghan",
    "name": "Yaghan",
    "entity": "Yaghan",
    "role": "tribe",
@@ -4869,7 +4869,7 @@
    "lat": -54,
    "lon": -70,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Pueblo_yag%C3%A1n",
+   "wikipedia": "https://en.wikipedia.org/wiki/Yahgan_people",
    "avatar": "yaghan"
   },
   {
@@ -4885,7 +4885,7 @@
    "avatar": "kaingang"
   },
   {
-   "id": "tribe_chancas",
+   "id": "tribe_chanca",
    "name": "Chanca",
    "entity": "Chanca",
    "role": "tribe",
@@ -4893,7 +4893,7 @@
    "lat": -13.6,
    "lon": -73.4,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Chanca",
+   "wikipedia": "https://en.wikipedia.org/wiki/Chanka",
    "avatar": "chanca"
   },
   {
@@ -4909,7 +4909,7 @@
    "avatar": "moche"
   },
   {
-   "id": "tribe_huancas",
+   "id": "tribe_huanca",
    "name": "Huanca",
    "entity": "Huanca",
    "role": "tribe",
@@ -4917,11 +4917,11 @@
    "lat": -9.4,
    "lon": -76,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Huanca",
+   "wikipedia": "https://en.wikipedia.org/wiki/Huanca",
    "avatar": "huanca"
   },
   {
-   "id": "tribe_canaris",
+   "id": "tribe_canari",
    "name": "Cañari",
    "entity": "Cañari",
    "role": "tribe",
@@ -4941,11 +4941,11 @@
    "lat": -1,
    "lon": -78,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Shuar",
+   "wikipedia": "https://en.wikipedia.org/wiki/Shuar",
    "avatar": "shuar"
   },
   {
-   "id": "tribe_ashaninkas",
+   "id": "tribe_ashaninka",
    "name": "Asháninka",
    "entity": "Asháninka",
    "role": "tribe",
@@ -4957,7 +4957,7 @@
    "avatar": "ashaninka"
   },
   {
-   "id": "tribe_moxos",
+   "id": "tribe_mojo",
    "name": "Mojo",
    "entity": "Mojo",
    "role": "tribe",
@@ -4965,11 +4965,11 @@
    "lat": -15.667,
    "lon": -65.917,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Moje%C3%B1os",
+   "wikipedia": "https://en.wikipedia.org/wiki/Moje%C3%B1os",
    "avatar": "mojo"
   },
   {
-   "id": "tribe_chiriguanos",
+   "id": "tribe_chiriguano",
    "name": "Chiriguano",
    "entity": "Chiriguano",
    "role": "tribe",
@@ -4977,11 +4977,11 @@
    "lat": -34,
    "lon": -64,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ava_guaran%C3%ADes",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ava_Guarani_people",
    "avatar": "chiriguano"
   },
   {
-   "id": "tribe_chontales",
+   "id": "tribe_chontal",
    "name": "Chontal",
    "entity": "Chontal",
    "role": "tribe",
@@ -4993,7 +4993,7 @@
    "avatar": "chontal"
   },
   {
-   "id": "tribe_tzeltales",
+   "id": "tribe_tzeltal",
    "name": "Tzeltal",
    "entity": "Tzeltal",
    "role": "tribe",
@@ -5005,7 +5005,7 @@
    "avatar": "tzeltal"
   },
   {
-   "id": "tribe_lacandones",
+   "id": "tribe_lacandon",
    "name": "Lacandon",
    "entity": "Lacandon",
    "role": "tribe",
@@ -5013,11 +5013,11 @@
    "lat": 16.4624,
    "lon": -91.1591,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Lacandones",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lacandon_people",
    "avatar": "lacandon"
   },
   {
-   "id": "tribe_otomies",
+   "id": "tribe_otomi",
    "name": "Otomi",
    "entity": "Otomi",
    "role": "tribe",
@@ -5025,11 +5025,11 @@
    "lat": 20.3,
    "lon": -99.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Pueblo_otom%C3%AD",
+   "wikipedia": "https://en.wikipedia.org/wiki/Otomi",
    "avatar": "otomi"
   },
   {
-   "id": "tribe_huastecos",
+   "id": "tribe_huastec",
    "name": "Huastec",
    "entity": "Huastec",
    "role": "tribe",
@@ -5037,11 +5037,11 @@
    "lat": 23,
    "lon": -102,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Pueblo_huasteco",
+   "wikipedia": "https://en.wikipedia.org/wiki/Huastec_people",
    "avatar": "huastec"
   },
   {
-   "id": "tribe_totonacas",
+   "id": "tribe_totonac",
    "name": "Totonac",
    "entity": "Totonac",
    "role": "tribe",
@@ -5061,7 +5061,7 @@
    "lat": 23,
    "lon": -102,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Lola_Casanova",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lola_Casanova",
    "avatar": "comcaac"
   },
   {
@@ -5073,7 +5073,7 @@
    "lat": 32.0,
    "lon": -112.0,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Pueblo_p%C3%A1pago",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tohono_O%CA%BCodham",
    "avatar": "tohono_o_odham"
   },
   {
@@ -5085,7 +5085,7 @@
    "lat": 35.8708,
    "lon": -110.6183,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Hopi",
+   "wikipedia": "https://en.wikipedia.org/wiki/Hopi",
    "avatar": "hopi"
   },
   {
@@ -5121,7 +5121,7 @@
    "lat": 39.8282,
    "lon": -98.5795,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Kumiai",
+   "wikipedia": "https://en.wikipedia.org/wiki/Kumeyaay",
    "avatar": "kumeyaay"
   },
   {
@@ -5133,7 +5133,7 @@
    "lat": 34.4,
    "lon": -119.7,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Chumash",
+   "wikipedia": "https://en.wikipedia.org/wiki/Chumash_people",
    "avatar": "chumash"
   },
   {
@@ -5157,7 +5157,7 @@
    "lat": 37.81,
    "lon": -122.37,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ohlone",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ohlone",
    "avatar": "ohlone"
   },
   {
@@ -5169,7 +5169,7 @@
    "lat": -27.6167,
    "lon": 32.0333,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Mzilikazi",
+   "wikipedia": "https://en.wikipedia.org/wiki/Mzilikazi",
    "avatar": "ndebele"
   },
   {
@@ -5181,7 +5181,7 @@
    "lat": -22.2,
    "lon": 23.7,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Moshoeshoe_I",
+   "wikipedia": "https://en.wikipedia.org/wiki/Moshoeshoe_I",
    "avatar": "basotho"
   },
   {
@@ -5217,7 +5217,7 @@
    "lat": -29,
    "lon": 24,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Makhado",
+   "wikipedia": "https://en.wikipedia.org/wiki/Makhado_Local_Municipality",
    "avatar": "venda"
   },
   {
@@ -5229,7 +5229,7 @@
    "lat": -22,
    "lon": 17,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Samuel_Maharero",
+   "wikipedia": "https://en.wikipedia.org/wiki/Samuel_Maharero",
    "avatar": "herero"
   },
   {
@@ -5241,7 +5241,7 @@
    "lat": -22,
    "lon": 17,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Hendrik_Witbooi",
+   "wikipedia": "https://en.wikipedia.org/wiki/Hendrik_Witbooi_%28Nama_chief%29",
    "avatar": "nama"
   },
   {
@@ -5265,7 +5265,7 @@
    "lat": -6.3069,
    "lon": 34.8539,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Mtwa_Mkwawa",
+   "wikipedia": "https://en.wikipedia.org/wiki/Chief_Mkwawa",
    "avatar": "hehe"
   },
   {
@@ -5317,7 +5317,7 @@
    "avatar": "nandi"
   },
   {
-   "id": "tribe_somalies_derviches",
+   "id": "tribe_dervish_somalis",
    "name": "Dervish Somalis",
    "entity": "Dervish Somalis",
    "role": "tribe",
@@ -5325,11 +5325,11 @@
    "lat": 8.2547,
    "lon": 46.3283,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Mohamed_Abdul%C3%A1_Hassan",
+   "wikipedia": "https://en.wikipedia.org/wiki/Mohammed_Abdullah_%28Sayyid%29",
    "avatar": "dervish_somalis"
   },
   {
-   "id": "tribe_oromo_de_jimma",
+   "id": "tribe_oromo_of_jimma",
    "name": "Oromo of Jimma",
    "entity": "Oromo of Jimma",
    "role": "tribe",
@@ -5341,7 +5341,7 @@
    "avatar": "oromo_of_jimma"
   },
   {
-   "id": "tribe_tuareg_del_air",
+   "id": "tribe_tuareg_of_air",
    "name": "Tuareg of Aïr",
    "entity": "Tuareg of Aïr",
    "role": "tribe",
@@ -5353,7 +5353,7 @@
    "avatar": "tuareg_of_air"
   },
   {
-   "id": "tribe_fulani_de_sokoto",
+   "id": "tribe_fulani_of_sokoto",
    "name": "Fulani of Sokoto",
    "entity": "Fulani of Sokoto",
    "role": "tribe",
@@ -5361,11 +5361,11 @@
    "lat": 12.5933,
    "lon": -12.8458,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Usman_dan_Fodio",
+   "wikipedia": "https://en.wikipedia.org/wiki/Usman_dan_Fodio",
    "avatar": "fulani_of_sokoto"
   },
   {
-   "id": "tribe_tucolor",
+   "id": "tribe_toucouleur",
    "name": "Toucouleur",
    "entity": "Toucouleur",
    "role": "tribe",
@@ -5373,11 +5373,11 @@
    "lat": 14.3667,
    "lon": -14.2833,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/El_Hadj_Umar_Tall",
+   "wikipedia": "https://en.wikipedia.org/wiki/Omar_Saidou_Tall",
    "avatar": "toucouleur"
   },
   {
-   "id": "tribe_wolof_de_cayor",
+   "id": "tribe_wolof_of_cayor",
    "name": "Wolof of Cayor",
    "entity": "Wolof of Cayor",
    "role": "tribe",
@@ -5389,7 +5389,7 @@
    "avatar": "wolof_of_cayor"
   },
   {
-   "id": "tribe_serer_de_sine",
+   "id": "tribe_serer_of_sine",
    "name": "Serer of Sine",
    "entity": "Serer of Sine",
    "role": "tribe",
@@ -5401,7 +5401,7 @@
    "avatar": "serer_of_sine"
   },
   {
-   "id": "tribe_mandinga_de_kaabu",
+   "id": "tribe_mandinka_of_kaabu",
    "name": "Mandinka of Kaabu",
    "entity": "Mandinka of Kaabu",
    "role": "tribe",
@@ -5421,7 +5421,7 @@
    "lat": 12.2667,
    "lon": -2.0667,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Mossi",
+   "wikipedia": "https://en.wikipedia.org/wiki/Mossi_people",
    "avatar": "mossi"
   },
   {
@@ -5445,11 +5445,11 @@
    "lat": 7.1856,
    "lon": 1.9881,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ghezo",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ghezo",
    "avatar": "fon"
   },
   {
-   "id": "tribe_yoruba_de_oyo",
+   "id": "tribe_yoruba_of_oyo",
    "name": "Yoruba of Oyo",
    "entity": "Yoruba of Oyo",
    "role": "tribe",
@@ -5461,7 +5461,7 @@
    "avatar": "yoruba_of_oyo"
   },
   {
-   "id": "tribe_ijaw_de_opobo",
+   "id": "tribe_ijaw_of_opobo",
    "name": "Ijaw of Opobo",
    "entity": "Ijaw of Opobo",
    "role": "tribe",
@@ -5469,7 +5469,7 @@
    "lat": 5.35,
    "lon": 5.5083,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Jaja_de_Opobo",
+   "wikipedia": "https://en.wikipedia.org/wiki/Jaja_of_Opobo",
    "avatar": "ijaw_of_opobo"
   },
   {
@@ -5505,7 +5505,7 @@
    "lat": -14,
    "lon": 28,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Lewanika",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lewanika",
    "avatar": "lozi"
   },
   {
@@ -5529,7 +5529,7 @@
    "lat": 31.5075,
    "lon": 34.4597,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Soshangane",
+   "wikipedia": "https://en.wikipedia.org/wiki/Soshangane",
    "avatar": "gaza"
   },
   {
@@ -5557,7 +5557,7 @@
    "avatar": "fur"
   },
   {
-   "id": "tribe_ruanda",
+   "id": "tribe_rwanda",
    "name": "Rwanda (Banyarwanda)",
    "entity": "Rwanda (Banyarwanda)",
    "role": "tribe",
@@ -5569,7 +5569,7 @@
    "avatar": "rwanda"
   },
   {
-   "id": "tribe_ovimbundu_de_bailundo",
+   "id": "tribe_ovimbundu_of_bailundo",
    "name": "Ovimbundu of Bailundo",
    "entity": "Ovimbundu of Bailundo",
    "role": "tribe",
@@ -5593,7 +5593,7 @@
    "avatar": "goringhaiqua"
   },
   {
-   "id": "tribe_masesilios",
+   "id": "tribe_masaesyli",
    "name": "Masaesyli (Numidians)",
    "entity": "Masaesyli (Numidians)",
    "role": "tribe",
@@ -5601,11 +5601,11 @@
    "lat": 35.5,
    "lon": 7.3,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Masinisa",
+   "wikipedia": "https://en.wikipedia.org/wiki/Masinissa",
    "avatar": "masaesyli"
   },
   {
-   "id": "tribe_musulamios",
+   "id": "tribe_musulamii",
    "name": "Musulamii",
    "entity": "Musulamii",
    "role": "tribe",
@@ -5613,7 +5613,7 @@
    "lat": 36.2864,
    "lon": 7.9511,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Tacfarinas",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tacfarinas",
    "avatar": "musulamii"
   },
   {
@@ -5625,7 +5625,7 @@
    "lat": 1.4842,
    "lon": 31.1325,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Kabalega",
+   "wikipedia": "https://en.wikipedia.org/wiki/MV_Kabalega",
    "avatar": "bunyoro"
   },
   {
@@ -5677,7 +5677,7 @@
    "avatar": "lobedu"
   },
   {
-   "id": "tribe_igbo_de_enugu_ezike",
+   "id": "tribe_igbo_of_enugu_ezike",
    "name": "Igbo of Enugu-Ezike",
    "entity": "Igbo of Enugu-Ezike",
    "role": "tribe",
@@ -5685,7 +5685,7 @@
    "lat": 9,
    "lon": 8,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ahebi_Ugbabe",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ahebi_Ugbabe",
    "avatar": "igbo_of_enugu_ezike"
   },
   {
@@ -5697,7 +5697,7 @@
    "lat": 9,
    "lon": 8,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Efunroye_Tinubu",
+   "wikipedia": "https://en.wikipedia.org/wiki/Efunroye_Tinubu",
    "avatar": "egba"
   },
   {
@@ -5709,11 +5709,11 @@
    "lat": 7.4667,
    "lon": 4.5667,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Moremi_Ajasoro",
+   "wikipedia": "https://en.wikipedia.org/wiki/Moremi_Ajasoro",
    "avatar": "ife"
   },
   {
-   "id": "tribe_hausa_de_daura",
+   "id": "tribe_hausa_of_daura",
    "name": "Hausa of Daura",
    "entity": "Hausa of Daura",
    "role": "tribe",
@@ -5721,7 +5721,7 @@
    "lat": 13.0364,
    "lon": 8.3178,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Daurama",
+   "wikipedia": "https://en.wikipedia.org/wiki/Daurama",
    "avatar": "hausa_of_daura"
   },
   {
@@ -5737,7 +5737,7 @@
    "avatar": "mende"
   },
   {
-   "id": "tribe_tuareg_del_ahaggar",
+   "id": "tribe_tuareg_of_ahaggar",
    "name": "Tuareg of Ahaggar",
    "entity": "Tuareg of Ahaggar",
    "role": "tribe",
@@ -5745,7 +5745,7 @@
    "lat": 23.2886,
    "lon": 5.5342,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Tin_Hinan",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tin_Hinan",
    "avatar": "tuareg_of_ahaggar"
   },
   {
@@ -5761,7 +5761,7 @@
    "avatar": "ndwandwe"
   },
   {
-   "id": "tribe_sakalava_de_boina",
+   "id": "tribe_sakalava_of_boina",
    "name": "Sakalava of Boina",
    "entity": "Sakalava of Boina",
    "role": "tribe",
@@ -5773,7 +5773,7 @@
    "avatar": "sakalava_of_boina"
   },
   {
-   "id": "tribe_nubios_nobatas",
+   "id": "tribe_nobatae",
    "name": "Nobatae (Nubians)",
    "entity": "Nobatae (Nubians)",
    "role": "tribe",
@@ -5805,7 +5805,7 @@
    "lat": 11.8167,
    "lon": 41.4167,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Regi%C3%B3n_de_Afar",
+   "wikipedia": "https://en.wikipedia.org/wiki/Afar_Region",
    "avatar": "afar"
   },
   {
@@ -5841,7 +5841,7 @@
    "lat": 5.1333,
    "lon": 12.65,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Idioma_fang",
+   "wikipedia": "https://en.wikipedia.org/wiki/Fang_language",
    "avatar": "fang"
   },
   {
@@ -5853,7 +5853,7 @@
    "lat": -0.75,
    "lon": 15.3833,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ngalifourou",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ngalifourou",
    "avatar": "teke"
   },
   {
@@ -5881,7 +5881,7 @@
    "avatar": "kiga"
   },
   {
-   "id": "tribe_burundeses",
+   "id": "tribe_burundi",
    "name": "Burundi",
    "entity": "Burundi",
    "role": "tribe",
@@ -5901,7 +5901,7 @@
    "lat": -0.3,
    "lon": 34.6,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Pueblo_luo",
+   "wikipedia": "https://en.wikipedia.org/wiki/Luo_peoples",
    "avatar": "luo"
   },
   {
@@ -5949,11 +5949,11 @@
    "lat": -24.8,
    "lon": 45.6,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Pueblo_antandroy",
+   "wikipedia": "https://en.wikipedia.org/wiki/Antandroy",
    "avatar": "antandroy"
   },
   {
-   "id": "tribe_vazimba_de_alasora",
+   "id": "tribe_vazimba_of_alasora",
    "name": "Vazimba of Alasora",
    "entity": "Vazimba of Alasora",
    "role": "tribe",
@@ -5961,7 +5961,7 @@
    "lat": -19.3333,
    "lon": 47.0667,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Rafohy",
+   "wikipedia": "https://en.wikipedia.org/wiki/Rafohy",
    "avatar": "vazimba_of_alasora"
   },
   {
@@ -5973,7 +5973,7 @@
    "lat": -23,
    "lon": 17,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Damara",
+   "wikipedia": "https://en.wikipedia.org/wiki/Damara_people",
    "avatar": "damara"
   },
   {
@@ -5985,7 +5985,7 @@
    "lat": -22.2,
    "lon": 23.7,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/San",
+   "wikipedia": "https://en.wikipedia.org/wiki/San_peoples",
    "avatar": "san"
   },
   {
@@ -5997,11 +5997,11 @@
    "lat": 5.1333,
    "lon": 12.65,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Confederaci%C3%B3n_Bamileke",
+   "wikipedia": "https://en.wikipedia.org/wiki/Bamileke_people",
    "avatar": "bamileke"
   },
   {
-   "id": "tribe_sereer_de_saloum",
+   "id": "tribe_serer_of_saloum",
    "name": "Serer of Saloum",
    "entity": "Serer of Saloum",
    "role": "tribe",
@@ -6021,7 +6021,7 @@
    "lat": 26.5,
    "lon": 13,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Garamantes",
+   "wikipedia": "https://en.wikipedia.org/wiki/Garamantes",
    "avatar": "garamantes"
   },
   {
@@ -6033,11 +6033,11 @@
    "lat": 8,
    "lon": -6,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Senufo",
+   "wikipedia": "https://en.wikipedia.org/wiki/Senufo_people",
    "avatar": "senufo"
   },
   {
-   "id": "tribe_baule",
+   "id": "tribe_baoule",
    "name": "Baoulé",
    "entity": "Baoulé",
    "role": "tribe",
@@ -6045,7 +6045,7 @@
    "lat": 8,
    "lon": -6,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Pokou",
+   "wikipedia": "https://en.wikipedia.org/wiki/Queen_Pokou",
    "avatar": "baoule"
   },
   {
@@ -6057,11 +6057,11 @@
    "lat": 5.0,
    "lon": -8.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Kru",
+   "wikipedia": "https://en.wikipedia.org/wiki/Kru_people",
    "avatar": "kru"
   },
   {
-   "id": "tribe_kanuri_de_kawar",
+   "id": "tribe_kanuri_of_kawar",
    "name": "Kanuri of Kawar",
    "entity": "Kanuri of Kawar",
    "role": "tribe",
@@ -6081,7 +6081,7 @@
    "lat": 15.4667,
    "lon": 19.4,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Tubu",
+   "wikipedia": "https://en.wikipedia.org/wiki/Toubou_people",
    "avatar": "toubou"
   },
   {
@@ -6093,7 +6093,7 @@
    "lat": 7,
    "lon": 30,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Shilluk",
+   "wikipedia": "https://en.wikipedia.org/wiki/Shilluk_people",
    "avatar": "shilluk"
   },
   {
@@ -6105,7 +6105,7 @@
    "lat": 7.5,
    "lon": 29.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Dinka",
+   "wikipedia": "https://en.wikipedia.org/wiki/Dinka_people",
    "avatar": "dinka"
   },
   {
@@ -6117,11 +6117,11 @@
    "lat": 8.3,
    "lon": 31.8,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Nuer",
+   "wikipedia": "https://en.wikipedia.org/wiki/Nuer_people",
    "avatar": "nuer"
   },
   {
-   "id": "tribe_queruscos",
+   "id": "tribe_cherusci",
    "name": "Cherusci",
    "entity": "Cherusci",
    "role": "tribe",
@@ -6129,11 +6129,11 @@
    "lat": 53.5611,
    "lon": 8.5222,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Arminio",
+   "wikipedia": "https://en.wikipedia.org/wiki/Arminius",
    "avatar": "cherusci"
   },
   {
-   "id": "tribe_marcomanos",
+   "id": "tribe_marcomanni",
    "name": "Marcomanni",
    "entity": "Marcomanni",
    "role": "tribe",
@@ -6141,11 +6141,11 @@
    "lat": 44.4161,
    "lon": 12.2017,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Marbod",
+   "wikipedia": "https://en.wikipedia.org/wiki/Maroboduus",
    "avatar": "marcomanni"
   },
   {
-   "id": "tribe_suevos",
+   "id": "tribe_suebi",
    "name": "Suebi",
    "entity": "Suebi",
    "role": "tribe",
@@ -6153,7 +6153,7 @@
    "lat": 50.9,
    "lon": 11.1,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ariovisto",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ariovistus",
    "avatar": "suebi"
   },
   {
@@ -6165,11 +6165,11 @@
    "lat": 46.5,
    "lon": 2.9,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ambi%C3%B3rix",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ambiorix",
    "avatar": "eburones"
   },
   {
-   "id": "tribe_nervios",
+   "id": "tribe_nervii",
    "name": "Nervii",
    "entity": "Nervii",
    "role": "tribe",
@@ -6177,11 +6177,11 @@
    "lat": 50.5,
    "lon": 3.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Boduognato",
+   "wikipedia": "https://en.wikipedia.org/wiki/Boduognatus",
    "avatar": "nervii"
   },
   {
-   "id": "tribe_helvecios",
+   "id": "tribe_helvetii",
    "name": "Helvetii",
    "entity": "Helvetii",
    "role": "tribe",
@@ -6189,11 +6189,11 @@
    "lat": 46.5,
    "lon": 2.9,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Org%C3%A9torix",
+   "wikipedia": "https://en.wikipedia.org/wiki/Orgetorix",
    "avatar": "helvetii"
   },
   {
-   "id": "tribe_cimbrios",
+   "id": "tribe_cimbri",
    "name": "Cimbri",
    "entity": "Cimbri",
    "role": "tribe",
@@ -6201,11 +6201,11 @@
    "lat": 45.3261,
    "lon": 8.4234,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Boiorix",
+   "wikipedia": "https://en.wikipedia.org/wiki/Boiorix",
    "avatar": "cimbri"
   },
   {
-   "id": "tribe_teutones",
+   "id": "tribe_teutons",
    "name": "Teutons",
    "entity": "Teutons",
    "role": "tribe",
@@ -6213,11 +6213,11 @@
    "lat": 41.8931,
    "lon": 12.4828,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Teutobod",
+   "wikipedia": "https://en.wikipedia.org/wiki/Teutobod",
    "avatar": "teutons"
   },
   {
-   "id": "tribe_eduos",
+   "id": "tribe_aedui",
    "name": "Aedui",
    "entity": "Aedui",
    "role": "tribe",
@@ -6225,7 +6225,7 @@
    "lat": 46.6667,
    "lon": 4.7,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/D%C3%BAmnorix",
+   "wikipedia": "https://en.wikipedia.org/wiki/Dumnorix",
    "avatar": "aedui"
   },
   {
@@ -6237,11 +6237,11 @@
    "lat": 46.5,
    "lon": 2.9,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Breno_%28siglo_IV_a._C.%29",
+   "wikipedia": "https://en.wikipedia.org/wiki/Brennus_%28leader_of_the_Senones%29",
    "avatar": "senones"
   },
   {
-   "id": "tribe_lusitanos",
+   "id": "tribe_lusitanians",
    "name": "Lusitanians",
    "entity": "Lusitanians",
    "role": "tribe",
@@ -6249,11 +6249,11 @@
    "lat": 38.7689,
    "lon": -7.2181,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Viriato",
+   "wikipedia": "https://en.wikipedia.org/wiki/Viriathus",
    "avatar": "lusitanians"
   },
   {
-   "id": "tribe_arevacos",
+   "id": "tribe_arevaci",
    "name": "Arevaci (Numantia)",
    "entity": "Arevaci (Numantia)",
    "role": "tribe",
@@ -6261,7 +6261,7 @@
    "lat": 41.5,
    "lon": -3.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ret%C3%B3genes_el_Caraunio",
+   "wikipedia": "https://en.wikipedia.org/wiki/Arevaci",
    "avatar": "arevaci"
   },
   {
@@ -6273,11 +6273,11 @@
    "lat": 41.6964,
    "lon": 0.9142,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ind%C3%ADbil",
+   "wikipedia": "https://en.wikipedia.org/wiki/Indibilis_and_Mandonius",
    "avatar": "ilergetes"
   },
   {
-   "id": "tribe_cantabros",
+   "id": "tribe_cantabri",
    "name": "Cantabri",
    "entity": "Cantabri",
    "role": "tribe",
@@ -6285,11 +6285,11 @@
    "lat": 40.2,
    "lon": -3.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Corocotta",
+   "wikipedia": "https://en.wikipedia.org/wiki/Corocotta",
    "avatar": "cantabri"
   },
   {
-   "id": "tribe_vandalos",
+   "id": "tribe_vandals",
    "name": "Vandals",
    "entity": "Vandals",
    "role": "tribe",
@@ -6297,11 +6297,11 @@
    "lat": 52.5,
    "lon": 17.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Genserico",
+   "wikipedia": "https://en.wikipedia.org/wiki/Gaiseric",
    "avatar": "vandals"
   },
   {
-   "id": "tribe_tervingios",
+   "id": "tribe_tervingi",
    "name": "Tervingi (Goths)",
    "entity": "Tervingi (Goths)",
    "role": "tribe",
@@ -6309,11 +6309,11 @@
    "lat": 41.0122,
    "lon": 28.976,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Atanarico",
+   "wikipedia": "https://en.wikipedia.org/wiki/Athanaric",
    "avatar": "tervingi"
   },
   {
-   "id": "tribe_visigodos",
+   "id": "tribe_visigoths",
    "name": "Visigoths",
    "entity": "Visigoths",
    "role": "tribe",
@@ -6321,11 +6321,11 @@
    "lat": 45.0667,
    "lon": 28.75,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Alarico_I",
+   "wikipedia": "https://en.wikipedia.org/wiki/Alaric_I",
    "avatar": "visigoths"
   },
   {
-   "id": "tribe_gepidos",
+   "id": "tribe_gepids",
    "name": "Gepids",
    "entity": "Gepids",
    "role": "tribe",
@@ -6333,11 +6333,11 @@
    "lat": 46.5,
    "lon": 21.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ardarico",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ardaric",
    "avatar": "gepids"
   },
   {
-   "id": "tribe_sajones",
+   "id": "tribe_saxons",
    "name": "Saxons",
    "entity": "Saxons",
    "role": "tribe",
@@ -6345,11 +6345,11 @@
    "lat": 54.1667,
    "lon": 9.6667,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Viduquindo",
+   "wikipedia": "https://en.wikipedia.org/wiki/Widukind",
    "avatar": "saxons"
   },
   {
-   "id": "tribe_frisones",
+   "id": "tribe_frisians",
    "name": "Frisians",
    "entity": "Frisians",
    "role": "tribe",
@@ -6357,11 +6357,11 @@
    "lat": 52.3167,
    "lon": 5.55,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Radbod",
+   "wikipedia": "https://en.wikipedia.org/wiki/Radbod_of_Frisia",
    "avatar": "frisians"
   },
   {
-   "id": "tribe_pictos",
+   "id": "tribe_picts",
    "name": "Picts",
    "entity": "Picts",
    "role": "tribe",
@@ -6369,11 +6369,11 @@
    "lat": 54.6,
    "lon": -2,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Bridei_III",
+   "wikipedia": "https://en.wikipedia.org/wiki/Bridei_son_of_Beli",
    "avatar": "picts"
   },
   {
-   "id": "tribe_dacios",
+   "id": "tribe_dacians",
    "name": "Dacians",
    "entity": "Dacians",
    "role": "tribe",
@@ -6385,7 +6385,7 @@
    "avatar": "dacians"
   },
   {
-   "id": "tribe_getas",
+   "id": "tribe_getae",
    "name": "Getae",
    "entity": "Getae",
    "role": "tribe",
@@ -6393,11 +6393,11 @@
    "lat": 45.7,
    "lon": 26.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Dromiquetes",
+   "wikipedia": "https://en.wikipedia.org/wiki/Dromichaetes",
    "avatar": "getae"
   },
   {
-   "id": "tribe_odrisios",
+   "id": "tribe_odrysians",
    "name": "Odrysians (Thracians)",
    "entity": "Odrysians (Thracians)",
    "role": "tribe",
@@ -6405,11 +6405,11 @@
    "lat": 41.98,
    "lon": 25.71,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Sitalces",
+   "wikipedia": "https://en.wikipedia.org/wiki/Sitalces",
    "avatar": "odrysians"
   },
   {
-   "id": "tribe_escitas",
+   "id": "tribe_scythians",
    "name": "Scythians",
    "entity": "Scythians",
    "role": "tribe",
@@ -6417,11 +6417,11 @@
    "lat": 44.9428,
    "lon": 34.1206,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ateas",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ateas",
    "avatar": "scythians"
   },
   {
-   "id": "tribe_hunos",
+   "id": "tribe_huns",
    "name": "Huns",
    "entity": "Huns",
    "role": "tribe",
@@ -6429,11 +6429,11 @@
    "lat": 44.9,
    "lon": 19.02,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Atila",
+   "wikipedia": "https://en.wikipedia.org/wiki/Attila",
    "avatar": "huns"
   },
   {
-   "id": "tribe_avaros",
+   "id": "tribe_avars",
    "name": "Avars (Pannonia)",
    "entity": "Avars (Pannonia)",
    "role": "tribe",
@@ -6445,7 +6445,7 @@
    "avatar": "avars"
   },
   {
-   "id": "tribe_onoguros",
+   "id": "tribe_onogurs",
    "name": "Onogurs (Bulgars)",
    "entity": "Onogurs (Bulgars)",
    "role": "tribe",
@@ -6453,11 +6453,11 @@
    "lat": 44.9,
    "lon": 19.02,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Kubrat",
+   "wikipedia": "https://en.wikipedia.org/wiki/Kubrat",
    "avatar": "onogurs"
   },
   {
-   "id": "tribe_cumanos",
+   "id": "tribe_cumans",
    "name": "Cumans",
    "entity": "Cumans",
    "role": "tribe",
@@ -6465,11 +6465,11 @@
    "lat": 47.4667,
    "lon": 19.05,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/K%C3%B6ten",
+   "wikipedia": "https://en.wikipedia.org/wiki/K%C3%B6ten",
    "avatar": "cumans"
   },
   {
-   "id": "tribe_obotritas",
+   "id": "tribe_obotrites",
    "name": "Obotrites",
    "entity": "Obotrites",
    "role": "tribe",
@@ -6477,11 +6477,11 @@
    "lat": 53.8923,
    "lon": 12.08,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Niklot",
+   "wikipedia": "https://en.wikipedia.org/wiki/Niklot",
    "avatar": "obotrites"
   },
   {
-   "id": "tribe_drevlianos",
+   "id": "tribe_drevlians",
    "name": "Drevlians",
    "entity": "Drevlians",
    "role": "tribe",
@@ -6489,11 +6489,11 @@
    "lat": 51.2,
    "lon": 28.8,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Mal",
+   "wikipedia": "https://en.wikipedia.org/wiki/Evil",
    "avatar": "drevlians"
   },
   {
-   "id": "tribe_prusianos_antiguos",
+   "id": "tribe_old_prussians",
    "name": "Old Prussians",
    "entity": "Old Prussians",
    "role": "tribe",
@@ -6501,11 +6501,11 @@
    "lat": 53.85,
    "lon": 20.8167,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Herkus_Monte",
+   "wikipedia": "https://en.wikipedia.org/wiki/Herkus_Monte",
    "avatar": "old_prussians"
   },
   {
-   "id": "tribe_estonios_de_sakala",
+   "id": "tribe_sakala_estonians",
    "name": "Sakala Estonians",
    "entity": "Sakala Estonians",
    "role": "tribe",
@@ -6513,11 +6513,11 @@
    "lat": 58.3633,
    "lon": 25.5956,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Lembitu",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lembitu",
    "avatar": "sakala_estonians"
   },
   {
-   "id": "tribe_samnitas",
+   "id": "tribe_samnites",
    "name": "Samnites",
    "entity": "Samnites",
    "role": "tribe",
@@ -6525,11 +6525,11 @@
    "lat": 42.5,
    "lon": 12.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Cayo_Poncio",
+   "wikipedia": "https://en.wikipedia.org/wiki/Gaius_Pontius",
    "avatar": "samnites"
   },
   {
-   "id": "tribe_boyos",
+   "id": "tribe_boii",
    "name": "Boii",
    "entity": "Boii",
    "role": "tribe",
@@ -6541,7 +6541,7 @@
    "avatar": "boii"
   },
   {
-   "id": "tribe_treveros",
+   "id": "tribe_treveri",
    "name": "Treveri",
    "entity": "Treveri",
    "role": "tribe",
@@ -6549,11 +6549,11 @@
    "lat": 46.5,
    "lon": 2.9,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Induciomaro",
+   "wikipedia": "https://en.wikipedia.org/wiki/Indutiomarus",
    "avatar": "treveri"
   },
   {
-   "id": "tribe_batavos",
+   "id": "tribe_batavians",
    "name": "Batavians",
    "entity": "Batavians",
    "role": "tribe",
@@ -6561,11 +6561,11 @@
    "lat": 52.0833,
    "lon": 5.9167,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Julio_Civilis",
+   "wikipedia": "https://en.wikipedia.org/wiki/Gaius_Julius_Civilis",
    "avatar": "batavians"
   },
   {
-   "id": "tribe_alamanes",
+   "id": "tribe_alamanni",
    "name": "Alamanni",
    "entity": "Alamanni",
    "role": "tribe",
@@ -6577,7 +6577,7 @@
    "avatar": "alamanni"
   },
   {
-   "id": "tribe_burgundios",
+   "id": "tribe_burgundians",
    "name": "Burgundians",
    "entity": "Burgundians",
    "role": "tribe",
@@ -6585,11 +6585,11 @@
    "lat": 49.5,
    "lon": 9.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Gundebaldo",
+   "wikipedia": "https://en.wikipedia.org/wiki/Gundobad",
    "avatar": "burgundians"
   },
   {
-   "id": "tribe_alanos",
+   "id": "tribe_alans",
    "name": "Alans",
    "entity": "Alans",
    "role": "tribe",
@@ -6597,11 +6597,11 @@
    "lat": 47,
    "lon": 36.6,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Respendial",
+   "wikipedia": "https://en.wikipedia.org/wiki/Respendial",
    "avatar": "alans"
   },
   {
-   "id": "tribe_ardieos",
+   "id": "tribe_ardiaei",
    "name": "Ardiaei (Illyrians)",
    "entity": "Ardiaei (Illyrians)",
    "role": "tribe",
@@ -6613,7 +6613,7 @@
    "avatar": "ardiaei"
   },
   {
-   "id": "tribe_bructeros",
+   "id": "tribe_bructeri",
    "name": "Bructeri",
    "entity": "Bructeri",
    "role": "tribe",
@@ -6621,7 +6621,7 @@
    "lat": 51.9,
    "lon": 7.6,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Veleda",
+   "wikipedia": "https://en.wikipedia.org/wiki/Veleda",
    "avatar": "bructeri"
   },
   {
@@ -6633,11 +6633,11 @@
    "lat": 52.5,
    "lon": 13.4,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ganna",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ganna_%28seeress%29",
    "avatar": "semnones"
   },
   {
-   "id": "tribe_sarmatas",
+   "id": "tribe_sarmatians",
    "name": "Sarmatians",
    "entity": "Sarmatians",
    "role": "tribe",
@@ -6645,11 +6645,11 @@
    "lat": 44.9428,
    "lon": 34.1206,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Amage",
+   "wikipedia": "https://en.wikipedia.org/wiki/Amage%2C_Haute-Sa%C3%B4ne",
    "avatar": "sarmatians"
   },
   {
-   "id": "tribe_ixomatas",
+   "id": "tribe_ixomatae",
    "name": "Ixomatae (Maeotians)",
    "entity": "Ixomatae (Maeotians)",
    "role": "tribe",
@@ -6661,7 +6661,7 @@
    "avatar": "ixomatae"
   },
   {
-   "id": "tribe_lombardos",
+   "id": "tribe_lombards",
    "name": "Lombards",
    "entity": "Lombards",
    "role": "tribe",
@@ -6669,11 +6669,11 @@
    "lat": 48.5,
    "lon": 16.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Teodolinda",
+   "wikipedia": "https://en.wikipedia.org/wiki/Theodelinda",
    "avatar": "lombards"
   },
   {
-   "id": "tribe_rugios",
+   "id": "tribe_rugians",
    "name": "Rugians",
    "entity": "Rugians",
    "role": "tribe",
@@ -6681,11 +6681,11 @@
    "lat": 48.5,
    "lon": 15.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Rugios",
+   "wikipedia": "https://en.wikipedia.org/wiki/Rugii",
    "avatar": "rugians"
   },
   {
-   "id": "tribe_escordiscos",
+   "id": "tribe_scordisci",
    "name": "Scordisci",
    "entity": "Scordisci",
    "role": "tribe",
@@ -6693,7 +6693,7 @@
    "lat": 44.8,
    "lon": 20.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Onomaris",
+   "wikipedia": "https://en.wikipedia.org/wiki/Onomaris",
    "avatar": "scordisci"
   },
   {
@@ -6705,11 +6705,11 @@
    "lat": 42.8167,
    "lon": -1.65,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Toda_Azn%C3%A1rez_de_Pamplona",
+   "wikipedia": "https://en.wikipedia.org/wiki/Toda_of_Pamplona",
    "avatar": "vascones"
   },
   {
-   "id": "tribe_oretanos",
+   "id": "tribe_oretani",
    "name": "Oretani",
    "entity": "Oretani",
    "role": "tribe",
@@ -6717,11 +6717,11 @@
    "lat": 39.5,
    "lon": -3.0,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Himilce",
+   "wikipedia": "https://en.wikipedia.org/wiki/Imilce",
    "avatar": "oretani"
   },
   {
-   "id": "tribe_samogitios",
+   "id": "tribe_samogitians",
    "name": "Samogitians",
    "entity": "Samogitians",
    "role": "tribe",
@@ -6729,11 +6729,11 @@
    "lat": 55.2,
    "lon": 24,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Birut%C4%97",
+   "wikipedia": "https://en.wikipedia.org/wiki/Birut%C4%97",
    "avatar": "samogitians"
   },
   {
-   "id": "tribe_checos",
+   "id": "tribe_czechs",
    "name": "Czechs (Bohemians)",
    "entity": "Czechs (Bohemians)",
    "role": "tribe",
@@ -6741,11 +6741,11 @@
    "lat": 50,
    "lon": 15,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ludmila_de_Bohemia",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ludmila_of_Bohemia",
    "avatar": "czechs"
   },
   {
-   "id": "tribe_hevelios",
+   "id": "tribe_hevelians",
    "name": "Hevelians (Stodorans)",
    "entity": "Hevelians (Stodorans)",
    "role": "tribe",
@@ -6753,11 +6753,11 @@
    "lat": 52.5,
    "lon": 12.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Drahom%C3%ADra",
+   "wikipedia": "https://en.wikipedia.org/wiki/Drahom%C3%ADra",
    "avatar": "hevelians"
   },
   {
-   "id": "tribe_polanos",
+   "id": "tribe_polans",
    "name": "Polans",
    "entity": "Polans",
    "role": "tribe",
@@ -6769,7 +6769,7 @@
    "avatar": "polans"
   },
   {
-   "id": "tribe_jazaros",
+   "id": "tribe_khazars",
    "name": "Khazars",
    "entity": "Khazars",
    "role": "tribe",
@@ -6777,11 +6777,11 @@
    "lat": 41.0125,
    "lon": 28.98,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Irene_de_Jazaria",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tzitzak",
    "avatar": "khazars"
   },
   {
-   "id": "tribe_cuados",
+   "id": "tribe_quadi",
    "name": "Quadi",
    "entity": "Quadi",
    "role": "tribe",
@@ -6789,11 +6789,11 @@
    "lat": 48.7,
    "lon": 18.0,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Cuados",
+   "wikipedia": "https://en.wikipedia.org/wiki/Quadi",
    "avatar": "quadi"
   },
   {
-   "id": "tribe_ubios",
+   "id": "tribe_ubii",
    "name": "Ubii",
    "entity": "Ubii",
    "role": "tribe",
@@ -6801,7 +6801,7 @@
    "lat": 50.9,
    "lon": 6.9,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ubios",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ubii",
    "avatar": "ubii"
   },
   {
@@ -6817,7 +6817,7 @@
    "avatar": "caninefates"
   },
   {
-   "id": "tribe_herulos",
+   "id": "tribe_heruli",
    "name": "Heruli",
    "entity": "Heruli",
    "role": "tribe",
@@ -6825,11 +6825,11 @@
    "lat": 55.5,
    "lon": 10.0,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/H%C3%A9rulos",
+   "wikipedia": "https://en.wikipedia.org/wiki/Heruli",
    "avatar": "heruli"
   },
   {
-   "id": "tribe_tauriscos",
+   "id": "tribe_taurisci",
    "name": "Taurisci",
    "entity": "Taurisci",
    "role": "tribe",
@@ -6841,7 +6841,7 @@
    "avatar": "taurisci"
   },
   {
-   "id": "tribe_alobroges",
+   "id": "tribe_allobroges",
    "name": "Allobroges",
    "entity": "Allobroges",
    "role": "tribe",
@@ -6849,7 +6849,7 @@
    "lat": 41.89,
    "lon": 12.48,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Al%C3%B3broges",
+   "wikipedia": "https://en.wikipedia.org/wiki/Allobroges",
    "avatar": "allobroges"
   },
   {
@@ -6861,11 +6861,11 @@
    "lat": 48.0,
    "lon": 1.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Carnutes",
+   "wikipedia": "https://en.wikipedia.org/wiki/Carnutes",
    "avatar": "carnutes"
   },
   {
-   "id": "tribe_venetos",
+   "id": "tribe_veneti",
    "name": "Veneti (Armorica)",
    "entity": "Veneti (Armorica)",
    "role": "tribe",
@@ -6873,11 +6873,11 @@
    "lat": 45.7333,
    "lon": 11.85,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/V%C3%A9netos",
+   "wikipedia": "https://en.wikipedia.org/wiki/Adriatic_Veneti",
    "avatar": "veneti"
   },
   {
-   "id": "tribe_ligures",
+   "id": "tribe_ligurians",
    "name": "Ligurians",
    "entity": "Ligurians",
    "role": "tribe",
@@ -6885,11 +6885,11 @@
    "lat": 42.5,
    "lon": 12.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Ligures",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ligures",
    "avatar": "ligurians"
   },
   {
-   "id": "tribe_astures",
+   "id": "tribe_asturians",
    "name": "Asturians",
    "entity": "Asturians",
    "role": "tribe",
@@ -6897,11 +6897,11 @@
    "lat": 43.0,
    "lon": -6.0,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Astures",
+   "wikipedia": "https://en.wikipedia.org/wiki/Astures",
    "avatar": "asturians"
   },
   {
-   "id": "tribe_vetones",
+   "id": "tribe_vettones",
    "name": "Vettones",
    "entity": "Vettones",
    "role": "tribe",
@@ -6909,11 +6909,11 @@
    "lat": 40.2,
    "lon": -3.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Vetones",
+   "wikipedia": "https://en.wikipedia.org/wiki/Vettones",
    "avatar": "vettones"
   },
   {
-   "id": "tribe_edetanos",
+   "id": "tribe_edetani",
    "name": "Edetani",
    "entity": "Edetani",
    "role": "tribe",
@@ -6921,7 +6921,7 @@
    "lat": 39.5,
    "lon": -0.75,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Edetanos",
+   "wikipedia": "https://en.wikipedia.org/wiki/Edetani",
    "avatar": "edetani"
   },
   {
@@ -6933,11 +6933,11 @@
    "lat": 67.9,
    "lon": 18.5167,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Samis",
+   "wikipedia": "https://en.wikipedia.org/wiki/S%C3%A1mi_people",
    "avatar": "sami"
   },
   {
-   "id": "tribe_tavastios",
+   "id": "tribe_tavastians",
    "name": "Tavastians (Finns)",
    "entity": "Tavastians (Finns)",
    "role": "tribe",
@@ -6949,7 +6949,7 @@
    "avatar": "tavastians"
   },
   {
-   "id": "tribe_curonios",
+   "id": "tribe_curonians",
    "name": "Curonians",
    "entity": "Curonians",
    "role": "tribe",
@@ -6957,11 +6957,11 @@
    "lat": 56.9,
    "lon": 21.8,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Curonios",
+   "wikipedia": "https://en.wikipedia.org/wiki/Curonians",
    "avatar": "curonians"
   },
   {
-   "id": "tribe_livones",
+   "id": "tribe_livonians",
    "name": "Livonians",
    "entity": "Livonians",
    "role": "tribe",
@@ -6969,11 +6969,11 @@
    "lat": 57,
    "lon": 25,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Livonios",
+   "wikipedia": "https://en.wikipedia.org/wiki/Livonians",
    "avatar": "livonians"
   },
   {
-   "id": "tribe_yotvingios",
+   "id": "tribe_yotvingians",
    "name": "Yotvingians",
    "entity": "Yotvingians",
    "role": "tribe",
@@ -6981,11 +6981,11 @@
    "lat": 54.0,
    "lon": 23.0,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Yotvingios",
+   "wikipedia": "https://en.wikipedia.org/wiki/Yotvingians",
    "avatar": "yotvingians"
   },
   {
-   "id": "tribe_pomeranos",
+   "id": "tribe_pomeranians",
    "name": "Pomeranians",
    "entity": "Pomeranians",
    "role": "tribe",
@@ -6997,7 +6997,7 @@
    "avatar": "pomeranians"
   },
   {
-   "id": "tribe_moravos",
+   "id": "tribe_moravians",
    "name": "Moravians",
    "entity": "Moravians",
    "role": "tribe",
@@ -7005,11 +7005,11 @@
    "lat": 49.5,
    "lon": 17,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Moravos",
+   "wikipedia": "https://en.wikipedia.org/wiki/Moravians",
    "avatar": "moravians"
   },
   {
-   "id": "tribe_carantanos",
+   "id": "tribe_carantanians",
    "name": "Carantanians (Slovenes)",
    "entity": "Carantanians (Slovenes)",
    "role": "tribe",
@@ -7021,7 +7021,7 @@
    "avatar": "carantanians"
   },
   {
-   "id": "tribe_pechenegos",
+   "id": "tribe_pechenegs",
    "name": "Pechenegs",
    "entity": "Pechenegs",
    "role": "tribe",
@@ -7029,11 +7029,11 @@
    "lat": 47.0,
    "lon": 33.0,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Pechenegos",
+   "wikipedia": "https://en.wikipedia.org/wiki/Pechenegs",
    "avatar": "pechenegs"
   },
   {
-   "id": "tribe_bulgaros_del_volga",
+   "id": "tribe_volga_bulgars",
    "name": "Volga Bulgars",
    "entity": "Volga Bulgars",
    "role": "tribe",
@@ -7041,11 +7041,11 @@
    "lat": 54.9667,
    "lon": 49.0333,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Bulgaria_del_Volga",
+   "wikipedia": "https://en.wikipedia.org/wiki/Volga_Bulgaria",
    "avatar": "volga_bulgars"
   },
   {
-   "id": "tribe_sauromatas",
+   "id": "tribe_sauromatians",
    "name": "Sauromatians",
    "entity": "Sauromatians",
    "role": "tribe",
@@ -7053,11 +7053,11 @@
    "lat": 44.9428,
    "lon": 34.1206,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/S%C3%A1rmatas",
+   "wikipedia": "https://en.wikipedia.org/wiki/Sarmatians",
    "avatar": "sauromatians"
   },
   {
-   "id": "tribe_caucos",
+   "id": "tribe_cauci",
    "name": "Cauci",
    "entity": "Cauci",
    "role": "tribe",
@@ -7065,11 +7065,11 @@
    "lat": 53.5,
    "lon": 8.5,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Caucos",
+   "wikipedia": "https://en.wikipedia.org/wiki/Chauci",
    "avatar": "cauci"
   },
   {
-   "id": "tribe_volcas_arecomicos",
+   "id": "tribe_volcae_arecomici",
    "name": "Volcae Arecomici",
    "entity": "Volcae Arecomici",
    "role": "tribe",
@@ -7077,7 +7077,7 @@
    "lat": 43.8,
    "lon": 4.4,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Volcas_arec%C3%B3micos",
+   "wikipedia": "https://en.wikipedia.org/wiki/Arecomici",
    "avatar": "volcae_arecomici"
   },
   {
@@ -7089,7 +7089,7 @@
    "lat": -33.8333,
    "lon": 147.5,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Windradyne",
+   "wikipedia": "https://en.wikipedia.org/wiki/Windradyne",
    "avatar": "wiradjuri"
   },
   {
@@ -7101,7 +7101,7 @@
    "lat": -32,
    "lon": 147,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Bennelong",
+   "wikipedia": "https://en.wikipedia.org/wiki/Bennelong",
    "avatar": "wangal"
   },
   {
@@ -7125,7 +7125,7 @@
    "lat": -25,
    "lon": 133,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Jandamarra",
+   "wikipedia": "https://en.wikipedia.org/wiki/Jandamarra",
    "avatar": "bunuba"
   },
   {
@@ -7161,7 +7161,7 @@
    "lat": -39.3,
    "lon": 174.1333,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Te_Whiti",
+   "wikipedia": "https://en.wikipedia.org/wiki/Te_Whiti_o_Rongomai",
    "avatar": "taranaki"
   },
   {
@@ -7189,7 +7189,7 @@
    "avatar": "ngati_maniapoto"
   },
   {
-   "id": "tribe_fiyianos_de_bau",
+   "id": "tribe_fijians_of_bau",
    "name": "Fijians of Bau",
    "entity": "Fijians of Bau",
    "role": "tribe",
@@ -7197,7 +7197,7 @@
    "lat": -17.8,
    "lon": 179.4167,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Seru_Epenisa_Cakobau",
+   "wikipedia": "https://en.wikipedia.org/wiki/Seru_Epenisa_Cakobau",
    "avatar": "fijians_of_bau"
   },
   {
@@ -7233,11 +7233,11 @@
    "lat": 6.85,
    "lon": 158.2167,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Isokelekel",
+   "wikipedia": "https://en.wikipedia.org/wiki/Isokelekel",
    "avatar": "saudeleur"
   },
   {
-   "id": "tribe_marquesanos",
+   "id": "tribe_marquesans",
    "name": "Marquesans",
    "entity": "Marquesans",
    "role": "tribe",
@@ -7269,7 +7269,7 @@
    "lat": -5.3795,
    "lon": 138.4634,
    "gender": "male",
-   "wikipedia": "https://es.wikipedia.org/wiki/Asmat",
+   "wikipedia": "https://en.wikipedia.org/wiki/Asmat_people",
    "avatar": "asmat"
   },
   {
@@ -7281,7 +7281,7 @@
    "lat": -25,
    "lon": 133,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Truganini",
+   "wikipedia": "https://en.wikipedia.org/wiki/Truganini",
    "avatar": "nuenonne"
   },
   {
@@ -7297,7 +7297,7 @@
    "avatar": "te_arawa"
   },
   {
-   "id": "tribe_samoanos",
+   "id": "tribe_samoans",
    "name": "Samoans",
    "entity": "Samoans",
    "role": "tribe",
@@ -7329,7 +7329,7 @@
    "lat": -43.805,
    "lon": -176.506,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Moriori",
+   "wikipedia": "https://en.wikipedia.org/wiki/Moriori",
    "avatar": "moriori"
   },
   {
@@ -7365,7 +7365,7 @@
    "lat": -25,
    "lon": 133,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Arrente",
+   "wikipedia": "https://en.wikipedia.org/wiki/Arrernte_people",
    "avatar": "arrernte"
   },
   {
@@ -7377,11 +7377,11 @@
    "lat": -25,
    "lon": 133,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Gunditjmara",
+   "wikipedia": "https://en.wikipedia.org/wiki/Gunditjmara",
    "avatar": "gunditjmara"
   },
   {
-   "id": "tribe_palauanos",
+   "id": "tribe_palauans",
    "name": "Palauans",
    "entity": "Palauans",
    "role": "tribe",
@@ -7393,7 +7393,7 @@
    "avatar": "palauans"
   },
   {
-   "id": "tribe_yapeses",
+   "id": "tribe_yapese",
    "name": "Yapese",
    "entity": "Yapese",
    "role": "tribe",
@@ -7405,7 +7405,7 @@
    "avatar": "yapese"
   },
   {
-   "id": "tribe_marshaleses",
+   "id": "tribe_marshallese",
    "name": "Marshallese",
    "entity": "Marshallese",
    "role": "tribe",
@@ -7417,7 +7417,7 @@
    "avatar": "marshallese"
   },
   {
-   "id": "tribe_kiribatianos",
+   "id": "tribe_i_kiribati",
    "name": "I-Kiribati",
    "entity": "I-Kiribati",
    "role": "tribe",
@@ -7437,7 +7437,7 @@
    "lat": 24.5116,
    "lon": 118.092,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Huli",
+   "wikipedia": "https://en.wikipedia.org/wiki/Huli%2C_Xiamen",
    "avatar": "huli"
   },
   {
@@ -7461,7 +7461,7 @@
    "lat": -6.3,
    "lon": 147,
    "gender": "female",
-   "wikipedia": "https://es.wikipedia.org/wiki/Tol%C3%A1i",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tolai_people",
    "avatar": "tolai"
   }
  ]

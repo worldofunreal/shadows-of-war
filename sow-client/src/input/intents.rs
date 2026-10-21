@@ -9,6 +9,15 @@ fn is_tutorial_control_intent(intent: &GameplayIntent) -> bool {
     )
 }
 
+fn is_emote_intent(intent: &GameplayIntent) -> bool {
+    matches!(
+        intent,
+        GameplayIntent::ExpressEmote { .. }
+            | GameplayIntent::ClearEmote
+            | GameplayIntent::SetEmotePinned { .. }
+    )
+}
+
 fn is_waiting_for_campaign_attack(
     waiting: bool,
     campaign: crate::campaign::CampaignId,
@@ -80,7 +89,25 @@ fn paused_tutorial_action_accepted(before: Option<u64>, after: Option<u64>) -> b
 }
 
 impl SowApp {
+    /// Applies a tutorial emote in its own turn. The offline queue is not safe for emotes: pause
+    /// commands clear it, which silently dropped the step emote that arrived just before a pause.
+    fn apply_tutorial_emote(&mut self, intent: sow_core::protocol::GameplayIntent) -> bool {
+        let Some(player_id) = self.sim.my_player_id else {
+            return false;
+        };
+        self.dispatch_sim_command(sow_core::protocol::SimCommand::Turn(
+            sow_core::protocol::Turn {
+                turn_number: 0,
+                intents: vec![sow_core::protocol::StampedIntent { player_id, intent }],
+            },
+        ));
+        true
+    }
+
     pub(crate) fn send_intent(&mut self, intent: sow_core::protocol::GameplayIntent) -> bool {
+        if self.ui.tutorial_active && self.net.is_offline && is_emote_intent(&intent) {
+            return self.apply_tutorial_emote(intent);
+        }
         let tutorial_control = is_tutorial_control_intent(&intent);
         if self.ui.tutorial_waiting_for_first_attack && !tutorial_control {
             if !is_waiting_for_campaign_attack(
@@ -91,10 +118,6 @@ impl SowApp {
                 return false;
             }
             self.sim.offline_intents.clear();
-            // The dialogue emote was registered while paused; clear it first so it cannot replay on resume.
-            self.sim
-                .offline_intents
-                .push(sow_core::protocol::GameplayIntent::ClearEmote);
             self.ui.tutorial_waiting_for_first_attack = false;
             self.sim.paused = false;
             self.sim.offline_tick_timer = 0.0;

@@ -526,6 +526,12 @@ test("Boudica spoken cards and contact responses require named existing portrait
     const badEmoteText = structuredClone(definition);
     badEmoteText.emote_texts = { threat: "not_a_tutorial_key" };
     assert.ok(report(badEmoteText).errors.some(issue => issue.field === "emote_texts"));
+    const badEmoteKind = structuredClone(definition);
+    badEmoteKind.steps.find(step => step.id === definition.entry).emote = "furious";
+    assert.ok(report(badEmoteKind).errors.some(issue => issue.step === definition.entry && issue.field === "emote"));
+    const pinnedRelease = structuredClone(definition);
+    Object.assign(pinnedRelease.steps.find(step => step.id === definition.entry), { emote: "clear", emote_pinned: true });
+    assert.ok(report(pinnedRelease).errors.some(issue => issue.step === definition.entry && issue.field === "emote_pinned"));
 
     for (const id of ["boudica_poison_end", "boudica_end"]) {
         const completion = definition.steps.find(step => step.id === id);

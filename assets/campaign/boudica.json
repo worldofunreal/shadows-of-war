@@ -34,9 +34,9 @@
       "iq": 85,
       "civ": "Iceni Kingdom",
       "leader": "Boudica",
+      "can_attack_player": false,
       "support_interval_seconds": 15,
-      "avatar": "iceni",
-      "can_attack_player": false
+      "avatar": "iceni"
     },
     {
       "id": "thetford",
@@ -280,7 +280,7 @@
       "name": "Catuvellauni",
       "x": 579,
       "y": 181,
-      "starting_troops": 5500,
+      "starting_troops": 2500,
       "relation": "neutral",
       "can_request_alliance": true,
       "color": "#4ca572",

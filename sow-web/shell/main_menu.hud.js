@@ -10,7 +10,6 @@
     var lastHudRaw = "";
     var activeHudPanel = null;
     var betrayalOpen = false;
-    var pinEmote = false;
     var emoteTextKey = "";
     var emoteTextTarget = null;
     var hudSafeArea = [0, 0, 0, 0];
@@ -942,8 +941,8 @@
                 var index = RING_EMOTE_SLOTS[definition.kind];
                 if (index != null) slots[index] = { type: "emote", definition: definition };
             });
-            if (hud.emote_pinned) slots[4] = { type: "clear" };
-            slots[5] = { type: "pin" };
+            if (hud.emote_active) slots[4] = { type: "clear" };
+            slots[5] = { type: "pin", enabled: Boolean(hud.emote_active) };
             return slots;
         }
         if (mapMenuView === "build") {
@@ -988,6 +987,7 @@
     }
 
     function ringSlotDisabled(slot) {
+        if (slot.type === "pin") return !slot.enabled;
         return Boolean(slot.type === "action" && (slot.item.disabled || (slot.presentation && slot.presentation.disabled)));
     }
 
@@ -1080,7 +1080,7 @@
         else if (slot.type === "clear") button.dataset.command = "clear_emote";
         else {
             button.dataset.emotePinToggle = "true";
-            button.setAttribute("aria-pressed", String(Boolean(hud.pin_emote)));
+            button.setAttribute("aria-pressed", String(Boolean(hud.emote_pinned)));
         }
         var icon = ringSlotIcon(slot, mapMenu);
         icon.classList.add("sow-hud__map-action-title");
@@ -1325,7 +1325,7 @@
         }
         ring.slots = slots;
         var renderKey = [window.SOW_LOCALE || "en", session, mapMenuView, mapMenu.alliance_state, mapMenu.relation,
-            mapMenu.target_player_id, hud.pin_emote, hud.emote_pinned, hud.player_leader,
+            mapMenu.target_player_id, hud.emote_active, hud.emote_pinned, hud.player_leader,
             mapMenu.building && mapMenu.building.level].join(":") + ":" + slots.map(ringSlotIdentity).join(",");
         if (menu.dataset.renderKey !== renderKey) {
             buildRing(menu, slots, mapMenu, hud);
@@ -2510,7 +2510,6 @@
             clearCompactHudDensity();
             activeHudPanel = null;
             betrayalOpen = false;
-            pinEmote = false;
             emoteTextKey = "";
             devSidebarOpen = false;
 
@@ -2807,7 +2806,6 @@
             hudRefs.fleetStrip.style.display = isDeploying || !hasFleetItems ? "none" : "flex";
         }
 
-        pinEmote = Boolean(hud.pin_emote);
         syncEmoteTexts(hud);
         if (hudRefs.devSidebar) {
             hudRefs.devSidebar.classList.toggle("hidden", !showDevTools || !devSidebarOpen);
@@ -3024,14 +3022,15 @@
             if (emoteChoice) {
                 event.preventDefault();
                 event.stopPropagation();
-                send("express_emote", { session: Number(hudRefs.mapMenu.dataset.session), tile_idx: Number(hudRefs.mapMenu.dataset.tileIdx), kind: emoteChoice.dataset.emoteKind, pinned: pinEmote });
+                send("express_emote", { session: Number(hudRefs.mapMenu.dataset.session), tile_idx: Number(hudRefs.mapMenu.dataset.tileIdx), kind: emoteChoice.dataset.emoteKind });
                 return;
             }
-            if (event.target.closest("[data-emote-pin-toggle]")) {
+            var pinButton = event.target.closest("[data-emote-pin-toggle]");
+            if (pinButton) {
                 event.preventDefault();
                 event.stopPropagation();
-                pinEmote = !pinEmote;
-                send("set_emote_pinned", { pinned: pinEmote });
+                // The pressed state comes from the game, so the button always flips what the game shows.
+                send("set_emote_pinned", { pinned: pinButton.getAttribute("aria-pressed") !== "true" });
                 return;
             }
             var mapButton = event.target.closest("[data-map-action]");
@@ -3119,7 +3118,6 @@
                 setDevMenu(false);
                 send("dev_vfx_all", { on: btn.dataset.on === "1" });
             } else if (cmd === "clear_emote") {
-                pinEmote = false;
                 send("clear_emote");
             } else if (cmd === "open_transfer") {
                 setHudPanel(null);
