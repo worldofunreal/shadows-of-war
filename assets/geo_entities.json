@@ -2798,7 +2798,7 @@
   },
   {
    "id": "tribe_naimanos",
-   "name": "Tayang Khan",
+   "name": "Tayang Kan",
    "entity": "Naimanos",
    "role": "tribe",
    "region": "asia",
@@ -2834,7 +2834,7 @@
   },
   {
    "id": "tribe_kazajos_pequena_horda",
-   "name": "Abul Khair Khan",
+   "name": "Abulkhair Kan",
    "entity": "Kazajos (Pequeña Horda)",
    "role": "tribe",
    "region": "asia",
@@ -2846,7 +2846,7 @@
   },
   {
    "id": "tribe_calmucos",
-   "name": "Ayuka Khan",
+   "name": "Ayuka Kan",
    "entity": "Calmucos",
    "role": "tribe",
    "region": "asia",
@@ -2882,7 +2882,7 @@
   },
   {
    "id": "tribe_oguz_selyucidas",
-   "name": "Tughril I",
+   "name": "Tughril Beg",
    "entity": "Oguz selyúcidas",
    "role": "tribe",
    "region": "asia",

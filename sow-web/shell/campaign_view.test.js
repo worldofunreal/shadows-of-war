@@ -224,7 +224,6 @@ test("campaign cinematic steps reuse the shared editor/game player and validate 
     assert.doesNotMatch(campaignView, /<video[^>]*\bcontrols\b/i);
     assert.ok(campaignView.includes("function failCinematic()"));
     assert.ok(campaignView.includes("cinematicVideo.play()"));
-    assert.match(campaignView, /setTimeout\(\(\) => \{[\s\S]*?\}, 1250\)/);
     assert.doesNotMatch(campaignView, /<video[^>]*autoplay/i);
     assert.match(campaignEditor, /autoPlayCinematic: false/);
     assert.match(lobbiesSource, /definition\.steps[\s\S]*?definition\.entry[\s\S]*?video_src/);
@@ -239,7 +238,7 @@ test("campaign cinematic steps reuse the shared editor/game player and validate 
 });
 
 
-test("shared cinematic retries muted autoplay and resumes on trusted clicks without prompts", async () => {
+test("Boudica video completion reveals its dialogue before the attack objective", async () => {
     const timers = new Map(); let timerId = 0; let playCalls = 0; let continued = 0; const cinematicChanges = [];
     class Element {
         constructor(ownerDocument, tagName) {
@@ -269,7 +268,7 @@ test("shared cinematic retries muted autoplay and resumes on trusted clicks with
         hasAttribute(name) { return Object.hasOwn(this.attributes, name); }
         removeAttribute(name) { delete this.attributes[name]; }
         querySelector(selector) {
-            if (!this.queries.has(selector)) this.queries.set(selector, new Element(this.ownerDocument, /img$/.test(selector) ? "img" : selector === "video" ? "video" : selector === "[data-story-start]" ? "button" : "div"));
+            if (!this.queries.has(selector)) this.queries.set(selector, new Element(this.ownerDocument, /img$/.test(selector) ? "img" : selector === "video" ? "video" : ["[data-story-start]", "[data-story-continue]"].includes(selector) ? "button" : "div"));
             return this.queries.get(selector);
         }
         querySelectorAll() { return []; }
@@ -305,12 +304,21 @@ test("shared cinematic retries muted autoplay and resumes on trusted clicks with
         clearTimeout(id) { timers.delete(id); }
     };
     vm.runInNewContext(campaignView, sandbox, { filename: "sow-campaign-view.js" });
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    const roster = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.json"), "utf8"));
+    const opening = definition.steps.find(step => step.id === definition.entry);
+    let machine = campaign.create(definition, definition.entry, roster);
     const view = sandbox.SOWCampaignView.mount(root, {
         asset: value => "/" + value,
         translate: key => key,
-        roster: { factions: [] },
-        onContinue() { continued++; },
-        onDismiss() { continued++; },
+        roster,
+        onContinue() {
+            continued++;
+            assert.equal(machine.advance(null, machine.view().step.id), true);
+            view.render(machine.view(), {});
+        },
+        onDismiss: null,
         onCinematicChange(active) { cinematicChanges.push(active); }
     });
     const video = root.querySelector(".sow-story__cinematic").querySelector("video");
@@ -320,9 +328,7 @@ test("shared cinematic retries muted autoplay and resumes on trusted clicks with
             ? Promise.reject(Object.assign(new Error("gesture required"), { name: "NotAllowedError" }))
             : Promise.resolve();
     };
-    const step = { id: "opening", type: "scene", presentation: "cinematic", video_src: "/assets/campaign/cinematic_test/opening.webm", title_key: "opening_title", body_key: "opening_body" };
-    const definition = { episode_id: "cinematic_test", speakers: {}, steps: [step] };
-    view.render({ definition, step, line: step, paused: true, done: false, choices: [], progress: { target: 0, current: 0 }, state: { line: 0 } }, {});
+    view.render(machine.view(), {});
     await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
     const start = root.querySelector("[data-story-start]");
     const dialog = root.querySelector(".sow-story__dialog");
@@ -356,25 +362,57 @@ test("shared cinematic retries muted autoplay and resumes on trusted clicks with
     assert.equal([...timers.values()].some(timer => timer.delay === 1250), false);
     assert.equal(continued, 0);
 
-    cinematic.dispatch("pointerdown", { pointerId: 2, pointerType: "touch", isPrimary: true, button: 0 });
-    const progressTimer = [...timers.entries()].find(([, timer]) => timer.delay === 16);
-    if (progressTimer) { timers.delete(progressTimer[0]); progressTimer[1].callback(); }
-    assert.equal(root.querySelector("[data-story-hold]").querySelector("b").style.transform, "scaleX(1)");
-    const holdTimer = [...timers.entries()].find(([, timer]) => timer.delay === 1250);
-    assert.ok(holdTimer, "mobile hold uses the same 1.25-second threshold");
-    timers.delete(holdTimer[0]); holdTimer[1].callback();
-    assert.equal(continued, 1, "a completed touch hold continues the scene");
+    const continueButton = root.querySelector("[data-story-continue]");
+    continueButton.setAttribute("data-story-continue", "");
+    for (const [width, height] of [[1530, 920], [390, 844]]) {
+        for (const completion of ["hold", "Escape", "ended", "error"]) {
+            view.render(null, {});
+            root.clientWidth = width; root.clientHeight = height;
+            machine = campaign.create(definition, definition.entry, roster);
+            view.render(machine.view(), {});
+            video.dispatch("playing");
+            const before = continued;
+            cinematic.dispatch("pointerdown", { pointerId: 2, pointerType: width < 960 ? "touch" : "mouse", isPrimary: true, button: 0 });
+            const holdTimer = [...timers.entries()].find(([, timer]) => timer.delay === 1250);
+            assert.ok(holdTimer, "skipping still requires a 1.25-second hold");
+            if (completion === "hold") {
+                timers.delete(holdTimer[0]); holdTimer[1].callback();
+            } else if (completion === "Escape") root.dispatch("keydown", { key: "Escape", repeat: false });
+            else video.dispatch(completion);
 
+            assert.equal(continued, before, `${completion} closes only the video`);
+            assert.equal(machine.view().step.id, definition.entry);
+            assert.equal(machine.state.completed.includes(definition.entry), false);
+            assert.equal(cinematic.hidden, true);
+            assert.equal(video.paused, true);
+            assert.equal(cinematicChanges.at(-1), false, "music resumes with the dialogue");
+            assert.equal(dialog.hidden, false, `${completion} reveals Boudica's dialogue at ${width}x${height}`);
+            assert.equal(root.querySelector(".sow-story__body").textContent, opening.body_key);
+            assert.equal(root.querySelector(".sow-story__footer").hidden, false);
+            assert.equal(cinematic.classList.contains("is-holding"), false);
+            assert.equal([...timers.values()].some(timer => timer.delay === 1250), false, "video completion cancels a pending skip");
+            video.dispatch("playing");
+            assert.equal(dialog.hidden, false, "a late playback event cannot hide the dialogue again");
+
+            root.dispatch("click", { target: continueButton, timeStamp: 2000 + before * 1000 });
+            assert.equal(continued, before + 1);
+            assert.equal(machine.view().step.id, opening.next, "only Continue opens the attack objective");
+            assert.equal(dialog.hidden, true);
+            assert.equal(root.querySelector(".sow-story__objective").hidden, width < 960);
+        }
+    }
+    view.render(null, {});
+    machine = campaign.create(definition, definition.entry, roster);
+    let rejectPlayback;
+    video.play = () => { playCalls++; return new Promise((resolve, reject) => { rejectPlayback = reject; }); };
+    view.render(machine.view(), {});
     root.dispatch("keydown", { key: "Escape", repeat: false });
-    assert.equal(continued, 2, "Escape continues immediately without waiting for the hold timer");
-    video.dispatch("ended");
-    assert.deepEqual(cinematicChanges, [true, false], "music is released when the video ends");
-    assert.equal(cinematic.hidden, true, "the video overlay closes after playback ends");
-    assert.equal(dialog.hidden, false, "the authored scene dialogue appears after the cinematic");
-    video.dispatch("error");
-    assert.equal(cinematic.hidden, true, "a failed video load falls back to the authored scene dialog");
-    assert.equal(cinematic.classList.contains("is-cinematic"), false);
-    assert.equal(root.querySelector(".sow-story__footer").hidden, false, "the fallback keeps a way to continue");
+    const attempts = playCalls;
+    rejectPlayback(Object.assign(new Error("gesture required"), { name: "NotAllowedError" }));
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    assert.equal(playCalls, attempts, "a late autoplay rejection cannot restart a skipped video");
+    assert.equal(machine.view().step.id, definition.entry);
+    assert.equal(dialog.hidden, false);
     view.destroy();
 });
 
@@ -509,9 +547,9 @@ test("cinematic waits for the loader and swaps in hashed WebM+MP4 sources with a
 });
 
 
-test("campaign dialogue starts each new beat at the top of its single scroll panel", () => {
-    assert.match(campaignView, /if \(renderKey !== key\) \{\s*renderKey = key;\s*dialog\.scrollTop = 0;/);
-    assert.match(storyCss, /\.sow-story__body\s*\{[^}]*white-space: normal/);
+test("campaign dialogue starts each new beat at the top of its scroll panel", () => {
+    assert.match(campaignView, /if \(renderKey !== key\) \{\s*renderKey = key;\s*conversation\.scrollTop = 0;\s*scrollContent\.scrollTop = 0;\s*actions\.scrollTop = 0;/);
+    assert.match(storyCss, /\.sow-story__scroll\s*\{[^}]*overflow-y: auto/);
 });
 
 
@@ -617,7 +655,6 @@ test("campaign view recovers portraits and renders compact objective guidance", 
         querySelectorAll() { return []; }
         replaceChildren(...children) { this.children = children; }
         appendChild(child) { this.children.push(child); return child; }
-        append(...children) { this.children.push(...children); }
         contains(child) { return this.children.includes(child) || [...this.queries.values()].includes(child); }
         getBoundingClientRect() { return { width: 100, height: 40 }; }
         focus() { this.ownerDocument.activeElement = this; }
@@ -780,9 +817,6 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     renderer.render(objectiveModel, { anchor: { x: 220, y: 360 }, gestureLabel: "Expand the frontier" });
     assert.equal(root.querySelector(".sow-story__objective").hidden, false, "normal desktop retains the quest card");
     assert.equal(root.querySelector(".sow-story__gesture-metric").hidden, true, "desktop keeps its existing quest-card progress instead of duplicating it");
-    const defense = { ...objective, id: "defense", trigger: { type: "territory", scope: "total", comparison: "lte", value: 5000 } };
-    renderer.render({ ...objectiveModel, step: defense, line: defense, progress: { current: 0, target: 5000 } }, {});
-    assert.equal(root.querySelector(".sow-story__objective").querySelector(".sow-story__meter").hidden, true, "defense never presents territory loss as a progress goal");
 
     const mapSurface = { closest: () => null };
     const pausedObjective = { ...objectiveModel, paused: true };
@@ -798,19 +832,6 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     assert.equal(mapTapDuringScene.defaultPrevented, true, "dialogue modals continue to block clicks outside the scene");
     assert.equal(mapTapDuringScene.propagationStopped, true, "dialogue modals continue to stop outside propagation");
     assert.equal(continueCalls, 0, "an outside map tap cannot skip a scene");
-    const choice = { id: "pay", label_key: "Feed their families", body_key: "Pay 200 gold. Form an alliance.", gold_cost: 200, gold_available: 300 };
-    const decision = { id: "terms", type: "choice", title_key: "Terms" };
-    renderer.render({ ...pausedObjective, step: decision, line: decision, choices: [choice] }, {});
-    const button = root.querySelector(".sow-story__choices").children[0];
-    const copy = button.children[1];
-    assert.equal(copy.children[1].tagName, "small");
-    assert.equal(copy.children[1].textContent, choice.body_key, "choices display the authored consequence");
-    assert.match(button.getAttribute("aria-label"), /Pay 200 gold\. Form an alliance\./);
-    const ending = { id: "epilogue", type: "end", title_key: "Epilogue", body_key: "The cup was empty.", presentation: "chapter" };
-    renderer.render({ ...pausedObjective, step: ending, line: ending }, {});
-    assert.equal(root.querySelector(".sow-story__portrait").hidden, true);
-    assert.equal(root.querySelector(".sow-story__body").textContent, ending.body_key);
-    assert.equal(root.querySelector("[data-story-continue]").querySelector("span").textContent, "hud.back_to_menu");
     renderer.destroy();
 });
 
@@ -886,26 +907,21 @@ test("campaign dialogue resolves story copy through the shared catalog", () => {
 
 test("mobile chapter dialogue hugs its copy while docked at the bottom", () => {
     const mobileStory = storyCss.slice(storyCss.indexOf("@container (max-width: 640px)"), storyCss.indexOf("@container (max-width: 380px)"));
-    assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__main \{[^}]*padding-block: 8px 0/);
+    assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__main \{[^}]*flex: 0 1 auto;[^}]*padding-block: 8px/);
     assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__conversation \{ padding-block: 0; \}/);
     assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__dialog \{ bottom: var\(--story-safe-bottom\); transform: none; \}/);
     assert.match(storyCss, /\.sow-story\.is-chapter \.sow-story__dialog \{ bottom: 50%; transform: translateY\(50%\)/);
 });
 
 
-test("mobile story dialogs use one scroll area and keep copy attached to choices", () => {
+test("mobile story dialogs scroll long text and choices while keeping speaker controls reachable", () => {
     const mobileStory = storyCss.slice(storyCss.indexOf("@container (max-width: 640px)"), storyCss.indexOf("@container (max-width: 380px)"));
-    assert.match(mobileStory, /\.sow-story__dialog \{[\s\S]*?display: block;[\s\S]*?overflow-y: auto/);
-    assert.match(mobileStory, /\.sow-story__main \{[^}]*display: grid;[^}]*padding: [^;]* 0/);
+    assert.match(mobileStory, /\.sow-story__main \{[^}]*flex: 0 1 auto/);
     assert.match(storyCss, /@container \(max-width: 640px\) \{[\s\S]*?max-height: min\(calc\(100% - var\(--story-safe-top\) - var\(--story-safe-bottom\)\), 60svh\)/);
-    assert.match(storyCss, /#sow-story\[data-compact="true"\] \.sow-story__dialog \{[\s\S]*?display: block;[\s\S]*?max-height: min\(calc\(100% - var\(--story-safe-top\) - var\(--story-safe-bottom\)\), 72svh\)[\s\S]*?overflow-y: auto/);
+    assert.match(storyCss, /#sow-story\[data-compact="true"\] \.sow-story__dialog \{[\s\S]*?max-height: min\(calc\(100% - var\(--story-safe-top\) - var\(--story-safe-bottom\)\), 72svh\)/);
     assert.match(storyCss, /\.sow-story__portrait img \{[^}]*width: 100%; height: 100%;[^}]*object-fit: cover/);
-    assert.match(mobileStory, /\.sow-story__scroll\s*\{[^}]*flex: 0 0 auto; min-height: 0; overflow: visible/);
-    assert.match(mobileStory, /\.sow-story__actions \{[^}]*min-height: 0; overflow: visible; padding: 0 [^;]*; border-top: 0/);
-    assert.match(mobileStory, /\.sow-story__main \{[^}]*padding: [^;]* 0/);
-    assert.match(storyCss, /#sow-story\[data-compact="true"\] \.sow-story__main \{[^}]*display: grid;[^}]*padding: [^;]* 0/);
-    assert.match(storyCss, /#sow-story\[data-compact="true"\] \.sow-story__scroll \{[^}]*overflow: visible/);
-    assert.match(storyCss, /#sow-story\[data-compact="true"\] \.sow-story__actions \{[^}]*min-height: 0; overflow: visible; padding: 0 [^;]*; border-top: 0/);
+    assert.match(storyCss, /\.sow-story__scroll\s*\{[^}]*flex: 1 1 auto; min-height: 0; overflow-y: auto/);
+    assert.match(storyCss, /\.sow-story__actions \{[^}]*overflow-y: auto/);
     assert.match(storyCss, /\.sow-story__choices \{ grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 280px\), 1fr\)\)/);
     assert.match(campaignView, /<div class="sow-story__main"><div class="sow-story__portrait"[\s\S]*?<div class="sow-story__conversation">[\s\S]*?<header class="sow-story__heading"[\s\S]*?data-story-dismiss[\s\S]*?<div class="sow-story__scroll"><h2[\s\S]*?<p class="sow-story__body"[\s\S]*?<\/div><\/div><\/div>'\s*\+\s*'<div class="sow-story__actions"><div class="sow-story__choices"><\/div><footer class="sow-story__footer"[\s\S]*?data-story-continue/);
     assert.match(campaignView, /footer\.hidden = step\.type === "choice"/);

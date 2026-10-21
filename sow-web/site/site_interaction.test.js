@@ -121,6 +121,8 @@ test("landing alpha badges link to the iOS and Android tests in every locale", (
     assert.match(siteCss, /\.hero-alpha-links \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); gap: 6\.5px; max-width: 299px; \}/);
     assert.match(siteCss, /\.hero-alpha-badge \{ display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 46px;/);
     assert.match(siteCss, /\.hero-alpha-icon \{ flex: 0 0 30px; width: 30px; height: 30px; \}/);
+    assert.match(siteCss, /\.hero-alpha-copy small \{ color: #fff; font: 500 7px\/1\.25 Arial, sans-serif; letter-spacing: \.08em; text-transform: uppercase; \}/);
+    assert.match(siteCss, /\.hero-alpha-copy b \{ margin-top: 2px; font: 600 13px\/1\.05 Arial, sans-serif; letter-spacing: -\.035em; white-space: nowrap; \}/);
     const narrowStyles = siteCss.slice(siteCss.indexOf("@media (max-width: 479px)"), siteCss.indexOf("@media (orientation: landscape)"));
     assert.match(narrowStyles, /\.hero-alpha-links \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); gap: 6px; max-width: none; \}/);
     assert.match(narrowStyles, /\.hero-alpha-badge \{ min-height: 42px; gap: 6px; padding-inline: 6px; \}/);

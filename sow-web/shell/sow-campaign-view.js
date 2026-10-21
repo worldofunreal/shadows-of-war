@@ -2,7 +2,6 @@
 (function (host) {
     "use strict";
     let instance = 0;
-    const CINEMATIC_START_TIMEOUT_MS = 8000;
     function isCompactViewport(root, width, height) {
         if (root && root.dataset && root.dataset.compact === "true") return true;
         width = Number.isFinite(Number(width)) ? Number(width) : Number(root && root.clientWidth);
@@ -60,7 +59,7 @@
         const portrait = find(".sow-story__portrait"), portraitLine = portrait.querySelector(".sow-story__portrait-line");
         let image = portrait.querySelector("img");
         const speaker = find(".sow-story__speaker"), title = find(".sow-story__title"), body = find(".sow-story__body");
-        const heading = find(".sow-story__heading"), conversation = find(".sow-story__conversation"), scrollContent = find(".sow-story__scroll"), choices = find(".sow-story__choices"), footer = find(".sow-story__footer");
+        const heading = find(".sow-story__heading"), conversation = find(".sow-story__conversation"), scrollContent = find(".sow-story__scroll"), actions = find(".sow-story__actions"), choices = find(".sow-story__choices"), footer = find(".sow-story__footer");
         const continueButton = find("[data-story-continue]"), lines = find(".sow-story__lines");
         const cinematic = find(".sow-story__cinematic"), cinematicVideo = cinematic.querySelector("video");
         const cinematicStart = find("[data-story-start]"), cinematicHold = find("[data-story-hold]"), cinematicHoldProgress = cinematicHold.querySelector("b");
@@ -77,7 +76,7 @@
         }
         const spotlight = find(".sow-story__spotlight");
         const view = doc.defaultView;
-        let cinematicStepKey = "", cinematicStatus = "none", cinematicStartTimer = 0, cinematicHoldTimer = 0, cinematicHoldFrame = 0, cinematicPointerId = null;
+        let cinematicStepKey = "", cinematicStatus = "none", cinematicHoldTimer = 0, cinematicHoldFrame = 0, cinematicPointerId = null;
         let cinematicAudioActive = false, cinematicLoaderWait = null, cinematicMediaArmed = false;
         let portraitFrame = 0, guideStepId = "", guideLastPulseValue = NaN, guideLastPulseAt = 0, guidePulse = null;
         let portraitRequestId = 0, destroyed = false;
@@ -259,13 +258,6 @@
             cinematicHoldProgress.style.transition = "none";
             cinematicHoldProgress.style.transform = "scaleX(0)";
         }
-        function watchCinematicStart(sourceKey) {
-            if (cinematicStartTimer) clearTimeout(cinematicStartTimer);
-            cinematicStartTimer = setTimeout(() => {
-                cinematicStartTimer = 0;
-                if (sourceKey === cinematicStepKey && model && cinematicStatus === "starting") failCinematic();
-            }, CINEMATIC_START_TIMEOUT_MS);
-        }
         function cinematicVariants(source) {
             const dot = source.lastIndexOf(".");
             const stem = dot > 0 ? source.slice(0, dot) : source;
@@ -324,14 +316,13 @@
         }
         function stopCinematic() {
             setCinematicAudioActive(false);
-            if (cinematicStartTimer) { clearTimeout(cinematicStartTimer); cinematicStartTimer = 0; }
             clearCinematicHold(); clearCinematicLoaderWait();
             cinematicStepKey = ""; cinematicStatus = "none";
             cinematicVideo.pause(); clearCinematicMedia(); cinematicVideo.load();
             cinematic.hidden = true; root.classList.remove("is-cinematic");
         }
         function startCinematic(sourceKey) {
-            if (!cinematicStepKey || sourceKey !== cinematicStepKey || !model || cinematicStatus === "fallback") return;
+            if (!cinematicStepKey || sourceKey !== cinematicStepKey || !model || cinematicStatus === "fallback" || cinematicStatus === "ended") return;
             if (loaderVisible() && (doc.defaultView || doc).addEventListener) {
                 if (!cinematicLoaderWait) {
                     const target = doc.defaultView || doc;
@@ -349,7 +340,6 @@
             }
             cinematicStatus = "starting"; syncCinematic(model.step);
             attachCinematicMedia(model.step.video_src);
-            watchCinematicStart(sourceKey);
             cinematicVideo.muted = false;
             requestCinematicPlayback(sourceKey);
         }
@@ -360,7 +350,7 @@
             if (playback && typeof playback.catch === "function") playback.catch(error => playbackRejected(error, sourceKey));
         }
         function playbackRejected(error, sourceKey) {
-            if (sourceKey !== cinematicStepKey || !model || cinematicStatus === "fallback") return;
+            if (sourceKey !== cinematicStepKey || !model || cinematicStatus === "fallback" || cinematicStatus === "ended") return;
             if (error && error.name === "NotAllowedError" && !cinematicVideo.muted) {
                 cinematicVideo.muted = true;
                 cinematicStatus = "starting";
@@ -375,7 +365,6 @@
                 cinematicVideo.muted = false;
                 cinematicStatus = "starting";
                 syncCinematic(model.step);
-                watchCinematicStart(cinematicStepKey);
                 requestCinematicPlayback(cinematicStepKey);
             } else if (cinematicVideo.muted && (cinematicStatus === "playing" || cinematicStatus === "starting")) {
                 cinematicVideo.muted = false;
@@ -385,7 +374,6 @@
             const source = step.type === "scene" && step.presentation === "cinematic" ? step.video_src || "" : "";
             const nextKey = source ? step.id + "\u0000" + source : "";
             if (nextKey !== cinematicStepKey) {
-                if (cinematicStartTimer) { clearTimeout(cinematicStartTimer); cinematicStartTimer = 0; }
                 clearCinematicHold(); clearCinematicLoaderWait();
                 cinematicStepKey = nextKey; cinematicStatus = source ? (options.autoPlayCinematic === false ? "ready" : "starting") : "none";
                 cinematicVideo.muted = false;
@@ -410,16 +398,15 @@
             footer.hidden = step.type === "choice" || step.pause_game === true || active;
         }
         function failCinematic() {
-            if (!cinematicStepKey || cinematicStatus === "fallback") return;
-            if (cinematicStartTimer) { clearTimeout(cinematicStartTimer); cinematicStartTimer = 0; }
+            if (!cinematicStepKey || cinematicStatus === "fallback" || cinematicStatus === "ended") return;
+            clearCinematicHold(); clearCinematicLoaderWait();
             const focusVideo = doc.activeElement === cinematic || doc.activeElement === cinematicVideo || doc.activeElement === cinematicStart;
             cinematicStatus = "fallback";
             cinematicVideo.pause(); clearCinematicMedia(); cinematicVideo.load();
             if (model && model.step) { syncCinematic(model.step); if (focusVideo) continueButton.focus({ preventScroll: true }); }
         }
         cinematicVideo.addEventListener("playing", () => {
-            if (!cinematicStepKey || cinematicStatus === "fallback") return;
-            if (cinematicStartTimer) { clearTimeout(cinematicStartTimer); cinematicStartTimer = 0; }
+            if (!cinematicStepKey || cinematicStatus === "fallback" || cinematicStatus === "ended") return;
             cinematicStatus = "playing"; syncCinematic(model.step);
             if (doc.activeElement === cinematicStart) cinematic.focus({ preventScroll: true });
         });
@@ -427,12 +414,14 @@
             if (!cinematicStepKey || cinematicStatus !== "playing" || cinematicVideo.ended) return;
             cinematicStatus = "paused"; syncCinematic(model.step);
         });
-        cinematicVideo.addEventListener("ended", () => {
-            if (!cinematicStepKey || cinematicStatus === "fallback") return;
-            if (cinematicStartTimer) { clearTimeout(cinematicStartTimer); cinematicStartTimer = 0; }
-            cinematicStatus = "ended"; syncCinematic(model.step);
+        function finishCinematic() {
+            if (!cinematicStepKey || cinematicStatus === "fallback" || cinematicStatus === "ended") return;
+            clearCinematicHold(); clearCinematicLoaderWait();
+            cinematicStatus = "ended";
+            cinematicVideo.pause(); syncCinematic(model.step);
             continueButton.focus({ preventScroll: true });
-        });
+        }
+        cinematicVideo.addEventListener("ended", finishCinematic);
         cinematicVideo.addEventListener("error", failCinematic);
         function beginCinematicHold(event) {
             if (!model || cinematicStatus !== "playing" || cinematicPointerId !== null || event.isPrimary === false || event.button > 0) return;
@@ -448,16 +437,7 @@
                 cinematicHoldProgress.style.removeProperty("transition"); cinematicHoldProgress.style.transform = "scaleX(1)";
             };
             if (view && typeof view.requestAnimationFrame === "function") cinematicHoldFrame = view.requestAnimationFrame(progress); else cinematicHoldFrame = setTimeout(progress, 16);
-            cinematicHoldTimer = setTimeout(() => {
-                cinematicHoldTimer = 0; cinematicPointerId = null;
-                if (cinematicHoldFrame) {
-                    if (view && typeof view.cancelAnimationFrame === "function") view.cancelAnimationFrame(cinematicHoldFrame);
-                    else clearTimeout(cinematicHoldFrame);
-                }
-                cinematicHoldFrame = 0;
-                cinematic.classList.remove("is-holding");
-                if (options.onContinue) options.onContinue();
-            }, 1250);
+            cinematicHoldTimer = setTimeout(finishCinematic, 1250);
         }
         function endCinematicHold(event) {
             if (cinematicPointerId === null || event.pointerId != null && event.pointerId !== cinematicPointerId) return;
@@ -473,6 +453,7 @@
         doc.addEventListener("visibilitychange", clearHoldWhenHidden);
         function dismissDialog() {
             if (!model) return;
+            if (!cinematic.hidden) { finishCinematic(); return; }
             if (model.step.type === "choice" || model.choices.length) { triggerNudge(); return; }
             if (options.onDismiss) options.onDismiss();
             else if (options.onContinue) options.onContinue();
@@ -594,7 +575,9 @@
             const key = JSON.stringify([step.id, model.state && model.state.line, copyTitle, copyBody, speakerName, character.avatar, step.presentation, step.video_src, model.choices.map(c => [c.id, t(c.label_key), t(c.body_key), c.gold_available, c.gold_insufficient])]);
             if (renderKey !== key) {
                 renderKey = key;
-                dialog.scrollTop = 0;
+                conversation.scrollTop = 0;
+                scrollContent.scrollTop = 0;
+                actions.scrollTop = 0;
                 setText(speaker, speakerName); speaker.hidden = !speakerName;
                 setText(title, copyTitle); title.hidden = !copyTitle;
                 setText(body, copyBody); body.hidden = !copyBody;
@@ -610,11 +593,6 @@
                     const copy = doc.createElement("span"); copy.className = "sow-story__choice-copy";
                     const label = doc.createElement("strong");
                     label.textContent = t(choice.label_key); copy.appendChild(label);
-                    const detail = t(choice.body_key);
-                    if (detail) {
-                        const description = doc.createElement("small");
-                        description.textContent = detail; copy.appendChild(description);
-                    }
                     if (Number(choice.gold_cost || 0) > 0 && Number.isFinite(choice.gold_available)) {
                         const price = doc.createElement("span");
                         price.className = "sow-story__choice-price" + (choice.gold_insufficient ? " is-insufficient" : "");
@@ -625,7 +603,7 @@
                         const formatGold = value => Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
                         amounts.textContent = formatGold(choice.gold_available) + " / " + formatGold(choice.gold_cost);
                         price.append(icon, amounts); copy.appendChild(price);
-                        button.setAttribute("aria-label", [label.textContent, detail, t("hud.gold") + " " + amounts.textContent].filter(Boolean).join(". "));
+                        button.setAttribute("aria-label", label.textContent + ". " + t("hud.gold") + " " + amounts.textContent);
                     }
                     button.append(mark, copy); choices.appendChild(button);
                 });
@@ -645,7 +623,7 @@
                 syncMobilePortrait();
             } else if (focusModal) focusAction();
             wasModal = modal;
-            setText(continueButton.querySelector("span"), t(step.type === "end" ? "hud.back_to_menu" : "tutorial.continue"));
+            setText(continueButton.querySelector("span"), t(step.type === "end" ? "tutorial.complete" : "tutorial.continue"));
             const dismissContinues = modal && step.type !== "choice" && model.choices.length === 0;
             dismissButtons.forEach(button => {
                 button.hidden = dismissContinues ? !options.onContinue : !(step.type === "choice" || options.onDismiss);
@@ -654,8 +632,7 @@
             setText(objectiveTitle, t(step.title_key));
             setText(hint, context.hintOverride || t(step.hint_key || step.body_key)); hint.hidden = !hint.textContent;
             const progress = model.progress;
-            objective.querySelector(".sow-story__meter").hidden = progress.target <= 1
-                || Boolean(step.trigger && step.trigger.type === "territory" && step.trigger.scope === "total" && step.trigger.comparison === "lte");
+            objective.querySelector(".sow-story__meter").hidden = progress.target <= 1;
             meter.max = Math.max(1, progress.target); meter.value = progress.current;
             meter.setAttribute("aria-label", t(step.title_key));
             setText(amount, Math.floor(progress.current).toLocaleString() + " / " + Math.ceil(progress.target).toLocaleString());

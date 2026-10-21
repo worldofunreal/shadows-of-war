@@ -1,26 +1,26 @@
-#,Tribu o pueblo,Archivo del retrato,Región,Época,Líder,Género,Tipo de líder,Wikipedia del líder,Wikipedia de la tribu,Material de arte
-1,Xiongnu,assets/art/avatars/tribes/xiongnu.webp,Asia,s. II a. C.,Modu Chanyu,Hombre,Histórico,https://en.wikipedia.org/wiki/Modu_Chanyu,https://es.wikipedia.org/wiki/Xiongnu,~/Downloads/modu_chanyu_desktop.jpg ; ~/Downloads/modu_chanyu_mobile.jpg
-2,Xianbei,assets/art/avatars/tribes/xianbei.webp,Asia,s. II,Tanshihuai,Hombre,Histórico,https://en.wikipedia.org/wiki/Tanshihuai,https://es.wikipedia.org/wiki/Xianbei,
-3,Göktürks,assets/art/avatars/tribes/gokturks.webp,Asia,s. VI,Bumin Kagan,Hombre,Histórico,https://en.wikipedia.org/wiki/Bumin_Qaghan,https://es.wikipedia.org/wiki/K%C3%B6kt%C3%BCrk,
-4,Uigures (kaganato),assets/art/avatars/tribes/uigures.webp,Asia,s. VIII,Kutlug Bilge Kagan,Hombre,Histórico,,https://es.wikipedia.org/wiki/Etnia_uigur,
-5,Yuezhi,assets/art/avatars/tribes/yuezhi.webp,Asia,s. I,Kujula Kadfises,Hombre,Histórico,https://es.wikipedia.org/wiki/Kujula_Kadphises,https://es.wikipedia.org/wiki/Yuezhi,
-6,Heftalitas,assets/art/avatars/tribes/heftalitas.webp,Asia,s. V,Toramana,Hombre,Histórico,https://en.wikipedia.org/wiki/Toramana,https://es.wikipedia.org/wiki/Heftalita,
-7,Jurchen,assets/art/avatars/tribes/jurchen.webp,Asia,s. XII,Wanyan Aguda,Hombre,Histórico,https://en.wikipedia.org/wiki/Emperor_Taizu_of_Jin,https://es.wikipedia.org/wiki/Yurchen,
-8,Tanguts,assets/art/avatars/tribes/tanguts.webp,Asia,s. XI,Li Yuanhao,Hombre,Histórico,https://en.wikipedia.org/wiki/Emperor_Jingzong_of_Western_Xia,https://en.wikipedia.org/wiki/Tangut_people,
-9,Jianzhou (manchúes),assets/art/avatars/tribes/jianzhou.webp,Asia,s. XVII,Nurhaci,Hombre,Histórico,https://es.wikipedia.org/wiki/Nurhaci,https://en.wikipedia.org/wiki/Jianzhou_Jurchens,
-10,Oirates,assets/art/avatars/tribes/oirates.webp,Asia,s. XV,Esen Taishi,Hombre,Histórico,https://en.wikipedia.org/wiki/Esen_Taishi,https://es.wikipedia.org/wiki/Oirates,
-11,Keraítas,assets/art/avatars/tribes/keraitas.webp,Asia,s. XII,Toghrul (Ong Kan),Hombre,Histórico,https://en.wikipedia.org/wiki/Toghrul,,
-12,Naimanos,assets/art/avatars/tribes/naimanos.webp,Asia,s. XII,Tayang Kan,Hombre,Histórico,https://en.wikipedia.org/wiki/Tayang_Khan,https://es.wikipedia.org/wiki/Naimano,
-13,Tártaros (estepa),assets/art/avatars/tribes/tartaros.webp,Asia,s. XII,Megujin Seultu,Hombre,Histórico,,https://es.wikipedia.org/wiki/T%C3%A1rtaros,
-14,Merkitas,assets/art/avatars/tribes/merkitas.webp,Asia,s. XII,Toqtoa Beki,Hombre,Histórico,,https://es.wikipedia.org/wiki/Merkit,
-15,Kazajos (Pequeña Horda),assets/art/avatars/tribes/kazajos_pequena_horda.webp,Asia,s. XVIII,Abulkhair Kan,Hombre,Histórico,https://en.wikipedia.org/wiki/Abul_Khair_Khan,https://es.wikipedia.org/wiki/Kazajos,
-16,Calmucos,assets/art/avatars/tribes/calmucos.webp,Asia,s. XVIII,Ayuka Kan,Hombre,Histórico,https://en.wikipedia.org/wiki/Ayuka_Khan,https://es.wikipedia.org/wiki/Pueblo_calmuco,
-17,Kara Koyunlu,assets/art/avatars/tribes/kara_koyunlu.webp,Asia,s. XV,Qara Yusuf,Hombre,Histórico,https://es.wikipedia.org/wiki/Qara_Yusuf,https://es.wikipedia.org/wiki/Kara_Koyunlu,
-18,Ak Koyunlu,assets/art/avatars/tribes/ak_koyunlu.webp,Asia,s. XV,Uzun Hasan,Hombre,Histórico,https://es.wikipedia.org/wiki/Uz%C3%BAn_Has%C3%A1n,https://es.wikipedia.org/wiki/Ak_Koyunlu,
-19,Oguz selyúcidas,assets/art/avatars/tribes/oguz_selyucidas.webp,Asia,s. XI,Tughril Beg,Hombre,Histórico,https://en.wikipedia.org/wiki/Tughril_I,https://es.wikipedia.org/wiki/Turcos_oguz,
-20,Kayı,assets/art/avatars/tribes/kay.webp,Asia,s. XIII,Ertuğrul,Hombre,Histórico,https://es.wikipedia.org/wiki/Ertu%C4%9Frul,,
-21,Abdalíes (durranis),assets/art/avatars/tribes/abdalies.webp,Asia,s. XVIII,Ahmad Shah Durrani,Hombre,Histórico,https://es.wikipedia.org/wiki/Ahmad_Shah_Durrani,,
-22,Baluchis de Kalat,assets/art/avatars/tribes/baluchis_de_kalat.webp,Asia,s. XVIII,Nasir Kan I,Hombre,Histórico,,,
+﻿#,Tribu o pueblo,Archivo del retrato,Región,Época,Líder,Género,Tipo de líder,Wikipedia del líder,Wikipedia de la tribu,Material de arte
+1,Xiongnu,assets/art/avatars/tribes/xiongnu.webp,Asia,s. II a. C.,Modu Chanyu,Hombre,Histórico,https://en.wikipedia.org/wiki/Modu_Chanyu,https://es.wikipedia.org/wiki/Xiongnu,outputs/identidades/generados/tribus/xiongnu__modu_chanyu.png
+2,Xianbei,assets/art/avatars/tribes/xianbei.webp,Asia,s. II,Tanshihuai,Hombre,Histórico,https://en.wikipedia.org/wiki/Tanshihuai,https://es.wikipedia.org/wiki/Xianbei,outputs/identidades/generados/tribus/xianbei__tanshihuai.png
+3,Göktürks,assets/art/avatars/tribes/gokturks.webp,Asia,s. VI,Bumin Kagan,Hombre,Histórico,https://en.wikipedia.org/wiki/Bumin_Qaghan,https://es.wikipedia.org/wiki/K%C3%B6kt%C3%BCrk,outputs/identidades/generados/tribus/gokturks__bumin_kagan.png
+4,Uigures (kaganato),assets/art/avatars/tribes/uigures.webp,Asia,s. VIII,Kutlug Bilge Kagan,Hombre,Histórico,,https://es.wikipedia.org/wiki/Etnia_uigur,outputs/identidades/generados/tribus/uigures__kutlug_bilge_kagan.png
+5,Yuezhi,assets/art/avatars/tribes/yuezhi.webp,Asia,s. I,Kujula Kadfises,Hombre,Histórico,https://es.wikipedia.org/wiki/Kujula_Kadphises,https://es.wikipedia.org/wiki/Yuezhi,outputs/identidades/generados/tribus/yuezhi__kujula_kadfises.png
+6,Heftalitas,assets/art/avatars/tribes/heftalitas.webp,Asia,s. V,Toramana,Hombre,Histórico,https://en.wikipedia.org/wiki/Toramana,https://es.wikipedia.org/wiki/Heftalita,outputs/identidades/generados/tribus/heftalitas__toramana.png
+7,Jurchen,assets/art/avatars/tribes/jurchen.webp,Asia,s. XII,Wanyan Aguda,Hombre,Histórico,https://en.wikipedia.org/wiki/Emperor_Taizu_of_Jin,https://es.wikipedia.org/wiki/Yurchen,outputs/identidades/generados/tribus/jurchen__wanyan_aguda.png
+8,Tanguts,assets/art/avatars/tribes/tanguts.webp,Asia,s. XI,Li Yuanhao,Hombre,Histórico,https://en.wikipedia.org/wiki/Emperor_Jingzong_of_Western_Xia,https://en.wikipedia.org/wiki/Tangut_people,outputs/identidades/generados/tribus/tanguts__li_yuanhao.png
+9,Jianzhou (manchúes),assets/art/avatars/tribes/jianzhou.webp,Asia,s. XVII,Nurhaci,Hombre,Histórico,https://es.wikipedia.org/wiki/Nurhaci,https://en.wikipedia.org/wiki/Jianzhou_Jurchens,outputs/identidades/generados/tribus/jianzhou__nurhaci.png
+10,Oirates,assets/art/avatars/tribes/oirates.webp,Asia,s. XV,Esen Taishi,Hombre,Histórico,https://en.wikipedia.org/wiki/Esen_Taishi,https://es.wikipedia.org/wiki/Oirates,outputs/identidades/generados/tribus/oirates__esen_taishi.png
+11,Keraítas,assets/art/avatars/tribes/keraitas.webp,Asia,s. XII,Toghrul (Ong Kan),Hombre,Histórico,https://en.wikipedia.org/wiki/Toghrul,,outputs/identidades/generados/tribus/keraitas__toghrul_ong_kan.png
+12,Naimanos,assets/art/avatars/tribes/naimanos.webp,Asia,s. XII,Tayang Kan,Hombre,Histórico,https://en.wikipedia.org/wiki/Tayang_Khan,https://es.wikipedia.org/wiki/Naimano,outputs/identidades/generados/tribus/naimanos__tayang_kan.png
+13,Tártaros (estepa),assets/art/avatars/tribes/tartaros.webp,Asia,s. XII,Megujin Seultu,Hombre,Histórico,,https://es.wikipedia.org/wiki/T%C3%A1rtaros,outputs/identidades/generados/tribus/tartaros__megujin_seultu.png
+14,Merkitas,assets/art/avatars/tribes/merkitas.webp,Asia,s. XII,Toqtoa Beki,Hombre,Histórico,,https://es.wikipedia.org/wiki/Merkit,outputs/identidades/generados/tribus/merkitas__toqtoa_beki.png
+15,Kazajos (Pequeña Horda),assets/art/avatars/tribes/kazajos_pequena_horda.webp,Asia,s. XVIII,Abulkhair Kan,Hombre,Histórico,https://en.wikipedia.org/wiki/Abul_Khair_Khan,https://es.wikipedia.org/wiki/Kazajos,outputs/identidades/generados/tribus/kazajos_pequena_horda__abulkhair_kan.png
+16,Calmucos,assets/art/avatars/tribes/calmucos.webp,Asia,s. XVIII,Ayuka Kan,Hombre,Histórico,https://en.wikipedia.org/wiki/Ayuka_Khan,https://es.wikipedia.org/wiki/Pueblo_calmuco,outputs/identidades/generados/tribus/calmucos__ayuka_kan.png
+17,Kara Koyunlu,assets/art/avatars/tribes/kara_koyunlu.webp,Asia,s. XV,Qara Yusuf,Hombre,Histórico,https://es.wikipedia.org/wiki/Qara_Yusuf,https://es.wikipedia.org/wiki/Kara_Koyunlu,outputs/identidades/generados/tribus/kara_koyunlu__qara_yusuf.png
+18,Ak Koyunlu,assets/art/avatars/tribes/ak_koyunlu.webp,Asia,s. XV,Uzun Hasan,Hombre,Histórico,https://es.wikipedia.org/wiki/Uz%C3%BAn_Has%C3%A1n,https://es.wikipedia.org/wiki/Ak_Koyunlu,outputs/identidades/generados/tribus/ak_koyunlu__uzun_hasan.png
+19,Oguz selyúcidas,assets/art/avatars/tribes/oguz_selyucidas.webp,Asia,s. XI,Tughril Beg,Hombre,Histórico,https://en.wikipedia.org/wiki/Tughril_I,https://es.wikipedia.org/wiki/Turcos_oguz,outputs/identidades/generados/tribus/oguz_selyucidas__tughril_beg.png
+20,Kayı,assets/art/avatars/tribes/kay.webp,Asia,s. XIII,Ertuğrul,Hombre,Histórico,https://es.wikipedia.org/wiki/Ertu%C4%9Frul,,outputs/identidades/generados/tribus/kay__ertugrul.png
+21,Abdalíes (durranis),assets/art/avatars/tribes/abdalies.webp,Asia,s. XVIII,Ahmad Shah Durrani,Hombre,Histórico,https://es.wikipedia.org/wiki/Ahmad_Shah_Durrani,,outputs/identidades/generados/tribus/abdalies__ahmad_shah_durrani.png
+22,Baluchis de Kalat,assets/art/avatars/tribes/baluchis_de_kalat.webp,Asia,s. XVIII,Nasir Kan I,Hombre,Histórico,,,outputs/identidades/generados/tribus/baluchis_de_kalat__nasir_kan_i.png
 23,Banu Shayban,assets/art/avatars/tribes/banu_shayban.webp,Asia,s. VII,Al-Muthanna ibn Haritha,Hombre,Histórico,https://en.wikipedia.org/wiki/Al-Muthanna_ibn_Haritha,https://en.wikipedia.org/wiki/Banu_Shayban,outputs/identidades/generados/tribus/banu_shayban__al_muthanna_ibn_haritha.png
 24,Nabateos,assets/art/avatars/tribes/nabateos.webp,Asia,s. I,Aretas IV,Hombre,Histórico,https://es.wikipedia.org/wiki/Aretas_IV,https://es.wikipedia.org/wiki/Nabateos,outputs/identidades/generados/tribus/nabateos__aretas_iv.png
 25,Kinda,assets/art/avatars/tribes/kinda.webp,Asia,s. VI,Imru al-Qais,Hombre,Histórico,https://en.wikipedia.org/wiki/Imru%27_al-Qais,https://en.wikipedia.org/wiki/Kingdom_of_Kinda,outputs/identidades/generados/tribus/kinda__imru_al_qais.png
@@ -58,13 +58,13 @@
 57,Masagetas,assets/art/avatars/tribes/masagetas.webp,Asia,s. VI a. C.,Tomiris,Mujer,Histórico,https://es.wikipedia.org/wiki/Tomiris,https://es.wikipedia.org/wiki/Mas%C3%A1getas,
 58,Sakas de Asia central,assets/art/avatars/tribes/sakas_de_asia_central.webp,Asia,s. VII a. C.,Zarina,Mujer,Tradicional (fuente semilegendaria),https://es.wikipedia.org/wiki/Zar,,
 59,Tolistobogios (gálatas),assets/art/avatars/tribes/tolistobogios.webp,Asia,s. II a. C.,Chiomara,Mujer,Histórico,https://es.wikipedia.org/wiki/Chiomara,,
-60,Tanújidas,assets/art/avatars/tribes/tanujidas.webp,Asia,s. IV,Mavia,Mujer,Histórico,https://es.wikipedia.org/wiki/Mavia,https://es.wikipedia.org/wiki/Tan%C3%BAjidas,~/Downloads/mavia_desktop.jpg ; ~/Downloads/mavia_mobile.jpg
+60,Tanújidas,assets/art/avatars/tribes/tanujidas.webp,Asia,s. IV,Mavia,Mujer,Histórico,https://es.wikipedia.org/wiki/Mavia,https://es.wikipedia.org/wiki/Tan%C3%BAjidas,~/Downloads/old/mavia_desktop.jpg ; ~/Downloads/old/mavia_mobile.jpg
 61,Qedaritas (árabes),assets/art/avatars/tribes/qedaritas.webp,Asia,s. VIII a. C.,Samsi,Mujer,Histórico,https://es.wikipedia.org/wiki/Samsi,,
 62,Banu Asad,assets/art/avatars/tribes/banu_asad.webp,Asia,s. VII,Jawla bint al-Azwar,Mujer,Histórico,https://en.wikipedia.org/wiki/Khawla_bint_al-Azwar,https://en.wikipedia.org/wiki/Banu_Asad,
 63,Banu Tamim,assets/art/avatars/tribes/banu_tamim.webp,Asia,s. VII,Sajah,Mujer,Histórico,https://es.wikipedia.org/wiki/Sajah,https://en.wikipedia.org/wiki/Banu_Tamim,
 64,Olkhunut,assets/art/avatars/tribes/olkhunut.webp,Asia,s. XII,Hoelun,Mujer,Histórico,https://es.wikipedia.org/wiki/Hoelun,https://en.wikipedia.org/wiki/Olkhonud,
 65,Onggirat,assets/art/avatars/tribes/onggirat.webp,Asia,s. XIII,Börte,Mujer,Histórico,https://es.wikipedia.org/wiki/Borte,https://en.wikipedia.org/wiki/Khongirad,
-66,Ulus de Kaidu,assets/art/avatars/tribes/ulus_de_kaidu.webp,Asia,s. XIII,Jutulun (Khutulun),Mujer,Histórico,https://en.wikipedia.org/wiki/Khutulun,,~/Downloads/khutulun_desktop.jpg ; ~/Downloads/khutulun_mobile.jpg
+66,Ulus de Kaidu,assets/art/avatars/tribes/ulus_de_kaidu.webp,Asia,s. XIII,Jutulun (Khutulun),Mujer,Histórico,https://en.wikipedia.org/wiki/Khutulun,,~/Downloads/old/khutulun_desktop.jpg ; ~/Downloads/old/khutulun_mobile.jpg
 67,Kazajos (Gran Horda),assets/art/avatars/tribes/kazajos_gran_horda.webp,Asia,s. XIV,Domalak Ana,Mujer,Tradicional (fuente semilegendaria),,https://es.wikipedia.org/wiki/Kazajos,
 68,Kitán,assets/art/avatars/tribes/kitan.webp,Asia,s. X,Shulü Ping,Mujer,Histórico,https://en.wikipedia.org/wiki/Shul%C3%BC_Ping,https://es.wikipedia.org/wiki/Kit%C3%A1n,
 69,Khorchin,assets/art/avatars/tribes/khorchin.webp,Asia,s. XVII,Bumbutai (Xiaozhuang),Mujer,Histórico,https://en.wikipedia.org/wiki/Empress_Xiaozhuangwen,https://en.wikipedia.org/wiki/Khorchin_Mongols,
@@ -102,7 +102,7 @@
 101,Hmong,assets/art/avatars/tribes/hmong.webp,Asia,s. XVIII,Ntxhi,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Pueblo_hmong,
 102,Yi (nuosu),assets/art/avatars/tribes/yi.webp,Asia,s. XV,Abu Shimo,Mujer,Inventado (basado en su cultura),,,
 103,Bai de Dali,assets/art/avatars/tribes/bai_de_dali.webp,Asia,s. X,Gao Xiu,Mujer,Inventado (basado en su cultura),,,
-104,Tuoba (xianbei),assets/art/avatars/tribes/tuoba.webp,Asia,s. V,Hua Mulan,Mujer,Tradicional (fuente semilegendaria),https://en.wikipedia.org/wiki/Hua_Mulan,https://en.wikipedia.org/wiki/Tuoba,~/Downloads/mulan_desktop.jpg ; ~/Downloads/mulan_mobile.jpg
+104,Tuoba (xianbei),assets/art/avatars/tribes/tuoba.webp,Asia,s. V,Hua Mulan,Mujer,Tradicional (fuente semilegendaria),https://en.wikipedia.org/wiki/Hua_Mulan,https://en.wikipedia.org/wiki/Tuoba,~/Downloads/old/mulan_desktop.jpg ; ~/Downloads/old/mulan_mobile.jpg
 105,Li (Hainán),assets/art/avatars/tribes/li.webp,Asia,s. VI,Lady Xian,Mujer,Histórico,https://en.wikipedia.org/wiki/Lady_Xian,,
 106,Sabeos,assets/art/avatars/tribes/sabeos.webp,Asia,s. X a. C.,Makeda (reina de Saba),Mujer,Tradicional (fuente semilegendaria),https://en.wikipedia.org/wiki/Queen_of_Sheba,https://en.wikipedia.org/wiki/Sabaeans,~/Downloads/leaders/makeda_amanirenas_triumphant.jpg ; ~/Downloads/leaders/makeda_heroic_portrait.jpg ; ~/Downloads/leaders/queen_makeda_portrait.jpg ; ~/Downloads/leaders/queen_makeda_sunset.jpg
 107,Tharu,assets/art/avatars/tribes/tharu.webp,Asia,s. XVI,Rajmati,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Tyaru,
@@ -116,7 +116,7 @@
 115,Pequot,assets/art/avatars/tribes/pequot.webp,Américas,s. XVII,Sassacus,Hombre,Histórico,https://es.wikipedia.org/wiki/Sassacus,https://es.wikipedia.org/wiki/Pequot,
 116,Mohegan,assets/art/avatars/tribes/mohegan.webp,Américas,s. XVII,Uncas,Hombre,Histórico,https://es.wikipedia.org/wiki/Uncas,https://es.wikipedia.org/wiki/Mohegan,
 117,Seneca,assets/art/avatars/tribes/seneca.webp,Américas,s. XVIII,Cornplanter,Hombre,Histórico,https://es.wikipedia.org/wiki/Cornplanter,https://es.wikipedia.org/wiki/Seneca,
-118,Onondaga,assets/art/avatars/tribes/hiawatha.webp,Américas,s. XV,Hiawatha,Hombre,Tradicional (fuente semilegendaria),https://en.wikipedia.org/wiki/Hiawatha,https://es.wikipedia.org/wiki/Onondaga,~/Downloads/hiawatha_desktop.jpg ; ~/Downloads/hiawatha_mobile.jpg ; ~/Downloads/leaders/hiawatha_ceremonial_triumph.jpg ; ~/Downloads/leaders/hiawatha_heroic_portrait.jpg ; ~/Downloads/leaders/hiawatha_hilltop_overlook.jpg ; ~/Downloads/leaders/hiawatha_peace_hero.jpg ; ~/Downloads/leaders/hiawatha_triumphant_ceremony.jpg ; ~/Downloads/leaders/hiawatha_triumphant_portrait.jpg
+118,Onondaga,assets/art/avatars/tribes/hiawatha.webp,Américas,s. XV,Hiawatha,Hombre,Tradicional (fuente semilegendaria),https://en.wikipedia.org/wiki/Hiawatha,https://es.wikipedia.org/wiki/Onondaga,~/Downloads/old/hiawatha_desktop.jpg ; ~/Downloads/old/hiawatha_mobile.jpg ; ~/Downloads/leaders/hiawatha_ceremonial_triumph.jpg ; ~/Downloads/leaders/hiawatha_heroic_portrait.jpg ; ~/Downloads/leaders/hiawatha_hilltop_overlook.jpg ; ~/Downloads/leaders/hiawatha_peace_hero.jpg ; ~/Downloads/leaders/hiawatha_triumphant_ceremony.jpg ; ~/Downloads/leaders/hiawatha_triumphant_portrait.jpg
 119,Oneida,assets/art/avatars/tribes/oneida.webp,Américas,s. XVIII,Skenandoa,Hombre,Histórico,https://es.wikipedia.org/wiki/Skenandoa,https://es.wikipedia.org/wiki/Oneida,
 120,Lenape,assets/art/avatars/tribes/lenape.webp,Américas,s. XVII,Tamanend,Hombre,Histórico,https://en.wikipedia.org/wiki/Tamanend,https://es.wikipedia.org/wiki/Lenape,
 121,Miami,assets/art/avatars/tribes/miami.webp,Américas,s. XVIII,Mihšihkinaahkwa (Little Turtle),Hombre,Histórico,https://en.wikipedia.org/wiki/Little_Turtle,https://es.wikipedia.org/wiki/Miami,
@@ -148,7 +148,7 @@
 147,Yaquis,assets/art/avatars/tribes/yaquis.webp,Américas,s. XIX,Cajeme,Hombre,Histórico,https://en.wikipedia.org/wiki/Cajeme,https://es.wikipedia.org/wiki/Pueblo_yaqui,
 148,Purépechas,assets/art/avatars/tribes/purepechas.webp,Américas,s. XVI,Tangáxuan II,Hombre,Histórico,https://en.wikipedia.org/wiki/Tangaxuan_II,https://es.wikipedia.org/wiki/Pueblo_pur%C3%A9pecha,
 149,Tlaxcaltecas,assets/art/avatars/tribes/tlaxcaltecas.webp,Américas,s. XVI,Xicoténcatl el Joven,Hombre,Histórico,https://en.wikipedia.org/wiki/Xicotencatl_II,https://es.wikipedia.org/wiki/Pueblo_tlaxcalteca,
-150,Mixtecos,assets/art/avatars/tribes/mixtecos.webp,Américas,s. XI,Ocho Venado,Hombre,Histórico,https://es.wikipedia.org/wiki/Ocho-Venado,https://es.wikipedia.org/wiki/Pueblo_mixteco,~/Downloads/8_venado_garra_de_jaguar_desktop.jpg ; ~/Downloads/8_venado_garra_de_jaguar_mobile.jpg ; ~/Downloads/leaders/eight_deer_hero.jpg ; ~/Downloads/leaders/eight_deer_jaguar_claw_1.jpg ; ~/Downloads/leaders/eight_deer_jaguar_claw_2.jpg
+150,Mixtecos,assets/art/avatars/tribes/mixtecos.webp,Américas,s. XI,Ocho Venado,Hombre,Histórico,https://es.wikipedia.org/wiki/Ocho-Venado,https://es.wikipedia.org/wiki/Pueblo_mixteco,~/Downloads/old/8_venado_garra_de_jaguar_desktop.jpg ; ~/Downloads/old/8_venado_garra_de_jaguar_mobile.jpg ; ~/Downloads/leaders/eight_deer_hero.jpg ; ~/Downloads/leaders/eight_deer_jaguar_claw_1.jpg ; ~/Downloads/leaders/eight_deer_jaguar_claw_2.jpg
 151,Zapotecos,assets/art/avatars/tribes/zapotecos.webp,Américas,s. XVI,Cocijoeza,Hombre,Histórico,https://es.wikipedia.org/wiki/Cocijoeza,https://es.wikipedia.org/wiki/Pueblo_zapoteco,~/Downloads/leaders/cosijoeza_bastion_portrait.jpg ; ~/Downloads/leaders/cosijoeza_guiengola_overlook.jpg ; ~/Downloads/leaders/cosijoeza_overlooking_valley.jpg ; ~/Downloads/leaders/cosijoeza_stone_wall.jpg ; ~/Downloads/leaders/cosijoeza_valley_diplomat.jpg ; ~/Downloads/leaders/cosijoeza_victory_pose.jpg
 152,Itzáes,assets/art/avatars/tribes/itzaes.webp,Américas,s. XVII,Kan Ek',Hombre,Histórico,https://es.wikipedia.org/wiki/Canek,https://es.wikipedia.org/wiki/Itz%C3%A1,
 153,K'iche',assets/art/avatars/tribes/k_iche.webp,Américas,s. XVI,Tecún Umán,Hombre,Tradicional (fuente semilegendaria),https://es.wikipedia.org/wiki/Tec%C3%BAn_Um%C3%A1n,https://es.wikipedia.org/wiki/Quich%C3%A9_%28etnia%29,
@@ -252,21 +252,21 @@
 251,Lobedu,assets/art/avatars/tribes/lobedu.webp,África,s. XIX,Modjadji,Mujer,Histórico,https://en.wikipedia.org/wiki/Rain_Queen,https://en.wikipedia.org/wiki/Lobedu_people,
 252,Igbo de Enugu-Ezike,assets/art/avatars/tribes/igbo_de_enugu_ezike.webp,África,s. XX,Ahebi Ugbabe,Mujer,Histórico,https://es.wikipedia.org/wiki/Ahebi_Ugbabe,,
 253,Egba (yoruba),assets/art/avatars/tribes/egba.webp,África,s. XIX,Madam Tinubu,Mujer,Histórico,https://es.wikipedia.org/wiki/Efunroye_Tinubu,https://en.wikipedia.org/wiki/Egba_people,
-254,Ife (yoruba),assets/art/avatars/tribes/ife.webp,África,s. XII,Moremi Ajasoro,Mujer,Tradicional (fuente semilegendaria),https://es.wikipedia.org/wiki/Moremi_Ajasoro,https://es.wikipedia.org/wiki/Ife,~/Downloads/Moremi Ajasoro_desktop.jpg ; ~/Downloads/Moremi Ajasoro_mobile.jpg
+254,Ife (yoruba),assets/art/avatars/tribes/ife.webp,África,s. XII,Moremi Ajasoro,Mujer,Tradicional (fuente semilegendaria),https://es.wikipedia.org/wiki/Moremi_Ajasoro,https://es.wikipedia.org/wiki/Ife,~/Downloads/old/Moremi Ajasoro_desktop.jpg ; ~/Downloads/old/Moremi Ajasoro_mobile.jpg
 255,Hausa de Daura,assets/art/avatars/tribes/hausa_de_daura.webp,África,s. X,Daurama,Mujer,Tradicional (fuente semilegendaria),https://es.wikipedia.org/wiki/Daurama,,
 256,Mende,assets/art/avatars/tribes/mende.webp,África,s. XIX,Madam Yoko,Mujer,Histórico,https://en.wikipedia.org/wiki/Madam_Yoko,https://en.wikipedia.org/wiki/Mende_people,
 257,Tuareg del Ahaggar,assets/art/avatars/tribes/tuareg_del_ahaggar.webp,África,s. IV,Tin Hinan,Mujer,Tradicional (fuente semilegendaria),https://es.wikipedia.org/wiki/Tin_Hinan,,
 258,Ndwandwe,assets/art/avatars/tribes/ndwandwe.webp,África,s. XIX,Ntombazi,Mujer,Histórico,,https://en.wikipedia.org/wiki/Ndwandwe,
 259,Sakalava de Boina,assets/art/avatars/tribes/sakalava_de_boina.webp,África,s. XVIII,Ravahiny,Mujer,Histórico,,https://en.wikipedia.org/wiki/Sakalava_people,
 260,Nubios nobatas,assets/art/avatars/tribes/nubios_nobatas.webp,África,s. VI,Kawa,Mujer,Inventado (basado en su cultura),,,
-261,Agaw,assets/art/avatars/tribes/agaw.webp,África,s. X,Gudit,Mujer,Tradicional (fuente semilegendaria),https://en.wikipedia.org/wiki/Gudit,https://en.wikipedia.org/wiki/Agaw_people,~/Downloads/gudit_desktop.jpg ; ~/Downloads/gudit_mobile.jpg
+261,Agaw,assets/art/avatars/tribes/agaw.webp,África,s. X,Gudit,Mujer,Tradicional (fuente semilegendaria),https://en.wikipedia.org/wiki/Gudit,https://en.wikipedia.org/wiki/Agaw_people,~/Downloads/old/gudit_desktop.jpg ; ~/Downloads/old/gudit_mobile.jpg
 262,Afar,assets/art/avatars/tribes/afar.webp,África,s. XVI,Dahaba,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Regi%C3%B3n_de_Afar,
 263,Temne,assets/art/avatars/tribes/temne.webp,África,s. XVIII,Yamba,Mujer,Inventado (basado en su cultura),,https://en.wikipedia.org/wiki/Temne_people,
 264,Baga,assets/art/avatars/tribes/baga.webp,África,s. XVIII,Nimba,Mujer,Inventado (basado en su cultura),,https://en.wikipedia.org/wiki/Baga_people,
 265,Fang,assets/art/avatars/tribes/fang.webp,África,s. XIX,Nzang Ela,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Idioma_fang,
 266,Teke,assets/art/avatars/tribes/teke.webp,África,s. XVII,Ngalifourou,Mujer,Histórico,https://es.wikipedia.org/wiki/Ngalifourou,https://en.wikipedia.org/wiki/Teke_people,
 267,Mangbetu,assets/art/avatars/tribes/mangbetu.webp,África,s. XIX,Nenzima,Mujer,Tradicional (fuente semilegendaria),,https://en.wikipedia.org/wiki/Mangbetu_people,
-268,Kiga,assets/art/avatars/tribes/kiga.webp,África,s. XX,Muhumuza,Mujer,Histórico,https://en.wikipedia.org/wiki/Muhumuza,https://en.wikipedia.org/wiki/Kiga_people,~/Downloads/muhumuza_desktop.jpg ; ~/Downloads/muhumuza_mobile.jpg
+268,Kiga,assets/art/avatars/tribes/kiga.webp,África,s. XX,Muhumuza,Mujer,Histórico,https://en.wikipedia.org/wiki/Muhumuza,https://en.wikipedia.org/wiki/Kiga_people,~/Downloads/old/muhumuza_desktop.jpg ; ~/Downloads/old/muhumuza_mobile.jpg
 269,Burundeses,assets/art/avatars/tribes/burundeses.webp,África,s. XIX,Ririkumutima,Mujer,Histórico,https://en.wikipedia.org/wiki/Ririkumutima,,
 270,Luo,assets/art/avatars/tribes/luo.webp,África,s. XVII,Nyipir Achieng,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Pueblo_luo,
 271,Sukuma,assets/art/avatars/tribes/sukuma.webp,África,s. XIX,Ng'washi,Mujer,Inventado (basado en su cultura),,https://en.wikipedia.org/wiki/Sukuma_people,
@@ -308,7 +308,7 @@
 307,Sajones,assets/art/avatars/tribes/sajones.webp,Europa,s. VIII,Widukind,Hombre,Histórico,https://es.wikipedia.org/wiki/Viduquindo,https://es.wikipedia.org/wiki/Pueblo_saj%C3%B3n,
 308,Frisones,assets/art/avatars/tribes/frisones.webp,Europa,s. VIII,Radbod,Hombre,Histórico,https://es.wikipedia.org/wiki/Radbod,https://es.wikipedia.org/wiki/Frisones,
 309,Pictos,assets/art/avatars/tribes/pictos.webp,Europa,s. VII,Bridei mac Bili,Hombre,Histórico,https://es.wikipedia.org/wiki/Bridei_III,https://es.wikipedia.org/wiki/Pictos,
-310,Dacios,assets/art/avatars/tribes/dacios.webp,Europa,s. I a. C.,Burebista,Hombre,Histórico,https://en.wikipedia.org/wiki/Burebista,https://es.wikipedia.org/wiki/Dacios,~/Downloads/burebista_desktop.jpg ; ~/Downloads/burebista_mobile.jpg
+310,Dacios,assets/art/avatars/tribes/dacios.webp,Europa,s. I a. C.,Burebista,Hombre,Histórico,https://en.wikipedia.org/wiki/Burebista,https://es.wikipedia.org/wiki/Dacios,~/Downloads/old/burebista_desktop.jpg ; ~/Downloads/old/burebista_mobile.jpg
 311,Getas,assets/art/avatars/tribes/getas.webp,Europa,s. III a. C.,Dromiquetes,Hombre,Histórico,https://es.wikipedia.org/wiki/Dromiquetes,https://es.wikipedia.org/wiki/Getas,
 312,Odrisios (tracios),assets/art/avatars/tribes/odrisios.webp,Europa,s. V a. C.,Sitalces,Hombre,Histórico,https://es.wikipedia.org/wiki/Sitalces,https://es.wikipedia.org/wiki/Reino_odrisio,
 313,Escitas,assets/art/avatars/tribes/escitas.webp,Europa,s. IV a. C.,Ateas,Hombre,Histórico,https://es.wikipedia.org/wiki/Ateas,https://es.wikipedia.org/wiki/Pueblos_escitas,
@@ -328,7 +328,7 @@
 327,Burgundios,assets/art/avatars/tribes/burgundios.webp,Europa,s. V-VI,Gundobado,Hombre,Histórico,https://es.wikipedia.org/wiki/Gundebaldo,https://es.wikipedia.org/wiki/Pueblo_burgundio,
 328,Alanos,assets/art/avatars/tribes/alanos.webp,Europa,s. V,Respendial,Hombre,Histórico,https://es.wikipedia.org/wiki/Respendial,https://es.wikipedia.org/wiki/Alanos,
 329,Ardieos (ilirios),assets/art/avatars/tribes/ardieos.webp,Europa,s. III a. C.,Teuta,Mujer,Histórico,https://en.wikipedia.org/wiki/Teuta,https://es.wikipedia.org/wiki/Ardieos,
-330,Brúcteros,assets/art/avatars/tribes/bructeros.webp,Europa,s. I,Veleda,Mujer,Histórico,https://es.wikipedia.org/wiki/Veleda,https://es.wikipedia.org/wiki/Br%C3%BActeros,~/Downloads/Veleda_desktop.jpg ; ~/Downloads/Veleda_mobile.jpg
+330,Brúcteros,assets/art/avatars/tribes/bructeros.webp,Europa,s. I,Veleda,Mujer,Histórico,https://es.wikipedia.org/wiki/Veleda,https://es.wikipedia.org/wiki/Br%C3%BActeros,~/Downloads/old/Veleda_desktop.jpg ; ~/Downloads/old/Veleda_mobile.jpg
 331,Semnones,assets/art/avatars/tribes/semnones.webp,Europa,s. I,Ganna,Mujer,Histórico,https://es.wikipedia.org/wiki/Ganna,https://es.wikipedia.org/wiki/Semnones,
 332,Sármatas,assets/art/avatars/tribes/sarmatas.webp,Europa,s. II a. C.,Amage,Mujer,Histórico,https://es.wikipedia.org/wiki/Amage,https://es.wikipedia.org/wiki/S%C3%A1rmatas,
 333,Ixomatas (meotas),assets/art/avatars/tribes/ixomatas.webp,Europa,s. IV a. C.,Tirgatao,Mujer,Histórico,https://en.wikipedia.org/wiki/Tirgatao,,
@@ -351,7 +351,7 @@
 350,Carnutes,assets/art/avatars/tribes/carnutes.webp,Europa,s. I a. C.,Ivomara,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Carnutes,
 351,Vénetos (Armórica),assets/art/avatars/tribes/venetos.webp,Europa,s. I a. C.,Litumara,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/V%C3%A9netos,
 352,Ligures,assets/art/avatars/tribes/ligures.webp,Europa,s. II a. C.,Bertia,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Ligures,
-353,Ástures,assets/art/avatars/tribes/astures.webp,Europa,s. I a. C.,Argantona,Mujer,Tradicional (fuente semilegendaria),,https://es.wikipedia.org/wiki/Astures,~/Downloads/Argantona_desktop.jpg ; ~/Downloads/Argantona_mobile.jpg ; ~/Downloads/leaders/image_20260919_132654-argantona-la-reina-astur-de-la-resistencia-beros-c.jpg
+353,Ástures,assets/art/avatars/tribes/astures.webp,Europa,s. I a. C.,Argantona,Mujer,Tradicional (fuente semilegendaria),,https://es.wikipedia.org/wiki/Astures,~/Downloads/old/Argantona_desktop.jpg ; ~/Downloads/old/Argantona_mobile.jpg ; ~/Downloads/leaders/image_20260919_132654-argantona-la-reina-astur-de-la-resistencia-beros-c.jpg
 354,Vetones,assets/art/avatars/tribes/vetones.webp,Europa,s. II a. C.,Boutia,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Vetones,
 355,Edetanos,assets/art/avatars/tribes/edetanos.webp,Europa,s. III a. C.,Iltirbeles,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Edetanos,
 356,Sami,assets/art/avatars/tribes/sami.webp,Europa,s. XI,Áile,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Samis,
@@ -367,7 +367,7 @@
 366,Saurómatas,assets/art/avatars/tribes/sauromatas.webp,Europa,s. V a. C.,Sirma,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/S%C3%A1rmatas,
 367,Caucos,assets/art/avatars/tribes/caucos.webp,Europa,s. I,Hilde,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Caucos,
 368,Volcas arecómicos,assets/art/avatars/tribes/volcas_arecomicos.webp,Europa,s. II a. C.,Smertulla,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Volcas_arec%C3%B3micos,
-369,Wiradjuri,assets/art/avatars/tribes/wiradjuri.webp,Oceanía,s. XIX,Windradyne,Hombre,Histórico,https://es.wikipedia.org/wiki/Windradyne,https://es.wikipedia.org/wiki/Wiradjuri,~/Downloads/windradyne_desktop.jpg ; ~/Downloads/windradyne_mobile.jpg
+369,Wiradjuri,assets/art/avatars/tribes/wiradjuri.webp,Oceanía,s. XIX,Windradyne,Hombre,Histórico,https://es.wikipedia.org/wiki/Windradyne,https://es.wikipedia.org/wiki/Wiradjuri,~/Downloads/old/windradyne_desktop.jpg ; ~/Downloads/old/windradyne_mobile.jpg
 370,Wangal (eora),assets/art/avatars/tribes/wangal.webp,Oceanía,s. XVIII,Bennelong,Hombre,Histórico,https://es.wikipedia.org/wiki/Bennelong,https://en.wikipedia.org/wiki/Wangal,
 371,Turrbal,assets/art/avatars/tribes/turrbal.webp,Oceanía,s. XIX,Dundalli,Hombre,Histórico,https://en.wikipedia.org/wiki/Dundalli,https://en.wikipedia.org/wiki/Turrbal,
 372,Bunuba,assets/art/avatars/tribes/bunuba.webp,Oceanía,s. XIX,Jandamarra,Hombre,Histórico,https://es.wikipedia.org/wiki/Jandamarra,https://en.wikipedia.org/wiki/Bunuba,
@@ -396,6 +396,6 @@
 395,Yapeses,assets/art/avatars/tribes/yapeses.webp,Oceanía,s. XVIII,Lilaw,Mujer,Inventado (basado en su cultura),,,
 396,Marshaleses,assets/art/avatars/tribes/marshaleses.webp,Oceanía,s. XIX,Leroij Lijebake,Mujer,Tradicional (fuente semilegendaria),,,
 397,Kiribatianos,assets/art/avatars/tribes/kiribatianos.webp,Oceanía,s. XVIII,Nei Teaiwa,Mujer,Inventado (basado en su cultura),,,
-398,Huli (Papúa),assets/art/avatars/tribes/huli.webp,Oceanía,s. XIX,Hela Wali,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Huli,
+398,Huli (Papúa),assets/art/avatars/tribes/huli.webp,Oceanía,s. XIX,Hela Wali,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Huli,~/Downloads/extreme-closeups-avatars/huli.png
 399,Motu (Papúa),assets/art/avatars/tribes/motu.webp,Oceanía,s. XIX,Lahara,Mujer,Inventado (basado en su cultura),,https://en.wikipedia.org/wiki/Motu_people,
 400,Tolai (Nueva Bretaña),assets/art/avatars/tribes/tolai.webp,Oceanía,s. XIX,Ia Kaplen,Mujer,Inventado (basado en su cultura),,https://es.wikipedia.org/wiki/Tol%C3%A1i,

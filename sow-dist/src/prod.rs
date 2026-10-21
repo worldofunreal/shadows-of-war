@@ -212,6 +212,9 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
         "sow-net",
         "sow-server",
         "sow-relay",
+        "assets/geo_entities.json",
+        "assets/guides",
+        "assets/maps/world/map.bin.br",
         "sow-dist/src",
         "sow-dist/deploy/freebsd",
         "sow-dist/deploy/linux",
@@ -1977,7 +1980,7 @@ pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
 
 fn freebsd_build_fingerprint(root: &Path) -> Result<String> {
     input_fingerprint(
-        "freebsd-v5",
+        "freebsd-v6",
         "",
         &[
             &root.join("Cargo.toml"),
@@ -2013,6 +2016,7 @@ fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
         "rsync",
         &[
             "-azc",
+            "--no-times",
             "--delete",
             "--exclude=.git",
             "--exclude=dist",
@@ -2025,8 +2029,9 @@ fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
     )?;
 
     let root = shell_quote(&config.build_root);
+    // Synced inputs can predate the last build; discard crates embedding game data.
     let command = format!(
-        "set -eu; cd {root}; cargo test --locked -p sow-core -- --test-threads=1; cargo test --locked -p sow-data --features server; cargo test --locked -p sow-server; cargo build --locked --profile deploy -p sow-server; cargo build --locked --profile deploy -p sow-data --features server --bin sow-database"
+        "set -eu; cd {root}; cargo clean --profile deploy -p sow-core -p sow-data; cargo test --locked -p sow-core -- --test-threads=1; cargo test --locked -p sow-data --features server; cargo test --locked -p sow-server; cargo build --locked --profile deploy -p sow-server; cargo build --locked --profile deploy -p sow-data --features server --bin sow-database"
     );
     run("ssh", &[&config.build_host, &command], None)?;
 

@@ -13,36 +13,15 @@ La columna "Material de arte" dice qué imágenes ya existen en tu compu (en `Do
 - **Material de arte:** 65 de los 200 ya tienen imágenes. No cuenta la pasada de Codex que rechazaste por la mueca repetida.
 - **Avatar:** solo 5 están validados (Hatshepsut, Mansa Musa, Amanirenas, Sundiata Keita y Amanitore).
 
-## `tribus-400.csv`: 400 tribus, cada una con su líder
+## Avatares de tribus
 
-Lista compacta para encargar retratos, una identidad por línea: [tribus-400-encargo.txt](tribus-400-encargo.txt).
+La lista para encargar y revisar el arte es [tribus-400-encargo.txt](tribus-400-encargo.txt): **FALTAN** primero y **TENEMOS** después. Cada línea incluye el nombre exacto del archivo.
 
-- 200 mujeres y 200 hombres, con el mismo reparto por región: Asia 112, América 96, África 80, Europa 80 y Oceanía 32.
-- "Tipo de líder":
-  - **Histórico** (260): una persona con registro histórico.
-  - **Tradicional** (20): de la tradición oral o de fuentes semilegendarias.
-  - **Inventado** (120): no hay líder registrado. El nombre está basado en la lengua y la cultura del pueblo. Conviene revisarlo antes de encargar el arte.
-- **Wikipedia:**
-  - 256 líderes tienen página.
-  - 338 tribus tienen página.
-  - Los inventados no tienen página propia, pero su tribu sí, cuando existe.
-- **Material de arte:** 43 tribus tienen al menos un archivo de imagen disponible localmente.
-  - Para aprovechar arte que ya tenías, se cambiaron 9 tribus o líderes:
-    - Hiawatha (onondaga)
-    - Burebista (dacios)
-    - Argantona (ástures)
-    - Tenamaxtli (caxcanes)
-    - Señora de Cao (moche)
-    - Muhumuza (kiga)
-    - Gudit (agaw)
-    - Makeda (sabeos)
-    - Hua Mulan (tuoba)
-  - Las cuotas por región y género no cambiaron.
-- **Por definir:** el nombre de la jefa guachichil. El arte que ya existe para los guachichiles es de un jefe hombre.
-- Fuera de la lista quedan:
-  - las tribus que ya son entidades de las 200 naciones (por ejemplo lakota, cherokee, mapuche, zulú);
-  - las tribus británicas de la campaña de Boudica, que ya tienen avatar;
-  - Iceni y Arvernos, porque sus líderes son héroes jugables.
+Incluye las tribus de bots, los héroes tribales y los retratos no romanos usados por el tutorial. Los personajes de una misma tribu conservan su afiliación; los asentamientos no se presentan como tribus nuevas. Las facciones romanas del tutorial quedan fuera del encargo de tribus.
+
+**TENEMOS** cuenta las identidades con imagen recibida en `Downloads/extreme-closeups-avatars/`, sea JPG o PNG. **FALTAN** cuenta únicamente las identidades sin imagen en esa carpeta. Las cantidades y la carpeta de los WebP viven únicamente en el TXT.
+
+`tribus-400.csv` conserva la investigación y los datos de las 400 identidades originales; para producir el arte se usa el TXT.
 
 ## `material-sin-asignar.csv`: arte que ya tienes y no está en ninguna lista
 

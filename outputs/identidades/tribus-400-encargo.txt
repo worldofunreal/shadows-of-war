@@ -1,400 +1,434 @@
-Modu Chanyu — Xiongnu
-Tanshihuai — Xianbei
-Bumin Kagan — Göktürks
-Kutlug Bilge Kagan — Uigures (kaganato)
-Kujula Kadfises — Yuezhi
-Toramana — Heftalitas
-Wanyan Aguda — Jurchen
-Li Yuanhao — Tanguts
-Nurhaci — Jianzhou (manchúes)
-Esen Taishi — Oirates
-Toghrul (Ong Kan) — Keraítas
-Tayang Kan — Naimanos
-Megujin Seultu — Tártaros (estepa)
-Toqtoa Beki — Merkitas
-Abulkhair Kan — Kazajos (Pequeña Horda)
-Ayuka Kan — Calmucos
-Qara Yusuf — Kara Koyunlu
-Uzun Hasan — Ak Koyunlu
-Tughril Beg — Oguz selyúcidas
-Ertuğrul — Kayı
-Ahmad Shah Durrani — Abdalíes (durranis)
-Nasir Kan I — Baluchis de Kalat
-Al-Muthanna ibn Haritha — Banu Shayban
-Aretas IV — Nabateos
-Imru al-Qais — Kinda
-Al-Mundhir III — Lájmidas
-Al-Harith ibn Jabalah — Gasánidas
-Abu Karib Asad — Himyaritas
-Deyoces — Medos
-Arsaces I — Parnos (partos)
-Skunkha — Sakas (escitas orientales)
-Teushpa — Cimerios
-Shakushain — Ainu
-Aterui — Emishi
-Lapulapu — Pueblo de Mactán
-Sultán Kudarat — Maguindanao
-Sisingamangaraja XII — Batak
-Rentap — Iban (dayak)
-Tuanku Imam Bonjol — Minangkabau
-Sultán Hasanuddin — Makasar
-Sangram Shah — Gond de Garha
-Rana Punja — Bhils
-Birsa Munda — Munda
-U Tirot Sing — Khasi
-Songtsen Gampo — Tibetanos de Yarlung
-Nong Zhigao — Zhuang
-Tygyn Darkhan — Sajá (yakutos)
-Muhammad Shaybani — Uzbecos shaibánidas
-Kizbech Tughuzhuqo — Circasianos
-Jeque Mansur — Chechenos
-Imam Shamil — Ávaros del Cáucaso
-Deyótaro — Gálatas tectósagos
-Mir Yazdanbakhsh — Hazaras
-Arung Palakka — Bugis de Bone
-Rajah Sulayman — Tagalos
-Amulgin — Chukchis
-Tomiris — Masagetas
-Zarina — Sakas de Asia central
-Chiomara — Tolistobogios (gálatas)
-Mavia — Tanújidas
-Samsi — Qedaritas (árabes)
-Jawla bint al-Azwar — Banu Asad
-Sajah — Banu Tamim
-Hoelun — Olkhunut
-Börte — Onggirat
-Jutulun (Khutulun) — Ulus de Kaidu
-Domalak Ana — Kazajos (Gran Horda)
-Shulü Ping — Kitán
-Bumbutai (Xiaozhuang) — Khorchin
-Himiko — Wa (Yamatai)
-Gabriela Silang — Ilocanos
-Urduja — Pangasinenses
-Keumalahayati — Achenenses
-We Tenriolle — Bugis de Tanete
-Rani Gaidinliu — Zeliangrong (naga)
-Jhalkari Bai — Kolis de Jhansi
-Phulo Murmu — Santales
-Mula Gabharu — Ahom
-Ropuiliani — Mizos
-Malalai — Pashtunes de Maiwand
-Adela Jánum — Jaf (kurdos)
-Darma-Bala — Calmucos torgutos
-Ayan — Tuyuhun
-Ak-Tamyr — Kirguises del Yeniséi
-Saran — Buriatos
-Altana — Evenkis
-Sava — Nénets
-Aneva — Janty
-Tylvan — Itelmenos (Kamchatka)
-Ojo — Nanái (Amur)
-Monuyka — Ainu de Sajalín
-Satsuki — Hayato (Kyūshū)
-Mulimu — Paiwan (Taiwán)
-Yaway — Atayal (Taiwán)
-Dalunag — Igorotes
-Bai Madakel — Manobo
-Kameloh — Dayak ngaju
-Lai Rinding — Toraja
-Sikerei Bai — Mentawai
-Naw Paw — Karen
-Ntxhi — Hmong
-Abu Shimo — Yi (nuosu)
-Gao Xiu — Bai de Dali
-Hua Mulan — Tuoba (xianbei)
-Lady Xian — Li (Hainán)
-Makeda (reina de Saba) — Sabeos
-Rajmati — Tharu
-Pelthi — Todas (Nilgiri)
-Kaliamma — Kurumbas
-Rangdi — Garos
-Nyolmit — Lepchas
-Hani — Baluchis marri
-Metacom — Wampanoag
-Canonchet — Narragansett
-Sassacus — Pequot
-Uncas — Mohegan
-Cornplanter — Seneca
-Hiawatha — Onondaga
-Skenandoa — Oneida
-Tamanend — Lenape
-Mihšihkinaahkwa (Little Turtle) — Miami
-Black Hawk — Sauk
-Francisco Tenamaxtli — Caxcanes
-Menawa — Muscogee (creek)
-Osceola — Seminolas
-Piomingo — Chickasaw
-Pushmataha — Choctaw
-Chief Joseph — Nez Perce
-Quanah Parker — Comanches
-Satanta — Kiowa
-Morning Star (Dull Knife) — Cheyenne del Norte
-Little Raven — Arapaho
-Washakie — Shoshone
-Plenty Coups — Crow
-Crowfoot — Siksika (pies negros)
-Manuelito — Navajo
-Popé — Pueblos (Ohkay Owingeh)
-Ouray — Ute
-Kintpuash — Modoc
-Si'ahl (Seattle) — Duwamish
-Albert Edward Edenshaw — Haida
-Mistahimaskwa (Big Bear) — Cree de las llanuras
-Bagonegiizhig — Ojibwe
-Kondiaronk — Wendat (hurones)
-Membertou — Mi'kmaq
-Grey Lock (Wawanolet) — Abenaki
-Cajeme — Yaquis
-Tangáxuan II — Purépechas
-Xicoténcatl el Joven — Tlaxcaltecas
-Ocho Venado — Mixtecos
-Cocijoeza — Zapotecos
-Kan Ek' — Itzáes
-Tecún Umán — K'iche'
-Lempira — Lencas
-Nicarao — Nicaraos
-Tisquesusa — Muiscas
-Juan Calchaquí — Calchaquíes (diaguitas)
-Sepé Tiarajú — Guaraníes de las misiones
-Cunhambebe — Tupinambá
-Maquinna — Nuu-chah-nulth
-Weetamoo — Pocasset
-Awashonks — Sakonnet
-Quaiapen — Niantic
-Cockacoeske — Pamunkey
-Yuisa — Taínos de Borikén
-Clara Camarão — Potiguara
-Jefa guachichil (nombre por definir) — Chichimecas guachichiles
-Gayogohó:no' Kahente — Cayuga
-Kanenstenhawi — Tuscarora
-Sally New River — Catawba
-Altamaha Wiseh — Yamasee
-Ulele — Timucuas
-Antonia (hermana de Carlos) — Calusa
-Pitaresaru — Pawnee
-Wiyaka Wastewin — Dakota (santee)
-Hokshila Win — Assiniboine
-Arnarulunnguaq — Inuit (Groenlandia)
-Mikak — Inuit del Labrador
-Wadili — Lokono (arahuacos)
-Akaiwa — Kalinago
-Jayaliyuu — Wayuu
-Ayelén — Tehuelches
-Lola Kiepja — Selk'nam
-Kipa Yamana — Yámanas
-Pensá — Kaingang
-Anqoyaku — Chancas
-Señora de Cao — Moche
-Mama Wanka — Huancas
-Kiris Cañari — Cañaris
-Yampintsa — Shuar
-Mañari — Asháninkas
-Ayaba — Moxos
-Kuñambai — Chiriguanos
-Ix Chuen — Chontales
-María de la Candelaria — Tzeltales
-Nuk Ixik — Lacandones
-Xochitl Otomí — Otomíes
-Tamtoque — Huastecos
-Xanat — Totonacas
-Lola Casanova — Comcaac (seris)
-Ha'ichu Ki — Tohono O'odham
-Honwaima — Hopi
-Tsalitsa — Zuni
-Toypurina — Tongva
-Kwaaypaay Shuluk — Kumeyaay
-Kihiwet — Chumash
-Shuwesh — Pomo
-Tuyu — Ohlone
-Mzilikazi — Ndebele (matabele)
-Moshoeshoe I — Basotho
-Khama III — Bamangwato (tswana)
-Sekhukhune I — Bapedi
-Makhado — Venda
-Samuel Maharero — Herero
-Hendrik Witbooi — Nama
-Mandume ya Ndemufayo — Kwanyama (ovambo)
-Mkwawa — Hehe
-Mirambo — Nyamwezi
-Machemba — Yao
-Mbatian — Maasái
-Koitalel arap Samoei — Nandi
-Mohammed Abdullah Hassan — Somalíes derviches
-Abba Jifar II — Oromo de Jimma
-Kaocen ag Geda — Tuareg del Aïr
-Usman dan Fodio — Fulani de Sokoto
-El Hadj Umar Tall — Tucolor
-Lat Dior — Wolof de Cayor
-Kumba Ndoffene Diouf — Serer de Sine
-Janke Waali — Mandinga de Kaabu
-Naaba Oubri — Mossi
-Na Gbewa — Dagomba
-Ghezo — Fon (Dahomey)
-Abiodun — Yoruba de Oyo
-Jaja de Opobo — Ijaw de Opobo
-Ibrahim Njoya — Bamum
-Shyaam a-Mbul — Kuba
-Lewanika — Lozi
-Zwangendaba — Ngoni
-Soshangane — Gaza (tsonga)
-Changamire Dombo — Rozvi
-Ali Dinar — Fur (Darfur)
-Kigeli IV Rwabugiri — Ruanda (banyarwanda)
-Ekuikui II — Ovimbundu de Bailundo
-Doman — Goringhaiqua (joijói)
-Masinisa — Masesilios (númidas)
-Tacfarinas — Musulamios
-Kabalega — Bunyoro
-Rudolf Duala Manga Bell — Duala
-Wangu wa Makeri — Kikuyu
-Mekatilili wa Menza — Giriama
-Modjadji — Lobedu
-Ahebi Ugbabe — Igbo de Enugu-Ezike
-Madam Tinubu — Egba (yoruba)
-Moremi Ajasoro — Ife (yoruba)
-Daurama — Hausa de Daura
-Madam Yoko — Mende
-Tin Hinan — Tuareg del Ahaggar
-Ntombazi — Ndwandwe
-Ravahiny — Sakalava de Boina
-Kawa — Nubios nobatas
-Gudit — Agaw
-Dahaba — Afar
-Yamba — Temne
-Nimba — Baga
-Nzang Ela — Fang
-Ngalifourou — Teke
-Nenzima — Mangbetu
-Muhumuza — Kiga
-Ririkumutima — Burundeses
-Nyipir Achieng — Luo
-Ng'washi — Sukuma
-Nyangu — Chewa
-Naharipa — Makua
-Ravoay — Antandroy
-Rafohy — Vazimba de Alasora
-Khoanes — Damara
-Xhaa — San (Kalahari)
-Mafo Ngou — Bamileke
-Linger Selbe — Sereer de Saloum
-Tinit — Garamantes
-Nanguin — Senufo
-Abla Pokou — Baulé
-Nyenpu — Kru
-Amsa — Kanuri de Kawar
-Kalli — Toubou
-Akwot — Shilluk
-Achol Deng — Dinka
-Nyachol — Nuer
-Arminio — Queruscos
-Marbod — Marcomanos
-Ariovisto — Suevos
-Ambiórix — Eburones
-Boduognato — Nervios
-Orgetórix — Helvecios
-Boiorix — Cimbrios
-Teutobod — Teutones
-Dumnórix — Eduos
-Breno — Senones (Galia)
-Viriato — Lusitanos
-Retógenes — Arévacos (Numancia)
-Indíbil — Ilergetes
-Corocotta — Cántabros
-Genserico — Vándalos
-Atanarico — Tervingios (godos)
-Alarico I — Visigodos
-Ardarico — Gépidos
-Widukind — Sajones
-Radbod — Frisones
-Bridei mac Bili — Pictos
-Burebista — Dacios
-Dromiquetes — Getas
-Sitalces — Odrisios (tracios)
-Ateas — Escitas
-Atila — Hunos
-Bayan I — Ávaros (Panonia)
-Kubrat — Onoguros (búlgaros)
-Köten — Cumanos
-Niklot — Obotritas
-Mal — Drevlianos
-Herkus Monte — Prusianos antiguos
-Lembitu — Estonios de Sakala
-Gayo Poncio — Samnitas
-Critasiro — Boyos
-Induciomaro — Tréveros
-Julio Civil — Bátavos
-Cnodomario — Alamanes
-Gundobado — Burgundios
-Respendial — Alanos
-Teuta — Ardieos (ilirios)
-Veleda — Brúcteros
-Ganna — Semnones
-Amage — Sármatas
-Tirgatao — Ixomatas (meotas)
-Teodolinda — Lombardos
-Giso — Rugios
-Onomaris — Escordiscos
-Toda Aznárez — Vascones
-Himilce — Oretanos
-Birutė — Samogitios
-Ludmila de Bohemia — Checos (bohemios)
-Drahomíra — Hevelios (stodoranos)
-Świętosława — Polanos
-Tzitzak — Jázaros
-Rihhilda — Cuados
-Gerlinda — Ubios
-Swanahilda — Caninefates
-Rodelinda — Hérulos
-Matugena — Tauriscos
-Banona — Alóbroges
-Ivomara — Carnutes
-Litumara — Vénetos (Armórica)
-Bertia — Ligures
-Argantona — Ástures
-Boutia — Vetones
-Iltirbeles — Edetanos
-Áile — Sami
-Lempi — Tavastios (fineses)
-Dārta — Curonios
-Imme — Livones
-Daina — Yotvingios
-Dobrosława — Pomeranos
-Radoslava — Moravos
-Vesna — Carantanos (eslovenos)
-Aybike — Pechenegos
-Altynbike — Búlgaros del Volga
-Sirma — Saurómatas
-Hilde — Caucos
-Smertulla — Volcas arecómicos
-Windradyne — Wiradjuri
-Bennelong — Wangal (eora)
-Dundalli — Turrbal
-Jandamarra — Bunuba
-William Barak — Wurundjeri
-Rua Kenana — Tūhoe
-Te Whiti o Rongomai — Taranaki (Parihaka)
-Te Maiharanui — Ngāi Tahu
-Rewi Maniapoto — Ngāti Maniapoto
-Seru Epenisa Cakobau — Fiyianos de Bau
-Ataï — Kanak
-Hurao — Chamorros
-Isokelekel — Saudeleur (Pohnpei)
-Keatonui — Marquesanos
-Kurulu — Dani (Papúa)
-Bipi — Asmat
-Truganini — Nuenonne (Tasmania)
-Heni Te Kiri Karamu — Te Arawa
-Salamasina — Samoanos
-Hinematioro — Ngāti Porou
-Rangitea — Moriori
-Kudnarto — Kaurna
-Djirrimbilil — Yolŋu
-Arrakurta — Arrernte
-Kirrae — Gunditjmara
-Ebil Reklai — Palauanos
-Lilaw — Yapeses
-Leroij Lijebake — Marshaleses
-Nei Teaiwa — Kiribatianos
-Hela Wali — Huli (Papúa)
-Lahara — Motu (Papúa)
-Ia Kaplen — Tolai (Nueva Bretaña)
+FALTAN (62)
+Ahmad Shah Durrani — Abdalíes (durranis) | abdalies.jpg
+Gudit — Agaw | agaw.jpg
+Banona — Alóbroges | alobroges.jpg
+Argantona — Ástures | astures.jpg
+Atrebates — Britania | atrebates.jpg
+Nasir Kan I — Baluchis de Kalat | baluchis_de_kalat.jpg
+Al-Muthanna ibn Haritha — Banu Shayban | banu_shayban.jpg
+Belgae — Britania | belgae.jpg
+Boudica — Iceni | boudica.jpg
+Brigantes — Britania | brigantes.jpg
+Veleda — Brúcteros | bructeros.jpg
+Caledonii — Britania | caledonii.jpg
+Cantiaci — Britania | cantiaci.jpg
+Durovernum — Cantiaci | cantiaci_chieftain.jpg
+Ivomara — Carnutes | carnutes.jpg
+Catuvellauni — Britania | catuvellauni.jpg
+Francisco Tenamaxtli — Caxcanes | caxcanes.jpg
+Hurao — Chamorros | chamorros.jpg
+Jefa guachichil (nombre por definir) — Chichimecas guachichiles | chichimecas_guachichiles.jpg
+Corieltauvi — Britania | corieltauvi.jpg
+Cornovii — Britania | cornovii.jpg
+Burebista — Dacios | dacios.jpg
+Damnonii — Britania | damnonii.jpg
+Deceangli — Britania | deceangli.jpg
+Demetae — Britania | demetae.jpg
+Dobunni — Britania | dobunni.jpg
+Dumnonii — Britania | dumnonii.jpg
+Durotriges — Britania | durotriges.jpg
+Seru Epenisa Cakobau — Fiyianos de Bau | fiyianos_de_bau.jpg
+Genghis Khan — Borjigin Mongols | genghis_khan.jpg
+Hiawatha — Onondaga | hiawatha.jpg
+Moremi Ajasoro — Ife (yoruba) | ife.jpg
+Ertuğrul — Kayı | kay.jpg
+Muhumuza — Kiga | kiga.jpg
+Keatonui — Marquesanos | marquesanos.jpg
+Ocho Venado — Mixtecos | mixtecos.jpg
+Señora de Cao — Moche | moche.jpg
+Mzilikazi — Ndebele (matabele) | ndebele.jpg
+Ordovices — Britania | ordovices.jpg
+Parisi — Britania | parisi.jpg
+Ragnar Lodbrok — Danish Vikings | ragnar.jpg
+Regnenses — Britania | regnenses.jpg
+Noviomagus — Regnenses | regnenses_male.jpg
+Makeda (reina de Saba) — Sabeos | sabeos.jpg
+Skunkha — Sakas (escitas orientales) | sakas.jpg
+Awashonks — Sakonnet | sakonnet.jpg
+Isokelekel — Saudeleur (Pohnpei) | saudeleur.jpg
+Selgovae — Britania | selgovae.jpg
+Silures — Britania | silures.jpg
+Snettisham — Iceni | snettisham.jpg
+Stonea — Iceni | stonea.jpg
+Mavia — Tanújidas | tanujidas.jpg
+Matugena — Tauriscos | tauriscos.jpg
+Thetford — Iceni | thetford.jpg
+Trinovantes — Britania | trinovantes.jpg
+Hua Mulan — Tuoba (xianbei) | tuoba.jpg
+Jutulun (Khutulun) — Ulus de Kaidu | ulus_de_kaidu.jpg
+Litumara — Vénetos (Armórica) | venetos.jpg
+Vercingetorix — Arverni | vercingetorix.jpg
+Votadini — Britania | votadini.jpg
+Windradyne — Wiradjuri | wiradjuri.jpg
+Cocijoeza — Zapotecos | zapotecos.jpg
+
+TENEMOS (368)
+WebP en assets: /home/bizkit/Github/shadows-of-war/assets/art/avatars/tribes/
+Grey Lock (Wawanolet) — Abenaki | abenaki.png
+Keumalahayati — Achenenses | achenenses.png
+Dahaba — Afar | afar.jpg
+Mula Gabharu — Ahom | ahom.png
+Shakushain — Ainu | ainu.png
+Monuyka — Ainu de Sajalín | ainu_de_sajalin.jpg
+Uzun Hasan — Ak Koyunlu | ak_koyunlu.png
+Cnodomario — Alamanes | alamanes.png
+Respendial — Alanos | alanos.jpg
+Ravoay — Antandroy | antandroy.png
+Little Raven — Arapaho | arapaho.png
+Teuta — Ardieos (ilirios) | ardieos.jpg
+Retógenes — Arévacos (Numancia) | arevacos.png
+Arrakurta — Arrernte | arrernte.png
+Mañari — Asháninkas | ashaninkas.jpg
+Bipi — Asmat | asmat.png
+Hokshila Win — Assiniboine | assiniboine.png
+Yaway — Atayal (Taiwán) | atayal.jpg
+Bayan I — Ávaros (Panonia) | avaros.png
+Imam Shamil — Ávaros del Cáucaso | avaros_del_caucaso.png
+Nimba — Baga | baga.jpg
+Gao Xiu — Bai de Dali | bai_de_dali.png
+Hani — Baluchis marri | baluchis_marri.jpg
+Khama III — Bamangwato (tswana) | bamangwato.jpg
+Mafo Ngou — Bamileke | bamileke.png
+Ibrahim Njoya — Bamum | bamum.jpg
+Jawla bint al-Azwar — Banu Asad | banu_asad.jpg
+Sajah — Banu Tamim | banu_tamim.jpg
+Sekhukhune I — Bapedi | bapedi.jpg
+Moshoeshoe I — Basotho | basotho.png
+Sisingamangaraja XII — Batak | batak.png
+Julio Civil — Bátavos | batavos.png
+Abla Pokou — Baulé | baule.png
+Rana Punja — Bhils | bhils.png
+Critasiro — Boyos | boyos.png
+Arung Palakka — Bugis de Bone | bugis_de_bone.png
+We Tenriolle — Bugis de Tanete | bugis_de_tanete.png
+Altynbike — Búlgaros del Volga | bulgaros_del_volga.jpg
+Jandamarra — Bunuba | bunuba.jpg
+Kabalega — Bunyoro | bunyoro.png
+Gundobado — Burgundios | burgundios.jpg
+Saran — Buriatos | buriatos.jpg
+Ririkumutima — Burundeses | burundeses.jpg
+Juan Calchaquí — Calchaquíes (diaguitas) | calchaquies.png
+Ayuka Kan — Calmucos | calmucos.png
+Darma-Bala — Calmucos torgutos | calmucos_torgutos.jpg
+Antonia (hermana de Carlos) — Calusa | calusa.png
+Kiris Cañari — Cañaris | canaris.jpg
+Swanahilda — Caninefates | caninefates.png
+Corocotta — Cántabros | cantabros.jpg
+Vesna — Carantanos (eslovenos) | carantanos.jpg
+Sally New River — Catawba | catawba.png
+Hilde — Caucos | caucos.jpg
+Gayogohó:no' Kahente — Cayuga | cayuga.jpg
+Anqoyaku — Chancas | chancas.jpg
+Jeque Mansur — Chechenos | chechenos.png
+Ludmila de Bohemia — Checos (bohemios) | checos.png
+Nyangu — Chewa | chewa.png
+Morning Star (Dull Knife) — Cheyenne del Norte | cheyenne_del_norte.png
+Piomingo — Chickasaw | chickasaw.png
+Kuñambai — Chiriguanos | chiriguanos.jpg
+Pushmataha — Choctaw | choctaw.png
+Ix Chuen — Chontales | chontales.png
+Amulgin — Chukchis | chukchis.png
+Kihiwet — Chumash | chumash.png
+Boiorix — Cimbrios | cimbrios.png
+Teushpa — Cimerios | cimerios.png
+Kizbech Tughuzhuqo — Circasianos | circasianos.png
+Quanah Parker — Comanches | comanches.png
+Lola Casanova — Comcaac (seris) | comcaac.png
+Mistahimaskwa (Big Bear) — Cree de las llanuras | cree_de_las_llanuras.png
+Plenty Coups — Crow | crow.jpg
+Rihhilda — Cuados | cuados.png
+Köten — Cumanos | cumanos.png
+Dārta — Curonios | curonios.png
+Na Gbewa — Dagomba | dagomba.png
+Wiyaka Wastewin — Dakota (santee) | dakota.png
+Khoanes — Damara | damara.png
+Kurulu — Dani (Papúa) | dani.png
+Kameloh — Dayak ngaju | dayak_ngaju.jpg
+Achol Deng — Dinka | dinka.jpg
+Mal — Drevlianos | drevlianos.png
+Rudolf Duala Manga Bell — Duala | duala.png
+Si'ahl (Seattle) — Duwamish | duwamish.jpg
+Ambiórix — Eburones | eburones.png
+Iltirbeles — Edetanos | edetanos.png
+Dumnórix — Eduos | eduos.png
+Madam Tinubu — Egba (yoruba) | egba.png
+Aterui — Emishi | emishi.png
+Ateas — Escitas | escitas.png
+Onomaris — Escordiscos | escordiscos.png
+Lembitu — Estonios de Sakala | estonios_de_sakala.png
+Altana — Evenkis | evenkis.jpg
+Nzang Ela — Fang | fang.jpg
+Ghezo — Fon (Dahomey) | fon.png
+Radbod — Frisones | frisones.jpg
+Usman dan Fodio — Fulani de Sokoto | fulani_de_sokoto.png
+Ali Dinar — Fur (Darfur) | fur.jpg
+Deyótaro — Gálatas tectósagos | galatas_tectosagos.png
+Tinit — Garamantes | garamantes.png
+Rangdi — Garos | garos.jpg
+Al-Harith ibn Jabalah — Gasánidas | gasanidas.png
+Soshangane — Gaza (tsonga) | gaza.png
+Ardarico — Gépidos | gepidos.jpg
+Dromiquetes — Getas | getas.png
+Mekatilili wa Menza — Giriama | giriama.png
+Bumin Kagan — Göktürks | gokturks.png
+Sangram Shah — Gond de Garha | gond_de_garha.png
+Doman — Goringhaiqua (joijói) | goringhaiqua.png
+Sepé Tiarajú — Guaraníes de las misiones | guaranies_de_las_misiones.png
+Kirrae — Gunditjmara | gunditjmara.png
+Albert Edward Edenshaw — Haida | haida.png
+Daurama — Hausa de Daura | hausa_de_daura.png
+Satsuki — Hayato (Kyūshū) | hayato.jpg
+Mir Yazdanbakhsh — Hazaras | hazaras.png
+Toramana — Heftalitas | heftalitas.png
+Mkwawa — Hehe | hehe.jpg
+Orgetórix — Helvecios | helvecios.png
+Samuel Maharero — Herero | herero.jpg
+Rodelinda — Hérulos | herulos.png
+Drahomíra — Hevelios (stodoranos) | hevelios.png
+Abu Karib Asad — Himyaritas | himyaritas.png
+Ntxhi — Hmong | hmong.png
+Honwaima — Hopi | hopi.png
+Mama Wanka — Huancas | huancas.jpg
+Tamtoque — Huastecos | huastecos.png
+Hela Wali — Huli (Papúa) | huli.png
+Atila — Hunos | hunos.png
+Rentap — Iban (dayak) | iban.png
+Ahebi Ugbabe — Igbo de Enugu-Ezike | igbo_de_enugu_ezike.png
+Dalunag — Igorotes | igorotes.jpg
+Jaja de Opobo — Ijaw de Opobo | ijaw_de_opobo.png
+Indíbil — Ilergetes | ilergetes.png
+Gabriela Silang — Ilocanos | ilocanos.jpg
+Arnarulunnguaq — Inuit (Groenlandia) | inuit.png
+Mikak — Inuit del Labrador | inuit_del_labrador.png
+Tylvan — Itelmenos (Kamchatka) | itelmenos.jpg
+Kan Ek' — Itzáes | itzaes.png
+Tirgatao — Ixomatas (meotas) | ixomatas.jpg
+Adela Jánum — Jaf (kurdos) | jaf.jpg
+Aneva — Janty | janty.jpg
+Tzitzak — Jázaros | jazaros.png
+Nurhaci — Jianzhou (manchúes) | jianzhou.png
+Wanyan Aguda — Jurchen | jurchen.png
+Tecún Umán — K'iche' | k_iche.png
+Pensá — Kaingang | kaingang.jpg
+Akaiwa — Kalinago | kalinago.png
+Ataï — Kanak | kanak.png
+Amsa — Kanuri de Kawar | kanuri_de_kawar.png
+Qara Yusuf — Kara Koyunlu | kara_koyunlu.png
+Naw Paw — Karen | karen.jpg
+Kudnarto — Kaurna | kaurna.jpg
+Domalak Ana — Kazajos (Gran Horda) | kazajos_gran_horda.jpg
+Abulkhair Kan — Kazajos (Pequeña Horda) | kazajos_pequena_horda.png
+Toghrul (Ong Kan) — Keraítas | keraitas.png
+U Tirot Sing — Khasi | khasi.png
+Bumbutai (Xiaozhuang) — Khorchin | khorchin.jpg
+Wangu wa Makeri — Kikuyu | kikuyu.png
+Imru al-Qais — Kinda | kinda.png
+Satanta — Kiowa | kiowa.png
+Ak-Tamyr — Kirguises del Yeniséi | kirguises_del_yenisei.jpg
+Nei Teaiwa — Kiribatianos | kiribatianos.png
+Shulü Ping — Kitán | kitan.jpg
+Jhalkari Bai — Kolis de Jhansi | kolis_de_jhansi.png
+Nyenpu — Kru | kru.png
+Shyaam a-Mbul — Kuba | kuba.jpg
+Kwaaypaay Shuluk — Kumeyaay | kumeyaay.png
+Kaliamma — Kurumbas | kurumbas.jpg
+Mandume ya Ndemufayo — Kwanyama (ovambo) | kwanyama.jpg
+Nuk Ixik — Lacandones | lacandones.png
+Al-Mundhir III — Lájmidas | lajmidas.png
+Tamanend — Lenape | lenape.png
+Lempira — Lencas | lencas.png
+Nyolmit — Lepchas | lepchas.jpg
+Lady Xian — Li (Hainán) | li.png
+Bertia — Ligures | ligures.png
+Imme — Livones | livones.png
+Modjadji — Lobedu | lobedu.png
+Wadili — Lokono (arahuacos) | lokono.png
+Teodolinda — Lombardos | lombardos.jpg
+Lewanika — Lozi | lozi.jpg
+Nyipir Achieng — Luo | luo.png
+Viriato — Lusitanos | lusitanos.png
+Mbatian — Maasái | maasai.png
+Sultán Kudarat — Maguindanao | maguindanao.png
+Sultán Hasanuddin — Makasar | makasar.png
+Naharipa — Makua | makua.png
+Janke Waali — Mandinga de Kaabu | mandinga_de_kaabu.png
+Nenzima — Mangbetu | mangbetu.jpg
+Bai Madakel — Manobo | manobo.jpg
+Marbod — Marcomanos | marcomanos.png
+Leroij Lijebake — Marshaleses | marshaleses.png
+Tomiris — Masagetas | masagetas.png
+Masinisa — Masesilios (númidas) | masesilios.png
+Deyoces — Medos | medos.png
+Madam Yoko — Mende | mende.png
+Sikerei Bai — Mentawai | mentawai.jpg
+Toqtoa Beki — Merkitas | merkitas.png
+Membertou — Mi'kmaq | mi_kmaq.png
+Mihšihkinaahkwa (Little Turtle) — Miami | miami.png
+Tuanku Imam Bonjol — Minangkabau | minangkabau.png
+Ropuiliani — Mizos | mizos.png
+Kintpuash — Modoc | modoc.jpg
+Uncas — Mohegan | mohegan.png
+Radoslava — Moravos | moravos.jpg
+Rangitea — Moriori | moriori.jpg
+Naaba Oubri — Mossi | mossi.png
+Lahara — Motu (Papúa) | motu.png
+Ayaba — Moxos | moxos.jpg
+Tisquesusa — Muiscas | muiscas.png
+Birsa Munda — Munda | munda.png
+Menawa — Muscogee (creek) | muscogee.png
+Tacfarinas — Musulamios | musulamios.png
+Aretas IV — Nabateos | nabateos.png
+Tayang Kan — Naimanos | naimanos.png
+Hendrik Witbooi — Nama | nama.jpg
+Ojo — Nanái (Amur) | nanai.jpg
+Koitalel arap Samoei — Nandi | nandi.png
+Canonchet — Narragansett | narragansett.jpg
+Manuelito — Navajo | navajo.jpg
+Ntombazi — Ndwandwe | ndwandwe.png
+Sava — Nénets | nenets.jpg
+Boduognato — Nervios | nervios.png
+Chief Joseph — Nez Perce | nez_perce.png
+Te Maiharanui — Ngāi Tahu | ngai_tahu.png
+Rewi Maniapoto — Ngāti Maniapoto | ngati_maniapoto.png
+Hinematioro — Ngāti Porou | ngati_porou.jpg
+Zwangendaba — Ngoni | ngoni.jpg
+Quaiapen — Niantic | niantic.jpg
+Nicarao — Nicaraos | nicaraos.png
+Kawa — Nubios nobatas | nubios_nobatas.jpg
+Truganini — Nuenonne (Tasmania) | nuenonne.png
+Nyachol — Nuer | nuer.jpg
+Maquinna — Nuu-chah-nulth | nuu_chah_nulth.jpg
+Mirambo — Nyamwezi | nyamwezi.jpg
+Niklot — Obotritas | obotritas.png
+Sitalces — Odrisios (tracios) | odrisios.png
+Tughril Beg — Oguz selyúcidas | oguz_selyucidas.png
+Tuyu — Ohlone | ohlone.png
+Esen Taishi — Oirates | oirates.png
+Bagonegiizhig — Ojibwe | ojibwe.png
+Hoelun — Olkhunut | olkhunut.jpg
+Skenandoa — Oneida | oneida.png
+Börte — Onggirat | onggirat.jpg
+Kubrat — Onoguros (búlgaros) | onoguros.png
+Himilce — Oretanos | oretanos.png
+Abba Jifar II — Oromo de Jimma | oromo_de_jimma.png
+Xochitl Otomí — Otomíes | otomies.png
+Ekuikui II — Ovimbundu de Bailundo | ovimbundu_de_bailundo.png
+Mulimu — Paiwan (Taiwán) | paiwan.jpg
+Ebil Reklai — Palauanos | palauanos.png
+Cockacoeske — Pamunkey | pamunkey.jpg
+Urduja — Pangasinenses | pangasinenses.jpg
+Arsaces I — Parnos (partos) | parnos.png
+Malalai — Pashtunes de Maiwand | pashtunes_de_maiwand.png
+Pitaresaru — Pawnee | pawnee.png
+Aybike — Pechenegos | pechenegos.jpg
+Sassacus — Pequot | pequot.png
+Bridei mac Bili — Pictos | pictos.jpg
+Weetamoo — Pocasset | pocasset.jpg
+Świętosława — Polanos | polanos.png
+Dobrosława — Pomeranos | pomeranos.jpg
+Shuwesh — Pomo | pomo.png
+Clara Camarão — Potiguara | potiguara.png
+Herkus Monte — Prusianos antiguos | prusianos_antiguos.png
+Lapulapu — Pueblo de Mactán | pueblo_de_mactan.png
+Popé — Pueblos (Ohkay Owingeh) | pueblos.jpg
+Tangáxuan II — Purépechas | purepechas.png
+Samsi — Qedaritas (árabes) | qedaritas.jpg
+Arminio — Queruscos | queruscos.jpg
+Changamire Dombo — Rozvi | rozvi.png
+Kigeli IV Rwabugiri — Ruanda (banyarwanda) | ruanda.jpg
+Giso — Rugios | rugios.jpg
+Tygyn Darkhan — Sajá (yakutos) | saja.png
+Widukind — Sajones | sajones.jpg
+Ravahiny — Sakalava de Boina | sakalava_de_boina.png
+Zarina — Sakas de Asia central | sakas_de_asia_central.png
+Áile — Sami | sami.png
+Gayo Poncio — Samnitas | samnitas.png
+Salamasina — Samoanos | samoanos.jpg
+Birutė — Samogitios | samogitios.png
+Xhaa — San (Kalahari) | san.png
+Phulo Murmu — Santales | santales.png
+Amage — Sármatas | sarmatas.jpg
+Black Hawk — Sauk | sauk.png
+Sirma — Saurómatas | sauromatas.jpg
+Lola Kiepja — Selk'nam | selk_nam.png
+Osceola — Seminolas | seminolas.png
+Ganna — Semnones | semnones.jpg
+Cornplanter — Seneca | seneca.png
+Breno — Senones (Galia) | senones.png
+Nanguin — Senufo | senufo.png
+Linger Selbe — Sereer de Saloum | sereer_de_saloum.png
+Kumba Ndoffene Diouf — Serer de Sine | serer_de_sine.png
+Akwot — Shilluk | shilluk.jpg
+Washakie — Shoshone | shoshone.jpg
+Yampintsa — Shuar | shuar.jpg
+Crowfoot — Siksika (pies negros) | siksika.jpg
+Mohammed Abdullah Hassan — Somalíes derviches | somalies_derviches.png
+Ariovisto — Suevos | suevos.png
+Ng'washi — Sukuma | sukuma.png
+Rajah Sulayman — Tagalos | tagalos.png
+Yuisa — Taínos de Borikén | tainos_de_boriken.jpg
+Li Yuanhao — Tanguts | tanguts.png
+Te Whiti o Rongomai — Taranaki (Parihaka) | taranaki.png
+Megujin Seultu — Tártaros (estepa) | tartaros.png
+Lempi — Tavastios (fineses) | tavastios.png
+Heni Te Kiri Karamu — Te Arawa | te_arawa.png
+Ayelén — Tehuelches | tehuelches.png
+Ngalifourou — Teke | teke.jpg
+Yamba — Temne | temne.jpg
+Atanarico — Tervingios (godos) | tervingios.jpg
+Teutobod — Teutones | teutones.png
+Rajmati — Tharu | tharu.jpg
+Songtsen Gampo — Tibetanos de Yarlung | tibetanos_de_yarlung.png
+Ulele — Timucuas | timucuas.png
+Xicoténcatl el Joven — Tlaxcaltecas | tlaxcaltecas.png
+Pelthi — Todas (Nilgiri) | todas.jpg
+Ha'ichu Ki — Tohono O'odham | tohono_o_odham.png
+Ia Kaplen — Tolai (Nueva Bretaña) | tolai.png
+Chiomara — Tolistobogios (gálatas) | tolistobogios.jpg
+Toypurina — Tongva | tongva.png
+Lai Rinding — Toraja | toraja.jpg
+Xanat — Totonacas | totonacas.png
+Kalli — Toubou | toubou.png
+Induciomaro — Tréveros | treveros.png
+Tin Hinan — Tuareg del Ahaggar | tuareg_del_ahaggar.png
+Kaocen ag Geda — Tuareg del Aïr | tuareg_del_air.png
+El Hadj Umar Tall — Tucolor | tucolor.png
+Rua Kenana — Tūhoe | tuhoe.png
+Cunhambebe — Tupinambá | tupinamba.jpg
+Dundalli — Turrbal | turrbal.jpg
+Kanenstenhawi — Tuscarora | tuscarora.png
+Ayan — Tuyuhun | tuyuhun.jpg
+María de la Candelaria — Tzeltales | tzeltales.png
+Gerlinda — Ubios | ubios.png
+Kutlug Bilge Kagan — Uigures (kaganato) | uigures.png
+Ouray — Ute | ute.jpg
+Muhammad Shaybani — Uzbecos shaibánidas | uzbecos_shaibanidas.png
+Genserico — Vándalos | vandalos.jpg
+Toda Aznárez — Vascones | vascones.png
+Rafohy — Vazimba de Alasora | vazimba_de_alasora.png
+Makhado — Venda | venda.jpg
+Boutia — Vetones | vetones.png
+Alarico I — Visigodos | visigodos.jpg
+Smertulla — Volcas arecómicos | volcas_arecomicos.jpg
+Himiko — Wa (Yamatai) | wa.jpg
+Metacom — Wampanoag | wampanoag.jpg
+Bennelong — Wangal (eora) | wangal.jpg
+Jayaliyuu — Wayuu | wayuu.png
+Kondiaronk — Wendat (hurones) | wendat.png
+Lat Dior — Wolof de Cayor | wolof_de_cayor.png
+William Barak — Wurundjeri | wurundjeri.jpg
+Tanshihuai — Xianbei | xianbei.png
+Modu Chanyu — Xiongnu | xiongnu.png
+Kipa Yamana — Yámanas | yamanas.png
+Altamaha Wiseh — Yamasee | yamasee.png
+Machemba — Yao | yao.png
+Lilaw — Yapeses | yapeses.png
+Cajeme — Yaquis | yaquis.png
+Abu Shimo — Yi (nuosu) | yi.png
+Djirrimbilil — Yolŋu | yolu.png
+Abiodun — Yoruba de Oyo | yoruba_de_oyo.png
+Daina — Yotvingios | yotvingios.png
+Kujula Kadfises — Yuezhi | yuezhi.png
+Rani Gaidinliu — Zeliangrong (naga) | zeliangrong.png
+Nong Zhigao — Zhuang | zhuang.png
+Tsalitsa — Zuni | zuni.png
