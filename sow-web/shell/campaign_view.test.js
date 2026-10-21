@@ -778,7 +778,7 @@ test("campaign dialogue keeps a compact speaker portrait on narrow screens", () 
     const mobileStart = storyCss.indexOf("@container (max-width: 640px)");
     const mobileEnd = storyCss.indexOf("@container (max-width: 380px)", mobileStart);
     const mobileStory = storyCss.slice(mobileStart, mobileEnd);
-    const compactPortrait = storyCss.match(/#sow-story\[data-compact="true"\] \.sow-story\.has-portrait \.sow-story__main \{[^}]*\}/);
+    const compactPortrait = storyCss.match(/#sow-story\[data-compact="true"\]\.has-portrait \.sow-story__main \{[^}]*\}/);
     assert.match(mobileStory, /\.sow-story\.has-portrait \.sow-story__main \{ grid-template-columns: var\(--story-portrait-size, min\(36cqw, 40svh\)\) minmax\(0, 1fr\); \}/);
     assert.ok(compactPortrait);
     assert.match(compactPortrait[0], /grid-template-columns: var\(--story-portrait-size, min\(36cqw, 40svh\)\) minmax\(0, 1fr\)/);
@@ -808,6 +808,7 @@ test("mobile chapter dialogue hugs its copy while docked at the bottom", () => {
 test("mobile story dialogs scroll long text and choices while keeping speaker controls reachable", () => {
     const mobileStory = storyCss.slice(storyCss.indexOf("@container (max-width: 640px)"), storyCss.indexOf("@container (max-width: 380px)"));
     assert.match(mobileStory, /\.sow-story__main \{[^}]*flex: 0 1 auto/);
+    assert.match(mobileStory, /\.sow-story__scroll \{ flex: 0 1 auto;/);
 });
 
 

@@ -187,7 +187,7 @@
             if (portrait.hidden) return;
             const headingStyle = view && typeof view.getComputedStyle === "function" ? view.getComputedStyle(heading) : null;
             const headingGap = headingStyle ? parseFloat(headingStyle.marginBottom) || 0 : 0;
-            const contentHeight = heading.getBoundingClientRect().height + headingGap + scrollContent.scrollHeight;
+            const contentHeight = heading.offsetHeight + headingGap + scrollContent.scrollHeight;
             const maxSize = Math.min(root.clientWidth * 0.36, root.clientHeight * 0.4);
             if (!contentHeight || !maxSize) return;
             const size = Math.min(contentHeight, maxSize);

@@ -258,6 +258,9 @@ struct RosterFile {
     factions: Vec<RosterEntry>,
 }
 
+/// Narrowest tutorial opening, in CSS pixels per tile. Smaller tiles push nameplates into LOD dots.
+const TUTORIAL_MIN_TILE_CSS: f32 = 48.0;
+
 pub(crate) fn tutorial_camera_frame(
     campaign: CampaignId,
     config: &sow_core::game_config::GameConfig,
@@ -278,8 +281,11 @@ pub(crate) fn tutorial_camera_frame(
         (player_x as f32 + target.x as f32 + 1.0) * 0.5,
         (player_y as f32 + target.y as f32 + 1.0) * 0.5,
     );
-    let fit_zoom = (screen_w.max(1.0) / (dx + 7.0))
-        .min(screen_h.max(1.0) / (dy + 7.0))
+    // Fit both tiles with margin in CSS pixels, then keep tiles at a readable size on any screen.
+    let dpr = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
+    let fit_css =
+        ((screen_w.max(1.0) / dpr) / (dx + 7.0)).min((screen_h.max(1.0) / dpr) / (dy + 7.0));
+    let fit_zoom = (fit_css.max(TUTORIAL_MIN_TILE_CSS) * dpr)
         .min(crate::camera_zoom_upper_bound(screen_w, screen_h));
     let min_zoom =
         crate::camera_zoom_lower_bound(screen_w, screen_h, config.map_width, config.map_height);
@@ -402,7 +408,9 @@ fn valid_campaign_group_id(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{CampaignId, parse_roster, to_scripted, tutorial_camera_frame};
+    use super::{
+        CampaignId, TUTORIAL_MIN_TILE_CSS, parse_roster, to_scripted, tutorial_camera_frame,
+    };
     use sow_core::game_config::GameConfig;
     use sow_core::protocol::{CampaignRelation, Team};
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -418,7 +426,11 @@ mod tests {
             ..GameConfig::default()
         };
 
-        for (screen, expected_zoom) in [((1440.0, 900.0), 100.0), ((390.0, 844.0), 390.0 / 14.0)] {
+        for (screen, expected_zoom) in [
+            ((1440.0, 900.0), 100.0),
+            ((390.0, 844.0), TUTORIAL_MIN_TILE_CSS),
+            ((844.0, 390.0), 390.0 / 7.0),
+        ] {
             let (center, zoom) =
                 tutorial_camera_frame(CampaignId::Boudica, &config, screen.0, screen.1).unwrap();
             assert_eq!(center, (719.0, 79.5));
