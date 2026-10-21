@@ -17,7 +17,7 @@ La columna "Material de arte" dice qué imágenes ya existen en tu compu (en `Do
 
 La lista para encargar y revisar el arte es [tribus-400-encargo.txt](tribus-400-encargo.txt): **FALTAN** primero y **TENEMOS** después. Cada línea incluye el nombre exacto del archivo.
 
-Incluye las tribus de bots, los héroes tribales y los retratos no romanos usados por el tutorial. Los personajes de una misma tribu conservan su afiliación; los asentamientos no se presentan como tribus nuevas. Las facciones romanas del tutorial quedan fuera del encargo de tribus.
+Incluye las tribus de bots (también las de los héroes Ragnar, Genghis Khan, Vercingetorix y Boudica, con el nombre de su tribu) y las tribus del tutorial que no son romanas. Los personajes de una misma tribu conservan su afiliación; los asentamientos no se presentan como tribus nuevas. Las seis imágenes romanas del tutorial también están en **FALTAN**: son arte viejo y se generan de nuevo como el resto.
 
 **TENEMOS** cuenta las identidades con imagen recibida en `Downloads/extreme-closeups-avatars/`, sea JPG o PNG. **FALTAN** cuenta únicamente las identidades sin imagen en esa carpeta. Las cantidades y la carpeta de los WebP viven únicamente en el TXT.
 

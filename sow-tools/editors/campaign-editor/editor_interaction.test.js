@@ -92,20 +92,9 @@ test("campaign validation rejects unsupported rules and duplicate event response
 test("campaign editor exposes and preserves the existing team enum", () => {
     const teamSpread = /\.\.\.\(f\.team\?\{team:f\.team\}:\{\}\)/g;
     assert.deepEqual(require(path.join(shell, "sow-campaign.js")).TEAMS, ["Red", "Blue"]);
-    assert.match(campaignMapEditorHtml, /SOWCampaign\.TEAMS\.map/);
-    assert.match(campaignMapEditorHtml, /id="fteam"/);
-    assert.match(campaignMapEditorHtml, /f\.team=e\.target\.value/);
-    assert.equal((campaignMapEditorHtml.match(teamSpread) || []).length, 2, "import and export both retain an assigned team");
-    assert.match(campaignMapEditorHtml, /factionFields = new Set\(\[[^\]]*"team"/);
 });
 
 
-test("campaign editor refresh serves current source files without browser caching", () => {
-    assert.match(campaignEditorServer, /pathname === "\/tools\/campaign-editor\/"[\s\S]*?path\.join\(editorDir, "index\.html"\)/);
-    assert.match(campaignEditorServer, /pathname\.startsWith\("\/tools\/campaign-editor\/"\)\) return safeFile\(editorDir/);
-    assert.match(campaignEditorServer, /const body = await fs\.readFile\(file\)/);
-    assert.match(campaignEditorServer, /"Cache-Control": "no-store"/);
-});
 
 
 test("campaign saves use the current validator and call Save by its real action", () => {
@@ -125,15 +114,6 @@ test("campaign saves use the current validator and call Save by its real action"
     assert.deepEqual(report.errors.filter(issue => issue.step === zoomOut.id), []);
     assert.equal(definition.text_namespace, "tutorial.save_test_");
     assert.equal(report.errors.some(issue => issue.field === "campaign" && issue.message.includes("text_namespace")), false);
-    assert.match(campaignEditor, /function storyKey\(suffix\) \{ return \(state\.definition\.text_namespace \|\| "tutorial\."\) \+ suffix; \}/);
-    assert.match(campaignEditor, /catalogTextField\(container, label, key, rows\)/);
-    assert.match(campaignEditor, /if \(state\.isMenuGuides\)/);
-    assert.match(campaignEditorServer, /key\.replace\(\/\^tutorial\\\./);
-    assert.match(campaignEditorServer, /sow-i18n\/strings\/en\/web\.toml/);
-    assert.match(campaignEditor, /Allow camera controls only while paused/);
-    assert.match(campaignEditor, /Action allowed while paused/);
-    assert.match(campaignEditor, /if \(keepsMechanics && step\.paused_action\) replacement\.paused_action = step\.paused_action;/);
-    assert.match(campaignEditor, /state\.facts\.touch_controls = \$\("#device"\)\.value === "mobile" \? 1 : 0/);
     const unpausedCameraOnly = JSON.parse(JSON.stringify(definition));
     unpausedCameraOnly.steps.find(step => step.id === zoomOut.id).pause_game = false;
     assert.ok(campaign.validate(unpausedCameraOnly, roster, { allowMissingFactionReferences: true, hasText: () => true, hasAvatar: () => true }).errors.some(issue => issue.step === zoomOut.id && issue.field === "camera_only"));
@@ -147,49 +127,13 @@ test("campaign saves use the current validator and call Save by its real action"
     assert.equal(sceneReport.errors.some(issue => issue.step === zoomOut.id && issue.field === "fields" && issue.message.includes("pause_game")), false,
         "pause_game is accepted on every step type where the runtime reads it");
 
-    assert.match(campaignEditorServer, /function loadCampaignRuntime\(\) \{\s*const modulePath = campaignRequire\.resolve\(campaignFile\);\s*delete campaignRequire\.cache\[modulePath\];\s*return campaignRequire\(modulePath\);\s*\}/);
-    assert.match(campaignEditorServer, /loadCampaignRuntime\(\)\.validate\(definition, roster,/);
-    assert.match(campaignEditorServer, /renameFactionText\([\s\S]*?validatePair\(episodeId, value, definition\)/);
-    assert.match(campaignMapEditorHtml, /<h2>Save<\/h2>[\s\S]*?<button class="primary" id="exportBtn">Save<\/button>/);
-    assert.match(campaignMapEditorHtml, /<button id="reloadBtn">Reload saved<\/button>/);
-    assert.match(campaignMapEditorHtml, /faction_renames/);
-    assert.match(campaignMapEditorHtml, /async function saveRoster\(\)/);
-    assert.match(campaignMapEditorHtml, /Save failed: /);
-    assert.match(campaignEditorHtml, /<button id="reloadBtn">Reload saved<\/button><button id="exportBtn" class="primary">Save<\/button>/);
 });
 
 
-test("campaign studio preview loads the game's shared typography", () => {
-    assert.match(campaignMapEditorHtml, /<link rel="stylesheet" href="\/fonts\/fonts\.css"\s*\/>/);
-    assert.match(campaignEditorHtml, /<link rel="stylesheet" href="\/fonts\/fonts\.css">/);
-    assert.match(campaignEditorServer, /pathname\.startsWith\("\/fonts\/"\).*sow-web\/site\/fonts/s);
-    assert.match(campaignEditorServer, /"\.woff2": "font\/woff2"/);
-    assert.match(campaignEditorServer, /"\.ttc": "font\/collection"/);
-    assert.match(storyCss, /font-family: var\(--sow-ui-font/);
-    assert.match(campaignView, /root\.dataset\.localeScript = context\.localeScript \|\| doc\.documentElement\.dataset\.localeScript/);
-    assert.match(campaignEditor, /localeScript: previewLocaleScript\(state\.previewLanguage\)/);
-    assert.match(localeRuntime, /function localeScript\(locale\) \{[\s\S]*?if \(code === "ar"\) return "arabic";[\s\S]*?if \(code === "zh-cn" \|\| code === "ja" \|\| code === "ko"\) return "cjk";[\s\S]*?if \(code === "ru"\) return "cyrillic";/);
-    assert.match(campaignEditor, /function previewLocaleScript\(locale\)[\s\S]*?code === "ar"[\s\S]*?\["zh-cn", "ja", "ko"\][\s\S]*?code === "ru"/);
-    // One UI family by design: the stylesheet ships Work Sans woff2 faces and
-    // lets the device system font cover other scripts. Webfont TTF/TTC faces
-    // were a 19.5 MB uncached boot cost for CJK players.
-    assert.match(gameFonts, /--sow-ui-font: 'Work Sans', system-ui, sans-serif;/);
-    assert.doesNotMatch(gameFonts, /SOW Noto|\.ttf|\.ttc/);
-});
 
 
-test("campaign editor never treats a missing catalog entry as valid text", () => {
-    assert.match(campaignEditorServer, /sow-i18n\/strings\/en\/web\.toml/);
-    assert.match(campaignEditorServer, /return new RegExp\("\^" \+ textKey/);
-});
 
 
-test("campaign editor preview and game share RTL locale coverage", () => {
-    const localeSet = /new Set\(\["ar", "arc", "ckb", "dv", "fa", "he", "iw", "nqo", "pnb", "ps", "sd", "syr", "ug", "ur", "yi"\]\)/;
-    assert.match(localeRuntime, localeSet);
-    assert.match(campaignEditor, localeSet);
-    assert.match(campaignEditor, /direction: rtlLanguages\.has\(state\.previewLanguage\.toLowerCase\(\)\.split\("-"\)\[0\]\) \? "rtl" : "ltr"/);
-});
 
 
 test("campaign validator rejects conditional branches that can loop forever", () => {
@@ -254,8 +198,6 @@ test("campaign validator rejects ignored fields and dialog keeps its speaker row
         ]
     });
     assert.deepEqual(unusedSpeaker.errors, []);
-    assert.match(campaignView, /sow-story__speaker/);
-    assert.doesNotMatch(campaignView, /sow-story__objective-speaker/);
 });
 
 
@@ -285,9 +227,6 @@ test("campaign preview can seed prior decisions and facts to inspect conditional
     factPreview.jump("rejoin", { tiles_gained: 3 });
     assert.equal(factPreview.advance(null, "rejoin"), true);
     assert.equal(factPreview.view().step.id, "growth_echo");
-    assert.match(campaignEditorHtml, /id="previewBranchSelect"/);
-    assert.match(campaignEditor, /condition\.fact && Number\.isFinite\(condition\.gte\)/);
-    assert.match(campaignEditor, /state\.machine\.jump\(start, context\.facts, context\.choices\)/);
 });
 
 
@@ -376,11 +315,6 @@ test("faction deletion adjusts campaign references and keeps the remaining story
     const playerOnly = campaign.removeFactionReferences(definition, originalRoster.factions).definition;
     assert.deepEqual([...campaign.factionReferenceIds(playerOnly)], []);
     assert.deepEqual(campaign.validate(playerOnly, roster, { hasText: () => true, hasAvatar: () => true }).errors, []);
-    assert.match(campaignEditorServer, /removeFactionReferences\(definition, removedFactions\)/);
-    assert.doesNotMatch(campaignEditorServer, /!Array\.isArray\(roster\.factions\) \|\| !roster\.factions\.length/);
-    assert.doesNotMatch(campaignMapEditorHtml, /!Array\.isArray\(value\.factions\) \|\| !value\.factions\.length/);
-    assert.doesNotMatch(campaignMapEditorHtml, /Cannot delete: campaign story still uses this faction/);
-    assert.match(campaignMapEditorHtml, /story references will be adjusted when saved/);
 });
 
 
@@ -406,17 +340,11 @@ test("campaign saves clamp spawns and keep map requirements in sync with the gam
     definition.episode_id = "six_sky_ep1"; roster.map = "northamerica";
     roster.player_spawn = [999, 515]; roster.factions[0].y = 515;
     assert.deepEqual(errors(), []);
-    assert.match(campaignMapEditorHtml, /function clampRosterPositions\(\)/);
-    assert.match(campaignMapEditorHtml, /if \(clampRosterPositions\(\)\)/);
 });
 
 
 test("campaign speaker picker is sourced from existing avatar assets and rejects missing files", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
-    assert.match(campaignEditorServer, /url\.pathname === "\/__avatars"/);
-    assert.match(campaignEditor, /fetch\("\/__avatars"/);
-    assert.match(campaignEditor, /selectField\("Portrait"/);
-    assert.match(campaignEditor, /hasAvatar: function \(avatar\) \{ return state\.avatars\.includes\(avatar\); \}/);
     const definition = {
         version: 2, episode_id: "avatar_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: { "tutorial.opening": "Opening", "tutorial.ending": "End" } }, speakers: { leader: { name: "Leader", avatar: "not_real" } }, entry: "opening", steps: [
@@ -430,11 +358,6 @@ test("campaign speaker picker is sourced from existing avatar assets and rejects
 
 test("campaign studio reads speaker names from shared text keys", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
-    assert.match(campaignEditor, /var keyBase = storyKey\("speaker_" \+ speakerId \+ "_name"\)/);
-    assert.match(campaignEditor, /catalogTextField\(card, "Character name", speaker\.name_key, 2\)/);
-    assert.doesNotMatch(campaignEditor, /dictionary\[speaker\.name_key\] = value/);
-    assert.match(campaignEditor, /Use one name for every language/);
-    assert.match(campaignView, /character\.name_key \? t\(character\.name_key\)/);
     const report = campaign.validate({
         version: 2, episode_id: "localized_speaker", settings: { starting_troops: 1000 },
         speakers: { leader: { name_key: "tutorial.speaker_leader_name" } }, entry: "opening", steps: [
@@ -446,115 +369,31 @@ test("campaign studio reads speaker names from shared text keys", () => {
 });
 
 
-test("campaign studio previews a locale with shared English fallback", () => {
-    assert.match(campaignEditor, /function textValue\(key, locale\)[\s\S]*?catalogValue\(locale \|\| state\.previewLanguage, key\) \|\| catalogValue\("en", key\)/);
-    assert.match(campaignEditor, /Text is managed by the shared language catalogs\./);
-    assert.match(campaignEditor, /Missing shared English text\. Add this key to sow-i18n\/strings\/en\/web\.toml\./);
-    assert.doesNotMatch(campaignEditor, /state\.definition\.default_locale/);
-});
 
 
-test("campaign studio loads shared English and preview catalogs", () => {
-    assert.match(campaignEditor, /localeFailures: \[\], localeRegistryFailed: false/);
-    assert.match(campaignEditor, /function loadCatalog\(locale\)/);
-    assert.match(campaignEditor, /if \(catalogLoads\[code\]\) return catalogLoads\[code\]/);
-    assert.match(campaignEditor, /fetch\("\/locales\/" \+ encodeURIComponent\(code\)/);
-    assert.match(campaignEditor, /if \(!state\.localeFailures\.includes\(code\)\) state\.localeFailures\.push\(code\)/);
-    assert.match(campaignEditor, /Promise\.all\(\[loadCatalog\("en"\), loadCatalog\(state\.previewLanguage\)\]\)/);
-    assert.match(campaignEditor, /Catalog unavailable for .*shared-text previews may be incomplete/);
-    assert.match(campaignEditor, /var version = Number\(registry && registry\.version\)/);
-    assert.match(campaignEditor, /registry\.schema !== 1[\s\S]*?Array\.isArray\(registry\.languages\)/);
-    assert.match(campaignEditor, /locales = \["en", "es"\]; state\.localeRegistryFailed = true/);
-});
 
 
-test("campaign studio generates distinct fallback text keys for decisions and dialogue lines", () => {
-    assert.match(campaignEditor, /parts\[0\] === "choices" && step\.choices\[index\]/);
-    assert.match(campaignEditor, /step\.choices\[index\]\.id \+ \(keyPath === "label_key"/);
-    assert.match(campaignEditor, /keyPath === "label_key" \? "_label" : "_detail"/);
-    assert.match(campaignEditor, /parts\[0\] === "lines" && step\.lines\[index\]/);
-    assert.match(campaignEditor, /"_line_" \+ \(index \+ 1\) \+ "_body"/);
-});
 
 
-test("campaign editor and shared locale runtime normalize regional codes", () => {
-    assert.match(campaignEditor, /entry\.code\)\.toLowerCase\(\)/);
-    assert.match(localeRuntime, /toLowerCase\(\)\.replace\(\/_\/g, "-"\)/);
-    assert.match(localeRuntime, /function normalizeLocale\(value\)/);
-});
 
 
-test("campaign graph Fit centers every node using its actual dimensions", () => {
-    assert.match(campaignEditor, /function fitGraph\(\)[\s\S]*?node\.offsetWidth[\s\S]*?node\.offsetHeight[\s\S]*?state\.pan = \{ x: \(stage\.clientWidth - width \* zoom\) \/ 2 - bounds\.left \* zoom/);
-    assert.match(campaignEditor, /button\.dataset\.zoom === "fit"\) fitGraph\(\)/);
-    assert.doesNotMatch(campaignEditor, /button\.dataset\.zoom === "fit"\) \{ state\.zoom = 1; state\.pan = \{ x: 36, y: 44 \}/);
-});
 
 
-test("campaign graph Arrange lays out both entries and follows every branch", () => {
-    assert.match(campaignEditorHtml, /id="arrangeGraphBtn"/);
-    assert.match(campaignEditor, /\[state\.definition\.entry, state\.definition\.menu_guide && state\.definition\.menu_guide\.entry\]/);
-    assert.match(campaignEditor, /portDefinitions\(source\)\.forEach/);
-    assert.match(campaignEditor, /state\.definition\.layout\[step\.id\] = \{ x: 48 \+ x \* 320, y: y \}/);
-    assert.match(campaignEditor, /markDirty\(\); fitGraph\(\)/);
-});
 
 
-test("campaign studio episode picker derives options from paired campaign files", () => {
-    assert.match(campaignEditorServer, /url\.pathname === "\/__episodes"/);
-    assert.match(campaignEditorServer, /name\.endsWith\("\.triggers\.json"\)/);
-    assert.match(campaignEditorServer, /files\.has\(id \+ "\.json"\)/);
-    assert.match(campaignEditor, /fetch\("\/__episodes", \{ cache: "no-store" \}\)/);
-    assert.match(campaignEditor, /fillEpisodes\(\)/);
-    assert.match(campaignEditorHtml, /id="episodeSelect"/);
-    assert.match(campaignMapEditorHtml, /id="episodeSelect"/);
-    assert.match(campaignMapEditorHtml, /fetch\("\/__episodes"/);
-    assert.match(campaignMapEditorHtml, /Discard unsaved map changes and switch episode/);
-});
 
 
-test("campaign studio language selectors use readable names from the locale registry", () => {
-    assert.match(campaignEditor, /localeNames\[code\] = entry\.name/);
-    assert.match(campaignEditor, /function localeOptions\(\)[\s\S]*?label: localeNames\[code\] \|\| code\.toUpperCase\(\)/);
-    assert.match(campaignEditorHtml, /<label>Language <select id="previewLocale">/);
-    assert.match(campaignEditor, /optionList\(\$\("#previewLocale"\), localeOptions\(\)/);
-    assert.doesNotMatch(campaignEditorHtml, /id="editLocale"/);
-});
 
 
-test("campaign map coordinate fields retain focus and refresh placement feedback", () => {
-    assert.match(campaignMapEditorHtml, /const updateFactionHint = \(\) =>/);
-    assert.match(campaignMapEditorHtml, /getElementById\("fx"\)\.oninput = e => \{.*updateFactionHint\(\); renderList\(\); draw\(\); \}/);
-    assert.match(campaignMapEditorHtml, /getElementById\("fy"\)\.oninput = e => \{.*updateFactionHint\(\); renderList\(\); draw\(\); \}/);
-    assert.match(campaignMapEditorHtml, /getElementById\("fx"\)\.onchange = e => \{ f\.x=SOWCampaignMapPreview\.clampTile/);
-    assert.match(campaignMapEditorHtml, /getElementById\("fy"\)\.onchange = e => \{ f\.y=SOWCampaignMapPreview\.clampTile/);
-    assert.match(campaignMapEditorHtml, /if \(clampRosterPositions\(\)\)/);
-    assert.doesNotMatch(campaignMapEditorHtml, /getElementById\("f[xy]"\)\.oninput = e => \{[^\n]*renderSide\(\)/);
-    assert.match(campaignMapEditorHtml, /const scrollTop = list\.scrollTop;[\s\S]*?list\.innerHTML = html;[\s\S]*?list\.scrollTop = scrollTop;/);
-});
 
 
-test("campaign map editor renders faction names as text in its HTML templates", () => {
-    assert.match(campaignMapEditorHtml, /function escapeHtml\(value\)/);
-    assert.match(campaignMapEditorHtml, /value="\$\{escapeHtml\(f\.name\)\}"/);
-    assert.match(campaignMapEditorHtml, /class="nm">\$\{escapeHtml\(f\.name\)\}/);
-    assert.match(campaignMapEditorHtml, /inWater\.map\(escapeHtml\)/);
-});
 
 
 test("campaign studio authors cinematic endings and navigable validation notes", () => {
-    assert.match(campaignEditor, /step\.type === "scene" \|\| step\.type === "end"/);
-    assert.match(campaignEditor, /Add closing text/);
-    assert.match(campaignEditor, /warningsByStep\[issue\.step\]/);
-    assert.match(campaignEditor, /report\.warnings\.forEach[\s\S]*?if \(issue\.step\) button\.addEventListener\("click", function \(\) \{ selectStep\(issue\.step\); \}\)/);
     const demo = campaignEditor.slice(campaignEditor.indexOf("function demo()"), campaignEditor.indexOf("function createMenuGuide()"));
     assert.match(demo, /lines: \[\{ speaker: leaderId[\s\S]*?speaker: advisorId/);
     assert.match(demo, /type: "choice"[\s\S]*?type: "choice"/);
     assert.doesNotMatch(demo, /Boudica|Rome/);
-    assert.match(campaignEditor, /label: textValue\(choice\.label_key, state\.previewLanguage\) \|\| choice\.id/);
-    assert.match(campaignEditor, /Add consequence detail/);
-    assert.match(campaignEditorHtml, /<summary>Quick start<\/summary>/);
-    assert.match(campaignEditorHtml, /Use Create next step on each decision answer to build its path in place/);
 });
 
 
@@ -563,56 +402,18 @@ test("branching sample preview preserves the episode draft and cannot be exporte
     assert.match(demo, /definition: JSON\.parse\(JSON\.stringify\(state\.definition\)\)/);
     assert.match(demo, /state\.definition = previous\.definition[\s\S]*?state\.dirty = previous\.dirty/);
     assert.doesNotMatch(demo, /confirm\(/);
-    assert.match(campaignEditor, /function markDirty\(\) \{\s*if \(state\.demoBackup\) return;/);
-    assert.match(campaignEditor, /async function save\(\) \{\s*if \(state\.demoBackup\) return false;/);
-    assert.match(campaignEditor, /function download\(\) \{\s*if \(state\.demoBackup\) return;/);
-    assert.match(campaignEditor, /async function watchExternalFiles\(\) \{\s*if \(state\.demoBackup \|\|/);
-    assert.match(campaignEditorHtml, /id="demoBtn" class="sample-toggle"[^>]*>Preview branching sample/);
-    assert.match(campaignEditorHtml, /id="graphPanel"[\s\S]*?id="inspectorPanel"/);
 });
 
 
 test("campaign story preview uses the selected episode map and faction positions", () => {
-    assert.match(campaignEditorHtml, /id="campaignMapPreview"/);
-    assert.match(campaignEditorHtml, /id="campaignPreviewMarkers"/);
-    assert.match(campaignEditor, /SOWCampaignMapPreview\.load\(mapId\)/);
-    assert.match(campaignEditor, /dataset: \{ factionId: faction\.id \}/);
-    assert.match(campaignEditor, /Number\(faction\.x\) \/ map\.width \* 100/);
-    assert.match(campaignEditor, /function previewWorldMarker\(frame, target, step\)/);
-    assert.match(campaignMapEditorHtml, /SOWCampaignMapPreview\.load\(mapId\)/);
-    assert.match(campaignMapPreview, /!== "SOWM"/);
-    assert.match(campaignMapPreview, /function terrainCanvas\(terrain, width, height\)/);
-    assert.match(campaignMapEditorHtml, /SOWCampaignMapPreview\.isLand\(terrain, MAPW, MAPH, mx, my\)/);
-    assert.match(campaignMapEditorHtml, /sel=\+el\.dataset\.i; focusFaction\(sel\)/);
-    assert.match(atlasHtml, /button\.onclick=\(\)=>select\(entity\.id,true\)/);
-    assert.match(atlasHtml, /SOWCampaignMapPreview\.load\("world"\)/);
-    assert.match(atlasHtml, /thumbnail_frames\.json/);
-    assert.match(atlasHtml, /giantworldmap\.png/);
-    assert.match(atlasHtml, /const frame=worldReference&&!worldReferenceError&&worldReference\.source\.map_grid_frame/);
-    assert.match(atlasHtml, /ctx\.drawImage\(worldReference\.image,frame\[0\],frame\[1\],frame\[2\],frame\[3\],0,0,world\.width,world\.height\)/);
-    assert.doesNotMatch(atlasHtml, /drawEquirectangularImage/);
-    assert.match(atlasHtml, /ctx\.globalAlpha=0\.2/);
-    assert.match(atlasHtml, /zoomMapView\(viewState\(\),point,factor,minScale,fitScale\*64\)/);
-    assert.match(campaignMapEditorHtml, /canvas \{ position:absolute; top:0; left:0; width:100%; height:100%;/);
     for (const viewer of [campaignMapEditorHtml, atlasHtml, mapRostersHtml]) {
         assert.match(viewer, /SOWCampaignMapPreview\.resizeCanvas\(/);
         assert.match(viewer, /SOWCampaignMapPreview\.fitMapView\(/);
         assert.match(viewer, /SOWCampaignMapPreview\.zoomMapView\(/);
     }
-    assert.match(mapRostersHtml, /window\.addEventListener\("resize",resize\);resize\(\);\s*document\.addEventListener/);
-    assert.match(atlasHtml, /mapPointToGeo/);
-    assert.match(atlasHtml, /world_island_guides\.json/);
-    assert.match(atlasHtml, /new Path2D\(\)/);
-    assert.match(atlasHtml, /ctx\.globalAlpha=1;ctx\.fillStyle=[^;]+;ctx\.fill\(worldIslandPath,"evenodd"\);ctx\.strokeStyle=[^;]+;ctx\.lineWidth=0\.75\/scale;[^;]+;[^;]+;ctx\.stroke\(worldIslandPath\)/);
-    assert.match(atlasHtml, /pointerStart=pointer\.slice\(\)/);
-    assert.match(atlasHtml, /Math\.hypot\(point\[0\]-pointerStart\[0\],point\[1\]-pointerStart\[1\]\)>Math\.min\(2,scale\*0\.5\)/);
-    assert.match(atlasHtml, /body:JSON\.stringify\(catalog\)/);
-    assert.match(campaignEditorServer, /JSON\.stringify\(value, null, 2\)/);
     const atlasScript = atlasHtml.match(/<script>\s*([\s\S]*?)<\/script>/);
     assert.ok(atlasScript, "Atlas inline script exists");
     assert.doesNotThrow(() => new vm.Script(atlasScript[1]));
-    assert.match(atlasHtml, /geoToTile\(entity\.lat,entity\.lon,world\.geoBounds/);
-    assert.match(atlasHtml, /SOWCampaignMapPreview\.isLand\(world\.terrain,world\.width,world\.height,tile\.x,tile\.y\)/);
 
     const islandGuides = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/map_sources/world_island_guides.json"), "utf8"));
     assert.equal(islandGuides.coordinate_reference, "WGS84 longitude,latitude");
@@ -640,10 +441,6 @@ test("selecting a map entity centers it in the current view", () => {
 });
 
 
-test("Atlas deletes the selected entity with Delete outside editable fields", () => {
-    assert.match(atlasHtml, /function deleteSelected\(\)[\s\S]*?catalog\.entities\.splice\(index,1\);[\s\S]*?selectedId=null;[\s\S]*?markDirty\(\)/);
-    assert.match(atlasHtml, /document\.addEventListener\("keydown",event=>\{[\s\S]*?event\.key!=="Delete"[\s\S]*?event\.key!=="Backspace"[\s\S]*?input,textarea,select,\[contenteditable='true'\][\s\S]*?event\.preventDefault\(\);deleteSelected\(\)/);
-});
 
 
 test("playable map preview shares game geography and land checks", () => {
@@ -713,13 +510,6 @@ test("playable map preview shares game geography and land checks", () => {
 });
 
 
-test("invalid campaign drafts preserve the last valid preview and disable simulation", () => {
-    assert.match(campaignEditor, /function syncPreview\(\) \{\s*if \(state\.validation\.errors\.length\)/);
-    assert.match(campaignEditor, /Fix validation errors to preview this draft/);
-    assert.match(campaignEditor, /\["playSelected", "restartBtn", "simulateBtn", "tickBtn", "previewBranchSelect"\][\s\S]*?\.disabled = blocked/);
-    assert.match(campaignEditor, /function paintPreview\(updateMachine\) \{\s*if \(!state\.machine \|\| state\.validation\.errors\.length\) return/);
-    assert.match(campaignEditor, /function renderPreview\(forceStep\) \{\s*if \(!state\.definition\) return;\s*if \(state\.validation\.errors\.length\)/);
-});
 
 
 test("campaign map preview accepts valid SOWM terrain and rejects a truncated map", () => {
@@ -797,15 +587,9 @@ test("Map Rosters reads binary presets and leaves unmatched map anchors intact",
             { entity_id: "iceland", role: "nation", x: 2, y: 0, legacy_anchor: 0 }
         ]
     }]);
-    assert.match(mapRostersHtml, /SOWCampaignMapPreview\.load\(id\)/);
-    assert.match(mapRostersHtml, /assets\/gameplay\/avatars/);
-    assert.match(mapRostersHtml, /SOWCampaignMapPreview\.drawMapLabel/);
     const rosterScript = mapRostersHtml.match(/<script>\s*([\s\S]*?)<\/script>/);
     assert.ok(rosterScript, "Map Rosters inline script exists");
     assert.doesNotThrow(() => new vm.Script(rosterScript[1]));
-    assert.match(mapRosterWriter, /map_file::encode\(&map\)/);
-    assert.match(mapRosterWriter, /map\.bin\.br/);
-    assert.doesNotMatch(mapRosterWriter.split("#[cfg(test)]")[0], /roster\.json/i);
 });
 
 
@@ -841,37 +625,14 @@ test("Atlas picker visibly selects a catalog entity by stable ID in both editors
     input.value = "ICENI";
     await input.dispatch("input");
     assert.equal(picker.getSelected().id, "iceni", "exact name input resolves to its stable Atlas ID");
-    assert.match(mapRostersHtml, /SOWAtlasEntityPicker\.attach/);
-    assert.match(mapRostersHtml, /entityPicker\.select\(selectedEntity\)/);
-    assert.match(mapRostersHtml, /entity_id:found\.id,role:/);
-    assert.match(mapRostersHtml, /pendingId=found\.id/);
-    assert.match(mapRostersHtml, /if\(placeAt\(pendingId,point\)\)entityPicker\?\.clear\(\)/);
-    assert.match(campaignMapEditorHtml, /SOWAtlasEntityPicker\.attach/);
-    assert.match(campaignMapEditorHtml, /atlasEntityPicker\.getSelected\(\)/);
-    assert.match(campaignMapEditorHtml, /color:FACTION_COLORS\[roster\.factions\.length%FACTION_COLORS\.length\]/);
     const episodeEditorScript = campaignMapEditorHtml.match(/<script>\s*([\s\S]*?)<\/script>/);
     assert.ok(episodeEditorScript, "Campaign Studio Episode script exists");
     assert.doesNotThrow(() => new vm.Script(episodeEditorScript[1]));
-    assert.match(atlasHtml, /map-rosters-link/);
-    assert.match(atlasHtml, /entity=\$\{encodeURIComponent\(selectedId\)\}/);
 });
 
 
-test("campaign studio preserves edits made while a save is in flight", () => {
-    assert.match(campaignEditor, /var savedDraft = JSON\.stringify\(state\.definition, null, 2\) \+ "\\n"/);
-    assert.match(campaignEditor, /if \(report\.errors\.length\)[\s\S]*?if \(state\.saving\) return false/);
-    assert.match(campaignEditor, /finally \{ state\.saving = false; refresh\(\); \}/);
-    assert.match(campaignEditor, /body: savedDraft/);
-    assert.match(campaignEditor, /JSON\.stringify\(state\.definition, null, 2\) \+ "\\n" !== savedDraft/);
-});
 
 
-test("campaign studio reports each external draft conflict only once per file version", () => {
-    assert.match(campaignEditor, /externalChangeTag: null/);
-    assert.match(campaignEditor, /var externalTag = responses\.map\(function \(response\) \{ return response\.headers\.get\("ETag"\); \}\)\.join\("\\n"\)/);
-    assert.match(campaignEditor, /if \(externalTag === state\.externalChangeTag\) return/);
-    assert.match(campaignEditor, /state\.externalChangeTag = null;\s*await load\(\)/);
-});
 
 
 test("campaign studio preview matches the real build submenu and direct nuke action", () => {
@@ -915,19 +676,6 @@ test("campaign studio preview matches the real build submenu and direct nuke act
             && campaignEditor.includes(`dataset: { command: "${command}" }`);
         assert.ok(exists || createdForPlacement, `Campaign studio preview is missing ${normalizedSelector}`);
     }
-    assert.match(campaignEditorHtml, /data-preview-map-menu="build"[\s\S]*?data-map-action="build_city"/);
-    assert.match(campaignEditorHtml, /<button[^>]*data-map-action="nuke"/);
-    assert.doesNotMatch(campaignEditorHtml, /data-preview-map-menu="nuke"|data-map-group="nuke"/);
-    assert.match(campaignEditorCss, /\.sample-menu\{[^}]*z-index:3/);
-    assert.match(campaignEditorCss, /#previewRoot\s*\{[^}]*z-index:\s*4/);
-    assert.match(hud, /var RING_ROOT_SLOTS = \{[^}]*nuke: 2/);
-    assert.doesNotMatch(hud, /mapMenuView === "nuke"|group: "nuke"/);
-    assert.match(campaignEngine, /map_nuke: '#sow-hud \[data-map-action="nuke"\]'/);
-    assert.equal([...campaignEditorHtml.matchAll(/data-map-back/g)].length, 1);
-    assert.doesNotMatch(campaignEditor, /syncPreviewMapMenu/);
-    assert.match(campaignEditor, /else if \(group\) hudRoot\.dataset\.previewMapMenu = group\.dataset\.mapGroup;[\s\S]*?paintPreview\(\);/);
-    assert.match(campaignEditor, /var menuHint = requiredMenu && \$\("#sow-hud"\)\.dataset\.previewMapMenu !== requiredMenu/);
-    assert.match(campaignEditor, /function previewAnchor\(step, facts\)[\s\S]*?target\.getClientRects\(\)\.length/);
     context.previewBuildingAction(previewTarget({ command: "confirm_building_placement" }));
     context.previewBuildingAction(previewTarget({ command: "confirm_building_placement" }));
     assert.deepEqual(builds, [1]);

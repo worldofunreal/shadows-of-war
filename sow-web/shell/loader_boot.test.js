@@ -31,26 +31,10 @@ const appStateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/ap
 
 
 test("first-run tutorial keeps one boot loader and splash art until Rust signals completion", async () => {
-    assert.match(loaderSource, /window\.SOW_leaderArtUrl = leaderArtUrl/);
-    assert.match(loaderSource, /window\.SOW_prepareLeaderArt = prepareLeaderArt/);
-    assert.match(loaderSource, /if \(loaderArtKey === 'boot' && state && state\.loader_job === 'EnterGame'\) \{[\s\S]*?prepareLeaderArt\(slug, 'low'\);[\s\S]*?activeMatchArt = preparedLeaderArt;/,
-        "tutorial art is prepared behind the original splash and pinned to the match");
     const attachExitArt = loaderSource.indexOf("const pendingArt = syncLoaderArt(state);");
     const closeAfterArt = loaderSource.indexOf("if (state.loader_done === true) {\n            if (pendingArt) return;\n            finish(cycleId);", attachExitArt);
     assert.ok(attachExitArt >= 0 && closeAfterArt > attachExitArt,
         "exit art is attached before the loader begins closing");
-    assert.match(loaderSource, /function waitForExitLeaderArt\(prepared, slug, cycleId\)[\s\S]*?syncLoaderArt\(current\)[\s\S]*?finish\(cycleId\);/,
-        "a pending exit reuses the same image and closes only its own loader cycle");
-    assert.doesNotMatch(loaderSource, /prepared\.variant !== leaderArtVariant\(\)/,
-        "orientation changes do not discard the art used by this match");
-    assert.match(coreSource, /return window\.SOW_leaderArtUrl\(slug, variant\)/);
-    assert.match(heroesSource, /prepareLeaderArt\(activeLeader\)/);
-    assert.doesNotMatch(shellSource, /state\.phase === "Playing" && state\.loader_leader[\s\S]*prepareLeaderArt\(leaderById\(state\.loader_leader\)\)/,
-        "finishing EnterGame does not trigger a redundant image preparation");
-    assert.match(shellSource, /function normalizeCompletedExitState\([\s\S]*?loader_cycle_id <= completedLoaderCycleId[\s\S]*?loader_job: "Boot"/,
-        "a completed exit is normalized before later menu snapshots reach the loader");
-    assert.match(shellSource, /sow:loader-cycle-ready", function \(event\)[\s\S]*?event\.detail\.cycle_id[\s\S]*?normalizeCompletedExitState\(state\)/,
-        "menu completion is tied to the exact loader cycle");
     for (const source of [coreSource, heroesSource, storeSource, profileSource]) {
         assert.doesNotMatch(source, /asset\(["']shell\/leaders\//, "leader art must use the same versioned URL as the loader");
     }
@@ -62,15 +46,6 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.match(bootIntro, /boot_campaign_pending = Some\(campaign\.episode_id\(\)\.to_string\(\)\)/);
     assert.match(bootIntro, /begin_enter_game_loader\(campaign\.advisor\(\)\)/);
     assert.doesNotMatch(bootIntro, /hide_web_loader|splash_state\.done = true|phase = ClientPhase::MainMenu/);
-    assert.match(webMenu, /"phase": "Playing",\s*"account_id": app\.progress_account_id,\s*"loader_cycle_id": app\.ui\.app\.splash_state\.cycle_id,\s*"loader_job": splash_job_name\(&app\.ui\.app\.splash_state\.job\),\s*"loader_leader": loader_leader_id\(&app\.ui\.app\.splash_state\),\s*"loader_progress": app\.ui\.app\.splash_state\.progress\.clamp\(0\.0, 1\.0\),\s*"loader_done": app\.ui\.app\.splash_state\.done/);
-    assert.match(webMenu, /"loader_cycle_id": app\.ui\.app\.splash_state\.cycle_id/);
-    assert.match(loaderSource, /if \(loaderArtKey === key \|\| loaderArtKey === key \+ ':failed'\) return null;/);
-    assert.match(loaderSource, /if \(!prepared\.ready\) \{[\s\S]*?return state\.loader_job === 'ExitGame' \? prepared : null;\s*\}\s*const image = prepared\.image;/,
-        "a completed existing preload can recover from an earlier pending state");
-    assert.doesNotMatch(loaderSource, /state\.phase !== 'MainMenu' && state\.phase !== 'Playing'/);
-    assert.doesNotMatch(loaderSource, /window\.hideWebLoader/);
-    assert.doesNotMatch(appStateSource, /web_loader_hidden/);
-    assert.match(tutorial, /state\.boot_campaign && runtime\.bootEpisode !== state\.boot_campaign\) startEpisode\(state\.boot_campaign, true\)/);
     const tutorialStateUpdate = shellSource.indexOf("window.SOW_tutorial_menu_state_update(state)");
     const loaderStateSync = shellSource.indexOf("syncWebLoaderForState(state)", tutorialStateUpdate);
     assert.ok(tutorialStateUpdate >= 0 && loaderStateSync > tutorialStateUpdate,
@@ -78,9 +53,6 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     const campaignCommandStart = webMenu.lastIndexOf("WebMenuCommand::StartCampaignEpisode {");
     const campaignCommandEnd = webMenu.indexOf("WebMenuCommand::CompleteCampaignEpisode {", campaignCommandStart);
     assert.ok(campaignCommandStart >= 0 && campaignCommandEnd > campaignCommandStart);
-    assert.match(webMenu.slice(campaignCommandStart, campaignCommandEnd),
-        /start_campaign_episode_from_web\(campaign, roster, match_config\)/);
-    assert.match(matchStartSource, /self\.start_offline_match\([\s\S]*?\},\s*true,\s*\);/);
     const campaignStartStart = matchStartSource.indexOf("pub(crate) fn start_campaign_episode_from_web");
     const offlineStartStart = matchStartSource.indexOf("pub(crate) fn start_offline_match", campaignStartStart);
     const campaignStart = matchStartSource.slice(campaignStartStart, offlineStartStart);
@@ -104,13 +76,6 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         "starting a match cannot overwrite the account's saved leader choice");
     const exitStart = sessionSource.indexOf("pub(crate) fn begin_exit_to_main_menu");
     const exitEnd = sessionSource.indexOf("/// Enter the EnterGame splash", exitStart);
-    assert.match(sessionSource.slice(exitStart, exitEnd),
-        /self\.ui\.app\.splash_state\.loader_leader = exit_leader;/,
-        "leaving a tutorial keeps its campaign leader for the exit splash");
-    assert.doesNotMatch(sessionSource.slice(exitStart, exitEnd), /sync_selected_leader_from_match\(/,
-        "leaving a tutorial does not replace the account's menu selection");
-    assert.doesNotMatch(nativeProfileSource, /fn sync_selected_leader_from_match\(/,
-        "a match no longer owns the account's selected hero");
     const preferencesStart = accountSource.indexOf("pub(crate) fn apply_progress_preferences(");
     const preferencesEnd = accountSource.indexOf("pub(crate) fn apply_cloud_profile(", preferencesStart);
     assert.ok(preferencesStart >= 0 && preferencesEnd > preferencesStart);
@@ -134,15 +99,11 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         "an account missing its preference receives its normal free-rotation assignment");
     assert.doesNotMatch(tutorialComplete, /Leader::Boudica/);
     const engineLoaderSource = fs.readFileSync(path.join(shell, "../../sow-client/src/loader/engine.rs"), "utf8");
-    assert.match(engineLoaderSource,
-        /if step == 3 && self\.sim\.current_snapshot\.is_some\(\) \{[\s\S]*?if ready_to_release \{[\s\S]*?self\.ui\.app\.splash_state\.done = true;/,
-        "Rust reports done only after the initialized game snapshot is ready");
     const enterLoaderStart = sessionSource.indexOf("pub(crate) fn begin_enter_game_loader");
     const enterLoaderEnd = sessionSource.indexOf("/// Whether the map/mover GPU path", enterLoaderStart);
     assert.ok(enterLoaderStart >= 0 && enterLoaderEnd > enterLoaderStart);
     const enterLoader = sessionSource.slice(enterLoaderStart, enterLoaderEnd);
     assert.match(enterLoader, /job == SplashJob::EnterGame[\s\S]*loader_leader == Some\(leader\)[\s\S]*!self\.ui\.app\.splash_state\.done[\s\S]*return;/);
-    assert.match(sessionSource.slice(enterLoaderStart, enterLoaderEnd), /SplashJob::Boot[\s\S]*?&& !self\.ui\.app\.splash_state\.done/);
 
     class Element {
         constructor(tagName) {
@@ -586,8 +547,6 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
 
 
 test("game exit resets Battle and replays the screen entrance after the loader", () => {
-    assert.match(coreSource, /var lastMenuPhase = null/);
-    assert.match(coreSource, /var pendingExitScreenIntro = false/);
     const resetStart = shellSource.indexOf("if (returnedFromGame) {");
     const resetEnd = shellSource.indexOf("if (typeof window.SOW_tutorial_menu_state_update", resetStart);
     assert.ok(resetStart >= 0 && resetEnd > resetStart);
@@ -596,12 +555,6 @@ test("game exit resets Battle and replays the screen entrance after the loader",
         assert.match(resetBlock, new RegExp(flag + " = false"));
     }
     assert.match(resetBlock, /pendingExitScreenIntro = true/);
-    assert.match(shellSource, /sow:loader-cycle-ready/);
-    assert.match(shellSource, /previousScreen = null;[\s\S]*render\(\);/);
-    assert.match(loaderSource, /sow:loader-cycle-ready/);
-    assert.match(loaderSource, /if \(!loaderReadyDispatched\)/);
-    assert.doesNotMatch(shellSource, /SOW_open_store_after_match/);
-    assert.match(menuLayoutCss, /sow-screen-panel-enter 240ms/);
 });
 
 

@@ -277,6 +277,9 @@ enum WebMenuCommand {
         #[serde(default)]
         pinned: bool,
     },
+    TutorialEmote {
+        kind: sow_core::emote::EmoteKind,
+    },
     ClearEmote,
     SetEmotePinned {
         pinned: bool,
@@ -1343,6 +1346,27 @@ impl SowApp {
                 WebMenuCommand::SetShowFpsPing { value } => {
                     self.ui.app.settings_state.show_fps_ping = value;
                     self.ui.app.settings_state.persist_local();
+                }
+                WebMenuCommand::TutorialEmote { kind } => {
+                    // Scripted campaign emote: the tutorial is paused until the first attack, and the
+                    // map-menu path drops intents while paused, so this one turn is sent directly.
+                    if self.ui.tutorial_active
+                        && self.net.is_offline
+                        && let Some(player_id) = self.sim.my_player_id
+                    {
+                        self.dispatch_sim_command(sow_core::protocol::SimCommand::Turn(
+                            sow_core::protocol::Turn {
+                                turn_number: 0,
+                                intents: vec![sow_core::protocol::StampedIntent {
+                                    player_id,
+                                    intent: sow_core::protocol::GameplayIntent::ExpressEmote {
+                                        kind,
+                                        pinned: false,
+                                    },
+                                }],
+                            },
+                        ));
+                    }
                 }
                 WebMenuCommand::ExpressEmote {
                     session,

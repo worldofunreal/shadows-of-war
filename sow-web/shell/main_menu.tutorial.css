@@ -125,7 +125,7 @@
 .sow-story__title { margin: 0 0 14px; font-size: clamp(22px, 3.1cqw, 34px); font-weight: 800; line-height: 1.12; letter-spacing: -.03em; text-wrap: balance; overflow-wrap: anywhere; }
 .sow-story__body { margin: 0; max-width: 65ch; font-size: clamp(15px, 1.65cqw, 18px); line-height: 1.65; color: #cfd6d5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .sow-story__footer { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--story-line); }
-.sow-story__continue { display: inline-flex; align-items: center; justify-content: center; gap: 24px; min-height: 46px; padding: 12px 18px; border: 1px solid var(--sow-button-primary-border); border-radius: 3px; background: var(--sow-button-primary-bg); color: var(--sow-button-primary-text); font-size: 11px !important; font-weight: 800 !important; letter-spacing: .08em; transition: background 150ms, transform 150ms; }
+.sow-story__continue { display: inline-flex; align-items: center; justify-content: center; gap: 24px; min-height: 46px; padding: 12px 18px; border: 1px solid var(--sow-button-primary-border); border-radius: 3px; background: var(--sow-button-primary-bg); color: var(--sow-button-primary-text); font-size: clamp(12px, 2cqw, 15px) !important; font-weight: 800 !important; letter-spacing: .08em; transition: background 150ms, transform 150ms; }
 .sow-story__continue:hover { filter: brightness(1.08); transform: translateY(-1px); }
 .sow-story__continue svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
 [dir="rtl"] .sow-story__continue svg { transform: rotate(180deg); }
@@ -171,7 +171,7 @@
 #sow-story .sow-story__objective { inset-inline-start: max(16px, var(--story-inset-left)); inset-inline-end: auto; top: calc(max(12px, var(--story-inset-top)) + var(--sow-player-panel-height) + var(--sow-tutorial-player-panel-gap)); }
 .sow-story__objective-copy { flex: 1; min-width: 0; }
 .sow-story__objective h3 { margin: 0; font-size: 16px; font-weight: 650; line-height: 1.35; }
-.sow-story__objective h3, .sow-story__meter output, .sow-story__title, .sow-story__speaker, .sow-story__choice strong, .sow-story__continue { -webkit-text-stroke: var(--sow-text-outline); paint-order: stroke fill; text-shadow: var(--sow-text-outline-shadow); }
+.sow-story__title, .sow-story__meter output { -webkit-text-stroke: var(--sow-text-outline); paint-order: stroke fill; text-shadow: var(--sow-text-outline-shadow); }
 .sow-story__objective p { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--story-muted); }
 .sow-story__meter { position: relative; display: flex; margin-top: 8px; }
 .sow-story__meter progress { width: 100%; height: var(--sow-tutorial-progress-height); flex: 1; padding: 1px; border: 1px solid color-mix(in srgb, var(--story-accent) 34%, transparent); border-radius: 999px; background: #141c20; box-shadow: inset 0 1px 2px #0009; appearance: none; overflow: hidden; }
@@ -296,7 +296,7 @@
     .sow-story__title { font-size: 22px; margin-bottom: 8px; }
     .sow-story__body { font-size: 14px; line-height: 1.55; }
     .sow-story__footer { flex: 0 0 auto; margin-top: 0; padding-top: 8px; gap: 8px; border-top: 0; }
-    .sow-story__continue { gap: 10px; padding: 12px; font-size: 10px !important; }
+    .sow-story__continue { gap: 10px; padding: 12px; }
     .sow-story__choice { min-height: 58px; padding: 12px; gap: 9px; }
     .sow-story__choice-mark { flex-basis: 24px; width: 24px; height: 24px; }
     .sow-story__choice strong { font-size: 13px; }
@@ -336,8 +336,7 @@
 #sow-story[data-compact="true"] .sow-story__dialog .sow-story__title { font-size: var(--sow-hud-text-primary-size); }
 #sow-story[data-compact="true"] .sow-story__dialog .sow-story__body,
 #sow-story[data-compact="true"] .sow-story__dialog .sow-story__speaker { font-size: var(--sow-hud-text-secondary-size); }
-#sow-story[data-compact="true"] .sow-story__dialog .sow-story__choice strong,
-#sow-story[data-compact="true"] .sow-story__dialog .sow-story__continue { font-size: 12px; }
+#sow-story[data-compact="true"] .sow-story__dialog .sow-story__choice strong { font-size: 12px; }
 
 @media (pointer: coarse) {
     #sow-story[data-compact="true"] :is(.sow-story__choice, .sow-story__continue, .sow-story__cinematic-start) {

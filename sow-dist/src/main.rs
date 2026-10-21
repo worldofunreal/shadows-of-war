@@ -301,7 +301,7 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
     // Avatars: one file per character, named by its catalog `avatar` id. The folder only
     // organizes the owner's art; a name in two folders would publish to the same URL.
     let mut avatar_sources = std::collections::BTreeMap::new();
-    for folder in ["heroes", "nations", "tribes"] {
+    for folder in ["heroes", "nations", "tribes", "campaign"] {
         for file in sorted_files(&art.join("avatars").join(folder))? {
             let stem = file_stem(&file);
             if folder == "heroes" && expression_part(&stem).is_some() {
@@ -341,6 +341,10 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
         let dst = out.join(&rel);
         compose_expression_sheet(&parts, &dst)?;
         publish(&dst, &rel, None)?;
+        // Each quadrant also ships alone, so a dialogue portrait shows one face without cropping the sheet.
+        for (name, part) in ["happy", "calm", "fear", "angry"].iter().zip(&parts) {
+            publish(part, &format!("gameplay/avatars/expressions/{base}_{name}.webp"), Some(PORTRAIT_PX))?;
+        }
     }
     // Hero scenes for the menu and the loader: `<id>_desktop` and `<id>_mobile`.
     for file in sorted_files(&art.join("heroes"))? {

@@ -65,7 +65,7 @@ pub(crate) fn building_metrics(
                     * hero(District::City, Resource::Troops)
                     * per_minute,
                 "+",
-                "/min",
+                "",
             ),
         ],
         BuildingKind::Port => vec![
@@ -78,14 +78,14 @@ pub(crate) fn building_metrics(
                     * hero(District::Port, Resource::Gold)
                     * per_minute,
                 "+",
-                "/min",
+                "",
             ),
             // Merchant income with trade routes, at most.
             BuildingMetric::new(
                 Icon::Gold,
                 config.trade_ship_gold_income * level * per_minute,
                 "+",
-                "/min",
+                "",
             ),
         ],
         BuildingKind::Factory => vec![BuildingMetric::new(
@@ -95,7 +95,7 @@ pub(crate) fn building_metrics(
                 * hero(District::Factory, Resource::Gold)
                 * per_minute,
             "+",
-            "/min",
+            "",
         )],
         BuildingKind::Bunker => {
             let range =
@@ -129,7 +129,7 @@ pub(crate) fn building_metrics(
                     * hero(District::Farm, Resource::Troops)
                     * per_minute,
                 "+",
-                "/min",
+                "",
             ),
             BuildingMetric::new(
                 Icon::Gold,
@@ -138,7 +138,7 @@ pub(crate) fn building_metrics(
                     * hero(District::Farm, Resource::Gold)
                     * per_minute,
                 "+",
-                "/min",
+                "",
             ),
         ],
     }
@@ -339,18 +339,18 @@ mod tests {
         let caesar = sow_core::player::Leader::of("caesar");
         let port = building_metrics(BuildingKind::Port, 2, caesar, &config);
         assert!(port.contains(&BuildingMetric::new(Icon::Boat, 2.0, "+", "")));
-        assert!(port.contains(&BuildingMetric::new(Icon::Gold, 30.0, "+", "/min")));
-        assert!(port.contains(&BuildingMetric::new(Icon::Gold, 24.0, "+", "/min")));
+        assert!(port.contains(&BuildingMetric::new(Icon::Gold, 30.0, "+", "")));
+        assert!(port.contains(&BuildingMetric::new(Icon::Gold, 24.0, "+", "")));
         let ragnar = building_metrics(
             BuildingKind::Port,
             2,
             sow_core::player::Leader::of("ragnar"),
             &config,
         );
-        assert!(ragnar.contains(&BuildingMetric::new(Icon::Gold, 45.0, "+", "/min")));
+        assert!(ragnar.contains(&BuildingMetric::new(Icon::Gold, 45.0, "+", "")));
         let farm = building_metrics(BuildingKind::Farm, 2, caesar, &config);
-        assert!(farm.contains(&BuildingMetric::new(Icon::Troops, 100.0, "+", "/min")));
-        assert!(farm.contains(&BuildingMetric::new(Icon::Gold, 10.0, "+", "/min")));
+        assert!(farm.contains(&BuildingMetric::new(Icon::Troops, 100.0, "+", "")));
+        assert!(farm.contains(&BuildingMetric::new(Icon::Gold, 10.0, "+", "")));
         let bunker = building_metrics(BuildingKind::Bunker, 2, caesar, &config);
         assert!(bunker.contains(&BuildingMetric::new(Icon::Shield, 10.0, "+", "%")));
         assert!(bunker.contains(&BuildingMetric::new(Icon::Range, 16.0, "", "")));

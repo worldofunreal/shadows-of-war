@@ -540,11 +540,7 @@ mod tests {
     #[test]
     fn avatar_slots_cover_builtin_and_geo_entity_portraits_without_dropping_them() {
         let mut loader = AssetLoader::new();
-        // Nation and tribe bots draw from the bot portrait atlas, not campaign slots.
-        let mut entity_avatars = sow_data::geo_entities::all()
-            .filter(|entity| entity.role == sow_data::geo_entities::Role::Campaign)
-            .filter_map(|entity| entity.avatar.clone())
-            .collect::<HashSet<_>>();
+        let mut entity_avatars = HashSet::<String>::new();
         fn collect_avatars(value: &serde_json::Value, out: &mut HashSet<String>) {
             match value {
                 serde_json::Value::Object(object) => {
@@ -583,10 +579,20 @@ mod tests {
             entity_avatars.len() + sow_render::text::avatar_campaign_first_slot()
                 <= sow_render::text::AVATAR_SLOT_COUNT
         );
+        // Same order as queue_campaign_avatar: a built-in hero takes a slot, and a name that is
+        // only a bot portrait draws from the bot atlas and takes none.
+        let slotted = entity_avatars
+            .iter()
+            .filter(|avatar| {
+                let slug = avatar.as_str();
+                Leader::all().any(|leader| leader.id() == slug)
+                    || sow_data::geo_entities::bot_portrait_index(slug).is_none()
+            })
+            .count();
         for avatar in &entity_avatars {
             loader.queue_campaign_avatar(avatar);
         }
-        assert_eq!(loader.campaign_avatar_slots.len(), entity_avatars.len());
+        assert_eq!(loader.campaign_avatar_slots.len(), slotted);
         assert!(
             loader
                 .campaign_avatar_slots
@@ -600,7 +606,7 @@ mod tests {
                 .copied()
                 .collect::<HashSet<_>>()
                 .len(),
-            entity_avatars.len()
+            slotted
         );
     }
 }

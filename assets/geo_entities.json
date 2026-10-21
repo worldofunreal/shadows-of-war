@@ -47,7 +47,7 @@
   },
   {
    "id": "ragnar",
-   "name": "Ragnar Lodbrok",
+   "name": "Danish Vikings",
    "entity": "Danish Vikings",
    "role": "tribe",
    "region": "europe",
@@ -55,7 +55,7 @@
    "lon": 12.57,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Ragnar_Lodbrok",
-   "avatar": "ragnar",
+   "avatar": "danish_vikings",
    "hero": {
     "name": "Ragnar",
     "ability": {
@@ -112,7 +112,7 @@
   },
   {
    "id": "genghis_khan",
-   "name": "Genghis Khan",
+   "name": "Borjigin Mongols",
    "entity": "Borjigin Mongols",
    "role": "tribe",
    "region": "asia",
@@ -120,7 +120,7 @@
    "lon": 108.0,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Genghis_Khan",
-   "avatar": "genghis_khan",
+   "avatar": "borjigin_mongols",
    "hero": {
     "name": "Genghis Khan",
     "ability": {
@@ -154,7 +154,7 @@
   },
   {
    "id": "vercingetorix",
-   "name": "Vercingetorix",
+   "name": "Arverni",
    "entity": "Arverni",
    "role": "tribe",
    "region": "europe",
@@ -162,7 +162,7 @@
    "lon": 3.08,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Vercingetorix",
-   "avatar": "vercingetorix",
+   "avatar": "arverni",
    "hero": {
     "name": "Vercingetorix",
     "ability": {
@@ -177,7 +177,7 @@
   },
   {
    "id": "boudica",
-   "name": "Boudica",
+   "name": "Iceni",
    "entity": "Iceni",
    "role": "tribe",
    "region": "europe",
@@ -185,7 +185,7 @@
    "lon": 1.0,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Boudica",
-   "avatar": "boudica",
+   "avatar": "iceni",
    "hero": {
     "name": "Boudica",
     "ability": {
@@ -267,7 +267,7 @@
   {
    "id": "nationbot_hatshepsut",
    "name": "Hatshepsut",
-   "entity": "Egipto antiguo",
+   "entity": "Ancient Egypt",
    "role": "nation",
    "region": "africa",
    "lat": 25.7206,
@@ -279,7 +279,7 @@
   {
    "id": "nationbot_mansa_musa",
    "name": "Mansa Musa",
-   "entity": "Imperio de Mali",
+   "entity": "Mali Empire",
    "role": "nation",
    "region": "africa",
    "lat": 13.5,
@@ -291,7 +291,7 @@
   {
    "id": "nationbot_amanirenas",
    "name": "Amanirenas",
-   "entity": "Reino de Kush",
+   "entity": "Kingdom of Kush",
    "role": "nation",
    "region": "africa",
    "lat": 18.0,
@@ -303,7 +303,7 @@
   {
    "id": "nationbot_sundiata_keita",
    "name": "Sundiata Keita",
-   "entity": "Imperio de Mali",
+   "entity": "Mali Empire",
    "role": "nation",
    "region": "africa",
    "lat": 11.3797,
@@ -315,7 +315,7 @@
   {
    "id": "nationbot_amanitore",
    "name": "Amanitore",
-   "entity": "Reino de Kush",
+   "entity": "Kingdom of Kush",
    "role": "nation",
    "region": "africa",
    "lat": 18.5368,
@@ -327,7 +327,7 @@
   {
    "id": "nationbot_sunni_ali",
    "name": "Sonni Ali",
-   "entity": "Imperio songhai",
+   "entity": "Songhai Empire",
    "role": "nation",
    "region": "africa",
    "lat": 16.3,
@@ -339,7 +339,7 @@
   {
    "id": "nationbot_amanishakheto",
    "name": "Amanishakheto",
-   "entity": "Reino de Kush",
+   "entity": "Kingdom of Kush",
    "role": "nation",
    "region": "africa",
    "lat": 16.9,
@@ -351,7 +351,7 @@
   {
    "id": "nationbot_askia_muhammad_i",
    "name": "Askia Muhammad I",
-   "entity": "Imperio songhai",
+   "entity": "Songhai Empire",
    "role": "nation",
    "region": "africa",
    "lat": 16.7733,
@@ -363,7 +363,7 @@
   {
    "id": "nationbot_nefertiti",
    "name": "Nefertiti",
-   "entity": "Egipto antiguo",
+   "entity": "Ancient Egypt",
    "role": "nation",
    "region": "africa",
    "lat": 25.7206,
@@ -375,7 +375,7 @@
   {
    "id": "nationbot_shaka_zulu",
    "name": "Shaka",
-   "entity": "Reino zulú",
+   "entity": "Zulu Kingdom",
    "role": "nation",
    "region": "africa",
    "lat": -28.515,
@@ -387,7 +387,7 @@
   {
    "id": "nationbot_cleopatra_selene_ii",
    "name": "Cleopatra Selene II",
-   "entity": "Mauritania antigua",
+   "entity": "Ancient Mauretania",
    "role": "nation",
    "region": "africa",
    "lat": 31.1975,
@@ -399,7 +399,7 @@
   {
    "id": "nationbot_menelik_ii",
    "name": "Menelik II",
-   "entity": "Etiopía",
+   "entity": "Ethiopia",
    "role": "nation",
    "region": "africa",
    "lat": 9.5667,
@@ -411,7 +411,7 @@
   {
    "id": "nationbot_nzinga_mbande",
    "name": "Nzinga of Ndongo and Matamba",
-   "entity": "Ndongo y Matamba",
+   "entity": "Ndongo and Matamba",
    "role": "nation",
    "region": "africa",
    "lat": -9.5,
@@ -423,7 +423,7 @@
   {
    "id": "nationbot_haile_selassie",
    "name": "Haile Selassie",
-   "entity": "Etiopía",
+   "entity": "Ethiopia",
    "role": "nation",
    "region": "africa",
    "lat": 9.4833,
@@ -435,7 +435,7 @@
   {
    "id": "nationbot_amina_de_zazzau",
    "name": "Amina of Zazzau",
-   "entity": "Zazzau (Nigeria actual)",
+   "entity": "Zazzau (modern Nigeria)",
    "role": "nation",
    "region": "africa",
    "lat": 11.0667,
@@ -447,7 +447,7 @@
   {
    "id": "nationbot_samori_ture",
    "name": "Samori Ture",
-   "entity": "Imperio Wassoulou",
+   "entity": "Wassoulou Empire",
    "role": "nation",
    "region": "africa",
    "lat": 9.2664,
@@ -459,7 +459,7 @@
   {
    "id": "nationbot_reina_idia",
    "name": "Idia",
-   "entity": "Reino de Benín",
+   "entity": "Kingdom of Benin",
    "role": "nation",
    "region": "africa",
    "lat": 6.3167,
@@ -471,7 +471,7 @@
   {
    "id": "nationbot_osei_tutu",
    "name": "Osei Kofi Tutu I",
-   "entity": "Imperio Ashanti",
+   "entity": "Ashanti Empire",
    "role": "nation",
    "region": "africa",
    "lat": 6.7,
@@ -483,7 +483,7 @@
   {
    "id": "nationbot_yaa_asantewaa",
    "name": "Yaa Asantewaa",
-   "entity": "Imperio Ashanti",
+   "entity": "Ashanti Empire",
    "role": "nation",
    "region": "africa",
    "lat": 6.7256,
@@ -495,7 +495,7 @@
   {
    "id": "nationbot_tewodros_ii",
    "name": "Tewodros II",
-   "entity": "Etiopía",
+   "entity": "Ethiopia",
    "role": "nation",
    "region": "africa",
    "lat": 12.5,
@@ -507,7 +507,7 @@
   {
    "id": "nationbot_ranavalona_i",
    "name": "Ranavalona I",
-   "entity": "Reino de Madagascar",
+   "entity": "Kingdom of Madagascar",
    "role": "nation",
    "region": "africa",
    "lat": -18.3167,
@@ -519,7 +519,7 @@
   {
    "id": "nationbot_ahmad_al_mansur",
    "name": "Ahmad al-Mansur",
-   "entity": "Marruecos / dinastía saadí",
+   "entity": "Morocco / Saadi dynasty",
    "role": "nation",
    "region": "africa",
    "lat": 34.0433,
@@ -531,7 +531,7 @@
   {
    "id": "nationbot_ranavalona_ii",
    "name": "Ranavalona II",
-   "entity": "Reino de Madagascar",
+   "entity": "Kingdom of Madagascar",
    "role": "nation",
    "region": "africa",
    "lat": -18.3167,
@@ -543,7 +543,7 @@
   {
    "id": "nationbot_idris_alooma",
    "name": "Idris Alooma",
-   "entity": "Imperio Kanem-Bornu",
+   "entity": "Kanem-Bornu Empire",
    "role": "nation",
    "region": "africa",
    "lat": 13.099,
@@ -555,7 +555,7 @@
   {
    "id": "nationbot_dihya",
    "name": "Kahina",
-   "entity": "Aures y pueblos amazigh",
+   "entity": "Aurès and Amazigh peoples",
    "role": "nation",
    "region": "africa",
    "lat": 35.3181,
@@ -567,7 +567,7 @@
   {
    "id": "nationbot_omar_mukhtar",
    "name": "Omar al-Mukhtar",
-   "entity": "Libia",
+   "entity": "Libya",
    "role": "nation",
    "region": "africa",
    "lat": 32.2833,
@@ -579,7 +579,7 @@
   {
    "id": "nationbot_nehanda_charwe_nyakasikana",
    "name": "Nehanda Charwe Nyakasikana",
-   "entity": "Zimbabue / Shona",
+   "entity": "Zimbabwe / Shona",
    "role": "nation",
    "region": "africa",
    "lat": -17.8292,
@@ -591,7 +591,7 @@
   {
    "id": "nationbot_mutesa_i_de_buganda",
    "name": "Muteesa I of Buganda",
-   "entity": "Reino de Buganda",
+   "entity": "Kingdom of Buganda",
    "role": "nation",
    "region": "africa",
    "lat": 0.35,
@@ -603,7 +603,7 @@
   {
    "id": "nationbot_lalla_fatma_n_soumer",
    "name": "Lalla Fatma N'Soumer",
-   "entity": "Cabilia (Argelia)",
+   "entity": "Kabylia (Algeria)",
    "role": "nation",
    "region": "africa",
    "lat": 36.5706,
@@ -615,7 +615,7 @@
   {
    "id": "nationbot_dingane",
    "name": "Dingane",
-   "entity": "Reino zulú",
+   "entity": "Zulu Kingdom",
    "role": "nation",
    "region": "africa",
    "lat": -29,
@@ -627,7 +627,7 @@
   {
    "id": "nationbot_sarraounia_mangou",
    "name": "Sarraounia",
-   "entity": "Azna / actual Níger",
+   "entity": "Azna / modern Niger",
    "role": "nation",
    "region": "africa",
    "lat": 17,
@@ -639,7 +639,7 @@
   {
    "id": "nationbot_cetshwayo",
    "name": "Cetshwayo",
-   "entity": "Reino zulú",
+   "entity": "Zulu Kingdom",
    "role": "nation",
    "region": "africa",
    "lat": -28.8883,
@@ -651,7 +651,7 @@
   {
    "id": "nationbot_kimpa_vita",
    "name": "Kimpa Vita",
-   "entity": "Reino del Congo",
+   "entity": "Kingdom of Kongo",
    "role": "nation",
    "region": "africa",
    "lat": -6.2667,
@@ -663,7 +663,7 @@
   {
    "id": "nationbot_taharqa",
    "name": "Taharqa",
-   "entity": "Reino de Kush",
+   "entity": "Kingdom of Kush",
    "role": "nation",
    "region": "africa",
    "lat": 29.8,
@@ -675,7 +675,7 @@
   {
    "id": "nationbot_labotsibeni_mdluli",
    "name": "Labotsibeni Mdluli",
-   "entity": "Suazilandia / Esuatini",
+   "entity": "Eswatini",
    "role": "nation",
    "region": "africa",
    "lat": -27.1836,
@@ -687,7 +687,7 @@
   {
    "id": "nationbot_piye",
    "name": "Piye",
-   "entity": "Reino de Kush",
+   "entity": "Kingdom of Kush",
    "role": "nation",
    "region": "africa",
    "lat": 17.18,
@@ -699,7 +699,7 @@
   {
    "id": "nationbot_zewditu",
    "name": "Zewditu",
-   "entity": "Etiopía",
+   "entity": "Ethiopia",
    "role": "nation",
    "region": "africa",
    "lat": 9.4833,
@@ -711,7 +711,7 @@
   {
    "id": "nationbot_maqoma",
    "name": "Maqoma",
-   "entity": "Pueblo xhosa",
+   "entity": "Xhosa people",
    "role": "nation",
    "region": "africa",
    "lat": -33.805,
@@ -723,7 +723,7 @@
   {
    "id": "nationbot_taytu_betul",
    "name": "Taytu Betul",
-   "entity": "Etiopía",
+   "entity": "Ethiopia",
    "role": "nation",
    "region": "africa",
    "lat": 9.0358,
@@ -735,7 +735,7 @@
   {
    "id": "nationbot_ewuare_el_grande",
    "name": "Ewuare",
-   "entity": "Reino de Benín",
+   "entity": "Kingdom of Benin",
    "role": "nation",
    "region": "africa",
    "lat": 9,
@@ -747,7 +747,7 @@
   {
    "id": "nationbot_anacaona",
    "name": "Anacaona",
-   "entity": "Xaragua / pueblo taíno",
+   "entity": "Xaragua / Taíno people",
    "role": "nation",
    "region": "americas",
    "lat": 19,
@@ -759,7 +759,7 @@
   {
    "id": "nationbot_moctezuma_i",
    "name": "Moctezuma I",
-   "entity": "Imperio mexica",
+   "entity": "Mexica Empire",
    "role": "nation",
    "region": "americas",
    "lat": 19.435,
@@ -771,7 +771,7 @@
   {
    "id": "nationbot_mama_ocllo",
    "name": "Mama Ocllo",
-   "entity": "Imperio inca",
+   "entity": "Inca Empire",
    "role": "nation",
    "region": "americas",
    "lat": -13.5167,
@@ -783,7 +783,7 @@
   {
    "id": "nationbot_moctezuma_ii",
    "name": "Moctezuma II",
-   "entity": "Imperio mexica",
+   "entity": "Mexica Empire",
    "role": "nation",
    "region": "americas",
    "lat": 19.435,
@@ -795,7 +795,7 @@
   {
    "id": "nationbot_lady_yohl_ik_nal",
    "name": "Yohl Ikʼnal",
-   "entity": "Palenque / mundo maya",
+   "entity": "Palenque / Maya world",
    "role": "nation",
    "region": "americas",
    "lat": 23,
@@ -807,7 +807,7 @@
   {
    "id": "nationbot_atahualpa",
    "name": "Atahualpa",
-   "entity": "Imperio inca",
+   "entity": "Inca Empire",
    "role": "nation",
    "region": "americas",
    "lat": -0.22,
@@ -819,7 +819,7 @@
   {
    "id": "nationbot_lady_k_ab_al_xook",
    "name": "Lady Xoc",
-   "entity": "Yaxchilán / mundo maya",
+   "entity": "Yaxchilán / Maya world",
    "role": "nation",
    "region": "americas",
    "lat": 16.9,
@@ -831,7 +831,7 @@
   {
    "id": "nationbot_pachacutec",
    "name": "Pachacuti",
-   "entity": "Imperio inca",
+   "entity": "Inca Empire",
    "role": "nation",
    "region": "americas",
    "lat": -13.5169,
@@ -843,7 +843,7 @@
   {
    "id": "nationbot_lady_tz_akbu_ajaw",
    "name": "Tz'akbu Ajaw",
-   "entity": "Palenque / mundo maya",
+   "entity": "Palenque / Maya world",
    "role": "nation",
    "region": "americas",
    "lat": 17.5,
@@ -855,7 +855,7 @@
   {
    "id": "nationbot_huayna_capac",
    "name": "Huayna Capac",
-   "entity": "Imperio inca",
+   "entity": "Inca Empire",
    "role": "nation",
    "region": "americas",
    "lat": -2.9064,
@@ -867,7 +867,7 @@
   {
    "id": "nationbot_lady_k_abel",
    "name": "Lady K'abel",
-   "entity": "El Perú-Waka' / mundo maya",
+   "entity": "Perú-Waka' / Maya world",
    "role": "nation",
    "region": "americas",
    "lat": 18.105,
@@ -879,7 +879,7 @@
   {
    "id": "nationbot_itzcoatl",
    "name": "Itzcoatl",
-   "entity": "Imperio mexica",
+   "entity": "Mexica Empire",
    "role": "nation",
    "region": "americas",
    "lat": 19.435,
@@ -891,7 +891,7 @@
   {
    "id": "nationbot_atotoztli",
    "name": "Atotoztli",
-   "entity": "México-Tenochtitlan / mexica",
+   "entity": "Mexico-Tenochtitlan / Mexica",
    "role": "nation",
    "region": "americas",
    "lat": 19.43,
@@ -903,7 +903,7 @@
   {
    "id": "nationbot_cuauhtemoc",
    "name": "Cuauhtémoc",
-   "entity": "Imperio mexica",
+   "entity": "Mexica Empire",
    "role": "nation",
    "region": "americas",
    "lat": 19.435,
@@ -915,7 +915,7 @@
   {
    "id": "nationbot_tecuichpo_ixcaxochitzin",
    "name": "Isabel Moctezuma",
-   "entity": "México-Tenochtitlan / mexica",
+   "entity": "Mexico-Tenochtitlan / Mexica",
    "role": "nation",
    "region": "americas",
    "lat": 19.435,
@@ -927,7 +927,7 @@
   {
    "id": "nationbot_tecumseh",
    "name": "Tecumseh",
-   "entity": "Shawnee / Confederación indígena",
+   "entity": "Shawnee / Indigenous confederacy",
    "role": "nation",
    "region": "americas",
    "lat": 39.3364,
@@ -939,7 +939,7 @@
   {
    "id": "nationbot_malintzin",
    "name": "La Malinche",
-   "entity": "Pueblos nahuas / México",
+   "entity": "Nahua peoples / Mexico",
    "role": "nation",
    "region": "americas",
    "lat": -9.4,
@@ -963,7 +963,7 @@
   {
    "id": "nationbot_nanyehi_nancy_ward",
    "name": "Nancy Ward",
-   "entity": "Nación Cherokee",
+   "entity": "Cherokee Nation",
    "role": "nation",
    "region": "americas",
    "lat": 35.555,
@@ -1047,7 +1047,7 @@
   {
    "id": "nationbot_tupac_amaru_ii",
    "name": "Túpac Amaru II",
-   "entity": "Rebelión andina / Perú",
+   "entity": "Andean Rebellion / Peru",
    "role": "nation",
    "region": "americas",
    "lat": -14.1444,
@@ -1059,7 +1059,7 @@
   {
    "id": "nationbot_micaela_bastidas",
    "name": "Micaela Bastidas",
-   "entity": "Rebelión andina / Perú",
+   "entity": "Andean Rebellion / Peru",
    "role": "nation",
    "region": "americas",
    "lat": -13.6169,
@@ -1071,7 +1071,7 @@
   {
    "id": "nationbot_guaicaipuro",
    "name": "Guaicaipuro",
-   "entity": "Pueblo caribe / Venezuela",
+   "entity": "Carib people / Venezuela",
    "role": "nation",
    "region": "americas",
    "lat": 8,
@@ -1083,7 +1083,7 @@
   {
    "id": "nationbot_bartolina_sisa",
    "name": "Bartolina Sisa",
-   "entity": "Pueblo aymara / Alto Perú",
+   "entity": "Aymara people / Upper Peru",
    "role": "nation",
    "region": "americas",
    "lat": -16.4958,
@@ -1095,7 +1095,7 @@
   {
    "id": "nationbot_tupac_yupanqui",
    "name": "Topa Inca Yupanqui",
-   "entity": "Imperio inca",
+   "entity": "Inca Empire",
    "role": "nation",
    "region": "americas",
    "lat": -13.5169,
@@ -1107,7 +1107,7 @@
   {
    "id": "nationbot_juana_azurduy",
    "name": "Juana Azurduy de Padilla",
-   "entity": "Alto Perú / Bolivia",
+   "entity": "Upper Peru / Bolivia",
    "role": "nation",
    "region": "americas",
    "lat": -19.0475,
@@ -1131,7 +1131,7 @@
   {
    "id": "nationbot_josefa_ortiz_de_dominguez",
    "name": "Josefa Ortiz de Domínguez",
-   "entity": "México",
+   "entity": "Mexico",
    "role": "nation",
    "region": "americas",
    "lat": 19.7028,
@@ -1143,7 +1143,7 @@
   {
    "id": "nationbot_jose_de_san_martin",
    "name": "José de San Martín",
-   "entity": "Argentina / Chile / Perú",
+   "entity": "Argentina / Chile / Peru",
    "role": "nation",
    "region": "americas",
    "lat": -29.4696,
@@ -1155,7 +1155,7 @@
   {
    "id": "nationbot_policarpa_salavarrieta",
    "name": "Policarpa Salavarrieta",
-   "entity": "Nueva Granada / Colombia",
+   "entity": "New Granada / Colombia",
    "role": "nation",
    "region": "americas",
    "lat": 5.0694,
@@ -1167,7 +1167,7 @@
   {
    "id": "nationbot_toussaint_louverture",
    "name": "Toussaint Louverture",
-   "entity": "Haití",
+   "entity": "Haiti",
    "role": "nation",
    "region": "americas",
    "lat": 19.75,
@@ -1179,7 +1179,7 @@
   {
    "id": "nationbot_gregoria_apaza",
    "name": "Gregoria Apaza",
-   "entity": "Pueblo aymara / Alto Perú",
+   "entity": "Aymara people / Upper Peru",
    "role": "nation",
    "region": "americas",
    "lat": -17.0833,
@@ -1191,7 +1191,7 @@
   {
    "id": "nationbot_caupolican",
    "name": "Caupolicán",
-   "entity": "Pueblo mapuche",
+   "entity": "Mapuche people",
    "role": "nation",
    "region": "americas",
    "lat": -37.8,
@@ -1215,7 +1215,7 @@
   {
    "id": "nationbot_lautaro",
    "name": "Lautaro",
-   "entity": "Pueblo mapuche",
+   "entity": "Mapuche people",
    "role": "nation",
    "region": "americas",
    "lat": -38.3333,
@@ -1239,7 +1239,7 @@
   {
    "id": "nationbot_pontiac",
    "name": "Pontiac",
-   "entity": "Pueblo odawa",
+   "entity": "Odawa people",
    "role": "nation",
    "region": "americas",
    "lat": 45,
@@ -1263,7 +1263,7 @@
   {
    "id": "nationbot_powhatan",
    "name": "Powhatan",
-   "entity": "Confederación powhatan",
+   "entity": "Powhatan Confederacy",
    "role": "nation",
    "region": "americas",
    "lat": 37.4,
@@ -1275,7 +1275,7 @@
   {
    "id": "nationbot_wilma_mankiller",
    "name": "Wilma Mankiller",
-   "entity": "Nación Cherokee",
+   "entity": "Cherokee Nation",
    "role": "nation",
    "region": "americas",
    "lat": 35.9128,
@@ -1287,7 +1287,7 @@
   {
    "id": "nationbot_benito_juarez",
    "name": "Benito Juárez",
-   "entity": "México",
+   "entity": "Mexico",
    "role": "nation",
    "region": "americas",
    "lat": 25.4475,
@@ -1323,7 +1323,7 @@
   {
    "id": "nationbot_wu_zetian",
    "name": "Wu Zetian",
-   "entity": "China / dinastía Zhou",
+   "entity": "China / Zhou dynasty",
    "role": "nation",
    "region": "asia",
    "lat": 32.4353,
@@ -1335,7 +1335,7 @@
   {
    "id": "nationbot_ashoka",
    "name": "Ashoka",
-   "entity": "Imperio Maurya",
+   "entity": "Maurya Empire",
    "role": "nation",
    "region": "asia",
    "lat": 25.61,
@@ -1347,7 +1347,7 @@
   {
    "id": "nationbot_emperatriz_suiko",
    "name": "Empress Suiko",
-   "entity": "Japón",
+   "entity": "Japan",
    "role": "nation",
    "region": "asia",
    "lat": 35,
@@ -1359,7 +1359,7 @@
   {
    "id": "nationbot_chandragupta_maurya",
    "name": "Chandragupta Maurya",
-   "entity": "Imperio Maurya",
+   "entity": "Maurya Empire",
    "role": "nation",
    "region": "asia",
    "lat": 25.611,
@@ -1371,7 +1371,7 @@
   {
    "id": "nationbot_emperatriz_genmei",
    "name": "Empress Genmei",
-   "entity": "Japón",
+   "entity": "Japan",
    "role": "nation",
    "region": "asia",
    "lat": 34.685,
@@ -1383,7 +1383,7 @@
   {
    "id": "nationbot_akbar",
    "name": "Akbar",
-   "entity": "Imperio mogol",
+   "entity": "Mughal Empire",
    "role": "nation",
    "region": "asia",
    "lat": 25.3636,
@@ -1395,7 +1395,7 @@
   {
    "id": "nationbot_rani_durgavati",
    "name": "Rani Durgavati",
-   "entity": "Gondwana / India central",
+   "entity": "Gondwana / Central India",
    "role": "nation",
    "region": "asia",
    "lat": 25.5,
@@ -1407,7 +1407,7 @@
   {
    "id": "nationbot_babur",
    "name": "Babur",
-   "entity": "Imperio mogol",
+   "entity": "Mughal Empire",
    "role": "nation",
    "region": "asia",
    "lat": 40.7833,
@@ -1431,7 +1431,7 @@
   {
    "id": "nationbot_ciro_el_grande",
    "name": "Cyrus the Great",
-   "entity": "Imperio aqueménida",
+   "entity": "Achaemenid Empire",
    "role": "nation",
    "region": "asia",
    "lat": 30.0117,
@@ -1455,7 +1455,7 @@
   {
    "id": "nationbot_dario_i",
    "name": "Darius the Great",
-   "entity": "Imperio aqueménida",
+   "entity": "Achaemenid Empire",
    "role": "nation",
    "region": "asia",
    "lat": 32.5364,
@@ -1479,7 +1479,7 @@
   {
    "id": "nationbot_suleiman_el_magnifico",
    "name": "Suleiman the Magnificent",
-   "entity": "Imperio otomano",
+   "entity": "Ottoman Empire",
    "role": "nation",
    "region": "asia",
    "lat": 41.005,
@@ -1491,7 +1491,7 @@
   {
    "id": "nationbot_cleopatra_thea",
    "name": "Cleopatra Thea",
-   "entity": "Imperio seléucida",
+   "entity": "Seleucid Empire",
    "role": "nation",
    "region": "asia",
    "lat": 27,
@@ -1503,7 +1503,7 @@
   {
    "id": "nationbot_saladino",
    "name": "Saladin",
-   "entity": "Sultanato ayubí",
+   "entity": "Ayyubid Sultanate",
    "role": "nation",
    "region": "asia",
    "lat": 34.6017,
@@ -1515,7 +1515,7 @@
   {
    "id": "nationbot_zenobia",
    "name": "Zenobia",
-   "entity": "Palmira",
+   "entity": "Palmyra",
    "role": "nation",
    "region": "asia",
    "lat": 34.5504,
@@ -1527,7 +1527,7 @@
   {
    "id": "nationbot_ogedei_khan",
    "name": "Ögedei Khan",
-   "entity": "Imperio mongol",
+   "entity": "Mongol Empire",
    "role": "nation",
    "region": "asia",
    "lat": 47.1,
@@ -1539,7 +1539,7 @@
   {
    "id": "nationbot_razia_sultan",
    "name": "Razia Sultan",
-   "entity": "Sultanato de Delhi",
+   "entity": "Delhi Sultanate",
    "role": "nation",
    "region": "asia",
    "lat": 28.05,
@@ -1551,7 +1551,7 @@
   {
    "id": "nationbot_kublai_khan",
    "name": "Kublai Khan",
-   "entity": "Imperio mongol / Yuan",
+   "entity": "Mongol Empire / Yuan",
    "role": "nation",
    "region": "asia",
    "lat": 47.1,
@@ -1563,7 +1563,7 @@
   {
    "id": "nationbot_rudrama_devi",
    "name": "Rudrama Devi",
-   "entity": "Reino Kakatiya",
+   "entity": "Kakatiya Kingdom",
    "role": "nation",
    "region": "asia",
    "lat": 17.9,
@@ -1575,7 +1575,7 @@
   {
    "id": "nationbot_tokugawa_ieyasu",
    "name": "Tokugawa Ieyasu",
-   "entity": "Japón",
+   "entity": "Japan",
    "role": "nation",
    "region": "asia",
    "lat": 34.9564,
@@ -1587,7 +1587,7 @@
   {
    "id": "nationbot_rani_abbakka_chowta",
    "name": "Abbakka Chowta",
-   "entity": "Ullal / costa de Karnataka",
+   "entity": "Ullal / Karnataka coast",
    "role": "nation",
    "region": "asia",
    "lat": 12.8,
@@ -1611,7 +1611,7 @@
   {
    "id": "nationbot_tarabai_bhonsle",
    "name": "Tarabai",
-   "entity": "Imperio Maratha",
+   "entity": "Maratha Empire",
    "role": "nation",
    "region": "asia",
    "lat": 17.35,
@@ -1623,7 +1623,7 @@
   {
    "id": "nationbot_sejong_el_grande",
    "name": "Sejong the Great",
-   "entity": "Joseon / Corea",
+   "entity": "Joseon / Korea",
    "role": "nation",
    "region": "asia",
    "lat": 37.58,
@@ -1635,7 +1635,7 @@
   {
    "id": "nationbot_chand_bibi",
    "name": "Chand Bibi",
-   "entity": "Ahmednagar y Bijapur",
+   "entity": "Ahmadnagar and Bijapur",
    "role": "nation",
    "region": "asia",
    "lat": 19.0833,
@@ -1647,7 +1647,7 @@
   {
    "id": "nationbot_suryavarman_ii",
    "name": "Suryavarman II",
-   "entity": "Imperio jemer",
+   "entity": "Khmer Empire",
    "role": "nation",
    "region": "asia",
    "lat": 13.4333,
@@ -1659,7 +1659,7 @@
   {
    "id": "nationbot_didda",
    "name": "Didda",
-   "entity": "Cachemira",
+   "entity": "Kashmir",
    "role": "nation",
    "region": "asia",
    "lat": 34.1,
@@ -1671,7 +1671,7 @@
   {
    "id": "nationbot_jayavarman_vii",
    "name": "Jayavarman VII",
-   "entity": "Imperio jemer",
+   "entity": "Khmer Empire",
    "role": "nation",
    "region": "asia",
    "lat": 13.4333,
@@ -1683,7 +1683,7 @@
   {
    "id": "nationbot_seondeok_de_silla",
    "name": "Queen Seondeok of Silla",
-   "entity": "Reino de Silla / Corea",
+   "entity": "Silla Kingdom / Korea",
    "role": "nation",
    "region": "asia",
    "lat": 35.96,
@@ -1695,7 +1695,7 @@
   {
    "id": "nationbot_bayinnaung",
    "name": "Bayinnaung",
-   "entity": "Imperio Toungoo / Birmania",
+   "entity": "Toungoo Empire / Burma",
    "role": "nation",
    "region": "asia",
    "lat": 18.9333,
@@ -1707,7 +1707,7 @@
   {
    "id": "nationbot_lu_zhi",
    "name": "Empress Lü",
-   "entity": "China / dinastía Han",
+   "entity": "China / Han dynasty",
    "role": "nation",
    "region": "asia",
    "lat": 34.7902,
@@ -1719,7 +1719,7 @@
   {
    "id": "nationbot_harun_al_rashid",
    "name": "Harun al-Rashid",
-   "entity": "Califato abasí",
+   "entity": "Abbasid Caliphate",
    "role": "nation",
    "region": "asia",
    "lat": 35.5975,
@@ -1743,7 +1743,7 @@
   {
    "id": "nationbot_hammurabi",
    "name": "Hammurabi",
-   "entity": "Babilonia",
+   "entity": "Babylon",
    "role": "nation",
    "region": "asia",
    "lat": 32.5,
@@ -1767,7 +1767,7 @@
   {
    "id": "nationbot_asurbanipal",
    "name": "Ashurbanipal",
-   "entity": "Imperio neoasirio",
+   "entity": "Neo-Assyrian Empire",
    "role": "nation",
    "region": "asia",
    "lat": 36.3667,
@@ -1791,7 +1791,7 @@
   {
    "id": "nationbot_rajaraja_i",
    "name": "Rajaraja I",
-   "entity": "Imperio Chola",
+   "entity": "Chola Empire",
    "role": "nation",
    "region": "asia",
    "lat": 10.8,
@@ -1803,7 +1803,7 @@
   {
    "id": "nationbot_suriyothai",
    "name": "Suriyothai",
-   "entity": "Ayutthaya / Tailandia",
+   "entity": "Ayutthaya / Thailand",
    "role": "nation",
    "region": "asia",
    "lat": 14.3594,
@@ -1815,7 +1815,7 @@
   {
    "id": "nationbot_ranjit_singh",
    "name": "Ranjit Singh",
-   "entity": "Imperio sij",
+   "entity": "Sikh Empire",
    "role": "nation",
    "region": "asia",
    "lat": 32.15,
@@ -1839,7 +1839,7 @@
   {
    "id": "nationbot_prithvi_narayan_shah",
    "name": "Prithvi Narayan Shah",
-   "entity": "Reino de Gorkha / Nepal",
+   "entity": "Gorkha Kingdom / Nepal",
    "role": "nation",
    "region": "asia",
    "lat": 28.2833,
@@ -1851,7 +1851,7 @@
   {
    "id": "nationbot_toregene_khatun",
    "name": "Töregene Khatun",
-   "entity": "Imperio mongol",
+   "entity": "Mongol Empire",
    "role": "nation",
    "region": "asia",
    "lat": 39.915,
@@ -1863,7 +1863,7 @@
   {
    "id": "nationbot_tipu_sultan",
    "name": "Tipu Sultan",
-   "entity": "Reino de Mysore",
+   "entity": "Kingdom of Mysore",
    "role": "nation",
    "region": "asia",
    "lat": 13.23,
@@ -1887,7 +1887,7 @@
   {
    "id": "nationbot_shivaji",
    "name": "Shivaji",
-   "entity": "Imperio Maratha",
+   "entity": "Maratha Empire",
    "role": "nation",
    "region": "asia",
    "lat": 19.1966,
@@ -1899,7 +1899,7 @@
   {
    "id": "nationbot_sorghaghtani_beki",
    "name": "Sorghaghtani Beki",
-   "entity": "Imperio mongol",
+   "entity": "Mongol Empire",
    "role": "nation",
    "region": "asia",
    "lat": 47.1,
@@ -1911,7 +1911,7 @@
   {
    "id": "nationbot_mustafa_kemal_ataturk",
    "name": "Mustafa Kemal Atatürk",
-   "entity": "Turquía",
+   "entity": "Turkey",
    "role": "nation",
    "region": "asia",
    "lat": 39.93,
@@ -1923,7 +1923,7 @@
   {
    "id": "nationbot_nur_jahan",
    "name": "Nur Jahan",
-   "entity": "Imperio mogol",
+   "entity": "Mughal Empire",
    "role": "nation",
    "region": "asia",
    "lat": 31.6207,
@@ -1935,7 +1935,7 @@
   {
    "id": "nationbot_timur",
    "name": "Timur",
-   "entity": "Imperio timúrida",
+   "entity": "Timurid Empire",
    "role": "nation",
    "region": "asia",
    "lat": 39.05,
@@ -1947,7 +1947,7 @@
   {
    "id": "nationbot_emperatriz_viuda_cixi",
    "name": "Empress Dowager Cixi",
-   "entity": "China / dinastía Qing",
+   "entity": "China / Qing dynasty",
    "role": "nation",
    "region": "asia",
    "lat": 39.904,
@@ -1959,7 +1959,7 @@
   {
    "id": "nationbot_zhu_yuanzhang",
    "name": "Hongwu Emperor",
-   "entity": "China / dinastía Ming",
+   "entity": "China / Ming dynasty",
    "role": "nation",
    "region": "asia",
    "lat": 32.8678,
@@ -1971,7 +1971,7 @@
   {
    "id": "nationbot_sultanah_safiatuddin",
    "name": "Taj ul-Alam",
-   "entity": "Sultanato de Aceh",
+   "entity": "Sultanate of Aceh",
    "role": "nation",
    "region": "asia",
    "lat": 5.55,
@@ -1983,7 +1983,7 @@
   {
    "id": "nationbot_kanishka",
    "name": "Kanishka",
-   "entity": "Imperio kushán",
+   "entity": "Kushan Empire",
    "role": "nation",
    "region": "asia",
    "lat": 34.0144,
@@ -1995,7 +1995,7 @@
   {
    "id": "nationbot_blanca_de_castilla",
    "name": "Blanche of Castile",
-   "entity": "Francia",
+   "entity": "France",
    "role": "nation",
    "region": "europe",
    "lat": 42.0167,
@@ -2007,7 +2007,7 @@
   {
    "id": "nationbot_pericles",
    "name": "Pericles",
-   "entity": "Atenas",
+   "entity": "Athens",
    "role": "nation",
    "region": "europe",
    "lat": 37.9842,
@@ -2019,7 +2019,7 @@
   {
    "id": "nationbot_olga_de_kiev",
    "name": "Olga of Kiev",
-   "entity": "Rus de Kiev",
+   "entity": "Kievan Rus'",
    "role": "nation",
    "region": "europe",
    "lat": 57.8167,
@@ -2031,7 +2031,7 @@
   {
    "id": "nationbot_augusto",
    "name": "Augustus",
-   "entity": "Imperio romano",
+   "entity": "Roman Empire",
    "role": "nation",
    "region": "europe",
    "lat": 41.8931,
@@ -2043,7 +2043,7 @@
   {
    "id": "nationbot_leonor_de_aquitania",
    "name": "Eleanor of Aquitaine",
-   "entity": "Aquitania / Francia",
+   "entity": "Aquitaine / France",
    "role": "nation",
    "region": "europe",
    "lat": 46.5811,
@@ -2055,7 +2055,7 @@
   {
    "id": "nationbot_carlomagno",
    "name": "Charlemagne",
-   "entity": "Imperio carolingio",
+   "entity": "Carolingian Empire",
    "role": "nation",
    "region": "europe",
    "lat": 47.24,
@@ -2067,7 +2067,7 @@
   {
    "id": "nationbot_isabel_i_de_castilla",
    "name": "Isabella I of Castile",
-   "entity": "Castilla / España",
+   "entity": "Castile / Spain",
    "role": "nation",
    "region": "europe",
    "lat": 41.087,
@@ -2079,7 +2079,7 @@
   {
    "id": "nationbot_alfredo_el_grande",
    "name": "Alfred the Great",
-   "entity": "Wessex / Inglaterra",
+   "entity": "Wessex / England",
    "role": "nation",
    "region": "europe",
    "lat": 51.589,
@@ -2091,7 +2091,7 @@
   {
    "id": "nationbot_isabel_i_de_inglaterra",
    "name": "Elizabeth I",
-   "entity": "Inglaterra",
+   "entity": "England",
    "role": "nation",
    "region": "europe",
    "lat": 51.4822,
@@ -2103,7 +2103,7 @@
   {
    "id": "nationbot_guillermo_el_conquistador",
    "name": "William the Conqueror",
-   "entity": "Normandía e Inglaterra",
+   "entity": "Normandy and England",
    "role": "nation",
    "region": "europe",
    "lat": 48.8972,
@@ -2115,7 +2115,7 @@
   {
    "id": "nationbot_catalina_la_grande",
    "name": "Catherine the Great",
-   "entity": "Imperio ruso",
+   "entity": "Russian Empire",
    "role": "nation",
    "region": "europe",
    "lat": 53.4247,
@@ -2127,7 +2127,7 @@
   {
    "id": "nationbot_luis_xiv",
    "name": "Louis XIV",
-   "entity": "Francia",
+   "entity": "France",
    "role": "nation",
    "region": "europe",
    "lat": 48.8981,
@@ -2139,7 +2139,7 @@
   {
    "id": "nationbot_maria_teresa_de_austria",
    "name": "Maria Theresa",
-   "entity": "Monarquía de los Habsburgo",
+   "entity": "Habsburg Monarchy",
    "role": "nation",
    "region": "europe",
    "lat": 48.2083,
@@ -2151,7 +2151,7 @@
   {
    "id": "nationbot_pedro_el_grande",
    "name": "Peter the Great",
-   "entity": "Rusia",
+   "entity": "Russia",
    "role": "nation",
    "region": "europe",
    "lat": 55.7506,
@@ -2163,7 +2163,7 @@
   {
    "id": "nationbot_margarita_i_de_dinamarca",
    "name": "Margaret I of Denmark",
-   "entity": "Unión de Kalmar",
+   "entity": "Kalmar Union",
    "role": "nation",
    "region": "europe",
    "lat": 56.0908,
@@ -2175,7 +2175,7 @@
   {
    "id": "nationbot_ivan_iv_de_rusia",
    "name": "Ivan the Terrible",
-   "entity": "Rusia",
+   "entity": "Russia",
    "role": "nation",
    "region": "europe",
    "lat": 55.6677,
@@ -2187,7 +2187,7 @@
   {
    "id": "nationbot_irene_de_atenas",
    "name": "Irene of Athens",
-   "entity": "Imperio bizantino",
+   "entity": "Byzantine Empire",
    "role": "nation",
    "region": "europe",
    "lat": 37.9842,
@@ -2211,7 +2211,7 @@
   {
    "id": "nationbot_teodora",
    "name": "Theodora",
-   "entity": "Imperio bizantino",
+   "entity": "Byzantine Empire",
    "role": "nation",
    "region": "europe",
    "lat": 41.6,
@@ -2223,7 +2223,7 @@
   {
    "id": "nationbot_juan_iii_sobieski",
    "name": "John III Sobieski",
-   "entity": "Polonia-Lituania",
+   "entity": "Poland-Lithuania",
    "role": "nation",
    "region": "europe",
    "lat": 49.9667,
@@ -2235,7 +2235,7 @@
   {
    "id": "nationbot_amalasunta",
    "name": "Amalasuintha",
-   "entity": "Reino ostrogodo / Italia",
+   "entity": "Ostrogothic Kingdom / Italy",
    "role": "nation",
    "region": "europe",
    "lat": 44.4161,
@@ -2247,7 +2247,7 @@
   {
    "id": "nationbot_gustavo_ii_adolfo",
    "name": "Gustavus Adolphus",
-   "entity": "Suecia",
+   "entity": "Sweden",
    "role": "nation",
    "region": "europe",
    "lat": 59.3267,
@@ -2259,7 +2259,7 @@
   {
    "id": "nationbot_brunilda_de_austrasia",
    "name": "Brunhilda of Austrasia",
-   "entity": "Austrasia / francos",
+   "entity": "Austrasia / Franks",
    "role": "nation",
    "region": "europe",
    "lat": 39.8667,
@@ -2271,7 +2271,7 @@
   {
    "id": "nationbot_harald_bluetooth",
    "name": "Harald Bluetooth",
-   "entity": "Dinamarca",
+   "entity": "Denmark",
    "role": "nation",
    "region": "europe",
    "lat": 56,
@@ -2283,7 +2283,7 @@
   {
    "id": "nationbot_jadwiga_de_polonia",
    "name": "Jadwiga of Poland",
-   "entity": "Polonia",
+   "entity": "Poland",
    "role": "nation",
    "region": "europe",
    "lat": 47.4667,
@@ -2295,7 +2295,7 @@
   {
    "id": "nationbot_otto_von_bismarck",
    "name": "Otto von Bismarck",
-   "entity": "Prusia / Alemania",
+   "entity": "Prussia / Germany",
    "role": "nation",
    "region": "europe",
    "lat": 52.5786,
@@ -2307,7 +2307,7 @@
   {
    "id": "nationbot_juana_de_arco",
    "name": "Joan of Arc",
-   "entity": "Francia",
+   "entity": "France",
    "role": "nation",
    "region": "europe",
    "lat": 48.4425,
@@ -2319,7 +2319,7 @@
   {
    "id": "nationbot_giuseppe_garibaldi",
    "name": "Giuseppe Garibaldi",
-   "entity": "Italia",
+   "entity": "Italy",
    "role": "nation",
    "region": "europe",
    "lat": 43.7019,
@@ -2331,7 +2331,7 @@
   {
    "id": "nationbot_cristina_de_suecia",
    "name": "Christina, Queen of Sweden",
-   "entity": "Suecia",
+   "entity": "Sweden",
    "role": "nation",
    "region": "europe",
    "lat": 59.3294,
@@ -2355,7 +2355,7 @@
   {
    "id": "nationbot_catalina_de_medici",
    "name": "Catherine de' Medici",
-   "entity": "Francia",
+   "entity": "France",
    "role": "nation",
    "region": "europe",
    "lat": 43.7714,
@@ -2367,7 +2367,7 @@
   {
    "id": "nationbot_sviatoslav_i_de_kiev",
    "name": "Sviatoslav I",
-   "entity": "Rus de Kiev",
+   "entity": "Kievan Rus'",
    "role": "nation",
    "region": "europe",
    "lat": 50.45,
@@ -2379,7 +2379,7 @@
   {
    "id": "nationbot_matilde_de_inglaterra",
    "name": "Empress Matilda",
-   "entity": "Inglaterra",
+   "entity": "England",
    "role": "nation",
    "region": "europe",
    "lat": 51.642,
@@ -2391,7 +2391,7 @@
   {
    "id": "nationbot_stefan_dusan",
    "name": "Stefan Dušan",
-   "entity": "Imperio serbio",
+   "entity": "Serbian Empire",
    "role": "nation",
    "region": "europe",
    "lat": 43.95,
@@ -2403,7 +2403,7 @@
   {
    "id": "nationbot_matilde_de_toscana",
    "name": "Matilda of Tuscany",
-   "entity": "Toscana / Italia",
+   "entity": "Tuscany / Italy",
    "role": "nation",
    "region": "europe",
    "lat": 45.1564,
@@ -2415,7 +2415,7 @@
   {
    "id": "nationbot_canuto_el_grande",
    "name": "Cnut",
-   "entity": "Mar del Norte / Inglaterra y Dinamarca",
+   "entity": "North Sea / England and Denmark",
    "role": "nation",
    "region": "europe",
    "lat": 56,
@@ -2427,7 +2427,7 @@
   {
    "id": "nationbot_fredegunda",
    "name": "Fredegund",
-   "entity": "Reino franco",
+   "entity": "Frankish Kingdom",
    "role": "nation",
    "region": "europe",
    "lat": 49.6481,
@@ -2439,7 +2439,7 @@
   {
    "id": "nationbot_carlos_v",
    "name": "Charles V, Holy Roman Emperor",
-   "entity": "Sacro Imperio Romano y España",
+   "entity": "Holy Roman Empire and Spain",
    "role": "nation",
    "region": "europe",
    "lat": 51.0536,
@@ -2451,7 +2451,7 @@
   {
    "id": "nationbot_grace_o_malley",
    "name": "Grace O'Malley",
-   "entity": "Irlanda",
+   "entity": "Ireland",
    "role": "nation",
    "region": "europe",
    "lat": 53.9,
@@ -2475,7 +2475,7 @@
   {
    "id": "nationbot_kaahumanu",
    "name": "Kaʻahumanu",
-   "entity": "Reino de Hawái",
+   "entity": "Kingdom of Hawaii",
    "role": "nation",
    "region": "oceania",
    "lat": 20.7702,
@@ -2487,7 +2487,7 @@
   {
    "id": "nationbot_kamehameha_i",
    "name": "Kamehameha I",
-   "entity": "Reino de Hawái",
+   "entity": "Kingdom of Hawaii",
    "role": "nation",
    "region": "oceania",
    "lat": 20.2572,
@@ -2499,7 +2499,7 @@
   {
    "id": "nationbot_liliuokalani",
    "name": "Liliʻuokalani",
-   "entity": "Reino de Hawái",
+   "entity": "Kingdom of Hawaii",
    "role": "nation",
    "region": "oceania",
    "lat": 21.3047,
@@ -2523,7 +2523,7 @@
   {
    "id": "nationbot_pomare_iv",
    "name": "Pōmare IV",
-   "entity": "Tahití",
+   "entity": "Tahiti",
    "role": "nation",
    "region": "oceania",
    "lat": -17.5397,
@@ -2607,7 +2607,7 @@
   {
    "id": "nationbot_pemulwuy",
    "name": "Pemulwuy",
-   "entity": "Pueblo bidjigal / Australia",
+   "entity": "Bidjigal people / Australia",
    "role": "nation",
    "region": "oceania",
    "lat": -33.9833,
@@ -2619,7 +2619,7 @@
   {
    "id": "nationbot_makea_takau_ariki",
    "name": "Makea Takau Ariki",
-   "entity": "Rarotonga / Islas Cook",
+   "entity": "Rarotonga / Cook Islands",
    "role": "nation",
    "region": "oceania",
    "lat": -21.207,
@@ -2631,7 +2631,7 @@
   {
    "id": "nationbot_yagan",
    "name": "Yagan",
-   "entity": "Pueblo noongar / Australia",
+   "entity": "Noongar people / Australia",
    "role": "nation",
    "region": "oceania",
    "lat": -26,
@@ -2666,7 +2666,7 @@
   },
   {
    "id": "tribe_xiongnu",
-   "name": "Modu Chanyu",
+   "name": "Xiongnu",
    "entity": "Xiongnu",
    "role": "tribe",
    "region": "asia",
@@ -2678,7 +2678,7 @@
   },
   {
    "id": "tribe_xianbei",
-   "name": "Tanshihuai",
+   "name": "Xianbei",
    "entity": "Xianbei",
    "role": "tribe",
    "region": "asia",
@@ -2690,7 +2690,7 @@
   },
   {
    "id": "tribe_gokturks",
-   "name": "Bumin Qaghan",
+   "name": "Göktürks",
    "entity": "Göktürks",
    "role": "tribe",
    "region": "asia",
@@ -2702,19 +2702,19 @@
   },
   {
    "id": "tribe_uigures",
-   "name": "Kutlug Bilge Kagan",
-   "entity": "Uigures (kaganato)",
+   "name": "Uyghurs (khaganate)",
+   "entity": "Uyghurs (khaganate)",
    "role": "tribe",
    "region": "asia",
    "lat": 35.8447,
    "lon": 103.4519,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Etnia_uigur",
-   "avatar": "uigures"
+   "avatar": "uyghurs"
   },
   {
    "id": "tribe_yuezhi",
-   "name": "Kujula Kadfises",
+   "name": "Yuezhi",
    "entity": "Yuezhi",
    "role": "tribe",
    "region": "asia",
@@ -2726,19 +2726,19 @@
   },
   {
    "id": "tribe_heftalitas",
-   "name": "Toramana",
-   "entity": "Heftalitas",
+   "name": "Hephthalites",
+   "entity": "Hephthalites",
    "role": "tribe",
    "region": "asia",
    "lat": 36.5,
    "lon": 67.0,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Toramana",
-   "avatar": "heftalitas"
+   "avatar": "hephthalites"
   },
   {
    "id": "tribe_jurchen",
-   "name": "Emperor Taizu of Jin",
+   "name": "Jurchen",
    "entity": "Jurchen",
    "role": "tribe",
    "region": "asia",
@@ -2750,7 +2750,7 @@
   },
   {
    "id": "tribe_tanguts",
-   "name": "Emperor Jingzong of Western Xia",
+   "name": "Tanguts",
    "entity": "Tanguts",
    "role": "tribe",
    "region": "asia",
@@ -2762,8 +2762,8 @@
   },
   {
    "id": "tribe_jianzhou",
-   "name": "Nurhaci",
-   "entity": "Jianzhou (manchúes)",
+   "name": "Jianzhou (Manchus)",
+   "entity": "Jianzhou (Manchus)",
    "role": "tribe",
    "region": "asia",
    "lat": 41.702,
@@ -2774,7 +2774,7 @@
   },
   {
    "id": "tribe_oirates",
-   "name": "Esen Taishi",
+   "name": "Oirates",
    "entity": "Oirates",
    "role": "tribe",
    "region": "asia",
@@ -2786,79 +2786,79 @@
   },
   {
    "id": "tribe_keraitas",
-   "name": "Toghrul",
-   "entity": "Keraítas",
+   "name": "Keraites",
+   "entity": "Keraites",
    "role": "tribe",
    "region": "asia",
    "lat": 46,
    "lon": 105,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Toghrul",
-   "avatar": "keraitas"
+   "avatar": "keraites"
   },
   {
    "id": "tribe_naimanos",
-   "name": "Tayang Kan",
-   "entity": "Naimanos",
+   "name": "Naimans",
+   "entity": "Naimans",
    "role": "tribe",
    "region": "asia",
    "lat": 48.0,
    "lon": 90.0,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Tayang_Khan",
-   "avatar": "naimanos"
+   "avatar": "naimans"
   },
   {
    "id": "tribe_tartaros",
-   "name": "Megujin Seultu",
-   "entity": "Tártaros (estepa)",
+   "name": "Tatars (steppe)",
+   "entity": "Tatars (steppe)",
    "role": "tribe",
    "region": "asia",
    "lat": 48.5,
    "lon": 115.0,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/T%C3%A1rtaros",
-   "avatar": "tartaros"
+   "avatar": "tatars"
   },
   {
    "id": "tribe_merkitas",
-   "name": "Toqtoa Beki",
-   "entity": "Merkitas",
+   "name": "Merkits",
+   "entity": "Merkits",
    "role": "tribe",
    "region": "asia",
    "lat": 51.5,
    "lon": 107.0,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Merkit",
-   "avatar": "merkitas"
+   "avatar": "merkits"
   },
   {
    "id": "tribe_kazajos_pequena_horda",
-   "name": "Abulkhair Kan",
-   "entity": "Kazajos (Pequeña Horda)",
+   "name": "Kazakhs (Little Horde)",
+   "entity": "Kazakhs (Little Horde)",
    "role": "tribe",
    "region": "asia",
    "lat": 48,
    "lon": 68,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Abul_Khair_Khan",
-   "avatar": "kazajos_pequena_horda"
+   "avatar": "kazakhs_little_horde"
   },
   {
    "id": "tribe_calmucos",
-   "name": "Ayuka Kan",
-   "entity": "Calmucos",
+   "name": "Kalmyks",
+   "entity": "Kalmyks",
    "role": "tribe",
    "region": "asia",
    "lat": 46.5667,
    "lon": 45.3167,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Ayuka_Khan",
-   "avatar": "calmucos"
+   "avatar": "kalmyks"
   },
   {
    "id": "tribe_kara_koyunlu",
-   "name": "Qara Yusuf",
+   "name": "Kara Koyunlu",
    "entity": "Kara Koyunlu",
    "role": "tribe",
    "region": "asia",
@@ -2870,7 +2870,7 @@
   },
   {
    "id": "tribe_ak_koyunlu",
-   "name": "Uzun Hasan",
+   "name": "Ak Koyunlu",
    "entity": "Ak Koyunlu",
    "role": "tribe",
    "region": "asia",
@@ -2882,19 +2882,19 @@
   },
   {
    "id": "tribe_oguz_selyucidas",
-   "name": "Tughril Beg",
-   "entity": "Oguz selyúcidas",
+   "name": "Oghuz Seljuks",
+   "entity": "Oghuz Seljuks",
    "role": "tribe",
    "region": "asia",
    "lat": 35.8047,
    "lon": 51.43,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Tughril_I",
-   "avatar": "oguz_selyucidas"
+   "avatar": "oghuz_seljuks"
   },
   {
    "id": "tribe_kay",
-   "name": "Ertuğrul",
+   "name": "Kayı",
    "entity": "Kayı",
    "role": "tribe",
    "region": "asia",
@@ -2906,31 +2906,31 @@
   },
   {
    "id": "tribe_abdalies",
-   "name": "Ahmad Shah Durrani",
-   "entity": "Abdalíes (durranis)",
+   "name": "Abdalis (Durrani)",
+   "entity": "Abdalis (Durrani)",
    "role": "tribe",
    "region": "asia",
    "lat": 34.3419,
    "lon": 62.2031,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Ahmad_Shah_Durrani",
-   "avatar": "abdalies"
+   "avatar": "abdalis"
   },
   {
    "id": "tribe_baluchis_de_kalat",
-   "name": "Nasir Kan I",
-   "entity": "Baluchis de Kalat",
+   "name": "Baluchis of Kalat",
+   "entity": "Baluchis of Kalat",
    "role": "tribe",
    "region": "asia",
    "lat": 29.0,
    "lon": 66.6,
    "gender": "male",
    "wikipedia": null,
-   "avatar": "baluchis_de_kalat"
+   "avatar": "baluchis_of_kalat"
   },
   {
    "id": "tribe_banu_shayban",
-   "name": "Al-Muthanna ibn Haritha",
+   "name": "Banu Shayban",
    "entity": "Banu Shayban",
    "role": "tribe",
    "region": "asia",
@@ -2942,19 +2942,19 @@
   },
   {
    "id": "tribe_nabateos",
-   "name": "Aretas IV",
-   "entity": "Nabateos",
+   "name": "Nabataeans",
+   "entity": "Nabataeans",
    "role": "tribe",
    "region": "asia",
    "lat": 30.3286,
    "lon": 35.4419,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Aretas_IV",
-   "avatar": "nabateos"
+   "avatar": "nabataeans"
   },
   {
    "id": "tribe_kinda",
-   "name": "Imru' al-Qais",
+   "name": "Kinda",
    "entity": "Kinda",
    "role": "tribe",
    "region": "asia",
@@ -2966,68 +2966,68 @@
   },
   {
    "id": "tribe_lajmidas",
-   "name": "Al-Mundhir III",
-   "entity": "Lájmidas",
+   "name": "Lakhmids",
+   "entity": "Lakhmids",
    "role": "tribe",
    "region": "asia",
    "lat": 31.8833,
    "lon": 44.45,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Al-Mundhir_III_ibn_al-Nu%27man",
-   "avatar": "lajmidas"
+   "avatar": "lakhmids"
   },
   {
    "id": "tribe_gasanidas",
-   "name": "Al-Harith ibn Jabalah",
-   "entity": "Gasánidas",
+   "name": "Ghassanids",
+   "entity": "Ghassanids",
    "role": "tribe",
    "region": "asia",
    "lat": 33.0,
    "lon": 36.5,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Al-Harith_ibn_Jabalah",
-   "avatar": "gasanidas"
+   "avatar": "ghassanids"
   },
   {
    "id": "tribe_himyaritas",
-   "name": "Abu Karib Asad",
-   "entity": "Himyaritas",
+   "name": "Himyarites",
+   "entity": "Himyarites",
    "role": "tribe",
    "region": "asia",
    "lat": 14.5,
    "lon": 44.5,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Himyar",
-   "avatar": "himyaritas"
+   "avatar": "himyarites"
   },
   {
    "id": "tribe_medos",
-   "name": "Deyoces",
-   "entity": "Medos",
+   "name": "Medes",
+   "entity": "Medes",
    "role": "tribe",
    "region": "asia",
    "lat": 37,
    "lon": 47,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Deyoces",
-   "avatar": "medos"
+   "avatar": "medes"
   },
   {
    "id": "tribe_parnos",
-   "name": "Arsaces I",
-   "entity": "Parnos (partos)",
+   "name": "Parni (Parthians)",
+   "entity": "Parni (Parthians)",
    "role": "tribe",
    "region": "asia",
    "lat": 33.0936,
    "lon": 44.5808,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Arsaces_I",
-   "avatar": "parnos"
+   "avatar": "parni"
   },
   {
    "id": "tribe_sakas",
-   "name": "Skunkha",
-   "entity": "Sakas (escitas orientales)",
+   "name": "Sakas (Eastern Scythians)",
+   "entity": "Sakas (Eastern Scythians)",
    "role": "tribe",
    "region": "asia",
    "lat": 43.0,
@@ -3038,19 +3038,19 @@
   },
   {
    "id": "tribe_cimerios",
-   "name": "Teušpâ",
-   "entity": "Cimerios",
+   "name": "Cimmerians",
+   "entity": "Cimmerians",
    "role": "tribe",
    "region": "asia",
    "lat": 39.4167,
    "lon": 29.9833,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Teu%C5%A1p%C3%A2",
-   "avatar": "cimerios"
+   "avatar": "cimmerians"
   },
   {
    "id": "tribe_ainu",
-   "name": "Shakushain",
+   "name": "Ainu",
    "entity": "Ainu",
    "role": "tribe",
    "region": "asia",
@@ -3062,7 +3062,7 @@
   },
   {
    "id": "tribe_emishi",
-   "name": "Aterui",
+   "name": "Emishi",
    "entity": "Emishi",
    "role": "tribe",
    "region": "asia",
@@ -3074,19 +3074,19 @@
   },
   {
    "id": "tribe_pueblo_de_mactan",
-   "name": "Lapulapu",
-   "entity": "Pueblo de Mactán",
+   "name": "Mactan",
+   "entity": "Mactan",
    "role": "tribe",
    "region": "asia",
    "lat": 10.3,
    "lon": 123.9667,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Lapulapu",
-   "avatar": "pueblo_de_mactan"
+   "avatar": "mactan"
   },
   {
    "id": "tribe_maguindanao",
-   "name": "Sultán Kudarat",
+   "name": "Maguindanao",
    "entity": "Maguindanao",
    "role": "tribe",
    "region": "asia",
@@ -3098,7 +3098,7 @@
   },
   {
    "id": "tribe_batak",
-   "name": "Sisingamangaraja XII",
+   "name": "Batak",
    "entity": "Batak",
    "role": "tribe",
    "region": "asia",
@@ -3110,8 +3110,8 @@
   },
   {
    "id": "tribe_iban",
-   "name": "Rentap",
-   "entity": "Iban (dayak)",
+   "name": "Iban (Dayak)",
+   "entity": "Iban (Dayak)",
    "role": "tribe",
    "region": "asia",
    "lat": -2,
@@ -3122,7 +3122,7 @@
   },
   {
    "id": "tribe_minangkabau",
-   "name": "Tuanku Imam Bonjol",
+   "name": "Minangkabau",
    "entity": "Minangkabau",
    "role": "tribe",
    "region": "asia",
@@ -3134,31 +3134,31 @@
   },
   {
    "id": "tribe_makasar",
-   "name": "Hasanuddin of Gowa",
-   "entity": "Makasar",
+   "name": "Makassar",
+   "entity": "Makassar",
    "role": "tribe",
    "region": "asia",
    "lat": -5.1331,
    "lon": 119.4136,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Hasanuddin_of_Gowa",
-   "avatar": "makasar"
+   "avatar": "makassar"
   },
   {
    "id": "tribe_gond_de_garha",
-   "name": "Sangram Shah",
-   "entity": "Gond de Garha",
+   "name": "Gonds of Garha",
+   "entity": "Gonds of Garha",
    "role": "tribe",
    "region": "asia",
    "lat": 23.1,
    "lon": 79.9,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Sangram_Shah",
-   "avatar": "gond_de_garha"
+   "avatar": "gonds_of_garha"
   },
   {
    "id": "tribe_bhils",
-   "name": "Battle of Haldighati",
+   "name": "Bhils",
    "entity": "Bhils",
    "role": "tribe",
    "region": "asia",
@@ -3170,7 +3170,7 @@
   },
   {
    "id": "tribe_munda",
-   "name": "Birsa Munda",
+   "name": "Munda",
    "entity": "Munda",
    "role": "tribe",
    "region": "asia",
@@ -3182,7 +3182,7 @@
   },
   {
    "id": "tribe_khasi",
-   "name": "Tirot Sing",
+   "name": "Khasi",
    "entity": "Khasi",
    "role": "tribe",
    "region": "asia",
@@ -3194,19 +3194,19 @@
   },
   {
    "id": "tribe_tibetanos_de_yarlung",
-   "name": "Songtsen Gampo",
-   "entity": "Tibetanos de Yarlung",
+   "name": "Yarlung Tibetans",
+   "entity": "Yarlung Tibetans",
    "role": "tribe",
    "region": "asia",
    "lat": 29.6458,
    "lon": 91.1408,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Songtsen_Gampo",
-   "avatar": "tibetanos_de_yarlung"
+   "avatar": "yarlung_tibetans"
   },
   {
    "id": "tribe_zhuang",
-   "name": "Nong Zhigao",
+   "name": "Zhuang",
    "entity": "Zhuang",
    "role": "tribe",
    "region": "asia",
@@ -3218,79 +3218,79 @@
   },
   {
    "id": "tribe_saja",
-   "name": "Tygyn Darkhan",
-   "entity": "Sajá (yakutos)",
+   "name": "Sakha (Yakuts)",
+   "entity": "Sakha (Yakuts)",
    "role": "tribe",
    "region": "asia",
    "lat": 66.4,
    "lon": 129.1667,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Tygyn_Darkhan",
-   "avatar": "saja"
+   "avatar": "sakha"
   },
   {
    "id": "tribe_uzbecos_shaibanidas",
-   "name": "Muhammad Shaybani",
-   "entity": "Uzbecos shaibánidas",
+   "name": "Shaybanid Uzbeks",
+   "entity": "Shaybanid Uzbeks",
    "role": "tribe",
    "region": "asia",
    "lat": 45.3,
    "lon": 63.9,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Muhammad_Shaybani",
-   "avatar": "uzbecos_shaibanidas"
+   "avatar": "shaybanid_uzbeks"
   },
   {
    "id": "tribe_circasianos",
-   "name": "Qizbech Tughuzhuqo",
-   "entity": "Circasianos",
+   "name": "Circassians",
+   "entity": "Circassians",
    "role": "tribe",
    "region": "asia",
    "lat": 43.5833,
    "lon": 43.4,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Qizbech_Tughuzhuqo",
-   "avatar": "circasianos"
+   "avatar": "circassians"
   },
   {
    "id": "tribe_chechenos",
-   "name": "Jeque Mansur",
-   "entity": "Chechenos",
+   "name": "Chechens",
+   "entity": "Chechens",
    "role": "tribe",
    "region": "asia",
    "lat": 66.4167,
    "lon": 94.25,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Mansur_Ushurma",
-   "avatar": "chechenos"
+   "avatar": "chechens"
   },
   {
    "id": "tribe_avaros_del_caucaso",
-   "name": "Imam Shamil",
-   "entity": "Ávaros del Cáucaso",
+   "name": "Caucasian Avars",
+   "entity": "Caucasian Avars",
    "role": "tribe",
    "region": "asia",
    "lat": 42.7578,
    "lon": 46.8422,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Shamil",
-   "avatar": "avaros_del_caucaso"
+   "avatar": "caucasian_avars"
   },
   {
    "id": "tribe_galatas_tectosagos",
-   "name": "Deyótaro",
-   "entity": "Gálatas tectósagos",
+   "name": "Tectosages (Galatians)",
+   "entity": "Tectosages (Galatians)",
    "role": "tribe",
    "region": "asia",
    "lat": 39.2667,
    "lon": 32.9833,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Dey%C3%B3taro",
-   "avatar": "galatas_tectosagos"
+   "avatar": "tectosages"
   },
   {
    "id": "tribe_hazaras",
-   "name": "Mir Yazdanbakhsh",
+   "name": "Hazaras",
    "entity": "Hazaras",
    "role": "tribe",
    "region": "asia",
@@ -3302,31 +3302,31 @@
   },
   {
    "id": "tribe_bugis_de_bone",
-   "name": "Arung Palakka",
-   "entity": "Bugis de Bone",
+   "name": "Bugis of Bone",
+   "entity": "Bugis of Bone",
    "role": "tribe",
    "region": "asia",
    "lat": -2,
    "lon": 121,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Arung_Palakka",
-   "avatar": "bugis_de_bone"
+   "avatar": "bugis_of_bone"
   },
   {
    "id": "tribe_tagalos",
-   "name": "Rajah Sulayman",
-   "entity": "Tagalos",
+   "name": "Tagalogs",
+   "entity": "Tagalogs",
    "role": "tribe",
    "region": "asia",
    "lat": 14.6,
    "lon": 121.0,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Rajah_Sulayman",
-   "avatar": "tagalos"
+   "avatar": "tagalogs"
   },
   {
    "id": "tribe_chukchis",
-   "name": "Amulgin",
+   "name": "Chukchis",
    "entity": "Chukchis",
    "role": "tribe",
    "region": "asia",
@@ -3338,67 +3338,67 @@
   },
   {
    "id": "tribe_masagetas",
-   "name": "Tomiris",
-   "entity": "Masagetas",
+   "name": "Massagetae",
+   "entity": "Massagetae",
    "role": "tribe",
    "region": "asia",
    "lat": 45.3,
    "lon": 63.9,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Tomiris",
-   "avatar": "masagetas"
+   "avatar": "massagetae"
   },
   {
    "id": "tribe_sakas_de_asia_central",
-   "name": "Zarina",
-   "entity": "Sakas de Asia central",
+   "name": "Central Asian Sakas",
+   "entity": "Central Asian Sakas",
    "role": "tribe",
    "region": "asia",
    "lat": 43.3667,
    "lon": 27.1167,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Zar",
-   "avatar": "sakas_de_asia_central"
+   "avatar": "central_asian_sakas"
   },
   {
    "id": "tribe_tolistobogios",
-   "name": "Chiomara",
-   "entity": "Tolistobogios (gálatas)",
+   "name": "Tolistoboii (Galatians)",
+   "entity": "Tolistoboii (Galatians)",
    "role": "tribe",
    "region": "asia",
    "lat": 39.9,
    "lon": 32.8,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Chiomara",
-   "avatar": "tolistobogios"
+   "avatar": "tolistoboii"
   },
   {
    "id": "tribe_tanujidas",
-   "name": "Mavia",
-   "entity": "Tanújidas",
+   "name": "Tanukhids",
+   "entity": "Tanukhids",
    "role": "tribe",
    "region": "asia",
    "lat": 35.7833,
    "lon": 37.4833,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Mavia",
-   "avatar": "tanujidas"
+   "avatar": "tanukhids"
   },
   {
    "id": "tribe_qedaritas",
-   "name": "Samsi",
-   "entity": "Qedaritas (árabes)",
+   "name": "Qedarites (Arabs)",
+   "entity": "Qedarites (Arabs)",
    "role": "tribe",
    "region": "asia",
    "lat": 30.0,
    "lon": 38.0,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Samsi",
-   "avatar": "qedaritas"
+   "avatar": "qedarites"
   },
   {
    "id": "tribe_banu_asad",
-   "name": "Khawla bint al-Azwar",
+   "name": "Banu Asad",
    "entity": "Banu Asad",
    "role": "tribe",
    "region": "asia",
@@ -3410,7 +3410,7 @@
   },
   {
    "id": "tribe_banu_tamim",
-   "name": "Sajah",
+   "name": "Banu Tamim",
    "entity": "Banu Tamim",
    "role": "tribe",
    "region": "asia",
@@ -3422,7 +3422,7 @@
   },
   {
    "id": "tribe_olkhunut",
-   "name": "Hoelun",
+   "name": "Olkhunut",
    "entity": "Olkhunut",
    "role": "tribe",
    "region": "asia",
@@ -3434,7 +3434,7 @@
   },
   {
    "id": "tribe_onggirat",
-   "name": "Börte",
+   "name": "Onggirat",
    "entity": "Onggirat",
    "role": "tribe",
    "region": "asia",
@@ -3446,43 +3446,43 @@
   },
   {
    "id": "tribe_ulus_de_kaidu",
-   "name": "Khutulun",
-   "entity": "Ulus de Kaidu",
+   "name": "Ulus of Kaidu",
+   "entity": "Ulus of Kaidu",
    "role": "tribe",
    "region": "asia",
    "lat": 47.1,
    "lon": 109.1667,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Khutulun",
-   "avatar": "ulus_de_kaidu"
+   "avatar": "ulus_of_kaidu"
   },
   {
    "id": "tribe_kazajos_gran_horda",
-   "name": "Domalak Ana",
-   "entity": "Kazajos (Gran Horda)",
+   "name": "Kazakhs (Great Horde)",
+   "entity": "Kazakhs (Great Horde)",
    "role": "tribe",
    "region": "asia",
    "lat": 48,
    "lon": 68,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Kazajos",
-   "avatar": "kazajos_gran_horda"
+   "avatar": "kazakhs_great_horde"
   },
   {
    "id": "tribe_kitan",
-   "name": "Shulü Ping",
-   "entity": "Kitán",
+   "name": "Khitans",
+   "entity": "Khitans",
    "role": "tribe",
    "region": "asia",
    "lat": 43.0,
    "lon": 119.0,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Shul%C3%BC_Ping",
-   "avatar": "kitan"
+   "avatar": "khitans"
   },
   {
    "id": "tribe_khorchin",
-   "name": "Empress Xiaozhuangwen",
+   "name": "Khorchin",
    "entity": "Khorchin",
    "role": "tribe",
    "region": "asia",
@@ -3494,7 +3494,7 @@
   },
   {
    "id": "tribe_wa",
-   "name": "Himiko",
+   "name": "Wa (Yamatai)",
    "entity": "Wa (Yamatai)",
    "role": "tribe",
    "region": "asia",
@@ -3506,7 +3506,7 @@
   },
   {
    "id": "tribe_ilocanos",
-   "name": "Gabriela Silang",
+   "name": "Ilocanos",
    "entity": "Ilocanos",
    "role": "tribe",
    "region": "asia",
@@ -3518,44 +3518,44 @@
   },
   {
    "id": "tribe_pangasinenses",
-   "name": "Urduja",
-   "entity": "Pangasinenses",
+   "name": "Pangasinan",
+   "entity": "Pangasinan",
    "role": "tribe",
    "region": "asia",
    "lat": 16.0,
    "lon": 120.3,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Urduja",
-   "avatar": "pangasinenses"
+   "avatar": "pangasinan"
   },
   {
    "id": "tribe_achenenses",
-   "name": "Keumalahayati",
-   "entity": "Achenenses",
+   "name": "Achaemenids",
+   "entity": "Achaemenids",
    "role": "tribe",
    "region": "asia",
    "lat": 5.3667,
    "lon": 95.5333,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Keumalahayati",
-   "avatar": "achenenses"
+   "avatar": "achaemenids"
   },
   {
    "id": "tribe_bugis_de_tanete",
-   "name": "We Tenriolle",
-   "entity": "Bugis de Tanete",
+   "name": "Bugis of Tanete",
+   "entity": "Bugis of Tanete",
    "role": "tribe",
    "region": "asia",
    "lat": -2,
    "lon": 121,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Bugis",
-   "avatar": "bugis_de_tanete"
+   "avatar": "bugis_of_tanete"
   },
   {
    "id": "tribe_zeliangrong",
-   "name": "Rani Gaidinliu",
-   "entity": "Zeliangrong (naga)",
+   "name": "Zeliangrong (Naga)",
+   "entity": "Zeliangrong (Naga)",
    "role": "tribe",
    "region": "asia",
    "lat": 22.5411,
@@ -3566,31 +3566,31 @@
   },
   {
    "id": "tribe_kolis_de_jhansi",
-   "name": "Jhalkaribai",
-   "entity": "Kolis de Jhansi",
+   "name": "Kolis of Jhansi",
+   "entity": "Kolis of Jhansi",
    "role": "tribe",
    "region": "asia",
    "lat": 25.4486,
    "lon": 78.5696,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Jhalkaribai",
-   "avatar": "kolis_de_jhansi"
+   "avatar": "kolis_of_jhansi"
   },
   {
    "id": "tribe_santales",
-   "name": "Phulo Murmu",
-   "entity": "Santales",
+   "name": "Santals",
+   "entity": "Santals",
    "role": "tribe",
    "region": "asia",
    "lat": 24.0,
    "lon": 87.0,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Santalales",
-   "avatar": "santales"
+   "avatar": "santals"
   },
   {
    "id": "tribe_ahom",
-   "name": "Mula Gabharu",
+   "name": "Ahom",
    "entity": "Ahom",
    "role": "tribe",
    "region": "asia",
@@ -3602,7 +3602,7 @@
   },
   {
    "id": "tribe_mizos",
-   "name": "Ropuiliani",
+   "name": "Mizos",
    "entity": "Mizos",
    "role": "tribe",
    "region": "asia",
@@ -3614,20 +3614,20 @@
   },
   {
    "id": "tribe_pashtunes_de_maiwand",
-   "name": "Malalai of Maiwand",
-   "entity": "Pashtunes de Maiwand",
+   "name": "Pashtuns of Maiwand",
+   "entity": "Pashtuns of Maiwand",
    "role": "tribe",
    "region": "asia",
    "lat": 31,
    "lon": 65.5,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Malalai_of_Maiwand",
-   "avatar": "pashtunes_de_maiwand"
+   "avatar": "pashtuns_of_maiwand"
   },
   {
    "id": "tribe_jaf",
-   "name": "Adela Jánum",
-   "entity": "Jaf (kurdos)",
+   "name": "Jaf (Kurds)",
+   "entity": "Jaf (Kurds)",
    "role": "tribe",
    "region": "asia",
    "lat": 34.607,
@@ -3638,19 +3638,19 @@
   },
   {
    "id": "tribe_calmucos_torgutos",
-   "name": "Darma-Bala",
-   "entity": "Calmucos torgutos",
+   "name": "Torghut Kalmyks",
+   "entity": "Torghut Kalmyks",
    "role": "tribe",
    "region": "asia",
    "lat": 47.0,
    "lon": 45.5,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "calmucos_torgutos"
+   "avatar": "torghut_kalmyks"
   },
   {
    "id": "tribe_tuyuhun",
-   "name": "Ayan",
+   "name": "Tuyuhun",
    "entity": "Tuyuhun",
    "role": "tribe",
    "region": "asia",
@@ -3662,43 +3662,43 @@
   },
   {
    "id": "tribe_kirguises_del_yenisei",
-   "name": "Ak-Tamyr",
-   "entity": "Kirguises del Yeniséi",
+   "name": "Yenisei Kyrgyz",
+   "entity": "Yenisei Kyrgyz",
    "role": "tribe",
    "region": "asia",
    "lat": 41,
    "lon": 75,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Kirguises",
-   "avatar": "kirguises_del_yenisei"
+   "avatar": "yenisei_kyrgyz"
   },
   {
    "id": "tribe_buriatos",
-   "name": "Saran",
-   "entity": "Buriatos",
+   "name": "Buryats",
+   "entity": "Buryats",
    "role": "tribe",
    "region": "asia",
    "lat": 66.4167,
    "lon": 94.25,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Pueblo_buriato",
-   "avatar": "buriatos"
+   "avatar": "buryats"
   },
   {
    "id": "tribe_evenkis",
-   "name": "Altana",
-   "entity": "Evenkis",
+   "name": "Evenks",
+   "entity": "Evenks",
    "role": "tribe",
    "region": "asia",
    "lat": 35.8447,
    "lon": 103.4519,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Etnia_evenki",
-   "avatar": "evenkis"
+   "avatar": "evenks"
   },
   {
    "id": "tribe_nenets",
-   "name": "Sava",
+   "name": "Nénets",
    "entity": "Nénets",
    "role": "tribe",
    "region": "asia",
@@ -3710,7 +3710,7 @@
   },
   {
    "id": "tribe_janty",
-   "name": "Aneva",
+   "name": "Janty",
    "entity": "Janty",
    "role": "tribe",
    "region": "asia",
@@ -3722,20 +3722,20 @@
   },
   {
    "id": "tribe_itelmenos",
-   "name": "Tylvan",
-   "entity": "Itelmenos (Kamchatka)",
+   "name": "Itelmens (Kamchatka)",
+   "entity": "Itelmens (Kamchatka)",
    "role": "tribe",
    "region": "asia",
    "lat": 56.0,
    "lon": 159.0,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Itelmenos",
-   "avatar": "itelmenos"
+   "avatar": "itelmens"
   },
   {
    "id": "tribe_nanai",
-   "name": "Ojo",
-   "entity": "Nanái (Amur)",
+   "name": "Nanai (Amur)",
+   "entity": "Nanai (Amur)",
    "role": "tribe",
    "region": "asia",
    "lat": 66.4,
@@ -3746,19 +3746,19 @@
   },
   {
    "id": "tribe_ainu_de_sajalin",
-   "name": "Monuyka",
-   "entity": "Ainu de Sajalín",
+   "name": "Ainu of Sakhalin",
+   "entity": "Ainu of Sakhalin",
    "role": "tribe",
    "region": "asia",
    "lat": 50.0,
    "lon": 142.8,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "ainu_de_sajalin"
+   "avatar": "ainu_of_sakhalin"
   },
   {
    "id": "tribe_hayato",
-   "name": "Satsuki",
+   "name": "Hayato (Kyūshū)",
    "entity": "Hayato (Kyūshū)",
    "role": "tribe",
    "region": "asia",
@@ -3770,8 +3770,8 @@
   },
   {
    "id": "tribe_paiwan",
-   "name": "Mulimu",
-   "entity": "Paiwan (Taiwán)",
+   "name": "Paiwan (Taiwan)",
+   "entity": "Paiwan (Taiwan)",
    "role": "tribe",
    "region": "asia",
    "lat": 24,
@@ -3782,8 +3782,8 @@
   },
   {
    "id": "tribe_atayal",
-   "name": "Yaway",
-   "entity": "Atayal (Taiwán)",
+   "name": "Atayal (Taiwan)",
+   "entity": "Atayal (Taiwan)",
    "role": "tribe",
    "region": "asia",
    "lat": 24.5,
@@ -3794,19 +3794,19 @@
   },
   {
    "id": "tribe_igorotes",
-   "name": "Dalunag",
-   "entity": "Igorotes",
+   "name": "Igorots",
+   "entity": "Igorots",
    "role": "tribe",
    "region": "asia",
    "lat": 17.1667,
    "lon": 121.1667,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Igorrote",
-   "avatar": "igorotes"
+   "avatar": "igorots"
   },
   {
    "id": "tribe_manobo",
-   "name": "Bai Madakel",
+   "name": "Manobo",
    "entity": "Manobo",
    "role": "tribe",
    "region": "asia",
@@ -3818,7 +3818,7 @@
   },
   {
    "id": "tribe_dayak_ngaju",
-   "name": "Kameloh",
+   "name": "Dayak ngaju",
    "entity": "Dayak ngaju",
    "role": "tribe",
    "region": "asia",
@@ -3830,7 +3830,7 @@
   },
   {
    "id": "tribe_toraja",
-   "name": "Lai Rinding",
+   "name": "Toraja",
    "entity": "Toraja",
    "role": "tribe",
    "region": "asia",
@@ -3842,7 +3842,7 @@
   },
   {
    "id": "tribe_mentawai",
-   "name": "Sikerei Bai",
+   "name": "Mentawai",
    "entity": "Mentawai",
    "role": "tribe",
    "region": "asia",
@@ -3854,7 +3854,7 @@
   },
   {
    "id": "tribe_karen",
-   "name": "Naw Paw",
+   "name": "Karen",
    "entity": "Karen",
    "role": "tribe",
    "region": "asia",
@@ -3866,7 +3866,7 @@
   },
   {
    "id": "tribe_hmong",
-   "name": "Ntxhi",
+   "name": "Hmong",
    "entity": "Hmong",
    "role": "tribe",
    "region": "asia",
@@ -3878,7 +3878,7 @@
   },
   {
    "id": "tribe_yi",
-   "name": "Abu Shimo",
+   "name": "Yi (nuosu)",
    "entity": "Yi (nuosu)",
    "role": "tribe",
    "region": "asia",
@@ -3890,19 +3890,19 @@
   },
   {
    "id": "tribe_bai_de_dali",
-   "name": "Gao Xiu",
-   "entity": "Bai de Dali",
+   "name": "Bai of Dali",
+   "entity": "Bai of Dali",
    "role": "tribe",
    "region": "asia",
    "lat": 25.6,
    "lon": 100.2,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "bai_de_dali"
+   "avatar": "bai_of_dali"
   },
   {
    "id": "tribe_tuoba",
-   "name": "Hua Mulan",
+   "name": "Tuoba (xianbei)",
    "entity": "Tuoba (xianbei)",
    "role": "tribe",
    "region": "asia",
@@ -3914,8 +3914,8 @@
   },
   {
    "id": "tribe_li",
-   "name": "Lady Xian",
-   "entity": "Li (Hainán)",
+   "name": "Li (Hainan)",
+   "entity": "Li (Hainan)",
    "role": "tribe",
    "region": "asia",
    "lat": 19.2,
@@ -3926,19 +3926,19 @@
   },
   {
    "id": "tribe_sabeos",
-   "name": "Queen of Sheba",
-   "entity": "Sabeos",
+   "name": "Sabaeans",
+   "entity": "Sabaeans",
    "role": "tribe",
    "region": "asia",
    "lat": 15.5,
    "lon": 48,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Queen_of_Sheba",
-   "avatar": "sabeos"
+   "avatar": "sabaeans"
   },
   {
    "id": "tribe_tharu",
-   "name": "Rajmati",
+   "name": "Tharu",
    "entity": "Tharu",
    "role": "tribe",
    "region": "asia",
@@ -3950,19 +3950,19 @@
   },
   {
    "id": "tribe_todas",
-   "name": "Pelthi",
-   "entity": "Todas (Nilgiri)",
+   "name": "Toda (Nilgiri)",
+   "entity": "Toda (Nilgiri)",
    "role": "tribe",
    "region": "asia",
    "lat": 11.4,
    "lon": 76.7,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Toda_people",
-   "avatar": "todas"
+   "avatar": "toda"
   },
   {
    "id": "tribe_kurumbas",
-   "name": "Kaliamma",
+   "name": "Kurumbas",
    "entity": "Kurumbas",
    "role": "tribe",
    "region": "asia",
@@ -3974,7 +3974,7 @@
   },
   {
    "id": "tribe_garos",
-   "name": "Rangdi",
+   "name": "Garos",
    "entity": "Garos",
    "role": "tribe",
    "region": "asia",
@@ -3986,7 +3986,7 @@
   },
   {
    "id": "tribe_lepchas",
-   "name": "Nyolmit",
+   "name": "Lepchas",
    "entity": "Lepchas",
    "role": "tribe",
    "region": "asia",
@@ -3998,19 +3998,19 @@
   },
   {
    "id": "tribe_baluchis_marri",
-   "name": "Hani",
-   "entity": "Baluchis marri",
+   "name": "Marri Baluchis",
+   "entity": "Marri Baluchis",
    "role": "tribe",
    "region": "asia",
    "lat": 30,
    "lon": 71,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Marri_%28tribe%29",
-   "avatar": "baluchis_marri"
+   "avatar": "marri_baluchis"
   },
   {
    "id": "tribe_wampanoag",
-   "name": "Metacomet",
+   "name": "Wampanoag",
    "entity": "Wampanoag",
    "role": "tribe",
    "region": "americas",
@@ -4022,7 +4022,7 @@
   },
   {
    "id": "tribe_narragansett",
-   "name": "Canonchet",
+   "name": "Narragansett",
    "entity": "Narragansett",
    "role": "tribe",
    "region": "americas",
@@ -4034,7 +4034,7 @@
   },
   {
    "id": "tribe_pequot",
-   "name": "Sassacus",
+   "name": "Pequot",
    "entity": "Pequot",
    "role": "tribe",
    "region": "americas",
@@ -4046,7 +4046,7 @@
   },
   {
    "id": "tribe_mohegan",
-   "name": "Uncas",
+   "name": "Mohegan",
    "entity": "Mohegan",
    "role": "tribe",
    "region": "americas",
@@ -4058,7 +4058,7 @@
   },
   {
    "id": "tribe_seneca",
-   "name": "Cornplanter",
+   "name": "Seneca",
    "entity": "Seneca",
    "role": "tribe",
    "region": "americas",
@@ -4070,7 +4070,7 @@
   },
   {
    "id": "tribe_onondaga",
-   "name": "Hiawatha",
+   "name": "Onondaga",
    "entity": "Onondaga",
    "role": "tribe",
    "region": "americas",
@@ -4078,11 +4078,11 @@
    "lon": -76.2,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Hiawatha",
-   "avatar": "hiawatha"
+   "avatar": "onondaga"
   },
   {
    "id": "tribe_oneida",
-   "name": "Skenandoa",
+   "name": "Oneida",
    "entity": "Oneida",
    "role": "tribe",
    "region": "americas",
@@ -4094,7 +4094,7 @@
   },
   {
    "id": "tribe_lenape",
-   "name": "Tamanend",
+   "name": "Lenape",
    "entity": "Lenape",
    "role": "tribe",
    "region": "americas",
@@ -4106,7 +4106,7 @@
   },
   {
    "id": "tribe_miami",
-   "name": "Little Turtle",
+   "name": "Miami",
    "entity": "Miami",
    "role": "tribe",
    "region": "americas",
@@ -4118,7 +4118,7 @@
   },
   {
    "id": "tribe_sauk",
-   "name": "Black Hawk",
+   "name": "Sauk",
    "entity": "Sauk",
    "role": "tribe",
    "region": "americas",
@@ -4130,7 +4130,7 @@
   },
   {
    "id": "tribe_caxcanes",
-   "name": "Tenamaxtli",
+   "name": "Caxcanes",
    "entity": "Caxcanes",
    "role": "tribe",
    "region": "americas",
@@ -4142,8 +4142,8 @@
   },
   {
    "id": "tribe_muscogee",
-   "name": "Menawa",
-   "entity": "Muscogee (creek)",
+   "name": "Muscogee (Creek)",
+   "entity": "Muscogee (Creek)",
    "role": "tribe",
    "region": "americas",
    "lat": 35.6,
@@ -4154,19 +4154,19 @@
   },
   {
    "id": "tribe_seminolas",
-   "name": "Osceola",
-   "entity": "Seminolas",
+   "name": "Seminoles",
+   "entity": "Seminoles",
    "role": "tribe",
    "region": "americas",
    "lat": 33,
    "lon": -83.5,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Osceola",
-   "avatar": "seminolas"
+   "avatar": "seminoles"
   },
   {
    "id": "tribe_chickasaw",
-   "name": "Piomingo",
+   "name": "Chickasaw",
    "entity": "Chickasaw",
    "role": "tribe",
    "region": "americas",
@@ -4178,7 +4178,7 @@
   },
   {
    "id": "tribe_choctaw",
-   "name": "Pushmataha",
+   "name": "Choctaw",
    "entity": "Choctaw",
    "role": "tribe",
    "region": "americas",
@@ -4190,7 +4190,7 @@
   },
   {
    "id": "tribe_nez_perce",
-   "name": "Chief Joseph",
+   "name": "Nez Perce",
    "entity": "Nez Perce",
    "role": "tribe",
    "region": "americas",
@@ -4202,7 +4202,7 @@
   },
   {
    "id": "tribe_comanches",
-   "name": "Quanah Parker",
+   "name": "Comanches",
    "entity": "Comanches",
    "role": "tribe",
    "region": "americas",
@@ -4214,7 +4214,7 @@
   },
   {
    "id": "tribe_kiowa",
-   "name": "Satanta",
+   "name": "Kiowa",
    "entity": "Kiowa",
    "role": "tribe",
    "region": "americas",
@@ -4226,19 +4226,19 @@
   },
   {
    "id": "tribe_cheyenne_del_norte",
-   "name": "Morning Star",
-   "entity": "Cheyenne del Norte",
+   "name": "Northern Cheyenne",
+   "entity": "Northern Cheyenne",
    "role": "tribe",
    "region": "americas",
    "lat": -33,
    "lon": -71,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Morning_Star_Sport_Club",
-   "avatar": "cheyenne_del_norte"
+   "avatar": "northern_cheyenne"
   },
   {
    "id": "tribe_arapaho",
-   "name": "Little raven",
+   "name": "Arapaho",
    "entity": "Arapaho",
    "role": "tribe",
    "region": "americas",
@@ -4250,7 +4250,7 @@
   },
   {
    "id": "tribe_shoshone",
-   "name": "Washakie",
+   "name": "Shoshone",
    "entity": "Shoshone",
    "role": "tribe",
    "region": "americas",
@@ -4262,7 +4262,7 @@
   },
   {
    "id": "tribe_crow",
-   "name": "Plenty Coups",
+   "name": "Crow",
    "entity": "Crow",
    "role": "tribe",
    "region": "americas",
@@ -4274,8 +4274,8 @@
   },
   {
    "id": "tribe_siksika",
-   "name": "Crowfoot",
-   "entity": "Siksika (pies negros)",
+   "name": "Siksika (Blackfoot)",
+   "entity": "Siksika (Blackfoot)",
    "role": "tribe",
    "region": "americas",
    "lat": 50.803,
@@ -4286,7 +4286,7 @@
   },
   {
    "id": "tribe_navajo",
-   "name": "Manuelito",
+   "name": "Navajo",
    "entity": "Navajo",
    "role": "tribe",
    "region": "americas",
@@ -4298,19 +4298,19 @@
   },
   {
    "id": "tribe_pueblos",
-   "name": "Popé",
-   "entity": "Pueblos (Ohkay Owingeh)",
+   "name": "Pueblo (Ohkay Owingeh)",
+   "entity": "Pueblo (Ohkay Owingeh)",
    "role": "tribe",
    "region": "americas",
    "lat": 34,
    "lon": -106,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Pop%C3%A9",
-   "avatar": "pueblos"
+   "avatar": "pueblo"
   },
   {
    "id": "tribe_ute",
-   "name": "Ouray",
+   "name": "Ute",
    "entity": "Ute",
    "role": "tribe",
    "region": "americas",
@@ -4322,7 +4322,7 @@
   },
   {
    "id": "tribe_modoc",
-   "name": "Kintpuash",
+   "name": "Modoc",
    "entity": "Modoc",
    "role": "tribe",
    "region": "americas",
@@ -4334,7 +4334,7 @@
   },
   {
    "id": "tribe_duwamish",
-   "name": "Chief Seattle",
+   "name": "Duwamish",
    "entity": "Duwamish",
    "role": "tribe",
    "region": "americas",
@@ -4346,7 +4346,7 @@
   },
   {
    "id": "tribe_haida",
-   "name": "Albert Edward Edenshaw",
+   "name": "Haida",
    "entity": "Haida",
    "role": "tribe",
    "region": "americas",
@@ -4358,19 +4358,19 @@
   },
   {
    "id": "tribe_cree_de_las_llanuras",
-   "name": "Big Bear",
-   "entity": "Cree de las llanuras",
+   "name": "Plains Cree",
+   "entity": "Plains Cree",
    "role": "tribe",
    "region": "americas",
    "lat": 56,
    "lon": -109,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Big_Bear",
-   "avatar": "cree_de_las_llanuras"
+   "avatar": "plains_cree"
   },
   {
    "id": "tribe_ojibwe",
-   "name": "Bagonegiizhig",
+   "name": "Ojibwe",
    "entity": "Ojibwe",
    "role": "tribe",
    "region": "americas",
@@ -4382,8 +4382,8 @@
   },
   {
    "id": "tribe_wendat",
-   "name": "Kondiaronk",
-   "entity": "Wendat (hurones)",
+   "name": "Wendat (Huron)",
+   "entity": "Wendat (Huron)",
    "role": "tribe",
    "region": "americas",
    "lat": 45.7867,
@@ -4394,7 +4394,7 @@
   },
   {
    "id": "tribe_mi_kmaq",
-   "name": "Henri Membertou",
+   "name": "Mi'kmaq",
    "entity": "Mi'kmaq",
    "role": "tribe",
    "region": "americas",
@@ -4406,7 +4406,7 @@
   },
   {
    "id": "tribe_abenaki",
-   "name": "Gray Lock",
+   "name": "Abenaki",
    "entity": "Abenaki",
    "role": "tribe",
    "region": "americas",
@@ -4418,79 +4418,79 @@
   },
   {
    "id": "tribe_yaquis",
-   "name": "Cajeme",
-   "entity": "Yaquis",
+   "name": "Yaqui",
+   "entity": "Yaqui",
    "role": "tribe",
    "region": "americas",
    "lat": 27.7167,
    "lon": -109.8333,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Cajeme",
-   "avatar": "yaquis"
+   "avatar": "yaqui"
   },
   {
    "id": "tribe_purepechas",
-   "name": "Tangaxuan II",
-   "entity": "Purépechas",
+   "name": "Purépecha",
+   "entity": "Purépecha",
    "role": "tribe",
    "region": "americas",
    "lat": 19.6283,
    "lon": -101.5789,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Tangaxuan_II",
-   "avatar": "purepechas"
+   "avatar": "purepecha"
   },
   {
    "id": "tribe_tlaxcaltecas",
-   "name": "Xicotencatl II",
-   "entity": "Tlaxcaltecas",
+   "name": "Tlaxcalans",
+   "entity": "Tlaxcalans",
    "role": "tribe",
    "region": "americas",
    "lat": 19.3151,
    "lon": -98.2362,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Xicotencatl_II",
-   "avatar": "tlaxcaltecas"
+   "avatar": "tlaxcalans"
   },
   {
    "id": "tribe_mixtecos",
-   "name": "Ocho Venado",
-   "entity": "Mixtecos",
+   "name": "Mixtec",
+   "entity": "Mixtec",
    "role": "tribe",
    "region": "americas",
    "lat": 23,
    "lon": -102,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Ocho-Venado",
-   "avatar": "mixtecos"
+   "avatar": "mixtec"
   },
   {
    "id": "tribe_zapotecos",
-   "name": "Cocijoeza",
-   "entity": "Zapotecos",
+   "name": "Zapotec",
+   "entity": "Zapotec",
    "role": "tribe",
    "region": "americas",
    "lat": 23,
    "lon": -102,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Cocijoeza",
-   "avatar": "zapotecos"
+   "avatar": "zapotec"
   },
   {
    "id": "tribe_itzaes",
-   "name": "Kan Ek'",
-   "entity": "Itzáes",
+   "name": "Itza",
+   "entity": "Itza",
    "role": "tribe",
    "region": "americas",
    "lat": 23,
    "lon": -102,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Canek",
-   "avatar": "itzaes"
+   "avatar": "itza"
   },
   {
    "id": "tribe_k_iche",
-   "name": "Tecún Umán",
+   "name": "K'iche'",
    "entity": "K'iche'",
    "role": "tribe",
    "region": "americas",
@@ -4502,67 +4502,67 @@
   },
   {
    "id": "tribe_lencas",
-   "name": "Lempira",
-   "entity": "Lencas",
+   "name": "Lenca",
+   "entity": "Lenca",
    "role": "tribe",
    "region": "americas",
    "lat": 14.6333,
    "lon": -86.8167,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Lempira_%28Lenca_ruler%29",
-   "avatar": "lencas"
+   "avatar": "lenca"
   },
   {
    "id": "tribe_nicaraos",
    "name": "Nicarao",
-   "entity": "Nicaraos",
+   "entity": "Nicarao",
    "role": "tribe",
    "region": "americas",
    "lat": 13,
    "lon": -85,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Nicarao",
-   "avatar": "nicaraos"
+   "avatar": "nicarao"
   },
   {
    "id": "tribe_muiscas",
-   "name": "Tisquesusa",
-   "entity": "Muiscas",
+   "name": "Muisca",
+   "entity": "Muisca",
    "role": "tribe",
    "region": "americas",
    "lat": 5,
    "lon": -74.15,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Tisquesusa",
-   "avatar": "muiscas"
+   "avatar": "muisca"
   },
   {
    "id": "tribe_calchaquies",
-   "name": "Juan Calchaquí",
-   "entity": "Calchaquíes (diaguitas)",
+   "name": "Calchaquí (Diaguita)",
+   "entity": "Calchaquí (Diaguita)",
    "role": "tribe",
    "region": "americas",
    "lat": -13.5167,
    "lon": -71.9667,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Juan_Calchaqu%C3%AD",
-   "avatar": "calchaquies"
+   "avatar": "calchaqui"
   },
   {
    "id": "tribe_guaranies_de_las_misiones",
-   "name": "Sepé Tiarajú",
-   "entity": "Guaraníes de las misiones",
+   "name": "Guaraní of the Missions",
+   "entity": "Guaraní of the Missions",
    "role": "tribe",
    "region": "americas",
    "lat": -28.4078,
    "lon": -54.9608,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Sep%C3%A9_Tiaray%C3%BA",
-   "avatar": "guaranies_de_las_misiones"
+   "avatar": "guarani_of_the_missions"
   },
   {
    "id": "tribe_tupinamba",
-   "name": "Cunhambebe",
+   "name": "Tupinambá",
    "entity": "Tupinambá",
    "role": "tribe",
    "region": "americas",
@@ -4574,7 +4574,7 @@
   },
   {
    "id": "tribe_nuu_chah_nulth",
-   "name": "Maquinna",
+   "name": "Nuu-chah-nulth",
    "entity": "Nuu-chah-nulth",
    "role": "tribe",
    "region": "americas",
@@ -4586,7 +4586,7 @@
   },
   {
    "id": "tribe_pocasset",
-   "name": "Weetamoo",
+   "name": "Pocasset",
    "entity": "Pocasset",
    "role": "tribe",
    "region": "americas",
@@ -4598,7 +4598,7 @@
   },
   {
    "id": "tribe_sakonnet",
-   "name": "Awashonks",
+   "name": "Sakonnet",
    "entity": "Sakonnet",
    "role": "tribe",
    "region": "americas",
@@ -4610,7 +4610,7 @@
   },
   {
    "id": "tribe_niantic",
-   "name": "Quaiapen",
+   "name": "Niantic",
    "entity": "Niantic",
    "role": "tribe",
    "region": "americas",
@@ -4622,7 +4622,7 @@
   },
   {
    "id": "tribe_pamunkey",
-   "name": "Cockacoeske",
+   "name": "Pamunkey",
    "entity": "Pamunkey",
    "role": "tribe",
    "region": "americas",
@@ -4634,19 +4634,19 @@
   },
   {
    "id": "tribe_tainos_de_boriken",
-   "name": "Yuisa",
-   "entity": "Taínos de Borikén",
+   "name": "Taíno (Borikén)",
+   "entity": "Taíno (Borikén)",
    "role": "tribe",
    "region": "americas",
    "lat": 18.2,
    "lon": -66.5,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "tainos_de_boriken"
+   "avatar": "taino"
   },
   {
    "id": "tribe_potiguara",
-   "name": "Clara Camarão",
+   "name": "Potiguara",
    "entity": "Potiguara",
    "role": "tribe",
    "region": "americas",
@@ -4658,19 +4658,19 @@
   },
   {
    "id": "tribe_chichimecas_guachichiles",
-   "name": "Jefa guachichil",
-   "entity": "Chichimecas guachichiles",
+   "name": "Chichimecs (Guachichil)",
+   "entity": "Chichimecs (Guachichil)",
    "role": "tribe",
    "region": "americas",
    "lat": 22.2,
    "lon": -101.0,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "chichimecas_guachichiles"
+   "avatar": "chichimecs_guachichil"
   },
   {
    "id": "tribe_cayuga",
-   "name": "Gayogohó:no' Kahente",
+   "name": "Cayuga",
    "entity": "Cayuga",
    "role": "tribe",
    "region": "americas",
@@ -4682,7 +4682,7 @@
   },
   {
    "id": "tribe_tuscarora",
-   "name": "Kanenstenhawi",
+   "name": "Tuscarora",
    "entity": "Tuscarora",
    "role": "tribe",
    "region": "americas",
@@ -4694,7 +4694,7 @@
   },
   {
    "id": "tribe_catawba",
-   "name": "Women in the American Revolution",
+   "name": "Catawba",
    "entity": "Catawba",
    "role": "tribe",
    "region": "americas",
@@ -4706,7 +4706,7 @@
   },
   {
    "id": "tribe_yamasee",
-   "name": "Altamaha Wiseh",
+   "name": "Yamasee",
    "entity": "Yamasee",
    "role": "tribe",
    "region": "americas",
@@ -4718,19 +4718,19 @@
   },
   {
    "id": "tribe_timucuas",
-   "name": "Ulele",
-   "entity": "Timucuas",
+   "name": "Timucua",
+   "entity": "Timucua",
    "role": "tribe",
    "region": "americas",
    "lat": 39.8282,
    "lon": -98.5795,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Timucua",
-   "avatar": "timucuas"
+   "avatar": "timucua"
   },
   {
    "id": "tribe_calusa",
-   "name": "Antonia",
+   "name": "Calusa",
    "entity": "Calusa",
    "role": "tribe",
    "region": "americas",
@@ -4742,7 +4742,7 @@
   },
   {
    "id": "tribe_pawnee",
-   "name": "Pitaresaru",
+   "name": "Pawnee",
    "entity": "Pawnee",
    "role": "tribe",
    "region": "americas",
@@ -4754,8 +4754,8 @@
   },
   {
    "id": "tribe_dakota",
-   "name": "Wiyaka Wastewin",
-   "entity": "Dakota (santee)",
+   "name": "Dakota (Santee)",
+   "entity": "Dakota (Santee)",
    "role": "tribe",
    "region": "americas",
    "lat": 44.5,
@@ -4766,7 +4766,7 @@
   },
   {
    "id": "tribe_assiniboine",
-   "name": "Hokshila Win",
+   "name": "Assiniboine",
    "entity": "Assiniboine",
    "role": "tribe",
    "region": "americas",
@@ -4778,8 +4778,8 @@
   },
   {
    "id": "tribe_inuit",
-   "name": "Arnarulunnguaq",
-   "entity": "Inuit (Groenlandia)",
+   "name": "Inuit (Greenland)",
+   "entity": "Inuit (Greenland)",
    "role": "tribe",
    "region": "americas",
    "lat": 56,
@@ -4790,20 +4790,20 @@
   },
   {
    "id": "tribe_inuit_del_labrador",
-   "name": "Mikak",
-   "entity": "Inuit del Labrador",
+   "name": "Labrador Inuit",
+   "entity": "Labrador Inuit",
    "role": "tribe",
    "region": "americas",
    "lat": 55.5,
    "lon": -61.0,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Mikak",
-   "avatar": "inuit_del_labrador"
+   "avatar": "labrador_inuit"
   },
   {
    "id": "tribe_lokono",
-   "name": "Wadili",
-   "entity": "Lokono (arahuacos)",
+   "name": "Lokono (Arawak)",
+   "entity": "Lokono (Arawak)",
    "role": "tribe",
    "region": "americas",
    "lat": 5.8,
@@ -4814,7 +4814,7 @@
   },
   {
    "id": "tribe_kalinago",
-   "name": "Akaiwa",
+   "name": "Kalinago",
    "entity": "Kalinago",
    "role": "tribe",
    "region": "americas",
@@ -4826,7 +4826,7 @@
   },
   {
    "id": "tribe_wayuu",
-   "name": "Jayaliyuu",
+   "name": "Wayuu",
    "entity": "Wayuu",
    "role": "tribe",
    "region": "americas",
@@ -4838,19 +4838,19 @@
   },
   {
    "id": "tribe_tehuelches",
-   "name": "Ayelén",
-   "entity": "Tehuelches",
+   "name": "Tehuelche",
+   "entity": "Tehuelche",
    "role": "tribe",
    "region": "americas",
    "lat": -41.8102,
    "lon": -68.9063,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Tehuelches",
-   "avatar": "tehuelches"
+   "avatar": "tehuelche"
   },
   {
    "id": "tribe_selk_nam",
-   "name": "Lola Kiepja",
+   "name": "Selk'nam",
    "entity": "Selk'nam",
    "role": "tribe",
    "region": "americas",
@@ -4862,19 +4862,19 @@
   },
   {
    "id": "tribe_yamanas",
-   "name": "Kipa Yamana",
-   "entity": "Yámanas",
+   "name": "Yaghan",
+   "entity": "Yaghan",
    "role": "tribe",
    "region": "americas",
    "lat": -54,
    "lon": -70,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Pueblo_yag%C3%A1n",
-   "avatar": "yamanas"
+   "avatar": "yaghan"
   },
   {
    "id": "tribe_kaingang",
-   "name": "Pensá",
+   "name": "Kaingang",
    "entity": "Kaingang",
    "role": "tribe",
    "region": "americas",
@@ -4886,19 +4886,19 @@
   },
   {
    "id": "tribe_chancas",
-   "name": "Anqoyaku",
-   "entity": "Chancas",
+   "name": "Chanca",
+   "entity": "Chanca",
    "role": "tribe",
    "region": "americas",
    "lat": -13.6,
    "lon": -73.4,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Chanca",
-   "avatar": "chancas"
+   "avatar": "chanca"
   },
   {
    "id": "tribe_moche",
-   "name": "Lady of Cao",
+   "name": "Moche",
    "entity": "Moche",
    "role": "tribe",
    "region": "americas",
@@ -4910,31 +4910,31 @@
   },
   {
    "id": "tribe_huancas",
-   "name": "Mama Wanka",
-   "entity": "Huancas",
+   "name": "Huanca",
+   "entity": "Huanca",
    "role": "tribe",
    "region": "americas",
    "lat": -9.4,
    "lon": -76,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Huanca",
-   "avatar": "huancas"
+   "avatar": "huanca"
   },
   {
    "id": "tribe_canaris",
-   "name": "Kiris Cañari",
-   "entity": "Cañaris",
+   "name": "Cañari",
+   "entity": "Cañari",
    "role": "tribe",
    "region": "americas",
    "lat": -2.7,
    "lon": -78.9,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Ca%C3%B1ari",
-   "avatar": "canaris"
+   "avatar": "canari"
   },
   {
    "id": "tribe_shuar",
-   "name": "Yampintsa",
+   "name": "Shuar",
    "entity": "Shuar",
    "role": "tribe",
    "region": "americas",
@@ -4946,116 +4946,116 @@
   },
   {
    "id": "tribe_ashaninkas",
-   "name": "Mañari",
-   "entity": "Asháninkas",
+   "name": "Asháninka",
+   "entity": "Asháninka",
    "role": "tribe",
    "region": "americas",
    "lat": -11.3,
    "lon": -74.5,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "ashaninkas"
+   "avatar": "ashaninka"
   },
   {
    "id": "tribe_moxos",
-   "name": "Ayaba",
-   "entity": "Moxos",
+   "name": "Mojo",
+   "entity": "Mojo",
    "role": "tribe",
    "region": "americas",
    "lat": -15.667,
    "lon": -65.917,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Moje%C3%B1os",
-   "avatar": "moxos"
+   "avatar": "mojo"
   },
   {
    "id": "tribe_chiriguanos",
-   "name": "Kuñambai",
-   "entity": "Chiriguanos",
+   "name": "Chiriguano",
+   "entity": "Chiriguano",
    "role": "tribe",
    "region": "americas",
    "lat": -34,
    "lon": -64,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Ava_guaran%C3%ADes",
-   "avatar": "chiriguanos"
+   "avatar": "chiriguano"
   },
   {
    "id": "tribe_chontales",
-   "name": "Ix Chuen",
-   "entity": "Chontales",
+   "name": "Chontal",
+   "entity": "Chontal",
    "role": "tribe",
    "region": "americas",
    "lat": 18.0,
    "lon": -93.0,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Chontal_Maya",
-   "avatar": "chontales"
+   "avatar": "chontal"
   },
   {
    "id": "tribe_tzeltales",
-   "name": "María de la Candelaria",
-   "entity": "Tzeltales",
+   "name": "Tzeltal",
+   "entity": "Tzeltal",
    "role": "tribe",
    "region": "americas",
    "lat": 19.4333,
    "lon": -99.1333,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Mar%C3%ADa_de_la_Candelaria",
-   "avatar": "tzeltales"
+   "avatar": "tzeltal"
   },
   {
    "id": "tribe_lacandones",
-   "name": "Nuk Ixik",
-   "entity": "Lacandones",
+   "name": "Lacandon",
+   "entity": "Lacandon",
    "role": "tribe",
    "region": "americas",
    "lat": 16.4624,
    "lon": -91.1591,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Lacandones",
-   "avatar": "lacandones"
+   "avatar": "lacandon"
   },
   {
    "id": "tribe_otomies",
-   "name": "Xochitl Otomí",
-   "entity": "Otomíes",
+   "name": "Otomi",
+   "entity": "Otomi",
    "role": "tribe",
    "region": "americas",
    "lat": 20.3,
    "lon": -99.5,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Pueblo_otom%C3%AD",
-   "avatar": "otomies"
+   "avatar": "otomi"
   },
   {
    "id": "tribe_huastecos",
-   "name": "Tamtoque",
-   "entity": "Huastecos",
+   "name": "Huastec",
+   "entity": "Huastec",
    "role": "tribe",
    "region": "americas",
    "lat": 23,
    "lon": -102,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Pueblo_huasteco",
-   "avatar": "huastecos"
+   "avatar": "huastec"
   },
   {
    "id": "tribe_totonacas",
-   "name": "Xanat",
-   "entity": "Totonacas",
+   "name": "Totonac",
+   "entity": "Totonac",
    "role": "tribe",
    "region": "americas",
    "lat": 19.9,
    "lon": -97.0,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "totonacas"
+   "avatar": "totonac"
   },
   {
    "id": "tribe_comcaac",
-   "name": "Lola Casanova",
-   "entity": "Comcaac (seris)",
+   "name": "Comcaac (Seri)",
+   "entity": "Comcaac (Seri)",
    "role": "tribe",
    "region": "americas",
    "lat": 23,
@@ -5066,7 +5066,7 @@
   },
   {
    "id": "tribe_tohono_o_odham",
-   "name": "Ha'ichu Ki",
+   "name": "Tohono O'odham",
    "entity": "Tohono O'odham",
    "role": "tribe",
    "region": "americas",
@@ -5078,7 +5078,7 @@
   },
   {
    "id": "tribe_hopi",
-   "name": "Honwaima",
+   "name": "Hopi",
    "entity": "Hopi",
    "role": "tribe",
    "region": "americas",
@@ -5090,7 +5090,7 @@
   },
   {
    "id": "tribe_zuni",
-   "name": "Tsalitsa",
+   "name": "Zuni",
    "entity": "Zuni",
    "role": "tribe",
    "region": "americas",
@@ -5102,7 +5102,7 @@
   },
   {
    "id": "tribe_tongva",
-   "name": "Toypurina",
+   "name": "Tongva",
    "entity": "Tongva",
    "role": "tribe",
    "region": "americas",
@@ -5114,7 +5114,7 @@
   },
   {
    "id": "tribe_kumeyaay",
-   "name": "Kwaaypaay Shuluk",
+   "name": "Kumeyaay",
    "entity": "Kumeyaay",
    "role": "tribe",
    "region": "americas",
@@ -5126,7 +5126,7 @@
   },
   {
    "id": "tribe_chumash",
-   "name": "Kihiwet",
+   "name": "Chumash",
    "entity": "Chumash",
    "role": "tribe",
    "region": "americas",
@@ -5138,7 +5138,7 @@
   },
   {
    "id": "tribe_pomo",
-   "name": "Shuwesh",
+   "name": "Pomo",
    "entity": "Pomo",
    "role": "tribe",
    "region": "americas",
@@ -5150,7 +5150,7 @@
   },
   {
    "id": "tribe_ohlone",
-   "name": "Tuyu",
+   "name": "Ohlone",
    "entity": "Ohlone",
    "role": "tribe",
    "region": "americas",
@@ -5162,8 +5162,8 @@
   },
   {
    "id": "tribe_ndebele",
-   "name": "Mzilikazi",
-   "entity": "Ndebele (matabele)",
+   "name": "Ndebele (Matabele)",
+   "entity": "Ndebele (Matabele)",
    "role": "tribe",
    "region": "africa",
    "lat": -27.6167,
@@ -5174,7 +5174,7 @@
   },
   {
    "id": "tribe_basotho",
-   "name": "Moshoeshoe I",
+   "name": "Basotho",
    "entity": "Basotho",
    "role": "tribe",
    "region": "africa",
@@ -5186,8 +5186,8 @@
   },
   {
    "id": "tribe_bamangwato",
-   "name": "Khama III",
-   "entity": "Bamangwato (tswana)",
+   "name": "Bamangwato (Tswana)",
+   "entity": "Bamangwato (Tswana)",
    "role": "tribe",
    "region": "africa",
    "lat": -22.2,
@@ -5198,7 +5198,7 @@
   },
   {
    "id": "tribe_bapedi",
-   "name": "Sekhukhune",
+   "name": "Bapedi",
    "entity": "Bapedi",
    "role": "tribe",
    "region": "africa",
@@ -5210,7 +5210,7 @@
   },
   {
    "id": "tribe_venda",
-   "name": "Makhado",
+   "name": "Venda",
    "entity": "Venda",
    "role": "tribe",
    "region": "africa",
@@ -5222,7 +5222,7 @@
   },
   {
    "id": "tribe_herero",
-   "name": "Samuel Maharero",
+   "name": "Herero",
    "entity": "Herero",
    "role": "tribe",
    "region": "africa",
@@ -5234,7 +5234,7 @@
   },
   {
    "id": "tribe_nama",
-   "name": "Hendrik Witbooi",
+   "name": "Nama",
    "entity": "Nama",
    "role": "tribe",
    "region": "africa",
@@ -5246,8 +5246,8 @@
   },
   {
    "id": "tribe_kwanyama",
-   "name": "Mandume ya Ndemufayo",
-   "entity": "Kwanyama (ovambo)",
+   "name": "Kwanyama (Ovambo)",
+   "entity": "Kwanyama (Ovambo)",
    "role": "tribe",
    "region": "africa",
    "lat": -17,
@@ -5258,7 +5258,7 @@
   },
   {
    "id": "tribe_hehe",
-   "name": "Mkwawa",
+   "name": "Hehe",
    "entity": "Hehe",
    "role": "tribe",
    "region": "africa",
@@ -5270,7 +5270,7 @@
   },
   {
    "id": "tribe_nyamwezi",
-   "name": "Mirambo",
+   "name": "Nyamwezi",
    "entity": "Nyamwezi",
    "role": "tribe",
    "region": "africa",
@@ -5282,7 +5282,7 @@
   },
   {
    "id": "tribe_yao",
-   "name": "Machemba",
+   "name": "Yao",
    "entity": "Yao",
    "role": "tribe",
    "region": "africa",
@@ -5294,8 +5294,8 @@
   },
   {
    "id": "tribe_maasai",
-   "name": "Mbatian",
-   "entity": "Maasái",
+   "name": "Maasai",
+   "entity": "Maasai",
    "role": "tribe",
    "region": "africa",
    "lat": 0.1,
@@ -5306,7 +5306,7 @@
   },
   {
    "id": "tribe_nandi",
-   "name": "Koitalel Arap Samoei",
+   "name": "Nandi",
    "entity": "Nandi",
    "role": "tribe",
    "region": "africa",
@@ -5318,103 +5318,103 @@
   },
   {
    "id": "tribe_somalies_derviches",
-   "name": "Mohammed Abdullah Hassan",
-   "entity": "Somalíes derviches",
+   "name": "Dervish Somalis",
+   "entity": "Dervish Somalis",
    "role": "tribe",
    "region": "africa",
    "lat": 8.2547,
    "lon": 46.3283,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Mohamed_Abdul%C3%A1_Hassan",
-   "avatar": "somalies_derviches"
+   "avatar": "dervish_somalis"
   },
   {
    "id": "tribe_oromo_de_jimma",
-   "name": "Abba Jifar II",
-   "entity": "Oromo de Jimma",
+   "name": "Oromo of Jimma",
+   "entity": "Oromo of Jimma",
    "role": "tribe",
    "region": "africa",
    "lat": 7,
    "lon": 30,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Abba_Jifar_II",
-   "avatar": "oromo_de_jimma"
+   "avatar": "oromo_of_jimma"
   },
   {
    "id": "tribe_tuareg_del_air",
-   "name": "Kaocen revolt",
-   "entity": "Tuareg del Aïr",
+   "name": "Tuareg of Aïr",
+   "entity": "Tuareg of Aïr",
    "role": "tribe",
    "region": "africa",
    "lat": 18.2769,
    "lon": 7.9994,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Kaocen_revolt",
-   "avatar": "tuareg_del_air"
+   "avatar": "tuareg_of_air"
   },
   {
    "id": "tribe_fulani_de_sokoto",
-   "name": "Usman dan Fodio",
-   "entity": "Fulani de Sokoto",
+   "name": "Fulani of Sokoto",
+   "entity": "Fulani of Sokoto",
    "role": "tribe",
    "region": "africa",
    "lat": 12.5933,
    "lon": -12.8458,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Usman_dan_Fodio",
-   "avatar": "fulani_de_sokoto"
+   "avatar": "fulani_of_sokoto"
   },
   {
    "id": "tribe_tucolor",
-   "name": "El Hadj Umar Tall",
-   "entity": "Tucolor",
+   "name": "Toucouleur",
+   "entity": "Toucouleur",
    "role": "tribe",
    "region": "africa",
    "lat": 14.3667,
    "lon": -14.2833,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/El_Hadj_Umar_Tall",
-   "avatar": "tucolor"
+   "avatar": "toucouleur"
   },
   {
    "id": "tribe_wolof_de_cayor",
-   "name": "Lat Jor",
-   "entity": "Wolof de Cayor",
+   "name": "Wolof of Cayor",
+   "entity": "Wolof of Cayor",
    "role": "tribe",
    "region": "africa",
    "lat": 14.3667,
    "lon": -14.2833,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Lat_Jor",
-   "avatar": "wolof_de_cayor"
+   "avatar": "wolof_of_cayor"
   },
   {
    "id": "tribe_serer_de_sine",
-   "name": "Kumba Ndoffene Famak Joof",
-   "entity": "Serer de Sine",
+   "name": "Serer of Sine",
+   "entity": "Serer of Sine",
    "role": "tribe",
    "region": "africa",
    "lat": 14.4631,
    "lon": -16.2905,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Kumba_Ndoffene_Famak_Joof",
-   "avatar": "serer_de_sine"
+   "avatar": "serer_of_sine"
   },
   {
    "id": "tribe_mandinga_de_kaabu",
-   "name": "Janke Waali",
-   "entity": "Mandinga de Kaabu",
+   "name": "Mandinka of Kaabu",
+   "entity": "Mandinka of Kaabu",
    "role": "tribe",
    "region": "africa",
    "lat": 12.3,
    "lon": -15.0,
    "gender": "male",
    "wikipedia": null,
-   "avatar": "mandinga_de_kaabu"
+   "avatar": "mandinka_of_kaabu"
   },
   {
    "id": "tribe_mossi",
-   "name": "Naaba Oubri",
+   "name": "Mossi",
    "entity": "Mossi",
    "role": "tribe",
    "region": "africa",
@@ -5426,7 +5426,7 @@
   },
   {
    "id": "tribe_dagomba",
-   "name": "Naa Gbewaa",
+   "name": "Dagomba",
    "entity": "Dagomba",
    "role": "tribe",
    "region": "africa",
@@ -5438,7 +5438,7 @@
   },
   {
    "id": "tribe_fon",
-   "name": "Ghezo",
+   "name": "Fon (Dahomey)",
    "entity": "Fon (Dahomey)",
    "role": "tribe",
    "region": "africa",
@@ -5450,31 +5450,31 @@
   },
   {
    "id": "tribe_yoruba_de_oyo",
-   "name": "Abiodun",
-   "entity": "Yoruba de Oyo",
+   "name": "Yoruba of Oyo",
+   "entity": "Yoruba of Oyo",
    "role": "tribe",
    "region": "africa",
    "lat": 7.12,
    "lon": 3.3725,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Abiodun_%28Oyo_ruler%29",
-   "avatar": "yoruba_de_oyo"
+   "avatar": "yoruba_of_oyo"
   },
   {
    "id": "tribe_ijaw_de_opobo",
-   "name": "Jaja de Opobo",
-   "entity": "Ijaw de Opobo",
+   "name": "Ijaw of Opobo",
+   "entity": "Ijaw of Opobo",
    "role": "tribe",
    "region": "africa",
    "lat": 5.35,
    "lon": 5.5083,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Jaja_de_Opobo",
-   "avatar": "ijaw_de_opobo"
+   "avatar": "ijaw_of_opobo"
   },
   {
    "id": "tribe_bamum",
-   "name": "Ibrahim Njoya",
+   "name": "Bamum",
    "entity": "Bamum",
    "role": "tribe",
    "region": "africa",
@@ -5486,7 +5486,7 @@
   },
   {
    "id": "tribe_kuba",
-   "name": "Kuba Kingdom",
+   "name": "Kuba",
    "entity": "Kuba",
    "role": "tribe",
    "region": "africa",
@@ -5498,7 +5498,7 @@
   },
   {
    "id": "tribe_lozi",
-   "name": "Lewanika",
+   "name": "Lozi",
    "entity": "Lozi",
    "role": "tribe",
    "region": "africa",
@@ -5510,7 +5510,7 @@
   },
   {
    "id": "tribe_ngoni",
-   "name": "Jere Ngoni Kingdom",
+   "name": "Ngoni",
    "entity": "Ngoni",
    "role": "tribe",
    "region": "africa",
@@ -5522,8 +5522,8 @@
   },
   {
    "id": "tribe_gaza",
-   "name": "Soshangane",
-   "entity": "Gaza (tsonga)",
+   "name": "Gaza (Tsonga)",
+   "entity": "Gaza (Tsonga)",
    "role": "tribe",
    "region": "africa",
    "lat": 31.5075,
@@ -5534,7 +5534,7 @@
   },
   {
    "id": "tribe_rozvi",
-   "name": "Rozvi Empire",
+   "name": "Rozvi",
    "entity": "Rozvi",
    "role": "tribe",
    "region": "africa",
@@ -5546,7 +5546,7 @@
   },
   {
    "id": "tribe_fur",
-   "name": "Ali Dinar",
+   "name": "Fur (Darfur)",
    "entity": "Fur (Darfur)",
    "role": "tribe",
    "region": "africa",
@@ -5558,32 +5558,32 @@
   },
   {
    "id": "tribe_ruanda",
-   "name": "Kigeli IV Rwabugiri",
-   "entity": "Ruanda (banyarwanda)",
+   "name": "Rwanda (Banyarwanda)",
+   "entity": "Rwanda (Banyarwanda)",
    "role": "tribe",
    "region": "africa",
    "lat": -2,
    "lon": 30,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Kigeli_IV_Rwabugiri",
-   "avatar": "ruanda"
+   "avatar": "rwanda"
   },
   {
    "id": "tribe_ovimbundu_de_bailundo",
-   "name": "Ekuikui II",
-   "entity": "Ovimbundu de Bailundo",
+   "name": "Ovimbundu of Bailundo",
+   "entity": "Ovimbundu of Bailundo",
    "role": "tribe",
    "region": "africa",
    "lat": -12.35,
    "lon": 17.35,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Ovimbundu",
-   "avatar": "ovimbundu_de_bailundo"
+   "avatar": "ovimbundu_of_bailundo"
   },
   {
    "id": "tribe_goringhaiqua",
-   "name": "Doman",
-   "entity": "Goringhaiqua (joijói)",
+   "name": "Goringhaiqua (Khoikhoi)",
+   "entity": "Goringhaiqua (Khoikhoi)",
    "role": "tribe",
    "region": "africa",
    "lat": -33.9,
@@ -5594,31 +5594,31 @@
   },
   {
    "id": "tribe_masesilios",
-   "name": "Masinisa",
-   "entity": "Masesilios (númidas)",
+   "name": "Masaesyli (Numidians)",
+   "entity": "Masaesyli (Numidians)",
    "role": "tribe",
    "region": "africa",
    "lat": 35.5,
    "lon": 7.3,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Masinisa",
-   "avatar": "masesilios"
+   "avatar": "masaesyli"
   },
   {
    "id": "tribe_musulamios",
-   "name": "Tacfarinas",
-   "entity": "Musulamios",
+   "name": "Musulamii",
+   "entity": "Musulamii",
    "role": "tribe",
    "region": "africa",
    "lat": 36.2864,
    "lon": 7.9511,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Tacfarinas",
-   "avatar": "musulamios"
+   "avatar": "musulamii"
   },
   {
    "id": "tribe_bunyoro",
-   "name": "Kabalega",
+   "name": "Bunyoro",
    "entity": "Bunyoro",
    "role": "tribe",
    "region": "africa",
@@ -5630,7 +5630,7 @@
   },
   {
    "id": "tribe_duala",
-   "name": "Rudolf Duala Manga Bell",
+   "name": "Duala",
    "entity": "Duala",
    "role": "tribe",
    "region": "africa",
@@ -5642,7 +5642,7 @@
   },
   {
    "id": "tribe_kikuyu",
-   "name": "Wangu wa Makeri",
+   "name": "Kikuyu",
    "entity": "Kikuyu",
    "role": "tribe",
    "region": "africa",
@@ -5654,7 +5654,7 @@
   },
   {
    "id": "tribe_giriama",
-   "name": "Mekatilili Wa Menza",
+   "name": "Giriama",
    "entity": "Giriama",
    "role": "tribe",
    "region": "africa",
@@ -5666,7 +5666,7 @@
   },
   {
    "id": "tribe_lobedu",
-   "name": "Rain Queen",
+   "name": "Lobedu",
    "entity": "Lobedu",
    "role": "tribe",
    "region": "africa",
@@ -5678,20 +5678,20 @@
   },
   {
    "id": "tribe_igbo_de_enugu_ezike",
-   "name": "Ahebi Ugbabe",
-   "entity": "Igbo de Enugu-Ezike",
+   "name": "Igbo of Enugu-Ezike",
+   "entity": "Igbo of Enugu-Ezike",
    "role": "tribe",
    "region": "africa",
    "lat": 9,
    "lon": 8,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Ahebi_Ugbabe",
-   "avatar": "igbo_de_enugu_ezike"
+   "avatar": "igbo_of_enugu_ezike"
   },
   {
    "id": "tribe_egba",
-   "name": "Madam Tinubu",
-   "entity": "Egba (yoruba)",
+   "name": "Egba (Yoruba)",
+   "entity": "Egba (Yoruba)",
    "role": "tribe",
    "region": "africa",
    "lat": 9,
@@ -5702,8 +5702,8 @@
   },
   {
    "id": "tribe_ife",
-   "name": "Moremi Ajasoro",
-   "entity": "Ife (yoruba)",
+   "name": "Ife (Yoruba)",
+   "entity": "Ife (Yoruba)",
    "role": "tribe",
    "region": "africa",
    "lat": 7.4667,
@@ -5714,19 +5714,19 @@
   },
   {
    "id": "tribe_hausa_de_daura",
-   "name": "Daurama",
-   "entity": "Hausa de Daura",
+   "name": "Hausa of Daura",
+   "entity": "Hausa of Daura",
    "role": "tribe",
    "region": "africa",
    "lat": 13.0364,
    "lon": 8.3178,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Daurama",
-   "avatar": "hausa_de_daura"
+   "avatar": "hausa_of_daura"
   },
   {
    "id": "tribe_mende",
-   "name": "Madam Yoko",
+   "name": "Mende",
    "entity": "Mende",
    "role": "tribe",
    "region": "africa",
@@ -5738,19 +5738,19 @@
   },
   {
    "id": "tribe_tuareg_del_ahaggar",
-   "name": "Tin Hinan",
-   "entity": "Tuareg del Ahaggar",
+   "name": "Tuareg of Ahaggar",
+   "entity": "Tuareg of Ahaggar",
    "role": "tribe",
    "region": "africa",
    "lat": 23.2886,
    "lon": 5.5342,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Tin_Hinan",
-   "avatar": "tuareg_del_ahaggar"
+   "avatar": "tuareg_of_ahaggar"
   },
   {
    "id": "tribe_ndwandwe",
-   "name": "Ntombazi",
+   "name": "Ndwandwe",
    "entity": "Ndwandwe",
    "role": "tribe",
    "region": "africa",
@@ -5762,31 +5762,31 @@
   },
   {
    "id": "tribe_sakalava_de_boina",
-   "name": "Ravahiny",
-   "entity": "Sakalava de Boina",
+   "name": "Sakalava of Boina",
+   "entity": "Sakalava of Boina",
    "role": "tribe",
    "region": "africa",
    "lat": -20,
    "lon": 47,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Sakalava_people",
-   "avatar": "sakalava_de_boina"
+   "avatar": "sakalava_of_boina"
   },
   {
    "id": "tribe_nubios_nobatas",
-   "name": "Kawa",
-   "entity": "Nubios nobatas",
+   "name": "Nobatae (Nubians)",
+   "entity": "Nobatae (Nubians)",
    "role": "tribe",
    "region": "africa",
    "lat": 21.5,
    "lon": 31.3,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "nubios_nobatas"
+   "avatar": "nobatae"
   },
   {
    "id": "tribe_agaw",
-   "name": "Gudit",
+   "name": "Agaw",
    "entity": "Agaw",
    "role": "tribe",
    "region": "africa",
@@ -5798,7 +5798,7 @@
   },
   {
    "id": "tribe_afar",
-   "name": "Dahaba",
+   "name": "Afar",
    "entity": "Afar",
    "role": "tribe",
    "region": "africa",
@@ -5810,7 +5810,7 @@
   },
   {
    "id": "tribe_temne",
-   "name": "Yamba",
+   "name": "Temne",
    "entity": "Temne",
    "role": "tribe",
    "region": "africa",
@@ -5822,7 +5822,7 @@
   },
   {
    "id": "tribe_baga",
-   "name": "Nimba",
+   "name": "Baga",
    "entity": "Baga",
    "role": "tribe",
    "region": "africa",
@@ -5834,7 +5834,7 @@
   },
   {
    "id": "tribe_fang",
-   "name": "Nzang Ela",
+   "name": "Fang",
    "entity": "Fang",
    "role": "tribe",
    "region": "africa",
@@ -5846,7 +5846,7 @@
   },
   {
    "id": "tribe_teke",
-   "name": "Ngalifourou",
+   "name": "Teke",
    "entity": "Teke",
    "role": "tribe",
    "region": "africa",
@@ -5858,7 +5858,7 @@
   },
   {
    "id": "tribe_mangbetu",
-   "name": "Nenzima",
+   "name": "Mangbetu",
    "entity": "Mangbetu",
    "role": "tribe",
    "region": "africa",
@@ -5870,7 +5870,7 @@
   },
   {
    "id": "tribe_kiga",
-   "name": "Muhumuza",
+   "name": "Kiga",
    "entity": "Kiga",
    "role": "tribe",
    "region": "africa",
@@ -5882,19 +5882,19 @@
   },
   {
    "id": "tribe_burundeses",
-   "name": "Ririkumutima",
-   "entity": "Burundeses",
+   "name": "Burundi",
+   "entity": "Burundi",
    "role": "tribe",
    "region": "africa",
    "lat": -3.6667,
    "lon": 29.8167,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Ririkumutima",
-   "avatar": "burundeses"
+   "avatar": "burundi"
   },
   {
    "id": "tribe_luo",
-   "name": "Nyipir Achieng",
+   "name": "Luo",
    "entity": "Luo",
    "role": "tribe",
    "region": "africa",
@@ -5906,7 +5906,7 @@
   },
   {
    "id": "tribe_sukuma",
-   "name": "Ng'washi",
+   "name": "Sukuma",
    "entity": "Sukuma",
    "role": "tribe",
    "region": "africa",
@@ -5918,7 +5918,7 @@
   },
   {
    "id": "tribe_chewa",
-   "name": "Nyangu",
+   "name": "Chewa",
    "entity": "Chewa",
    "role": "tribe",
    "region": "africa",
@@ -5930,7 +5930,7 @@
   },
   {
    "id": "tribe_makua",
-   "name": "Naharipa",
+   "name": "Makua",
    "entity": "Makua",
    "role": "tribe",
    "region": "africa",
@@ -5942,7 +5942,7 @@
   },
   {
    "id": "tribe_antandroy",
-   "name": "Ravoay",
+   "name": "Antandroy",
    "entity": "Antandroy",
    "role": "tribe",
    "region": "africa",
@@ -5954,19 +5954,19 @@
   },
   {
    "id": "tribe_vazimba_de_alasora",
-   "name": "Rafohy",
-   "entity": "Vazimba de Alasora",
+   "name": "Vazimba of Alasora",
+   "entity": "Vazimba of Alasora",
    "role": "tribe",
    "region": "africa",
    "lat": -19.3333,
    "lon": 47.0667,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Rafohy",
-   "avatar": "vazimba_de_alasora"
+   "avatar": "vazimba_of_alasora"
   },
   {
    "id": "tribe_damara",
-   "name": "Khoanes",
+   "name": "Damara",
    "entity": "Damara",
    "role": "tribe",
    "region": "africa",
@@ -5978,7 +5978,7 @@
   },
   {
    "id": "tribe_san",
-   "name": "Xhaa",
+   "name": "San (Kalahari)",
    "entity": "San (Kalahari)",
    "role": "tribe",
    "region": "africa",
@@ -5990,7 +5990,7 @@
   },
   {
    "id": "tribe_bamileke",
-   "name": "Mafo Ngou",
+   "name": "Bamileke",
    "entity": "Bamileke",
    "role": "tribe",
    "region": "africa",
@@ -6002,19 +6002,19 @@
   },
   {
    "id": "tribe_sereer_de_saloum",
-   "name": "Linger Selbe",
-   "entity": "Sereer de Saloum",
+   "name": "Serer of Saloum",
+   "entity": "Serer of Saloum",
    "role": "tribe",
    "region": "africa",
    "lat": 14.1,
    "lon": -16.1,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "sereer_de_saloum"
+   "avatar": "serer_of_saloum"
   },
   {
    "id": "tribe_garamantes",
-   "name": "Tinit",
+   "name": "Garamantes",
    "entity": "Garamantes",
    "role": "tribe",
    "region": "africa",
@@ -6026,7 +6026,7 @@
   },
   {
    "id": "tribe_senufo",
-   "name": "Nanguin",
+   "name": "Senufo",
    "entity": "Senufo",
    "role": "tribe",
    "region": "africa",
@@ -6038,19 +6038,19 @@
   },
   {
    "id": "tribe_baule",
-   "name": "Abla Pokou",
-   "entity": "Baulé",
+   "name": "Baoulé",
+   "entity": "Baoulé",
    "role": "tribe",
    "region": "africa",
    "lat": 8,
    "lon": -6,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Pokou",
-   "avatar": "baule"
+   "avatar": "baoule"
   },
   {
    "id": "tribe_kru",
-   "name": "Nyenpu",
+   "name": "Kru",
    "entity": "Kru",
    "role": "tribe",
    "region": "africa",
@@ -6062,19 +6062,19 @@
   },
   {
    "id": "tribe_kanuri_de_kawar",
-   "name": "Amsa",
-   "entity": "Kanuri de Kawar",
+   "name": "Kanuri of Kawar",
+   "entity": "Kanuri of Kawar",
    "role": "tribe",
    "region": "africa",
    "lat": 18.8,
    "lon": 12.9,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "kanuri_de_kawar"
+   "avatar": "kanuri_of_kawar"
   },
   {
    "id": "tribe_toubou",
-   "name": "Kalli",
+   "name": "Toubou",
    "entity": "Toubou",
    "role": "tribe",
    "region": "africa",
@@ -6086,7 +6086,7 @@
   },
   {
    "id": "tribe_shilluk",
-   "name": "Akwot",
+   "name": "Shilluk",
    "entity": "Shilluk",
    "role": "tribe",
    "region": "africa",
@@ -6098,7 +6098,7 @@
   },
   {
    "id": "tribe_dinka",
-   "name": "Achol Deng",
+   "name": "Dinka",
    "entity": "Dinka",
    "role": "tribe",
    "region": "africa",
@@ -6110,7 +6110,7 @@
   },
   {
    "id": "tribe_nuer",
-   "name": "Nyachol",
+   "name": "Nuer",
    "entity": "Nuer",
    "role": "tribe",
    "region": "africa",
@@ -6122,43 +6122,43 @@
   },
   {
    "id": "tribe_queruscos",
-   "name": "Arminio",
-   "entity": "Queruscos",
+   "name": "Cherusci",
+   "entity": "Cherusci",
    "role": "tribe",
    "region": "europe",
    "lat": 53.5611,
    "lon": 8.5222,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Arminio",
-   "avatar": "queruscos"
+   "avatar": "cherusci"
   },
   {
    "id": "tribe_marcomanos",
-   "name": "Marbod",
-   "entity": "Marcomanos",
+   "name": "Marcomanni",
+   "entity": "Marcomanni",
    "role": "tribe",
    "region": "europe",
    "lat": 44.4161,
    "lon": 12.2017,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Marbod",
-   "avatar": "marcomanos"
+   "avatar": "marcomanni"
   },
   {
    "id": "tribe_suevos",
-   "name": "Ariovisto",
-   "entity": "Suevos",
+   "name": "Suebi",
+   "entity": "Suebi",
    "role": "tribe",
    "region": "europe",
    "lat": 50.9,
    "lon": 11.1,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Ariovisto",
-   "avatar": "suevos"
+   "avatar": "suebi"
   },
   {
    "id": "tribe_eburones",
-   "name": "Ambiórix",
+   "name": "Eburones",
    "entity": "Eburones",
    "role": "tribe",
    "region": "europe",
@@ -6170,68 +6170,68 @@
   },
   {
    "id": "tribe_nervios",
-   "name": "Boduognato",
-   "entity": "Nervios",
+   "name": "Nervii",
+   "entity": "Nervii",
    "role": "tribe",
    "region": "europe",
    "lat": 50.5,
    "lon": 3.5,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Boduognato",
-   "avatar": "nervios"
+   "avatar": "nervii"
   },
   {
    "id": "tribe_helvecios",
-   "name": "Orgetórix",
-   "entity": "Helvecios",
+   "name": "Helvetii",
+   "entity": "Helvetii",
    "role": "tribe",
    "region": "europe",
    "lat": 46.5,
    "lon": 2.9,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Org%C3%A9torix",
-   "avatar": "helvecios"
+   "avatar": "helvetii"
   },
   {
    "id": "tribe_cimbrios",
-   "name": "Boiorix",
-   "entity": "Cimbrios",
+   "name": "Cimbri",
+   "entity": "Cimbri",
    "role": "tribe",
    "region": "europe",
    "lat": 45.3261,
    "lon": 8.4234,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Boiorix",
-   "avatar": "cimbrios"
+   "avatar": "cimbri"
   },
   {
    "id": "tribe_teutones",
-   "name": "Teutobod",
-   "entity": "Teutones",
+   "name": "Teutons",
+   "entity": "Teutons",
    "role": "tribe",
    "region": "europe",
    "lat": 41.8931,
    "lon": 12.4828,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Teutobod",
-   "avatar": "teutones"
+   "avatar": "teutons"
   },
   {
    "id": "tribe_eduos",
-   "name": "Dumnórix",
-   "entity": "Eduos",
+   "name": "Aedui",
+   "entity": "Aedui",
    "role": "tribe",
    "region": "europe",
    "lat": 46.6667,
    "lon": 4.7,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/D%C3%BAmnorix",
-   "avatar": "eduos"
+   "avatar": "aedui"
   },
   {
    "id": "tribe_senones",
-   "name": "Breno",
-   "entity": "Senones (Galia)",
+   "name": "Senones (Gaul)",
+   "entity": "Senones (Gaul)",
    "role": "tribe",
    "region": "europe",
    "lat": 46.5,
@@ -6242,31 +6242,31 @@
   },
   {
    "id": "tribe_lusitanos",
-   "name": "Viriato",
-   "entity": "Lusitanos",
+   "name": "Lusitanians",
+   "entity": "Lusitanians",
    "role": "tribe",
    "region": "europe",
    "lat": 38.7689,
    "lon": -7.2181,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Viriato",
-   "avatar": "lusitanos"
+   "avatar": "lusitanians"
   },
   {
    "id": "tribe_arevacos",
-   "name": "Retógenes",
-   "entity": "Arévacos (Numancia)",
+   "name": "Arevaci (Numantia)",
+   "entity": "Arevaci (Numantia)",
    "role": "tribe",
    "region": "europe",
    "lat": 41.5,
    "lon": -3.5,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Ret%C3%B3genes_el_Caraunio",
-   "avatar": "arevacos"
+   "avatar": "arevaci"
   },
   {
    "id": "tribe_ilergetes",
-   "name": "Indíbil",
+   "name": "Ilergetes",
    "entity": "Ilergetes",
    "role": "tribe",
    "region": "europe",
@@ -6278,355 +6278,355 @@
   },
   {
    "id": "tribe_cantabros",
-   "name": "Corocotta",
-   "entity": "Cántabros",
+   "name": "Cantabri",
+   "entity": "Cantabri",
    "role": "tribe",
    "region": "europe",
    "lat": 40.2,
    "lon": -3.5,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Corocotta",
-   "avatar": "cantabros"
+   "avatar": "cantabri"
   },
   {
    "id": "tribe_vandalos",
-   "name": "Genserico",
-   "entity": "Vándalos",
+   "name": "Vandals",
+   "entity": "Vandals",
    "role": "tribe",
    "region": "europe",
    "lat": 52.5,
    "lon": 17.5,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Genserico",
-   "avatar": "vandalos"
+   "avatar": "vandals"
   },
   {
    "id": "tribe_tervingios",
-   "name": "Atanarico",
-   "entity": "Tervingios (godos)",
+   "name": "Tervingi (Goths)",
+   "entity": "Tervingi (Goths)",
    "role": "tribe",
    "region": "europe",
    "lat": 41.0122,
    "lon": 28.976,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Atanarico",
-   "avatar": "tervingios"
+   "avatar": "tervingi"
   },
   {
    "id": "tribe_visigodos",
-   "name": "Alarico I",
-   "entity": "Visigodos",
+   "name": "Visigoths",
+   "entity": "Visigoths",
    "role": "tribe",
    "region": "europe",
    "lat": 45.0667,
    "lon": 28.75,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Alarico_I",
-   "avatar": "visigodos"
+   "avatar": "visigoths"
   },
   {
    "id": "tribe_gepidos",
-   "name": "Ardarico",
-   "entity": "Gépidos",
+   "name": "Gepids",
+   "entity": "Gepids",
    "role": "tribe",
    "region": "europe",
    "lat": 46.5,
    "lon": 21.5,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Ardarico",
-   "avatar": "gepidos"
+   "avatar": "gepids"
   },
   {
    "id": "tribe_sajones",
-   "name": "Widukind",
-   "entity": "Sajones",
+   "name": "Saxons",
+   "entity": "Saxons",
    "role": "tribe",
    "region": "europe",
    "lat": 54.1667,
    "lon": 9.6667,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Viduquindo",
-   "avatar": "sajones"
+   "avatar": "saxons"
   },
   {
    "id": "tribe_frisones",
-   "name": "Radbod",
-   "entity": "Frisones",
+   "name": "Frisians",
+   "entity": "Frisians",
    "role": "tribe",
    "region": "europe",
    "lat": 52.3167,
    "lon": 5.55,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Radbod",
-   "avatar": "frisones"
+   "avatar": "frisians"
   },
   {
    "id": "tribe_pictos",
-   "name": "Bridei mac Bili",
-   "entity": "Pictos",
+   "name": "Picts",
+   "entity": "Picts",
    "role": "tribe",
    "region": "europe",
    "lat": 54.6,
    "lon": -2,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Bridei_III",
-   "avatar": "pictos"
+   "avatar": "picts"
   },
   {
    "id": "tribe_dacios",
-   "name": "Burebista",
-   "entity": "Dacios",
+   "name": "Dacians",
+   "entity": "Dacians",
    "role": "tribe",
    "region": "europe",
    "lat": 45.7,
    "lon": 26.5,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Burebista",
-   "avatar": "dacios"
+   "avatar": "dacians"
   },
   {
    "id": "tribe_getas",
-   "name": "Dromiquetes",
-   "entity": "Getas",
+   "name": "Getae",
+   "entity": "Getae",
    "role": "tribe",
    "region": "europe",
    "lat": 45.7,
    "lon": 26.5,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Dromiquetes",
-   "avatar": "getas"
+   "avatar": "getae"
   },
   {
    "id": "tribe_odrisios",
-   "name": "Sitalces",
-   "entity": "Odrisios (tracios)",
+   "name": "Odrysians (Thracians)",
+   "entity": "Odrysians (Thracians)",
    "role": "tribe",
    "region": "europe",
    "lat": 41.98,
    "lon": 25.71,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Sitalces",
-   "avatar": "odrisios"
+   "avatar": "odrysians"
   },
   {
    "id": "tribe_escitas",
-   "name": "Ateas",
-   "entity": "Escitas",
+   "name": "Scythians",
+   "entity": "Scythians",
    "role": "tribe",
    "region": "europe",
    "lat": 44.9428,
    "lon": 34.1206,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Ateas",
-   "avatar": "escitas"
+   "avatar": "scythians"
   },
   {
    "id": "tribe_hunos",
-   "name": "Atila",
-   "entity": "Hunos",
+   "name": "Huns",
+   "entity": "Huns",
    "role": "tribe",
    "region": "europe",
    "lat": 44.9,
    "lon": 19.02,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Atila",
-   "avatar": "hunos"
+   "avatar": "huns"
   },
   {
    "id": "tribe_avaros",
-   "name": "Bayan I",
-   "entity": "Ávaros (Panonia)",
+   "name": "Avars (Pannonia)",
+   "entity": "Avars (Pannonia)",
    "role": "tribe",
    "region": "europe",
    "lat": 42,
    "lon": 22,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Bayan_I",
-   "avatar": "avaros"
+   "avatar": "avars"
   },
   {
    "id": "tribe_onoguros",
-   "name": "Kubrat",
-   "entity": "Onoguros (búlgaros)",
+   "name": "Onogurs (Bulgars)",
+   "entity": "Onogurs (Bulgars)",
    "role": "tribe",
    "region": "europe",
    "lat": 44.9,
    "lon": 19.02,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Kubrat",
-   "avatar": "onoguros"
+   "avatar": "onogurs"
   },
   {
    "id": "tribe_cumanos",
-   "name": "Köten",
-   "entity": "Cumanos",
+   "name": "Cumans",
+   "entity": "Cumans",
    "role": "tribe",
    "region": "europe",
    "lat": 47.4667,
    "lon": 19.05,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/K%C3%B6ten",
-   "avatar": "cumanos"
+   "avatar": "cumans"
   },
   {
    "id": "tribe_obotritas",
-   "name": "Niklot",
-   "entity": "Obotritas",
+   "name": "Obotrites",
+   "entity": "Obotrites",
    "role": "tribe",
    "region": "europe",
    "lat": 53.8923,
    "lon": 12.08,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Niklot",
-   "avatar": "obotritas"
+   "avatar": "obotrites"
   },
   {
    "id": "tribe_drevlianos",
-   "name": "Mal",
-   "entity": "Drevlianos",
+   "name": "Drevlians",
+   "entity": "Drevlians",
    "role": "tribe",
    "region": "europe",
    "lat": 51.2,
    "lon": 28.8,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Mal",
-   "avatar": "drevlianos"
+   "avatar": "drevlians"
   },
   {
    "id": "tribe_prusianos_antiguos",
-   "name": "Herkus Monte",
-   "entity": "Prusianos antiguos",
+   "name": "Old Prussians",
+   "entity": "Old Prussians",
    "role": "tribe",
    "region": "europe",
    "lat": 53.85,
    "lon": 20.8167,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Herkus_Monte",
-   "avatar": "prusianos_antiguos"
+   "avatar": "old_prussians"
   },
   {
    "id": "tribe_estonios_de_sakala",
-   "name": "Lembitu",
-   "entity": "Estonios de Sakala",
+   "name": "Sakala Estonians",
+   "entity": "Sakala Estonians",
    "role": "tribe",
    "region": "europe",
    "lat": 58.3633,
    "lon": 25.5956,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Lembitu",
-   "avatar": "estonios_de_sakala"
+   "avatar": "sakala_estonians"
   },
   {
    "id": "tribe_samnitas",
-   "name": "Gayo Poncio",
-   "entity": "Samnitas",
+   "name": "Samnites",
+   "entity": "Samnites",
    "role": "tribe",
    "region": "europe",
    "lat": 42.5,
    "lon": 12.5,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Cayo_Poncio",
-   "avatar": "samnitas"
+   "avatar": "samnites"
   },
   {
    "id": "tribe_boyos",
-   "name": "Critasirus",
-   "entity": "Boyos",
+   "name": "Boii",
+   "entity": "Boii",
    "role": "tribe",
    "region": "europe",
    "lat": 49.5,
    "lon": 14.5,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Critasirus",
-   "avatar": "boyos"
+   "avatar": "boii"
   },
   {
    "id": "tribe_treveros",
-   "name": "Induciomaro",
-   "entity": "Tréveros",
+   "name": "Treveri",
+   "entity": "Treveri",
    "role": "tribe",
    "region": "europe",
    "lat": 46.5,
    "lon": 2.9,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Induciomaro",
-   "avatar": "treveros"
+   "avatar": "treveri"
   },
   {
    "id": "tribe_batavos",
-   "name": "Julio Civil",
-   "entity": "Bátavos",
+   "name": "Batavians",
+   "entity": "Batavians",
    "role": "tribe",
    "region": "europe",
    "lat": 52.0833,
    "lon": 5.9167,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Julio_Civilis",
-   "avatar": "batavos"
+   "avatar": "batavians"
   },
   {
    "id": "tribe_alamanes",
-   "name": "Chnodomarius",
-   "entity": "Alamanes",
+   "name": "Alamanni",
+   "entity": "Alamanni",
    "role": "tribe",
    "region": "europe",
    "lat": 48.3,
    "lon": 9.0,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Chnodomarius",
-   "avatar": "alamanes"
+   "avatar": "alamanni"
   },
   {
    "id": "tribe_burgundios",
-   "name": "Gundobado",
-   "entity": "Burgundios",
+   "name": "Burgundians",
+   "entity": "Burgundians",
    "role": "tribe",
    "region": "europe",
    "lat": 49.5,
    "lon": 9.5,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Gundebaldo",
-   "avatar": "burgundios"
+   "avatar": "burgundians"
   },
   {
    "id": "tribe_alanos",
-   "name": "Respendial",
-   "entity": "Alanos",
+   "name": "Alans",
+   "entity": "Alans",
    "role": "tribe",
    "region": "europe",
    "lat": 47,
    "lon": 36.6,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Respendial",
-   "avatar": "alanos"
+   "avatar": "alans"
   },
   {
    "id": "tribe_ardieos",
-   "name": "Teuta",
-   "entity": "Ardieos (ilirios)",
+   "name": "Ardiaei (Illyrians)",
+   "entity": "Ardiaei (Illyrians)",
    "role": "tribe",
    "region": "europe",
    "lat": 42.4,
    "lon": 19.2,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Teuta",
-   "avatar": "ardieos"
+   "avatar": "ardiaei"
   },
   {
    "id": "tribe_bructeros",
-   "name": "Veleda",
-   "entity": "Brúcteros",
+   "name": "Bructeri",
+   "entity": "Bructeri",
    "role": "tribe",
    "region": "europe",
    "lat": 51.9,
    "lon": 7.6,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Veleda",
-   "avatar": "bructeros"
+   "avatar": "bructeri"
   },
   {
    "id": "tribe_semnones",
-   "name": "Ganna",
+   "name": "Semnones",
    "entity": "Semnones",
    "role": "tribe",
    "region": "europe",
@@ -6638,67 +6638,67 @@
   },
   {
    "id": "tribe_sarmatas",
-   "name": "Amage",
-   "entity": "Sármatas",
+   "name": "Sarmatians",
+   "entity": "Sarmatians",
    "role": "tribe",
    "region": "europe",
    "lat": 44.9428,
    "lon": 34.1206,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Amage",
-   "avatar": "sarmatas"
+   "avatar": "sarmatians"
   },
   {
    "id": "tribe_ixomatas",
-   "name": "Tirgatao",
-   "entity": "Ixomatas (meotas)",
+   "name": "Ixomatae (Maeotians)",
+   "entity": "Ixomatae (Maeotians)",
    "role": "tribe",
    "region": "europe",
    "lat": 45.5,
    "lon": 39.5,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Tirgatao",
-   "avatar": "ixomatas"
+   "avatar": "ixomatae"
   },
   {
    "id": "tribe_lombardos",
-   "name": "Teodolinda",
-   "entity": "Lombardos",
+   "name": "Lombards",
+   "entity": "Lombards",
    "role": "tribe",
    "region": "europe",
    "lat": 48.5,
    "lon": 16.5,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Teodolinda",
-   "avatar": "lombardos"
+   "avatar": "lombards"
   },
   {
    "id": "tribe_rugios",
-   "name": "Giso",
-   "entity": "Rugios",
+   "name": "Rugians",
+   "entity": "Rugians",
    "role": "tribe",
    "region": "europe",
    "lat": 48.5,
    "lon": 15.5,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Rugios",
-   "avatar": "rugios"
+   "avatar": "rugians"
   },
   {
    "id": "tribe_escordiscos",
-   "name": "Onomaris",
-   "entity": "Escordiscos",
+   "name": "Scordisci",
+   "entity": "Scordisci",
    "role": "tribe",
    "region": "europe",
    "lat": 44.8,
    "lon": 20.5,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Onomaris",
-   "avatar": "escordiscos"
+   "avatar": "scordisci"
   },
   {
    "id": "tribe_vascones",
-   "name": "Toda Aznárez",
+   "name": "Vascones",
    "entity": "Vascones",
    "role": "tribe",
    "region": "europe",
@@ -6710,103 +6710,103 @@
   },
   {
    "id": "tribe_oretanos",
-   "name": "Himilce",
-   "entity": "Oretanos",
+   "name": "Oretani",
+   "entity": "Oretani",
    "role": "tribe",
    "region": "europe",
    "lat": 39.5,
    "lon": -3.0,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Himilce",
-   "avatar": "oretanos"
+   "avatar": "oretani"
   },
   {
    "id": "tribe_samogitios",
-   "name": "Birutė",
-   "entity": "Samogitios",
+   "name": "Samogitians",
+   "entity": "Samogitians",
    "role": "tribe",
    "region": "europe",
    "lat": 55.2,
    "lon": 24,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Birut%C4%97",
-   "avatar": "samogitios"
+   "avatar": "samogitians"
   },
   {
    "id": "tribe_checos",
-   "name": "Ludmila de Bohemia",
-   "entity": "Checos (bohemios)",
+   "name": "Czechs (Bohemians)",
+   "entity": "Czechs (Bohemians)",
    "role": "tribe",
    "region": "europe",
    "lat": 50,
    "lon": 15,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Ludmila_de_Bohemia",
-   "avatar": "checos"
+   "avatar": "czechs"
   },
   {
    "id": "tribe_hevelios",
-   "name": "Drahomíra",
-   "entity": "Hevelios (stodoranos)",
+   "name": "Hevelians (Stodorans)",
+   "entity": "Hevelians (Stodorans)",
    "role": "tribe",
    "region": "europe",
    "lat": 52.5,
    "lon": 12.5,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Drahom%C3%ADra",
-   "avatar": "hevelios"
+   "avatar": "hevelians"
   },
   {
    "id": "tribe_polanos",
-   "name": "Świętosława",
-   "entity": "Polanos",
+   "name": "Polans",
+   "entity": "Polans",
    "role": "tribe",
    "region": "europe",
    "lat": 52,
    "lon": 19,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/%C5%9Awi%C4%99tos%C5%82awa",
-   "avatar": "polanos"
+   "avatar": "polans"
   },
   {
    "id": "tribe_jazaros",
-   "name": "Tzitzak",
-   "entity": "Jázaros",
+   "name": "Khazars",
+   "entity": "Khazars",
    "role": "tribe",
    "region": "europe",
    "lat": 41.0125,
    "lon": 28.98,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Irene_de_Jazaria",
-   "avatar": "jazaros"
+   "avatar": "khazars"
   },
   {
    "id": "tribe_cuados",
-   "name": "Rihhilda",
-   "entity": "Cuados",
+   "name": "Quadi",
+   "entity": "Quadi",
    "role": "tribe",
    "region": "europe",
    "lat": 48.7,
    "lon": 18.0,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Cuados",
-   "avatar": "cuados"
+   "avatar": "quadi"
   },
   {
    "id": "tribe_ubios",
-   "name": "Gerlinda",
-   "entity": "Ubios",
+   "name": "Ubii",
+   "entity": "Ubii",
    "role": "tribe",
    "region": "europe",
    "lat": 50.9,
    "lon": 6.9,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Ubios",
-   "avatar": "ubios"
+   "avatar": "ubii"
   },
   {
    "id": "tribe_caninefates",
-   "name": "Swanahilda",
+   "name": "Caninefates",
    "entity": "Caninefates",
    "role": "tribe",
    "region": "europe",
@@ -6818,43 +6818,43 @@
   },
   {
    "id": "tribe_herulos",
-   "name": "Rodelinda",
-   "entity": "Hérulos",
+   "name": "Heruli",
+   "entity": "Heruli",
    "role": "tribe",
    "region": "europe",
    "lat": 55.5,
    "lon": 10.0,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/H%C3%A9rulos",
-   "avatar": "herulos"
+   "avatar": "heruli"
   },
   {
    "id": "tribe_tauriscos",
-   "name": "Matugena",
-   "entity": "Tauriscos",
+   "name": "Taurisci",
+   "entity": "Taurisci",
    "role": "tribe",
    "region": "europe",
    "lat": 46.8,
    "lon": 14.0,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "tauriscos"
+   "avatar": "taurisci"
   },
   {
    "id": "tribe_alobroges",
-   "name": "Banona",
-   "entity": "Alóbroges",
+   "name": "Allobroges",
+   "entity": "Allobroges",
    "role": "tribe",
    "region": "europe",
    "lat": 41.89,
    "lon": 12.48,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Al%C3%B3broges",
-   "avatar": "alobroges"
+   "avatar": "allobroges"
   },
   {
    "id": "tribe_carnutes",
-   "name": "Ivomara",
+   "name": "Carnutes",
    "entity": "Carnutes",
    "role": "tribe",
    "region": "europe",
@@ -6866,67 +6866,67 @@
   },
   {
    "id": "tribe_venetos",
-   "name": "Litumara",
-   "entity": "Vénetos (Armórica)",
+   "name": "Veneti (Armorica)",
+   "entity": "Veneti (Armorica)",
    "role": "tribe",
    "region": "europe",
    "lat": 45.7333,
    "lon": 11.85,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/V%C3%A9netos",
-   "avatar": "venetos"
+   "avatar": "veneti"
   },
   {
    "id": "tribe_ligures",
-   "name": "Bertia",
-   "entity": "Ligures",
+   "name": "Ligurians",
+   "entity": "Ligurians",
    "role": "tribe",
    "region": "europe",
    "lat": 42.5,
    "lon": 12.5,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Ligures",
-   "avatar": "ligures"
+   "avatar": "ligurians"
   },
   {
    "id": "tribe_astures",
-   "name": "Argantona",
-   "entity": "Ástures",
+   "name": "Asturians",
+   "entity": "Asturians",
    "role": "tribe",
    "region": "europe",
    "lat": 43.0,
    "lon": -6.0,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Astures",
-   "avatar": "astures"
+   "avatar": "asturians"
   },
   {
    "id": "tribe_vetones",
-   "name": "Boutia",
-   "entity": "Vetones",
+   "name": "Vettones",
+   "entity": "Vettones",
    "role": "tribe",
    "region": "europe",
    "lat": 40.2,
    "lon": -3.5,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Vetones",
-   "avatar": "vetones"
+   "avatar": "vettones"
   },
   {
    "id": "tribe_edetanos",
-   "name": "Iltirbeles",
-   "entity": "Edetanos",
+   "name": "Edetani",
+   "entity": "Edetani",
    "role": "tribe",
    "region": "europe",
    "lat": 39.5,
    "lon": -0.75,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Edetanos",
-   "avatar": "edetanos"
+   "avatar": "edetani"
   },
   {
    "id": "tribe_sami",
-   "name": "Áile",
+   "name": "Sami",
    "entity": "Sami",
    "role": "tribe",
    "region": "europe",
@@ -6938,151 +6938,151 @@
   },
   {
    "id": "tribe_tavastios",
-   "name": "Lempi",
-   "entity": "Tavastios (fineses)",
+   "name": "Tavastians (Finns)",
+   "entity": "Tavastians (Finns)",
    "role": "tribe",
    "region": "europe",
    "lat": 61.0,
    "lon": 24.5,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "tavastios"
+   "avatar": "tavastians"
   },
   {
    "id": "tribe_curonios",
-   "name": "Dārta",
-   "entity": "Curonios",
+   "name": "Curonians",
+   "entity": "Curonians",
    "role": "tribe",
    "region": "europe",
    "lat": 56.9,
    "lon": 21.8,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Curonios",
-   "avatar": "curonios"
+   "avatar": "curonians"
   },
   {
    "id": "tribe_livones",
-   "name": "Imme",
-   "entity": "Livones",
+   "name": "Livonians",
+   "entity": "Livonians",
    "role": "tribe",
    "region": "europe",
    "lat": 57,
    "lon": 25,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Livonios",
-   "avatar": "livones"
+   "avatar": "livonians"
   },
   {
    "id": "tribe_yotvingios",
-   "name": "Daina",
-   "entity": "Yotvingios",
+   "name": "Yotvingians",
+   "entity": "Yotvingians",
    "role": "tribe",
    "region": "europe",
    "lat": 54.0,
    "lon": 23.0,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Yotvingios",
-   "avatar": "yotvingios"
+   "avatar": "yotvingians"
   },
   {
    "id": "tribe_pomeranos",
-   "name": "Dobrosława",
-   "entity": "Pomeranos",
+   "name": "Pomeranians",
+   "entity": "Pomeranians",
    "role": "tribe",
    "region": "europe",
    "lat": 54.2,
    "lon": 16.0,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "pomeranos"
+   "avatar": "pomeranians"
   },
   {
    "id": "tribe_moravos",
-   "name": "Radoslava",
-   "entity": "Moravos",
+   "name": "Moravians",
+   "entity": "Moravians",
    "role": "tribe",
    "region": "europe",
    "lat": 49.5,
    "lon": 17,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Moravos",
-   "avatar": "moravos"
+   "avatar": "moravians"
   },
   {
    "id": "tribe_carantanos",
-   "name": "Vesna",
-   "entity": "Carantanos (eslovenos)",
+   "name": "Carantanians (Slovenes)",
+   "entity": "Carantanians (Slovenes)",
    "role": "tribe",
    "region": "europe",
    "lat": 46.6,
    "lon": 14.3,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "carantanos"
+   "avatar": "carantanians"
   },
   {
    "id": "tribe_pechenegos",
-   "name": "Aybike",
-   "entity": "Pechenegos",
+   "name": "Pechenegs",
+   "entity": "Pechenegs",
    "role": "tribe",
    "region": "europe",
    "lat": 47.0,
    "lon": 33.0,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Pechenegos",
-   "avatar": "pechenegos"
+   "avatar": "pechenegs"
   },
   {
    "id": "tribe_bulgaros_del_volga",
-   "name": "Altynbike",
-   "entity": "Búlgaros del Volga",
+   "name": "Volga Bulgars",
+   "entity": "Volga Bulgars",
    "role": "tribe",
    "region": "europe",
    "lat": 54.9667,
    "lon": 49.0333,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Bulgaria_del_Volga",
-   "avatar": "bulgaros_del_volga"
+   "avatar": "volga_bulgars"
   },
   {
    "id": "tribe_sauromatas",
-   "name": "Sirma",
-   "entity": "Saurómatas",
+   "name": "Sauromatians",
+   "entity": "Sauromatians",
    "role": "tribe",
    "region": "europe",
    "lat": 44.9428,
    "lon": 34.1206,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/S%C3%A1rmatas",
-   "avatar": "sauromatas"
+   "avatar": "sauromatians"
   },
   {
    "id": "tribe_caucos",
-   "name": "Hilde",
-   "entity": "Caucos",
+   "name": "Cauci",
+   "entity": "Cauci",
    "role": "tribe",
    "region": "europe",
    "lat": 53.5,
    "lon": 8.5,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Caucos",
-   "avatar": "caucos"
+   "avatar": "cauci"
   },
   {
    "id": "tribe_volcas_arecomicos",
-   "name": "Smertulla",
-   "entity": "Volcas arecómicos",
+   "name": "Volcae Arecomici",
+   "entity": "Volcae Arecomici",
    "role": "tribe",
    "region": "europe",
    "lat": 43.8,
    "lon": 4.4,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Volcas_arec%C3%B3micos",
-   "avatar": "volcas_arecomicos"
+   "avatar": "volcae_arecomici"
   },
   {
    "id": "tribe_wiradjuri",
-   "name": "Windradyne",
+   "name": "Wiradjuri",
    "entity": "Wiradjuri",
    "role": "tribe",
    "region": "oceania",
@@ -7094,7 +7094,7 @@
   },
   {
    "id": "tribe_wangal",
-   "name": "Bennelong",
+   "name": "Wangal (eora)",
    "entity": "Wangal (eora)",
    "role": "tribe",
    "region": "oceania",
@@ -7106,7 +7106,7 @@
   },
   {
    "id": "tribe_turrbal",
-   "name": "Dundalli",
+   "name": "Turrbal",
    "entity": "Turrbal",
    "role": "tribe",
    "region": "oceania",
@@ -7118,7 +7118,7 @@
   },
   {
    "id": "tribe_bunuba",
-   "name": "Jandamarra",
+   "name": "Bunuba",
    "entity": "Bunuba",
    "role": "tribe",
    "region": "oceania",
@@ -7130,7 +7130,7 @@
   },
   {
    "id": "tribe_wurundjeri",
-   "name": "William Barak",
+   "name": "Wurundjeri",
    "entity": "Wurundjeri",
    "role": "tribe",
    "region": "oceania",
@@ -7142,7 +7142,7 @@
   },
   {
    "id": "tribe_tuhoe",
-   "name": "Rua Kēnana Hepetipa",
+   "name": "Tūhoe",
    "entity": "Tūhoe",
    "role": "tribe",
    "region": "oceania",
@@ -7154,7 +7154,7 @@
   },
   {
    "id": "tribe_taranaki",
-   "name": "Te Whiti o Rongomai",
+   "name": "Taranaki (Parihaka)",
    "entity": "Taranaki (Parihaka)",
    "role": "tribe",
    "region": "oceania",
@@ -7166,7 +7166,7 @@
   },
   {
    "id": "tribe_ngai_tahu",
-   "name": "Tama-i-hara-nui",
+   "name": "Ngāi Tahu",
    "entity": "Ngāi Tahu",
    "role": "tribe",
    "region": "oceania",
@@ -7178,7 +7178,7 @@
   },
   {
    "id": "tribe_ngati_maniapoto",
-   "name": "Rewi Maniapoto",
+   "name": "Ngāti Maniapoto",
    "entity": "Ngāti Maniapoto",
    "role": "tribe",
    "region": "oceania",
@@ -7190,19 +7190,19 @@
   },
   {
    "id": "tribe_fiyianos_de_bau",
-   "name": "Seru Epenisa Cakobau",
-   "entity": "Fiyianos de Bau",
+   "name": "Fijians of Bau",
+   "entity": "Fijians of Bau",
    "role": "tribe",
    "region": "oceania",
    "lat": -17.8,
    "lon": 179.4167,
    "gender": "male",
    "wikipedia": "https://es.wikipedia.org/wiki/Seru_Epenisa_Cakobau",
-   "avatar": "fiyianos_de_bau"
+   "avatar": "fijians_of_bau"
   },
   {
    "id": "tribe_kanak",
-   "name": "Atai",
+   "name": "Kanak",
    "entity": "Kanak",
    "role": "tribe",
    "region": "oceania",
@@ -7214,7 +7214,7 @@
   },
   {
    "id": "tribe_chamorros",
-   "name": "Hurao",
+   "name": "Chamorros",
    "entity": "Chamorros",
    "role": "tribe",
    "region": "oceania",
@@ -7226,7 +7226,7 @@
   },
   {
    "id": "tribe_saudeleur",
-   "name": "Isokelekel",
+   "name": "Saudeleur (Pohnpei)",
    "entity": "Saudeleur (Pohnpei)",
    "role": "tribe",
    "region": "oceania",
@@ -7238,19 +7238,19 @@
   },
   {
    "id": "tribe_marquesanos",
-   "name": "Keatonui",
-   "entity": "Marquesanos",
+   "name": "Marquesans",
+   "entity": "Marquesans",
    "role": "tribe",
    "region": "oceania",
    "lat": -9.0,
    "lon": -139.5,
    "gender": "male",
    "wikipedia": null,
-   "avatar": "marquesanos"
+   "avatar": "marquesans"
   },
   {
    "id": "tribe_dani",
-   "name": "Kurulu",
+   "name": "Dani (Papúa)",
    "entity": "Dani (Papúa)",
    "role": "tribe",
    "region": "oceania",
@@ -7262,7 +7262,7 @@
   },
   {
    "id": "tribe_asmat",
-   "name": "Bipi",
+   "name": "Asmat",
    "entity": "Asmat",
    "role": "tribe",
    "region": "oceania",
@@ -7274,7 +7274,7 @@
   },
   {
    "id": "tribe_nuenonne",
-   "name": "Truganini",
+   "name": "Nuenonne (Tasmania)",
    "entity": "Nuenonne (Tasmania)",
    "role": "tribe",
    "region": "oceania",
@@ -7286,7 +7286,7 @@
   },
   {
    "id": "tribe_te_arawa",
-   "name": "Hēni Te Kiri Karamū",
+   "name": "Te Arawa",
    "entity": "Te Arawa",
    "role": "tribe",
    "region": "oceania",
@@ -7298,19 +7298,19 @@
   },
   {
    "id": "tribe_samoanos",
-   "name": "Salamasina",
-   "entity": "Samoanos",
+   "name": "Samoans",
+   "entity": "Samoans",
    "role": "tribe",
    "region": "oceania",
    "lat": -13.8,
    "lon": -172.0,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Salamasina",
-   "avatar": "samoanos"
+   "avatar": "samoans"
   },
   {
    "id": "tribe_ngati_porou",
-   "name": "Hinematioro",
+   "name": "Ngāti Porou",
    "entity": "Ngāti Porou",
    "role": "tribe",
    "region": "oceania",
@@ -7322,7 +7322,7 @@
   },
   {
    "id": "tribe_moriori",
-   "name": "Rangitea",
+   "name": "Moriori",
    "entity": "Moriori",
    "role": "tribe",
    "region": "oceania",
@@ -7334,7 +7334,7 @@
   },
   {
    "id": "tribe_kaurna",
-   "name": "Kudnarto",
+   "name": "Kaurna",
    "entity": "Kaurna",
    "role": "tribe",
    "region": "oceania",
@@ -7346,7 +7346,7 @@
   },
   {
    "id": "tribe_yolu",
-   "name": "Djirrimbilil",
+   "name": "Yolŋu",
    "entity": "Yolŋu",
    "role": "tribe",
    "region": "oceania",
@@ -7358,7 +7358,7 @@
   },
   {
    "id": "tribe_arrernte",
-   "name": "Arrakurta",
+   "name": "Arrernte",
    "entity": "Arrernte",
    "role": "tribe",
    "region": "oceania",
@@ -7370,7 +7370,7 @@
   },
   {
    "id": "tribe_gunditjmara",
-   "name": "Kirrae",
+   "name": "Gunditjmara",
    "entity": "Gunditjmara",
    "role": "tribe",
    "region": "oceania",
@@ -7382,55 +7382,55 @@
   },
   {
    "id": "tribe_palauanos",
-   "name": "Ebil Reklai",
-   "entity": "Palauanos",
+   "name": "Palauans",
+   "entity": "Palauans",
    "role": "tribe",
    "region": "oceania",
    "lat": 7.5,
    "lon": 134.6,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "palauanos"
+   "avatar": "palauans"
   },
   {
    "id": "tribe_yapeses",
-   "name": "Lilaw",
-   "entity": "Yapeses",
+   "name": "Yapese",
+   "entity": "Yapese",
    "role": "tribe",
    "region": "oceania",
    "lat": 9.5,
    "lon": 138.1,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "yapeses"
+   "avatar": "yapese"
   },
   {
    "id": "tribe_marshaleses",
-   "name": "Leroij Lijebake",
-   "entity": "Marshaleses",
+   "name": "Marshallese",
+   "entity": "Marshallese",
    "role": "tribe",
    "region": "oceania",
    "lat": 7.1,
    "lon": 171.2,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "marshaleses"
+   "avatar": "marshallese"
   },
   {
    "id": "tribe_kiribatianos",
-   "name": "Nei Teaiwa",
-   "entity": "Kiribatianos",
+   "name": "I-Kiribati",
+   "entity": "I-Kiribati",
    "role": "tribe",
    "region": "oceania",
    "lat": 1.4,
    "lon": 173.0,
    "gender": "female",
    "wikipedia": null,
-   "avatar": "kiribatianos"
+   "avatar": "i_kiribati"
   },
   {
    "id": "tribe_huli",
-   "name": "Hela Wali",
+   "name": "Huli (Papúa)",
    "entity": "Huli (Papúa)",
    "role": "tribe",
    "region": "oceania",
@@ -7442,7 +7442,7 @@
   },
   {
    "id": "tribe_motu",
-   "name": "Lahara",
+   "name": "Motu (Papúa)",
    "entity": "Motu (Papúa)",
    "role": "tribe",
    "region": "oceania",
@@ -7454,7 +7454,7 @@
   },
   {
    "id": "tribe_tolai",
-   "name": "Ia Kaplen",
+   "name": "Tolai (Nueva Bretaña)",
    "entity": "Tolai (Nueva Bretaña)",
    "role": "tribe",
    "region": "oceania",
@@ -7463,976 +7463,6 @@
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Tol%C3%A1i",
    "avatar": "tolai"
-  },
-  {
-   "id": "atrebates",
-   "name": "Atrebates",
-   "entity": "Atrebates",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 49.808918643243395,
-   "lon": 2.9205555224952775,
-   "avatar": "atrebates"
-  },
-  {
-   "id": "trinovantes",
-   "name": "Trinovantes",
-   "entity": "Trinovantes",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 51.272165624362444,
-   "lon": 0.5098942534044113,
-   "avatar": "trinovantes"
-  },
-  {
-   "id": "catuvellauni",
-   "name": "Catuvellauni",
-   "entity": "Catuvellauni",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 51.85,
-   "lon": -0.4,
-   "avatar": "catuvellauni"
-  },
-  {
-   "id": "cantiaci",
-   "name": "Cantiaci",
-   "entity": "Cantiaci",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 51.53472204138595,
-   "lon": 0.8032431206234207,
-   "avatar": "cantiaci"
-  },
-  {
-   "id": "snettisham",
-   "name": "Snettisham",
-   "entity": "Snettisham",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "snettisham"
-  },
-  {
-   "id": "thetford",
-   "name": "Thetford",
-   "entity": "Thetford",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "thetford"
-  },
-  {
-   "id": "stonea",
-   "name": "Stonea",
-   "entity": "Stonea",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "stonea"
-  },
-  {
-   "id": "colonia_veterans",
-   "name": "Colonia Veterans",
-   "entity": "Colonia Veterans",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "colonia_veterans"
-  },
-  {
-   "id": "the_iceni_despoilers",
-   "name": "The Iceni Despoilers",
-   "entity": "The Iceni Despoilers",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "the_iceni_despoilers"
-  },
-  {
-   "id": "roman_supply_depot",
-   "name": "Roman Supply Depot",
-   "entity": "Roman Supply Depot",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "roman_supply_depot"
-  },
-  {
-   "id": "tax_collectors",
-   "name": "Tax Collectors",
-   "entity": "Tax Collectors",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "tax_collectors"
-  },
-  {
-   "id": "camulodunum",
-   "name": "Camulodunum",
-   "entity": "Camulodunum",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "roman_praetorian"
-  },
-  {
-   "id": "londinium",
-   "name": "Londinium",
-   "entity": "Londinium",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "roman"
-  },
-  {
-   "id": "verulamium",
-   "name": "Verulamium",
-   "entity": "Verulamium",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "roman"
-  },
-  {
-   "id": "legio_ix_hispana",
-   "name": "Legio IX Hispana",
-   "entity": "Legio IX Hispana",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "roman_legionary"
-  },
-  {
-   "id": "legio_xiv_gemina",
-   "name": "Legio XIV Gemina",
-   "entity": "Legio XIV Gemina",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "tax_collectors"
-  },
-  {
-   "id": "suetonius_paulinus",
-   "name": "Gaius Suetonius Paulinus",
-   "entity": "Gaius Suetonius Paulinus",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "roman_praetorian"
-  },
-  {
-   "id": "suetonius_auxilia",
-   "name": "Suetonius' Auxilia",
-   "entity": "Suetonius' Auxilia",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "roman_legionary"
-  },
-  {
-   "id": "legio_xx_valeria",
-   "name": "Legio XX Valeria",
-   "entity": "Legio XX Valeria",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "roman_praetorian"
-  },
-  {
-   "id": "legio_ii_augusta",
-   "name": "Legio II Augusta",
-   "entity": "Legio II Augusta",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "colonia_veterans"
-  },
-  {
-   "id": "durovernum",
-   "name": "Durovernum",
-   "entity": "Durovernum",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "cantiaci_chieftain"
-  },
-  {
-   "id": "regnenses",
-   "name": "Regnenses",
-   "entity": "Regnenses",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "regnenses"
-  },
-  {
-   "id": "noviomagus",
-   "name": "Noviomagus",
-   "entity": "Noviomagus",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "regnenses_male"
-  },
-  {
-   "id": "calleva",
-   "name": "Calleva",
-   "entity": "Calleva",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "atrebates"
-  },
-  {
-   "id": "lindum",
-   "name": "Lindum",
-   "entity": "Lindum",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "roman"
-  },
-  {
-   "id": "viroconium",
-   "name": "Viroconium",
-   "entity": "Viroconium",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "roman"
-  },
-  {
-   "id": "isca_dumnoniorum",
-   "name": "Isca Dumnoniorum",
-   "entity": "Isca Dumnoniorum",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "dumnonii"
-  },
-  {
-   "id": "brigantes_1",
-   "name": "Brigantes 1",
-   "entity": "Brigantes 1",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "brigantes"
-  },
-  {
-   "id": "parisi_1",
-   "name": "Parisi",
-   "entity": "Parisi",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "parisi"
-  },
-  {
-   "id": "corieltauvi_1",
-   "name": "Corieltauvi",
-   "entity": "Corieltauvi",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "corieltauvi"
-  },
-  {
-   "id": "cornovii_1",
-   "name": "Cornovii 1",
-   "entity": "Cornovii 1",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "cornovii"
-  },
-  {
-   "id": "dobunni_1",
-   "name": "Dobunni",
-   "entity": "Dobunni",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "dobunni"
-  },
-  {
-   "id": "durotriges_1",
-   "name": "Durotriges 1",
-   "entity": "Durotriges 1",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "durotriges"
-  },
-  {
-   "id": "dumnonii_1",
-   "name": "Dumnonii 1",
-   "entity": "Dumnonii 1",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "dumnonii"
-  },
-  {
-   "id": "silures_1",
-   "name": "Silures 1",
-   "entity": "Silures 1",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "silures"
-  },
-  {
-   "id": "demetae_1",
-   "name": "Demetae",
-   "entity": "Demetae",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "demetae"
-  },
-  {
-   "id": "ordovices_1",
-   "name": "Ordovices 1",
-   "entity": "Ordovices 1",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "ordovices"
-  },
-  {
-   "id": "deceangli_1",
-   "name": "Deceangli",
-   "entity": "Deceangli",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "deceangli"
-  },
-  {
-   "id": "caledonii_1",
-   "name": "Caledonii 1",
-   "entity": "Caledonii 1",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "caledonii"
-  },
-  {
-   "id": "votadini_1",
-   "name": "Votadini 1",
-   "entity": "Votadini 1",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "votadini"
-  },
-  {
-   "id": "gaulish_traders_1",
-   "name": "Gaulish Traders 1",
-   "entity": "Gaulish Traders 1",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "vercingetorix"
-  },
-  {
-   "id": "gaulish_traders_2",
-   "name": "Gaulish Traders 2",
-   "entity": "Gaulish Traders 2",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "vercingetorix"
-  },
-  {
-   "id": "gaulish_traders_3",
-   "name": "Gaulish Traders 3",
-   "entity": "Gaulish Traders 3",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "vercingetorix"
-  },
-  {
-   "id": "irish_raiders_1",
-   "name": "Irish Raiders",
-   "entity": "Irish Raiders",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "damnonii"
-  },
-  {
-   "id": "picts_1",
-   "name": "Picts 1",
-   "entity": "Picts 1",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "selgovae"
-  },
-  {
-   "id": "belgae_1",
-   "name": "Belgae 1",
-   "entity": "Belgae 1",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": "belgae"
-  },
-  {
-   "id": "altun_ha",
-   "name": "Altun Ha",
-   "entity": "Altun Ha",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "altun_ha_traders",
-   "name": "Altun Ha Traders",
-   "entity": "Altun Ha Traders",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "belgae",
-   "name": "Belgae",
-   "entity": "Belgae",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 50,
-   "lon": 4,
-   "avatar": null
-  },
-  {
-   "id": "brigantes",
-   "name": "Brigantes",
-   "entity": "Brigantes",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 54,
-   "lon": -1.8,
-   "avatar": null
-  },
-  {
-   "id": "calakmul_emissaries",
-   "name": "Calakmul Emissaries",
-   "entity": "Calakmul Emissaries",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "calakmul_honor_guard",
-   "name": "Calakmul Honor Guard",
-   "entity": "Calakmul Honor Guard",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "caledonii",
-   "name": "Caledonii",
-   "entity": "Caledonii",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 56.63384403515818,
-   "lon": -4.029293481458694,
-   "avatar": null
-  },
-  {
-   "id": "caracol",
-   "name": "Caracol",
-   "entity": "Caracol",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "caracol_outpost",
-   "name": "Caracol Outpost",
-   "entity": "Caracol Outpost",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "caracol_war_host",
-   "name": "Caracol War Host",
-   "entity": "Caracol War Host",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "copan_delegation",
-   "name": "Copan Delegation",
-   "entity": "Copan Delegation",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "cornovii",
-   "name": "Cornovii",
-   "entity": "Cornovii",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 52.7,
-   "lon": -2.5,
-   "avatar": null
-  },
-  {
-   "id": "dos_pilas_honor_guard",
-   "name": "Dos Pilas Honor Guard",
-   "entity": "Dos Pilas Honor Guard",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "dos_pilas_veterans",
-   "name": "Dos Pilas Veterans",
-   "entity": "Dos Pilas Veterans",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "dumnonii",
-   "name": "Dumnonii",
-   "entity": "Dumnonii",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 50.5,
-   "lon": -4,
-   "avatar": null
-  },
-  {
-   "id": "durotriges",
-   "name": "Durotriges",
-   "entity": "Durotriges",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 50.7,
-   "lon": -2.4,
-   "avatar": null
-  },
-  {
-   "id": "k_ak_tiliw_guard",
-   "name": "K'ak' Tiliw Guard",
-   "entity": "K'ak' Tiliw Guard",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "k_inichil_kab",
-   "name": "K'inichil Kab",
-   "entity": "K'inichil Kab",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "lamanai",
-   "name": "Lamanai",
-   "entity": "Lamanai",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "lamanai_fishers",
-   "name": "Lamanai Fishers",
-   "entity": "Lamanai Fishers",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "moon_priestesses",
-   "name": "Moon Priestesses",
-   "entity": "Moon Priestesses",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "naranjo_loyalists",
-   "name": "Naranjo Loyalists",
-   "entity": "Naranjo Loyalists",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "ordovices",
-   "name": "Ordovices",
-   "entity": "Ordovices",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 52.36384756882859,
-   "lon": -3.4117169188922674,
-   "avatar": null
-  },
-  {
-   "id": "palenque_envoys",
-   "name": "Palenque Envoys",
-   "entity": "Palenque Envoys",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "picts",
-   "name": "Picts",
-   "entity": "Picts",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 57.034588040088785,
-   "lon": -4.631430629960931,
-   "avatar": null
-  },
-  {
-   "id": "piedras_negras_garrison",
-   "name": "Piedras Negras Garrison",
-   "entity": "Piedras Negras Garrison",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "quirigua",
-   "name": "Quirigua",
-   "entity": "Quirigua",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "rival_claimant",
-   "name": "Rival Claimant",
-   "entity": "Rival Claimant",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "roman_outpost",
-   "name": "Roman Outpost",
-   "entity": "Roman Outpost",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "sa_aal_court",
-   "name": "Sa'aal Court",
-   "entity": "Sa'aal Court",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "sa_aal_veterans",
-   "name": "Sa'aal Veterans",
-   "entity": "Sa'aal Veterans",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "seibal_rebels",
-   "name": "Seibal Rebels",
-   "entity": "Seibal Rebels",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "seibal_traders",
-   "name": "Seibal Traders",
-   "entity": "Seibal Traders",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "silures",
-   "name": "Silures",
-   "entity": "Silures",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 51.7,
-   "lon": -3.3,
-   "avatar": null
-  },
-  {
-   "id": "tayasal_farmers",
-   "name": "Tayasal Farmers",
-   "entity": "Tayasal Farmers",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "tayasal_rebels",
-   "name": "Tayasal Rebels",
-   "entity": "Tayasal Rebels",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "tikal",
-   "name": "Tikal",
-   "entity": "Tikal",
-   "role": "campaign",
-   "region": "americas",
-   "lat": 17.22,
-   "lon": -89.62,
-   "avatar": null
-  },
-  {
-   "id": "tikal_coalition",
-   "name": "Tikal Coalition",
-   "entity": "Tikal Coalition",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "tikal_tribute_post",
-   "name": "Tikal Tribute Post",
-   "entity": "Tikal Tribute Post",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "tikal_vanguard",
-   "name": "Tikal Vanguard",
-   "entity": "Tikal Vanguard",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "topoxte",
-   "name": "Topoxte",
-   "entity": "Topoxte",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "topoxte_fishers",
-   "name": "Topoxte Fishers",
-   "entity": "Topoxte Fishers",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "uaxactun_rebels",
-   "name": "Uaxactun Rebels",
-   "entity": "Uaxactun Rebels",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "uaxactun_villagers",
-   "name": "Uaxactun Villagers",
-   "entity": "Uaxactun Villagers",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "votadini",
-   "name": "Votadini",
-   "entity": "Votadini",
-   "role": "campaign",
-   "region": "europe",
-   "lat": 55.18287436213356,
-   "lon": -2.979413325095777,
-   "avatar": null
-  },
-  {
-   "id": "xunantunich",
-   "name": "Xunantunich",
-   "entity": "Xunantunich",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "xunantunich_rebels",
-   "name": "Xunantunich Rebels",
-   "entity": "Xunantunich Rebels",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "yaxchilan_allies",
-   "name": "Yaxchilan Allies",
-   "entity": "Yaxchilan Allies",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "yaxha_fishers",
-   "name": "Yaxha Fishers",
-   "entity": "Yaxha Fishers",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "yaxha_lookouts",
-   "name": "Yaxha Lookouts",
-   "entity": "Yaxha Lookouts",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
-  },
-  {
-   "id": "yaxha_rebels",
-   "name": "Yaxha Rebels",
-   "entity": "Yaxha Rebels",
-   "role": "campaign",
-   "region": "unassigned",
-   "lat": null,
-   "lon": null,
-   "avatar": null
   }
  ]
 }

@@ -480,6 +480,7 @@
             runtime.definition = data.definition;
             runtime.machine = window.SOWCampaign.create(data.definition, undefined, data.roster);
             runtime.active = true;
+            window.SOW_emote_text_overrides = data.definition.emote_texts || {};
             runtime.lastUnlockCommand = null;
             runtime.uiCounts = Object.create(null);
             runtime.uiPaused = null;
@@ -1262,6 +1263,7 @@
     function continueScene() {
         if (!runtime.machine) return;
         var step = runtime.machine.view().step;
+        if (step.emote) send("tutorial_emote", { kind: step.emote });
         if (runtime.machine.advance(null, step.id)) update(runtime.latestHud);
     }
 
@@ -1425,6 +1427,7 @@
         runtime.definition = null;
         runtime.machine = null;
         runtime.active = false;
+        window.SOW_emote_text_overrides = {};
         runtime.starting = null;
         runtime.activating = null;
         runtime.bootEpisode = null;

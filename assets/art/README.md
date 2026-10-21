@@ -13,7 +13,8 @@ Para reemplazar algo, sobrescribe el archivo con el mismo nombre.
 | Carpeta | Archivo | Quién lo usa | Se publica a |
 |---|---|---|---|
 | `avatars/nations/` | `<id>.webp` | naciones bot (200) | 256 px y atlas de retratos de bots (64 px) |
-| `avatars/tribes/` | `<avatar>.webp` | tribus bot (404) y figuras de campaña | igual |
+| `avatars/tribes/` | `<avatar>.webp` | tribus bot (404) y tribus del tutorial | igual |
+| `avatars/campaign/` | `<avatar>.webp` | figuras de campaña que no son tribus (romanos del tutorial) | 256 px |
 | `avatars/heroes/` | `<id>.webp` | héroes jugables | 256 px |
 | `avatars/` | `default.webp` | cara de un jugador sin retrato | 256 px |
 

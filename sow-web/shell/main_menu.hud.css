@@ -115,15 +115,13 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     background-repeat: no-repeat;
 }
 
-/* Outlined text for numbers, titles and button labels (same rule as the story overlay). */
+/* Outlined text for numbers and titles (same rule as the story overlay). Buttons stay plain: the outline fills small letters. */
 #sow-hud :is(.sow-hud__nameplate-copy strong, .sow-hud__nameplate-readout, .sow-hud__nameplate-stat b,
     .sow-hud__army-allocation strong, .sow-hud__deploy-title, .sow-hud__deploy-timer, .sow-hud__ring-readout strong,
     .sow-hud__panel-header h3, .sow-hud__transfer-header h3, .sow-hud__player-rank,
     .sow-hud__player-identity b, .sow-hud__player-land, .sow-hud__player-troops, .sow-hud__hover-header b,
     .sow-hud__hover-stats b, .sow-hud__endgame-banner,
-    .sow-hud__endgame-title, .sow-hud__endgame-stat b, .sow-hud__fps, .sow-hud__ping,
-    .sow-hud__endgame-primary, .sow-hud__endgame-secondary, .sow-hud__row-action,
-    .sow-hud__transfer-actions button, .sow-hud__request-actions button) {
+    .sow-hud__endgame-title, .sow-hud__endgame-stat b, .sow-hud__fps, .sow-hud__ping) {
     -webkit-text-stroke: var(--sow-text-outline);
     paint-order: stroke fill;
     text-shadow: var(--sow-text-outline-shadow);

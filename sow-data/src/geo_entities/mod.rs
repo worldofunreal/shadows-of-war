@@ -1,14 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
-/// What a catalog character is in a random match. `Campaign` entries only
-/// appear through campaign scripts and map rosters.
+/// What a catalog character is in a random match: a nation (led by its leader)
+/// or a tribe (named after its people).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
     Nation,
     Tribe,
-    Campaign,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -102,13 +101,13 @@ pub struct Hero {
 }
 
 /// One character of the shared catalog (`assets/geo_entities.json`): every
-/// nation and tribe bot, the playable heroes and the campaign factions.
+/// nation and tribe bot, playable heroes included.
 /// `lat`/`lon` is the character's home; bots spawn spread over all land and
 /// each spawn takes the free character whose home is closest.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeoEntity {
     pub id: String,
-    /// Shown on the map (the leader's name for nations and tribes).
+    /// Shown in game: the leader's name for a nation, the tribe's name for a tribe.
     pub name: String,
     /// The people or realm the character leads.
     #[serde(default)]
@@ -190,7 +189,7 @@ pub fn bot_portrait_index(avatar: &str) -> Option<usize> {
     static INDEX: OnceLock<std::collections::HashMap<&'static str, usize>> = OnceLock::new();
     INDEX
         .get_or_init(|| {
-            bot_portraits()
+            all()
                 .enumerate()
                 .filter_map(|(index, character)| Some((character.avatar.as_deref()?, index)))
                 .collect()
@@ -199,13 +198,9 @@ pub fn bot_portrait_index(avatar: &str) -> Option<usize> {
         .copied()
 }
 
-/// Every character packed into the bot portrait atlas, in cell order.
-pub fn bot_portraits() -> impl Iterator<Item = &'static GeoEntity> {
-    all().filter(|entity| entity.role != Role::Campaign)
-}
-
+/// Every character packed into the bot portrait atlas, in catalog order.
 pub fn bot_portrait_count() -> usize {
-    bot_portraits().count()
+    all().count()
 }
 
 /// Nation or tribe bots in catalog order (the order is stable across clients).
@@ -253,24 +248,29 @@ mod tests {
             }
             // Every bot needs a home (spawn assignment), a portrait folder,
             // a gender, a real region and a name of its own.
-            if entity.role != Role::Campaign {
-                assert!(
-                    entity.lat.is_some(),
-                    "{} has no home coordinates",
-                    entity.id
-                );
-                assert!(entity.avatar.is_some(), "{} has no avatar name", entity.id);
-                assert!(entity.gender.is_some(), "{} has no gender", entity.id);
-                assert_ne!(entity.region, Region::Unassigned, "{}", entity.id);
-                assert!(
-                    !entity.entity.is_empty(),
-                    "{} has no people/realm",
+            assert!(
+                entity.lat.is_some(),
+                "{} has no home coordinates",
+                entity.id
+            );
+            assert!(entity.avatar.is_some(), "{} has no avatar name", entity.id);
+            assert!(entity.gender.is_some(), "{} has no gender", entity.id);
+            assert_ne!(entity.region, Region::Unassigned, "{}", entity.id);
+            assert!(
+                !entity.entity.is_empty(),
+                "{} has no people/realm",
+                entity.id
+            );
+            if entity.role == Role::Tribe {
+                assert_eq!(
+                    entity.name, entity.entity,
+                    "{} must be named after its people",
                     entity.id
                 );
             }
         }
         let mut portraits = std::collections::HashSet::new();
-        for character in bot_portraits() {
+        for character in all() {
             assert!(
                 portraits.insert(character.avatar.as_deref()),
                 "{} shares an avatar with another bot",
@@ -289,30 +289,5 @@ mod tests {
         );
         assert_eq!(parse_territory_color("#12xz00"), None);
         assert_eq!(parse_territory_color("#fff"), None);
-    }
-
-    #[test]
-    fn every_campaign_faction_is_in_the_catalog() {
-        let campaign_dir =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/campaign");
-        for entry in std::fs::read_dir(campaign_dir).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if !path.extension().is_some_and(|ext| ext == "json")
-                || path
-                    .file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .ends_with(".triggers.json")
-            {
-                continue;
-            }
-            let value: serde_json::Value =
-                serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
-            for faction in value["factions"].as_array().unwrap() {
-                let name = faction["name"].as_str().unwrap();
-                assert!(by_name(name).is_some(), "campaign entity missing: {name}");
-            }
-        }
     }
 }

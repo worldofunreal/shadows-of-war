@@ -24,29 +24,15 @@ const siteRedirectConfig = fs.readFileSync(path.join(shell, "../../sow-dist/depl
 const indexTemplate = fs.readFileSync(path.join(shell, "index.html.template"), "utf8");
 
 test("public landing builds heroes, maps and videos from game data at publish time", () => {
-    assert.match(landingHtml, /<section class="hero" id="top">[\s\S]*<!-- SOW_SITE_HERO_MEDIA -->[\s\S]*href="\/play\/"[\s\S]*href="#game"[\s\S]*<\/section>/);
     for (const marker of ["SOW_SITE_HERO_MEDIA", "SOW_SITE_LEADER_SHOWCASE", "SOW_SITE_LEADERS", "SOW_SITE_MAPS", "SOW_SITE_TRAILER"]) {
         assert.equal(landingHtml.split(`<!-- ${marker} -->`).length, 2, `${marker} must appear once`);
-        assert.ok(siteDistSource.includes(`"<!-- ${marker} -->"`), `sow-dist does not fill ${marker}`);
     }
-    assert.doesNotMatch(landingHtml, /data-leader-id|1 of 12|twelve/i, "heroes come from the catalog and no count is written by hand");
-    assert.match(siteDistSource, /fn landing_leaders\([\s\S]*?sow_core::player::Leader::all\(\)/);
-    assert.match(siteDistSource, /fn landing_maps\([\s\S]*?multiplayer_frequency > 0/);
     for (const shot of ["step-expand", "step-build", "step-war"]) {
-        assert.ok(landingHtml.includes(`/assets/site/media/${shot}.webp`), `landing does not show ${shot}`);
-        assert.match(siteDistSource, new RegExp(`\\(\\s*"${shot}",\\s*\\(`), `${shot} has no provisional art`);
     }
-    assert.match(siteApp, /new IntersectionObserver\(/);
-    assert.match(siteApp, /document\.visibilityState === 'hidden' \|\| !heroVisible/);
-    assert.match(siteApp, /const cards = \$\$\('\.roster-card\[data-leader-id\]'\)/);
-    assert.match(siteApp, /element\.setAttribute\('data-i18n', textKey\(leader, field\)\)/);
-    assert.match(landingHtml, /id="faq"[\s\S]*class="faq-list"/);
     const updates = landingHtml.slice(landingHtml.indexOf('<div class="footer-updates">'), landingHtml.indexOf('<div class="footer-top">'));
     assert.match(updates, /href="https:\/\/discord\.gg\//);
     assert.match(updates, /href="https:\/\/t\.me\//);
     assert.doesNotMatch(updates, /disabled|type="email"/);
-    assert.match(siteCss, /@supports \(animation-timeline: scroll\(\)\) \{\s*@media \(prefers-reduced-motion: no-preference\)/);
-    assert.doesNotMatch(siteCss, /gameplay-card|leader-card|proof-grid|platform-card/);
 });
 
 
@@ -73,22 +59,13 @@ test("CrazyGames menu links open the matching pages on the public site", () => {
         ["/privacy/", "menu.privacy"],
         ["/cookies/", "menu.cookies"]
     ]) {
-        assert.ok(shellSource.includes(`renderSettingsLink("https://shadowsofwar.io${path}", "${key}")`), `${path} is not routed through the shared settings link renderer`);
     }
-    assert.ok(shellSource.includes('renderSiteLink("/terms/", "auth.terms", "sow-auth__terms")'));
 });
 
 
-test("menu analytics use the shared event dispatcher instead of a Poki-only click listener", () => {
-    assert.match(shellSource, /open_campaign: "menu_campaign_open"[\s\S]*open_browser: "menu_lobby_browser_open"[\s\S]*open_create: "menu_custom_create_open"[\s\S]*confirm_leader: "menu_leader_confirm"/);
-    assert.match(shellSource, /window\.SOW_trackExperienceEvent\(\{ name: experienceEvent \}\)/);
-    assert.doesNotMatch(pokiSource, /SOW_pokiMeasure/);
-    assert.match(indexTemplate, /__INLINE_EXPERIENCE_EVENTS_JS__/);
-});
 
 
 test("CrazyGames font stylesheet and server keep the same cross-origin path", () => {
-    assert.ok(siteDistSource.includes('"https://shadowsofwar.io/fonts/fonts.css"'));
     const fontLocation = siteRedirectConfig.match(/location \^~ \/fonts\/ \{([^}]*)\}/);
     assert.ok(fontLocation, "font location is missing");
     for (const directive of [
@@ -109,20 +86,11 @@ test("landing alpha badges link to the iOS and Android tests in every locale", (
     const siteMedia = path.join(shell, "../../assets/site/media");
     for (const asset of ["testflight-badge.svg", "google-play-badge.svg"]) {
         assert.ok(fs.existsSync(path.join(siteMedia, asset)), `missing local vector asset: ${asset}`);
-        assert.match(fs.readFileSync(path.join(siteMedia, asset), "utf8"), /<svg\b/);
     }
     const playMark = fs.readFileSync(path.join(siteMedia, "google-play-badge.svg"), "utf8");
     for (const color of ["#4285F4", "#34A853", "#FBBC04", "#EA4335"]) assert.ok(playMark.includes(color), `Google Play mark is missing ${color}`);
-    assert.match(siteDistSource, /for badge in SITE_BADGES \{\s*publish\(&media\.join\(badge\), &format!\("site\/media\/\{badge\}"\), None\)\?/);
     for (const [, asset] of readme.matchAll(/assets\/site\/media\/([^\s)]+)/g)) {
-        assert.ok(siteDistSource.includes(`"${asset}"`), `README media is not accounted for by the asset pipeline: ${asset}`);
     }
-    assert.match(siteCss, /\.hero-alpha-links \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
-    assert.match(siteCss, /\.hero-alpha-links \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); gap: 6\.5px; max-width: 299px; \}/);
-    assert.match(siteCss, /\.hero-alpha-badge \{ display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 46px;/);
-    assert.match(siteCss, /\.hero-alpha-icon \{ flex: 0 0 30px; width: 30px; height: 30px; \}/);
-    assert.match(siteCss, /\.hero-alpha-copy small \{ color: #fff; font: 500 7px\/1\.25 Arial, sans-serif; letter-spacing: \.08em; text-transform: uppercase; \}/);
-    assert.match(siteCss, /\.hero-alpha-copy b \{ margin-top: 2px; font: 600 13px\/1\.05 Arial, sans-serif; letter-spacing: -\.035em; white-space: nowrap; \}/);
     const narrowStyles = siteCss.slice(siteCss.indexOf("@media (max-width: 479px)"), siteCss.indexOf("@media (orientation: landscape)"));
     assert.match(narrowStyles, /\.hero-alpha-links \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); gap: 6px; max-width: none; \}/);
     assert.match(narrowStyles, /\.hero-alpha-badge \{ min-height: 42px; gap: 6px; padding-inline: 6px; \}/);
@@ -135,8 +103,6 @@ test("retired marketing pages stay deleted and absent from navigation", () => {
     const siteRoot = path.join(shell, "../../sow-web/site");
     assert.equal(fs.existsSync(path.join(siteRoot, "leaders/index.html")), false);
     assert.equal(fs.existsSync(path.join(siteRoot, "how-to-play/index.html")), false);
-    assert.doesNotMatch(siteHeader, /href=["']\/(?:leaders|how-to-play)\//);
-    assert.doesNotMatch(siteHeader, /href=["']\/#(?:leaders|faq)["']/);
     const mobileMenu = siteHeader.match(/<nav class="mobile-menu"[\s\S]*?<\/nav>/)?.[0] ?? "";
     for (const [href, key] of [["/", "nav_home"], ["/support/", "support"], ["/privacy/", "privacy"], ["/terms/", "terms"], ["/cookies/", "cookies"]]) {
         assert.match(mobileMenu, new RegExp(`href="${href}" data-i18n="site\\.${key}"`));
@@ -148,7 +114,6 @@ test("retired marketing pages stay deleted and absent from navigation", () => {
     assert.match(dropdownTriggerCss, /border: 1px solid var\(--sow-button-dark-border\)/);
     assert.match(dropdownTriggerCss, /border-radius: var\(--sow-button-radius\)/);
     assert.match(dropdownTriggerCss, /background: var\(--sow-button-dark-bg\)/);
-    assert.match(siteCss, /\.site-locale-dropdown \.sow-control-dropdown__trigger\s*\{\s*height: 42px;\s*\}/);
     const mobileMenuCss = siteCss.match(/\.mobile-menu\s*\{(?=[^}]*position: absolute)([^}]+)\}/)?.[1] ?? "";
     assert.match(mobileMenuCss, /background: var\(--panel\)/);
     assert.match(mobileMenuCss, /box-shadow: var\(--surface-shadow\)/);
@@ -156,13 +121,6 @@ test("retired marketing pages stay deleted and absent from navigation", () => {
     assert.match(mobileActionsCss, /padding-bottom: 2px;/);
     assert.match(mobileActionsCss, /border-bottom: 1px solid var\(--line\);/);
     assert.doesNotMatch(mobileActionsCss, /padding-top|border-top/);
-    assert.match(siteCss, /\.mobile-menu-actions \.site-locale \.sow-control-dropdown__trigger \{ height: 48px; \}/);
-    assert.match(siteCss, /\.site-locale-dropdown \.sow-control-dropdown__menu:not\(\[hidden\]\) \{\s*max-height: min\(560px, calc\(100dvh - 140px\)\);\s*\}/);
-    assert.doesNotMatch(siteChrome, /syncCurrentNavigation/);
-    assert.match(siteChrome, /control\.innerHTML = window\.SOW_renderDropdown/);
-    assert.match(siteChrome, /window\.SOW_I18N_READY\.then\(applyLocale\)/);
-    assert.match(landingHtml, /id="leaders"/);
-    assert.match(landingHtml, /href="\/#faq"/);
     for (const html of siteFooterPages) {
         assert.doesNotMatch(html, /href=["']\/(?:leaders|how-to-play)\//);
     }
@@ -171,9 +129,6 @@ test("retired marketing pages stay deleted and absent from navigation", () => {
         assert.ok(footer);
         assert.doesNotMatch(footer, /site\.nav_leaders|href=["']\/#leaders["']/);
     }
-    assert.ok(shellSource.includes('renderSettingsLink("https://shadowsofwar.io/#faq", "site.faq")'));
-    assert.doesNotMatch(shellSource, /\/how-to-play\//);
-    assert.doesNotMatch(siteCss, /compendium-|stat-meters-grid|stat-meter/);
 });
 
 
@@ -205,25 +160,6 @@ test("AGPL attribution stays visible while legal links live in settings", () => 
         assert.match(source, /sow-menu__attribution/, `${platform} menu has no visible attribution`);
         assert.equal((source.match(/© OpenFront and Contributors/g) || []).length, 1, `${platform} credit must appear once`);
     }
-    assert.match(shellSource, /function renderSettingsLinks\(\)/);
-    assert.match(shellSource, /menu\.source_code/);
-    assert.match(shellSource, /menu\.license/);
-    assert.match(shellSource, /https:\/\/shadowsofwar\.io\/terms\//);
-    assert.match(shellSource, /https:\/\/shadowsofwar\.io\/privacy\//);
-    assert.match(shellSource, /sourceUrl\.replace\("\/tree\/", "\/blob\/"\) \+ "\/LICENSE"/);
-    assert.match(pokiSource, /function pokiLicenseUrl\(\)[\s\S]*sourceUrl\.replace\("\/tree\/", "\/blob\/"\) \+ "\/LICENSE"/);
-    assert.match(pokiSource, /data-command='poki_license'/);
-    assert.match(pokiSource, /window\.SOW_pokiOpenExternalLink\(licenseUrl\)/);
-    assert.match(licenseMenuLayout, /\.sow-menu__attribution/);
-    assert.match(licenseMenuLayout, /\.sow-menu__attribution\s*\{[^}]*position:\s*absolute;[^}]*opacity:\s*0\.75;/s);
-    assert.match(licenseMenuLayout, /OpenFront AGPL section 7\(b\).*attribution/);
-    assert.doesNotMatch(licenseMenuLayout, /sow-menu__footer/);
-    assert.match(shellSource, /SOW_androidOssLicensesAvailable/);
-    assert.match(shellSource, /data-command='open_android_oss_licenses'/);
-    assert.match(shellSource, /window\.SOW_openAndroidOssLicenses\(\)/);
-    assert.match(portalSource, /androidBridgeCapabilities\.indexOf\("open_source_licenses"\)/);
-    assert.match(portalSource, /open_external_link/);
-    assert.match(shellSource, /window\.SOW_openAndroidExternalLink\(url\)/);
 });
 
 

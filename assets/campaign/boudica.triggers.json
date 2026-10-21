@@ -3,6 +3,9 @@
   "episode_id": "boudica",
   "text_namespace": "tutorial.campaign_boudica_",
   "require_speaker_portraits": true,
+  "emote_texts": {
+    "threat": "tutorial.campaign_boudica_boudica_council_strike"
+  },
   "settings": {
     "campaign_support": {
       "after_defeated": "roman_outpost",
@@ -118,6 +121,9 @@
       "title_key": "tutorial.campaign_boudica_boudica_council_title",
       "body_key": "tutorial.campaign_boudica_boudica_council_body",
       "speaker": "boudica",
+      "portrait_expression": "angry",
+      "continue_key": "tutorial.campaign_boudica_boudica_council_strike",
+      "emote": "threat",
       "presentation": "cinematic",
       "video_src": "/assets/campaign/boudica/intro.720p.555d0500.webm",
       "attack_ratio_on_enter": 0.25,

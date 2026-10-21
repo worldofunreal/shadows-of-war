@@ -1017,6 +1017,31 @@ fn icon_label_width(
     icon_px + gap + width
 }
 
+/// Width of each `push_icon_label_row` item: icon, text and pill padding.
+fn icon_label_row_widths(
+    text: &mut TextRenderer,
+    items: &[(NameplateStatusSprite, String)],
+    font_size: f32,
+    spacing: f32,
+    padding: f32,
+) -> Vec<f32> {
+    items
+        .iter()
+        .map(|(_, label)| icon_label_width(text, true, label, font_size, spacing) + 2.0 * padding)
+        .collect()
+}
+
+/// Letter size at which a row (`widths` measured at `font_size`, plus `gaps`) fits `max_width`.
+// ponytail: letters stop at 40% of their size; a longer row needs a wider button.
+fn fitted_row_font(font_size: f32, widths: f32, gaps: f32, max_width: f32) -> f32 {
+    let room = (max_width - gaps).max(0.0);
+    if widths <= room || widths <= 0.0 {
+        font_size
+    } else {
+        font_size * (room / widths).max(0.4)
+    }
+}
+
 /// Lays `items` out side by side, centered on `center` with `gap` between them.
 #[allow(clippy::too_many_arguments)]
 fn push_icon_label_row(
@@ -1033,10 +1058,7 @@ fn push_icon_label_row(
     let style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]);
     let outline = crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]);
     let padding = pill.map_or(0.0, |(padding, ..)| padding);
-    let widths: Vec<f32> = items
-        .iter()
-        .map(|(_, label)| icon_label_width(text, true, label, font_size, spacing) + 2.0 * padding)
-        .collect();
+    let widths = icon_label_row_widths(text, items, font_size, spacing, padding);
     let total = widths.iter().sum::<f32>() + gap * items.len().saturating_sub(1) as f32;
     let mut left = center[0] - total * 0.5;
     for ((icon, label), width) in items.iter().zip(widths) {
@@ -1073,7 +1095,7 @@ fn render_building_panel(
         .map(|seconds| {
             (
                 NameplateStatusSprite::Clock,
-                format!("{}s", seconds.ceil().max(0.0)),
+                crate::utils::format_number(seconds.ceil().max(0.0)),
             )
         })
         .into_iter()
@@ -1117,22 +1139,34 @@ fn render_building_panel(
         edge,
         3.0 * sf,
     );
+    let items = [
+        (NameplateStatusSprite::ArrowUp, offer.next_level.to_string()),
+        (
+            NameplateStatusSprite::Gold,
+            crate::utils::format_number(offer.cost),
+        ),
+        (
+            NameplateStatusSprite::Clock,
+            crate::utils::format_number(offer.seconds.ceil()),
+        ),
+    ];
+    // The tap area is the button, so the letters shrink to fit inside it.
+    let font_size = 18.0 * sf * scale;
+    let gap = 14.0 * sf;
+    let spacing = dev.font_char_spacing.max(0.1);
+    let widths = icon_label_row_widths(text, &items, font_size, spacing, 0.0);
+    let fitted = fitted_row_font(
+        font_size,
+        widths.iter().sum(),
+        gap * (items.len() - 1) as f32,
+        layout.button_size[0] - 24.0 * sf,
+    );
     push_icon_label_row(
         text,
-        &[
-            (NameplateStatusSprite::ArrowUp, offer.next_level.to_string()),
-            (
-                NameplateStatusSprite::Gold,
-                crate::utils::format_number(offer.cost),
-            ),
-            (
-                NameplateStatusSprite::Clock,
-                format!("{}s", offer.seconds.ceil()),
-            ),
-        ],
+        &items,
         layout.button_center,
-        18.0 * sf * scale,
-        14.0 * sf,
+        fitted,
+        gap,
         None,
         dev,
         sf,
@@ -1301,6 +1335,15 @@ fn building_icon_size(zoom_scaled: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fitted_row_font_keeps_letters_that_fit_and_shrinks_the_rest_into_the_button() {
+        assert_eq!(fitted_row_font(18.0, 100.0, 20.0, 200.0), 18.0);
+        let fitted = fitted_row_font(18.0, 300.0, 20.0, 200.0);
+        // Widths scale with the letters, so the shrunk row ends exactly at the button edge.
+        assert!((300.0 * fitted / 18.0 + 20.0 - 200.0).abs() < 1e-3);
+        assert_eq!(fitted_row_font(18.0, 1000.0, 20.0, 200.0), 18.0 * 0.4);
+    }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]

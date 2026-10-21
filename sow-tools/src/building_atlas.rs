@@ -178,7 +178,7 @@ fn avatar_source(art_root: &Path, name: &str) -> Result<PathBuf, Box<dyn Error +
 fn pack_bot_portraits(args: &PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sync>> {
     const CELL: u32 = 64;
     const COLUMNS: u32 = 32;
-    let characters: Vec<_> = sow_core::geo_entities::bot_portraits().collect();
+    let characters: Vec<_> = sow_core::geo_entities::all().collect();
     let rows = (characters.len() as u32).div_ceil(COLUMNS).max(1);
     let mut atlas = ImageBuffer::from_pixel(CELL * COLUMNS, CELL * rows, Rgba([0, 0, 0, 0]));
     for (index, character) in characters.iter().enumerate() {

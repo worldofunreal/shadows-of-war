@@ -13,7 +13,7 @@ const campaignDir = path.join(root, "assets/campaign");
 const guideDir = path.join(root, "assets/guides");
 const mapsDir = path.join(root, "assets/maps");
 const avatarArtDir = path.join(root, "assets/art/avatars");
-const avatarFolders = ["heroes", "nations", "tribes"];
+const avatarFolders = ["heroes", "nations", "tribes", "campaign"];
 const entityCatalogFile = path.join(root, "assets/geo_entities.json");
 const distLocaleDir = path.join(root, "dist/web/locales");
 const campaignRequire = createRequire(import.meta.url);
@@ -179,8 +179,7 @@ async function validateEntityCatalog(value) {
   if (!value || value.version !== 2 || !Array.isArray(value.entities) || value.entities.length > 10000) throw new Error("Invalid entity catalog.");
   const ids = new Set();
   const names = new Set();
-  const avatarFiles = new Set(await listAvatarIds());
-  const roles = new Set(["nation", "tribe", "campaign"]);
+  const roles = new Set(["nation", "tribe"]);
   const genders = new Set(["female", "male"]);
   const regions = new Set(["unassigned", "europe", "africa", "asia", "americas", "oceania"]);
   for (const entity of value.entities) {
@@ -192,7 +191,8 @@ async function validateEntityCatalog(value) {
       || (entity.wikipedia != null && (typeof entity.wikipedia !== "string" || !/^https:\/\/[a-z-]+\.wikipedia\.org\/wiki\//.test(entity.wikipedia)))
       || (entity.territory_color != null && (typeof entity.territory_color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(entity.territory_color)))) throw new Error("Invalid or duplicate entity.");
     // Bots need a home and a portrait folder; the portrait itself may arrive later.
-    if (entity.role !== "campaign" && (entity.lat == null || typeof entity.avatar !== "string")) throw new Error(`Bot needs a home and a portrait folder: ${entity.id}`);
+    if (entity.lat == null || typeof entity.avatar !== "string") throw new Error(`Bot needs a home and a portrait folder: ${entity.id}`);
+    if (entity.role === "tribe" && entity.name !== entity.entity) throw new Error(`A tribe is named after its people: ${entity.id}`);
     ids.add(entity.id);
     const normalizedName = entity.name.trim().toLocaleLowerCase();
     if (names.has(normalizedName)) throw new Error(`Duplicate entity name: ${entity.name}`);
@@ -200,7 +200,7 @@ async function validateEntityCatalog(value) {
     if ((entity.lat == null) !== (entity.lon == null)
       || (entity.lat != null && (!Number.isFinite(entity.lat) || entity.lat < -90 || entity.lat > 90
         || !Number.isFinite(entity.lon) || entity.lon < -180 || entity.lon > 180))) throw new Error(`Invalid coordinates: ${entity.id}`);
-    if (entity.avatar != null && (typeof entity.avatar !== "string" || !avatarId.test(entity.avatar) || (entity.role === "campaign" && !avatarFiles.has(entity.avatar)))) throw new Error(`Missing avatar: ${entity.id}`);
+    if (entity.avatar != null && (typeof entity.avatar !== "string" || !avatarId.test(entity.avatar))) throw new Error(`Missing avatar: ${entity.id}`);
   }
 }
 

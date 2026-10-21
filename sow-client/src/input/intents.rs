@@ -91,6 +91,10 @@ impl SowApp {
                 return false;
             }
             self.sim.offline_intents.clear();
+            // The dialogue emote was registered while paused; clear it first so it cannot replay on resume.
+            self.sim
+                .offline_intents
+                .push(sow_core::protocol::GameplayIntent::ClearEmote);
             self.ui.tutorial_waiting_for_first_attack = false;
             self.sim.paused = false;
             self.sim.offline_tick_timer = 0.0;

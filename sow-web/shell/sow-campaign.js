@@ -530,7 +530,7 @@
             issue(null, "version", "Campaign logic must use version 2.");
             return { errors, warnings };
         }
-        knownFields(definition, ["version", "episode_id", "default_locale", "text_namespace", "faction_story_names", "require_speaker_portraits", "settings", "entry", "menu_guide", "speakers", "strings", "layout", "steps", "reactions"], null, "campaign");
+        knownFields(definition, ["version", "episode_id", "default_locale", "text_namespace", "faction_story_names", "require_speaker_portraits", "emote_texts", "settings", "entry", "menu_guide", "speakers", "strings", "layout", "steps", "reactions"], null, "campaign");
         if (!id(definition.episode_id)) issue(null, "episode_id", "Invalid episode ID.");
         if (own(definition, "require_speaker_portraits") && typeof definition.require_speaker_portraits !== "boolean") issue(null, "require_speaker_portraits", "Choose whether dialogue needs a named speaker and portrait.");
         const requireSpeakerPortraits = definition.require_speaker_portraits === true;
@@ -602,6 +602,13 @@
             if (typeof key !== "string" || !/^tutorial\.[a-zA-Z0-9_.-]+$/.test(key)) issue(step, field, "Choose a tutorial text key.");
             else if (options.hasText && !options.hasText(key)) issue(step, field, "Missing shared English text: " + key);
         }
+        if (own(definition, "emote_texts")) {
+            if (!object(definition.emote_texts)) issue(null, "emote_texts", "Emote texts must map each emote to a text key.");
+            else Object.entries(definition.emote_texts).forEach(([kind, key]) => {
+                if (!["greet", "help", "threat", "celebrate"].includes(kind)) issue(null, "emote_texts", "Choose a known emote.");
+                text(null, "emote_texts", key, true);
+            });
+        }
         const speakers = definition.speakers || {};
         if (!object(speakers)) issue(null, "speakers", "Invalid character dictionary.");
         else Object.entries(speakers).forEach(([key, speaker]) => {
@@ -662,7 +669,7 @@
             } else if (!Object.values(METRICS).concat(["tiles", "contacts", "defeated", "touch_controls"]).includes(when.fact) || !Number.isFinite(when.gte)) issue(step, "routes", "Invalid game fact condition.");
         }
         const stepFields = {
-            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
+            scene: ["id", "type", "title_key", "body_key", "speaker", "portrait_expression", "continue_key", "emote", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
             choice: ["id", "type", "title_key", "body_key", "speaker", "marker", "choices", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
             objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
             guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
@@ -752,6 +759,9 @@
             }
             if (step.speaker && !own(speakers, step.speaker)) issue(step, "speaker", "Unknown character.");
             if (step.presentation && (!["dialogue", "chapter", "celebration", "cinematic"].includes(step.presentation) || step.presentation === "cinematic" && step.type !== "scene")) issue(step, "presentation", "Choose a presentation supported by this step.");
+            if (own(step, "portrait_expression") && !["happy", "calm", "fear", "angry"].includes(step.portrait_expression)) issue(step, "portrait_expression", "Choose a portrait expression: happy, calm, fear or angry.");
+            text(step, "continue_key", step.continue_key, false);
+            if (own(step, "emote") && !["greet", "help", "threat", "celebrate"].includes(step.emote)) issue(step, "emote", "Choose a known emote.");
             if (step.video_src != null) {
                 const prefix = "/assets/campaign/" + definition.episode_id + "/";
                 const relative = typeof step.video_src === "string" && step.video_src.startsWith(prefix) ? step.video_src.slice(prefix.length) : "";

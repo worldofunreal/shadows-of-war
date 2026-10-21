@@ -605,7 +605,13 @@ pub(super) fn render_nameplates(
 
     let tick_secs = (sim.config.tick_rate_ms / 1000.0).max(0.001);
     let emote_fraction = system.emote_tick_at.map_or(0.0, |at| {
-        now.duration_since(at).as_secs_f32().min(tick_secs)
+        let elapsed = now.duration_since(at).as_secs_f32();
+        // A paused sim stops ticking, so an emote's clock must follow real time or it freezes.
+        if sim.paused {
+            elapsed
+        } else {
+            elapsed.min(tick_secs)
+        }
     });
     let (order, visuals, frame_plans, badge_animations) = (
         &system.order,

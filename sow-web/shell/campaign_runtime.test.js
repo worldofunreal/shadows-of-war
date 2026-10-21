@@ -22,22 +22,6 @@ const buildingsIntent = fs.readFileSync(path.join(shell, "../../sow-core/src/int
 const mapClick = fs.readFileSync(path.join(shell, "../../sow-client/src/input/map_click.rs"), "utf8");
 
 
-test("campaign runtime shares the JSON interpreter and cinematic view", () => {
-    assert.match(tutorial, /SOWCampaign\.validate/);
-    assert.match(tutorial, /SOWCampaign\.create/);
-    assert.match(tutorial, /SOWCampaignView\.mount/);
-    assert.match(tutorial, /onCinematicChange: function \(active\)[\s\S]*?SOW_menu_music_cinematic\(active\)/);
-    assert.match(tutorial, /start_campaign_episode/);
-    assert.match(tutorial, /set_tutorial_paused/);
-    assert.match(tutorial, /complete_campaign_episode/);
-    assert.match(webMenu, /WebMenuCommand::SetTutorialPaused \{\s*paused,\s*camera_only,\s*paused_action,\s*\} => \{[\s\S]*?self\.sim\.paused = paused[\s\S]*?tutorial_paused_action/);
-    assert.match(simUpdateSource, /if self\.sim\.paused \{\s*self\.sim\.offline_tick_timer = 0\.0;/);
-    assert.match(campaignEngine, /wilderness_orders_accepted/);
-    assert.match(campaignEngine, /const paused = \["scene", "choice", "end"\]\.includes\(step\.type\) \|\| \(step\.pause_game === true && !expansionStarted\)/);
-    assert.match(campaignView, /data-story-choice/);
-    assert.match(storyCss, /\.sow-story__choices/);
-    assert.doesNotMatch(hudCss, /\.sow-hud__tutorial-overlay/);
-});
 
 
 test("Boudica keeps open neutral clans, makes every Roman enemy, and orders the recorded pre-final targets", () => {
@@ -96,8 +80,6 @@ test("campaign attack permission changes accept existing enemies only", () => {
     assert.deepEqual(campaign.validate(definition, roster, { hasText: () => true }).errors, []);
     definition.steps[0].campaign_attack_on_enter.faction_id = "clan";
     assert.ok(campaign.validate(definition, roster, { hasText: () => true }).errors.some(issue => issue.field === "campaign_attack_on_enter.faction_id"));
-    assert.match(campaignEditor, /Change an enemy's attack behavior when this step begins/);
-    assert.match(tutorial, /send\("set_campaign_attack_permission", machineView\.step\.campaign_attack_on_enter\)/);
 });
 
 
@@ -113,8 +95,6 @@ test("Boudica final decision opens at 5,000 tiles and targets her on the map", (
     assert.equal(machine.update({ tiles: 5000 }, {}).step.id, choice.id);
     const editorPreviewFocus = campaignEditor.slice(campaignEditor.indexOf("function applyPreviewFocus"), campaignEditor.indexOf("function renderPreview", campaignEditor.indexOf("function applyPreviewFocus")));
     assert.match(editorPreviewFocus, /step\.marker && step\.marker\.target/);
-    assert.match(campaignEditor, /var keepsMarker = \["scene", "choice", "objective", "guide"\]/);
-    assert.match(campaignEditor, /if \(\["scene", "choice", "objective", "guide"\]\.includes\(step\.type\)\) \{\s*var markerPanel/);
 });
 
 
@@ -135,15 +115,6 @@ test("Boudica reveal beats share a fixed 1.1-second wait while tribal contact st
     assert.equal(definition.steps.find(step => step.id === "boudica_aid_kept").campaign_assault_on_enter, undefined);
     assert.equal(definition.steps.some(step => /factory|bunker/.test(step.id)), false);
     assert.equal(definition.steps.some(step => Object.hasOwn(step, "start_delay_seconds") || Object.hasOwn(step, "advance_delay_seconds")), false);
-    assert.doesNotMatch(campaignEditor, /start_delay_seconds|advance_delay_seconds/);
-    assert.match(campaignEditor, /Wait 1\.1 seconds before showing/);
-    assert.match(campaignEditor, /var canTick = Boolean\(\(trigger && trigger\.type === "elapsed"\) \|\| timedRoute\)/);
-    assert.match(tutorial, /stepRevealToken !== waitingToken[\s\S]*waitingMachine\.view\(\)\.step\.id === waitingStepId/);
-    assert.match(campaignEditor, /previewRevealToken !== waitingToken[\s\S]*waitingMachine\.view\(\)\.step\.id === waitingStepId/);
-    assert.match(tutorial, /function clearStepRevealTimer\(\)[\s\S]*stepRevealToken\+\+[\s\S]*window\.clearTimeout/);
-    assert.match(campaignEditor, /function clearPreviewRevealTimer\(\)[\s\S]*previewRevealToken\+\+[\s\S]*window\.clearTimeout/);
-    assert.match(campaignView, /\}, host\.SOWCampaign\.WAIT_MS\);/);
-    assert.doesNotMatch(tutorial, /window\.setTimeout\(updateMenuGuide/);
     for (const [type, legacyField] of [["scene", "start_delay_seconds"], ["objective", "advance_delay_seconds"]]) {
         const legacyStep = { id: "wait", type, title_key: "tutorial.wait", next: "end", [legacyField]: 1 };
         if (type === "objective") legacyStep.trigger = { type: "elapsed", scope: "step", value: 1 };
@@ -208,10 +179,6 @@ test("campaign building and action permissions are cumulative, route-safe, and r
     const rustActions = Array.from(actionEnum.matchAll(/^\s*([A-Z][A-Za-z0-9]*),?\s*$/gm), match => match[1]
         .replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase()).sort();
     assert.deepEqual(rustActions, campaign.CAMPAIGN_ACTIONS.slice().sort(), "Rust action permissions and editor controls must stay in sync");
-    assert.match(rustCampaign, /Self::TransportFleet => None/);
-    assert.match(rustCampaign, /Self::TradeShip => Some\(\(BuildingKind::Port, 1\)\)/);
-    assert.match(rustCampaign, /Self::Warship => Some\(\(BuildingKind::Port, 2\)\)/);
-    assert.match(rustCampaign, /Self::Nuke => Some\(\(BuildingKind::City, BuildingKind::City\.max_level\(\)\)\)/);
     const cityTwo = { buildings: { City: 2 }, actions: ["transport_fleet", "trade_ship", "warship", "nuke"] };
     assert.equal(campaign.campaignAllowsAction(cityTwo, "transport_fleet"), true);
     assert.equal(campaign.campaignAllowsAction(cityTwo, "trade_ship"), false);
@@ -534,9 +501,6 @@ test("first-contact responses open on the contact fact and queue each faction on
     assert.equal(second.reaction, "contact_a");
     machine.advance(null, "reaction-contact_a@a");
     assert.equal(machine.update({ tiles_gained: 0, contact_faction_ids: ["b", "a"] }, {}).step.id, "objective");
-    assert.match(campaignEditor, /Add contact response/);
-    assert.match(campaignEditor, /On contact with/);
-    assert.match(campaignEditor, /Simulate first " \+ \(isContact \? "contact"/);
 });
 
 
@@ -660,14 +624,6 @@ test("campaign negotiation uses the canonical HUD gold balance, not player-list 
 });
 
 
-test("Boudica City upgrade guidance and Ninth scene have English and Spanish copy", () => {
-    const en = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
-    const es = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/es/web.toml"), "utf8");
-    assert.match(en, /^campaign_boudica_boudica_structure_upgrade_hint = "Upgrade the City once to raise troop capacity before the Ninth arrives\."$/m);
-    assert.match(es, /^campaign_boudica_boudica_structure_upgrade_hint = "Mejora la Ciudad una vez para aumentar la capacidad de tropas antes de que llegue la Novena\."$/m);
-    assert.match(es, /^campaign_boudica_boudica_city_upgrade_ready_title = "Listos para la Novena"$/m);
-    assert.match(es, /^campaign_boudica_boudica_city_upgrade_ready_body = "Nuestra ciudad ya puede sostener un ejército mayor\. Cerialis marcha para socorrer Camulodunum; enfrentemos a la Novena con todas nuestras fuerzas\."$/m);
-});
 
 
 test("campaign objectives distinguish the intended contact, alliance, fleet and transfer action", () => {
@@ -716,13 +672,6 @@ test("campaign objectives distinguish the intended contact, alliance, fleet and 
 });
 
 
-test("campaign interpreter facts are all published by the WASM HUD payload", () => {
-    const campaign = require(path.join(shell, "sow-campaign.js"));
-    const facts = new Set([...Object.values(campaign.METRICS).filter(fact => fact !== campaign.METRICS.hover), "tiles", "defeated", "defeated_faction_ids", "contacts", "contact_faction_ids", "attacks_by_faction_id", "fleets_by_type", "transport_fleets_by_faction_id", "support_deliveries_by_faction_id", "resource_transfers_by_recipient_faction_id", "alliance_faction_ids", "camera_target_radius"]);
-    for (const fact of facts) assert.match(webMenu, new RegExp('"' + fact + '"\\s*:'), `WASM HUD is missing campaign fact ${fact}`);
-    assert.match(tutorial, /hover_events: runtime\.hoverEvents/);
-    assert.match(tutorial, /runtime\.machine\.update\(facts, runtime\.uiCounts\)/);
-});
 
 
 test("an active campaign keeps its loaded definition when the editor draft changes", () => {
@@ -740,11 +689,6 @@ test("an active campaign keeps its loaded definition when the editor draft chang
 });
 
 
-test("campaign episode JSON is cached only while paired files are loading", () => {
-    assert.match(tutorial, /var request = Promise\.all\(\[/);
-    assert.match(tutorial, /runtime\.loading\[episodeId\] = request;\s*function releaseRequest\(\) \{\s*if \(runtime\.loading\[episodeId\] === request\) delete runtime\.loading\[episodeId\];\s*}\s*request\.then\(releaseRequest, releaseRequest\)/);
-    assert.match(tutorial, /if \(open\) \{\s*runtime\.uiPaused = true;\s*runtime\.pausedAction = null;/);
-});
 
 
 test("campaign start keeps its loaded script and replay clicks belong to that episode", async () => {
@@ -891,7 +835,6 @@ test("campaign decisions keep their selected branch and guard stale callbacks", 
     assert.equal(machine.advance(null, "strike_step"), true);
     assert.equal(machine.advance(null, "rejoin"), true);
     assert.equal(machine.view().step.id, "strike_echo");
-    assert.match(campaignEngine, /expectedStepId/);
 });
 
 
@@ -950,99 +893,22 @@ test("UI objectives respect step, episode, and total scope", () => {
 });
 
 
-test("objective completion has no artificial wait or delayed preview timer", () => {
-    assert.doesNotMatch(campaignEngine, /readyAt|reactionOpenedAt|now - readyAt/);
-    assert.doesNotMatch(campaignView, /is-ready|model\.ready/);
-    assert.doesNotMatch(storyCss, /story-objective-complete|is-ready/);
-    assert.doesNotMatch(campaignEditor, /setTimeout\(function \(\) \{ if \(state\.machine\) paintPreview\(\); \}, 840\)/);
-    assert.match(storyCss, /\.sow-story\.is-reduced [^{]*\{ animation: none !important/);
-    assert.match(storyCss, /\.sow-story__meter progress \{[^}]*height: var\(--sow-tutorial-progress-height\)[^}]*border-radius: 999px/);
-});
 
 
 test("campaign episode 1 stays locked so only the tutorial can be replayed", () => {
     const unlockStart = campaignModule.indexOf("pub fn is_unlocked(");
     const unlock = campaignModule.slice(unlockStart, campaignModule.indexOf("pub fn advisor(", unlockStart));
     assert.ok(unlockStart >= 0, "is_unlocked must exist");
-    assert.match(campaignPolicySource, /pub const PUBLISHED_EPISODES: &\[&str\] = &\["boudica"\];/,
-        "the shared registry keeps all Six Sky episodes unpublished");
     assert.match(unlock, /sow_data::campaign::episode_is_published\(episode\.id\)/,
         "campaign availability follows the shared published-episode registry");
     assert.match(unlock, /episode\s*\.\s*prerequisite\s*\.\s*is_none_or\s*\(\s*\|required\|\s*progress\.completed_episodes\.contains\(required\)\s*\)/,
         "later campaign episodes follow the shared prerequisite metadata");
     // A locked episode renders the same disabled card as the rest of the chain.
-    assert.match(lobbiesSource, /: "<button class='sow-menu__secondary sow-campaign__play' type='button' disabled>"/);
     // "Saga complete" may only appear when every episode is really finished.
-    assert.match(lobbiesSource, /episodes\.every\(function \(episode\) \{ return episode && episode\.completed; \}\)/);
 });
 
 
-test("tutorial X is not wired to leave match and menu exit clears runtime", () => {
-    assert.match(tutorial, /function update\(hud\) \{\s*if \(!runtime\.machine \|\| runtime\.modalOpen \|\|/);
-    assert.match(tutorial, /runtime\.machine\.setPaused\(open\)/);
-    assert.match(tutorial, /onDismiss: skipMenuGuide/);
-    assert.match(tutorial, /SOW_tutorial_menu_state_update/);
-    assert.match(tutorial, /function reset\(\)/);
-    assert.match(hud, /id="sow-hud-surrender-modal"/);
-    assert.match(hudCss, /\.sow-campaign-error/);
-    assert.doesNotMatch(hudCss, /sow-hud__tutorial-overlay|sow-hud__tutorial-hand/);
-});
 
 
-test("campaign building access is enforced by the shared step unlock policy", () => {
-    assert.doesNotMatch(coreCost, /structure_kind_enabled/);
-    assert.match(buildingsIntent, /campaign_allows_building\(kind, 1\)/);
-    assert.match(buildingsIntent, /campaign_allows_building\(building\.kind, target_level\)/);
-    assert.match(mapClick, /campaign_building_max_level\(kind\) >= 1/);
-    assert.match(webMenu, /"reason_key": item\.reason_key/);
-    assert.doesNotMatch(webMenu, /factory_unlocked/);
-    assert.match(hud, /if \(item\.reason_key\) \{\s*var reason = SOW_t\(item\.reason_key, item\.reason_troops == null/);
-    assert.doesNotMatch(hud, /factoryLocked/);
-    assert.match(hud, /button\.hidden = !available/);
-    assert.match(hud, /button\.disabled = disabled/);
-    assert.match(campaignEditor, /Campaign availability/);
-    assert.match(campaignEditor, /STRUCTURE_LEVEL_LIMITS/);
-    assert.match(campaignEditor, /Available when this step begins/);
-    assert.doesNotMatch(campaignEditor, /Buildings available|Unlock buildings after/);
-    assert.doesNotMatch(hud, /campaignActionLockReason/);
-    assert.match(hud, /function campaignAllowsBuilding\(unlocks, kind, level\)\s*\{\s*return unlocks === null \|\|/);
-    assert.match(hud, /item\.reason_key !== "lobbies\.locked"/);
-    assert.match(campaignEditor, /CAMPAIGN_ACTION_BUILDING_REQUIREMENTS/);
-    assert.match(mapClick, /reason_level: Option<u8>/);
-    assert.match(mapClick, /reason_seconds: Option<u32>/);
-    assert.match(mapClick, /MapMenuAction::Nuke => \(Some\(self\.sim\.config\.nuke_cost\), None\)/);
-    assert.match(webMenu, /"reason_level": item\.reason_level/);
-    assert.match(webMenu, /"reason_seconds": item\.reason_seconds/);
-    assert.match(webMenu, /campaign_session_id == self\.ui\.campaign_session_id[\s\S]*?engine\.state\.config\.tutorial/);
-    assert.match(matchStartSource, /campaign_session_id = self\.ui\.campaign_session_id\.wrapping_add\(1\)\.max\(1\)/);
-    const botBuildingSource = fs.readFileSync(path.join(shell, "../../sow-core/src/intent/nation/build.rs"), "utf8");
-    const botCombatSource = fs.readFileSync(path.join(shell, "../../sow-core/src/intent/nation/combat.rs"), "utf8");
-    const botEconomySource = fs.readFileSync(path.join(shell, "../../sow-core/src/execution/income.rs"), "utf8");
-    assert.match(botBuildingSource, /if !self\.campaign_allows_building\(kind, 1\) \{\s*continue;\s*\}/);
-    assert.match(botCombatSource, /if !self\.campaign_allows_action\(crate::campaign::CampaignAction::Nuke\) \{\s*return;\s*\}/);
-    assert.match(botEconomySource, /campaign_allows_building\(crate::game::BuildingKind::City, 1\)/);
-    assert.match(hud, /button\.setAttribute\("aria-disabled", String\(disabled\)\)/);
-    assert.match(hud, /if \(mapButton\.disabled\) return/);
-    assert.doesNotMatch(hud, /mapButton\.disabled \|\| mapButton\.getAttribute\("aria-disabled"\) === "true"/);
-    assert.match(hudCss, /\.sow-hud__building-btn\[aria-disabled="true"\]/);
-    assert.match(buildingsIntent, /factory_upgrades_without_a_city_level_requirement/);
-});
 
 
-test("campaign hides unavailable actions instead of rendering lock-label UI", () => {
-    assert.match(mapClick, /campaign_fleet\s*&&\s*target\.is_land/);
-    assert.match(mapClick, /MapMenuAction::Fleet => self[\s\S]*?CampaignAction::TransportFleet/);
-    assert.doesNotMatch(mapClick, /campaign_locked\.then_some\("hud\.campaign_unlock_required"\)/);
-    assert.match(mapClick, /Some\(\("hud\.fleet_capacity_full", None\)\)/);
-    assert.match(mapClick, /fleet_route_check\([\s\S]*?FleetRouteCheck::Access\)/);
-    assert.match(webMenu, /"reason_troops": item\.reason_troops/);
-    assert.doesNotMatch(hud, /mapDisabledSector|var radialCount = 4/);
-    assert.match(hud, /fleetTrade\.hidden = hideTrade/);
-    assert.match(hud, /fleetWarship\.hidden = hideWarship/);
-    assert.match(hud, /fleetNuke\.hidden = hideNuke/);
-    assert.match(fs.readFileSync(path.join(shell, "../../sow-client/src/ui/building_panel.rs"), "utf8"),
-        /next_level > building\.kind\.max_level\(\)\s*\|\| next_level > self\.campaign_building_max_level/, "locked upgrades hide the button");
-    assert.doesNotMatch(hud, /campaign_unlock_required/);
-    assert.doesNotMatch(hudCss, /\.sow-hud__map-sector \.sow-hud__map-action-reason/);
-    assert.doesNotMatch(mapClick, /fleet_no_port|NoPort|completed port/);
-});

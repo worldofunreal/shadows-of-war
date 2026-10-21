@@ -20,7 +20,7 @@
       "civ": "Iceni Kingdom",
       "leader": "Boudica",
       "support_interval_seconds": 15,
-      "avatar": "stonea"
+      "avatar": "iceni"
     },
     {
       "id": "snettisham",
@@ -35,7 +35,7 @@
       "civ": "Iceni Kingdom",
       "leader": "Boudica",
       "support_interval_seconds": 15,
-      "avatar": "snettisham",
+      "avatar": "iceni",
       "can_attack_player": false
     },
     {
@@ -51,7 +51,7 @@
       "civ": "Iceni Kingdom",
       "leader": "Boudica",
       "support_interval_seconds": 20,
-      "avatar": "thetford"
+      "avatar": "iceni"
     },
     {
       "id": "trinovantes",
@@ -99,7 +99,7 @@
       "leader": "Caesar",
       "can_attack_player": false,
       "gold_loot_override": 200,
-      "avatar": "the_iceni_despoilers"
+      "avatar": "roman"
     },
     {
       "id": "roman_supply_depot",
@@ -315,7 +315,7 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "cantiaci_chieftain"
+      "avatar": "cantiaci"
     },
     {
       "id": "regnenses",
@@ -345,7 +345,7 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "regnenses_male"
+      "avatar": "regnenses"
     },
     {
       "id": "atrebates",
@@ -617,7 +617,7 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "vercingetorix"
+      "avatar": "arverni"
     },
     {
       "id": "gaulish_traders_2",
@@ -631,7 +631,7 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "vercingetorix"
+      "avatar": "arverni"
     },
     {
       "id": "gaulish_traders_3",
@@ -645,7 +645,7 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "vercingetorix"
+      "avatar": "arverni"
     },
     {
       "id": "irish_raiders_1",
@@ -673,7 +673,7 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "selgovae"
+      "avatar": "picts"
     },
     {
       "id": "belgae_1",

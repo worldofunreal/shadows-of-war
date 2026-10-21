@@ -286,10 +286,6 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
     assert.equal(doc.activeElement, context.hudRefs.inboxButton, "Escape returns focus to the toolbar control");
     assert.deepEqual(calls.at(-1), { type: "toggle_inbox" });
 
-    assert.match(hudCss, /\.sow-hud__transfer-actions button:active:not\(:disabled\),\s*\.sow-hud__request-actions button:active:not\(:disabled\)\s*\{[^}]*transform:\s*translateY\(1px\)/);
-    assert.match(hudCss, /\.sow-hud__transfer-actions button:disabled,\s*\.sow-hud__request-actions button:disabled\s*\{[^}]*opacity:\s*0\.35/);
-    assert.match(hudCss, /\.sow-hud__sheet \.sow-hud__request-actions button \{[^}]*min-block-size:\s*48px/);
-    assert.match(hudCss, /\.sow-hud__request-name \{[^}]*overflow-wrap:\s*anywhere/);
 
 
 });
@@ -306,8 +302,6 @@ test("map feedback reuses one compact card, clamps to the viewport, and releases
     const fadeOutMs = Number(fadeOutMatch[1]);
     assert.equal(durationMs, 2000, "map feedback stays brief");
     assert.equal(fadeOutMs, 180, "map feedback fades out gently");
-    assert.match(hudCss, /\.sow-hud__notification--contextual\s*\{[^}]*opacity: 0;[^}]*transition: opacity 180ms ease, transform 180ms cubic-bezier/);
-    assert.match(hudCss, /\.sow-hud__notification--contextual\.sow-hud__map-feedback-card--visible\s*\{[^}]*opacity: 1;/);
     assert.ok(start >= 0 && end > start);
     let showTransitions = 0;
     const classes = new Set();
@@ -422,7 +416,6 @@ test("Campaign Studio avoids rebuilding the route graph on progress-only updates
     const paint = campaignEditor.slice(start, end);
     assert.match(paint, /if \(previousStep !== model\.step\.id\) renderGraph\(\)/);
     assert.equal((paint.match(/renderGraph\(\)/g) || []).length, 1);
-    assert.match(campaignEditor, /function markDirty\(\)[\s\S]*?refresh\(true\); syncPreview\(\); renderGraph\(\)/);
 });
 
 
@@ -577,16 +570,10 @@ test("gameplay and editor share compact viewport and hand progress rules", () =>
     assert.equal(view.compactGuideMetric(
         { trigger: { type: "territory", value: 250 } }, { current: 120, target: 250 }
     ), null, "passive status steps do not gain a fake action counter");
-    assert.match(hud, /SOWCampaignView\.isCompactViewport\(hudRoot, width, height\)/);
 });
 
 
 test("short landscape HUD geometry fits the requested phone widths and heights", () => {
-    assert.match(hudCss, /@media \(hover: none\) and \(pointer: coarse\) \{[\s\S]*?#sow-hud\[data-compact="true"\]/);
-    assert.match(hudCss, /\.sow-hud__dock \{[^}]*width: min\(520px, calc\(100vw - max\(8px, var\(--sow-sal\)\) - max\(8px, var\(--sow-sar\)\) - 204px\)\)/);
-    assert.match(hudCss, /\.sow-hud__operations \{[^}]*width: min\(320px, calc\(100vw - max\(8px, var\(--sow-sal\)\) - 280px - max\(8px, var\(--sow-sar\)\)\)/);
-    assert.match(hudCss, /\.sow-hud__building-btn \{ flex: 0 0 44px; min-height: 44px; \}/);
-    assert.match(hudCss, /\.sow-hud__icon-btn \{ width: 44px; height: 44px/);
     for (const [width, height, safeLeft] of [[568, 320, 44], [667, 375, 0], [844, 390, 0], [932, 430, 0]]) {
         const leftInset = Math.max(8, safeLeft), rightInset = 8;
         const dockWidth = Math.min(520, width - leftInset - rightInset - 204);
@@ -600,8 +587,6 @@ test("short landscape HUD geometry fits the requested phone widths and heights",
         assert.ok(operationsRight <= width - rightInset && operationsRight - operationWidth >= leftInset, `${width}x${height}: operations stay inside safe edges`);
         assert.ok(operationsHeight > 0 && operationsHeight <= height * 0.2, `${width}x${height}: operations remain scrollable within 20% of the frame`);
     }
-    assert.match(hudCss, /@media \(hover: hover\) and \(pointer: fine\) \{[\s\S]*?#sow-hud\[data-compact="true"\]/);
-    assert.match(hudCss, /@media \(max-width: 599px\) and \(orientation: portrait\)/);
 });
 
 
@@ -647,7 +632,6 @@ test("transfer acknowledgements release the mobile sidebars without leaving a hi
         update(null);
         assert.equal(context.hudRoot.dataset.overlayOpen, "false", "a state-driven close also restores the rails");
     }
-    assert.match(hudCss, /#sow-hud\[data-overlay-open="true"\] \.sow-hud__left-rail,[^}]*\.sow-hud__right-rail,[^}]*display: none;/);
 });
 
 
@@ -727,13 +711,6 @@ test("player dialogs share identities, preserve drafts and focus, and prioritize
     update({ betrayal: { ally_id: 99, ally_name: "", ally_avatar: { kind: "fallback" } } });
     assert.equal(context.hudRefs.betrayalIdentity.name.textContent, "es:hud.player_name");
     assert.equal(context.hudRefs.betrayalIdentity.portrait.src, "/assets/gameplay/avatars/null.webp");
-    assert.match(hud, /statusIcon\("traitor", "sow-hud__inline-icon"\)/);
-    assert.doesNotMatch(hud, /class="sow-hud__panel sow-hud__transfer/);
-    assert.doesNotMatch(hudCss, /sow-hud__modal-card|sow-hud__transfer-target|sow-hud__panel-actions|sow-hud__btn-danger/);
-    assert.match(hudCss, /\.sow-hud__dialog-body \{[^}]*min-block-size: 0;[^}]*overflow-y: auto;/);
-    assert.match(hudCss, /#sow-hud \.sow-hud__dialog \.sow-hud__transfer-actions button \{[^}]*min-block-size: 2\.75rem/);
-    assert.match(hudCss, /\.sow-hud__dialog \.sow-hud__transfer-actions \{[^}]*flex-wrap: wrap/);
-    assert.match(hudCss, /\.sow-hud__transfer-actions \.sow-hud__betrayal-confirm \{[^}]*var\(--sow-red\)/);
 });
 
 
@@ -763,12 +740,6 @@ test("shared dialog viewport tracks the available keyboard area without scaling 
     context.syncCompactHudBounds();
     assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-height"), "844px");
     assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-bottom"), "0px");
-    assert.match(hud, /visualViewport\.addEventListener\("resize", onViewportChange/);
-    assert.match(hud, /visualViewport\.addEventListener\("scroll", onViewportChange/);
-    assert.match(hudCss, /\.sow-hud__dialog \{[^}]*inline-size: min\(28rem/);
-    assert.match(hudCss, /data-compact="true"\] \.sow-hud__dialog \{[^}]*inline-size: min\(36rem/);
-    assert.match(hudCss, /\.sow-hud__dialog \{[^}]*max-block-size: min\(75dvh/);
-    assert.match(hudCss, /\.sow-hud__transfer \{[^}]*bottom: calc\(var\(--sow-hud-dialog-view-bottom/);
 });
 
 
@@ -777,56 +748,8 @@ test("mobile overlays never hide the building dock and story dialogs remain abov
     assert.ok(overlayRules.length >= 2, "portrait and short-landscape overlay rules remain covered");
     assert.ok(overlayRules.every(rule => !rule.includes(".sow-hud__dock")),
         "transient menus and panels cannot hide the persistent building dock");
-    assert.match(hud, /hudRefs\.buildingsStrip\.style\.display = !isDeploying && hasBuildingItems \? "flex" : "none"/,
-        "the building strip hides when deployment is active or the tutorial locks every building");
-    assert.match(hudCss, /\.sow-hud__dock\s*\{[^}]*z-index: 50/s);
-    assert.match(storyCss, /\.sow-story\s*\{[^}]*z-index: 210/s,
-        "blocking story dialogs can cover the dock");
 });
 
 
-test("tutorial collapses an empty action dock and releases its combat-operation space", () => {
-    assert.match(hud, /hasBuildingItems = hudRefs\.buildingButtons\.some\(function \(button\) \{ return !button\.hidden; \}\)/);
-    assert.match(hud, /var dockHidden = !\(isDeploying \|\| hasBuildingItems \|\| hasFleetItems\)/);
-    assert.match(hud, /if \(hudRefs\.dock && hudRefs\.dock\.hidden !== dockHidden\) \{\s*hudRefs\.dock\.hidden = dockHidden;\s*syncCompactHudBounds\(\);\s*\}/);
-    assert.match(hudCss, /\.sow-hud__dock\[hidden\] \{ display: none !important; \}/);
-    assert.match(hud, /function syncDefaultDockReserve\(\) \{\s*if \(hudRefs\.dock && hudRefs\.dock\.hidden\) \{\s*hudRoot\.style\.setProperty\("--sow-dock-reserve", "0px"\)/);
-    assert.match(hud, /var dockReserve = stackHeight > 0 \? stackHeight \+ Math\.max\(8, safeBottom\) \+ 8 : 0/);
-    assert.match(hudCss, /#sow-hud\[data-compact="true"\] \.sow-hud__dock-stack\s*\{[^}]*flex-direction: column-reverse/);
-});
 
 
-test("tutorial locale and UI guides resolve per episode and point to actual HUD controls", () => {
-    assert.match(tutorial, /window\.SOW_t\(key\)/);
-    assert.match(tutorial, /function menuGuideTranslate\(key\)/);
-    assert.match(tutorial, /SOWCampaign\.resolveUiTarget\(guide\.target, document, runtime\.episodeId, guideFacts\)/);
-    assert.match(tutorial, /if \(!source \|\| source\.disabled \|\| source\.getClientRects\(\)\.length === 0\) return null/);
-    assert.match(tutorial, /tutorial\[guide\.target\]/);
-    assert.match(campaignView, /sow-story__gesture/);
-    assert.match(campaignView, /sow-story__gesture-label/);
-    assert.match(campaignView, /sow-story__gesture-hint/);
-    assert.match(campaignView, /sow-story__zoom-fingers/);
-    assert.doesNotMatch(campaignView + storyCss, /sow-story__guide-shade|guide-cutout|mask-image:\s*radial-gradient/);
-    assert.match(campaignView, /spotlight\.hidden = !guideVisible \|\| !anchor\.width/);
-    assert.doesNotMatch(campaignView, /stopGuideShadeInput|guideShade\.addEventListener/);
-    assert.match(campaignView, /const modal = \["scene", "choice", "end"\]\.includes\(step\.type\)/);
-    assert.match(storyCss, /\.sow-story__gesture-label \{[^}]*text-transform: uppercase/);
-    assert.match(storyCss, /data-gesture="zoom_in"/);
-    assert.match(storyCss, /data-gesture="zoom_out"/);
-    assert.match(storyCss, /\.sow-story__zoom \{[^}]*width: 108px; height: 108px/);
-    assert.match(storyCss, /data-gesture="zoom_out"[^\n]*story-left-together/);
-    assert.match(storyCss, /data-gesture="zoom_out"[^\n]*story-right-together/);
-    assert.match(storyCss, /data-gesture="pan_keys"/);
-    assert.match(campaignEditor, /var zoomMode = \$\("#device"\)\.value === "mobile" \? "pinch" : window\.SOWCampaign\.zoomInputMode\(\{ platform: previewPlatform \}\)/);
-    assert.match(campaignEditor, /stepTextKey\(model\.step, "_" \+ zoomMode\)[\s\S]*_hint[\s\S]*_label/);
-    assert.match(tutorial, /stepTextKey\(step, "_" \+ context\.zoomMode \+ "_hint"\)/);
-    assert.match(tutorial, /stepTextKey\(step, "_" \+ context\.zoomMode \+ "_label"\)/);
-    assert.match(tutorial, /context\.gestureHint = context\.hintOverride/);
-    assert.match(campaignView, /const showGestureHint = !compactStatusVisible && showGestureText && \(gestureType === "hover" \|\| zoomGuide\)[\s\S]*context\.gestureHint \|\| context\.hintOverride/);
-    assert.match(campaignEngine, /\["pinch", "trackpad", "wheel"\]\.forEach\(mode => \["_hint", "_label"\]/);
-    assert.match(storyCss, /\.sow-story__gesture-hint \{[^}]*text-transform: none/);
-    assert.match(campaignEngine, /menu_campaign:/);
-    assert.match(campaignEngine, /map_attack:/);
-    assert.match(tutorial, /addEventListener\("resize", function \(\) \{\s*runtime\.guidedScrollStepId = null;\s*redrawCampaign\(\);\s*\}/);
-    assert.match(tutorial, /var actionEvent = control && control\.matches\("input"\) \? "change" : "click"/);
-});

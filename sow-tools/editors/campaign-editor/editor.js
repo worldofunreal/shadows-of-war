@@ -1060,7 +1060,7 @@
         host.appendChild(checkboxField("Allied support after milestone", Boolean(settings.campaign_support), function (enabled) {
             if (!enabled) delete settings.campaign_support;
             else {
-                var defaultMilestone = (state.roster.factions.find(function (faction) { return faction.avatar === "the_iceni_despoilers"; }) || {}).id || "";
+                var defaultMilestone = (state.roster.factions.find(function (faction) { return faction.id === "roman_outpost"; }) || {}).id || "";
                 settings.campaign_support = settings.campaign_support || { after_defeated: defaultMilestone, share_percent: 50 };
             }
             markDirty(); renderSettings();

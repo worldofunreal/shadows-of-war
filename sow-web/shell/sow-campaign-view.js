@@ -128,6 +128,9 @@
                 const step = (definition.steps || []).find(item => item.speaker === key || (item.lines || []).some(line => line.speaker === key));
                 const reaction = (definition.reactions || []).find(item => item.speaker === key);
                 portraitImage(options.asset("gameplay/avatars/" + avatar + ".webp"), key, step && step.id || reaction && reaction.id || "preload", definition.episode_id);
+                (definition.steps || []).forEach(item => {
+                    if (item.portrait_expression && item.speaker === key) portraitImage(options.asset("gameplay/avatars/expressions/" + avatar + "_" + item.portrait_expression + ".webp"), key, item.id, definition.episode_id);
+                });
             });
         }
         function showPortrait(source, speakerKey, stepId, episodeId) {
@@ -582,7 +585,8 @@
                 setText(title, copyTitle); title.hidden = !copyTitle;
                 setText(body, copyBody); body.hidden = !copyBody;
                 cinematicVideo.setAttribute("aria-label", copyTitle || speakerName || "Campaign cinematic");
-                const avatar = character.avatar && character.avatar !== "null" ? options.asset("gameplay/avatars/" + character.avatar + ".webp") : "";
+                const avatarPath = step.portrait_expression ? "expressions/" + character.avatar + "_" + step.portrait_expression : character.avatar;
+                const avatar = character.avatar && character.avatar !== "null" ? options.asset("gameplay/avatars/" + avatarPath + ".webp") : "";
                 if (modal && speakerName) showPortrait(avatar, speakerKey || model.reactionTarget || "unknown", step.id, model.definition.episode_id);
                 else { portrait.hidden = true; root.classList.remove("has-portrait"); portraitRequestId++; }
                 choices.replaceChildren();
@@ -623,7 +627,7 @@
                 syncMobilePortrait();
             } else if (focusModal) focusAction();
             wasModal = modal;
-            setText(continueButton.querySelector("span"), t(step.type === "end" ? "tutorial.complete" : "tutorial.continue"));
+            setText(continueButton.querySelector("span"), t(step.continue_key || (step.type === "end" ? "tutorial.complete" : "tutorial.continue")));
             const dismissContinues = modal && step.type !== "choice" && model.choices.length === 0;
             dismissButtons.forEach(button => {
                 button.hidden = dismissContinues ? !options.onContinue : !(step.type === "choice" || options.onDismiss);

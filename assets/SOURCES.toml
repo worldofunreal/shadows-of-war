@@ -10,7 +10,7 @@ source = "ai_generated"
 tool = "Gemini / Meta AI / Midjourney / OpenAI ImageGen (mixed, historical)"
 license = "CC-BY-SA-4.0"
 license_doc = "docs/legal/LICENSE-ASSETS"
-notes = "One portrait per character, named by its catalog avatar id: nations/ (nation bots), tribes/ (tribe bots and campaign figures), heroes/ (playable heroes, with <id>_1 to <id>_4 expressions). default.webp is the face of a player without a portrait and of any character whose own portrait is still missing. random is original dice-and-map art for the random leader option (AGPL-3.0-or-later)."
+notes = "One portrait per character, named by its catalog avatar id: nations/ (nation bots), tribes/ (tribe bots and tutorial tribes), campaign/ (tutorial figures that are not tribes), heroes/ (playable heroes, with <id>_1 to <id>_4 expressions). default.webp is the face of a player without a portrait and of any character whose own portrait is still missing. random is original dice-and-map art for the random leader option (AGPL-3.0-or-later)."
 
 [heroes]
 path = "assets/art/heroes/"
