@@ -669,11 +669,11 @@
             } else if (!Object.values(METRICS).concat(["tiles", "contacts", "defeated", "touch_controls"]).includes(when.fact) || !Number.isFinite(when.gte)) issue(step, "routes", "Invalid game fact condition.");
         }
         const stepFields = {
-            scene: ["id", "type", "title_key", "body_key", "speaker", "portrait_expression", "continue_key", "emote", "emote_pinned", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
-            choice: ["id", "type", "title_key", "body_key", "speaker", "emote", "emote_pinned", "marker", "choices", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
+            scene: ["id", "type", "title_key", "show_title", "body_key", "speaker", "portrait_expression", "continue_key", "emote", "emote_pinned", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
+            choice: ["id", "type", "title_key", "show_title", "body_key", "speaker", "emote", "emote_pinned", "marker", "choices", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
             objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "emote", "emote_pinned", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
             guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "emote", "emote_pinned", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
-            end: ["id", "type", "title_key", "body_key", "speaker", "presentation", "attack_ratio_on_enter", "pause_game", "unlocks"]
+            end: ["id", "type", "title_key", "show_title", "body_key", "speaker", "presentation", "attack_ratio_on_enter", "pause_game", "unlocks"]
         };
         steps.filter(object).forEach(step => {
             knownFields(step, stepFields[step.type] || ["id", "type"], step, "fields");
@@ -762,6 +762,7 @@
             if (own(step, "portrait_expression") && !["happy", "calm", "fear", "angry"].includes(step.portrait_expression)) issue(step, "portrait_expression", "Choose a portrait expression: happy, calm, fear or angry.");
             text(step, "continue_key", step.continue_key, false);
             if (own(step, "emote") && !["greet", "help", "threat", "celebrate", "clear"].includes(step.emote)) issue(step, "emote", "Choose a known emote or clear.");
+            if (own(step, "show_title") && (typeof step.show_title !== "boolean" || !step.title_key)) issue(step, "show_title", "Set show_title to true only beside a title_key.");
             if (own(step, "emote_pinned") && (typeof step.emote_pinned !== "boolean" || !own(step, "emote") || step.emote === "clear")) issue(step, "emote_pinned", "Pin only a named emote, with true or false.");
             if (step.video_src != null) {
                 const prefix = "/assets/campaign/" + definition.episode_id + "/";

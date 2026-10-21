@@ -523,6 +523,10 @@ test("Boudica spoken cards and contact responses require named existing portrait
     const badExpression = structuredClone(definition);
     badExpression.steps.find(step => step.id === definition.entry).portrait_expression = "furious";
     assert.ok(report(badExpression).errors.some(issue => issue.step === definition.entry && issue.field === "portrait_expression"));
+    const titleWithoutKey = structuredClone(definition);
+    const titleStep = titleWithoutKey.steps.find(step => step.id === definition.entry);
+    titleStep.show_title = true; delete titleStep.title_key;
+    assert.ok(report(titleWithoutKey).errors.some(issue => issue.step === definition.entry && issue.field === "show_title"));
     const badEmoteText = structuredClone(definition);
     badEmoteText.emote_texts = { threat: "not_a_tutorial_key" };
     assert.ok(report(badEmoteText).errors.some(issue => issue.field === "emote_texts"));
@@ -654,7 +658,7 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     const portrait = root.querySelector(".sow-story__portrait");
     assert.match(portrait.children[0].src, /^data:image\/svg\+xml/);
     assert.equal(portrait.hidden, false);
-    assert.equal(root.querySelector(".sow-story__speaker").textContent, "Recover Speaker");
+    assert.doesNotMatch(campaignView, /sow-story__speaker/, "dialogues show the portrait, not a name label");
     assert.ok(warnings.some(args => args[1] && args[1].dialogue_id === "failed_scene" && args[1].image.includes("recover.webp")));
 
     paint("recovered_scene", "recover");
@@ -668,7 +672,10 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     assert.equal(portrait.children[0], current);
     late.dispatch("error");
     assert.equal(portrait.children[0], current, "a late error from the previous speaker does not replace the current portrait");
-    assert.equal(root.querySelector(".sow-story__speaker").textContent, "First Speaker");
+    assert.equal(root.querySelector(".sow-story__title").hidden, true, "dialogue titles are hidden unless a step opts in");
+    const titled = { id: "titled_scene", type: "scene", speaker: "first", title_key: "titled_title", body_key: "titled_body", presentation: "dialogue", show_title: true };
+    renderer.render({ definition, step: titled, line: titled, paused: true, done: false, choices: [], progress: { target: 1, current: 0 }, state: { line: 0 } }, {});
+    assert.equal(root.querySelector(".sow-story__title").hidden, false, "show_title opts one dialogue into its title");
 
     const objective = { id: "expand_250", type: "objective", title_key: "expand_title", hint_key: "expand_hint", trigger: { type: "territory", value: 250 }, guide: { kind: "world", target: "expand", gesture: "tap" } };
     const objectiveModel = { definition: { episode_id: "compact_test", speakers: {}, steps: [objective] }, step: objective, line: objective, paused: false, done: false, choices: [], progress: { current: 120, target: 250 }, state: { line: 0 } };
@@ -778,11 +785,9 @@ test("campaign dialogue keeps a compact speaker portrait on narrow screens", () 
     const mobileStart = storyCss.indexOf("@container (max-width: 640px)");
     const mobileEnd = storyCss.indexOf("@container (max-width: 380px)", mobileStart);
     const mobileStory = storyCss.slice(mobileStart, mobileEnd);
-    const compactPortrait = storyCss.match(/#sow-story\[data-compact="true"\]\.has-portrait \.sow-story__main \{[^}]*\}/);
-    assert.match(mobileStory, /\.sow-story\.has-portrait \.sow-story__main \{ grid-template-columns: var\(--story-portrait-size, min\(36cqw, 40svh\)\) minmax\(0, 1fr\); \}/);
-    assert.ok(compactPortrait);
-    assert.match(compactPortrait[0], /grid-template-columns: var\(--story-portrait-size, min\(36cqw, 40svh\)\) minmax\(0, 1fr\)/);
-    assert.doesNotMatch(mobileStory + compactPortrait[0], /(?:144px|64px)/);
+    assert.match(mobileStory, /\.sow-story\.has-portrait \.sow-story__dialog \{ grid-template-columns: clamp\(108px, 30cqw, 150px\) minmax\(0, 1fr\); \}/);
+    assert.doesNotMatch(storyCss, /--story-portrait-size/, "the avatar takes the modal height from the grid, not from a measured size");
+    assert.doesNotMatch(mobileStory, /(?:144px|64px)/);
 });
 
 
@@ -799,7 +804,6 @@ test("campaign dialogue resolves story copy through the shared catalog", () => {
 
 test("mobile chapter dialogue hugs its copy while docked at the bottom", () => {
     const mobileStory = storyCss.slice(storyCss.indexOf("@container (max-width: 640px)"), storyCss.indexOf("@container (max-width: 380px)"));
-    assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__main \{[^}]*flex: 0 1 auto;[^}]*padding-block: 8px/);
     assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__conversation \{ padding-block: 0; \}/);
     assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__dialog \{ bottom: var\(--story-safe-bottom\); transform: none; \}/);
 });
@@ -807,8 +811,8 @@ test("mobile chapter dialogue hugs its copy while docked at the bottom", () => {
 
 test("mobile story dialogs scroll long text and choices while keeping speaker controls reachable", () => {
     const mobileStory = storyCss.slice(storyCss.indexOf("@container (max-width: 640px)"), storyCss.indexOf("@container (max-width: 380px)"));
-    assert.match(mobileStory, /\.sow-story__main \{[^}]*flex: 0 1 auto/);
-    assert.match(mobileStory, /\.sow-story__scroll \{ flex: 0 1 auto;/);
+    assert.match(mobileStory, /\.sow-story__actions \{ max-height: 45svh;/);
+    assert.match(storyCss, /\.sow-story__conversation \{ padding: 24px 32px 0; min-width: 0; min-height: 0; overflow-y: auto;/);
 });
 
 

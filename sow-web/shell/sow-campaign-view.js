@@ -44,7 +44,7 @@
             '<div class="sow-story__cinematic" tabindex="-1" hidden><video playsinline preload="none" fetchpriority="low"></video><button class="sow-story__continue sow-story__cinematic-start" type="button" data-story-start hidden></button><span class="sow-story__cinematic-hold" data-story-hold hidden aria-hidden="true"><span></span><i><b></b></i></span></div>' +
             '<article class="sow-story__dialog" tabindex="-1" hidden>' +
                 '<div class="sow-story__main"><div class="sow-story__portrait" hidden><img alt="" draggable="false"><span class="sow-story__portrait-line" aria-hidden="true"></span></div>' +
-                '<div class="sow-story__conversation"><header class="sow-story__heading"><p class="sow-story__speaker"></p><button class="sow-story__close" type="button" data-story-dismiss>×</button></header>' +
+                '<div class="sow-story__conversation"><header class="sow-story__heading"><button class="sow-story__close" type="button" data-story-dismiss>×</button></header>' +
                 '<div class="sow-story__scroll"><h2 class="sow-story__title" id="' + uid + '-title"></h2><p class="sow-story__body" id="' + uid + '-body" aria-live="polite" aria-atomic="true"></p></div></div></div>' +
                 '<div class="sow-story__actions"><div class="sow-story__choices"></div><footer class="sow-story__footer"><span class="sow-story__lines" aria-hidden="true"></span>' +
                 '<button class="sow-story__continue" type="button" data-story-continue><span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 7 7-7 7"/></svg></button></footer></div>' +
@@ -58,7 +58,7 @@
         const dialog = find(".sow-story__dialog"), shade = find(".sow-story__shade");
         const portrait = find(".sow-story__portrait"), portraitLine = portrait.querySelector(".sow-story__portrait-line");
         let image = portrait.querySelector("img");
-        const speaker = find(".sow-story__speaker"), title = find(".sow-story__title"), body = find(".sow-story__body");
+        const title = find(".sow-story__title"), body = find(".sow-story__body");
         const heading = find(".sow-story__heading"), conversation = find(".sow-story__conversation"), scrollContent = find(".sow-story__scroll"), actions = find(".sow-story__actions"), choices = find(".sow-story__choices"), footer = find(".sow-story__footer");
         const continueButton = find("[data-story-continue]"), lines = find(".sow-story__lines");
         const cinematic = find(".sow-story__cinematic"), cinematicVideo = cinematic.querySelector("video");
@@ -155,7 +155,6 @@
                     image = failedImage; portrait.replaceChildren(image, portraitLine);
                 }, { once: true });
                 portrait.replaceChildren(image, portraitLine);
-                syncMobilePortrait();
             });
         }
         function clearNudge() {
@@ -180,26 +179,11 @@
                 }
             }, host.SOWCampaign.WAIT_MS);
         }
-        function syncMobilePortrait() {
-            if (root.hidden) return;
-            const shortLandscape = Boolean(view && view.matchMedia && view.matchMedia("(orientation: landscape) and (max-height: 560px) and (hover: none) and (pointer: coarse)").matches);
-            if (root.clientWidth > 640 && !shortLandscape) { root.style.removeProperty("--story-portrait-size"); return; }
-            if (portrait.hidden) return;
-            const headingStyle = view && typeof view.getComputedStyle === "function" ? view.getComputedStyle(heading) : null;
-            const headingGap = headingStyle ? parseFloat(headingStyle.marginBottom) || 0 : 0;
-            const contentHeight = heading.offsetHeight + headingGap + scrollContent.scrollHeight;
-            const maxSize = Math.min(root.clientWidth * 0.36, root.clientHeight * 0.4);
-            if (!contentHeight || !maxSize) return;
-            const size = Math.min(contentHeight, maxSize);
-            const current = parseFloat(root.style.getPropertyValue("--story-portrait-size"));
-            if (!Number.isFinite(current) || Math.abs(current - size) >= 1) root.style.setProperty("--story-portrait-size", size + "px");
-        }
         const ResizeObserverCtor = view && view.ResizeObserver;
         const portraitObserver = typeof ResizeObserverCtor === "function" ? new ResizeObserverCtor(() => {
             if (portraitFrame || !view) return;
             portraitFrame = view.requestAnimationFrame(() => {
                 portraitFrame = 0;
-                syncMobilePortrait();
                 const width = root.clientWidth, height = root.clientHeight;
                 const nextCompact = isCompactViewport(root, width, height);
                 if (model && !root.hidden && (nextCompact !== compactViewport || width !== renderedWidth || height !== renderedHeight)) {
@@ -545,6 +529,8 @@
             root.dir = context.direction || doc.documentElement.dir || "ltr";
             root.dataset.localeScript = context.localeScript || doc.documentElement.dataset.localeScript || "latin";
             const modal = ["scene", "choice", "end"].includes(step.type);
+            // Dialogue titles are opt-in (show_title: true); chapter cards keep theirs.
+            const showTitle = !modal || step.show_title === true || step.presentation === "chapter" || step.presentation === "cinematic";
             if (step.guide && step.guide.kind === "ui" && step.guide.target === "attack_ratio") root.dataset.guideTarget = "attack_ratio";
             else delete root.dataset.guideTarget;
             root.classList.toggle("is-modal", modal);
@@ -556,7 +542,7 @@
             objective.hidden = modal || context.hideObjective === true || compactViewport;
             dialog.setAttribute("role", "dialog");
             dialog.setAttribute("aria-modal", "true");
-            dialog.setAttribute("aria-labelledby", uid + (line.title_key || step.title_key ? "-title" : "-body"));
+            dialog.setAttribute("aria-labelledby", uid + (showTitle && (line.title_key || step.title_key) ? "-title" : "-body"));
             dialog.setAttribute("aria-describedby", uid + "-body");
             const focusModal = modal && (!wasModal || wasHidden);
             if (modal && !wasModal) focusBefore = doc.activeElement;
@@ -574,16 +560,16 @@
             const reactionRole = model.reactionData && model.reactionData.speaker_role_key;
             const roleName = character.name_key ? t(character.name_key) : character.name || (!speakerKey && reactionRole ? t(reactionRole) : "");
             const speakerName = [roleName, factionName].filter(Boolean).join(" · ");
-            const copyTitle = t(line.title_key || step.title_key), copyBody = t(line.body_key || step.body_key) || (modal ? context.hintOverride || t(step.hint_key) : "");
+            const copyTitle = showTitle ? t(line.title_key || step.title_key) : "", copyBody = t(line.body_key || step.body_key) || (modal ? context.hintOverride || t(step.hint_key) : "");
             const key = JSON.stringify([step.id, model.state && model.state.line, copyTitle, copyBody, speakerName, character.avatar, step.presentation, step.video_src, model.choices.map(c => [c.id, t(c.label_key), t(c.body_key), c.gold_available, c.gold_insufficient])]);
             if (renderKey !== key) {
                 renderKey = key;
                 conversation.scrollTop = 0;
                 scrollContent.scrollTop = 0;
                 actions.scrollTop = 0;
-                setText(speaker, speakerName); speaker.hidden = !speakerName;
                 setText(title, copyTitle); title.hidden = !copyTitle;
                 setText(body, copyBody); body.hidden = !copyBody;
+                dialog.dataset.copy = copyBody.length <= 80 ? "short" : copyBody.length <= 180 ? "medium" : "long";
                 cinematicVideo.setAttribute("aria-label", copyTitle || speakerName || "Campaign cinematic");
                 const avatarPath = step.portrait_expression ? "expressions/" + character.avatar + "_" + step.portrait_expression : character.avatar;
                 const avatar = character.avatar && character.avatar !== "null" ? options.asset("gameplay/avatars/" + avatarPath + ".webp") : "";
@@ -617,20 +603,22 @@
                 });
                 if (modal && (focusModal || beatChanged)) focusAction();
                 if (beatChanged && !reducedMotion) {
-                    [speaker, title, body, image, choices].forEach(node => {
+                    [title, body, image, choices].forEach(node => {
                         if (!node.hidden && node.animate) node.animate(
                             [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "translateY(0)" }],
                             { duration: 180, easing: "cubic-bezier(.2,.7,.2,1)" }
                         );
                     });
                 }
-                syncMobilePortrait();
             } else if (focusModal) focusAction();
             wasModal = modal;
             setText(continueButton.querySelector("span"), t(step.continue_key || (step.type === "end" ? "tutorial.complete" : "tutorial.continue")));
             const dismissContinues = modal && step.type !== "choice" && model.choices.length === 0;
+            // Modal dialogs close through Continue or Escape; the X stays only for the non-modal guide skip.
+            const dismissVisible = !modal && (step.type === "choice" || Boolean(options.onDismiss));
+            heading.hidden = !dismissVisible;
             dismissButtons.forEach(button => {
-                button.hidden = dismissContinues ? !options.onContinue : !(step.type === "choice" || options.onDismiss);
+                button.hidden = !dismissVisible;
                 button.setAttribute("aria-label", t(dismissContinues || step.type === "choice" ? "tutorial.continue" : "hud.leave_match"));
             });
             setText(objectiveTitle, t(step.title_key));
@@ -826,7 +814,6 @@
                 stopCinematic();
                 destroyed = true; portraitRequestId++; portraitCache.clear(); reportedPortraitFailures.clear();
                 if (portraitObserver) portraitObserver.disconnect();
-                root.style.removeProperty("--story-portrait-size");
                 root.removeEventListener("click", click); root.removeEventListener("keydown", keys);
                 doc.removeEventListener("click", recoverCinematicFromClick, true);
                 doc.removeEventListener("click", outsideClick, true);
