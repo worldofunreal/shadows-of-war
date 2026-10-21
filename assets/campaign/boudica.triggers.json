@@ -124,7 +124,6 @@
       "body_key": "tutorial.campaign_boudica_boudica_council_body",
       "speaker": "boudica",
       "portrait_expression": "angry",
-      "continue_key": "tutorial.campaign_boudica_boudica_council_strike",
       "emote": "threat",
       "emote_pinned": true,
       "presentation": "cinematic",

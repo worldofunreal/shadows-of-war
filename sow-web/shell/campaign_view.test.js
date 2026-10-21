@@ -536,7 +536,6 @@ test("Boudica spoken cards and contact responses require named existing portrait
     const pinnedRelease = structuredClone(definition);
     Object.assign(pinnedRelease.steps.find(step => step.id === definition.entry), { emote: "clear", emote_pinned: true });
     assert.ok(report(pinnedRelease).errors.some(issue => issue.step === definition.entry && issue.field === "emote_pinned"));
-
     for (const id of ["boudica_poison_end", "boudica_end"]) {
         const completion = definition.steps.find(step => step.id === id);
         assert.equal(completion.type, "end");
@@ -770,7 +769,7 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     const mapTapDuringScene = doc.dispatchClick(mapSurface);
     assert.equal(mapTapDuringScene.defaultPrevented, true, "dialogue modals continue to block clicks outside the scene");
     assert.equal(mapTapDuringScene.propagationStopped, true, "dialogue modals continue to stop outside propagation");
-    assert.equal(continueCalls, 0, "an outside map tap cannot skip a scene");
+    assert.equal(continueCalls, 1, "an outside map tap continues a scene, like its Continue button");
     renderer.destroy();
 });
 
@@ -804,7 +803,7 @@ test("campaign dialogue resolves story copy through the shared catalog", () => {
 
 test("mobile chapter dialogue hugs its copy while docked at the bottom", () => {
     const mobileStory = storyCss.slice(storyCss.indexOf("@container (max-width: 640px)"), storyCss.indexOf("@container (max-width: 380px)"));
-    assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__conversation \{ padding-block: 0; \}/);
+    assert.match(mobileStory, /\.sow-story__conversation \{ padding: 14px 16px 0; \}/);
     assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__dialog \{ bottom: var\(--story-safe-bottom\); transform: none; \}/);
 });
 

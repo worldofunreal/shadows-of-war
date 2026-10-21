@@ -8,6 +8,8 @@ use std::sync::OnceLock;
 pub enum Role {
     Nation,
     Tribe,
+    /// A playable hero: never a bot, so it is absent from `bots(..)`.
+    Hero,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -180,27 +182,6 @@ pub fn by_id(id: &str) -> Option<&'static GeoEntity> {
 
 pub fn by_name(name: &str) -> Option<&'static GeoEntity> {
     all().find(|entity| entity.name.eq_ignore_ascii_case(name))
-}
-
-/// Cell of a bot's portrait (by avatar name) in the packed bot portrait
-/// atlas: nation and tribe characters in catalog order (sow-tools packs the
-/// same order).
-pub fn bot_portrait_index(avatar: &str) -> Option<usize> {
-    static INDEX: OnceLock<std::collections::HashMap<&'static str, usize>> = OnceLock::new();
-    INDEX
-        .get_or_init(|| {
-            all()
-                .enumerate()
-                .filter_map(|(index, character)| Some((character.avatar.as_deref()?, index)))
-                .collect()
-        })
-        .get(avatar)
-        .copied()
-}
-
-/// Every character packed into the bot portrait atlas, in catalog order.
-pub fn bot_portrait_count() -> usize {
-    all().count()
 }
 
 /// Nation or tribe bots in catalog order (the order is stable across clients).

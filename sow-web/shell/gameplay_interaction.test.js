@@ -480,7 +480,7 @@ test("HUD notifications coalesce, prioritize, reuse both entity avatars, and exp
     assert.match(botCard.avatars[1].wrapper.className, /--overlap/);
 
     add(109, "hud.nuke_struck", 4, "single-avatar", {}, [
-        null, { kind: "portrait", slug: "nationbot_hatshepsut" }
+        null, { kind: "portrait", slug: "hatshepsut" }
     ]);
     const singleAvatarCard = cards.find(parts => parts.copy.textContent === "hud.nuke_struck");
     assert.deepEqual(singleAvatarCard.avatars.map(item => item.wrapper.hidden), [true, false]);
@@ -629,10 +629,10 @@ test("notification cards render typed avatars, recover failed art, and clear reu
     assert.equal(parts.avatars[0].image.hidden, false);
 
     context.renderNotificationCard(parts, {
-        entry: { id: 2, key: "hud.alliance_formed", values: {}, avatars: [{ kind: "portrait", slug: "nationbot_hatshepsut" }] },
+        entry: { id: 2, key: "hud.alliance_formed", values: {}, avatars: [{ kind: "portrait", slug: "hatshepsut" }] },
         priority: 2
     }, false);
-    assert.equal(parts.avatars[0].image.src, "/assets/gameplay/avatars/nationbot_hatshepsut.webp");
+    assert.equal(parts.avatars[0].image.src, "/assets/gameplay/avatars/hatshepsut.webp");
     assert.equal(parts.avatars[0].emblem.hidden, true);
     assert.equal(parts.avatars[1].wrapper.hidden, true);
     assert.equal(parts.avatars[1].emblem.textContent, "");

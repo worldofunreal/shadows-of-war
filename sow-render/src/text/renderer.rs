@@ -2,11 +2,10 @@ use crate::context::RenderContext;
 use crate::text::msdf::{FontAtlas, MsdfChar};
 use crate::text::texture::FontAtlasTexture;
 use crate::text::types::{
-    AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, BOT_PORTRAIT_CELL, BOT_PORTRAIT_COLS,
-    KIND_ARC, KIND_BOT_SPRITE, KIND_BUILDING_SPRITE, KIND_CROSS, KIND_DISC, KIND_GLYPH, KIND_ICON,
-    KIND_RECT, KIND_RING, KIND_ROUNDED_RECT, KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE,
-    NameplateStatusSprite, OutlineStyle, TextGlobals, TextInstanceGpu, TextPaintStyle,
-    TextShaderData, avatar_slot_uv, bot_portrait_count, bot_portrait_rows, bot_portrait_uv,
+    AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC, KIND_BUILDING_SPRITE,
+    KIND_CROSS, KIND_DISC, KIND_GLYPH, KIND_ICON, KIND_RECT, KIND_RING, KIND_ROUNDED_RECT,
+    KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite, OutlineStyle,
+    TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
 };
 use blade_graphics as gpu;
 
@@ -480,10 +479,6 @@ fn cross_geometry(center: [f32; 2], half_size: f32) -> ([f32; 2], [f32; 2], [f32
 pub struct TextRenderer {
     pub font_atlas_desc: FontAtlas,
     pub font_atlas_tex: FontAtlasTexture,
-    /// Every catalog bot's portrait, one fetched image (see `bot_portrait_index`).
-    bot_portraits_tex: FontAtlasTexture,
-    bot_portraits_loaded: bool,
-    bot_portraits_dirty: bool,
     avatar_atlas_tex: FontAtlasTexture,
     building_atlas_tex: FontAtlasTexture,
     status_atlas_tex: FontAtlasTexture,
@@ -493,7 +488,6 @@ pub struct TextRenderer {
     pipeline: gpu::RenderPipeline,
     buffer: gpu::Buffer,
     sampler: gpu::Sampler,
-    bot_portraits_sampler: gpu::Sampler,
     avatar_sampler: gpu::Sampler,
     building_sampler: gpu::Sampler,
     status_sampler: gpu::Sampler,
@@ -504,13 +498,6 @@ impl TextRenderer {
     pub fn new(context: &gpu::Context, surface_format: gpu::TextureFormat) -> Self {
         let font_atlas_desc = FontAtlas::load_static();
         let font_atlas_tex = FontAtlasTexture::new(context);
-        let bot_portraits_tex = FontAtlasTexture::blank(
-            context,
-            BOT_PORTRAIT_COLS * BOT_PORTRAIT_CELL,
-            bot_portrait_rows() * BOT_PORTRAIT_CELL,
-            "bot_portraits",
-            gpu::TextureFormat::Rgba8UnormSrgb,
-        );
         let avatar_atlas_tex = FontAtlasTexture::blank(
             context,
             AVATAR_COLS * AVATAR_CELL,
@@ -595,13 +582,6 @@ impl TextRenderer {
             ..Default::default()
         });
 
-        let bot_portraits_sampler = context.create_sampler(gpu::SamplerDesc {
-            name: "bot_portraits_sampler",
-            mag_filter: gpu::FilterMode::Linear,
-            min_filter: gpu::FilterMode::Linear,
-            ..Default::default()
-        });
-
         let avatar_sampler = context.create_sampler(gpu::SamplerDesc {
             name: "avatar_atlas_sampler",
             mag_filter: gpu::FilterMode::Linear,
@@ -626,9 +606,6 @@ impl TextRenderer {
         Self {
             font_atlas_desc,
             font_atlas_tex,
-            bot_portraits_tex,
-            bot_portraits_loaded: false,
-            bot_portraits_dirty: false,
             avatar_atlas_tex,
             building_atlas_tex,
             status_atlas_tex,
@@ -638,7 +615,6 @@ impl TextRenderer {
             pipeline,
             buffer,
             sampler,
-            bot_portraits_sampler,
             avatar_sampler,
             building_sampler,
             status_sampler,
@@ -650,7 +626,6 @@ impl TextRenderer {
     /// (alongside `upload_atlas`) before any draw.
     pub fn init_textures(&self, encoder: &mut gpu::CommandEncoder) {
         encoder.init_texture(self.font_atlas_tex.texture);
-        encoder.init_texture(self.bot_portraits_tex.texture);
         encoder.init_texture(self.avatar_atlas_tex.texture);
         encoder.init_texture(self.building_atlas_tex.texture);
         encoder.init_texture(self.status_atlas_tex.texture);
@@ -658,7 +633,6 @@ impl TextRenderer {
 
     pub fn upload_atlas(&self, encoder: &mut gpu::CommandEncoder, context: &gpu::Context) {
         self.font_atlas_tex.upload(encoder, context);
-        self.bot_portraits_tex.upload(encoder, context);
         self.avatar_atlas_tex.upload(encoder, context);
         self.building_atlas_tex.upload(encoder, context);
         self.status_atlas_tex.upload(encoder, context);
@@ -1118,49 +1092,6 @@ impl TextRenderer {
         self.avatar_loaded[slot] = true;
     }
 
-    /// Replace the whole bot portrait atlas (decoded RGBA of the published image).
-    /// Returns `false`, uploading nothing, when the size does not match the catalog layout.
-    pub fn upload_bot_portraits(&mut self, width: u32, height: u32, rgba: &[u8]) -> bool {
-        let (w, h) = (self.bot_portraits_tex.width, self.bot_portraits_tex.height);
-        if width != w || height != h || rgba.len() != (w * h * 4) as usize {
-            return false;
-        }
-        let dst = unsafe {
-            std::slice::from_raw_parts_mut(self.bot_portraits_tex.buffer.data(), rgba.len())
-        };
-        dst.copy_from_slice(rgba);
-        self.bot_portraits_dirty = true;
-        self.bot_portraits_loaded = true;
-        true
-    }
-
-    /// Circular portrait of a catalog bot; `false` until the atlas has arrived.
-    pub fn push_bot_portrait(
-        &mut self,
-        center: [f32; 2],
-        size: [f32; 2],
-        index: usize,
-        tint: [f32; 4],
-    ) -> bool {
-        if !self.bot_portraits_loaded || index >= bot_portrait_count() {
-            return false;
-        }
-        self.push_inst(TextInstanceGpu {
-            screen_pos: [center[0] - size[0] * 0.5, center[1] - size[1] * 0.5],
-            size,
-            uv_rect: bot_portrait_uv(index),
-            content_rect: [0.0, 0.0, 1.0, 1.0],
-            color: tint,
-            outline_color: [0.0; 4],
-            face_dilate: 0.0,
-            outline_thickness: 0.0,
-            underlay_offset_y: 0.0,
-            underlay_softness: 0.0,
-            kind: KIND_BOT_SPRITE,
-        });
-        true
-    }
-
     /// UV rect for a loaded avatar slot, or `None` if that slot hasn't been uploaded yet.
     pub fn avatar_uv(&self, slot: usize) -> Option<[f32; 4]> {
         if slot < AVATAR_SLOT_COUNT && self.avatar_loaded[slot] {
@@ -1197,9 +1128,6 @@ impl TextRenderer {
 
         self.write_buffers(context);
 
-        if std::mem::take(&mut self.bot_portraits_dirty) {
-            self.bot_portraits_tex.upload(encoder, context);
-        }
         // The atlas was initialized by upload_atlas; update only cells that just arrived.
         for slot in self.avatar_dirty_slots.drain(..) {
             let cell = AVATAR_CELL as usize;
@@ -1235,8 +1163,6 @@ impl TextRenderer {
             globals,
             font_atlas: self.font_atlas_tex.view,
             font_sampler: self.sampler,
-            bot_portraits: self.bot_portraits_tex.view,
-            bot_portraits_sampler: self.bot_portraits_sampler,
             avatar_atlas: self.avatar_atlas_tex.view,
             avatar_sampler: self.avatar_sampler,
             building_atlas: self.building_atlas_tex.view,
@@ -1257,9 +1183,6 @@ impl TextRenderer {
             .destroy_render_pipeline(&mut self.pipeline);
         render_ctx.context.destroy_buffer(self.buffer);
         render_ctx.context.destroy_sampler(self.sampler);
-        render_ctx
-            .context
-            .destroy_sampler(self.bot_portraits_sampler);
         render_ctx.context.destroy_sampler(self.avatar_sampler);
         render_ctx.context.destroy_sampler(self.building_sampler);
         render_ctx.context.destroy_sampler(self.status_sampler);
@@ -1272,15 +1195,6 @@ impl TextRenderer {
         render_ctx
             .context
             .destroy_buffer(self.font_atlas_tex.buffer);
-        render_ctx
-            .context
-            .destroy_texture_view(self.bot_portraits_tex.view);
-        render_ctx
-            .context
-            .destroy_texture(self.bot_portraits_tex.texture);
-        render_ctx
-            .context
-            .destroy_buffer(self.bot_portraits_tex.buffer);
         render_ctx
             .context
             .destroy_texture_view(self.avatar_atlas_tex.view);

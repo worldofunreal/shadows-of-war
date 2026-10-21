@@ -217,8 +217,7 @@ const ART_FOLDERS: [(&str, &str); 4] = [
     ("music", "gameplay/music"),
 ];
 /// Tool output in assets/generated: (file, published path).
-const GENERATED_FILES: [(&str, &str); 4] = [
-    ("bot-portraits.webp", "gameplay/avatars/bot-portraits.webp"),
+const GENERATED_FILES: [(&str, &str); 3] = [
     ("buildings-atlas.webp", "gameplay/buildings/atlas.webp"),
     ("buildings-atlas.json", "gameplay/buildings/atlas.json"),
     (

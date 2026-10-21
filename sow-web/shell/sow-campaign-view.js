@@ -768,14 +768,11 @@
             if (control) return;
             event.preventDefault();
             event.stopPropagation();
-            if (model.step.type === "scene") return;
-            if (model.step.type !== "choice" && event.timeStamp - lastAction >= 220) {
-                lastAction = event.timeStamp;
-                options.onContinue();
-            } else if (model.step.type === "choice" && event.timeStamp - lastAction >= 220) {
-                lastAction = event.timeStamp;
-                triggerNudge();
-            }
+            if (event.timeStamp - lastAction < 220) return;
+            lastAction = event.timeStamp;
+            if (model.step.type === "choice") { triggerNudge(); return; }
+            // An outside tap acts as Continue, but only where Continue is on screen (not during a cinematic or a pause_game step).
+            if (!dialog.hidden && !footer.hidden) options.onContinue();
         }
         function stop(event) { event.stopPropagation(); }
         function keys(event) {

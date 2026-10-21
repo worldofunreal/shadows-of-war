@@ -15,8 +15,6 @@ pub enum AvatarFetchKey {
         slug: String,
         slot: usize,
     },
-    /// One image holding every catalog bot's portrait.
-    BotPortraits,
 }
 
 #[derive(Clone, Debug)]
@@ -39,9 +37,12 @@ pub struct AssetLoader {
     pub avatars_in_flight: HashSet<AvatarFetchKey>,
     avatar_retry_state: HashMap<AvatarFetchKey, Retry>,
     pub gpu_avatar_cells: Vec<(usize, Vec<u8>)>,
-    /// Decoded bot portrait atlas waiting for the renderer: (width, height, RGBA).
-    pub bot_portraits: Option<(u32, u32, Vec<u8>)>,
-    bot_portraits_received: bool,
+    /// Slots whose cell changed since the renderer last uploaded them.
+    pub gpu_avatar_dirty: Vec<usize>,
+    /// Advances once per frame in `request_drawn_portraits`.
+    drawn_frame: u64,
+    /// Frame each portrait slot was last drawn in; the least recently drawn one is evicted first.
+    portrait_last_drawn: Vec<u64>,
     pub portal_avatar: Option<Vec<u8>>,
     pub portal_avatar_request: Option<String>,
     pub portal_avatar_in_flight: bool,
@@ -71,8 +72,9 @@ impl AssetLoader {
                 sow_render::text::AVATAR_GOLD_SLOT,
                 gold_icon_cell().to_vec(),
             )],
-            bot_portraits: None,
-            bot_portraits_received: false,
+            gpu_avatar_dirty: Vec::new(),
+            drawn_frame: 0,
+            portrait_last_drawn: vec![0; sow_render::text::AVATAR_SLOT_COUNT],
             portal_avatar: None,
             portal_avatar_request: None,
             portal_avatar_in_flight: false,
@@ -94,7 +96,6 @@ impl AssetLoader {
                 format!("{}.webp", sow_data::commerce::leader_id(*leader))
             }
             AvatarFetchKey::Campaign { slug, .. } => format!("{slug}.webp"),
-            AvatarFetchKey::BotPortraits => "bot-portraits.webp".into(),
         }
     }
 
@@ -128,27 +129,8 @@ impl AssetLoader {
             self.queue_leader_avatar(leader, false);
             return;
         }
-        // A campaign avatar matching a built-in leader shares that leader's
-        // expression sheet, even when a bot uses the same portrait slug.
-        if sow_data::geo_entities::bot_portrait_index(slug).is_some() {
-            self.queue_avatar_fetch(AvatarFetchKey::BotPortraits, false);
+        let Some(slot) = self.portrait_slot(slug) else {
             return;
-        }
-        let slot = if let Some(slot) = self.campaign_avatar_slots.get(slug) {
-            *slot
-        } else {
-            let static_count = self
-                .campaign_avatar_slots
-                .values()
-                .filter(|slot| **slot >= sow_render::text::avatar_campaign_first_slot())
-                .count();
-            let slot = sow_render::text::avatar_campaign_first_slot() + static_count;
-            if slot >= sow_render::text::AVATAR_SLOT_COUNT {
-                log::error!("Avatar atlas exhausted while allocating {slug}");
-                return;
-            }
-            self.campaign_avatar_slots.insert(slug.to_string(), slot);
-            slot
         };
         self.queue_avatar_fetch(
             AvatarFetchKey::Campaign {
@@ -157,6 +139,60 @@ impl AssetLoader {
             },
             false,
         );
+    }
+
+    /// Requests the portraits drawn this frame. Portraits not in this list may be evicted.
+    pub fn request_drawn_portraits(&mut self, slugs: &[String]) {
+        self.drawn_frame += 1;
+        for slug in slugs {
+            self.queue_campaign_avatar(slug);
+        }
+    }
+
+    /// The slot for a portrait drawn this frame. A full pool evicts the least recently drawn
+    /// portrait; heroes and their slots are never evicted.
+    // ponytail: LRU over the slots after the hero blocks (78). Ceiling: more than 78 portraits
+    // drawn in one frame fall back. Upgrade path: raise AVATAR_ROWS.
+    fn portrait_slot(&mut self, slug: &str) -> Option<usize> {
+        if let Some(slot) = self.campaign_avatar_slots.get(slug).copied() {
+            self.portrait_last_drawn[slot] = self.drawn_frame;
+            return Some(slot);
+        }
+        let first = sow_render::text::avatar_campaign_first_slot();
+        let Some(slot) = (first..sow_render::text::AVATAR_SLOT_COUNT)
+            .filter(|slot| self.portrait_last_drawn[*slot] < self.drawn_frame)
+            .min_by_key(|slot| self.portrait_last_drawn[*slot])
+        else {
+            log::warn!("Avatar atlas full of portraits drawn this frame; {slug} stays on fallback");
+            return None;
+        };
+        if let Some(evicted) = self
+            .campaign_avatar_slots
+            .iter()
+            .find(|(_, owner)| **owner == slot)
+            .map(|(evicted, _)| evicted.clone())
+        {
+            self.campaign_avatar_slots.remove(&evicted);
+            self.campaign_avatars.remove(&evicted);
+            self.avatars_fetch_pending.retain(
+                |key| !matches!(key, AvatarFetchKey::Campaign { slug, .. } if *slug == evicted),
+            );
+            // Blank until the new portrait arrives, so the evicted face never shows under the new owner.
+            let blank = vec![0; (sow_render::text::AVATAR_CELL as usize).pow(2) * 4];
+            self.push_gpu_cell(slot, blank);
+        }
+        self.campaign_avatar_slots.insert(slug.to_owned(), slot);
+        self.portrait_last_drawn[slot] = self.drawn_frame;
+        Some(slot)
+    }
+
+    fn push_gpu_cell(&mut self, slot: usize, cell: Vec<u8>) {
+        self.gpu_avatar_cells
+            .retain(|(loaded_slot, _)| *loaded_slot != slot);
+        self.gpu_avatar_cells.push((slot, cell));
+        if !self.gpu_avatar_dirty.contains(&slot) {
+            self.gpu_avatar_dirty.push(slot);
+        }
     }
 
     pub fn campaign_avatar_slot(&self, slug: &str) -> Option<usize> {
@@ -184,7 +220,6 @@ impl AssetLoader {
                 self.avatars.contains_key(&leader)
             }
             AvatarFetchKey::Campaign { slug, .. } => self.campaign_avatars.contains_key(slug),
-            AvatarFetchKey::BotPortraits => self.bot_portraits_received,
         }
     }
 
@@ -267,15 +302,15 @@ impl AssetLoader {
     ) -> Result<(), String> {
         self.avatars_in_flight.remove(&key);
         self.avatar_retry_state.remove(&key);
+        if let AvatarFetchKey::Campaign { slug, slot } = &key
+            && self.campaign_avatar_slots.get(slug) != Some(slot)
+        {
+            // Evicted while this fetch was in flight; the slot may already hold another portrait.
+            return Ok(());
+        }
         let image = image::load_from_memory(bytes)
             .map_err(|error| format!("decode avatar: {error}"))?
             .to_rgba8();
-        if key == AvatarFetchKey::BotPortraits {
-            let (width, height) = image.dimensions();
-            self.bot_portraits = Some((width, height, image.into_raw()));
-            self.bot_portraits_received = true;
-            return Ok(());
-        }
         self.store_avatar_cells(key.clone(), image)?;
         match key {
             AvatarFetchKey::Fallback => self.avatar_fallback = Some(bytes.to_vec()),
@@ -285,7 +320,6 @@ impl AssetLoader {
             AvatarFetchKey::Campaign { slug, .. } => {
                 self.campaign_avatars.insert(slug, bytes.to_vec());
             }
-            AvatarFetchKey::BotPortraits => {}
         }
         Ok(())
     }
@@ -327,12 +361,9 @@ impl AssetLoader {
                 square_avatar_cell(&image),
             )],
             AvatarFetchKey::Campaign { slot, .. } => vec![(slot, square_avatar_cell(&image))],
-            AvatarFetchKey::BotPortraits => unreachable!("handled above"),
         };
         for (slot, cell) in cells {
-            self.gpu_avatar_cells
-                .retain(|(loaded_slot, _)| *loaded_slot != slot);
-            self.gpu_avatar_cells.push((slot, cell));
+            self.push_gpu_cell(slot, cell);
         }
         Ok(())
     }
@@ -538,75 +569,19 @@ mod tests {
     }
 
     #[test]
-    fn avatar_slots_cover_builtin_and_geo_entity_portraits_without_dropping_them() {
+    fn drawn_portraits_evict_the_least_recently_drawn_slot() {
         let mut loader = AssetLoader::new();
-        let mut entity_avatars = HashSet::<String>::new();
-        fn collect_avatars(value: &serde_json::Value, out: &mut HashSet<String>) {
-            match value {
-                serde_json::Value::Object(object) => {
-                    for (key, value) in object {
-                        if key == "avatar"
-                            && let Some(slug) = value.as_str()
-                        {
-                            out.insert(slug.to_owned());
-                        }
-                        collect_avatars(value, out);
-                    }
-                }
-                serde_json::Value::Array(array) => {
-                    for value in array {
-                        collect_avatars(value, out);
-                    }
-                }
-                _ => {}
-            }
+        let first = sow_render::text::avatar_campaign_first_slot();
+        let pool = sow_render::text::AVATAR_SLOT_COUNT - first;
+        for n in 0..pool {
+            loader.request_drawn_portraits(&[format!("bot_{n}")]);
         }
-        let campaigns = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/campaign");
-        for entry in std::fs::read_dir(campaigns).unwrap() {
-            let path = entry.unwrap().path();
-            if path
-                .extension()
-                .is_some_and(|extension| extension == "json")
-            {
-                collect_avatars(
-                    &serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap(),
-                    &mut entity_avatars,
-                );
-            }
-        }
-        entity_avatars.remove("null");
-        assert!(
-            entity_avatars.len() + sow_render::text::avatar_campaign_first_slot()
-                <= sow_render::text::AVATAR_SLOT_COUNT
-        );
-        // Same order as queue_campaign_avatar: a built-in hero takes a slot, and a name that is
-        // only a bot portrait draws from the bot atlas and takes none.
-        let slotted = entity_avatars
-            .iter()
-            .filter(|avatar| {
-                let slug = avatar.as_str();
-                Leader::all().any(|leader| leader.id() == slug)
-                    || sow_data::geo_entities::bot_portrait_index(slug).is_none()
-            })
-            .count();
-        for avatar in &entity_avatars {
-            loader.queue_campaign_avatar(avatar);
-        }
-        assert_eq!(loader.campaign_avatar_slots.len(), slotted);
-        assert!(
-            loader
-                .campaign_avatar_slots
-                .values()
-                .all(|slot| *slot < sow_render::text::AVATAR_SLOT_COUNT)
-        );
-        assert_eq!(
-            loader
-                .campaign_avatar_slots
-                .values()
-                .copied()
-                .collect::<HashSet<_>>()
-                .len(),
-            slotted
-        );
+        assert_eq!(loader.campaign_avatar_slot("bot_0"), Some(first));
+        // bot_0 is drawn again, so bot_1 is the least recently drawn and gives up its slot.
+        loader.request_drawn_portraits(&["bot_0".into(), "bot_extra".into()]);
+        assert_eq!(loader.campaign_avatar_slot("bot_0"), Some(first));
+        assert_eq!(loader.campaign_avatar_slot("bot_1"), None);
+        assert_eq!(loader.campaign_avatar_slot("bot_extra"), Some(first + 1));
+        assert!(loader.gpu_avatar_dirty.contains(&(first + 1)));
     }
 }

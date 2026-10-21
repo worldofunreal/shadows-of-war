@@ -176,14 +176,9 @@ impl SowApp {
                     );
                 }
             }
-            for slug in snapshot
-                .players
-                .iter()
-                .filter_map(|player| player.campaign_avatar.as_deref())
-            {
-                self.ui.app.asset_loader.queue_campaign_avatar(slug);
-            }
         }
+        let drawn = self.ui.nameplates.take_avatar_wants();
+        self.ui.app.asset_loader.request_drawn_portraits(&drawn);
 
         while self.ui.app.asset_loader.avatars_in_flight.len() < MAX_AVATAR_FETCHES_IN_FLIGHT {
             let Some(key) = self

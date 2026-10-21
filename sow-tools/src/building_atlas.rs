@@ -148,78 +148,16 @@ pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sy
 
     pack_badges(&args)?;
     pack_units(&args)?;
-    pack_bot_portraits(&args)?;
     println!(
-        "✅ Atlases ready: {} ({}x{}, {} building levels), {} badges, {} units and {} bot portraits",
+        "✅ Atlases ready: {} ({}x{}, {} building levels), {} badges and {} units",
         atlas_path.display(),
         packed.atlas.width(),
         packed.atlas.height(),
         entries.len(),
         BADGES.len(),
         UNITS.len(),
-        sow_core::geo_entities::bot_portrait_count()
     );
     Ok(())
-}
-
-/// The portrait file of an avatar name, in whichever folder holds it (assets/art/avatars).
-fn avatar_source(art_root: &Path, name: &str) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
-    let avatars = art_root.join("avatars");
-    ["heroes", "nations", "tribes"]
-        .iter()
-        .find_map(|folder| art_source(&avatars.join(folder), name).ok())
-        .ok_or_else(|| format!("missing avatar art: assets/art/avatars/*/{name}.webp").into())
-}
-
-/// Every catalog bot's portrait in `bot_portrait_index` order, 64px cells,
-/// 32 per row. A bot without its avatar file fails the pack: there is no shared
-/// stand-in. Lossy WebP via ImageMagick (already required by the pipeline) keeps
-/// the download small.
-fn pack_bot_portraits(args: &PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sync>> {
-    const CELL: u32 = 64;
-    const COLUMNS: u32 = 32;
-    let characters: Vec<_> = sow_core::geo_entities::all().collect();
-    let rows = (characters.len() as u32).div_ceil(COLUMNS).max(1);
-    let mut atlas = ImageBuffer::from_pixel(CELL * COLUMNS, CELL * rows, Rgba([0, 0, 0, 0]));
-    for (index, character) in characters.iter().enumerate() {
-        let name = character.avatar.as_deref().unwrap_or(&character.id);
-        let source = avatar_source(&args.art_root, name)?;
-        let image = image::load_from_memory(&fs::read(&source)?)?.to_rgba8();
-        let side = image.width().min(image.height());
-        let square = image::imageops::crop_imm(
-            &image,
-            (image.width() - side) / 2,
-            (image.height() - side) / 2,
-            side,
-            side,
-        )
-        .to_image();
-        let cell = image::imageops::resize(&square, CELL, CELL, FilterType::Lanczos3);
-        let index = index as u32;
-        image::imageops::overlay(
-            &mut atlas,
-            &cell,
-            i64::from(index % COLUMNS * CELL),
-            i64::from(index / COLUMNS * CELL),
-        );
-    }
-    let target = args.generated_root.join("bot-portraits.webp");
-    let png = std::env::temp_dir().join(format!("sow-bot-portraits-{}.png", std::process::id()));
-    atlas.save(&png)?;
-    let encoded =
-        std::env::temp_dir().join(format!("sow-bot-portraits-{}.webp", std::process::id()));
-    let status = std::process::Command::new("magick")
-        .arg(&png)
-        .args(["-quality", "82", "-define", "webp:method=6"])
-        .arg(&encoded)
-        .status()?;
-    let _ = fs::remove_file(&png);
-    if !status.success() {
-        return Err("magick failed to encode the bot portrait atlas".into());
-    }
-    let bytes = fs::read(&encoded)?;
-    let _ = fs::remove_file(&encoded);
-    write_if_changed(&target, &bytes)
 }
 
 fn pack_units(args: &PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sync>> {

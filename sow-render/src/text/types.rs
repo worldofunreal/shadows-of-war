@@ -122,8 +122,6 @@ pub const KIND_BUILDING_SPRITE: f32 = 11.0;
 pub const KIND_STATUS_SPRITE: f32 = 12.0;
 /// Badge-atlas art drawn with the emoji outline and shadow.
 pub const KIND_ICON: f32 = 13.0;
-/// Circular portrait from the bot portrait atlas.
-pub const KIND_BOT_SPRITE: f32 = 14.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NameplateStatusSprite {
     Request,
@@ -254,37 +252,6 @@ mod badge_atlas_tests {
 
 // Four 256px expressions per hero, plus shared static campaign portraits.
 // See docs/nameplates-and-emotes.md; capacity is checked against referenced assets.
-/// Bot portraits: one `BOT_PORTRAIT_CELL` square per catalog bot, packed by
-/// sow-tools in `sow_data::geo_entities::bot_portrait_index` order.
-pub const BOT_PORTRAIT_CELL: u32 = 64;
-pub const BOT_PORTRAIT_COLS: u32 = 32;
-
-pub fn bot_portrait_count() -> usize {
-    sow_data::geo_entities::bot_portrait_count()
-}
-
-pub fn bot_portrait_rows() -> u32 {
-    (bot_portrait_count() as u32)
-        .div_ceil(BOT_PORTRAIT_COLS)
-        .max(1)
-}
-
-pub fn bot_portrait_uv(index: usize) -> [f32; 4] {
-    let (w, h) = (
-        (BOT_PORTRAIT_COLS * BOT_PORTRAIT_CELL) as f32,
-        (bot_portrait_rows() * BOT_PORTRAIT_CELL) as f32,
-    );
-    let x = (index as u32 % BOT_PORTRAIT_COLS * BOT_PORTRAIT_CELL) as f32;
-    let y = (index as u32 / BOT_PORTRAIT_COLS * BOT_PORTRAIT_CELL) as f32;
-    let cell = BOT_PORTRAIT_CELL as f32;
-    [
-        (x + 0.5) / w,
-        (y + 0.5) / h,
-        (x + cell - 0.5) / w,
-        (y + cell - 0.5) / h,
-    ]
-}
-
 pub const AVATAR_CELL: u32 = 256;
 pub const AVATAR_COLS: u32 = 8;
 pub const AVATAR_ROWS: u32 = 16;
@@ -348,8 +315,6 @@ pub struct TextShaderData {
     pub globals: TextGlobals,
     pub font_atlas: gpu::TextureView,
     pub font_sampler: gpu::Sampler,
-    pub bot_portraits: gpu::TextureView,
-    pub bot_portraits_sampler: gpu::Sampler,
     pub avatar_atlas: gpu::TextureView,
     pub avatar_sampler: gpu::Sampler,
     pub building_atlas: gpu::TextureView,

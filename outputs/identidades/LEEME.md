@@ -12,6 +12,7 @@ La columna "Material de arte" dice qué imágenes ya existen en tu compu (en `Do
 - La columna "Nota" también marca 12 figuras del siglo XX, por si prefieres quitarlas.
 - **Material de arte:** 65 de los 200 ya tienen imágenes. No cuenta la pasada de Codex que rechazaste por la mueca repetida.
 - **Avatar:** solo 5 están validados (Hatshepsut, Mansa Musa, Amanirenas, Sundiata Keita y Amanitore).
+- La lista con la ubicación de cada retrato está en [naciones-encargo.txt](naciones-encargo.txt): **FALTAN** primero y **TENEMOS** después. Los retratos viven en `assets/art/avatars/nations/`.
 
 ## Avatares de tribus
 

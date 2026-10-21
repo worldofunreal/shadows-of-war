@@ -949,7 +949,7 @@ mod tests {
             id: "historical".into(),
             name: "Historical".into(),
             entries: vec![MapRosterEntry {
-                entity_id: "nationbot_hatshepsut".into(),
+                entity_id: "nation_hatshepsut".into(),
                 role: MapRosterRole::Nation,
                 x: 2,
                 y: 3,

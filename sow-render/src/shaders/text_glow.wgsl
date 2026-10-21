@@ -21,8 +21,6 @@ struct TextInstance {
 var<uniform> globals: TextGlobals;
 var font_atlas: texture_2d<f32>;
 var font_sampler: sampler;
-var bot_portraits: texture_2d<f32>;
-var bot_portraits_sampler: sampler;
 var avatar_atlas: texture_2d<f32>;
 var avatar_sampler: sampler;
 var building_atlas: texture_2d<f32>;
@@ -65,7 +63,6 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: TextInstance) -> VertexOutput {
     if inst.kind > 10.5 && inst.kind < 11.5 { instance_scale = globals.shader_params[__TEXT_BUILDING_SIZE__].x; }
     if inst.kind > 11.5 && inst.kind < 12.5 { instance_scale = globals.shader_params[__TEXT_STATUS_SIZE__].x; }
     if inst.kind > 12.5 && inst.kind < 13.5 { instance_scale = globals.shader_params[__TEXT_EMOJI_SIZE__].x; }
-    if inst.kind > 13.5 { instance_scale = globals.shader_params[__TEXT_AVATAR_SIZE__].x; }
     let center = inst.screen_pos + inst.size * 0.5;
     let screen = center + (inst.screen_pos + local * inst.size - center) * instance_scale;
     let ndc = vec2<f32>(
@@ -174,19 +171,15 @@ fn shade_arc(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(in.color.rgb * globals.shader_params[__TEXT_SHAPE_STROKE_TINT__].rgb, ring_alpha * arc_alpha * in.color.a * globals.shader_params[__TEXT_OPACITY__].x);
 }
 
-// Circular portrait: hero/campaign avatar atlas, or the bot portrait atlas.
-fn shade_sprite(in: VertexOutput, bot: bool) -> vec4<f32> {
+// Circular portrait from the avatar atlas (heroes, campaigns and bots).
+fn shade_sprite(in: VertexOutput) -> vec4<f32> {
     let span = max(in.uv_rect.zw - in.uv_rect.xy, vec2<f32>(1e-6));
     let local = (in.uv - in.uv_rect.xy) / span;
     let d = rounded_rect_distance(local, 0.5);
     let aa = max(fwidth(d), 1e-5);
     let mask = 1.0 - smoothstep(-aa, aa, d);
     let uv = clamp(in.uv, in.uv_rect.xy, in.uv_rect.zw);
-    let tex = select(
-        textureSample(avatar_atlas, avatar_sampler, uv),
-        textureSample(bot_portraits, bot_portraits_sampler, uv),
-        bot,
-    );
+    let tex = textureSample(avatar_atlas, avatar_sampler, uv);
     return vec4<f32>(tex.rgb * in.color.rgb * globals.shader_params[__TEXT_AVATAR_TINT__].rgb, tex.a * mask * in.color.a * globals.shader_params[__TEXT_AVATAR_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x);
 }
 
@@ -315,9 +308,6 @@ fn shade_icon(in: VertexOutput) -> vec4<f32> {
 }
 
 fn shade_text(in: VertexOutput) -> vec4<f32> {
-    if (in.kind > 13.5) {
-        return shade_sprite(in, true);
-    }
     if (in.kind > 12.5) {
         return shade_icon(in);
     }
@@ -343,7 +333,7 @@ fn shade_text(in: VertexOutput) -> vec4<f32> {
         return shade_rect(in);
     }
     if (in.kind > 3.5) {
-        return shade_sprite(in, false);
+        return shade_sprite(in);
     }
     if (in.kind > 1.5) {
         return shade_shape(in);

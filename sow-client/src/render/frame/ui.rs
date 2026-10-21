@@ -154,15 +154,9 @@ impl SowApp {
         let building_panel = self.building_panel_layout();
         if let Some(text) = &mut self.gfx.text_renderer {
             text.begin_frame();
-            if let Some((width, height, rgba)) = self.ui.app.asset_loader.bot_portraits.take()
-                && !text.upload_bot_portraits(width, height, &rgba)
-            {
-                log::error!(
-                    "bot portrait atlas {width}x{height} does not match the catalog layout"
-                );
-            }
+            let dirty_avatar_slots = std::mem::take(&mut self.ui.app.asset_loader.gpu_avatar_dirty);
             for &(slot, ref cell) in &self.ui.app.asset_loader.gpu_avatar_cells {
-                if text.avatar_uv(slot).is_none() {
+                if text.avatar_uv(slot).is_none() || dirty_avatar_slots.contains(&slot) {
                     text.upload_avatar(slot, cell);
                 }
             }

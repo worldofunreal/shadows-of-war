@@ -2334,9 +2334,9 @@ mod tests {
                 id: "historical".into(),
                 name: "Historical".into(),
                 entries: vec![
-                    entry("nationbot_hatshepsut", Nation, 15),
-                    entry("nationbot_mansa_musa", Nation, 45),
-                    entry("nationbot_amanirenas", Nation, 75),
+                    entry("nation_hatshepsut", Nation, 15),
+                    entry("nation_mansa_musa", Nation, 45),
+                    entry("nation_amanirenas", Nation, 75),
                     entry("tribe_cherusci", Tribe, 115),
                     entry("tribe_marcomanni", Tribe, 145),
                     entry("tribe_suebi", Tribe, 175),

@@ -5,7 +5,7 @@
    "id": "caesar",
    "name": "Julius Caesar",
    "entity": "Roman Republic",
-   "role": "nation",
+   "role": "hero",
    "region": "europe",
    "lat": 41.89,
    "lon": 12.49,
@@ -26,7 +26,7 @@
    "id": "cleopatra",
    "name": "Cleopatra",
    "entity": "Ptolemaic Egypt",
-   "role": "nation",
+   "role": "hero",
    "region": "africa",
    "lat": 31.2,
    "lon": 29.92,
@@ -72,7 +72,7 @@
    "id": "sun_tzu",
    "name": "Sun Tzu",
    "entity": "State of Wu",
-   "role": "nation",
+   "role": "hero",
    "region": "asia",
    "lat": 31.3,
    "lon": 120.62,
@@ -93,7 +93,7 @@
    "id": "alexander",
    "name": "Alexander the Great",
    "entity": "Macedon",
-   "role": "nation",
+   "role": "hero",
    "region": "europe",
    "lat": 40.76,
    "lon": 22.52,
@@ -135,7 +135,7 @@
    "id": "richard_the_lionheart",
    "name": "Richard the Lionheart",
    "entity": "Angevin England",
-   "role": "nation",
+   "role": "hero",
    "region": "europe",
    "lat": 51.51,
    "lon": -0.13,
@@ -203,7 +203,7 @@
    "id": "lady_six_sky",
    "name": "Lady Six Sky",
    "entity": "Naranjo",
-   "role": "nation",
+   "role": "hero",
    "region": "americas",
    "lat": 17.13,
    "lon": -89.26,
@@ -226,7 +226,7 @@
    "id": "leonidas",
    "name": "Leonidas I",
    "entity": "Sparta",
-   "role": "nation",
+   "role": "hero",
    "region": "europe",
    "lat": 37.08,
    "lon": 22.43,
@@ -247,7 +247,7 @@
    "id": "napoleon",
    "name": "Napoleon",
    "entity": "French Empire",
-   "role": "nation",
+   "role": "hero",
    "region": "europe",
    "lat": 48.86,
    "lon": 2.35,
@@ -265,7 +265,7 @@
    "territory_color": "#2e47ad"
   },
   {
-   "id": "nationbot_hatshepsut",
+   "id": "nation_hatshepsut",
    "name": "Hatshepsut",
    "entity": "Ancient Egypt",
    "role": "nation",
@@ -274,10 +274,10 @@
    "lon": 32.6103,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Hatshepsut",
-   "avatar": "nationbot_hatshepsut"
+   "avatar": "hatshepsut"
   },
   {
-   "id": "nationbot_mansa_musa",
+   "id": "nation_mansa_musa",
    "name": "Mansa Musa",
    "entity": "Mali Empire",
    "role": "nation",
@@ -286,10 +286,10 @@
    "lon": -7.9,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Mansa_Musa",
-   "avatar": "nationbot_mansa_musa"
+   "avatar": "mansa_musa"
   },
   {
-   "id": "nationbot_amanirenas",
+   "id": "nation_amanirenas",
    "name": "Amanirenas",
    "entity": "Kingdom of Kush",
    "role": "nation",
@@ -298,10 +298,10 @@
    "lon": 33.0,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Amanirenas",
-   "avatar": "nationbot_amanirenas"
+   "avatar": "amanirenas"
   },
   {
-   "id": "nationbot_sundiata_keita",
+   "id": "nation_sundiata_keita",
    "name": "Sundiata Keita",
    "entity": "Mali Empire",
    "role": "nation",
@@ -310,10 +310,10 @@
    "lon": -8.3842,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Sundiata_Keita",
-   "avatar": "nationbot_sundiata_keita"
+   "avatar": "sundiata_keita"
   },
   {
-   "id": "nationbot_amanitore",
+   "id": "nation_amanitore",
    "name": "Amanitore",
    "entity": "Kingdom of Kush",
    "role": "nation",
@@ -322,10 +322,10 @@
    "lon": 31.8276,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Amanitore",
-   "avatar": "nationbot_amanitore"
+   "avatar": "amanitore"
   },
   {
-   "id": "nationbot_sunni_ali",
+   "id": "nation_sunni_ali",
    "name": "Sonni Ali",
    "entity": "Songhai Empire",
    "role": "nation",
@@ -334,10 +334,10 @@
    "lon": -0.0,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Sonni_Ali",
-   "avatar": "nationbot_sunni_ali"
+   "avatar": "sunni_ali"
   },
   {
-   "id": "nationbot_amanishakheto",
+   "id": "nation_amanishakheto",
    "name": "Amanishakheto",
    "entity": "Kingdom of Kush",
    "role": "nation",
@@ -346,10 +346,10 @@
    "lon": 33.7,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Amanishakheto",
-   "avatar": "nationbot_amanishakheto"
+   "avatar": "amanishakheto"
   },
   {
-   "id": "nationbot_askia_muhammad_i",
+   "id": "nation_askia_muhammad_i",
    "name": "Askia Muhammad I",
    "entity": "Songhai Empire",
    "role": "nation",
@@ -358,10 +358,10 @@
    "lon": -2.9994,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Askia_Muhammad_I",
-   "avatar": "nationbot_askia_muhammad_i"
+   "avatar": "askia_muhammad_i"
   },
   {
-   "id": "nationbot_nefertiti",
+   "id": "nation_nefertiti",
    "name": "Nefertiti",
    "entity": "Ancient Egypt",
    "role": "nation",
@@ -370,10 +370,10 @@
    "lon": 32.6103,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Nefertiti",
-   "avatar": "nationbot_nefertiti"
+   "avatar": "nefertiti"
   },
   {
-   "id": "nationbot_shaka_zulu",
+   "id": "nation_shaka_zulu",
    "name": "Shaka",
    "entity": "Zulu Kingdom",
    "role": "nation",
@@ -382,10 +382,10 @@
    "lon": 31.8486,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Shaka",
-   "avatar": "nationbot_shaka_zulu"
+   "avatar": "shaka_zulu"
   },
   {
-   "id": "nationbot_cleopatra_selene_ii",
+   "id": "nation_cleopatra_selene_ii",
    "name": "Cleopatra Selene II",
    "entity": "Ancient Mauretania",
    "role": "nation",
@@ -394,10 +394,10 @@
    "lon": 29.8925,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Cleopatra_Selene_II",
-   "avatar": "nationbot_cleopatra_selene_ii"
+   "avatar": "cleopatra_selene_ii"
   },
   {
-   "id": "nationbot_menelik_ii",
+   "id": "nation_menelik_ii",
    "name": "Menelik II",
    "entity": "Ethiopia",
    "role": "nation",
@@ -406,10 +406,10 @@
    "lon": 39.9,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Menelik_II",
-   "avatar": "nationbot_menelik_ii"
+   "avatar": "menelik_ii"
   },
   {
-   "id": "nationbot_nzinga_mbande",
+   "id": "nation_nzinga_mbande",
    "name": "Nzinga of Ndongo and Matamba",
    "entity": "Ndongo and Matamba",
    "role": "nation",
@@ -418,10 +418,10 @@
    "lon": 15.0,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Nzinga_of_Ndongo_and_Matamba",
-   "avatar": "nationbot_nzinga_mbande"
+   "avatar": "nzinga_mbande"
   },
   {
-   "id": "nationbot_haile_selassie",
+   "id": "nation_haile_selassie",
    "name": "Haile Selassie",
    "entity": "Ethiopia",
    "role": "nation",
@@ -430,10 +430,10 @@
    "lon": 42.2333,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Haile_Selassie",
-   "avatar": "nationbot_haile_selassie"
+   "avatar": "haile_selassie"
   },
   {
-   "id": "nationbot_amina_de_zazzau",
+   "id": "nation_amina_de_zazzau",
    "name": "Amina of Zazzau",
    "entity": "Zazzau (modern Nigeria)",
    "role": "nation",
@@ -442,10 +442,10 @@
    "lon": 7.7,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Amina_of_Zazzau",
-   "avatar": "nationbot_amina_de_zazzau"
+   "avatar": "amina_de_zazzau"
   },
   {
-   "id": "nationbot_samori_ture",
+   "id": "nation_samori_ture",
    "name": "Samori Ture",
    "entity": "Wassoulou Empire",
    "role": "nation",
@@ -454,10 +454,10 @@
    "lon": -9.0172,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Samori_Ture",
-   "avatar": "nationbot_samori_ture"
+   "avatar": "samori_ture"
   },
   {
-   "id": "nationbot_reina_idia",
+   "id": "nation_reina_idia",
    "name": "Idia",
    "entity": "Kingdom of Benin",
    "role": "nation",
@@ -466,10 +466,10 @@
    "lon": 5.6,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Idia",
-   "avatar": "nationbot_reina_idia"
+   "avatar": "reina_idia"
   },
   {
-   "id": "nationbot_osei_tutu",
+   "id": "nation_osei_tutu",
    "name": "Osei Kofi Tutu I",
    "entity": "Ashanti Empire",
    "role": "nation",
@@ -478,10 +478,10 @@
    "lon": -1.9667,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Osei_Kofi_Tutu_I",
-   "avatar": "nationbot_osei_tutu"
+   "avatar": "osei_tutu"
   },
   {
-   "id": "nationbot_yaa_asantewaa",
+   "id": "nation_yaa_asantewaa",
    "name": "Yaa Asantewaa",
    "entity": "Ashanti Empire",
    "role": "nation",
@@ -490,10 +490,10 @@
    "lon": -1.4508,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Yaa_Asantewaa",
-   "avatar": "nationbot_yaa_asantewaa"
+   "avatar": "yaa_asantewaa"
   },
   {
-   "id": "nationbot_tewodros_ii",
+   "id": "nation_tewodros_ii",
    "name": "Tewodros II",
    "entity": "Ethiopia",
    "role": "nation",
@@ -502,10 +502,10 @@
    "lon": 35.75,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Tewodros_II",
-   "avatar": "nationbot_tewodros_ii"
+   "avatar": "tewodros_ii"
   },
   {
-   "id": "nationbot_ranavalona_i",
+   "id": "nation_ranavalona_i",
    "name": "Ranavalona I",
    "entity": "Kingdom of Madagascar",
    "role": "nation",
@@ -514,10 +514,10 @@
    "lon": 47.6167,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Ranavalona_I",
-   "avatar": "nationbot_ranavalona_i"
+   "avatar": "ranavalona_i"
   },
   {
-   "id": "nationbot_ahmad_al_mansur",
+   "id": "nation_ahmad_al_mansur",
    "name": "Ahmad al-Mansur",
    "entity": "Morocco / Saadi dynasty",
    "role": "nation",
@@ -526,10 +526,10 @@
    "lon": -5.0033,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Ahmad_al-Mansur",
-   "avatar": "nationbot_ahmad_al_mansur"
+   "avatar": "ahmad_al_mansur"
   },
   {
-   "id": "nationbot_ranavalona_ii",
+   "id": "nation_ranavalona_ii",
    "name": "Ranavalona II",
    "entity": "Kingdom of Madagascar",
    "role": "nation",
@@ -538,10 +538,10 @@
    "lon": 47.6167,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Ranavalona_II",
-   "avatar": "nationbot_ranavalona_ii"
+   "avatar": "ranavalona_ii"
   },
   {
-   "id": "nationbot_idris_alooma",
+   "id": "nation_idris_alooma",
    "name": "Idris Alooma",
    "entity": "Kanem-Bornu Empire",
    "role": "nation",
@@ -550,10 +550,10 @@
    "lon": 14.533,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Idris_Alooma",
-   "avatar": "nationbot_idris_alooma"
+   "avatar": "idris_alooma"
   },
   {
-   "id": "nationbot_dihya",
+   "id": "nation_dihya",
    "name": "Kahina",
    "entity": "Aurès and Amazigh peoples",
    "role": "nation",
@@ -562,10 +562,10 @@
    "lon": 6.6369,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Kahina",
-   "avatar": "nationbot_dihya"
+   "avatar": "dihya"
   },
   {
-   "id": "nationbot_omar_mukhtar",
+   "id": "nation_omar_mukhtar",
    "name": "Omar al-Mukhtar",
    "entity": "Libya",
    "role": "nation",
@@ -574,10 +574,10 @@
    "lon": 21.6333,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Omar_al-Mukhtar",
-   "avatar": "nationbot_omar_mukhtar"
+   "avatar": "omar_mukhtar"
   },
   {
-   "id": "nationbot_nehanda_charwe_nyakasikana",
+   "id": "nation_nehanda_charwe_nyakasikana",
    "name": "Nehanda Charwe Nyakasikana",
    "entity": "Zimbabwe / Shona",
    "role": "nation",
@@ -586,10 +586,10 @@
    "lon": 31.0522,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Nehanda_Charwe_Nyakasikana",
-   "avatar": "nationbot_nehanda_charwe_nyakasikana"
+   "avatar": "nehanda_charwe_nyakasikana"
   },
   {
-   "id": "nationbot_mutesa_i_de_buganda",
+   "id": "nation_mutesa_i_de_buganda",
    "name": "Muteesa I of Buganda",
    "entity": "Kingdom of Buganda",
    "role": "nation",
@@ -598,10 +598,10 @@
    "lon": 32.5833,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Muteesa_I_of_Buganda",
-   "avatar": "nationbot_mutesa_i_de_buganda"
+   "avatar": "mutesa_i_de_buganda"
   },
   {
-   "id": "nationbot_lalla_fatma_n_soumer",
+   "id": "nation_lalla_fatma_n_soumer",
    "name": "Lalla Fatma N'Soumer",
    "entity": "Kabylia (Algeria)",
    "role": "nation",
@@ -610,10 +610,10 @@
    "lon": 4.3111,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Lalla_Fatma_N%27Soumer",
-   "avatar": "nationbot_lalla_fatma_n_soumer"
+   "avatar": "lalla_fatma_n_soumer"
   },
   {
-   "id": "nationbot_dingane",
+   "id": "nation_dingane",
    "name": "Dingane",
    "entity": "Zulu Kingdom",
    "role": "nation",
@@ -622,10 +622,10 @@
    "lon": 31,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Dingane",
-   "avatar": "nationbot_dingane"
+   "avatar": "dingane"
   },
   {
-   "id": "nationbot_sarraounia_mangou",
+   "id": "nation_sarraounia_mangou",
    "name": "Sarraounia",
    "entity": "Azna / modern Niger",
    "role": "nation",
@@ -634,10 +634,10 @@
    "lon": 10,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Sarraounia",
-   "avatar": "nationbot_sarraounia_mangou"
+   "avatar": "sarraounia_mangou"
   },
   {
-   "id": "nationbot_cetshwayo",
+   "id": "nation_cetshwayo",
    "name": "Cetshwayo",
    "entity": "Zulu Kingdom",
    "role": "nation",
@@ -646,10 +646,10 @@
    "lon": 31.4483,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Cetshwayo",
-   "avatar": "nationbot_cetshwayo"
+   "avatar": "cetshwayo"
   },
   {
-   "id": "nationbot_kimpa_vita",
+   "id": "nation_kimpa_vita",
    "name": "Kimpa Vita",
    "entity": "Kingdom of Kongo",
    "role": "nation",
@@ -658,10 +658,10 @@
    "lon": 14.25,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Kimpa_Vita",
-   "avatar": "nationbot_kimpa_vita"
+   "avatar": "kimpa_vita"
   },
   {
-   "id": "nationbot_taharqa",
+   "id": "nation_taharqa",
    "name": "Taharqa",
    "entity": "Kingdom of Kush",
    "role": "nation",
@@ -670,10 +670,10 @@
    "lon": 31.3,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Taharqa",
-   "avatar": "nationbot_taharqa"
+   "avatar": "taharqa"
   },
   {
-   "id": "nationbot_labotsibeni_mdluli",
+   "id": "nation_labotsibeni_mdluli",
    "name": "Labotsibeni Mdluli",
    "entity": "Eswatini",
    "role": "nation",
@@ -682,10 +682,10 @@
    "lon": 31.3192,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Labotsibeni_Mdluli",
-   "avatar": "nationbot_labotsibeni_mdluli"
+   "avatar": "labotsibeni_mdluli"
   },
   {
-   "id": "nationbot_piye",
+   "id": "nation_piye",
    "name": "Piye",
    "entity": "Kingdom of Kush",
    "role": "nation",
@@ -694,10 +694,10 @@
    "lon": 33.83,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Piye",
-   "avatar": "nationbot_piye"
+   "avatar": "piye"
   },
   {
-   "id": "nationbot_zewditu",
+   "id": "nation_zewditu",
    "name": "Zewditu",
    "entity": "Ethiopia",
    "role": "nation",
@@ -706,10 +706,10 @@
    "lon": 42.2333,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Zewditu",
-   "avatar": "nationbot_zewditu"
+   "avatar": "zewditu"
   },
   {
-   "id": "nationbot_maqoma",
+   "id": "nation_maqoma",
    "name": "Maqoma",
    "entity": "Xhosa people",
    "role": "nation",
@@ -718,10 +718,10 @@
    "lon": 18.37,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Maqoma",
-   "avatar": "nationbot_maqoma"
+   "avatar": "maqoma"
   },
   {
-   "id": "nationbot_taytu_betul",
+   "id": "nation_taytu_betul",
    "name": "Taytu Betul",
    "entity": "Ethiopia",
    "role": "nation",
@@ -730,10 +730,10 @@
    "lon": 38.7525,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Taytu_Betul",
-   "avatar": "nationbot_taytu_betul"
+   "avatar": "taytu_betul"
   },
   {
-   "id": "nationbot_ewuare_el_grande",
+   "id": "nation_ewuare_el_grande",
    "name": "Ewuare",
    "entity": "Kingdom of Benin",
    "role": "nation",
@@ -742,10 +742,10 @@
    "lon": 8,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Ewuare",
-   "avatar": "nationbot_ewuare_el_grande"
+   "avatar": "ewuare_el_grande"
   },
   {
-   "id": "nationbot_anacaona",
+   "id": "nation_anacaona",
    "name": "Anacaona",
    "entity": "Xaragua / Taíno people",
    "role": "nation",
@@ -754,10 +754,10 @@
    "lon": -72.8,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Anacaona",
-   "avatar": "nationbot_anacaona"
+   "avatar": "anacaona"
   },
   {
-   "id": "nationbot_moctezuma_i",
+   "id": "nation_moctezuma_i",
    "name": "Moctezuma I",
    "entity": "Mexica Empire",
    "role": "nation",
@@ -766,10 +766,10 @@
    "lon": -99.1314,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Moctezuma_I",
-   "avatar": "nationbot_moctezuma_i"
+   "avatar": "moctezuma_i"
   },
   {
-   "id": "nationbot_mama_ocllo",
+   "id": "nation_mama_ocllo",
    "name": "Mama Ocllo",
    "entity": "Inca Empire",
    "role": "nation",
@@ -778,10 +778,10 @@
    "lon": -71.9667,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Mama_Ocllo",
-   "avatar": "nationbot_mama_ocllo"
+   "avatar": "mama_ocllo"
   },
   {
-   "id": "nationbot_moctezuma_ii",
+   "id": "nation_moctezuma_ii",
    "name": "Moctezuma II",
    "entity": "Mexica Empire",
    "role": "nation",
@@ -790,10 +790,10 @@
    "lon": -99.1314,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Moctezuma_II",
-   "avatar": "nationbot_moctezuma_ii"
+   "avatar": "moctezuma_ii"
   },
   {
-   "id": "nationbot_lady_yohl_ik_nal",
+   "id": "nation_lady_yohl_ik_nal",
    "name": "Yohl Ikʼnal",
    "entity": "Palenque / Maya world",
    "role": "nation",
@@ -802,10 +802,10 @@
    "lon": -102,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Yohl_Ik%CA%BCnal",
-   "avatar": "nationbot_lady_yohl_ik_nal"
+   "avatar": "lady_yohl_ik_nal"
   },
   {
-   "id": "nationbot_atahualpa",
+   "id": "nation_atahualpa",
    "name": "Atahualpa",
    "entity": "Inca Empire",
    "role": "nation",
@@ -814,10 +814,10 @@
    "lon": -78.5125,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Atahualpa",
-   "avatar": "nationbot_atahualpa"
+   "avatar": "atahualpa"
   },
   {
-   "id": "nationbot_lady_k_ab_al_xook",
+   "id": "nation_lady_k_ab_al_xook",
    "name": "Lady Xoc",
    "entity": "Yaxchilán / Maya world",
    "role": "nation",
@@ -826,10 +826,10 @@
    "lon": -90.9667,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Lady_Xoc",
-   "avatar": "nationbot_lady_k_ab_al_xook"
+   "avatar": "lady_k_ab_al_xook"
   },
   {
-   "id": "nationbot_pachacutec",
+   "id": "nation_pachacutec",
    "name": "Pachacuti",
    "entity": "Inca Empire",
    "role": "nation",
@@ -838,10 +838,10 @@
    "lon": -71.9786,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Pachacuti",
-   "avatar": "nationbot_pachacutec"
+   "avatar": "pachacutec"
   },
   {
-   "id": "nationbot_lady_tz_akbu_ajaw",
+   "id": "nation_lady_tz_akbu_ajaw",
    "name": "Tz'akbu Ajaw",
    "entity": "Palenque / Maya world",
    "role": "nation",
@@ -850,10 +850,10 @@
    "lon": -92.0,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Tz%27akbu_Ajaw",
-   "avatar": "nationbot_lady_tz_akbu_ajaw"
+   "avatar": "lady_tz_akbu_ajaw"
   },
   {
-   "id": "nationbot_huayna_capac",
+   "id": "nation_huayna_capac",
    "name": "Huayna Capac",
    "entity": "Inca Empire",
    "role": "nation",
@@ -862,10 +862,10 @@
    "lon": -78.9975,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Huayna_Capac",
-   "avatar": "nationbot_huayna_capac"
+   "avatar": "huayna_capac"
   },
   {
-   "id": "nationbot_lady_k_abel",
+   "id": "nation_lady_k_abel",
    "name": "Lady K'abel",
    "entity": "Perú-Waka' / Maya world",
    "role": "nation",
@@ -874,10 +874,10 @@
    "lon": -89.8106,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Lady_K%27abel",
-   "avatar": "nationbot_lady_k_abel"
+   "avatar": "lady_k_abel"
   },
   {
-   "id": "nationbot_itzcoatl",
+   "id": "nation_itzcoatl",
    "name": "Itzcoatl",
    "entity": "Mexica Empire",
    "role": "nation",
@@ -886,10 +886,10 @@
    "lon": -99.1314,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Itzcoatl",
-   "avatar": "nationbot_itzcoatl"
+   "avatar": "itzcoatl"
   },
   {
-   "id": "nationbot_atotoztli",
+   "id": "nation_atotoztli",
    "name": "Atotoztli",
    "entity": "Mexico-Tenochtitlan / Mexica",
    "role": "nation",
@@ -898,10 +898,10 @@
    "lon": -99.13,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Atotoztli",
-   "avatar": "nationbot_atotoztli"
+   "avatar": "atotoztli"
   },
   {
-   "id": "nationbot_cuauhtemoc",
+   "id": "nation_cuauhtemoc",
    "name": "Cuauhtémoc",
    "entity": "Mexica Empire",
    "role": "nation",
@@ -910,10 +910,10 @@
    "lon": -99.1314,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Cuauht%C3%A9moc",
-   "avatar": "nationbot_cuauhtemoc"
+   "avatar": "cuauhtemoc"
   },
   {
-   "id": "nationbot_tecuichpo_ixcaxochitzin",
+   "id": "nation_tecuichpo_ixcaxochitzin",
    "name": "Isabel Moctezuma",
    "entity": "Mexico-Tenochtitlan / Mexica",
    "role": "nation",
@@ -922,10 +922,10 @@
    "lon": -99.1314,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Isabel_Moctezuma",
-   "avatar": "nationbot_tecuichpo_ixcaxochitzin"
+   "avatar": "tecuichpo_ixcaxochitzin"
   },
   {
-   "id": "nationbot_tecumseh",
+   "id": "nation_tecumseh",
    "name": "Tecumseh",
    "entity": "Shawnee / Indigenous confederacy",
    "role": "nation",
@@ -934,10 +934,10 @@
    "lon": -82.9839,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Tecumseh",
-   "avatar": "nationbot_tecumseh"
+   "avatar": "tecumseh"
   },
   {
-   "id": "nationbot_malintzin",
+   "id": "nation_malintzin",
    "name": "La Malinche",
    "entity": "Nahua peoples / Mexico",
    "role": "nation",
@@ -946,10 +946,10 @@
    "lon": -76,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/La_Malinche",
-   "avatar": "nationbot_malintzin"
+   "avatar": "malintzin"
   },
   {
-   "id": "nationbot_crazy_horse",
+   "id": "nation_crazy_horse",
    "name": "Crazy Horse",
    "entity": "Lakota",
    "role": "nation",
@@ -958,10 +958,10 @@
    "lon": -100,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Crazy_Horse",
-   "avatar": "nationbot_crazy_horse"
+   "avatar": "crazy_horse"
   },
   {
-   "id": "nationbot_nanyehi_nancy_ward",
+   "id": "nation_nanyehi_nancy_ward",
    "name": "Nancy Ward",
    "entity": "Cherokee Nation",
    "role": "nation",
@@ -970,10 +970,10 @@
    "lon": -84.1311,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Nancy_Ward",
-   "avatar": "nationbot_nanyehi_nancy_ward"
+   "avatar": "nanyehi_nancy_ward"
   },
   {
-   "id": "nationbot_red_cloud",
+   "id": "nation_red_cloud",
    "name": "Red Cloud",
    "entity": "Lakota",
    "role": "nation",
@@ -982,10 +982,10 @@
    "lon": -100.6758,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Red_Cloud",
-   "avatar": "nationbot_red_cloud"
+   "avatar": "red_cloud"
   },
   {
-   "id": "nationbot_molly_brant",
+   "id": "nation_molly_brant",
    "name": "Molly Brant",
    "entity": "Mohawk / Haudenosaunee",
    "role": "nation",
@@ -994,10 +994,10 @@
    "lon": -74.6411,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Molly_Brant",
-   "avatar": "nationbot_molly_brant"
+   "avatar": "molly_brant"
   },
   {
-   "id": "nationbot_sitting_bull",
+   "id": "nation_sitting_bull",
    "name": "Sitting Bull",
    "entity": "Hunkpapa Lakota",
    "role": "nation",
@@ -1006,10 +1006,10 @@
    "lon": -100.4672,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Sitting_Bull",
-   "avatar": "nationbot_sitting_bull"
+   "avatar": "sitting_bull"
   },
   {
-   "id": "nationbot_lozen",
+   "id": "nation_lozen",
    "name": "Lozen",
    "entity": "Chiricahua Apache",
    "role": "nation",
@@ -1018,10 +1018,10 @@
    "lon": -106.047,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Lozen",
-   "avatar": "nationbot_lozen"
+   "avatar": "lozen"
   },
   {
-   "id": "nationbot_geronimo",
+   "id": "nation_geronimo",
    "name": "Geronimo",
    "entity": "Chiricahua Apache",
    "role": "nation",
@@ -1030,10 +1030,10 @@
    "lon": -114.555,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Geronimo",
-   "avatar": "nationbot_geronimo"
+   "avatar": "geronimo"
   },
   {
-   "id": "nationbot_sarah_winnemucca",
+   "id": "nation_sarah_winnemucca",
    "name": "Sarah Winnemucca",
    "entity": "Northern Paiute",
    "role": "nation",
@@ -1042,10 +1042,10 @@
    "lon": -118.6075,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Sarah_Winnemucca",
-   "avatar": "nationbot_sarah_winnemucca"
+   "avatar": "sarah_winnemucca"
   },
   {
-   "id": "nationbot_tupac_amaru_ii",
+   "id": "nation_tupac_amaru_ii",
    "name": "Túpac Amaru II",
    "entity": "Andean Rebellion / Peru",
    "role": "nation",
@@ -1054,10 +1054,10 @@
    "lon": -71.4056,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/T%C3%BApac_Amaru_II",
-   "avatar": "nationbot_tupac_amaru_ii"
+   "avatar": "tupac_amaru_ii"
   },
   {
-   "id": "nationbot_micaela_bastidas",
+   "id": "nation_micaela_bastidas",
    "name": "Micaela Bastidas",
    "entity": "Andean Rebellion / Peru",
    "role": "nation",
@@ -1066,10 +1066,10 @@
    "lon": -72.8711,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Micaela_Bastidas",
-   "avatar": "nationbot_micaela_bastidas"
+   "avatar": "micaela_bastidas"
   },
   {
-   "id": "nationbot_guaicaipuro",
+   "id": "nation_guaicaipuro",
    "name": "Guaicaipuro",
    "entity": "Carib people / Venezuela",
    "role": "nation",
@@ -1078,10 +1078,10 @@
    "lon": -67,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Guaicaipuro",
-   "avatar": "nationbot_guaicaipuro"
+   "avatar": "guaicaipuro"
   },
   {
-   "id": "nationbot_bartolina_sisa",
+   "id": "nation_bartolina_sisa",
    "name": "Bartolina Sisa",
    "entity": "Aymara people / Upper Peru",
    "role": "nation",
@@ -1090,10 +1090,10 @@
    "lon": -68.1333,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Bartolina_Sisa",
-   "avatar": "nationbot_bartolina_sisa"
+   "avatar": "bartolina_sisa"
   },
   {
-   "id": "nationbot_tupac_yupanqui",
+   "id": "nation_tupac_yupanqui",
    "name": "Topa Inca Yupanqui",
    "entity": "Inca Empire",
    "role": "nation",
@@ -1102,10 +1102,10 @@
    "lon": -71.9786,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Topa_Inca_Yupanqui",
-   "avatar": "nationbot_tupac_yupanqui"
+   "avatar": "tupac_yupanqui"
   },
   {
-   "id": "nationbot_juana_azurduy",
+   "id": "nation_juana_azurduy",
    "name": "Juana Azurduy de Padilla",
    "entity": "Upper Peru / Bolivia",
    "role": "nation",
@@ -1114,10 +1114,10 @@
    "lon": -65.26,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Juana_Azurduy_de_Padilla",
-   "avatar": "nationbot_juana_azurduy"
+   "avatar": "juana_azurduy"
   },
   {
-   "id": "nationbot_simon_bolivar",
+   "id": "nation_simon_bolivar",
    "name": "Simón Bolívar",
    "entity": "Gran Colombia",
    "role": "nation",
@@ -1126,10 +1126,10 @@
    "lon": -66.9144,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Sim%C3%B3n_Bol%C3%ADvar",
-   "avatar": "nationbot_simon_bolivar"
+   "avatar": "simon_bolivar"
   },
   {
-   "id": "nationbot_josefa_ortiz_de_dominguez",
+   "id": "nation_josefa_ortiz_de_dominguez",
    "name": "Josefa Ortiz de Domínguez",
    "entity": "Mexico",
    "role": "nation",
@@ -1138,10 +1138,10 @@
    "lon": -101.1922,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Josefa_Ortiz_de_Dom%C3%ADnguez",
-   "avatar": "nationbot_josefa_ortiz_de_dominguez"
+   "avatar": "josefa_ortiz_de_dominguez"
   },
   {
-   "id": "nationbot_jose_de_san_martin",
+   "id": "nation_jose_de_san_martin",
    "name": "José de San Martín",
    "entity": "Argentina / Chile / Peru",
    "role": "nation",
@@ -1150,10 +1150,10 @@
    "lon": -56.8174,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Jos%C3%A9_de_San_Mart%C3%ADn",
-   "avatar": "nationbot_jose_de_san_martin"
+   "avatar": "jose_de_san_martin"
   },
   {
-   "id": "nationbot_policarpa_salavarrieta",
+   "id": "nation_policarpa_salavarrieta",
    "name": "Policarpa Salavarrieta",
    "entity": "New Granada / Colombia",
    "role": "nation",
@@ -1162,10 +1162,10 @@
    "lon": -74.5981,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Policarpa_Salavarrieta",
-   "avatar": "nationbot_policarpa_salavarrieta"
+   "avatar": "policarpa_salavarrieta"
   },
   {
-   "id": "nationbot_toussaint_louverture",
+   "id": "nation_toussaint_louverture",
    "name": "Toussaint Louverture",
    "entity": "Haiti",
    "role": "nation",
@@ -1174,10 +1174,10 @@
    "lon": -72.2,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Toussaint_Louverture",
-   "avatar": "nationbot_toussaint_louverture"
+   "avatar": "toussaint_louverture"
   },
   {
-   "id": "nationbot_gregoria_apaza",
+   "id": "nation_gregoria_apaza",
    "name": "Gregoria Apaza",
    "entity": "Aymara people / Upper Peru",
    "role": "nation",
@@ -1186,10 +1186,10 @@
    "lon": -68,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Gregoria_Apaza",
-   "avatar": "nationbot_gregoria_apaza"
+   "avatar": "gregoria_apaza"
   },
   {
-   "id": "nationbot_caupolican",
+   "id": "nation_caupolican",
    "name": "Caupolicán",
    "entity": "Mapuche people",
    "role": "nation",
@@ -1198,10 +1198,10 @@
    "lon": -73.3833,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Caupolic%C3%A1n",
-   "avatar": "nationbot_caupolican"
+   "avatar": "caupolican"
   },
   {
-   "id": "nationbot_manuela_saenz",
+   "id": "nation_manuela_saenz",
    "name": "Manuela Sáenz",
    "entity": "Ecuador / Gran Colombia",
    "role": "nation",
@@ -1210,10 +1210,10 @@
    "lon": -78.5125,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Manuela_S%C3%A1enz",
-   "avatar": "nationbot_manuela_saenz"
+   "avatar": "manuela_saenz"
   },
   {
-   "id": "nationbot_lautaro",
+   "id": "nation_lautaro",
    "name": "Lautaro",
    "entity": "Mapuche people",
    "role": "nation",
@@ -1222,10 +1222,10 @@
    "lon": -73.5,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Lautaro",
-   "avatar": "nationbot_lautaro"
+   "avatar": "lautaro"
   },
   {
-   "id": "nationbot_isabel_peron",
+   "id": "nation_isabel_peron",
    "name": "Isabel Perón",
    "entity": "Argentina",
    "role": "nation",
@@ -1234,10 +1234,10 @@
    "lon": -66.8558,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Isabel_Per%C3%B3n",
-   "avatar": "nationbot_isabel_peron"
+   "avatar": "isabel_peron"
   },
   {
-   "id": "nationbot_pontiac",
+   "id": "nation_pontiac",
    "name": "Pontiac",
    "entity": "Odawa people",
    "role": "nation",
@@ -1246,10 +1246,10 @@
    "lon": -82,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Pontiac_%28Odawa_leader%29",
-   "avatar": "nationbot_pontiac"
+   "avatar": "pontiac"
   },
   {
-   "id": "nationbot_violeta_chamorro",
+   "id": "nation_violeta_chamorro",
    "name": "Violeta Chamorro",
    "entity": "Nicaragua",
    "role": "nation",
@@ -1258,10 +1258,10 @@
    "lon": -85.8287,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Violeta_Chamorro",
-   "avatar": "nationbot_violeta_chamorro"
+   "avatar": "violeta_chamorro"
   },
   {
-   "id": "nationbot_powhatan",
+   "id": "nation_powhatan",
    "name": "Powhatan",
    "entity": "Powhatan Confederacy",
    "role": "nation",
@@ -1270,10 +1270,10 @@
    "lon": -76.8,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Powhatan",
-   "avatar": "nationbot_powhatan"
+   "avatar": "powhatan"
   },
   {
-   "id": "nationbot_wilma_mankiller",
+   "id": "nation_wilma_mankiller",
    "name": "Wilma Mankiller",
    "entity": "Cherokee Nation",
    "role": "nation",
@@ -1282,10 +1282,10 @@
    "lon": -94.9714,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Wilma_Mankiller",
-   "avatar": "nationbot_wilma_mankiller"
+   "avatar": "wilma_mankiller"
   },
   {
-   "id": "nationbot_benito_juarez",
+   "id": "nation_benito_juarez",
    "name": "Benito Juárez",
    "entity": "Mexico",
    "role": "nation",
@@ -1294,10 +1294,10 @@
    "lon": -103.2422,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Benito_Ju%C3%A1rez",
-   "avatar": "nationbot_benito_juarez"
+   "avatar": "benito_juarez"
   },
   {
-   "id": "nationbot_elizabeth_peratrovich",
+   "id": "nation_elizabeth_peratrovich",
    "name": "Elizabeth Peratrovich",
    "entity": "Tlingit / Alaska",
    "role": "nation",
@@ -1306,10 +1306,10 @@
    "lon": -132.9419,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Elizabeth_Peratrovich",
-   "avatar": "nationbot_elizabeth_peratrovich"
+   "avatar": "elizabeth_peratrovich"
   },
   {
-   "id": "nationbot_jose_marti",
+   "id": "nation_jose_marti",
    "name": "José Martí",
    "entity": "Cuba",
    "role": "nation",
@@ -1318,10 +1318,10 @@
    "lon": -82.3589,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Jos%C3%A9_Mart%C3%AD",
-   "avatar": "nationbot_jose_marti"
+   "avatar": "jose_marti"
   },
   {
-   "id": "nationbot_wu_zetian",
+   "id": "nation_wu_zetian",
    "name": "Wu Zetian",
    "entity": "China / Zhou dynasty",
    "role": "nation",
@@ -1330,10 +1330,10 @@
    "lon": 105.8398,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Wu_Zetian",
-   "avatar": "nationbot_wu_zetian"
+   "avatar": "wu_zetian"
   },
   {
-   "id": "nationbot_ashoka",
+   "id": "nation_ashoka",
    "name": "Ashoka",
    "entity": "Maurya Empire",
    "role": "nation",
@@ -1345,7 +1345,7 @@
    "avatar": "ashoka"
   },
   {
-   "id": "nationbot_emperatriz_suiko",
+   "id": "nation_emperatriz_suiko",
    "name": "Empress Suiko",
    "entity": "Japan",
    "role": "nation",
@@ -1354,10 +1354,10 @@
    "lon": 136,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Empress_Suiko",
-   "avatar": "nationbot_emperatriz_suiko"
+   "avatar": "emperatriz_suiko"
   },
   {
-   "id": "nationbot_chandragupta_maurya",
+   "id": "nation_chandragupta_maurya",
    "name": "Chandragupta Maurya",
    "entity": "Maurya Empire",
    "role": "nation",
@@ -1366,10 +1366,10 @@
    "lon": 85.144,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Chandragupta_Maurya",
-   "avatar": "nationbot_chandragupta_maurya"
+   "avatar": "chandragupta_maurya"
   },
   {
-   "id": "nationbot_emperatriz_genmei",
+   "id": "nation_emperatriz_genmei",
    "name": "Empress Genmei",
    "entity": "Japan",
    "role": "nation",
@@ -1378,10 +1378,10 @@
    "lon": 135.8048,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Empress_Genmei",
-   "avatar": "nationbot_emperatriz_genmei"
+   "avatar": "emperatriz_genmei"
   },
   {
-   "id": "nationbot_akbar",
+   "id": "nation_akbar",
    "name": "Akbar",
    "entity": "Mughal Empire",
    "role": "nation",
@@ -1390,10 +1390,10 @@
    "lon": 69.7339,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Akbar",
-   "avatar": "nationbot_akbar"
+   "avatar": "akbar"
   },
   {
-   "id": "nationbot_rani_durgavati",
+   "id": "nation_rani_durgavati",
    "name": "Rani Durgavati",
    "entity": "Gondwana / Central India",
    "role": "nation",
@@ -1405,7 +1405,7 @@
    "avatar": "rani_durgavati"
   },
   {
-   "id": "nationbot_babur",
+   "id": "nation_babur",
    "name": "Babur",
    "entity": "Mughal Empire",
    "role": "nation",
@@ -1414,10 +1414,10 @@
    "lon": 72.3506,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Babur",
-   "avatar": "nationbot_babur"
+   "avatar": "babur"
   },
   {
-   "id": "nationbot_ahilyabai_holkar",
+   "id": "nation_ahilyabai_holkar",
    "name": "Ahilyabai Holkar",
    "entity": "Maratha / Malwa",
    "role": "nation",
@@ -1426,10 +1426,10 @@
    "lon": 75.32,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Ahilyabai_Holkar",
-   "avatar": "nationbot_ahilyabai_holkar"
+   "avatar": "ahilyabai_holkar"
   },
   {
-   "id": "nationbot_ciro_el_grande",
+   "id": "nation_ciro_el_grande",
    "name": "Cyrus the Great",
    "entity": "Achaemenid Empire",
    "role": "nation",
@@ -1438,10 +1438,10 @@
    "lon": 52.4078,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Cyrus_the_Great",
-   "avatar": "nationbot_ciro_el_grande"
+   "avatar": "ciro_el_grande"
   },
   {
-   "id": "nationbot_kittur_chennamma",
+   "id": "nation_kittur_chennamma",
    "name": "Kittur Chennamma",
    "entity": "Kittur / India",
    "role": "nation",
@@ -1450,10 +1450,10 @@
    "lon": 74.55,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Kittur_Chennamma",
-   "avatar": "nationbot_kittur_chennamma"
+   "avatar": "kittur_chennamma"
   },
   {
-   "id": "nationbot_dario_i",
+   "id": "nation_dario_i",
    "name": "Darius the Great",
    "entity": "Achaemenid Empire",
    "role": "nation",
@@ -1465,7 +1465,7 @@
    "avatar": "darius_i"
   },
   {
-   "id": "nationbot_rani_lakshmibai",
+   "id": "nation_rani_lakshmibai",
    "name": "Lakshmibai, Rani of Jhansi",
    "entity": "Jhansi / India",
    "role": "nation",
@@ -1474,10 +1474,10 @@
    "lon": 83.0128,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Lakshmibai%2C_Rani_of_Jhansi",
-   "avatar": "nationbot_rani_lakshmibai"
+   "avatar": "rani_lakshmibai"
   },
   {
-   "id": "nationbot_suleiman_el_magnifico",
+   "id": "nation_suleiman_el_magnifico",
    "name": "Suleiman the Magnificent",
    "entity": "Ottoman Empire",
    "role": "nation",
@@ -1486,10 +1486,10 @@
    "lon": 39.7225,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Suleiman_the_Magnificent",
-   "avatar": "nationbot_suleiman_el_magnifico"
+   "avatar": "suleiman_el_magnifico"
   },
   {
-   "id": "nationbot_cleopatra_thea",
+   "id": "nation_cleopatra_thea",
    "name": "Cleopatra Thea",
    "entity": "Seleucid Empire",
    "role": "nation",
@@ -1498,10 +1498,10 @@
    "lon": 29,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Cleopatra_Thea",
-   "avatar": "nationbot_cleopatra_thea"
+   "avatar": "cleopatra_thea"
   },
   {
-   "id": "nationbot_saladino",
+   "id": "nation_saladino",
    "name": "Saladin",
    "entity": "Ayyubid Sultanate",
    "role": "nation",
@@ -1510,10 +1510,10 @@
    "lon": 43.6939,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Saladin",
-   "avatar": "nationbot_saladino"
+   "avatar": "saladino"
   },
   {
-   "id": "nationbot_zenobia",
+   "id": "nation_zenobia",
    "name": "Zenobia",
    "entity": "Palmyra",
    "role": "nation",
@@ -1522,10 +1522,10 @@
    "lon": 38.2698,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Zenobia",
-   "avatar": "nationbot_zenobia"
+   "avatar": "zenobia"
   },
   {
-   "id": "nationbot_ogedei_khan",
+   "id": "nation_ogedei_khan",
    "name": "Ögedei Khan",
    "entity": "Mongol Empire",
    "role": "nation",
@@ -1534,10 +1534,10 @@
    "lon": 109.1667,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/%C3%96gedei_Khan",
-   "avatar": "nationbot_ogedei_khan"
+   "avatar": "ogedei_khan"
   },
   {
-   "id": "nationbot_razia_sultan",
+   "id": "nation_razia_sultan",
    "name": "Razia Sultan",
    "entity": "Delhi Sultanate",
    "role": "nation",
@@ -1546,10 +1546,10 @@
    "lon": 79.12,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Razia_Sultan",
-   "avatar": "nationbot_razia_sultan"
+   "avatar": "razia_sultan"
   },
   {
-   "id": "nationbot_kublai_khan",
+   "id": "nation_kublai_khan",
    "name": "Kublai Khan",
    "entity": "Mongol Empire / Yuan",
    "role": "nation",
@@ -1558,10 +1558,10 @@
    "lon": 109.1667,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Kublai_Khan",
-   "avatar": "nationbot_kublai_khan"
+   "avatar": "kublai_khan"
   },
   {
-   "id": "nationbot_rudrama_devi",
+   "id": "nation_rudrama_devi",
    "name": "Rudrama Devi",
    "entity": "Kakatiya Kingdom",
    "role": "nation",
@@ -1570,10 +1570,10 @@
    "lon": 79.6,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Rudrama_Devi",
-   "avatar": "nationbot_rudrama_devi"
+   "avatar": "rudrama_devi"
   },
   {
-   "id": "nationbot_tokugawa_ieyasu",
+   "id": "nation_tokugawa_ieyasu",
    "name": "Tokugawa Ieyasu",
    "entity": "Japan",
    "role": "nation",
@@ -1582,10 +1582,10 @@
    "lon": 137.1589,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Tokugawa_Ieyasu",
-   "avatar": "nationbot_tokugawa_ieyasu"
+   "avatar": "tokugawa_ieyasu"
   },
   {
-   "id": "nationbot_rani_abbakka_chowta",
+   "id": "nation_rani_abbakka_chowta",
    "name": "Abbakka Chowta",
    "entity": "Ullal / Karnataka coast",
    "role": "nation",
@@ -1594,10 +1594,10 @@
    "lon": 74.86,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Abbakka_Chowta",
-   "avatar": "nationbot_rani_abbakka_chowta"
+   "avatar": "rani_abbakka_chowta"
   },
   {
-   "id": "nationbot_qin_shi_huang",
+   "id": "nation_qin_shi_huang",
    "name": "Qin Shi Huang",
    "entity": "China",
    "role": "nation",
@@ -1606,10 +1606,10 @@
    "lon": 114.4894,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Qin_Shi_Huang",
-   "avatar": "nationbot_qin_shi_huang"
+   "avatar": "qin_shi_huang"
   },
   {
-   "id": "nationbot_tarabai_bhonsle",
+   "id": "nation_tarabai_bhonsle",
    "name": "Tarabai",
    "entity": "Maratha Empire",
    "role": "nation",
@@ -1618,10 +1618,10 @@
    "lon": 74.13,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Tarabai",
-   "avatar": "nationbot_tarabai_bhonsle"
+   "avatar": "tarabai_bhonsle"
   },
   {
-   "id": "nationbot_sejong_el_grande",
+   "id": "nation_sejong_el_grande",
    "name": "Sejong the Great",
    "entity": "Joseon / Korea",
    "role": "nation",
@@ -1630,10 +1630,10 @@
    "lon": 126.9703,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Sejong_the_Great",
-   "avatar": "nationbot_sejong_el_grande"
+   "avatar": "sejong_el_grande"
   },
   {
-   "id": "nationbot_chand_bibi",
+   "id": "nation_chand_bibi",
    "name": "Chand Bibi",
    "entity": "Ahmadnagar and Bijapur",
    "role": "nation",
@@ -1642,10 +1642,10 @@
    "lon": 74.7333,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Chand_Bibi",
-   "avatar": "nationbot_chand_bibi"
+   "avatar": "chand_bibi"
   },
   {
-   "id": "nationbot_suryavarman_ii",
+   "id": "nation_suryavarman_ii",
    "name": "Suryavarman II",
    "entity": "Khmer Empire",
    "role": "nation",
@@ -1654,10 +1654,10 @@
    "lon": 103.8333,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Suryavarman_II",
-   "avatar": "nationbot_suryavarman_ii"
+   "avatar": "suryavarman_ii"
   },
   {
-   "id": "nationbot_didda",
+   "id": "nation_didda",
    "name": "Didda",
    "entity": "Kashmir",
    "role": "nation",
@@ -1666,10 +1666,10 @@
    "lon": 74.8,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Didda",
-   "avatar": "nationbot_didda"
+   "avatar": "didda"
   },
   {
-   "id": "nationbot_jayavarman_vii",
+   "id": "nation_jayavarman_vii",
    "name": "Jayavarman VII",
    "entity": "Khmer Empire",
    "role": "nation",
@@ -1678,10 +1678,10 @@
    "lon": 103.8333,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Jayavarman_VII",
-   "avatar": "nationbot_jayavarman_vii"
+   "avatar": "jayavarman_vii"
   },
   {
-   "id": "nationbot_seondeok_de_silla",
+   "id": "nation_seondeok_de_silla",
    "name": "Queen Seondeok of Silla",
    "entity": "Silla Kingdom / Korea",
    "role": "nation",
@@ -1690,10 +1690,10 @@
    "lon": 129.42,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Queen_Seondeok_of_Silla",
-   "avatar": "nationbot_seondeok_de_silla"
+   "avatar": "seondeok_de_silla"
   },
   {
-   "id": "nationbot_bayinnaung",
+   "id": "nation_bayinnaung",
    "name": "Bayinnaung",
    "entity": "Toungoo Empire / Burma",
    "role": "nation",
@@ -1702,10 +1702,10 @@
    "lon": 96.4333,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Bayinnaung",
-   "avatar": "nationbot_bayinnaung"
+   "avatar": "bayinnaung"
   },
   {
-   "id": "nationbot_lu_zhi",
+   "id": "nation_lu_zhi",
    "name": "Empress Lü",
    "entity": "China / Han dynasty",
    "role": "nation",
@@ -1714,10 +1714,10 @@
    "lon": 116.0793,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Empress_L%C3%BC",
-   "avatar": "nationbot_lu_zhi"
+   "avatar": "lu_zhi"
   },
   {
-   "id": "nationbot_harun_al_rashid",
+   "id": "nation_harun_al_rashid",
    "name": "Harun al-Rashid",
    "entity": "Abbasid Caliphate",
    "role": "nation",
@@ -1726,10 +1726,10 @@
    "lon": 51.4344,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Harun_al-Rashid",
-   "avatar": "nationbot_harun_al_rashid"
+   "avatar": "harun_al_rashid"
   },
   {
-   "id": "nationbot_lady_trieu",
+   "id": "nation_lady_trieu",
    "name": "Lady Triệu",
    "entity": "Vietnam",
    "role": "nation",
@@ -1738,10 +1738,10 @@
    "lon": 105.9,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Lady_Tri%E1%BB%87u",
-   "avatar": "nationbot_lady_trieu"
+   "avatar": "lady_trieu"
   },
   {
-   "id": "nationbot_hammurabi",
+   "id": "nation_hammurabi",
    "name": "Hammurabi",
    "entity": "Babylon",
    "role": "nation",
@@ -1750,10 +1750,10 @@
    "lon": 44.5,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Hammurabi",
-   "avatar": "nationbot_hammurabi"
+   "avatar": "hammurabi"
   },
   {
-   "id": "nationbot_trung_trac",
+   "id": "nation_trung_trac",
    "name": "Trưng Trắc",
    "entity": "Vietnam",
    "role": "nation",
@@ -1762,10 +1762,10 @@
    "lon": 108,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Tr%C6%B0ng_sisters",
-   "avatar": "nationbot_trung_trac"
+   "avatar": "trung_trac"
   },
   {
-   "id": "nationbot_asurbanipal",
+   "id": "nation_asurbanipal",
    "name": "Ashurbanipal",
    "entity": "Neo-Assyrian Empire",
    "role": "nation",
@@ -1774,10 +1774,10 @@
    "lon": 43.15,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Ashurbanipal",
-   "avatar": "nationbot_asurbanipal"
+   "avatar": "asurbanipal"
   },
   {
-   "id": "nationbot_trung_nhi",
+   "id": "nation_trung_nhi",
    "name": "Trưng Nhị",
    "entity": "Vietnam",
    "role": "nation",
@@ -1786,10 +1786,10 @@
    "lon": 108,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Tr%C6%B0ng_sisters",
-   "avatar": "nationbot_trung_nhi"
+   "avatar": "trung_nhi"
   },
   {
-   "id": "nationbot_rajaraja_i",
+   "id": "nation_rajaraja_i",
    "name": "Rajaraja I",
    "entity": "Chola Empire",
    "role": "nation",
@@ -1798,10 +1798,10 @@
    "lon": 79.1,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Rajaraja_I",
-   "avatar": "nationbot_rajaraja_i"
+   "avatar": "rajaraja_i"
   },
   {
-   "id": "nationbot_suriyothai",
+   "id": "nation_suriyothai",
    "name": "Suriyothai",
    "entity": "Ayutthaya / Thailand",
    "role": "nation",
@@ -1810,10 +1810,10 @@
    "lon": 100.5761,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Suriyothai",
-   "avatar": "nationbot_suriyothai"
+   "avatar": "suriyothai"
   },
   {
-   "id": "nationbot_ranjit_singh",
+   "id": "nation_ranjit_singh",
    "name": "Ranjit Singh",
    "entity": "Sikh Empire",
    "role": "nation",
@@ -1822,10 +1822,10 @@
    "lon": 74.1833,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Ranjit_Singh",
-   "avatar": "nationbot_ranjit_singh"
+   "avatar": "ranjit_singh"
   },
   {
-   "id": "nationbot_tribhuwana_wijayatunggadewi",
+   "id": "nation_tribhuwana_wijayatunggadewi",
    "name": "Tribhuwana Wijayatunggadewi",
    "entity": "Majapahit / Java",
    "role": "nation",
@@ -1834,10 +1834,10 @@
    "lon": 112.4,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Tribhuwana_Wijayatunggadewi",
-   "avatar": "nationbot_tribhuwana_wijayatunggadewi"
+   "avatar": "tribhuwana_wijayatunggadewi"
   },
   {
-   "id": "nationbot_prithvi_narayan_shah",
+   "id": "nation_prithvi_narayan_shah",
    "name": "Prithvi Narayan Shah",
    "entity": "Gorkha Kingdom / Nepal",
    "role": "nation",
@@ -1846,10 +1846,10 @@
    "lon": 84.6833,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Prithvi_Narayan_Shah",
-   "avatar": "nationbot_prithvi_narayan_shah"
+   "avatar": "prithvi_narayan_shah"
   },
   {
-   "id": "nationbot_toregene_khatun",
+   "id": "nation_toregene_khatun",
    "name": "Töregene Khatun",
    "entity": "Mongol Empire",
    "role": "nation",
@@ -1858,10 +1858,10 @@
    "lon": 116.39,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/T%C3%B6regene_Khatun",
-   "avatar": "nationbot_toregene_khatun"
+   "avatar": "toregene_khatun"
   },
   {
-   "id": "nationbot_tipu_sultan",
+   "id": "nation_tipu_sultan",
    "name": "Tipu Sultan",
    "entity": "Kingdom of Mysore",
    "role": "nation",
@@ -1873,7 +1873,7 @@
    "avatar": "tipu_sultan"
   },
   {
-   "id": "nationbot_mandukhai_khatun",
+   "id": "nation_mandukhai_khatun",
    "name": "Mandukhai",
    "entity": "Mongolia",
    "role": "nation",
@@ -1882,10 +1882,10 @@
    "lon": 105,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Mandukhai",
-   "avatar": "nationbot_mandukhai_khatun"
+   "avatar": "mandukhai_khatun"
   },
   {
-   "id": "nationbot_shivaji",
+   "id": "nation_shivaji",
    "name": "Shivaji",
    "entity": "Maratha Empire",
    "role": "nation",
@@ -1894,10 +1894,10 @@
    "lon": 73.859,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Shivaji",
-   "avatar": "nationbot_shivaji"
+   "avatar": "shivaji"
   },
   {
-   "id": "nationbot_sorghaghtani_beki",
+   "id": "nation_sorghaghtani_beki",
    "name": "Sorghaghtani Beki",
    "entity": "Mongol Empire",
    "role": "nation",
@@ -1906,10 +1906,10 @@
    "lon": 109.1667,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Sorghaghtani_Beki",
-   "avatar": "nationbot_sorghaghtani_beki"
+   "avatar": "sorghaghtani_beki"
   },
   {
-   "id": "nationbot_mustafa_kemal_ataturk",
+   "id": "nation_mustafa_kemal_ataturk",
    "name": "Mustafa Kemal Atatürk",
    "entity": "Turkey",
    "role": "nation",
@@ -1918,10 +1918,10 @@
    "lon": 32.86,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Mustafa_Kemal_Atat%C3%BCrk",
-   "avatar": "nationbot_mustafa_kemal_ataturk"
+   "avatar": "mustafa_kemal_ataturk"
   },
   {
-   "id": "nationbot_nur_jahan",
+   "id": "nation_nur_jahan",
    "name": "Nur Jahan",
    "entity": "Mughal Empire",
    "role": "nation",
@@ -1930,10 +1930,10 @@
    "lon": 65.7159,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Nur_Jahan",
-   "avatar": "nationbot_nur_jahan"
+   "avatar": "nur_jahan"
   },
   {
-   "id": "nationbot_timur",
+   "id": "nation_timur",
    "name": "Timur",
    "entity": "Timurid Empire",
    "role": "nation",
@@ -1942,10 +1942,10 @@
    "lon": 66.8333,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Timur",
-   "avatar": "nationbot_timur"
+   "avatar": "timur"
   },
   {
-   "id": "nationbot_emperatriz_viuda_cixi",
+   "id": "nation_emperatriz_viuda_cixi",
    "name": "Empress Dowager Cixi",
    "entity": "China / Qing dynasty",
    "role": "nation",
@@ -1954,10 +1954,10 @@
    "lon": 116.4075,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Empress_Dowager_Cixi",
-   "avatar": "nationbot_emperatriz_viuda_cixi"
+   "avatar": "emperatriz_viuda_cixi"
   },
   {
-   "id": "nationbot_zhu_yuanzhang",
+   "id": "nation_zhu_yuanzhang",
    "name": "Hongwu Emperor",
    "entity": "China / Ming dynasty",
    "role": "nation",
@@ -1966,10 +1966,10 @@
    "lon": 117.5571,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Hongwu_Emperor",
-   "avatar": "nationbot_zhu_yuanzhang"
+   "avatar": "zhu_yuanzhang"
   },
   {
-   "id": "nationbot_sultanah_safiatuddin",
+   "id": "nation_sultanah_safiatuddin",
    "name": "Taj ul-Alam",
    "entity": "Sultanate of Aceh",
    "role": "nation",
@@ -1978,10 +1978,10 @@
    "lon": 95.3167,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Taj_ul-Alam",
-   "avatar": "nationbot_sultanah_safiatuddin"
+   "avatar": "sultanah_safiatuddin"
   },
   {
-   "id": "nationbot_kanishka",
+   "id": "nation_kanishka",
    "name": "Kanishka",
    "entity": "Kushan Empire",
    "role": "nation",
@@ -1993,7 +1993,7 @@
    "avatar": "kanishka"
   },
   {
-   "id": "nationbot_blanca_de_castilla",
+   "id": "nation_blanca_de_castilla",
    "name": "Blanche of Castile",
    "entity": "France",
    "role": "nation",
@@ -2002,10 +2002,10 @@
    "lon": -4.5333,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Blanche_of_Castile",
-   "avatar": "nationbot_blanca_de_castilla"
+   "avatar": "blanca_de_castilla"
   },
   {
-   "id": "nationbot_pericles",
+   "id": "nation_pericles",
    "name": "Pericles",
    "entity": "Athens",
    "role": "nation",
@@ -2014,10 +2014,10 @@
    "lon": 23.7281,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Pericles",
-   "avatar": "nationbot_pericles"
+   "avatar": "pericles"
   },
   {
-   "id": "nationbot_olga_de_kiev",
+   "id": "nation_olga_de_kiev",
    "name": "Olga of Kiev",
    "entity": "Kievan Rus'",
    "role": "nation",
@@ -2026,10 +2026,10 @@
    "lon": 28.3333,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Olga_of_Kiev",
-   "avatar": "nationbot_olga_de_kiev"
+   "avatar": "olga_de_kiev"
   },
   {
-   "id": "nationbot_augusto",
+   "id": "nation_augusto",
    "name": "Augustus",
    "entity": "Roman Empire",
    "role": "nation",
@@ -2038,10 +2038,10 @@
    "lon": 12.4828,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Augustus",
-   "avatar": "nationbot_augusto"
+   "avatar": "augusto"
   },
   {
-   "id": "nationbot_leonor_de_aquitania",
+   "id": "nation_leonor_de_aquitania",
    "name": "Eleanor of Aquitaine",
    "entity": "Aquitaine / France",
    "role": "nation",
@@ -2050,10 +2050,10 @@
    "lon": 0.3353,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Eleanor_of_Aquitaine",
-   "avatar": "nationbot_leonor_de_aquitania"
+   "avatar": "leonor_de_aquitania"
   },
   {
-   "id": "nationbot_carlomagno",
+   "id": "nation_carlomagno",
    "name": "Charlemagne",
    "entity": "Carolingian Empire",
    "role": "nation",
@@ -2062,10 +2062,10 @@
    "lon": 6.02,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Charlemagne",
-   "avatar": "nationbot_carlomagno"
+   "avatar": "carlomagno"
   },
   {
-   "id": "nationbot_isabel_i_de_castilla",
+   "id": "nation_isabel_i_de_castilla",
    "name": "Isabella I of Castile",
    "entity": "Castile / Spain",
    "role": "nation",
@@ -2074,10 +2074,10 @@
    "lon": -4.9957,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Isabella_I_of_Castile",
-   "avatar": "nationbot_isabel_i_de_castilla"
+   "avatar": "isabel_i_de_castilla"
   },
   {
-   "id": "nationbot_alfredo_el_grande",
+   "id": "nation_alfredo_el_grande",
    "name": "Alfred the Great",
    "entity": "Wessex / England",
    "role": "nation",
@@ -2086,10 +2086,10 @@
    "lon": -1.427,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Alfred_the_Great",
-   "avatar": "nationbot_alfredo_el_grande"
+   "avatar": "alfredo_el_grande"
   },
   {
-   "id": "nationbot_isabel_i_de_inglaterra",
+   "id": "nation_isabel_i_de_inglaterra",
    "name": "Elizabeth I",
    "entity": "England",
    "role": "nation",
@@ -2098,10 +2098,10 @@
    "lon": -0.0067,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Elizabeth_I",
-   "avatar": "nationbot_isabel_i_de_inglaterra"
+   "avatar": "isabel_i_de_inglaterra"
   },
   {
-   "id": "nationbot_guillermo_el_conquistador",
+   "id": "nation_guillermo_el_conquistador",
    "name": "William the Conqueror",
    "entity": "Normandy and England",
    "role": "nation",
@@ -2113,7 +2113,7 @@
    "avatar": "william_the_conqueror"
   },
   {
-   "id": "nationbot_catalina_la_grande",
+   "id": "nation_catalina_la_grande",
    "name": "Catherine the Great",
    "entity": "Russian Empire",
    "role": "nation",
@@ -2122,10 +2122,10 @@
    "lon": 14.5553,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Catherine_the_Great",
-   "avatar": "nationbot_catalina_la_grande"
+   "avatar": "catalina_la_grande"
   },
   {
-   "id": "nationbot_luis_xiv",
+   "id": "nation_luis_xiv",
    "name": "Louis XIV",
    "entity": "France",
    "role": "nation",
@@ -2134,10 +2134,10 @@
    "lon": 2.0964,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Louis_XIV",
-   "avatar": "nationbot_luis_xiv"
+   "avatar": "luis_xiv"
   },
   {
-   "id": "nationbot_maria_teresa_de_austria",
+   "id": "nation_maria_teresa_de_austria",
    "name": "Maria Theresa",
    "entity": "Habsburg Monarchy",
    "role": "nation",
@@ -2146,10 +2146,10 @@
    "lon": 16.3725,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Maria_Theresa",
-   "avatar": "nationbot_maria_teresa_de_austria"
+   "avatar": "maria_teresa_de_austria"
   },
   {
-   "id": "nationbot_pedro_el_grande",
+   "id": "nation_pedro_el_grande",
    "name": "Peter the Great",
    "entity": "Russia",
    "role": "nation",
@@ -2158,10 +2158,10 @@
    "lon": 37.6175,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Peter_the_Great",
-   "avatar": "nationbot_pedro_el_grande"
+   "avatar": "pedro_el_grande"
   },
   {
-   "id": "nationbot_margarita_i_de_dinamarca",
+   "id": "nation_margarita_i_de_dinamarca",
    "name": "Margaret I of Denmark",
    "entity": "Kalmar Union",
    "role": "nation",
@@ -2170,10 +2170,10 @@
    "lon": 12.3102,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Margaret_I_of_Denmark",
-   "avatar": "nationbot_margarita_i_de_dinamarca"
+   "avatar": "margarita_i_de_dinamarca"
   },
   {
-   "id": "nationbot_ivan_iv_de_rusia",
+   "id": "nation_ivan_iv_de_rusia",
    "name": "Ivan the Terrible",
    "entity": "Russia",
    "role": "nation",
@@ -2182,10 +2182,10 @@
    "lon": 37.6666,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Ivan_the_Terrible",
-   "avatar": "nationbot_ivan_iv_de_rusia"
+   "avatar": "ivan_iv_de_rusia"
   },
   {
-   "id": "nationbot_irene_de_atenas",
+   "id": "nation_irene_de_atenas",
    "name": "Irene of Athens",
    "entity": "Byzantine Empire",
    "role": "nation",
@@ -2194,10 +2194,10 @@
    "lon": 23.7281,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Irene_of_Athens",
-   "avatar": "nationbot_irene_de_atenas"
+   "avatar": "irene_de_atenas"
   },
   {
-   "id": "nationbot_skanderbeg",
+   "id": "nation_skanderbeg",
    "name": "Skanderbeg",
    "entity": "Albania",
    "role": "nation",
@@ -2206,10 +2206,10 @@
    "lon": 20.2975,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Skanderbeg",
-   "avatar": "nationbot_skanderbeg"
+   "avatar": "skanderbeg"
   },
   {
-   "id": "nationbot_teodora",
+   "id": "nation_teodora",
    "name": "Theodora",
    "entity": "Byzantine Empire",
    "role": "nation",
@@ -2218,10 +2218,10 @@
    "lon": 35,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Theodora_%28wife_of_Justinian_I%29",
-   "avatar": "nationbot_teodora"
+   "avatar": "teodora"
   },
   {
-   "id": "nationbot_juan_iii_sobieski",
+   "id": "nation_juan_iii_sobieski",
    "name": "John III Sobieski",
    "entity": "Poland-Lithuania",
    "role": "nation",
@@ -2233,7 +2233,7 @@
    "avatar": "john_iii_sobieski"
   },
   {
-   "id": "nationbot_amalasunta",
+   "id": "nation_amalasunta",
    "name": "Amalasuintha",
    "entity": "Ostrogothic Kingdom / Italy",
    "role": "nation",
@@ -2242,10 +2242,10 @@
    "lon": 12.2017,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Amalasuintha",
-   "avatar": "nationbot_amalasunta"
+   "avatar": "amalasunta"
   },
   {
-   "id": "nationbot_gustavo_ii_adolfo",
+   "id": "nation_gustavo_ii_adolfo",
    "name": "Gustavus Adolphus",
    "entity": "Sweden",
    "role": "nation",
@@ -2254,10 +2254,10 @@
    "lon": 18.0717,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Gustavus_Adolphus",
-   "avatar": "nationbot_gustavo_ii_adolfo"
+   "avatar": "gustavo_ii_adolfo"
   },
   {
-   "id": "nationbot_brunilda_de_austrasia",
+   "id": "nation_brunilda_de_austrasia",
    "name": "Brunhilda of Austrasia",
    "entity": "Austrasia / Franks",
    "role": "nation",
@@ -2266,10 +2266,10 @@
    "lon": -4.0333,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Brunhilda_of_Austrasia",
-   "avatar": "nationbot_brunilda_de_austrasia"
+   "avatar": "brunilda_de_austrasia"
   },
   {
-   "id": "nationbot_harald_bluetooth",
+   "id": "nation_harald_bluetooth",
    "name": "Harald Bluetooth",
    "entity": "Denmark",
    "role": "nation",
@@ -2278,10 +2278,10 @@
    "lon": 10,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Harald_Bluetooth",
-   "avatar": "nationbot_harald_bluetooth"
+   "avatar": "harald_bluetooth"
   },
   {
-   "id": "nationbot_jadwiga_de_polonia",
+   "id": "nation_jadwiga_de_polonia",
    "name": "Jadwiga of Poland",
    "entity": "Poland",
    "role": "nation",
@@ -2290,10 +2290,10 @@
    "lon": 19.05,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Jadwiga_of_Poland",
-   "avatar": "nationbot_jadwiga_de_polonia"
+   "avatar": "jadwiga_de_polonia"
   },
   {
-   "id": "nationbot_otto_von_bismarck",
+   "id": "nation_otto_von_bismarck",
    "name": "Otto von Bismarck",
    "entity": "Prussia / Germany",
    "role": "nation",
@@ -2302,10 +2302,10 @@
    "lon": 12.0397,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Otto_von_Bismarck",
-   "avatar": "nationbot_otto_von_bismarck"
+   "avatar": "otto_von_bismarck"
   },
   {
-   "id": "nationbot_juana_de_arco",
+   "id": "nation_juana_de_arco",
    "name": "Joan of Arc",
    "entity": "France",
    "role": "nation",
@@ -2314,10 +2314,10 @@
    "lon": 5.675,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Joan_of_Arc",
-   "avatar": "nationbot_juana_de_arco"
+   "avatar": "juana_de_arco"
   },
   {
-   "id": "nationbot_giuseppe_garibaldi",
+   "id": "nation_giuseppe_garibaldi",
    "name": "Giuseppe Garibaldi",
    "entity": "Italy",
    "role": "nation",
@@ -2326,10 +2326,10 @@
    "lon": 7.2683,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Giuseppe_Garibaldi",
-   "avatar": "nationbot_giuseppe_garibaldi"
+   "avatar": "giuseppe_garibaldi"
   },
   {
-   "id": "nationbot_cristina_de_suecia",
+   "id": "nation_cristina_de_suecia",
    "name": "Christina, Queen of Sweden",
    "entity": "Sweden",
    "role": "nation",
@@ -2338,22 +2338,22 @@
    "lon": 18.0686,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Christina%2C_Queen_of_Sweden",
-   "avatar": "nationbot_cristina_de_suecia"
+   "avatar": "cristina_de_suecia"
   },
   {
-   "id": "nationbot_federico_el_grande",
+   "id": "nation_federico_el_grande",
    "name": "Frederick the Great",
-   "entity": "Prusia",
+   "entity": "Prussia",
    "role": "nation",
    "region": "europe",
    "lat": 52.5167,
    "lon": 13.3833,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Frederick_the_Great",
-   "avatar": "nationbot_federico_el_grande"
+   "avatar": "federico_el_grande"
   },
   {
-   "id": "nationbot_catalina_de_medici",
+   "id": "nation_catalina_de_medici",
    "name": "Catherine de' Medici",
    "entity": "France",
    "role": "nation",
@@ -2362,10 +2362,10 @@
    "lon": 11.2542,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Catherine_de%27_Medici",
-   "avatar": "nationbot_catalina_de_medici"
+   "avatar": "catalina_de_medici"
   },
   {
-   "id": "nationbot_sviatoslav_i_de_kiev",
+   "id": "nation_sviatoslav_i_de_kiev",
    "name": "Sviatoslav I",
    "entity": "Kievan Rus'",
    "role": "nation",
@@ -2374,10 +2374,10 @@
    "lon": 30.5236,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Sviatoslav_I",
-   "avatar": "nationbot_sviatoslav_i_de_kiev"
+   "avatar": "sviatoslav_i_de_kiev"
   },
   {
-   "id": "nationbot_matilde_de_inglaterra",
+   "id": "nation_matilde_de_inglaterra",
    "name": "Empress Matilda",
    "entity": "England",
    "role": "nation",
@@ -2386,10 +2386,10 @@
    "lon": -1.276,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Empress_Matilda",
-   "avatar": "nationbot_matilde_de_inglaterra"
+   "avatar": "matilde_de_inglaterra"
   },
   {
-   "id": "nationbot_stefan_dusan",
+   "id": "nation_stefan_dusan",
    "name": "Stefan Dušan",
    "entity": "Serbian Empire",
    "role": "nation",
@@ -2398,10 +2398,10 @@
    "lon": 20.9333,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Stefan_Du%C5%A1an",
-   "avatar": "nationbot_stefan_dusan"
+   "avatar": "stefan_dusan"
   },
   {
-   "id": "nationbot_matilde_de_toscana",
+   "id": "nation_matilde_de_toscana",
    "name": "Matilda of Tuscany",
    "entity": "Tuscany / Italy",
    "role": "nation",
@@ -2410,10 +2410,10 @@
    "lon": 10.7911,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Matilda_of_Tuscany",
-   "avatar": "nationbot_matilde_de_toscana"
+   "avatar": "matilde_de_toscana"
   },
   {
-   "id": "nationbot_canuto_el_grande",
+   "id": "nation_canuto_el_grande",
    "name": "Cnut",
    "entity": "North Sea / England and Denmark",
    "role": "nation",
@@ -2422,10 +2422,10 @@
    "lon": 10,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Cnut",
-   "avatar": "nationbot_canuto_el_grande"
+   "avatar": "canuto_el_grande"
   },
   {
-   "id": "nationbot_fredegunda",
+   "id": "nation_fredegunda",
    "name": "Fredegund",
    "entity": "Frankish Kingdom",
    "role": "nation",
@@ -2434,10 +2434,10 @@
    "lon": 2.57,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Fredegund",
-   "avatar": "nationbot_fredegunda"
+   "avatar": "fredegunda"
   },
   {
-   "id": "nationbot_carlos_v",
+   "id": "nation_carlos_v",
    "name": "Charles V, Holy Roman Emperor",
    "entity": "Holy Roman Empire and Spain",
    "role": "nation",
@@ -2449,7 +2449,7 @@
    "avatar": "charles_v"
   },
   {
-   "id": "nationbot_grace_o_malley",
+   "id": "nation_grace_o_malley",
    "name": "Grace O'Malley",
    "entity": "Ireland",
    "role": "nation",
@@ -2458,10 +2458,10 @@
    "lon": -9.25,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Grace_O%27Malley",
-   "avatar": "nationbot_grace_o_malley"
+   "avatar": "grace_o_malley"
   },
   {
-   "id": "nationbot_esteban_el_grande_de_moldavia",
+   "id": "nation_esteban_el_grande_de_moldavia",
    "name": "Stephen the Great",
    "entity": "Moldavia",
    "role": "nation",
@@ -2470,10 +2470,10 @@
    "lon": 26.818,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Stephen_the_Great",
-   "avatar": "nationbot_esteban_el_grande_de_moldavia"
+   "avatar": "esteban_el_grande_de_moldavia"
   },
   {
-   "id": "nationbot_kaahumanu",
+   "id": "nation_kaahumanu",
    "name": "Kaʻahumanu",
    "entity": "Kingdom of Hawaii",
    "role": "nation",
@@ -2482,10 +2482,10 @@
    "lon": -156.2682,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Ka%CA%BBahumanu",
-   "avatar": "nationbot_kaahumanu"
+   "avatar": "kaahumanu"
   },
   {
-   "id": "nationbot_kamehameha_i",
+   "id": "nation_kamehameha_i",
    "name": "Kamehameha I",
    "entity": "Kingdom of Hawaii",
    "role": "nation",
@@ -2494,10 +2494,10 @@
    "lon": -155.8767,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Kamehameha_I",
-   "avatar": "nationbot_kamehameha_i"
+   "avatar": "kamehameha_i"
   },
   {
-   "id": "nationbot_liliuokalani",
+   "id": "nation_liliuokalani",
    "name": "Liliʻuokalani",
    "entity": "Kingdom of Hawaii",
    "role": "nation",
@@ -2506,10 +2506,10 @@
    "lon": -157.8572,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Lili%CA%BBuokalani",
-   "avatar": "nationbot_liliuokalani"
+   "avatar": "liliuokalani"
   },
   {
-   "id": "nationbot_hongi_hika",
+   "id": "nation_hongi_hika",
    "name": "Hongi Hika",
    "entity": "Māori / Ngāpuhi",
    "role": "nation",
@@ -2518,10 +2518,10 @@
    "lon": 173.7997,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Hongi_Hika",
-   "avatar": "nationbot_hongi_hika"
+   "avatar": "hongi_hika"
   },
   {
-   "id": "nationbot_pomare_iv",
+   "id": "nation_pomare_iv",
    "name": "Pōmare IV",
    "entity": "Tahiti",
    "role": "nation",
@@ -2530,10 +2530,10 @@
    "lon": -149.5689,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/P%C5%8Dmare_IV",
-   "avatar": "nationbot_pomare_iv"
+   "avatar": "pomare_iv"
   },
   {
-   "id": "nationbot_te_rauparaha",
+   "id": "nation_te_rauparaha",
    "name": "Te Rauparaha",
    "entity": "Māori / Ngāti Toa",
    "role": "nation",
@@ -2542,10 +2542,10 @@
    "lon": 175.15,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Te_Rauparaha",
-   "avatar": "nationbot_te_rauparaha"
+   "avatar": "te_rauparaha"
   },
   {
-   "id": "nationbot_salote_tupou_iii",
+   "id": "nation_salote_tupou_iii",
    "name": "Sālote Tupou III",
    "entity": "Tonga",
    "role": "nation",
@@ -2554,10 +2554,10 @@
    "lon": -175.2018,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/S%C4%81lote_Tupou_III",
-   "avatar": "nationbot_salote_tupou_iii"
+   "avatar": "salote_tupou_iii"
   },
   {
-   "id": "nationbot_potatau_te_wherowhero",
+   "id": "nation_potatau_te_wherowhero",
    "name": "Pōtatau Te Wherowhero",
    "entity": "Māori / Waikato",
    "role": "nation",
@@ -2566,10 +2566,10 @@
    "lon": 175.208,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/P%C5%8Dtatau_Te_Wherowhero",
-   "avatar": "nationbot_potatau_te_wherowhero"
+   "avatar": "potatau_te_wherowhero"
   },
   {
-   "id": "nationbot_te_puea_herangi",
+   "id": "nation_te_puea_herangi",
    "name": "Te Puea Hērangi",
    "entity": "Māori / Waikato",
    "role": "nation",
@@ -2578,10 +2578,10 @@
    "lon": 175.4,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Te_Puea_H%C4%93rangi",
-   "avatar": "nationbot_te_puea_herangi"
+   "avatar": "te_puea_herangi"
   },
   {
-   "id": "nationbot_tamati_waka_nene",
+   "id": "nation_tamati_waka_nene",
    "name": "Tāmati Wāka Nene",
    "entity": "Māori / Ngāpuhi",
    "role": "nation",
@@ -2590,10 +2590,10 @@
    "lon": 173.8098,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/T%C4%81mati_W%C4%81ka_Nene",
-   "avatar": "nationbot_tamati_waka_nene"
+   "avatar": "tamati_waka_nene"
   },
   {
-   "id": "nationbot_whina_cooper",
+   "id": "nation_whina_cooper",
    "name": "Whina Cooper",
    "entity": "Māori / Aotearoa",
    "role": "nation",
@@ -2602,10 +2602,10 @@
    "lon": 173.42,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Whina_Cooper",
-   "avatar": "nationbot_whina_cooper"
+   "avatar": "whina_cooper"
   },
   {
-   "id": "nationbot_pemulwuy",
+   "id": "nation_pemulwuy",
    "name": "Pemulwuy",
    "entity": "Bidjigal people / Australia",
    "role": "nation",
@@ -2614,10 +2614,10 @@
    "lon": 151.1833,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Pemulwuy",
-   "avatar": "nationbot_pemulwuy"
+   "avatar": "pemulwuy"
   },
   {
-   "id": "nationbot_makea_takau_ariki",
+   "id": "nation_makea_takau_ariki",
    "name": "Makea Takau Ariki",
    "entity": "Rarotonga / Cook Islands",
    "role": "nation",
@@ -2626,10 +2626,10 @@
    "lon": -159.771,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Makea_Takau_Ariki",
-   "avatar": "nationbot_makea_takau_ariki"
+   "avatar": "makea_takau_ariki"
   },
   {
-   "id": "nationbot_yagan",
+   "id": "nation_yagan",
    "name": "Yagan",
    "entity": "Noongar people / Australia",
    "role": "nation",
@@ -2638,10 +2638,10 @@
    "lon": 121,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Yagan",
-   "avatar": "nationbot_yagan"
+   "avatar": "yagan"
   },
   {
-   "id": "nationbot_maria_angata",
+   "id": "nation_maria_angata",
    "name": "Angata",
    "entity": "Rapa Nui",
    "role": "nation",
@@ -2650,10 +2650,10 @@
    "lon": -109.35,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Angata",
-   "avatar": "nationbot_maria_angata"
+   "avatar": "maria_angata"
   },
   {
-   "id": "nationbot_george_tupou_i",
+   "id": "nation_george_tupou_i",
    "name": "George Tupou I",
    "entity": "Tonga",
    "role": "nation",
@@ -2662,7 +2662,7 @@
    "lon": -174.3667,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/George_Tupou_I",
-   "avatar": "nationbot_george_tupou_i"
+   "avatar": "george_tupou_i"
   },
   {
    "id": "tribe_xiongnu",

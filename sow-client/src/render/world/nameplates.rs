@@ -89,6 +89,8 @@ pub(crate) struct NameplateSystem {
     prepared_emotes: [sow_render::text::PreparedText; 4],
     emote_text_style_key: Option<u32>,
     safe_area: [f32; 4],
+    /// Campaign portraits of this frame's full plates; the asset loader requests them next frame.
+    avatar_wants: Vec<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -161,8 +163,6 @@ impl AvatarPlan {
 #[derive(Clone, Copy)]
 enum AvatarContent {
     Sprite([f32; 4]),
-    /// Cell in the bot portrait atlas (`sow_data::geo_entities::bot_portrait_index`).
-    BotPortrait(usize),
     None,
 }
 
@@ -391,6 +391,10 @@ struct EmoteBubbleLayout {
 }
 
 impl NameplateSystem {
+    pub(crate) fn take_avatar_wants(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.avatar_wants)
+    }
+
     pub(crate) fn reset(&mut self) {
         let texts = std::mem::take(&mut self.emote_texts);
         let safe_area = self.safe_area;
@@ -822,6 +826,9 @@ pub(super) fn render_nameplates(
         }
         match plan.presentation {
             NameplatePresentation::Full => {
+                if let Some(slug) = &player.campaign_avatar {
+                    system.avatar_wants.push(slug.clone());
+                }
                 let mut full = plan
                     .full
                     .expect("full presentation requires a complete prepared plate");
@@ -1664,9 +1671,6 @@ fn resolve_avatar_content(
                     .or_else(|| text.avatar_uv(AVATAR_FALLBACK_SLOT))
                     .map_or(AvatarContent::None, AvatarContent::Sprite);
             }
-            if let Some(index) = sow_data::geo_entities::bot_portrait_index(slug) {
-                return AvatarContent::BotPortrait(index);
-            }
             let slot = campaign_avatar_slots
                 .get(slug)
                 .copied()
@@ -2061,14 +2065,6 @@ pub(crate) fn paint_prepared_avatar(text: &mut TextRenderer, avatar: AvatarPlan,
                 text.push_sprite(avatar.center, size, previous, [1.0, 1.0, 1.0, alpha]);
                 text.push_sprite(avatar.center, size, uv, [1.0, 1.0, 1.0, alpha * mix]);
             } else {
-                text.push_sprite(avatar.center, size, uv, tint);
-            }
-        }
-        AvatarContent::BotPortrait(index) => {
-            let size = avatar.scale.map(|scale| avatar.radius * 2.0 * scale);
-            if !text.push_bot_portrait(avatar.center, size, index, tint)
-                && let Some(uv) = text.avatar_uv(AVATAR_FALLBACK_SLOT)
-            {
                 text.push_sprite(avatar.center, size, uv, tint);
             }
         }
