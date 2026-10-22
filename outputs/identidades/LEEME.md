@@ -3,16 +3,17 @@
 Cada fila es un avatar por encargar: un retrato cuadrado de frente, una sola imagen por identidad.
 La columna "Material de arte" dice qué imágenes ya existen en tu compu (en `Downloads` o en lo que generó Codex) y pueden servir de punto de partida.
 
-## `naciones-200.csv`: los 200 bots que reemplazan a las naciones
+## `naciones-200.csv`: los 220 bots de naciones
 
-- La lista balanceada de Codex que aprobaste: 100 mujeres y 100 hombres.
-- Regiones: Asia 56, América 48, África 40, Europa 40, Oceanía 16.
-- **Los 200 tienen página en Wikipedia.** El enlace está en "Referencia". Las hermanas Trưng comparten la misma página.
+- La lista de Codex que aprobaste (200), más 20 de reserva al final (filas 201 a 220).
+- Regiones: Asia 60, Américas 59, África 44, Europa 41, Oceanía 16. Género: 111 hombres y 109 mujeres.
+- **Los 220 tienen página en Wikipedia.** El enlace está en "Referencia". Las hermanas Trưng comparten la misma página.
 - Se cambiaron 7 que ya son héroes jugables, con el mismo género y región. La columna "Nota" dice a quién reemplaza cada uno. Mama Ocllo entró en lugar de Mama Anahuarque, que no tiene página.
+- Se cambiaron 8 que ya tenían arte de héroe (William the Conqueror, Ashoka, Darius I, Tipu Sultan, Kanishka, Rani Durgavati, John III Sobieski, Charles V). La columna "Nota" dice por quién se reemplazó cada uno.
 - La columna "Nota" también marca 12 figuras del siglo XX, por si prefieres quitarlas.
-- **Material de arte:** 65 de los 200 ya tienen imágenes. No cuenta la pasada de Codex que rechazaste por la mueca repetida.
-- **Avatar:** solo 5 están validados (Hatshepsut, Mansa Musa, Amanirenas, Sundiata Keita y Amanitore).
-- La lista con la ubicación de cada retrato está en [naciones-encargo.txt](naciones-encargo.txt): **FALTAN** primero y **TENEMOS** después. Los retratos viven en `assets/art/avatars/nations/`.
+- **Material de arte:** 86 de los 220 tienen imágenes registradas. No cuenta la pasada de Codex que rechazaste por la mueca repetida.
+- **Avatar:** solo 5 están validados (Hatshepsut, Mansa Musa, Amanirenas, Sundiata Keita y Amanitore). Las filas marcadas "Por validar" usan imágenes del material sin asignar; varias son escenas amplias con el personaje pequeño.
+- La lista con la ubicación de cada retrato está en [naciones-encargo.txt](naciones-encargo.txt): hoy **FALTAN** (0) y **TENEMOS** (220). Los retratos viven en `assets/art/avatars/nations/`.
 
 ## Avatares de tribus
 

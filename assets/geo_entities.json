@@ -1333,16 +1333,16 @@
    "avatar": "wu_zetian"
   },
   {
-   "id": "nation_ashoka",
-   "name": "Ashoka",
-   "entity": "Maurya Empire",
+   "id": "nation_gajah_mada",
+   "name": "Gajah Mada",
+   "entity": "Majapahit",
    "role": "nation",
    "region": "asia",
-   "lat": 25.61,
-   "lon": 85.1414,
+   "lat": -7.55,
+   "lon": 112.33,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Ashoka",
-   "avatar": "ashoka"
+   "wikipedia": "https://en.wikipedia.org/wiki/Gajah_Mada",
+   "avatar": "gajah_mada"
   },
   {
    "id": "nation_emperatriz_suiko",
@@ -1393,16 +1393,16 @@
    "avatar": "akbar"
   },
   {
-   "id": "nation_rani_durgavati",
-   "name": "Rani Durgavati",
-   "entity": "Gondwana / Central India",
+   "id": "nation_qin_liangyu",
+   "name": "Qin Liangyu",
+   "entity": "Ming dynasty",
    "role": "nation",
    "region": "asia",
-   "lat": 25.5,
-   "lon": 80.5,
+   "lat": 30.57,
+   "lon": 104.07,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Rani_Durgavati",
-   "avatar": "rani_durgavati"
+   "wikipedia": "https://en.wikipedia.org/wiki/Qin_Liangyu",
+   "avatar": "qin_liangyu"
   },
   {
    "id": "nation_babur",
@@ -1453,16 +1453,16 @@
    "avatar": "kittur_chennamma"
   },
   {
-   "id": "nation_dario_i",
-   "name": "Darius the Great",
-   "entity": "Achaemenid Empire",
+   "id": "nation_solomon",
+   "name": "Solomon",
+   "entity": "Kingdom of Israel",
    "role": "nation",
    "region": "asia",
-   "lat": 32.5364,
-   "lon": 44.4208,
+   "lat": 31.77,
+   "lon": 35.21,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Darius_the_Great",
-   "avatar": "darius_i"
+   "wikipedia": "https://en.wikipedia.org/wiki/Solomon",
+   "avatar": "solomon"
   },
   {
    "id": "nation_rani_lakshmibai",
@@ -1861,16 +1861,16 @@
    "avatar": "toregene_khatun"
   },
   {
-   "id": "nation_tipu_sultan",
-   "name": "Tipu Sultan",
-   "entity": "Kingdom of Mysore",
+   "id": "nation_sayyid_said",
+   "name": "Sayyid Said",
+   "entity": "Sultanate of Muscat and Oman",
    "role": "nation",
    "region": "asia",
-   "lat": 13.23,
-   "lon": 77.7,
+   "lat": 23.61,
+   "lon": 58.59,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Tipu_Sultan",
-   "avatar": "tipu_sultan"
+   "wikipedia": "https://en.wikipedia.org/wiki/Said_bin_Sultan",
+   "avatar": "sayyid_said"
   },
   {
    "id": "nation_mandukhai_khatun",
@@ -1981,16 +1981,16 @@
    "avatar": "sultanah_safiatuddin"
   },
   {
-   "id": "nation_kanishka",
-   "name": "Kanishka",
-   "entity": "Kushan Empire",
+   "id": "nation_lapu_lapu",
+   "name": "Lapu-Lapu",
+   "entity": "Mactan",
    "role": "nation",
    "region": "asia",
-   "lat": 34.0144,
-   "lon": 71.5675,
+   "lat": 10.3,
+   "lon": 123.98,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Kanishka",
-   "avatar": "kanishka"
+   "wikipedia": "https://en.wikipedia.org/wiki/Lapu-Lapu",
+   "avatar": "lapu_lapu"
   },
   {
    "id": "nation_blanca_de_castilla",
@@ -2101,16 +2101,16 @@
    "avatar": "isabel_i_de_inglaterra"
   },
   {
-   "id": "nation_guillermo_el_conquistador",
-   "name": "William the Conqueror",
-   "entity": "Normandy and England",
+   "id": "nation_constantine_the_great",
+   "name": "Constantine the Great",
+   "entity": "Roman Empire",
    "role": "nation",
    "region": "europe",
-   "lat": 48.8972,
-   "lon": -0.1975,
+   "lat": 41.01,
+   "lon": 28.98,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/William_the_Conqueror",
-   "avatar": "william_the_conqueror"
+   "wikipedia": "https://en.wikipedia.org/wiki/Constantine_the_Great",
+   "avatar": "constantine"
   },
   {
    "id": "nation_catalina_la_grande",
@@ -2221,16 +2221,16 @@
    "avatar": "teodora"
   },
   {
-   "id": "nation_juan_iii_sobieski",
-   "name": "John III Sobieski",
-   "entity": "Poland-Lithuania",
+   "id": "nation_vlad_iii",
+   "name": "Vlad III the Impaler",
+   "entity": "Wallachia",
    "role": "nation",
    "region": "europe",
-   "lat": 49.9667,
-   "lon": 24.8833,
+   "lat": 44.93,
+   "lon": 25.46,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/John_III_Sobieski",
-   "avatar": "john_iii_sobieski"
+   "wikipedia": "https://en.wikipedia.org/wiki/Vlad_III_the_Impaler",
+   "avatar": "vlad_iii"
   },
   {
    "id": "nation_amalasunta",
@@ -2437,16 +2437,16 @@
    "avatar": "fredegunda"
   },
   {
-   "id": "nation_carlos_v",
-   "name": "Charles V, Holy Roman Emperor",
-   "entity": "Holy Roman Empire and Spain",
+   "id": "nation_mary_of_burgundy",
+   "name": "Mary of Burgundy",
+   "entity": "Burgundian Netherlands",
    "role": "nation",
    "region": "europe",
-   "lat": 51.0536,
-   "lon": 3.7253,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Charles_V%2C_Holy_Roman_Emperor",
-   "avatar": "charles_v"
+   "lat": 50.85,
+   "lon": 4.35,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Mary_of_Burgundy",
+   "avatar": "mary_of_burgundy"
   },
   {
    "id": "nation_grace_o_malley",
@@ -7463,6 +7463,246 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Tolai_people",
    "avatar": "tolai"
+  },
+  {
+   "id": "nation_semiramis",
+   "name": "Semiramis",
+   "entity": "Assyrian Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 36.36,
+   "lon": 43.15,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Semiramis",
+   "avatar": "semiramis"
+  },
+  {
+   "id": "nation_shima_kalingga",
+   "name": "Shima",
+   "entity": "Kalingga",
+   "role": "nation",
+   "region": "asia",
+   "lat": -6.7,
+   "lon": 110.6,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Shima_(queen)",
+   "avatar": "shima_kalingga"
+  },
+  {
+   "id": "nation_tomyris",
+   "name": "Tomyris",
+   "entity": "Massagetae",
+   "role": "nation",
+   "region": "asia",
+   "lat": 42.0,
+   "lon": 60.0,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tomyris",
+   "avatar": "tomyris"
+  },
+  {
+   "id": "nation_gorgo",
+   "name": "Gorgo",
+   "entity": "Sparta",
+   "role": "nation",
+   "region": "europe",
+   "lat": 37.07,
+   "lon": 22.43,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Gorgo",
+   "avatar": "gorgo"
+  },
+  {
+   "id": "nation_makeda",
+   "name": "Makeda",
+   "entity": "Kingdom of Aksum",
+   "role": "nation",
+   "region": "africa",
+   "lat": 14.13,
+   "lon": 38.72,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Queen_of_Sheba",
+   "avatar": "makeda"
+  },
+  {
+   "id": "nation_jose_artigas",
+   "name": "José Gervasio Artigas",
+   "entity": "Banda Oriental",
+   "role": "nation",
+   "region": "americas",
+   "lat": -34.9,
+   "lon": -56.16,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/José_Gervasio_Artigas",
+   "avatar": "artigas"
+  },
+  {
+   "id": "nation_bernardo_ohiggins",
+   "name": "Bernardo O'Higgins",
+   "entity": "Chile",
+   "role": "nation",
+   "region": "americas",
+   "lat": -33.45,
+   "lon": -70.67,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Bernardo_O%27Higgins",
+   "avatar": "bernardo_ohiggins"
+  },
+  {
+   "id": "nation_nezahualcoyotl",
+   "name": "Nezahualcóyotl",
+   "entity": "Texcoco",
+   "role": "nation",
+   "region": "americas",
+   "lat": 19.52,
+   "lon": -98.88,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Nezahualc%C3%B3yotl",
+   "avatar": "nezahualcoyotl"
+  },
+  {
+   "id": "nation_tlacaelel",
+   "name": "Tlacaelel",
+   "entity": "Mexica Empire",
+   "role": "nation",
+   "region": "americas",
+   "lat": 19.43,
+   "lon": -99.13,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tlacaelel",
+   "avatar": "tlacaelel"
+  },
+  {
+   "id": "nation_tenamaxtli",
+   "name": "Tenamaxtli",
+   "entity": "Caxcanes",
+   "role": "nation",
+   "region": "americas",
+   "lat": 21.38,
+   "lon": -102.87,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tenamaxtli",
+   "avatar": "tenamaxtli"
+  },
+  {
+   "id": "nation_ramesses_ii",
+   "name": "Ramesses II",
+   "entity": "Ancient Egypt",
+   "role": "nation",
+   "region": "africa",
+   "lat": 25.72,
+   "lon": 32.66,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ramesses_II",
+   "avatar": "ramesses_ii"
+  },
+  {
+   "id": "nation_cosijoeza",
+   "name": "Cosijoeza",
+   "entity": "Zapotec",
+   "role": "nation",
+   "region": "americas",
+   "lat": 16.94,
+   "lon": -96.75,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Cosijoeza",
+   "avatar": "cosijoeza"
+  },
+  {
+   "id": "nation_thanadelthur",
+   "name": "Thanadelthur",
+   "entity": "Chipewyan",
+   "role": "nation",
+   "region": "americas",
+   "lat": 59.0,
+   "lon": -109.5,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Thanadelthur",
+   "avatar": "thanadelthur"
+  },
+  {
+   "id": "nation_mangas_coloradas",
+   "name": "Mangas Coloradas",
+   "entity": "Chiricahua Apache",
+   "role": "nation",
+   "region": "americas",
+   "lat": 32.8,
+   "lon": -108.2,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Mangas_Coloradas",
+   "avatar": "mangas_coloradas"
+  },
+  {
+   "id": "nation_tomochichi",
+   "name": "Tomochichi",
+   "entity": "Yamacraw",
+   "role": "nation",
+   "region": "americas",
+   "lat": 32.08,
+   "lon": -81.09,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tomochichi",
+   "avatar": "tomochichi"
+  },
+  {
+   "id": "nation_lobengula",
+   "name": "Lobengula",
+   "entity": "Matabeleland",
+   "role": "nation",
+   "region": "africa",
+   "lat": -20.15,
+   "lon": 28.58,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lobengula",
+   "avatar": "lobengula"
+  },
+  {
+   "id": "nation_eight_deer",
+   "name": "Eight Deer Jaguar Claw",
+   "entity": "Mixtec",
+   "role": "nation",
+   "region": "americas",
+   "lat": 17.07,
+   "lon": -96.72,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Eight_Deer_Jaguar_Claw",
+   "avatar": "eight_deer"
+  },
+  {
+   "id": "nation_nemequene",
+   "name": "Nemequene",
+   "entity": "Muisca",
+   "role": "nation",
+   "region": "americas",
+   "lat": 5.15,
+   "lon": -73.77,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Nemequene",
+   "avatar": "nemequene"
+  },
+  {
+   "id": "nation_artemisia_i",
+   "name": "Artemisia I of Caria",
+   "entity": "Caria",
+   "role": "nation",
+   "region": "asia",
+   "lat": 37.04,
+   "lon": 27.42,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Artemisia_I_of_Caria",
+   "avatar": "artemisia_i"
+  },
+  {
+   "id": "nation_shajar_al_durr",
+   "name": "Shajar al-Durr",
+   "entity": "Mamluk Sultanate",
+   "role": "nation",
+   "region": "africa",
+   "lat": 30.04,
+   "lon": 31.24,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Shajar_al-Durr",
+   "avatar": "shajar_al_durr"
   }
  ]
 }
