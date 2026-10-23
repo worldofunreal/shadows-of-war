@@ -211,9 +211,7 @@
    "hero": {
     "name": "Lady Six Sky",
     "ability": {
-     "kind": "district_income",
-     "district": "factory",
-     "resource": "gold",
+     "kind": "tribe_speed",
      "percent": 50
     },
     "card": "sow-lady-six-sky"
@@ -255,8 +253,8 @@
    "hero": {
     "name": "Napoleon",
     "ability": {
-     "kind": "expansion_speed",
-     "percent": 20
+     "kind": "outnumbered_strength",
+     "percent": 35
     },
     "card": "sow-napoleon"
    },
@@ -273,18 +271,6 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Hatshepsut",
    "avatar": "hatshepsut"
-  },
-  {
-   "id": "nation_mansa_musa",
-   "name": "Mansa Musa",
-   "entity": "Mali Empire",
-   "role": "nation",
-   "region": "africa",
-   "lat": 13.5,
-   "lon": -7.9,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Mansa_Musa",
-   "avatar": "mansa_musa"
   },
   {
    "id": "nation_amanirenas",
@@ -369,18 +355,6 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Nefertiti",
    "avatar": "nefertiti"
-  },
-  {
-   "id": "nation_shaka_zulu",
-   "name": "Shaka",
-   "entity": "Zulu Kingdom",
-   "role": "nation",
-   "region": "africa",
-   "lat": -28.515,
-   "lon": 31.8486,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Shaka",
-   "avatar": "shaka_zulu"
   },
   {
    "id": "nation_cleopatra_selene_ii",
@@ -1149,18 +1123,6 @@
    "avatar": "juana_azurduy"
   },
   {
-   "id": "nation_simon_bolivar",
-   "name": "Simón Bolívar",
-   "entity": "Gran Colombia",
-   "role": "nation",
-   "region": "americas",
-   "lat": 10.5061,
-   "lon": -66.9144,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Sim%C3%B3n_Bol%C3%ADvar",
-   "avatar": "simon_bolivar"
-  },
-  {
    "id": "nation_josefa_ortiz_de_dominguez",
    "name": "Josefa Ortiz de Domínguez",
    "entity": "Mexico",
@@ -1461,18 +1423,6 @@
    "avatar": "ahilyabai_holkar"
   },
   {
-   "id": "nation_ciro_el_grande",
-   "name": "Cyrus the Great",
-   "entity": "Achaemenid Empire",
-   "role": "nation",
-   "region": "asia",
-   "lat": 30.0117,
-   "lon": 52.4078,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Cyrus_the_Great",
-   "avatar": "ciro_el_grande"
-  },
-  {
    "id": "nation_kittur_chennamma",
    "name": "Kittur Chennamma",
    "entity": "Kittur / India",
@@ -1509,18 +1459,6 @@
    "avatar": "rani_lakshmibai"
   },
   {
-   "id": "nation_suleiman_el_magnifico",
-   "name": "Suleiman the Magnificent",
-   "entity": "Ottoman Empire",
-   "role": "nation",
-   "region": "asia",
-   "lat": 41.005,
-   "lon": 39.7225,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Suleiman_the_Magnificent",
-   "avatar": "suleiman_el_magnifico"
-  },
-  {
    "id": "nation_cleopatra_thea",
    "name": "Cleopatra Thea",
    "entity": "Seleucid Empire",
@@ -1531,18 +1469,6 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Cleopatra_Thea",
    "avatar": "cleopatra_thea"
-  },
-  {
-   "id": "nation_saladino",
-   "name": "Saladin",
-   "entity": "Ayyubid Sultanate",
-   "role": "nation",
-   "region": "asia",
-   "lat": 34.6017,
-   "lon": 43.6939,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Saladin",
-   "avatar": "saladino"
   },
   {
    "id": "nation_zenobia",
@@ -1759,18 +1685,6 @@
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Harun_al-Rashid",
    "avatar": "harun_al_rashid"
-  },
-  {
-   "id": "nation_lady_trieu",
-   "name": "Lady Triệu",
-   "entity": "Vietnam",
-   "role": "nation",
-   "region": "asia",
-   "lat": 19.933,
-   "lon": 105.9,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Lady_Tri%E1%BB%87u",
-   "avatar": "lady_trieu"
   },
   {
    "id": "nation_hammurabi",
@@ -2145,18 +2059,6 @@
    "avatar": "constantine"
   },
   {
-   "id": "nation_catalina_la_grande",
-   "name": "Catherine the Great",
-   "entity": "Russian Empire",
-   "role": "nation",
-   "region": "europe",
-   "lat": 53.4247,
-   "lon": 14.5553,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Catherine_the_Great",
-   "avatar": "catalina_la_grande"
-  },
-  {
    "id": "nation_luis_xiv",
    "name": "Louis XIV",
    "entity": "France",
@@ -2241,18 +2143,6 @@
    "avatar": "skanderbeg"
   },
   {
-   "id": "nation_teodora",
-   "name": "Theodora",
-   "entity": "Byzantine Empire",
-   "role": "nation",
-   "region": "europe",
-   "lat": 41.6,
-   "lon": 35,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Theodora_%28wife_of_Justinian_I%29",
-   "avatar": "teodora"
-  },
-  {
    "id": "nation_vlad_iii",
    "name": "Vlad III the Impaler",
    "entity": "Wallachia",
@@ -2335,18 +2225,6 @@
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Otto_von_Bismarck",
    "avatar": "otto_von_bismarck"
-  },
-  {
-   "id": "nation_juana_de_arco",
-   "name": "Joan of Arc",
-   "entity": "France",
-   "role": "nation",
-   "region": "europe",
-   "lat": 48.4425,
-   "lon": 5.675,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Joan_of_Arc",
-   "avatar": "juana_de_arco"
   },
   {
    "id": "nation_giuseppe_garibaldi",
@@ -2515,18 +2393,6 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Ka%CA%BBahumanu",
    "avatar": "kaahumanu"
-  },
-  {
-   "id": "nation_kamehameha_i",
-   "name": "Kamehameha I",
-   "entity": "Kingdom of Hawaii",
-   "role": "nation",
-   "region": "oceania",
-   "lat": 20.2572,
-   "lon": -155.8767,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Kamehameha_I",
-   "avatar": "kamehameha_i"
   },
   {
    "id": "nation_liliuokalani",
@@ -7841,7 +7707,7 @@
    "hero": {
     "name": "Hannibal",
     "ability": {
-     "kind": "enemy_troop_strength",
+     "kind": "mountain_cost",
      "percent": 25
     }
    }

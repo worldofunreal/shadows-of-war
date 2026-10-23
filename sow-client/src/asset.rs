@@ -413,7 +413,6 @@ impl SowApp {
                     }
                     crate::anonymous_identity::clear_pending_display_name();
                     self.pending_display_name = None;
-                    self.name_save_revision = self.name_save_revision.wrapping_add(1);
                     self.ui.app.main_menu_state.player_name = display_name;
                     self.ui.app.main_menu_state.error_message = None;
                     if self.profile_refresh_pending {
@@ -590,13 +589,8 @@ impl SowApp {
                     if operation == "menu guide progress" {
                         self.progress.merge_menu_guides(progress.menu_guides);
                         self.menu_guide_save_pending = false;
-                        self.menu_guide_save_revision =
-                            self.menu_guide_save_revision.wrapping_add(1);
                         self.save_local_progress();
                         continue;
-                    }
-                    if operation == "leader unlock" {
-                        self.purchase_revision = self.purchase_revision.wrapping_add(1);
                     }
                     let campaign_episode = operation
                         .strip_prefix("campaign completion:")
@@ -660,8 +654,6 @@ impl SowApp {
                     }
                     if operation == "menu guide progress" {
                         self.menu_guide_save_pending = false;
-                        self.menu_guide_save_revision =
-                            self.menu_guide_save_revision.wrapping_add(1);
                         log::warn!(
                             "[menu-guide] progress save failed status={status:?}; retry remains pending"
                         );

@@ -452,7 +452,6 @@
         purchaseIntent = { type: "leader", leaderId: offer.id };
         purchaseModal = { type: "leader", leaderId: offer.id, currency: currency, phase: "confirm", submitted: false };
         trackStoreEvent("store_buy_tap", "leader", offer.id, isGems ? "gems" : "crowns");
-        menuOutcomeCounts.leader_purchase_prompt_opened = (menuOutcomeCounts.leader_purchase_prompt_opened || 0) + 1;
         render();
     }
 

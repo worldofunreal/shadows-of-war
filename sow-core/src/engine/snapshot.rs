@@ -86,6 +86,15 @@ impl SowEngine {
                     can_retaliate: crate::diplomacy::can_retaliate_against(p),
                     traitor: p.traitor,
                     leader: p.leader,
+                    empowered_attack: self.attacks.iter().any(|a| {
+                        a.owner_id == p.id
+                            && crate::execution::combat::outnumbered_bonus_applies(
+                                &self.state,
+                                p.id,
+                                a.target_owner,
+                                a.troops,
+                            )
+                    }),
                     campaign_avatar: self.campaign_avatars.get(&p.id).cloned(),
                     is_campaign_faction: self.campaign_faction_ids.contains_key(&p.id),
                     skin_style: p.skin_style,

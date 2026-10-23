@@ -103,32 +103,47 @@ pub struct MenuGuideProgress {
     pub source_match_id: Option<String>,
 }
 
+pub fn normalize_welcome_guide_progress(
+    progress: &MenuGuideProgress,
+    matches_played: u32,
+) -> MenuGuideProgress {
+    let status = if progress.status.is_terminal() {
+        progress.status
+    } else if progress.completed_steps.contains("welcome_heroes")
+        || progress.completed_steps.contains("welcome_complete")
+    {
+        MenuGuideStatus::Completed
+    } else if matches_played > 0 {
+        MenuGuideStatus::Skipped
+    } else {
+        MenuGuideStatus::Active
+    };
+    MenuGuideProgress {
+        completed_steps: if status == MenuGuideStatus::Completed {
+            ["welcome_heroes".to_string(), "welcome_complete".to_string()]
+                .into_iter()
+                .collect()
+        } else {
+            Default::default()
+        },
+        current_step: (status == MenuGuideStatus::Active).then(|| "welcome_heroes".to_string()),
+        status,
+        selected_leader: progress.selected_leader.clone(),
+        ..Default::default()
+    }
+}
+
 pub fn merge_menu_guide_progress(
     saved: Option<&MenuGuideProgress>,
     incoming: &MenuGuideProgress,
 ) -> MenuGuideProgress {
-    let mut merged = incoming.clone();
     if let Some(saved) = saved {
-        merged
-            .completed_steps
-            .extend(saved.completed_steps.iter().cloned());
-        if !incoming.completed_steps.is_superset(&saved.completed_steps)
-            || saved.status.is_terminal()
-        {
-            merged.current_step = saved.current_step.clone();
-        }
+        let saved = normalize_welcome_guide_progress(saved, 0);
         if saved.status.is_terminal() {
-            merged.status = saved.status;
+            return saved;
         }
-        if merged.selected_leader.is_none() {
-            merged.selected_leader = saved.selected_leader.clone();
-        }
-        merged.source_match_id = saved.source_match_id.clone();
-    } else {
-        // Enrollment is server-owned; a client cannot create guide eligibility.
-        merged.source_match_id = None;
     }
-    merged
+    normalize_welcome_guide_progress(incoming, 0)
 }
 
 pub fn validate_menu_guide_progress(
@@ -700,65 +715,82 @@ pub fn tier_for_score(score: u16) -> (&'static str, Option<String>) {
 mod tests {
     use super::{
         MenuGuideProgress, MenuGuideStatus, RewardReceipt, merge_menu_guide_progress,
-        validate_menu_guide_progress,
+        normalize_welcome_guide_progress, validate_menu_guide_progress,
     };
     use std::collections::BTreeSet;
 
     #[test]
-    fn menu_guide_progress_uses_published_ids_and_keeps_terminal_state() {
-        let saved = MenuGuideProgress {
-            completed_steps: BTreeSet::from(["welcome_name".to_string()]),
-            status: MenuGuideStatus::Completed,
-            selected_leader: Some("boudica".to_string()),
-            source_match_id: None,
-            current_step: Some("welcome_heroes".to_string()),
-        };
-        let stale = MenuGuideProgress {
-            completed_steps: BTreeSet::from(["welcome_heroes".to_string()]),
-            status: MenuGuideStatus::Active,
-            selected_leader: None,
-            source_match_id: Some("client-fake-match".to_string()),
-            current_step: Some("welcome_name".to_string()),
-        };
-        let merged = merge_menu_guide_progress(Some(&saved), &stale);
-        assert_eq!(merged.status, MenuGuideStatus::Completed);
-        assert_eq!(merged.completed_steps.len(), 2);
-        assert_eq!(merged.selected_leader.as_deref(), Some("boudica"));
-        assert_eq!(merged.source_match_id, None);
+    fn welcome_progress_retires_legacy_steps_and_preserves_terminal_states() {
+        for (status, steps, matches, expected) in [
+            (
+                MenuGuideStatus::Active,
+                vec!["welcome_name"],
+                0,
+                MenuGuideStatus::Active,
+            ),
+            (
+                MenuGuideStatus::Active,
+                vec!["welcome_name", "welcome_heroes"],
+                0,
+                MenuGuideStatus::Completed,
+            ),
+            (MenuGuideStatus::Active, vec![], 1, MenuGuideStatus::Skipped),
+            (
+                MenuGuideStatus::Completed,
+                vec!["welcome_complete"],
+                1,
+                MenuGuideStatus::Completed,
+            ),
+            (
+                MenuGuideStatus::Skipped,
+                vec!["welcome_name"],
+                0,
+                MenuGuideStatus::Skipped,
+            ),
+        ] {
+            let legacy = MenuGuideProgress {
+                completed_steps: steps.into_iter().map(str::to_string).collect(),
+                current_step: Some("welcome_purchase_confirm".to_string()),
+                selected_leader: Some("boudica".to_string()),
+                status,
+                ..Default::default()
+            };
+            let normalized = normalize_welcome_guide_progress(&legacy, matches);
+            assert_eq!(normalized.status, expected);
+            assert_eq!(
+                normalized.current_step.as_deref(),
+                (expected == MenuGuideStatus::Active).then_some("welcome_heroes")
+            );
+            assert_eq!(normalized.selected_leader.as_deref(), Some("boudica"));
+            assert!(validate_menu_guide_progress("welcome", &normalized).is_ok());
+            if expected.is_terminal() {
+                assert_eq!(
+                    merge_menu_guide_progress(Some(&normalized), &MenuGuideProgress::default()),
+                    normalized
+                );
+            }
+        }
+    }
 
-        let saved_first_match = MenuGuideProgress {
-            source_match_id: Some("first-match".to_string()),
-            ..Default::default()
-        };
-        let stale_first_match = MenuGuideProgress {
-            source_match_id: Some("later-client-match".to_string()),
-            ..Default::default()
-        };
-        assert_eq!(
-            merge_menu_guide_progress(Some(&saved_first_match), &stale_first_match)
-                .source_match_id
-                .as_deref(),
-            Some("first-match")
+    #[test]
+    fn welcome_writes_use_only_published_ids_and_a_complete_ending() {
+        for id in ["unknown", "welcome_name", "first_profile"] {
+            let invalid = MenuGuideProgress {
+                completed_steps: BTreeSet::from([id.to_string()]),
+                ..Default::default()
+            };
+            assert!(validate_menu_guide_progress("welcome", &invalid).is_err());
+        }
+        assert!(
+            validate_menu_guide_progress("first_multiplayer", &MenuGuideProgress::default())
+                .is_err()
         );
-
-        let invalid = MenuGuideProgress {
-            completed_steps: BTreeSet::from(["unknown".to_string()]),
-            ..Default::default()
-        };
-        assert!(validate_menu_guide_progress("welcome", &invalid).is_err());
-        assert!(validate_menu_guide_progress("unknown", &MenuGuideProgress::default()).is_err());
-
         let unfinished = MenuGuideProgress {
-            completed_steps: BTreeSet::from(["welcome_name".to_string()]),
             status: MenuGuideStatus::Completed,
             ..Default::default()
         };
         assert!(validate_menu_guide_progress("welcome", &unfinished).is_err());
-        let finished = MenuGuideProgress {
-            completed_steps: BTreeSet::from(["welcome_complete".to_string()]),
-            status: MenuGuideStatus::Completed,
-            ..Default::default()
-        };
+        let finished = normalize_welcome_guide_progress(&unfinished, 0);
         assert!(validate_menu_guide_progress("welcome", &finished).is_ok());
     }
 

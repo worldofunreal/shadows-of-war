@@ -1,0 +1,110 @@
+NUEVAS TRIBUS PARA ENCARGAR (80)
+Orden: las más conocidas primero. Formato: Líder — Tribu | archivo del retrato (assets/art/avatars/tribes/).
+Todas son FALTAN: ninguna tiene arte todavía.
+
+AMÉRICAS (15)
+Cuauhtémoc — Mexica | mexica.webp
+Pakal — Maya | maya.webp
+Manco Cápac — Quechua (Inca) | quechua.webp
+Túpac Katari — Aimara | aymara.webp
+
+Minchançaman — Chimú | chimu.webp
+Topiltzin Quetzalcóatl — Tolteca | tolteca.webp
+Lautaro — Mapuche | mapuche.webp
+Vaimaca Pirú — Charrúa | charrua.webp
+
+Cochise — Apache | apache.webp
+Red Cloud — Lakota | lakota.webp
+Dragging Canoe — Cherokee | cherokee.webp
+Joseph Brant — Mohawk | mohawk.webp
+
+Black Kettle — Cheyenne del Sur | cheyenne_del_sur.webp
+Pontiac — Ottawa | ottawa.webp
+Atlacatl — Pipil | pipil.webp
+
+ÁFRICA (17)
+Shaka — Zulú | zulu.webp
+Maqoma — Xhosa | xhosa.webp
+Sobhuza I — Suazi | swazi.webp
+Opoku Ware I — Akan | akan.webp
+
+Afonso I — Kongo | kongo.webp
+Kalala Ilunga — Luba | luba.webp
+Mwata Yamvo — Lunda | lunda.webp
+Mutesa I — Baganda | baganda.webp
+
+Sundiata Keita — Malinké (Mali) | mali_malinke.webp
+Idris Alooma — Bornu | bornu.webp
+Andrianampoinimerina — Merina | merina.webp
+Nzinga — Ndongo | ndongo.webp
+
+Ewuare — Edo (Benin) | edo_benin.webp
+Ezana — Aksumitas | aksumitas.webp
+Mutota — Mutapa | mutapa.webp
+Tunka Manin — Soninke (Ghana) | soninke.webp
+
+Ramsés II — Egipcios | egipcios.webp
+
+EUROPA (15)
+Porsenna — Etruscos | etruscos.webp
+Coriolano — Volscos | volscos.webp
+Tito Tacio — Sabinos | sabinos.webp
+Cunobelino — Catuvellaunos | catuvellaunos.webp
+
+Clodoveo I — Francos | francos.webp
+Teodorico el Grande — Ostrogodos | ostrogodos.webp
+Offa — Anglos (Mercia) | anglos.webp
+Krum — Búlgaros | bulgaros.webp
+
+Tomislav — Croatas | croatas.webp
+Stefan Dušan — Serbios | serbios.webp
+Mindaugas — Lituanos | lituanos.webp
+Harald Hardrada — Noruegos | noruegos.webp
+
+Vladímir el Grande — Rus de Kiev | rus_de_kiev.webp
+Samo — Eslovacos | eslovacos.webp
+Kulin Ban — Bosnios | bosnios.webp
+
+OCEANÍA (8)
+Hongi Hika — Ngāpuhi | ngapuhi.webp
+Te Rauparaha — Ngāti Toa | ngati_toa.webp
+Pōtatau Te Wherowhero — Waikato | waikato.webp
+Kamehameha I — Hawaianos | hawaianos.webp
+
+George Tupou I — Tonganos | tonganos.webp
+Pōmare IV — Tahitianos | tahitianos.webp
+Yagan — Noongar | noongar.webp
+Mannalargenna — Trawlwoolway (Tasmania) | trawlwoolway.webp
+
+ASIA (25; Asia sube de 113 a 138)
+Liu Bang — Han (China) | han_china.webp
+Gwanggaeto el Grande — Goguryeo | goguryeo.webp
+Geunchogo — Baekje | baekje.webp
+Hùng Vương — Lạc Việt | lac_viet.webp
+
+Shōtoku Taishi — Yamato | yamato.webp
+Shō Hashi — Ryukyu | ryukyu.webp
+Jayavarman II — Jemer (Khmer) | khmer.webp
+Po Rome — Champa | champa.webp
+
+Dhammazedi — Mon | mon.webp
+Anawrahta — Bamar (Bagan) | bamar_bagan.webp
+Ramkhamhaeng — Tai (Sukhothai) | thai_sukhothai.webp
+Fa Ngum — Lao (Lan Xang) | lao.webp
+
+Parameswara — Malayos (Malaca) | malayos_malacca.webp
+Balaputradewa — Srivijaya | srivijaya.webp
+Rana Pratap — Rajput | rajput.webp
+Dutugemunu — Cingaleses | cingaleses.webp
+
+Rajaraja I — Tamiles (Chola) | tamiles_chola.webp
+Dharmapala — Bengal (Pala) | bengal_pala.webp
+Suppiluliuma I — Hititas | hititas.webp
+Shutruk-Nahhunte — Elamitas | elamitas.webp
+
+Midas — Frigios | frigios.webp
+Creso — Lidios | lidios.webp
+Sarduri I — Urartu | urartu.webp
+Spitamenes — Sogdianos | sogdianos.webp
+
+Sargón de Akkad — Acadios | acadios.webp

@@ -517,6 +517,10 @@ pub struct PlayerSnapshot {
     #[serde(default)]
     pub traitor: bool,
     pub leader: crate::player::Leader,
+    /// True while one of this player's attacks is on a stronger player under a
+    /// hero "against the odds" ability (the attack fights with the bonus).
+    #[serde(default)]
+    pub empowered_attack: bool,
     #[serde(default)]
     pub campaign_avatar: Option<String>,
     /// True only for factions spawned from a scripted campaign roster.

@@ -471,10 +471,20 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
             base_color = mix(base_color, globals.shader_params[__MAP_DIALOG_COLOR__].rgb, clamp(wash, 0.0, globals.shader_params[__MAP_DIALOG_INTERIOR_MAX__].x));
         }
 
-        // Conquest shockwave flash on interior
+        // Conquest shockwave flash on interior. Hero tints (flags from player_skin_styles):
+        // "against the odds" conquests flash inverted; a mountain-cost hero's mountain
+        // conquests flash amber. Both fade to the owner's colour with the flash.
         if flash_val > 0.0 && globals.effect_shockwave > 0.0 {
             let shockwave = flash_val * globals.effect_shockwave;
-            let flash_color = mix(vec3<f32>(1.0, 1.0, 1.0), albedo, 1.0 - flash_val);
+            var flash_tint = vec3<f32>(1.0, 1.0, 1.0);
+            if owner_id < 256u && player_skin_styles.styles[owner_id].y > 0.5 {
+                flash_tint = vec3<f32>(1.0, 1.0, 1.0) - albedo;
+            }
+            let mountain = f32(terrain_byte & 0x1Fu) >= globals.shader_params[__MAP_LAND_HIGHLANDS_LIMIT__].x;
+            if owner_id < 256u && player_skin_styles.styles[owner_id].z > 0.5 && mountain {
+                flash_tint = globals.shader_params[__MAP_CONQUEST_MOUNTAIN_COLOR__].rgb;
+            }
+            let flash_color = mix(flash_tint, albedo, 1.0 - flash_val);
             base_color = mix(base_color, flash_color, shockwave * globals.shader_params[__MAP_CONQUEST_INTERIOR_FLASH__].x);
         }
     } else if is_land {

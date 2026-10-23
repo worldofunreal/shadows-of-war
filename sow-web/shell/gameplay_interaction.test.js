@@ -650,3 +650,21 @@ test("notification cards render typed avatars, recover failed art, and clear reu
     assert.equal(parts.avatars[1].wrapper.hidden, true);
     assert.equal(parts.avatars[1].emblem.textContent, "");
 });
+
+test("hero ability notices show that hero's ability icon in the seal", () => {
+    const start = hud.indexOf("    function notificationIcon(");
+    const end = hud.indexOf("    function renderNotificationCard(", start);
+    const notificationIcon = vm.runInNewContext(hud.slice(start, end) + "\nnotificationIcon;", {
+        asset: (p) => "/assets/" + p,
+        hudIcon: (name) => "<svg data-icon='" + name + "'></svg>",
+        statusIcon: (name) => "<svg data-icon='" + name + "'></svg>",
+    });
+    assert.match(
+        notificationIcon("hud.elimination", { hero: "lady_six_sky", victim: "Tribe" }),
+        /<img class='sow-hud__notification-ability' src='\/assets\/gameplay\/icons\/abilities\/lady_six_sky\.webp'/
+    );
+    assert.doesNotMatch(notificationIcon("hud.elimination", { hero: "x'><script>" }), /<img/);
+    assert.doesNotMatch(notificationIcon("hud.elimination", { victim: "Tribe" }), /<img/);
+    assert.ok(fs.existsSync(path.join(shell, "../../assets/art/icons/abilities/lady_six_sky.webp")));
+    assert.ok(hudCss.includes(".sow-hud__notification-ability"));
+});

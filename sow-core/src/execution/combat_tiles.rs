@@ -27,9 +27,32 @@ fn terrain_loss_multiplier(terrain: TerrainType, config: &crate::game_config::Ga
     }
 }
 
+/// Hero "against the odds" ability: `attacker` fights a player with more troops.
+/// Shared by the strength formula and the player snapshot, so the visual and the
+/// combat can never disagree.
+/// `army` is the troops this attack sends, so an attack that is itself outnumbered
+/// is judged by its own numbers, not by what the attacker keeps at home.
+pub(crate) fn outnumbered_bonus_applies(
+    state: &GameState,
+    attacker: u16,
+    target: u16,
+    army: f64,
+) -> bool {
+    let Some(p) = state.player(attacker) else {
+        return false;
+    };
+    matches!(
+        p.leader.ability(),
+        crate::geo_entities::Ability::OutnumberedStrength { .. }
+    ) && target != 0
+        && state
+            .player(target)
+            .is_some_and(|rival| rival.troops > army)
+}
+
 /// How much each of `attacker`'s troops counts against `target` (0 = neutral land)
 /// from hero abilities. The only owner: tile combat and attack clashes both use it.
-pub(crate) fn attack_strength(state: &GameState, attacker: u16, target: u16) -> f64 {
+pub(crate) fn attack_strength(state: &GameState, attacker: u16, target: u16, army: f64) -> f64 {
     let Some(p) = state.player(attacker) else {
         return 1.0;
     };
@@ -43,7 +66,22 @@ pub(crate) fn attack_strength(state: &GameState, attacker: u16, target: u16) -> 
         .player(target)
         .filter(|t| is_traitor_active(t, state.tick as u32))
         .map_or(1.0, |_| p.leader.damage_to_traitors_multiplier());
-    p.leader.troop_strength_multiplier() * rival_bonus * traitor_bonus
+    let outnumbered_bonus = if outnumbered_bonus_applies(state, attacker, target, army) {
+        p.leader.outnumbered_strength_multiplier()
+    } else {
+        1.0
+    };
+    p.leader.troop_strength_multiplier() * rival_bonus * traitor_bonus * outnumbered_bonus
+}
+
+/// Hero mountain ability: mountain tiles cost the attacker fewer troops.
+fn attacker_loss_multiplier(state: &GameState, attacker: u16, terrain: TerrainType) -> f64 {
+    if terrain != TerrainType::Mountain {
+        return 1.0;
+    }
+    state
+        .player(attacker)
+        .map_or(1.0, |p| p.leader.mountain_loss_multiplier())
 }
 
 /// Hero city abilities: a city tile costs more to take from a defender with `CityDefense`
@@ -131,7 +169,12 @@ impl SowEngine {
             let adjacent = (execution.to_conquer.len() as f64).max(1.0);
 
             let troop_strength =
-                attack_strength(&self.state, execution.owner_id, execution.target_owner);
+                attack_strength(
+                    &self.state,
+                    execution.owner_id,
+                    execution.target_owner,
+                    execution.troops,
+                );
             let effective_troops = execution.troops * troop_strength;
 
             let max_cap = max_tiles_cap_for_troops(effective_troops, &self.state.config);
@@ -161,9 +204,17 @@ impl SowEngine {
                 * self.state.config.global_speed_multiplier;
             budget = budget.min(scaled_max_cap);
 
-            // Hero expansion-speed ability, after the cap so long fronts keep it.
+            // Hero expansion-speed abilities, after the cap so long fronts keep them.
+            // Tribes are the bot players (not nations or humans).
             if let Some(player) = self.state.player(execution.owner_id) {
                 budget *= player.leader.expansion_speed_multiplier();
+                if self
+                    .state
+                    .player(execution.target_owner)
+                    .is_some_and(|t| t.player_type == crate::player::PlayerType::Bot)
+                {
+                    budget *= player.leader.tribe_speed_multiplier();
+                }
             }
 
             let mut stale_pops = 0u32;
@@ -275,7 +326,8 @@ impl SowEngine {
                     }
 
                     let terrain_multiplier =
-                        terrain_loss_multiplier(terrain_type, &self.state.config);
+                        terrain_loss_multiplier(terrain_type, &self.state.config)
+                            * attacker_loss_multiplier(&self.state, execution.owner_id, terrain_type);
 
                     if execution.target_owner == 0 {
                         // Neutral: attacker pays constant base cost scaled by terrain multiplier

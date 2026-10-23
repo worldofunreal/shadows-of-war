@@ -4,6 +4,7 @@
 //! here without writing a new test; an ability that does nothing fails.
 use crate::building::{Building, BuildingAggregate};
 use crate::engine::SowEngine;
+use crate::execution::combat::attack_strength;
 use crate::execution::income_rates::{
     alliance_gold_per_second, gold_income_per_second, troop_income_per_second,
 };
@@ -32,6 +33,9 @@ fn measurement(ability: Ability) -> u8 {
         Ability::AllianceCost { .. } => 10,
         Ability::AllianceGold { .. } => 11,
         Ability::DamageToTraitors { .. } => 12,
+        Ability::TribeSpeed { .. } => 13,
+        Ability::OutnumberedStrength { .. } => 14,
+        Ability::MountainCost { .. } => 15,
     }
 }
 
@@ -48,6 +52,8 @@ fn baseline_for(hero: Leader) -> Leader {
 fn arena(width: u32, own: u32, attacker: Leader, defender: Option<Leader>) -> SowEngine {
     let mut config = GameConfig::default();
     config.tick_rate_ms = 100.0;
+    // Ability gaps are measured over a fixed tick window at the previous standard speed.
+    config.global_speed_multiplier = 0.35;
     // Nobody wins mid-measurement.
     config.map_control_win_percentage = 2.0;
     let mut state = GameState::new(91, width, width, config);
@@ -283,6 +289,15 @@ fn every_hero_ability_changes_the_game() {
             Ability::DamageToTraitors { .. } => {
                 traitor_defender_troops(hero) < traitor_defender_troops(plain)
             }
+            Ability::TribeSpeed { .. } => {
+                crush(hero, PlayerType::Bot).0 < crush(plain, PlayerType::Bot).0
+            }
+            Ability::OutnumberedStrength { .. } => {
+                outnumbered_tiles(hero, 20_000.0) > outnumbered_tiles(plain, 20_000.0)
+            }
+            Ability::MountainCost { .. } => {
+                cost_per_tile(hero, MOUNTAIN) < cost_per_tile(plain, MOUNTAIN)
+            }
         };
         assert!(
             improved,
@@ -307,31 +322,36 @@ fn send(engine: &mut SowEngine, player_id: u16, intent: GameplayIntent) {
 }
 
 /// The owner's live test, start to finish through real intents: player 1 (`hero`)
-/// and player 2 ally, player 2 betrays (break + attack, as the betrayal button
-/// does), `delay` ticks pass, then player 1 counterattacks with half its army
-/// for 50 ticks (5 s). Returns (tiles player 1 gained, troops player 2 lost).
-fn revenge(hero: Leader, delay: u32) -> (i64, i64) {
+/// and player 2 ally, player 2 betrays (break, plus an attack when `traitor_attacks`,
+/// as the betrayal button does), `delay` ticks pass, then player 1 attacks back with
+/// half its army for 10 ticks (1 s). Returns (tiles player 1 gained, troops player 2
+/// lost, whether player 2 wore the traitor badge — the red border — when hit).
+fn revenge(hero: Leader, delay: u32, traitor_attacks: bool) -> (i64, i64, bool) {
     let mut engine = arena(32, 16, hero, Some(Leader::of("ragnar")));
     engine.execute_income();
     send(&mut engine, 1, GameplayIntent::ProposeAlliance { target_player: 2 });
     send(&mut engine, 2, GameplayIntent::AcceptAlliance { target_player: 1 });
     assert!(engine.state.player(1).unwrap().alliances.contains(&2), "alliance never formed");
     send(&mut engine, 2, GameplayIntent::BreakAlliance { target_player: 1 });
-    let half = engine.state.player(2).unwrap().troops * 0.5;
-    send(&mut engine, 2, GameplayIntent::Attack(AttackIntent { target_owner: 1, troops: Some(half) }));
+    if traitor_attacks {
+        let half = engine.state.player(2).unwrap().troops * 0.5;
+        send(&mut engine, 2, GameplayIntent::Attack(AttackIntent { target_owner: 1, troops: Some(half) }));
+    }
     for _ in 0..delay {
         engine.tick();
     }
     let tiles_before = engine.state.player(1).unwrap().tile_count as i64;
     let traitor_before = engine.state.player(2).unwrap().troops;
+    let badge = engine.build_snapshot().players.iter().any(|p| p.id == 2 && p.traitor);
     let half = engine.state.player(1).unwrap().troops * 0.5;
     send(&mut engine, 1, GameplayIntent::Attack(AttackIntent { target_owner: 2, troops: Some(half) }));
-    for _ in 0..50 {
+    for _ in 0..10 {
         engine.tick();
     }
     (
         engine.state.player(1).unwrap().tile_count as i64 - tiles_before,
         (traitor_before - engine.state.player(2).unwrap().troops).round() as i64,
+        badge,
     )
 }
 
@@ -380,20 +400,30 @@ fn boudica_revenge_in_a_real_betrayal() {
     assert_eq!(engine.state.player(1).unwrap().leader, boudica);
 
     let plain = Leader::of("ragnar");
-    let (b_tiles, b_kills) = revenge(boudica, 0);
-    let (p_tiles, p_kills) = revenge(plain, 0);
-    let late_b = revenge(boudica, TRAITOR_WINDOW_PLUS_ONE);
-    let late_p = revenge(plain, TRAITOR_WINDOW_PLUS_ONE);
-    eprintln!("right after betrayal: Boudica {b_tiles} tiles / {b_kills} kills, plain {p_tiles} tiles / {p_kills} kills");
-    eprintln!("after the traitor mark ends: Boudica {late_b:?}, plain {late_p:?}");
+    let (b_tiles, b_kills, _) = revenge(boudica, 0, true);
+    let (p_tiles, p_kills, _) = revenge(plain, 0, true);
+    eprintln!("counterattack right after betrayal: Boudica {b_tiles} tiles / {b_kills} troops, plain {p_tiles} tiles / {p_kills} troops");
     assert!(
         b_tiles > 0 && b_tiles >= p_tiles.max(1) * 3 / 2,
         "Boudica took {b_tiles} tiles vs {p_tiles} without the ability"
     );
-    assert_eq!(late_b, late_p, "the bonus outlived the traitor mark");
+
+    // The bonus lives exactly as long as the badge: 1 s before it ends and 0.1 s after.
+    let window = crate::diplomacy::TRAITOR_STATUS_TICKS;
+    for (delay, marked) in [(window - 10, true), (window + 1, false)] {
+        let (b, b_kills, b_badge) = revenge(boudica, delay, false);
+        let (p, p_kills, p_badge) = revenge(plain, delay, false);
+        eprintln!("attack at tick {delay}: badge {b_badge}, Boudica {b} tiles / {b_kills} troops, plain {p} tiles / {p_kills} troops");
+        assert_eq!((b_badge, p_badge), (marked, marked), "badge at tick {delay}");
+        assert!(p > 0, "plain attack must take land at tick {delay}");
+        if marked {
+            assert!(b_kills > p_kills * 3 / 2, "no bonus while the badge is on");
+        } else {
+            assert_eq!((b, b_kills), (p, p_kills), "bonus outlived the badge");
+        }
+    }
 }
 
-const TRAITOR_WINDOW_PLUS_ONE: u32 = crate::diplomacy::TRAITOR_STATUS_TICKS + 1;
 
 /// The real betrayal path (`BreakAlliance` intent) must mark the breaker as an
 /// active traitor, and the snapshot the map and combat read must carry it.
@@ -419,7 +449,7 @@ fn breaking_an_alliance_marks_the_breaker_as_traitor() {
 #[test]
 fn every_hero_in_the_betrayal_scene() {
     for hero in Leader::all() {
-        let (tiles, kills) = revenge(hero, 0);
+        let (tiles, kills, _) = revenge(hero, 0, true);
         let fights_harder = matches!(
             hero.ability(),
             Ability::CombatStrength { .. }
@@ -429,4 +459,182 @@ fn every_hero_in_the_betrayal_scene() {
         eprintln!("{hero:?}: {:?} → {tiles} tiles, {kills} troops", hero.ability());
         assert_eq!(tiles > 0, fights_harder, "{hero:?} in the betrayal scene");
     }
+}
+
+/// Player 1 (`hero`) attacks player 2 — a real tribe (`Bot`, tribe troops) or a
+/// human — with half its army through the real attack intent, again and again
+/// until player 2 falls. Returns (ticks to crush it, tiles taken in the first second).
+fn crush(hero: Leader, victim: PlayerType) -> (u32, u32) {
+    let mut engine = arena(32, 16, hero, Some(Leader::of("ragnar")));
+    let tribe = Player::new_bot(2, "Tribe".into(), [0.2; 3], &engine.state.config);
+    let rival = engine.state.player_mut(2).unwrap();
+    rival.player_type = victim;
+    rival.troops = tribe.troops;
+    engine.execute_income();
+    let start = engine.state.player(1).unwrap().tile_count;
+    let mut first_second = 0;
+    for tick in 1..=600 {
+        if !engine.attacks.iter().any(|a| a.owner_id == 1) {
+            let half = engine.state.player(1).unwrap().troops * 0.5;
+            send(&mut engine, 1, GameplayIntent::Attack(AttackIntent { target_owner: 2, troops: Some(half) }));
+        }
+        engine.tick();
+        if tick == 10 {
+            first_second = engine.state.player(1).unwrap().tile_count - start;
+        }
+        if !engine.state.player(2).unwrap().alive || engine.state.player(2).unwrap().tile_count == 0 {
+            return (tick, first_second);
+        }
+    }
+    (600, first_second)
+}
+
+/// Lady Six Sky, "Villages Kneel": she crushes tribes faster than a hero without
+/// the ability and gets nothing extra against human players.
+#[test]
+fn lady_six_sky_crushes_tribes() {
+    let six_sky = Leader::of("lady_six_sky");
+    assert_eq!(six_sky.ability(), Ability::TribeSpeed { percent: 50 });
+    let plain = Leader::of("ragnar");
+    let (six_ticks, six_first) = crush(six_sky, PlayerType::Bot);
+    let (plain_ticks, plain_first) = crush(plain, PlayerType::Bot);
+    eprintln!("vs tribe: Lady Six Sky crushes it in {six_ticks} ticks ({six_first} tiles in 1 s), plain {plain_ticks} ticks ({plain_first} tiles)");
+    assert!(six_ticks < 600 && six_ticks < plain_ticks, "no faster against tribes");
+    assert!(six_first > plain_first, "no stronger first strike against tribes");
+
+    let vs_human = crush(six_sky, PlayerType::Human);
+    let plain_vs_human = crush(plain, PlayerType::Human);
+    eprintln!("vs human: Lady Six Sky {vs_human:?}, plain {plain_vs_human:?}");
+    assert_eq!(vs_human, plain_vs_human, "the tribe bonus leaked onto human players");
+}
+
+const MOUNTAIN: u8 = 0x80 | 25;
+const LAND: u8 = 0x80;
+
+/// Tiles `attacker` (5,000 troops) takes from a rival holding `rival_troops`, in 20 ticks.
+fn outnumbered_tiles(attacker: Leader, rival_troops: f64) -> u32 {
+    let mut engine = arena(24, 4, attacker, Some(Leader::of("caesar")));
+    engine.state.player_mut(1).unwrap().troops = 5_000.0;
+    engine.state.player_mut(2).unwrap().troops = rival_troops;
+    send(
+        &mut engine,
+        1,
+        GameplayIntent::Attack(AttackIntent {
+            target_owner: 2,
+            troops: Some(5_000.0),
+        }),
+    );
+    for _ in 0..20 {
+        engine.tick();
+    }
+    engine.state.player(1).unwrap().tile_count
+}
+
+/// Troops the attacking army loses per neutral tile taken on `terrain`. Only conquest
+/// takes from the army (income goes to the home pool), so a short raid isolates it.
+fn cost_per_tile(leader: Leader, terrain: u8) -> f64 {
+    let mut engine = arena(48, 2, leader, None);
+    engine.state.map.terrain.fill(MapTile::from_byte(terrain));
+    engine.state.player_mut(1).unwrap().troops = 10_000.0;
+    send(
+        &mut engine,
+        1,
+        GameplayIntent::Attack(AttackIntent {
+            target_owner: 0,
+            troops: Some(10_000.0),
+        }),
+    );
+    let army = |engine: &SowEngine| -> f64 {
+        engine
+            .attacks
+            .iter()
+            .filter(|a| a.owner_id == 1)
+            .map(|a| a.troops)
+            .sum()
+    };
+    let army_start = army(&engine);
+    let start_tiles = engine.state.player(1).unwrap().tile_count;
+    for _ in 0..3 {
+        engine.tick();
+    }
+    let tiles = engine.state.player(1).unwrap().tile_count - start_tiles;
+    (army_start - army(&engine)) / f64::from(tiles)
+}
+
+/// Napoleon, "Against the Odds": his attacks fight 35% stronger only against a player
+/// whose troops outnumber the army he sends. Other heroes and neutral land get nothing.
+#[test]
+fn napoleon_strength_counts_only_against_a_stronger_player() {
+    let napoleon = Leader::of("napoleon");
+    let mut engine = arena(24, 4, napoleon, Some(Leader::of("caesar")));
+    engine.state.player_mut(2).unwrap().troops = 20_000.0;
+    let strength = |engine: &SowEngine, target: u16, army: f64| {
+        attack_strength(&engine.state, 1, target, army)
+    };
+    assert_eq!(strength(&engine, 2, 5_000.0), 1.35);
+    assert_eq!(strength(&engine, 2, 20_000.0), 1.0, "equal numbers");
+    assert_eq!(strength(&engine, 2, 25_000.0), 1.0, "bigger army");
+    assert_eq!(strength(&engine, 0, 5_000.0), 1.0, "neutral land");
+    engine.state.player_mut(1).unwrap().leader = Leader::of("ragnar");
+    assert_eq!(strength(&engine, 2, 5_000.0), 1.0, "another hero");
+}
+
+#[test]
+fn napoleon_outnumbered_attack_takes_more_tiles() {
+    let napoleon = Leader::of("napoleon");
+    let plain = Leader::of("ragnar");
+    assert!(
+        outnumbered_tiles(napoleon, 20_000.0) > outnumbered_tiles(plain, 20_000.0),
+        "Napoleon's outnumbered attack must out-fight the same attack without the ability"
+    );
+    assert_eq!(
+        outnumbered_tiles(napoleon, 2_500.0),
+        outnumbered_tiles(plain, 2_500.0),
+        "no bonus when his army is the bigger one"
+    );
+}
+
+/// The visual flag must follow the same rule as the combat: Napoleon's attack on a
+/// stronger player is flagged, the same attack by another hero or against a weaker
+/// player is not.
+#[test]
+fn napoleon_empowered_flag_reaches_the_snapshot() {
+    let flagged = |attacker: Leader, rival_troops: f64| {
+        let mut engine = arena(24, 4, attacker, Some(Leader::of("caesar")));
+        engine.state.player_mut(1).unwrap().troops = 5_000.0;
+        engine.state.player_mut(2).unwrap().troops = rival_troops;
+        send(
+            &mut engine,
+            1,
+            GameplayIntent::Attack(AttackIntent {
+                target_owner: 2,
+                troops: Some(5_000.0),
+            }),
+        );
+        let snapshot = engine.build_snapshot();
+        snapshot
+            .players
+            .iter()
+            .find(|p| p.id == 1)
+            .unwrap()
+            .empowered_attack
+    };
+    assert!(flagged(Leader::of("napoleon"), 20_000.0));
+    assert!(!flagged(Leader::of("napoleon"), 2_500.0));
+    assert!(!flagged(Leader::of("ragnar"), 20_000.0));
+}
+
+/// Hannibal, "Alpine Crossing": a mountain tile costs him 25% fewer troops; land is
+/// unchanged, so the ability does nothing outside the mountains.
+#[test]
+fn hannibal_mountain_conquest_costs_a_quarter_less() {
+    let hannibal = Leader::of("hannibal");
+    let plain = Leader::of("ragnar");
+    let mountain = cost_per_tile(hannibal, MOUNTAIN);
+    let plain_mountain = cost_per_tile(plain, MOUNTAIN);
+    assert!(
+        (mountain - 0.75 * plain_mountain).abs() < 1e-6,
+        "mountain: {mountain} vs {plain_mountain} without the ability"
+    );
+    assert_eq!(cost_per_tile(hannibal, LAND), cost_per_tile(plain, LAND));
 }

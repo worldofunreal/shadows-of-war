@@ -434,6 +434,7 @@ mod avatar_identity_tests {
             can_retaliate: false,
             traitor: false,
             leader: Leader::default(),
+            empowered_attack: false,
             campaign_avatar: campaign_avatar.map(str::to_owned),
             is_campaign_faction: false,
             skin_style: 0,

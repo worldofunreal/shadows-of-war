@@ -779,6 +779,17 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     }
     super::pack_art_atlases(paths)?;
     super::validate_current_ui_contract(paths)?;
+    run(
+        "node",
+        &[
+            "--test",
+            "sow-web/shell/menu_flow.test.js",
+            "sow-web/shell/campaign_view.test.js",
+            "sow-web/shell/gameplay_ui.test.js",
+        ],
+        Some(&paths.root),
+    )
+    .context("shell UI regression tests failed")?;
     for filter in ["test_build_index_", "test_nginx_conf_"] {
         run(
             "cargo",
@@ -798,6 +809,8 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "sow-data",
             "-p",
             "sow-server",
+            "-p",
+            "sow-render",
             "--features",
             "sow-data/server",
             "--",
@@ -805,11 +818,14 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
         ],
         Some(&paths.root),
     )
-    .context("core economy and simulation regression tests failed")?;
-    for (filter, failure) in [(
-        "reward_exit_tests",
-        "server-confirmed reward exit tests failed",
-    )] {
+    .context("core economy, simulation and render regression tests failed")?;
+    for (filter, failure) in [
+        (
+            "reward_exit_tests",
+            "server-confirmed reward exit tests failed",
+        ),
+        ("hero_ability", "hero ability client tests failed"),
+    ] {
         run(
             "cargo",
             &[

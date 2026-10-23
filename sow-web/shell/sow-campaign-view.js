@@ -40,6 +40,7 @@
         let guideWasVisible = false, cameraTracking = false, guideX = null, guideY = null, guideLabelWidth = 0, guideLabelHeight = 0, guideLabelMeasureKey = "", nudgeTimer = 0;
         let homeGuideAnimation = null, homeGuideAnimationStep = null;
         root.classList.add("sow-story");
+        root.classList.toggle("has-guide-skip", Boolean(options.guideSkipLabel));
         root.innerHTML = '<div class="sow-story__shade" hidden></div>' +
             '<div class="sow-story__cinematic" tabindex="-1" hidden><video playsinline preload="none" fetchpriority="low"></video><button class="sow-story__continue sow-story__cinematic-start" type="button" data-story-start hidden></button><span class="sow-story__cinematic-hold" data-story-hold hidden aria-hidden="true"><span></span><i><b></b></i></span></div>' +
             '<article class="sow-story__dialog" tabindex="-1" hidden>' +
@@ -53,9 +54,11 @@
                 '<div class="sow-story__objective-copy"><h3></h3><p id="' + uid + '-hint"></p><div class="sow-story__meter"><progress></progress><output></output></div></div>' +
                 '<button class="sow-story__locate" type="button" data-story-focus>⌖</button></aside>' +
             '<div class="sow-story__spotlight" aria-hidden="true" hidden></div>' +
+            '<button class="sow-story__guide-skip" type="button" data-story-guide-skip hidden></button>' +
             '<div class="sow-story__gesture" data-tutorial-hand hidden><span class="sow-story__ripple" aria-hidden="true"></span><span class="sow-story__hand" aria-hidden="true"><img alt="" draggable="false"></span><span class="sow-story__zoom" aria-hidden="true"><span class="sow-story__zoom-fingers"><i></i><i></i><b>↔</b></span><span class="sow-story__zoom-wheel">↕</span></span><span class="sow-story__pan-keys" aria-hidden="true"><kbd>↑</kbd><span><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span></span><span class="sow-story__gesture-label" hidden><span class="sow-story__gesture-copy"></span><span class="sow-story__gesture-hint" hidden></span><span class="sow-story__gesture-metric" hidden><b class="sow-story__zoom-current"></b><i aria-hidden="true">→</i><b class="sow-story__zoom-target"></b></span></span></div>';
         const find = selector => root.querySelector(selector);
         const dialog = find(".sow-story__dialog"), shade = find(".sow-story__shade");
+        const guideSkip = find("[data-story-guide-skip]");
         const portrait = find(".sow-story__portrait"), portraitLine = portrait.querySelector(".sow-story__portrait-line");
         let image = portrait.querySelector("img");
         const title = find(".sow-story__title"), body = find(".sow-story__body");
@@ -666,6 +669,11 @@
             gesture.classList.toggle("is-compact", compactViewport);
             spotlight.hidden = !guideVisible || !anchor.width;
             spotlight.classList.toggle("is-dimmed", Boolean(guideVisible && (anchor.dimOutside || step.guide.kind === "ui")));
+            guideSkip.hidden = !(options.guideSkipLabel && options.onDismiss && !spotlight.hidden && spotlight.classList.contains("is-dimmed"));
+            if (!guideSkip.hidden) {
+                setText(guideSkip, options.guideSkipLabel);
+                guideSkip.setAttribute("aria-label", options.guideSkipLabel);
+            }
             if (!guideVisible || !homeGuide) clearHomeGuideAnimation();
             if (guideVisible) {
                 cameraTracking = anchor.cameraTracked === true;
@@ -760,7 +768,7 @@
                 startCinematic(sourceKey);
             }
             else if (button.hasAttribute("data-story-focus") && options.onFocus) options.onFocus();
-            else if (button.hasAttribute("data-story-dismiss")) dismissDialog();
+            else if (button.hasAttribute("data-story-dismiss") || button.hasAttribute("data-story-guide-skip")) dismissDialog();
         }
         function outsideClick(event) {
             if (!model || root.hidden || !model.paused || !root.classList.contains("is-modal") || root.contains(event.target)) return;
@@ -779,7 +787,11 @@
             if (!model || root.hidden) return;
             if (model.paused) event.stopPropagation();
             if (event.repeat) return;
-            if (event.key === "Escape" && (options.onDismiss || options.onContinue)) { event.preventDefault(); dismissDialog(); }
+            if (event.key === "Escape" && (options.onDismiss || options.onContinue)) {
+                event.preventDefault();
+                if (options.guideSkipLabel) event.stopPropagation();
+                dismissDialog();
+            }
             else if (event.key === "Tab" && model.paused && ["scene", "choice", "end"].includes(model.step.type)) {
                 const buttons = !cinematic.hidden
                     ? (cinematicStart.hidden ? [] : [cinematicStart])
@@ -799,7 +811,8 @@
         doc.addEventListener("click", recoverCinematicFromClick, true);
         doc.addEventListener("click", outsideClick, true);
         ["pointerdown", "pointerup", "touchstart", "touchend", "wheel"].forEach(type => root.addEventListener(type, stop, { passive: true }));
-        root.addEventListener("keydown", keys);
+        const keyboardTarget = options.guideSkipLabel ? doc : root;
+        keyboardTarget.addEventListener("keydown", keys, Boolean(options.guideSkipLabel));
         return {
             render,
             updateCameraAnchor,
@@ -811,7 +824,8 @@
                 stopCinematic();
                 destroyed = true; portraitRequestId++; portraitCache.clear(); reportedPortraitFailures.clear();
                 if (portraitObserver) portraitObserver.disconnect();
-                root.removeEventListener("click", click); root.removeEventListener("keydown", keys);
+                root.removeEventListener("click", click);
+                keyboardTarget.removeEventListener("keydown", keys, Boolean(options.guideSkipLabel));
                 doc.removeEventListener("click", recoverCinematicFromClick, true);
                 doc.removeEventListener("click", outsideClick, true);
                 doc.removeEventListener("visibilitychange", clearHoldWhenHidden);

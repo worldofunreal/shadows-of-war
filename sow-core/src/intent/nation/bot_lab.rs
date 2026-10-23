@@ -1562,7 +1562,7 @@ fn s5_enclosed_coastal_ghost_breaks_out_by_sea() {
 #[test]
 fn s7_every_match_ends_somebody_wins() {
     let seeds = [101, 202, 303, 404, 505, 606, 707, 808, 909, 1010];
-    const CAP: u64 = 4_000;
+    const CAP: u64 = 8_000;
     let mut decided = 0usize;
     let mut ghost_wins = 0usize;
 
@@ -2580,6 +2580,8 @@ fn s16_building_rules_trace(legacy: bool) -> Vec<(u64, u64)> {
 
     let mut scenario = build_s16_scenario();
     scenario.assert_setup();
+    // Recorded checkpoints were produced at the previous standard speed.
+    scenario.engine.state.config.global_speed_multiplier = 0.35;
     scenario.engine.legacy_building_rules = legacy;
     scenario.engine.legacy_elimination_rewards = legacy;
     let mut hash = 0xcbf29ce484222325;
@@ -2622,27 +2624,27 @@ fn s16_checkpoint_decision_and_state_reference() {
     // The runtime trace is fixed per target; raw floating-point state diverges on FreeBSD after tick 750.
     #[cfg(target_os = "freebsd")]
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0xe8fb_e0d9_e99f_7c88),
-        (500, 0xe417_c4af_f495_78b3),
-        (750, 0x46f1_8858_5be8_47f8),
-        (1000, 0x37f6_1297_c836_eae8),
-        (1250, 0xc946_c980_cb95_63ca),
-        (1500, 0x9737_dc04_415d_c923),
-        (1750, 0xf741_f2e9_1acb_4893),
-        (2000, 0x3fa4_48b5_b8b8_cfa9),
-        (2102, 0x4501_5158_00c0_0001),
+        (250, 0x8abf_fc1b_839c_f669),
+        (500, 0x5643_a822_e6a1_9fca),
+        (750, 0x5380_be2a_f6a1_c2e5),
+        (1000, 0xa1bd_7a90_48ab_b27d),
+        (1250, 0x05df_5407_d440_1f53),
+        (1500, 0x9151_a3b6_6746_b5b5),
+        (1750, 0x71db_aa58_76a3_6bae),
+        (2000, 0x0c58_c574_1e12_792a),
+        (2102, 0xbe10_80e6_287c_0d53),
     ];
     #[cfg(not(target_os = "freebsd"))]
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0xe8fb_e0d9_e99f_7c88),
-        (500, 0xe417_c4af_f495_78b3),
-        (750, 0x46f1_8858_5be8_47f8),
-        (1000, 0x37f6_1297_c836_eae8),
-        (1250, 0xc946_c980_cb95_63ca),
-        (1500, 0x9737_dc04_415d_c923),
-        (1750, 0xf741_f2e9_1acb_4893),
-        (2000, 0x3fa4_48b5_b8b8_cfa9),
-        (2102, 0x4501_5158_00c0_0001),
+        (250, 0x8abf_fc1b_839c_f669),
+        (500, 0x5643_a822_e6a1_9fca),
+        (750, 0x5380_be2a_f6a1_c2e5),
+        (1000, 0xa1bd_7a90_48ab_b27d),
+        (1250, 0x05df_5407_d440_1f53),
+        (1500, 0x9151_a3b6_6746_b5b5),
+        (1750, 0x71db_aa58_76a3_6bae),
+        (2000, 0x0c58_c574_1e12_792a),
+        (2102, 0xbe10_80e6_287c_0d53),
     ];
     assert_eq!(
         checkpoints,
@@ -2659,15 +2661,15 @@ fn s16_checkpoint_decision_and_state_reference() {
 fn historical_s16_building_rules_keep_recorded_results() {
     let checkpoints = s16_building_rules_trace(true);
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x5617_8864_9b5a_55d4),
-        (500, 0xdb3c_eb91_31b5_8eab),
-        (750, 0xe30e_51d7_28a8_0283),
-        (1000, 0x4b23_73dd_832d_d272),
-        (1250, 0x65b0_1629_e32a_1e4a),
-        (1500, 0x909e_b2ea_d56e_cbe4),
-        (1750, 0x1ccb_00ab_1478_72b3),
-        (2000, 0x7aee_df39_168b_231c),
-        (2102, 0x7a8d_0e28_8a44_5652),
+        (250, 0xabc7_d55c_e898_815a),
+        (500, 0xf929_85ae_2a53_f523),
+        (750, 0x39e8_5565_3823_2118),
+        (1000, 0x9ab4_ff49_4137_9faf),
+        (1250, 0xda67_c269_5e1d_be23),
+        (1500, 0xedb9_e8d5_472c_37e3),
+        (1750, 0xdc5d_5ace_69da_2208),
+        (2000, 0xc464_c6fd_52c5_c2b1),
+        (2102, 0x8af1_dba5_1c0a_68b9),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

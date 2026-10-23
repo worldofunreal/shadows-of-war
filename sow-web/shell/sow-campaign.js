@@ -169,22 +169,8 @@
     const UI_TARGETS = {
         menu_campaign: '#sow-menu [data-command="open_campaign"]',
         campaign_replay: '#sow-menu [data-command="start_campaign_episode"][data-episode-id]',
-        menu_multiplayer: '#sow-menu [data-command="quick_match"]',
-        menu_home: '#sow-menu [data-nav-screen="battle"]',
         menu_lobby: '#sow-menu .sow-menu__home-public [data-lobby-card]',
         menu_heroes: '#sow-menu [data-nav-screen="heroes"]',
-        menu_profile: '#sow-menu [data-nav-screen="profile"]',
-        menu_store: '#sow-menu [data-nav-screen="store"]',
-        menu_display_name: '#sow-menu [data-role="display-name"]',
-        menu_leader_card: '#sow-menu [data-screen-panel="heroes"] [data-command="preview_leader"]:not(.is-locked)',
-        menu_selected_leader_card: '#sow-menu [data-screen-panel="heroes"] [data-command="preview_leader"]',
-        menu_alternate_leader_card: '#sow-menu [data-screen-panel="heroes"] [data-command="preview_leader"]:not(.is-locked)',
-        menu_affordable_leader_card: '#sow-menu [data-screen-panel="heroes"] [data-command="preview_leader"]',
-        menu_leader_confirm: '#sow-menu [data-screen-panel="heroes"] [data-command="confirm_leader"]',
-        menu_gem_offer: '#sow-menu [data-screen-panel="heroes"] [data-hero-purchase] [data-command="unlock_leader"][data-currency="gems"]:not(:disabled)',
-        menu_profile_history: '#sow-menu [data-screen-panel="profile"] [data-command="profile_tab"][data-profile-tab="history"]',
-        menu_purchase_confirm: '#sow-menu [data-command="confirm_purchase"]',
-        menu_purchase_cancel: '#sow-menu [data-command="cancel_purchase"]',
         attack_ratio: "#sow-hud-slider",
         hud_center_camera: '#sow-hud [data-command="center_camera"]',
         hud_inbox: '#sow-hud [data-command="toggle_inbox"]',
@@ -218,22 +204,8 @@
         settings: '#sow-hud [data-command="toggle_settings"]'
     };
     const MENU_GUIDE_OUTCOMES = Object.freeze({
-        heroes_ready: Object.freeze({ control: "menu_heroes", kind: "screen", screen: "heroes" }),
-        name_saved: Object.freeze({ control: "menu_display_name", kind: "counter" }),
-        leader_preview_selected: Object.freeze({ control: "menu_alternate_leader_card", kind: "counter" }),
-        leader_selected: Object.freeze({ control: "menu_leader_confirm", kind: "counter" }),
-        leader_offer_selected: Object.freeze({ control: "menu_affordable_leader_card", kind: "counter" }),
-        leader_purchase_prompt_opened: Object.freeze({ control: "menu_gem_offer", kind: "counter" }),
-        leader_purchased: Object.freeze({ control: "menu_purchase_confirm", kind: "counter" }),
-        leader_purchase_cancelled: Object.freeze({ control: "menu_purchase_cancel", kind: "counter" }),
-        leader_purchase_closed: Object.freeze({ control: "menu_purchase_cancel", kind: "counter" }),
-        home_ready: Object.freeze({ control: "menu_home", kind: "screen", screen: "home" }),
-        profile_opened: Object.freeze({ control: "menu_profile", kind: "counter" }),
-        history_current_match_ready: Object.freeze({ control: "menu_profile_history", kind: "counter" }),
-        store_ready: Object.freeze({ control: "menu_store", kind: "counter" }),
-        quick_match_accepted: Object.freeze({ control: "menu_multiplayer", kind: "counter" })
+        heroes_ready: Object.freeze({ control: "menu_heroes", kind: "screen", screen: "heroes" })
     });
-    const MENU_GUIDE_ROUTE_FACTS = Object.freeze(["alternate_leader_available", "commerce_available", "commerce_offer_available", "leader_purchase_modal_open", "leader_purchase_confirmed"]);
 
     function zoomInputMode(info) {
         info = info || {};
@@ -420,46 +392,11 @@
     function resolveUiTarget(key, root, episodeId, facts) {
         const selector = UI_TARGETS[key];
         if (!selector || !root) return null;
-        if (key === "menu_selected_leader_card") {
-            if (typeof root.querySelectorAll !== "function") return null;
-            return Array.from(root.querySelectorAll(selector)).find(node => String(node.dataset && node.dataset.leaderId) === String(facts && facts.menu_guide_selected_leader)
-                && !node.disabled && node.getClientRects().length > 0) || null;
-        }
-        if (key === "menu_alternate_leader_card") {
-            const available = new Set((facts && facts.available_leader_ids || []).map(String));
-            const selected = String(facts && facts.selected_leader || "");
-            if (!available.size || typeof root.querySelectorAll !== "function") return null;
-            return Array.from(root.querySelectorAll(selector)).find(node => {
-                const leaderId = String(node.dataset && node.dataset.leaderId || "");
-                return leaderId && leaderId !== selected && available.has(leaderId)
-                    && !node.disabled && node.getClientRects().length > 0;
-            }) || null;
-        }
-        if (key === "menu_affordable_leader_card") {
-            const affordable = new Set((facts && facts.affordable_unowned_leader_ids || []).map(String));
-            if (!affordable.size || typeof root.querySelectorAll !== "function") return null;
-            return Array.from(root.querySelectorAll(selector)).find(node => node.dataset && affordable.has(String(node.dataset.leaderId))
-                && !node.disabled && node.getClientRects().length > 0) || null;
-        }
         if (key === "campaign_replay") {
             if (!episodeId || typeof root.querySelectorAll !== "function") return null;
             return Array.from(root.querySelectorAll(selector)).find(node => node.dataset && node.dataset.episodeId === episodeId) || null;
         }
         return typeof root.querySelector === "function" ? root.querySelector(selector) : null;
-    }
-
-    // Restore access to a pending control through the same menu controls as normal play.
-    function menuGuideControl(step, facts) {
-        const target = step.guide && step.guide.target;
-        const heroControls = ["menu_alternate_leader_card", "menu_affordable_leader_card", "menu_leader_confirm", "menu_gem_offer", "menu_purchase_confirm", "menu_purchase_cancel"];
-        if (heroControls.includes(target) && facts.screen !== "heroes" && !facts.purchase_modal_phase) return { target: "menu_heroes", hint_key: "menu.guide.recover_heroes" };
-        if (target === "menu_profile_history" && facts.screen !== "profile") return { target: "menu_profile", hint_key: "menu.guide.recover_profile" };
-        if (["menu_display_name", "menu_multiplayer"].includes(target) && facts.screen !== "home") return { target: "menu_home", hint_key: "menu.guide.recover_home" };
-        const chosen = facts.menu_guide_selected_leader;
-        if (chosen && !facts.purchase_modal_phase && ["menu_leader_confirm", "menu_gem_offer", "menu_purchase_confirm"].includes(target)
-            && facts.preview_leader_id !== chosen) return { target: "menu_selected_leader_card", hint_key: "menu.guide.recover_selection" };
-        if (target === "menu_purchase_confirm" && !facts.purchase_modal_phase) return { target: "menu_gem_offer", hint_key: "menu.guide.recover_offer" };
-        return { target, hint_key: step.hint_key };
     }
 
     function resolveUiAnchor(element, spotlightElement) {
@@ -1066,7 +1003,7 @@
     function validateMenuGuides(definition) {
         const errors = [];
         const issue = (step, field, message) => errors.push({ step: step && step.id, field, message });
-        const allowedGuides = ["welcome", "first_multiplayer"];
+        const allowedGuides = ["welcome"];
         if (!object(definition) || definition.version !== 1 || definition.episode_id !== "menu") {
             issue(null, "version", "Menu guides must use version 1 and episode_id menu.");
             return { errors, warnings: [] };
@@ -1111,7 +1048,6 @@
                     if (trigger.outcome != null && trigger.outcomes != null) issue(step, "trigger.outcomes", "Use either one outcome or an outcome list.");
                     if (trigger.outcomes != null && (!Array.isArray(trigger.outcomes) || new Set(trigger.outcomes).size !== trigger.outcomes.length)) issue(step, "trigger.outcomes", "Outcome lists must contain distinct registered outcomes.");
                 }
-                if (object(trigger) && trigger.require_purchased_leader != null && typeof trigger.require_purchased_leader !== "boolean") issue(step, "trigger.require_purchased_leader", "Choose whether the confirmed selection must equip this guide's purchased hero.");
                 if (object(trigger) && object(guide) && trigger.action !== guide.target) issue(step, "guide.target", "The hand and confirmed outcome must use the same control.");
             } else if (step.trigger || step.guide) issue(step, "trigger", "Only hand-guide steps use a menu control outcome.");
             if (step.type === "scene" && !step.title_key && !step.body_key) issue(step, "title_key", "Add title or body copy.");
@@ -1132,11 +1068,7 @@
         steps.forEach(step => {
             if (!object(step)) return;
             destinations(step).forEach(target => { if (!byId.has(target)) issue(step, "next", "Unknown destination: " + target); });
-            if (step.routes != null && !Array.isArray(step.routes)) issue(step, "routes", "Routes must be a list.");
-            (Array.isArray(step.routes) ? step.routes : []).forEach(route => {
-                const when = route && route.when;
-                if (!object(route) || !object(when) || typeof when.fact !== "string" || !MENU_GUIDE_ROUTE_FACTS.includes(when.fact) || !Number.isFinite(Number(when.gte))) issue(step, "routes", "Menu routes need a published numeric fact threshold.");
-            });
+            if (step.routes != null) issue(step, "routes", "The welcome guide does not use conditional routes.");
         });
         allowedGuides.forEach(guideId => {
             const guide = guides[guideId];
@@ -1234,7 +1166,6 @@
                     current = Number(ui[trigger.action] || 0) - Number(uiReference[trigger.action] || 0);
                     target = 1;
                 }
-                if (trigger.require_purchased_leader && !facts.menu_guide_selected_offer_equipped) current = 0;
             } else if (trigger.type === "building_selected") {
                 current = facts.selected_building_kind === trigger.kind ? 1 : 0;
                 target = 1;
@@ -1481,7 +1412,7 @@
         enter(entry || definition.entry);
         return { get definition() { return definition; }, state, update, advance, jump, replaceDefinition, setPaused, view };
     }
-    const api = { TYPES, TEAMS, METRICS, WAIT_MS, UI_TARGETS, menuGuideControl, MENU_GUIDE_OUTCOMES, MENU_GUIDE_ROUTE_FACTS, STRUCTURE_LEVEL_LIMITS, CAMPAIGN_ACTIONS, CAMPAIGN_ACTION_BUILDING_REQUIREMENTS, emptyCampaignUnlocks, applyCampaignUnlocks, campaignAllowsBuilding, campaignAllowsAction, campaignUnlockStates, campaignUnlocksAtStep, zoomInputMode, guideAction, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, resolveUiRangeAnchor, resolveUiRangeGuideAnchor, renameFactionText, removeFactionReferences, replaceFactionStoryNames, factionReferenceIds, validate, validateMenuGuides, create };
+    const api = { TYPES, TEAMS, METRICS, WAIT_MS, UI_TARGETS, MENU_GUIDE_OUTCOMES, STRUCTURE_LEVEL_LIMITS, CAMPAIGN_ACTIONS, CAMPAIGN_ACTION_BUILDING_REQUIREMENTS, emptyCampaignUnlocks, applyCampaignUnlocks, campaignAllowsBuilding, campaignAllowsAction, campaignUnlockStates, campaignUnlocksAtStep, zoomInputMode, guideAction, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, resolveUiRangeAnchor, resolveUiRangeGuideAnchor, renameFactionText, removeFactionReferences, replaceFactionStoryNames, factionReferenceIds, validate, validateMenuGuides, create };
     if (typeof module !== "undefined" && module.exports) module.exports = api;
     else host.SOWCampaign = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

@@ -1,8 +1,20 @@
-FALTAN (0)
+FALTAN (11)
+Muhammad Ahmad (el Mahdi) — Mahdist State | muhammad_ahmad.webp
+Msiri — Yeke Kingdom | msiri.webp
+Pedro II de Brasil — Empire of Brazil | pedro_ii.webp
+Tigranes el Grande — Armenian Empire | tigranes_el_grande.webp
 
-TENEMOS (213)
+Parākramabāhu I — Kingdom of Polonnaruwa | parakramabahu_i.webp
+Parameswara — Malacca Sultanate | parameswara.webp
+Walter Lini — Vanuatu | walter_lini.webp
+Tamar de Georgia — Kingdom of Georgia | tamar_de_georgia.webp
+
+María Estuardo — Kingdom of Scotland | maria_estuardo.webp
+Gwenllian ferch Gruffudd — Deheubarth (Wales) | gwenllian.webp
+María I de Portugal — Kingdom of Portugal | maria_i_de_portugal.webp
+
+TENEMOS (202)
 Hatshepsut — Ancient Egypt | hatshepsut.webp
-Mansa Musa — Mali Empire | mansa_musa.webp
 Amanirenas — Kingdom of Kush | amanirenas.webp
 Sundiata Keita — Mali Empire | sundiata_keita.webp
 Amanitore — Kingdom of Kush | amanitore.webp
@@ -10,7 +22,6 @@ Sonni Ali — Songhai Empire | sunni_ali.webp
 Amanishakheto — Kingdom of Kush | amanishakheto.webp
 Askia Muhammad I — Songhai Empire | askia_muhammad_i.webp
 Nefertiti — Ancient Egypt | nefertiti.webp
-Shaka — Zulu Kingdom | shaka_zulu.webp
 Cleopatra Selene II — Ancient Mauretania | cleopatra_selene_ii.webp
 Menelik II — Ethiopia | menelik_ii.webp
 Nzinga of Ndongo and Matamba — Ndongo and Matamba | nzinga_mbande.webp
@@ -68,7 +79,6 @@ Guaicaipuro — Carib people / Venezuela | guaicaipuro.webp
 Bartolina Sisa — Aymara people / Upper Peru | bartolina_sisa.webp
 Topa Inca Yupanqui — Inca Empire | tupac_yupanqui.webp
 Juana Azurduy de Padilla — Upper Peru / Bolivia | juana_azurduy.webp
-Simón Bolívar — Gran Colombia | simon_bolivar.webp
 Josefa Ortiz de Domínguez — Mexico | josefa_ortiz_de_dominguez.webp
 José de San Martín — Argentina / Chile / Peru | jose_de_san_martin.webp
 Policarpa Salavarrieta — New Granada / Colombia | policarpa_salavarrieta.webp
@@ -94,13 +104,10 @@ Akbar — Mughal Empire | akbar.webp
 Qin Liangyu — Ming dynasty | qin_liangyu.webp
 Babur — Mughal Empire | babur.webp
 Ahilyabai Holkar — Maratha / Malwa | ahilyabai_holkar.webp
-Cyrus the Great — Achaemenid Empire | ciro_el_grande.webp
 Kittur Chennamma — Kittur / India | kittur_chennamma.webp
 Solomon — Kingdom of Israel | solomon.webp
 Lakshmibai, Rani of Jhansi — Jhansi / India | rani_lakshmibai.webp
-Suleiman the Magnificent — Ottoman Empire | suleiman_el_magnifico.webp
 Cleopatra Thea — Seleucid Empire | cleopatra_thea.webp
-Saladin — Ayyubid Sultanate | saladino.webp
 Zenobia — Palmyra | zenobia.webp
 Ögedei Khan — Mongol Empire | ogedei_khan.webp
 Razia Sultan — Delhi Sultanate | razia_sultan.webp
@@ -119,7 +126,6 @@ Queen Seondeok of Silla — Silla Kingdom / Korea | seondeok_de_silla.webp
 Bayinnaung — Toungoo Empire / Burma | bayinnaung.webp
 Empress Lü — China / Han dynasty | lu_zhi.webp
 Harun al-Rashid — Abbasid Caliphate | harun_al_rashid.webp
-Lady Triệu — Vietnam | lady_trieu.webp
 Hammurabi — Babylon | hammurabi.webp
 Trưng Trắc — Vietnam | trung_trac.webp
 Ashurbanipal — Neo-Assyrian Empire | asurbanipal.webp
@@ -151,7 +157,6 @@ Isabella I of Castile — Castile / Spain | isabel_i_de_castilla.webp
 Alfred the Great — Wessex / England | alfredo_el_grande.webp
 Elizabeth I — England | isabel_i_de_inglaterra.webp
 Constantine the Great — Roman Empire | constantine.webp
-Catherine the Great — Russian Empire | catalina_la_grande.webp
 Louis XIV — France | luis_xiv.webp
 Maria Theresa — Habsburg Monarchy | maria_teresa_de_austria.webp
 Peter the Great — Russia | pedro_el_grande.webp
@@ -159,7 +164,6 @@ Margaret I of Denmark — Kalmar Union | margarita_i_de_dinamarca.webp
 Ivan the Terrible — Russia | ivan_iv_de_rusia.webp
 Irene of Athens — Byzantine Empire | irene_de_atenas.webp
 Skanderbeg — Albania | skanderbeg.webp
-Theodora — Byzantine Empire | teodora.webp
 Vlad III the Impaler — Wallachia | vlad_iii.webp
 Amalasuintha — Ostrogothic Kingdom / Italy | amalasunta.webp
 Gustavus Adolphus — Sweden | gustavo_ii_adolfo.webp
@@ -167,7 +171,6 @@ Brunhilda of Austrasia — Austrasia / Franks | brunilda_de_austrasia.webp
 Harald Bluetooth — Denmark | harald_bluetooth.webp
 Jadwiga of Poland — Poland | jadwiga_de_polonia.webp
 Otto von Bismarck — Prussia / Germany | otto_von_bismarck.webp
-Joan of Arc — France | juana_de_arco.webp
 Giuseppe Garibaldi — Italy | giuseppe_garibaldi.webp
 Christina, Queen of Sweden — Sweden | cristina_de_suecia.webp
 Frederick the Great — Prussia | federico_el_grande.webp
@@ -182,7 +185,6 @@ Mary of Burgundy — Burgundian Netherlands | mary_of_burgundy.webp
 Grace O'Malley — Ireland | grace_o_malley.webp
 Stephen the Great — Moldavia | esteban_el_grande_de_moldavia.webp
 Kaʻahumanu — Kingdom of Hawaii | kaahumanu.webp
-Kamehameha I — Kingdom of Hawaii | kamehameha_i.webp
 Liliʻuokalani — Kingdom of Hawaii | liliuokalani.webp
 Pōmare IV — Tahiti | pomare_iv.webp
 Te Rauparaha — Māori / Ngāti Toa | te_rauparaha.webp

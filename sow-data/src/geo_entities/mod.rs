@@ -83,8 +83,14 @@ pub enum Ability {
     AllianceCost { percent: u32 },
     /// Every active alliance pays gold, `percent` more than the base rate.
     AllianceGold { percent: u32 },
-    /// Attacks on a traitor's territory deal `percent` more damage to its defenders.
+    /// Against an active traitor, each attacking troop counts `percent` more.
     DamageToTraitors { percent: u32 },
+    /// Attacks on tribes conquer `percent` faster.
+    TribeSpeed { percent: u32 },
+    /// Attacks on a player with more troops fight `percent` stronger.
+    OutnumberedStrength { percent: u32 },
+    /// Conquering mountain tiles costs `percent` fewer troops.
+    MountainCost { percent: u32 },
 }
 
 impl Ability {
@@ -103,7 +109,10 @@ impl Ability {
             | Ability::CityAssault { percent }
             | Ability::AllianceCost { percent }
             | Ability::AllianceGold { percent }
-            | Ability::DamageToTraitors { percent } => percent,
+            | Ability::DamageToTraitors { percent }
+            | Ability::TribeSpeed { percent }
+            | Ability::OutnumberedStrength { percent }
+            | Ability::MountainCost { percent } => percent,
         }
     }
 }

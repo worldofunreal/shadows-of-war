@@ -10,6 +10,16 @@ pub(crate) struct EliminationEventInfo<'a> {
     pub by_nuke: bool,
 }
 
+/// Hero tribe ability: crushing a tribe shows the hero's ability icon.
+fn tribe_ability_hero(
+    me: Option<sow_core::player::Leader>,
+    victim_type: sow_core::player::PlayerType,
+) -> Option<sow_core::player::Leader> {
+    me.filter(|leader| {
+        victim_type == sow_core::player::PlayerType::Bot && leader.tribe_speed_multiplier() > 1.0
+    })
+}
+
 impl SowApp {
     pub(crate) fn handle_player_eliminated(
         &mut self,
@@ -114,17 +124,43 @@ impl SowApp {
             }
         }
 
-        if conqueror_id == my_id && my_id != 0 && info.gold_bounty == 0 {
+        let tribe_ability_hero = tribe_ability_hero(
+            snap.players.iter().find(|p| p.id == my_id).map(|me| me.leader),
+            victim_type,
+        );
+        if conqueror_id == my_id
+            && my_id != 0
+            && (info.gold_bounty == 0 || tribe_ability_hero.is_some())
+        {
             let name = victim
                 .map(|p| sow_core::player::display_name(p.id, &p.name, p.player_type))
                 .unwrap_or_else(|| format!("Player {player_id}"));
+            let mut text = crate::ui::UiText::new("hud.elimination").with("victim", name);
+            if let Some(hero) = tribe_ability_hero {
+                text = text.with("hero", sow_core::commerce::leader_id(hero));
+            }
             self.ui.app.hud_state.push_notification_for_players(
-                crate::ui::UiText::new("hud.elimination").with("victim", name),
+                text,
                 [Some(my_id), Some(player_id)],
                 3,
                 Some(format!("elimination:{player_id}")),
                 false,
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tribe_ability_hero;
+    use sow_core::player::{Leader, PlayerType};
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn hero_ability_icon_only_when_a_tribe_hero_crushes_a_tribe() {
+        let six_sky = Leader::of("lady_six_sky");
+        assert_eq!(tribe_ability_hero(Some(six_sky), PlayerType::Bot), Some(six_sky));
+        assert_eq!(tribe_ability_hero(Some(six_sky), PlayerType::Human), None);
+        assert_eq!(tribe_ability_hero(Some(six_sky), PlayerType::Nation), None);
+        assert_eq!(tribe_ability_hero(Some(Leader::of("boudica")), PlayerType::Bot), None);
     }
 }

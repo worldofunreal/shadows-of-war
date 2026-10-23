@@ -272,7 +272,11 @@ impl SowApp {
                                 let rgb =
                                     p.team.map_or(p.color, sow_core::player::team_territory_rgb);
                                 player_colors[p.id as usize] = [rgb[0], rgb[1], rgb[2], 1.0];
-                                player_skin_styles[p.id as usize][0] = p.skin_style as f32;
+                                player_skin_styles[p.id as usize] = tile_effect_styles(
+                                    p.skin_style,
+                                    p.leader,
+                                    p.empowered_attack,
+                                );
                             }
                         }
                     }
@@ -643,3 +647,40 @@ impl SowApp {
         }
     }
 }
+
+/// Per-owner style row the map shader reads: `.x` skin, `.y` 1 while the owner's attack
+/// is "against the odds" (inverted conquest flash), `.z` 1 for a mountain-cost hero
+/// (amber mountain conquest flash). Derived from the same snapshot the combat uses.
+fn tile_effect_styles(
+    skin_style: u8,
+    leader: sow_core::player::Leader,
+    empowered_attack: bool,
+) -> [f32; 4] {
+    [
+        f32::from(skin_style),
+        f32::from(u8::from(empowered_attack)),
+        f32::from(u8::from(leader.has_mountain_cost())),
+        0.0,
+    ]
+}
+
+#[cfg(test)]
+mod hero_ability_tile_flags {
+    use super::tile_effect_styles;
+    use sow_core::player::Leader;
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn napoleon_outnumbered_attack_sets_the_inverted_flash_flag() {
+        let napoleon = Leader::of("napoleon");
+        assert_eq!(tile_effect_styles(3, napoleon, true), [3.0, 1.0, 0.0, 0.0]);
+        assert_eq!(tile_effect_styles(3, napoleon, false), [3.0, 0.0, 0.0, 0.0]);
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn hannibal_sets_the_mountain_flag_and_no_one_else_does() {
+        let hannibal = Leader::of("hannibal");
+        assert_eq!(tile_effect_styles(0, hannibal, false), [0.0, 0.0, 1.0, 0.0]);
+        assert_eq!(tile_effect_styles(0, Leader::of("ragnar"), true), [0.0, 1.0, 0.0, 0.0]);
+    }
+}
+

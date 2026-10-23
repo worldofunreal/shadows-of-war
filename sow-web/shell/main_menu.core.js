@@ -60,6 +60,7 @@
     var storeCatalogLoaded = false;
     var storeCatalogRetryAt = 0;
     var pendingCommands = [];
+    var pendingLeaderSelection = null;
 
     // Line icons live in main_menu.hud.js (loaded after the menu, used at render time).
     function menuIcon(name) {
@@ -90,6 +91,52 @@
             secret = window.localStorage.getItem("sow_account_secret");
         } catch (e) {}
         return (id && secret) ? { account_id: id, auth_secret: secret } : null;
+    }
+
+    function normalizeLeaderSelectionId(value) {
+        return String(value || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+    }
+
+    function leaderSelectionMatches(selection, preferRandom, leaderId) {
+        if (!selection || !!selection.prefer_random_leader !== !!preferRandom) return false;
+        return !!preferRandom || normalizeLeaderSelectionId(selection.selected_leader) ===
+            normalizeLeaderSelectionId(leaderId);
+    }
+
+    function currentLeaderSelection() {
+        var accountId = String(state && state.account_id || "");
+        if (pendingLeaderSelection && pendingLeaderSelection.account_id === accountId) {
+            return pendingLeaderSelection;
+        }
+        var preferRandom = !!(state && state.prefer_random_leader);
+        return {
+            account_id: accountId,
+            selected_leader: preferRandom ? null : (state && state.selected_leader || "Caesar"),
+            prefer_random_leader: preferRandom
+        };
+    }
+
+    function stageLeaderSelection(preferRandom, leaderId) {
+        var accountId = String(state && state.account_id || "");
+        if (pendingLeaderSelection && pendingLeaderSelection.account_id !== accountId) {
+            pendingLeaderSelection = null;
+        }
+        if (leaderSelectionMatches(currentLeaderSelection(), preferRandom, leaderId)) return;
+        pendingLeaderSelection = {
+            account_id: accountId,
+            selected_leader: preferRandom ? null : leaderId,
+            prefer_random_leader: !!preferRandom
+        };
+    }
+
+    function reconcileLeaderSelection(nextState) {
+        if (!pendingLeaderSelection) return;
+        var accountId = String(nextState && nextState.account_id || "");
+        if (pendingLeaderSelection.account_id !== accountId ||
+            leaderSelectionMatches(nextState, pendingLeaderSelection.prefer_random_leader,
+                pendingLeaderSelection.selected_leader)) {
+            pendingLeaderSelection = null;
+        }
     }
 
     function asset(path) {
@@ -340,14 +387,15 @@
 
     function heroImage(leaderId, variant) {
         var selected = arguments.length === 0;
-        if (selected && state && state.prefer_random_leader && state.phase === "MainMenu" &&
+        var selection = selected ? currentLeaderSelection() : null;
+        if (selected && selection.prefer_random_leader && state && state.phase === "MainMenu" &&
             state.loader_job !== "EnterGame" && state.loader_job !== "ExitGame") {
             window.SOW_prepareLeaderArt("random", state.loader_job === "Boot" ? "low" : "high");
             return leaderArtUrl("random");
         }
         var leader = arguments.length
             ? leaderById(leaderId || "Caesar")
-            : leaderById(state && state.selected_leader);
+            : leaderById(selection.selected_leader);
         if (selected && state && state.phase === "MainMenu" &&
             state.loader_job !== "EnterGame" && state.loader_job !== "ExitGame") {
             prepareLeaderArt(leader.slug, state.loader_job === "Boot" ? "low" : "high");
@@ -364,13 +412,15 @@
     }
 
     function avatarImage(leaderId) {
+        var selected = arguments.length === 0;
+        var selection = selected ? currentLeaderSelection() : null;
         if (arguments.length && !leaderId) return asset("gameplay/avatars/random.webp");
-        if (!arguments.length && state && state.prefer_random_leader) return asset("gameplay/avatars/random.webp");
+        if (selected && selection.prefer_random_leader) return asset("gameplay/avatars/random.webp");
         if (arguments.length) {
             var explicitLeader = leaderById(leaderId);
             return asset("gameplay/avatars/" + explicitLeader.slug + ".webp");
         }
-        var leader = leaderById(state && state.selected_leader);
+        var leader = leaderById(selection.selected_leader);
         return asset("gameplay/avatars/" + leader.slug + ".webp");
     }
 

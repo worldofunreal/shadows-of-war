@@ -2,8 +2,10 @@ use crate::leaders::Leader;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
-pub const FREE_ROTATION_SIZE: usize = 4;
+pub const FREE_ROTATION_SIZE: usize = 8;
 pub const ROTATION_PERIOD_SECS: u64 = 7 * 24 * 60 * 60;
+// Unix weeks start Thursday; this aligns rotations to Tuesday 08:00 UTC (02:00 Mexico City).
+const ROTATION_RESET_OFFSET_SECS: u64 = 40 * 60 * 60;
 // ponytail: one balancing constant until real retention data exists; move pricing to live config then.
 // Crowns are the free spendable currency (owner decision 2026-09); laurels are
 // achievement points and are never a price.
@@ -114,7 +116,7 @@ pub fn current_rotation_period() -> u64 {
 }
 
 pub const fn rotation_period(unix_seconds: u64) -> u64 {
-    unix_seconds / ROTATION_PERIOD_SECS
+    unix_seconds.saturating_add(ROTATION_RESET_OFFSET_SECS) / ROTATION_PERIOD_SECS
 }
 
 pub fn rotation_for_period(period: u64) -> Vec<Leader> {
@@ -339,7 +341,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rotation_is_four_and_deterministic() {
+    fn rotation_is_eight_and_deterministic() {
         let first = rotation_for_period(7);
         assert_eq!(first.len(), FREE_ROTATION_SIZE);
         assert_eq!(first, rotation_for_period(7));
@@ -353,6 +355,15 @@ mod tests {
                 .len(),
             FREE_ROTATION_SIZE
         );
+    }
+
+    #[test]
+    fn rotation_period_resets_tuesday_at_0800_utc() {
+        let first_reset = ROTATION_PERIOD_SECS - ROTATION_RESET_OFFSET_SECS;
+        assert_eq!(rotation_period(first_reset - 1), 0);
+        assert_eq!(rotation_period(first_reset), 1);
+        assert_eq!(rotation_period(first_reset + ROTATION_PERIOD_SECS - 1), 1);
+        assert_eq!(rotation_period(first_reset + ROTATION_PERIOD_SECS), 2);
     }
 
     #[test]

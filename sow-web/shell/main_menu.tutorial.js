@@ -61,19 +61,15 @@
     var menuJourney = {
         definition: null,
         loading: null,
-        guideId: null,
         accountId: null,
         machine: null,
         view: null,
         state: null,
         facts: null,
-        selectedLeader: null,
         paused: true,
         updateRevision: 0,
-        completedSignature: "",
-        lastSaveSignature: "",
-        lastSaveRevision: null,
         lastSaveAt: 0,
+        quickMatchRevision: 0,
         pendingSave: null,
         saveRetryTimer: null
     };
@@ -919,152 +915,62 @@
         return String(state && state.account_id || "");
     }
 
-    function menuGuideSaveRevision(state) {
-        var revision = Number(state && state.menu_guide_save_revision);
-        return Number.isFinite(revision) ? revision : null;
+    function menuGuideLocalKey(accountId) {
+        return "sow.menu_guide.v1." + encodeURIComponent(accountId) + ".welcome";
     }
 
-    function menuGuideLocalKey(accountId, guideId) {
-        return "sow.menu_guide.v1." + encodeURIComponent(accountId) + "." + guideId;
-    }
-
-    function readMenuGuideLocal(accountId, guideId) {
+    function readMenuGuideLocal(accountId) {
         try {
-            var value = JSON.parse(window.localStorage.getItem(menuGuideLocalKey(accountId, guideId)) || "null");
-            if (!value || !Array.isArray(value.completed_steps) || !["active", "completed", "skipped"].includes(value.status)) return null;
-            return value;
+            var value = JSON.parse(window.localStorage.getItem(menuGuideLocalKey(accountId)) || "null");
+            return value && ["active", "completed", "skipped"].includes(value.status) ? value : null;
         } catch (error) { return null; }
     }
 
-    function writeMenuGuideLocal(accountId, guideId, record) {
-        if (!accountId) return;
-        try { window.localStorage.setItem(menuGuideLocalKey(accountId, guideId), JSON.stringify(record)); }
-        catch (error) { /* Server progress remains the durable copy. */ }
-    }
-
-    function clearMenuGuideLocal(accountId, guideId) {
-        if (!accountId) return;
-        try { window.localStorage.removeItem(menuGuideLocalKey(accountId, guideId)); }
-        catch (error) { /* The server copy remains authoritative. */ }
-    }
-
     function normalizeMenuGuideRecord(record) {
-        return record && typeof record === "object" ? {
-            completed_steps: Array.isArray(record.completed_steps) ? record.completed_steps.filter(function (id) { return typeof id === "string"; }) : [],
-            current_step: typeof record.current_step === "string" ? record.current_step : null,
-            status: ["active", "completed", "skipped"].includes(record.status) ? record.status : "active",
-            selected_leader: typeof record.selected_leader === "string" ? record.selected_leader : null,
-            source_match_id: typeof record.source_match_id === "string" ? record.source_match_id : null
-        } : { completed_steps: [], current_step: null, status: "active", selected_leader: null, source_match_id: null };
+        record = record || {};
+        var completed = Array.isArray(record.completed_steps) ? record.completed_steps : [];
+        var status = ["completed", "skipped"].includes(record.status) ? record.status
+            : completed.includes("welcome_heroes") || completed.includes("welcome_complete") ? "completed" : "active";
+        return {
+            completed_steps: status === "completed" ? ["welcome_heroes", "welcome_complete"] : [],
+            current_step: status === "active" ? "welcome_heroes" : null,
+            status: status
+        };
     }
 
     function mergeMenuGuideRecord(serverRecord, localRecord) {
         var server = normalizeMenuGuideRecord(serverRecord), local = normalizeMenuGuideRecord(localRecord);
-        if (["completed", "skipped"].includes(server.status)) return server;
-        if (["completed", "skipped"].includes(local.status)) return local;
-        var localSelectionPending = local.selected_leader && !menuGuideRecordCovered(server, local);
-        return {
-            completed_steps: Array.from(new Set(server.completed_steps.concat(local.completed_steps))),
-            current_step: local.current_step && !menuGuideRecordCovered(server, local) ? local.current_step : server.current_step || local.current_step,
-            status: "active",
-            selected_leader: localSelectionPending ? local.selected_leader : server.selected_leader || local.selected_leader || null,
-            source_match_id: server.source_match_id || local.source_match_id || null
-        };
-    }
-
-    function menuGuideRecordCovered(serverRecord, nextRecord) {
-        var server = normalizeMenuGuideRecord(serverRecord), next = normalizeMenuGuideRecord(nextRecord);
-        return server.status === next.status
-            && (!next.current_step || server.current_step === next.current_step)
-            && next.completed_steps.every(function (stepId) { return server.completed_steps.includes(stepId); })
-            && (!next.selected_leader || server.selected_leader === next.selected_leader);
+        return server.status !== "active" ? server : local.status !== "active" ? local : server;
     }
 
     function scheduleMenuGuideSaveRetry() {
         if (menuJourney.saveRetryTimer || !menuJourney.pendingSave) return;
         menuJourney.saveRetryTimer = window.setTimeout(function () {
             menuJourney.saveRetryTimer = null;
-            var pending = menuJourney.pendingSave, state = menuJourney.state;
-            if (!pending || !state || menuGuideAccount(state) !== pending.accountId) return;
-            menuJourney.retryRequested = true;
-            menuJourney.lastSaveRevision = null;
-            saveMenuGuideRecord(state, pending.guideId, pending.record);
+            if (menuJourney.pendingSave) saveMenuGuideRecord(menuJourney.pendingSave);
         }, 2000);
     }
 
-    function saveMenuGuideRecord(state, guideId, record) {
-        var accountId = menuGuideAccount(state), serverRecord = menuGuideMap(state)[guideId];
-        if (!accountId) return;
-        writeMenuGuideLocal(accountId, guideId, record);
-        if (menuGuideRecordCovered(serverRecord, record)) {
-            clearMenuGuideLocal(accountId, guideId);
+    function saveMenuGuideRecord(record) {
+        var state = menuJourney.state, accountId = menuGuideAccount(state);
+        if (!accountId || record.status === "active") return;
+        var serverRecord = menuGuideMap(state).welcome;
+        if (serverRecord && ["completed", "skipped"].includes(serverRecord.status)) {
+            try { window.localStorage.removeItem(menuGuideLocalKey(accountId)); } catch (error) { /* Keep the server result. */ }
             menuJourney.pendingSave = null;
-            if (menuJourney.saveRetryTimer) { window.clearTimeout(menuJourney.saveRetryTimer); menuJourney.saveRetryTimer = null; }
-            menuJourney.lastSaveSignature = "";
-            menuJourney.lastSaveRevision = menuGuideSaveRevision(state);
+            if (menuJourney.saveRetryTimer) window.clearTimeout(menuJourney.saveRetryTimer);
+            menuJourney.saveRetryTimer = null;
             return;
         }
-        menuJourney.pendingSave = { accountId: accountId, guideId: guideId, record: record };
-        if (state && state.menu_guide_save_pending) return;
-        var signature = JSON.stringify([guideId, record.completed_steps, record.current_step, record.status, record.selected_leader]);
-        var revision = menuGuideSaveRevision(state);
-        if (menuJourney.lastSaveSignature === signature
-            && (revision === null || menuJourney.lastSaveRevision === revision) && !menuJourney.retryRequested) return;
+        try { window.localStorage.setItem(menuGuideLocalKey(accountId), JSON.stringify(record)); }
+        catch (error) { console.error("[SOW MENU GUIDE] Could not cache the pending result.", error); }
+        menuJourney.pendingSave = record;
         var now = Date.now();
-        if (menuJourney.lastSaveAt && now - menuJourney.lastSaveAt < 2000) { scheduleMenuGuideSaveRetry(); return; }
-        menuJourney.retryRequested = false;
-        menuJourney.lastSaveAt = now;
-        menuJourney.lastSaveSignature = signature;
-        menuJourney.lastSaveRevision = revision;
-        if (!send("save_menu_guide_progress", {
-            guide_id: guideId,
-            completed_steps: record.completed_steps,
-            current_step: record.current_step,
-            status: record.status,
-            selected_leader: record.selected_leader
-        })) { menuJourney.retryRequested = true; scheduleMenuGuideSaveRetry(); }
-    }
-
-    function menuGuideFacts(facts) {
-        facts = Object.assign({}, facts || {});
-        facts.commerce_offer_available = facts.commerce_available
-            && Array.isArray(facts.affordable_unowned_leader_ids)
-            && facts.affordable_unowned_leader_ids.length ? 1 : 0;
-        facts.leader_purchase_modal_open = facts.purchase_modal_phase ? 1 : 0;
-        facts.alternate_leader_available = (facts.available_leader_ids || []).some(function (id) { return String(id) !== String(facts.selected_leader || ""); }) ? 1 : 0;
-        facts.menu_guide_selected_leader = menuJourney.selectedLeader || null;
-        var selected = String(menuJourney.selectedLeader || "");
-        var owned = Array.isArray(facts.owned_leader_ids) ? facts.owned_leader_ids.map(String) : [];
-        facts.leader_purchase_confirmed = selected
-            && (String(facts.purchased_leader_id || "") === selected || owned.includes(selected)) ? 1 : 0;
-        facts.menu_guide_selected_offer_equipped = Boolean(selected && String(facts.selected_leader || "") === selected && owned.includes(selected));
-        return facts;
-    }
-
-    function firstMultiplayerReceiptReady(state, matchId) {
-        if (!matchId || !state || !Array.isArray(state.reward_receipts)) return false;
-        return state.reward_receipts.some(function (receipt) {
-            return receipt && receipt.id === matchId && receipt.match_id === matchId
-                && (receipt.status === "applied" || receipt.status === "presented")
-                && (receipt.verification_status === "verified" || receipt.verification_status === "rejected");
-        });
-    }
-
-    function nextMenuGuideStep(guide, definition, completed, facts) {
-        var byId = new Map(definition.steps.map(function (step) { return [step.id, step]; }));
-        var stepId = guide.entry, seen = new Set();
-        while (stepId && byId.has(stepId) && !seen.has(stepId)) {
-            seen.add(stepId);
-            if (!completed.includes(stepId)) return stepId;
-            var step = byId.get(stepId), route = (step.routes || []).find(function (candidate) {
-                var when = candidate && candidate.when;
-                return when && Number.isFinite(Number(facts[when.fact])) && Number(facts[when.fact]) >= Number(when.gte);
-            });
-            var visitedNext = [step.next].concat((step.routes || []).map(function (candidate) { return candidate.next; }), (step.choices || []).map(function (choice) { return choice.next; }))
-                .find(function (next) { return completed.includes(next); });
-            stepId = visitedNext || (route ? route.next : step.next);
+        if (serverRecord && !state.menu_guide_save_pending && (!menuJourney.lastSaveAt || now - menuJourney.lastSaveAt >= 2000)) {
+            menuJourney.lastSaveAt = now;
+            send("save_menu_guide_progress", Object.assign({ guide_id: "welcome" }, record));
         }
-        return null;
+        scheduleMenuGuideSaveRetry();
     }
 
     function loadMenuGuideDefinition() {
@@ -1098,150 +1004,73 @@
             translate: menuGuideTranslate,
             asset: asset,
             roster: null,
-            onContinue: function () { advanceMenuGuide(null); },
-            onChoice: function (choice) { advanceMenuGuide(choice); },
-            onFocus: null,
+            guideSkipLabel: menuGuideTranslate("menu.guide.skip"),
             onDismiss: skipMenuGuide
         });
     }
 
-    function advanceMenuGuide(choiceId) {
-        if (!menuGuideAuthorized() || !menuJourney.machine || !menuJourney.view) { pauseMenuGuide(); return; }
-        var step = menuJourney.machine.view().step;
-        if (menuJourney.machine.advance(choiceId, step.id)) updateMenuGuideRender();
+    function finishMenuGuide(status) {
+        menuJourney.machine = null;
+        pauseMenuGuide();
+        saveMenuGuideRecord(normalizeMenuGuideRecord({ status: status }));
     }
 
     function skipMenuGuide() {
-        if (!menuGuideAuthorized() || !menuJourney.guideId) { pauseMenuGuide(); return; }
-        var record = normalizeMenuGuideRecord({
-            completed_steps: menuJourney.machine && menuJourney.machine.state.completed || [],
-            status: "skipped",
-            selected_leader: menuJourney.selectedLeader || null
-        });
-        saveMenuGuideRecord(menuJourney.state, menuJourney.guideId, record);
-        menuJourney.machine = null;
-        menuJourney.guideId = null;
-        if (menuJourney.view) { menuJourney.view.destroy(); menuJourney.view = null; }
+        if (menuGuideAuthorized()) finishMenuGuide("skipped");
     }
 
     function updateMenuGuideRender() {
         if (!menuGuideAuthorized() || !menuJourney.machine || !menuJourney.view) { pauseMenuGuide(); return; }
-        var currentStep = menuJourney.machine.view().step;
-        var rawFacts = menuJourney.facts || {};
-        var facts = menuGuideFacts(rawFacts), machineView = menuJourney.machine.update(facts, {});
-        if (menuJourney.guideId === "welcome" && ["welcome_offer_selection", "welcome_owned_selection"].includes(currentStep.id)
-            && menuJourney.machine.state.completed.includes(currentStep.id)) {
-            var selectedOffer = String(rawFacts.preview_leader_id || "");
-            if ((currentStep.id === "welcome_owned_selection" ? rawFacts.available_leader_ids || [] : rawFacts.affordable_unowned_leader_ids || []).map(String).includes(selectedOffer)) menuJourney.selectedLeader = selectedOffer;
-        }
-        var step = machineView.step;
-        if (step.id === "welcome_purchase_close" && !facts.purchase_modal_phase) {
-            // A reloaded page has no purchase celebration to dismiss; ownership remains server-confirmed.
-            menuJourney.machine.advance(null, step.id);
-            updateMenuGuideRender();
-            return;
-        }
-        var completed = menuJourney.machine.state.completed.slice();
-        if (step.type === "end") {
-            menuJourney.machine.advance(null, step.id);
-            var complete = normalizeMenuGuideRecord({
-                completed_steps: menuJourney.machine.state.completed.slice(),
-                status: "completed",
-                selected_leader: menuJourney.selectedLeader || null
-            });
-            saveMenuGuideRecord(menuJourney.state, menuJourney.guideId, complete);
-            menuJourney.machine = null;
-            menuJourney.guideId = null;
-            if (menuJourney.view) { menuJourney.view.destroy(); menuJourney.view = null; }
-            return;
-        }
-        if (machineView.done) return;
-        var signature = JSON.stringify(completed);
-        if (signature !== menuJourney.completedSignature) {
-            menuJourney.completedSignature = signature;
-            saveMenuGuideRecord(menuJourney.state, menuJourney.guideId, normalizeMenuGuideRecord({
-                completed_steps: completed,
-                current_step: step.id,
-                status: "active",
-                selected_leader: menuJourney.selectedLeader || null
-            }));
-        }
-        if (step.id === "welcome_purchase_close" && facts.purchase_modal_phase && facts.purchase_modal_phase !== "success") {
-            menuJourney.view.destroy();
-            menuJourney.view = null;
-            return;
-        }
-        var control = window.SOWCampaign.menuGuideControl(step, facts);
-        var renderStep = Object.assign({}, step, { guide: Object.assign({}, step.guide, { target: control.target }) });
-        var anchor = anchorFor(renderStep, { tutorial: {} }, facts);
+        var machineView = menuJourney.machine.update(menuJourney.facts || {}, {}), step = machineView.step;
+        if (step.type === "end") { finishMenuGuide("completed"); return; }
+        var anchor = anchorFor(step, { tutorial: {} }, menuJourney.facts || {});
         var context = renderContext(step, null, anchor, machineView);
         context.reducedMotion = Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
         context.hideObjective = true;
-        context.gestureLabel = control.hint_key ? menuGuideTranslate(control.hint_key) : context.gestureLabel;
+        context.gestureLabel = menuGuideTranslate(step.hint_key);
         menuJourney.view.render(machineView, context);
     }
 
     function updateMenuGuide(state, facts) {
-        if (!menuGuideAuthorized()) { pauseMenuGuide(); return; }
         state = state || {};
-        facts = Object.assign({}, facts || {});
-        if (typeof state.selected_leader === "string") facts.selected_leader = state.selected_leader;
-        facts = menuGuideFacts(facts || {});
-        var updateRevision = ++menuJourney.updateRevision;
-        var accountId = menuGuideAccount(state), serverGuides = menuGuideMap(state), activeGuideId = ["welcome", "first_multiplayer"].find(function (guideId) {
-            return serverGuides[guideId] && serverGuides[guideId].status === "active";
-        });
-        if (menuJourney.accountId && menuJourney.accountId !== accountId) {
-            if (menuJourney.saveRetryTimer) { window.clearTimeout(menuJourney.saveRetryTimer); menuJourney.saveRetryTimer = null; }
+        var accountId = menuGuideAccount(state);
+        if (menuJourney.accountId !== accountId) {
+            pauseMenuGuide();
+            menuJourney.machine = null;
             menuJourney.pendingSave = null;
-            menuJourney.retryRequested = false;
+            menuJourney.lastSaveAt = 0;
+            menuJourney.quickMatchRevision = Number(state.quick_match_revision) || 0;
+            if (menuJourney.saveRetryTimer) window.clearTimeout(menuJourney.saveRetryTimer);
+            menuJourney.saveRetryTimer = null;
         }
-        menuJourney.accountId = accountId || null;
-        if (!accountId || !activeGuideId) { pauseMenuGuide(); return; }
-        if (activeGuideId === "first_multiplayer") {
-            var sourceMatchId = typeof serverGuides.first_multiplayer.source_match_id === "string" ? serverGuides.first_multiplayer.source_match_id : null;
-            if (!firstMultiplayerReceiptReady(state, sourceMatchId)) { pauseMenuGuide(); return; }
-            facts.current_match_id = sourceMatchId;
+        menuJourney.accountId = accountId;
+        menuJourney.state = state;
+        menuJourney.facts = facts || {};
+        var serverRecord = menuGuideMap(state).welcome;
+        if (!accountId || !serverRecord) { pauseMenuGuide(); return; }
+        var record = mergeMenuGuideRecord(serverRecord, readMenuGuideLocal(accountId));
+        var quickMatchRevision = Number(state.quick_match_revision) || 0;
+        var startedMatch = quickMatchRevision > menuJourney.quickMatchRevision || state.phase === "Playing";
+        menuJourney.quickMatchRevision = quickMatchRevision;
+        if (record.status === "active" && (startedMatch || Number(state.profile_stats && state.profile_stats.matches_played) > 0)) {
+            record = normalizeMenuGuideRecord({ status: "skipped" });
         }
+        if (record.status !== "active") {
+            menuJourney.machine = null;
+            pauseMenuGuide();
+            saveMenuGuideRecord(record);
+            return;
+        }
+        if (!menuGuideAuthorized()) { pauseMenuGuide(); return; }
+        var updateRevision = ++menuJourney.updateRevision;
         loadMenuGuideDefinition().then(function (definition) {
             if (updateRevision !== menuJourney.updateRevision || !menuGuideAuthorized()) return;
-            var guide = definition.menu_guides[activeGuideId];
-            var localRecord = readMenuGuideLocal(accountId, activeGuideId);
-            var record = mergeMenuGuideRecord(serverGuides[activeGuideId], localRecord);
-            menuJourney.selectedLeader = activeGuideId === "welcome" ? record.selected_leader : null;
-            facts = menuGuideFacts(facts);
-            if (record.status !== "active") {
-                saveMenuGuideRecord(state, activeGuideId, record);
-                pauseMenuGuide();
-                return;
-            }
-            var completed = guide.step_ids.filter(function (stepId) { return record.completed_steps.includes(stepId); });
-            if (completed.length !== record.completed_steps.length) record.completed_steps = completed;
-            var start = record.current_step && guide.step_ids.includes(record.current_step) && !record.completed_steps.includes(record.current_step)
-                ? record.current_step : nextMenuGuideStep(guide, definition, record.completed_steps, facts);
-            if (!start) {
-                record.completed_steps = guide.step_ids.slice();
-                record.status = "completed";
-                saveMenuGuideRecord(state, activeGuideId, record);
-                pauseMenuGuide();
-                return;
-            }
-            if (menuJourney.guideId !== activeGuideId || !menuJourney.machine) {
-                menuJourney.guideId = activeGuideId;
-                menuJourney.state = state;
-                menuJourney.facts = facts;
-                menuJourney.completedSignature = JSON.stringify(record.completed_steps);
-                menuJourney.machine = window.SOWCampaign.create(definition, guide.entry, null);
-                menuJourney.machine.state.completed = record.completed_steps.slice();
-                menuJourney.machine.jump(start, facts);
-            } else {
-                menuJourney.state = state;
-                menuJourney.facts = facts;
+            if (!menuJourney.machine) {
+                menuJourney.machine = window.SOWCampaign.create(definition, definition.menu_guides.welcome.entry, null);
             }
             ensureMenuGuideView();
             menuJourney.paused = false;
             menuJourney.machine.setPaused(false);
-            if (record.completed_steps.length) saveMenuGuideRecord(state, activeGuideId, record);
             updateMenuGuideRender();
         }).catch(function (error) {
             if (updateRevision !== menuJourney.updateRevision) return;

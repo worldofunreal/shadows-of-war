@@ -882,8 +882,6 @@ impl SowApp {
                             self.progress.leader_selection_pending = true;
                             self.save_local_progress();
                             self.persist_leader_selection();
-                            self.leader_selection_revision =
-                                self.leader_selection_revision.wrapping_add(1);
                         }
                         Err(error) => log::warn!("[WEB MENU] invalid leader: {error}"),
                     }
@@ -3238,8 +3236,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     // The store is only shown after a match. Keep its catalog out of the hot HUD path,
     // and use the browser clock because SystemTime::now() panics on wasm32.
     let featured_skin = if match_over {
-        let rotation_period = ((js_sys::Date::now().max(0.0) / 1000.0) as u64)
-            / sow_data::commerce::ROTATION_PERIOD_SECS;
+        let rotation_period = sow_data::commerce::rotation_period(
+            (js_sys::Date::now().max(0.0) / 1000.0) as u64,
+        );
         sow_data::commerce::catalog_for_profile(
             &app.progress.owned_leaders,
             &app.progress.owned_skins,
@@ -3423,6 +3422,10 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "cost_gems": skin.cost_gems,
         })).unwrap_or(serde_json::Value::Null),
         "player_leader": me.map(|player| leader_id(player.leader)),
+        "player_name": snapshot
+            .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == my_pid))
+            .map(|player| player.name.as_str())
+            .unwrap_or_default(),
     });
     let endgame_stats = if match_over {
         endgame_stats_snapshot(app, my_pid).or(app.ui.manual_endgame_stats)
@@ -3696,8 +3699,9 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         app.ui.leaderboard_top_three = [None; 3];
         app.ui.leaderboard_refresh_at = None;
         app.ui.leaderboard_publish_pending = false;
-        let rotation_period = ((js_sys::Date::now().max(0.0) / 1000.0) as u64)
-            / sow_data::commerce::ROTATION_PERIOD_SECS;
+        let rotation_period = sow_data::commerce::rotation_period(
+            (js_sys::Date::now().max(0.0) / 1000.0) as u64,
+        );
         let store_catalog = sow_data::commerce::catalog_for_profile(
             &progress.owned_leaders,
             &progress.owned_skins,
@@ -3798,12 +3802,8 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "menu_return": app.menu_return,
             "profile_ready": app.profile_last_applied_request > 0,
             "menu_guides": progress.menu_guides,
-            "name_save_revision": app.name_save_revision,
             "name_save_pending": app.pending_display_name.is_some(),
-            "leader_selection_revision": app.leader_selection_revision,
-            "purchase_revision": app.purchase_revision,
             "quick_match_revision": app.quick_match_revision,
-            "menu_guide_save_revision": app.menu_guide_save_revision,
             "menu_guide_save_pending": app.menu_guide_save_pending,
             "achievements": progress.unlocked_achievements,
             "campaign": campaign_payload(progress),
@@ -3939,6 +3939,7 @@ mod tests {
             can_retaliate: false,
             traitor: false,
             leader: Leader::of("caesar"),
+            empowered_attack: false,
             campaign_avatar: None,
             is_campaign_faction: false,
             skin_style: 0,

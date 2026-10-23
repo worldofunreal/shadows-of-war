@@ -12,10 +12,10 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Genghis Khan | Horde Momentum | Eliminating a player pays 50% more gold. | elimination_gold | 50% | `gameplay/icons/abilities/genghis_khan.webp` |
 | Richard the Lionheart | Crusader Fortresses | City districts grant +50% max troop capacity. | city_troop_capacity | 50% | `gameplay/icons/abilities/richard_the_lionheart.webp` |
 | Vercingetorix | Hillfort Gaul | City districts generate +50% troop income. | district_income (city / troops) | 50% | `gameplay/icons/abilities/vercingetorix.webp` |
-| Boudica | Revenge | Your attacks on traitors deal 100% more damage to their defenders. | damage_to_traitors | 100% | `gameplay/icons/abilities/boudica.webp` |
-| Lady Six Sky | Temple of the Sky | Factory districts generate +50% Gold. | district_income (factory / gold) | 50% | `gameplay/icons/abilities/lady_six_sky.webp` |
+| Boudica | Revenge | Against traitors, your troops fight with double strength. | damage_to_traitors | 100% | `gameplay/icons/abilities/boudica.webp` |
+| Lady Six Sky | Villages Kneel | Your armies crush tribes 50% faster. | tribe_speed | 50% | `gameplay/icons/abilities/lady_six_sky.webp` |
 | Leonidas | Spartan Phalanx | Bunkers make attackers lose 50% more troops. | bunker_defense | 50% | `gameplay/icons/abilities/leonidas.webp` |
-| Napoleon | Grande Armée | Territory expansion moves 20% faster. | expansion_speed | 20% | `gameplay/icons/abilities/napoleon.webp` |
+| Napoleon | Against the Odds | When you attack a player with more troops, your armies fight 35% stronger. | outnumbered_strength | 35% | `gameplay/icons/abilities/napoleon.webp` |
 | Amina of Zazzau | Walls of Zazzau | Enemies need 50% more effort to capture your cities. | city_defense | 50% | `gameplay/icons/abilities/amina_de_zazzau.webp` |
 | Yaa Asantewaa | Rallying the People | Cities hold 50% more troops. | city_troop_capacity | 50% | `gameplay/icons/abilities/yaa_asantewaa.webp` |
 | Anacaona | Trade Harbors | Ports produce 50% more troops. | district_income (port / troops) | 50% | `gameplay/icons/abilities/anacaona.webp` |
@@ -26,7 +26,7 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Rani Durgavati | Gond Harvest | Farms produce 50% more troops. | district_income (farm / troops) | 50% | `gameplay/icons/abilities/rani_durgavati.webp` |
 | Empress Gi | Imperial Treasury | Cities produce 50% more gold. | district_income (city / gold) | 50% | `gameplay/icons/abilities/empress_gi.webp` |
 | Ashoka | Dharma Arsenal | Factories produce 50% more troops. | district_income (factory / troops) | 50% | `gameplay/icons/abilities/ashoka.webp` |
-| Hannibal | Alpine Crossing | Troops fight 25% stronger against other players. | enemy_troop_strength | 25% | `gameplay/icons/abilities/hannibal.webp` |
+| Hannibal | Alpine Crossing | Conquering mountain tiles costs 25% fewer troops. | mountain_cost | 25% | `gameplay/icons/abilities/hannibal.webp` |
 | Simón Bolívar | Liberator's Pacts | Campaign alliances cost 30% less gold. | alliance_cost | 30% | `gameplay/icons/abilities/bolivar.webp` |
 | Joan of Arc | Bastion of Faith | Bunkers make attackers lose 50% more troops. | bunker_defense | 50% | `gameplay/icons/abilities/joan_of_arc.webp` |
 | Catherine the Great | Imperial Patronage | Each active alliance produces 50% more gold. | alliance_gold | 50% | `gameplay/icons/abilities/catherine_the_great.webp` |
