@@ -517,7 +517,8 @@ mod tests {
         assert_eq!(game.state.player(1).unwrap().gold, config.starting_gold);
         let city_tile = 2 * game.state.map.width + 8;
         let mut city_ordered = false;
-        for _ in 0..1_200 {
+        // Four minutes of ticks at the current standard speed (half the earlier pace).
+        for _ in 0..2_400 {
             game.execute_income();
             game.state.tick += 1;
             if !city_ordered && game.state.player(1).unwrap().gold >= config.cost_city {
@@ -527,7 +528,7 @@ mod tests {
         }
         assert!(
             city_ordered,
-            "starting gold and ordinary income should afford a City within two minutes"
+            "starting gold and ordinary income should afford a City within four minutes"
         );
         assert!(game.buildings.iter().any(|building| {
             building.owner_id == 1

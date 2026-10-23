@@ -36,18 +36,25 @@ test("endgame shows the five match stats with exact combat counts and compact to
     const cards = helpers.endgameStatsMarkup("endgame");
     const surrenderCards = helpers.endgameStatsMarkup("surrender");
     assert.equal(cards.replace(/sow-hud-endgame-/g, "sow-hud-surrender-"), surrenderCards);
+    const accessibleNames = [
+        "endgame.stat_kills", "endgame.stat_assists", "endgame.stat_max_territory",
+        "endgame.stat_gold_received", "endgame.stat_troops_received"
+    ];
     for (const prefix of ["endgame", "surrender"]) {
         const markup = prefix === "endgame" ? cards : surrenderCards;
         for (const id of ["kills", "assists", "max-territory", "gold-received", "troops-received"]) {
             assert.match(markup, new RegExp(`sow-hud-${prefix}-${id}`));
         }
-        assert.equal((markup.match(/sow-hud__endgame-stat\"/g) || []).length, 5);
+        assert.equal((markup.match(/role=\"group\" aria-label=/g) || []).length, 5);
+        for (const name of accessibleNames) assert.ok(markup.includes(`aria-label=\"${name}\"`), name);
+        assert.doesNotMatch(markup, /sow-hud__endgame-stat-label/);
         assert.doesNotMatch(markup, /profile\.kda|endgame-kda|\bDeaths\b|\bKDA\b/i);
     }
     for (const icon of ["attack", "allied", "globe", "gold", "troops"]) assert.ok(cards.includes(icon), icon);
     assert.ok(hud.includes('endgameStatsMarkup("surrender")'));
     assert.ok(hud.includes('endgameStatsMarkup("endgame")'));
-    assert.ok(hud.includes('class="sow-hud__exit-content"'));
+    assert.doesNotMatch(hud, /sow-hud__exit-content/);
+    assert.ok(hud.includes('id="sow-hud-surrender-save-note"'));
     assert.ok(hud.includes('renderEndgameStats(hudRefs.surrenderStatValues, hud.player_endgame_stats)'));
     assert.ok(hud.includes('send("request_endgame_stats")'));
     assert.ok(hud.includes('send("clear_endgame_stats")'));
@@ -56,9 +63,9 @@ test("endgame shows the five match stats with exact combat counts and compact to
         .map(key => [key, { textContent: "" }]));
     helpers.renderEndgameStats(statValues, {
         kills: 17, assists: 3, max_territory: 1_234,
-        gold_received: 1_500_000, troops_received: 9_500
+        gold_received: 12_345_678, troops_received: 99_999_999
     });
-    assert.deepEqual(Object.values(statValues).map(node => node.textContent), ["17", "3", "1.2K", "1.5M", "9.5K"]);
+    assert.deepEqual(Object.values(statValues).map(node => node.textContent), ["17", "3", "1.2K", "12.3M", "100M"]);
 
     const start = hud.indexOf("        // Endgame Screen");
     const end = hud.indexOf("        var mapMenuOpen =", start);
@@ -80,7 +87,7 @@ test("endgame shows the five match stats with exact combat counts and compact to
             hud: {
                 match_over: true, is_winner: isWinner, player_endgame_stats: {
                     kills: 17, assists: 3, max_territory: 1_234,
-                    gold_received: 1_500_000, troops_received: 9_500
+                    gold_received: 12_345_678, troops_received: 99_999_999
                 }, player_leader: "test", featured_skin: null, winner_name: ""
             },
             hudRefs: refs, hudState: { selected_leader: "test" },
@@ -88,7 +95,7 @@ test("endgame shows the five match stats with exact combat counts and compact to
             SOW_t: key => key,
             formatEndgameExact: format.formatEndgameExact,
             formatEndgameCompact: format.formatEndgameCompact,
-            renderEndgameStats: format.renderEndgameStats,
+            renderEndgameStats: helpers.renderEndgameStats,
             leaderById: () => ({ slug: "test", name: "Test" }),
             asset: name => "/assets/" + name
         });
@@ -101,13 +108,20 @@ test("endgame shows the five match stats with exact combat counts and compact to
             refs.endgameStatValues.maxTerritory.textContent,
             refs.endgameStatValues.goldReceived.textContent,
             refs.endgameStatValues.troopsReceived.textContent
-        ], ["17", "3", "1.2K", "1.5M", "9.5K"]);
+        ], ["17", "3", "1.2K", "12.3M", "100M"]);
     }
-    assert.match(hudCss, /\.sow-hud__endgame-stats\s*\{[^}]*grid-template-columns:\s*repeat\(3,/);
-    assert.match(hudCss, /\.sow-hud__endgame-stats\s*\{\s*grid-template-columns:\s*repeat\(2,/);
+    const statsRules = [...hudCss.matchAll(/\.sow-hud__endgame-stats\s*\{([^}]*)\}/g)];
+    assert.equal(statsRules.length, 1, "portrait and horizontal views share one responsive layout");
+    assert.match(statsRules[0][1], /grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(72px,\s*1fr\)\)/);
+    const minimumStatWidth = Number(statsRules[0][1].match(/minmax\((\d+)px/)[1]);
+    assert.deepEqual([242, 297, 458].map(width => Math.min(5, Math.floor(width / minimumStatWidth))), [3, 4, 5]);
+    const statRule = hudCss.match(/\.sow-hud__endgame-stat\s*\{([^}]*)\}/)[1];
+    assert.match(statRule, /display:\s*flex/);
+    assert.doesNotMatch(statRule, /border:|background:/);
+    assert.match(hudCss, /\.sow-hud__endgame-stat \+ \.sow-hud__endgame-stat::before/);
     assert.match(hudCss, /\.sow-hud__exit-card\s*\{\s*min-height: 0;[^}]*max-height: min\([^}]*60svh\)/);
-    assert.match(hudCss, /\.sow-hud__exit-content\s*\{[^}]*overflow-y: auto;/);
-    assert.match(hudCss, /\.sow-hud__exit-card \.sow-hud__endgame-stats\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/);
+    assert.doesNotMatch(hudCss, /sow-hud__exit-content|\.sow-hud__exit-card \.sow-hud__endgame-stats/);
+    assert.match(hudCss, /\.sow-hud__exit-card \.sow-hud__endgame-actions\s*\{\s*flex: 0 0 auto;/);
 });
 
 test("manual exit requests one stats snapshot and clears it when canceled", () => {

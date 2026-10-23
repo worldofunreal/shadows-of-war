@@ -1,6 +1,6 @@
 #,Líder,Archivo del retrato,Género,Región,Entidad histórica,Referencia,Avatar,Material de arte,Nota
 1,Hatshepsut,assets/art/avatars/nations/hatshepsut.webp,Mujer,África,Ancient Egypt,https://en.wikipedia.org/wiki/Hatshepsut,Validado,~/Downloads/Hatshepsut_desktop.jpg ; ~/Downloads/Hatshepsut_mobile.jpg ; ~/Downloads/leaders/hatshepsut_heroic_portrait.jpg,
-2,Mansa Musa,assets/art/avatars/nations/mansa_musa.webp,Hombre,África,Mali Empire,https://en.wikipedia.org/wiki/Mansa_Musa,Validado,~/Downloads/mansa_musa_desktop.jpg ; ~/Downloads/mansa_musa_mobile.jpg,
+2,Mansa Musa,assets/art/avatars/nations/mansa_musa.webp,Hombre,África,Mali Empire,https://en.wikipedia.org/wiki/Mansa_Musa,Sale del juego,~/Downloads/mansa_musa_desktop.jpg ; ~/Downloads/mansa_musa_mobile.jpg,Sale del juego: reemplazado por Muhammad Ahmad (el Mahdi)
 3,Amanirenas,assets/art/avatars/nations/amanirenas.webp,Mujer,África,Kingdom of Kush,https://en.wikipedia.org/wiki/Amanirenas,Validado,~/Downloads/amanirenas_desktop.jpg ; ~/Downloads/amanirenas_mobile.jpg ; ~/Downloads/leaders/makeda_amanirenas_triumphant.jpg,
 4,Sundiata Keita,assets/art/avatars/nations/sundiata_keita.webp,Hombre,África,Mali Empire,https://en.wikipedia.org/wiki/Sundiata_Keita,Validado,,
 5,Amanitore,assets/art/avatars/nations/amanitore.webp,Mujer,África,Kingdom of Kush,https://en.wikipedia.org/wiki/Amanitore,Validado,,
@@ -8,7 +8,7 @@
 7,Amanishakheto,assets/art/avatars/nations/amanishakheto.webp,Mujer,África,Kingdom of Kush,https://en.wikipedia.org/wiki/Amanishakheto,Por encargar,,
 8,Askia Muhammad I,assets/art/avatars/nations/askia_muhammad_i.webp,Hombre,África,Songhai Empire,https://en.wikipedia.org/wiki/Askia_Muhammad_I,Por encargar,,
 9,Nefertiti,assets/art/avatars/nations/nefertiti.webp,Mujer,África,Ancient Egypt,https://en.wikipedia.org/wiki/Nefertiti,Por encargar,~/Downloads/nefertiti_desktop.jpg ; ~/Downloads/nefertiti_mobile.jpg,Reemplaza a Cleopatra VII (ya es héroe jugable)
-10,Shaka Zulu,assets/art/avatars/nations/shaka_zulu.webp,Hombre,África,Zulu Kingdom,https://en.wikipedia.org/wiki/Shaka,Por encargar,~/Downloads/shaka_zulu_desktop.jpg ; ~/Downloads/shaka_zulu_mobile.jpg,
+10,Shaka Zulu,assets/art/avatars/nations/shaka_zulu.webp,Hombre,África,Zulu Kingdom,https://en.wikipedia.org/wiki/Shaka,Sale del juego,~/Downloads/shaka_zulu_desktop.jpg ; ~/Downloads/shaka_zulu_mobile.jpg,Sale del juego: reemplazado por Msiri
 11,Cleopatra Selene II,assets/art/avatars/nations/cleopatra_selene_ii.webp,Mujer,África,Ancient Mauretania,https://en.wikipedia.org/wiki/Cleopatra_Selene_II,Por encargar,,
 12,Menelik II,assets/art/avatars/nations/menelik_ii.webp,Hombre,África,Ethiopia,https://en.wikipedia.org/wiki/Menelik_II,Por encargar,,
 13,Nzinga Mbande,assets/art/avatars/nations/nzinga_mbande.webp,Mujer,África,Ndongo and Matamba,https://en.wikipedia.org/wiki/Nzinga_of_Ndongo_and_Matamba,Por encargar,~/Downloads/nzinga_mbande_desktop.jpg ; ~/Downloads/nzinga_mbande_mobile.jpg,
@@ -70,7 +70,7 @@
 69,Bartolina Sisa,assets/art/avatars/nations/bartolina_sisa.webp,Mujer,Américas,Aymara people / Upper Peru,https://en.wikipedia.org/wiki/Bartolina_Sisa,Por encargar,,
 70,Túpac Yupanqui,assets/art/avatars/nations/tupac_yupanqui.webp,Hombre,Américas,Inca Empire,https://en.wikipedia.org/wiki/Topa_Inca_Yupanqui,Por encargar,,
 71,Juana Azurduy,assets/art/avatars/nations/juana_azurduy.webp,Mujer,Américas,Upper Peru / Bolivia,https://en.wikipedia.org/wiki/Juana_Azurduy_de_Padilla,Por encargar,,
-72,Simón Bolívar,assets/art/avatars/nations/simon_bolivar.webp,Hombre,Américas,Gran Colombia,https://en.wikipedia.org/wiki/Sim%C3%B3n_Bol%C3%ADvar,Por encargar,~/Downloads/leaders/simon_bolivar_hero_1.jpg ; ~/Downloads/leaders/simon_bolivar_hero_portrait.jpg,
+72,Simón Bolívar,assets/art/avatars/nations/simon_bolivar.webp,Hombre,Américas,Gran Colombia,https://en.wikipedia.org/wiki/Sim%C3%B3n_Bol%C3%ADvar,Sale del juego,~/Downloads/leaders/simon_bolivar_hero_1.jpg ; ~/Downloads/leaders/simon_bolivar_hero_portrait.jpg,Sale del juego: reemplazado por Pedro II de Brasil
 73,Josefa Ortiz de Domínguez,assets/art/avatars/nations/josefa_ortiz_de_dominguez.webp,Mujer,Américas,Mexico,https://en.wikipedia.org/wiki/Josefa_Ortiz_de_Dom%C3%ADnguez,Por encargar,,
 74,José de San Martín,assets/art/avatars/nations/jose_de_san_martin.webp,Hombre,Américas,Argentina / Chile / Peru,https://en.wikipedia.org/wiki/Jos%C3%A9_de_San_Mart%C3%ADn,Por encargar,,
 75,Policarpa Salavarrieta,assets/art/avatars/nations/policarpa_salavarrieta.webp,Mujer,Américas,New Granada / Colombia,https://en.wikipedia.org/wiki/Policarpa_Salavarrieta,Por encargar,,
@@ -96,13 +96,13 @@
 95,Qin Liangyu,assets/art/avatars/nations/qin_liangyu.webp,Mujer,Asia,Ming dynasty,https://en.wikipedia.org/wiki/Qin_Liangyu,Por validar,~/Downloads/material sin asignar: qin liangyu,Reemplaza a Rani Durgavati (colisionaba con un héroe)
 96,Babur,assets/art/avatars/nations/babur.webp,Hombre,Asia,Mughal Empire,https://en.wikipedia.org/wiki/Babur,Por encargar,,
 97,Ahilyabai Holkar,assets/art/avatars/nations/ahilyabai_holkar.webp,Mujer,Asia,Maratha / Malwa,https://en.wikipedia.org/wiki/Ahilyabai_Holkar,Por encargar,,
-98,Ciro el Grande,assets/art/avatars/nations/ciro_el_grande.webp,Hombre,Asia,Achaemenid Empire,https://en.wikipedia.org/wiki/Cyrus_the_Great,Por encargar,~/Downloads/Cyrus the Great _desktop.jpg ; ~/Downloads/Cyrus the Great_mobile.jpg ; ~/Downloads/leaders/cyrus_pasargada_dawn.jpg ; ~/Downloads/leaders/cyrus_portrait_dawn.jpg,
+98,Ciro el Grande,assets/art/avatars/nations/ciro_el_grande.webp,Hombre,Asia,Achaemenid Empire,https://en.wikipedia.org/wiki/Cyrus_the_Great,Sale del juego,~/Downloads/Cyrus the Great _desktop.jpg ; ~/Downloads/Cyrus the Great_mobile.jpg ; ~/Downloads/leaders/cyrus_pasargada_dawn.jpg ; ~/Downloads/leaders/cyrus_portrait_dawn.jpg,Sale del juego: reemplazado por Tigranes el Grande
 99,Kittur Chennamma,assets/art/avatars/nations/kittur_chennamma.webp,Mujer,Asia,Kittur / India,https://en.wikipedia.org/wiki/Kittur_Chennamma,Por encargar,,
 100,Solomon,assets/art/avatars/nations/solomon.webp,Hombre,Asia,Kingdom of Israel,https://en.wikipedia.org/wiki/Solomon,Por validar,~/Downloads/material sin asignar: solomon royal,Reemplaza a Darius the Great (colisionaba con un héroe)
 101,Rani Lakshmibai,assets/art/avatars/nations/rani_lakshmibai.webp,Mujer,Asia,Jhansi / India,https://en.wikipedia.org/wiki/Lakshmibai%2C_Rani_of_Jhansi,Por encargar,~/Downloads/Lakshmibai_desktop.jpg ; ~/Downloads/Lakshmibai_mobile.jpg ; ~/Downloads/leaders/rani_lakshmibai_battlefield.jpg ; ~/Downloads/leaders/rani_lakshmibai_heroic.jpg ; ~/Downloads/leaders/rani_lakshmibai_heroic_1.jpg ; ~/Downloads/leaders/rani_lakshmibai_heroic_charge.jpg,
-102,Suleimán el Magnífico,assets/art/avatars/nations/suleiman_el_magnifico.webp,Hombre,Asia,Ottoman Empire,https://en.wikipedia.org/wiki/Suleiman_the_Magnificent,Por encargar,,
+102,Suleimán el Magnífico,assets/art/avatars/nations/suleiman_el_magnifico.webp,Hombre,Asia,Ottoman Empire,https://en.wikipedia.org/wiki/Suleiman_the_Magnificent,Sale del juego,,Sale del juego: reemplazado por Parākramabāhu I
 103,Cleopatra Thea,assets/art/avatars/nations/cleopatra_thea.webp,Mujer,Asia,Seleucid Empire,https://en.wikipedia.org/wiki/Cleopatra_Thea,Por encargar,,
-104,Saladino,assets/art/avatars/nations/saladino.webp,Hombre,Asia,Ayyubid Sultanate,https://en.wikipedia.org/wiki/Saladin,Por encargar,~/Downloads/saladin_desktop.jpg ; ~/Downloads/saladin_mobile.jpg,
+104,Saladino,assets/art/avatars/nations/saladino.webp,Hombre,Asia,Ayyubid Sultanate,https://en.wikipedia.org/wiki/Saladin,Sale del juego,~/Downloads/saladin_desktop.jpg ; ~/Downloads/saladin_mobile.jpg,Sale del juego: reemplazado por Parameswara
 105,Zenobia,assets/art/avatars/nations/zenobia.webp,Mujer,Asia,Palmyra,https://en.wikipedia.org/wiki/Zenobia,Por encargar,,
 106,Ögedei Khan,assets/art/avatars/nations/ogedei_khan.webp,Hombre,Asia,Mongol Empire,https://en.wikipedia.org/wiki/%C3%96gedei_Khan,Por encargar,,Reemplaza a Genghis Khan (ya es héroe jugable)
 107,Razia Sultan,assets/art/avatars/nations/razia_sultan.webp,Mujer,Asia,Delhi Sultanate,https://en.wikipedia.org/wiki/Razia_Sultan,Por encargar,~/Downloads/leaders/razia_sultan_portrait.jpg,
@@ -121,7 +121,7 @@
 120,Bayinnaung,assets/art/avatars/nations/bayinnaung.webp,Hombre,Asia,Toungoo Empire / Burma,https://en.wikipedia.org/wiki/Bayinnaung,Por encargar,,
 121,Lü Zhi,assets/art/avatars/nations/lu_zhi.webp,Mujer,Asia,China / Han dynasty,https://en.wikipedia.org/wiki/Empress_L%C3%BC,Por encargar,,
 122,Harún al-Rashid,assets/art/avatars/nations/harun_al_rashid.webp,Hombre,Asia,Abbasid Caliphate,https://en.wikipedia.org/wiki/Harun_al-Rashid,Por encargar,,
-123,Lady Triệu,assets/art/avatars/nations/lady_trieu.webp,Mujer,Asia,Vietnam,https://en.wikipedia.org/wiki/Lady_Tri%E1%BB%87u,Por encargar,~/Downloads/lady_trieu_desktop.jpg ; ~/Downloads/lady_trieu_mobile.jpg ; ~/Downloads/leaders/lady_trieu_stormy_sea.jpg,
+123,Lady Triệu,assets/art/avatars/nations/lady_trieu.webp,Mujer,Asia,Vietnam,https://en.wikipedia.org/wiki/Lady_Tri%E1%BB%87u,Sale del juego,~/Downloads/lady_trieu_desktop.jpg ; ~/Downloads/lady_trieu_mobile.jpg ; ~/Downloads/leaders/lady_trieu_stormy_sea.jpg,Sale del juego: reemplazado por Tamar de Georgia
 124,Hammurabi,assets/art/avatars/nations/hammurabi.webp,Hombre,Asia,Babylon,https://en.wikipedia.org/wiki/Hammurabi,Por encargar,,
 125,Trưng Trắc,assets/art/avatars/nations/trung_trac.webp,Mujer,Asia,Vietnam,https://en.wikipedia.org/wiki/Tr%C6%B0ng_sisters,Por encargar,~/Downloads/leaders/trung_trac_vertical_portrait.jpg ; ~/Downloads/leaders/trung_trac_warrior_queen.jpg,
 126,Asurbanipal,assets/art/avatars/nations/asurbanipal.webp,Hombre,Asia,Neo-Assyrian Empire,https://en.wikipedia.org/wiki/Ashurbanipal,Por encargar,,
@@ -153,7 +153,7 @@
 152,Alfredo el Grande,assets/art/avatars/nations/alfredo_el_grande.webp,Hombre,Europa,Wessex / England,https://en.wikipedia.org/wiki/Alfred_the_Great,Por encargar,,
 153,Isabel I de Inglaterra,assets/art/avatars/nations/isabel_i_de_inglaterra.webp,Mujer,Europa,England,https://en.wikipedia.org/wiki/Elizabeth_I,Por encargar,~/Downloads/leaders/queen_elizabeth_portrait.jpg,
 154,Constantine the Great,assets/art/avatars/nations/constantine.webp,Hombre,Europa,Roman Empire,https://en.wikipedia.org/wiki/Constantine_the_Great,Por validar,~/Downloads/material sin asignar: constantine,Reemplaza a William the Conqueror (colisionaba con un héroe)
-155,Catalina la Grande,assets/art/avatars/nations/catalina_la_grande.webp,Mujer,Europa,Russian Empire,https://en.wikipedia.org/wiki/Catherine_the_Great,Por encargar,~/Downloads/leaders/catherine_great_pixar (1).jpg ; ~/Downloads/leaders/catherine_great_pixar.jpg ; ~/Downloads/leaders/catherine_imperial_portrait.jpg ; ~/Downloads/leaders/catherine_vertical_portrait.jpg,
+155,Catalina la Grande,assets/art/avatars/nations/catalina_la_grande.webp,Mujer,Europa,Russian Empire,https://en.wikipedia.org/wiki/Catherine_the_Great,Sale del juego,~/Downloads/leaders/catherine_great_pixar (1).jpg ; ~/Downloads/leaders/catherine_great_pixar.jpg ; ~/Downloads/leaders/catherine_imperial_portrait.jpg ; ~/Downloads/leaders/catherine_vertical_portrait.jpg,Sale del juego: reemplazado por María Estuardo
 156,Luis XIV,assets/art/avatars/nations/luis_xiv.webp,Hombre,Europa,France,https://en.wikipedia.org/wiki/Louis_XIV,Por encargar,,Reemplaza a Napoleón Bonaparte (ya es héroe jugable)
 157,María Teresa de Austria,assets/art/avatars/nations/maria_teresa_de_austria.webp,Mujer,Europa,Habsburg Monarchy,https://en.wikipedia.org/wiki/Maria_Theresa,Por encargar,,
 158,Pedro el Grande,assets/art/avatars/nations/pedro_el_grande.webp,Hombre,Europa,Russia,https://en.wikipedia.org/wiki/Peter_the_Great,Por encargar,~/Downloads/peter_the_great_desktop.jpg ; ~/Downloads/peter_the_great_mobile.jpg,
@@ -161,7 +161,7 @@
 160,Iván IV de Rusia,assets/art/avatars/nations/ivan_iv_de_rusia.webp,Hombre,Europa,Russia,https://en.wikipedia.org/wiki/Ivan_the_Terrible,Por encargar,,
 161,Irene de Atenas,assets/art/avatars/nations/irene_de_atenas.webp,Mujer,Europa,Byzantine Empire,https://en.wikipedia.org/wiki/Irene_of_Athens,Por encargar,,
 162,Skanderbeg,assets/art/avatars/nations/skanderbeg.webp,Hombre,Europa,Albania,https://en.wikipedia.org/wiki/Skanderbeg,Por encargar,,
-163,Teodora,assets/art/avatars/nations/teodora.webp,Mujer,Europa,Byzantine Empire,https://en.wikipedia.org/wiki/Theodora_%28wife_of_Justinian_I%29,Por encargar,,
+163,Teodora,assets/art/avatars/nations/teodora.webp,Mujer,Europa,Byzantine Empire,https://en.wikipedia.org/wiki/Theodora_%28wife_of_Justinian_I%29,Sale del juego,,Sale del juego: reemplazado por Gwenllian ferch Gruffudd
 164,Vlad III the Impaler,assets/art/avatars/nations/vlad_iii.webp,Hombre,Europa,Wallachia,https://en.wikipedia.org/wiki/Vlad_III_the_Impaler,Por validar,~/Downloads/material sin asignar: vlad,Reemplaza a John III Sobieski (colisionaba con un héroe)
 165,Amalasunta,assets/art/avatars/nations/amalasunta.webp,Mujer,Europa,Ostrogothic Kingdom / Italy,https://en.wikipedia.org/wiki/Amalasuintha,Por encargar,,
 166,Gustavo II Adolfo,assets/art/avatars/nations/gustavo_ii_adolfo.webp,Hombre,Europa,Sweden,https://en.wikipedia.org/wiki/Gustavus_Adolphus,Por encargar,~/Downloads/leaders/gustavus_adolphus_charge (1).jpg ; ~/Downloads/leaders/gustavus_adolphus_charge.jpg ; ~/Downloads/leaders/gustavus_adolphus_leaping.jpg,
@@ -169,7 +169,7 @@
 168,Harald Bluetooth,assets/art/avatars/nations/harald_bluetooth.webp,Hombre,Europa,Denmark,https://en.wikipedia.org/wiki/Harald_Bluetooth,Por encargar,,
 169,Jadwiga de Polonia,assets/art/avatars/nations/jadwiga_de_polonia.webp,Mujer,Europa,Poland,https://en.wikipedia.org/wiki/Jadwiga_of_Poland,Por encargar,,
 170,Otto von Bismarck,assets/art/avatars/nations/otto_von_bismarck.webp,Hombre,Europa,Prussia / Germany,https://en.wikipedia.org/wiki/Otto_von_Bismarck,Por encargar,,
-171,Juana de Arco,assets/art/avatars/nations/juana_de_arco.webp,Mujer,Europa,France,https://en.wikipedia.org/wiki/Joan_of_Arc,Por encargar,~/Downloads/leaders/gallery joan_arc_victory_banner-tiene-3-brazos-lol-sobra-el-que-esta-apuntando-con.jpg ; ~/Downloads/leaders/joan_of_arc_sunset.jpg,
+171,Juana de Arco,assets/art/avatars/nations/juana_de_arco.webp,Mujer,Europa,France,https://en.wikipedia.org/wiki/Joan_of_Arc,Sale del juego,~/Downloads/leaders/gallery joan_arc_victory_banner-tiene-3-brazos-lol-sobra-el-que-esta-apuntando-con.jpg ; ~/Downloads/leaders/joan_of_arc_sunset.jpg,Sale del juego: reemplazado por María I de Portugal
 172,Giuseppe Garibaldi,assets/art/avatars/nations/giuseppe_garibaldi.webp,Hombre,Europa,Italy,https://en.wikipedia.org/wiki/Giuseppe_Garibaldi,Por encargar,,
 173,Cristina de Suecia,assets/art/avatars/nations/cristina_de_suecia.webp,Mujer,Europa,Sweden,https://en.wikipedia.org/wiki/Christina%2C_Queen_of_Sweden,Por encargar,~/Downloads/leaders/queen_christina_library_1.jpg ; ~/Downloads/leaders/queen_christina_portrait.jpg,
 174,Federico el Grande,assets/art/avatars/nations/federico_el_grande.webp,Hombre,Europa,Prusia,https://en.wikipedia.org/wiki/Frederick_the_Great,Por encargar,,
@@ -184,7 +184,7 @@
 183,Grace O'Malley,assets/art/avatars/nations/grace_o_malley.webp,Mujer,Europa,Ireland,https://en.wikipedia.org/wiki/Grace_O%27Malley,Por encargar,,
 184,Esteban el Grande de Moldavia,assets/art/avatars/nations/esteban_el_grande_de_moldavia.webp,Hombre,Europa,Moldavia,https://en.wikipedia.org/wiki/Stephen_the_Great,Por encargar,,
 185,Kaʻahumanu,assets/art/avatars/nations/kaahumanu.webp,Mujer,Oceanía,Kingdom of Hawaii,https://en.wikipedia.org/wiki/Ka%CA%BBahumanu,Por encargar,~/Downloads/kaahumanu_desktop.jpg ; ~/Downloads/kaahumanu_mobile.jpg,
-186,Kamehameha I,assets/art/avatars/nations/kamehameha_i.webp,Hombre,Oceanía,Kingdom of Hawaii,https://en.wikipedia.org/wiki/Kamehameha_I,Por encargar,~/Downloads/kamehameha_i_desktop.jpg ; ~/Downloads/kamehameha_i_mobile.jpg ; ~/Downloads/leaders/kamehameha_heroic_ridge.jpg ; ~/Downloads/leaders/kamehameha_sunset_warrior.jpg,
+186,Kamehameha I,assets/art/avatars/nations/kamehameha_i.webp,Hombre,Oceanía,Kingdom of Hawaii,https://en.wikipedia.org/wiki/Kamehameha_I,Sale del juego,~/Downloads/kamehameha_i_desktop.jpg ; ~/Downloads/kamehameha_i_mobile.jpg ; ~/Downloads/leaders/kamehameha_heroic_ridge.jpg ; ~/Downloads/leaders/kamehameha_sunset_warrior.jpg,Sale del juego: reemplazado por Walter Lini
 187,Liliʻuokalani,assets/art/avatars/nations/liliuokalani.webp,Mujer,Oceanía,Kingdom of Hawaii,https://en.wikipedia.org/wiki/Lili%CA%BBuokalani,Por encargar,,
 188,Hongi Hika,assets/art/avatars/nations/hongi_hika.webp,Hombre,Oceanía,Māori / Ngāpuhi,https://en.wikipedia.org/wiki/Hongi_Hika,Por encargar,~/Downloads/hongi_hika_desktop.jpg ; ~/Downloads/hongi_hika_mobile.jpg,
 189,Pōmare IV,assets/art/avatars/nations/pomare_iv.webp,Mujer,Oceanía,Tahiti,https://en.wikipedia.org/wiki/P%C5%8Dmare_IV,Por encargar,,
@@ -219,3 +219,14 @@
 218,Nemequene,assets/art/avatars/nations/nemequene.webp,Hombre,Américas,Muisca,https://en.wikipedia.org/wiki/Nemequene,Por validar,~/Downloads/material sin asignar: nemequene guatavita,Reserva: agregado al catálogo
 219,Artemisia I of Caria,assets/art/avatars/nations/artemisia_i.webp,Mujer,Asia,Caria,https://en.wikipedia.org/wiki/Artemisia_I_of_Caria,Por validar,~/Downloads/material sin asignar: artemisia,Reserva: agregado al catálogo
 220,Shajar al-Durr,assets/art/avatars/nations/shajar_al_durr.webp,Mujer,África,Mamluk Sultanate,https://en.wikipedia.org/wiki/Shajar_al-Durr,Por validar,~/Downloads/material sin asignar: sultana qutb,Reserva: agregado al catálogo
+221,Muhammad Ahmad (el Mahdi),assets/art/avatars/nations/muhammad_ahmad.webp,Hombre,África,Mahdist State,https://en.wikipedia.org/wiki/Muhammad_Ahmad,Por encargar,,Reemplaza a Mansa Musa
+222,Msiri,assets/art/avatars/nations/msiri.webp,Hombre,África,Yeke Kingdom,https://en.wikipedia.org/wiki/Msiri,Por encargar,,Reemplaza a Shaka Zulu
+223,Pedro II de Brasil,assets/art/avatars/nations/pedro_ii.webp,Hombre,Américas,Empire of Brazil,https://en.wikipedia.org/wiki/Pedro_II_of_Brazil,Por encargar,,Reemplaza a Simón Bolívar
+224,Tigranes el Grande,assets/art/avatars/nations/tigranes_el_grande.webp,Hombre,Asia,Armenian Empire,https://en.wikipedia.org/wiki/Tigranes_the_Great,Por encargar,,Reemplaza a Ciro el Grande
+225,Parākramabāhu I,assets/art/avatars/nations/parakramabahu_i.webp,Hombre,Asia,Kingdom of Polonnaruwa,https://en.wikipedia.org/wiki/Parakramabahu_I,Por encargar,,Reemplaza a Suleimán el Magnífico
+226,Parameswara,assets/art/avatars/nations/parameswara.webp,Hombre,Asia,Malacca Sultanate,https://en.wikipedia.org/wiki/Parameswara_of_Malacca,Por encargar,,Reemplaza a Saladino
+227,Walter Lini,assets/art/avatars/nations/walter_lini.webp,Hombre,Oceanía,Vanuatu,https://en.wikipedia.org/wiki/Walter_Lini,Por encargar,,Reemplaza a Kamehameha I
+228,Tamar de Georgia,assets/art/avatars/nations/tamar_de_georgia.webp,Mujer,Asia,Kingdom of Georgia,https://en.wikipedia.org/wiki/Tamar_I,Por encargar,,Reemplaza a Lady Triệu
+229,María Estuardo,assets/art/avatars/nations/maria_estuardo.webp,Mujer,Europa,Kingdom of Scotland,"https://en.wikipedia.org/wiki/Mary,_Queen_of_Scots",Por encargar,,Reemplaza a Catalina la Grande
+230,Gwenllian ferch Gruffudd,assets/art/avatars/nations/gwenllian.webp,Mujer,Europa,Deheubarth (Wales),https://en.wikipedia.org/wiki/Gwenllian_ferch_Gruffudd,Por encargar,,Reemplaza a Teodora
+231,María I de Portugal,assets/art/avatars/nations/maria_i_de_portugal.webp,Mujer,Europa,Kingdom of Portugal,https://en.wikipedia.org/wiki/Maria_I_of_Portugal,Por encargar,,Reemplaza a Juana de Arco

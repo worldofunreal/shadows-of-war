@@ -1178,6 +1178,13 @@ pub static PARAMS: &[ParamDef] = &[
         "×",
         "MAP_CONQUEST_INTERIOR_FLASH"
     ),
+    linear_color!(
+        "conquest.mountain_color",
+        "Mountain conquest flash (Hannibal)",
+        "Conquest",
+        [0.737, 0.376, 0.019],
+        "MAP_CONQUEST_MOUNTAIN_COLOR"
+    ),
     flag!(
         "vfx.attack_flash",
         "Attack flash",

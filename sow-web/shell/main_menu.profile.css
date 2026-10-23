@@ -1737,8 +1737,7 @@
 }
 
 .sow-hero-briefing--random,
-.sow-hero-briefing--modal,
-.sow-hero-briefing--selection {
+.sow-hero-briefing--modal {
     grid-template-columns: minmax(0, 1fr);
 }
 
@@ -1819,6 +1818,7 @@
 }
 
 .sow-menu__leader-copy .sow-hero-briefing {
+    grid-template-columns: minmax(0, 1fr);
     text-align: start;
 }
 
@@ -2261,16 +2261,18 @@
     #sow-menu[data-screen="heroes"] .sow-heroes__workspace { gap: 10px; }
     .sow-heroes__featured-copy { padding: 14px; }
     .sow-hero-briefing {
-        grid-template-columns: minmax(0, .68fr) minmax(0, 1.32fr);
+        grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
         gap: 8px;
     }
-    .sow-hero-briefing--selection { grid-template-columns: minmax(0, 1fr); }
     .sow-hero-briefing__civilization { margin-bottom: 3px; font-size: 9px; }
     .sow-hero-briefing__name { font-size: clamp(17px, 3vh, 25px); }
     .sow-hero-briefing__ability { gap: 7px; }
     .sow-hero-briefing__icon-slot { flex-basis: 32px; width: 32px; height: 32px; }
     .sow-hero-briefing__ability-name { font-size: 10px; }
     .sow-hero-briefing__description { font-size: 10px; line-height: 1.3; }
+    #sow-menu[data-screen="heroes"] .sow-heroes__featured-copy .sow-hero-briefing__name { font-size: clamp(17px, 3vh, 22px); }
+    .sow-menu__leader-copy .sow-hero-briefing__name { font-size: clamp(17px, 3vh, 22px); }
+    .sow-menu__leader-copy .sow-hero-briefing__ability { margin-top: 0; }
 }
 
 @media (min-width: 681px) and (orientation: landscape) {

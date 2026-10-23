@@ -189,6 +189,7 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
 /* Shared player and economy plate. */
 .sow-hud__nameplate {
     position: absolute;
+    container-type: inline-size;
     top: max(12px, var(--sow-sat));
     inset-inline-start: max(16px, var(--sow-sal));
     display: none;
@@ -234,7 +235,7 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 20px;
+    font-size: clamp(14px, 8cqw, 20px);
     line-height: 1.1;
     font-weight: 750;
     letter-spacing: .01em;
@@ -1386,10 +1387,11 @@ html[dir="rtl"] .sow-hud__dev-play::before { transform: scaleX(-1); }
 
 .sow-hud__endgame-stats {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-    margin: 24px 0 14px;
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+    gap: 0;
+    margin: 18px 0 12px;
     padding: 0;
+    border-block: 1px solid color-mix(in srgb, var(--sow-gold) 18%, var(--sow-line));
 }
 
 .sow-hud__endgame-card {
@@ -1918,56 +1920,54 @@ html[dir="rtl"] .sow-hud__dev-play::before { transform: scaleX(-1); }
 }
 
 .sow-hud__endgame-stat {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    grid-template-rows: auto auto;
-    column-gap: 7px;
+    position: relative;
+    display: flex;
     align-items: center;
+    justify-content: center;
+    gap: 4px;
     min-width: 0;
-    padding: 10px 8px;
-    border: 1px solid var(--sow-line);
-    border-radius: 4px 7px 7px 4px;
-    background: rgb(255 255 255 / 3%);
+    padding: 8px 4px;
+}
+
+.sow-hud__endgame-stat + .sow-hud__endgame-stat::before {
+    position: absolute;
+    inset-inline-start: 0;
+    top: 50%;
+    width: 1px;
+    height: 18px;
+    background: color-mix(in srgb, var(--sow-line) 85%, transparent);
+    content: "";
+    transform: translateY(-50%);
 }
 
 .sow-hud__endgame-stat-icon {
     display: grid;
-    width: 24px;
-    height: 24px;
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
     place-items: center;
-    grid-row: 1 / span 2;
     color: var(--sow-gold);
 }
 
 .sow-hud__endgame-stat-icon svg {
     display: block;
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
 }
 
 .sow-hud__endgame-stat-icon img {
     display: block;
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     object-fit: contain;
 }
 
-.sow-hud__endgame-stat-label {
-    overflow: hidden;
-    color: var(--sow-muted);
-    font-size: 8px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    line-height: 1;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 .sow-hud__endgame-stat b {
-    margin-top: 4px;
+    margin: 0;
     color: #f5f1e8;
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1;
+    white-space: nowrap;
 }
 
 .sow-hud__endgame-store {
@@ -2208,6 +2208,13 @@ html[dir="rtl"] .sow-hud__dev-play::before { transform: scaleX(-1); }
     width: 17px;
     height: 17px;
     object-fit: contain;
+}
+
+.sow-hud__notification-ability {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
 }
 
 .sow-hud__notification-portraits {
@@ -2634,7 +2641,7 @@ html[dir="rtl"] .sow-hud__dev-play::before { transform: scaleX(-1); }
         gap: 3px 6px;
     }
 
-    .sow-hud__nameplate-copy strong { font-size: 18px; }
+    .sow-hud__nameplate-copy strong { font-size: clamp(14px, 8cqw, 18px); }
     .sow-hud__nameplate-bar { height: 18px; }
     .sow-hud__nameplate-bar > span { font-size: 14px; }
     .sow-hud__nameplate-economy { gap: 2px; }
@@ -2820,12 +2827,6 @@ html[dir="rtl"] .sow-hud__dev-play::before { transform: scaleX(-1); }
         justify-content: flex-start;
         overflow: hidden;
     }
-    .sow-hud__exit-content {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-    }
     .sow-hud__exit-card .sow-hud__endgame-actions { flex: 0 0 auto; }
     .sow-hud__exit-card .sow-hud__endgame-primary,
     .sow-hud__exit-card .sow-hud__endgame-secondary {
@@ -2837,10 +2838,6 @@ html[dir="rtl"] .sow-hud__dev-play::before { transform: scaleX(-1); }
     }
     .sow-hud__endgame-hero { gap: 12px; }
     .sow-hud__endgame-portrait-wrap { width: 100px; height: 100px; border-radius: 8px; }
-    .sow-hud__endgame-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .sow-hud__exit-card .sow-hud__endgame-stats { grid-template-columns: minmax(0, 1fr); }
-    .sow-hud__endgame-stat { padding: 11px 10px; }
-
     .sow-hud__notification {
         grid-template-columns: 24px auto minmax(0, 1fr);
         gap: 7px;
@@ -2883,7 +2880,7 @@ html[dir="rtl"] .sow-hud__dev-play::before { transform: scaleX(-1); }
         grid-template-rows: minmax(0, 1fr) 18px 24px;
         gap: 3px 6px;
     }
-    #sow-hud[data-compact="true"] .sow-hud__nameplate-copy strong { font-size: 16px; }
+    #sow-hud[data-compact="true"] .sow-hud__nameplate-copy strong { font-size: clamp(13px, 6cqw, 16px); }
     #sow-hud[data-compact="true"] .sow-hud__nameplate-bar { height: 18px; }
     #sow-hud[data-compact="true"] .sow-hud__left-rail,
     #sow-hud[data-compact="true"] .sow-hud__right-rail { bottom: max(6px, var(--sow-sab)); }

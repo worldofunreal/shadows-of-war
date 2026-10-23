@@ -42,6 +42,21 @@ fn map_shader_parses_and_matches_globals_layout() {
     assert_struct_size(&module, "Globals", std::mem::size_of::<crate::MapGlobals>());
 }
 
+/// The hero conquest tints are read from the owner's style row. A refactor that drops
+/// either flag or the mountain test would silently remove the visual; naga cannot see that.
+#[test]
+fn map_shader_tints_hero_conquest_flashes() {
+    let source = include_str!("shaders/map.wgsl");
+    for expected in [
+        "player_skin_styles.styles[owner_id].y > 0.5",
+        "player_skin_styles.styles[owner_id].z > 0.5",
+        "f32(terrain_byte & 0x1Fu) >= globals.shader_params[__MAP_LAND_HIGHLANDS_LIMIT__].x",
+        "__MAP_CONQUEST_MOUNTAIN_COLOR__",
+    ] {
+        assert!(source.contains(expected), "map shader lost hero flash tint: {expected}");
+    }
+}
+
 #[test]
 fn text_shader_parses_and_matches_globals_layout() {
     let source =

@@ -127,6 +127,7 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     display: flex;
     align-items: center;
     gap: 12px;
+    flex: 1 1 auto;
     min-width: 0;
 }
 
@@ -169,21 +170,27 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 }
 
 .sow-menu__profile {
-    min-width: 96px;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 #sow-menu .sow-menu__profile input {
-    width: 180px;
+    display: block;
+    width: 100%;
+    min-width: 0;
     padding: 2px 0;
     border: 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.22);
     outline: 0;
     background: transparent;
     color: #fff;
-    font-size: clamp(15px, 1.6vw, 20px);
+    font-size: clamp(16px, 1.8vw, 24px);
     font-weight: var(--sow-button-weight);
     letter-spacing: 0.06em;
     text-transform: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     transition: border-color 160ms ease;
 }
 

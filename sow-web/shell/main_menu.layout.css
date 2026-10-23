@@ -54,7 +54,9 @@
         }
     
         .sow-menu__profile input {
-            width: min(22vw, 100px);
+            width: 100%;
+            min-width: 0;
+            font-size: clamp(15px, 4vw, 21px);
         }
     
         .sow-menu__profile {
@@ -108,10 +110,13 @@
             min-height: 0;
             width: 100%;
         }
-    
-        .sow-menu__leader-copy {
-            display: none !important;
+
+        #sow-menu[data-screen="home"] .sow-menu__battlefield {
+            order: -1;
+            flex: 0 0 auto;
         }
+    
+        /* Keep the selected hero visible in the home screen's narrow layout. */
     
         .sow-menu__public,
         .sow-menu__modal {
@@ -133,7 +138,7 @@
 }
 
 @media (min-width: 600px) and (max-width: 959px) {
-    .sow-menu__profile input { width: 140px; }
+    .sow-menu__profile input { width: 100%; }
     
         .sow-menu__signin,
         .sow-menu__icon-button,
@@ -186,7 +191,7 @@
             min-width: 0;
             min-height: 0;
             height: 24px;
-            font-size: 15px;
+            font-size: clamp(15px, 4vw, 21px);
         }
     
         .sow-menu__join input,
@@ -567,10 +572,6 @@
             order: 1;
         }
     
-        #sow-menu[data-screen="home"] .sow-menu__battlefield {
-            display: none;
-        }
-    
         #sow-menu[data-screen="browser"] .sow-menu__main,
         #sow-menu[data-screen="create"] .sow-menu__main,
         #sow-menu[data-screen="queue"] .sow-menu__main,
@@ -674,7 +675,8 @@
         }
     
         #sow-menu .sow-menu__profile input {
-            width: 180px;
+            width: 100%;
+            min-width: 0;
             max-width: 100%;
         }
     

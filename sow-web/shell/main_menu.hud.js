@@ -202,11 +202,11 @@
 
     function endgameStatsMarkup(prefix) {
         return '<div class="sow-hud__endgame-stats" id="sow-hud-' + prefix + '-stats">'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + hudIcon("attack", "sow-hud__inline-icon") + '</span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.stat_kills") + '</span><b id="sow-hud-' + prefix + '-kills">0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + statusIcon("allied", "sow-hud__inline-icon") + '</span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.stat_assists") + '</span><b id="sow-hud-' + prefix + '-assists">0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + hudIcon("globe", "sow-hud__inline-icon") + '</span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.stat_max_territory") + '</span><b id="sow-hud-' + prefix + '-max-territory">0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + hudIcon("gold", "sow-hud__inline-icon") + '</span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.stat_gold_received") + '</span><b id="sow-hud-' + prefix + '-gold-received">0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + hudIcon("troops", "sow-hud__inline-icon") + '</span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.stat_troops_received") + '</span><b id="sow-hud-' + prefix + '-troops-received">0</b></div>'
+            + '      <div class="sow-hud__endgame-stat" role="group" aria-label="' + SOW_t("endgame.stat_kills") + '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + hudIcon("attack", "sow-hud__inline-icon") + '</span><b id="sow-hud-' + prefix + '-kills">0</b></div>'
+            + '      <div class="sow-hud__endgame-stat" role="group" aria-label="' + SOW_t("endgame.stat_assists") + '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + statusIcon("allied", "sow-hud__inline-icon") + '</span><b id="sow-hud-' + prefix + '-assists">0</b></div>'
+            + '      <div class="sow-hud__endgame-stat" role="group" aria-label="' + SOW_t("endgame.stat_max_territory") + '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + hudIcon("globe", "sow-hud__inline-icon") + '</span><b id="sow-hud-' + prefix + '-max-territory">0</b></div>'
+            + '      <div class="sow-hud__endgame-stat" role="group" aria-label="' + SOW_t("endgame.stat_gold_received") + '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + hudIcon("gold", "sow-hud__inline-icon") + '</span><b id="sow-hud-' + prefix + '-gold-received">0</b></div>'
+            + '      <div class="sow-hud__endgame-stat" role="group" aria-label="' + SOW_t("endgame.stat_troops_received") + '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + hudIcon("troops", "sow-hud__inline-icon") + '</span><b id="sow-hud-' + prefix + '-troops-received">0</b></div>'
             + '    </div>';
     }
 
@@ -581,10 +581,8 @@
             + '        <p class="sow-hud__endgame-desc" id="sow-hud-surrender-desc">' + SOW_t("endgame.your_battle_will_end") + '</p>'
             + '      </div>'
             + '    </div>'
-            + '    <div class="sow-hud__exit-content">'
-            + '      ' + endgameStatsMarkup("surrender")
-            + '      <p class="sow-hud__endgame-desc" id="sow-hud-surrender-save-note">' + SOW_t("endgame.leave_rewards_saved") + '</p>'
-            + '    </div>'
+            + '    ' + endgameStatsMarkup("surrender")
+            + '    <p class="sow-hud__endgame-desc" id="sow-hud-surrender-save-note">' + SOW_t("endgame.leave_rewards_saved") + '</p>'
             + '    <div class="sow-hud__endgame-actions">'
             + '      <button class="sow-hud__endgame-secondary" type="button" data-command="close_surrender_modal" id="sow-hud-surrender-cancel">' + SOW_t("endgame.cancel") + '</button>'
             + '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_surrender"><span aria-hidden="true">⌂</span> <span id="sow-hud-surrender-action-label">' + SOW_t("endgame.leave_match") + '</span></button>'
@@ -1873,7 +1871,11 @@
         });
     }
 
-    function notificationIcon(key) {
+    function notificationIcon(key, values) {
+        // A notice that names the hero whose ability fired shows that ability's icon.
+        if (/^[a-z][a-z0-9_]*$/.test(values.hero || "")) {
+            return "<img class='sow-hud__notification-ability' src='" + asset("gameplay/icons/abilities/" + values.hero + ".webp") + "' alt='' draggable='false'>";
+        }
         if (key.indexOf("nuke") >= 0) return hudIcon("nuke", "sow-hud__notification-icon");
         if (key.indexOf("betrayal") >= 0) return statusIcon("traitor", "sow-hud__notification-icon");
         if (/attack|elimination/.test(key)) return hudIcon("attack", "sow-hud__notification-icon");
@@ -1898,7 +1900,7 @@
             + (contextual ? " sow-hud__notification--contextual" : "")
             + (item.priority >= 4 ? " sow-hud__notification--urgent" : "")
             + (/resource_(received|sent)|ally_support/.test(key) ? " sow-hud__notification--support" : "");
-        parts.seal.innerHTML = notificationIcon(key);
+        parts.seal.innerHTML = notificationIcon(key, entry.values || {});
         parts.avatars.forEach(function (slot, index) {
             var presentation = avatars[index] || null;
             slot.wrapper.hidden = !presentation;
@@ -2649,12 +2651,12 @@
             if (!playerPlateHidden) {
                 var plateLeader = leaderById(hud.player_leader || (hudState && hudState.selected_leader));
                 var plateSrc = asset("gameplay/avatars/" + plateLeader.slug + ".webp");
+                var platePlayerName = String(hud.player_name || "");
                 if (hudRefs.plateAvatar && hudRefs.plateAvatar.getAttribute("src") !== plateSrc) {
                     hudRefs.plateAvatar.src = plateSrc;
-                    hudRefs.plateAvatar.alt = plateLeader.name;
                 }
-                if (hudRefs.plateName && hudRefs.plateName.textContent !== plateLeader.name) {
-                    hudRefs.plateName.textContent = plateLeader.name;
+                if (hudRefs.plateName && hudRefs.plateName.textContent !== platePlayerName) {
+                    hudRefs.plateName.textContent = platePlayerName;
                 }
                 var plateText = formatNameplateTroops(troops) + " / " + formatNameplateTroops(maxTroops);
                 if (hudRefs.plateTroops && hudRefs.plateTroops.textContent !== plateText) {

@@ -1018,11 +1018,7 @@ impl SowApp {
             self.profile_action_retry_at = None;
             self.pending_campaign_exit = None;
             self.menu_return = None;
-            self.name_save_revision = 0;
-            self.leader_selection_revision = 0;
-            self.purchase_revision = 0;
             self.quick_match_revision = 0;
-            self.menu_guide_save_revision = 0;
             self.menu_guide_save_pending = false;
         }
         #[cfg(target_arch = "wasm32")]
@@ -2028,6 +2024,7 @@ pub(crate) mod reward_exit_tests {
             can_retaliate: false,
             traitor: false,
             leader: Leader::of("caesar"),
+            empowered_attack: false,
             campaign_avatar: None,
             is_campaign_faction: false,
             skin_style: 0,
@@ -2888,38 +2885,22 @@ pub(crate) mod reward_exit_tests {
         assert!(
             progress.menu_guides["welcome"]
                 .completed_steps
-                .contains("welcome_name")
+                .contains("welcome_heroes")
         );
     }
 
     #[wasm_bindgen_test]
-    fn confirmed_first_match_context_survives_delayed_snapshots() {
+    fn retired_first_match_guide_is_ignored_in_delayed_snapshots() {
         use sow_data::profile::MenuGuideProgress;
         let mut progress = PlayerProgress::default();
-        let confirmed = MenuGuideProgress {
-            source_match_id: Some("match-a".to_string()),
-            ..Default::default()
-        };
         progress.merge_menu_guides(std::collections::BTreeMap::from([(
             "first_multiplayer".to_string(),
-            confirmed,
+            MenuGuideProgress {
+                source_match_id: Some("match-a".to_string()),
+                ..Default::default()
+            },
         )]));
-        assert_eq!(
-            progress.menu_guides["first_multiplayer"]
-                .source_match_id
-                .as_deref(),
-            Some("match-a")
-        );
-        progress.merge_menu_guides(std::collections::BTreeMap::from([(
-            "first_multiplayer".to_string(),
-            MenuGuideProgress::default(),
-        )]));
-        assert_eq!(
-            progress.menu_guides["first_multiplayer"]
-                .source_match_id
-                .as_deref(),
-            Some("match-a")
-        );
+        assert!(!progress.menu_guides.contains_key("first_multiplayer"));
     }
 
     #[wasm_bindgen_test]

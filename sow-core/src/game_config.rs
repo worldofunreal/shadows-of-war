@@ -387,7 +387,7 @@ impl Default for GameConfig {
 
             // Core Simulation Pacing
             tick_rate_ms: 100.0, // Server clock ticks every 100ms (10 ticks per second)
-            global_speed_multiplier: 0.35,
+            global_speed_multiplier: 0.175,
 
             // Combat & Expansion Mechanics
             attack_cost_enemy: 2.0,
@@ -422,7 +422,7 @@ impl Default for GameConfig {
             bunker_range: 14.0,
             bunker_priority: 120.0,
             bunker_strength: 0.05,
-            // 24 gold/minute at the standard 0.35x game speed.
+            // 12 gold/minute at the standard 0.175x game speed.
             factory_gold_income: 8.0 / 7.0,
             port_gold_income: default_port_gold_income(),
             hero_city_gold_income: default_hero_city_gold_income(),

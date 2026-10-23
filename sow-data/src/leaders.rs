@@ -193,6 +193,31 @@ impl Leader {
         self.ability_multiplier(|a| matches!(a, Ability::DamageToTraitors { .. }))
     }
 
+    /// `1 + percent/100` for an attack on a player with more troops, else `1`.
+    pub fn outnumbered_strength_multiplier(self) -> f64 {
+        match self.ability() {
+            Ability::OutnumberedStrength { percent } => 1.0 + f64::from(percent) / 100.0,
+            _ => 1.0,
+        }
+    }
+
+    /// `1 - percent/100` on mountain tiles, else `1`.
+    pub fn mountain_loss_multiplier(self) -> f64 {
+        match self.ability() {
+            Ability::MountainCost { percent } => 1.0 - f64::from(percent) / 100.0,
+            _ => 1.0,
+        }
+    }
+
+    /// Whether this hero's mountain conquests get the conqueror's colour flash.
+    pub fn has_mountain_cost(self) -> bool {
+        matches!(self.ability(), Ability::MountainCost { .. })
+    }
+
+    pub fn tribe_speed_multiplier(self) -> f64 {
+        self.ability_multiplier(|a| matches!(a, Ability::TribeSpeed { .. }))
+    }
+
     pub fn city_defense_multiplier(self) -> f64 {
         self.ability_multiplier(|a| matches!(a, Ability::CityDefense { .. }))
     }

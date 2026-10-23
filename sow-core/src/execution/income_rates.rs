@@ -137,9 +137,9 @@ mod tests {
         let ticks_per_second = 1_000.0 / f64::from(cfg.tick_rate_ms);
         let gold_per_minute = |per_second| cfg.per_tick(per_second) * ticks_per_second * 60.0;
 
-        assert_eq!(gold_per_minute(cfg.gold_base_income), 21.0);
-        assert!((gold_per_minute(cfg.factory_gold_income) - 24.0).abs() < 1e-12);
-        assert_eq!(cfg.troop_base_income * 21.0, 3_675.0);
+        assert_eq!(gold_per_minute(cfg.gold_base_income), 10.5);
+        assert!((gold_per_minute(cfg.factory_gold_income) - 12.0).abs() < 1e-12);
+        assert_eq!(cfg.troop_base_income * 10.5, 1_837.5);
         assert_eq!(cfg.territory_troop_tiles, 24);
         assert_eq!(cfg.territory_gold_tiles, 2_048);
         assert_eq!(cfg.cost_city, 200.0);

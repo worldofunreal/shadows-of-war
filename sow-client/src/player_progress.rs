@@ -284,16 +284,24 @@ impl PlayerProgress {
         &mut self,
         incoming: std::collections::BTreeMap<String, sow_data::profile::MenuGuideProgress>,
     ) {
+        self.menu_guides.retain(|id, _| id == "welcome");
         for (id, progress) in incoming {
+            if id != "welcome" {
+                continue;
+            }
             let saved = self.menu_guides.get(&id);
             let source_match_id = progress
                 .source_match_id
                 .clone()
                 .or_else(|| saved.and_then(|record| record.source_match_id.clone()));
             let mut merged = sow_data::profile::merge_menu_guide_progress(saved, &progress);
-            // These snapshots came from the server; the shared write merger
-            // deliberately strips this field from untrusted client requests.
+            // Server snapshots may establish this context; client writes cannot.
             merged.source_match_id = source_match_id;
+            let merged = if id == "welcome" {
+                sow_data::profile::normalize_welcome_guide_progress(&merged, self.matches_played)
+            } else {
+                merged
+            };
             self.menu_guides.insert(id, merged);
         }
     }

@@ -69,14 +69,7 @@
         };
     }
 
-    function isWelcomeLeaderSelectionStep() {
-        var guide = state && state.menu_guides && state.menu_guides.welcome;
-        return !!(guide && guide.status === "active" &&
-            (guide.current_step === "welcome_offer_selection" || guide.current_step === "welcome_owned_selection"));
-    }
-
     function renderRandomLeaderCard(selected) {
-        if (isWelcomeLeaderSelectionStep()) return "";
         var matchesSearch = !heroesSearchQuery.trim()
             || randomLeaderName().toLowerCase().indexOf(heroesSearchQuery.trim().toLowerCase()) !== -1;
         if (!matchesSearch || heroesRegionFilter !== "all") return "";
@@ -88,7 +81,7 @@
 
     function heroesRoster(leaders) {
         var query = heroesSearchQuery.trim().toLowerCase();
-        return leaders.filter(function (leader) {
+        var filtered = leaders.filter(function (leader) {
             var matchesQuery = !query ||
                 String(leaderDisplayName(leader) || "").toLowerCase().indexOf(query) !== -1 ||
                 String(leaderHistoricalName(leader) || "").toLowerCase().indexOf(query) !== -1 ||
@@ -97,6 +90,8 @@
             var matchesRegion = heroesRegionFilter === "all" || leader.region === heroesRegionFilter;
             return matchesQuery && matchesRegion;
         });
+        return filtered.filter(function (leader) { return leader.available !== false; })
+            .concat(filtered.filter(function (leader) { return leader.available === false; }));
     }
 
     function renderHeroesRegionDropdown() {
@@ -139,8 +134,7 @@
 
     function updateHeroesPreview() {
         if (currentScreen() !== "heroes") return false;
-        var randomSelected = !isWelcomeLeaderSelectionStep() &&
-            (tempSelectedRandom || (!tempSelectedLeader && !!(state && state.prefer_random_leader)));
+        var randomSelected = (tempSelectedRandom || (!tempSelectedLeader && !!(state && state.prefer_random_leader)));
         var activeLeader = randomSelected ? randomLeaderOption() : leaderById(tempSelectedLeader || (state && state.selected_leader) || "Caesar");
         var panel = activeScreenPanel() || root;
         var featured = panel.querySelector(".sow-heroes__featured");
@@ -199,8 +193,7 @@
 
     function renderHeroInfoModal() {
         if (!heroInfoOpen) return "";
-        if (!isWelcomeLeaderSelectionStep() &&
-            (tempSelectedRandom || (!tempSelectedLeader && state && state.prefer_random_leader))) return "";
+        if ((tempSelectedRandom || (!tempSelectedLeader && state && state.prefer_random_leader))) return "";
         var activeLeader = leaderById(tempSelectedLeader || (state && state.selected_leader) || "Caesar");
         if (!activeLeader) return "";
         // The info dialog is one tall portrait card on every device, so it
@@ -325,8 +318,7 @@
 
     function renderHeroes() {
         var activeId = tempSelectedLeader || (state && state.selected_leader) || "Caesar";
-        var activeRandom = !isWelcomeLeaderSelectionStep() &&
-            (tempSelectedRandom || (!tempSelectedLeader && !!(state && state.prefer_random_leader)));
+        var activeRandom = (tempSelectedRandom || (!tempSelectedLeader && !!(state && state.prefer_random_leader)));
         var activeLeader = activeRandom ? randomLeaderOption() : leaderById(activeId);
         var locked = activeLeader.available === false;
         // prepareLeaderArt() warms the loader splash art (loader.js), not this

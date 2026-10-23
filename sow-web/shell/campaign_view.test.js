@@ -555,7 +555,7 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     const createdImages = [], warnings = [];
     const resizeObservers = [], resizeFrames = [];
     const documentListeners = {};
-    let continueCalls = 0;
+    let continueCalls = 0, dismissCalls = 0;
     class ResizeObserver {
         constructor(callback) { this.callback = callback; resizeObservers.push(this); }
         observe() {}
@@ -624,7 +624,8 @@ test("campaign view recovers portraits and renders compact objective guidance", 
         asset: value => "/" + value,
         translate: key => key,
         roster: { factions: [] },
-        onContinue() { continueCalls++; }, onDismiss() {}, onChoice() {}
+        guideSkipLabel: "Skip",
+        onContinue() { continueCalls++; }, onDismiss() { dismissCalls++; }, onChoice() {}
     });
     const definition = {
         episode_id: "portrait_test",
@@ -770,7 +771,40 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     assert.equal(mapTapDuringScene.defaultPrevented, true, "dialogue modals continue to block clicks outside the scene");
     assert.equal(mapTapDuringScene.propagationStopped, true, "dialogue modals continue to stop outside propagation");
     assert.equal(continueCalls, 1, "an outside map tap continues a scene, like its Continue button");
+    const welcome = { id: "welcome_heroes", type: "guide", title_key: "heroes_title",
+        guide: { kind: "ui", target: "menu_heroes", gesture: "tap" } };
+    const welcomeModel = { ...objectiveModel, step: welcome, line: welcome, paused: false };
+    const welcomeContext = { anchor: { x: 150, y: 100, width: 80, height: 44 }, hideObjective: true,
+        gestureLabel: "Open Heroes to choose a commander or unlock one with gems.", reducedMotion: true };
+    const skip = root.querySelector("[data-story-guide-skip]");
+    for (const [width, height] of [[1366, 768], [390, 844]]) {
+        root.clientWidth = width; root.clientHeight = height;
+        renderer.render(welcomeModel, welcomeContext);
+        assert.equal(root.querySelector(".sow-story__dialog").hidden, true);
+        assert.equal(root.querySelector(".sow-story__spotlight").hidden, false);
+        assert.equal(skip.hidden, false, "Skip is available with the dimming on desktop and mobile");
+        assert.equal(skip.textContent, "Skip");
+        assert.equal(skip.attributes["aria-label"], "Skip");
+    }
+    skip.hasAttribute = name => name === "data-story-guide-skip";
+    root.listeners.click[0].listener({ target: { closest: () => skip }, timeStamp: 10000, stopPropagation() {}, preventDefault() {} });
+    assert.equal(dismissCalls, 1, "click/touch Skip uses the existing dismissal path");
+    doc.activeElement = new Element(doc, "input");
+    (documentListeners.keydown || []).forEach(item => item.listener({ key: "Escape", repeat: false,
+        preventDefault() {}, stopPropagation() {} }));
+    assert.equal(dismissCalls, 2, "Escape dismisses even when focus is on a menu control outside the guide");
+    renderer.render(welcomeModel, { ...welcomeContext, anchor: null });
+    assert.equal(skip.hidden, true, "no target and no dimming means no Skip button");
+    renderer.render(zoomModel, { anchor: { x: 190, y: 400 }, gestureLabel: "Zoom in" });
+    assert.equal(skip.hidden, true, "an undimmed guide has no Skip button");
     renderer.destroy();
+    const campaignOnly = sandbox.SOWCampaignView.mount(root, {
+        asset: value => "/" + value, translate: key => key, onDismiss() {}, onContinue() {}
+    });
+    campaignOnly.render(welcomeModel, welcomeContext);
+    assert.equal(root.querySelector("[data-story-guide-skip]").hidden, true,
+        "campaign views do not opt into the menu-only button");
+    campaignOnly.destroy();
 });
 
 
@@ -826,6 +860,22 @@ test("desktop retains the quest card while compact play uses the shared guided l
     assert.ok(desktopObjective, "tutorial objective uses its own stacked placement");
     assert.match(desktopObjective[0], /inset-inline-start: max\(16px, var\(--story-inset-left\)\)/);
     assert.match(desktopObjective[0], /calc\(max\(12px, var\(--story-inset-top\)\) \+ var\(--sow-player-panel-height\) \+ var\(--sow-tutorial-player-panel-gap\)\)/);
+});
+
+
+test("player nameplate keeps the active leader portrait and shows the nickname responsively", () => {
+    const plateStart = hud.indexOf("var playerPlateHidden = Boolean(hud.is_spectating)");
+    const plateEnd = hud.indexOf("var plateText = formatNameplateTroops", plateStart);
+    assert.ok(plateStart >= 0 && plateEnd > plateStart);
+    const plateUpdate = hud.slice(plateStart, plateEnd);
+    assert.match(plateUpdate, /plateLeader = leaderById\(hud\.player_leader/);
+    assert.match(plateUpdate, /gameplay\/avatars\/" \+ plateLeader\.slug/);
+    assert.match(plateUpdate, /platePlayerName = String\(hud\.player_name/);
+    assert.match(plateUpdate, /plateName\.textContent = platePlayerName/);
+    assert.doesNotMatch(plateUpdate, /plateName\.textContent = plateLeader\.name/);
+    assert.match(webMenu, /"player_name": snapshot[\s\S]*?snapshot\.players\.iter\(\)[\s\S]*?player\.name\.as_str\(\)/);
+    assert.match(hudCss, /\.sow-hud__nameplate \{[^}]*container-type: inline-size;/);
+    assert.match(hudCss, /\.sow-hud__nameplate-copy strong \{[^}]*min-width: 0;[^}]*overflow: hidden;[^}]*text-overflow: ellipsis;[^}]*font-size: clamp\(/);
 });
 
 

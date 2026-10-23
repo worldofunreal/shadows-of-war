@@ -873,11 +873,7 @@ pub struct SowApp {
     /// Last requested name, kept until the canonical profile acknowledges it.
     pub pending_display_name: Option<String>,
     pub display_name_save_request_id: Option<u64>,
-    pub(crate) name_save_revision: u64,
-    pub(crate) leader_selection_revision: u64,
-    pub(crate) purchase_revision: u64,
     pub(crate) quick_match_revision: u64,
-    pub(crate) menu_guide_save_revision: u64,
     pub(crate) menu_guide_save_pending: bool,
     /// Prevents a profile refresh from racing an in-flight rename.
     pub profile_request_in_flight: bool,

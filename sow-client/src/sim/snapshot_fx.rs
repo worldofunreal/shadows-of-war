@@ -445,6 +445,7 @@ mod nuke_alert_tests {
             can_retaliate: false,
             traitor: false,
             leader: Leader::of("caesar"),
+            empowered_attack: false,
             campaign_avatar: None,
             is_campaign_faction: false,
             skin_style: 0,

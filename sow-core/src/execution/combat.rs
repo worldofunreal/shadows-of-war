@@ -2,7 +2,7 @@
 mod combat_fleets;
 #[path = "combat_tiles.rs"]
 mod combat_tiles;
-pub(crate) use combat_tiles::attack_strength;
+pub(crate) use combat_tiles::{attack_strength, outnumbered_bonus_applies};
 
 #[cfg(test)]
 mod tests {

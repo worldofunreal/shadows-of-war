@@ -33,10 +33,6 @@
     var rewardPresentationReady = false;
     var menuFlow = window.SOWMenuFlow.create();
     window.SOW_menu_flow = menuFlow;
-    var menuOutcomeCounts = Object.create(null);
-    var menuOutcomeReady = Object.create(null);
-    var purchasedLeaderId = null;
-    var lastPurchaseRevision = 0;
     var lastMenuFlowPhase = null;
     var displayedProgression = null;
     var progressionAnimationFrame = 0;
@@ -1403,7 +1399,7 @@
                 "match", state.menu_return && state.menu_return.match_id);
         }
         var guide = window.SOW_menu_guide;
-        if (!menuFlow.canGuide() && guide) guide.pause();
+        if (guide) guide.update(state, menuGuideFacts());
         if (menuFlow.canPresent() && !rewardAnimationRunning && pending.length) {
             ensureProgressionDisplay();
             runRewardPresentation(pending);
@@ -1416,49 +1412,10 @@
             render();
             return;
         }
-        if (menuFlow.canGuide() && guide) guide.update(state, menuGuideFacts());
     }
 
     function menuGuideFacts() {
-        var screen = currentScreen();
-        var entry = activeProfileEntry();
-        var ownProfile = screen === "profile" && profileAccountId === state.account_id && profileDataComplete();
-        var historyReady = ownProfile && profileTab === "history" && entry && entry.historyLoaded && !entry.historyError;
-        var matchId = state.menu_return && state.menu_return.source === "multiplayer" ? state.menu_return.match_id : null;
-        var firstGuide = state.menu_guides && state.menu_guides.first_multiplayer;
-        if (firstGuide && firstGuide.status === "active" && firstGuide.source_match_id) matchId = firstGuide.source_match_id;
-        var historyIds = (profileHistory || []).map(function (item) { return item.match_id; });
-        var commerce = window.SOW_PORTAL !== "poki" && window.SOW_PORTAL !== "jest";
-        var affordable = commerce ? (state.store && state.store.leaders || []).filter(function (offer) {
-            return !offer.owned && Number(offer.cost_gems) > 0 && Number(offer.cost_gems) <= Number(state.gems);
-        }).map(function (offer) { return offer.id; }) : [];
-        var ready = {
-            profile_opened: ownProfile && profileTab === "overview",
-            history_current_match_ready: !!(historyReady && matchId && historyIds.indexOf(matchId) !== -1),
-            store_ready: commerce && screen === "store" && storeCatalogLoaded && !storeCatalogLoading
-        };
-        Object.keys(ready).forEach(function (key) {
-            if (ready[key] && !menuOutcomeReady[key]) menuOutcomeCounts[key] = (menuOutcomeCounts[key] || 0) + 1;
-            menuOutcomeReady[key] = ready[key];
-        });
-        return {
-            screen: screen, profile_tab: profileTab, profile_ready: ownProfile, own_profile_ready: ownProfile,
-            history_ready: !!historyReady, history_match_ids: historyIds, current_match_id: matchId,
-            commerce_available: commerce, affordable_unowned_leader_ids: affordable,
-            store_ready: ready.store_ready,
-            purchase_prompt_leader_id: purchaseModal && purchaseModal.type === "leader" ? purchaseModal.leaderId : null,
-            purchase_modal_phase: purchaseModal && purchaseModal.type === "leader" ? purchaseModal.phase : null,
-            purchased_leader_id: purchasedLeaderId,
-            owned_leader_ids: (state.store && state.store.leaders || []).filter(function (offer) { return offer.owned; }).map(function (offer) { return offer.id; }),
-            available_leader_ids: (state.leaders || []).filter(function (leader) { return leader.available !== false; }).map(function (leader) { return leader.id; }),
-            preview_leader_id: tempSelectedLeader,
-            menu_outcomes: Object.assign({}, menuOutcomeCounts, {
-                name_saved: Number(state.name_save_revision) || 0,
-                leader_selected: Number(state.leader_selection_revision) || 0,
-                leader_purchased: Number(state.purchase_revision) || 0,
-                quick_match_accepted: Number(state.quick_match_revision) || 0
-            })
-        };
+        return { screen: currentScreen() };
     }
 
     function updateDynamic() {
@@ -1613,6 +1570,7 @@
             passwordLobbyId = null;
             passwordDraft = "";
             tempSelectedLeader = null;
+            tempSelectedRandom = false;
             if (navScreen === "heroes") {
                 profileOpen = false;
                 profileAccountId = null;
@@ -1624,8 +1582,9 @@
                 heroesSearchQuery = "";
                 heroesRegionFilter = "all";
                 dropdownOpenKey = null;
-                tempSelectedLeader = state ? state.selected_leader : "Caesar";
-                tempSelectedRandom = !!(state && state.prefer_random_leader);
+                var navLeaderSelection = currentLeaderSelection();
+                tempSelectedLeader = navLeaderSelection.selected_leader;
+                tempSelectedRandom = navLeaderSelection.prefer_random_leader;
                 render();
                 return;
             }
@@ -1847,8 +1806,9 @@
             heroesSearchQuery = "";
             heroesRegionFilter = "all";
             dropdownOpenKey = null;
-            tempSelectedLeader = state ? state.selected_leader : "Caesar";
-            tempSelectedRandom = !!(state && state.prefer_random_leader);
+            var pickerLeaderSelection = currentLeaderSelection();
+            tempSelectedLeader = pickerLeaderSelection.selected_leader;
+            tempSelectedRandom = pickerLeaderSelection.prefer_random_leader;
             settingsOpen = false;
             signOutConfirmOpen = false;
             render();
@@ -1876,15 +1836,6 @@
         if (command === "preview_leader") {
             tempSelectedLeader = target.dataset.leaderId;
             tempSelectedRandom = false;
-            var previewLeader = leaderById(tempSelectedLeader);
-            if (previewLeader && previewLeader.available !== false && tempSelectedLeader !== state.selected_leader) {
-                menuOutcomeCounts.leader_preview_selected = (menuOutcomeCounts.leader_preview_selected || 0) + 1;
-            }
-            var previewOffer = typeof storeLeaderById === "function" ? storeLeaderById(tempSelectedLeader) : null;
-            if (previewOffer && !previewOffer.owned && Number(previewOffer.cost_gems) > 0
-                && Number(previewOffer.cost_gems) <= Number(state && state.gems)) {
-                menuOutcomeCounts.leader_offer_selected = (menuOutcomeCounts.leader_offer_selected || 0) + 1;
-            }
             if (!updateHeroesPreview()) render();
             maybePresentRewards();
             return;
@@ -1896,6 +1847,7 @@
             return;
         }
         if (command === "confirm_random_leader") {
+            stageLeaderSelection(true, null);
             send("set_random_leader");
             heroesOpen = false;
             heroesSearchQuery = "";
@@ -1909,6 +1861,7 @@
             var leaderId = target.dataset.leaderId || tempSelectedLeader;
             var leader = leaderById(leaderId);
             if (leaderId && leader.available !== false) {
+                stageLeaderSelection(false, leaderId);
                 send("set_leader", { leader_id: leaderId });
                 heroesOpen = false;
                 heroesSearchQuery = "";
@@ -1954,12 +1907,6 @@
             return;
         }
         if (command === "cancel_purchase") {
-            if (purchaseModal && purchaseModal.type === "leader" && purchaseModal.phase === "success") {
-                menuOutcomeCounts.leader_purchase_closed = (menuOutcomeCounts.leader_purchase_closed || 0) + 1;
-            }
-            if (purchaseModal && purchaseModal.type === "leader" && purchaseModal.phase === "confirm" && !purchaseModal.submitted) {
-                menuOutcomeCounts.leader_purchase_cancelled = (menuOutcomeCounts.leader_purchase_cancelled || 0) + 1;
-            }
             if (typeof canDismissPurchaseModal === "function" && !canDismissPurchaseModal()) return;
             if (typeof dismissPurchaseModal === "function") dismissPurchaseModal();
             else {
@@ -2505,6 +2452,7 @@
 
         var replayExitIntro = pendingExitScreenIntro;
         state = normalizeCompletedExitState(state);
+        reconcileLeaderSelection(state);
         syncMenuMusic(state, false);
         if (replayExitIntro) {
             pendingExitScreenIntro = false;
@@ -2555,21 +2503,12 @@
             if (rewardAckRetryTimer !== null) window.clearTimeout(rewardAckRetryTimer);
             rewardAckRetryTimer = null;
             displayedProgression = null;
-            menuOutcomeCounts = Object.create(null);
-            menuOutcomeReady = Object.create(null);
-            purchasedLeaderId = null;
-            lastPurchaseRevision = 0;
             rewardPresentationReady = false;
             cancelRewardAnimation();
             if (rewardAnimationTimer !== null) window.clearTimeout(rewardAnimationTimer);
             rewardAnimationTimer = null;
         }
         if (typeof resumeExternalPurchaseDelivery === "function") resumeExternalPurchaseDelivery(false);
-        var purchaseRevision = Number(state.purchase_revision) || 0;
-        if (purchaseRevision > lastPurchaseRevision && purchaseIntent && purchaseIntent.type === "leader") {
-            purchasedLeaderId = purchaseIntent.leaderId;
-        }
-        lastPurchaseRevision = purchaseRevision;
         if (typeof resolvePurchaseModal === "function") resolvePurchaseModal();
         var returnedFromGame = lastMenuPhase !== null &&
             lastMenuPhase !== "MainMenu" &&

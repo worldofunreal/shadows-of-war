@@ -118,11 +118,126 @@ test("the main-menu art and hero briefing both honor Random", () => {
         window: { SOW_prepareLeaderArt: (...args) => prepared.push(args) },
         leaderById: id => ({ slug: String(id).toLowerCase() }),
         leaderArtUrl: (slug, variant) => slug + ":" + (variant || "viewport-default"),
+        currentLeaderSelection: () => ({ selected_leader: "Caesar", prefer_random_leader: true }),
         prepareLeaderArt() {}
     };
     vm.runInNewContext(coreSource.slice(start, end) + "; this.heroImage = heroImage;", context);
     assert.equal(context.heroImage(), "random:viewport-default");
     assert.deepEqual(prepared, [["random", "low"]]);
+});
+
+test("confirmed leader choice stays current until the published state catches up", () => {
+    const selectionStart = coreSource.indexOf("    function normalizeLeaderSelectionId(");
+    const selectionEnd = coreSource.indexOf("    function asset(path)", selectionStart);
+    const artStart = coreSource.indexOf("    function heroImage(");
+    const artEnd = coreSource.indexOf("    function lobbyThumb(", artStart);
+    assert.ok(selectionStart >= 0 && selectionEnd > selectionStart);
+    assert.ok(artStart >= 0 && artEnd > artStart);
+
+    const initialState = {
+        account_id: "account-a", selected_leader: "Boudica", prefer_random_leader: false,
+        phase: "MainMenu", loader_job: "Idle"
+    };
+    const context = {
+        state: initialState,
+        pendingLeaderSelection: null,
+        asset: path => path,
+        leaderById: id => ({ slug: String(id || "caesar").toLowerCase() }),
+        leaderArtUrl: slug => "hero:" + slug,
+        prepareLeaderArt() {},
+        window: { SOW_prepareLeaderArt() {} }
+    };
+    vm.runInNewContext(
+        coreSource.slice(selectionStart, selectionEnd) + coreSource.slice(artStart, artEnd) +
+        "this.currentLeaderSelection = currentLeaderSelection;" +
+        "this.stageLeaderSelection = stageLeaderSelection;" +
+        "this.reconcileLeaderSelection = reconcileLeaderSelection;" +
+        "this.leaderSelectionMatches = leaderSelectionMatches;" +
+        "this.avatarImage = avatarImage; this.heroImage = heroImage;",
+        context
+    );
+
+    context.stageLeaderSelection(true, null);
+    assert.equal(context.currentLeaderSelection().prefer_random_leader, true);
+    assert.equal(context.currentLeaderSelection().selected_leader, null);
+    assert.equal(context.leaderSelectionMatches({ selected_leader: "SunTzu", prefer_random_leader: false }, false, "sun_tzu"), true);
+    assert.equal(context.avatarImage(), "gameplay/avatars/random.webp");
+    assert.equal(context.heroImage(), "hero:random");
+    context.reconcileLeaderSelection(initialState);
+    assert.equal(context.pendingLeaderSelection.prefer_random_leader, true,
+        "the old concrete state cannot clear a pending Random choice");
+
+    const randomState = { ...initialState, prefer_random_leader: true };
+    assert.equal(randomState.selected_leader, "Boudica",
+        "Random keeps the concrete preference as a hidden server-side backup");
+    context.state = randomState;
+    context.reconcileLeaderSelection(randomState);
+    assert.equal(context.pendingLeaderSelection, null);
+    assert.equal(context.currentLeaderSelection().prefer_random_leader, true);
+
+    context.stageLeaderSelection(false, "napoleon");
+    assert.equal(context.currentLeaderSelection().selected_leader, "napoleon");
+    assert.equal(context.currentLeaderSelection().prefer_random_leader, false);
+    assert.equal(context.avatarImage(), "gameplay/avatars/napoleon.webp");
+    assert.equal(context.heroImage(), "hero:napoleon");
+    context.reconcileLeaderSelection(randomState);
+    assert.equal(context.pendingLeaderSelection.selected_leader, "napoleon",
+        "the old Random state cannot clear a pending concrete choice");
+
+    const concreteState = { ...randomState, selected_leader: "Napoleon", prefer_random_leader: false };
+    context.state = concreteState;
+    context.reconcileLeaderSelection(concreteState);
+    assert.equal(context.pendingLeaderSelection, null);
+    assert.equal(context.currentLeaderSelection().selected_leader, "Napoleon");
+    assert.equal(context.currentLeaderSelection().prefer_random_leader, false);
+
+    context.stageLeaderSelection(false, "caesar");
+    const switchedAccount = { ...concreteState, account_id: "account-b", selected_leader: "SunTzu" };
+    context.state = switchedAccount;
+    context.reconcileLeaderSelection(switchedAccount);
+    assert.equal(context.pendingLeaderSelection, null,
+        "a pending choice from one account cannot leak into another");
+    assert.equal(context.currentLeaderSelection().selected_leader, "SunTzu");
+});
+
+test("leader confirmation and reopening use the staged choice, not the previous snapshot", () => {
+    const randomStart = shellSource.indexOf('if (command === "confirm_random_leader")');
+    const concreteStart = shellSource.indexOf('if (command === "confirm_leader")', randomStart);
+    const concreteEnd = shellSource.indexOf('/* POKI_SHARED_STORE_UNLOCK_BEGIN */', concreteStart);
+    const pickerStart = shellSource.indexOf('if (command === "open_leader_picker")');
+    const navStart = shellSource.indexOf('if (command === "main_nav")');
+    const navEnd = shellSource.indexOf('if (command === "open_leader_picker")', navStart);
+    assert.ok(randomStart >= 0 && concreteStart > randomStart && concreteEnd > concreteStart);
+    assert.ok(pickerStart >= 0 && navStart >= 0 && navEnd > navStart);
+
+    const randomConfirm = shellSource.slice(randomStart, concreteStart);
+    const concreteConfirm = shellSource.slice(concreteStart, concreteEnd);
+    const pickerOpen = shellSource.slice(pickerStart, shellSource.indexOf("if (command === \"toggle_dropdown\")", pickerStart));
+    const heroesNavigation = shellSource.slice(navStart, navEnd);
+    assert.match(randomConfirm, /stageLeaderSelection\(true, null\);\s*send\("set_random_leader"\)/);
+    assert.doesNotMatch(randomConfirm, /leader_id/,
+        "Random must not carry a previous concrete leader ID");
+    assert.match(concreteConfirm, /stageLeaderSelection\(false, leaderId\);\s*send\("set_leader", \{ leader_id: leaderId \}\)/);
+    assert.match(randomConfirm, /tempSelectedLeader = null;\s*tempSelectedRandom = false;/);
+    assert.match(concreteConfirm, /tempSelectedLeader = null;\s*tempSelectedRandom = false;/);
+    assert.match(pickerOpen, /currentLeaderSelection\(\)/);
+    assert.match(heroesNavigation, /tempSelectedLeader = null;\s*tempSelectedRandom = false;/);
+    assert.match(heroesNavigation, /currentLeaderSelection\(\)/);
+});
+
+test("header keeps only the nickname and sizes it to the available space", () => {
+    const topbarStart = shellSource.indexOf("    function renderTopbar()");
+    const topbarEnd = shellSource.indexOf("\n    function ", topbarStart + 1);
+    assert.ok(topbarStart >= 0 && topbarEnd > topbarStart);
+    const topbar = shellSource.slice(topbarStart, topbarEnd);
+    assert.match(topbar, /data-role='display-name'/);
+    assert.doesNotMatch(topbar, /selected_leader_name|selected_civilization|kingdom/i);
+
+    const baseCss = menuCss["main_menu.base.css"];
+    const layoutCss = menuCss["main_menu.layout.css"];
+    assert.match(baseCss, /\.sow-menu__profile\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-width:\s*0;/);
+    assert.match(baseCss, /#sow-menu \.sow-menu__profile input\s*\{[^}]*width:\s*100%;[^}]*font-size:\s*clamp\(16px, 1\.8vw, 24px\)/);
+    assert.match(layoutCss, /\.sow-menu__profile input\s*\{[^}]*width:\s*100%;[^}]*font-size:\s*clamp\(15px, 4vw, 21px\)/);
 });
 
 
@@ -564,7 +679,8 @@ test("one hero briefing renders identity and the named ability without exposing 
         perk_key: "site.leader_amina_de_zazzau_description"
     }, "selection", "sow-heroes-selected");
     assert.match(amina, /Kingdom of Zazzau[\s\S]*Amina of Zazzau[\s\S]*Walls of Zazzau[\s\S]*Enemies need 50% more effort/);
-    assert.equal((amina.match(/Amina of Zazzau/g) || []).length, 1, "Amina's historical subtitle must not repeat her name");
+    assert.equal((amina.match(/<h2\b[^>]*class='sow-hero-briefing__name'[^>]*>Amina of Zazzau<\/h2>/g) || []).length, 1,
+        "Amina's visible title must not repeat her name");
     assert.match(amina, /sow-hero-briefing__icon[\s\S]*gameplay\/icons\/abilities\/amina_de_zazzau\.webp/);
     assert.doesNotMatch(amina, /\[site\.|site\.leader_/);
 
@@ -628,11 +744,22 @@ test("skill icons stay beside full hero details and out of compact avatar cards"
     assert.match(home, /renderHeroBriefing\(leader, "home", "sow-home-selected"\)/);
 });
 
-test("hero briefing keeps the three requested responsive compositions", () => {
+test("home hero briefing places the skill below identity while selection stays responsive", () => {
     assert.match(profileCss, /\.sow-hero-briefing\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1\.2fr\) minmax\(0, 1fr\)/);
-    assert.match(profileCss, /\.sow-hero-briefing--selection\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
-    assert.match(profileCss, /@media \(orientation: landscape\) and \(max-height: 560px\)[\s\S]*?\.sow-hero-briefing\s*\{[\s\S]*\.68fr[\s\S]*1\.32fr/);
+    assert.doesNotMatch(profileCss, /\.sow-hero-briefing--selection\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/,
+        "wide hero selection must use the horizontal briefing composition");
+    assert.match(profileCss, /\.sow-menu__leader-copy \.sow-hero-briefing\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
+        "the home skill section must sit below the identity");
+    assert.match(profileCss, /@media \(orientation: landscape\) and \(max-height: 560px\)[\s\S]*?\.sow-hero-briefing\s*\{[\s\S]*\.92fr[\s\S]*1\.08fr/);
+    assert.match(profileCss, /\.sow-menu__leader-copy \.sow-hero-briefing__name \{ font-size: clamp\(17px, 3vh, 22px\); \}/,
+        "the compact home title must fit above the skill briefing");
+    assert.match(profileCss, /#sow-menu\[data-screen="heroes"\] \.sow-heroes__featured-copy \.sow-hero-briefing__name \{ font-size: clamp\(17px, 3vh, 22px\); \}/,
+        "the compact selection title must fit its column beside the skill briefing");
     assert.match(profileCss, /@media \(max-width: 680px\), \(orientation: portrait\)[\s\S]*?\.sow-hero-briefing\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
+    assert.match(menuCss["main_menu.layout.css"], /#sow-menu\[data-screen="home"\] \.sow-menu__battlefield\s*\{\s*order:\s*-1;/,
+        "narrow home must show the same hero briefing before the menu actions");
+    assert.doesNotMatch(menuCss["main_menu.layout.css"], /\.sow-menu__leader-copy\s*\{\s*display:\s*none\s*!important;/,
+        "small screens must not hide the main-menu hero briefing");
     assert.doesNotMatch(profileCss, /sow-heroes__featured-copy \.sow-heroes__perk-row\s*\{\s*display:\s*none/);
 });
 

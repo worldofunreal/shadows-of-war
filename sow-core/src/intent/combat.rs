@@ -231,19 +231,26 @@ impl SowEngine {
         enemy_hits.sort_by_key(|&i| self.attacks[i].id);
 
         // Hero combat abilities count in the clash too, not only in tile combat.
-        let my_strength =
-            crate::execution::combat::attack_strength(&self.state, player_id, target_owner);
-        let enemy_strength =
-            crate::execution::combat::attack_strength(&self.state, target_owner, player_id);
         for &e_enemy in &enemy_hits {
             if remaining < self.state.config.attack_cost_neutral {
                 break;
             }
-            let enemy_ex = &mut self.attacks[e_enemy];
-
-            if enemy_ex.troops < self.state.config.attack_cost_enemy {
+            if self.attacks[e_enemy].troops < self.state.config.attack_cost_enemy {
                 continue;
             }
+            let my_strength = crate::execution::combat::attack_strength(
+                &self.state,
+                player_id,
+                target_owner,
+                remaining,
+            );
+            let enemy_strength = crate::execution::combat::attack_strength(
+                &self.state,
+                target_owner,
+                player_id,
+                self.attacks[e_enemy].troops,
+            );
+            let enemy_ex = &mut self.attacks[e_enemy];
             let clash = (enemy_ex.troops * enemy_strength).min(remaining * my_strength);
             enemy_ex.troops -= clash / enemy_strength;
             enemy_ex.troops = enemy_ex.troops.max(0.0);

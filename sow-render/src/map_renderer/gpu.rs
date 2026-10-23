@@ -405,8 +405,7 @@ impl MapRenderer {
             let old_owner = self.owners[i];
             if old_owner != dt.new_owner {
                 if dt.new_owner > 0 {
-                    self.conquest_flash[i] = 255;
-                    self.flash_active.push(dt.index);
+                    start_conquest_flash(&mut self.conquest_flash, &mut self.flash_active, dt.index);
                 }
                 self.owners[i] = dt.new_owner;
             }
@@ -670,5 +669,31 @@ impl MapRenderer {
         render_ctx
             .context
             .destroy_render_pipeline(&mut self.pipeline);
+    }
+}
+
+/// Starts a conquest flash on `tile`. A tile that is already flashing keeps its single
+/// `flash_active` entry, so each frame's decay is subtracted once, not once per capture.
+fn start_conquest_flash(conquest_flash: &mut [u8], flash_active: &mut Vec<u32>, tile: u32) {
+    let i = tile as usize;
+    if conquest_flash[i] == 0 {
+        flash_active.push(tile);
+    }
+    conquest_flash[i] = 255;
+}
+
+#[cfg(test)]
+mod conquest_flash_tests {
+    use super::start_conquest_flash;
+
+    #[test]
+    fn recapturing_a_flashing_tile_keeps_one_decay_entry() {
+        let mut flash = vec![0u8; 4];
+        let mut active = Vec::new();
+        start_conquest_flash(&mut flash, &mut active, 2);
+        flash[2] = 100;
+        start_conquest_flash(&mut flash, &mut active, 2);
+        assert_eq!(active, vec![2]);
+        assert_eq!(flash[2], 255);
     }
 }

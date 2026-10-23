@@ -2353,7 +2353,7 @@ mod tests {
                 name: "Historical".into(),
                 entries: vec![
                     entry("nation_hatshepsut", Nation, 15),
-                    entry("nation_mansa_musa", Nation, 45),
+                    entry("nation_sundiata_keita", Nation, 45),
                     entry("nation_amanirenas", Nation, 75),
                     entry("tribe_cherusci", Tribe, 115),
                     entry("tribe_marcomanni", Tribe, 145),

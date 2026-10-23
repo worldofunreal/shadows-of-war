@@ -1923,13 +1923,18 @@ impl PlayerDb {
         &self,
         account: PlayerAccount,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
-        if account.profile.menu_guides.contains_key("welcome")
-            || !account
+        let saved = account.profile.menu_guides.get("welcome");
+        let normalized = saved.map(|guide| {
+            crate::profile::normalize_welcome_guide_progress(guide, account.profile.matches_played)
+        });
+        let enroll = saved.is_none()
+            && account.profile.matches_played == 0
+            && account
                 .profile
                 .reward_receipts
                 .get("tutorial")
-                .is_some_and(|receipt| receipt.presented_at.is_none())
-        {
+                .is_some_and(|receipt| receipt.presented_at.is_none());
+        if saved == normalized.as_ref() && !enroll {
             return Ok(account);
         }
         let now = std::time::SystemTime::now()
@@ -1938,7 +1943,13 @@ impl PlayerDb {
             .as_secs();
         let account = self
             .update_account_atomic(&account.id, &["tutorial"], |account| {
-                if !account.profile.menu_guides.contains_key("welcome")
+                if let Some(guide) = account.profile.menu_guides.get_mut("welcome") {
+                    *guide = crate::profile::normalize_welcome_guide_progress(
+                        guide,
+                        account.profile.matches_played,
+                    );
+                    account.updated_at = now;
+                } else if account.profile.matches_played == 0
                     && account
                         .profile
                         .reward_receipts
@@ -1963,12 +1974,6 @@ impl PlayerDb {
         progress: MenuGuideProgress,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         crate::profile::validate_menu_guide_progress(guide_id, &progress)?;
-        let mut progress = progress;
-        if let Some(leader_id) = progress.selected_leader.as_deref() {
-            let leader =
-                crate::commerce::leader_from_id(leader_id).ok_or("unknown selected leader")?;
-            progress.selected_leader = Some(crate::commerce::leader_wire_id(leader).to_string());
-        }
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -1987,6 +1992,14 @@ impl PlayerDb {
                     return;
                 }
                 let merged = crate::profile::merge_menu_guide_progress(saved, &progress);
+                let merged = if guide_id == "welcome" {
+                    crate::profile::normalize_welcome_guide_progress(
+                        &merged,
+                        account.profile.matches_played,
+                    )
+                } else {
+                    merged
+                };
                 account
                     .profile
                     .menu_guides
@@ -3952,10 +3965,13 @@ impl PlayerDb {
                         .is_some_and(|receipt| receipt.presented_at.is_none())
                     {
                         if !account.profile.menu_guides.contains_key("welcome") {
-                            account
-                                .profile
-                                .menu_guides
-                                .insert("welcome".to_string(), MenuGuideProgress::default());
+                            account.profile.menu_guides.insert(
+                                "welcome".to_string(),
+                                crate::profile::normalize_welcome_guide_progress(
+                                    &MenuGuideProgress::default(),
+                                    account.profile.matches_played,
+                                ),
+                            );
                             account.updated_at = now;
                         }
                     }
@@ -3990,7 +4006,12 @@ impl PlayerDb {
                     .profile
                     .menu_guides
                     .entry("welcome".to_string())
-                    .or_default();
+                    .or_insert_with(|| {
+                        crate::profile::normalize_welcome_guide_progress(
+                            &MenuGuideProgress::default(),
+                            account.profile.matches_played,
+                        )
+                    });
                 account.updated_at = now;
             })
             .await?;
@@ -5115,7 +5136,6 @@ fn apply_match_participation_to_account(
         }
         return;
     }
-    enroll_first_multiplayer_guide(&mut account.profile, match_id);
     let effective_leader = account.profile.record_match_stats_with_leader(
         false,
         SessionDefeats::default(),
@@ -5124,6 +5144,10 @@ fn apply_match_participation_to_account(
         0,
         canonical_leader.as_deref(),
     );
+    if let Some(guide) = account.profile.menu_guides.get_mut("welcome") {
+        *guide =
+            crate::profile::normalize_welcome_guide_progress(guide, account.profile.matches_played);
+    }
     account.profile.apply_reward_receipt(
         match_id,
         match_id,
@@ -5281,18 +5305,6 @@ fn verified_participant_result_hash(
     Ok(hex::encode(sha2::Sha256::digest(bytes)))
 }
 
-fn enroll_first_multiplayer_guide(profile: &mut PlayerProfile, match_id: &str) {
-    if profile.matches_played == 0 {
-        let guide = profile
-            .menu_guides
-            .entry("first_multiplayer".to_string())
-            .or_default();
-        if guide.source_match_id.is_none() {
-            guide.source_match_id = Some(match_id.to_string());
-        }
-    }
-}
-
 fn is_valid_gem_grant_request_id(value: &str) -> bool {
     value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
@@ -5426,10 +5438,10 @@ mod tests {
     }
     use super::{
         AccountKind, DISPLAY_NAME_MAX_CHARS, LeaderCareerStats, MatchRecord, PlayerAccount,
-        PlayerDb, PlayerProfile, PurchaseRecord, VerifiedReceiptDecision,
-        enroll_first_multiplayer_guide, generated_display_name, is_valid_account_id,
-        is_valid_gem_grant_request_id, normalize_display_name, should_skip_full_match_participant,
-        validate_lobby_match_id, verified_receipt_decision, verified_victory_key,
+        PlayerDb, PlayerProfile, PurchaseRecord, VerifiedReceiptDecision, generated_display_name,
+        is_valid_account_id, is_valid_gem_grant_request_id, normalize_display_name,
+        should_skip_full_match_participant, validate_lobby_match_id, verified_receipt_decision,
+        verified_victory_key,
     };
 
     fn test_account(kind: AccountKind) -> PlayerAccount {
@@ -6262,30 +6274,49 @@ mod tests {
     }
 
     #[test]
-    fn first_multiplayer_guide_enrolls_on_first_participation_only() {
-        let mut profile = PlayerProfile::default();
-        enroll_first_multiplayer_guide(&mut profile, "first-match");
-        assert_eq!(
-            profile
-                .menu_guides
-                .get("first_multiplayer")
-                .and_then(|guide| guide.source_match_id.as_deref()),
-            Some("first-match")
-        );
-        enroll_first_multiplayer_guide(&mut profile, "later-match");
-        assert_eq!(
-            profile
-                .menu_guides
-                .get("first_multiplayer")
-                .and_then(|guide| guide.source_match_id.as_deref()),
-            Some("first-match")
-        );
-
-        profile.record_match_stats_with_leader(false, Default::default(), 0, 0, 0, None);
-        assert_eq!(profile.matches_played, 1);
-        profile.menu_guides.remove("first_multiplayer");
-        enroll_first_multiplayer_guide(&mut profile, "later-match");
-        assert!(!profile.menu_guides.contains_key("first_multiplayer"));
+    fn multiplayer_participation_closes_welcome_without_enrolling_another_guide() {
+        use crate::profile::{MenuGuideProgress, MenuGuideStatus};
+        for status in [
+            MenuGuideStatus::Active,
+            MenuGuideStatus::Completed,
+            MenuGuideStatus::Skipped,
+        ] {
+            let mut account = test_account(AccountKind::Human);
+            account.profile.menu_guides.insert(
+                "welcome".to_string(),
+                MenuGuideProgress {
+                    status,
+                    ..Default::default()
+                },
+            );
+            super::apply_match_participation_to_account(
+                &mut account,
+                Some("Boudica"),
+                "first-match",
+                1,
+            );
+            assert!(
+                !account
+                    .profile
+                    .menu_guides
+                    .contains_key("first_multiplayer")
+            );
+            assert_eq!(
+                account.profile.menu_guides["welcome"].status,
+                if status == MenuGuideStatus::Active {
+                    MenuGuideStatus::Skipped
+                } else {
+                    status
+                }
+            );
+            super::apply_match_participation_to_account(
+                &mut account,
+                Some("Boudica"),
+                "first-match",
+                2,
+            );
+            assert_eq!(account.profile.matches_played, 1);
+        }
     }
 
     #[test]
