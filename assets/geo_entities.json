@@ -5,7 +5,7 @@
    "id": "caesar",
    "name": "Julius Caesar",
    "entity": "Roman Republic",
-   "role": "hero",
+   "role": "nation",
    "region": "europe",
    "lat": 41.89,
    "lon": 12.49,
@@ -26,7 +26,7 @@
    "id": "cleopatra",
    "name": "Cleopatra",
    "entity": "Ptolemaic Egypt",
-   "role": "hero",
+   "role": "nation",
    "region": "africa",
    "lat": 31.2,
    "lon": 29.92,
@@ -72,7 +72,7 @@
    "id": "sun_tzu",
    "name": "Sun Tzu",
    "entity": "State of Wu",
-   "role": "hero",
+   "role": "nation",
    "region": "asia",
    "lat": 31.3,
    "lon": 120.62,
@@ -93,7 +93,7 @@
    "id": "alexander",
    "name": "Alexander the Great",
    "entity": "Macedon",
-   "role": "hero",
+   "role": "nation",
    "region": "europe",
    "lat": 40.76,
    "lon": 22.52,
@@ -135,7 +135,7 @@
    "id": "richard_the_lionheart",
    "name": "Richard the Lionheart",
    "entity": "Angevin England",
-   "role": "hero",
+   "role": "nation",
    "region": "europe",
    "lat": 51.51,
    "lon": -0.13,
@@ -189,10 +189,8 @@
    "hero": {
     "name": "Boudica",
     "ability": {
-     "kind": "district_income",
-     "district": "farm",
-     "resource": "gold",
-     "percent": 50
+     "kind": "damage_to_traitors",
+     "percent": 100
     },
     "card": "sow-boudica",
     "free": true
@@ -203,7 +201,7 @@
    "id": "lady_six_sky",
    "name": "Lady Six Sky",
    "entity": "Naranjo",
-   "role": "hero",
+   "role": "nation",
    "region": "americas",
    "lat": 17.13,
    "lon": -89.26,
@@ -226,7 +224,7 @@
    "id": "leonidas",
    "name": "Leonidas I",
    "entity": "Sparta",
-   "role": "hero",
+   "role": "nation",
    "region": "europe",
    "lat": 37.08,
    "lon": 22.43,
@@ -247,7 +245,7 @@
    "id": "napoleon",
    "name": "Napoleon",
    "entity": "French Empire",
-   "role": "hero",
+   "role": "nation",
    "region": "europe",
    "lat": 48.86,
    "lon": 2.35,
@@ -433,7 +431,7 @@
    "avatar": "haile_selassie"
   },
   {
-   "id": "nation_amina_de_zazzau",
+   "id": "amina_de_zazzau",
    "name": "Amina of Zazzau",
    "entity": "Zazzau (modern Nigeria)",
    "role": "nation",
@@ -442,7 +440,15 @@
    "lon": 7.7,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Amina_of_Zazzau",
-   "avatar": "amina_de_zazzau"
+   "avatar": "amina_de_zazzau",
+   "territory_color": "#c2552b",
+   "hero": {
+    "name": "Amina of Zazzau",
+    "ability": {
+     "kind": "city_defense",
+     "percent": 50
+    }
+   }
   },
   {
    "id": "nation_samori_ture",
@@ -481,7 +487,7 @@
    "avatar": "osei_tutu"
   },
   {
-   "id": "nation_yaa_asantewaa",
+   "id": "yaa_asantewaa",
    "name": "Yaa Asantewaa",
    "entity": "Ashanti Empire",
    "role": "nation",
@@ -490,7 +496,15 @@
    "lon": -1.4508,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Yaa_Asantewaa",
-   "avatar": "yaa_asantewaa"
+   "avatar": "yaa_asantewaa",
+   "territory_color": "#6a4c9c",
+   "hero": {
+    "name": "Yaa Asantewaa",
+    "ability": {
+     "kind": "city_troop_capacity",
+     "percent": 50
+    }
+   }
   },
   {
    "id": "nation_tewodros_ii",
@@ -745,7 +759,7 @@
    "avatar": "ewuare_el_grande"
   },
   {
-   "id": "nation_anacaona",
+   "id": "anacaona",
    "name": "Anacaona",
    "entity": "Xaragua / Taíno people",
    "role": "nation",
@@ -754,7 +768,17 @@
    "lon": -72.8,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Anacaona",
-   "avatar": "anacaona"
+   "avatar": "anacaona",
+   "territory_color": "#2aa8c4",
+   "hero": {
+    "name": "Anacaona",
+    "ability": {
+     "kind": "district_income",
+     "district": "port",
+     "resource": "troops",
+     "percent": 50
+    }
+   }
   },
   {
    "id": "nation_moctezuma_i",
@@ -1009,7 +1033,7 @@
    "avatar": "sitting_bull"
   },
   {
-   "id": "nation_lozen",
+   "id": "lozen",
    "name": "Lozen",
    "entity": "Chiricahua Apache",
    "role": "nation",
@@ -1018,7 +1042,15 @@
    "lon": -106.047,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Lozen",
-   "avatar": "lozen"
+   "avatar": "lozen",
+   "territory_color": "#3d7f9e",
+   "hero": {
+    "name": "Lozen",
+    "ability": {
+     "kind": "expansion_speed",
+     "percent": 15
+    }
+   }
   },
   {
    "id": "nation_geronimo",
@@ -2509,7 +2541,7 @@
    "avatar": "liliuokalani"
   },
   {
-   "id": "nation_hongi_hika",
+   "id": "hongi_hika",
    "name": "Hongi Hika",
    "entity": "Māori / Ngāpuhi",
    "role": "nation",
@@ -2518,7 +2550,15 @@
    "lon": 173.7997,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Hongi_Hika",
-   "avatar": "hongi_hika"
+   "avatar": "hongi_hika",
+   "territory_color": "#1c5e4a",
+   "hero": {
+    "name": "Hongi Hika",
+    "ability": {
+     "kind": "city_assault",
+     "percent": 50
+    }
+   }
   },
   {
    "id": "nation_pomare_iv",
@@ -2545,7 +2585,7 @@
    "avatar": "te_rauparaha"
   },
   {
-   "id": "nation_salote_tupou_iii",
+   "id": "salote_tupou_iii",
    "name": "Sālote Tupou III",
    "entity": "Tonga",
    "role": "nation",
@@ -2554,7 +2594,15 @@
    "lon": -175.2018,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/S%C4%81lote_Tupou_III",
-   "avatar": "salote_tupou_iii"
+   "avatar": "salote_tupou_iii",
+   "territory_color": "#c77d2a",
+   "hero": {
+    "name": "Sālote Tupou III",
+    "ability": {
+     "kind": "alliance_gold",
+     "percent": 50
+    }
+   }
   },
   {
    "id": "nation_potatau_te_wherowhero",
@@ -7513,7 +7561,7 @@
    "avatar": "gorgo"
   },
   {
-   "id": "nation_makeda",
+   "id": "makeda",
    "name": "Makeda",
    "entity": "Kingdom of Aksum",
    "role": "nation",
@@ -7522,7 +7570,15 @@
    "lon": 38.72,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Queen_of_Sheba",
-   "avatar": "makeda"
+   "avatar": "makeda",
+   "territory_color": "#e3b341",
+   "hero": {
+    "name": "Makeda",
+    "ability": {
+     "kind": "territory_gold",
+     "percent": 50
+    }
+   }
   },
   {
    "id": "nation_jose_artigas",
@@ -7703,6 +7759,352 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Shajar_al-Durr",
    "avatar": "shajar_al_durr"
+  },
+  {
+   "id": "rani_durgavati",
+   "name": "Rani Durgavati",
+   "entity": "Gond Kingdom of Garha-Katanga",
+   "role": "nation",
+   "region": "asia",
+   "lat": 23.17,
+   "lon": 79.94,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Rani_Durgavati",
+   "avatar": "rani_durgavati",
+   "territory_color": "#a0287a",
+   "hero": {
+    "name": "Rani Durgavati",
+    "ability": {
+     "kind": "district_income",
+     "district": "farm",
+     "resource": "troops",
+     "percent": 50
+    }
+   }
+  },
+  {
+   "id": "empress_gi",
+   "name": "Empress Gi",
+   "entity": "Yuan Dynasty",
+   "role": "nation",
+   "region": "asia",
+   "lat": 39.9042,
+   "lon": 116.4074,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Empress_Gi",
+   "avatar": "empress_gi",
+   "territory_color": "#c94f7c",
+   "hero": {
+    "name": "Empress Gi",
+    "ability": {
+     "kind": "district_income",
+     "district": "city",
+     "resource": "gold",
+     "percent": 50
+    }
+   }
+  },
+  {
+   "id": "ashoka",
+   "name": "Ashoka",
+   "entity": "Maurya Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 25.6,
+   "lon": 85.1,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ashoka",
+   "avatar": "ashoka",
+   "territory_color": "#9bb83a",
+   "hero": {
+    "name": "Ashoka",
+    "ability": {
+     "kind": "district_income",
+     "district": "factory",
+     "resource": "troops",
+     "percent": 50
+    }
+   }
+  },
+  {
+   "id": "hannibal",
+   "name": "Hannibal",
+   "entity": "Carthage",
+   "role": "nation",
+   "region": "africa",
+   "lat": 36.85,
+   "lon": 10.32,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Hannibal",
+   "avatar": "hannibal",
+   "territory_color": "#7b3f8f",
+   "hero": {
+    "name": "Hannibal",
+    "ability": {
+     "kind": "enemy_troop_strength",
+     "percent": 25
+    }
+   }
+  },
+  {
+   "id": "bolivar",
+   "name": "Simón Bolívar",
+   "entity": "Gran Colombia",
+   "role": "nation",
+   "region": "americas",
+   "lat": 10.5061,
+   "lon": -66.9144,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Sim%C3%B3n_Bol%C3%ADvar",
+   "avatar": "bolivar",
+   "territory_color": "#c0392b",
+   "hero": {
+    "name": "Simón Bolívar",
+    "ability": {
+     "kind": "alliance_cost",
+     "percent": 30
+    }
+   }
+  },
+  {
+   "id": "joan_of_arc",
+   "name": "Joan of Arc",
+   "entity": "France",
+   "role": "nation",
+   "region": "europe",
+   "lat": 48.4425,
+   "lon": 5.675,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Joan_of_Arc",
+   "avatar": "joan_of_arc",
+   "territory_color": "#16a085",
+   "hero": {
+    "name": "Joan of Arc",
+    "ability": {
+     "kind": "bunker_defense",
+     "percent": 50
+    }
+   }
+  },
+  {
+   "id": "catherine_the_great",
+   "name": "Catherine the Great",
+   "entity": "Russian Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 53.4247,
+   "lon": 14.5553,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Catherine_the_Great",
+   "avatar": "catherine_the_great",
+   "territory_color": "#8e44ad",
+   "hero": {
+    "name": "Catherine the Great",
+    "ability": {
+     "kind": "alliance_gold",
+     "percent": 50
+    }
+   }
+  },
+  {
+   "id": "theodora",
+   "name": "Theodora",
+   "entity": "Byzantine Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 41.6,
+   "lon": 35,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Theodora_%28wife_of_Justinian_I%29",
+   "avatar": "theodora",
+   "territory_color": "#d35400",
+   "hero": {
+    "name": "Theodora",
+    "ability": {
+     "kind": "damage_to_traitors",
+     "percent": 100
+    }
+   }
+  },
+  {
+   "id": "cyrus_the_great",
+   "name": "Cyrus the Great",
+   "entity": "Achaemenid Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 30.0117,
+   "lon": 52.4078,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Cyrus_the_Great",
+   "avatar": "cyrus_the_great",
+   "territory_color": "#2c3e50",
+   "hero": {
+    "name": "Cyrus the Great",
+    "ability": {
+     "kind": "city_troop_capacity",
+     "percent": 50
+    }
+   }
+  },
+  {
+   "id": "saladin",
+   "name": "Saladin",
+   "entity": "Ayyubid Sultanate",
+   "role": "nation",
+   "region": "asia",
+   "lat": 34.6017,
+   "lon": 43.6939,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Saladin",
+   "avatar": "saladin",
+   "territory_color": "#27ae60",
+   "hero": {
+    "name": "Saladin",
+    "ability": {
+     "kind": "city_assault",
+     "percent": 50
+    }
+   }
+  },
+  {
+   "id": "suleiman",
+   "name": "Suleiman the Magnificent",
+   "entity": "Ottoman Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 41.005,
+   "lon": 39.7225,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Suleiman_the_Magnificent",
+   "avatar": "suleiman",
+   "territory_color": "#f1c40f",
+   "hero": {
+    "name": "Suleiman the Magnificent",
+    "ability": {
+     "kind": "enemy_troop_strength",
+     "percent": 25
+    }
+   }
+  },
+  {
+   "id": "tomoe_gozen",
+   "name": "Tomoe Gozen",
+   "entity": "Japan",
+   "role": "nation",
+   "region": "asia",
+   "lat": 36.23,
+   "lon": 138.1,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tomoe_Gozen",
+   "avatar": "tomoe_gozen",
+   "territory_color": "#e84393",
+   "hero": {
+    "name": "Tomoe Gozen",
+    "ability": {
+     "kind": "expansion_speed",
+     "percent": 15
+    }
+   }
+  },
+  {
+   "id": "trieu_thi_trinh",
+   "name": "Lady Triệu",
+   "entity": "Vietnam",
+   "role": "nation",
+   "region": "asia",
+   "lat": 19.933,
+   "lon": 105.9,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lady_Tri%E1%BB%87u",
+   "avatar": "trieu_thi_trinh",
+   "territory_color": "#00cec9",
+   "hero": {
+    "name": "Lady Triệu",
+    "ability": {
+     "kind": "city_defense",
+     "percent": 50
+    }
+   }
+  },
+  {
+   "id": "musa_i",
+   "name": "Mansa Musa",
+   "entity": "Mali Empire",
+   "role": "nation",
+   "region": "africa",
+   "lat": 13.5,
+   "lon": -7.9,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Mansa_Musa",
+   "avatar": "musa_i",
+   "territory_color": "#6c5ce7",
+   "hero": {
+    "name": "Mansa Musa",
+    "ability": {
+     "kind": "territory_gold",
+     "percent": 50
+    }
+   }
+  },
+  {
+   "id": "shaka",
+   "name": "Shaka",
+   "entity": "Zulu Kingdom",
+   "role": "nation",
+   "region": "africa",
+   "lat": -28.515,
+   "lon": 31.8486,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Shaka",
+   "avatar": "shaka",
+   "territory_color": "#fd79a8",
+   "hero": {
+    "name": "Shaka",
+    "ability": {
+     "kind": "combat_strength",
+     "percent": 25
+    }
+   }
+  },
+  {
+   "id": "nzinga",
+   "name": "Nzinga",
+   "entity": "Ndongo and Matamba",
+   "role": "nation",
+   "region": "africa",
+   "lat": -9.5,
+   "lon": 15.0,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Nzinga_of_Ndongo_and_Matamba",
+   "avatar": "nzinga",
+   "territory_color": "#55efc4",
+   "hero": {
+    "name": "Nzinga",
+    "ability": {
+     "kind": "elimination_gold",
+     "percent": 50
+    }
+   }
+  },
+  {
+   "id": "kamehameha",
+   "name": "Kamehameha I",
+   "entity": "Kingdom of Hawaii",
+   "role": "nation",
+   "region": "oceania",
+   "lat": 20.2572,
+   "lon": -155.8767,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Kamehameha_I",
+   "avatar": "kamehameha",
+   "territory_color": "#fdcb6e",
+   "hero": {
+    "name": "Kamehameha I",
+    "ability": {
+     "kind": "bunker_range",
+     "percent": 50
+    }
+   }
   }
  ]
 }

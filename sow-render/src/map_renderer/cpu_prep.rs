@@ -44,6 +44,8 @@ pub struct MapGlobals {
     pub alert_color: [f32; 4],
     /// Entity requesting terms in the open tutorial dialog: [player_id, age_secs, 0, 0].
     pub dialog_border: [f32; 4],
+    /// Active traitors' player ids, up to four: [id, id, id, id] (0 = empty).
+    pub betrayal_owners: [f32; 4],
     pub effect_vignette: f32,
     pub preview_effect: f32,
     pub preview_phase: f32,

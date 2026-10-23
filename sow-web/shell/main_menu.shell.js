@@ -385,7 +385,6 @@
     document.addEventListener("click", menuMusicUnlockFromClick, true);
 
     function renderTopbar() {
-        var leader = leaderById(state.selected_leader);
         var name = state.player_name || SOW_t("menu.anonymous");
         var auth = {};
         /* POKI_SHARED_AUTH_LOOKUP_BEGIN */
@@ -407,7 +406,6 @@
                         "aria-label='" + esc(SOW_t("menu.select_leader")) + "' style=\"background-image:url('" + esc(avatarImage()) + "')\"></button>" +
                     "<div class='sow-menu__profile'>" +
                         "<input data-role='display-name' name='display_name' value=\"" + esc(name) + "\" maxlength='16' aria-label='" + esc(SOW_t("menu.display_name")) + "'>" +
-                        "<button class='sow-menu__profile-link' type='button' data-command='open_profile'>" + esc(leaderDisplayName(leader)) + " · " + esc(leaderCivilization(leader)) + "</button>" +
                     "</div>" +
                 "</div>" +
                 "<div class='sow-menu__top-actions'>" +
@@ -793,7 +791,6 @@
     function updateTopbar() {
         var topbar = root.querySelector(".sow-menu__topbar");
         if (!topbar || !state) return;
-        var leader = leaderById(state.selected_leader);
         var nameInput = topbar.querySelector("[data-role='display-name']");
         var name = state.player_name || SOW_t("menu.anonymous");
         if (nameInput && document.activeElement !== nameInput) nameInput.value = name;
@@ -803,8 +800,6 @@
             avatar.style.backgroundImage = "url(" + JSON.stringify(avatarUrl) + ")";
             avatar.dataset.avatarUrl = avatarUrl;
         }
-        var leaderLink = topbar.querySelector(".sow-menu__profile-link");
-        if (leaderLink) leaderLink.textContent = leaderDisplayName(leader) + " · " + leaderCivilization(leader);
         var auth = {};
         /* POKI_SHARED_AUTH_LOOKUP_BEGIN */
         auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() || {} : {};

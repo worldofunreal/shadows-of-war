@@ -115,13 +115,19 @@ test("every playable hero is complete: ability, art and texts in every language"
     for (const hero of heroes) {
         const entry = catalog.find((entity) => entity.id === hero);
         assert.ok(entry.hero.ability && entry.hero.name, `${hero} needs a catalog name and ability`);
-        const heroFiles = [`avatars/heroes/${hero}.webp`, ...[1, 2, 3, 4].map((n) => `avatars/heroes/${hero}_${n}.webp`), `heroes/${hero}_desktop.webp`, `heroes/${hero}_mobile.webp`];
+        const heroFiles = [`avatars/heroes/${hero}.webp`, ...[1, 2, 3, 4].map((n) => `avatars/heroes/${hero}_${n}.webp`), `heroes/${hero}_desktop.webp`, `heroes/${hero}_mobile.webp`, `icons/abilities/${hero}.webp`];
         for (const file of heroFiles) {
             assert.ok(fs.existsSync(path.join(art, file)), `${hero} needs assets/art/${file}`);
         }
         for (const locale of locales) {
             const strings = fs.readFileSync(path.join(root, "sow-i18n/strings", locale, "web.toml"), "utf8");
             for (const field of ["name", "historical", "civilization", "ability", "description"]) {
+                const key = `leader_${hero}_${field}`;
+                const value = new RegExp(`^${key}\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)"`, "m").exec(strings)?.[1]?.trim();
+                assert.ok(value, `${key} needs a translation in ${locale}`);
+                assert.notEqual(value.toLowerCase(), "name", `${key} must not contain the placeholder in ${locale}`);
+                assert.notEqual(value, `[${key}]`, `${key} must not expose a missing-key marker in ${locale}`);
+                assert.ok(!/^(?:heroes|site)\.leader_/.test(value), `${key} must not expose a raw translation key in ${locale}`);
             }
         }
     }

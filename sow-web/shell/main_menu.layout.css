@@ -55,15 +55,10 @@
     
         .sow-menu__profile input {
             width: min(22vw, 100px);
-            font-size: 11px;
         }
     
         .sow-menu__profile {
             min-width: 0;
-        }
-    
-        .sow-menu__profile small {
-            display: none;
         }
     
         .sow-menu__signin { padding: 9px 6px; font-size: 8px; }
@@ -170,8 +165,6 @@
             padding: 5px 6px;
             backdrop-filter: none;
         }
-    
-        .sow-menu__profile small { display: none; }
     
         .sow-menu__identity {
             width: 100%;
@@ -630,16 +623,6 @@
             max-width: 100%;
         }
     
-        #sow-menu .sow-menu__profile input {
-            font-size: 15px;
-        }
-    
-        #sow-menu .sow-menu__profile-link {
-            width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
 }
 
 @media (orientation: landscape) and (max-height: 560px) {
@@ -740,9 +723,6 @@
             backdrop-filter: none;
         }
     
-        #sow-menu .sow-menu__profile small {
-            display: none;
-        }
 }
 
 @media (max-width: 680px), (orientation: portrait) {

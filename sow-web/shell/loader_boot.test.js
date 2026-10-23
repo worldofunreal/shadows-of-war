@@ -8,6 +8,7 @@ const coreSource = fs.readFileSync(path.join(shell, "main_menu.core.js"), "utf8"
 const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.js"), "utf8");
 const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.js"), "utf8");
 const loaderSource = fs.readFileSync(path.join(shell, "loader.js"), "utf8");
+const loaderTemplate = fs.readFileSync(path.join(shell, "index.html.template"), "utf8");
 const menuLayoutCss = fs.readFileSync(path.join(shell, "main_menu.layout.css"), "utf8");
 const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.js"), "utf8");
 const sessionSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/session.rs"), "utf8");
@@ -31,6 +32,24 @@ const appStateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/ap
 
 
 test("first-run tutorial keeps one boot loader and splash art until Rust signals completion", async () => {
+    for (const id of ["loader-footer", "loader-ability", "loader-bar-wrap", "loader-bar-fill"]) {
+        assert.ok(loaderTemplate.includes(`id="${id}"`), `production loader template must contain ${id}`);
+    }
+    assert.doesNotMatch(loaderTemplate, /id="loader-hero-name"|id="loader-hero-civilization"|id="loader-ability-icon"|id="loader-ability-text"/,
+        "the loader must render the shared hero briefing instead of maintaining a second copy");
+    assert.match(loaderTemplate, /backdrop-filter:\s*blur\(/, "loader details need a dark blurred surface over splash art");
+    assert.match(loaderTemplate, /@media \(max-width: 599px\) and \(orientation: portrait\)[\s\S]*?sow-hero-briefing__icon/,
+        "the loader briefing has a vertical-screen size");
+    assert.match(loaderTemplate, /@media \(orientation: landscape\) and \(max-height: 560px\) and \(min-width: 600px\)[\s\S]*?sow-hero-briefing__icon/,
+        "the loader briefing has a compact-landscape size");
+    assert.equal((webMenu.match(/"loader_info_leader":/g) || []).length, 2,
+        "both menu and in-game loader updates must keep the actual leader identity");
+    assert.equal((webMenu.match(/"loader_show_hero_briefing":/g) || []).length, 2,
+        "both loader updates must carry the explicit normal-match presentation signal");
+    assert.match(matchStartSource, /show_hero_briefing = !tutorial/,
+        "normal offline matches show details while tutorial starts keep them hidden");
+    assert.match(netMessagesSource, /show_hero_briefing = !start_msg\.config\.tutorial/,
+        "network matches use the server's tutorial flag for loader details");
     const attachExitArt = loaderSource.indexOf("const pendingArt = syncLoaderArt(state);");
     const closeAfterArt = loaderSource.indexOf("if (state.loader_done === true) {\n            if (pendingArt) return;\n            finish(cycleId);", attachExitArt);
     assert.ok(attachExitArt >= 0 && closeAfterArt > attachExitArt,
@@ -164,9 +183,10 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     initialPicture.appendChild(initialSource);
     initialPicture.appendChild(initialImage);
     root.appendChild(initialPicture);
-    for (const id of ["loader-bar-wrap", "loader-bar-fill", "loader-bar-full", "loader-bar-empty", "loader-text"]) {
+    for (const id of ["loader-footer", "loader-ability", "loader-bar-wrap", "loader-bar-fill", "loader-bar-full", "loader-bar-empty", "loader-text"]) {
         const child = new Element("div");
         child.id = id;
+        child.hidden = id === "loader-ability";
         root.appendChild(child);
     }
     const find = (node, predicate) => predicate(node) ? node : node.children.map(child => find(child, predicate)).find(Boolean) || null;
@@ -196,10 +216,15 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         }
     }
     let nextTimer = 0;
+    const briefingCalls = [];
     const window = {
         SOW_BOOT_UI_BASE: "/assets/shell/loader",
         SOW_BUILD_TS: "regression",
         SOW_PORTAL: "jest",
+        SOW_renderHeroBriefing(leader, surface) {
+            briefingCalls.push([leader, surface]);
+            return `<article class="sow-hero-briefing sow-hero-briefing--${surface}">${leader} briefing</article>`;
+        },
         innerWidth: 1024,
         innerHeight: 768,
         matchMedia: () => ({ matches: window.innerHeight >= window.innerWidth }),
@@ -235,12 +260,14 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     let cycleId = -1;
     let previousJob = null;
     let previousDone = false;
-    const state = (job, leader, progress = 0.4, phase = "Splash", done = false) => {
+    const state = (job, leader, progress = 0.4, phase = "Splash", done = false, showHeroBriefing = false) => {
         if (job !== previousJob || (previousDone && !done)) cycleId += 1;
         previousJob = job;
         previousDone = done;
         return {
             phase, loader_cycle_id: cycleId, loader_job: job, loader_leader: leader,
+            loader_info_leader: leader && leader !== "random" ? leader.toLowerCase() : "caesar",
+            loader_show_hero_briefing: showHeroBriefing,
             loader_progress: progress, loader_done: done,
             ...(phase === "Playing" ? {} : { leaders })
         };
@@ -296,6 +323,8 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.equal(document.getElementById("loader-bar-fill"), loaderBar, "the progress bar node is never recreated");
     assert.equal(root.style.visibility, "visible");
     assert.equal(loaderBar.style.width, "97.0%", "progress advances monotonically through tutorial startup");
+    assert.equal(document.getElementById("loader-ability").hidden, true, "the tutorial keeps its custom loader free of the hero briefing");
+    assert.equal(briefingCalls.length, 0, "the tutorial never asks the shared component to render");
     assert.equal(events.length, 0, "phase changes cannot close the loader before Rust reports done");
 
     const roster = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.json"), "utf8"));
@@ -369,12 +398,15 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.equal(leaderPreloads.length, 1, "the finished cycle does not trigger another Boudica image");
     assert.equal(await reusedBoudicaReady, true);
 
-    window.SOW_syncWebLoader(state("EnterGame", "Boudica", 0.45));
+    window.SOW_syncWebLoader(state("EnterGame", "Boudica", 0.45, "Splash", false, true));
     const normalEntryPicture = findPicture();
+    assert.equal(document.getElementById("loader-ability").hidden, false, "normal matches show the shared hero briefing");
+    assert.match(document.getElementById("loader-ability").innerHTML, /sow-hero-briefing--loader/);
+    assert.deepEqual(briefingCalls.at(-1), ["boudica", "loader"]);
     assert.equal(normalEntryPicture.children[0], boudicaPreload,
         "a normal game entry displays the already-decoded selected hero");
     assert.equal(leaderPreloads.length, 1);
-    const normalEntryDone = state("EnterGame", "Boudica", 1, "Playing", true);
+    const normalEntryDone = state("EnterGame", "Boudica", 1, "Playing", true, true);
     assert.equal(normalEntryDone.leaders, undefined, "the real Playing update does not resend the hero catalog");
     window.SOW_syncWebLoader(normalEntryDone);
     assert.equal(findPicture(), normalEntryPicture, "completion preserves the visible hero until the close timer runs");
@@ -500,16 +532,20 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         assert.equal(window.SOW_prepareLeaderArt("random"), randomReady, "Random reuses the menu's prepared URL");
         const requestCount = leaderPreloads.length;
 
-        window.SOW_syncWebLoader(state("EnterGame", "random", 0.45));
+        window.SOW_syncWebLoader(state("EnterGame", "random", 0.45, "Splash", false, true));
         const randomPicture = findPicture();
         assert.equal(randomPicture.children[0], randomImage, "Random enters through the same prepared-image path as a hero");
+        assert.equal(document.getElementById("loader-ability").hidden, false);
+        assert.match(document.getElementById("loader-ability").innerHTML, /random briefing/,
+            "random art displays the random option instead of the resolved leader's ability");
+        assert.deepEqual(briefingCalls.at(-1), ["random", "loader"]);
         if (previousRandomImage) {
             previousRandomImage.onerror();
             assert.equal(findPicture(), randomPicture, "an old Random variant cannot touch the current cycle");
         }
-        window.SOW_syncWebLoader(state("EnterGame", "random", 0.9));
+        window.SOW_syncWebLoader(state("EnterGame", "random", 0.9, "Splash", false, true));
         assert.equal(findPicture(), randomPicture);
-        const randomEntryDone = state("EnterGame", "random", 1, "Playing", true);
+        const randomEntryDone = state("EnterGame", "random", 1, "Playing", true, true);
         assert.equal(randomEntryDone.leaders, undefined);
         window.SOW_syncWebLoader(randomEntryDone);
         assert.equal(findPicture(), randomPicture, "Random stays visible throughout the final close window");

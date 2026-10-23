@@ -10,6 +10,12 @@ fn territory_rate(tiles: u32, amount: f64, interval: u32) -> f64 {
     tiles as f64 / interval as f64 * amount
 }
 
+/// Hero-only base income: `rate` times the hero's bonus, or nothing for other leaders.
+#[inline]
+fn hero_only_income(bonus: Option<f64>, rate: f64) -> f64 {
+    bonus.map_or(0.0, |bonus| rate * bonus)
+}
+
 /// Per-second troop income before bot penalty and before `per_tick()` scaling.
 pub fn troop_income_per_second(
     tiles_owned: u32,
@@ -25,6 +31,14 @@ pub fn troop_income_per_second(
         + cfg.farm_troop_income
             * agg.farm_income_level_weight
             * leader.district_income_multiplier(District::Farm, Resource::Troops)
+        + hero_only_income(
+            leader.district_income_hero_bonus(District::Factory, Resource::Troops),
+            cfg.hero_factory_troop_income * agg.factory_levels as f64,
+        )
+        + hero_only_income(
+            leader.district_income_hero_bonus(District::Port, Resource::Troops),
+            cfg.hero_port_troop_income * agg.port_income_level_weight,
+        )
         + territory_rate(
             tiles_owned,
             cfg.territory_troop_amount,
@@ -50,7 +64,21 @@ pub fn gold_income_per_second(
         + cfg.port_gold_income
             * agg.port_income_level_weight
             * leader.district_income_multiplier(District::Port, Resource::Gold)
+        + hero_only_income(
+            leader.district_income_hero_bonus(District::City, Resource::Gold),
+            cfg.hero_city_gold_income * agg.city_levels as f64,
+        )
         + territory_rate(tiles, cfg.territory_gold_amount, cfg.territory_gold_tiles)
+            * leader.territory_gold_multiplier()
+}
+
+/// Per-game-second gold from the player's active alliances, paid only to the hero
+/// whose ability pays for them.
+pub fn alliance_gold_per_second(alliances: usize, leader: Leader, cfg: &GameConfig) -> f64 {
+    hero_only_income(
+        leader.alliance_gold_hero_bonus(),
+        cfg.alliance_gold_income * alliances as f64,
+    )
 }
 
 #[inline]

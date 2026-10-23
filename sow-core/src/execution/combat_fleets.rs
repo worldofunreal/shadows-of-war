@@ -241,7 +241,7 @@ impl SowEngine {
                     let deaths = fleet.troops * crate::warp_fleet::FLEET_RETREAT_SHORE_MALUS;
                     let survivors = fleet.troops - deaths;
                     if let Some(p) = self.state.player_mut(fleet.owner_id) {
-                        p.troops = (p.troops + survivors).min(p.max_troops);
+                        p.credit_troops_capped(survivors, p.max_troops);
                     }
                 } else {
                     refund_fleet_troops_to_player(&mut self.state, fleet.owner_id, fleet.troops);
@@ -262,7 +262,7 @@ impl SowEngine {
                 let deaths = fleet.troops * crate::warp_fleet::FLEET_RETREAT_SHORE_MALUS;
                 let survivors = fleet.troops - deaths;
                 if let Some(p) = self.state.player_mut(fleet.owner_id) {
-                    p.troops = (p.troops + survivors).min(p.max_troops);
+                    p.credit_troops_capped(survivors, p.max_troops);
                 }
                 to_remove.push(i);
                 continue;

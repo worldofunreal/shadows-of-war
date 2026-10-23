@@ -210,8 +210,9 @@ const ART_ICONS: [(&str, &str, &str, u32); 14] = [
     ),
 ];
 /// Folders published byte-for-byte: (assets/art/<dir>, published folder).
-const ART_FOLDERS: [(&str, &str); 4] = [
+const ART_FOLDERS: [(&str, &str); 5] = [
     ("brand", "shell/brand"),
+    ("icons/abilities", "gameplay/icons/abilities"),
     ("loader", "shell/loader"),
     ("skins", "gameplay/skins"),
     ("music", "gameplay/music"),
@@ -376,9 +377,15 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
     for dir in ["icons", "store"] {
         for file in fs::read_dir(art.join(dir))? {
             let file = file?.path();
+            if ART_FOLDERS
+                .iter()
+                .any(|(source, _)| art.join(source) == file)
+            {
+                continue;
+            }
             if !known_icons.contains(&file) {
                 bail!(
-                    "unknown art {}: add it to ART_ICONS in sow-dist",
+                    "unknown art {}: add it to ART_ICONS or ART_FOLDERS in sow-dist",
                     file.display()
                 );
             }

@@ -35,7 +35,8 @@ const GOLD_REWARD_MAX_TEXT_SCALE: f32 = 1.3;
 const DEATH_GOLD_ROW_GAP: f32 = 8.0;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
 const ATTACK_BADGE_UPDATE_SECS: f32 = 0.09;
-const OUTGOING_ATTACK_TEXT_COLOR: [f32; 4] = [1.0, 90.0 / 255.0, 90.0 / 255.0, 1.0];
+const OUTGOING_ATTACK_TEXT_COLOR: [f32; 4] = [1.0; 4];
+const INCOMING_ATTACK_TEXT_COLOR: [f32; 4] = [1.0, 90.0 / 255.0, 90.0 / 255.0, 1.0];
 
 fn death_gold_row_offset(death_bottom: f32, gold_top: f32, sf: f32) -> f32 {
     death_bottom - gold_top + DEATH_GOLD_ROW_GAP * sf.max(0.01)
@@ -799,7 +800,7 @@ fn attack_badge_text_color(attack: &AttackSnapshot, my_id: u16) -> Option<[f32; 
         return None;
     }
     if attack.target_owner == my_id {
-        Some([1.0; 4])
+        Some(INCOMING_ATTACK_TEXT_COLOR)
     } else if attack.owner_id == my_id {
         Some(OUTGOING_ATTACK_TEXT_COLOR)
     } else {
@@ -866,7 +867,10 @@ mod tests {
             attack_badge_text_color(&base, 2),
             Some(OUTGOING_ATTACK_TEXT_COLOR)
         );
-        assert_eq!(attack_badge_text_color(&base, 3), Some([1.0; 4]));
+        assert_eq!(
+            attack_badge_text_color(&base, 3),
+            Some(INCOMING_ATTACK_TEXT_COLOR)
+        );
         assert_eq!(attack_badge_text_color(&base, 4), None);
 
         let another_player = AttackSnapshot {

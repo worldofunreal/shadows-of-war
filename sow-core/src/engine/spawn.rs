@@ -74,13 +74,6 @@ impl SowEngine {
                 self.state.config.map_name
             );
         }
-        let held_by_humans: std::collections::HashSet<&'static str> = self
-            .state
-            .players
-            .iter()
-            .filter(|player| player.player_type == crate::player::PlayerType::Human)
-            .map(|player| sow_data::commerce::leader_id(player.leader))
-            .collect();
         let mut used: std::collections::HashSet<&'static str> = std::collections::HashSet::new();
 
         for (role, count, spacing) in [
@@ -113,8 +106,7 @@ impl SowEngine {
                     log::error!("spawn_ai: no free land left for {role:?} bots");
                     break;
                 };
-                let Some(character) =
-                    self.closest_free_character(role, position, &used, &held_by_humans, &mut rng)
+                let Some(character) = self.closest_free_character(role, position, &used, &mut rng)
                 else {
                     log::error!("spawn_ai: catalog has no free {role:?} character left");
                     break;
@@ -133,47 +125,38 @@ impl SowEngine {
     }
 
     /// Closest free character of `role` to a map tile, by home coordinates.
-    /// Humans' heroes are used only when nothing else is free. Maps without
-    /// real geography pick at random. Basic f64 ops only (lockstep-safe).
+    /// Maps without real geography pick at random. Basic f64 ops only (lockstep-safe).
     pub(crate) fn closest_free_character(
         &self,
         role: crate::geo_entities::Role,
         (x, y): (u32, u32),
         used: &std::collections::HashSet<&'static str>,
-        held_by_humans: &std::collections::HashSet<&'static str>,
         rng: &mut wyrand::WyRand,
     ) -> Option<&'static crate::geo_entities::GeoEntity> {
         let home = self
             .state
             .geo_bounds
             .map(|bounds| bounds.unproject(x, y, self.state.map.width, self.state.map.height));
-        for allow_held in [false, true] {
-            let free: Vec<_> = crate::geo_entities::bots(role)
-                .filter(|character| {
-                    !used.contains(character.id.as_str())
-                        && (allow_held || !held_by_humans.contains(character.id.as_str()))
-                })
-                .collect();
-            if free.is_empty() {
-                continue;
-            }
-            let Some((lat, lon)) = home else {
-                return Some(free[(rng.rand() as usize) % free.len()]);
-            };
-            let distance = |character: &crate::geo_entities::GeoEntity| {
-                let (Some(clat), Some(clon)) = (character.lat, character.lon) else {
-                    return f64::MAX;
-                };
-                let dlat = clat as f64 - lat;
-                let dlon = (clon as f64 - lon).abs();
-                let dlon = dlon.min(360.0 - dlon);
-                dlat * dlat + dlon * dlon
-            };
-            return free
-                .into_iter()
-                .min_by(|a, b| distance(a).total_cmp(&distance(b)));
+        let free: Vec<_> = crate::geo_entities::bots(role)
+            .filter(|character| !used.contains(character.id.as_str()))
+            .collect();
+        if free.is_empty() {
+            return None;
         }
-        None
+        let Some((lat, lon)) = home else {
+            return Some(free[(rng.rand() as usize) % free.len()]);
+        };
+        let distance = |character: &crate::geo_entities::GeoEntity| {
+            let (Some(clat), Some(clon)) = (character.lat, character.lon) else {
+                return f64::MAX;
+            };
+            let dlat = clat as f64 - lat;
+            let dlon = (clon as f64 - lon).abs();
+            let dlon = dlon.min(360.0 - dlon);
+            dlat * dlat + dlon * dlon
+        };
+        free.into_iter()
+            .min_by(|a, b| distance(a).total_cmp(&distance(b)))
     }
 
     fn spawn_catalog_bot(
@@ -435,6 +418,7 @@ impl SowEngine {
             player.leader = s.leader;
             if let Some(t) = s.troops {
                 player.troops = t;
+                player.troops_received = t.max(0.0);
             }
             if let Some(iq) = s.iq {
                 player.iq = iq;

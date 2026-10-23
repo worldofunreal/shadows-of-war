@@ -241,6 +241,13 @@
         return /^[a-z0-9_]+$/.test(slug) ? slug : null;
     }
 
+    function loaderInfoSlug(state) {
+        const slug = String(state && state.loader_info_leader || '');
+        if (/^[a-z0-9_]+$/.test(slug)) return slug;
+        const artSlug = leaderSlugForState(state);
+        return artSlug && artSlug !== 'random' ? artSlug : null;
+    }
+
     function loaderCycleId(state) {
         const value = state && state.loader_cycle_id;
         return Number.isSafeInteger(value) && value >= 0 ? value : null;
@@ -261,7 +268,39 @@
         });
     }
 
+    function setLoaderInfo(state) {
+        const box = document.getElementById('loader-ability');
+        if (!box) return;
+        if (!state || state.loader_show_hero_briefing !== true || typeof window.SOW_renderHeroBriefing !== 'function') {
+            box.hidden = true;
+            box.innerHTML = '';
+            loaderBriefingKey = null;
+            return;
+        }
+        const slug = state.loader_leader === 'random' ? 'random' : loaderInfoSlug(state);
+        if (!slug) {
+            box.hidden = true;
+            box.innerHTML = '';
+            loaderBriefingKey = null;
+            return;
+        }
+        const key = String(state.loader_cycle_id || 0) + ':' + slug;
+        if (loaderBriefingKey !== key) {
+            const markup = window.SOW_renderHeroBriefing(slug, 'loader');
+            if (!markup) {
+                box.hidden = true;
+                box.innerHTML = '';
+                loaderBriefingKey = null;
+                return;
+            }
+            box.innerHTML = markup;
+            loaderBriefingKey = key;
+        }
+        box.hidden = false;
+    }
+
     function syncLoaderArt(state) {
+        setLoaderInfo(state);
         if (loaderArtKey === 'boot' && state && state.loader_job === 'EnterGame') {
             const slug = leaderSlugForState(state);
             if (slug) {
@@ -341,6 +380,7 @@
     let loaderVisible = false;
     let loaderReadyDispatched = false;
     let loaderArtKey = null;
+    let loaderBriefingKey = null;
     let preparedLeaderArt = null;
     let activeMatchArt = null;
     let activeLoaderCycleId = -1;
@@ -412,8 +452,9 @@
         if (barWrapEl) {
             barWrapEl.style.width = barWidth + 'px';
             barWrapEl.style.height = barHeight + 'px';
-            barWrapEl.style.bottom = 'max(' + bottomPadding + 'px, var(--sow-sab))';
         }
+        const footerEl = document.getElementById('loader-footer');
+        if (footerEl) footerEl.style.bottom = 'max(' + bottomPadding + 'px, var(--sow-sab))';
         if (barFull) {
             barFull.style.width = barWidth + 'px';
         }
@@ -470,12 +511,15 @@
                     <source id="splash-mobile" media="(max-width: 599px)">
                     <img id="splash-bg" class="splash-bg" alt="" decoding="async" fetchpriority="high">
                 </picture>
-                <div id="loader-bar-wrap" class="loader-bar-wrap">
-                    <img id="loader-bar-empty" class="loader-bar-empty" alt="" decoding="async" fetchpriority="high">
-                    <div id="loader-bar-fill" class="loader-bar-fill">
-                        <img id="loader-bar-full" class="loader-bar-full" alt="" decoding="async" fetchpriority="low">
+                <div id="loader-footer" class="loader-footer">
+                    <section id="loader-ability" class="loader-ability" hidden aria-live="polite"></section>
+                    <div id="loader-bar-wrap" class="loader-bar-wrap">
+                        <img id="loader-bar-empty" class="loader-bar-empty" alt="" decoding="async" fetchpriority="high">
+                        <div id="loader-bar-fill" class="loader-bar-fill">
+                            <img id="loader-bar-full" class="loader-bar-full" alt="" decoding="async" fetchpriority="low">
+                        </div>
+                        <p id="loader-text" class="loader-text">Loading...</p>
                     </div>
-                    <p id="loader-text" class="loader-text">Loading...</p>
                 </div>
             `;
             document.body.appendChild(root);
@@ -624,7 +668,10 @@
     window.SOW_leaderArtUrl = leaderArtUrl;
     window.SOW_prepareLeaderArt = prepareLeaderArt;
     window.SOW_assetUrl = assetUrl;
-    window.addEventListener('sow:locale-change', refreshLoaderText);
+    window.addEventListener('sow:locale-change', () => {
+        refreshLoaderText();
+        if (latestLoaderState) setLoaderInfo(latestLoaderState);
+    });
     window.SOW_syncWebLoader = sync;
 
     // Game shell (play subdomain / portal): #web-loader in index.html auto-starts.

@@ -266,6 +266,8 @@ enum WebMenuCommand {
         #[serde(default)]
         destination: Option<String>,
     },
+    RequestEndgameStats,
+    ClearEndgameStats,
     ContinueObserving,
     ZoomIn,
     ZoomOut,
@@ -420,7 +422,7 @@ struct HudPublishKey {
     endgame_active: bool,
     endgame_winner: Option<u16>,
     endgame_team: Option<sow_core::protocol::Team>,
-    player_kda: [u32; 3],
+    player_endgame_stats: Option<[u64; 5]>,
     snapshot_tick: u64,
     combat_operations_tick: u64,
     camera_zoom_hundredths: i32,
@@ -447,9 +449,6 @@ struct MyPlayerSummary {
     has_spawned: bool,
     team: Option<sow_core::protocol::Team>,
     leader: sow_core::player::Leader,
-    kills: u32,
-    deaths: u32,
-    assists: u32,
     inbox_count: usize,
     nuke_available: bool,
     nuke_cooldown_ticks: u32,
@@ -480,9 +479,6 @@ fn my_player_summary(app: &SowApp, snapshot_tick: u64, my_pid: u16) -> Option<My
                 has_spawned: player.has_spawned,
                 team: player.team,
                 leader: player.leader,
-                kills: player.kills,
-                deaths: player.deaths,
-                assists: player.assists,
                 inbox_count: player.alliance_requests.len() + player.resource_requests.len(),
                 nuke_available: player.nuke_available,
                 nuke_cooldown_ticks: player.nuke_cooldown_ticks,
@@ -993,17 +989,28 @@ impl SowApp {
                 }
                 WebMenuCommand::SetMute { value } => {
                     self.ui.app.settings_state.mute_all = value;
-                    sow_audio::set_master_volume(if value { 0.0 } else { 0.8 });
+                    self.ui.app.settings_state.persist_local();
+                    sow_audio::set_master_volume(if value {
+                        0.0
+                    } else {
+                        self.ui.app.settings_state.music_volume
+                    });
                 }
                 WebMenuCommand::SetMusicVolume { value } => {
                     let volume = value.clamp(0.0, 1.0);
                     self.ui.app.settings_state.music_volume = volume;
+                    self.ui.app.settings_state.persist_local();
+                    if !self.ui.app.settings_state.mute_all {
+                        sow_audio::set_master_volume(volume);
+                    }
                 }
                 WebMenuCommand::SetReducedMotion { value } => {
-                    self.ui.app.settings_state.reduced_motion = value;
+                    self.ui.app.settings_state.set_reduced_motion(value);
+                    self.ui.app.settings_state.persist_local();
                 }
                 WebMenuCommand::SetFreeZoomOut { value } => {
                     self.ui.app.settings_state.free_zoom_out = value;
+                    self.ui.app.settings_state.persist_local();
                     self.clamp_camera_to_map();
                 }
                 WebMenuCommand::SetAttackRatio { ratio } => {
@@ -1198,14 +1205,35 @@ impl SowApp {
                 }
                 WebMenuCommand::ReturnToMenu { destination } => {
                     self.process_ui_actions(Some(UiAction::ReturnToMenu));
+                    self.ui.manual_endgame_stats = None;
                     if let Some(context) = &mut self.menu_return {
                         context.requested_screen = destination.filter(|value| value == "store");
                     }
                     self.save_menu_return_context();
                 }
+                WebMenuCommand::RequestEndgameStats => {
+                    let tutorial_active = self.ui.tutorial_active && self.net.is_offline;
+                    let stats = if self.ui.app.phase == crate::ClientPhase::Playing
+                        && !self.ui.is_spectating
+                        && !tutorial_active
+                    {
+                        let my_pid = self
+                            .sim
+                            .my_player_id
+                            .unwrap_or(self.ui.app.hud_state.my_player_id);
+                        endgame_stats_snapshot(self, my_pid)
+                    } else {
+                        None
+                    };
+                    self.ui.manual_endgame_stats = stats;
+                }
+                WebMenuCommand::ClearEndgameStats => {
+                    self.ui.manual_endgame_stats = None;
+                }
                 WebMenuCommand::ContinueObserving => {
                     self.ui.is_spectating = true;
                     self.ui.endgame_cache = None;
+                    self.ui.manual_endgame_stats = None;
                 }
                 WebMenuCommand::ZoomIn => {
                     self.process_ui_actions(Some(UiAction::ZoomIn));
@@ -1485,6 +1513,22 @@ fn combat_operations_snapshot_tick(
     }
 }
 
+fn endgame_stats_snapshot(app: &SowApp, player_id: u16) -> Option<[u64; 5]> {
+    app.sim
+        .engine
+        .as_ref()
+        .and_then(|engine| engine.state.player(player_id))
+        .map(|player| {
+            [
+                u64::from(player.kills),
+                u64::from(player.assists),
+                u64::from(player.max_tile_count),
+                player.gold_received.to_bits(),
+                player.troops_received.to_bits(),
+            ]
+        })
+}
+
 fn hud_publish_key(app: &SowApp) -> HudPublishKey {
     let hud = &app.ui.app.hud_state;
     let (hovered_tile, hovered_owner) = hovered_tile_owner(app);
@@ -1527,6 +1571,11 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             snapshot.winner.is_some()
                 || me.is_some_and(|player| !player.alive && player.has_spawned)
         });
+    let player_endgame_stats = if endgame_active {
+        endgame_stats_snapshot(app, my_pid)
+    } else {
+        app.ui.manual_endgame_stats
+    };
     let inbox_count = me.map(|player| player.inbox_count).unwrap_or(0);
     HudPublishKey {
         fps: app.time.current_fps,
@@ -1566,9 +1615,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         endgame_active,
         endgame_winner: snapshot.and_then(|snapshot| snapshot.winner),
         endgame_team: snapshot.and_then(|snapshot| snapshot.winning_team),
-        player_kda: me
-            .map(|player| [player.kills, player.deaths, player.assists])
-            .unwrap_or_default(),
+        player_endgame_stats,
         tutorial_active,
         campaign_session_id: if tutorial_active {
             app.ui.campaign_session_id
@@ -3376,12 +3423,21 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "cost_gems": skin.cost_gems,
         })).unwrap_or(serde_json::Value::Null),
         "player_leader": me.map(|player| leader_id(player.leader)),
-        "player_kda": {
-            "kills": me.map(|player| player.kills).unwrap_or(0),
-            "deaths": me.map(|player| player.deaths).unwrap_or(0),
-            "assists": me.map(|player| player.assists).unwrap_or(0),
-        },
     });
+    let endgame_stats = if match_over {
+        endgame_stats_snapshot(app, my_pid).or(app.ui.manual_endgame_stats)
+    } else {
+        app.ui.manual_endgame_stats
+    };
+    if let Some([kills, assists, max_territory, gold_received, troops_received]) = endgame_stats {
+        payload["player_endgame_stats"] = serde_json::json!({
+            "kills": kills,
+            "assists": assists,
+            "max_territory": max_territory,
+            "gold_received": f64::from_bits(gold_received),
+            "troops_received": f64::from_bits(troops_received),
+        });
+    }
     if let Some(players) = tutorial_players {
         payload["players"] = players;
     }
@@ -3467,6 +3523,13 @@ fn loader_leader_id(splash: &crate::ui::loading_screen::SplashState) -> Option<S
     } else {
         splash.loader_leader.map(leader_id)
     }
+}
+
+fn loader_info_leader_slug(
+    splash: &crate::ui::loading_screen::SplashState,
+    selected_leader: sow_core::player::Leader,
+) -> String {
+    splash.loader_leader.unwrap_or(selected_leader).id().to_string()
 }
 
 fn notice_name(notice: Option<crate::LobbyNotice>) -> Option<&'static str> {
@@ -3569,6 +3632,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
 
     let state = &app.ui.app.main_menu_state;
     let progress = &app.progress;
+    let selected_leader_for_loader = state.selected_leader;
 
     let payload = if app.ui.app.phase == crate::ClientPhase::Playing {
         let include_leaderboard = if app.ui.show_leaderboard {
@@ -3607,6 +3671,8 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "loader_cycle_id": app.ui.app.splash_state.cycle_id,
             "loader_job": splash_job_name(&app.ui.app.splash_state.job),
             "loader_leader": loader_leader_id(&app.ui.app.splash_state),
+            "loader_info_leader": loader_info_leader_slug(&app.ui.app.splash_state, selected_leader_for_loader),
+            "loader_show_hero_briefing": app.ui.app.splash_state.show_hero_briefing,
             "loader_progress": app.ui.app.splash_state.progress.clamp(0.0, 1.0),
             "loader_done": app.ui.app.splash_state.done,
             "hud": hud_payload,
@@ -3692,6 +3758,8 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "loader_cycle_id": app.ui.app.splash_state.cycle_id,
             "loader_job": splash_job_name(&app.ui.app.splash_state.job),
             "loader_leader": loader_leader_id(&app.ui.app.splash_state),
+            "loader_info_leader": loader_info_leader_slug(&app.ui.app.splash_state, selected_leader_for_loader),
+            "loader_show_hero_briefing": app.ui.app.splash_state.show_hero_briefing,
             "loader_progress": app.ui.app.splash_state.progress.clamp(0.0, 1.0),
             "loader_done": app.ui.app.splash_state.done,
             "boot_campaign": app.boot_campaign_pending.clone(),
@@ -3824,6 +3892,7 @@ mod tests {
     fn loader_art_random_keeps_the_real_leader_and_campaign_reset() {
         let mut splash = crate::ui::loading_screen::SplashState::default();
         assert_eq!(loader_leader_id(&splash), None);
+        assert_eq!(loader_info_leader_slug(&splash, Leader::of("caesar")), "caesar");
         splash.transition_anim(
             crate::ui::loading_screen::SplashJob::EnterGame,
             Leader::of("caesar"),
@@ -3832,6 +3901,7 @@ mod tests {
 
         splash.use_random_art = true;
         assert_eq!(loader_leader_id(&splash).as_deref(), Some("random"));
+        assert_eq!(loader_info_leader_slug(&splash, Leader::of("boudica")), "caesar");
         assert_eq!(splash.loader_leader, Some(Leader::of("caesar")));
 
         splash.transition_anim(
@@ -3839,6 +3909,7 @@ mod tests {
             Leader::of("boudica"),
         );
         assert_eq!(loader_leader_id(&splash).as_deref(), Some("Boudica"));
+        assert_eq!(loader_info_leader_slug(&splash, Leader::of("caesar")), "boudica");
         assert_eq!(splash.loader_leader, Some(Leader::of("boudica")));
     }
 

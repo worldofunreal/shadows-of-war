@@ -12,6 +12,118 @@ const hudCss = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
 const campaignEngine = fs.readFileSync(path.join(shell, "sow-campaign.js"), "utf8");
 const campaignEditor = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/editor.js"), "utf8");
 
+test("endgame shows the five match stats with exact combat counts and compact totals on either result", () => {
+    const formatterStart = hud.indexOf("    function formatEndgameExact(");
+    const formatterEnd = hud.indexOf("\n    function buildingIcon(", formatterStart);
+    assert.ok(formatterStart >= 0 && formatterEnd > formatterStart);
+    const format = vm.runInNewContext(
+        hud.slice(formatterStart, formatterEnd) + "\n({ formatEndgameExact, formatEndgameCompact });"
+    );
+    assert.equal(format.formatEndgameExact(1234), "1234");
+    assert.equal(format.formatEndgameCompact(999), "999");
+    assert.equal(format.formatEndgameCompact(1_000), "1K");
+    assert.equal(format.formatEndgameCompact(1_250), "1.3K");
+    assert.equal(format.formatEndgameCompact(999_950), "1M");
+    assert.equal(format.formatEndgameCompact(1_500_000), "1.5M");
+
+    const statsMarkupStart = hud.indexOf("    function formatEndgameExact(");
+    const statsMarkupEnd = hud.indexOf("\n    function buildingIcon(", statsMarkupStart);
+    assert.ok(statsMarkupStart >= 0 && statsMarkupEnd > statsMarkupStart);
+    const helpers = vm.runInNewContext(
+        hud.slice(statsMarkupStart, statsMarkupEnd) + "\n({ endgameStatsMarkup, renderEndgameStats });",
+        { hudIcon: name => `<icon>${name}</icon>`, statusIcon: name => `<status>${name}</status>`, SOW_t: key => key }
+    );
+    const cards = helpers.endgameStatsMarkup("endgame");
+    const surrenderCards = helpers.endgameStatsMarkup("surrender");
+    assert.equal(cards.replace(/sow-hud-endgame-/g, "sow-hud-surrender-"), surrenderCards);
+    for (const prefix of ["endgame", "surrender"]) {
+        const markup = prefix === "endgame" ? cards : surrenderCards;
+        for (const id of ["kills", "assists", "max-territory", "gold-received", "troops-received"]) {
+            assert.match(markup, new RegExp(`sow-hud-${prefix}-${id}`));
+        }
+        assert.equal((markup.match(/sow-hud__endgame-stat\"/g) || []).length, 5);
+        assert.doesNotMatch(markup, /profile\.kda|endgame-kda|\bDeaths\b|\bKDA\b/i);
+    }
+    for (const icon of ["attack", "allied", "globe", "gold", "troops"]) assert.ok(cards.includes(icon), icon);
+    assert.ok(hud.includes('endgameStatsMarkup("surrender")'));
+    assert.ok(hud.includes('endgameStatsMarkup("endgame")'));
+    assert.ok(hud.includes('class="sow-hud__exit-content"'));
+    assert.ok(hud.includes('renderEndgameStats(hudRefs.surrenderStatValues, hud.player_endgame_stats)'));
+    assert.ok(hud.includes('send("request_endgame_stats")'));
+    assert.ok(hud.includes('send("clear_endgame_stats")'));
+
+    const statValues = Object.fromEntries(["kills", "assists", "maxTerritory", "goldReceived", "troopsReceived"]
+        .map(key => [key, { textContent: "" }]));
+    helpers.renderEndgameStats(statValues, {
+        kills: 17, assists: 3, max_territory: 1_234,
+        gold_received: 1_500_000, troops_received: 9_500
+    });
+    assert.deepEqual(Object.values(statValues).map(node => node.textContent), ["17", "3", "1.2K", "1.5M", "9.5K"]);
+
+    const start = hud.indexOf("        // Endgame Screen");
+    const end = hud.indexOf("        var mapMenuOpen =", start);
+    assert.ok(start >= 0 && end > start);
+    for (const [isWinner, result] of [[true, "victory"], [false, "defeat"]]) {
+        const node = () => ({
+            dataset: {}, textContent: "", src: "", alt: "",
+            classList: { toggle(name, enabled) { this[name] = enabled; } }
+        });
+        const refs = {
+            endgame: node(), endgameCard: node(), endgameBanner: node(), endgamePortrait: node(),
+            endgameStatValues: {
+                kills: node(), assists: node(), maxTerritory: node(),
+                goldReceived: node(), troopsReceived: node()
+            }, endgameStore: node(),
+            endgameObserve: node()
+        };
+        const context = vm.createContext({
+            hud: {
+                match_over: true, is_winner: isWinner, player_endgame_stats: {
+                    kills: 17, assists: 3, max_territory: 1_234,
+                    gold_received: 1_500_000, troops_received: 9_500
+                }, player_leader: "test", featured_skin: null, winner_name: ""
+            },
+            hudRefs: refs, hudState: { selected_leader: "test" },
+            window: { SOW_PORTAL: "web" },
+            SOW_t: key => key,
+            formatEndgameExact: format.formatEndgameExact,
+            formatEndgameCompact: format.formatEndgameCompact,
+            renderEndgameStats: format.renderEndgameStats,
+            leaderById: () => ({ slug: "test", name: "Test" }),
+            asset: name => "/assets/" + name
+        });
+        vm.runInContext(hud.slice(start, end), context);
+        assert.equal(refs.endgameCard.dataset.result, result);
+        assert.equal(refs.endgameBanner.textContent, `hud.${result}`);
+        assert.deepEqual([
+            refs.endgameStatValues.kills.textContent,
+            refs.endgameStatValues.assists.textContent,
+            refs.endgameStatValues.maxTerritory.textContent,
+            refs.endgameStatValues.goldReceived.textContent,
+            refs.endgameStatValues.troopsReceived.textContent
+        ], ["17", "3", "1.2K", "1.5M", "9.5K"]);
+    }
+    assert.match(hudCss, /\.sow-hud__endgame-stats\s*\{[^}]*grid-template-columns:\s*repeat\(3,/);
+    assert.match(hudCss, /\.sow-hud__endgame-stats\s*\{\s*grid-template-columns:\s*repeat\(2,/);
+    assert.match(hudCss, /\.sow-hud__exit-card\s*\{\s*min-height: 0;[^}]*max-height: min\([^}]*60svh\)/);
+    assert.match(hudCss, /\.sow-hud__exit-content\s*\{[^}]*overflow-y: auto;/);
+    assert.match(hudCss, /\.sow-hud__exit-card \.sow-hud__endgame-stats\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/);
+});
+
+test("manual exit requests one stats snapshot and clears it when canceled", () => {
+    const { context, calls, click } = makePlayerDialogsHarness();
+    context.renderHud = () => {};
+    click("prompt_surrender");
+    assert.deepEqual(calls, [{ type: "request_endgame_stats" }]);
+    assert.equal(context.surrenderModalOpen, true);
+    click("close_surrender_modal");
+    assert.deepEqual(calls, [
+        { type: "request_endgame_stats" },
+        { type: "clear_endgame_stats" }
+    ]);
+    assert.equal(context.surrenderModalOpen, false);
+});
+
 function makeHudDocument() {
     const doc = { activeElement: null, nodes: Object.create(null) };
     class Element {

@@ -120,6 +120,32 @@ impl SowEngine {
 
 pub fn refund_fleet_troops_to_player(game: &mut GameState, owner_id: u16, troops: f64) {
     if let Some(p) = game.player_mut(owner_id) {
-        p.troops = (p.troops + troops.max(0.0)).min(p.max_troops);
+        p.credit_troops_capped(troops, p.max_troops);
+    }
+}
+
+#[cfg(test)]
+mod troop_return_tests {
+    use super::refund_fleet_troops_to_player;
+    use crate::game::GameState;
+    use crate::game_config::GameConfig;
+    use crate::player::Player;
+
+    #[test]
+    fn troop_refunds_count_only_the_amount_that_fits_and_spending_keeps_the_total() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 2, 2, config.clone());
+        let mut player = Player::new_human(1, "Player".into(), [1.0; 3], &config);
+        player.troops = 900.0;
+        player.max_troops = 1_000.0;
+        state.register_player(player);
+        let received_before = state.player(1).unwrap().troops_received;
+
+        refund_fleet_troops_to_player(&mut state, 1, 250.0);
+        assert_eq!(state.player(1).unwrap().troops, 1_000.0);
+        assert_eq!(state.player(1).unwrap().troops_received, received_before + 100.0);
+
+        state.player_mut(1).unwrap().troops -= 500.0;
+        assert_eq!(state.player(1).unwrap().troops_received, received_before + 100.0);
     }
 }

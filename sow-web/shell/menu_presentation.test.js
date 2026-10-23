@@ -108,6 +108,23 @@ test("profile banner always uses landscape leader art", () => {
     assert.equal(context.profileHeroImage("Boudica"), "boudica:desktop");
 });
 
+test("the main-menu art and hero briefing both honor Random", () => {
+    const start = coreSource.indexOf("function heroImage(");
+    const end = coreSource.indexOf("function profileHeroImage(", start);
+    assert.ok(start >= 0 && end > start);
+    const prepared = [];
+    const context = {
+        state: { prefer_random_leader: true, phase: "MainMenu", loader_job: "Boot", selected_leader: "Caesar" },
+        window: { SOW_prepareLeaderArt: (...args) => prepared.push(args) },
+        leaderById: id => ({ slug: String(id).toLowerCase() }),
+        leaderArtUrl: (slug, variant) => slug + ":" + (variant || "viewport-default"),
+        prepareLeaderArt() {}
+    };
+    vm.runInNewContext(coreSource.slice(start, end) + "; this.heroImage = heroImage;", context);
+    assert.equal(context.heroImage(), "random:viewport-default");
+    assert.deepEqual(prepared, [["random", "low"]]);
+});
+
 
 test("desktop navigation stacks battle, heroes, profile, and shop", () => {
     const layout = menuCss["main_menu.layout.css"];
@@ -488,7 +505,7 @@ test("hero selection opens the shared catalog for equipped and purchasable skins
 
 test("leader display names use the catalog translation keys for every leader", () => {
     const start = coreSource.indexOf("function leaderTranslationSlug(leader)");
-    const end = coreSource.indexOf("function mapInfo(key)", start);
+    const end = coreSource.indexOf("function heroBriefingLeader", start);
     assert.ok(start >= 0 && end > start);
     const requestedKeys = [];
     const context = {
@@ -519,6 +536,52 @@ test("leader display names use the catalog translation keys for every leader", (
 
 
 
+test("one hero briefing renders identity and the named ability without exposing missing translations", () => {
+    const start = coreSource.indexOf("function heroBriefingLeader");
+    const end = coreSource.indexOf("function mapInfo(key)", start);
+    assert.ok(start >= 0 && end > start);
+    const translations = {
+        "heroes.leader_amina_de_zazzau_name": "Amina of Zazzau",
+        "heroes.leader_amina_de_zazzau_civilization": "Kingdom of Zazzau",
+        "site.leader_amina_de_zazzau_ability": "Walls of Zazzau",
+        "site.leader_amina_de_zazzau_description": "Enemies need 50% more effort to capture your cities.",
+        "heroes.random_leader": "Random",
+        "heroes.random_leader_description": "A surprise hero from your collection."
+    };
+    const context = {
+        state: { leaders: [] },
+        window: {},
+        document: { addEventListener() {} },
+        SOW_t: key => translations[key] || `[${key}]`,
+        esc: value => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"),
+        asset: path => "/assets/" + path
+    };
+    vm.runInNewContext(coreSource.slice(start, end) + "; this.renderHeroBriefing = renderHeroBriefing; this.hideBrokenHeroBriefingIcon = hideBrokenHeroBriefingIcon;", context);
+
+    const amina = context.renderHeroBriefing({
+        id: "AminaDeZazzau", slug: "amina_de_zazzau", name: "Amina of Zazzau",
+        civilization_key: "heroes.leader_amina_de_zazzau_civilization",
+        perk_key: "site.leader_amina_de_zazzau_description"
+    }, "selection", "sow-heroes-selected");
+    assert.match(amina, /Kingdom of Zazzau[\s\S]*Amina of Zazzau[\s\S]*Walls of Zazzau[\s\S]*Enemies need 50% more effort/);
+    assert.equal((amina.match(/Amina of Zazzau/g) || []).length, 1, "Amina's historical subtitle must not repeat her name");
+    assert.match(amina, /sow-hero-briefing__icon[\s\S]*gameplay\/icons\/abilities\/amina_de_zazzau\.webp/);
+    assert.doesNotMatch(amina, /\[site\.|site\.leader_/);
+
+    const random = context.renderHeroBriefing("random", "home");
+    assert.match(random, /Random[\s\S]*A surprise hero from your collection/);
+    assert.doesNotMatch(random, /sow-hero-briefing__icon|site\.leader_|Walls of Zazzau/);
+
+    const unavailable = context.renderHeroBriefing({ id: "Caesar", slug: "caesar", name: "Caesar" }, "loader");
+    assert.doesNotMatch(unavailable, /\[site\.|site\.leader_/);
+    assert.doesNotMatch(unavailable, /sow-hero-briefing__icon/);
+
+    const iconSlot = { removed: false, classList: { contains: value => value === "sow-hero-briefing__icon-slot" }, remove() { this.removed = true; } };
+    const image = { parentNode: iconSlot, classList: { contains: value => value === "sow-hero-briefing__icon" } };
+    context.hideBrokenHeroBriefingIcon({ target: image });
+    assert.equal(iconSlot.removed, true, "a failed ability image removes its frame instead of leaving a broken-image box");
+});
+
 test("weekly free rotation is a splash-only status", () => {
     const cardStart = heroesSource.indexOf("function renderHeroesCard");
     const cardEnd = heroesSource.indexOf("function heroesRoster", cardStart);
@@ -539,10 +602,38 @@ test("heroes preview never resolves the random option through leader i18n keys",
     const previewBody = heroesSource.slice(previewStart, previewEnd);
     assert.match(previewBody, /image\.alt = randomSelected \? randomLeaderName\(\) : leaderDisplayName\(activeLeader\)/,
         "image alt must use randomLeaderName() when random is selected, or it reports heroes.leader_random_name missing");
-    assert.match(previewBody, /randomSelected \? "" : leaderHistoricalName\(activeLeader\)/,
-        "historical name must not call leaderHistoricalName() for the random option, or it reports heroes.leader_random_historical missing");
-    assert.doesNotMatch(previewBody, /historical\.textContent = leaderHistoricalName\(activeLeader\)/,
-        "historical text must go through the randomSelected branch");
+    assert.match(previewBody, /briefing\.innerHTML = renderHeroBriefing\(randomSelected \? "random" : activeLeader, "selection", "sow-heroes-selected"\)/);
+    assert.doesNotMatch(previewBody, /leaderHistoricalName\(|sow-heroes__ability-icon/);
+});
+
+test("skill icons stay beside full hero details and out of compact avatar cards", () => {
+    const cardStart = heroesSource.indexOf("function renderHeroesCard");
+    const cardEnd = heroesSource.indexOf("function randomLeaderName", cardStart);
+    const card = heroesSource.slice(cardStart, cardEnd);
+    assert.doesNotMatch(card, /sow-heroes__ability-icon/);
+    assert.doesNotMatch(card, /renderHeroBriefing/);
+    const fullStart = heroesSource.indexOf("function renderHeroes()");
+    const fullEnd = heroesSource.indexOf("function renderHeroes", fullStart + 1);
+    const full = heroesSource.slice(fullStart, fullEnd);
+    assert.match(full, /data-hero-briefing[\s\S]*renderHeroBriefing\(activeRandom \? "random" : activeLeader, "selection", "sow-heroes-selected"\)/);
+    assert.doesNotMatch(full, /leaderHistoricalName\(/);
+    const modalStart = heroesSource.indexOf("function renderHeroInfoModal");
+    const modalEnd = heroesSource.indexOf("function resetDropdownPosition", modalStart);
+    assert.match(heroesSource.slice(modalStart, modalEnd), /renderHeroBriefing\(activeLeader, "modal", "sow-hero-info-selected"\)/);
+
+    const homeStart = lobbiesSource.indexOf("function renderHome()");
+    const homeEnd = lobbiesSource.indexOf("var campaignCinematicAvailability", homeStart);
+    const home = lobbiesSource.slice(homeStart, homeEnd);
+    assert.match(home, /state\.prefer_random_leader \? "random" : leaderById\(state\.selected_leader\)/);
+    assert.match(home, /renderHeroBriefing\(leader, "home", "sow-home-selected"\)/);
+});
+
+test("hero briefing keeps the three requested responsive compositions", () => {
+    assert.match(profileCss, /\.sow-hero-briefing\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1\.2fr\) minmax\(0, 1fr\)/);
+    assert.match(profileCss, /\.sow-hero-briefing--selection\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
+    assert.match(profileCss, /@media \(orientation: landscape\) and \(max-height: 560px\)[\s\S]*?\.sow-hero-briefing\s*\{[\s\S]*\.68fr[\s\S]*1\.32fr/);
+    assert.match(profileCss, /@media \(max-width: 680px\), \(orientation: portrait\)[\s\S]*?\.sow-hero-briefing\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
+    assert.doesNotMatch(profileCss, /sow-heroes__featured-copy \.sow-heroes__perk-row\s*\{\s*display:\s*none/);
 });
 
 

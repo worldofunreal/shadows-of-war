@@ -185,6 +185,50 @@
         return '<span class="' + (cls || "sow-hud__action-icon") + ' sow-hud__status-icon" style="' + style + '" aria-hidden="true"></span>';
     }
 
+    function formatEndgameExact(value) {
+        return String(Math.max(0, Math.trunc(Number(value) || 0)));
+    }
+
+    function formatEndgameCompact(value) {
+        var amount = Number(value);
+        if (!Number.isFinite(amount) || amount <= 0) return "0";
+        if (amount < 1000) return String(Math.round(amount));
+        var suffix = amount >= 1000000 ? "M" : "K";
+        var divisor = suffix === "M" ? 1000000 : 1000;
+        var rounded = Math.round(amount / divisor * 10) / 10;
+        if (suffix === "K" && rounded >= 1000) return "1M";
+        return String(rounded).replace(/\.0$/, "") + suffix;
+    }
+
+    function endgameStatsMarkup(prefix) {
+        return '<div class="sow-hud__endgame-stats" id="sow-hud-' + prefix + '-stats">'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + hudIcon("attack", "sow-hud__inline-icon") + '</span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.stat_kills") + '</span><b id="sow-hud-' + prefix + '-kills">0</b></div>'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + statusIcon("allied", "sow-hud__inline-icon") + '</span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.stat_assists") + '</span><b id="sow-hud-' + prefix + '-assists">0</b></div>'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + hudIcon("globe", "sow-hud__inline-icon") + '</span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.stat_max_territory") + '</span><b id="sow-hud-' + prefix + '-max-territory">0</b></div>'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + hudIcon("gold", "sow-hud__inline-icon") + '</span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.stat_gold_received") + '</span><b id="sow-hud-' + prefix + '-gold-received">0</b></div>'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + hudIcon("troops", "sow-hud__inline-icon") + '</span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.stat_troops_received") + '</span><b id="sow-hud-' + prefix + '-troops-received">0</b></div>'
+            + '    </div>';
+    }
+
+    function endgameStatRefs(prefix) {
+        return {
+            kills: document.getElementById("sow-hud-" + prefix + "-kills"),
+            assists: document.getElementById("sow-hud-" + prefix + "-assists"),
+            maxTerritory: document.getElementById("sow-hud-" + prefix + "-max-territory"),
+            goldReceived: document.getElementById("sow-hud-" + prefix + "-gold-received"),
+            troopsReceived: document.getElementById("sow-hud-" + prefix + "-troops-received")
+        };
+    }
+
+    function renderEndgameStats(refs, stats) {
+        stats = stats || {};
+        if (refs.kills) refs.kills.textContent = formatEndgameExact(stats.kills);
+        if (refs.assists) refs.assists.textContent = formatEndgameExact(stats.assists);
+        if (refs.maxTerritory) refs.maxTerritory.textContent = formatEndgameCompact(stats.max_territory);
+        if (refs.goldReceived) refs.goldReceived.textContent = formatEndgameCompact(stats.gold_received);
+        if (refs.troopsReceived) refs.troopsReceived.textContent = formatEndgameCompact(stats.troops_received);
+    }
+
     function buildingIcon(kind, level, cls) {
         var name = String(kind || "");
         var art = window.SOW_BUILDING_ART;
@@ -537,10 +581,10 @@
             + '        <p class="sow-hud__endgame-desc" id="sow-hud-surrender-desc">' + SOW_t("endgame.your_battle_will_end") + '</p>'
             + '      </div>'
             + '    </div>'
-            + '    <div class="sow-hud__endgame-stats" id="sow-hud-surrender-stats">'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' + hudIcon("troops", "sow-hud__inline-icon") + '</span><span class="sow-hud__endgame-stat-label">' + SOW_t("profile.kda") + '</span><b id="sow-hud-surrender-kda">0 / 0 / 0</b></div>'
+            + '    <div class="sow-hud__exit-content">'
+            + '      ' + endgameStatsMarkup("surrender")
+            + '      <p class="sow-hud__endgame-desc" id="sow-hud-surrender-save-note">' + SOW_t("endgame.leave_rewards_saved") + '</p>'
             + '    </div>'
-            + '    <p class="sow-hud__endgame-desc" id="sow-hud-surrender-save-note">' + SOW_t("endgame.leave_rewards_saved") + '</p>'
             + '    <div class="sow-hud__endgame-actions">'
             + '      <button class="sow-hud__endgame-secondary" type="button" data-command="close_surrender_modal" id="sow-hud-surrender-cancel">' + SOW_t("endgame.cancel") + '</button>'
             + '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_surrender"><span aria-hidden="true">⌂</span> <span id="sow-hud-surrender-action-label">' + SOW_t("endgame.leave_match") + '</span></button>'
@@ -548,21 +592,16 @@
             + '  </section>'
             + '</div>'
             + '<div class="sow-hud__endgame-backdrop hidden" id="sow-hud-endgame-modal">'
-            + '  <section class="sow-hud__endgame-card" role="dialog" aria-modal="true" aria-labelledby="sow-hud-endgame-title">'
+            + '  <section class="sow-hud__endgame-card" role="dialog" aria-modal="true" aria-labelledby="sow-hud-endgame-banner">'
             + '    <div class="sow-hud__endgame-hero">'
             + '      <div class="sow-hud__endgame-portrait-wrap">'
             + '        <img class="sow-hud__endgame-portrait" id="sow-hud-endgame-portrait" src="" alt="' + SOW_t("hud.leader_avatar") + '" />'
             + '      </div>'
             + '      <div class="sow-hud__endgame-hero-copy">'
-            + '        <div class="sow-hud__endgame-kicker"><span class="sow-hud__endgame-icon" id="sow-hud-endgame-icon" aria-hidden="true">' + hudIcon("attack", "sow-hud__inline-icon") + '</span><span>' + SOW_t("hud.match_result") + '</span></div>'
             + '        <h2 class="sow-hud__endgame-banner" id="sow-hud-endgame-banner">' + SOW_t("hud.defeat") + '</h2>'
-            + '        <h3 class="sow-hud__endgame-title" id="sow-hud-endgame-title">' + SOW_t("hud.match_lost") + '</h3>'
-            + '        <p class="sow-hud__endgame-desc" id="sow-hud-endgame-desc">' + SOW_t("hud.match_ended") + '</p>'
             + '      </div>'
             + '    </div>'
-            + '    <div class="sow-hud__endgame-stats" id="sow-hud-endgame-stats">'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l14 14M18 4L4 18M5 5l3 3M19 5l-3 3M5 19l3-3M19 19l-3-3"/></svg></span><span class="sow-hud__endgame-stat-label">' + SOW_t("profile.kda") + '</span><b id="sow-hud-endgame-kda">0 / 0 / 0</b></div>'
-            + '    </div>'
+            + '    ' + endgameStatsMarkup("endgame")
             + '    <div class="sow-hud__endgame-store" id="sow-hud-endgame-store" aria-label="' + SOW_t("store.featured_skin") + '">'
             + '      <span class="sow-hud__endgame-store-icon" aria-hidden="true">✦</span>'
             + '      <span class="sow-hud__endgame-store-copy"><b id="sow-hud-endgame-store-name">' + SOW_t("store.featured_skin") + '</b><small id="sow-hud-endgame-store-copy">' + SOW_t("store.original_cosmetic") + '</small></span>'
@@ -642,20 +681,16 @@
             surrenderTitle: document.getElementById("sow-hud-surrender-title"),
             surrenderDesc: document.getElementById("sow-hud-surrender-desc"),
             surrenderStats: document.getElementById("sow-hud-surrender-stats"),
-            surrenderKda: document.getElementById("sow-hud-surrender-kda"),
+            surrenderStatValues: endgameStatRefs("surrender"),
             surrenderSaveNote: document.getElementById("sow-hud-surrender-save-note"),
             surrenderPortrait: document.getElementById("sow-hud-surrender-portrait"),
             surrenderCancel: document.getElementById("sow-hud-surrender-cancel"),
             surrenderActionLabel: document.getElementById("sow-hud-surrender-action-label"),
             endgame: document.getElementById("sow-hud-endgame-modal"),
             endgameCard: document.querySelector("#sow-hud-endgame-modal .sow-hud__endgame-card"),
-            endgameIcon: document.getElementById("sow-hud-endgame-icon"),
             endgameBanner: document.getElementById("sow-hud-endgame-banner"),
-            endgameTitle: document.getElementById("sow-hud-endgame-title"),
-            endgameDesc: document.getElementById("sow-hud-endgame-desc"),
             endgamePortrait: document.getElementById("sow-hud-endgame-portrait"),
-            endgameStats: document.getElementById("sow-hud-endgame-stats"),
-            endgameKda: document.getElementById("sow-hud-endgame-kda"),
+            endgameStatValues: endgameStatRefs("endgame"),
             endgameStore: document.getElementById("sow-hud-endgame-store"),
             endgameStoreName: document.getElementById("sow-hud-endgame-store-name"),
             endgameStoreCopy: document.getElementById("sow-hud-endgame-store-copy"),
@@ -1270,8 +1305,10 @@
 
     function ringActivate(menu, target) {
         if (target === "hub") {
+            // The center is "back" inside a submenu and "close" at the root.
             var back = menu.querySelector("[data-map-back]");
             if (back) back.click();
+            else send("close_map_context_menu");
             return;
         }
         if (typeof target !== "number") return;
@@ -2909,9 +2946,8 @@
             if (hudRefs.surrenderDesc) hudRefs.surrenderDesc.textContent = tutorialActive
                 ? SOW_t("endgame.tutorial_description")
                 : (surrenderMessage || SOW_t("endgame.your_battle_will_end"));
-            var surrenderKda = hud.player_kda || {};
             if (hudRefs.surrenderStats) hudRefs.surrenderStats.classList.toggle("hidden", tutorialActive);
-            if (hudRefs.surrenderKda) hudRefs.surrenderKda.textContent = [surrenderKda.kills || 0, surrenderKda.deaths || 0, surrenderKda.assists || 0].join(" / ");
+            renderEndgameStats(hudRefs.surrenderStatValues, hud.player_endgame_stats);
             if (hudRefs.surrenderSaveNote) {
                 hudRefs.surrenderSaveNote.textContent = SOW_t("endgame.leave_rewards_saved");
                 hudRefs.surrenderSaveNote.classList.toggle("hidden", tutorialActive);
@@ -2932,23 +2968,17 @@
         if (hudRefs.endgame) {
             hudRefs.endgame.classList.toggle("hidden", !isOver);
             if (isOver) {
-                var kda = hud.player_kda || {};
                 var result = isWinner ? "victory" : "defeat";
-                var kdaText = [kda.kills || 0, kda.deaths || 0, kda.assists || 0].join(" / ");
+                var stats = hud.player_endgame_stats || {};
                 if (hudRefs.endgameCard) hudRefs.endgameCard.dataset.result = result;
-                if (hudRefs.endgameIcon) hudRefs.endgameIcon.innerHTML = hudIcon(isWinner ? "upgrade" : "attack", "sow-hud__inline-icon");
                 if (hudRefs.endgameBanner) hudRefs.endgameBanner.textContent = isWinner ? SOW_t("hud.victory") : SOW_t("hud.defeat");
-                if (hudRefs.endgameTitle) hudRefs.endgameTitle.textContent = isWinner ? SOW_t("hud.match_won") : SOW_t("hud.match_lost");
-                if (hudRefs.endgameDesc) hudRefs.endgameDesc.textContent = isWinner
-                    ? SOW_t("hud.map_control_secured")
-                    : (hud.winner_name ? SOW_t("hud.winner", { name: hud.winner_name }) : SOW_t("hud.empire_eliminated"));
                 var activeLeaderId = (hud && hud.player_leader) || (hudState && hudState.selected_leader);
                 var activeLeader = leaderById(activeLeaderId);
                 if (hudRefs.endgamePortrait) {
                     hudRefs.endgamePortrait.src = asset("gameplay/avatars/" + activeLeader.slug + ".webp");
                     hudRefs.endgamePortrait.alt = activeLeader.name || SOW_t("hud.leader_avatar");
                 }
-                if (hudRefs.endgameKda) hudRefs.endgameKda.textContent = kdaText;
+                renderEndgameStats(hudRefs.endgameStatValues, stats);
                 var featuredSkin = (window.SOW_PORTAL === "poki" || window.SOW_PORTAL === "jest") ? null : hud.featured_skin;
                 if (hudRefs.endgameStore) hudRefs.endgameStore.classList.toggle("hidden", !featuredSkin);
                 if (featuredSkin) {
@@ -3172,10 +3202,12 @@
                 var focusY = Number(btn.dataset.focusY);
                 if (Number.isFinite(focusX) && Number.isFinite(focusY)) send("focus_world", { x: focusX, y: focusY });
             } else if (cmd === "prompt_surrender") {
+                send("request_endgame_stats");
                 surrenderModalOpen = true;
                 surrenderMessage = null;
                 renderHud();
             } else if (cmd === "close_surrender_modal") {
+                send("clear_endgame_stats");
                 surrenderModalOpen = false;
                 surrenderMessage = null;
                 renderHud();

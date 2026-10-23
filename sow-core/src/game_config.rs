@@ -62,6 +62,15 @@ fn default_port_gold_income() -> f64 {
     12.0 / 21.0
 }
 
+/// Same rate as one Factory level.
+fn default_hero_city_gold_income() -> f64 {
+    8.0 / 7.0
+}
+
+fn default_alliance_gold_income() -> f64 {
+    0.25
+}
+
 fn default_structure_upgrade_scale() -> f64 {
     0.75
 }
@@ -268,6 +277,20 @@ pub struct GameConfig {
     /// Gold income per game second added per weighted Port level.
     #[serde(default = "default_port_gold_income")]
     pub port_gold_income: f64,
+    // Hero-only bases: each one pays only the hero whose ability produces it, so the
+    // economy of every other player is unchanged.
+    /// Gold income per game second per City level, paid to Empress Gi only.
+    #[serde(default = "default_hero_city_gold_income")]
+    pub hero_city_gold_income: f64,
+    /// Troop income per game second per Factory level, paid to Ashoka only.
+    #[serde(default = "default_city_troop_income")]
+    pub hero_factory_troop_income: f64,
+    /// Troop income per game second per weighted Port level, paid to Anacaona only.
+    #[serde(default = "default_city_troop_income")]
+    pub hero_port_troop_income: f64,
+    /// Gold income per game second per active alliance, paid to Sālote Tupou III only.
+    #[serde(default = "default_alliance_gold_income")]
+    pub alliance_gold_income: f64,
     /// Gold cost to place a City.
     pub cost_city: f64,
     /// Gold cost to place a Bunker.
@@ -402,6 +425,10 @@ impl Default for GameConfig {
             // 24 gold/minute at the standard 0.35x game speed.
             factory_gold_income: 8.0 / 7.0,
             port_gold_income: default_port_gold_income(),
+            hero_city_gold_income: default_hero_city_gold_income(),
+            hero_factory_troop_income: default_city_troop_income(),
+            hero_port_troop_income: default_city_troop_income(),
+            alliance_gold_income: default_alliance_gold_income(),
             cost_city: 200.0,
             cost_bunker: 100.0,
             cost_factory: 175.0,

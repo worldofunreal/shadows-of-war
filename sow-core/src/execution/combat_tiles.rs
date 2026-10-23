@@ -1,6 +1,8 @@
+use crate::building::BuildingGrid;
+use crate::diplomacy::is_traitor_active;
 use crate::engine::SowEngine;
 use crate::execution::{PrioritizedTile, RETREAT_PENALTY_VS_PLAYER};
-use crate::game::{GameEvent, GamePhase};
+use crate::game::{GameEvent, GamePhase, GameState};
 use crate::game_config::max_tiles_cap_for_troops;
 use crate::map::TerrainType;
 use crate::rng::NextIntExt;
@@ -25,6 +27,49 @@ fn terrain_loss_multiplier(terrain: TerrainType, config: &crate::game_config::Ga
     }
 }
 
+/// How much each of `attacker`'s troops counts against `target` (0 = neutral land)
+/// from hero abilities. The only owner: tile combat and attack clashes both use it.
+pub(crate) fn attack_strength(state: &GameState, attacker: u16, target: u16) -> f64 {
+    let Some(p) = state.player(attacker) else {
+        return 1.0;
+    };
+    let rival_bonus = if target == 0 {
+        1.0
+    } else {
+        p.leader.enemy_troop_strength_multiplier()
+    };
+    // Hero traitor ability: against a traitor, each attacking troop counts double.
+    let traitor_bonus = state
+        .player(target)
+        .filter(|t| is_traitor_active(t, state.tick as u32))
+        .map_or(1.0, |_| p.leader.damage_to_traitors_multiplier());
+    p.leader.troop_strength_multiplier() * rival_bonus * traitor_bonus
+}
+
+/// Hero city abilities: a city tile costs more to take from a defender with `CityDefense`
+/// and less for an attacker with `CityAssault`. Takes disjoint fields because the attack
+/// loop holds a mutable borrow of `attacks`.
+#[inline]
+fn city_capture_multiplier(
+    state: &GameState,
+    buildings: &BuildingGrid,
+    (tile_x, tile_y): (u32, u32),
+    attacker: u16,
+    defender: u16,
+) -> f64 {
+    let defense = state
+        .player(defender)
+        .map_or(1.0, |p| p.leader.city_defense_multiplier());
+    let assault = state
+        .player(attacker)
+        .map_or(1.0, |p| p.leader.city_assault_multiplier());
+    let ratio = defense / assault;
+    if ratio == 1.0 || !buildings.city_covers_tile(tile_x, tile_y) {
+        return 1.0;
+    }
+    ratio
+}
+
 // Attack execution tick (territory expansion and combat resolution)
 impl SowEngine {
     pub fn execute_combat(&mut self) {
@@ -46,6 +91,7 @@ impl SowEngine {
         // Rebuild only when buildings changed; each tile then queries nearby cells.
         if !self.attacks.is_empty() {
             self.refresh_defense_grid();
+            self.refresh_building_grid();
         }
 
         // attacks are sorted on insertion
@@ -68,7 +114,7 @@ impl SowEngine {
                     };
                     let back = refund * factor;
                     if let Some(player) = self.state.player_mut(execution.owner_id) {
-                        player.troops = (player.troops + back).min(player.max_troops);
+                        player.credit_troops_capped(back, player.max_troops);
                     }
                 }
                 to_remove.push(i);
@@ -84,11 +130,8 @@ impl SowEngine {
             // Fast approximation of active frontier size without scanning the entire empire border
             let adjacent = (execution.to_conquer.len() as f64).max(1.0);
 
-            let troop_strength = self
-                .state
-                .player(execution.owner_id)
-                .map(|p| p.leader.troop_strength_multiplier())
-                .unwrap_or(1.0);
+            let troop_strength =
+                attack_strength(&self.state, execution.owner_id, execution.target_owner);
             let effective_troops = execution.troops * troop_strength;
 
             let max_cap = max_tiles_cap_for_troops(effective_troops, &self.state.config);
@@ -137,7 +180,7 @@ impl SowEngine {
                     if refund.is_finite()
                         && let Some(player) = self.state.player_mut(execution.owner_id)
                     {
-                        player.troops = (player.troops + refund).min(player.max_troops);
+                        player.credit_troops_capped(refund, player.max_troops);
                     }
                     to_remove.push(i);
                     break;
@@ -207,6 +250,14 @@ impl SowEngine {
                         let ratio_clamp = ratio.clamp(0.2, 1.5);
                         ratio_clamp * base_speed * defense.capture_multiplier
                     };
+                    let tile_cost = tile_cost
+                        * city_capture_multiplier(
+                            &self.state,
+                            &self.building_grid,
+                            (target_tile.x, target_tile.y),
+                            execution.owner_id,
+                            execution.target_owner,
+                        );
 
                     // Check if we can afford this tile on this tick using expectation-invariant deterministic RNG
                     if budget < tile_cost {
@@ -364,7 +415,7 @@ impl SowEngine {
                         && refund.is_finite()
                         && let Some(player) = self.state.player_mut(execution.owner_id)
                     {
-                        player.troops = (player.troops + refund).min(player.max_troops);
+                        player.credit_troops_capped(refund, player.max_troops);
                     }
                     to_remove.push(i);
                     break;

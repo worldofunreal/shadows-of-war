@@ -207,6 +207,7 @@ impl SowApp {
         self.net.client = None;
         self.net.current_ping_ms = None;
         self.begin_enter_game_loader(leader);
+        self.ui.app.splash_state.show_hero_briefing = !tutorial;
         self.ui.app.splash_state.use_random_art =
             !tutorial && self.ui.app.main_menu_state.prefer_random_leader;
         self.sim.my_player_id = Some(1);

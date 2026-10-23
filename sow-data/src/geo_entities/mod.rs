@@ -1,15 +1,14 @@
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
-/// What a catalog character is in a random match: a nation (led by its leader)
-/// or a tribe (named after its people).
+/// Which bot list a catalog character belongs to: a nation (led by its leader)
+/// or a tribe (named after its people). Playable heroes keep their origin here;
+/// the `hero` block, not this role, makes them playable and keeps them out of `bots(..)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
     Nation,
     Tribe,
-    /// A playable hero: never a bot, so it is absent from `bots(..)`.
-    Hero,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,6 +71,20 @@ pub enum Ability {
     BunkerDefense { percent: u32 },
     /// More gold for eliminating a player.
     EliminationGold { percent: u32 },
+    /// Territory produces more gold.
+    TerritoryGold { percent: u32 },
+    /// Troops fight stronger when attacking another player (not neutral land).
+    EnemyTroopStrength { percent: u32 },
+    /// Enemies need more effort to capture this hero's city tiles.
+    CityDefense { percent: u32 },
+    /// Attacks on enemy city tiles capture faster.
+    CityAssault { percent: u32 },
+    /// Campaign alliances cost this much less gold.
+    AllianceCost { percent: u32 },
+    /// Every active alliance pays gold, `percent` more than the base rate.
+    AllianceGold { percent: u32 },
+    /// Attacks on a traitor's territory deal `percent` more damage to its defenders.
+    DamageToTraitors { percent: u32 },
 }
 
 impl Ability {
@@ -83,7 +96,14 @@ impl Ability {
             | Ability::CityTroopCapacity { percent }
             | Ability::BunkerRange { percent }
             | Ability::BunkerDefense { percent }
-            | Ability::EliminationGold { percent } => percent,
+            | Ability::EliminationGold { percent }
+            | Ability::TerritoryGold { percent }
+            | Ability::EnemyTroopStrength { percent }
+            | Ability::CityDefense { percent }
+            | Ability::CityAssault { percent }
+            | Ability::AllianceCost { percent }
+            | Ability::AllianceGold { percent }
+            | Ability::DamageToTraitors { percent } => percent,
         }
     }
 }
@@ -185,8 +205,9 @@ pub fn by_name(name: &str) -> Option<&'static GeoEntity> {
 }
 
 /// Nation or tribe bots in catalog order (the order is stable across clients).
+/// Playable heroes are never bots, whatever their origin.
 pub fn bots(role: Role) -> impl Iterator<Item = &'static GeoEntity> {
-    all().filter(move |entity| entity.role == role)
+    all().filter(move |entity| entity.role == role && entity.hero.is_none())
 }
 
 #[cfg(test)]
@@ -196,7 +217,8 @@ mod tests {
     #[test]
     fn catalog_entries_are_valid_and_stable() {
         let mut ids = std::collections::HashSet::new();
-        let mut names = std::collections::HashSet::new();
+        let mut bot_names = std::collections::HashSet::new();
+        let mut hero_names = std::collections::HashSet::new();
         for entity in all() {
             assert!(
                 !entity.id.is_empty()
@@ -207,9 +229,17 @@ mod tests {
                 entity.id
             );
             assert!(ids.insert(entity.id.as_str()), "duplicate ID {}", entity.id);
+            // A playable hero can intentionally share its historical name
+            // with the bot representation of the same character.
+            let names = if entity.hero.is_some() {
+                &mut hero_names
+            } else {
+                &mut bot_names
+            };
             assert!(
                 names.insert(entity.name.to_lowercase()),
-                "duplicate name {}",
+                "duplicate {} name {}",
+                if entity.hero.is_some() { "hero" } else { "bot" },
                 entity.name
             );
             assert_eq!(entity.lat.is_some(), entity.lon.is_some(), "{}", entity.id);
@@ -256,6 +286,19 @@ mod tests {
                 portraits.insert(character.avatar.as_deref()),
                 "{} shares an avatar with another bot",
                 character.id
+            );
+        }
+    }
+
+    #[test]
+    fn playable_heroes_are_never_bots() {
+        for hero in all().filter(|entity| entity.hero.is_some()) {
+            assert!(
+                !bots(Role::Nation)
+                    .chain(bots(Role::Tribe))
+                    .any(|bot| bot.id == hero.id),
+                "{} is a playable hero and must not be a bot",
+                hero.id
             );
         }
     }

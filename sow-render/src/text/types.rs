@@ -253,8 +253,10 @@ mod badge_atlas_tests {
 // Four 256px expressions per hero, plus shared static campaign portraits.
 // See docs/nameplates-and-emotes.md; capacity is checked against referenced assets.
 pub const AVATAR_CELL: u32 = 256;
-pub const AVATAR_COLS: u32 = 8;
-pub const AVATAR_ROWS: u32 = 16;
+// 16×12 cells = 192 slots, texture 4096×3072: the same 4096 px maximum side as the old 8×16
+// layout, with room for 36 heroes (146 slots) plus bot portraits.
+pub const AVATAR_COLS: u32 = 16;
+pub const AVATAR_ROWS: u32 = 12;
 pub const AVATAR_SLOT_COUNT: usize = (AVATAR_COLS * AVATAR_ROWS) as usize;
 
 pub const AVATAR_EXPRESSIONS: usize = 4;

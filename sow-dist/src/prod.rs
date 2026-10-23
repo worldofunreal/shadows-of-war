@@ -96,12 +96,6 @@ impl<'a> RelayAdmissionPause<'a> {
             config,
             paused: true,
         };
-        let active = relay_active_lobbies(config)?;
-        if active != 0 {
-            bail!(
-                "backend update postponed: {active} active or closing match(es) still depend on the running server"
-            );
-        }
         verify_no_pending_reward_calculations(config)?;
         Ok(pause)
     }
@@ -301,15 +295,6 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     }
     println!("  plan: {plan:?}");
 
-    if plan.server || plan.database || plan.maps || plan.ops || plan.relay {
-        let active = relay_active_lobbies(&config)?;
-        if active > 0 {
-            bail!(
-                "refusing relay replacement while {active} match(es) are active; the current relay cannot hand live matches to a new process"
-            );
-        }
-    }
-
     if !plan.any() {
         println!("  no production component changed; no restart performed");
         verify_control_certificates(&config)?;
@@ -353,8 +338,7 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     verify_control_certificates(&config)?;
     verify_origin_tls_from_relay(&config)?;
     ensure_relay_certificate_automation(paths, &config)?;
-    // Relay last, and only after the registry is empty, so live games survive
-    // deployment and the control host is healthy before relay workers change.
+    // Relay last, so the control host is healthy before relay workers change.
     if plan.relay {
         activate_relay_host(&config, &release)?;
     }
@@ -1436,25 +1420,6 @@ fn relay_authed_request(
     Ok(responses)
 }
 
-fn relay_active_lobbies(config: &Config) -> Result<usize> {
-    if relay_workers_stopped(config)? {
-        return Ok(0);
-    }
-    let mut total = 0usize;
-    for (worker_id, body) in relay_authed_get(config, "/internal/lobbies")? {
-        let value: serde_json::Value = serde_json::from_str(&body)
-            .with_context(|| format!("worker port {worker_id} returned invalid lobbies"))?;
-        let lobbies = value
-            .get("lobbies")
-            .and_then(serde_json::Value::as_array)
-            .with_context(|| {
-                format!("worker {worker_id} did not confirm its active or closing matches")
-            })?;
-        total += lobbies.len();
-    }
-    Ok(total)
-}
-
 fn relay_supports_lobby_drain(config: &Config) -> Result<bool> {
     let mut supported = Vec::new();
     for (worker_id, body) in relay_authed_get(config, "/internal/metrics")? {
@@ -1548,13 +1513,8 @@ fn stage_relay(config: &Config, release: &Release) -> Result<()> {
     Ok(())
 }
 
-/// Activate the relay only after its active match registry is empty.
+/// Replace the relay workers with the staged release, even while matches are running.
 fn activate_relay_host(config: &Config, release: &Release) -> Result<()> {
-    let active_lobbies = relay_active_lobbies(config)?;
-    if active_lobbies > 0 {
-        bail!("refusing relay replacement while {active_lobbies} match(es) are active");
-    }
-    println!("  relay replacement: no active matches");
     let env = RelayEnv::load()?;
     let revision = output("git", &["rev-parse", "--short=12", "HEAD"])?;
     let relay_fstack = fstack_version(config)?;

@@ -38,7 +38,7 @@ notes = "Ships and missiles moving on the map, packed into assets/generated/unit
 path = "assets/art/icons/"
 source = "user_supplied"
 license = "Project-owner supplied; cleared for distribution"
-notes = "All iconography: currency (gold, gem, crown, laurel), troops (HUD, menu nav and map), tutorial hand, surrender, mobile navigation, and the nameplate/map badges packed into assets/generated/badges-atlas.* (request/allied/traitor: AGPL-3.0-or-later; rank, you, disconnected, upgrade-sparkle, wilderness, death, radiation, construction, hammer: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art). laurel is a generated placeholder pending final art."
+notes = "All iconography: currency (gold, gem, crown, laurel), troops (HUD, menu nav and map), tutorial hand, surrender, mobile navigation, and the nameplate/map badges packed into assets/generated/badges-atlas.* (request/allied/traitor: AGPL-3.0-or-later; rank, you, disconnected, upgrade-sparkle, wilderness, death, radiation, construction, hammer: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art). Hero ability icons are in abilities/<hero-id>.webp and published byte-for-byte. laurel is a generated placeholder pending final art."
 
 [store]
 path = "assets/art/store/"

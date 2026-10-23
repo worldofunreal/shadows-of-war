@@ -133,6 +133,7 @@ impl SowApp {
                                 .reset_anim(crate::ui::loading_screen::SplashJob::EnterGame);
                         }
                         self.ui.app.splash_state.loader_leader = loader_leader;
+                        self.ui.app.splash_state.show_hero_briefing = !start_msg.config.tutorial;
                         self.ui.app.splash_state.use_random_art = !start_msg.config.tutorial
                             && self.ui.app.main_menu_state.prefer_random_leader;
                         self.ui.app.main_menu_state.is_waiting = false;

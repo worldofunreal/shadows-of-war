@@ -1,7 +1,8 @@
 use crate::building::aggregate_buildings_per_player;
 use crate::engine::SowEngine;
 use crate::execution::income_rates::{
-    gold_income_per_second, trade_income_per_second, troop_income_per_second,
+    alliance_gold_per_second, gold_income_per_second, trade_income_per_second,
+    troop_income_per_second,
 };
 use crate::game::GamePhase;
 
@@ -81,15 +82,26 @@ impl SowEngine {
             if is_standard_bot {
                 troop_income *= 0.75;
             }
-            self.state.players[idx].troops = (safe_troops + troop_income).min(max_tr);
+            let player = &mut self.state.players[idx];
+            player.troops = safe_troops;
+            player.troops = (safe_troops + troop_income).min(max_tr);
+            let received_troops = (player.troops - safe_troops).max(0.0);
+            if received_troops.is_finite() {
+                player.troops_received += received_troops;
+            }
 
-            let gold_ps = gold_income_per_second(tiles_owned, agg, leader, &config);
+            let gold_ps = gold_income_per_second(tiles_owned, agg, leader, &config)
+                + alliance_gold_per_second(
+                    self.state.players[idx].alliances.len(),
+                    leader,
+                    &config,
+                );
             let mut gold_income = config.per_tick(gold_ps);
 
             if is_standard_bot {
                 gold_income *= 0.75;
             }
-            self.state.players[idx].gold += gold_income;
+            self.state.players[idx].credit_gold(gold_income);
 
             let iq_gain = config.per_tick(self.state.players[idx].iq as f64 / 100.0);
             self.state.players[idx].iq_points =
@@ -100,7 +112,7 @@ impl SowEngine {
             if fleet.unit_type == crate::game::UnitType::TradeShip
                 && let Some(player) = self.state.player_mut(fleet.owner_id)
             {
-                player.gold += config.per_tick(trade_income_per_second(1, &config));
+                player.credit_gold(config.per_tick(trade_income_per_second(1, &config)));
             }
         }
 
@@ -278,7 +290,7 @@ mod economy_speed_tests {
     use crate::player::Player;
     use crate::water_components::WaterComponents;
 
-    fn gold_after_ten_seconds(global_speed_multiplier: f64) -> f64 {
+    fn income_after_ten_seconds(global_speed_multiplier: f64) -> (f64, f64) {
         let config = GameConfig {
             global_speed_multiplier,
             gold_base_income: 4.0,
@@ -292,22 +304,26 @@ mod economy_speed_tests {
         state.phase = GamePhase::Playing;
         let mut player = Player::new_human(1, "Player".into(), [1.0; 3], &config);
         player.gold = 0.0;
+        let received_before = player.gold_received;
         player.tile_count = 1;
         state.register_player(player);
         let mut engine = SowEngine::new(state, WaterComponents::default());
         for _ in 0..100 {
             engine.execute_income();
         }
-        engine.state.player(1).unwrap().gold
+        let player = engine.state.player(1).unwrap();
+        (player.gold, player.gold_received - received_before)
     }
 
     #[test]
     fn recurring_gold_income_scales_with_global_game_speed() {
-        let half_speed = gold_after_ten_seconds(0.5);
-        let normal_speed = gold_after_ten_seconds(1.0);
+        let (half_speed, half_received) = income_after_ten_seconds(0.5);
+        let (normal_speed, normal_received) = income_after_ten_seconds(1.0);
         assert!((half_speed * 2.0 - normal_speed).abs() < 1e-9);
         assert!((half_speed - 20.0).abs() < 1e-9);
         assert!((normal_speed - 40.0).abs() < 1e-9);
+        assert!((half_received - half_speed).abs() < 1e-9);
+        assert!((normal_received - normal_speed).abs() < 1e-9);
     }
 }
 
@@ -343,10 +359,19 @@ mod zero_troop_bot_income_tests {
         state.player_lookup = vec![None, Some(0), Some(1)];
 
         let mut engine = SowEngine::new(state, WaterComponents::default());
+        let received_before: Vec<_> = engine
+            .state
+            .players
+            .iter()
+            .map(|player| player.troops_received)
+            .collect();
         engine.execute_income();
 
-        assert!(engine.state.player(1).unwrap().troops > 0.0);
-        assert!(engine.state.player(2).unwrap().troops > 0.0);
+        for (index, id) in [1, 2].into_iter().enumerate() {
+            let player = engine.state.player(id).unwrap();
+            assert!(player.troops > 0.0);
+            assert!(player.troops_received > received_before[index]);
+        }
     }
 
     #[test]

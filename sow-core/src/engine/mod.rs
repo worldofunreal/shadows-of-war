@@ -851,14 +851,14 @@ impl SowEngine {
             .map_or(1.0, |player| player.leader.elimination_gold_multiplier());
         let killer_final_gold = (f64::from(killer_gold) * killer_multiplier) as u32;
         if let Some(attacker) = self.state.player_mut(conqueror_id) {
-            attacker.gold += f64::from(killer_final_gold);
+            attacker.credit_gold(f64::from(killer_final_gold));
             attacker.kills += 1;
         }
 
         let mut assist_event_rewards = Vec::new();
         for (assist_id, share) in &assist_rewards {
             if let Some(p) = self.state.player_mut(*assist_id) {
-                p.gold += f64::from(*share);
+                p.credit_gold(f64::from(*share));
                 p.assists += 1;
                 assist_event_rewards.push((*assist_id, *share));
             }
@@ -1268,6 +1268,10 @@ impl SowEngine {
             if let Some(player) = self.state.player_mut(*id) {
                 player.max_troops = standing_cap;
                 player.troops = if refill {
+                    let received = (standing_cap - player.troops).max(0.0);
+                    if received.is_finite() {
+                        player.troops_received += received;
+                    }
                     standing_cap
                 } else {
                     player.troops.min(standing_cap)
@@ -2045,6 +2049,7 @@ mod tests {
             state.tick = tick;
             let mut human = Player::new_human(1, "Boudica".into(), [1.0; 3], &config);
             human.gold = 100.0;
+            let received_before = human.gold_received;
             state.register_player(human);
             let mut victim = Player::new_human(2, "Outpost".into(), [0.5; 3], &config);
             victim.player_type = victim_type;
@@ -2068,6 +2073,10 @@ mod tests {
                     _ => None,
                 })
                 .unwrap();
+            assert_eq!(
+                engine.state.player(1).unwrap().gold_received - received_before,
+                f64::from(bounty)
+            );
             (engine.state.player(1).unwrap().gold, bounty)
         };
 
@@ -2138,6 +2147,9 @@ mod tests {
             player.gold = 0.0;
             state.register_player(player);
         }
+        let received_before: Vec<_> = (1..=3)
+            .map(|id| state.player(id).unwrap().gold_received)
+            .collect();
         state.player_mut(1).unwrap().tile_conquests.insert(4, 5);
         state.player_mut(2).unwrap().tile_conquests.insert(4, 1);
         state.player_mut(3).unwrap().tile_conquests.insert(4, 1);
@@ -2158,6 +2170,12 @@ mod tests {
         assert_eq!(engine.state.player(3).unwrap().gold, 12.0);
         assert_eq!(engine.state.player(4).unwrap().gold, 0.0);
         assert_eq!(engine.state.player(5).unwrap().gold, 0.0);
+        for (index, id, amount) in [(0, 1, 25.0), (1, 2, 13.0), (2, 3, 12.0)] {
+            assert_eq!(
+                engine.state.player(id).unwrap().gold_received,
+                received_before[index] + amount
+            );
+        }
         assert!(matches!(
             engine.state.events.last(),
             Some(GameEvent::PlayerEliminated {
@@ -2588,7 +2606,7 @@ mod tests {
     }
 
     #[test]
-    fn closest_character_wins_and_humans_heroes_wait_until_nothing_else_is_free() {
+    fn closest_character_is_a_free_bot() {
         let engine = SowEngine::new(geo_test_state(5), WaterComponents::default());
         let bounds = engine.state.geo_bounds.unwrap();
         // Boudica's home (Norfolk) projected onto the test map.
@@ -2596,28 +2614,19 @@ mod tests {
         let tribe = crate::geo_entities::Role::Tribe;
         let mut rng = wyrand::WyRand::new(1);
         let none = std::collections::HashSet::new();
-        let closest = |used: &_, held: &_, rng: &mut _| {
+        let closest = |used: &_, rng: &mut _| {
             engine
-                .closest_free_character(tribe, norfolk, used, held, rng)
+                .closest_free_character(tribe, norfolk, used, rng)
                 .map(|character| character.id.as_str())
         };
-        assert_eq!(closest(&none, &none, &mut rng), Some("boudica"));
-        let held: std::collections::HashSet<&'static str> = ["boudica"].into_iter().collect();
-        assert_ne!(closest(&none, &held, &mut rng), Some("boudica"));
-        let every_other: std::collections::HashSet<&'static str> = crate::geo_entities::bots(tribe)
-            .map(|character| character.id.as_str())
-            .filter(|id| *id != "boudica")
-            .collect();
-        assert_eq!(
-            closest(&every_other, &held, &mut rng),
-            Some("boudica"),
-            "a human's hero is used only when no other character is free"
-        );
+        let nearest = closest(&none, &mut rng).expect("a free tribe");
+        assert!(crate::geo_entities::bots(tribe).any(|bot| bot.id == nearest));
+        assert_ne!(nearest, "boudica", "a playable hero is never a bot");
         let all: std::collections::HashSet<&'static str> = crate::geo_entities::bots(tribe)
             .map(|character| character.id.as_str())
             .collect();
         assert_eq!(
-            closest(&all, &held, &mut rng),
+            closest(&all, &mut rng),
             None,
             "two bots never share a character"
         );
