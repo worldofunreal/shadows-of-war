@@ -27,11 +27,12 @@ pub fn roll(
     rng: &mut impl Rng,
 ) -> MatchmakingPopulation {
     let max_players = roll_human_capacity(game_mode, rng);
-    let neutral_ai = roll_neutral_ai(map.map(|entry| entry.num_land_tiles).unwrap_or(0), rng);
     let (bot_count, nation_count) = if game_mode == "HumansVsNations" {
-        // HvN resolves its opposing nation side when the final roster exists.
-        (neutral_ai, 0)
+        // HvN nations are determined from the final human roster; keep the full
+        // tribe pool as food, independent of map size.
+        (GameConfig::max_tribe_bots(), 0)
     } else {
+        let neutral_ai = roll_neutral_ai(map.map(|entry| entry.num_land_tiles).unwrap_or(0), rng);
         let nation_share = rng.gen_range(NATION_SHARE_MIN..=NATION_SHARE_MAX);
         let nation_count = ((neutral_ai as f64) * nation_share).round() as u32;
         (neutral_ai - nation_count, nation_count)
@@ -158,14 +159,17 @@ mod tests {
     fn hvn_starts_without_extra_nations_and_finalizes_to_human_roster() {
         let mut rng = StdRng::seed_from_u64(13);
         let population = roll(Some(&map(420_244)), "HumansVsNations", &mut rng);
+        assert_eq!(population.bot_count, GameConfig::max_tribe_bots());
         assert_eq!(population.nation_count, 0);
 
         let mut config = GameConfig {
             game_mode: "HumansVsNations".to_string(),
-            nation_count: 128,
+            bot_count: population.bot_count,
+            nation_count: population.nation_count,
             ..Default::default()
         };
         assert!(finalize_for_start(&mut config, 37));
+        assert_eq!(config.bot_count, GameConfig::max_tribe_bots());
         assert_eq!(config.nation_count, 37);
     }
 }

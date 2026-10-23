@@ -99,14 +99,88 @@
         }
 
         #web-loader .loader-bar-wrap {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
+            position: relative;
             width: min(42vw, 480px);
             aspect-ratio: 2064 / 512;
-            bottom: max(7vh, 32px);
+            margin: 0 auto;
             pointer-events: none;
             overflow: visible;
+        }
+
+        #web-loader .loader-footer {
+            position: absolute;
+            left: 50%;
+            bottom: max(7vh, 32px);
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: min(60vw, 560px);
+        }
+
+        #web-loader .loader-ability {
+            box-sizing: border-box;
+            padding: 14px 18px;
+            border: 1px solid rgba(235, 190, 94, .42);
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(6, 8, 12, .94), rgba(6, 8, 12, .78));
+            box-shadow: 0 12px 36px rgba(0, 0, 0, .42), inset 0 1px rgba(255, 255, 255, .06);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            pointer-events: none;
+        }
+
+        #web-loader .loader-ability[hidden] {
+            display: none !important;
+        }
+
+        #web-loader .sow-hero-briefing__civilization {
+            display: block;
+            margin: 0 0 4px;
+            color: #f1bd4b;
+            font: 800 10px/1.2 var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
+            letter-spacing: .12em;
+            text-transform: uppercase;
+        }
+
+        #web-loader .sow-hero-briefing__name {
+            margin: 0;
+            color: #fff;
+            font: 800 20px/1.1 var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
+            text-shadow: 0 2px 8px #000;
+        }
+
+        #web-loader .sow-hero-briefing__ability {
+            gap: 12px;
+            margin: 10px 0 0;
+        }
+
+        #web-loader .sow-hero-briefing__icon-slot,
+        #web-loader .sow-hero-briefing__icon {
+            flex: 0 0 44px;
+            width: 44px;
+            height: 44px;
+        }
+
+        #web-loader .sow-hero-briefing__ability-copy {
+            min-width: 0;
+        }
+
+        #web-loader .sow-hero-briefing__ability-name {
+            margin: 0 0 3px;
+            color: #f1bd4b;
+            font: 800 12px/1.2 var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
+        }
+
+        #web-loader .sow-hero-briefing__description {
+            margin: 0;
+            font-family: var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
+            font-size: 13px;
+            line-height: 1.45;
+            color: #fff;
+            text-shadow: 0 1px 4px #000;
+            letter-spacing: normal;
+            text-transform: none;
         }
 
         #web-loader .loader-bar-wrap .loader-text {
@@ -183,10 +257,17 @@
 
         /* Fallback sizes before JS layout(); JS sets data-layout + inline font-size. */
         @media (max-width: 599px) and (orientation: portrait) {
-            #web-loader .loader-bar-wrap {
-                width: min(76vw, calc(100vw - 64px));
+            #web-loader .loader-footer {
+                width: min(88vw, 480px);
                 bottom: max(6vh, 24px);
             }
+
+            #web-loader .loader-ability { padding: 12px 14px; }
+            #web-loader .sow-hero-briefing__name { font-size: 17px; }
+            #web-loader .sow-hero-briefing__ability { gap: 9px; margin-top: 8px; }
+            #web-loader .sow-hero-briefing__icon-slot,
+            #web-loader .sow-hero-briefing__icon { flex-basis: 38px; width: 38px; height: 38px; }
+            #web-loader .sow-hero-briefing__description { font-size: 12px; }
 
             #web-loader .loader-text {
                 font-size: 12px;
@@ -194,9 +275,34 @@
         }
 
         @media (max-width: 599px) and (orientation: landscape) {
+            #web-loader .loader-footer {
+                width: min(84vw, 420px);
+                bottom: max(5vh, 18px);
+                gap: 8px;
+            }
+
+            #web-loader .loader-ability { padding: 9px 12px; }
+            #web-loader .sow-hero-briefing { gap: 6px; }
+            #web-loader .sow-hero-briefing__name { font-size: 15px; }
+            #web-loader .sow-hero-briefing__ability { gap: 8px; margin-top: 6px; }
+            #web-loader .sow-hero-briefing__icon-slot,
+            #web-loader .sow-hero-briefing__icon { flex-basis: 32px; width: 32px; height: 32px; }
+            #web-loader .sow-hero-briefing__description { font-size: 11px; }
             #web-loader .loader-text {
                 font-size: 10px;
             }
+        }
+
+        @media (orientation: landscape) and (max-height: 560px) and (min-width: 600px) {
+            #web-loader .loader-footer { width: min(70vw, 480px); bottom: max(3vh, 14px); gap: 8px; }
+            #web-loader .loader-ability { padding: 9px 12px; }
+            #web-loader .sow-hero-briefing { gap: 8px; }
+            #web-loader .sow-hero-briefing__name { font-size: 16px; }
+            #web-loader .sow-hero-briefing__ability { gap: 8px; margin-top: 6px; }
+            #web-loader .sow-hero-briefing__icon-slot,
+            #web-loader .sow-hero-briefing__icon { flex-basis: 32px; width: 32px; height: 32px; }
+            #web-loader .sow-hero-briefing__ability-name { font-size: 10px; }
+            #web-loader .sow-hero-briefing__description { font-size: 10px; line-height: 1.3; }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -216,14 +322,18 @@
             <img id="splash-bg" class="splash-bg" alt="" decoding="sync" fetchpriority="high"
                 src="__SOW_SPLASH_DESKTOP_DATA__">
         </picture>
-        <div id="loader-bar-wrap" class="loader-bar-wrap">
-            <img id="loader-bar-empty" class="loader-bar-empty" alt="" decoding="async" fetchpriority="high"
-                src="__ASSETS_UI_BASE__loader_empty.webp?v=__BUILD_TS__">
-            <div id="loader-bar-fill" class="loader-bar-fill">
-                <img id="loader-bar-full" class="loader-bar-full" alt="" decoding="async" fetchpriority="low"
-                    src="__ASSETS_UI_BASE__loader_full.webp?v=__BUILD_TS__">
+        <div id="loader-footer" class="loader-footer">
+            <section id="loader-ability" class="loader-ability" hidden aria-live="polite">
+            </section>
+            <div id="loader-bar-wrap" class="loader-bar-wrap">
+                <img id="loader-bar-empty" class="loader-bar-empty" alt="" decoding="async" fetchpriority="high"
+                    src="__ASSETS_UI_BASE__loader_empty.webp?v=__BUILD_TS__">
+                <div id="loader-bar-fill" class="loader-bar-fill">
+                    <img id="loader-bar-full" class="loader-bar-full" alt="" decoding="async" fetchpriority="low"
+                        src="__ASSETS_UI_BASE__loader_full.webp?v=__BUILD_TS__">
+                </div>
+                <p id="loader-text" class="loader-text" data-i18n="menu.loading">Loading...</p>
             </div>
-            <p id="loader-text" class="loader-text" data-i18n="menu.loading">Loading...</p>
         </div>
     </div>
 

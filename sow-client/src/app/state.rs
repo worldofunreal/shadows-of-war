@@ -547,6 +547,8 @@ pub struct UiState {
     pub detonation_scratch: Vec<(f32, f32, sow_core::game::ProjectileKind)>,
     /// Cached endgame copy for panel fade-out (is_victory, title, subtitle).
     pub endgame_cache: Option<(bool, String, String)>,
+    /// One-time match-stat snapshot shown while confirming a manual exit.
+    pub manual_endgame_stats: Option<[u64; 5]>,
 
     /// Client-side nuke silo cooldown tracking: building id → tick when ready.
     pub silo_cooldowns: std::collections::HashMap<u64, u64>,

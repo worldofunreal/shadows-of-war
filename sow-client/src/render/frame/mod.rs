@@ -344,6 +344,14 @@ impl SowApp {
                         dialog_border = [preview_player_id as f32, preview_time, 0.0, 0.0];
                     }
 
+                    // Traitor border: every player with an active traitor flag, up to four.
+                    let mut betrayal_owners = [0.0f32; 4];
+                    if let Some(snapshot) = snapshot {
+                        for (slot, traitor) in snapshot.players.iter().filter(|p| p.traitor).take(4).enumerate() {
+                            betrayal_owners[slot] = traitor.id as f32;
+                        }
+                    }
+
                     // ── Attack Border Flash ──
                     let (attack_flash_target, attack_flash_t) = {
                         self.ui.border_flash_intensities.clear();
@@ -516,6 +524,7 @@ impl SowApp {
                         } else {
                             [0.0; 4]
                         },
+                        betrayal_owners,
                         effect_vignette: if dev.vfx_screen_vignette { 1.0 } else { 0.0 },
                         preview_effect: preview_effect as f32,
                         preview_phase,

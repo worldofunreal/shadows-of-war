@@ -294,6 +294,11 @@ test("mobile hover is Rust-owned and the HUD only presents its state", () => {
 });
 
 
+test("ring center closes at the root and goes back inside submenus", () => {
+    assert.match(hud, /if \(back\) back\.click\(\);\s*else send\("close_map_context_menu"\);/);
+});
+
+
 test("army allocation starts centered and only formats send/keep while shown", () => {
     const allocationRail = hud.slice(hud.indexOf("'<aside class=\"sow-hud__left-rail\""), hud.indexOf("'<aside class=\"sow-hud__right-rail\""));
     assert.doesNotMatch(allocationRail, /hudIcon\("troops", "sow-hud__action-icon"\)/);

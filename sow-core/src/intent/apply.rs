@@ -172,6 +172,8 @@ impl SowEngine {
         let Some(human) = self.state.player(human_id) else {
             return;
         };
+        // Hero ability: this human's hero can make campaign alliances cheaper.
+        let gold_cost = gold_cost * human.leader.alliance_cost_multiplier();
         if human.player_type != PlayerType::Human || !human.alive || human.gold < gold_cost {
             return;
         }
@@ -188,7 +190,7 @@ impl SowEngine {
                 human.gold -= gold_cost;
             }
             if let Some(target) = self.state.player_mut(target_id) {
-                target.gold += gold_cost;
+                target.credit_gold(gold_cost);
             }
             self.state
                 .events
@@ -694,8 +696,8 @@ impl SowEngine {
                     }
                     if actual_g > 0.0 || actual_t > 0.0 {
                         if let Some(t_player) = self.state.player_mut(target) {
-                            t_player.gold += actual_g;
-                            t_player.troops += actual_t;
+                            t_player.credit_gold(actual_g);
+                            t_player.credit_troops(actual_t);
                         }
                         self.state
                             .events
@@ -806,9 +808,8 @@ impl SowEngine {
                         && let Some(prop_player) = self.state.player_mut(target)
                         && prop_player.alive
                     {
-                        prop_player.gold += actual_g;
-                        prop_player.troops =
-                            (prop_player.troops + actual_t).min(prop_player.max_troops);
+                        prop_player.credit_gold(actual_g);
+                        prop_player.credit_troops_capped(actual_t, prop_player.max_troops);
                     }
                 }
             }
@@ -953,6 +954,10 @@ mod tests {
                 state.register_player(player);
             }
             let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+            let payer_gold_received = engine.state.player(1).unwrap().gold_received;
+            let requester_gold_received = engine.state.player(2).unwrap().gold_received;
+            let payer_troops_received = engine.state.player(1).unwrap().troops_received;
+            let requester_troops_received = engine.state.player(2).unwrap().troops_received;
             engine.apply_stamped_intent(
                 &StampedIntent {
                     player_id: 2,
@@ -987,8 +992,47 @@ mod tests {
             assert_eq!(payer.troops, if paid { 90.0 } else { 100.0 });
             assert_eq!(requester.gold, if paid { 120.0 } else { 100.0 });
             assert_eq!(requester.troops, if paid { 110.0 } else { 100.0 });
+            assert_eq!(payer.gold_received, payer_gold_received);
+            assert_eq!(requester.gold_received, requester_gold_received + if paid { 20.0 } else { 0.0 });
+            assert_eq!(payer.troops_received, payer_troops_received);
+            assert_eq!(requester.troops_received, requester_troops_received + if paid { 10.0 } else { 0.0 });
             assert!(engine.resource_requests_proposed.is_empty());
         }
+    }
+
+    #[test]
+    fn direct_resource_transfers_count_only_the_amount_the_recipient_can_hold() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 4, 4, config.clone());
+        for id in 1..=2 {
+            let mut player = Player::new_human(id, format!("Player {id}"), [1.0; 3], &config);
+            player.gold = 100.0;
+            player.troops = 100.0;
+            player.max_troops = if id == 2 { 105.0 } else { 1_000.0 };
+            player.alliances.push(if id == 1 { 2 } else { 1 });
+            state.register_player(player);
+        }
+        let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+        let gold_before = engine.state.player(2).unwrap().gold_received;
+        let troops_before = engine.state.player(2).unwrap().troops_received;
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::SendResources {
+                    target_player: 2,
+                    gold: 20.0,
+                    troops: 10.0,
+                },
+            },
+            0,
+        );
+
+        let recipient = engine.state.player(2).unwrap();
+        assert_eq!(recipient.gold, 120.0);
+        assert_eq!(recipient.troops, 105.0);
+        assert_eq!(recipient.gold_received, gold_before + 20.0);
+        assert_eq!(recipient.troops_received, troops_before + 5.0);
     }
 
     #[test]

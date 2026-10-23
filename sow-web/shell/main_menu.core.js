@@ -185,6 +185,76 @@
         return "";
     }
 
+    function heroBriefingLeader(leaderOrSlug) {
+        if (leaderOrSlug && typeof leaderOrSlug === "object") return leaderOrSlug;
+        var slug = String(leaderOrSlug || "").trim().toLowerCase();
+        if (slug === "random") return { id: "random", slug: "random" };
+        if (!/^[a-z0-9_]+$/.test(slug)) return null;
+        var leaders = state && Array.isArray(state.leaders) ? state.leaders : [];
+        return leaders.find(function (leader) { return leader && leader.slug === slug; }) || {
+            id: slug,
+            slug: slug,
+            name: slug.split("_").map(function (part) { return part.charAt(0).toUpperCase() + part.slice(1); }).join(" "),
+            civilization_key: "heroes.leader_" + slug + "_civilization",
+            perk_key: "site.leader_" + slug + "_description"
+        };
+    }
+
+    function heroBriefingText(key) {
+        if (!key || typeof SOW_t !== "function") return "";
+        var value = String(SOW_t(key) || "").trim();
+        return value && value !== key && value !== "[" + key + "]" ? value : "";
+    }
+
+    function renderHeroBriefing(leaderOrSlug, surface, headingId) {
+        var leader = heroBriefingLeader(leaderOrSlug);
+        if (!leader) return "";
+        var slug = leader.slug || "";
+        var random = slug === "random" || String(leader.id || "").toLowerCase() === "random";
+        var name = random
+            ? heroBriefingText("heroes.random_leader")
+            : heroBriefingText("heroes.leader_" + slug + "_name") || leader.name || "";
+        var civilization = random ? "" :
+            heroBriefingText(leader.civilization_key || "heroes.leader_" + slug + "_civilization") || leader.civilization || "";
+        var abilityName = random ? "" : heroBriefingText("site.leader_" + slug + "_ability");
+        var description = random
+            ? heroBriefingText("heroes.random_leader_description")
+            : heroBriefingText(leader.perk_key || "site.leader_" + slug + "_description") ||
+                heroBriefingText("site.leader_" + slug + "_description") || heroBriefingText("heroes.enhanced_bonuses");
+        var surfaceName = ["home", "selection", "modal", "loader"].indexOf(surface) !== -1 ? surface : "default";
+        var id = /^[a-z][a-z0-9_-]*$/.test(String(headingId || "")) ? " id='" + headingId + "'" : "";
+        var identity = (civilization ? "<small class='sow-heroes__civilization sow-hero-briefing__civilization'>" + esc(civilization) + "</small>" : "") +
+            (name ? "<h2" + id + " class='sow-hero-briefing__name'>" + esc(name) + "</h2>" : "");
+        var ability = "";
+        if (random) {
+            if (description) ability = "<div class='sow-hero-briefing__random-copy'><p class='sow-hero-briefing__description'>" + esc(description) + "</p></div>";
+        } else if (abilityName || description) {
+            var icon = slug && /^[a-z0-9_]+$/.test(slug)
+                ? "<span class='sow-hero-briefing__icon-slot'><img class='sow-heroes__ability-icon sow-hero-briefing__icon' src='" + esc(asset("gameplay/icons/abilities/" + slug + ".webp")) + "' alt='' decoding='async'></span>"
+                : "";
+            ability = "<div class='sow-heroes__perk-row sow-hero-briefing__ability'>" + icon +
+                "<div class='sow-hero-briefing__ability-copy'>" +
+                (abilityName ? "<h3 class='sow-hero-briefing__ability-name'>" + esc(abilityName) + "</h3>" : "") +
+                (description ? "<p class='sow-heroes__perk sow-hero-briefing__description'>" + esc(description) + "</p>" : "") +
+                "</div></div>";
+        }
+        return "<section class='sow-hero-briefing sow-hero-briefing--" + surfaceName + (random ? " sow-hero-briefing--random" : "") + "' data-hero-briefing-surface='" + surfaceName + "' aria-label='" + esc(name) + "'>" +
+            (identity ? "<div class='sow-hero-briefing__identity'>" + identity + "</div>" : "") + ability +
+            "</section>";
+    }
+
+    window.SOW_renderHeroBriefing = renderHeroBriefing;
+
+    function hideBrokenHeroBriefingIcon(event) {
+        var image = event && event.target;
+        var slot = image && image.parentNode;
+        if (image && image.classList && image.classList.contains("sow-hero-briefing__icon") &&
+            slot && slot.classList && slot.classList.contains("sow-hero-briefing__icon-slot")) {
+            slot.remove();
+        }
+    }
+    document.addEventListener("error", hideBrokenHeroBriefingIcon, true);
+
     function mapInfo(key) {
         var catalog = state && Array.isArray(state.map_catalog) ? state.map_catalog : [];
         var found = catalog.find(function (m) { return m.key === key; });

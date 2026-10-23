@@ -89,7 +89,7 @@ pub fn spawn_or_merge_attack_for_fleet_arrival_pure(
 ) {
     if troops < engine.state.config.attack_cost_neutral || !troops.is_finite() {
         if let Some(p) = engine.state.player_mut(owner_id) {
-            p.troops = (p.troops + troops.max(0.0)).min(p.max_troops);
+            p.credit_troops_capped(troops, p.max_troops);
         }
         return;
     }
@@ -118,7 +118,7 @@ pub fn spawn_or_merge_attack_for_fleet_arrival_pure(
 
     if fresh.is_empty() {
         if let Some(p) = engine.state.player_mut(owner_id) {
-            p.troops = (p.troops + troops).min(p.max_troops);
+            p.credit_troops_capped(troops, p.max_troops);
         }
         return;
     }
@@ -230,6 +230,11 @@ impl SowEngine {
             .collect();
         enemy_hits.sort_by_key(|&i| self.attacks[i].id);
 
+        // Hero combat abilities count in the clash too, not only in tile combat.
+        let my_strength =
+            crate::execution::combat::attack_strength(&self.state, player_id, target_owner);
+        let enemy_strength =
+            crate::execution::combat::attack_strength(&self.state, target_owner, player_id);
         for &e_enemy in &enemy_hits {
             if remaining < self.state.config.attack_cost_neutral {
                 break;
@@ -239,10 +244,10 @@ impl SowEngine {
             if enemy_ex.troops < self.state.config.attack_cost_enemy {
                 continue;
             }
-            let clash = enemy_ex.troops.min(remaining);
-            enemy_ex.troops -= clash;
+            let clash = (enemy_ex.troops * enemy_strength).min(remaining * my_strength);
+            enemy_ex.troops -= clash / enemy_strength;
             enemy_ex.troops = enemy_ex.troops.max(0.0);
-            remaining -= clash;
+            remaining = (remaining - clash / my_strength).max(0.0);
         }
 
         let mut to_remove = Vec::new();
@@ -265,7 +270,7 @@ impl SowEngine {
 
         if remaining < self.state.config.attack_cost_neutral {
             if let Some(p) = self.state.player_mut(player_id) {
-                p.troops = (p.troops + remaining).min(p.max_troops);
+                p.credit_troops_capped(remaining, p.max_troops);
             }
             return;
         }
@@ -291,7 +296,7 @@ impl SowEngine {
 
         if fresh.is_empty() {
             if let Some(p) = self.state.player_mut(player_id) {
-                p.troops = (p.troops + remaining).min(p.max_troops);
+                p.credit_troops_capped(remaining, p.max_troops);
             }
             return;
         }

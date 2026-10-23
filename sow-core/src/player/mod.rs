@@ -168,6 +168,12 @@ pub struct Player {
     pub assists: u32,
     #[serde(default)]
     pub tile_conquests: std::collections::BTreeMap<PlayerId, u32>,
+    #[serde(default)]
+    pub max_tile_count: u32,
+    #[serde(default)]
+    pub gold_received: f64,
+    #[serde(default)]
+    pub troops_received: f64,
 }
 
 fn default_wyrand() -> WyRand {
@@ -217,6 +223,9 @@ impl Player {
             deaths: 0,
             assists: 0,
             tile_conquests: std::collections::BTreeMap::new(),
+            max_tile_count: 0,
+            gold_received: config.starting_gold.max(0.0),
+            troops_received: config.starting_troops.max(0.0),
         }
     }
     pub fn new_bot(
@@ -276,6 +285,9 @@ impl Player {
             deaths: 0,
             assists: 0,
             tile_conquests: std::collections::BTreeMap::new(),
+            max_tile_count: 0,
+            gold_received: starting_gold.max(0.0),
+            troops_received: starting_troops.max(0.0),
         }
     }
     pub fn new_nation(
@@ -327,8 +339,38 @@ impl Player {
             deaths: 0,
             assists: 0,
             tile_conquests: std::collections::BTreeMap::new(),
+            max_tile_count: 0,
+            gold_received: config.starting_gold.max(0.0),
+            troops_received: config.starting_troops.max(0.0),
         }
     }
+
+    #[inline]
+    pub fn credit_gold(&mut self, amount: f64) {
+        self.gold += amount;
+        if amount.is_finite() && amount > 0.0 {
+            self.gold_received += amount;
+        }
+    }
+
+    #[inline]
+    pub fn credit_troops(&mut self, amount: f64) {
+        self.troops += amount;
+        if amount.is_finite() && amount > 0.0 {
+            self.troops_received += amount;
+        }
+    }
+
+    #[inline]
+    pub fn credit_troops_capped(&mut self, amount: f64, max_troops: f64) {
+        let previous = self.troops;
+        self.troops = (self.troops + amount.max(0.0)).min(max_troops);
+        let credited = (self.troops - previous).max(0.0);
+        if credited.is_finite() {
+            self.troops_received += credited;
+        }
+    }
+
     pub fn is_human(&self) -> bool {
         self.player_type == PlayerType::Human
     }
@@ -520,5 +562,31 @@ mod avatar_identity_tests {
             serde_json::to_value(AvatarIdentity::Fallback).unwrap(),
             serde_json::json!({ "kind": "fallback" })
         );
+    }
+}
+
+#[cfg(test)]
+mod match_stats_tests {
+    use super::Player;
+    use crate::game_config::GameConfig;
+
+    #[test]
+    fn received_totals_include_starting_stock_and_survive_spending() {
+        let config = GameConfig {
+            starting_gold: 1_250.0,
+            starting_troops: 2_000.0,
+            ..GameConfig::default()
+        };
+        let mut player = Player::new_human(1, "Player".into(), [1.0; 3], &config);
+        assert_eq!(player.gold_received, 1_250.0);
+        assert_eq!(player.troops_received, 2_000.0);
+
+        player.credit_gold(875.0);
+        player.gold -= 1_500.0;
+        player.credit_troops_capped(1_000.0, 2_500.0);
+        player.troops -= 2_000.0;
+
+        assert_eq!(player.gold_received, 2_125.0);
+        assert_eq!(player.troops_received, 2_500.0);
     }
 }

@@ -1,6 +1,6 @@
-# Héroes: roles y propuesta de los próximos 12
+# Héroes: roles y lista de 36
 
-Estado: propuesta. Nada de código ni del catálogo cambió todavía.
+Estado: los 36 héroes están en el catálogo con sus textos en 15 idiomas y su efecto implementado. La regla de roles está aplicada. Las caras y escenas están en el repositorio; las marcadas como provisionales en la sección 4 hay que revisarlas.
 
 ## 1. Roles: qué confunde
 
@@ -35,17 +35,17 @@ Los nombres cortos de los héroes se guardan como clave del progreso de cada jug
 
 ## 2. Los 12 actuales
 
-Todos cambian la partida: la prueba `every_hero_ability_changes_the_game` (`sow-core/src/execution/hero_ability_tests.rs:182`) pasó en el despliegue. Esa prueba confirma que la habilidad hace algo. No confirma que el balance esté bien.
+Todos cambian la partida: la prueba `every_hero_ability_changes_the_game` (`sow-core/src/execution/hero_ability_tests.rs`) pasó en el despliegue. Esa prueba confirma que la habilidad hace algo. No confirma que el balance esté bien.
 
 | # | Héroe | Origen (rol hoy) | Región | Género | Habilidad | Dónde se aplica | Nota |
 |---|---|---|---|---|---|---|---|
-| 1 | Julius Caesar | héroe | Europa | M | Tropas en combate +10 % | `sow-core/src/execution/combat_tiles.rs:90` | |
-| 2 | Cleopatra | héroe | África | F | Oro de fábricas +50 % | `sow-core/src/execution/income_rates.rs:46` | Igual que Lady Six Sky |
+| 1 | Julius Caesar | héroe | Europa | M | Tropas en combate +10 % | `sow-core/src/execution/combat_tiles.rs` | |
+| 2 | Cleopatra | héroe | África | F | Oro de fábricas +50 % | `sow-core/src/execution/income_rates.rs` | Igual que Lady Six Sky |
 | 3 | Ragnar (Danish Vikings) | tribu | Europa | M | Oro de puertos +50 % | `income_rates.rs:52` | Sale también como IA |
-| 4 | Sun Tzu | héroe | Asia | M | Alcance de búnkeres +50 % | `sow-core/src/engine/mod.rs:718` | |
+| 4 | Sun Tzu | héroe | Asia | M | Alcance de búnkeres +50 % | `sow-core/src/engine/mod.rs` | |
 | 5 | Alexander | héroe | Europa | M | Expansión +15 % | `combat_tiles.rs:123` | Mismo tipo que Napoleon |
-| 6 | Genghis Khan (Borjigin Mongols) | tribu | Asia | M | Oro al eliminar a un jugador +50 % | `sow-core/src/engine/mod.rs:851` | Sale también como IA |
-| 7 | Richard the Lionheart | héroe | Europa | M | Tope de tropas de ciudades +50 % | `sow-core/src/execution/income.rs:66` | |
+| 6 | Genghis Khan (Borjigin Mongols) | tribu | Asia | M | Oro al eliminar a un jugador +50 % | `sow-core/src/engine/mod.rs` | Sale también como IA |
+| 7 | Richard the Lionheart | héroe | Europa | M | Tope de tropas de ciudades +50 % | `sow-core/src/execution/income.rs` | |
 | 8 | Vercingetorix (Arverni) | tribu | Europa | M | Tropas de ciudades +50 % | `income_rates.rs:24` | Sale también como IA |
 | 9 | Boudica (Iceni) | tribu | Europa | F | Oro de granjas +50 % | `income_rates.rs:49` | Sale también como IA. Gratis |
 | 10 | Lady Six Sky | héroe | Américas | F | Oro de fábricas +50 % | `income_rates.rs:46` | Igual que Cleopatra |
@@ -56,86 +56,96 @@ Totales hoy: 9 hombres, 3 mujeres. Europa 8, Asia 2, África 1, Américas 1, Oce
 
 Repetidas: Cleopatra y Lady Six Sky hacen lo mismo. Alexander y Napoleon usan el mismo tipo de efecto. No bloquean nada. Conviene cambiar una de cada par cuando se haga el balance.
 
-## 3. Propuesta de los próximos 12
+## 3. Los 24 héroes: efectos implementados
 
-Género y región pensados para que el total quede en 12 hombres y 12 mujeres, y para cubrir Oceanía y Américas.
+Los 24 nuevos quedaron así. Los números de los efectos nuevos (25 %, 30 % y 50 %) y las bases de ingreso son propuestos y se ajustan en el balance.
 
-| # | Héroe | Región | Género | Habilidad propuesta | Qué falta en código | Ya está en catálogo |
+| # | Héroe | Región | Género | Habilidad | Efecto | Cómo está programado |
 |---|---|---|---|---|---|---|
-| 1 | Rani Durgavati | Asia | F | Granjas dan tropas +50 % | Nada: el camino ya existe y nadie lo usa | No (se quitó al agregar Qin Liangyu) |
-| 2 | Empress Gi | Asia | F | Ciudades dan oro +50 % | 1 línea | No |
-| 3 | Ashoka | Asia | M | Fábricas dan tropas +50 % | 1 línea | No (se quitó al agregar Gajah Mada) |
-| 4 | Amina de Zazzau | África | F | Ciudades más fuertes al ser atacadas (tipo nuevo) | Tipo nuevo | Sí, como nación |
-| 5 | Yaa Asantewaa | África | F | Reclutamiento más barato | Tipo nuevo y **costo de tropas, que hoy no existe** | Sí, como nación |
-| 6 | Makeda | África | F | Caravanas: más oro por territorio (tipo nuevo) | Tipo nuevo | Sí, como nación |
-| 7 | Hannibal | África | M | Alpes: sus tropas ganan fuerza en territorio enemigo (tipo nuevo) | Tipo nuevo | No |
-| 8 | Anacaona | Américas | F | Puertos dan tropas +50 % | 1 línea | Sí, como nación |
-| 9 | Awashonks | Américas | F | Alianzas más baratas (tipo nuevo) | Tipo nuevo. Las alianzas ya existen | No |
-| 10 | Lozen | Américas | F | Refuerzos enemigos tardan más | Tipo nuevo y **refuerzos, que hoy no existen** | Sí, como nación |
-| 11 | Sālote Tupou III | Oceanía | F | Oro por cada alianza activa (tipo nuevo) | Tipo nuevo. "Tratado de paz" no existe; se cambió a alianzas | Sí, como nación |
-| 12 | Hongi Hika | Oceanía | M | Ataques contra ciudades más fuertes (tipo nuevo) | Tipo nuevo | Sí, como nación |
+| 1 | Rani Durgavati | Asia | F | Cosecha gond | Granjas dan 50 % más tropas | Ya existía |
+| 2 | Empress Gi | Asia | F | Tesoro imperial | Ciudades dan 50 % más oro | Base de oro por ciudad solo para Gi (`hero_city_gold_income`) |
+| 3 | Ashoka | Asia | M | Arsenal del Dharma | Fábricas dan 50 % más tropas | Base de tropas por fábrica solo para Ashoka (`hero_factory_troop_income`) |
+| 4 | Amina de Zazzau | África | F | Murallas de Zazzau | Enemigos necesitan 50 % más esfuerzo para tomar tus ciudades | Tipo nuevo `city_defense` |
+| 5 | Yaa Asantewaa | África | F | Unir al pueblo | Ciudades aguantan 50 % más tropas | Ya existía |
+| 6 | Makeda | África | F | Comercio de caravanas | Territorio da 50 % más oro | Tipo nuevo `territory_gold` |
+| 7 | Hannibal | África | M | Cruce de los Alpes | Tropas 25 % más fuertes contra otros jugadores | Tipo nuevo `enemy_troop_strength` |
+| 8 | Anacaona | Américas | F | Puertos de comercio | Puertos dan 50 % más tropas | Base de tropas por puerto solo para Anacaona (`hero_port_troop_income`) |
+| 9 | Simón Bolívar | Américas | M | Pactos del Libertador | Alianzas de campaña cuestan 30 % menos oro (entra en lugar de Awashonks) | Tipo `alliance_cost`, el mismo de Awashonks |
+| 10 | Lozen | Américas | F | Asaltante veloz | Expansión 15 % más rápida | Ya existía |
+| 11 | Sālote Tupou III | Oceanía | F | Pacto del Pacífico | Cada alianza activa da 50 % más oro | Tipo nuevo `alliance_gold`, base `alliance_gold_income` (0,25 por alianza y segundo) solo para ella |
+| 12 | Hongi Hika | Oceanía | M | Rompe-fortalezas | Ataques contra ciudades 50 % más fuertes | Tipo nuevo `city_assault` |
+| 13 | Juana de Arco | Europa | F | Baluarte de la fe | Búnkeres: atacantes pierden 50 % más tropas | Tipo `bunker_defense`, igual que Leonidas |
+| 14 | Catalina la Grande | Europa | F | Patronazgo imperial | Cada alianza activa da 50 % más oro | Tipo `alliance_gold`, igual que Sālote |
+| 15 | Teodora | Europa | F | Justicia imperial | Ataques contra traidores hacen 100 % más daño | Tipo `damage_to_traitors`, igual que Boudica |
+| 16 | Ciro el Grande | Asia | M | Guarniciones persas | Ciudades aguantan 50 % más tropas | Tipo `city_troop_capacity`, igual que Yaa Asantewaa |
+| 17 | Saladino | Asia | M | Rompemuros | Ataques contra ciudades 50 % más fuertes | Tipo `city_assault`, igual que Hongi Hika |
+| 18 | Solimán el Magnífico | Asia | M | Legiones del sultán | Tropas 25 % más fuertes contra otros jugadores | Tipo `enemy_troop_strength`, igual que Hannibal. La propuesta decía −25 %; el efecto correcto es +25 % |
+| 19 | Tomoe Gozen | Asia | F | Carga a caballo | Expansión 15 % más rápida | Tipo `expansion_speed`, igual que Lozen |
+| 20 | Lady Triệu | Asia | F | Fortalezas de montaña | Enemigos necesitan 50 % más esfuerzo para tomar tus ciudades | Tipo `city_defense`, igual que Amina |
+| 21 | Mansa Musa | África | M | Peregrinación dorada | Territorio da 50 % más oro | Tipo `territory_gold`, igual que Makeda |
+| 22 | Shaka | África | M | Impi de hierro | Ejércitos 25 % más fuertes | Tipo `combat_strength`, igual que Caesar (con 25 % en vez de 10 %) |
+| 23 | Nzinga | África | F | Recompensa de la reina | Eliminar a un jugador da 50 % más oro | Tipo `elimination_gold`, igual que Genghis Khan |
+| 24 | Kamehameha I | Oceanía | M | Fortalezas de la isla | Búnkeres defienden 50 % más área | Tipo `bunker_range`, igual que Sun Tzu |
 
-Resultado con los 24: 12 hombres y 12 mujeres. Europa 8, Asia 5, África 5, Américas 4, Oceanía 2.
+Los 12 anteriores (sección 2) siguen igual. Con los 36, la lista tiene 19 hombres y 17 mujeres. Europa 11, Asia 10, África 8, Américas 4, Oceanía 3.
 
-Ajustes frente a la lista anterior:
-- **Hannibal:** "menos bajas en ataque" repetiría el tipo de César. Se cambió.
-- **Sālote:** "tratado de paz" no existe en el juego. Las alianzas sí, así que el oro va por alianza activa.
-- **Yaa Asantewaa y Lozen:** necesitan mecanismos que hoy no existen (costo de tropas, refuerzos). Es más trabajo que un tipo de efecto. Si lo prefieres, se cambian por efectos que el juego ya tiene.
+Cada ingreso base nuevo (`hero_city_gold_income`, `hero_factory_troop_income`, `hero_port_troop_income`, `alliance_gold_income`) solo lo recibe el héroe que lo usa. Los demás jugadores no cambian su economía.
 
-Tipos de efecto nuevos: 8 (Amina, Yaa, Makeda, Hannibal, Awashonks, Lozen, Sālote, Hongi). Cada uno necesita código, enlace y prueba. Los casos de "1 línea" son combinaciones de ingreso que el código todavía no conecta (ciudades → oro, fábricas → tropas, puertos → tropas). Rani Durgavati sí tiene camino ya conectado.
+La prueba `every_hero_ability_changes_the_game` mide cada habilidad en el juego real, incluidos los 6 tipos nuevos.
 
-Cada héroe nuevo: nombre corto único (no se renombra después), región, género, bloque `hero` con habilidad, color de territorio, y arte (sección 4).
+## 4. Arte
 
-## 4. Arte: dónde está
+Cada héroe necesita `assets/art/avatars/heroes/<id>.webp` (cara, 256 px en el juego) y `assets/art/heroes/<id>_desktop.webp` y `<id>_mobile.webp` (escenas). Las caras `_1` a `_4` (expresiones) son opcionales: solo las tienen los 12 héroes de la sección 2. Los demás usan la cara base.
 
-Un héroe jugable necesita estos archivos (ver `assets/art/README.md`, líneas 18 a 29):
-
-- `assets/art/avatars/heroes/<id>.webp`: cara base, 256 px.
-- `assets/art/avatars/heroes/<id>_1.webp` a `_4.webp`: cuatro caras (feliz, calmado, miedo, enojado).
-- `assets/art/heroes/<id>_desktop.webp` y `<id>_mobile.webp`: escena del menú y de carga.
-
-Los 12 actuales tienen los cinco archivos. Ningún héroe nuevo tiene caras en el repositorio.
-
-Estado de los 12 nuevos:
-
-| Héroe | Escena en el repositorio | Caras en el repositorio | Dónde está lo que falta |
+| Héroe | Cara | Escena | Estado |
 |---|---|---|---|
-| Rani Durgavati | Sí: `assets/art/heroes/rani_durgavati_desktop.webp` y `_mobile` | No | Fuente sin procesar: `~/Downloads/nations/rani_durgavati.jpg` |
-| Empress Gi | Sí: `assets/art/heroes/empress_gi_desktop.webp` y `_mobile` | No | `~/Downloads/leaders/empress_gi_desktop.jpg` y `_mobile.jpg` (copias de la escena) |
-| Ashoka | Sí: `assets/art/heroes/ashoka_desktop.webp` y `_mobile` | No | `~/Downloads/leaders/ashoka_heroic_portrait.jpg`, `ashoka_heroic_portrait (1).jpg`, `ashoka_sunset_empire.jpg`; `~/Downloads/nations/ashoka.jpg` |
-| Amina de Zazzau | No | Cara de nación: `assets/art/avatars/nations/amina_de_zazzau.webp` | `~/Downloads/leaders/amina_sunset_portrait.jpg`, `amina_warrior_portrait.jpg`, `amina_zaria_sunset_charge.jpg` |
-| Yaa Asantewaa | No | Cara de nación: `assets/art/avatars/nations/yaa_asantewaa.webp` | `~/Downloads/leaders/yaa_asantewaa_portrait.jpg` (y `(1)`, `(2)`), `yaa_asantewaa_rally.jpg`, `image_20260927_152307-yaa-asantewaa-...jpg` |
-| Makeda | No | Cara de nación: `assets/art/avatars/nations/makeda.webp` | `~/Downloads/leaders/makeda_heroic_portrait.jpg`, `queen_makeda_portrait.jpg`, `queen_makeda_sunset.jpg`, `makeda_amanirenas_triumphant.jpg` |
-| Hannibal | Sí: `assets/art/heroes/hannibal_desktop.webp` y `_mobile` | No | Sin caras en Downloads. Copias de la escena en `~/Downloads/old/hannibal_*.jpg` |
-| Anacaona | No | Cara de nación: `assets/art/avatars/nations/anacaona.webp` | `~/Downloads/leaders/anacaona_heroic_portrait.jpg`, `anacaona_golden_portrait.jpg`, `anacaona_golden_sunset.jpg` |
-| Awashonks | No | No | `~/Downloads/leaders/serene_awashonks_portrait.jpg`; `awashonks_coastal_cliff.jpg` es escena ancha |
-| Lozen | No | Cara de nación: `assets/art/avatars/nations/lozen.webp` | `~/Downloads/leaders/heroic_lozen_portrait.jpg` |
-| Sālote Tupou III | No | Cara de nación: `assets/art/avatars/nations/salote_tupou_iii.webp` | Nada en Downloads |
-| Hongi Hika | No | Cara de nación: `assets/art/avatars/nations/hongi_hika.webp` | `~/Downloads/old/hongi_hika_desktop.jpg` y `_mobile.jpg` (copias viejas) |
+| Rani Durgavati | Real | Real | Lista |
+| Empress Gi | **Provisional**: recorte de su escena | Real | Revisar la cara |
+| Ashoka | Real (`leaders/ashoka_heroic_portrait.jpg`) | Real | Lista |
+| Amina de Zazzau | Real (antes cara de nación) | De Downloads (`leaders/amina_zaria_sunset_charge.jpg` y `amina_warrior_portrait.jpg`) | Revisar la escena |
+| Yaa Asantewaa | Real (antes cara de nación) | **Provisional**: recorte de la cara | Revisar la escena |
+| Makeda | Real (antes cara de nación) | De Downloads (`leaders/queen_makeda_sunset.jpg` y `queen_makeda_portrait.jpg`) | Revisar la escena |
+| Hannibal | **Provisional**: recorte de su escena | Real | Revisar la cara |
+| Anacaona | Real (antes cara de nación) | De Downloads (`leaders/anacaona_golden_sunset.jpg` y `anacaona_heroic_portrait.jpg`) | Revisar la escena |
+| Simón Bolívar | Real (`leaders/simon_bolivar_hero_1.jpg`) | **Provisional**: recortes de su retrato; en la vertical se quitó el letrero de abajo | Revisar la escena |
+| Lozen | Real (antes cara de nación) | **Provisional**: recorte de la cara | Revisar la escena |
+| Sālote Tupou III | Real (antes cara de nación) | **Provisional**: ampliación de la cara; no hay escena | Falta escena real |
+| Hongi Hika | Real (antes cara de nación) | Real (`old/hongi_hika_desktop.jpg` y `_mobile.jpg`) | Lista |
+| Juana de Arco | Real (`old/juan_de_arco_mobile.jpg`) | De Downloads (`old/juan_de_arco_desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
+| Catalina la Grande | Real (`leaders/catherine_imperial_portrait.jpg`) | **Provisional**: recortes de su retrato (`leaders/catherine_great_pixar.jpg` y `catherine_imperial_portrait.jpg`) | Revisar la escena |
+| Teodora | Real (`leaders/theodora_portrait.jpg`) | **Provisional**: recortes de su retrato (`leaders/theodora_hagia_sophia.jpg` y `theodora_portrait.jpg`) | Revisar la escena |
+| Ciro el Grande | Real (`old/Cyrus the Great_mobile.jpg`) | De Downloads (`old/Cyrus the Great _desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
+| Saladino | Real (`old/saladin_mobile.jpg`) | De Downloads (`old/saladin_desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
+| Solimán el Magnífico | **Provisional**: copia del retrato de nación (`avatars/nations/suleiman_el_magnifico.webp`) | **Falta**: no hay escena | Falta arte |
+| Tomoe Gozen | Real (`old/tomoe_gozen_mobile.jpg`) | De Downloads (`old/tomoe_gozen_desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
+| Lady Triệu | Real (`old/lady_trieu_mobile.jpg`) | De Downloads (`old/lady_trieu_desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
+| Mansa Musa | Real (`old/mansa_musa_mobile.jpg`) | De Downloads (`old/mansa_musa_desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
+| Shaka | Real (`old/shaka_zulu_mobile.jpg`) | De Downloads (`old/shaka_zulu_desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
+| Nzinga | Real (`old/nzinga_mbande_mobile.jpg`) | De Downloads (`old/nzinga_mbande_desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
+| Kamehameha I | Real (`old/kamehameha_i_mobile.jpg`) | De Downloads (`old/kamehameha_i_desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
 
-Resumen:
-- Escena lista en el repositorio: 4 (Rani Durgavati, Empress Gi, Ashoka, Hannibal).
-- Caras de héroe listas: 0 de 12.
-- Cara de nación ya existente, que sirve como base de la cara de héroe: 7 (Amina, Yaa, Makeda, Anacaona, Lozen, Sālote, Hongi). Igual faltan las 4 caras.
-- Sin arte en ningún lado: Awashonks.
-- Los 7 que hoy son naciones de IA pasan a héroes: se les agrega el bloque `hero` y salen de la lista de IA.
+Las escenas nuevas vienen de `~/Downloads` sin revisión visual. El dueño las revisa antes de la publicación final.
+
+Las cinco caras que eran de nación (Amina, Makeda, Anacaona, Sālote y Hongi) se movieron a `avatars/heroes/`. La lista de naciones bajó a 213 (`naciones-encargo.txt`).
 
 ## 5. Capacidad del atlas de caras
 
-Cada héroe usa 4 casillas del atlas de caras. El atlas tiene 128 casillas (16 filas).
+Cada héroe usa 4 casillas del atlas. Con 36 héroes son 146 casillas, y las 46 restantes quedan para retratos de bots y campañas.
 
-| Héroes | Filas 16 (128 casillas): casillas libres para IA y campañas | Filas 24 (192 casillas): casillas libres |
-|---|---|---|
-| 12 (hoy) | 78 | 142 |
-| 24 (propuesta) | 30 | 94 |
-
-Con 16 filas, 24 héroes dejan 30 casillas para la IA. Eso es poco para 200 naciones y 400 tribus. Con 24 filas quedan 94. Subir a 24 filas suma unos 16 MB de memoria. Se decide según el celular viejo.
+El atlas pasó de 8 × 16 celdas (128 casillas, 4096 × 2048 px) a 16 × 12 celdas (192 casillas, 4096 × 3072 px). Con 36 héroes quedan 46 casillas libres para bots y campañas. Las 24 filas de 8 columnas habrían dado 6144 px de alto, y muchos celulares viejos no soportan más de 4096 px por lado. El costo es ~17 MB más de memoria.
 
 ## 6. Decisiones
 
-1. ¿Aprobás la regla de roles? Recomendado: sí. Un solo rol de origen (nación o tribu) más el bloque `hero`.
-2. ¿Aprobás la lista de 12, o cambiamos alguno?
-3. ¿Subimos el atlas de caras a 24 filas? Recomendado: sí.
-4. Yaa Asantewaa y Lozen: ¿los dejamos con mecanismos nuevos o los cambiamos por efectos que el juego ya tiene?
+1. Regla de roles: aplicada.
+2. Lista de 12 con Yaa Asantewaa y Lozen con efectos existentes: aplicada. Luego se agregaron los 9 restantes (sección 3).
+3. Atlas: 16 × 12 celdas (no 24 filas × 8 columnas, por el límite de textura de celulares viejos).
+4. Ingresos y costos nuevos: solo para su héroe, con bases en la configuración de juego.
+5. Lista de 13 aprobada: entra Simón Bolívar en lugar de Awashonks, y se suman 12 más. Solimán recibe el efecto que ya usa Hannibal (tropas 25 % más fuertes contra otros jugadores). La propuesta decía −25 %; era un error.
 
-No se implementa nada hasta que apruebes.
+## 7. Pendientes conocidos
+
+- El precio que muestra el diálogo de alianza de campaña sigue siendo el precio base. El descuento de Simón Bolívar se aplica en el servidor al cobrar, así que el jugador paga menos de lo que se muestra. Hay que mostrar el precio con descuento (lo hace el agente de habilidades y efectos).
+- Los porcentajes y bases nuevas son propuestos y los ajusta el agente de habilidades y efectos.
+- Escenas y caras provisionales: sección 4.
+- Solimán no tiene arte: cara provisional y sin escena.
+- Doce de los nuevos ya son personajes de la IA de nación (todos menos Tomoe Gozen). Hoy salen en las dos listas. Pendiente: decidir si salen de la IA de nación.

@@ -7,7 +7,7 @@ Roman praetorian — Roman tutorial | roman_praetorian.jpg
 Roman supply officer — Roman tutorial | roman_supply_depot.jpg
 Tax collector — Roman tutorial | tax_collectors.jpg
 
-TENEMOS (424)
+TENEMOS (420)
 Ahmad Shah Durrani — Abdalis (Durrani) | abdalis.jpg
 Grey Lock (Wawanolet) — Abenaki | abenaki.png
 Keumalahayati — Achaemenids | achaemenids.png
@@ -26,7 +26,6 @@ Little Raven — Arapaho | arapaho.png
 Teuta — Ardiaei (Illyrians) | ardiaei.jpg
 Retógenes — Arevaci (Numantia) | arevaci.png
 Arrakurta — Arrernte | arrernte.png
-Vercingetorix — Arverni | arverni.jpg
 Mañari — Asháninka | ashaninka.jpg
 Bipi — Asmat | asmat.png
 Hokshila Win — Assiniboine | assiniboine.png
@@ -51,7 +50,6 @@ Julio Civil — Batavians | batavians.png
 Belgae — Britannia | belgae.jpg
 Rana Punja — Bhils | bhils.jpg
 Critasiro — Boii | boii.png
-Genghis Khan — Borjigin Mongols | borjigin_mongols.jpg
 Brigantes — Britannia | brigantes.jpg
 Veleda — Bructeri | bructeri.jpg
 Arung Palakka — Bugis of Bone | bugis_of_bone.png
@@ -106,7 +104,6 @@ Wiyaka Wastewin — Dakota (Santee) | dakota.png
 Khoanes — Damara | damara.png
 Damnonii — Britannia | damnonii.jpg
 Kurulu — Dani (Papúa) | dani.png
-Ragnar Lodbrok — Danish Vikings | danish_vikings.png
 Kameloh — Dayak ngaju | dayak_ngaju.jpg
 Deceangli — Britannia | deceangli.jpg
 Demetae — Britannia | demetae.jpg
@@ -160,7 +157,6 @@ Hela Wali — Huli (Papúa) | huli.png
 Atila — Huns | huns.png
 Nei Teaiwa — I-Kiribati | i_kiribati.png
 Rentap — Iban (Dayak) | iban.png
-Boudica — Iceni | iceni.jpg
 Moremi Ajasoro — Ife (Yoruba) | ife.png
 Ahebi Ugbabe — Igbo of Enugu-Ezike | igbo_of_enugu_ezike.png
 Dalunag — Igorots | igorots.jpg

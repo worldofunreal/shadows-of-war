@@ -489,6 +489,7 @@ impl GameState {
             p.sum_x += x as u64;
             p.sum_y += y as u64;
             p.tile_count += 1;
+            p.max_tile_count = p.max_tile_count.max(p.tile_count);
             if old_owner != 0 && old_owner != new_owner {
                 *p.tile_conquests.entry(old_owner).or_insert(0) += 1;
             }
@@ -592,5 +593,31 @@ mod naval_requirement_tests {
         assert!(!UnitType::TradeShip.uses_military_capacity());
         assert!(UnitType::Warship.uses_military_capacity());
         assert!(UnitType::TransportShip.uses_military_capacity());
+    }
+}
+
+#[cfg(test)]
+mod match_summary_stats_tests {
+    use super::GameState;
+    use crate::game_config::GameConfig;
+    use crate::player::Player;
+
+    #[test]
+    fn max_territory_keeps_the_high_water_mark_after_tiles_are_lost() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 5, 3, config.clone());
+        state.map.terrain.fill(crate::map::MapTile::from_byte(0));
+        state.register_player(Player::new_human(1, "One".into(), [1.0; 3], &config));
+        state.register_player(Player::new_human(2, "Two".into(), [0.5; 3], &config));
+
+        state.set_tile_owner(1, 1, 1);
+        state.set_tile_owner(2, 1, 1);
+        state.set_tile_owner(3, 1, 1);
+        assert_eq!(state.player(1).unwrap().max_tile_count, 3);
+
+        state.set_tile_owner(2, 1, 2);
+        assert_eq!(state.player(1).unwrap().tile_count, 2);
+        assert_eq!(state.player(1).unwrap().max_tile_count, 3);
+        assert_eq!(state.player(2).unwrap().max_tile_count, 1);
     }
 }

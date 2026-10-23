@@ -1,6 +1,6 @@
 FALTAN (0)
 
-TENEMOS (220)
+TENEMOS (213)
 Hatshepsut — Ancient Egypt | hatshepsut.webp
 Mansa Musa — Mali Empire | mansa_musa.webp
 Amanirenas — Kingdom of Kush | amanirenas.webp
@@ -15,11 +15,9 @@ Cleopatra Selene II — Ancient Mauretania | cleopatra_selene_ii.webp
 Menelik II — Ethiopia | menelik_ii.webp
 Nzinga of Ndongo and Matamba — Ndongo and Matamba | nzinga_mbande.webp
 Haile Selassie — Ethiopia | haile_selassie.webp
-Amina of Zazzau — Zazzau (modern Nigeria) | amina_de_zazzau.webp
 Samori Ture — Wassoulou Empire | samori_ture.webp
 Idia — Kingdom of Benin | reina_idia.webp
 Osei Kofi Tutu I — Ashanti Empire | osei_tutu.webp
-Yaa Asantewaa — Ashanti Empire | yaa_asantewaa.webp
 Tewodros II — Ethiopia | tewodros_ii.webp
 Ranavalona I — Kingdom of Madagascar | ranavalona_i.webp
 Ahmad al-Mansur — Morocco / Saadi dynasty | ahmad_al_mansur.webp
@@ -41,7 +39,6 @@ Zewditu — Ethiopia | zewditu.webp
 Maqoma — Xhosa people | maqoma.webp
 Taytu Betul — Ethiopia | taytu_betul.webp
 Ewuare — Kingdom of Benin | ewuare_el_grande.webp
-Anacaona — Xaragua / Taíno people | anacaona.webp
 Moctezuma I — Mexica Empire | moctezuma_i.webp
 Mama Ocllo — Inca Empire | mama_ocllo.webp
 Moctezuma II — Mexica Empire | moctezuma_ii.webp
@@ -63,7 +60,6 @@ Nancy Ward — Cherokee Nation | nanyehi_nancy_ward.webp
 Red Cloud — Lakota | red_cloud.webp
 Molly Brant — Mohawk / Haudenosaunee | molly_brant.webp
 Sitting Bull — Hunkpapa Lakota | sitting_bull.webp
-Lozen — Chiricahua Apache | lozen.webp
 Geronimo — Chiricahua Apache | geronimo.webp
 Sarah Winnemucca — Northern Paiute | sarah_winnemucca.webp
 Túpac Amaru II — Andean Rebellion / Peru | tupac_amaru_ii.webp
@@ -188,10 +184,8 @@ Stephen the Great — Moldavia | esteban_el_grande_de_moldavia.webp
 Kaʻahumanu — Kingdom of Hawaii | kaahumanu.webp
 Kamehameha I — Kingdom of Hawaii | kamehameha_i.webp
 Liliʻuokalani — Kingdom of Hawaii | liliuokalani.webp
-Hongi Hika — Māori / Ngāpuhi | hongi_hika.webp
 Pōmare IV — Tahiti | pomare_iv.webp
 Te Rauparaha — Māori / Ngāti Toa | te_rauparaha.webp
-Sālote Tupou III — Tonga | salote_tupou_iii.webp
 Pōtatau Te Wherowhero — Māori / Waikato | potatau_te_wherowhero.webp
 Te Puea Hērangi — Māori / Waikato | te_puea_herangi.webp
 Tāmati Wāka Nene — Māori / Ngāpuhi | tamati_waka_nene.webp
@@ -205,7 +199,6 @@ Semiramis — Assyrian Empire | semiramis.webp
 Shima — Kalingga | shima_kalingga.webp
 Tomyris — Massagetae | tomyris.webp
 Gorgo — Sparta | gorgo.webp
-Makeda — Kingdom of Aksum | makeda.webp
 José Gervasio Artigas — Banda Oriental | artigas.webp
 Bernardo O'Higgins — Chile | bernardo_ohiggins.webp
 Nezahualcóyotl — Texcoco | nezahualcoyotl.webp

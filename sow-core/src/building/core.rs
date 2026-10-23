@@ -1,4 +1,4 @@
-use super::placement::hex_distance;
+use super::placement::{BuildingFootprint, hex_distance};
 use crate::game::BuildingKind;
 use serde::{Deserialize, Serialize};
 use wyrand::WyRand;
@@ -614,6 +614,14 @@ impl BuildingGrid {
     ) -> impl Iterator<Item = BuildingGridEntry> + '_ {
         self.iter_in_range(tile_x, tile_y, range)
             .chain(self.iter_non_city_in_range(tile_x, tile_y, range))
+    }
+
+    /// Whether a city's footprint covers this tile. The grid must be refreshed first.
+    pub fn city_covers_tile(&self, tile_x: u32, tile_y: u32) -> bool {
+        self.iter_in_range(tile_x, tile_y, 2).any(|city| {
+            BuildingFootprint::at(BuildingKind::City, city.x, city.y)
+                .contains(tile_x as i32, tile_y as i32)
+        })
     }
 }
 

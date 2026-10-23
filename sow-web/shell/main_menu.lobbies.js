@@ -171,12 +171,11 @@
     }
 
     function renderHome() {
-        var leader = leaderById(state.selected_leader);
+        var leader = state.prefer_random_leader ? "random" : leaderById(state.selected_leader);
         return "<main class='sow-menu__main' data-screen-panel='home'>" +
             renderCommandPanel() +
             "<section class='sow-menu__battlefield'>" +
-                "<div class='sow-menu__leader-copy'><small>" + esc(leaderCivilization(leader)) + "</small><h2>" + esc(leaderDisplayName(leader)) +
-                    "</h2><p>" + esc(leaderPerk(leader)) + "</p></div>" +
+                "<div class='sow-menu__leader-copy'>" + renderHeroBriefing(leader, "home", "sow-home-selected") + "</div>" +
             "</section>" +
         "</main>";
     }

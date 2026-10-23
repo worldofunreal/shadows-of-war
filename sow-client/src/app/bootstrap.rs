@@ -38,17 +38,12 @@ impl SowApp {
         let asset_config = crate::AssetConfig::resolve();
         crate::store_portals::track_product_event("boot_start");
         let mut app = ClientApp::new();
+        sow_audio::set_master_volume(if app.settings_state.mute_all {
+            0.0
+        } else {
+            app.settings_state.music_volume
+        });
         crate::map_cache::hydrate_asset_maps(&mut app.asset_loader.maps);
-        #[cfg(target_arch = "wasm32")]
-        {
-            if let Some(window) = web_sys::window() {
-                if let Ok(Some(mql)) = window.match_media("(prefers-reduced-motion: reduce)") {
-                    if mql.matches() {
-                        app.settings_state.reduced_motion = true;
-                    }
-                }
-            }
-        }
 
         // ── Network State ───────────────────────────────────────────────────────
         let net_client: Option<SowClient> = None;
@@ -270,6 +265,7 @@ impl SowApp {
                 last_projectile_snapshot_tick: None,
                 detonation_scratch: Vec::new(),
                 endgame_cache: None,
+                manual_endgame_stats: None,
                 silo_cooldowns: std::collections::HashMap::new(),
                 mover_scene: crate::render::world::movers::MoverScene::new(),
                 click_markers: Vec::new(),

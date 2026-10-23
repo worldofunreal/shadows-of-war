@@ -45,6 +45,8 @@ struct Globals {
     alert_color: vec4<f32>,
     // Entity requesting terms in the open tutorial dialog: [player_id, age_secs, 0, 0].
     dialog_border: vec4<f32>,
+    // Active traitors' player ids, up to four: [id, id, id, id] (0 = empty).
+    betrayal_owners: vec4<f32>,
     effect_vignette: f32,
     preview_effect: f32,
     preview_phase: f32,
@@ -247,6 +249,12 @@ fn apply_alliance_celebration(
 // Highlights the entity requesting terms while its dialog is open: a golden
 // outline that flashes on open, breathes, and carries marching light streaks
 // with per-tile glints around the whole territory border.
+// Owners with an active traitor flag: ids in the betrayal_owners slots (0 = empty).
+fn is_traitor_owner(owner_id: u32) -> bool {
+    let traitors = globals.betrayal_owners;
+    return owner_id > 0u && (owner_id == u32(traitors.x) || owner_id == u32(traitors.y) || owner_id == u32(traitors.z) || owner_id == u32(traitors.w));
+}
+
 fn dialog_border_glow_color(world_pos: vec2<f32>, age: f32) -> vec3<f32> {
     let dialog_time = select(globals.time, globals.preview_time, globals.preview_effect == 7.0);
     let intro = 1.0 - smoothstep_safe(0.0, globals.shader_params[__MAP_DIALOG_INTRO_DURATION__].x, age);
@@ -599,10 +607,13 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
                     if globals.shader_params[__MAP_ATTACK_FLASH_ENABLED__].x > 0.5 && globals.attack_flash_t > 0.0 && owner_id == u32(globals.attack_flash_target) {
                         border_albedo = mix(border_albedo, globals.shader_params[__MAP_BORDER_ATTACK_COLOR__].rgb, globals.attack_flash_t * globals.shader_params[__MAP_BORDER_ATTACK_BLEND__].x);
                     }
-                    if globals.tutorial_target_player > 0.0 && owner_id == u32(globals.tutorial_target_player) {
-                        let gold_glow = globals.shader_params[__MAP_BORDER_TUTORIAL_COLOR__].rgb;
+                    // Same pulse as the tutorial gold border; traitors pulse red.
+                    // ponytail: fixed red; move to shader_params if it needs tuning.
+                    let traitor = is_traitor_owner(owner_id);
+                    if traitor || (globals.tutorial_target_player > 0.0 && owner_id == u32(globals.tutorial_target_player)) {
+                        let glow_color = select(globals.shader_params[__MAP_BORDER_TUTORIAL_COLOR__].rgb, vec3<f32>(0.85, 0.12, 0.10), traitor);
                         let pulse = globals.shader_params[__MAP_BORDER_TUTORIAL_BASE__].x + sin(globals.time * globals.shader_params[__MAP_BORDER_TUTORIAL_RATE__].x) * globals.shader_params[__MAP_BORDER_TUTORIAL_AMOUNT__].x;
-                        border_albedo = mix(border_albedo, gold_glow * globals.shader_params[__MAP_BORDER_TUTORIAL_GLOW__].x, pulse);
+                        border_albedo = mix(border_albedo, glow_color * globals.shader_params[__MAP_BORDER_TUTORIAL_GLOW__].x, pulse);
                     }
                 }
 

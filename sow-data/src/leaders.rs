@@ -124,14 +124,15 @@ impl Leader {
         self.hero().ability
     }
 
+    /// `1 + percent/100` when this hero's ability matches, else `None`.
+    fn ability_bonus(self, applies: impl Fn(Ability) -> bool) -> Option<f64> {
+        let ability = self.ability();
+        applies(ability).then(|| 1.0 + f64::from(ability.percent()) / 100.0)
+    }
+
     /// `1 + percent/100` when this hero's ability matches, else `1`.
     fn ability_multiplier(self, applies: impl Fn(Ability) -> bool) -> f64 {
-        let ability = self.ability();
-        if applies(ability) {
-            1.0 + f64::from(ability.percent()) / 100.0
-        } else {
-            1.0
-        }
+        self.ability_bonus(applies).unwrap_or(1.0)
     }
 
     pub fn troop_strength_multiplier(self) -> f64 {
@@ -142,15 +143,26 @@ impl Leader {
         self.ability_multiplier(|a| matches!(a, Ability::ExpansionSpeed { .. }))
     }
 
+    /// `Some(bonus)` when this hero's district ability produces `resource` in `district`.
+    /// Only that hero gets the hero-only base income for the pair.
+    pub fn district_income_hero_bonus(
+        self,
+        district: geo_entities::District,
+        resource: geo_entities::Resource,
+    ) -> Option<f64> {
+        self.ability_bonus(|a| {
+            matches!(a, Ability::DistrictIncome { district: d, resource: r, .. }
+                if d == district && r == resource)
+        })
+    }
+
     pub fn district_income_multiplier(
         self,
         district: geo_entities::District,
         resource: geo_entities::Resource,
     ) -> f64 {
-        self.ability_multiplier(|a| {
-            matches!(a, Ability::DistrictIncome { district: d, resource: r, .. }
-                if d == district && r == resource)
-        })
+        self.district_income_hero_bonus(district, resource)
+            .unwrap_or(1.0)
     }
 
     pub fn city_troop_capacity_multiplier(self) -> f64 {
@@ -167,6 +179,39 @@ impl Leader {
 
     pub fn elimination_gold_multiplier(self) -> f64 {
         self.ability_multiplier(|a| matches!(a, Ability::EliminationGold { .. }))
+    }
+
+    pub fn territory_gold_multiplier(self) -> f64 {
+        self.ability_multiplier(|a| matches!(a, Ability::TerritoryGold { .. }))
+    }
+
+    pub fn enemy_troop_strength_multiplier(self) -> f64 {
+        self.ability_multiplier(|a| matches!(a, Ability::EnemyTroopStrength { .. }))
+    }
+
+    pub fn damage_to_traitors_multiplier(self) -> f64 {
+        self.ability_multiplier(|a| matches!(a, Ability::DamageToTraitors { .. }))
+    }
+
+    pub fn city_defense_multiplier(self) -> f64 {
+        self.ability_multiplier(|a| matches!(a, Ability::CityDefense { .. }))
+    }
+
+    pub fn city_assault_multiplier(self) -> f64 {
+        self.ability_multiplier(|a| matches!(a, Ability::CityAssault { .. }))
+    }
+
+    /// Share of a campaign alliance's gold price this hero pays (`1` unless discounted).
+    pub fn alliance_cost_multiplier(self) -> f64 {
+        match self.ability() {
+            Ability::AllianceCost { percent } => 1.0 - f64::from(percent) / 100.0,
+            _ => 1.0,
+        }
+    }
+
+    /// `Some(bonus)` when every active alliance pays this hero gold.
+    pub fn alliance_gold_hero_bonus(self) -> Option<f64> {
+        self.ability_bonus(|a| matches!(a, Ability::AllianceGold { .. }))
     }
 }
 
