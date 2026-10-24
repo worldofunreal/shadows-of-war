@@ -1899,9 +1899,20 @@ pub(crate) fn prepare_death_avatar(
         text,
         identity_ref,
         campaign_avatar_slots,
-        AvatarExpression::Calm,
+        death_avatar_expression(identity),
     );
     avatar_plan(center, radius, content)
+}
+
+fn death_avatar_expression(identity: &sow_core::player::AvatarIdentity) -> AvatarExpression {
+    match identity {
+        sow_core::player::AvatarIdentity::Portrait {
+            leader: Some(_), ..
+        } => AvatarExpression::Fear,
+        sow_core::player::AvatarIdentity::Portrait { leader: None, .. }
+        | sow_core::player::AvatarIdentity::Wilderness
+        | sow_core::player::AvatarIdentity::Fallback => AvatarExpression::Calm,
+    }
 }
 
 fn resolve_avatar_content(
@@ -2185,6 +2196,25 @@ mod status_badge_tests {
             sow_core::water_components::WaterComponents::default(),
         );
         engine.build_snapshot()
+    }
+
+    #[wasm_bindgen_test]
+    fn death_avatar_uses_fear_only_for_a_hero_identity() {
+        use sow_core::player::AvatarIdentity;
+
+        let hero = AvatarIdentity::Portrait {
+            slug: "boudica".into(),
+            leader: Some(Leader::of("boudica")),
+        };
+        assert_eq!(death_avatar_expression(&hero), AvatarExpression::Fear);
+
+        for slug in ["boudica", "danish_vikings", "amanirenas", "stonea"] {
+            let assigned = AvatarIdentity::Portrait {
+                slug: slug.into(),
+                leader: None,
+            };
+            assert_eq!(death_avatar_expression(&assigned), AvatarExpression::Calm);
+        }
     }
 
     #[wasm_bindgen_test]

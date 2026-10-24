@@ -295,6 +295,15 @@ impl SowApp {
         }
         let drawn = self.ui.nameplates.take_avatar_wants();
         self.ui.app.asset_loader.request_drawn_portraits(&drawn);
+        let now = web_time::Instant::now();
+        for animation in &self.ui.death_nameplates {
+            if let Some(slug) = animation.active_avatar_slug(now) {
+                self.ui
+                    .app
+                    .asset_loader
+                    .request_additional_drawn_portrait(slug);
+            }
+        }
 
         while self.ui.app.asset_loader.avatars_in_flight.len() < MAX_AVATAR_FETCHES_IN_FLIGHT {
             let Some(key) = self

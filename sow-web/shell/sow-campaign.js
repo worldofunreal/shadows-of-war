@@ -4,6 +4,7 @@
 
     const TYPES = ["scene", "choice", "objective", "guide", "end"];
     const TEAMS = Object.freeze(["Red", "Blue"]);
+    const CAMERA_SHOTS = Object.freeze(["reveal", "approach", "threat", "link"]);
     const WAIT_MS = 1100;
     const METRICS = {
         territory: "tiles_gained", kills: "kills", attack: "attacks", troops: "troops",
@@ -297,8 +298,10 @@
                 (Array.isArray(step.trigger.targets) ? step.trigger.targets : []).forEach(add);
             }
             if (object(step.campaign_attack_on_enter)) add(step.campaign_attack_on_enter.faction_id);
+            if (object(step.campaign_halt_on_enter)) add(step.campaign_halt_on_enter.faction_id);
             if (object(step.campaign_assault_on_enter) && step.campaign_assault_on_enter.target !== "player_and_allies") add(step.campaign_assault_on_enter.target);
             if (object(step.marker)) add(step.marker.target);
+            if (object(step.camera)) { add(step.camera.from); add(step.camera.to); }
         });
         (Array.isArray(definition.reactions) ? definition.reactions : []).forEach(reaction => {
             if (!object(reaction) || !object(reaction.when)) return;
@@ -369,6 +372,11 @@
             if (object(step.campaign_attack_on_enter) && removed.has(step.campaign_attack_on_enter.faction_id)) {
                 delete step.campaign_attack_on_enter;
             }
+            if (object(step.campaign_halt_on_enter) && removed.has(step.campaign_halt_on_enter.faction_id)) {
+                delete step.campaign_halt_on_enter;
+            }
+            if (object(step.camera) && removed.has(step.camera.to)) delete step.camera;
+            if (object(step.camera) && removed.has(step.camera.from)) delete step.camera.from;
         });
 
         if (Array.isArray(result.reactions)) {
@@ -499,7 +507,7 @@
                     issue(null, "roster", "Faction IDs and names must be valid, unique and nonempty.");
                     return;
                 }
-                knownFields(faction, ["id", "name", "x", "y", "starting_troops", "relation", "team", "can_request_alliance", "can_attack_player", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "gold_loot_bonus", "gold_loot_override", "alliance_group", "assault_force"], null, "roster.factions");
+                knownFields(faction, ["id", "name", "x", "y", "starting_troops", "relation", "team", "can_request_alliance", "can_attack_player", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "gold_loot_bonus", "gold_loot_override", "alliance_group", "assault_force", "hold_structures_until_contact", "city_requires_gold"], null, "roster.factions");
                 factions.add(faction.id); factionNames.add(faction.name);
                 rosterFactions.add(faction.id);
                 if (!Number.isInteger(faction.starting_troops) || faction.starting_troops < 0 || faction.starting_troops > 1000000 || typeof faction.civ !== "string" || !faction.civ || typeof faction.leader !== "string" || !faction.leader || ![faction.x, faction.y].every(n => Number.isInteger(n) && n >= 0)) issue(null, "roster", "Invalid starting troops, civilization, leader or spawn: " + faction.name);
@@ -510,6 +518,8 @@
                 if (faction.can_attack_player != null && typeof faction.can_attack_player !== "boolean") issue(null, "roster.factions.can_attack_player", "Choose whether this enemy can initiate attacks against the player.");
                 if (String(faction.civ).replace(/[^a-z0-9]/gi, "").toLowerCase() === "romanempire" && faction.relation === "neutral") issue(null, "roster.factions.relation", "Roman Empire factions must be enemies or allies, never neutral.");
                 if (faction.assault_force != null && typeof faction.assault_force !== "boolean") issue(null, "roster.factions.assault_force", "Choose whether this faction can join a configured campaign assault.");
+                if (faction.hold_structures_until_contact != null && typeof faction.hold_structures_until_contact !== "boolean") issue(null, "roster.factions.hold_structures_until_contact", "Choose whether this faction waits for your decision before building.");
+                if (faction.city_requires_gold != null && typeof faction.city_requires_gold !== "boolean") issue(null, "roster.factions.city_requires_gold", "Choose whether this faction pays for its first city.");
                 if (faction.color != null && (typeof faction.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(faction.color))) issue(null, "roster.factions.color", "Use a six-digit hex color for " + faction.name + ".");
                 if (faction.support_interval_seconds != null && (!Number.isInteger(faction.support_interval_seconds) || faction.support_interval_seconds < 5 || faction.support_interval_seconds > 600)) issue(null, "roster.factions.support_interval_seconds", "Support intervals must be 5–600 seconds.");
                 if (faction.gold_loot_bonus != null && (!Number.isInteger(faction.gold_loot_bonus) || faction.gold_loot_bonus < 0 || faction.gold_loot_bonus > 1_000_000)) issue(null, "roster.factions.gold_loot_bonus", "Bonus gold loot must be an integer from 0 to 1,000,000.");
@@ -601,15 +611,18 @@
             if (!object(when) || ["choice", "fact"].filter(key => own(when, key)).length !== 1) return issue(step, "routes", "Choose one condition: player decision or game fact.");
             knownFields(when, own(when, "choice") ? ["choice", "equals"] : ["fact", "gte"], step, "routes.when");
             if (own(when, "choice")) {
+                // A condition may name a player decision or a contact response (its id) and the answer picked there.
                 const choice = byId.get(when.choice);
-                if (!choice || choice.type !== "choice" || !Array.isArray(choice.choices) || !choice.choices.some(option => option.id === when.equals)) issue(step, "routes", "Condition refers to an unknown decision or answer.");
+                const response = (definition.reactions || []).find(reaction => reaction && reaction.id === when.choice);
+                const answers = choice && choice.type === "choice" ? choice.choices : response && response.choices;
+                if (!Array.isArray(answers) || !answers.some(option => option && option.id === when.equals)) issue(step, "routes", "Condition refers to an unknown decision or answer.");
             } else if (!Object.values(METRICS).concat(["tiles", "contacts", "defeated", "touch_controls"]).includes(when.fact) || !Number.isFinite(when.gte)) issue(step, "routes", "Invalid game fact condition.");
         }
         const stepFields = {
-            scene: ["id", "type", "title_key", "show_title", "body_key", "speaker", "portrait_expression", "continue_key", "emote", "emote_pinned", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
+            scene: ["id", "type", "title_key", "show_title", "body_key", "speaker", "portrait_expression", "continue_key", "emote", "emote_pinned", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_halt_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks", "camera"],
             choice: ["id", "type", "title_key", "show_title", "body_key", "speaker", "emote", "emote_pinned", "marker", "choices", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
-            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "emote", "emote_pinned", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
-            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "emote", "emote_pinned", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
+            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "emote", "emote_pinned", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "camera", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
+            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "emote", "emote_pinned", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "camera", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
             end: ["id", "type", "title_key", "show_title", "body_key", "speaker", "presentation", "attack_ratio_on_enter", "pause_game", "unlocks"]
         };
         steps.filter(object).forEach(step => {
@@ -656,6 +669,24 @@
                 const faction = object(action) && roster && Array.isArray(roster.factions) && roster.factions.find(entry => entry.id === action.faction_id);
                 if (faction && faction.relation !== "enemy") issue(step, "campaign_attack_on_enter.faction_id", "Attack behavior can only change for an enemy faction.");
                 if (!allowMissingFactionReferences && roster && !rosterFactions.has(action && action.faction_id)) issue(step, "campaign_attack_on_enter.faction_id", "Choose an existing campaign faction.");
+            }
+            if (own(step, "campaign_halt_on_enter")) {
+                const action = step.campaign_halt_on_enter;
+                knownFields(action, ["faction_id"], step, "campaign_halt_on_enter");
+                if (!object(action) || !id(action.faction_id)) issue(step, "campaign_halt_on_enter", "Choose the campaign faction to halt.");
+                if (!allowMissingFactionReferences && roster && !rosterFactions.has(action && action.faction_id)) issue(step, "campaign_halt_on_enter.faction_id", "Choose an existing campaign faction.");
+            }
+            if (own(step, "camera")) {
+                const camera = step.camera;
+                knownFields(camera, ["shot", "from", "to", "seconds", "machinima"], step, "camera");
+                if (!object(camera) || !CAMERA_SHOTS.includes(camera.shot)) issue(step, "camera.shot", "Choose a reveal, threat or link shot.");
+                if (object(camera) && own(camera, "machinima") && typeof camera.machinima !== "boolean") issue(step, "camera.machinima", "Machinima must be true or false.");
+                ["from", "to"].forEach(field => {
+                    if (object(camera) && (field === "to" || own(camera, field)) && (typeof camera[field] !== "string" || (roster && !factions.has(camera[field]) && !allowMissingFactionReferences))) issue(step, "camera." + field, "Choose the player or an existing campaign faction to film.");
+                });
+                if (object(camera) && own(camera, "seconds") && (!Number.isFinite(camera.seconds) || camera.seconds < 1 || camera.seconds > 5)) issue(step, "camera.seconds", "Shot length must be 1–5 seconds.");
+                // Camera lessons are the player's to perform: a scripted move would do the gesture for them.
+                if (step.camera_only === true) issue(step, "camera", "Camera lessons cannot run a scripted shot.");
             }
             if (own(step, "pause_game") && typeof step.pause_game !== "boolean") issue(step, "pause_game", "Pause game must be true or false.");
             if (own(step, "camera_only") && (typeof step.camera_only !== "boolean" || (step.camera_only && step.pause_game !== true))) issue(step, "camera_only", "Camera-only input requires a paused objective.");
@@ -770,7 +801,8 @@
                 const trigger = step.trigger;
                 if (!object(trigger) || !Object.keys(METRICS).concat(["contact", "defeated", "eliminated", "ui", "building_selected"]).includes(trigger.type)) issue(step, "trigger", "Choose a supported objective.");
                 else {
-                    knownFields(trigger, ["type", "scope", "value", "comparison", "target", "targets", "action", "outcome", "unit", "recipient", "resources", "kind", "distance"], step, "trigger");
+                    knownFields(trigger, ["type", "scope", "value", "comparison", "target", "targets", "action", "outcome", "unit", "recipient", "resources", "kind", "distance", "faction"], step, "trigger");
+                    if (own(trigger, "faction") && trigger.type !== "structure_level") issue(step, "trigger.faction", "Only building triggers can watch a campaign faction.");
                     if (!["step", "episode", "total"].includes(trigger.scope)) issue(step, "trigger.scope", "Choose when the objective starts counting.");
                     if (own(trigger, "comparison") && (trigger.type !== "territory" || trigger.scope !== "total" || trigger.comparison !== "lte")) issue(step, "trigger.comparison", "Only total territory objectives can use an at-most comparison.");
                     if (trigger.targets != null && !["contact", "defeated"].includes(trigger.type)) issue(step, "trigger.targets", "Only contact and defeat objectives can list multiple factions.");
@@ -806,6 +838,7 @@
                     } else if (trigger.type === "structure_level") {
                         if (!["City", "Farm", "Factory", "Tower", "Port"].includes(trigger.kind)) issue(step, "trigger.kind", "Choose a supported building type.");
                         else if (!Number.isInteger(trigger.value) || trigger.value < 1 || trigger.value > STRUCTURE_LEVEL_LIMITS[trigger.kind]) issue(step, "trigger.value", "Choose a level that this building can reach.");
+                        if (own(trigger, "faction") && (typeof trigger.faction !== "string" || (roster && !rosterFactions.has(trigger.faction) && !allowMissingFactionReferences))) issue(step, "trigger.faction", "Choose an existing campaign faction.");
                     } else {
                         if (!Number.isFinite(trigger.value) || trigger.value <= 0) issue(step, "trigger.value", "Objective value must be greater than zero.");
                         if (trigger.type === "fleet" && trigger.unit != null && !["TransportShip", "TradeShip", "Warship"].includes(trigger.unit)) issue(step, "trigger.unit", "Choose a ship type supported by the game.");
@@ -854,7 +887,8 @@
         const reactionIds = new Set(), reactionEvents = new Set();
         reactions.forEach(reaction => {
             if (!object(reaction)) return issue(null, "reactions", "Invalid story response.");
-            knownFields(reaction, ["id", "after", "when", "speaker", "speaker_role_key", "title_key", "body_key", "outcome", "gold_cost", "choices"], null, "reactions");
+            knownFields(reaction, ["id", "after", "when", "speaker", "speaker_role_key", "title_key", "show_title", "body_key", "outcome", "gold_cost", "choices"], null, "reactions");
+            if (own(reaction, "show_title") && (typeof reaction.show_title !== "boolean" || !reaction.title_key)) issue(null, "reactions.show_title", "Set show_title to true only beside a title_key.");
             if (!id(reaction.id) || byId.has(reaction.id) || reactionIds.has(reaction.id)) issue(null, "reactions.id", "Response IDs must be unique and distinct from story steps.");
             reactionIds.add(reaction.id);
             knownFields(reaction.when, ["type", "target", "targets", "relation"], null, "reactions.when");
@@ -1209,8 +1243,9 @@
                 current = Number(currentCounts[resources] || 0) - Number(baselineCounts[resources] || 0);
             } else if (trigger.type === "structure_level") {
                 const kind = String(trigger.kind || "").toLowerCase();
-                const currentLevels = facts.structure_levels || {};
-                const baselineLevels = reference.structure_levels || {};
+                // A faction-scoped trigger counts that campaign faction's buildings instead of the player's.
+                const currentLevels = trigger.faction ? (facts.faction_structure_levels || {})[trigger.faction] || {} : facts.structure_levels || {};
+                const baselineLevels = trigger.faction ? (reference.faction_structure_levels || {})[trigger.faction] || {} : reference.structure_levels || {};
                 current = Number(currentLevels[kind] || 0) - Number(baselineLevels[kind] || 0);
                 target = Number(trigger.value || 1);
             } else {
@@ -1289,7 +1324,7 @@
                     : null;
                 const response = {
                     id: "reaction-" + activeReaction.instanceId, type: hasChoices ? "choice" : "scene", speaker: reaction.speaker || factionSpeaker,
-                    speaker_role_key: reaction.speaker_role_key, title_key: reaction.title_key, body_key: reaction.body_key, presentation: "dialogue"
+                    speaker_role_key: reaction.speaker_role_key, title_key: reaction.title_key, show_title: reaction.show_title, body_key: reaction.body_key, presentation: "dialogue"
                 };
                 return { definition, step: response, line: response, progress: progress(), paused: true, paused_action: null, done: false, choices: reaction.choices || [], state, unlocks: copy(state.unlocks), reaction: reaction.id, reactionInstance: activeReaction.instanceId, reactionTarget: activeReaction.target, reactionData: reaction };
             }
@@ -1310,6 +1345,7 @@
                     const answer = reaction.choices.find(option => option.id === choiceId);
                     if (!answer) return false;
                     state.reactionChoices[activeReaction.instanceId] = answer.id;
+                    state.choices[reaction.id] = answer.id;
                 }
                 if (!state.reactionsShown.includes(activeReaction.instanceId)) state.reactionsShown.push(activeReaction.instanceId);
                 if (["contact", "first_contact"].includes(reaction.when.type) && !state.contactsResolved.includes(activeReaction.target)) state.contactsResolved.push(activeReaction.target);

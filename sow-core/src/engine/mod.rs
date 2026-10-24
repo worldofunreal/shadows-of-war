@@ -408,8 +408,14 @@ pub struct SowEngine {
     pub campaign_assault: Option<CampaignAssaultState>,
     pub campaign_can_request_alliance: std::collections::HashMap<PlayerId, bool>,
     pub campaign_contact_resolved: std::collections::HashSet<PlayerId>,
+    /// Campaign factions that build nothing until their contact response is decided.
+    pub campaign_structure_hold_ids: std::collections::HashSet<PlayerId>,
+    /// Campaign factions that must pay for their first city instead of receiving it free.
+    pub campaign_city_requires_gold_ids: std::collections::HashSet<PlayerId>,
     /// Next campaign-support send tick for each eligible ally.
     pub campaign_support_next_tick: std::collections::HashMap<PlayerId, u64>,
+    /// Campaign factions that stop all AI actions and support for the rest of the match.
+    pub campaign_halted_ids: std::collections::HashSet<PlayerId>,
     /// Player id -> (first debt tick, rebellion already started this debt episode).
     pub(crate) debt_episodes: std::collections::HashMap<PlayerId, (u64, bool)>,
     pub port_queues:
@@ -512,7 +518,10 @@ impl SowEngine {
             campaign_assault: None,
             campaign_can_request_alliance: std::collections::HashMap::new(),
             campaign_contact_resolved: std::collections::HashSet::new(),
+            campaign_structure_hold_ids: std::collections::HashSet::new(),
+            campaign_city_requires_gold_ids: std::collections::HashSet::new(),
             campaign_support_next_tick: std::collections::HashMap::new(),
+            campaign_halted_ids: std::collections::HashSet::new(),
             debt_episodes: std::collections::HashMap::new(),
             port_queues: std::collections::HashMap::new(),
             projectiles: Vec::new(),
@@ -532,6 +541,13 @@ impl SowEngine {
             #[cfg(test)]
             test_last_ai_intents: Vec::new(),
         }
+    }
+
+    /// True while a held campaign faction still waits for the player's contact decision.
+    #[inline]
+    pub fn campaign_structures_held(&self, player_id: PlayerId) -> bool {
+        self.campaign_structure_hold_ids.contains(&player_id)
+            && !self.campaign_contact_resolved.contains(&player_id)
     }
 
     #[inline]
@@ -583,6 +599,20 @@ impl SowEngine {
         }
         self.campaign_can_attack_player
             .insert(player_id, can_attack_player);
+        true
+    }
+
+    /// Halt one campaign faction for the rest of the match: no AI actions, no support.
+    pub fn halt_campaign_faction(&mut self, faction_id: &str) -> bool {
+        let Some((&player_id, _)) = self
+            .campaign_faction_ids
+            .iter()
+            .find(|(_, id)| id.as_str() == faction_id)
+        else {
+            return false;
+        };
+        self.campaign_halted_ids.insert(player_id);
+        self.campaign_support_next_tick.remove(&player_id);
         true
     }
 
@@ -1904,6 +1934,8 @@ mod tests {
                 campaign_can_request_alliance: Some(faction.can_request_alliance),
                 campaign_can_attack_player: faction.can_attack_player,
                 campaign_assault_force: faction.assault_force,
+                campaign_hold_structures_until_contact: false,
+                campaign_city_requires_gold: false,
             })
             .collect();
         assert_eq!(config.scripted_spawns.len(), selected.len());
@@ -1960,6 +1992,11 @@ mod tests {
                 .contains(&1)
         );
 
+        assert!(!engine.halt_campaign_faction("missing_faction"));
+        engine.campaign_support_next_tick.insert(trinovantes, 100);
+        assert!(engine.halt_campaign_faction("trinovantes"));
+        assert!(engine.campaign_halted_ids.contains(&trinovantes));
+        assert!(!engine.campaign_support_next_tick.contains_key(&trinovantes));
         assert_eq!(
             engine.campaign_assault_force_ids,
             roman_forces.iter().copied().collect()

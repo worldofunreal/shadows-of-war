@@ -58,13 +58,13 @@ function renderSettings() {
                 "<div class='sow-menu__settings-body'>" +
                     accountControl +
                     "<div class='sow-menu__settings-controls'>" +
-                        "<label class='sow-menu__form-field'><div class='sow-menu__slider-label'><span>" + esc(SOW_t("menu.music_volume")) + "</span><b data-val-for='music_vol'>" + volPct + "%</b></div><input class='sow-menu__field' type='range' name='music_volume' min='0' max='1' step='0.05' value='" + esc(vol) + "' data-setting='music_volume'></label>" +
-                        "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.motion_animation")) + "</span>" +
-                            SOW_renderDropdown({ key: "settings-motion", name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [{ value: "full", label: SOW_t("menu.full") }, { value: "reduced", label: SOW_t("menu.reduced_motion") }] }) +
-                        "</label>" +
-                        "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.language")) + "</span>" +
-                            SOW_renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: jestLocaleOptions() }) +
-                        "</label>" +
+                        "<label class='sow-hud__setting-row sow-hud__setting-row--slider'><div class='sow-menu__slider-label'><span>" + esc(SOW_t("menu.music_volume")) + "</span><b data-val-for='music_vol'>" + volPct + "%</b></div><input type='range' name='music_volume' min='0' max='1' step='0.05' value='" + esc(vol) + "' data-setting='music_volume'></label>" +
+                        "<div class='sow-hud__setting-row sow-menu__settings-dropdown-row'><span>" + esc(SOW_t("menu.motion_animation")) + "</span>" +
+                            SOW_renderDropdown({ key: "settings-motion", className: "sow-menu__settings-dropdown", label: SOW_t("menu.motion_animation"), name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [{ value: "full", label: SOW_t("menu.full") }, { value: "reduced", label: SOW_t("menu.reduced_motion") }] }) +
+                        "</div>" +
+                        "<div class='sow-hud__setting-row sow-menu__settings-dropdown-row'><span>" + esc(SOW_t("menu.language")) + "</span>" +
+                            SOW_renderDropdown({ key: "settings-language", className: "sow-menu__settings-dropdown", label: SOW_t("menu.language"), name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: jestLocaleOptions() }) +
+                        "</div>" +
                     "</div>" +
                 "</div>" +
             "</section>" +

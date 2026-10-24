@@ -541,32 +541,32 @@
                         "<section class='sow-menu__settings-section'><h3>" + esc(SOW_t("menu.account")) + "</h3>" + accountControl +
                         (signOutControl ? "<div class='sow-menu__settings-actions'>" + signOutControl + "</div>" : "") + "</section>" +
                         "<section class='sow-menu__settings-section'><h3>" + esc(SOW_t("menu.settings_preferences")) + "</h3><div class='sow-menu__settings-controls'>" +
-                            "<label class='sow-menu__form-field'>" +
+                            "<label class='sow-hud__setting-row sow-hud__setting-row--slider'>" +
                                 "<div class='sow-menu__slider-label'><span>" + esc(SOW_t("menu.music_volume")) + "</span><b data-val-for='music_vol'>" + volPct + "%</b></div>" +
-                                "<input class='sow-menu__field' type='range' name='music_volume' min='0' max='1' step='0.05' value='" + esc(vol) + "' data-setting='music_volume'>" +
+                                "<input type='range' name='music_volume' min='0' max='1' step='0.05' value='" + esc(vol) + "' data-setting='music_volume'>" +
                             "</label>" +
-                            "<label class='sow-menu__form-field'>" +
+                            "<div class='sow-hud__setting-row sow-menu__settings-dropdown-row'>" +
                                 "<span>" + esc(SOW_t("menu.motion_animation")) + "</span>" +
-                                SOW_renderDropdown({ key: "settings-motion", name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [
+                                SOW_renderDropdown({ key: "settings-motion", className: "sow-menu__settings-dropdown", label: SOW_t("menu.motion_animation"), name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [
                                     { value: "full", label: SOW_t("menu.full") },
                                     { value: "reduced", label: SOW_t("menu.reduced_motion") }
                                 ] }) +
-                            "</label>" +
-                            "<label class='sow-menu__form-field'>" +
+                            "</div>" +
+                            "<label class='sow-hud__setting-row'>" +
                                 "<span>" + esc(SOW_t("menu.free_zoom_out")) + "</span>" +
-                                "<input class='sow-menu__field' type='checkbox' name='free_zoom_out' data-setting='free_zoom_out'" + (settings.free_zoom_out ? " checked" : "") + ">" +
+                                "<input class='sow-hud__switch' type='checkbox' role='switch' name='free_zoom_out' data-setting='free_zoom_out'" + (settings.free_zoom_out ? " checked" : "") + ">" +
                             "</label>" +
-                            "<label class='sow-menu__form-field'>" +
+                            "<label class='sow-hud__setting-row'>" +
                                 "<span>" + esc(SOW_t("menu.show_fps_ping")) + "</span>" +
-                                "<input class='sow-menu__field' type='checkbox' name='show_fps_ping' data-setting='show_fps_ping'" + (settings.show_fps_ping === true ? " checked" : "") + ">" +
+                                "<input class='sow-hud__switch' type='checkbox' role='switch' name='show_fps_ping' data-setting='show_fps_ping'" + (settings.show_fps_ping === true ? " checked" : "") + ">" +
                             "</label>" +
-                            (settings.show_dev_tools_available ? "<label class='sow-menu__form-field'>" +
+                            (settings.show_dev_tools_available ? "<label class='sow-hud__setting-row'>" +
                                 "<span>" + esc(SOW_t("menu.show_dev_tools")) + "</span>" +
-                                "<input class='sow-menu__field' type='checkbox' name='show_dev_tools' data-setting='show_dev_tools'" + (settings.show_dev_tools ? " checked" : "") + ">" +
+                                "<input class='sow-hud__switch' type='checkbox' role='switch' name='show_dev_tools' data-setting='show_dev_tools'" + (settings.show_dev_tools ? " checked" : "") + ">" +
                             "</label>" : "") +
-                            "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.language")) + "</span>" +
-                                SOW_renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
-                            "</label>" +
+                            "<div class='sow-hud__setting-row sow-menu__settings-dropdown-row'><span>" + esc(SOW_t("menu.language")) + "</span>" +
+                                SOW_renderDropdown({ key: "settings-language", className: "sow-menu__settings-dropdown", label: SOW_t("menu.language"), name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
+                            "</div>" +
                         "</div></section>" +
                         "<section class='sow-menu__settings-section'><h3>" + esc(SOW_t("menu.game_links")) + "</h3><nav class='sow-menu__settings-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'>" + renderSettingsLinks() + "</nav></section>" +
                     "</div>" +

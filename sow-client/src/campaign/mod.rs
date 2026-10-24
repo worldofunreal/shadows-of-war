@@ -133,6 +133,10 @@ pub struct Faction {
     pub alliance_group: Option<String>,
     pub can_attack_player: Option<bool>,
     pub assault_force: bool,
+    /// Builds nothing until the player's contact response is decided.
+    pub hold_structures_until_contact: bool,
+    /// Pays for its first city from its own gold instead of receiving one free.
+    pub city_requires_gold: bool,
 }
 
 // Rosters are authored only as JSON (assets/campaign/*.json) and parsed through this module.
@@ -206,6 +210,8 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
             campaign_can_request_alliance: Some(f.can_request_alliance),
             campaign_can_attack_player: f.can_attack_player,
             campaign_assault_force: f.assault_force,
+            campaign_hold_structures_until_contact: f.hold_structures_until_contact,
+            campaign_city_requires_gold: f.city_requires_gold,
         })
         .collect()
 }
@@ -246,6 +252,10 @@ struct RosterEntry {
     can_attack_player: Option<bool>,
     #[serde(default)]
     assault_force: bool,
+    #[serde(default)]
+    hold_structures_until_contact: bool,
+    #[serde(default)]
+    city_requires_gold: bool,
 }
 
 #[derive(serde::Deserialize)]
@@ -259,7 +269,7 @@ struct RosterFile {
 }
 
 /// Narrowest tutorial opening, in CSS pixels per tile. Smaller tiles push nameplates into LOD dots.
-const TUTORIAL_MIN_TILE_CSS: f32 = 48.0;
+pub(crate) const TUTORIAL_MIN_TILE_CSS: f32 = 48.0;
 
 pub(crate) fn tutorial_camera_frame(
     campaign: CampaignId,
@@ -275,21 +285,35 @@ pub(crate) fn tutorial_camera_frame(
         .scripted_spawns
         .iter()
         .find(|spawn| spawn.campaign_faction_id.as_deref() == Some("roman_outpost"))?;
-    let dx = player_x.abs_diff(target.x) as f32;
-    let dy = player_y.abs_diff(target.y) as f32;
-    let center = (
-        (player_x as f32 + target.x as f32 + 1.0) * 0.5,
-        (player_y as f32 + target.y as f32 + 1.0) * 0.5,
-    );
-    // Fit both tiles with margin in CSS pixels, then keep tiles at a readable size on any screen.
+    Some(camera_frame(
+        (player_x as f32 + 0.5, player_y as f32 + 0.5),
+        (target.x as f32 + 0.5, target.y as f32 + 0.5),
+        (screen_w, screen_h),
+        (config.map_width, config.map_height),
+        TUTORIAL_MIN_TILE_CSS,
+    ))
+}
+
+/// Center and zoom that fit two world points with margin. Tiles stay at least `min_tile_css`
+/// CSS pixels wide when the screen allows it; pass 0 for a wide shot with no readability floor.
+pub(crate) fn camera_frame(
+    a: (f32, f32),
+    b: (f32, f32),
+    (screen_w, screen_h): (f32, f32),
+    (map_w, map_h): (u32, u32),
+    min_tile_css: f32,
+) -> ((f32, f32), f32) {
+    let dx = (a.0 - b.0).abs();
+    let dy = (a.1 - b.1).abs();
+    let center = ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5);
+    // Fit both points with margin in CSS pixels, then keep tiles at a readable size on any screen.
     let dpr = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
     let fit_css =
         ((screen_w.max(1.0) / dpr) / (dx + 7.0)).min((screen_h.max(1.0) / dpr) / (dy + 7.0));
-    let fit_zoom = (fit_css.max(TUTORIAL_MIN_TILE_CSS) * dpr)
+    let fit_zoom = (fit_css.max(min_tile_css) * dpr)
         .min(crate::camera_zoom_upper_bound(screen_w, screen_h));
-    let min_zoom =
-        crate::camera_zoom_lower_bound(screen_w, screen_h, config.map_width, config.map_height);
-    Some((center, fit_zoom.max(min_zoom)))
+    let min_zoom = crate::camera_zoom_lower_bound(screen_w, screen_h, map_w, map_h);
+    (center, fit_zoom.max(min_zoom))
 }
 
 /// Romans are the Boudica story's enemy: a roster `civ` naming the Roman
@@ -363,6 +387,8 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             alliance_group: e.alliance_group.clone(),
             can_attack_player: e.can_attack_player,
             assault_force: e.assault_force,
+            hold_structures_until_contact: e.hold_structures_until_contact,
+            city_requires_gold: e.city_requires_gold,
         });
     }
     let player_color = match rf.player_color.as_deref() {
@@ -478,7 +504,7 @@ mod tests {
         assert!(to_scripted(&empty.0).is_empty());
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn campaign_relationship_and_alliance_offer_setting_reach_scripted_spawns() {
         let roster = r##"{"factions":[{"id":"outpost","name":"Roman Outpost","x":2,"y":1,"starting_troops":0,"relation":"enemy","can_request_alliance":false,"can_attack_player":false,"civ":"Roman Empire","leader":"Caesar","gold_loot_override":200}]}"##;
         let (factions, _, _) = parse_roster(roster).unwrap();
@@ -487,6 +513,7 @@ mod tests {
         assert_eq!(factions[0].starting_troops, 0);
         assert_eq!(spawn.campaign_can_request_alliance, Some(false));
         assert_eq!(spawn.campaign_can_attack_player, Some(false));
+        assert!(!spawn.campaign_hold_structures_until_contact);
         assert_eq!(spawn.campaign_relation, Some(CampaignRelation::Enemy));
         assert_eq!(spawn.campaign_gold_loot_override, Some(200));
 
@@ -499,6 +526,14 @@ mod tests {
         );
         let removed_behavior = r##"{"factions":[{"id":"outpost","name":"Roman Outpost","x":2,"y":1,"starting_troops":0,"relation":"enemy","hostility":"aggressive","civ":"Roman Empire","leader":"Caesar"}]}"##;
         assert!(parse_roster(removed_behavior).is_none());
+    }
+
+    #[wasm_bindgen_test]
+    fn structure_hold_setting_reaches_scripted_spawns() {
+        let roster = r##"{"factions":[{"id":"snettisham","name":"Snettisham","x":2,"y":1,"starting_troops":500,"relation":"neutral","civ":"Iceni Kingdom","leader":"Boudica","hold_structures_until_contact":true}]}"##;
+        let (factions, _, _) = parse_roster(roster).unwrap();
+        assert!(factions[0].hold_structures_until_contact);
+        assert!(to_scripted(&factions)[0].campaign_hold_structures_until_contact);
     }
 
     #[test]

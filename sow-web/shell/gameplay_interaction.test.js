@@ -263,7 +263,10 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
     assert.equal(firstRows[1].querySelectorAll('[data-command="cancel_attack"]').length, 1);
     assert.equal(firstRows[2].querySelectorAll('[data-command="cancel_attack"]').length, 0, "a fleet ID cannot be sent as an attack ID");
     assert.equal(firstRows[2].querySelectorAll('[data-command="scuttle_fleet"]').length, 1);
-    assert.match(firstRows[2].children[1].children[1].textContent, /hud\.transport_eta/);
+    const fleetDetails = firstRows[2].children[1].children[1];
+    assert.match(fleetDetails.children[2].textContent, /hud\.transport_eta/);
+    assert.equal(fleetDetails.children[1].hidden, false, "the ETA separator is visible with an ETA");
+    assert.equal(firstRows[0].children[1].children[1].children[2].hidden, true, "attacks do not show a transport ETA");
     context.renderHud();
     assert.equal(firstList.replacements, 1, "unchanged operations do not remount rows");
     firstRows.forEach((row, index) => assert.equal(firstList.children[index], row));
@@ -306,8 +309,8 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
     assert.equal(returningFleet.querySelectorAll('[data-command="focus_world"]').length, 1);
     assert.equal(returningFleet.querySelectorAll('[data-command="recall_fleet"]').length, 0);
     assert.equal(returningFleet.querySelectorAll('[data-command="scuttle_fleet"]').length, 1);
-    assert.match(returningFleet.children[1].children[1].textContent, /es:hud\.returning_transport/);
-    assert.match(returningFleet.children[1].children[1].textContent, /es:hud\.transport_eta/);
+    assert.match(returningFleet.children[1].children[1].children[0].textContent, /es:hud\.returning_transport/);
+    assert.match(returningFleet.children[1].children[1].children[2].textContent, /es:hud\.transport_eta/);
 
     context.renderCombatOperations(operations.slice(1));
     assert.equal(rebuiltList.children.length, 2);

@@ -125,19 +125,26 @@ impl AssetLoader {
             return;
         }
         if let Some(leader) = Leader::all().find(|leader| leader.id() == slug) {
-            self.campaign_avatar_slots.insert(
-                slug.to_owned(),
-                sow_render::text::leader_avatar_slot(
-                    leader,
-                    sow_core::emote::AvatarExpression::Calm,
-                ),
-            );
+            if let Some(slot) = self.campaign_avatar_slots.get(slug).copied() {
+                self.portrait_last_drawn[slot] = self.drawn_frame;
+            } else {
+                self.campaign_avatar_slots.insert(
+                    slug.to_owned(),
+                    sow_render::text::leader_avatar_slot(
+                        leader,
+                        sow_core::emote::AvatarExpression::Calm,
+                    ),
+                );
+            }
             self.queue_leader_avatar(leader, false);
             return;
         }
         let Some(slot) = self.portrait_slot(slug) else {
             return;
         };
+        if self.campaign_avatars.contains_key(slug) {
+            return;
+        }
         self.queue_avatar_fetch(
             AvatarFetchKey::Campaign {
                 slug: slug.to_string(),
@@ -153,6 +160,10 @@ impl AssetLoader {
         for slug in slugs {
             self.queue_campaign_avatar(slug);
         }
+    }
+
+    pub(crate) fn request_additional_drawn_portrait(&mut self, slug: &str) {
+        self.queue_campaign_avatar(slug);
     }
 
     /// The slot for a portrait drawn this frame. A full pool evicts the least recently drawn
@@ -482,6 +493,7 @@ fn valid_avatar_id(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     #[test]
     fn hero_quadrants_are_square_and_odd_sheets_do_not_distort() {
@@ -602,5 +614,29 @@ mod tests {
         assert_eq!(loader.campaign_avatar_slot("bot_1"), None);
         assert_eq!(loader.campaign_avatar_slot("bot_extra"), Some(first + 1));
         assert!(loader.gpu_avatar_dirty.contains(&(first + 1)));
+    }
+
+    #[wasm_bindgen_test]
+    fn death_avatar_requests_cold_portraits_and_releases_the_slot_next_frame() {
+        let mut loader = AssetLoader::new();
+        loader.request_drawn_portraits(&[]);
+        loader.request_additional_drawn_portrait("stonea");
+
+        let slot = loader.campaign_avatar_slot("stonea").unwrap();
+        assert!(!loader.campaign_avatars.contains_key("stonea"));
+        assert!(loader.avatars_fetch_pending.contains(&AvatarFetchKey::Campaign {
+            slug: "stonea".into(),
+            slot,
+        }));
+        assert_eq!(loader.portrait_last_drawn[slot], loader.drawn_frame);
+
+        loader.request_drawn_portraits(&[]);
+        assert!(loader.portrait_last_drawn[slot] < loader.drawn_frame);
+
+        loader.request_drawn_portraits(&[]);
+        loader.request_additional_drawn_portrait("boudica");
+        assert!(loader
+            .avatars_fetch_pending
+            .contains(&AvatarFetchKey::Leader(Leader::of("boudica"))));
     }
 }

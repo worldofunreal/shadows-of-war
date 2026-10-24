@@ -456,6 +456,12 @@ impl SowEngine {
             if s.campaign_assault_force {
                 self.campaign_assault_force_ids.insert(bot_id);
             }
+            if s.campaign_hold_structures_until_contact {
+                self.campaign_structure_hold_ids.insert(bot_id);
+            }
+            if s.campaign_city_requires_gold {
+                self.campaign_city_requires_gold_ids.insert(bot_id);
+            }
             if let Some(relation) = s.campaign_relation {
                 self.campaign_relations.insert(bot_id, relation);
                 if relation == crate::protocol::CampaignRelation::Allied

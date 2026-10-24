@@ -28,7 +28,7 @@ test("Boudica keeps open neutral clans, makes every Roman enemy, and orders the 
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const roster = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.json"), "utf8"));
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
-    const candidateNames = ["Catuvellauni", "Cantiaci", "Durovernum", "Parisi", "Corieltauvi", "Cornovii", "Dobunni", "Durotriges", "Dumnonii", "Silures", "Demetae", "Ordovices", "Deceangli", "Caledonii", "Votadini", "Belgae", "Gaulish Traders 1", "Gaulish Traders 2", "Gaulish Traders 3", "Irish Raiders", "Picts"];
+    const candidateNames = ["Catuvellauni", "Cantiaci", "Durovernum", "Parisi", "Corieltauvi", "Cornovii", "Dobunni", "Durotriges", "Dumnonii", "Silures", "Demetae", "Ordovices", "Deceangli", "Caledonii", "Votadini", "Belgae", "Gaulish Traders", "Irish Raiders", "Picts"];
     const byName = new Map(roster.factions.map(faction => [faction.name, faction]));
     for (const name of candidateNames) assert.equal(byName.get(name).relation, "neutral", name + " remains neutral");
     const romans = roster.factions.filter(faction => faction.civ.replace(/[^a-z0-9]/gi, "").toLowerCase() === "romanempire");
@@ -80,6 +80,25 @@ test("campaign attack permission changes accept existing enemies only", () => {
     assert.deepEqual(campaign.validate(definition, roster, { hasText: () => true }).errors, []);
     definition.steps[0].campaign_attack_on_enter.faction_id = "clan";
     assert.ok(campaign.validate(definition, roster, { hasText: () => true }).errors.some(issue => issue.field === "campaign_attack_on_enter.faction_id"));
+});
+
+
+test("scene camera shots film the player or existing factions only", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const definition = { version: 2, episode_id: "camera_shot", entry: "notice", settings: { starting_troops: 1000 }, speakers: {}, steps: [
+        { id: "notice", type: "scene", title_key: "tutorial.notice", camera: { shot: "approach", from: "player", to: "enemy", seconds: 3 }, next: "end" },
+        { id: "end", type: "end", title_key: "tutorial.end" }
+    ] };
+    const roster = { map: "eastanglia", player_spawn: [1, 1], factions: [
+        { id: "enemy", name: "Enemy", x: 1, y: 1, starting_troops: 1, relation: "enemy", civ: "Roman Empire", leader: "Caesar" }
+    ] };
+    const errors = () => campaign.validate(definition, roster, { hasText: () => true }).errors.map(issue => issue.field);
+    assert.deepEqual(errors(), []);
+    definition.steps[0].camera = { shot: "spin", to: "nobody", seconds: 9 };
+    assert.deepEqual(errors(), ["camera.shot", "camera.to", "camera.seconds"]);
+    definition.steps[0] = { id: "notice", type: "objective", title_key: "tutorial.notice", pause_game: true, camera_only: true,
+        trigger: { type: "zoom_out_complete", value: 0.95, scope: "step" }, camera: { shot: "link", to: "enemy", seconds: 3 }, next: "end" };
+    assert.ok(errors().includes("camera"), "a camera lesson cannot move the camera for the player");
 });
 
 
@@ -235,7 +254,7 @@ test("Boudica pauses for action steps and resumes only after valid expansion or 
     const acceptedExpansion = expansion.update({ tiles_gained: 0, wilderness_orders_accepted: 1 }, {});
     assert.equal(acceptedExpansion.paused, false, "accepted neutral attack resumes before capture");
     assert.equal(acceptedExpansion.step.id, "boudica_first_expansion", "the 250-tile goal still waits for actual territory gain");
-    assert.equal(expansion.update({ tiles_gained: 250, wilderness_orders_accepted: 1 }, {}).step.id, "boudica_camera_intro");
+    assert.equal(expansion.update({ tiles_gained: 250, wilderness_orders_accepted: 1 }, {}).step.id, "boudica_city_intro");
     assert.equal(expansion.view().paused, true);
 
     for (const id of ["boudica_first_contact", "boudica_third_contact"]) {
@@ -928,4 +947,81 @@ test("a step's emote directive fires once, when that step completes", () => {
     assert.deepEqual(completed, ["a"]);
     assert.equal(machine.advance(null, "b"), true);
     assert.deepEqual(completed, ["a", "b"]);
+});
+
+
+test("Snettisham refuse goes straight to its reply while accept waits for the Snettisham City", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    const step = id => definition.steps.find(candidate => candidate.id === id);
+    const contact = { contact_faction_ids: ["snettisham"], tiles_gained: 250, wilderness_orders_accepted: 1 };
+
+    assert.deepEqual(campaign.validate(definition, roster, { hasText: () => true }).errors, [], "the Snettisham branch is valid data");
+    assert.equal(step("boudica_second_contact").next, "boudica_snettisham_accept_wait");
+    assert.deepEqual(step("boudica_second_contact").routes, [{ when: { choice: "contact_snettisham", equals: "refuse" }, next: "boudica_snettisham_refuse_reply" }]);
+    assert.equal(step("boudica_snettisham_refuse_reply").show_title, true);
+    assert.equal(step("boudica_snettisham_refuse_reply").speaker, "snettisham");
+    assert.equal(step("boudica_snettisham_refuse_reply").title_key, "tutorial.campaign_boudica_boudica_snettisham_refuse_title");
+    assert.equal(step("boudica_snettisham_refuse_reply").body_key, "tutorial.campaign_boudica_boudica_snettisham_refuse_body");
+    assert.equal(step("boudica_snettisham_accept_reply").show_title, true);
+    assert.equal(step("boudica_snettisham_accept_reply").title_key, "tutorial.campaign_boudica_boudica_snettisham_accept_title");
+    assert.equal(step("boudica_snettisham_accept_reply").body_key, "tutorial.campaign_boudica_boudica_snettisham_accept_body");
+    assert.deepEqual(step("boudica_snettisham_accept_wait").trigger, { type: "structure_level", kind: "City", value: 1, scope: "total", faction: "snettisham" });
+    assert.equal(step("boudica_snettisham_accept_wait").pause_game, undefined, "the accept wait does not pause the game");
+
+    const refuse = campaign.create(definition, "boudica_second_contact", roster);
+    const refuseView = refuse.update(contact, {});
+    assert.equal(refuseView.reactionData.id, "contact_snettisham");
+    assert.equal(refuse.advance("refuse", "reaction-contact_snettisham@snettisham", true), true);
+    assert.equal(refuse.update(contact, {}).step.id, "boudica_snettisham_refuse_reply", "refuse plays its reply right after the choice");
+
+    const accept = campaign.create(definition, "boudica_second_contact", roster);
+    accept.update(contact, {});
+    assert.equal(accept.advance("accept", "reaction-contact_snettisham@snettisham", true), true);
+    assert.equal(accept.update(contact, {}).step.id, "boudica_snettisham_accept_wait", "accept waits before its reply");
+    assert.equal(accept.update({ ...contact, faction_structure_levels: { snettisham: { city: 0 } } }, {}).step.id, "boudica_snettisham_accept_wait");
+    assert.equal(accept.update({ ...contact, structure_levels: { city: 1 } }, {}).step.id, "boudica_snettisham_accept_wait", "the player's own City does not count for Snettisham");
+    assert.equal(accept.update({ ...contact, faction_structure_levels: { snettisham: { city: 1 } } }, {}).step.id, "boudica_snettisham_accept_reply");
+});
+
+test("Boudica camera lessons leave every gesture to the player", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    const step = id => definition.steps.find(candidate => candidate.id === id);
+    for (const id of ["boudica_camera_intro", "boudica_zoom_out", "boudica_camera_drag", "boudica_camera_hover", "boudica_zoom_in", "boudica_camera_home"]) {
+        assert.equal(Object.hasOwn(step(id), "camera"), false, id + " does not move the camera for the player");
+    }
+    for (const shot of definition.steps.filter(candidate => candidate.camera)) {
+        assert.ok(shot.camera.seconds <= 5, shot.id + " stays a light move");
+    }
+    assert.equal(step("boudica_camera_drag").trigger.type, "camera_target", "drag still needs the player to move toward Suetonius");
+    assert.equal(step("boudica_camera_hover").trigger.type, "hover");
+    assert.equal(step("boudica_zoom_in").trigger.type, "zoom_in_complete");
+    assert.equal(step("boudica_camera_home").trigger.action, "hud_center_camera");
+    assert.deepEqual(campaign.validate(definition, roster, { hasText: () => true }).errors, []);
+});
+
+test("structure triggers can watch a campaign faction and the faction flag is validated", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    const errorsFor = change => {
+        const copy = structuredClone(definition);
+        change(copy);
+        return campaign.validate(copy, roster, { hasText: () => true }).errors.map(issue => issue.field);
+    };
+    assert.deepEqual(errorsFor(() => {}), []);
+    assert.ok(errorsFor(copy => { copy.steps.find(s => s.id === "boudica_snettisham_accept_wait").trigger.faction = "nobody"; }).includes("trigger.faction"));
+    assert.ok(errorsFor(copy => { copy.steps.find(s => s.id === "boudica_snettisham_accept_wait").trigger.faction = 3; }).includes("trigger.faction"));
+    assert.ok(errorsFor(copy => { copy.steps.find(s => s.id === "boudica_build_city").trigger.faction = "snettisham"; }).includes("trigger.faction"));
+    assert.ok(errorsFor(copy => { copy.steps.find(s => s.id === "boudica_second_contact").routes[0].when.equals = "maybe"; }).includes("routes"));
+    const rosterCopy = structuredClone(roster);
+    rosterCopy.factions.find(faction => faction.id === "snettisham").hold_structures_until_contact = "yes";
+    assert.ok(campaign.validate(definition, rosterCopy, { hasText: () => true }).errors.some(issue => issue.field === "roster.factions.hold_structures_until_contact"));
+    assert.equal(roster.factions.find(faction => faction.id === "snettisham").hold_structures_until_contact, true);
 });

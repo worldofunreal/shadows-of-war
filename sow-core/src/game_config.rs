@@ -142,6 +142,11 @@ pub struct ScriptedSpawn {
     /// Eligible to join a campaign's configured final assault.
     #[serde(default)]
     pub campaign_assault_force: bool,
+    /// Holds this faction's construction until the player decides its contact response.
+    #[serde(default)]
+    pub campaign_hold_structures_until_contact: bool,
+    #[serde(default)]
+    pub campaign_city_requires_gold: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -408,7 +413,7 @@ impl Default for GameConfig {
 
             // Core Simulation Pacing
             tick_rate_ms: 100.0, // Server clock ticks every 100ms (10 ticks per second)
-            global_speed_multiplier: 0.125,
+            global_speed_multiplier: 0.15,
 
             // Combat & Expansion Mechanics
             attack_cost_enemy: 2.0,

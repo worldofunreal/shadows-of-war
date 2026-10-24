@@ -92,7 +92,17 @@ pub(crate) fn render_overlays(
             .flatten(),
         ui.app.settings_state.reduced_motion,
     );
-    feedback::render(text, snapshot, sim, ui, input, &dev, sf, now);
+    feedback::render(
+        text,
+        snapshot,
+        sim,
+        ui,
+        input,
+        &dev,
+        campaign_avatar_slots,
+        sf,
+        now,
+    );
     render_building_placement_controls(text, sim, ui, input, sf, placement_can_confirm);
     if let Some((panel, layout)) = building_panel {
         render_building_panel(text, panel, layout, &dev, sf);

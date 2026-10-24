@@ -86,6 +86,9 @@ enum WebMenuCommand {
         faction_id: String,
         can_attack_player: bool,
     },
+    HaltCampaignFaction {
+        faction_id: String,
+    },
     SetTutorialMarker {
         #[serde(default)]
         player_id: Option<u16>,
@@ -301,7 +304,33 @@ enum WebMenuCommand {
     FocusWorld {
         x: f32,
         y: f32,
+        #[serde(default)]
+        shot: Option<CameraShotRequest>,
     },
+}
+
+/// Campaign narration shot that ends on the focused world point.
+#[derive(Debug, Deserialize)]
+struct CameraShotRequest {
+    kind: CameraShotKind,
+    from_x: f32,
+    from_y: f32,
+    seconds: f32,
+    /// Code-directed move: the player cannot break it with drag, zoom or key pan.
+    #[serde(default)]
+    machinima: bool,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum CameraShotKind {
+    /// Glide toward the speaker and the target together, easing back a little.
+    Reveal,
+    /// Glide onto the target, easing in a little.
+    #[serde(alias = "threat")]
+    Approach,
+    /// Glide onto the target at the current zoom.
+    Link,
 }
 
 #[cfg(any(feature = "dev", debug_assertions))]
@@ -723,6 +752,16 @@ impl SowApp {
                         log::warn!(
                             "[CAMPAIGN] attack permission target is missing or not an enemy: {faction_id}"
                         );
+                    }
+                }
+                WebMenuCommand::HaltCampaignFaction { faction_id } => {
+                    if self.ui.tutorial_active
+                        && self.net.is_offline
+                        && let Some(engine) = self.sim.engine.as_mut()
+                        && engine.state.config.tutorial
+                        && !engine.halt_campaign_faction(&faction_id)
+                    {
+                        log::warn!("[CAMPAIGN] halt target is missing: {faction_id}");
                     }
                 }
                 WebMenuCommand::ActivateCampaignAssault {
@@ -1433,14 +1472,50 @@ impl SowApp {
                         }
                     }
                 }
-                WebMenuCommand::FocusWorld { x, y } => {
-                    if x.is_finite()
-                        && y.is_finite()
-                        && x >= 0.0
-                        && y >= 0.0
-                        && x < self.sim.map_w as f32
-                        && y < self.sim.map_h as f32
-                    {
+                WebMenuCommand::FocusWorld { x, y, shot } => {
+                    let on_map = |x: f32, y: f32| {
+                        x.is_finite()
+                            && y.is_finite()
+                            && x >= 0.0
+                            && y >= 0.0
+                            && x < self.sim.map_w as f32
+                            && y < self.sim.map_h as f32
+                    };
+                    if !on_map(x, y) {
+                        continue;
+                    }
+                    if let Some(shot) = shot.filter(|shot| {
+                        on_map(shot.from_x, shot.from_y) && shot.seconds.is_finite()
+                    }) {
+                        let screen = (self.input.screen_w, self.input.screen_h);
+                        let map = (self.sim.map_w, self.sim.map_h);
+                        let (from, to) = ((shot.from_x, shot.from_y), (x, y));
+                        // Light moves only: one glide that eases the zoom by at most a quarter.
+                        let zoom = self.input.camera_zoom;
+                        let ease = |(center, z): ((f32, f32), f32), lo: f32, hi: f32| {
+                            (center, z.clamp(zoom * lo, zoom * hi))
+                        };
+                        let key = match shot.kind {
+                            CameraShotKind::Reveal => ease(
+                                crate::campaign::camera_frame(from, to, screen, map, 0.0),
+                                0.75,
+                                1.0,
+                            ),
+                            CameraShotKind::Approach => ease(
+                                crate::campaign::camera_frame(
+                                    to,
+                                    to,
+                                    screen,
+                                    map,
+                                    crate::campaign::TUTORIAL_MIN_TILE_CSS,
+                                ),
+                                1.0,
+                                1.25,
+                            ),
+                            CameraShotKind::Link => (to, zoom),
+                        };
+                        self.start_camera_shot(vec![key], shot.seconds.clamp(1.0, 5.0), shot.machinima);
+                    } else {
                         let tutorial_focus = self.ui.tutorial_active && self.net.is_offline;
                         self.input.has_snapped_camera_to_spawn = true;
                         self.input.target_zoom = self.input.camera_zoom;
@@ -2655,6 +2730,8 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "support_deliveries_by_faction_id": support_deliveries_by_faction_id,
             "structure_upgrades": observation.structure_upgrades,
             "structure_levels": observation.structure_levels,
+            "faction_structure_levels": observation.faction_structure_levels,
+            "machinima_active": app.machinima_camera_active(),
             "city_upgrades": observation.city_upgrades,
             "city_levels": observation.city_levels,
             "port_upgrades": observation.port_upgrades,

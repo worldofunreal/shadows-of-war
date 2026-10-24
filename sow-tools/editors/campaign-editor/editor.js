@@ -1627,7 +1627,8 @@
             || window.navigator && window.navigator.platform || "";
         var zoomMode = $("#device").value === "mobile" ? "pinch" : window.SOWCampaign.zoomInputMode({ platform: previewPlatform });
         var zoomGuide = model.step.guide && ["zoom_in", "zoom_out"].includes(model.step.guide.gesture);
-        var deviceHint = model.step.guide && ["drag", "hover"].includes(model.step.guide.gesture)
+        var cameraCue = model.step.camera_only === true && model.step.guide && ["zoom_in", "zoom_out", "drag", "hover"].includes(model.step.guide.gesture);
+        var deviceHint = !cameraCue && model.step.guide && ["drag", "hover"].includes(model.step.guide.gesture)
             ? translated(stepTextKey(model.step, "_" + ($("#device").value === "mobile" ? "mobile" : "desktop") + "_hint"), state.previewLanguage) : null;
         var previewHint = deviceHint || "", guideMetric = null, gestureLabel = null;
         var guideAction = model.step.guide ? window.SOWCampaign.guideAction(model.step) : "";
@@ -1641,7 +1642,7 @@
                     : "tutorial.hand_" + (zoomMode === "pinch" ? "tap" : "click") + "_" + guideAction;
             gestureLabel = actionText || translated(fallbackKey, state.previewLanguage);
         }
-        if (zoomGuide) {
+        if (zoomGuide && !cameraCue) {
             var zoomModeKey = stepTextKey(model.step, "_" + zoomMode);
             previewHint = textValue(zoomModeKey + "_hint", state.previewLanguage) || "";
             gestureLabel = textValue(zoomModeKey + "_label", state.previewLanguage) || translated(model.step.guide.gesture === "zoom_in" ? "hud.zoom_in" : "hud.zoom_out", state.previewLanguage);
@@ -1654,7 +1655,7 @@
                     direction: model.step.guide.gesture === "zoom_in" ? "min" : "max"
                 };
             }
-        } else if (!zoomGuide && model.step.trigger && model.step.trigger.type === "camera_target" && Number.isFinite(Number(model.step.trigger.distance)) && Number.isFinite(Number(state.facts.camera_target_distance))) {
+        } else if (!cameraCue && !zoomGuide && model.step.trigger && model.step.trigger.type === "camera_target" && Number.isFinite(Number(model.step.trigger.distance)) && Number.isFinite(Number(state.facts.camera_target_distance))) {
             guideMetric = { text: previewMetric(stepTextKey(model.step, "_progress"), { current: Math.ceil(Number(state.facts.camera_target_distance)), target: model.step.trigger.distance }) };
         }
         if (menuControl) gestureLabel = translated(menuControl.hint_key, state.previewLanguage);

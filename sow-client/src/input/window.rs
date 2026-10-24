@@ -363,6 +363,7 @@ impl SowApp {
                     self.input.tutorial_camera_drag_recorded = false;
                 }
                 self.input.dragging = !panel_button
+                    && !self.machinima_camera_active()
                     && (self.ui.tutorial_camera_only
                         || (!warship_tool_selected
                             && self.ui.app.hud_state.selected_nuke_kind.is_none()));
@@ -469,7 +470,13 @@ impl SowApp {
                 .insert(finger_id.into_raw() as u64, (x, y));
         }
         let is_touch = matches!(source, winit::event::PointerSource::Touch { .. });
-        if self.input.active_touches.len() >= 2 {
+        // A code-directed camera move owns the view: drags and pinches start nothing until it lands.
+        let machinima = self.machinima_camera_active();
+        if machinima {
+            self.input.dragging = false;
+            self.input.last_pinch_state = None;
+        }
+        if self.input.active_touches.len() >= 2 && !machinima {
             self.finish_pointer_gesture();
             self.input.dragging = false;
             self.input.hover_pointer = HoverPointer::None;
@@ -542,7 +549,10 @@ impl SowApp {
     }
 
     fn handle_wheel(&mut self, delta: MouseScrollDelta) {
-        if !self.input.active_touches.is_empty() || self.ui.app.phase != ClientPhase::Playing {
+        if !self.input.active_touches.is_empty()
+            || self.ui.app.phase != ClientPhase::Playing
+            || self.machinima_camera_active()
+        {
             return;
         }
         self.close_map_context_menu();
