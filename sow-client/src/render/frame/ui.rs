@@ -47,16 +47,127 @@ fn focus_camera_step(
     )
 }
 
+type CameraKey = ((f32, f32), f32);
+
+/// Camera center and zoom at `progress` (0..1) through a shot. One ease in and out spans every
+/// waypoint at an even pace, so the move never stops between legs.
+fn camera_shot_frame(keys: &[CameraKey], progress: f32, screen: (f32, f32)) -> CameraKey {
+    let view = screen.0.min(screen.1).max(1.0);
+    // Leg length in screens panned plus zoom doublings, so pans and zooms share one pace.
+    let legs: Vec<f32> = keys
+        .windows(2)
+        .map(|leg| {
+            let ((a, za), (b, zb)) = (leg[0], leg[1]);
+            (b.0 - a.0).hypot(b.1 - a.1) * za.min(zb) / view + (zb / za).ln().abs()
+        })
+        .collect();
+    let total: f32 = legs.iter().sum();
+    let t = progress.clamp(0.0, 1.0);
+    let mut distance = t * t * t * (t * (t * 6.0 - 15.0) + 10.0) * total;
+    for (leg, length) in keys.windows(2).zip(&legs) {
+        if distance <= *length && *length > 0.0 {
+            return camera_shot_leg(leg[0], leg[1], distance / length);
+        }
+        distance -= length;
+    }
+    keys[keys.len() - 1]
+}
+
+/// One leg of a shot. Zooming legs scale around their fixed point, so the frame grows or
+/// shrinks as one piece instead of swinging the subject off screen mid-move.
+fn camera_shot_leg((a, za): CameraKey, (b, zb): CameraKey, u: f32) -> CameraKey {
+    let zoom = za * (zb / za).powf(u);
+    if (zb / za).ln().abs() < 0.05 {
+        return ((a.0 + (b.0 - a.0) * u, a.1 + (b.1 - a.1) * u), zoom);
+    }
+    let anchor = (
+        (b.0 * zb - a.0 * za) / (zb - za),
+        (b.1 * zb - a.1 * za) / (zb - za),
+    );
+    let scale = za / zoom;
+    (
+        (
+            anchor.0 - (anchor.0 - a.0) * scale,
+            anchor.1 - (anchor.1 - a.1) * scale,
+        ),
+        zoom,
+    )
+}
+
+/// Player camera input ends a narration shot. Machinima moves are code-directed and never end that way.
+fn machinima_move_taken_over(machinima: bool, player_moved_camera: bool) -> bool {
+    !machinima && player_moved_camera
+}
+
 impl SowApp {
+    /// Film `keys` after the current view over `seconds`; any player camera input ends the shot.
+    pub(crate) fn start_camera_shot(&mut self, keys: Vec<CameraKey>, seconds: f32, machinima: bool) {
+        let zoom = self.input.camera_zoom;
+        let current = (
+            (
+                (self.input.screen_w * 0.5 - self.input.camera_x) / zoom,
+                (self.input.screen_h * 0.5 - self.input.camera_y) / zoom,
+            ),
+            zoom,
+        );
+        self.input.has_snapped_camera_to_spawn = true;
+        self.input.camera_focus_target = None;
+        self.input.camera_focus_waiting_for_input_release = false;
+        self.input.tutorial_camera_focus = false;
+        self.input.target_zoom = zoom;
+        self.input.camera_shot = Some(crate::app::CameraShot {
+            keys: std::iter::once(current).chain(keys).collect(),
+            seconds,
+            elapsed: 0.0,
+            left_at: (self.input.camera_x, self.input.camera_y, zoom),
+            machinima,
+        });
+    }
+
+    /// True while a code-directed camera move owns the view and player camera input is ignored.
+    pub(crate) fn machinima_camera_active(&self) -> bool {
+        self.input.camera_shot.as_ref().is_some_and(|shot| shot.machinima)
+    }
+
     pub(super) fn advance_camera(&mut self, dt: f32) {
         if self.ui.app.phase == ClientPhase::Playing && !self.input.input_focused {
             let dx = self.input.key_pan_left as i32 as f32 - self.input.key_pan_right as i32 as f32;
             let dy = self.input.key_pan_up as i32 as f32 - self.input.key_pan_down as i32 as f32;
-            if dx != 0.0 || dy != 0.0 {
+            if (dx != 0.0 || dy != 0.0) && !self.machinima_camera_active() {
                 let pan = 1000.0 * dt;
                 self.input.camera_x += dx * pan;
                 self.input.camera_y += dy * pan;
                 self.clamp_camera_to_map();
+            }
+        }
+        if let Some(mut shot) = self.input.camera_shot.take() {
+            let (x, y, zoom) = shot.left_at;
+            let player_moved_camera = self.input.camera_focus_target.is_some()
+                || self.input.is_pointer_gesture_active()
+                || self.input.camera_x != x
+                || self.input.camera_y != y
+                || self.input.camera_zoom != zoom
+                || self.input.target_zoom != zoom;
+            let taken_over = machinima_move_taken_over(shot.machinima, player_moved_camera);
+            if !taken_over {
+                shot.elapsed += dt;
+                let progress = shot.elapsed / shot.seconds;
+                let screen = (self.input.screen_w, self.input.screen_h);
+                let (center, zoom) = camera_shot_frame(&shot.keys, progress, screen);
+                self.input.camera_zoom = zoom;
+                self.input.target_zoom = zoom;
+                self.input.camera_x = screen.0 * 0.5 - center.0 * zoom;
+                self.input.camera_y = screen.1 * 0.5 - center.1 * zoom;
+                self.clamp_camera_to_map();
+                if progress < 1.0 {
+                    shot.left_at = (
+                        self.input.camera_x,
+                        self.input.camera_y,
+                        self.input.camera_zoom,
+                    );
+                    self.input.camera_shot = Some(shot);
+                }
+                return;
             }
         }
         let pointer_gesture_active = self.input.is_pointer_gesture_active();
@@ -210,8 +321,16 @@ impl SowApp {
 
 #[cfg(test)]
 mod tests {
-    use super::focus_camera_step;
+    use super::{machinima_move_taken_over, camera_shot_frame, focus_camera_step};
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn machinima_moves_ignore_player_camera_input_until_they_land() {
+        assert!(machinima_move_taken_over(false, true), "narration shots still hand control back to the player");
+        assert!(!machinima_move_taken_over(false, false));
+        assert!(!machinima_move_taken_over(true, true), "machinima ignores drag, zoom and key pan");
+        assert!(!machinima_move_taken_over(true, false));
+    }
 
     #[wasm_bindgen_test]
     fn tutorial_camera_focus_stays_straight_when_zoom_changes() {
@@ -273,5 +392,33 @@ mod tests {
         );
         assert!(next_center.0 > center.0 && next_center.0 < focus.0);
         assert!(next_center.1 > center.1 && next_center.1 < focus.1);
+    }
+
+    #[wasm_bindgen_test]
+    fn camera_shot_keeps_its_subject_on_screen_and_lands_on_each_end() {
+        let screen = (1440.0, 900.0);
+        let current = ((700.0, 80.0), 40.0);
+        let wide = ((760.0, 140.0), 5.0);
+        let close = ((820.0, 200.0), 100.0);
+        let keys = [current, wide, close];
+        let near = |(a, za): ((f32, f32), f32), (b, zb): ((f32, f32), f32)| {
+            (a.0 - b.0).abs() < 0.01 && (a.1 - b.1).abs() < 0.01 && (za - zb).abs() < 0.01
+        };
+        assert!(near(camera_shot_frame(&keys, 0.0, screen), current));
+        assert!(near(camera_shot_frame(&keys, 1.0, screen), close));
+        let mut last_zoom = f32::INFINITY;
+        let mut pushing_in = false;
+        for step in 1..200 {
+            let ((cx, cy), zoom) = camera_shot_frame(&keys, step as f32 / 200.0, screen);
+            pushing_in |= zoom > last_zoom;
+            if pushing_in {
+                // After the wide frame the zoom only grows and the subject never leaves the screen.
+                assert!(zoom >= last_zoom, "push-in reversed");
+                assert!(((close.0.0 - cx) * zoom).abs() <= screen.0 * 0.5);
+                assert!(((close.0.1 - cy) * zoom).abs() <= screen.1 * 0.5);
+            }
+            last_zoom = zoom;
+        }
+        assert!(pushing_in, "the shot never pushed in from its wide frame");
     }
 }

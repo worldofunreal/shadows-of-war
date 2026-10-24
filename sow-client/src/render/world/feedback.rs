@@ -81,13 +81,14 @@ pub(crate) fn render(
     ui: &mut UiState,
     input: &InputState,
     dev: &DevConfig,
+    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     sf: f32,
     now: Instant,
 ) {
     render_click_markers(text, ui, input, dev, sf, now);
     render_transport_targets(text, snapshot, sim, ui, input, dev, sf, now);
     render_transport_impacts(text, ui, input, sf, now);
-    render_death_nameplates(text, ui, input, dev, sf, now);
+    render_death_nameplates(text, ui, input, dev, campaign_avatar_slots, sf, now);
     render_attack_badges(text, snapshot, sim, ui, input, dev, sf, now);
     render_attack_launch_notices(text, ui, input, dev, sf, now);
 }
@@ -395,6 +396,7 @@ fn render_death_nameplates(
     ui: &mut UiState,
     input: &InputState,
     dev: &DevConfig,
+    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     sf: f32,
     now: Instant,
 ) {
@@ -403,8 +405,6 @@ fn render_death_nameplates(
     let screen_h = input.screen_h / sf;
     let font_scale = dev.font_size_scale.max(0.1);
     let char_spacing = dev.font_char_spacing.max(0.1);
-    let campaign_avatar_slots = &ui.app.asset_loader.campaign_avatar_slots;
-
     ui.death_nameplates.retain(|animation| {
         let elapsed = now.duration_since(animation.start_time).as_secs_f32();
         death_animation(elapsed).is_some()

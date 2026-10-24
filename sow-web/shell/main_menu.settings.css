@@ -47,26 +47,30 @@
 .sow-menu__settings-link {
     display: inline-flex;
     min-width: 0;
-    min-height: 44px;
+    min-height: 52px;
     align-items: center;
     justify-content: flex-start;
     padding: 10px 12px;
-    border: 1px solid var(--sow-line);
+    border: 1px solid color-mix(in srgb, var(--sow-gold) 22%, var(--sow-line));
     border-radius: var(--sow-button-radius);
-    background: rgba(255, 255, 255, 0.035);
+    background: rgba(255, 255, 255, 0.055);
     color: #f5f1e8;
     font: inherit;
-    font-size: 11px;
+    font-size: 12px;
+    font-weight: 800;
     line-height: 1.35;
     text-align: start;
     text-decoration: none;
     cursor: pointer;
+    transition: background 120ms, border-color 120ms, color 120ms, transform 120ms;
 }
 
 .sow-menu__settings-link:hover,
 .sow-menu__settings-link:focus-visible {
     border-color: var(--sow-gold);
+    background: rgba(243, 177, 43, 0.11);
     color: var(--sow-gold-bright);
+    transform: translateY(-1px);
 }
 
 .sow-menu__settings-account {
@@ -100,11 +104,31 @@
 .sow-menu__settings-controls {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 0;
 }
 
-.sow-menu__settings-controls .sow-menu__form-field {
-    gap: 8px;
+.sow-menu__settings-dropdown-row > span {
+    flex: 1 1 10rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.sow-menu__settings-dropdown {
+    flex: 0 1 220px;
+    width: min(100%, 220px);
+    min-width: 0;
+}
+
+.sow-menu__settings-dropdown .sow-control-dropdown__trigger {
+    height: 48px;
+}
+
+.sow-menu__settings-dropdown .sow-control-dropdown__menu:not([hidden]) {
+    max-width: min(280px, calc(100vw - 16px));
+}
+
+.sow-menu__settings-dropdown .sow-control-dropdown__option {
+    white-space: normal;
 }
 
 .sow-menu__settings-actions {

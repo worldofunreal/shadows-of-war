@@ -61,6 +61,14 @@ pub struct DeathNameplateAnimation {
 }
 
 impl DeathNameplateAnimation {
+    pub(crate) fn active_avatar_slug(&self, now: Instant) -> Option<&str> {
+        death_animation(now.duration_since(self.start_time).as_secs_f32())?;
+        match &self.avatar {
+            AvatarIdentity::Portrait { slug, .. } => Some(slug),
+            AvatarIdentity::Wilderness | AvatarIdentity::Fallback => None,
+        }
+    }
+
     pub fn enqueue(queue: &mut Vec<Self>, animation: Self) {
         if queue.len() >= MAX_DEATH_NAMEPLATES {
             let evict = queue
@@ -112,6 +120,7 @@ pub fn death_icon(by_nuke: bool) -> NameplateStatusSprite {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     fn animation() -> DeathNameplateAnimation {
         DeathNameplateAnimation {
@@ -137,6 +146,31 @@ mod tests {
         assert!(death_animation(1.45).unwrap().2 < 1.0);
         assert!(death_animation(1.499).is_some());
         assert!(death_animation(1.5).is_none());
+    }
+
+    #[wasm_bindgen_test]
+    fn death_avatar_retention_ends_with_death_while_gold_reward_continues() {
+        let mut death = animation();
+        death.avatar = AvatarIdentity::Portrait {
+            slug: "stonea".into(),
+            leader: None,
+        };
+        death.reward = Some(DeathNameplateReward {
+            amount: "+50".into(),
+            is_assist: false,
+        });
+        let started = death.start_time;
+
+        assert_eq!(death.active_avatar_slug(started), Some("stonea"));
+        assert_eq!(
+            death.active_avatar_slug(started + web_time::Duration::from_millis(1499)),
+            Some("stonea")
+        );
+        assert_eq!(
+            death.active_avatar_slug(started + web_time::Duration::from_millis(1500)),
+            None
+        );
+        assert!(gold_reward_elapsed(1.5).is_some());
     }
 
     #[test]

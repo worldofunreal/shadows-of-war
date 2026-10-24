@@ -234,6 +234,7 @@ impl SowApp {
                 camera_focus_target: None,
                 camera_focus_waiting_for_input_release: false,
                 tutorial_camera_focus: false,
+                camera_shot: None,
                 tutorial_zoom_in_events: 0,
                 tutorial_zoom_out_events: 0,
                 tutorial_camera_drag_events: 0,

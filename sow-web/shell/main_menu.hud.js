@@ -2421,6 +2421,9 @@
         var copy = document.createElement("span");
         var name = document.createElement("b");
         var details = document.createElement("small");
+        var detailsLabel = document.createElement("span");
+        var detailsSeparator = document.createElement("span");
+        var detailsEta = document.createElement("span");
         var troops = document.createElement("b");
         var actions = document.createElement("span");
         var emblem = document.createElement("span");
@@ -2437,12 +2440,18 @@
         copy.className = "sow-hud__operation-copy";
         name.className = "sow-hud__operation-name";
         details.className = "sow-hud__operation-details";
+        detailsLabel.className = "sow-hud__operation-details-label";
+        detailsSeparator.className = "sow-hud__operation-details-separator";
+        detailsSeparator.hidden = true;
+        detailsEta.className = "sow-hud__operation-details-eta";
+        detailsEta.hidden = true;
         troops.className = "sow-hud__operation-troops";
         actions.className = "sow-hud__operation-actions";
         avatar.append(portrait, emblem, glyph);
+        details.append(detailsLabel, detailsSeparator, detailsEta);
         copy.append(name, details);
         element.append(avatar, copy, troops, actions);
-        return { element: element, portrait: portrait, emblem: emblem, glyph: glyph, name: name, details: details, troops: troops, actions: actions, actionKey: "" };
+        return { element: element, portrait: portrait, emblem: emblem, glyph: glyph, name: name, details: details, detailsLabel: detailsLabel, detailsSeparator: detailsSeparator, detailsEta: detailsEta, troops: troops, actions: actions, actionKey: "" };
     }
 
     function operationAction(command, glyph, label, operation) {
@@ -2504,11 +2513,12 @@
             var details = operation.kind === "attack" && incoming
                 ? SOW_t("hud.attack_incoming", { count: formatNameplateTroops(troops) })
                 : SOW_t(operation.kind === "fleet" ? "hud.map_action_fleet" : "hud.map_action_attack");
+            var detailsEta = "";
             if (operation.kind === "fleet" && outgoing) {
                 details = SOW_t(retreating ? "hud.returning_transport" : "hud.map_action_fleet");
                 var etaSeconds = Number(operation.eta_seconds);
                 if (operation.eta_seconds != null && Number.isFinite(etaSeconds)) {
-                    details += " · " + SOW_t("hud.transport_eta", {
+                    detailsEta = SOW_t("hud.transport_eta", {
                         seconds: String(Math.max(1, Math.ceil(etaSeconds)))
                     });
                 }
@@ -2525,7 +2535,12 @@
                     : { kind: "fallback" }
             );
             if (row.name.textContent !== name) row.name.textContent = name;
-            if (row.details.textContent !== details) row.details.textContent = details;
+            if (row.detailsLabel.textContent !== details) row.detailsLabel.textContent = details;
+            var detailsSeparatorText = detailsEta === "" ? "" : " · ";
+            if (row.detailsSeparator.textContent !== detailsSeparatorText) row.detailsSeparator.textContent = detailsSeparatorText;
+            row.detailsSeparator.hidden = detailsEta === "";
+            if (row.detailsEta.textContent !== detailsEta) row.detailsEta.textContent = detailsEta;
+            row.detailsEta.hidden = detailsEta === "";
             var troopText = formatNameplateTroops(troops);
             if (row.troops.textContent !== troopText) row.troops.textContent = troopText;
             var canFocus = operation.focus_x != null && operation.focus_y != null

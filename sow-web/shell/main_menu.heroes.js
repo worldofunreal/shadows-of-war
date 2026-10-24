@@ -278,10 +278,9 @@
         var edge = 8;
         var gap = 6;
         var maxHeight = Math.min(240, Math.max(40, viewportHeight - edge * 2));
-        var width = Math.min(
-            Math.max(rect.width, menu.scrollWidth + 8),
-            Math.max(rect.width, viewportWidth - edge * 2)
-        );
+        var maxWidth = Math.max(0, viewportWidth - edge * 2);
+        if (menu.closest(".sow-menu__settings-dropdown")) maxWidth = Math.min(maxWidth, 280);
+        var width = Math.min(Math.max(rect.width, menu.scrollWidth + 8), maxWidth);
         var rtl = document.documentElement && document.documentElement.dir === "rtl";
         var left = rtl ? rect.right - width : rect.left;
         left = Math.max(edge, Math.min(left, viewportWidth - width - edge));

@@ -35,8 +35,10 @@
         hoveredEntityId: null,
         hoverStepId: null,
         hoverStepRecorded: false,
+        hoverPointerAway: false,
         mapUiStepRecorded: false,
         cameraTargetFactionId: null,
+        cameraShotStepId: null,
         reactionHighlightPlayerId: null,
         stepRevealTimer: null,
         stepRevealStepId: null,
@@ -210,9 +212,10 @@
         };
         if (step && step.guide) {
             context.zoomMode = zoomMode();
+            var cameraCue = step.camera_only === true && ["zoom_in", "zoom_out", "drag", "hover"].includes(step.guide.gesture);
             var facts = hud && hud.tutorial && hud.tutorial.facts || {};
             var hintKey = "";
-            if (step.guide.gesture === "zoom_in" || step.guide.gesture === "zoom_out") {
+            if (!cameraCue && (step.guide.gesture === "zoom_in" || step.guide.gesture === "zoom_out")) {
                 var zoomHintKey = stepTextKey(step, "_" + context.zoomMode + "_hint");
                 var zoomLabelKey = stepTextKey(step, "_" + context.zoomMode + "_label");
                 if (hasText(zoomHintKey)) {
@@ -229,16 +232,24 @@
                         direction: step.guide.gesture === "zoom_in" ? "min" : "max"
                     };
                 }
-            } else if (["drag", "hover"].includes(step.guide.gesture)) {
-                hintKey = stepTextKey(step, "_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint");
+            } else if (!cameraCue && ["drag", "hover"].includes(step.guide.gesture)) {
+                if (!cameraCue) hintKey = stepTextKey(step, "_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint");
                 if (step.trigger && step.trigger.type === "camera_target" && Number.isFinite(Number(step.trigger.distance))) {
                     var distance = cameraTargetDistance(step, hud);
                     var targetRadius = Number(facts.camera_target_radius);
                     if (!Number.isFinite(targetRadius) || targetRadius <= 0) targetRadius = step.trigger.distance;
                     var progressKey = stepTextKey(step, "_progress");
-                    if (Number.isFinite(distance) && hasText(progressKey)) context.guideMetric = { text: metricText(progressKey, {
-                        current: Math.ceil(distance), target: Math.ceil(targetRadius)
-                    }) };
+                    if (Number.isFinite(distance)) {
+                        var currentDistance = Math.ceil(distance), targetDistance = Math.ceil(targetRadius);
+                        context.guideMetric = {
+                            kind: "distance",
+                            current: currentDistance,
+                            target: targetDistance,
+                            label: hasText(progressKey) ? metricText(progressKey, {
+                                current: currentDistance, target: targetDistance
+                            }) : ""
+                        };
+                    }
                 }
             }
             if (step.guide.gesture === "tap" && step.guide.show_label !== false) {
@@ -433,6 +444,7 @@
             runtime.observingAfterDefeat = false;
             runtime.hoverEvents = 0;
             runtime.cameraTargetFactionId = null;
+            runtime.cameraShotStepId = null;
             runtime.hoveredEntityId = null;
             runtime.hoverStepId = null;
             runtime.hoverStepRecorded = false;
@@ -484,6 +496,7 @@
             runtime.pausedAction = null;
             runtime.hoverEvents = 0;
             runtime.cameraTargetFactionId = null;
+            runtime.cameraShotStepId = null;
             var hovered = runtime.latestHud.hovered;
             runtime.hoveredEntityId = hovered && !hovered.is_me && Number.isInteger(Number(hovered.id))
                 ? Number(hovered.id) : null;
@@ -664,6 +677,41 @@
         if (target) target.classList.add("sow-tutorial-guide-target");
     }
 
+    function campaignPlayer(hud, factionId) {
+        return factionId === "player"
+            ? (hud.players || []).find(function (player) { return player && player.is_me; })
+            : factionId && (hud.players || []).find(function (player) {
+                return player && player.campaign_faction_id === factionId;
+            });
+    }
+
+    function onMap(player) {
+        return Boolean(player && player.is_alive === true
+            && Number.isFinite(Number(player.centroid_x))
+            && Number.isFinite(Number(player.centroid_y)));
+    }
+
+    // Narration shots run once per scene, from the speaker's land to the faction the scene is about.
+    function syncCameraShot(step, hud) {
+        var camera = step.camera;
+        if (!camera || runtime.cameraShotStepId === step.id) return;
+        var to = campaignPlayer(hud, camera.to);
+        if (!onMap(to)) return;
+        var from = campaignPlayer(hud, camera.from || "player");
+        if (!onMap(from)) from = to;
+        if (send("focus_world", {
+            x: Number(to.centroid_x) + 0.5,
+            y: Number(to.centroid_y) + 0.5,
+            shot: {
+                kind: camera.shot,
+                from_x: Number(from.centroid_x) + 0.5,
+                from_y: Number(from.centroid_y) + 0.5,
+                seconds: Number.isFinite(camera.seconds) ? camera.seconds : 3,
+                ...(camera.machinima === true ? { machinima: true } : {})
+            }
+        })) runtime.cameraShotStepId = step.id;
+    }
+
     function markerTargetFor(step) {
         var facts = runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.facts || {};
         var eliminated = facts.eliminated_faction_ids || [];
@@ -695,6 +743,7 @@
         if (stepChanged) {
             runtime.hoverStepId = currentStep.id;
             runtime.hoverStepRecorded = false;
+            runtime.hoverPointerAway = false;
             runtime.mapUiStepRecorded = false;
         }
         var hoveredEntityId = hud.hovered && !hud.hovered.is_me && Number.isInteger(Number(hud.hovered.id))
@@ -713,9 +762,12 @@
             return player && Number(player.id) === hoveredEntityId && (hoverTarget === "player" ? player.is_me : player.campaign_faction_id === hoverTarget);
         }) || pointerNearTarget;
         var hoverDetected = tutorialTargetHovered || (hoveredEntityId !== null && hoverMatchesTarget) || pointerNearTarget;
+        var machinimaMoving = Boolean(tutorial.facts && tutorial.facts.machinima_active);
+        // The lesson is the player's gesture: a pointer already resting on the target when the step
+        // opens must leave it and come back before the hover counts.
+        if (!hoverDetected) runtime.hoverPointerAway = true;
         if (currentStep.trigger && currentStep.trigger.type === "hover" && !runtime.hoverStepRecorded
-            && hoverDetected
-            && (stepChanged || hoveredEntityId !== runtime.hoveredEntityId || pointerNearTarget || tutorialTargetHovered)) {
+            && !machinimaMoving && hoverDetected && runtime.hoverPointerAway) {
             runtime.hoverStepRecorded = true;
             runtime.hoverEvents++;
         }
@@ -818,6 +870,9 @@
             if (machineView.step.campaign_attack_on_enter) {
                 send("set_campaign_attack_permission", machineView.step.campaign_attack_on_enter);
             }
+            if (machineView.step.campaign_halt_on_enter) {
+                send("halt_campaign_faction", machineView.step.campaign_halt_on_enter);
+            }
             if (machineView.step.campaign_assault_on_enter) {
                 var assault = machineView.step.campaign_assault_on_enter;
                 send("activate_campaign_assault", {
@@ -842,14 +897,8 @@
             ? markerTargetFor(targetStep) : null;
         if (targetFactionId !== runtime.cameraTargetFactionId) {
             runtime.cameraTargetFactionId = targetFactionId;
-            var focusPlayer = targetFactionId === "player"
-                ? (hud.players || []).find(function (player) { return player && player.is_me; })
-                : targetFactionId && (hud.players || []).find(function (player) {
-                    return player && player.campaign_faction_id === targetFactionId;
-                });
-            if (focusPlayer && focusPlayer.is_alive === true
-                && Number.isFinite(Number(focusPlayer.centroid_x))
-                && Number.isFinite(Number(focusPlayer.centroid_y))) {
+            var focusPlayer = campaignPlayer(hud, targetFactionId);
+            if (onMap(focusPlayer)) {
                 send("focus_world", {
                     x: Number(focusPlayer.centroid_x) + 0.5,
                     y: Number(focusPlayer.centroid_y) + 0.5
@@ -860,9 +909,7 @@
         var markerId = null;
         var markerTarget = markerTargetFor(machineView.step);
         if (markerTarget) {
-            var marked = markerTarget === "player"
-                ? (hud.players || []).find(function (player) { return player && player.is_me; })
-                : (hud.players || []).find(function (player) { return player && player.campaign_faction_id === markerTarget; });
+            var marked = campaignPlayer(hud, markerTarget);
             if (marked && Number.isInteger(Number(marked.id))) markerId = Number(marked.id);
         }
         if (markerId !== runtime.markerId) {
@@ -892,6 +939,7 @@
                 clearStepRevealTimer();
                 var displayView = placementGuideView(machineView, hud);
                 runtime.view.render(displayView, renderContext(displayView.step, hud, anchorFor(displayView.step, hud), displayView));
+                syncCameraShot(machineView.step, hud);
             }
         }
         if (machineView.done && !runtime.completionSent) {

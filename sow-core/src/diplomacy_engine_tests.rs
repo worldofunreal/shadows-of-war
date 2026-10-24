@@ -37,6 +37,55 @@ mod alliance_lifecycle_tests {
     }
 
     #[test]
+    fn share_assault_sends_trinovantes_whole_army_at_camulodunum() {
+        use crate::protocol::{CampaignRelation, Team};
+
+        let mut engine = campaign_contact_engine(0.0, false);
+        engine
+            .state
+            .map
+            .terrain
+            .fill(crate::map::MapTile::from_byte(0x80));
+        let config = engine.state.config.clone();
+
+        let mut trinovantes = Player::new_bot(3, "Trinovantes".into(), [0.2; 3], &config);
+        trinovantes.team = Some(Team::Blue);
+        trinovantes.tile_count = 1;
+        trinovantes.troops = 1_000.0;
+        trinovantes.max_troops = 1_000.0;
+        trinovantes.border_insert(0);
+        engine.state.register_player(trinovantes);
+        engine.state.map.set_owner_id(0, 0, 3);
+        engine.campaign_faction_ids.insert(3, "trinovantes".into());
+        engine.campaign_relations.insert(3, CampaignRelation::Allied);
+
+        let mut camulodunum = Player::new_bot(4, "Camulodunum".into(), [0.8, 0.2, 0.2], &config);
+        camulodunum.team = Some(Team::Red);
+        camulodunum.tile_count = 1;
+        camulodunum.troops = 100.0;
+        camulodunum.max_troops = 100.0;
+        camulodunum.border_insert(1);
+        engine.state.register_player(camulodunum);
+        engine.state.map.set_owner_id(1, 0, 4);
+        engine.campaign_faction_ids.insert(4, "camulodunum".into());
+        engine.campaign_relations.insert(4, CampaignRelation::Enemy);
+
+        assert_eq!(
+            engine.activate_campaign_assault(Team::Blue, 4, false, false, None, false),
+            1
+        );
+        for _ in 0..300 {
+            engine.tick();
+        }
+        let remaining = engine.state.player(3).unwrap().troops;
+        assert!(
+            remaining < 50.0,
+            "Trinovantes kept {remaining} of 1000 troops"
+        );
+        assert!(engine.state.player(4).unwrap().troops < 100.0);
+    }
+
+    #[test]
     fn alliance_action_state_matches_request_and_renewal_lifecycle() {
         use AllianceActionState::*;
 

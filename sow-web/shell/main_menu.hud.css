@@ -957,7 +957,8 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
 .sow-hud__sheet :focus-visible { outline: 2px solid var(--sow-gold-bright); outline-offset: 2px; }
 
 /* Shared controls */
-.sow-hud__sheet input[type="range"] {
+.sow-hud__sheet input[type="range"],
+#sow-menu .sow-menu__settings-controls input[type="range"] {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
@@ -965,8 +966,10 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     margin: 0;
     background: transparent;
 }
-.sow-hud__sheet input[type="range"]::-webkit-slider-runnable-track { height: 12px; border-radius: 6px; background: var(--sow-track, rgb(255 255 255 / 16%)); }
-.sow-hud__sheet input[type="range"]::-webkit-slider-thumb {
+.sow-hud__sheet input[type="range"]::-webkit-slider-runnable-track,
+#sow-menu .sow-menu__settings-controls input[type="range"]::-webkit-slider-runnable-track { height: 12px; border-radius: 6px; background: var(--sow-track, rgb(255 255 255 / 16%)); }
+.sow-hud__sheet input[type="range"]::-webkit-slider-thumb,
+#sow-menu .sow-menu__settings-controls input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 32px;
     height: 32px;
@@ -976,8 +979,10 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     background: var(--sow-gold);
     box-shadow: 0 2px 6px rgb(0 0 0 / 50%);
 }
-.sow-hud__sheet input[type="range"]::-moz-range-track { height: 12px; border-radius: 6px; background: var(--sow-track, rgb(255 255 255 / 16%)); }
-.sow-hud__sheet input[type="range"]::-moz-range-thumb { width: 26px; height: 26px; border: 3px solid #10171c; border-radius: 50%; background: var(--sow-gold); }
+.sow-hud__sheet input[type="range"]::-moz-range-track,
+#sow-menu .sow-menu__settings-controls input[type="range"]::-moz-range-track { height: 12px; border-radius: 6px; background: var(--sow-track, rgb(255 255 255 / 16%)); }
+.sow-hud__sheet input[type="range"]::-moz-range-thumb,
+#sow-menu .sow-menu__settings-controls input[type="range"]::-moz-range-thumb { width: 26px; height: 26px; border: 3px solid #10171c; border-radius: 50%; background: var(--sow-gold); }
 
 .sow-hud__switch {
     -webkit-appearance: none;
@@ -2794,6 +2799,10 @@ html[dir="rtl"] .sow-hud__dev-play::before { transform: scaleX(-1); }
     .sow-hud__operation { grid-template-columns: max-content minmax(0, 1fr); gap: 2px; }
     .sow-hud__operation-avatar { grid-column: 1; grid-row: 1; width: 28px; height: 28px; }
     .sow-hud__operation-copy { grid-column: 2; grid-row: 1; }
+    .sow-hud__operation-details { display: flex; text-overflow: clip; }
+    .sow-hud__operation-details-label { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+    .sow-hud__operation-details-separator,
+    .sow-hud__operation-details-eta { flex: 0 0 auto; }
     .sow-hud__operation-troops { grid-column: 1; grid-row: 2; }
     .sow-hud__operation-actions { grid-column: 2; grid-row: 2; gap: 0; }
     .sow-hud__dock-inner {

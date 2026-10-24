@@ -9,6 +9,10 @@
         if (!(width > 0) || !(height > 0)) return false;
         return width <= height ? width <= 959 : Math.min(width / 960, height / 720) < 1;
     }
+    function isCameraCue(step) {
+        return Boolean(step && step.camera_only && step.guide
+            && ["zoom_in", "zoom_out", "drag", "hover"].includes(step.guide.gesture));
+    }
     function compactGuideMetric(step, progress) {
         const trigger = step && step.trigger || {};
         if (!step || !step.guide || step.guide.show_label === false || !progress
@@ -55,7 +59,7 @@
                 '<button class="sow-story__locate" type="button" data-story-focus>⌖</button></aside>' +
             '<div class="sow-story__spotlight" aria-hidden="true" hidden></div>' +
             '<button class="sow-story__guide-skip" type="button" data-story-guide-skip hidden></button>' +
-            '<div class="sow-story__gesture" data-tutorial-hand hidden><span class="sow-story__ripple" aria-hidden="true"></span><span class="sow-story__hand" aria-hidden="true"><img alt="" draggable="false"></span><span class="sow-story__zoom" aria-hidden="true"><span class="sow-story__zoom-fingers"><i></i><i></i><b>↔</b></span><span class="sow-story__zoom-wheel">↕</span></span><span class="sow-story__pan-keys" aria-hidden="true"><kbd>↑</kbd><span><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span></span><span class="sow-story__gesture-label" hidden><span class="sow-story__gesture-copy"></span><span class="sow-story__gesture-hint" hidden></span><span class="sow-story__gesture-metric" hidden><b class="sow-story__zoom-current"></b><i aria-hidden="true">→</i><b class="sow-story__zoom-target"></b></span></span></div>';
+            '<div class="sow-story__gesture" data-tutorial-hand hidden><span class="sow-story__ripple" aria-hidden="true"></span><span class="sow-story__hand" aria-hidden="true"><img alt="" draggable="false"></span><span class="sow-story__zoom" aria-hidden="true"><span class="sow-story__zoom-fingers"><i></i><i></i><b></b></span><span class="sow-story__zoom-wheel"></span></span><span class="sow-story__pan-keys" aria-hidden="true"><kbd>↑</kbd><span><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span></span><span class="sow-story__gesture-label" role="status" aria-live="polite" aria-atomic="true" hidden><span class="sow-story__gesture-copy"></span><span class="sow-story__gesture-hint" hidden></span><span class="sow-story__gesture-metric" hidden><span class="sow-story__distance-tile" aria-hidden="true"></span><b class="sow-story__zoom-current"></b><i aria-hidden="true">→</i><span class="sow-story__distance-target" aria-hidden="true">⌖</span><b class="sow-story__zoom-target"></b></span></span></div>';
         const find = selector => root.querySelector(selector);
         const dialog = find(".sow-story__dialog"), shade = find(".sow-story__shade");
         const guideSkip = find("[data-story-guide-skip]");
@@ -201,7 +205,7 @@
         function positionGuideLabel(anchor, statusOnly) {
             if (!anchor || !Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) return;
             const ratioGuide = !statusOnly && model.step.guide && model.step.guide.kind === "ui" && model.step.guide.target === "attack_ratio";
-            const measureKey = gestureCopy.textContent + ":" + gestureMetric.textContent + ":" + root.clientWidth + ":" + root.clientHeight + ":" + (statusOnly ? "status" : "guide");
+            const measureKey = gestureCopy.textContent + ":" + gestureMetric.classList.contains("is-distance") + ":" + gestureMetric.classList.contains("is-text") + ":" + gestureMetric.textContent.length + ":" + root.clientWidth + ":" + root.clientHeight + ":" + (statusOnly ? "status" : "guide");
             if (measureKey !== guideLabelMeasureKey) {
                 guideLabelMeasureKey = measureKey;
                 const rect = gestureLabel.getBoundingClientRect();
@@ -457,11 +461,34 @@
             if (guidePulse) { guidePulse.cancel(); guidePulse = null; }
             guideStepId = ""; guideLastPulseValue = NaN; guideLastPulseAt = 0;
             gestureMetric.hidden = true;
-            gestureMetric.classList.remove("is-text");
+            gestureMetric.classList.remove("is-text", "is-distance");
+            gestureLabel.classList.remove("has-distance-metric");
+            gestureMetric.removeAttribute("role"); gestureMetric.removeAttribute("aria-label");
             setText(guideCurrent, ""); setText(guideTarget, "");
         }
         function renderGuideMetric(metric, reducedMotion, stepId) {
             if (!metric) { clearGuideMetric(); return; }
+            if (metric.kind === "distance") {
+                const current = Number(metric.current), target = Number(metric.target);
+                if (!Number.isFinite(current) || !Number.isFinite(target)) { clearGuideMetric(); return; }
+                if (guidePulse) { guidePulse.cancel(); guidePulse = null; }
+                guideStepId = stepId; guideLastPulseValue = NaN; guideLastPulseAt = 0;
+                gestureMetric.hidden = false;
+                gestureMetric.classList.remove("is-text"); gestureMetric.classList.add("is-distance");
+                gestureLabel.classList.add("has-distance-metric");
+                setText(guideCurrent, Math.ceil(current).toLocaleString());
+                setText(guideTarget, "≤" + Math.ceil(target).toLocaleString());
+                if (metric.label) {
+                    gestureMetric.setAttribute("role", "img");
+                    gestureMetric.setAttribute("aria-label", metric.label);
+                } else {
+                    gestureMetric.removeAttribute("role"); gestureMetric.removeAttribute("aria-label");
+                }
+                return;
+            }
+            gestureMetric.classList.remove("is-distance");
+            gestureLabel.classList.remove("has-distance-metric");
+            gestureMetric.removeAttribute("role"); gestureMetric.removeAttribute("aria-label");
             if (typeof metric.text === "string" && metric.text) {
                 if (guidePulse) { guidePulse.cancel(); guidePulse = null; }
                 guideStepId = stepId; guideLastPulseValue = NaN; guideLastPulseAt = 0;
@@ -542,7 +569,8 @@
             syncCinematic(step);
             root.dataset.stepId = step.id;
             root.dataset.stepType = step.type;
-            objective.hidden = modal || context.hideObjective === true || compactViewport;
+            const cameraCue = isCameraCue(step);
+            objective.hidden = modal || context.hideObjective === true || compactViewport || cameraCue;
             dialog.setAttribute("role", "dialog");
             dialog.setAttribute("aria-modal", "true");
             dialog.setAttribute("aria-labelledby", uid + (showTitle && (line.title_key || step.title_key) ? "-title" : "-body"));
@@ -572,7 +600,6 @@
                 actions.scrollTop = 0;
                 setText(title, copyTitle); title.hidden = !copyTitle;
                 setText(body, copyBody); body.hidden = !copyBody;
-                dialog.dataset.copy = copyBody.length <= 80 ? "short" : copyBody.length <= 180 ? "medium" : "long";
                 cinematicVideo.setAttribute("aria-label", copyTitle || speakerName || "Campaign cinematic");
                 const avatarPath = step.portrait_expression ? "expressions/" + character.avatar + "_" + step.portrait_expression : character.avatar;
                 const avatar = character.avatar && character.avatar !== "null" ? options.asset("gameplay/avatars/" + avatarPath + ".webp") : "";
@@ -643,6 +670,16 @@
             const gestureType = step.guide && step.guide.gesture;
             const showGestureText = !step.guide || step.guide.show_label !== false;
             const zoomGuide = gestureType && gestureType.startsWith("zoom_");
+            const cameraCueLabel = cameraCue
+                ? gestureType === "zoom_in" ? t("hud.zoom_in")
+                    : gestureType === "zoom_out" ? t("hud.zoom_out")
+                        : gestureType === "hover" ? "Hover" : "Move"
+                : "";
+            const cameraCueHint = cameraCue && zoomGuide
+                ? context.zoomMode === "wheel" ? "Mouse wheel"
+                    : gestureType === "zoom_in" ? "Spread" : "Pinch"
+                : cameraCue && gestureType === "drag" && context.zoomMode === "wheel" ? "Click and hold"
+                : cameraCue && gestureType === "hover" && context.zoomMode === "pinch" ? "Hold" : "";
             const zoomButtonGuide = step.guide && step.guide.kind === "ui" && ["hud_zoom_in", "hud_zoom_out"].includes(step.guide.target);
             const homeGuide = Boolean(step.guide && step.guide.kind === "ui" && step.guide.target === "hud_center_camera"
                 && step.guide.gesture === "tap" && step.trigger && step.trigger.type === "ui" && step.trigger.action === "hud_center_camera");
@@ -653,17 +690,20 @@
                 && Number.isFinite(anchor.x) && Number.isFinite(anchor.y);
             const statusLabel = statusVisible ? compactStatusLabel(step, context, t) : "";
             compactStatusVisible = Boolean(statusVisible && statusLabel);
-            const labeledGesture = compactStatusVisible || showGestureText && (zoomGuide || zoomButtonGuide || ["drag", "pan_keys", "hover"].includes(gestureType) || Boolean(context.gestureLabel));
+            const labeledGesture = cameraCue || compactStatusVisible || showGestureText && (zoomGuide || zoomButtonGuide || ["drag", "pan_keys", "hover"].includes(gestureType) || Boolean(context.gestureLabel));
             gestureLabel.hidden = !labeledGesture;
             const gestureTitleKey = zoomGuide ? (gestureType === "zoom_in" ? "hud.zoom_in" : "hud.zoom_out")
                 : zoomButtonGuide ? (step.guide.target === "hud_zoom_in" ? "hud.zoom_in" : "hud.zoom_out") : step.title_key;
-            if (labeledGesture) setText(gestureCopy, compactStatusVisible ? statusLabel : context.gestureLabel || t(gestureTitleKey));
-            const showGestureHint = !compactStatusVisible && showGestureText && (gestureType === "hover" || zoomGuide) && Boolean(context.gestureHint || context.hintOverride);
+            if (labeledGesture) setText(gestureCopy, cameraCue ? cameraCueLabel : compactStatusVisible ? statusLabel : context.gestureLabel || t(gestureTitleKey));
+            const showGestureHint = cameraCue ? Boolean(cameraCueHint)
+                : !compactStatusVisible && showGestureText && (gestureType === "hover" || zoomGuide) && Boolean(context.gestureHint || context.hintOverride);
             gestureHint.hidden = !showGestureHint;
-            if (showGestureHint) setText(gestureHint, context.gestureHint || context.hintOverride);
+            if (showGestureHint) setText(gestureHint, cameraCue ? cameraCueHint : context.gestureHint || context.hintOverride);
             const guideVisible = Boolean(!modal && !statusOnly && step.guide && anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y));
             const statusDrawable = Boolean(compactStatusVisible && statusLabel);
-            renderGuideMetric(context.guideMetric || (compactViewport && guideVisible ? compactGuideMetric(step, progress) : null), reducedMotion, step.id);
+            const guideMetric = context.guideMetric;
+            renderGuideMetric(cameraCue ? null : guideMetric || (compactViewport && guideVisible ? compactGuideMetric(step, progress) : null),
+            reducedMotion, step.id);
             gesture.hidden = !guideVisible && !statusDrawable;
             gesture.classList.toggle("is-status", statusDrawable);
             gesture.classList.toggle("is-compact", compactViewport);

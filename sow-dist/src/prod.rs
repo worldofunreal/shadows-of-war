@@ -831,6 +831,10 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
         ("hero_ability", "hero ability client tests failed"),
         ("status_badge", "nameplate status badge tests failed"),
         ("troop_transfer", "troop transfer nameplate tests failed"),
+        (
+            "death_avatar",
+            "death avatar presentation and loading tests failed",
+        ),
     ] {
         run(
             "cargo",
@@ -1078,8 +1082,16 @@ fn relay_runtime_command(start_missing: bool) -> Result<String> {
             .map(|id| format!("timeout 90s sudo systemctl start sow-relay@{id}.service"))
             .collect::<Vec<_>>()
             .join("; ");
+        // A partial set cannot heal in place: the primary (worker 0) cannot
+        // re-take the NIC while secondaries still hold it. Stop every worker,
+        // secondaries first, then start them all again in order.
+        let stops = (0..count)
+            .rev()
+            .map(|id| format!("timeout 90s sudo systemctl stop sow-relay@{id}.service"))
+            .collect::<Vec<_>>()
+            .join("; ");
         command.push_str(&format!(
-            " if [ \"$active\" -eq 0 ]; then sudo systemctl enable sow-relay.service >/dev/null; sudo systemctl daemon-reload >/dev/null; {starts}; elif [ \"$active\" -ne {count} ]; then echo 'partial relay worker failure; refusing unsafe DPDK recovery' >&2; exit 78; else sudo systemctl enable sow-relay.service >/dev/null; fi;"
+            " if [ \"$active\" -ne {count} ]; then sudo systemctl enable sow-relay.service >/dev/null; sudo systemctl daemon-reload >/dev/null; if [ \"$active\" -ne 0 ]; then echo 'partial relay worker failure; restarting all workers in order' >&2; {stops}; fi; {starts}; else sudo systemctl enable sow-relay.service >/dev/null; fi;"
         ));
     }
     command.push_str(" systemctl is-enabled --quiet sow-relay.service; systemctl is-active --quiet sow-relay.service; systemctl is-enabled --quiet chrony.service; systemctl is-active --quiet chrony.service; test \"$(timedatectl show -p NTPSynchronized --value)\" = yes;");

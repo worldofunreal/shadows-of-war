@@ -1283,6 +1283,89 @@ mod bot_iq_alliance_tests {
         );
     }
 
+    /// Campaign faction on Snettisham's terms: 200 gold received, iq 85, construction held.
+    fn test_engine_held_campaign_faction() -> SowEngine {
+        let w = 48u32;
+        let h = 48u32;
+        let config = crate::game_config::GameConfig::default();
+        let mut game = GameState::new(42, w, h, config.clone());
+        game.phase = GamePhase::Playing;
+        for t in game.map.terrain.iter_mut() {
+            *t = crate::map::MapTile::from_byte(0b1000_0000);
+        }
+        let owner = 10u16;
+        let mut sum_x = 0u64;
+        let mut sum_y = 0u64;
+        let mut count = 0u32;
+        for y in 4..28 {
+            for x in 4..28 {
+                game.map.set_owner_id(x, y, owner);
+                sum_x += x as u64;
+                sum_y += y as u64;
+                count += 1;
+            }
+        }
+        let mut faction = Player::new_bot(10, "Snettisham".into(), [0.0, 1.0, 0.0], &config);
+        faction.iq = 85;
+        faction.iq_points = 500.0;
+        faction.gold = 200.0;
+        faction.troops = 5_000.0;
+        faction.tile_count = count;
+        faction.sum_x = sum_x;
+        faction.sum_y = sum_y;
+        for x in 4..28 {
+            faction.border_insert(4 * w + x);
+            faction.border_insert(27 * w + x);
+        }
+        for y in 5..27 {
+            faction.border_insert(y * w + 4);
+            faction.border_insert(y * w + 27);
+        }
+        game.players.push(faction);
+        let mut lookup = vec![None; 11];
+        lookup[10] = Some(0);
+        game.player_lookup = lookup;
+        let mut engine = SowEngine::new(game, WaterComponents::default());
+        engine.campaign_structure_hold_ids.insert(10);
+        engine.refresh_building_grid();
+        engine.building_aggregates_dirty = true;
+        engine
+    }
+
+    #[test]
+    fn held_campaign_faction_builds_nothing_until_its_contact_is_decided() {
+        let mut engine = test_engine_held_campaign_faction();
+        run_building_sim_ticks(&mut engine, 2000);
+        assert!(
+            !engine.buildings.iter().any(|b| b.owner_id == 10),
+            "held faction must not build before the player decides"
+        );
+        engine.campaign_contact_resolved.insert(10);
+        let mut first_kind = None;
+        for _ in 0..2000 {
+            run_building_sim_ticks(&mut engine, 1);
+            engine.execute_construction();
+            if first_kind.is_none() {
+                first_kind = engine
+                    .buildings
+                    .iter()
+                    .find(|b| b.owner_id == 10)
+                    .map(|b| b.kind);
+            }
+        }
+        assert_eq!(
+            first_kind,
+            Some(crate::game::BuildingKind::City),
+            "the first building after the decision is the village (City), not a cheaper structure"
+        );
+        assert!(
+            engine.buildings.iter().any(|b| b.owner_id == 10
+                && b.kind == crate::game::BuildingKind::City
+                && !b.under_construction),
+            "after the decision the received gold builds a finished City"
+        );
+    }
+
     fn run_building_sim_ticks(engine: &mut SowEngine, ticks: u64) {
         engine.state.config.global_speed_multiplier = 1.0;
         for _ in 0..ticks {

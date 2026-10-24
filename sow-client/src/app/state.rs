@@ -79,6 +79,9 @@ pub struct TutorialObservation {
         std::collections::BTreeMap<String, CampaignSupportReceipt>,
     pub structure_upgrades: u64,
     pub structure_levels: std::collections::BTreeMap<String, u64>,
+    /// Highest level per campaign faction id and building kind, for faction-scoped structure triggers.
+    pub faction_structure_levels:
+        std::collections::BTreeMap<String, std::collections::BTreeMap<String, u64>>,
     pub city_upgrades: u64,
     pub city_levels: u64,
     pub port_upgrades: u64,
@@ -273,6 +276,7 @@ pub struct InputState {
     pub camera_focus_target: Option<(f32, f32)>,
     pub camera_focus_waiting_for_input_release: bool,
     pub tutorial_camera_focus: bool,
+    pub camera_shot: Option<CameraShot>,
     pub tutorial_zoom_in_events: u64,
     pub tutorial_zoom_out_events: u64,
     pub tutorial_camera_drag_events: u64,
@@ -288,6 +292,17 @@ impl InputState {
             || self.last_pinch_state.is_some()
             || !self.active_touches.is_empty()
     }
+}
+
+/// Scripted campaign camera move: waypoints of (world center, zoom) played over `seconds`.
+pub struct CameraShot {
+    pub keys: Vec<((f32, f32), f32)>,
+    pub seconds: f32,
+    pub elapsed: f32,
+    /// Camera (x, y, zoom) as the shot last left it. Any other change means the player took over.
+    pub left_at: (f32, f32, f32),
+    /// Machinima moves are code-directed: player drag, zoom and key pan are ignored until they land.
+    pub machinima: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

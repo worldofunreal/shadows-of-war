@@ -247,6 +247,7 @@ impl SowEngine {
                     && player.player_type != crate::player::PlayerType::Human
                     && player.alive
                     && self.campaign_support_intervals.contains_key(&player.id)
+                    && !self.campaign_halted_ids.contains(&player.id)
                     && self.campaign_relations.get(&player.id)
                         == Some(&crate::protocol::CampaignRelation::Allied)
                     && contacted.contains(&player.id)

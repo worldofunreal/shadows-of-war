@@ -187,6 +187,25 @@ impl TutorialObservation {
                 .max()
                 .unwrap_or_default(),
         );
+        for building in &engine.buildings {
+            let Some(faction_id) = engine.campaign_faction_ids.get(&building.owner_id) else {
+                continue;
+            };
+            let key = match building.kind {
+                sow_core::game::BuildingKind::City => "city",
+                sow_core::game::BuildingKind::Farm => "farm",
+                sow_core::game::BuildingKind::Factory => "factory",
+                sow_core::game::BuildingKind::Tower => "tower",
+                sow_core::game::BuildingKind::Port => "port",
+            };
+            let level = u64::from(building.active_level());
+            self.faction_structure_levels
+                .entry(faction_id.clone())
+                .or_default()
+                .entry(key.to_string())
+                .and_modify(|current| *current = (*current).max(level))
+                .or_insert(level);
+        }
         if me.has_spawned {
             if let Some(previous) = self.previous_tiles.replace(me.tile_count) {
                 self.tiles_gained = self

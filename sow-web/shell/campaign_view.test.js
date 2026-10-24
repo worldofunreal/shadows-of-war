@@ -736,10 +736,62 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     assert.equal(root.querySelector(".sow-story__zoom-current").textContent, "1.25×");
     assert.equal(root.querySelector(".sow-story__zoom-target").textContent, "≥2×", "zoom keeps the existing directional distance metric");
 
+    const cameraZoomOut = { ...zoom, id: "boudica_zoom_out", camera_only: true, guide: { ...zoom.guide, gesture: "zoom_out" } };
+    const cameraZoomModel = { ...zoomModel, step: cameraZoomOut, line: cameraZoomOut };
+    root.clientWidth = 1366; root.clientHeight = 768;
+    renderer.render(cameraZoomModel, {
+        anchor: { x: 190, y: 400 }, zoomMode: "wheel", gestureLabel: "Zoom out · scroll down",
+        gestureHint: "Scroll the mouse wheel down to zoom out.", guideMetric: { current: 1, target: 0.2, direction: "max" }
+    });
+    assert.equal(root.querySelector(".sow-story__objective").hidden, true, "camera cues replace the duplicate desktop objective");
+    assert.equal(root.querySelector(".sow-story__gesture-copy").textContent, "hud.zoom_out", "the primary cue names only the action");
+    assert.equal(root.querySelector(".sow-story__gesture-hint").textContent, "Mouse wheel", "desktop keeps only the short input signal");
+    assert.equal(root.querySelector(".sow-story__gesture").dataset.zoomMode, "wheel");
+    assert.equal(root.querySelector(".sow-story__gesture-metric").hidden, true, "camera zoom numbers are omitted");
+    assert.equal(root.querySelector(".sow-story__zoom-current").textContent, "");
+    assert.equal(root.querySelector(".sow-story__zoom-target").textContent, "");
+    assert.match(campaignView, /class="sow-story__gesture-label" role="status" aria-live="polite" aria-atomic="true"/);
+    assert.match(storyCss, /\.sow-story__zoom-wheel::after\s*\{\s*content:\s*"↓"/);
+    assert.match(storyCss, /data-gesture="zoom_in"\] \.sow-story__zoom-wheel::after\s*\{\s*content:\s*"↑"/);
+
+    const cameraZoomIn = { ...cameraZoomOut, id: "boudica_zoom_in", guide: { ...cameraZoomOut.guide, gesture: "zoom_in" } };
+    renderer.render({ ...cameraZoomModel, step: cameraZoomIn, line: cameraZoomIn }, { anchor: { x: 190, y: 400 }, zoomMode: "trackpad" });
+    assert.equal(root.querySelector(".sow-story__gesture-copy").textContent, "hud.zoom_in");
+    assert.equal(root.querySelector(".sow-story__gesture-hint").textContent, "Spread", "trackpad and touch share the familiar two-finger cue");
+    assert.equal(root.querySelector(".sow-story__gesture-metric").hidden, true);
+
+    const cameraDrag = { ...cameraZoomOut, id: "boudica_camera_drag", guide: { ...cameraZoomOut.guide, gesture: "drag" } };
+    root.clientWidth = 844; root.clientHeight = 390;
+    renderer.render({ ...cameraZoomModel, step: cameraDrag, line: cameraDrag }, {
+        anchor: { x: 190, y: 400 }, zoomMode: "wheel", gestureLabel: "Center Suetonius",
+        gestureHint: "Drag the map until Suetonius is near the center.",
+        guideMetric: { kind: "distance", current: 18, target: 8, label: "18 tiles away · goal: 8 or closer" }
+    });
+    assert.equal(root.querySelector(".sow-story__objective").hidden, true);
+    assert.equal(root.querySelector(".sow-story__gesture-copy").textContent, "Move");
+    assert.equal(root.querySelector(".sow-story__gesture-hint").textContent, "Click and hold", "mouse users get the familiar hold instruction");
+    renderer.render({ ...cameraZoomModel, step: cameraDrag, line: cameraDrag }, { anchor: { x: 190, y: 400 }, zoomMode: "trackpad" });
+    assert.equal(root.querySelector(".sow-story__gesture-copy").textContent, "Move");
+    assert.equal(root.querySelector(".sow-story__gesture-hint").hidden, true, "trackpad and touch do not get a mouse instruction");
+    const cameraDistanceMetric = root.querySelector(".sow-story__gesture-metric");
+    assert.equal(cameraDistanceMetric.hidden, true, "camera distance numbers are omitted");
+    assert.equal(root.querySelector(".sow-story__zoom-current").textContent, "");
+    assert.equal(root.querySelector(".sow-story__zoom-target").textContent, "");
+    assert.match(storyCss, /\.sow-story__gesture\.is-compact \.sow-story__gesture-label \{[^}]*overflow-x: hidden/);
+    assert.match(storyCss, /\.sow-story__gesture-label\.has-distance-metric \.sow-story__gesture-copy \{[^}]*font-size: 15px/);
+    assert.match(storyCss, /\.sow-story__gesture-metric\.is-distance \.sow-story__zoom-target \{[^}]*font-size: 13px/);
+
+    const cameraHover = { ...cameraZoomOut, id: "boudica_camera_hover", guide: { ...cameraZoomOut.guide, gesture: "hover" } };
+    root.clientWidth = 390; root.clientHeight = 844;
+    renderer.render({ ...cameraZoomModel, step: cameraHover, line: cameraHover }, { anchor: { x: 190, y: 400 }, zoomMode: "pinch" });
+    assert.equal(root.querySelector(".sow-story__gesture-copy").textContent, "Hover");
+    assert.equal(root.querySelector(".sow-story__gesture-hint").textContent, "Hold");
+    assert.equal(root.querySelector(".sow-story__gesture-metric").hidden, true);
+
     const distance = { id: "camera_distance", type: "objective", title_key: "distance_title", trigger: { type: "camera_target", distance: 8 }, guide: { kind: "world", target: "player", gesture: "drag" } };
     const distanceModel = { ...objectiveModel, step: distance, line: distance, progress: { current: 0, target: 1 } };
     renderer.render(distanceModel, { anchor: { x: 190, y: 400 }, gestureLabel: "Move the map", guideMetric: { text: "8 / 12 tiles" } });
-    assert.equal(root.querySelector(".sow-story__zoom-target").textContent, "8 / 12 tiles", "camera distance keeps its existing metric");
+    assert.equal(root.querySelector(".sow-story__zoom-target").textContent, "8 / 12 tiles", "generic counters keep their existing text metric");
 
     const passive = { id: "support_wait", type: "objective", title_key: "support_title", hint_key: "support_hint", trigger: { type: "support" } };
     const passiveModel = { ...objectiveModel, step: passive, line: passive, progress: { current: 0, target: 1 } };
@@ -1019,6 +1071,104 @@ test("a marked campaign decision smoothly focuses its player target once on entr
 });
 
 
+test("a narrated scene films its camera shot once, from the speaker to its subject", async () => {
+    const commands = [], root = { hidden: true, isConnected: false };
+    const model = {
+        step: { id: "march", type: "scene", camera: { shot: "link", from: "player", to: "rome" } },
+        paused: true,
+        state: { choices: {} },
+        choices: []
+    };
+    const document = {
+        body: { appendChild(node) { node.isConnected = true; } },
+        documentElement: { dir: "ltr" },
+        getElementById: () => null,
+        createElement: () => root,
+        addEventListener() {}
+    };
+    const window = {
+        addEventListener() {},
+        SOW_menu_command(message) { commands.push(JSON.parse(message)); },
+        SOWCampaign: {
+            validate: () => ({ errors: [] }), UI_TARGETS: {}, zoomInputMode: () => "wheel",
+            create: () => ({ state: { choices: {} }, update: () => model, view: () => model, advance: () => true })
+        },
+        SOWCampaignView: { mount: () => ({ render() {}, destroy() {} }) }
+    };
+    vm.runInNewContext(tutorial, { window, document, performance: { now: () => 0 }, console,
+        fetch(url) {
+            const data = url.endsWith(".triggers.json")
+                ? { episode_id: "boudica", settings: {}, strings: {}, speakers: {}, steps: [model.step] }
+                : { factions: [] };
+            return Promise.resolve({ ok: true, json: () => Promise.resolve(data) });
+        }
+    });
+    const update = () => window.SOW_tutorial_state_update({ phase: "Playing", hud: {
+        players: [
+            { id: 1, name: "Boudica", is_me: true, is_alive: true, centroid_x: 12, centroid_y: 34 },
+            { id: 2, name: "Rome", campaign_faction_id: "rome", is_alive: true, centroid_x: 50, centroid_y: 60 }
+        ],
+        settings: {}, tutorial: { active: true, episode_id: "boudica", facts: {} }
+    } });
+    update();
+    await new Promise(setImmediate);
+    update();
+    const shots = commands.filter(command => command.type === "focus_world");
+    assert.equal(shots.length, 1, JSON.stringify(commands));
+    assert.deepEqual(shots[0], {
+        type: "focus_world", x: 50.5, y: 60.5,
+        shot: { kind: "link", from_x: 12.5, from_y: 34.5, seconds: 3 }
+    });
+});
+
+
+test("the hover lesson waits for the player to move onto the target during the step", async () => {
+    const root = { hidden: true, isConnected: false }, seen = [];
+    const model = {
+        step: { id: "boudica_camera_hover", type: "objective", trigger: { type: "hover", target: "rome", value: 1, scope: "step" }, camera_only: true, pause_game: true },
+        paused: true,
+        state: { choices: {} },
+        choices: []
+    };
+    const document = {
+        body: { appendChild(node) { node.isConnected = true; } },
+        documentElement: { dir: "ltr" },
+        getElementById: () => null,
+        createElement: () => root,
+        addEventListener() {}
+    };
+    const window = {
+        addEventListener() {},
+        SOW_menu_command() {},
+        SOWCampaign: {
+            validate: () => ({ errors: [] }), UI_TARGETS: {}, zoomInputMode: () => "wheel",
+            create: () => ({ state: { choices: {} }, update(facts) { seen.push(facts.hover_events); return model; }, view: () => model, advance: () => true })
+        },
+        SOWCampaignView: { mount: () => ({ render() {}, destroy() {} }) }
+    };
+    vm.runInNewContext(tutorial, { window, document, performance: { now: () => 0 }, console,
+        fetch(url) {
+            const data = url.endsWith(".triggers.json")
+                ? { episode_id: "boudica", settings: {}, strings: {}, speakers: {}, steps: [model.step] }
+                : { factions: [] };
+            return Promise.resolve({ ok: true, json: () => Promise.resolve(data) });
+        }
+    });
+    const update = hovered => window.SOW_tutorial_state_update({ phase: "Playing", hud: {
+        players: [{ id: 1, name: "Boudica", is_me: true, is_alive: true, centroid_x: 1, centroid_y: 1 }],
+        settings: {}, tutorial: { active: true, episode_id: "boudica", facts: { tutorial_target_hovered: hovered } }
+    } });
+    update(true);
+    await new Promise(setImmediate);
+    update(true);
+    update(true);
+    assert.equal(seen.at(-1), 0, "a cursor already resting on the target does not finish the lesson");
+    update(false);
+    update(true);
+    assert.equal(seen.at(-1), 1, "moving onto the target finishes it");
+});
+
+
 test("a compact campaign guide scrolls a dock target into view once per step", () => {
     const start = tutorial.indexOf("    function revealGuidedUiTarget(");
     const end = tutorial.indexOf("\n    function syncTransferGuide(", start);
@@ -1169,10 +1319,10 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     }, definition.episode_id), homeButton);
     assert.equal(resolvedSelector, selector);
 
-    const contextStart = tutorial.indexOf("    function renderContext(");
+    const contextStart = tutorial.indexOf("    function targetPlayer(");
     const contextEnd = tutorial.indexOf("\n    function fetchJson(", contextStart);
     const contextSource = tutorial.slice(contextStart, contextEnd);
-    function renderContextFor(mode, translated = true, candidateStep = step, machineView = {}) {
+    function renderContextFor(mode, translated = true, candidateStep = step, machineView = {}, hud = { settings: {} }) {
         const desktopKey = definition.text_namespace + step.id + "_desktop_action";
         const mobileKey = definition.text_namespace + step.id + "_mobile_action";
         const expansionKey = definition.text_namespace + expansionStep.id;
@@ -1182,6 +1332,9 @@ test("a UI step uses its configured target and device-specific hand labels", () 
             [expansionKey + "_mobile_action"]: "Tap to expand",
             [expansionKey + "_continue_action"]: "Keep expanding"
         } : {};
+        if (translated && candidateStep.trigger && candidateStep.trigger.type === "camera_target") {
+            translations[definition.text_namespace + candidateStep.id + "_progress"] = "{current} tiles away · goal: {target} or closer";
+        }
         const renderContext = vm.runInNewContext(contextSource + "\nrenderContext;", {
             document: { documentElement: { dir: "ltr" } },
             window: { SOWCampaign: campaign },
@@ -1199,7 +1352,7 @@ test("a UI step uses its configured target and device-specific hand labels", () 
                 "hud.building_in_progress": "Building in progress"
             })[key] || key
         });
-        return renderContext(candidateStep, { settings: {} }, null, machineView);
+        return renderContext(candidateStep, hud, null, machineView);
     }
     assert.equal(campaign.guideAction(step), "home");
     assert.equal(campaign.guideAction(expansionStep), "expand");
@@ -1210,6 +1363,23 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     assert.equal(renderContextFor("wheel", true, expansionStep, { paused_action: "expand_once_then_resume" }).gestureLabel, "Click to expand");
     assert.equal(renderContextFor("pinch", true, expansionStep, { paused_action: "expand_once_then_resume" }).gestureLabel, "Tap to expand");
     assert.equal(renderContextFor("wheel", true, expansionStep, { paused_action: null }).gestureLabel, "Keep expanding");
+    const cameraZoomGuide = { id: "zoom_out", camera_only: true, trigger: { type: "zoom_out_complete", value: 0.95 }, guide: { kind: "world", target: "player", gesture: "zoom_out" } };
+    const cameraDragGuide = { id: "camera_drag", camera_only: true, trigger: { type: "camera_target", target: "suetonius", distance: 8 }, guide: { kind: "world", target: "player", gesture: "drag" } };
+    const cameraZoomContext = renderContextFor("wheel", true, cameraZoomGuide);
+    assert.equal(cameraZoomContext.gestureLabel, undefined, "the shared viewer supplies the short zoom label");
+    assert.equal(cameraZoomContext.gestureHint, undefined, "camera-only zoom avoids verbose hints");
+    assert.equal(cameraZoomContext.guideMetric, undefined, "camera-only zoom omits numeric zoom metrics");
+    const cameraHud = {
+        settings: {},
+        players: [{ campaign_faction_id: "suetonius", centroid_x: 20, centroid_y: 40 }],
+        tutorial: { camera: { x: 0, y: 0, zoom: 1, width: 100, height: 100 }, facts: { camera_target_radius: 24 } }
+    };
+    const cameraDragContext = renderContextFor("wheel", true, cameraDragGuide, {}, cameraHud);
+    assert.equal(cameraDragContext.gestureLabel, undefined, "the shared viewer supplies the short drag label");
+    assert.equal(cameraDragContext.gestureHint, undefined, "camera-only drag avoids verbose hints");
+    assert.equal(cameraDragContext.guideMetric, undefined, "camera-only drag omits numeric distance metrics");
+    const untranslatedCameraDrag = renderContextFor("wheel", false, cameraDragGuide, {}, cameraHud);
+    assert.equal(untranslatedCameraDrag.guideMetric, undefined);
     const passiveConstruction = { id: "city_wait", type: "objective", hint_key: "city_wait_hint", trigger: { type: "structure_level", kind: "City" } };
     const passiveSupport = { id: "support_wait", type: "objective", hint_key: "support_wait_hint", trigger: { type: "support" } };
     const resistance = { id: "resistance_wait", type: "objective", hint_key: "resistance_hint", trigger: { type: "territory", comparison: "lte", value: 5000 } };

@@ -134,6 +134,7 @@ impl SowEngine {
             p.alive
                 && self.state.config.buildings_enabled
                 && self.campaign_allows_building(crate::game::BuildingKind::City, 1)
+                && !self.campaign_structures_held(p.id)
         }) {
             let has_city = aggs
                 .get(player.id as usize)
@@ -141,6 +142,7 @@ impl SowEngine {
             let is_standard_bot = player.player_type == crate::player::PlayerType::Bot;
             let needs_city = if is_standard_bot {
                 player.cities == 0
+                    && !self.campaign_city_requires_gold_ids.contains(&player.id)
             } else {
                 !has_city
             };

@@ -100,7 +100,7 @@ impl SowEngine {
             let Some(tier) = ai_tier(p.player_type, p.is_ai_controlled) else {
                 continue; // real human: no AI brain
             };
-            if !p.alive {
+            if !p.alive || self.campaign_halted_ids.contains(&p.id) {
                 continue;
             }
             let bot_id = p.id;
@@ -152,7 +152,7 @@ impl SowEngine {
                 ghost_retaliation.is_some_and(|retaliation| retaliation.is_ready_at(tick));
             let do_attack = scheduled_attack || retaliation_due;
 
-            let do_structures = if p.iq >= 100 {
+            let do_structures = !self.campaign_structures_held(bot_id) && if p.iq >= 100 {
                 let one_third = (offset + interval / 3) % interval;
                 let two_thirds = (offset + (interval * 2) / 3) % interval;
                 scheduled_attack || phase == one_third || phase == two_thirds
