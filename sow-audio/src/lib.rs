@@ -23,7 +23,7 @@ pub enum PlayerSoundType {
 #[derive(Clone, Copy, Debug)]
 pub enum BuildingSoundKind {
     City,
-    Bunker,
+    Tower,
     Factory,
     Port,
 }

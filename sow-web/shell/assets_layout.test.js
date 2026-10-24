@@ -30,7 +30,7 @@ test("art lives only in assets/art; tools write only assets/generated", () => {
 });
 
 test("every art slot the game draws has its file", () => {
-    for (const kind of ["city", "factory", "port", "bunker", "farm"]) {
+    for (const kind of ["city", "factory", "port", "tower", "farm"]) {
         for (const level of [1, 2, 3, 4]) {
             assert.ok(
                 ["png", "webp"].some((ext) => fs.existsSync(path.join(art, "buildings", `${kind}-${level}.${ext}`))),
@@ -45,7 +45,7 @@ test("every art slot the game draws has its file", () => {
     for (const name of badges.cells) {
         assert.ok(["png", "webp"].some((ext) => fs.existsSync(path.join(art, "icons", `${name}.${ext}`))), `missing assets/art/icons/${name}.png`);
     }
-    // One file per avatar name, in exactly one folder; hero faces are <id>_1 .. <id>_4.
+    // One file per avatar name, in exactly one folder; each playable hero owns one 2x2 sheet.
     const avatarFolders = ["heroes", "nations", "tribes", "campaign"];
     const avatarNames = new Map();
     for (const folder of avatarFolders) {
@@ -112,10 +112,20 @@ test("every playable hero is complete: ability, art and texts in every language"
     const locales = fs.readdirSync(path.join(root, "sow-i18n/strings"));
     const heroes = catalog.filter((entity) => entity.hero).map((entity) => entity.id);
     assert.ok(heroes.length >= 12);
+    const heroAvatarDir = path.join(art, "avatars/heroes");
+    assert.deepEqual(
+        fs.readdirSync(heroAvatarDir).sort(),
+        heroes.map((hero) => `${hero}.webp`).sort(),
+        "avatars/heroes only contains one spritesheet per playable hero"
+    );
+    assert.ok(fs.existsSync(path.join(art, "avatars/random.webp")), "Random keeps its shared avatar");
     for (const hero of heroes) {
         const entry = catalog.find((entity) => entity.id === hero);
         assert.ok(entry.hero.ability && entry.hero.name, `${hero} needs a catalog name and ability`);
-        const heroFiles = [`avatars/heroes/${hero}.webp`, ...[1, 2, 3, 4].map((n) => `avatars/heroes/${hero}_${n}.webp`), `heroes/${hero}_desktop.webp`, `heroes/${hero}_mobile.webp`, `icons/abilities/${hero}.webp`];
+        const expressionFaces = [1, 2, 3, 4].map((n) => `avatars/heroes/${hero}_${n}.webp`);
+        assert.equal(entry.hero.expressions, undefined, `${hero}: expressions are part of its sheet, not catalog metadata`);
+        assert.ok(!expressionFaces.some((file) => fs.existsSync(path.join(art, file))), `${hero} must use one sheet, not separate face files`);
+        const heroFiles = [`avatars/heroes/${hero}.webp`, `icons/abilities/${hero}.webp`];
         for (const file of heroFiles) {
             assert.ok(fs.existsSync(path.join(art, file)), `${hero} needs assets/art/${file}`);
         }

@@ -16,7 +16,10 @@ fn tribe_ability_hero(
     victim_type: sow_core::player::PlayerType,
 ) -> Option<sow_core::player::Leader> {
     me.filter(|leader| {
-        victim_type == sow_core::player::PlayerType::Bot && leader.tribe_speed_multiplier() > 1.0
+        let tribe = sow_core::geo_entities::Target::Tribe;
+        victim_type == sow_core::player::PlayerType::Bot
+            && (leader.attack_strength_multiplier(tribe) > 1.0
+                || leader.conquest_speed_multiplier(tribe) > 1.0)
     })
 }
 
@@ -125,7 +128,10 @@ impl SowApp {
         }
 
         let tribe_ability_hero = tribe_ability_hero(
-            snap.players.iter().find(|p| p.id == my_id).map(|me| me.leader),
+            snap.players
+                .iter()
+                .find(|p| p.id == my_id)
+                .map(|me| me.leader),
             victim_type,
         );
         if conqueror_id == my_id
@@ -157,10 +163,16 @@ mod tests {
 
     #[wasm_bindgen_test::wasm_bindgen_test]
     fn hero_ability_icon_only_when_a_tribe_hero_crushes_a_tribe() {
-        let six_sky = Leader::of("lady_six_sky");
-        assert_eq!(tribe_ability_hero(Some(six_sky), PlayerType::Bot), Some(six_sky));
-        assert_eq!(tribe_ability_hero(Some(six_sky), PlayerType::Human), None);
-        assert_eq!(tribe_ability_hero(Some(six_sky), PlayerType::Nation), None);
-        assert_eq!(tribe_ability_hero(Some(Leader::of("boudica")), PlayerType::Bot), None);
+        let genghis = Leader::of("genghis_khan");
+        assert_eq!(
+            tribe_ability_hero(Some(genghis), PlayerType::Bot),
+            Some(genghis)
+        );
+        assert_eq!(tribe_ability_hero(Some(genghis), PlayerType::Human), None);
+        assert_eq!(tribe_ability_hero(Some(genghis), PlayerType::Nation), None);
+        assert_eq!(
+            tribe_ability_hero(Some(Leader::of("boudica")), PlayerType::Bot),
+            None
+        );
     }
 }

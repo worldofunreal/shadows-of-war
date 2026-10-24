@@ -60,7 +60,7 @@ impl SowApp {
                         if let (Some(lid), Some(pid)) =
                             (self.sim.my_lobby_id, self.sim.my_player_id)
                         {
-                            let msg = if self.ui.app.phase == crate::ClientPhase::Playing {
+                            let msg = if self.sim.relay_reconnect_ticket.is_some() {
                                 log::info!("Sending reconnect ticket to relay");
                                 self.make_reconnect_message(lid, pid)
                             } else {

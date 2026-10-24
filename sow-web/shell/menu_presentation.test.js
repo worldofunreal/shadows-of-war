@@ -711,6 +711,119 @@ test("weekly free rotation is a splash-only status", () => {
     assert.equal(context.isWeeklyFreeRotation({ available: true, free_rotation: true, owned: false }), true);
 });
 
+test("weekly rotation countdown replaces its label, observes the four-day window, and updates only its own nodes", () => {
+    const helperStart = heroesSource.indexOf("function isWeeklyFreeRotation");
+    const helperEnd = heroesSource.indexOf("// OWNER DECISION", helperStart);
+    assert.ok(helperStart >= 0 && helperEnd > helperStart);
+    const countdownNode = { textContent: "", hidden: true };
+    const statusLabelNode = { textContent: "", hidden: false };
+    const statusNode = { hidden: true, querySelector: () => statusLabelNode };
+    const weeklyLeader = { id: "free", available: true, free_rotation: true, owned: false };
+    const ownedLeader = { id: "owned", available: true, free_rotation: false, owned: true };
+    const leaders = { free: weeklyLeader, owned: ownedLeader };
+    let locale = "en";
+    let nowMs = 1_700_000_000_000;
+    let screen = "heroes";
+    let nextTimerId = 1;
+    const timers = new Map();
+    const cleared = [];
+    let renders = 0;
+    const context = {
+        SOW_t(key, values) {
+            assert.equal(key, "heroes.rotation_available_for");
+            return `${locale}: Available for ${values.days}d ${values.hours}h ${values.minutes}m ${values.seconds}s`;
+        },
+        Date: { now: () => nowMs },
+        state: { phase: "MainMenu", selected_leader: "free", store: { rotation_ends_at: 0 } },
+        tempSelectedLeader: "",
+        tempSelectedRandom: false,
+        leaderById: id => leaders[id],
+        currentScreen: () => screen,
+        root: {
+            hidden: false,
+            querySelector(selector) { return selector === "[data-hero-status]" ? statusNode : countdownNode; }
+        },
+        document: { visibilityState: "visible" },
+        window: {
+            setInterval(callback, delay) {
+                assert.equal(delay, 1000);
+                const id = nextTimerId++;
+                timers.set(id, callback);
+                return id;
+            },
+            clearInterval(id) { cleared.push(id); timers.delete(id); }
+        },
+        render() { renders++; }
+    };
+    context.state.store.rotation_ends_at = nowMs / 1000 + 4 * 86400;
+    vm.runInNewContext("var HEROES_ROTATION_COUNTDOWN_SECS = 4 * 24 * 60 * 60; var heroesRotationCountdownInterval = null;\n" + heroesSource.slice(helperStart, helperEnd) +
+        "this.heroesStatusLabel = heroesStatusLabel; this.rotationCountdownText = rotationCountdownText; this.syncHeroesRotationCountdown = syncHeroesRotationCountdown;", context);
+
+    assert.equal(context.heroesStatusLabel(weeklyLeader), "", "the weekly title is omitted when the countdown is shown");
+    context.syncHeroesRotationCountdown();
+    assert.equal(timers.size, 1);
+    assert.equal(countdownNode.textContent, "en: Available for 4d 00h 00m 00s");
+    assert.equal(statusNode.hidden, false, "the countdown badge is visible without the weekly title");
+    assert.equal(statusLabelNode.hidden, true, "the countdown always replaces the badge label");
+    nowMs += 1000;
+    [...timers.values()][0]();
+    assert.equal(countdownNode.textContent, "en: Available for 3d 23h 59m 59s");
+    assert.equal(renders, 0, "each tick writes to the countdown node without rendering the menu");
+
+    screen = "profile";
+    context.syncHeroesRotationCountdown();
+    assert.equal(timers.size, 0, "the timer stops outside the heroes panel");
+    assert.deepEqual(cleared, [1]);
+    context.document.visibilityState = "hidden";
+    screen = "heroes";
+    context.syncHeroesRotationCountdown();
+    assert.equal(timers.size, 0, "the timer stays stopped while the app is hidden");
+
+    context.document.visibilityState = "visible";
+    context.state.selected_leader = "owned";
+    locale = "es";
+    context.syncHeroesRotationCountdown();
+    assert.equal(timers.size, 1, "the timer resumes when the heroes panel becomes visible again");
+    assert.equal(countdownNode.textContent, "", "a newly selected non-rotation hero has no countdown");
+    assert.equal(statusNode.hidden, true, "the empty countdown badge is hidden for other heroes");
+    assert.equal(statusLabelNode.hidden, false, "the badge label is restored when there is no countdown");
+    context.state.selected_leader = "free";
+    [...timers.values()][0]();
+    assert.equal(countdownNode.textContent, "es: Available for 3d 23h 59m 59s",
+        "the countdown follows the selected hero and uses the current locale");
+    context.state.store.rotation_ends_at = nowMs / 1000;
+    [...timers.values()][0]();
+    assert.equal(countdownNode.textContent, "", "the countdown hides when the rotation ends");
+    screen = "profile";
+    context.syncHeroesRotationCountdown();
+    assert.equal(timers.size, 0);
+
+    const leader = { available: true, free_rotation: true, owned: false };
+    const nowSeconds = nowMs / 1000;
+    assert.equal(context.rotationCountdownText(leader, nowSeconds + 4 * 86400 + 1, nowSeconds), "");
+    assert.equal(context.rotationCountdownText(leader, nowSeconds, nowSeconds), "");
+    assert.equal(context.rotationCountdownText({ ...leader, owned: true }, nowSeconds + 60, nowSeconds), "");
+});
+
+test("weekly rotation countdown is compact and localized in all 15 locales", () => {
+    const locales = ["en", "es", "fr", "de", "it", "tr", "zh-cn", "ja", "ko", "ar", "ru", "vi", "id", "fil", "pt-br"];
+    for (const locale of locales) {
+        const catalog = fs.readFileSync(path.join(shell, `../../sow-i18n/strings/${locale}/web.toml`), "utf8");
+        const line = catalog.split("\n").find(entry => entry.startsWith("rotation_available_for ="));
+        assert.ok(line, `heroes.rotation_available_for must exist in ${locale}`);
+        assert.match(line, /\{days\}\S+.*\{hours\}\S+.*\{minutes\}\S+.*\{seconds\}\S+/,
+            `each localized number must touch its unit in ${locale}`);
+        assert.doesNotMatch(catalog, /^weekly_free_rotation\s*=/m,
+            `the duplicate weekly title must not remain in ${locale}`);
+    }
+    assert.doesNotMatch(heroesSource, /heroes\.weekly_free_rotation/);
+    assert.match(heroesSource, /data-hero-status-label/);
+    assert.match(heroesSource, /data-hero-rotation-countdown/);
+    assert.match(shellSource, /function updateDynamic\(\) \{\s*syncHeroesRotationCountdown\(\);/);
+    assert.match(shellSource, /document\.addEventListener\("visibilitychange", function \(\) \{\s*syncHeroesRotationCountdown\(\);/);
+    assert.match(coreSource, /rotation_ends_at:\s*state\.store\.rotation_ends_at/);
+});
+
 test("heroes preview never resolves the random option through leader i18n keys", () => {
     const previewStart = heroesSource.indexOf("function updateHeroesPreview");
     const previewEnd = heroesSource.indexOf("function renderHeroInfoModal", previewStart);
@@ -744,23 +857,64 @@ test("skill icons stay beside full hero details and out of compact avatar cards"
     assert.match(home, /renderHeroBriefing\(leader, "home", "sow-home-selected"\)/);
 });
 
-test("home hero briefing places the skill below identity while selection stays responsive", () => {
+test("hero selection stacks the skill below identity and the home briefing stays behind controls and hides in portrait", () => {
     assert.match(profileCss, /\.sow-hero-briefing\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1\.2fr\) minmax\(0, 1fr\)/);
-    assert.doesNotMatch(profileCss, /\.sow-hero-briefing--selection\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/,
-        "wide hero selection must use the horizontal briefing composition");
-    assert.match(profileCss, /\.sow-menu__leader-copy \.sow-hero-briefing\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
-        "the home skill section must sit below the identity");
-    assert.match(profileCss, /@media \(orientation: landscape\) and \(max-height: 560px\)[\s\S]*?\.sow-hero-briefing\s*\{[\s\S]*\.92fr[\s\S]*1\.08fr/);
+    assert.match(profileCss, /#sow-menu\[data-screen="heroes"\] \.sow-hero-briefing--selection\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
+        "the full selection card must stack identity above the ability at every width");
+    assert.match(profileCss, /\.sow-menu__leader-copy \.sow-hero-briefing\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)[^}]*text-align:\s*end/,
+        "home hero and skill copy must align to the right");
+    assert.match(profileCss, /@media \(orientation: landscape\)[\s\S]*?\.sow-menu__leader-copy \.sow-hero-briefing__ability\s*\{[^}]*flex-direction:\s*row-reverse/,
+        "the horizontal home skill icon must sit at the right edge of its copy");
+    const compactStart = profileCss.indexOf(
+        "@media (orientation: landscape) and (max-height: 560px)",
+        profileCss.indexOf(".sow-heroes__featured")
+    );
+    const compactEnd = profileCss.indexOf("\n@media ", compactStart + 1);
+    const compact = profileCss.slice(compactStart, compactEnd);
+    assert.ok(compactStart >= 0 && compactEnd > compactStart, "compact landscape rules must remain explicit");
+    assert.match(compact, /\.sow-heroes__featured-copy\s*\{[^}]*padding:\s*14px/,
+        "compact landscape reduces the featured-card padding");
+    assert.match(compact, /\.sow-hero-briefing__ability-name\s*\{\s*font-size:\s*10px/);
+    assert.match(compact, /\.sow-hero-briefing__description\s*\{\s*font-size:\s*10px/);
+    assert.match(compact, /\.sow-hero-briefing__icon-slot\s*\{\s*flex-basis:\s*32px;\s*width:\s*32px/);
+    assert.doesNotMatch(compact, /\.sow-hero-briefing--selection\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*\.92fr/,
+        "compact landscape must not put selection identity beside the skill");
+    assert.match(profileCss, /\.sow-heroes__confirm\s*\{\s*min-height:\s*44px/,
+        "the compact card keeps the confirm action reachable");
     assert.match(profileCss, /\.sow-menu__leader-copy \.sow-hero-briefing__name \{ font-size: clamp\(17px, 3vh, 22px\); \}/,
         "the compact home title must fit above the skill briefing");
     assert.match(profileCss, /#sow-menu\[data-screen="heroes"\] \.sow-heroes__featured-copy \.sow-hero-briefing__name \{ font-size: clamp\(17px, 3vh, 22px\); \}/,
-        "the compact selection title must fit its column beside the skill briefing");
+        "the compact selection title must fit above the skill briefing");
     assert.match(profileCss, /@media \(max-width: 680px\), \(orientation: portrait\)[\s\S]*?\.sow-hero-briefing\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
-    assert.match(menuCss["main_menu.layout.css"], /#sow-menu\[data-screen="home"\] \.sow-menu__battlefield\s*\{\s*order:\s*-1;/,
-        "narrow home must show the same hero briefing before the menu actions");
-    assert.doesNotMatch(menuCss["main_menu.layout.css"], /\.sow-menu__leader-copy\s*\{\s*display:\s*none\s*!important;/,
-        "small screens must not hide the main-menu hero briefing");
+    assert.match(menuCss["main_menu.layout.css"], /#sow-menu\[data-screen="home"\] \.sow-menu__battlefield\s*\{[^}]*position:\s*absolute[^}]*pointer-events:\s*none/,
+        "narrow home hero copy must overlay the background without taking layout space");
+    assert.doesNotMatch(menuCss["main_menu.layout.css"], /#sow-menu\[data-screen="home"\] \.sow-menu__battlefield\s*\{[^}]*order:\s*-1/,
+        "the home hero overlay must not reorder the menu");
+    assert.match(menuCss["main_menu.layout.css"], /#sow-menu\[data-screen="home"\] \.sow-menu__battlefield\s*\{[^}]*z-index:\s*0/,
+        "the narrow hero briefing must sit below the command panel");
+    assert.match(menuCss["main_menu.layout.css"], /#sow-menu\[data-screen="home"\] \.sow-menu__leader-copy\s*\{[^}]*position:\s*absolute[^}]*inset-block-start:\s*0[^}]*inset-inline-end:\s*10px[^}]*pointer-events:\s*none/,
+        "the narrow home briefing stays positioned without reserving layout space");
+    assert.match(menuCss["main_menu.layout.css"], /#sow-menu\[data-screen="home"\] \.sow-menu__command\s*\{[^}]*z-index:\s*1/,
+        "the map and menu controls retain their layer and normal flow");
+    const commandStart = shellSource.indexOf("function renderCommandPanel()");
+    const commandEnd = shellSource.indexOf("\n    function ", commandStart + 1);
+    const commandPanel = shellSource.slice(commandStart, commandEnd);
+    assert.match(commandPanel, /<section class='sow-menu__command'>[\s\S]*sow-menu__home-public[\s\S]*renderPublicPanel\("home"\)[\s\S]*sow-menu__home-actions/,
+        "the map and controls remain inside the normal-flow command panel");
+    const homeStart = lobbiesSource.indexOf("function renderHome()");
+    const homeEnd = lobbiesSource.indexOf("var campaignCinematicAvailability", homeStart);
+    const home = lobbiesSource.slice(homeStart, homeEnd);
+    assert.match(home, /renderCommandPanel\(\)\s*\+\s*"<section class='sow-menu__battlefield'>[\s\S]*sow-menu__leader-copy[\s\S]*renderHeroBriefing/,
+        "only the decorative leader briefing sits in the mobile overlay");
+    assert.match(menuCss["main_menu.layout.css"], /\.sow-menu__leader-copy\s*\{[^}]*padding:\s*0[^}]*border:\s*0[^}]*background:\s*transparent/,
+        "mobile hero copy must not render as an in-flow card");
+    assert.match(menuCss["main_menu.layout.css"], /@media \(orientation: portrait\)\s*\{[^}]*#sow-menu\[data-screen="home"\] \.sow-menu__leader-copy\s*\{[^}]*display:\s*none/,
+        "the portrait home screen hides the briefing while the loader keeps its separate copy");
     assert.doesNotMatch(profileCss, /sow-heroes__featured-copy \.sow-heroes__perk-row\s*\{\s*display:\s*none/);
+    assert.match(profileCss, /\.sow-menu__leader-copy \.sow-hero-briefing__name,[\s\S]*?text-shadow:\s*0 2px 10px rgba\(0, 0, 0, \.92\)/,
+        "the floating hero copy stays legible over the background art");
+    assert.match(profileCss, /#sow-menu\[data-screen="home"\] \.sow-menu__leader-copy \.sow-hero-briefing__name\s*\{[^}]*font-size:\s*clamp\(18px, 4\.5vw, 22px\)/,
+        "the portrait home briefing uses a compact title that fits the clear area above the controls");
 });
 
 

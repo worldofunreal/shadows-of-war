@@ -15,7 +15,8 @@
    "hero": {
     "name": "Caesar",
     "ability": {
-     "kind": "combat_strength",
+     "kind": "attack_strength",
+     "against": "anyone",
      "percent": 10
     },
     "card": "sow-caesar"
@@ -36,8 +37,8 @@
    "hero": {
     "name": "Cleopatra",
     "ability": {
-     "kind": "district_income",
-     "district": "factory",
+     "kind": "resource_bonus",
+     "source": {"district": "port"},
      "resource": "gold",
      "percent": 50
     },
@@ -59,9 +60,8 @@
    "hero": {
     "name": "Ragnar",
     "ability": {
-     "kind": "district_income",
-     "district": "port",
-     "resource": "gold",
+     "kind": "conquest_speed",
+     "against": "outnumbered",
      "percent": 50
     },
     "card": "sow-ragnar"
@@ -82,7 +82,8 @@
    "hero": {
     "name": "Sun Tzu",
     "ability": {
-     "kind": "bunker_range",
+     "kind": "conquest_speed",
+     "against": "larger",
      "percent": 50
     },
     "card": "sow-sun-tzu"
@@ -103,7 +104,8 @@
    "hero": {
     "name": "Alexander",
     "ability": {
-     "kind": "expansion_speed",
+     "kind": "conquest_speed",
+     "against": "richer",
      "percent": 15
     },
     "card": "sow-alexander"
@@ -124,7 +126,8 @@
    "hero": {
     "name": "Genghis Khan",
     "ability": {
-     "kind": "elimination_gold",
+     "kind": "attack_strength",
+     "against": "tribe",
      "percent": 50
     },
     "card": "sow-genghis-khan"
@@ -145,7 +148,9 @@
    "hero": {
     "name": "Richard the Lionheart",
     "ability": {
-     "kind": "city_troop_capacity",
+     "kind": "resource_bonus",
+     "source": "alliance",
+     "resource": "gold",
      "percent": 50
     },
     "card": "sow-richard"
@@ -166,8 +171,8 @@
    "hero": {
     "name": "Vercingetorix",
     "ability": {
-     "kind": "district_income",
-     "district": "city",
+     "kind": "resource_bonus",
+     "source": "alliance",
      "resource": "troops",
      "percent": 50
     },
@@ -189,7 +194,8 @@
    "hero": {
     "name": "Boudica",
     "ability": {
-     "kind": "damage_to_traitors",
+     "kind": "attack_strength",
+     "against": "outnumbered",
      "percent": 100
     },
     "card": "sow-boudica",
@@ -211,7 +217,8 @@
    "hero": {
     "name": "Lady Six Sky",
     "ability": {
-     "kind": "tribe_speed",
+     "kind": "attack_strength",
+     "against": "smaller",
      "percent": 50
     },
     "card": "sow-lady-six-sky"
@@ -232,7 +239,8 @@
    "hero": {
     "name": "Leonidas",
     "ability": {
-     "kind": "bunker_defense",
+     "kind": "tower_loss",
+     "side": "defender",
      "percent": 50
     },
     "card": "sow-leonidas"
@@ -253,7 +261,8 @@
    "hero": {
     "name": "Napoleon",
     "ability": {
-     "kind": "outnumbered_strength",
+     "kind": "conquest_speed",
+     "against": "other_player",
      "percent": 35
     },
     "card": "sow-napoleon"
@@ -419,7 +428,8 @@
    "hero": {
     "name": "Amina of Zazzau",
     "ability": {
-     "kind": "city_defense",
+     "kind": "city_capture",
+     "side": "defender",
      "percent": 50
     }
    }
@@ -475,8 +485,9 @@
    "hero": {
     "name": "Yaa Asantewaa",
     "ability": {
-     "kind": "city_troop_capacity",
-     "percent": 50
+     "kind": "attack_strength",
+     "against": "nation",
+     "percent": 30
     }
    }
   },
@@ -747,9 +758,8 @@
    "hero": {
     "name": "Anacaona",
     "ability": {
-     "kind": "district_income",
-     "district": "port",
-     "resource": "troops",
+     "kind": "attack_strength",
+     "against": "active_traitor",
      "percent": 50
     }
    }
@@ -1021,7 +1031,8 @@
    "hero": {
     "name": "Lozen",
     "ability": {
-     "kind": "expansion_speed",
+     "kind": "attacker_loss",
+     "when": "retreat",
      "percent": 15
     }
    }
@@ -1327,16 +1338,16 @@
    "avatar": "wu_zetian"
   },
   {
-   "id": "nation_gajah_mada",
-   "name": "Gajah Mada",
-   "entity": "Majapahit",
+   "id": "nation_darius_i",
+   "name": "Darius I",
+   "entity": "Achaemenid Empire",
    "role": "nation",
    "region": "asia",
-   "lat": -7.55,
-   "lon": 112.33,
+   "lat": 29.93,
+   "lon": 52.89,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Gajah_Mada",
-   "avatar": "gajah_mada"
+   "wikipedia": "https://en.wikipedia.org/wiki/Darius_the_Great",
+   "avatar": "darius_i"
   },
   {
    "id": "nation_emperatriz_suiko",
@@ -1387,16 +1398,16 @@
    "avatar": "akbar"
   },
   {
-   "id": "nation_qin_liangyu",
-   "name": "Qin Liangyu",
-   "entity": "Ming dynasty",
+   "id": "nation_khutulun",
+   "name": "Khutulun",
+   "entity": "Chagatai Khanate",
    "role": "nation",
    "region": "asia",
-   "lat": 30.57,
-   "lon": 104.07,
+   "lat": 43.9,
+   "lon": 80.3,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Qin_Liangyu",
-   "avatar": "qin_liangyu"
+   "wikipedia": "https://en.wikipedia.org/wiki/Khutulun",
+   "avatar": "khutulun"
   },
   {
    "id": "nation_babur",
@@ -1435,16 +1446,16 @@
    "avatar": "kittur_chennamma"
   },
   {
-   "id": "nation_solomon",
-   "name": "Solomon",
-   "entity": "Kingdom of Israel",
+   "id": "nation_kanishka",
+   "name": "Kanishka",
+   "entity": "Kushan Empire",
    "role": "nation",
    "region": "asia",
-   "lat": 31.77,
-   "lon": 35.21,
+   "lat": 34.01,
+   "lon": 71.58,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Solomon",
-   "avatar": "solomon"
+   "wikipedia": "https://en.wikipedia.org/wiki/Kanishka",
+   "avatar": "kanishka"
   },
   {
    "id": "nation_rani_lakshmibai",
@@ -1807,16 +1818,16 @@
    "avatar": "toregene_khatun"
   },
   {
-   "id": "nation_sayyid_said",
-   "name": "Sayyid Said",
-   "entity": "Sultanate of Muscat and Oman",
+   "id": "nation_tipu_sultan",
+   "name": "Tipu Sultan",
+   "entity": "Kingdom of Mysore",
    "role": "nation",
    "region": "asia",
-   "lat": 23.61,
-   "lon": 58.59,
+   "lat": 12.42,
+   "lon": 76.68,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Said_bin_Sultan",
-   "avatar": "sayyid_said"
+   "wikipedia": "https://en.wikipedia.org/wiki/Tipu_Sultan",
+   "avatar": "tipu_sultan"
   },
   {
    "id": "nation_mandukhai_khatun",
@@ -1927,16 +1938,16 @@
    "avatar": "sultanah_safiatuddin"
   },
   {
-   "id": "nation_lapu_lapu",
-   "name": "Lapu-Lapu",
-   "entity": "Mactan",
+   "id": "nation_sargon_akkad",
+   "name": "Sargon of Akkad",
+   "entity": "Akkadian Empire",
    "role": "nation",
    "region": "asia",
-   "lat": 10.3,
-   "lon": 123.98,
+   "lat": 33.3,
+   "lon": 44.4,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Lapu-Lapu",
-   "avatar": "lapu_lapu"
+   "wikipedia": "https://en.wikipedia.org/wiki/Sargon_of_Akkad",
+   "avatar": "sargon_akkad"
   },
   {
    "id": "nation_blanca_de_castilla",
@@ -2011,16 +2022,16 @@
    "avatar": "carlomagno"
   },
   {
-   "id": "nation_isabel_i_de_castilla",
-   "name": "Isabella I of Castile",
-   "entity": "Castile / Spain",
+   "id": "nation_cartimandua",
+   "name": "Cartimandua",
+   "entity": "Brigantes",
    "role": "nation",
    "region": "europe",
-   "lat": 41.087,
-   "lon": -4.9957,
+   "lat": 54.0,
+   "lon": -1.5,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Isabella_I_of_Castile",
-   "avatar": "isabel_i_de_castilla"
+   "wikipedia": "https://en.wikipedia.org/wiki/Cartimandua",
+   "avatar": "cartimandua"
   },
   {
    "id": "nation_alfredo_el_grande",
@@ -2047,16 +2058,16 @@
    "avatar": "isabel_i_de_inglaterra"
   },
   {
-   "id": "nation_constantine_the_great",
-   "name": "Constantine the Great",
-   "entity": "Roman Empire",
+   "id": "nation_william_the_conqueror",
+   "name": "William the Conqueror",
+   "entity": "Duchy of Normandy",
    "role": "nation",
    "region": "europe",
-   "lat": 41.01,
-   "lon": 28.98,
+   "lat": 49.18,
+   "lon": -0.37,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Constantine_the_Great",
-   "avatar": "constantine"
+   "wikipedia": "https://en.wikipedia.org/wiki/William_the_Conqueror",
+   "avatar": "william_the_conqueror"
   },
   {
    "id": "nation_luis_xiv",
@@ -2143,16 +2154,16 @@
    "avatar": "skanderbeg"
   },
   {
-   "id": "nation_vlad_iii",
-   "name": "Vlad III the Impaler",
-   "entity": "Wallachia",
+   "id": "nation_john_iii_sobieski",
+   "name": "John III Sobieski",
+   "entity": "Polish-Lithuanian Commonwealth",
    "role": "nation",
    "region": "europe",
-   "lat": 44.93,
-   "lon": 25.46,
+   "lat": 52.23,
+   "lon": 21.01,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Vlad_III_the_Impaler",
-   "avatar": "vlad_iii"
+   "wikipedia": "https://en.wikipedia.org/wiki/John_III_Sobieski",
+   "avatar": "john_iii_sobieski"
   },
   {
    "id": "nation_amalasunta",
@@ -2347,16 +2358,16 @@
    "avatar": "fredegunda"
   },
   {
-   "id": "nation_mary_of_burgundy",
-   "name": "Mary of Burgundy",
-   "entity": "Burgundian Netherlands",
+   "id": "nation_cynethryth",
+   "name": "Cynethryth",
+   "entity": "Mercia",
    "role": "nation",
    "region": "europe",
-   "lat": 50.85,
-   "lon": 4.35,
+   "lat": 52.63,
+   "lon": -1.69,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Mary_of_Burgundy",
-   "avatar": "mary_of_burgundy"
+   "wikipedia": "https://en.wikipedia.org/wiki/Cynethryth",
+   "avatar": "cynethryth"
   },
   {
    "id": "nation_grace_o_malley",
@@ -2421,7 +2432,9 @@
    "hero": {
     "name": "Hongi Hika",
     "ability": {
-     "kind": "city_assault",
+     "kind": "resource_bonus",
+     "source": "trade",
+     "resource": "troops",
      "percent": 50
     }
    }
@@ -2465,7 +2478,8 @@
    "hero": {
     "name": "Sālote Tupou III",
     "ability": {
-     "kind": "alliance_gold",
+     "kind": "alliance_cost",
+     "against": "nation",
      "percent": 50
     }
    }
@@ -7379,52 +7393,52 @@
    "avatar": "tolai"
   },
   {
-   "id": "nation_semiramis",
-   "name": "Semiramis",
-   "entity": "Assyrian Empire",
+   "id": "nation_dyah_gitarja",
+   "name": "Dyah Gitarja",
+   "entity": "Majapahit",
    "role": "nation",
    "region": "asia",
-   "lat": 36.36,
-   "lon": 43.15,
+   "lat": -7.55,
+   "lon": 112.33,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Semiramis",
-   "avatar": "semiramis"
+   "wikipedia": "https://en.wikipedia.org/wiki/Tribhuwana_Wijayatunggadewi",
+   "avatar": "dyah_gitarja"
   },
   {
-   "id": "nation_shima_kalingga",
-   "name": "Shima",
-   "entity": "Kalingga",
+   "id": "nation_khurshid_banu_natavan",
+   "name": "Khurshid Banu Natavan",
+   "entity": "Karabakh Khanate",
    "role": "nation",
    "region": "asia",
-   "lat": -6.7,
-   "lon": 110.6,
+   "lat": 39.76,
+   "lon": 46.75,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Shima_(queen)",
-   "avatar": "shima_kalingga"
+   "wikipedia": "https://en.wikipedia.org/wiki/Khurshidbanu_Natavan",
+   "avatar": "khurshid_banu_natavan"
   },
   {
-   "id": "nation_tomyris",
-   "name": "Tomyris",
-   "entity": "Massagetae",
+   "id": "nation_mulan",
+   "name": "Mulan",
+   "entity": "Northern Wei",
    "role": "nation",
    "region": "asia",
-   "lat": 42.0,
-   "lon": 60.0,
+   "lat": 34.62,
+   "lon": 112.45,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Tomyris",
-   "avatar": "tomyris"
+   "wikipedia": "https://en.wikipedia.org/wiki/Hua_Mulan",
+   "avatar": "mulan"
   },
   {
-   "id": "nation_gorgo",
-   "name": "Gorgo",
-   "entity": "Sparta",
+   "id": "nation_thusnelda",
+   "name": "Thusnelda",
+   "entity": "Cherusci",
    "role": "nation",
    "region": "europe",
-   "lat": 37.07,
-   "lon": 22.43,
+   "lat": 52.0,
+   "lon": 8.6,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Gorgo",
-   "avatar": "gorgo"
+   "wikipedia": "https://en.wikipedia.org/wiki/Thusnelda",
+   "avatar": "thusnelda"
   },
   {
    "id": "makeda",
@@ -7441,190 +7455,215 @@
    "hero": {
     "name": "Makeda",
     "ability": {
-     "kind": "territory_gold",
+     "kind": "enemy_retreat_penalty",
+     "against": "human",
      "percent": 50
     }
    }
   },
   {
-   "id": "nation_jose_artigas",
-   "name": "José Gervasio Artigas",
-   "entity": "Banda Oriental",
+   "id": "nation_tzintzicha",
+   "name": "Tzintzicha",
+   "entity": "Purépecha Empire",
    "role": "nation",
    "region": "americas",
-   "lat": -34.9,
-   "lon": -56.16,
+   "lat": 19.59,
+   "lon": -101.52,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/José_Gervasio_Artigas",
-   "avatar": "artigas"
+   "wikipedia": "https://en.wikipedia.org/wiki/P%C3%BArepecha_Empire",
+   "avatar": "tzintzicha"
   },
   {
-   "id": "nation_bernardo_ohiggins",
-   "name": "Bernardo O'Higgins",
-   "entity": "Chile",
+   "id": "nation_conin",
+   "name": "Conín",
+   "entity": "Otomi",
    "role": "nation",
    "region": "americas",
-   "lat": -33.45,
-   "lon": -70.67,
+   "lat": 19.98,
+   "lon": -99.52,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Bernardo_O%27Higgins",
-   "avatar": "bernardo_ohiggins"
+   "wikipedia": "https://en.wikipedia.org/wiki/Con%C3%ADn",
+   "avatar": "conin"
   },
   {
-   "id": "nation_nezahualcoyotl",
-   "name": "Nezahualcóyotl",
-   "entity": "Texcoco",
+   "id": "nation_hiawatha",
+   "name": "Hiawatha",
+   "entity": "Haudenosaunee",
    "role": "nation",
    "region": "americas",
-   "lat": 19.52,
-   "lon": -98.88,
+   "lat": 42.9,
+   "lon": -75.9,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Nezahualc%C3%B3yotl",
-   "avatar": "nezahualcoyotl"
+   "wikipedia": "https://en.wikipedia.org/wiki/Hiawatha",
+   "avatar": "hiawatha"
   },
   {
-   "id": "nation_tlacaelel",
-   "name": "Tlacaelel",
-   "entity": "Mexica Empire",
+   "id": "nation_senora_de_cao",
+   "name": "Señora de Cao",
+   "entity": "Moche",
    "role": "nation",
    "region": "americas",
-   "lat": 19.43,
-   "lon": -99.13,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Tlacaelel",
-   "avatar": "tlacaelel"
-  },
-  {
-   "id": "nation_tenamaxtli",
-   "name": "Tenamaxtli",
-   "entity": "Caxcanes",
-   "role": "nation",
-   "region": "americas",
-   "lat": 21.38,
-   "lon": -102.87,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Tenamaxtli",
-   "avatar": "tenamaxtli"
-  },
-  {
-   "id": "nation_ramesses_ii",
-   "name": "Ramesses II",
-   "entity": "Ancient Egypt",
-   "role": "nation",
-   "region": "africa",
-   "lat": 25.72,
-   "lon": 32.66,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Ramesses_II",
-   "avatar": "ramesses_ii"
-  },
-  {
-   "id": "nation_cosijoeza",
-   "name": "Cosijoeza",
-   "entity": "Zapotec",
-   "role": "nation",
-   "region": "americas",
-   "lat": 16.94,
-   "lon": -96.75,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Cosijoeza",
-   "avatar": "cosijoeza"
-  },
-  {
-   "id": "nation_thanadelthur",
-   "name": "Thanadelthur",
-   "entity": "Chipewyan",
-   "role": "nation",
-   "region": "americas",
-   "lat": 59.0,
-   "lon": -109.5,
+   "lat": -8.1,
+   "lon": -79.07,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Thanadelthur",
-   "avatar": "thanadelthur"
+   "wikipedia": "https://en.wikipedia.org/wiki/Lady_of_Cao",
+   "avatar": "senora_de_cao"
   },
   {
-   "id": "nation_mangas_coloradas",
-   "name": "Mangas Coloradas",
-   "entity": "Chiricahua Apache",
-   "role": "nation",
-   "region": "americas",
-   "lat": 32.8,
-   "lon": -108.2,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Mangas_Coloradas",
-   "avatar": "mangas_coloradas"
-  },
-  {
-   "id": "nation_tomochichi",
-   "name": "Tomochichi",
-   "entity": "Yamacraw",
-   "role": "nation",
-   "region": "americas",
-   "lat": 32.08,
-   "lon": -81.09,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Tomochichi",
-   "avatar": "tomochichi"
-  },
-  {
-   "id": "nation_lobengula",
-   "name": "Lobengula",
-   "entity": "Matabeleland",
-   "role": "nation",
-   "region": "africa",
-   "lat": -20.15,
-   "lon": 28.58,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Lobengula",
-   "avatar": "lobengula"
-  },
-  {
-   "id": "nation_eight_deer",
-   "name": "Eight Deer Jaguar Claw",
-   "entity": "Mixtec",
-   "role": "nation",
-   "region": "americas",
-   "lat": 17.07,
-   "lon": -96.72,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Eight_Deer_Jaguar_Claw",
-   "avatar": "eight_deer"
-  },
-  {
-   "id": "nation_nemequene",
-   "name": "Nemequene",
-   "entity": "Muisca",
-   "role": "nation",
-   "region": "americas",
-   "lat": 5.15,
-   "lon": -73.77,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Nemequene",
-   "avatar": "nemequene"
-  },
-  {
-   "id": "nation_artemisia_i",
-   "name": "Artemisia I of Caria",
-   "entity": "Caria",
+   "id": "nation_esther",
+   "name": "Esther",
+   "entity": "Achaemenid Empire",
    "role": "nation",
    "region": "asia",
-   "lat": 37.04,
-   "lon": 27.42,
+   "lat": 32.19,
+   "lon": 48.25,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Artemisia_I_of_Caria",
-   "avatar": "artemisia_i"
+   "wikipedia": "https://en.wikipedia.org/wiki/Esther",
+   "avatar": "esther"
   },
   {
-   "id": "nation_shajar_al_durr",
-   "name": "Shajar al-Durr",
-   "entity": "Mamluk Sultanate",
+   "id": "nation_gudit",
+   "name": "Gudit",
+   "entity": "Kingdom of Aksum",
    "role": "nation",
    "region": "africa",
-   "lat": 30.04,
-   "lon": 31.24,
+   "lat": 14.13,
+   "lon": 38.72,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Shajar_al-Durr",
-   "avatar": "shajar_al_durr"
+   "wikipedia": "https://en.wikipedia.org/wiki/Gudit",
+   "avatar": "gudit"
+  },
+  {
+   "id": "nation_muhammad_ahmad",
+   "name": "Muhammad Ahmad",
+   "entity": "Mahdist State",
+   "role": "nation",
+   "region": "africa",
+   "lat": 15.6445,
+   "lon": 32.4777,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Muhammad_Ahmad",
+   "avatar": "muhammad_ahmad"
+  },
+  {
+   "id": "nation_msiri",
+   "name": "Msiri",
+   "entity": "Yeke Kingdom",
+   "role": "nation",
+   "region": "africa",
+   "lat": -10.4,
+   "lon": 26.2,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Msiri",
+   "avatar": "msiri"
+  },
+  {
+   "id": "nation_pedro_ii",
+   "name": "Pedro II",
+   "entity": "Empire of Brazil",
+   "role": "nation",
+   "region": "americas",
+   "lat": -22.9068,
+   "lon": -43.1729,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Pedro_II_of_Brazil",
+   "avatar": "pedro_ii"
+  },
+  {
+   "id": "nation_tigranes_el_grande",
+   "name": "Tigranes the Great",
+   "entity": "Armenian Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 40.0,
+   "lon": 44.5,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tigranes_the_Great",
+   "avatar": "tigranes_el_grande"
+  },
+  {
+   "id": "nation_parakramabahu_i",
+   "name": "Parakramabahu I",
+   "entity": "Kingdom of Polonnaruwa",
+   "role": "nation",
+   "region": "asia",
+   "lat": 7.9403,
+   "lon": 81.0188,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Parakramabahu_I",
+   "avatar": "parakramabahu_i"
+  },
+  {
+   "id": "nation_parameswara",
+   "name": "Parameswara",
+   "entity": "Malacca Sultanate",
+   "role": "nation",
+   "region": "asia",
+   "lat": 2.1896,
+   "lon": 102.2501,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Parameswara_of_Malacca",
+   "avatar": "parameswara"
+  },
+  {
+   "id": "nation_walter_lini",
+   "name": "Walter Lini",
+   "entity": "Vanuatu",
+   "role": "nation",
+   "region": "oceania",
+   "lat": -17.7333,
+   "lon": 168.3273,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Walter_Lini",
+   "avatar": "walter_lini"
+  },
+  {
+   "id": "nation_tamar_de_georgia",
+   "name": "Tamar of Georgia",
+   "entity": "Kingdom of Georgia",
+   "role": "nation",
+   "region": "asia",
+   "lat": 41.7151,
+   "lon": 44.8271,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tamar_I",
+   "avatar": "tamar_de_georgia"
+  },
+  {
+   "id": "nation_maria_estuardo",
+   "name": "Mary Queen of Scots",
+   "entity": "Kingdom of Scotland",
+   "role": "nation",
+   "region": "europe",
+   "lat": 55.9533,
+   "lon": -3.1883,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Mary,_Queen_of_Scots",
+   "avatar": "maria_estuardo"
+  },
+  {
+   "id": "nation_gwenllian",
+   "name": "Gwenllian ferch Gruffudd",
+   "entity": "Deheubarth (Wales)",
+   "role": "nation",
+   "region": "europe",
+   "lat": 51.8762,
+   "lon": -3.9828,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Gwenllian_ferch_Gruffudd",
+   "avatar": "gwenllian"
+  },
+  {
+   "id": "nation_maria_i_de_portugal",
+   "name": "Maria I of Portugal",
+   "entity": "Kingdom of Portugal",
+   "role": "nation",
+   "region": "europe",
+   "lat": 38.7223,
+   "lon": -9.1393,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Maria_I_of_Portugal",
+   "avatar": "maria_i_de_portugal"
   },
   {
    "id": "rani_durgavati",
@@ -7641,9 +7680,8 @@
    "hero": {
     "name": "Rani Durgavati",
     "ability": {
-     "kind": "district_income",
-     "district": "farm",
-     "resource": "troops",
+     "kind": "enemy_retreat_penalty",
+     "against": "nation",
      "percent": 50
     }
    }
@@ -7663,9 +7701,8 @@
    "hero": {
     "name": "Empress Gi",
     "ability": {
-     "kind": "district_income",
-     "district": "city",
-     "resource": "gold",
+     "kind": "alliance_cost",
+     "against": "human",
      "percent": 50
     }
    }
@@ -7685,9 +7722,9 @@
    "hero": {
     "name": "Ashoka",
     "ability": {
-     "kind": "district_income",
-     "district": "factory",
-     "resource": "troops",
+     "kind": "resource_bonus",
+     "source": {"district": "city"},
+     "resource": "gold",
      "percent": 50
     }
    }
@@ -7707,7 +7744,8 @@
    "hero": {
     "name": "Hannibal",
     "ability": {
-     "kind": "mountain_cost",
+     "kind": "conquest_speed",
+     "against": "tribe",
      "percent": 25
     }
    }
@@ -7727,7 +7765,9 @@
    "hero": {
     "name": "Simón Bolívar",
     "ability": {
-     "kind": "alliance_cost",
+     "kind": "resource_bonus",
+     "source": "territory",
+     "resource": "gold",
      "percent": 30
     }
    }
@@ -7747,8 +7787,9 @@
    "hero": {
     "name": "Joan of Arc",
     "ability": {
-     "kind": "bunker_defense",
-     "percent": 50
+     "kind": "attack_strength",
+     "against": "other_player",
+     "percent": 25
     }
    }
   },
@@ -7767,28 +7808,30 @@
    "hero": {
     "name": "Catherine the Great",
     "ability": {
-     "kind": "alliance_gold",
+     "kind": "tower_loss",
+     "side": "attacker",
      "percent": 50
     }
    }
   },
   {
-   "id": "theodora",
-   "name": "Theodora",
-   "entity": "Byzantine Empire",
+   "id": "isabella_of_castile",
+   "name": "Isabella I of Castile",
+   "entity": "Castile / Spain",
    "role": "nation",
    "region": "europe",
-   "lat": 41.6,
-   "lon": 35,
+   "lat": 41.087,
+   "lon": -4.9957,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Theodora_%28wife_of_Justinian_I%29",
-   "avatar": "theodora",
-   "territory_color": "#d35400",
+   "wikipedia": "https://en.wikipedia.org/wiki/Isabella_I_of_Castile",
+   "avatar": "isabella_of_castile",
+   "territory_color": "#2e86c1",
    "hero": {
-    "name": "Theodora",
+    "name": "Isabella I of Castile",
     "ability": {
-     "kind": "damage_to_traitors",
-     "percent": 100
+     "kind": "city_capture",
+     "side": "attacker",
+     "percent": 50
     }
    }
   },
@@ -7807,8 +7850,9 @@
    "hero": {
     "name": "Cyrus the Great",
     "ability": {
-     "kind": "city_troop_capacity",
-     "percent": 50
+     "kind": "conquest_speed",
+     "against": "anyone",
+     "percent": 25
     }
    }
   },
@@ -7827,8 +7871,9 @@
    "hero": {
     "name": "Saladin",
     "ability": {
-     "kind": "city_assault",
-     "percent": 50
+     "kind": "conquest_speed",
+     "against": "nation",
+     "percent": 25
     }
    }
   },
@@ -7847,7 +7892,8 @@
    "hero": {
     "name": "Suleiman the Magnificent",
     "ability": {
-     "kind": "enemy_troop_strength",
+     "kind": "conquest_speed",
+     "against": "smaller",
      "percent": 25
     }
    }
@@ -7867,8 +7913,9 @@
    "hero": {
     "name": "Tomoe Gozen",
     "ability": {
-     "kind": "expansion_speed",
-     "percent": 15
+     "kind": "conquest_speed",
+     "against": "human",
+     "percent": 25
     }
    }
   },
@@ -7887,8 +7934,9 @@
    "hero": {
     "name": "Lady Triệu",
     "ability": {
-     "kind": "city_defense",
-     "percent": 50
+     "kind": "attack_strength",
+     "against": "larger",
+     "percent": 25
     }
    }
   },
@@ -7907,7 +7955,8 @@
    "hero": {
     "name": "Mansa Musa",
     "ability": {
-     "kind": "territory_gold",
+     "kind": "attacker_loss",
+     "when": "recapture_window",
      "percent": 50
     }
    }
@@ -7927,7 +7976,8 @@
    "hero": {
     "name": "Shaka",
     "ability": {
-     "kind": "combat_strength",
+     "kind": "alliance_cost",
+     "against": "smaller",
      "percent": 25
     }
    }
@@ -7947,7 +7997,9 @@
    "hero": {
     "name": "Nzinga",
     "ability": {
-     "kind": "elimination_gold",
+     "kind": "resource_bonus",
+     "source": "territory",
+     "resource": "troops",
      "percent": 50
     }
    }
@@ -7967,10 +8019,584 @@
    "hero": {
     "name": "Kamehameha I",
     "ability": {
-     "kind": "bunker_range",
+     "kind": "enemy_retreat_penalty",
+     "against": "other_player",
+     "percent": 100
+    },
+    "tower_range_bonus_percent": 50
+   }
+  },
+  {
+   "id": "gajah_mada",
+   "name": "Gajah Mada",
+   "entity": "Majapahit",
+   "role": "nation",
+   "region": "asia",
+   "lat": -7.55,
+   "lon": 112.33,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Gajah_Mada",
+   "avatar": "gajah_mada",
+   "hero": {
+    "name": "Gajah Mada",
+    "ability": {
+     "kind": "conquest_speed",
+     "against": "neutral",
      "percent": 50
     }
-   }
+   },
+   "territory_color": "#d879cc"
+  },
+  {
+   "id": "solomon",
+   "name": "Solomon",
+   "entity": "Kingdom of Israel",
+   "role": "nation",
+   "region": "asia",
+   "lat": 31.77,
+   "lon": 35.21,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Solomon",
+   "avatar": "solomon",
+   "hero": {
+    "name": "Solomon",
+    "ability": {
+     "kind": "resource_bonus",
+     "source": "trade",
+     "resource": "gold",
+     "percent": 30
+    }
+   },
+   "territory_color": "#6de967"
+  },
+  {
+   "id": "sayyid_said",
+   "name": "Sayyid Said",
+   "entity": "Sultanate of Muscat and Oman",
+   "role": "nation",
+   "region": "asia",
+   "lat": 23.61,
+   "lon": 58.59,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Said_bin_Sultan",
+   "avatar": "sayyid_said",
+   "hero": {
+    "name": "Sayyid Said",
+    "ability": {
+     "kind": "enemy_retreat_penalty",
+     "against": "tribe",
+     "percent": 50
+    }
+   },
+   "territory_color": "#0c90df"
+  },
+  {
+   "id": "lapu_lapu",
+   "name": "Lapu-Lapu",
+   "entity": "Mactan",
+   "role": "nation",
+   "region": "asia",
+   "lat": 10.3,
+   "lon": 123.98,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lapu-Lapu",
+   "avatar": "lapu_lapu",
+   "hero": {
+    "name": "Lapu-Lapu",
+    "ability": {
+     "kind": "enemy_retreat_penalty",
+     "against": "outnumbered",
+     "percent": 50
+    }
+   },
+   "territory_color": "#e3f42a"
+  },
+  {
+   "id": "constantine",
+   "name": "Constantine",
+   "entity": "Roman Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 41.01,
+   "lon": 28.98,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Constantine_the_Great",
+   "avatar": "constantine",
+   "hero": {
+    "name": "Constantine",
+    "ability": {
+     "kind": "conquest_speed",
+     "against": "outnumbering",
+     "percent": 50
+    }
+   },
+   "territory_color": "#d65af6"
+  },
+  {
+   "id": "vlad_iii",
+   "name": "Vlad III",
+   "entity": "Wallachia",
+   "role": "nation",
+   "region": "europe",
+   "lat": 44.93,
+   "lon": 25.46,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Vlad_III_the_Impaler",
+   "avatar": "vlad_iii",
+   "hero": {
+    "name": "Vlad III",
+    "ability": {
+     "kind": "resource_bonus",
+     "source": "elimination",
+     "resource": "gold",
+     "percent": 50
+    }
+   },
+   "territory_color": "#9dd879"
+  },
+  {
+   "id": "mary_of_burgundy",
+   "name": "Mary of Burgundy",
+   "entity": "Burgundian Netherlands",
+   "role": "nation",
+   "region": "europe",
+   "lat": 50.85,
+   "lon": 4.35,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Mary_of_Burgundy",
+   "avatar": "mary_of_burgundy",
+   "hero": {
+    "name": "Mary of Burgundy",
+    "ability": {
+     "kind": "alliance_cost",
+     "against": "larger",
+     "percent": 30
+    }
+   },
+   "territory_color": "#a367e9"
+  },
+  {
+   "id": "semiramis",
+   "name": "Semiramis",
+   "entity": "Assyrian Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 36.36,
+   "lon": 43.15,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Semiramis",
+   "avatar": "semiramis",
+   "hero": {
+    "name": "Semiramis",
+    "ability": {
+     "kind": "resource_bonus",
+     "source": {"district": "farm"},
+     "resource": "gold",
+     "percent": 25
+    }
+   },
+   "territory_color": "#09ae24"
+  },
+  {
+   "id": "shima_kalingga",
+   "name": "Shima",
+   "entity": "Kalingga",
+   "role": "nation",
+   "region": "asia",
+   "lat": -6.7,
+   "lon": 110.6,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Shima_(queen)",
+   "avatar": "shima_kalingga",
+   "hero": {
+    "name": "Shima",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "neutral",
+     "percent": 50
+    }
+   },
+   "territory_color": "#c9f65a"
+  },
+  {
+   "id": "tomyris",
+   "name": "Tomyris",
+   "entity": "Massagetae",
+   "role": "nation",
+   "region": "asia",
+   "lat": 42.0,
+   "lon": 60.0,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tomyris",
+   "avatar": "tomyris",
+   "hero": {
+    "name": "Tomyris",
+    "ability": {
+     "kind": "enemy_retreat_penalty",
+     "against": "outnumbering",
+     "percent": 35
+    }
+   },
+   "territory_color": "#cd1d6f"
+  },
+  {
+   "id": "gorgo",
+   "name": "Gorgo",
+   "entity": "Sparta",
+   "role": "nation",
+   "region": "europe",
+   "lat": 37.07,
+   "lon": 22.43,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Gorgo",
+   "avatar": "gorgo",
+   "hero": {
+    "name": "Gorgo",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "richer",
+     "percent": 25
+    }
+   },
+   "territory_color": "#7709ae"
+  },
+  {
+   "id": "artigas",
+   "name": "Artigas",
+   "entity": "Banda Oriental",
+   "role": "nation",
+   "region": "americas",
+   "lat": -34.9,
+   "lon": -56.16,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/José_Gervasio_Artigas",
+   "avatar": "artigas",
+   "hero": {
+    "name": "Artigas",
+    "ability": {
+     "kind": "conquest_speed",
+     "against": "active_traitor",
+     "percent": 15
+    }
+   },
+   "territory_color": "#0cdf5a"
+  },
+  {
+   "id": "bernardo_ohiggins",
+   "name": "Bernardo O'Higgins",
+   "entity": "Chile",
+   "role": "nation",
+   "region": "americas",
+   "lat": -33.45,
+   "lon": -70.67,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Bernardo_O%27Higgins",
+   "avatar": "bernardo_ohiggins",
+   "hero": {
+    "name": "Bernardo O'Higgins",
+    "ability": {
+     "kind": "alliance_cost",
+     "against": "richer",
+     "percent": 30
+    }
+   },
+   "territory_color": "#f43a2a"
+  },
+  {
+   "id": "nezahualcoyotl",
+   "name": "Nezahualcóyotl",
+   "entity": "Texcoco",
+   "role": "nation",
+   "region": "americas",
+   "lat": 19.52,
+   "lon": -98.88,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Nezahualc%C3%B3yotl",
+   "avatar": "nezahualcoyotl",
+   "hero": {
+    "name": "Nezahualcóyotl",
+    "ability": {
+     "kind": "resource_bonus",
+     "source": {"district": "factory"},
+     "resource": "gold",
+     "percent": 50
+    }
+   },
+   "territory_color": "#4417a1"
+  },
+  {
+   "id": "tlacaelel",
+   "name": "Tlacaelel",
+   "entity": "Mexica Empire",
+   "role": "nation",
+   "region": "americas",
+   "lat": 19.43,
+   "lon": -99.13,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tlacaelel",
+   "avatar": "tlacaelel",
+   "hero": {
+    "name": "Tlacaelel",
+    "ability": {
+     "kind": "alliance_cost",
+     "against": "other_player",
+     "percent": 30
+    }
+   },
+   "territory_color": "#67aee9"
+  },
+  {
+   "id": "tenamaxtli",
+   "name": "Tenamaxtli",
+   "entity": "Caxcanes",
+   "role": "nation",
+   "region": "americas",
+   "lat": 21.38,
+   "lon": -102.87,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tenamaxtli",
+   "avatar": "tenamaxtli",
+   "hero": {
+    "name": "Tenamaxtli",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "outnumbering",
+     "percent": 25
+    }
+   },
+   "territory_color": "#94ae09"
+  },
+  {
+   "id": "cosijoeza",
+   "name": "Cosijoeza",
+   "entity": "Zapotec",
+   "role": "nation",
+   "region": "americas",
+   "lat": 16.94,
+   "lon": -96.75,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Cosijoeza",
+   "avatar": "cosijoeza",
+   "hero": {
+    "name": "Cosijoeza",
+    "ability": {
+     "kind": "enemy_retreat_penalty",
+     "against": "larger",
+     "percent": 50
+    }
+   },
+   "territory_color": "#c30cdf"
+  },
+  {
+   "id": "mangas_coloradas",
+   "name": "Mangas Coloradas",
+   "entity": "Chiricahua Apache",
+   "role": "nation",
+   "region": "americas",
+   "lat": 32.8,
+   "lon": -108.2,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Mangas_Coloradas",
+   "avatar": "mangas_coloradas",
+   "hero": {
+    "name": "Mangas Coloradas",
+    "ability": {
+     "kind": "alliance_cost",
+     "against": "tribe",
+     "percent": 35
+    }
+   },
+   "territory_color": "#2af49e"
+  },
+  {
+   "id": "tomochichi",
+   "name": "Tomochichi",
+   "entity": "Yamacraw",
+   "role": "nation",
+   "region": "americas",
+   "lat": 32.08,
+   "lon": -81.09,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tomochichi",
+   "avatar": "tomochichi",
+   "hero": {
+    "name": "Tomochichi",
+    "ability": {
+     "kind": "alliance_cost",
+     "against": "poorer",
+     "percent": 25
+    }
+   },
+   "territory_color": "#f6875a"
+  },
+  {
+   "id": "eight_deer",
+   "name": "Eight Deer",
+   "entity": "Mixtec",
+   "role": "nation",
+   "region": "americas",
+   "lat": 17.07,
+   "lon": -96.72,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Eight_Deer_Jaguar_Claw",
+   "avatar": "eight_deer",
+   "hero": {
+    "name": "Eight Deer",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "human",
+     "percent": 30
+    }
+   },
+   "territory_color": "#5bb635"
+  },
+  {
+   "id": "nemequene",
+   "name": "Nemequene",
+   "entity": "Muisca",
+   "role": "nation",
+   "region": "americas",
+   "lat": 5.15,
+   "lon": -73.77,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Nemequene",
+   "avatar": "nemequene",
+   "hero": {
+    "name": "Nemequene",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": "highland",
+     "percent": 50
+    }
+   },
+   "territory_color": "#3be364"
+  },
+  {
+   "id": "thanadelthur",
+   "name": "Thanadelthur",
+   "entity": "Chipewyan",
+   "role": "nation",
+   "region": "americas",
+   "lat": 59.0,
+   "lon": -109.5,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Thanadelthur",
+   "avatar": "thanadelthur",
+   "hero": {
+    "name": "Thanadelthur",
+    "ability": {
+     "kind": "alliance_cost",
+     "against": "anyone",
+     "percent": 30
+    }
+   },
+   "territory_color": "#91df0c"
+  },
+  {
+   "id": "artemisia_i",
+   "name": "Artemisia I",
+   "entity": "Caria",
+   "role": "nation",
+   "region": "asia",
+   "lat": 37.04,
+   "lon": 27.42,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Artemisia_I_of_Caria",
+   "avatar": "artemisia_i",
+   "hero": {
+    "name": "Artemisia I",
+    "ability": {
+     "kind": "resource_bonus",
+     "source": {"district": "port"},
+     "resource": "troops",
+     "percent": 50
+    }
+   },
+   "territory_color": "#f42ae4"
+  },
+  {
+   "id": "shajar_al_durr",
+   "name": "Shajar al-Durr",
+   "entity": "Mamluk Sultanate",
+   "role": "nation",
+   "region": "africa",
+   "lat": 30.04,
+   "lon": 31.24,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Shajar_al-Durr",
+   "avatar": "shajar_al_durr",
+   "hero": {
+    "name": "Shajar al-Durr",
+    "ability": {
+     "kind": "enemy_retreat_penalty",
+     "against": "active_traitor",
+     "percent": 50
+    }
+   },
+   "territory_color": "#b73be3"
+  },
+  {
+   "id": "ramesses_ii",
+   "name": "Ramesses II",
+   "entity": "Ancient Egypt",
+   "role": "nation",
+   "region": "africa",
+   "lat": 25.72,
+   "lon": 32.66,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ramesses_II",
+   "avatar": "ramesses_ii",
+   "hero": {
+    "name": "Ramesses II",
+    "ability": {
+     "kind": "resource_bonus",
+     "source": {"district": "factory"},
+     "resource": "troops",
+     "percent": 25
+    }
+   },
+   "territory_color": "#0c28df"
+  },
+  {
+   "id": "qin_liangyu",
+   "name": "Qin Liangyu",
+   "entity": "Ming dynasty",
+   "role": "nation",
+   "region": "asia",
+   "lat": 30.57,
+   "lon": 104.07,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Qin_Liangyu",
+   "avatar": "qin_liangyu",
+   "hero": {
+    "name": "Qin Liangyu",
+    "ability": {
+     "kind": "enemy_retreat_penalty",
+     "against": "anyone",
+     "percent": 50
+    }
+   },
+   "territory_color": "#392af4"
+  },
+  {
+   "id": "lobengula",
+   "name": "Lobengula",
+   "entity": "Matabeleland",
+   "role": "nation",
+   "region": "africa",
+   "lat": -20.15,
+   "lon": 28.58,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lobengula",
+   "avatar": "lobengula",
+   "hero": {
+    "name": "Lobengula",
+    "ability": {
+     "kind": "city_troop_capacity",
+     "percent": 50
+    }
+   },
+   "territory_color": "#42ae09"
   }
  ]
 }

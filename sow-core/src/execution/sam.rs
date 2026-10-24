@@ -40,8 +40,8 @@ impl SowEngine {
             .buildings
             .iter()
             .filter(|b| {
-                b.kind == BuildingKind::Bunker
-                    && b.active_level() >= BuildingKind::Bunker.max_level()
+                b.kind == BuildingKind::Tower
+                    && b.active_level() >= BuildingKind::Tower.max_level()
                     && !b.under_construction
             })
             .map(|b| (b.id, b.owner_id, b.tile_idx, sam_range(b.active_level())))

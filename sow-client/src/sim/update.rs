@@ -44,39 +44,41 @@ impl SowApp {
         if is_playing_or_loading {
             if self.net.client.is_some() {
                 // Multiplayer: lockstep execution dictated by server
-                let mut ticks_processed = 0;
-                while let Some(turn) = self.sim.turn_queue.pop_front() {
-                    ticks_processed += 1;
-                    self.dispatch_sim_command(sow_core::protocol::SimCommand::Turn(turn));
+                if self.sim.engine.is_some() {
+                    let mut ticks_processed = 0;
+                    while let Some(turn) = self.sim.turn_queue.pop_front() {
+                        ticks_processed += 1;
+                        self.dispatch_sim_command(sow_core::protocol::SimCommand::Turn(turn));
 
-                    // NOTE(2026-08-22): sim-tick perf instrumentation added to
-                    // diagnose the F-Stack relay lag report (sow-dist/prod.rs
-                    // era). Forensics exonerated BOTH the relay and the sim —
-                    // p50=9ms @ 558 players, 3 anomalous ticks in ~16k — the
-                    // only real cost was Chrome stack-capturing these very
-                    // console.warn lines when DevTools was open. Disabled so
-                    // the console stays free. Re-enable via `crate::diag` if a
-                    // regression ever needs measuring:
-                    //   let tick_start = Instant::now();
-                    //   ... dispatch ...
-                    //   crate::diag::record_tick((Instant::now() - tick_start).as_micros() as u64);
+                        // NOTE(2026-08-22): sim-tick perf instrumentation added to
+                        // diagnose the F-Stack relay lag report (sow-dist/prod.rs
+                        // era). Forensics exonerated BOTH the relay and the sim —
+                        // p50=9ms @ 558 players, 3 anomalous ticks in ~16k — the
+                        // only real cost was Chrome stack-capturing these very
+                        // console.warn lines when DevTools was open. Disabled so
+                        // the console stays free. Re-enable via `crate::diag` if a
+                        // regression ever needs measuring:
+                        //   let tick_start = Instant::now();
+                        //   ... dispatch ...
+                        //   crate::diag::record_tick((Instant::now() - tick_start).as_micros() as u64);
 
-                    // Update UI HUD State from my player id
-                    self.sync_hud_player_state();
-                    self.process_resource_notifications();
-                    self.sync_building_costs();
+                        // Update UI HUD State from my player id
+                        self.sync_hud_player_state();
+                        self.process_resource_notifications();
+                        self.sync_building_costs();
 
-                    if ticks_processed >= 10 {
-                        break;
+                        if ticks_processed >= 10 {
+                            break;
+                        }
                     }
-                }
-                if ticks_processed > 0 {
-                    // NOTE(2026-08-22): [SIM PERF]/[DIAG SIM TICK] reporting
-                    // disabled — added to diagnose the F-Stack relay lag
-                    // report; forensics exonerated relay and sim (p50=9ms @
-                    // 558 players), and each console.warn line made DevTools
-                    // stack-capture a 12-frame wasm trace, which was the only
-                    // measurable lag. See `crate::diag` to re-enable.
+                    if ticks_processed > 0 {
+                        // NOTE(2026-08-22): [SIM PERF]/[DIAG SIM TICK] reporting
+                        // disabled — added to diagnose the F-Stack relay lag
+                        // report; forensics exonerated relay and sim (p50=9ms @
+                        // 558 players), and each console.warn line made DevTools
+                        // stack-capture a 12-frame wasm trace, which was the only
+                        // measurable lag. See `crate::diag` to re-enable.
+                    }
                 }
             } else {
                 // Singleplayer: pace ticks from wall clock + lobby tick_rate_ms (same as relay).
@@ -389,13 +391,6 @@ impl SowApp {
                     .get(my_pid as usize)
                     .copied()
                     .unwrap_or_default();
-                self.ui.app.hud_state.troop_rate =
-                    sow_core::execution::income_rates::troop_income_per_second(
-                        player.tile_count,
-                        agg,
-                        player.leader,
-                        &self.sim.config,
-                    ) * self.sim.config.global_speed_multiplier;
                 let trade_ships = e
                     .fleets
                     .iter()
@@ -404,14 +399,33 @@ impl SowApp {
                             && fleet.unit_type == sow_core::game::UnitType::TradeShip
                     })
                     .count() as u32;
+                self.ui.app.hud_state.troop_rate = (sow_core::execution::income_rates::troop_income_per_second(
+                    player.tile_count,
+                    agg,
+                    player.leader,
+                    &self.sim.config,
+                ) + sow_core::execution::income_rates::alliance_troops_per_second(
+                    player.alliances.len(),
+                    player.leader,
+                    &self.sim.config,
+                ) + sow_core::execution::income_rates::trade_troops_per_second(
+                    trade_ships,
+                    player.leader,
+                    &self.sim.config,
+                )) * self.sim.config.global_speed_multiplier;
                 self.ui.app.hud_state.gold_rate =
                     (sow_core::execution::income_rates::gold_income_per_second(
                         player.tile_count,
                         agg,
                         player.leader,
                         &self.sim.config,
+                    ) + sow_core::execution::income_rates::alliance_gold_per_second(
+                        player.alliances.len(),
+                        player.leader,
+                        &self.sim.config,
                     ) + sow_core::execution::income_rates::trade_income_per_second(
                         trade_ships,
+                        player.leader,
                         &self.sim.config,
                     )) * self.sim.config.global_speed_multiplier;
             }

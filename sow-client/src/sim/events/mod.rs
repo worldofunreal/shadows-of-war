@@ -53,6 +53,15 @@ impl SowApp {
         self.sfx.begin_tick();
         for event in events {
             match event {
+                sow_core::game::GameEvent::ResourceTransferred {
+                    receiver_id,
+                    troops,
+                    ..
+                } => {
+                    self.ui
+                        .nameplates
+                        .receive_troops(receiver_id, troops, now_instant);
+                }
                 sow_core::game::GameEvent::TransportShipLanded { owner_id, x, y } => {
                     let color = snap
                         .players
@@ -75,6 +84,41 @@ impl SowApp {
                             color,
                             start_time: now_instant,
                         });
+                }
+                sow_core::game::GameEvent::AbilityTriggered { owner_id, tile, .. } => {
+                    let Some(owner) = snap.players.iter().find(|player| player.id == owner_id)
+                    else {
+                        continue;
+                    };
+                    if let Some((x, y)) = tile {
+                        let color = owner
+                            .team
+                            .map_or(owner.color, sow_core::player::team_territory_rgb);
+                        if self.ui.transport_impacts.len() == crate::app::MAX_TRANSPORT_IMPACTS {
+                            self.ui.transport_impacts.pop_front();
+                        }
+                        self.ui
+                            .transport_impacts
+                            .push_back(crate::app::TransportImpact {
+                                tile_x: x,
+                                tile_y: y,
+                                color,
+                                start_time: now_instant,
+                            });
+                    }
+                    if owner_id == my_id {
+                        // The notice shows the hero's icon and its own ability name.
+                        let hero = sow_core::commerce::leader_id(owner.leader).to_string();
+                        self.ui.app.hud_state.push_notification_for_players(
+                            crate::ui::UiText::new("hud.ability_notice")
+                                .with("hero", hero.clone())
+                                .with("ability_key", format!("site.leader_{hero}_ability")),
+                            [Some(owner_id), None],
+                            3,
+                            Some(format!("ability:{owner_id}")),
+                            false,
+                        );
+                    }
                 }
                 sow_core::game::GameEvent::PlayerEliminated {
                     player_id,

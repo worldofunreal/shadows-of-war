@@ -23,27 +23,27 @@ pub fn troop_income_per_second(
     leader: Leader,
     cfg: &GameConfig,
 ) -> f64 {
-    use crate::geo_entities::{District, Resource};
+    use crate::geo_entities::{District, Resource, Source};
     cfg.troop_base_income
         + cfg.city_troop_income
             * agg.city_levels as f64
-            * leader.district_income_multiplier(District::City, Resource::Troops)
+            * leader.resource_bonus_multiplier(Source::District(District::City), Resource::Troops)
         + cfg.farm_troop_income
             * agg.farm_income_level_weight
-            * leader.district_income_multiplier(District::Farm, Resource::Troops)
+            * leader.resource_bonus_multiplier(Source::District(District::Farm), Resource::Troops)
         + hero_only_income(
-            leader.district_income_hero_bonus(District::Factory, Resource::Troops),
+            leader.resource_bonus_hero_bonus(Source::District(District::Factory), Resource::Troops),
             cfg.hero_factory_troop_income * agg.factory_levels as f64,
         )
         + hero_only_income(
-            leader.district_income_hero_bonus(District::Port, Resource::Troops),
+            leader.resource_bonus_hero_bonus(Source::District(District::Port), Resource::Troops),
             cfg.hero_port_troop_income * agg.port_income_level_weight,
         )
         + territory_rate(
             tiles_owned,
             cfg.territory_troop_amount,
             cfg.territory_troop_tiles,
-        )
+        ) * leader.resource_bonus_multiplier(Source::Territory, Resource::Troops)
 }
 
 /// Per-game-second income before NPC handicap and `per_tick()` scaling.
@@ -53,37 +53,69 @@ pub fn gold_income_per_second(
     leader: Leader,
     cfg: &GameConfig,
 ) -> f64 {
-    use crate::geo_entities::{District, Resource};
+    use crate::geo_entities::{District, Resource, Source};
     cfg.gold_base_income
         + cfg.factory_gold_income
             * agg.factory_levels as f64
-            * leader.district_income_multiplier(District::Factory, Resource::Gold)
+            * leader.resource_bonus_multiplier(Source::District(District::Factory), Resource::Gold)
         + cfg.farm_gold_income
             * agg.farm_income_level_weight
-            * leader.district_income_multiplier(District::Farm, Resource::Gold)
+            * leader.resource_bonus_multiplier(Source::District(District::Farm), Resource::Gold)
         + cfg.port_gold_income
             * agg.port_income_level_weight
-            * leader.district_income_multiplier(District::Port, Resource::Gold)
+            * leader.resource_bonus_multiplier(Source::District(District::Port), Resource::Gold)
         + hero_only_income(
-            leader.district_income_hero_bonus(District::City, Resource::Gold),
+            leader.resource_bonus_hero_bonus(Source::District(District::City), Resource::Gold),
             cfg.hero_city_gold_income * agg.city_levels as f64,
         )
         + territory_rate(tiles, cfg.territory_gold_amount, cfg.territory_gold_tiles)
-            * leader.territory_gold_multiplier()
+            * leader.resource_bonus_multiplier(Source::Territory, Resource::Gold)
 }
 
 /// Per-game-second gold from the player's active alliances, paid only to the hero
 /// whose ability pays for them.
 pub fn alliance_gold_per_second(alliances: usize, leader: Leader, cfg: &GameConfig) -> f64 {
+    use crate::geo_entities::{Resource, Source};
     hero_only_income(
-        leader.alliance_gold_hero_bonus(),
+        leader.resource_bonus_hero_bonus(Source::Alliance, Resource::Gold),
         cfg.alliance_gold_income * alliances as f64,
     )
 }
 
+/// Per-game-second troops from the player's active alliances, paid only to the hero
+/// whose ability pays for them.
+pub fn alliance_troops_per_second(alliances: usize, leader: Leader, cfg: &GameConfig) -> f64 {
+    use crate::geo_entities::{Resource, Source};
+    hero_only_income(
+        leader.resource_bonus_hero_bonus(Source::Alliance, Resource::Troops),
+        cfg.alliance_troop_income * alliances as f64,
+    )
+}
+
 #[inline]
-pub fn trade_income_per_second(trade_ships: u32, cfg: &GameConfig) -> f64 {
-    f64::from(trade_ships) * cfg.trade_ship_gold_income
+pub fn trade_income_per_second(trade_ships: u32, leader: Leader, cfg: &GameConfig) -> f64 {
+    use crate::geo_entities::{Resource, Source};
+    f64::from(trade_ships)
+        * cfg.trade_ship_gold_income
+        * leader.resource_bonus_multiplier(Source::Trade, Resource::Gold)
+}
+
+/// Per-game-second troops from Trade Ships, paid only to the hero whose ability pays for them.
+pub fn trade_troops_per_second(trade_ships: u32, leader: Leader, cfg: &GameConfig) -> f64 {
+    use crate::geo_entities::{Resource, Source};
+    hero_only_income(
+        leader.resource_bonus_hero_bonus(Source::Trade, Resource::Troops),
+        cfg.trade_troop_income * f64::from(trade_ships),
+    )
+}
+
+/// Troops a conqueror gets for eliminating a player, paid only to the hero whose ability pays for them.
+pub fn elimination_troop_bounty(leader: Leader, cfg: &GameConfig) -> f64 {
+    use crate::geo_entities::{Resource, Source};
+    hero_only_income(
+        leader.resource_bonus_hero_bonus(Source::Elimination, Resource::Troops),
+        cfg.elimination_troop_bounty,
+    )
 }
 
 #[cfg(test)]
@@ -110,40 +142,42 @@ mod tests {
     }
 
     #[test]
-    fn territory_generates_one_gold_per_second_per_2048_tiles() {
+    fn territory_generates_one_gold_per_second_per_1024_tiles() {
         let cfg = default_cfg();
         let agg = BuildingAggregate::default();
         assert_eq!(
             gold_income_per_second(128, agg, Leader::of("caesar"), &cfg),
-            cfg.gold_base_income + 0.0625
+            cfg.gold_base_income + 0.125
         );
         assert_eq!(
-            gold_income_per_second(2_048, agg, Leader::of("caesar"), &cfg),
+            gold_income_per_second(1_024, agg, Leader::of("caesar"), &cfg),
             cfg.gold_base_income + 1.0
         );
         assert_eq!(
-            gold_income_per_second(20_480, agg, Leader::of("caesar"), &cfg),
+            gold_income_per_second(10_240, agg, Leader::of("caesar"), &cfg),
             cfg.gold_base_income + 10.0
         );
         assert_eq!(
             troop_income_per_second(400, agg, Leader::of("caesar"), &cfg),
-            cfg.troop_base_income + 400.0 / 24.0
+            cfg.troop_base_income + 400.0 / 16.0
         );
     }
 
     #[test]
-    fn standard_speed_base_and_factory_gold_match_balance_targets() {
+    fn base_and_factory_gold_match_game_time_balance_targets() {
         let cfg = default_cfg();
         let ticks_per_second = 1_000.0 / f64::from(cfg.tick_rate_ms);
-        let gold_per_minute = |per_second| cfg.per_tick(per_second) * ticks_per_second * 60.0;
+        let gold_per_game_minute = |per_second| {
+            cfg.per_tick(per_second) * ticks_per_second * 60.0 / cfg.global_speed_multiplier
+        };
 
-        assert_eq!(gold_per_minute(cfg.gold_base_income), 10.5);
-        assert!((gold_per_minute(cfg.factory_gold_income) - 12.0).abs() < 1e-12);
-        assert_eq!(cfg.troop_base_income * 10.5, 1_837.5);
-        assert_eq!(cfg.territory_troop_tiles, 24);
-        assert_eq!(cfg.territory_gold_tiles, 2_048);
+        assert!((gold_per_game_minute(cfg.gold_base_income) - 60.0).abs() < 1e-9);
+        assert!((gold_per_game_minute(cfg.factory_gold_income) - 60.0 * (8.0 / 7.0)).abs() < 1e-9);
+        assert_eq!(cfg.troop_base_income, 175.0);
+        assert_eq!(cfg.territory_troop_tiles, 16);
+        assert_eq!(cfg.territory_gold_tiles, 1_024);
         assert_eq!(cfg.cost_city, 200.0);
-        assert_eq!(cfg.cost_bunker, 100.0);
+        assert_eq!(cfg.cost_tower, 100.0);
         assert_eq!(cfg.cost_factory, 175.0);
         assert_eq!(cfg.cost_port, 200.0);
         assert_eq!(cfg.cost_farm, 125.0);
@@ -152,7 +186,9 @@ mod tests {
     #[test]
     fn trade_income_uses_game_seconds() {
         let cfg = default_cfg();
-        assert!((trade_income_per_second(2, &cfg) * 21.0 - 24.0).abs() < 1e-12);
+        assert!(
+            (trade_income_per_second(2, Leader::of("caesar"), &cfg) * 21.0 - 24.0).abs() < 1e-12
+        );
     }
 
     #[test]
@@ -168,19 +204,10 @@ mod tests {
     }
 
     #[test]
-    fn vercingetorix_multiplies_city_but_not_farm_troops() {
+    fn vercingetorix_pays_alliance_troops_at_one_and_a_half() {
         let cfg = default_cfg();
-        let agg = BuildingAggregate {
-            city_levels: 2,
-            farm_income_level_weight: 2.0,
-            ..Default::default()
-        };
-        let base = troop_income_per_second(0, agg, Leader::of("caesar"), &cfg);
-        let verc = troop_income_per_second(0, agg, Leader::of("vercingetorix"), &cfg);
-        let city_bonus = cfg.city_troop_income * 2.0;
-        let farm_bonus = cfg.farm_troop_income * 2.0;
-        assert_eq!(base, cfg.troop_base_income + city_bonus + farm_bonus);
-        assert_eq!(verc, cfg.troop_base_income + city_bonus * 1.5 + farm_bonus);
+        let verc = alliance_troops_per_second(2, Leader::of("vercingetorix"), &cfg);
+        assert!((verc - cfg.alliance_troop_income * 2.0 * 1.5).abs() < 1e-12);
     }
 
     #[test]
@@ -196,7 +223,7 @@ mod tests {
         assert!((troop_rate - (175.0 + 4.75 * 40.0 / 21.0)).abs() < 1e-12);
         assert!((gold_rate - (1.0 + 4.75 * (4.0 + 12.0) / 21.0)).abs() < 1e-12);
 
-        let ragnar_gold = gold_income_per_second(0, agg, Leader::of("ragnar"), &cfg);
+        let ragnar_gold = gold_income_per_second(0, agg, Leader::of("cleopatra"), &cfg);
         assert!((ragnar_gold - (1.0 + 4.75 * (4.0 + 18.0) / 21.0)).abs() < 1e-12);
     }
 
@@ -212,7 +239,7 @@ mod tests {
             cfg.troop_base_income
         );
         assert_eq!(
-            troop_income_per_second(0, agg, Leader::of("ragnar"), &cfg),
+            troop_income_per_second(0, agg, Leader::of("cleopatra"), &cfg),
             cfg.troop_base_income
         );
     }

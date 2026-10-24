@@ -1,5 +1,7 @@
 use crate::engine::SowEngine;
 use crate::game::{BuildingKind, GameEvent, GamePhase, UnitType};
+use crate::geo_entities::{Ability, District, Source};
+use crate::player::Leader;
 /// Advance construction timers; emits [`GameEvent::StructureReady`].
 /// Split out for unit tests (`advance_building_construction_tick`).
 impl SowEngine {
@@ -23,9 +25,16 @@ impl SowEngine {
                 if b.kind == BuildingKind::Port {
                     self.sea_lanes_dirty = true;
                 }
-                if b.kind == BuildingKind::Bunker {
+                if b.kind == BuildingKind::Tower {
                     self.defense_grid_dirty = true;
                     self.render_defense_dirty = true;
+                }
+                if self
+                    .state
+                    .player(b.owner_id)
+                    .is_some_and(|player| structure_marks_leader(player.leader, b.kind))
+                {
+                    self.state.announce_leader_ability(b.owner_id, None);
                 }
                 self.state.events.push(GameEvent::StructureReady {
                     id: b.id,
@@ -227,6 +236,13 @@ impl SowEngine {
                 fleet.set_speed_bonus_percent(
                     crate::building::cost::boat_speed_bonus_from_port_levels(port_levels),
                 );
+                if self
+                    .state
+                    .player(player_id)
+                    .is_some_and(|player| player.leader.has_resource_bonus_from(Source::Trade))
+                {
+                    self.state.announce_leader_ability(player_id, None);
+                }
                 new_fleets.push(fleet);
                 *count += 1;
             }
@@ -249,6 +265,23 @@ struct TradeRoute {
     dst_tile: u32,
     dst_owner: u16,
     path: Vec<u32>,
+}
+
+/// Whether finishing a `kind` building pays `leader` its ability: a district's income,
+/// a city's troop cap or a tower's reach.
+fn structure_marks_leader(leader: Leader, kind: BuildingKind) -> bool {
+    match (leader.ability(), kind) {
+        (Ability::TowerRange { .. }, BuildingKind::Tower) => true,
+        (Ability::CityTroopCapacity { .. }, BuildingKind::City) => true,
+        (Ability::ResourceBonus { source: Source::District(district), .. }, _) => matches!(
+            (district, kind),
+            (District::City, BuildingKind::City)
+                | (District::Factory, BuildingKind::Factory)
+                | (District::Port, BuildingKind::Port)
+                | (District::Farm, BuildingKind::Farm)
+        ),
+        _ => false,
+    }
 }
 
 fn ready_trade_ports(buildings: &[crate::building::Building]) -> Vec<TradePort> {
@@ -346,16 +379,16 @@ fn find_trade_route(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::building::Building;
-    use crate::game::{GamePhase, GameState, UnitType};
+    use crate::game::{GameEvent, GamePhase, GameState, UnitType};
     use crate::game_config::GameConfig;
-    use crate::player::Player;
+    use crate::player::{Leader, Player};
     use crate::sea_lane::SeaLane;
     use crate::water_components::WaterComponents;
 
-    fn port(id: u64, owner_id: u16, tile_idx: u32) -> Building {
+    pub(crate) fn port(id: u64, owner_id: u16, tile_idx: u32) -> Building {
         Building {
             id,
             owner_id,
@@ -367,7 +400,7 @@ mod tests {
         }
     }
 
-    fn engine_with_ports(ports: &[Building], lanes: Vec<SeaLane>) -> SowEngine {
+    pub(crate) fn engine_with_ports(ports: &[Building], lanes: Vec<SeaLane>) -> SowEngine {
         let mut state = GameState::new(1, 64, 64, GameConfig::default());
         state.phase = GamePhase::Playing;
         let config = state.config.clone();
@@ -383,12 +416,63 @@ mod tests {
         engine
     }
 
-    fn lane(id: u64, a: u64, b: u64, path: &[u32]) -> SeaLane {
+    pub(crate) fn lane(id: u64, a: u64, b: u64, path: &[u32]) -> SeaLane {
         SeaLane {
             id,
             port_a_id: a,
             port_b_id: b,
             path: path.to_vec(),
+        }
+    }
+
+    #[test]
+    fn trade_ship_departure_shows_the_mark_only_for_trade_heroes() {
+        for (hero, marks) in [("solomon", 1), ("hongi_hika", 1), ("cleopatra", 0)] {
+            let mut engine = engine_with_ports(
+                &[port(1, 1, 10), port(2, 2, 20)],
+                vec![lane(1, 1, 2, &[100, 101])],
+            );
+            engine.state.player_mut(1).unwrap().leader = Leader::of(hero);
+            engine.execute_trade_ships();
+            let shown = engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::AbilityTriggered { owner_id: 1, .. }))
+                .count();
+            assert_eq!(shown, marks, "{hero} marks its trade ship departure");
+        }
+    }
+
+    #[test]
+    fn finished_structures_show_the_mark_only_for_their_hero() {
+        for (hero, kind, marks) in [
+            ("nezahualcoyotl", BuildingKind::Factory, 1),
+            ("nezahualcoyotl", BuildingKind::Port, 0),
+            ("cleopatra", BuildingKind::Port, 1),
+            ("cleopatra", BuildingKind::Factory, 0),
+            ("lobengula", BuildingKind::City, 1),
+            ("lobengula", BuildingKind::Tower, 0),
+        ] {
+            let mut engine = engine_with_ports(&[], vec![]);
+            engine.state.player_mut(1).unwrap().leader = Leader::of(hero);
+            engine.add_building(Building {
+                id: 1,
+                owner_id: 1,
+                tile_idx: 10,
+                kind,
+                level: 1,
+                under_construction: true,
+                ticks_until_complete: 1,
+            });
+            engine.execute_construction();
+            let shown = engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::AbilityTriggered { owner_id: 1, .. }))
+                .count();
+            assert_eq!(shown, marks, "{hero} when a {kind:?} is finished");
         }
     }
 

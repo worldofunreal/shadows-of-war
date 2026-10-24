@@ -2,7 +2,9 @@
 use super::overlays::world_to_screen_values;
 use crate::app::{InputState, SimState};
 use crate::render::gpu::TextRenderer;
-use crate::render::motion::{EmoteMotion, emote_motion, smoothstep, spring_overshoot};
+use crate::render::motion::{
+    EmoteMotion, emote_motion, smoothstep, spring_overshoot, troop_transfer_motion,
+};
 use crate::theme::dev_config::DevConfig;
 use sow_core::emote::{ActiveEmote, AvatarExpression, EMOTE_DURATION_SECS, EMOTES};
 use sow_core::player::{Leader, PlayerType};
@@ -10,8 +12,8 @@ use sow_core::protocol::{PlayerSnapshot, SimSnapshot};
 use sow_render::nameplate::{
     BadgeKind, MapPoint, NAMEPLATE_MAX_BADGES, NAMEPLATE_SAMPLE_TICKS, NameplateCapacityPlan,
     NameplateLandCache, NameplateLayout, NameplateMetrics, NameplatePresentation, NameplateStatus,
-    NameplateStyle, ScreenPoint, WorldRect, assign_nameplate_capacity, fit_bounds_to_land,
-    fit_size_to_land, fitted_font_px, fog_allows_nameplate, font_size_scale,
+    NameplateStyle, ScreenPoint, WorldRect, assign_nameplate_capacity, fit_size_to_land,
+    fitted_font_px, fog_allows_nameplate, font_size_scale,
     nameplate_visible_after_viewport_and_fog, sample_due as nameplate_sample_due,
     size_needs_interpolation as nameplate_size_needs_interpolation,
 };
@@ -29,6 +31,7 @@ const NAMEPLATE_MAX_CATCHUP_TICKS: u64 = NAMEPLATE_SAMPLE_TICKS * 2;
 const SPAWN_STICKY_HOLD: Duration = Duration::from_millis(120);
 const SPAWN_SETTLE_DURATION: Duration = Duration::from_millis(180);
 const LOD_DOT_RADIUS: f32 = 2.0;
+const LOD_STAR_DIAMETER: f32 = 12.0;
 const AVATAR_PLACEHOLDER_COLOR: [f32; 4] = [0.16, 0.18, 0.20, 1.0];
 const EMOTE_BUBBLE_FONT_RATIO: f32 = 0.22;
 const EMOTE_BUBBLE_MIN_FONT_SIZE: f32 = 9.0;
@@ -41,12 +44,18 @@ const EMOTE_BUBBLE_TAIL_LENGTH_RATIO: f32 = 0.22;
 const EMOTE_BUBBLE_INNER_TAIL_WIDTH_RATIO: f32 = 0.23;
 const EMOTE_BUBBLE_INNER_TAIL_LENGTH_RATIO: f32 = 0.16;
 const EMOTE_BUBBLE_BODY_OFFSET_RATIO: f32 = 0.35;
-const STATUS_BADGE_COUNT: usize = 4;
-const STATUS_BADGE_ENTER_SECS: f32 = 0.25;
-const STATUS_BADGE_EXIT_SECS: f32 = 0.35;
-const STATUS_BADGE_EXIT_SCALE: f32 = 1.35;
-const STATUS_BADGE_MAX_SCALE: f32 = 1.45;
+const STATUS_BADGE_COUNT: usize = 7;
+const STATUS_BADGE_ENTER_SECS: f32 = 0.52;
+const STATUS_BADGE_EXIT_SECS: f32 = 0.65;
+const STATUS_BADGE_EXIT_SCALE: [f32; 2] = [1.50, 1.42];
+const STATUS_BADGE_MAX_SCALE: f32 = 1.60;
+const STATUS_BADGE_ENTER_PREP_END: f32 = 0.15;
+const STATUS_BADGE_ENTER_POP_END: f32 = 0.58;
+const STATUS_BADGE_EXIT_PREP_END: f32 = 0.12;
+const STATUS_BADGE_EXIT_FADE_START: f32 = 0.34;
 const NAMEPLATE_RENDER_BADGE_CAPACITY: usize = NAMEPLATE_MAX_BADGES + STATUS_BADGE_COUNT;
+const TROOP_TRANSFER_TEXT_DELAY: f32 = 0.08;
+const TROOP_TRANSFER_GLYPH_DELAY: f32 = 0.035;
 
 #[derive(Clone, Debug)]
 pub(crate) struct NameplateVisualState {
@@ -67,6 +76,21 @@ pub(crate) struct NameplateVisualState {
     prepared_name: sow_render::text::PreparedText,
     prepared_troops: sow_render::text::PreparedText,
     text_style_key: Option<u32>,
+    troop_transfer_at: Option<Instant>,
+}
+
+impl NameplateVisualState {
+    fn troop_transfer_age(&self, now: Instant, reduced_motion: bool) -> Option<f32> {
+        if reduced_motion {
+            return None;
+        }
+        let age = now.duration_since(self.troop_transfer_at?).as_secs_f32();
+        let duration = TROOP_TRANSFER_TEXT_DELAY
+            + TROOP_TRANSFER_GLYPH_DELAY
+                * self.prepared_troops.instance_count().saturating_sub(1) as f32
+            + 0.5;
+        (age < duration).then_some(age)
+    }
 }
 
 #[derive(Default)]
@@ -98,7 +122,7 @@ struct PreparedNameplate {
     player_index: usize,
     has_human_priority: bool,
     full: Option<FullNameplate>,
-    dot: LodDot,
+    marker: LodMarker,
     presentation: NameplatePresentation,
     tutorial_hit_bounds: Option<[f32; 4]>,
 }
@@ -122,10 +146,15 @@ impl NameplateCapacityPlan for PreparedNameplate {
 }
 
 #[derive(Clone, Copy)]
-struct LodDot {
-    center: ScreenPoint,
-    color: [f32; 4],
-    scale: f32,
+enum LodMarker {
+    Dot {
+        center: ScreenPoint,
+        color: [f32; 4],
+        scale: f32,
+    },
+    Star {
+        center: ScreenPoint,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -242,45 +271,145 @@ struct TroopsPlan {
     icon_center: [f32; 2],
     icon_diameter: f32,
     text: TextPlan,
+    transfer_age: Option<f32>,
 }
 
 #[derive(Clone, Copy)]
 struct BadgePlan {
     kind: BadgeKind,
     center: [f32; 2],
-    diameter: f32,
+    size: [f32; 2],
     tint: [f32; 4],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct BadgeMotion {
+    scale: [f32; 2],
+    alpha: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BadgeTransition {
+    Enter,
+    Exit,
 }
 
 #[derive(Clone, Copy)]
 struct BadgeAnimation {
     started_at: Instant,
     duration_secs: f32,
-    from_scale: f32,
+    transition: BadgeTransition,
+    from_scale: [f32; 2],
     from_alpha: f32,
-    to_scale: f32,
-    to_alpha: f32,
 }
 
 impl BadgeAnimation {
-    fn values(self, now: Instant, reduced_motion: bool) -> (f32, f32) {
+    fn values(self, now: Instant, reduced_motion: bool) -> BadgeMotion {
         let progress = (now.duration_since(self.started_at).as_secs_f32()
             / self.duration_secs.max(f32::EPSILON))
         .clamp(0.0, 1.0);
         if progress >= 1.0 {
-            return (self.to_scale, self.to_alpha);
+            return match self.transition {
+                BadgeTransition::Enter => BadgeMotion {
+                    scale: [1.0; 2],
+                    alpha: 1.0,
+                },
+                BadgeTransition::Exit => BadgeMotion {
+                    scale: STATUS_BADGE_EXIT_SCALE,
+                    alpha: 0.0,
+                },
+            };
         }
-        let alpha_progress = smoothstep(progress);
-        let alpha = self.from_alpha + (self.to_alpha - self.from_alpha) * alpha_progress;
+
+        let mix = |from: f32, to: f32, t: f32| from + (to - from) * t;
         if reduced_motion {
-            return (1.0, alpha.clamp(0.0, 1.0));
+            let alpha = match self.transition {
+                BadgeTransition::Enter => mix(self.from_alpha, 1.0, smoothstep(progress)),
+                BadgeTransition::Exit => {
+                    self.from_alpha
+                        * (1.0
+                            - smoothstep(
+                                (progress - STATUS_BADGE_EXIT_FADE_START)
+                                    / (1.0 - STATUS_BADGE_EXIT_FADE_START),
+                            ))
+                }
+            };
+            return BadgeMotion {
+                scale: [1.0; 2],
+                alpha: alpha.clamp(0.0, 1.0),
+            };
         }
-        let scale_progress = spring_overshoot(progress);
-        let scale = self.from_scale + (self.to_scale - self.from_scale) * scale_progress;
-        (
-            scale.clamp(0.0, STATUS_BADGE_MAX_SCALE),
-            alpha.clamp(0.0, 1.0),
-        )
+
+        let (scale, alpha) = match self.transition {
+            BadgeTransition::Enter => {
+                let alpha = if progress < STATUS_BADGE_ENTER_PREP_END {
+                    mix(
+                        self.from_alpha,
+                        0.42,
+                        smoothstep(progress / STATUS_BADGE_ENTER_PREP_END),
+                    )
+                } else if progress < STATUS_BADGE_ENTER_POP_END {
+                    mix(
+                        0.42,
+                        1.0,
+                        smoothstep(
+                            (progress - STATUS_BADGE_ENTER_PREP_END)
+                                / (STATUS_BADGE_ENTER_POP_END - STATUS_BADGE_ENTER_PREP_END),
+                        ),
+                    )
+                } else {
+                    1.0
+                };
+                let scale = if progress < STATUS_BADGE_ENTER_PREP_END {
+                    let t = smoothstep(progress / STATUS_BADGE_ENTER_PREP_END);
+                    [
+                        mix(self.from_scale[0], 0.76, t),
+                        mix(self.from_scale[1], 0.68, t),
+                    ]
+                } else if progress < STATUS_BADGE_ENTER_POP_END {
+                    let t = smoothstep(
+                        (progress - STATUS_BADGE_ENTER_PREP_END)
+                            / (STATUS_BADGE_ENTER_POP_END - STATUS_BADGE_ENTER_PREP_END),
+                    );
+                    [mix(0.76, 1.20, t), mix(0.68, 1.25, t)]
+                } else {
+                    let t = (progress - STATUS_BADGE_ENTER_POP_END)
+                        / (1.0 - STATUS_BADGE_ENTER_POP_END);
+                    let settle = 1.0 - spring_overshoot(t);
+                    [1.0 + 0.20 * settle, 1.0 + 0.25 * settle]
+                };
+                (scale, alpha)
+            }
+            BadgeTransition::Exit => {
+                let scale = if progress < STATUS_BADGE_EXIT_PREP_END {
+                    let t = smoothstep(progress / STATUS_BADGE_EXIT_PREP_END);
+                    [
+                        mix(self.from_scale[0], 0.86, t),
+                        mix(self.from_scale[1], 0.78, t),
+                    ]
+                } else {
+                    let t = (progress - STATUS_BADGE_EXIT_PREP_END)
+                        / (1.0 - STATUS_BADGE_EXIT_PREP_END);
+                    let spring = spring_overshoot(t);
+                    [
+                        0.86 + (STATUS_BADGE_EXIT_SCALE[0] - 0.86) * spring,
+                        0.78 + (STATUS_BADGE_EXIT_SCALE[1] - 0.78) * spring,
+                    ]
+                };
+                let alpha = self.from_alpha
+                    * (1.0
+                        - smoothstep(
+                            (progress - STATUS_BADGE_EXIT_FADE_START)
+                                / (1.0 - STATUS_BADGE_EXIT_FADE_START),
+                        ));
+                (scale, alpha)
+            }
+        };
+
+        BadgeMotion {
+            scale: scale.map(|axis| axis.clamp(0.0, STATUS_BADGE_MAX_SCALE)),
+            alpha: alpha.clamp(0.0, 1.0),
+        }
     }
 
     fn is_finished(self, now: Instant) -> bool {
@@ -320,11 +449,17 @@ impl PlayerStatusBadgeAnimations {
 
         for (badge, is_present) in self.badges.iter_mut().zip(present) {
             if badge.present != is_present {
-                let (from_scale, from_alpha) = badge.animation.map_or(
+                let from = badge.animation.map_or(
                     if badge.present {
-                        (1.0, 1.0)
+                        BadgeMotion {
+                            scale: [1.0; 2],
+                            alpha: 1.0,
+                        }
                     } else {
-                        (0.0, 0.0)
+                        BadgeMotion {
+                            scale: [0.72; 2],
+                            alpha: 0.0,
+                        }
                     },
                     |animation| animation.values(now, reduced_motion),
                 );
@@ -336,14 +471,13 @@ impl PlayerStatusBadgeAnimations {
                     } else {
                         STATUS_BADGE_EXIT_SECS
                     },
-                    from_scale,
-                    from_alpha,
-                    to_scale: if entering {
-                        1.0
+                    transition: if entering {
+                        BadgeTransition::Enter
                     } else {
-                        STATUS_BADGE_EXIT_SCALE
+                        BadgeTransition::Exit
                     },
-                    to_alpha: if entering { 1.0 } else { 0.0 },
+                    from_scale: from.scale,
+                    from_alpha: from.alpha,
                 });
                 badge.present = is_present;
             } else if badge
@@ -391,6 +525,17 @@ struct EmoteBubbleLayout {
 }
 
 impl NameplateSystem {
+    pub(crate) fn receive_troops(&mut self, receiver_id: u16, troops: f64, now: Instant) {
+        if troops.is_finite()
+            && troops > 0.0
+            && let Some(state) = self.visuals.get_mut(&receiver_id)
+            && state.troop_transfer_age(now, false).is_none()
+        {
+            // Merge simultaneous gifts into the current wave rather than queueing or restarting it.
+            state.troop_transfer_at = Some(now);
+        }
+    }
+
     pub(crate) fn take_avatar_wants(&mut self) -> Vec<String> {
         std::mem::take(&mut self.avatar_wants)
     }
@@ -508,6 +653,7 @@ impl NameplateSystem {
         &mut self,
         snapshot: &SimSnapshot,
         my_id: u16,
+        leaderboard_top_three: [Option<u16>; 3],
         now: Instant,
         reduced_motion: bool,
     ) {
@@ -518,11 +664,18 @@ impl NameplateSystem {
         for &player_index in &self.order {
             let player = &snapshot.players[player_index];
             let other_me = my_player.filter(|me| me.id != player.id);
+            let rank = leaderboard_top_three
+                .iter()
+                .position(|id| *id == Some(player.id))
+                .map(|index| index + 1);
             let present = [
                 other_me.is_some_and(|me| me.alliance_requests.contains(&player.id)),
                 other_me.is_some_and(|me| me.alliances.contains(&player.id)),
                 player.traitor,
                 player.disconnected,
+                rank == Some(1),
+                rank == Some(2),
+                rank == Some(3),
             ];
             self.badge_animations.entry(player.id).or_default().observe(
                 present,
@@ -599,7 +752,7 @@ pub(super) fn render_nameplates(
     system.prepare_emote_texts(text, dev);
     system.tutorial_target_hit_bounds = None;
     sample_nameplates(text, snapshot, sim, system, dev, sf, my_id, now);
-    system.observe_status_badges(snapshot, my_id, now, reduced_motion);
+    system.observe_status_badges(snapshot, my_id, leaderboard_top_three, now, reduced_motion);
 
     let my_player = snapshot.players.iter().find(|player| player.id == my_id);
     let mut full_labels_drawn = 0usize;
@@ -613,11 +766,15 @@ pub(super) fn render_nameplates(
     let emote_fraction = system.emote_tick_at.map_or(0.0, |at| {
         let elapsed = now.duration_since(at).as_secs_f32();
         // A paused sim stops ticking, so an emote's clock must follow real time or it freezes.
-        if sim.paused { elapsed } else { elapsed.min(tick_secs) }
+        if sim.paused {
+            elapsed
+        } else {
+            elapsed.min(tick_secs)
+        }
     });
     let (order, visuals, frame_plans, badge_animations) = (
         &system.order,
-        &system.visuals,
+        &mut system.visuals,
         &mut system.frame_plans,
         &mut system.badge_animations,
     );
@@ -630,7 +787,7 @@ pub(super) fn render_nameplates(
         let is_me = player.id == my_id;
         let has_human_priority = player.player_type == PlayerType::Human;
         let style = NameplateStyle::for_player(player.player_type, player.is_campaign_faction);
-        let Some(state) = visuals.get(&player.id) else {
+        let Some(state) = visuals.get_mut(&player.id) else {
             continue;
         };
         let (center_world, land_bounds, spawn_settle_scale) = spawn_center_visual(state, now);
@@ -669,15 +826,35 @@ pub(super) fn render_nameplates(
             continue;
         }
 
-        let dot = LodDot {
-            center,
-            color: player_color(player),
-            scale: fit_size_to_land(
-                2.0 * (LOD_DOT_RADIUS + 1.0),
-                2.0 * (LOD_DOT_RADIUS + 1.0),
-                land_bounds,
-                zoom_scaled,
-            ),
+        if state.troop_transfer_at.is_some() {
+            if state.troop_transfer_age(now, false).is_some() {
+                // Receipt must update the count immediately, ahead of the slower spatial sampling.
+                refresh_nameplate_text_cache(
+                    text,
+                    state,
+                    player,
+                    nameplate_metrics_style_key(dev),
+                    dev,
+                    sf,
+                );
+            } else {
+                state.troop_transfer_at = None;
+            }
+        }
+
+        let marker = if is_me {
+            LodMarker::Star { center }
+        } else {
+            LodMarker::Dot {
+                center,
+                color: player_color(player),
+                scale: fit_size_to_land(
+                    2.0 * (LOD_DOT_RADIUS + 1.0),
+                    2.0 * (LOD_DOT_RADIUS + 1.0),
+                    land_bounds,
+                    zoom_scaled,
+                ),
+            }
         };
 
         if zoom_scaled < NAMEPLATE_HIDE_ZOOM && !is_me && !has_human_priority {
@@ -685,7 +862,7 @@ pub(super) fn render_nameplates(
                 player_index,
                 has_human_priority,
                 full: None,
-                dot,
+                marker,
                 presentation: NameplatePresentation::Hidden,
                 tutorial_hit_bounds: None,
             });
@@ -740,7 +917,15 @@ pub(super) fn render_nameplates(
             .max(shadow_padding)
             .max(layout.badge_effect_padding());
         let layout_bounds = layout.visual_bounds(center, text_padding);
-        let fit_scale = fit_bounds_to_land(layout_bounds, center, land_bounds, zoom_scaled);
+        let base_extents = layout_bounds.extents_about(center);
+        let fit_scale = fit_nameplate_bounds_to_land(
+            layout,
+            center,
+            land_bounds,
+            zoom_scaled,
+            base_extents,
+            badge_animations.get(&player.id),
+        );
         if fit_scale <= 0.0 || !fit_scale.is_finite() {
             continue;
         }
@@ -757,7 +942,7 @@ pub(super) fn render_nameplates(
                 player_index,
                 has_human_priority,
                 full: None,
-                dot,
+                marker,
                 presentation: NameplatePresentation::Hidden,
                 tutorial_hit_bounds: None,
             });
@@ -798,7 +983,7 @@ pub(super) fn render_nameplates(
             player_index,
             has_human_priority,
             full: Some(full),
-            dot,
+            marker,
             presentation: NameplatePresentation::Hidden,
             tutorial_hit_bounds,
         });
@@ -862,9 +1047,7 @@ pub(super) fn render_nameplates(
                 }
                 paint_prepared_nameplate(text, state, full);
             }
-            NameplatePresentation::Compact => {
-                paint_lod_dot(text, plan.dot.center, plan.dot.color, sf, plan.dot.scale)
-            }
+            NameplatePresentation::Compact => paint_lod_marker(text, plan.marker, sf),
             NameplatePresentation::Hidden => {}
         }
     }
@@ -1077,6 +1260,7 @@ fn new_nameplate_visual_state(
         prepared_name: sow_render::text::PreparedText::default(),
         prepared_troops: sow_render::text::PreparedText::default(),
         text_style_key: None,
+        troop_transfer_at: None,
     }
 }
 
@@ -1555,6 +1739,69 @@ fn compute_nameplate_layout(
     )
 }
 
+fn fit_nameplate_bounds_to_land(
+    layout: NameplateLayout,
+    center: ScreenPoint,
+    land_bounds: WorldRect,
+    zoom_scaled: f32,
+    mut extents: [f32; 2],
+    animations: Option<&PlayerStatusBadgeAnimations>,
+) -> f32 {
+    let badge_padding = layout.badge_effect_padding();
+
+    if let Some(animations) = animations {
+        for badge in layout.badges().iter().flatten() {
+            let Some(index) = status_badge_index(badge.kind()) else {
+                continue;
+            };
+            if animations.badges[index].animation.is_some() {
+                include_badge_animation_extent(
+                    &mut extents,
+                    center.0,
+                    badge.center().0,
+                    badge.diameter(),
+                    badge_padding,
+                );
+            }
+        }
+
+        let avatar_center = layout.avatar_center().0;
+        for badge in &animations.badges {
+            if badge.present || badge.animation.is_none() {
+                continue;
+            }
+            let Some(geometry) = badge.geometry else {
+                continue;
+            };
+            include_badge_animation_extent(
+                &mut extents,
+                center.0,
+                [
+                    avatar_center[0] + geometry.center_from_avatar[0],
+                    avatar_center[1] + geometry.center_from_avatar[1],
+                ],
+                geometry.diameter,
+                badge_padding,
+            );
+        }
+    }
+
+    fit_size_to_land(extents[0] * 2.0, extents[1] * 2.0, land_bounds, zoom_scaled)
+}
+
+fn include_badge_animation_extent(
+    extents: &mut [f32; 2],
+    reference: [f32; 2],
+    badge_center: [f32; 2],
+    diameter: f32,
+    padding: f32,
+) {
+    let radius = diameter * STATUS_BADGE_MAX_SCALE * 0.5 + padding;
+    for axis in 0..2 {
+        extents[axis] = extents[axis].max((badge_center[axis] - reference[axis]).abs() + radius);
+    }
+}
+
 fn prepare_full_nameplate(
     text: &TextRenderer,
     player: &PlayerSnapshot,
@@ -1605,6 +1852,7 @@ fn prepare_full_nameplate(
                 position: [text_anchor.0[0] * sf, text_anchor.0[1] * sf],
                 final_font_size: troops_font_size * sf * fit_scale,
             },
+            transfer_age: state.troop_transfer_age(now, reduced_motion),
         }
     });
     let instance_count = avatar
@@ -1747,7 +1995,7 @@ fn prepare_badges(
     let mut count = 0;
     for badge in layout.badges().iter().flatten() {
         let kind = badge.kind();
-        let mut diameter = badge.diameter();
+        let mut size = [badge.diameter() * sf; 2];
         let mut tint = badge.tint();
         if let Some(index) = status_badge_index(kind) {
             let visual = &mut animations.badges[index];
@@ -1756,19 +2004,20 @@ fn prepare_badges(
                     badge.center().0[0] - avatar_center[0],
                     badge.center().0[1] - avatar_center[1],
                 ],
-                diameter,
+                diameter: badge.diameter(),
                 tint,
             });
             if let Some(animation) = visual.animation {
-                let (scale, alpha) = animation.values(now, reduced_motion);
-                diameter *= scale;
-                tint[3] *= alpha;
+                let motion = animation.values(now, reduced_motion);
+                size[0] *= motion.scale[0];
+                size[1] *= motion.scale[1];
+                tint[3] *= motion.alpha;
             }
         }
         plans[count] = Some(BadgePlan {
             kind,
             center: [badge.center().0[0] * sf, badge.center().0[1] * sf],
-            diameter: diameter * sf,
+            size,
             tint,
         });
         count += 1;
@@ -1782,8 +2031,8 @@ fn prepare_badges(
         let (Some(animation), Some(geometry)) = (visual.animation, visual.geometry) else {
             continue;
         };
-        let (scale, alpha) = animation.values(now, reduced_motion);
-        if alpha <= 0.0 {
+        let motion = animation.values(now, reduced_motion);
+        if motion.alpha <= 0.0 {
             continue;
         }
         let kind = status_badge_kind(index);
@@ -1793,12 +2042,15 @@ fn prepare_badges(
                 (avatar_center[0] + geometry.center_from_avatar[0]) * sf,
                 (avatar_center[1] + geometry.center_from_avatar[1]) * sf,
             ],
-            diameter: geometry.diameter * sf * scale,
+            size: [
+                geometry.diameter * sf * motion.scale[0],
+                geometry.diameter * sf * motion.scale[1],
+            ],
             tint: [
                 geometry.tint[0],
                 geometry.tint[1],
                 geometry.tint[2],
-                geometry.tint[3] * alpha,
+                geometry.tint[3] * motion.alpha,
             ],
         });
         count += 1;
@@ -1812,7 +2064,10 @@ fn status_badge_index(kind: BadgeKind) -> Option<usize> {
         BadgeKind::Allied => Some(1),
         BadgeKind::Traitor => Some(2),
         BadgeKind::Disconnected => Some(3),
-        BadgeKind::Rank1 | BadgeKind::Rank2 | BadgeKind::Rank3 | BadgeKind::Star => None,
+        BadgeKind::Rank1 => Some(4),
+        BadgeKind::Rank2 => Some(5),
+        BadgeKind::Rank3 => Some(6),
+        BadgeKind::Star => None,
     }
 }
 
@@ -1822,6 +2077,9 @@ fn status_badge_kind(index: usize) -> BadgeKind {
         1 => BadgeKind::Allied,
         2 => BadgeKind::Traitor,
         3 => BadgeKind::Disconnected,
+        4 => BadgeKind::Rank1,
+        5 => BadgeKind::Rank2,
+        6 => BadgeKind::Rank3,
         _ => unreachable!("status badge index is bounded by STATUS_BADGE_COUNT"),
     }
 }
@@ -1847,7 +2105,7 @@ fn paint_prepared_nameplate(
             BadgeKind::Star => NameplateStatusSprite::You,
             BadgeKind::Disconnected => NameplateStatusSprite::Disconnected,
         };
-        text.push_status_sprite(sprite, badge.center, badge.diameter, badge.tint);
+        text.push_status_sprite_scaled(sprite, badge.center, badge.size, badge.tint);
     }
     if let Some(name) = plan.name {
         let _ = text.push_prepared_text(
@@ -1859,19 +2117,46 @@ fn paint_prepared_nameplate(
         );
     }
     if let Some(troops) = plan.troops {
+        let (icon_scale, icon_offset) = troops
+            .transfer_age
+            .map(troop_transfer_motion)
+            .unwrap_or(([1.0; 2], 0.0));
         text.push_troop_icon(
-            troops.icon_center,
-            troops.icon_diameter * 0.5,
+            [
+                troops.icon_center[0],
+                troops.icon_center[1] + icon_offset * troops.icon_diameter,
+            ],
+            troops.icon_diameter * 0.5 * icon_scale[1],
             1.0,
             plan.emoji_outline,
         );
-        let _ = text.push_prepared_text(
-            &state.prepared_troops,
-            troops.text.position,
-            troops.text.final_font_size,
-            NAMEPLATE_TEXT_COLOR,
-            plan.text_style,
-        );
+        if let Some(age) = troops.transfer_age {
+            let _ = text.push_prepared_text_transformed(
+                &state.prepared_troops,
+                troops.text.position,
+                troops.text.final_font_size,
+                NAMEPLATE_TEXT_COLOR,
+                plan.text_style,
+                |index, glyph| {
+                    let (scale, offset) = troop_transfer_motion(
+                        age - TROOP_TRANSFER_TEXT_DELAY - index as f32 * TROOP_TRANSFER_GLYPH_DELAY,
+                    );
+                    for (axis, scale) in scale.into_iter().enumerate() {
+                        glyph.screen_pos[axis] += glyph.size[axis] * (1.0 - scale) * 0.5;
+                        glyph.size[axis] *= scale;
+                    }
+                    glyph.screen_pos[1] += offset * troops.text.final_font_size;
+                },
+            );
+        } else {
+            let _ = text.push_prepared_text(
+                &state.prepared_troops,
+                troops.text.position,
+                troops.text.final_font_size,
+                NAMEPLATE_TEXT_COLOR,
+                plan.text_style,
+            );
+        }
     }
     debug_assert!(
         text.instance_count().saturating_sub(before)
@@ -1906,12 +2191,14 @@ mod status_badge_tests {
     fn initial_badges_seed_without_animation() {
         let now = Instant::now();
         let mut player = PlayerStatusBadgeAnimations::default();
-        player.observe([true, false, true, false], now, false);
+        player.observe([true, false, true, false, false, true, false], now, false);
 
         assert!(player.badges[0].present);
         assert!(player.badges[2].present);
+        assert!(player.badges[5].present);
         assert!(player.badges[0].animation.is_none());
         assert!(player.badges[2].animation.is_none());
+        assert!(player.badges[5].animation.is_none());
     }
 
     #[wasm_bindgen_test]
@@ -1920,32 +2207,54 @@ mod status_badge_tests {
         let mut player = PlayerStatusBadgeAnimations::default();
         player.observe([false; STATUS_BADGE_COUNT], now, false);
         let enter_started = now + Duration::from_millis(10);
-        player.observe([true, false, false, false], enter_started, false);
+        player.observe(
+            [true, false, false, false, false, false, false],
+            enter_started,
+            false,
+        );
         let enter = player.badges[0].animation.unwrap();
 
-        assert_eq!(enter.values(enter_started, false), (0.0, 0.0));
-        let entering = enter.values(enter_started + Duration::from_millis(125), false);
-        assert!(entering.0 > 1.0, "entry should overshoot before settling");
-        assert!((0.0..1.0).contains(&entering.1));
         assert_eq!(
-            enter.values(enter_started + Duration::from_millis(250), false),
-            (1.0, 1.0)
+            enter.values(enter_started, false),
+            BadgeMotion {
+                scale: [0.72; 2],
+                alpha: 0.0,
+            }
+        );
+        let entering = enter.values(enter_started + Duration::from_millis(260), false);
+        assert!(entering.scale[0] > 1.0 && entering.scale[1] > 1.0);
+        assert!((0.0..1.0).contains(&entering.alpha));
+        assert_eq!(
+            enter.values(enter_started + Duration::from_millis(520), false),
+            BadgeMotion {
+                scale: [1.0; 2],
+                alpha: 1.0,
+            }
         );
 
-        let exit_started = enter_started + Duration::from_millis(250);
+        let exit_started = enter_started + Duration::from_millis(520);
         player.observe([false; STATUS_BADGE_COUNT], exit_started, false);
         let exit = player.badges[0].animation.unwrap();
-        assert_eq!(exit.values(exit_started, false), (1.0, 1.0));
-        let exiting = exit.values(exit_started + Duration::from_millis(175), false);
-        assert!(exiting.0 > 1.0, "exit should burst outward");
-        assert!(exiting.1 < 1.0, "exit should fade while expanding");
         assert_eq!(
-            exit.values(exit_started + Duration::from_millis(350), false),
-            (STATUS_BADGE_EXIT_SCALE, 0.0)
+            exit.values(exit_started, false),
+            BadgeMotion {
+                scale: [1.0; 2],
+                alpha: 1.0,
+            }
+        );
+        let exiting = exit.values(exit_started + Duration::from_millis(400), false);
+        assert!(exiting.scale[0] > 1.0, "exit should burst outward");
+        assert!(exiting.alpha < 1.0, "exit should fade while expanding");
+        assert_eq!(
+            exit.values(exit_started + Duration::from_millis(650), false),
+            BadgeMotion {
+                scale: STATUS_BADGE_EXIT_SCALE,
+                alpha: 0.0,
+            }
         );
         player.observe(
             [false; STATUS_BADGE_COUNT],
-            exit_started + Duration::from_millis(350),
+            exit_started + Duration::from_millis(650),
             false,
         );
         assert!(player.badges[0].animation.is_none());
@@ -1957,7 +2266,7 @@ mod status_badge_tests {
         let now = Instant::now();
         let mut player = PlayerStatusBadgeAnimations::default();
         player.observe([false; STATUS_BADGE_COUNT], now, false);
-        player.observe([true, false, false, false], now, false);
+        player.observe([true, false, false, false, false, false, false], now, false);
         player.observe(
             [false; STATUS_BADGE_COUNT],
             now + Duration::from_millis(50),
@@ -1967,13 +2276,17 @@ mod status_badge_tests {
         let at_reentry = now + Duration::from_millis(120);
         let visible_before_reentry = exiting.values(at_reentry, false);
 
-        player.observe([true, false, false, false], at_reentry, false);
+        player.observe(
+            [true, false, false, false, false, false, false],
+            at_reentry,
+            false,
+        );
         let reentering = player.badges[0].animation.unwrap();
         assert_eq!(reentering.values(at_reentry, false), visible_before_reentry);
 
         let reduced = reentering.values(at_reentry + Duration::from_millis(100), true);
-        assert_eq!(reduced.0, 1.0);
-        assert!((0.0..1.0).contains(&reduced.1));
+        assert_eq!(reduced.scale, [1.0; 2]);
+        assert!((0.0..1.0).contains(&reduced.alpha));
     }
 
     #[wasm_bindgen_test]
@@ -1982,21 +2295,31 @@ mod status_badge_tests {
         let mut player = PlayerStatusBadgeAnimations::default();
         player.observe([false; STATUS_BADGE_COUNT], now, false);
         let request_started = now + Duration::from_millis(10);
-        player.observe([true, false, false, false], request_started, false);
+        player.observe(
+            [true, false, false, false, false, false, false],
+            request_started,
+            false,
+        );
 
         let replaced_at = request_started + Duration::from_millis(80);
         let outgoing_before = player.badges[0]
             .animation
             .unwrap()
             .values(replaced_at, false);
-        player.observe([false, true, false, false], replaced_at, false);
+        player.observe(
+            [false, true, false, false, false, false, false],
+            replaced_at,
+            false,
+        );
 
         let outgoing = player.badges[0].animation.unwrap();
         let incoming = player.badges[1].animation.unwrap();
-        assert_eq!((outgoing.from_scale, outgoing.from_alpha), outgoing_before);
-        assert_eq!(incoming.values(replaced_at, false), (0.0, 0.0));
+        assert_eq!(outgoing.values(replaced_at, false), outgoing_before);
+        assert_eq!(incoming.values(replaced_at, false).alpha, 0.0);
         assert_eq!(outgoing.duration_secs, STATUS_BADGE_EXIT_SECS);
         assert_eq!(incoming.duration_secs, STATUS_BADGE_ENTER_SECS);
+        assert_eq!(outgoing.transition, BadgeTransition::Exit);
+        assert_eq!(incoming.transition, BadgeTransition::Enter);
     }
 
     #[wasm_bindgen_test]
@@ -2005,10 +2328,9 @@ mod status_badge_tests {
         let animation = BadgeAnimation {
             started_at,
             duration_secs: STATUS_BADGE_ENTER_SECS,
-            from_scale: 0.0,
+            transition: BadgeTransition::Enter,
+            from_scale: [0.72; 2],
             from_alpha: 0.0,
-            to_scale: 1.0,
-            to_alpha: 1.0,
         };
         let sample_at = started_at + Duration::from_millis(100);
         let expected = animation.values(sample_at, false);
@@ -2040,7 +2362,7 @@ mod status_badge_tests {
                 .unwrap(),
         );
 
-        system.observe_status_badges(&snapshot, 1, now, false);
+        system.observe_status_badges(&snapshot, 1, [None; 3], now, false);
         assert!(system.badge_animations.contains_key(&1));
         assert!(!system.badge_animations.contains_key(&2));
 
@@ -2049,10 +2371,187 @@ mod status_badge_tests {
     }
 
     #[wasm_bindgen_test]
-    fn draw_capacity_covers_six_current_and_four_outgoing_badges() {
+    fn draw_capacity_covers_six_current_and_seven_outgoing_badges() {
         assert_eq!(NAMEPLATE_MAX_BADGES, 6);
-        assert_eq!(STATUS_BADGE_COUNT, 4);
-        assert_eq!(NAMEPLATE_RENDER_BADGE_CAPACITY, 10);
+        assert_eq!(STATUS_BADGE_COUNT, 7);
+        assert_eq!(NAMEPLATE_RENDER_BADGE_CAPACITY, 13);
+    }
+
+    #[wasm_bindgen_test]
+    fn rank_changes_exit_the_old_badge_and_enter_the_new_one() {
+        let now = Instant::now();
+        let snapshot = snapshot(&[1, 2]);
+        let mut system = NameplateSystem::default();
+        system.active_ids.insert(2);
+        system.order.push(
+            snapshot
+                .players
+                .iter()
+                .position(|player| player.id == 2)
+                .unwrap(),
+        );
+
+        system.observe_status_badges(&snapshot, 1, [Some(2), None, None], now, false);
+        system.observe_status_badges(
+            &snapshot,
+            1,
+            [Some(1), Some(2), None],
+            now + Duration::from_millis(30),
+            false,
+        );
+
+        let badges = &system.badge_animations[&2].badges;
+        assert!(!badges[4].present);
+        assert_eq!(
+            badges[4].animation.unwrap().transition,
+            BadgeTransition::Exit
+        );
+        assert!(badges[5].present);
+        assert_eq!(
+            badges[5].animation.unwrap().transition,
+            BadgeTransition::Enter
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn animated_badge_fit_bounds_cover_the_largest_burst() {
+        let mut extents = [4.0; 2];
+        include_badge_animation_extent(&mut extents, [0.0; 2], [10.0, -3.0], 10.0, 1.0);
+        assert_eq!(extents, [19.0, 12.0]);
+    }
+
+    #[wasm_bindgen_test]
+    fn every_changing_nameplate_badge_has_an_animation_slot() {
+        for (index, kind) in [
+            BadgeKind::Request,
+            BadgeKind::Allied,
+            BadgeKind::Traitor,
+            BadgeKind::Disconnected,
+            BadgeKind::Rank1,
+            BadgeKind::Rank2,
+            BadgeKind::Rank3,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            assert_eq!(status_badge_index(kind), Some(index));
+            assert_eq!(status_badge_kind(index), kind);
+        }
+        assert_eq!(status_badge_index(BadgeKind::Star), None);
+    }
+
+    #[wasm_bindgen_test]
+    async fn troop_transfer_animates_only_the_receiver_and_settles_without_restarting() {
+        use sow_core::game::GameEvent;
+
+        let profile = serde_json::json!({
+            "account_id": "0123456789abcdef0123456789abcdef",
+            "display_name": "Receiver",
+            "profile": crate::player_progress::PlayerProgress::default(),
+        })
+        .to_string();
+        crate::app::setup_tutorial_exit(&profile, &profile);
+        let mut app = crate::app::SowApp::new();
+        let mut snap = snapshot(&[1, 2]);
+        for player in &snap.players {
+            app.ui.nameplates.visuals.insert(
+                player.id,
+                new_nameplate_visual_state(
+                    player,
+                    MapPoint([2.0; 2]),
+                    10.0,
+                    WorldRect([0.0, 0.0, 4.0, 4.0]),
+                ),
+            );
+        }
+        // Passive growth, gold-only gifts and rejected transfers cannot trigger troop kinetics.
+        snap.players[1].troops += 100.0;
+        app.process_tick_events(
+            vec![
+                GameEvent::ResourceTransferred {
+                    sender_id: 1,
+                    receiver_id: 2,
+                    gold: 100.0,
+                    troops: 0.0,
+                },
+                GameEvent::ResourceTransferRejected {
+                    sender_id: 1,
+                    receiver_id: 2,
+                },
+            ],
+            &snap,
+            1,
+        );
+        assert!(
+            app.ui
+                .nameplates
+                .visuals
+                .values()
+                .all(|v| v.troop_transfer_at.is_none())
+        );
+        app.process_tick_events(
+            vec![GameEvent::ResourceTransferred {
+                sender_id: 1,
+                receiver_id: 2,
+                gold: 0.0,
+                troops: 100.0,
+            }],
+            &snap,
+            1,
+        );
+        let received_at = app.ui.nameplates.visuals[&2].troop_transfer_at.unwrap();
+        assert!(app.ui.nameplates.visuals[&1].troop_transfer_at.is_none());
+        assert_eq!(troop_transfer_motion(0.0), ([1.0; 2], 0.0));
+        assert_ne!(troop_transfer_motion(0.07), ([1.0; 2], 0.0));
+        assert_eq!(
+            troop_transfer_motion(0.07 - TROOP_TRANSFER_TEXT_DELAY),
+            ([1.0; 2], 0.0)
+        );
+        assert_ne!(
+            troop_transfer_motion(0.10 - TROOP_TRANSFER_TEXT_DELAY),
+            ([1.0; 2], 0.0)
+        );
+        assert_eq!(
+            troop_transfer_motion(0.10 - TROOP_TRANSFER_TEXT_DELAY - TROOP_TRANSFER_GLYPH_DELAY),
+            ([1.0; 2], 0.0),
+        );
+        app.ui
+            .nameplates
+            .receive_troops(2, 50.0, received_at + Duration::from_millis(120));
+        assert_eq!(
+            app.ui.nameplates.visuals[&2].troop_transfer_at,
+            Some(received_at)
+        );
+        let state = &app.ui.nameplates.visuals[&2];
+        assert!(state.troop_transfer_age(received_at, true).is_none());
+        let sample_at = received_at + Duration::from_millis(200);
+        let expected = state.troop_transfer_age(sample_at, false);
+        for ms in 0..1000 {
+            let _ = state.troop_transfer_age(received_at + Duration::from_millis(ms), false);
+        }
+        assert_eq!(state.troop_transfer_age(sample_at, false), expected);
+        assert!(
+            state
+                .troop_transfer_age(received_at + Duration::from_secs(1), false)
+                .is_none()
+        );
+        let mut previous = troop_transfer_motion(0.0);
+        for ms in 1..=500 {
+            let motion = troop_transfer_motion(ms as f32 / 1000.0);
+            for axis in 0..2 {
+                assert!((motion.0[axis] - previous.0[axis]).abs() < 0.01);
+                assert!((0.8..=1.2).contains(&motion.0[axis]));
+            }
+            assert!((motion.1 - previous.1).abs() < 0.01);
+            previous = motion;
+        }
+        assert_eq!(previous, ([1.0; 2], 0.0));
+        app.ui.nameplates.reset();
+        assert!(app.ui.nameplates.visuals.is_empty());
+        drop(app);
+        wasm_bindgen_futures::JsFuture::from(crate::app::restore_tutorial_exit())
+            .await
+            .unwrap();
     }
 }
 
@@ -2396,6 +2895,22 @@ fn paint_lod_dot(
     );
 }
 
+fn paint_lod_marker(text: &mut TextRenderer, marker: LodMarker, sf: f32) {
+    match marker {
+        LodMarker::Dot {
+            center,
+            color,
+            scale,
+        } => paint_lod_dot(text, center, color, sf, scale),
+        LodMarker::Star { center } => text.push_status_sprite(
+            NameplateStatusSprite::You,
+            [center.0[0] * sf, center.0[1] * sf],
+            LOD_STAR_DIAMETER * sf,
+            [1.0; 4],
+        ),
+    }
+}
+
 pub(crate) fn player_color(player: &PlayerSnapshot) -> [f32; 4] {
     let rgb = player
         .team
@@ -2437,6 +2952,7 @@ mod spawn_center_tests {
             prepared_name: sow_render::text::PreparedText::default(),
             prepared_troops: sow_render::text::PreparedText::default(),
             text_style_key: None,
+            troop_transfer_at: None,
         }
     }
 

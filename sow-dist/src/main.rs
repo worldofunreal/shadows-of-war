@@ -210,12 +210,13 @@ const ART_ICONS: [(&str, &str, &str, u32); 14] = [
     ),
 ];
 /// Folders published byte-for-byte: (assets/art/<dir>, published folder).
-const ART_FOLDERS: [(&str, &str); 5] = [
+const ART_FOLDERS: [(&str, &str); 6] = [
     ("brand", "shell/brand"),
     ("icons/abilities", "gameplay/icons/abilities"),
     ("loader", "shell/loader"),
     ("skins", "gameplay/skins"),
     ("music", "gameplay/music"),
+    ("units", "gameplay/units"),
 ];
 /// Tool output in assets/generated: (file, published path).
 const GENERATED_FILES: [(&str, &str); 3] = [
@@ -298,14 +299,28 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
             .find(|path| path.is_file())
     };
 
-    // Avatars: one file per character, named by its catalog `avatar` id. The folder only
-    // organizes the owner's art; a name in two folders would publish to the same URL.
+    // Avatars: ordinary portraits plus one 2×2 source sheet per playable hero.
     let mut avatar_sources = std::collections::BTreeMap::new();
+    let hero_ids = sow_core::player::Leader::all()
+        .map(sow_core::player::Leader::id)
+        .collect::<std::collections::BTreeSet<_>>();
     for folder in ["heroes", "nations", "tribes", "campaign"] {
         for file in sorted_files(&art.join("avatars").join(folder))? {
             let stem = file_stem(&file);
-            if folder == "heroes" && expression_part(&stem).is_some() {
-                continue;
+            if folder == "heroes" {
+                if expression_part(&stem).is_some() {
+                    bail!(
+                        "hero faces now belong in one 2 x 2 sheet: remove {}",
+                        file.display()
+                    );
+                }
+                if hero_ids.contains(stem.as_str()) {
+                    continue;
+                }
+                bail!(
+                    "unexpected avatar {}: keep only playable hero sheets in avatars/heroes; general portraits belong in avatars/",
+                    file.display()
+                );
             }
             if let Some(first) = avatar_sources.insert(stem.clone(), file.clone()) {
                 bail!(
@@ -321,32 +336,72 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
             )?;
         }
     }
+    let random_avatar = source_named(&art.join("avatars"), "random")
+        .context("missing art: assets/art/avatars/random.webp")?;
+    if let Some(first) = avatar_sources.insert("random".to_owned(), random_avatar.clone()) {
+        bail!(
+            "avatar random is in two folders: {} and {}",
+            first.display(),
+            random_avatar.display()
+        );
+    }
+    publish(
+        &random_avatar,
+        "gameplay/avatars/random.webp",
+        Some(PORTRAIT_PX),
+    )?;
     publish(
         &art.join("avatars/default.webp"),
         "gameplay/avatars/null.webp",
         Some(PORTRAIT_PX),
     )?;
-    // A hero's four expression quadrants (`<id>_1` .. `<id>_4`) join into one 2 x 2 sheet.
-    let mut sheets: std::collections::BTreeMap<String, Vec<PathBuf>> = Default::default();
-    for file in sorted_files(&art.join("avatars/heroes"))? {
-        if let Some(base) = expression_part(&file_stem(&file)) {
-            sheets.entry(base.to_owned()).or_default().push(file);
+    let hero_crop_dir = tempfile::tempdir().context("create temporary hero avatar crops")?;
+    for leader in sow_core::player::Leader::all() {
+        let base = leader.id();
+        let source = art.join("avatars/heroes").join(format!("{base}.webp"));
+        if !source.is_file() {
+            bail!("hero {base} needs one 2 x 2 sheet at {}", source.display());
+        }
+        if let Some(first) = avatar_sources.insert(base.to_owned(), source.clone()) {
+            bail!(
+                "avatar {base} is in two folders: {} and {}",
+                first.display(),
+                source.display()
+            );
+        }
+        publish(
+            &source,
+            &format!("gameplay/avatars/spritesheets/{base}.webp"),
+            None,
+        )?;
+        let sheet = image::open(&source)
+            .with_context(|| format!("read hero sheet {}", source.display()))?
+            .to_rgba8();
+        for (expression, name) in sow_core::emote::AvatarExpression::ALL
+            .into_iter()
+            .zip(["happy", "calm", "fear", "angry"])
+        {
+            let crop = hero_expression_crop(&sheet, expression)?;
+            let crop_path = hero_crop_dir
+                .path()
+                .join(format!("{base}_{name}.png"));
+            crop.save(&crop_path)
+                .with_context(|| format!("write {name} crop for hero {base}"))?;
+            publish(
+                &crop_path,
+                &format!("gameplay/avatars/expressions/{base}_{name}.webp"),
+                Some(PORTRAIT_PX),
+            )?;
+            if expression == sow_core::emote::AvatarExpression::Calm {
+                publish(
+                    &crop_path,
+                    &format!("gameplay/avatars/{base}.webp"),
+                    Some(PORTRAIT_PX),
+                )?;
+            }
         }
     }
-    for (base, parts) in sheets {
-        if parts.len() != 4 {
-            bail!("hero {base} needs {base}_1 to {base}_4 in assets/art/avatars/heroes");
-        }
-        let rel = format!("gameplay/avatars/spritesheets/{base}.webp");
-        let dst = out.join(&rel);
-        compose_expression_sheet(&parts, &dst)?;
-        publish(&dst, &rel, None)?;
-        // Each quadrant also ships alone, so a dialogue portrait shows one face without cropping the sheet.
-        for (name, part) in ["happy", "calm", "fear", "angry"].iter().zip(&parts) {
-            publish(part, &format!("gameplay/avatars/expressions/{base}_{name}.webp"), Some(PORTRAIT_PX))?;
-        }
-    }
-    // Hero scenes for the menu and the loader: `<id>_desktop` and `<id>_mobile`.
+    // Hero scenes are optional; publish whichever desktop/mobile art is present.
     for file in sorted_files(&art.join("heroes"))? {
         let stem = file_stem(&file);
         if !stem.ends_with("_desktop") && !stem.ends_with("_mobile") {
@@ -627,46 +682,48 @@ fn file_stem(path: &Path) -> String {
         .into_owned()
 }
 
-/// `<id>_1` .. `<id>_4` name one expression quadrant of a hero; returns the hero id.
+/// Recognize removed per-expression files so the build rejects the old multi-file layout.
 fn expression_part(stem: &str) -> Option<&str> {
     let (base, index) = stem.rsplit_once('_')?;
     matches!(index, "1" | "2" | "3" | "4").then_some(base)
 }
 
-/// Joins a hero's four expression quadrants (Happy, Calm, Fear, Angry; 2 x 2) into the
-/// sheet the client reads. Rebuilt only when a quadrant is newer than the sheet.
-fn compose_expression_sheet(parts: &[PathBuf], dst: &Path) -> Result<()> {
-    let newest = parts
-        .iter()
-        .filter_map(|part| fs::metadata(part).ok()?.modified().ok())
-        .max();
-    let built = fs::metadata(dst).ok().and_then(|meta| meta.modified().ok());
-    if built.is_some() && built >= newest {
-        return Ok(());
+/// Crop one named expression using the same quadrant and separator rules as the game client.
+fn hero_expression_crop(
+    sheet: &image::RgbaImage,
+    expression: sow_core::emote::AvatarExpression,
+) -> Result<image::RgbaImage> {
+    let (width, height) = sheet.dimensions();
+    if width < 4 || height < 4 {
+        bail!("hero sheet must contain a 2 x 2 grid");
     }
-    if let Some(parent) = dst.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let status = Command::new("magick")
-        .arg("montage")
-        .args(parts)
-        .args([
-            "-tile",
-            "2x2",
-            "-geometry",
-            "+0+0",
-            "-strip",
-            "-quality",
-            "85",
-        ])
-        .args(["-define", "webp:method=6"])
-        .arg(dst)
-        .status()
-        .with_context(|| "expression sheets require ImageMagick (magick)")?;
-    if !status.success() {
-        bail!("expression sheet failed for {}", dst.display());
-    }
-    Ok(())
+    let half_width = width / 2;
+    let half_height = height / 2;
+    let inset = ((half_width.min(half_height) as f32 * 0.01).round() as u32).max(1);
+    let index = expression as u32;
+    let quadrant = image::imageops::crop_imm(
+        sheet,
+        (index % 2) * half_width + inset,
+        (index / 2) * half_height + inset,
+        half_width.saturating_sub(2 * inset).max(1),
+        half_height.saturating_sub(2 * inset).max(1),
+    )
+    .to_image();
+    let size = quadrant.width().min(quadrant.height()).max(1);
+    let square = image::imageops::crop_imm(
+        &quadrant,
+        (quadrant.width() - size) / 2,
+        (quadrant.height() - size) / 2,
+        size,
+        size,
+    )
+    .to_image();
+    Ok(image::imageops::resize(
+        &square,
+        PORTRAIT_PX,
+        PORTRAIT_PX,
+        image::imageops::FilterType::Triangle,
+    ))
 }
 
 /// A landing capture becomes `<stem>.webm` (VP9), `<stem>.mp4` (H.264) and a
@@ -2431,7 +2488,9 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
     key.starts_with("menu.language_")
         // Hero names are proper names in every language.
         || (key.starts_with("heroes.leader_")
-            && (key.ends_with("_name") || key.ends_with("_historical")))
+            && (key.ends_with("_name")
+                || key.ends_with("_historical")
+                || key.ends_with("_civilization")))
         || matches!(
             key,
             "auth.discord_provider"
@@ -2446,6 +2505,7 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
                 | "heroes.asia"
                 | "heroes.leader_leonidas_civilization"
                 | "heroes.europe"
+                | "hud.ability_notice"
                 | "hud.fps"
                 | "hud.fps_ping"
                 | "hud.nuke_struck"
@@ -2473,7 +2533,9 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
                 | "site.discord"
                 | "site.faq"
                 | "site.github"
+                | "site.leader_artigas_ability"
                 | "site.leader_napoleon_ability"
+                | "site.leader_tlacaelel_ability"
                 | "site.terms_maps_license"
                 | "site.telegram"
         )
@@ -2679,13 +2741,23 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
                     bail!("web locale entry is not a file: {}", entry.path().display());
                 }
                 let name = entry.file_name().to_string_lossy().into_owned();
-                if name != "web.toml" {
+                let is_timestamped_backup = name
+                    .strip_prefix("web.toml.bak_")
+                    .is_some_and(|suffix| {
+                        !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit())
+                    });
+                if name != "web.toml" && !is_timestamped_backup {
                     bail!("unexpected web locale file: {}/{}", code, name);
                 }
                 Ok(name)
             })
             .collect::<Result<Vec<_>>>()?;
-        if files.len() != 1 {
+        if files
+            .iter()
+            .filter(|name| name.as_str() == "web.toml")
+            .count()
+            != 1
+        {
             bail!("web locale {code} must contain exactly one catalog");
         }
         found.insert(code);
@@ -5333,6 +5405,28 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_build_index_hero_sheet_crops_happy_calm_fear_and_angry() -> Result<()> {
+        let colors = [
+            [240, 10, 10, 255],
+            [10, 240, 10, 255],
+            [10, 10, 240, 255],
+            [240, 240, 10, 255],
+        ];
+        let mut sheet = image::RgbaImage::new(64, 64);
+        for (x, y, pixel) in sheet.enumerate_pixels_mut() {
+            let column = usize::from(x >= 32);
+            let row = usize::from(y >= 32);
+            *pixel = image::Rgba(colors[row * 2 + column]);
+        }
+        for (index, expression) in sow_core::emote::AvatarExpression::ALL.into_iter().enumerate() {
+            let crop = hero_expression_crop(&sheet, expression)?;
+            assert_eq!(crop.dimensions(), (PORTRAIT_PX, PORTRAIT_PX));
+            assert!(crop.pixels().all(|pixel| pixel.0 == colors[index]));
+        }
+        Ok(())
+    }
 
     fn cinematic_definition(video_src: &str) -> serde_json::Value {
         serde_json::json!({

@@ -3,6 +3,107 @@ use crate::MapDownloadEvent;
 use crate::app::SowApp;
 
 impl SowApp {
+    pub(crate) fn start_map_download(&mut self, map_name: String) {
+        let map_key = crate::ui::asset_loader::AssetLoader::map_key(&map_name);
+        self.ui.app.main_menu_state.downloading_map_name = Some(map_key.clone());
+        self.ui.app.main_menu_state.is_downloading_map = true;
+        self.ui.app.main_menu_state.map_download_progress = 0;
+        self.ui.app.main_menu_state.map_download_error = None;
+        self.ui.app.main_menu_state.cached_map = None;
+        self.ui.app.main_menu_state.cached_map_key = None;
+
+        if self.ui.app.main_menu_state.is_waiting
+            && let (Some(lobby_id), Some(player_id)) =
+                (self.sim.my_lobby_id, self.sim.my_player_id)
+            && let Some(client) = self.net.client.as_ref()
+            && let Ok(message) = bincode::serialize(
+                &sow_core::protocol::ClientMessage::MapDownloadProgress {
+                    lobby_id,
+                    player_id,
+                    progress: 0,
+                },
+            )
+        {
+            client.send(message);
+        }
+
+        if !self.ui.app.asset_loader.maps_in_flight.insert(map_key.clone()) {
+            return;
+        }
+
+        let url = format!(
+            "{}/{}/map.bin.br",
+            self.asset_config.maps_base.trim_end_matches('/'),
+            map_key
+        );
+        let tx = self.tasks.map_tx.clone();
+        let accumulated = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let total_bytes = std::sync::Arc::new(std::sync::Mutex::new(0usize));
+        log::info!("Downloading map from: {url}");
+
+        ehttp::streaming::fetch(
+            ehttp::Request::get(&url),
+            move |result: ehttp::Result<ehttp::streaming::Part>| match result {
+                Ok(ehttp::streaming::Part::Response(response)) => {
+                    if !response.ok {
+                        let _ = tx.send(MapDownloadEvent::Error {
+                            map_name: map_key.clone(),
+                            reason: format!("HTTP {}", response.status),
+                        });
+                        return std::ops::ControlFlow::Break(());
+                    }
+                    if let Some(length) = response
+                        .headers
+                        .get("content-length")
+                        .or_else(|| response.headers.get("Content-Length"))
+                        .and_then(|value| value.parse::<usize>().ok())
+                    {
+                        *total_bytes.lock().unwrap() = length;
+                    }
+                    std::ops::ControlFlow::Continue(())
+                }
+                Ok(ehttp::streaming::Part::Chunk(chunk)) => {
+                    if chunk.is_empty() {
+                        let bytes = std::mem::take(&mut *accumulated.lock().unwrap());
+                        let _ = tx.send(MapDownloadEvent::MapReady(map_key.clone(), bytes));
+                        return std::ops::ControlFlow::Break(());
+                    }
+                    let mut bytes = accumulated.lock().unwrap();
+                    bytes.extend_from_slice(&chunk);
+                    let total = *total_bytes.lock().unwrap();
+                    if total > 0 {
+                        let progress = ((bytes.len() as f64 / total as f64) * 100.0) as u8;
+                        let _ = tx.send(MapDownloadEvent::Progress(
+                            map_key.clone(),
+                            progress.min(99),
+                        ));
+                    }
+                    std::ops::ControlFlow::Continue(())
+                }
+                Err(error) => {
+                    let _ = tx.send(MapDownloadEvent::Error {
+                        map_name: map_key.clone(),
+                        reason: error.to_string(),
+                    });
+                    std::ops::ControlFlow::Break(())
+                }
+            },
+        );
+    }
+
+    pub(crate) fn retry_map_download(&mut self) {
+        if self.ui.app.main_menu_state.map_download_error.is_none() {
+            return;
+        }
+        let Some(map_name) = self.ui.app.main_menu_state.downloading_map_name.clone() else {
+            return;
+        };
+        let map_key = crate::ui::asset_loader::AssetLoader::map_key(&map_name);
+        self.ui.app.asset_loader.maps.remove(&map_key);
+        self.ui.app.asset_loader.maps_in_flight.remove(&map_key);
+        self.start_map_download(map_name);
+    }
+
     pub fn update_assets(&mut self) {
         if self.ui.app.phase == ClientPhase::Playing {
             // The browser shell owns the main menu, so the normal WASM path never reaches
@@ -34,6 +135,7 @@ impl SowApp {
                         self.ui.app.main_menu_state.map_download_progress = progress;
                         if let (Some(lid), Some(pid)) =
                             (self.sim.my_lobby_id, self.sim.my_player_id)
+                            && self.ui.app.main_menu_state.is_waiting
                             && let Some(c) = self.net.client.as_ref()
                         {
                             c.send(
@@ -51,7 +153,17 @@ impl SowApp {
                 }
                 MapDownloadEvent::MapReady(map_name, bytes) => {
                     self.ui.app.asset_loader.maps_in_flight.remove(&map_name);
-                    crate::map_cache::persist(&map_name, &bytes);
+                    if !crate::map_cache::persist(&map_name, &bytes) {
+                        log::error!("Downloaded map {map_name} is invalid");
+                        if Some(map_name.clone())
+                            == self.ui.app.main_menu_state.downloading_map_name
+                        {
+                            self.ui.app.main_menu_state.is_downloading_map = false;
+                            self.ui.app.main_menu_state.map_download_error =
+                                Some("Downloaded map data is invalid".to_string());
+                        }
+                        continue;
+                    }
                     self.ui
                         .app
                         .asset_loader
@@ -63,9 +175,11 @@ impl SowApp {
                         self.ui.app.main_menu_state.cached_map = Some(bytes);
                         self.ui.app.main_menu_state.is_downloading_map = false;
                         self.ui.app.main_menu_state.map_download_progress = 100;
+                        self.ui.app.main_menu_state.map_download_error = None;
 
                         if let (Some(lid), Some(pid)) =
                             (self.sim.my_lobby_id, self.sim.my_player_id)
+                            && self.ui.app.main_menu_state.is_waiting
                             && let Some(c) = self.net.client.as_ref()
                         {
                             c.send(
@@ -121,16 +235,15 @@ impl SowApp {
                 MapDownloadEvent::PortalAvatarFailed { reason } => {
                     self.ui.app.asset_loader.note_portal_avatar_failed(reason);
                 }
-                MapDownloadEvent::Error(e) => {
-                    log::error!("Map download aborted: {}", e);
-                    self.ui.app.main_menu_state.is_downloading_map = false;
-                    self.tasks.engine_init_queued_msg = None;
-                    if self.ui.app.phase == crate::ClientPhase::MainMenu {
-                        self.leave_lobby_to_main_menu();
-                    } else {
-                        self.begin_exit_to_main_menu();
+                MapDownloadEvent::Error { map_name, reason } => {
+                    self.ui.app.asset_loader.maps_in_flight.remove(&map_name);
+                    log::error!("Map download aborted for {map_name}: {reason}");
+                    if Some(map_name.clone())
+                        == self.ui.app.main_menu_state.downloading_map_name
+                    {
+                        self.ui.app.main_menu_state.is_downloading_map = false;
+                        self.ui.app.main_menu_state.map_download_error = Some(reason);
                     }
-                    break;
                 }
             }
         }
@@ -162,10 +275,13 @@ impl SowApp {
     }
 
     fn poll_avatar_fetches(&mut self) {
-        use crate::ui::asset_loader::{AssetLoader, AvatarFetchKey, MAX_AVATAR_FETCHES_IN_FLIGHT};
+        use crate::ui::asset_loader::{AssetLoader, MAX_AVATAR_FETCHES_IN_FLIGHT};
 
-        let priority_leader = self.ui.app.main_menu_state.selected_leader;
-        let priority = AvatarFetchKey::Leader(priority_leader);
+        let priority = self
+            .ui
+            .app
+            .asset_loader
+            .leader_fetch_key(self.ui.app.main_menu_state.selected_leader);
 
         if let Some(snapshot) = self.sim.current_snapshot.as_ref() {
             for player in &snapshot.players {

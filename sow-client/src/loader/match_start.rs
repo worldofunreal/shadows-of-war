@@ -298,69 +298,10 @@ impl SowApp {
             self.ui.app.main_menu_state.cached_map = self.ui.app.asset_loader.take_map(&map_id);
             self.ui.app.main_menu_state.cached_map_key = Some(map_id.clone());
             self.ui.app.main_menu_state.is_downloading_map = false;
+            self.ui.app.main_menu_state.map_download_progress = 100;
+            self.ui.app.main_menu_state.map_download_error = None;
         } else {
-            self.ui.app.main_menu_state.is_downloading_map = true;
-            self.ui.app.main_menu_state.cached_map = None;
-            self.ui.app.main_menu_state.cached_map_key = None;
-            let maps_base = self.asset_config.maps_base.clone();
-            let url = format!("{}/{}/map.bin.br", maps_base.trim_end_matches('/'), map_id);
-            let tx = self.tasks.map_tx.clone();
-            let request = ehttp::Request::get(&url);
-            let map_name_for_closure = map_id.clone();
-            let accumulated = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-            let total_bytes = std::sync::Arc::new(std::sync::Mutex::new(0usize));
-
-            ehttp::streaming::fetch(
-                request,
-                move |result: ehttp::Result<ehttp::streaming::Part>| match result {
-                    Ok(ehttp::streaming::Part::Response(res)) => {
-                        if !res.ok {
-                            let _ = tx.send(crate::MapDownloadEvent::Error(format!(
-                                "HTTP Error: {}",
-                                res.status
-                            )));
-                            return std::ops::ControlFlow::Break(());
-                        }
-                        let cl = res
-                            .headers
-                            .get("content-length")
-                            .or_else(|| res.headers.get("Content-Length"));
-                        if let Some(cl_str) = cl
-                            && let Ok(b) = cl_str.parse::<usize>()
-                        {
-                            *total_bytes.lock().unwrap() = b;
-                        }
-                        std::ops::ControlFlow::Continue(())
-                    }
-                    Ok(ehttp::streaming::Part::Chunk(chunk)) => {
-                        if chunk.is_empty() {
-                            let final_bytes = std::mem::take(&mut *accumulated.lock().unwrap());
-                            let _ = tx.send(crate::MapDownloadEvent::MapReady(
-                                map_name_for_closure.clone(),
-                                final_bytes,
-                            ));
-                            return std::ops::ControlFlow::Break(());
-                        }
-                        let mut acc = accumulated.lock().unwrap();
-                        acc.extend_from_slice(&chunk);
-                        let total = *total_bytes.lock().unwrap();
-                        let pct = if total > 0 {
-                            ((acc.len() as f64 / total as f64) * 100.0) as u8
-                        } else {
-                            0
-                        };
-                        let _ = tx.send(crate::MapDownloadEvent::Progress(
-                            map_name_for_closure.clone(),
-                            pct,
-                        ));
-                        std::ops::ControlFlow::Continue(())
-                    }
-                    Err(e) => {
-                        let _ = tx.send(crate::MapDownloadEvent::Error(e.to_string()));
-                        std::ops::ControlFlow::Break(())
-                    }
-                },
-            );
+            self.start_map_download(map_id);
         }
     }
 }

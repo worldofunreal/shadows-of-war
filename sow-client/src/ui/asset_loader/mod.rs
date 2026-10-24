@@ -99,10 +99,11 @@ impl AssetLoader {
         }
     }
 
-    pub fn queue_leader_avatar(&mut self, leader: Leader, priority: bool) {
-        self.queue_avatar_fetch(AvatarFetchKey::Fallback, true);
+    /// Fetch the hero's expression sheet, falling back to its generated Calm portrait after a
+    /// permanent sheet failure.
+    pub fn leader_fetch_key(&self, leader: Leader) -> AvatarFetchKey {
         let sheet = AvatarFetchKey::Leader(leader);
-        let key = if self
+        if self
             .avatar_retry_state
             .get(&sheet)
             .is_some_and(|retry| retry.permanent)
@@ -110,7 +111,12 @@ impl AssetLoader {
             AvatarFetchKey::LeaderPortrait(leader)
         } else {
             sheet
-        };
+        }
+    }
+
+    pub fn queue_leader_avatar(&mut self, leader: Leader, priority: bool) {
+        self.queue_avatar_fetch(AvatarFetchKey::Fallback, true);
+        let key = self.leader_fetch_key(leader);
         self.queue_avatar_fetch(key, priority);
     }
 
@@ -151,8 +157,8 @@ impl AssetLoader {
 
     /// The slot for a portrait drawn this frame. A full pool evicts the least recently drawn
     /// portrait; heroes and their slots are never evicted.
-    // ponytail: LRU over the slots after the hero blocks (46 with 36 heroes). Ceiling: more than
-    // 46 portraits drawn in one frame fall back. Upgrade path: raise AVATAR_ROWS.
+    // ponytail: LRU over the slots after the hero blocks (106 with 63 heroes). More than 106
+    // portraits drawn in one frame fall back. Upgrade path: raise AVATAR_ROWS.
     fn portrait_slot(&mut self, slug: &str) -> Option<usize> {
         if let Some(slot) = self.campaign_avatar_slots.get(slug).copied() {
             self.portrait_last_drawn[slot] = self.drawn_frame;
@@ -206,6 +212,18 @@ impl AssetLoader {
     pub fn has_map(&self, name: &str) -> bool {
         let key = Self::map_key(name);
         self.maps.contains_key(&key) || sow_core::maps::map_payload_available(&key)
+    }
+
+    pub fn restore_cached_map(&mut self, name: &str) -> bool {
+        let key = Self::map_key(name);
+        if self.has_map(&key) {
+            return true;
+        }
+        if let Some(bytes) = crate::map_cache::load(&key) {
+            self.maps.insert(key, bytes);
+            return true;
+        }
+        false
     }
 
     pub fn take_map(&mut self, name: &str) -> Option<Vec<u8>> {
@@ -324,7 +342,7 @@ impl AssetLoader {
         Ok(())
     }
 
-    /// The GPU cells a decoded avatar fills: hero expressions, one portrait or a campaign slot.
+    /// The GPU cells a decoded avatar fills: four hero expressions, a fallback or campaign slot.
     fn store_avatar_cells(
         &mut self,
         key: AvatarFetchKey,
@@ -347,14 +365,13 @@ impl AssetLoader {
             AvatarFetchKey::LeaderPortrait(leader) => {
                 let cell = square_avatar_cell(&image);
                 sow_core::emote::AvatarExpression::ALL
-                    .into_iter()
                     .map(|expression| {
                         (
                             sow_render::text::leader_avatar_slot(leader, expression),
                             cell.clone(),
                         )
                     })
-                    .collect()
+                    .to_vec()
             }
             AvatarFetchKey::Fallback => vec![(
                 sow_render::text::AVATAR_FALLBACK_SLOT,
@@ -395,7 +412,8 @@ impl AssetLoader {
             .iter()
             .filter_map(|lobby| {
                 let key = Self::map_key(&lobby.map_name);
-                (!self.has_map(&key) && self.maps_in_flight.insert(key.clone())).then_some(key)
+                (!self.restore_cached_map(&key) && self.maps_in_flight.insert(key.clone()))
+                    .then_some(key)
             })
             .collect()
     }
@@ -487,40 +505,28 @@ mod tests {
     }
 
     #[test]
-    fn all_playable_hero_sheets_exist_and_have_four_distinct_frames() {
+    fn all_playable_heroes_load_four_frames_from_one_sheet() {
         let avatars =
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/art/avatars/heroes");
         for leader in Leader::all() {
             let key = AvatarFetchKey::Leader(leader);
             let id = sow_data::commerce::leader_id(leader);
-            // The pipeline joins the four expression quadrants (Happy, Calm, Fear, Angry)
-            // into one 2 x 2 sheet; the test builds the same sheet from the real files.
-            let quadrants = (1..=4)
-                .map(|n| {
-                    let path = avatars.join(format!("{id}_{n}.webp"));
-                    image::open(&path)
-                        .unwrap_or_else(|error| panic!("{}: {error}", path.display()))
-                        .to_rgba8()
-                })
-                .collect::<Vec<_>>();
-            let (width, height) = quadrants[0].dimensions();
-            let mut sheet = image::RgbaImage::new(width * 2, height * 2);
-            for (index, quadrant) in quadrants.iter().enumerate() {
-                let x = (index as u32 % 2) * width;
-                let y = (index as u32 / 2) * height;
-                image::imageops::replace(&mut sheet, quadrant, i64::from(x), i64::from(y));
-            }
+            let path = avatars.join(format!("{id}.webp"));
+            let sheet = image::open(&path)
+                .unwrap_or_else(|error| panic!("{}: {error}", path.display()))
+                .to_rgba8();
             let mut loader = AssetLoader::new();
             loader.store_avatar_cells(key, sheet).unwrap();
             assert!(loader.gpu_avatar_cells.iter().any(|(slot, cell)| {
-                *slot == sow_render::text::AVATAR_GOLD_SLOT && cell.len() == 256 * 256 * 4
+                *slot == sow_render::text::AVATAR_GOLD_SLOT
+                    && cell.len() == (sow_render::text::AVATAR_CELL as usize).pow(2) * 4
             }));
             let hero_cells = loader
                 .gpu_avatar_cells
                 .iter()
                 .filter(|entry| entry.0 != sow_render::text::AVATAR_GOLD_SLOT)
                 .collect::<Vec<_>>();
-            assert_eq!(hero_cells.len(), 4);
+            assert_eq!(hero_cells.len(), 4, "{id}");
             for (index, (slot, cell)) in hero_cells.into_iter().enumerate() {
                 assert_eq!(
                     *slot,
@@ -529,16 +535,29 @@ mod tests {
                         sow_core::emote::AvatarExpression::ALL[index]
                     )
                 );
-                assert_eq!(cell.len(), 256 * 256 * 4);
-                assert!(
-                    loader
-                        .gpu_avatar_cells
-                        .iter()
-                        .take(index)
-                        .all(|(_, other)| other != cell)
+                assert_eq!(
+                    cell.len(),
+                    (sow_render::text::AVATAR_CELL as usize).pow(2) * 4
                 );
             }
         }
+    }
+
+    #[test]
+    fn calm_portrait_fallback_fills_each_hero_expression_slot() {
+        let leader = Leader::of("boudica");
+        let mut loader = AssetLoader::new();
+        let portrait = image::RgbaImage::from_pixel(256, 256, image::Rgba([12, 34, 56, 255]));
+        loader
+            .store_avatar_cells(AvatarFetchKey::LeaderPortrait(leader), portrait)
+            .unwrap();
+        let cells = loader
+            .gpu_avatar_cells
+            .iter()
+            .filter(|entry| entry.0 != sow_render::text::AVATAR_GOLD_SLOT)
+            .collect::<Vec<_>>();
+        assert_eq!(cells.len(), 4);
+        assert!(cells.windows(2).all(|pair| pair[0].1 == pair[1].1));
     }
 
     #[test]

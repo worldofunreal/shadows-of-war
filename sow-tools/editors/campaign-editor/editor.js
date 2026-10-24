@@ -12,7 +12,7 @@
         { value: "attack", label: "Launch an attack" }, { value: "troops", label: "Reach a troop minimum" },
         { value: "building", label: "Complete a building" }, { value: "city", label: "Complete a city" },
         { value: "farm", label: "Complete a farm" }, { value: "factory", label: "Complete a factory" },
-        { value: "port", label: "Complete a port" }, { value: "bunker", label: "Complete a bunker" },
+        { value: "port", label: "Complete a port" }, { value: "tower", label: "Complete a tower" },
         { value: "structure_upgrade", label: "Upgrade a structure" }, { value: "structure_level", label: "Reach a building level" }, { value: "city_upgrade", label: "Upgrade a city" },
         { value: "city_level", label: "Reach a city level" },
         { value: "port_upgrade", label: "Upgrade a port" }, { value: "port_level", label: "Reach port level" },
@@ -836,12 +836,12 @@
                 objective.appendChild(inputField("Required amount", step.trigger.value || 1, function (value) { step.trigger.value = Number(value); markDirty(); }, { type: "number", min: 1, step: 1 }));
             }
             else if (step.trigger.type === "structure_upgrade") {
-                objective.appendChild(selectField("Building type", step.trigger.kind || "City", ["City", "Farm", "Factory", "Bunker", "Port"], function (value) { step.trigger.kind = value; markDirty(); renderInspector(); }));
+                objective.appendChild(selectField("Building type", step.trigger.kind || "City", ["City", "Farm", "Factory", "Tower", "Port"], function (value) { step.trigger.kind = value; markDirty(); renderInspector(); }));
                 objective.appendChild(inputField("Upgrades to complete", step.trigger.value || 1, function (value) { step.trigger.value = Number(value); markDirty(); }, { type: "number", min: 1, step: 1 }));
             }
             else if (step.trigger.type === "structure_level") {
                 var structureLevelLimits = window.SOWCampaign.STRUCTURE_LEVEL_LIMITS;
-                objective.appendChild(selectField("Building type", step.trigger.kind || "City", ["City", "Farm", "Factory", "Bunker", "Port"], function (value) {
+                objective.appendChild(selectField("Building type", step.trigger.kind || "City", ["City", "Farm", "Factory", "Tower", "Port"], function (value) {
                     step.trigger.kind = value;
                     step.trigger.value = Math.min(Number(step.trigger.value || 1), structureLevelLimits[value]);
                     markDirty(); renderInspector();
@@ -2088,7 +2088,7 @@
         var command = target.closest("[data-command]");
         var action = target.closest("[data-map-action]");
         var type = command && command.dataset.command;
-        var direct = action && /^build_(city|factory|port|bunker|farm)$/.exec(action.dataset.mapAction);
+        var direct = action && /^build_(city|factory|port|tower|farm)$/.exec(action.dataset.mapAction);
         if (!["select_building", "nudge_building_placement", "cancel_building_mode", "confirm_building_placement"].includes(type) && !direct) return false;
         var root = $("#sow-hud"), placement = $("#sow-hud-placement");
         if (type === "nudge_building_placement") {

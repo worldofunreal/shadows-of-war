@@ -853,6 +853,8 @@ impl serde::Serialize for S16TracePlayer<'_> {
         field!(active_emote);
         field!(emote_event_id);
         field!(betrayal_retaliation_ticks);
+        field!(recapture_target);
+        field!(recapture_ticks);
         field!(traitor);
         field!(traitor_tick);
         field!(leader);
@@ -934,14 +936,14 @@ impl serde::Serialize for S16TraceConfig<'_> {
                 &zero_f64,
                 &config.city_troop_income,
                 &config.farm_troop_income,
-                &config.bunker_range,
-                &config.bunker_priority,
-                &config.bunker_strength,
+                &config.tower_range,
+                &config.tower_priority,
+                &config.tower_strength,
                 &config.factory_gold_income,
                 &config.port_gold_income,
                 &zero_f64,
                 &config.cost_city,
-                &config.cost_bunker,
+                &config.cost_tower,
                 &config.cost_factory,
                 &config.cost_port,
                 &config.cost_farm,
@@ -1562,7 +1564,8 @@ fn s5_enclosed_coastal_ghost_breaks_out_by_sea() {
 #[test]
 fn s7_every_match_ends_somebody_wins() {
     let seeds = [101, 202, 303, 404, 505, 606, 707, 808, 909, 1010];
-    const CAP: u64 = 8_000;
+    // The original 8,000 turns at 100ms and 0.22x span 176 game seconds.
+    const GAME_SECONDS: f64 = 176.0;
     let mut decided = 0usize;
     let mut ghost_wins = 0usize;
 
@@ -1570,8 +1573,12 @@ fn s7_every_match_ends_somebody_wins() {
         let ghost = LabPlayer::ghost(1, 1, 1);
         let nation = LabPlayer::nation(2, 10, 10);
         let mut engine = build_lab(12, 12, "FFA", &[ghost, nation]);
+        // This scenario must finish under the real victory rules, unlike the behavior sandboxes.
+        engine.state.config.map_control_win_percentage =
+            crate::game_config::GameConfig::default().map_control_win_percentage;
+        let cap = (GAME_SECONDS / engine.state.config.per_tick(1.0)).ceil() as u64;
 
-        for _ in 0..CAP {
+        for _ in 0..cap {
             if engine.state.winner.is_some() || engine.state.phase == GamePhase::GameOver {
                 break;
             }
@@ -1580,7 +1587,18 @@ fn s7_every_match_ends_somebody_wins() {
         let over = engine.state.winner.is_some() || engine.state.phase == GamePhase::GameOver;
         assert!(
             over,
-            "S7 FAIL: seed {seed} never decided within {CAP} ticks — nobody wants to win"
+            "S7 FAIL: seed {seed} never decided within {cap} ticks ({GAME_SECONDS} game seconds); players(id,tiles,troops,iq)={:?}; attacks(owner,target,troops)={:?}",
+            engine
+                .state
+                .players
+                .iter()
+                .map(|p| (p.id, p.tile_count, p.troops, p.iq_points))
+                .collect::<Vec<_>>(),
+            engine
+                .attacks
+                .iter()
+                .map(|a| (a.owner_id, a.target_owner, a.troops))
+                .collect::<Vec<_>>()
         );
         decided += 1;
         if engine.state.winner == Some(1) {
@@ -2582,6 +2600,10 @@ fn s16_building_rules_trace(legacy: bool) -> Vec<(u64, u64)> {
     scenario.assert_setup();
     // Recorded checkpoints were produced at the previous standard speed.
     scenario.engine.state.config.global_speed_multiplier = 0.35;
+    if legacy {
+        // Historical checkpoints stored the old tower base in their game config.
+        scenario.engine.state.config.tower_range = 14.0;
+    }
     scenario.engine.legacy_building_rules = legacy;
     scenario.engine.legacy_elimination_rewards = legacy;
     let mut hash = 0xcbf29ce484222325;
@@ -2621,30 +2643,30 @@ fn s16_building_rules_trace(legacy: bool) -> Vec<(u64, u64)> {
 #[test]
 fn s16_checkpoint_decision_and_state_reference() {
     let checkpoints = s16_building_rules_trace(false);
-    // The runtime trace is fixed per target; raw floating-point state diverges on FreeBSD after tick 750.
+    // The runtime trace is fixed per target and refreshed after deterministic behavior changes.
     #[cfg(target_os = "freebsd")]
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x8abf_fc1b_839c_f669),
-        (500, 0x5643_a822_e6a1_9fca),
-        (750, 0x5380_be2a_f6a1_c2e5),
-        (1000, 0xa1bd_7a90_48ab_b27d),
-        (1250, 0x05df_5407_d440_1f53),
-        (1500, 0x9151_a3b6_6746_b5b5),
-        (1750, 0x71db_aa58_76a3_6bae),
-        (2000, 0x0c58_c574_1e12_792a),
-        (2102, 0xbe10_80e6_287c_0d53),
+        (250, 0x40ba_fc1d_378c_631e),
+        (500, 0x1443_ed00_c144_c6bc),
+        (750, 0x193a_458a_6d36_cf39),
+        (1000, 0x5ed4_8869_a71e_2996),
+        (1250, 0xca1b_f316_ff47_1036),
+        (1500, 0x1ef9_e4fb_f727_ebe3),
+        (1750, 0xee2c_9f73_4050_8589),
+        (2000, 0x0672_941e_ed21_3b30),
+        (2102, 0x4a33_d4f8_8173_e62c),
     ];
     #[cfg(not(target_os = "freebsd"))]
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x8abf_fc1b_839c_f669),
-        (500, 0x5643_a822_e6a1_9fca),
-        (750, 0x5380_be2a_f6a1_c2e5),
-        (1000, 0xa1bd_7a90_48ab_b27d),
-        (1250, 0x05df_5407_d440_1f53),
-        (1500, 0x9151_a3b6_6746_b5b5),
-        (1750, 0x71db_aa58_76a3_6bae),
-        (2000, 0x0c58_c574_1e12_792a),
-        (2102, 0xbe10_80e6_287c_0d53),
+        (250, 0x40ba_fc1d_378c_631e),
+        (500, 0x1443_ed00_c144_c6bc),
+        (750, 0x193a_458a_6d36_cf39),
+        (1000, 0x5ed4_8869_a71e_2996),
+        (1250, 0xca1b_f316_ff47_1036),
+        (1500, 0x1ef9_e4fb_f727_ebe3),
+        (1750, 0xee2c_9f73_4050_8589),
+        (2000, 0x0672_941e_ed21_3b30),
+        (2102, 0x4a33_d4f8_8173_e62c),
     ];
     assert_eq!(
         checkpoints,
@@ -2660,16 +2682,17 @@ fn s16_checkpoint_decision_and_state_reference() {
 #[test]
 fn historical_s16_building_rules_keep_recorded_results() {
     let checkpoints = s16_building_rules_trace(true);
+    // Re-recorded after the hero ability reassignment: bots draw random heroes, so their
+    // abilities shape this game. The building rules are unchanged.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0xabc7_d55c_e898_815a),
-        (500, 0xf929_85ae_2a53_f523),
-        (750, 0x39e8_5565_3823_2118),
-        (1000, 0x9ab4_ff49_4137_9faf),
-        (1250, 0xda67_c269_5e1d_be23),
-        (1500, 0xedb9_e8d5_472c_37e3),
-        (1750, 0xdc5d_5ace_69da_2208),
-        (2000, 0xc464_c6fd_52c5_c2b1),
-        (2102, 0x8af1_dba5_1c0a_68b9),
+        (250, 0x81ef_ab53_9bf2_921b),
+        (500, 0x97ba_6ca9_1129_9457),
+        (750, 0x9adf_211f_d503_8c7d),
+        (1000, 0xced4_e660_6c98_7c39),
+        (1250, 0xfe9e_9c37_6377_a183),
+        (1500, 0xaed7_1ba2_6d98_5f25),
+        (1750, 0xb138_2a3d_de2b_ca2d),
+        (1982, 0x46fb_2ba5_82ec_c71b),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

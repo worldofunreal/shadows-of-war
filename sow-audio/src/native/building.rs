@@ -17,7 +17,7 @@ fn placement_params(kind: BuildingSoundKind) -> BuildingPlacementParams {
             duration_secs: 0.10,
             amplitude: 0.10,
         },
-        BuildingSoundKind::Bunker => BuildingPlacementParams {
+        BuildingSoundKind::Tower => BuildingPlacementParams {
             freq: 220.0,
             decay_rate: 10.0,
             duration_secs: 0.11,

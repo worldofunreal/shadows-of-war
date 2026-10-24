@@ -662,11 +662,25 @@ fn render_building_selection_focus(
         );
     }
 
-    if kind == BuildingKind::Bunker && menu.building_level > 0 && !menu.building_under_construction
+    if kind == BuildingKind::Tower && menu.building_level > 0 && !menu.building_under_construction
     {
-        let range = (sim.config.bunker_range.round() as u32
-            + u32::from(menu.building_level.saturating_sub(1)) * 2)
-            .min(20);
+        let range_multiplier = sim
+            .engine
+            .as_ref()
+            .and_then(|engine| {
+                engine
+                    .buildings
+                    .iter()
+                    .find(|building| building.tile_idx == menu.tile_idx)
+                    .and_then(|building| engine.state.player(building.owner_id))
+                    .map(|player| player.leader.tower_range_multiplier())
+            })
+            .unwrap_or(1.0);
+        let range = sow_core::building::tower_range_for_level(
+            menu.building_level,
+            &sim.config,
+            range_multiplier,
+        );
         text.push_ring(
             anchor_center,
             range as f32 * zoom,
@@ -860,10 +874,15 @@ fn render_building_placement_preview(
     if let Some(uv_rect) = crate::render::gpu::building_sprite_uv(kind, 1) {
         text.push_building_sprite(sprite_center, sprite_size, uv_rect, colors.building);
     }
-    if kind == BuildingKind::Bunker {
+    if kind == BuildingKind::Tower {
+        let range_multiplier = engine
+            .state
+            .player(my_id)
+            .map_or(1.0, |player| player.leader.tower_range_multiplier());
+        let range = sow_core::building::tower_range_for_level(1, &sim.config, range_multiplier);
         text.push_ring(
             center_px,
-            sim.config.bunker_range as f32 * input.camera_zoom,
+            range as f32 * input.camera_zoom,
             [0.75, 0.85, 1.0, 0.32],
             (1.5 * sf).max(1.0),
         );

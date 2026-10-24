@@ -112,7 +112,7 @@ impl SowApp {
     pub fn update_loader(&mut self) {
         if let Some(start_msg) = self.tasks.engine_init_queued_msg.take() {
             let map_name = start_msg.config.map_name.clone();
-            let has_map = self.ui.app.asset_loader.has_map(&map_name)
+            let has_map = self.ui.app.asset_loader.restore_cached_map(&map_name)
                 || self.ui.app.main_menu_state.cached_map.is_some();
 
             if !has_map {
@@ -219,8 +219,6 @@ impl SowApp {
                 };
 
                 init_logic();
-
-                self.sim.turn_queue.clear();
 
                 self.sim.current_snapshot = None;
                 self.sim.latest_local_spawn = None;
@@ -399,6 +397,7 @@ impl SowApp {
                         self.ui.app.main_menu_state.is_connected
                             && self.net.client.is_some()
                             && self.ws_on_relay()
+                                && self.sim.turn_queue.is_empty()
                     };
 
                     if ready_to_release {
@@ -415,23 +414,6 @@ impl SowApp {
                         // Clear pending init data to completely finish EnterGame phase
                         self.tasks.pending_engine_init_data = None;
                         log::info!("EnterGame load complete; fading out loader");
-
-                        if !self.net.is_offline
-                            && let Some(c) = self.net.client.as_ref()
-                            && let (Some(lid), Some(pid)) =
-                                (self.sim.my_lobby_id, self.sim.my_player_id)
-                        {
-                            if let Some(ready_msg) = self.make_initial_relay_ready_message(lid, pid)
-                                && let Ok(json) = bincode::serialize(&ready_msg)
-                            {
-                                c.send(json);
-                                self.net.load_telemetry.mark_ready_sent();
-                            } else {
-                                log::warn!(
-                                    "EnterGame waiting for relay ticket before sending ready"
-                                );
-                            }
-                        }
                     } else {
                         let p = self.ui.app.splash_state.progress;
                         if p < 0.95 {
@@ -440,10 +422,11 @@ impl SowApp {
                         }
                         if self.ui.app.splash_state.frames_drawn.is_multiple_of(120) {
                             log::warn!(
-                                "[LOADER] Waiting for relay connection before releasing loader: is_connected={}, has_client={}, on_relay={}, my_lobby_id={:?}, my_player_id={:?}, phase={:?}",
+                                "[LOADER] Waiting for relay connection or turn catch-up before releasing loader: is_connected={}, has_client={}, on_relay={}, queued_turns={}, my_lobby_id={:?}, my_player_id={:?}, phase={:?}",
                                 self.ui.app.main_menu_state.is_connected,
                                 self.net.client.is_some(),
                                 self.ws_on_relay(),
+                                self.sim.turn_queue.len(),
                                 self.sim.my_lobby_id,
                                 self.sim.my_player_id,
                                 self.ui.app.phase

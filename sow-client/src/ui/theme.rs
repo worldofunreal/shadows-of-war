@@ -45,9 +45,9 @@ pub mod dev_config {
         pub font_underlay_softness: f32,
         pub font_char_spacing: f32,
         pub font_size_scale: f32,
-        pub bunker_laser_target: bool,
-        pub bunker_laser_arc: bool,
-        pub bunker_laser_scatter: bool,
+        pub tower_laser_target: bool,
+        pub tower_laser_arc: bool,
+        pub tower_laser_scatter: bool,
         pub shader_params: [[f32; 4]; PARAM_CAPACITY],
     }
 
@@ -90,9 +90,9 @@ pub mod dev_config {
                 font_underlay_softness: 0.1,
                 font_char_spacing: 0.95,
                 font_size_scale: 2.0,
-                bunker_laser_target: true,
-                bunker_laser_arc: true,
-                bunker_laser_scatter: false,
+                tower_laser_target: true,
+                tower_laser_arc: true,
+                tower_laser_scatter: false,
                 shader_params: shader_params::shader_defaults(),
             }
         }

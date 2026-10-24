@@ -152,6 +152,12 @@ pub struct Player {
     pub emote_event_id: u64,
     #[serde(default)]
     pub betrayal_retaliation_ticks: u32,
+    /// Enemy that took one of this player's cities (0 = none). Only set while the leader has a recapture discount.
+    #[serde(default)]
+    pub recapture_target: u16,
+    /// Ticks left in which attacks on `recapture_target` cost less.
+    #[serde(default)]
+    pub recapture_ticks: u32,
     #[serde(default)]
     pub traitor: bool,
     #[serde(default)]
@@ -215,6 +221,8 @@ impl Player {
             active_emote: None,
             emote_event_id: 0,
             betrayal_retaliation_ticks: 0,
+            recapture_target: 0,
+            recapture_ticks: 0,
             traitor: false,
             traitor_tick: 0,
             leader: Leader::default(),
@@ -277,6 +285,8 @@ impl Player {
             active_emote: None,
             emote_event_id: 0,
             betrayal_retaliation_ticks: 0,
+            recapture_target: 0,
+            recapture_ticks: 0,
             traitor: false,
             traitor_tick: 0,
             leader,
@@ -331,6 +341,8 @@ impl Player {
             active_emote: None,
             emote_event_id: 0,
             betrayal_retaliation_ticks: 0,
+            recapture_target: 0,
+            recapture_ticks: 0,
             traitor: false,
             traitor_tick: 0,
             leader,

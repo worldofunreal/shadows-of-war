@@ -702,6 +702,26 @@ impl TextRenderer {
         )
     }
 
+    /// Transform only the just-emitted glyphs, keeping shaping and the frame budget unchanged.
+    pub fn push_prepared_text_transformed(
+        &mut self,
+        prepared: &PreparedText,
+        pos: [f32; 2],
+        final_font_size: f32,
+        color: [f32; 4],
+        settings: TextPaintStyle,
+        mut transform: impl FnMut(usize, &mut TextInstanceGpu),
+    ) -> bool {
+        let start = self.upload_instances.len();
+        if !self.push_prepared_text(prepared, pos, final_font_size, color, settings) {
+            return false;
+        }
+        for (index, glyph) in self.upload_instances[start..].iter_mut().enumerate() {
+            transform(index, glyph);
+        }
+        true
+    }
+
     pub fn remaining_instance_capacity(&self) -> usize {
         MAX_TEXT_GLYPHS.saturating_sub(self.upload_instances.len())
     }
@@ -981,7 +1001,18 @@ impl TextRenderer {
         diameter: f32,
         tint: [f32; 4],
     ) {
-        self.push_status_sprite_with_desaturation(sprite, center, diameter, tint, 0.0);
+        self.push_status_sprite_with_desaturation(sprite, center, [diameter; 2], tint, 0.0);
+    }
+
+    /// Push a status sprite with separate horizontal and vertical scale.
+    pub fn push_status_sprite_scaled(
+        &mut self,
+        sprite: NameplateStatusSprite,
+        center: [f32; 2],
+        size: [f32; 2],
+        tint: [f32; 4],
+    ) {
+        self.push_status_sprite_with_desaturation(sprite, center, size, tint, 0.0);
     }
 
     /// Push a disabled status sprite with grayscale color while preserving its alpha.
@@ -992,21 +1023,21 @@ impl TextRenderer {
         diameter: f32,
         tint: [f32; 4],
     ) {
-        self.push_status_sprite_with_desaturation(sprite, center, diameter, tint, 1.0);
+        self.push_status_sprite_with_desaturation(sprite, center, [diameter; 2], tint, 1.0);
     }
 
     fn push_status_sprite_with_desaturation(
         &mut self,
         sprite: NameplateStatusSprite,
         center: [f32; 2],
-        diameter: f32,
+        size: [f32; 2],
         tint: [f32; 4],
         desaturation: f32,
     ) {
-        let diameter = diameter.max(0.0);
+        let size = size.map(|axis| axis.max(0.0));
         self.push_inst(TextInstanceGpu {
-            screen_pos: [center[0] - diameter * 0.5, center[1] - diameter * 0.5],
-            size: [diameter; 2],
+            screen_pos: [center[0] - size[0] * 0.5, center[1] - size[1] * 0.5],
+            size,
             uv_rect: sprite.uv_rect(),
             content_rect: [0.0, 0.0, 1.0, 1.0],
             color: tint,

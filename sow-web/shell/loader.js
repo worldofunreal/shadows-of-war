@@ -146,6 +146,23 @@
         if (loaderText) loaderText.textContent = localizedLoaderText();
     }
 
+    function setLoaderMapError(state) {
+        const box = document.getElementById('loader-map-error');
+        const message = document.getElementById('loader-map-error-text');
+        const retry = document.getElementById('loader-map-retry');
+        if (!box || !message || !retry) return;
+        const failed = !!(state && state.map_download_error === true);
+        box.hidden = !failed;
+        if (failed) {
+            message.textContent = typeof window.SOW_t === 'function'
+                ? window.SOW_t('lobbies.map_download_failed')
+                : 'Map download failed.';
+            retry.textContent = typeof window.SOW_t === 'function'
+                ? window.SOW_t('lobbies.map_download_retry')
+                : 'RETRY DOWNLOAD';
+        }
+    }
+
     function isCrossOriginAssetUrl(url) {
         try {
             const resolved = new URL(url, window.location.href);
@@ -377,6 +394,7 @@
     let reportedProgress = null;
     let initialized = false;
     let listenersBound = false;
+    let mapRetryListenerBound = false;
     let loaderVisible = false;
     let loaderReadyDispatched = false;
     let loaderArtKey = null;
@@ -512,6 +530,10 @@
                     <img id="splash-bg" class="splash-bg" alt="" decoding="async" fetchpriority="high">
                 </picture>
                 <div id="loader-footer" class="loader-footer">
+                    <section id="loader-map-error" class="loader-map-error" hidden aria-live="assertive">
+                        <span id="loader-map-error-text"></span>
+                        <button id="loader-map-retry" type="button"></button>
+                    </section>
                     <section id="loader-ability" class="loader-ability" hidden aria-live="polite"></section>
                     <div id="loader-bar-wrap" class="loader-bar-wrap">
                         <img id="loader-bar-empty" class="loader-bar-empty" alt="" decoding="async" fetchpriority="high">
@@ -528,6 +550,15 @@
         barFill = document.getElementById('loader-bar-fill');
         barFull = document.getElementById('loader-bar-full');
         loaderText = document.getElementById('loader-text');
+        const retryButton = document.getElementById('loader-map-retry');
+        if (retryButton && !mapRetryListenerBound && typeof retryButton.addEventListener === 'function') {
+            retryButton.addEventListener('click', () => {
+                if (typeof window.SOW_menu_command === 'function') {
+                    window.SOW_menu_command(JSON.stringify({ type: 'retry_map_download' }));
+                }
+            });
+            mapRetryListenerBound = true;
+        }
 
         if (!initialized) {
             const splashImage = document.getElementById('splash-bg');
@@ -642,6 +673,7 @@
             startProgress();
         }
         const pendingArt = syncLoaderArt(state);
+        setLoaderMapError(state);
         const progress = Number(state.loader_progress);
         if (Number.isFinite(progress)) {
             const nextProgress = Math.max(0, Math.min(1, progress));

@@ -723,7 +723,6 @@
         var mapMenu = hud.map_menu;
         var selectedBuildingKind = mapMenu && mapMenu.open && mapMenu.view === "building_details" && mapMenu.building
             ? String(mapMenu.building.kind || "") : "";
-        if (selectedBuildingKind === "Defense Tower") selectedBuildingKind = "Bunker";
         var facts = Object.assign({}, tutorial.facts || {}, {
             hover_events: runtime.hoverEvents,
             touch_controls: zoomMode() === "pinch" ? 1 : 0,

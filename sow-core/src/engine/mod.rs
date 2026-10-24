@@ -715,7 +715,7 @@ impl SowEngine {
             |owner| {
                 players
                     .player(owner)
-                    .map_or(1.0, |player| player.leader.bunker_range_multiplier())
+                    .map_or(1.0, |player| player.leader.tower_range_multiplier())
             },
         );
         self.defense_grid_dirty = false;
@@ -848,10 +848,25 @@ impl SowEngine {
         let killer_multiplier = self
             .state
             .player(conqueror_id)
-            .map_or(1.0, |player| player.leader.elimination_gold_multiplier());
+            .map_or(1.0, |player| {
+                player.leader.resource_bonus_multiplier(
+                    crate::geo_entities::Source::Elimination,
+                    crate::geo_entities::Resource::Gold,
+                )
+            });
+        let troop_bounty = self.state.player(conqueror_id).map_or(0.0, |player| {
+            crate::execution::income_rates::elimination_troop_bounty(
+                player.leader,
+                &self.state.config,
+            )
+        });
+        if killer_multiplier != 1.0 || troop_bounty > 0.0 {
+            self.state.announce_leader_ability(conqueror_id, None);
+        }
         let killer_final_gold = (f64::from(killer_gold) * killer_multiplier) as u32;
         if let Some(attacker) = self.state.player_mut(conqueror_id) {
             attacker.credit_gold(f64::from(killer_final_gold));
+            attacker.credit_troops_capped(troop_bounty, attacker.max_troops);
             attacker.kills += 1;
         }
 
@@ -885,7 +900,7 @@ impl SowEngine {
 
     #[inline]
     pub fn add_building(&mut self, b: Building) {
-        let is_ready_defense = b.kind == crate::game::BuildingKind::Bunker && !b.under_construction;
+        let is_ready_defense = b.kind == crate::game::BuildingKind::Tower && !b.under_construction;
         let pos = self.buildings.partition_point(|x| x.id < b.id);
         self.buildings.insert(pos, b);
         self.building_grid.insert(
@@ -1150,7 +1165,7 @@ impl SowEngine {
         self.campaign_relations
             .insert(id, crate::protocol::CampaignRelation::Enemy);
         self.campaign_avatars
-            .insert(id, "roman_legionary".to_string());
+            .insert(id, "roman_reserve".to_string());
         log::info!("[CAMPAIGN] summoned {name} for the final assault");
         Some(id)
     }

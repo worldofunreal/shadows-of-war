@@ -3,6 +3,7 @@ use crate::diplomacy::{
     TRAITOR_STATUS_TICKS, alliance_can_renew,
 };
 use crate::engine::SowEngine;
+use crate::geo_entities::Source;
 use crate::player::PlayerType;
 use crate::protocol::{GameplayIntent, StampedIntent};
 
@@ -42,6 +43,13 @@ impl SowEngine {
                 }
                 let campaign_pair = self.campaign_relations.contains_key(&proposer_id)
                     || self.campaign_relations.contains_key(&target_id);
+                for ally in [proposer_id, target_id] {
+                    if self.state.player(ally).is_some_and(|player| {
+                        player.leader.has_resource_bonus_from(Source::Alliance)
+                    }) {
+                        self.state.announce_leader_ability(ally, None);
+                    }
+                }
                 if let Some(player) = self.state.player_mut(proposer_id) {
                     if !player.alliances.contains(&target_id) {
                         player.alliances.push(target_id);
@@ -172,8 +180,15 @@ impl SowEngine {
         let Some(human) = self.state.player(human_id) else {
             return;
         };
-        // Hero ability: this human's hero can make campaign alliances cheaper.
-        let gold_cost = gold_cost * human.leader.alliance_cost_multiplier();
+        // Hero ability: this human's hero can make campaign alliances with some targets cheaper.
+        let alliance_discount = crate::execution::combat::targeted_multiplier(
+            &self.state,
+            human_id,
+            target_id,
+            0.0,
+            |target| human.leader.alliance_cost_multiplier(target),
+        );
+        let gold_cost = gold_cost * alliance_discount;
         if human.player_type != PlayerType::Human || !human.alive || human.gold < gold_cost {
             return;
         }
@@ -186,6 +201,9 @@ impl SowEngine {
         }
 
         if gold_cost > 0.0 {
+            if alliance_discount != 1.0 {
+                self.state.announce_leader_ability(human_id, None);
+            }
             if let Some(human) = self.state.player_mut(human_id) {
                 human.gold -= gold_cost;
             }
@@ -298,6 +316,21 @@ impl SowEngine {
                     wf.retreat_dst = None;
                     wf.replace_path(Vec::new());
                     break;
+                }
+            }
+            GameplayIntent::ScuttleFleet { fleet_id } => {
+                if !self.campaign_allows_action(crate::campaign::CampaignAction::TransportFleet) {
+                    return;
+                }
+                let pid = stamped.player_id;
+                if let Some(index) = self.fleets.iter().position(|fleet| fleet.id == *fleet_id) {
+                    let can_scuttle = self.fleets.get(index).is_some_and(|fleet| {
+                        fleet.owner_id == pid
+                            && fleet.unit_type == crate::game::UnitType::TransportShip
+                    });
+                    if can_scuttle {
+                        self.fleets.remove(index);
+                    }
                 }
             }
             GameplayIntent::LaunchFleet {
@@ -469,7 +502,7 @@ impl SowEngine {
                             self.state.set_tile_owner(i % w, i / w, 0);
                         }
                         let had_defense_post = self.buildings.iter().any(|b| {
-                            b.owner_id == pid && b.kind == crate::game::BuildingKind::Bunker
+                            b.owner_id == pid && b.kind == crate::game::BuildingKind::Tower
                         });
                         self.buildings.retain(|b| b.owner_id != pid);
                         self.building_grid.mark_dirty();
@@ -939,6 +972,63 @@ mod tests {
         assert!(!engine.fleets[1].retreating);
         assert!(!engine.fleets[2].retreating);
         assert!(!engine.fleets[3].retreating);
+    }
+
+    #[test]
+    fn scuttle_only_removes_owned_transports_and_frees_their_slots_without_refund() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 4, 4, config.clone());
+        state.register_player(Player::new_human(7, "Seven".into(), [1.0, 0.0, 0.0], &config));
+        state.register_player(Player::new_human(8, "Eight".into(), [0.0, 1.0, 0.0], &config));
+        let initial_troops = state.player(7).unwrap().troops;
+        let water = WaterComponents::compute(&state.map, |_| {});
+        let mut engine = crate::engine::SowEngine::new(state, water);
+        for (id, owner_id, unit_type) in [
+            (1, 7, UnitType::TransportShip),
+            (2, 7, UnitType::TradeShip),
+            (3, 8, UnitType::TransportShip),
+        ] {
+            engine.add_fleet(WarpFleet::new(
+                id,
+                owner_id,
+                9,
+                unit_type,
+                100.0,
+                (0, 0),
+                vec![0, 1],
+            ));
+        }
+
+        assert_eq!(engine.boat_slots_used(7), 1);
+        for intent in [
+            StampedIntent {
+                player_id: 8,
+                intent: GameplayIntent::ScuttleFleet { fleet_id: 1 },
+            },
+            StampedIntent {
+                player_id: 7,
+                intent: GameplayIntent::ScuttleFleet { fleet_id: 2 },
+            },
+            StampedIntent {
+                player_id: 7,
+                intent: GameplayIntent::ScuttleFleet { fleet_id: 3 },
+            },
+        ] {
+            engine.apply_stamped_intent(&intent, 0);
+        }
+        assert_eq!(engine.fleets.len(), 3);
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 7,
+                intent: GameplayIntent::ScuttleFleet { fleet_id: 1 },
+            },
+            1,
+        );
+
+        assert_eq!(engine.fleets.iter().map(|fleet| fleet.id).collect::<Vec<_>>(), [2, 3]);
+        assert_eq!(engine.boat_slots_used(7), 0);
+        assert_eq!(engine.state.player(7).unwrap().troops, initial_troops);
     }
 
     #[test]

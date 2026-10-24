@@ -27,6 +27,8 @@ const nativeProfileSource = [
     "../../sow-client/src/ui.rs"
 ].map((file) => fs.readFileSync(path.join(shell, file), "utf8")).join("\n");
 const matchStartSource = fs.readFileSync(path.join(shell, "../../sow-client/src/loader/match_start.rs"), "utf8");
+const engineLoaderSource = fs.readFileSync(path.join(shell, "../../sow-client/src/loader/engine.rs"), "utf8");
+const simUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/sim/update.rs"), "utf8");
 const netMessagesSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/update/messages.rs"), "utf8");
 const appStateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/app/state.rs"), "utf8");
 
@@ -50,6 +52,14 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         "normal offline matches show details while tutorial starts keep them hidden");
     assert.match(netMessagesSource, /show_hero_briefing = !start_msg\.config\.tutorial/,
         "network matches use the server's tutorial flag for loader details");
+    assert.match(loaderTemplate, /id="loader-map-error"[\s\S]*?id="loader-map-error-text"[\s\S]*?id="loader-map-retry"/,
+        "the match loader includes a retry action for a failed map download");
+    assert.match(loaderSource, /SOW_menu_command\(JSON\.stringify\(\{ type: 'retry_map_download' \}\)\)/,
+        "the loader retry button uses the existing Rust menu command bridge");
+    assert.match(engineLoaderSource, /self\.sim\.turn_queue\.is_empty\(\)/,
+        "the loader stays visible until queued relay turns are applied");
+    assert.match(simUpdateSource, /if self\.sim\.engine\.is_some\(\) \{[\s\S]*?while let Some\(turn\) = self\.sim\.turn_queue\.pop_front\(\)/,
+        "relay turns remain queued until the simulation engine exists, then drain in order");
     const attachExitArt = loaderSource.indexOf("const pendingArt = syncLoaderArt(state);");
     const closeAfterArt = loaderSource.indexOf("if (state.loader_done === true) {\n            if (pendingArt) return;\n            finish(cycleId);", attachExitArt);
     assert.ok(attachExitArt >= 0 && closeAfterArt > attachExitArt,
@@ -117,7 +127,6 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         /assigned_leader_for_account\(\s*account_id,\s*crate::commerce::current_rotation_period\(\)\s*,?\s*\)/,
         "an account missing its preference receives its normal free-rotation assignment");
     assert.doesNotMatch(tutorialComplete, /Leader::Boudica/);
-    const engineLoaderSource = fs.readFileSync(path.join(shell, "../../sow-client/src/loader/engine.rs"), "utf8");
     const enterLoaderStart = sessionSource.indexOf("pub(crate) fn begin_enter_game_loader");
     const enterLoaderEnd = sessionSource.indexOf("/// Whether the map/mover GPU path", enterLoaderStart);
     assert.ok(enterLoaderStart >= 0 && enterLoaderEnd > enterLoaderStart);
@@ -131,6 +140,7 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
             this.style = {};
             this.dataset = {};
             this.attributes = {};
+            this.listeners = {};
             this.parentNode = null;
         }
         appendChild(child) {
@@ -161,6 +171,8 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
             this.parentNode = null;
         }
         setAttribute(name, value) { this.attributes[name] = String(value); }
+        addEventListener(type, callback) { this.listeners[type] = callback; }
+        click() { this.listeners.click?.(); }
         getAttribute(name) {
             if (Object.prototype.hasOwnProperty.call(this.attributes, name)) return this.attributes[name];
             return this[name] == null ? null : String(this[name]);
@@ -189,6 +201,16 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         child.hidden = id === "loader-ability";
         root.appendChild(child);
     }
+    const mapError = new Element("section");
+    mapError.id = "loader-map-error";
+    mapError.hidden = true;
+    root.appendChild(mapError);
+    const mapErrorText = new Element("span");
+    mapErrorText.id = "loader-map-error-text";
+    root.appendChild(mapErrorText);
+    const retryButton = new Element("button");
+    retryButton.id = "loader-map-retry";
+    root.appendChild(retryButton);
     const find = (node, predicate) => predicate(node) ? node : node.children.map(child => find(child, predicate)).find(Boolean) || null;
     const findPicture = () => find(root, node => node.className === "splash-picture");
     const document = {
@@ -203,6 +225,7 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     const events = [];
     const completedLoaderCycles = [];
     const leaderPreloads = [];
+    const menuCommands = [];
     class PreloadImage {
         constructor() { this.parentNode = null; this.children = []; }
         set src(value) { this._src = value; leaderPreloads.push(this); }
@@ -235,6 +258,8 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
             if (event.type === "sow:loader-cycle-ready") completedLoaderCycles.push(event.detail.cycle_id);
         }
     };
+    window.SOW_t = key => key;
+    window.SOW_menu_command = message => menuCommands.push(JSON.parse(message));
     const context = {
         window, document, URL, Image: PreloadImage,
         Event: class { constructor(type) { this.type = type; } },
@@ -273,6 +298,15 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         };
     };
     window.SOW_syncWebLoader(state("Boot", null, 0.2, "Splash"));
+    window.SOW_syncWebLoader({ ...state("Boot", null, 0.2, "Splash"), map_download_error: true });
+    assert.equal(mapError.hidden, false, "a failed map download remains visible in the active loader");
+    assert.equal(mapErrorText.textContent, "lobbies.map_download_failed");
+    assert.equal(retryButton.textContent, "lobbies.map_download_retry");
+    retryButton.click();
+    assert.deepEqual(menuCommands, [{ type: "retry_map_download" }],
+        "retry keeps the player in the same match loader and invokes the existing command");
+    window.SOW_syncWebLoader({ ...state("Boot", null, 0.2, "Splash"), map_download_error: false });
+    assert.equal(mapError.hidden, true, "a retry clears the visible download error");
     const bootPicture = findPicture();
     const bootImage = bootPicture.children[1];
     assert.equal(bootPicture, initialPicture, "Boot updates keep the original splash picture");

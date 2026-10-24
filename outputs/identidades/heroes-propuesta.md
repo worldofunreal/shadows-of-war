@@ -1,10 +1,10 @@
-# Héroes: roles y lista de 36
+# Héroes: roles y lista de 63
 
-Estado: los 36 héroes están en el catálogo con sus textos en 15 idiomas y su efecto implementado. La regla de roles está aplicada. Las caras y escenas están en el repositorio; las marcadas como provisionales en la sección 4 hay que revisarlas.
+Estado: los 63 héroes están en el catálogo con sus textos en 15 idiomas y su habilidad implementada. La regla de roles está aplicada. Las caras, escenas e iconos están en el repositorio, salvo los de Isabel I de Castilla y las escenas de Solimán (sección 4). Las escenas y caras provisionales de la sección 4 hay que revisarlas en partida. Las naciones quedan en 204 con retrato; faltan 9 retratos (sección 7).
 
 ## 1. Roles: qué confunde
 
-Hoy cada personaje del catálogo tiene un rol con tres valores:
+Antes del cambio de roles, cada personaje del catálogo tenía un rol con tres valores:
 
 - **nación**: sale como IA de nación. Hay 220.
 - **tribu**: sale como IA de tribu. Hay 400.
@@ -35,63 +35,32 @@ Los nombres cortos de los héroes se guardan como clave del progreso de cada jug
 
 ## 2. Los 12 actuales
 
-Todos cambian la partida: la prueba `every_hero_ability_changes_the_game` (`sow-core/src/execution/hero_ability_tests.rs`) pasó en el despliegue. Esa prueba confirma que la habilidad hace algo. No confirma que el balance esté bien.
+Las habilidades de estos 12 cambiaron con la revisión por historia. La lista vigente está en [docs/habilidades-heroes.md](../../docs/habilidades-heroes.md).
 
-| # | Héroe | Origen (rol hoy) | Región | Género | Habilidad | Dónde se aplica | Nota |
-|---|---|---|---|---|---|---|---|
-| 1 | Julius Caesar | héroe | Europa | M | Tropas en combate +10 % | `sow-core/src/execution/combat_tiles.rs` | |
-| 2 | Cleopatra | héroe | África | F | Oro de fábricas +50 % | `sow-core/src/execution/income_rates.rs` | Igual que Lady Six Sky |
-| 3 | Ragnar (Danish Vikings) | tribu | Europa | M | Oro de puertos +50 % | `income_rates.rs:52` | Sale también como IA |
-| 4 | Sun Tzu | héroe | Asia | M | Alcance de búnkeres +50 % | `sow-core/src/engine/mod.rs` | |
-| 5 | Alexander | héroe | Europa | M | Expansión +15 % | `combat_tiles.rs:123` | Mismo tipo que Napoleon |
-| 6 | Genghis Khan (Borjigin Mongols) | tribu | Asia | M | Oro al eliminar a un jugador +50 % | `sow-core/src/engine/mod.rs` | Sale también como IA |
-| 7 | Richard the Lionheart | héroe | Europa | M | Tope de tropas de ciudades +50 % | `sow-core/src/execution/income.rs` | |
-| 8 | Vercingetorix (Arverni) | tribu | Europa | M | Tropas de ciudades +50 % | `income_rates.rs:24` | Sale también como IA |
-| 9 | Boudica (Iceni) | tribu | Europa | F | Oro de granjas +50 % | `income_rates.rs:49` | Sale también como IA. Gratis |
-| 10 | Lady Six Sky | héroe | Américas | F | Oro de fábricas +50 % | `income_rates.rs:46` | Igual que Cleopatra |
-| 11 | Leonidas I | héroe | Europa | M | Búnkeres: atacantes pierden más tropas +50 % | `combat_tiles.rs:241` | |
-| 12 | Napoleon | héroe | Europa | M | Expansión +20 % | `combat_tiles.rs:123` | Mismo tipo que Alexander |
+| # | Héroe | Origen (rol hoy) | Región | Género |
+|---|---|---|---|---|
+| 1 | Julius Caesar | héroe | Europa | M |
+| 2 | Cleopatra | héroe | África | F |
+| 3 | Ragnar (Danish Vikings) | tribu | Europa | M |
+| 4 | Sun Tzu | héroe | Asia | M |
+| 5 | Alexander | héroe | Europa | M |
+| 6 | Genghis Khan (Borjigin Mongols) | tribu | Asia | M |
+| 7 | Richard the Lionheart | héroe | Europa | M |
+| 8 | Vercingetorix (Arverni) | tribu | Europa | M |
+| 9 | Boudica (Iceni) | tribu | Europa | F |
+| 10 | Lady Six Sky | héroe | Américas | F |
+| 11 | Leonidas I | héroe | Europa | M |
+| 12 | Napoleon | héroe | Europa | M |
 
-Totales hoy: 9 hombres, 3 mujeres. Europa 8, Asia 2, África 1, Américas 1, Oceanía 0.
+Totales de estos 12: 9 hombres, 3 mujeres. Europa 8, Asia 2, África 1, Américas 1, Oceanía 0.
 
 Repetidas: Cleopatra y Lady Six Sky hacen lo mismo. Alexander y Napoleon usan el mismo tipo de efecto. No bloquean nada. Conviene cambiar una de cada par cuando se haga el balance.
 
-## 3. Los 24 héroes: efectos implementados
+## 3. Habilidades de los 63
 
-Los 24 nuevos quedaron así. Los números de los efectos nuevos (25 %, 30 % y 50 %) y las bases de ingreso son propuestos y se ajustan en el balance.
+Cada héroe tiene una habilidad única y situacional, con su marca visual cuando la situación aplica. La tabla vigente (héroe, habilidad, descripción, tipo y número) está en [docs/habilidades-heroes.md](../../docs/habilidades-heroes.md), generada desde el catálogo. No se copia aquí.
 
-| # | Héroe | Región | Género | Habilidad | Efecto | Cómo está programado |
-|---|---|---|---|---|---|---|
-| 1 | Rani Durgavati | Asia | F | Cosecha gond | Granjas dan 50 % más tropas | Ya existía |
-| 2 | Empress Gi | Asia | F | Tesoro imperial | Ciudades dan 50 % más oro | Base de oro por ciudad solo para Gi (`hero_city_gold_income`) |
-| 3 | Ashoka | Asia | M | Arsenal del Dharma | Fábricas dan 50 % más tropas | Base de tropas por fábrica solo para Ashoka (`hero_factory_troop_income`) |
-| 4 | Amina de Zazzau | África | F | Murallas de Zazzau | Enemigos necesitan 50 % más esfuerzo para tomar tus ciudades | Tipo nuevo `city_defense` |
-| 5 | Yaa Asantewaa | África | F | Unir al pueblo | Ciudades aguantan 50 % más tropas | Ya existía |
-| 6 | Makeda | África | F | Comercio de caravanas | Territorio da 50 % más oro | Tipo nuevo `territory_gold` |
-| 7 | Hannibal | África | M | Cruce de los Alpes | Tropas 25 % más fuertes contra otros jugadores | Tipo nuevo `enemy_troop_strength` |
-| 8 | Anacaona | Américas | F | Puertos de comercio | Puertos dan 50 % más tropas | Base de tropas por puerto solo para Anacaona (`hero_port_troop_income`) |
-| 9 | Simón Bolívar | Américas | M | Pactos del Libertador | Alianzas de campaña cuestan 30 % menos oro (entra en lugar de Awashonks) | Tipo `alliance_cost`, el mismo de Awashonks |
-| 10 | Lozen | Américas | F | Asaltante veloz | Expansión 15 % más rápida | Ya existía |
-| 11 | Sālote Tupou III | Oceanía | F | Pacto del Pacífico | Cada alianza activa da 50 % más oro | Tipo nuevo `alliance_gold`, base `alliance_gold_income` (0,25 por alianza y segundo) solo para ella |
-| 12 | Hongi Hika | Oceanía | M | Rompe-fortalezas | Ataques contra ciudades 50 % más fuertes | Tipo nuevo `city_assault` |
-| 13 | Juana de Arco | Europa | F | Baluarte de la fe | Búnkeres: atacantes pierden 50 % más tropas | Tipo `bunker_defense`, igual que Leonidas |
-| 14 | Catalina la Grande | Europa | F | Patronazgo imperial | Cada alianza activa da 50 % más oro | Tipo `alliance_gold`, igual que Sālote |
-| 15 | Teodora | Europa | F | Justicia imperial | Ataques contra traidores hacen 100 % más daño | Tipo `damage_to_traitors`, igual que Boudica |
-| 16 | Ciro el Grande | Asia | M | Guarniciones persas | Ciudades aguantan 50 % más tropas | Tipo `city_troop_capacity`, igual que Yaa Asantewaa |
-| 17 | Saladino | Asia | M | Rompemuros | Ataques contra ciudades 50 % más fuertes | Tipo `city_assault`, igual que Hongi Hika |
-| 18 | Solimán el Magnífico | Asia | M | Legiones del sultán | Tropas 25 % más fuertes contra otros jugadores | Tipo `enemy_troop_strength`, igual que Hannibal. La propuesta decía −25 %; el efecto correcto es +25 % |
-| 19 | Tomoe Gozen | Asia | F | Carga a caballo | Expansión 15 % más rápida | Tipo `expansion_speed`, igual que Lozen |
-| 20 | Lady Triệu | Asia | F | Fortalezas de montaña | Enemigos necesitan 50 % más esfuerzo para tomar tus ciudades | Tipo `city_defense`, igual que Amina |
-| 21 | Mansa Musa | África | M | Peregrinación dorada | Territorio da 50 % más oro | Tipo `territory_gold`, igual que Makeda |
-| 22 | Shaka | África | M | Impi de hierro | Ejércitos 25 % más fuertes | Tipo `combat_strength`, igual que Caesar (con 25 % en vez de 10 %) |
-| 23 | Nzinga | África | F | Recompensa de la reina | Eliminar a un jugador da 50 % más oro | Tipo `elimination_gold`, igual que Genghis Khan |
-| 24 | Kamehameha I | Oceanía | M | Fortalezas de la isla | Búnkeres defienden 50 % más área | Tipo `bunker_range`, igual que Sun Tzu |
-
-Los 12 anteriores (sección 2) siguen igual. Con los 36, la lista tiene 19 hombres y 17 mujeres. Europa 11, Asia 10, África 8, Américas 4, Oceanía 3.
-
-Cada ingreso base nuevo (`hero_city_gold_income`, `hero_factory_troop_income`, `hero_port_troop_income`, `alliance_gold_income`) solo lo recibe el héroe que lo usa. Los demás jugadores no cambian su economía.
-
-La prueba `every_hero_ability_changes_the_game` mide cada habilidad en el juego real, incluidos los 6 tipos nuevos.
+La prueba `every_hero_ability_changes_the_game_and_shows_its_mark` (`sow-core/src/execution/hero_ability_tests.rs`) mide cada habilidad en el juego real: debe cambiar la partida, debe mostrar su marca en su situación y no debe mostrarla en la situación de un héroe sin ella.
 
 ## 4. Arte
 
@@ -113,7 +82,7 @@ Cada héroe necesita `assets/art/avatars/heroes/<id>.webp` (cara, 256 px en el j
 | Hongi Hika | Real (antes cara de nación) | Real (`old/hongi_hika_desktop.jpg` y `_mobile.jpg`) | Lista |
 | Juana de Arco | Real (`old/juan_de_arco_mobile.jpg`) | De Downloads (`old/juan_de_arco_desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
 | Catalina la Grande | Real (`leaders/catherine_imperial_portrait.jpg`) | **Provisional**: recortes de su retrato (`leaders/catherine_great_pixar.jpg` y `catherine_imperial_portrait.jpg`) | Revisar la escena |
-| Teodora | Real (`leaders/theodora_portrait.jpg`) | **Provisional**: recortes de su retrato (`leaders/theodora_hagia_sophia.jpg` y `theodora_portrait.jpg`) | Revisar la escena |
+| Isabel I de Castilla | Por encargar | — | Falta escena, retrato y icono de habilidad |
 | Ciro el Grande | Real (`old/Cyrus the Great_mobile.jpg`) | De Downloads (`old/Cyrus the Great _desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
 | Saladino | Real (`old/saladin_mobile.jpg`) | De Downloads (`old/saladin_desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
 | Solimán el Magnífico | **Provisional**: copia del retrato de nación (`avatars/nations/suleiman_el_magnifico.webp`) | **Falta**: no hay escena | Falta arte |
@@ -124,15 +93,15 @@ Cada héroe necesita `assets/art/avatars/heroes/<id>.webp` (cara, 256 px en el j
 | Nzinga | Real (`old/nzinga_mbande_mobile.jpg`) | De Downloads (`old/nzinga_mbande_desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
 | Kamehameha I | Real (`old/kamehameha_i_mobile.jpg`) | De Downloads (`old/kamehameha_i_desktop.jpg` y `_mobile.jpg`) | Revisar la escena |
 
-Las escenas nuevas vienen de `~/Downloads` sin revisión visual. El dueño las revisa antes de la publicación final.
+Los 27 héroes nuevos tienen cara en `avatars/heroes/`, escenas `_desktop` y `_mobile` en `heroes/` e icono en `icons/abilities/`; todos los archivos existen. Las escenas nuevas vienen de `~/Downloads` sin revisión visual; el dueño las revisa en partida antes de la publicación final.
 
-Las cinco caras que eran de nación (Amina, Makeda, Anacaona, Sālote y Hongi) se movieron a `avatars/heroes/`. La lista de naciones bajó a 213 (`naciones-encargo.txt`).
+Las siete caras que eran de nación (Yaa Asantewaa, Lozen, Amina, Makeda, Anacaona, Sālote y Hongi) están ahora en `avatars/heroes/`. La lista de naciones quedó en 204 con retrato; 9 esperan encargo (`naciones-encargo.txt`).
 
 ## 5. Capacidad del atlas de caras
 
-Cada héroe usa 4 casillas del atlas. Con 36 héroes son 146 casillas, y las 46 restantes quedan para retratos de bots y campañas.
+Los 12 héroes con caras de expresión usan 4 casillas cada uno; los otros 51 usan 1. Con los 63 héroes son 99 casillas, y con las 2 fijas (relleno y dorada) los héroes llegan a la casilla 101. Quedan 91 casillas para retratos de campaña y bots.
 
-El atlas pasó de 8 × 16 celdas (128 casillas, 4096 × 2048 px) a 16 × 12 celdas (192 casillas, 4096 × 3072 px). Con 36 héroes quedan 46 casillas libres para bots y campañas. Las 24 filas de 8 columnas habrían dado 6144 px de alto, y muchos celulares viejos no soportan más de 4096 px por lado. El costo es ~17 MB más de memoria.
+El atlas pasó de 8 × 16 celdas (128 casillas, 4096 × 2048 px) a 16 × 12 celdas (192 casillas, 4096 × 3072 px). Con 4 casillas para cada héroe harían falta 254 casillas: en 4096 px solo quedarían 2 para retratos de campaña y bots, y subir a 17 filas (4352 px) rompe celulares viejos. Por eso solo los 12 con expresiones usan 4. Las 24 filas de 8 columnas habrían dado 6144 px. El costo es ~17 MB más de memoria.
 
 ## 6. Decisiones
 
@@ -141,11 +110,18 @@ El atlas pasó de 8 × 16 celdas (128 casillas, 4096 × 2048 px) a 16 × 12 celd
 3. Atlas: 16 × 12 celdas (no 24 filas × 8 columnas, por el límite de textura de celulares viejos).
 4. Ingresos y costos nuevos: solo para su héroe, con bases en la configuración de juego.
 5. Lista de 13 aprobada: entra Simón Bolívar en lugar de Awashonks, y se suman 12 más. Solimán recibe el efecto que ya usa Hannibal (tropas 25 % más fuertes contra otros jugadores). La propuesta decía −25 %; era un error.
+6. Lista de 27 nuevos aprobada. Tomyris se reemplaza por Mulan (Asia, mujer): la Reina de Saba del plan es Makeda, que ya es héroe.
+7. Caras de expresión: solo los 12 héroes de la sección 2 las tienen. Los demás muestran su cara base; en el anillo de emociones muestran el icono genérico, como hoy.
+8. Naciones: se publica con 204 bots de nación con retrato. Los 9 que faltan entran al juego cuando tengan retrato; no se publican sin cara.
+9. Habilidades: cada una tiene una situación que ningún otro héroe usa. La versión vigente está en [docs/habilidades-heroes.md](../../docs/habilidades-heroes.md).
 
 ## 7. Pendientes conocidos
 
+- Sin situación con respaldo histórico: Ragnar, Anacaona, Makeda, Empress Gi, Ashoka, Simón Bolívar, Tomoe Gozen, Gajah Mada, Sayyid Said, Mary of Burgundy, Semiramis, Shima Kalingga, Gorgo, Tenamaxtli, Tomochichi y Shajar al-Durr. Tienen la situación más cercana que el motor puede expresar con sus 76 reglas; para un encaje real hace falta una regla nueva.
 - El precio que muestra el diálogo de alianza de campaña sigue siendo el precio base. El descuento de Simón Bolívar se aplica en el servidor al cobrar, así que el jugador paga menos de lo que se muestra. Hay que mostrar el precio con descuento (lo hace el agente de habilidades y efectos).
 - Los porcentajes y bases nuevas son propuestos y los ajusta el agente de habilidades y efectos.
 - Escenas y caras provisionales: sección 4.
 - Solimán no tiene arte: cara provisional y sin escena.
 - Doce de los nuevos ya son personajes de la IA de nación (todos menos Tomoe Gozen). Hoy salen en las dos listas. Pendiente: decidir si salen de la IA de nación.
+- Nueve naciones sin retrato: Francisco de Miranda, Miguel Hidalgo, Túpac Katari, Osceola, Hatuey, Lempira, Tecún Umán, Ezana de Aksum y Khama III. Se encargan (`naciones-encargo.txt`) y entran al juego cuando llegue cada retrato.
+- Tzintzicha: el enlace va al artículo del Imperio purépecha. No encontré un artículo en inglés del líder.

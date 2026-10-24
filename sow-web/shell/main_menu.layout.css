@@ -67,6 +67,7 @@
     
         .sow-menu__main {
             display: flex;
+            position: relative;
             flex-direction: column;
             align-items: stretch;
             gap: 14px;
@@ -112,11 +113,29 @@
         }
 
         #sow-menu[data-screen="home"] .sow-menu__battlefield {
-            order: -1;
-            flex: 0 0 auto;
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            justify-content: flex-start;
+            pointer-events: none;
+        }
+
+        #sow-menu[data-screen="home"] .sow-menu__leader-copy {
+            position: absolute;
+            inset-block-start: 0;
+            inset-inline-end: 10px;
+            width: min(72%, 300px);
+            margin: 0;
+            text-align: end;
+            pointer-events: none;
+        }
+
+        #sow-menu[data-screen="home"] .sow-menu__command {
+            position: relative;
+            z-index: 1;
         }
     
-        /* Keep the selected hero visible in the home screen's narrow layout. */
+        /* Keep the selected hero below the controls in narrow landscape layouts. */
     
         .sow-menu__public,
         .sow-menu__modal {
@@ -243,11 +262,11 @@
     
         .sow-menu__leader-copy {
             margin: 0;
-            padding: 14px;
-            border: 1px solid var(--sow-line);
-            border-inline-start: 2px solid var(--sow-gold);
-            border-radius: 8px;
-            background: rgba(10, 12, 16, 0.88);
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            pointer-events: none;
         }
     
         .sow-menu__leader-copy h2 { margin: 3px 0 5px; font-size: 28px; line-height: 0.95; }
@@ -790,4 +809,10 @@
     #sow-menu .sow-menu__progress { height: 32px; }
     #sow-menu .sow-menu__progress-cell { padding-inline: 4px; font-size: 9px; }
     #sow-menu .sow-menu__currency-icon { width: 14px; height: 14px; }
+}
+
+@media (orientation: portrait) {
+    #sow-menu[data-screen="home"] .sow-menu__leader-copy {
+        display: none;
+    }
 }

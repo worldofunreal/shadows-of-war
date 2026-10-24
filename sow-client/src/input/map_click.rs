@@ -29,7 +29,7 @@ pub(crate) enum MapMenuAction {
     BuildCity,
     BuildFactory,
     BuildPort,
-    BuildBunker,
+    BuildTower,
     BuildFarm,
     UpgradeStructure,
     Nuke,
@@ -47,7 +47,7 @@ impl MapMenuAction {
             Self::BuildCity => "build_city",
             Self::BuildFactory => "build_factory",
             Self::BuildPort => "build_port",
-            Self::BuildBunker => "build_bunker",
+            Self::BuildTower => "build_tower",
             Self::BuildFarm => "build_farm",
             Self::UpgradeStructure => "upgrade_structure",
             Self::Nuke => "nuke",
@@ -148,7 +148,7 @@ impl MapTarget {
                 MapMenuAction::BuildCity,
                 MapMenuAction::BuildFactory,
                 MapMenuAction::BuildPort,
-                MapMenuAction::BuildBunker,
+                MapMenuAction::BuildTower,
                 MapMenuAction::BuildFarm,
             ];
         }
@@ -264,6 +264,11 @@ impl SowApp {
             return false;
         };
         if !target.is_land || target.owner == target.my_id || target.is_friendly() {
+            return false;
+        }
+        // Out-of-range targets are handled on pointer release, where the full
+        // click path can try a fleet without dispatching the same click twice.
+        if !self.can_attack(tile_idx, target.owner) {
             return false;
         }
         self.attack_from_tile(tile_idx)
@@ -562,6 +567,19 @@ impl SowApp {
         self.add_map_feedback(crate::ui::UiText::new(key));
     }
 
+    fn has_fleet_capacity(&self, player_id: u16) -> bool {
+        self.sim
+            .current_snapshot
+            .as_ref()
+            .and_then(|snapshot| {
+                snapshot
+                    .players
+                    .iter()
+                    .find(|player| player.id == player_id)
+            })
+            .is_none_or(|player| player.boats_in_use < player.boat_capacity)
+    }
+
     pub(crate) fn map_menu_actions(&mut self, tile_idx: u32) -> Vec<MapMenuAction> {
         let Some(target) = self.map_target(tile_idx) else {
             return Vec::new();
@@ -569,17 +587,6 @@ impl SowApp {
         let spawning = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
             matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. })
         });
-        let has_boat_capacity = self
-            .sim
-            .current_snapshot
-            .as_ref()
-            .and_then(|snapshot| {
-                snapshot
-                    .players
-                    .iter()
-                    .find(|player| player.id == target.my_id)
-            })
-            .is_none_or(|player| player.boats_in_use < player.boat_capacity);
         let campaign_fleet = self
             .sim
             .engine
@@ -592,7 +599,7 @@ impl SowApp {
                 && self
                     .campaign_action_unlocked(sow_core::campaign::CampaignAction::TransportFleet))
                 || (!campaign_fleet
-                    && has_boat_capacity
+                    && self.has_fleet_capacity(target.my_id)
                     && self
                         .fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Access)
                         .is_ok()));
@@ -653,8 +660,8 @@ impl SowApp {
                         ),
                         (MapMenuAction::BuildPort, sow_core::game::BuildingKind::Port),
                         (
-                            MapMenuAction::BuildBunker,
-                            sow_core::game::BuildingKind::Bunker,
+                            MapMenuAction::BuildTower,
+                            sow_core::game::BuildingKind::Tower,
                         ),
                         (MapMenuAction::BuildFarm, sow_core::game::BuildingKind::Farm),
                     ] {
@@ -696,18 +703,7 @@ impl SowApp {
                             Some(("hud.fleet_teammate", None))
                         } else if target.is_allied {
                             Some(("hud.fleet_alliance", None))
-                        } else if self
-                            .sim
-                            .current_snapshot
-                            .as_ref()
-                            .and_then(|snapshot| {
-                                snapshot
-                                    .players
-                                    .iter()
-                                    .find(|player| player.id == target.my_id)
-                            })
-                            .is_some_and(|player| player.boats_in_use >= player.boat_capacity)
-                        {
+                        } else if !self.has_fleet_capacity(target.my_id) {
                             Some(("hud.fleet_capacity_full", None))
                         } else if let Err(error) =
                             self.fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Access)
@@ -861,13 +857,13 @@ impl SowApp {
             MapMenuAction::BuildCity
             | MapMenuAction::BuildFactory
             | MapMenuAction::BuildPort
-            | MapMenuAction::BuildBunker
+            | MapMenuAction::BuildTower
             | MapMenuAction::BuildFarm => {
                 let kind = match action {
                     MapMenuAction::BuildCity => sow_core::game::BuildingKind::City,
                     MapMenuAction::BuildFactory => sow_core::game::BuildingKind::Factory,
                     MapMenuAction::BuildPort => sow_core::game::BuildingKind::Port,
-                    MapMenuAction::BuildBunker => sow_core::game::BuildingKind::Bunker,
+                    MapMenuAction::BuildTower => sow_core::game::BuildingKind::Tower,
                     MapMenuAction::BuildFarm => sow_core::game::BuildingKind::Farm,
                     _ => unreachable!(),
                 };
@@ -1236,13 +1232,13 @@ impl SowApp {
             MapMenuAction::BuildCity
             | MapMenuAction::BuildFactory
             | MapMenuAction::BuildPort
-            | MapMenuAction::BuildBunker
+            | MapMenuAction::BuildTower
             | MapMenuAction::BuildFarm => {
                 let kind = match action {
                     MapMenuAction::BuildCity => sow_core::game::BuildingKind::City,
                     MapMenuAction::BuildFactory => sow_core::game::BuildingKind::Factory,
                     MapMenuAction::BuildPort => sow_core::game::BuildingKind::Port,
-                    MapMenuAction::BuildBunker => sow_core::game::BuildingKind::Bunker,
+                    MapMenuAction::BuildTower => sow_core::game::BuildingKind::Tower,
                     MapMenuAction::BuildFarm => sow_core::game::BuildingKind::Farm,
                     _ => unreachable!(),
                 };
@@ -1392,6 +1388,8 @@ impl SowApp {
         }
         if target.is_friendly() {
             self.open_map_context_menu(x, y);
+        } else if target.is_attackable() && !self.can_attack(tile_idx, target.owner) {
+            self.launch_fleet_from_tile(tile_idx);
         } else {
             self.attack_from_tile(tile_idx);
         }
@@ -1451,6 +1449,10 @@ impl SowApp {
         }
         if target.owner != 0 && !target.is_enemy() {
             self.add_map_feedback(crate::ui::UiText::new("hud.fleet_own_target"));
+            return false;
+        }
+        if !self.has_fleet_capacity(target.my_id) {
+            self.add_map_feedback(crate::ui::UiText::new("hud.fleet_capacity_full"));
             return false;
         }
         if let Err(error) = self.fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Path) {
@@ -2167,7 +2169,7 @@ mod tests {
                 MapMenuAction::BuildCity,
                 MapMenuAction::BuildFactory,
                 MapMenuAction::BuildPort,
-                MapMenuAction::BuildBunker,
+                MapMenuAction::BuildTower,
                 MapMenuAction::BuildFarm,
             ]
         );

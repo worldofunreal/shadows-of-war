@@ -41,7 +41,7 @@ impl SowApp {
         sow_audio::set_master_volume(if app.settings_state.mute_all {
             0.0
         } else {
-            app.settings_state.music_volume
+            1.0
         });
         crate::map_cache::hydrate_asset_maps(&mut app.asset_loader.maps);
 

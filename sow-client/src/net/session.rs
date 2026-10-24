@@ -23,14 +23,6 @@ impl SowApp {
         })
     }
 
-    pub(crate) fn make_initial_relay_ready_message(
-        &self,
-        lobby_id: u64,
-        player_id: u16,
-    ) -> Option<sow_core::protocol::ClientMessage> {
-        self.make_relay_ready_message(lobby_id, player_id)
-    }
-
     pub(crate) fn make_reconnect_message(
         &self,
         lobby_id: u64,

@@ -134,6 +134,35 @@
             display: none !important;
         }
 
+        #web-loader .loader-map-error {
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 16px;
+            border: 1px solid rgba(255, 120, 100, .5);
+            border-radius: 10px;
+            background: rgba(6, 8, 12, .92);
+            color: #fff;
+            font: 600 13px/1.35 var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
+            pointer-events: auto;
+        }
+
+        #web-loader .loader-map-error[hidden] { display: none !important; }
+
+        #web-loader .loader-map-error button {
+            flex: 0 0 auto;
+            min-height: 36px;
+            padding: 0 14px;
+            border: 1px solid rgba(235, 190, 94, .7);
+            border-radius: 8px;
+            background: rgba(120, 76, 15, .9);
+            color: #fff;
+            font: 800 11px/1 var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
+            cursor: pointer;
+        }
+
         #web-loader .sow-hero-briefing__civilization {
             display: block;
             margin: 0 0 4px;
@@ -323,6 +352,10 @@
                 src="__SOW_SPLASH_DESKTOP_DATA__">
         </picture>
         <div id="loader-footer" class="loader-footer">
+            <section id="loader-map-error" class="loader-map-error" hidden aria-live="assertive">
+                <span id="loader-map-error-text"></span>
+                <button id="loader-map-retry" type="button"></button>
+            </section>
             <section id="loader-ability" class="loader-ability" hidden aria-live="polite">
             </section>
             <div id="loader-bar-wrap" class="loader-bar-wrap">

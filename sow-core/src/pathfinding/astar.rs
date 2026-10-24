@@ -222,7 +222,7 @@ impl WaterNavGraph {
         &self,
         from_region: u32,
         to_region: u32,
-        from_tile: u32,
+        from_tiles: &[u32],
         goal_tile: u32,
     ) -> Option<(u32, u32)> {
         let start = *self.edge_offsets.get(from_region as usize)? as usize;
@@ -232,7 +232,14 @@ impl WaterNavGraph {
         self.edges[start..end]
             .iter()
             .filter(|edge| edge.to_region == to_region)
-            .min_by_key(|edge| dist(from_tile, edge.from_tile) + dist(edge.to_tile, goal_tile))
+            .min_by_key(|edge| {
+                from_tiles
+                    .iter()
+                    .map(|&from_tile| dist(from_tile, edge.from_tile))
+                    .min()
+                    .unwrap_or(u32::MAX)
+                    .saturating_add(dist(edge.to_tile, goal_tile))
+            })
             .map(|edge| (edge.from_tile, edge.to_tile))
     }
 }
@@ -493,21 +500,22 @@ impl WaterAStar {
         None
     }
 
-    fn first_start_in_region(
+    fn start_tiles_in_region(
         graph: &WaterNavGraph,
         map: &GameMap,
         starts: &[u32],
         region: u32,
-    ) -> Option<(u32, u32)> {
+    ) -> Vec<(u32, u32)> {
+        let mut candidates = Vec::new();
         for &start in starts {
             let (tiles, count) = water_candidates(map, start);
             for water_tile in tiles.into_iter().take(count) {
                 if graph.tile_regions.get(water_tile as usize) == Some(&region) {
-                    return Some((start, water_tile));
+                    candidates.push((start, water_tile));
                 }
             }
         }
-        None
+        candidates
     }
 
     fn goal_tile_in_region(
@@ -571,11 +579,15 @@ impl WaterAStar {
         }
         self.route_regions.reverse();
 
-        let Some((source_tile, source_water)) =
-            Self::first_start_in_region(&graph, map, starts, self.route_regions[0])
-        else {
+        let source_candidates =
+            Self::start_tiles_in_region(&graph, map, starts, self.route_regions[0]);
+        if source_candidates.is_empty() {
             return self.find_tile_path(map, None, starts, goal);
-        };
+        }
+        let source_water_tiles: Vec<u32> = source_candidates
+            .iter()
+            .map(|(_, water_tile)| *water_tile)
+            .collect();
         let Some(&last_region) = self.route_regions.last() else {
             return self.find_tile_path(map, None, starts, goal);
         };
@@ -584,25 +596,33 @@ impl WaterAStar {
         };
 
         self.route_crossings.clear();
-        let mut from_tile = source_water;
+        let mut previous_water = None;
         for pair in self.route_regions.windows(2) {
-            let Some(crossing) = graph.edge_tiles(pair[0], pair[1], from_tile, goal_water) else {
+            let crossing = match previous_water {
+                Some(tile) => graph.edge_tiles(
+                    pair[0],
+                    pair[1],
+                    std::slice::from_ref(&tile),
+                    goal_water,
+                ),
+                None => graph.edge_tiles(pair[0], pair[1], &source_water_tiles, goal_water),
+            };
+            let Some(crossing) = crossing else {
                 return self.find_tile_path(map, None, starts, goal);
             };
-            from_tile = crossing.1;
+            previous_water = Some(crossing.1);
             self.route_crossings.push(crossing);
         }
 
         let mut path = Vec::with_capacity(self.route_regions.len().saturating_mul(8));
-        if source_tile != source_water {
-            path.push(source_tile);
-        }
         for index in 0..self.route_regions.len() {
             let region = self.route_regions[index];
-            let segment_start = if index == 0 {
-                source_water
-            } else {
-                self.route_crossings[index - 1].1
+            let previous_start = index
+                .checked_sub(1)
+                .map(|previous| self.route_crossings[previous].1);
+            let segment_starts = match previous_start.as_ref() {
+                Some(tile) => std::slice::from_ref(tile),
+                None => source_water_tiles.as_slice(),
             };
             let segment_goal = if index < self.route_crossings.len() {
                 self.route_crossings[index].0
@@ -610,11 +630,24 @@ impl WaterAStar {
                 goal_water
             };
             let Some(segment) =
-                self.find_tile_path(map, Some((&graph, region)), &[segment_start], segment_goal)
+                self.find_tile_path(map, Some((&graph, region)), segment_starts, segment_goal)
             else {
                 return self.find_tile_path(map, None, starts, goal);
             };
             if index == 0 {
+                let Some(&source_water) = segment.first() else {
+                    return self.find_tile_path(map, None, starts, goal);
+                };
+                let Some(source_tile) = source_candidates
+                    .iter()
+                    .find(|(_, water_tile)| *water_tile == source_water)
+                    .map(|(source_tile, _)| *source_tile)
+                else {
+                    return self.find_tile_path(map, None, starts, goal);
+                };
+                if source_tile != source_water {
+                    path.push(source_tile);
+                }
                 path.extend(segment);
             } else {
                 path.extend(segment.into_iter().skip(1));
@@ -684,6 +717,7 @@ impl WaterAStar {
         let start_x = start % width;
         let start_y = start / width;
         let cross_norm = manhattan(start_x, start_y, goal_x, goal_y).max(1);
+        let use_cross_tie_breaker = starts.len() == 1;
 
         while let Some(node) = self.heap.pop() {
             let current = node.idx as usize;
@@ -726,15 +760,19 @@ impl WaterAStar {
                             goal_x,
                             goal_y,
                         ));
-                    let cross = cross_tie_breaker(
-                        neighbor % width,
-                        neighbor / width,
-                        goal_x,
-                        goal_y,
-                        start_x,
-                        start_y,
-                        cross_norm,
-                    );
+                    let cross = if use_cross_tie_breaker {
+                        cross_tie_breaker(
+                            neighbor % width,
+                            neighbor / width,
+                            goal_x,
+                            goal_y,
+                            start_x,
+                            start_y,
+                            cross_norm,
+                        )
+                    } else {
+                        0
+                    };
                     self.push_seq = self.push_seq.wrapping_add(1);
                     self.heap.push(AStarNode {
                         f_score: tentative_g.saturating_add(h).saturating_add(cross),

@@ -12,7 +12,7 @@ const BADGE_CELL_PX: u32 = 128;
 const GUTTER_PX: u32 = 2;
 const ART_MARGIN_PX: u32 = 2;
 /// Every building and level needs art: `assets/art/buildings/<kind>-<level>.png`.
-const BUILDING_KINDS: [&str; 5] = ["City", "Factory", "Port", "Bunker", "Farm"];
+const BUILDING_KINDS: [&str; 5] = ["City", "Factory", "Port", "Tower", "Farm"];
 const BUILDING_LEVELS: u8 = 4;
 /// Nameplate and HUD badges, one strip in this order: `assets/art/icons/<name>.png`.
 /// The cell order is read by sow-render (`badge_atlas::CELLS`) and the HUD (`STATUS_CELLS`).
@@ -296,7 +296,7 @@ fn rust_registry(
             let Some((kind, raw_level)) = rect.name.split_once(':') else {
                 return Err("building atlas key must contain kind:level".into());
             };
-            if !matches!(kind, "City" | "Bunker" | "Factory" | "Port" | "Farm") {
+            if !matches!(kind, "City" | "Tower" | "Factory" | "Port" | "Farm") {
                 return Err(format!("unknown building kind in atlas: {kind}").into());
             }
             let level: u8 = raw_level.parse()?;

@@ -960,8 +960,8 @@ mod bot_iq_alliance_tests {
             id: 102,
             owner_id: 2,
             tile_idx: 10,
-            kind: BuildingKind::Bunker,
-            level: BuildingKind::Bunker.max_level(),
+            kind: BuildingKind::Tower,
+            level: BuildingKind::Tower.max_level(),
             under_construction: false,
             ticks_until_complete: 0,
         });
@@ -1336,7 +1336,7 @@ mod bot_iq_alliance_tests {
     fn test_bot_structure_target_count_floor_is_stable() {
         // Low IQ: factor 0.1 caps non-city kinds at 0, city at least 1
         assert_eq!(bot_structure_target_count(BuildingKind::City, 10, 85), 1);
-        assert_eq!(bot_structure_target_count(BuildingKind::Bunker, 10, 85), 0);
+        assert_eq!(bot_structure_target_count(BuildingKind::Tower, 10, 85), 0);
         // Mid IQ: 50% of high-IQ quotas, deterministic floor
         assert_eq!(bot_structure_target_count(BuildingKind::Factory, 8, 110), 2);
         // High IQ: full quotas

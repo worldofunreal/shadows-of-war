@@ -113,7 +113,7 @@ test("Boudica reveal beats share a fixed 1.1-second wait while tribal contact st
     assert.deepEqual(definition.steps.find(step => step.id === "boudica_share_sent").campaign_assault_on_enter,
         { attacker_team: "Blue", target: "camulodunum" });
     assert.equal(definition.steps.find(step => step.id === "boudica_aid_kept").campaign_assault_on_enter, undefined);
-    assert.equal(definition.steps.some(step => /factory|bunker/.test(step.id)), false);
+    assert.equal(definition.steps.some(step => /factory|tower/.test(step.id)), false);
     assert.equal(definition.steps.some(step => Object.hasOwn(step, "start_delay_seconds") || Object.hasOwn(step, "advance_delay_seconds")), false);
     for (const [type, legacyField] of [["scene", "start_delay_seconds"], ["objective", "advance_delay_seconds"]]) {
         const legacyStep = { id: "wait", type, title_key: "tutorial.wait", next: "end", [legacyField]: 1 };
@@ -161,7 +161,7 @@ test("campaign building and action permissions are cumulative, route-safe, and r
         buildings: { City: 2 }, actions: []
     });
     assert.deepEqual(campaign.validate(definition, roster).errors, []);
-    assert.equal(definition.steps.some(step => /factory|bunker/i.test(step.id)), false);
+    assert.equal(definition.steps.some(step => /factory|tower/i.test(step.id)), false);
     assert.ok(definition.steps.every(step => !step.unlocks ||
         Object.keys(step.unlocks.buildings || {}).every(kind => kind === "City") &&
         (!step.unlocks.actions || step.unlocks.actions.length === 0)));

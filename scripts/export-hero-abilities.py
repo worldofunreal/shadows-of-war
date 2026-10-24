@@ -34,9 +34,9 @@ def main():
         ability = hero["hero"]["ability"]
         name = site.get(f"leader_{hero_id}_ability", "(sin texto)")
         description = site.get(f"leader_{hero_id}_description", "(sin texto)")
-        extra = ability.get("district") or ""
-        if ability.get("resource"):
-            extra = f"{extra} / {ability['resource']}".strip(" /")
+        source = ability.get("source")
+        district = source.get("district") if isinstance(source, dict) else source
+        extra = " / ".join(part for part in (district, ability.get("resource")) if part)
         kind = ability["kind"] + (f" ({extra})" if extra else "")
         icon = f"gameplay/icons/abilities/{hero_id}.webp"
         lines.append(

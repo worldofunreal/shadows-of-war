@@ -58,6 +58,45 @@ impl fmt::Display for FleetLaunchError {
     }
 }
 
+fn validate_fleet_target(
+    map: &GameMap,
+    player_id: u16,
+    target: (u16, u32),
+) -> Result<(), FleetLaunchError> {
+    let map_area = map.width.saturating_mul(map.height);
+    if map_area == 0 || target.1 >= map_area {
+        return Err(FleetLaunchError::InvalidTile);
+    }
+    if target.0 == player_id {
+        return Err(FleetLaunchError::SelfTarget);
+    }
+    Ok(())
+}
+
+fn resolve_landing_shore(
+    map: &GameMap,
+    water_components: &WaterComponents,
+    target: (u16, u32),
+    my_comps: &[u32],
+    target_border: Option<&crate::bitset::DenseBitSet>,
+) -> Result<u32, FleetLaunchError> {
+    let (target_owner, target_tile) = target;
+    let landing = if target_owner != 0 {
+        let border = target_border.ok_or(FleetLaunchError::TargetPlayerNotFound { target_owner })?;
+        closest_target_shore_for_player(
+            map,
+            water_components,
+            my_comps,
+            target_owner,
+            border,
+            target_tile,
+        )
+    } else {
+        closest_neutral_shore_on_components(map, water_components, my_comps, (target_tile, 200))
+    };
+    landing.ok_or(FleetLaunchError::NoLandingShore)
+}
+
 /// Shared route resolution for `LaunchFleet`.
 ///
 /// `target_border`: required when `target_owner != 0` (enemy player's `border_tiles`);
@@ -71,16 +110,57 @@ pub fn resolve_fleet_route(
     border_tiles: &crate::bitset::DenseBitSet,
     target_border: Option<&crate::bitset::DenseBitSet>,
 ) -> Result<FleetRoute, FleetLaunchError> {
-    let (src, landing) = resolve_fleet_endpoints(
+    validate_fleet_target(map, player_id, target)?;
+    let mut source_shores = Vec::new();
+    let mut my_comps = Vec::new();
+    for idx in border_tiles.ones() {
+        let x = idx % map.width;
+        let y = idx / map.width;
+        let terrain = map.terrain[idx as usize];
+        if map.owner_id(x, y) != player_id || !terrain.is_land() || !terrain.is_shoreline() {
+            continue;
+        }
+        let component = water_components.component_of(idx);
+        if component == 0 {
+            continue;
+        }
+        source_shores.push((idx, component));
+        if !my_comps.contains(&component) {
+            my_comps.push(component);
+        }
+    }
+    if source_shores.is_empty() {
+        return Err(FleetLaunchError::NoWaterAccess);
+    }
+    my_comps.sort_unstable();
+    let landing = resolve_landing_shore(
         map,
         water_components,
-        player_id,
         target,
-        border_tiles,
+        &my_comps,
         target_border,
     )?;
+    let landing_component = water_components.component_of(landing);
+    let starts: Vec<u32> = source_shores
+        .into_iter()
+        .filter_map(|(idx, component)| (component == landing_component).then_some(idx))
+        .collect();
+    if starts.is_empty() {
+        return Err(FleetLaunchError::NoLaunchShore {
+            component: landing_component,
+        });
+    }
+    let path = path_scratch
+        .astar
+        .find_path(map, &starts, landing)
+        .ok_or(FleetLaunchError::NoWaterPath)?;
+    let src = *path.first().ok_or(FleetLaunchError::NoWaterPath)?;
 
-    resolve_fleet_route_between_shores(map, path_scratch, src, landing)
+    Ok(FleetRoute {
+        src_tile: src,
+        landing_tile: landing,
+        path,
+    })
 }
 
 /// Route between already validated shores. AI scans can bound candidate work,
@@ -116,34 +196,14 @@ pub fn resolve_fleet_endpoints(
     border_tiles: &crate::bitset::DenseBitSet,
     target_border: Option<&crate::bitset::DenseBitSet>,
 ) -> Result<(u32, u32), FleetLaunchError> {
-    let (target_owner, target_tile) = target;
-    let map_area = map.width.saturating_mul(map.height);
-    if map_area == 0 || target_tile >= map_area {
-        return Err(FleetLaunchError::InvalidTile);
-    }
-    if target_owner == player_id {
-        return Err(FleetLaunchError::SelfTarget);
-    }
+    validate_fleet_target(map, player_id, target)?;
 
     let my_comps = player_water_components(map, water_components, player_id, border_tiles);
     if my_comps.is_empty() {
         return Err(FleetLaunchError::NoWaterAccess);
     }
 
-    let landing = if target_owner != 0 {
-        let tb = target_border.ok_or(FleetLaunchError::TargetPlayerNotFound { target_owner })?;
-        closest_target_shore_for_player(
-            map,
-            water_components,
-            &my_comps,
-            target_owner,
-            tb,
-            target_tile,
-        )
-    } else {
-        closest_neutral_shore_on_components(map, water_components, &my_comps, (target_tile, 200))
-    };
-    let landing = landing.ok_or(FleetLaunchError::NoLandingShore)?;
+    let landing = resolve_landing_shore(map, water_components, target, &my_comps, target_border)?;
 
     let landing_comp = water_components.component_of(landing);
     let src = best_shore_spawn_for_transport(
@@ -524,7 +584,6 @@ impl WarpFleet {
 
     pub fn recalculate_eta(&mut self, base_steps_per_tick: f64, tick_rate_ms: f32) {
         if self.unit_type != crate::game::UnitType::TransportShip
-            || self.retreating
             || self.path_cursor >= self.path.len()
         {
             self.eta_seconds_remaining = None;
@@ -546,7 +605,6 @@ impl WarpFleet {
 
     pub fn update_eta_after_tick(&mut self, base_steps_per_tick: f64, tick_rate_ms: f32) {
         if self.unit_type != crate::game::UnitType::TransportShip
-            || self.retreating
             || self.path_cursor >= self.path.len()
         {
             self.eta_seconds_remaining = None;
@@ -570,7 +628,6 @@ impl WarpFleet {
 
     pub fn remaining_eta_seconds(&self) -> Option<f32> {
         if self.unit_type != crate::game::UnitType::TransportShip
-            || self.retreating
             || self.path_cursor >= self.path.len()
         {
             return None;
@@ -648,18 +705,22 @@ mod movement_tests {
     }
 
     #[test]
-    fn transport_eta_is_absent_after_arrival_or_retreat() {
+    fn transport_eta_is_absent_after_arrival_and_available_on_return_routes() {
         let mut arrived = transport();
         arrived.recalculate_eta(0.2, 100.0);
         arrived.path_cursor = arrived.path.len();
         arrived.update_eta_after_tick(0.2, 100.0);
         assert_eq!(arrived.remaining_eta_seconds(), None);
 
-        let mut retreating = transport();
-        retreating.recalculate_eta(0.2, 100.0);
-        retreating.retreating = true;
-        retreating.update_eta_after_tick(0.2, 100.0);
-        assert_eq!(retreating.remaining_eta_seconds(), None);
+        let mut returning = transport();
+        returning.retreating = true;
+        returning.replace_path(vec![20, 21, 22, 23]);
+        returning.update_eta_after_tick(0.2, 100.0);
+        assert!((returning.remaining_eta_seconds().unwrap() - 1.5).abs() < 1e-5);
+
+        returning.replace_path(Vec::new());
+        returning.update_eta_after_tick(0.2, 100.0);
+        assert_eq!(returning.remaining_eta_seconds(), None);
     }
 
     #[test]
@@ -717,5 +778,113 @@ mod metrics_tests {
 
         assert_eq!(measured, regular);
         assert_eq!(examined, 2);
+    }
+}
+
+#[cfg(test)]
+mod route_selection_tests {
+    use super::{resolve_fleet_endpoints, resolve_fleet_route, resolve_fleet_route_between_shores};
+    use crate::bitset::DenseBitSet;
+    use crate::map::{GameMap, MapTile};
+    use crate::pathfinding::WaterPathfinderScratch;
+    use crate::water_components::WaterComponents;
+
+    fn tile(width: u32, x: u32, y: u32) -> u32 {
+        y * width + x
+    }
+
+    #[test]
+    fn route_chooses_navigably_closer_source_and_keeps_near_landing() {
+        let mut map = GameMap::new(24, 16);
+        map.terrain.fill(MapTile::from_byte(0x20));
+
+        // This island wall makes the geometrically nearer west shore require a detour.
+        for y in 2..=12 {
+            map.terrain[tile(map.width, 10, y) as usize] = MapTile::from_byte(0x80);
+        }
+
+        let source_west = tile(map.width, 9, 7);
+        let source_east = tile(map.width, 12, 12);
+        map.terrain[source_west as usize] = MapTile::from_byte(0x80);
+        map.terrain[source_east as usize] = MapTile::from_byte(0x80);
+        map.set_owner_id(9, 7, 1);
+        map.set_owner_id(12, 12, 1);
+
+        // The selected inland tile is equally close to several shores; the
+        // existing deterministic tie-break keeps the upper shore as landing.
+        let click = tile(map.width, 17, 7);
+        let mut target_border = DenseBitSet::new();
+        for y in 5..=9 {
+            for x in 15..=20 {
+                map.terrain[tile(map.width, x, y) as usize] = MapTile::from_byte(0x80);
+                map.set_owner_id(x, y, 2);
+                target_border.insert(tile(map.width, x, y));
+            }
+        }
+        map.compute_shorelines();
+
+        let mut my_border = DenseBitSet::new();
+        my_border.insert(source_west);
+        my_border.insert(source_east);
+        let water = WaterComponents::compute(&map, |_| {});
+        let (geometric_source, expected_landing) = resolve_fleet_endpoints(
+            &map,
+            &water,
+            1,
+            (2, click),
+            &my_border,
+            Some(&target_border),
+        )
+        .unwrap();
+        assert_eq!(geometric_source, source_west);
+        assert_eq!(expected_landing, tile(map.width, 17, 5));
+
+        let mut geometric_scratch = WaterPathfinderScratch::default();
+        let geometric_route = resolve_fleet_route_between_shores(
+            &map,
+            &mut geometric_scratch,
+            geometric_source,
+            expected_landing,
+        )
+        .unwrap();
+
+        let mut scratch = WaterPathfinderScratch::default();
+        let route = resolve_fleet_route(
+            &map,
+            &water,
+            &mut scratch,
+            1,
+            (2, click),
+            &my_border,
+            Some(&target_border),
+        )
+        .unwrap();
+
+        assert_eq!(route.src_tile, source_east);
+        assert_eq!(route.landing_tile, expected_landing);
+        assert!(route.path.len() < geometric_route.path.len());
+        for pair in route.path.windows(2) {
+            let distance = (pair[0] % map.width).abs_diff(pair[1] % map.width)
+                + (pair[0] / map.width).abs_diff(pair[1] / map.width);
+            assert_eq!(distance, 1);
+        }
+        assert!(route.path[1..route.path.len() - 1]
+            .iter()
+            .all(|&idx| !map.terrain[idx as usize].is_land()));
+
+        let mut repeat_scratch = WaterPathfinderScratch::default();
+        assert_eq!(
+            route,
+            resolve_fleet_route(
+                &map,
+                &water,
+                &mut repeat_scratch,
+                1,
+                (2, click),
+                &my_border,
+                Some(&target_border),
+            )
+            .unwrap()
+        );
     }
 }

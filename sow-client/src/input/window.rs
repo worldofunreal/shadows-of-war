@@ -1,4 +1,4 @@
-use crate::app::{HoverPointer, MapPointerStart, SowApp};
+use crate::app::{HoverPointer, MapContextMenuView, MapPointerStart, SowApp};
 use crate::input::map_click::{TOUCH_HOLD_MS, is_quick_tap};
 use crate::{ClientPhase, camera_zoom_upper_bound};
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, PointerKind, WindowEvent};
@@ -253,7 +253,7 @@ impl SowApp {
                 Some(sow_core::game::BuildingKind::Port)
             }
             winit::keyboard::KeyCode::Digit4 | winit::keyboard::KeyCode::Numpad4 => {
-                Some(sow_core::game::BuildingKind::Bunker)
+                Some(sow_core::game::BuildingKind::Tower)
             }
             winit::keyboard::KeyCode::Digit5 | winit::keyboard::KeyCode::Numpad5 => {
                 Some(sow_core::game::BuildingKind::Farm)
@@ -274,6 +274,15 @@ impl SowApp {
             self.clear_placement();
             self.close_map_context_menu();
         }
+    }
+
+    /// A press that only closes the radial menu is consumed by that close: it
+    /// must not attack, and it must not reopen a menu on the tile it lands on.
+    fn press_dismisses_radial(&self, x: f64, y: f64) -> bool {
+        self.input
+            .map_context_menu
+            .is_some_and(|menu| menu.view == MapContextMenuView::Radial)
+            && !self.building_panel_button_at(x as f32, y as f32)
     }
 
     fn handle_pointer_button(
@@ -313,7 +322,7 @@ impl SowApp {
                         x,
                         y,
                         is_touch: true,
-                        action_sent: false,
+                        action_sent: self.press_dismisses_radial(x, y),
                     });
                 } else {
                     self.finish_pointer_gesture();
@@ -346,6 +355,7 @@ impl SowApp {
                 // into a new click at every move.
                 // A press on the building panel's button keeps the panel open.
                 let panel_button = self.building_panel_button_at(x as f32, y as f32);
+                let dismisses_radial = self.press_dismisses_radial(x, y);
                 if !panel_button {
                     self.close_map_context_menu();
                 }
@@ -357,10 +367,11 @@ impl SowApp {
                         || (!warship_tool_selected
                             && self.ui.app.hud_state.selected_nuke_kind.is_none()));
                 if !is_touch {
-                    let action_sent = !self.ui.tutorial_camera_only
-                        && !build_tool_selected
-                        && !panel_button
-                        && self.try_attack_at(x, y);
+                    let action_sent = dismisses_radial
+                        || (!self.ui.tutorial_camera_only
+                            && !build_tool_selected
+                            && !panel_button
+                            && self.try_attack_at(x, y));
                     self.input.map_pointer_start = Some(MapPointerStart {
                         started_at: web_time::Instant::now(),
                         x,
@@ -376,7 +387,7 @@ impl SowApp {
                         x,
                         y,
                         is_touch,
-                        action_sent: false,
+                        action_sent: dismisses_radial,
                     });
                 }
                 if build_tool_selected && (!is_touch || self.input.active_touches.len() == 1) {
@@ -737,13 +748,13 @@ mod tests {
         app.input.hover_pointer = HoverPointer::None;
         app.input.last_mouse_x = 120.0;
         app.input.last_mouse_y = 120.0;
-        let bunker_center_site = {
+        let tower_center_site = {
             let engine = app.sim.engine.as_mut().unwrap();
             engine.refresh_building_grid();
             sow_core::building::nearest_structure_site(
                 &engine.state.map,
                 1,
-                sow_core::game::BuildingKind::Bunker,
+                sow_core::game::BuildingKind::Tower,
                 camera_center.0,
                 camera_center.1,
                 radius,
@@ -754,7 +765,7 @@ mod tests {
         app.handle_key_event(true, PhysicalKey::Code(KeyCode::Digit4));
         assert_eq!(
             app.ui.app.hud_state.building_placement.unwrap().tile_idx,
-            bunker_center_site,
+            tower_center_site,
             "a hotkey without a current map pointer preserves the old camera-center behavior"
         );
 

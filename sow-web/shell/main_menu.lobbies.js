@@ -589,7 +589,13 @@
         var modeLabel = lobby ? (lobby.game_mode === "Teams" ? SOW_t("lobbies.teams_red_blue") : gameModeLabel(lobby.game_mode)) : SOW_t("lobbies.matchmaking");
 
         var feedback = "";
-        if (state.is_downloading_map) {
+        if (state.map_download_error) {
+            feedback = "<div class='sow-menu__queue-feedback sow-menu__queue-feedback--error'>" +
+                esc(SOW_t("lobbies.map_download_failed")) + " " +
+                "<button class='sow-menu__secondary' type='button' data-command='retry_map_download'>" +
+                    esc(SOW_t("lobbies.map_download_retry")) +
+                "</button></div>";
+        } else if (state.is_downloading_map) {
             var pct = state.map_download_progress || 0;
             feedback = "" +
                 "<div class='sow-menu__map-download-wrap'>" +

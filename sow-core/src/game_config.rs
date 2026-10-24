@@ -39,11 +39,11 @@ fn default_territory_troop_amount() -> f64 {
 }
 
 fn default_territory_troop_tiles() -> u32 {
-    24
+    16
 }
 
 fn default_territory_gold_tiles() -> u32 {
-    2_048
+    1_024
 }
 
 fn default_city_troop_income() -> f64 {
@@ -69,6 +69,18 @@ fn default_hero_city_gold_income() -> f64 {
 
 fn default_alliance_gold_income() -> f64 {
     0.25
+}
+
+fn default_alliance_troop_income() -> f64 {
+    0.1
+}
+
+fn default_trade_troop_income() -> f64 {
+    0.1
+}
+
+fn default_elimination_troop_bounty() -> f64 {
+    1_000.0
 }
 
 fn default_structure_upgrade_scale() -> f64 {
@@ -229,7 +241,7 @@ pub struct GameConfig {
     /// Gold per game second per `territory_gold_tiles` owned, before `per_tick()` scaling.
     #[serde(default = "default_territory_gold_amount")]
     pub territory_gold_amount: f64,
-    /// Tiles per territory gold interval (e.g. 128 → 1 gold/s per 128 tiles).
+    /// Tiles per territory gold interval (1024 → 1 gold/s per 1024 tiles).
     #[serde(default = "default_territory_gold_tiles")]
     pub territory_gold_tiles: u32,
     /// Troops regenerated per game second before `per_tick()` scaling.
@@ -248,7 +260,7 @@ pub struct GameConfig {
     /// Troops per second per `territory_troop_tiles` owned (smooth fractional scaling).
     #[serde(default = "default_territory_troop_amount")]
     pub territory_troop_amount: f64,
-    /// Tiles per territory troop interval (24 → 1 troop/s per 24 tiles).
+    /// Tiles per territory troop interval (16 → 1 troop/s per 16 tiles).
     #[serde(default = "default_territory_troop_tiles")]
     pub territory_troop_tiles: u32,
 
@@ -266,12 +278,12 @@ pub struct GameConfig {
     /// Gold income per game second added per weighted Farm level.
     #[serde(default = "default_farm_gold_income")]
     pub farm_gold_income: f64,
-    /// Defense range/radius of each Bunker.
-    pub bunker_range: f64,
-    /// Extra attack frontier priority per Bunker within range.
-    pub bunker_priority: f64,
-    /// Defensive troop loss multiplier per Bunker within range.
-    pub bunker_strength: f64,
+    /// Defense range/radius of each Tower.
+    pub tower_range: f64,
+    /// Extra attack frontier priority per Tower within range.
+    pub tower_priority: f64,
+    /// Defensive troop loss multiplier per Tower within range.
+    pub tower_strength: f64,
     /// Gold income per game second added per Factory level.
     pub factory_gold_income: f64,
     /// Gold income per game second added per weighted Port level.
@@ -291,10 +303,19 @@ pub struct GameConfig {
     /// Gold income per game second per active alliance, paid to Sālote Tupou III only.
     #[serde(default = "default_alliance_gold_income")]
     pub alliance_gold_income: f64,
+    /// Troop income per game second per active alliance, paid to Nzinga only.
+    #[serde(default = "default_alliance_troop_income")]
+    pub alliance_troop_income: f64,
+    /// Troop income per game second per Trade Ship, paid only to the hero whose ability pays for it.
+    #[serde(default = "default_trade_troop_income")]
+    pub trade_troop_income: f64,
+    /// Troops a conqueror gets for eliminating a player, paid only to the hero whose ability pays for it.
+    #[serde(default = "default_elimination_troop_bounty")]
+    pub elimination_troop_bounty: f64,
     /// Gold cost to place a City.
     pub cost_city: f64,
-    /// Gold cost to place a Bunker.
-    pub cost_bunker: f64,
+    /// Gold cost to place a Tower.
+    pub cost_tower: f64,
     /// Gold cost to place a Factory.
     pub cost_factory: f64,
     /// Gold cost to place a Port.
@@ -387,7 +408,7 @@ impl Default for GameConfig {
 
             // Core Simulation Pacing
             tick_rate_ms: 100.0, // Server clock ticks every 100ms (10 ticks per second)
-            global_speed_multiplier: 0.175,
+            global_speed_multiplier: 0.125,
 
             // Combat & Expansion Mechanics
             attack_cost_enemy: 2.0,
@@ -419,18 +440,21 @@ impl Default for GameConfig {
             city_troop_income: 6.25,
             farm_troop_income: default_farm_troop_income(),
             farm_gold_income: default_farm_gold_income(),
-            bunker_range: 14.0,
-            bunker_priority: 120.0,
-            bunker_strength: 0.05,
-            // 12 gold/minute at the standard 0.175x game speed.
+            tower_range: 6.0,
+            tower_priority: 120.0,
+            tower_strength: 0.05,
+            // About 15 gold/minute at the standard 0.22x game speed.
             factory_gold_income: 8.0 / 7.0,
             port_gold_income: default_port_gold_income(),
             hero_city_gold_income: default_hero_city_gold_income(),
             hero_factory_troop_income: default_city_troop_income(),
             hero_port_troop_income: default_city_troop_income(),
             alliance_gold_income: default_alliance_gold_income(),
+            alliance_troop_income: default_alliance_troop_income(),
+            trade_troop_income: default_trade_troop_income(),
+            elimination_troop_bounty: default_elimination_troop_bounty(),
             cost_city: 200.0,
-            cost_bunker: 100.0,
+            cost_tower: 100.0,
             cost_factory: 175.0,
             cost_port: 200.0,
             cost_farm: 125.0,

@@ -1,5 +1,8 @@
 // Hero selection, filtering, dropdowns, and preview updates.
 
+    var heroesRotationCountdownInterval = null;
+    var HEROES_ROTATION_COUNTDOWN_SECS = 4 * 24 * 60 * 60;
+
     function isWeeklyFreeRotation(leader) {
         return !!leader && leader.available === true && leader.free_rotation === true && leader.owned === false;
     }
@@ -7,8 +10,57 @@
     function heroesStatusLabel(leader) {
         if (!leader || leader.id === "Boudica") return "";
         if (leader.permanently_free) return SOW_t("heroes.always_free");
-        if (isWeeklyFreeRotation(leader)) return SOW_t("heroes.weekly_free_rotation");
         return "";
+    }
+
+    function rotationCountdownText(leader, rotationEndsAt, nowSeconds) {
+        if (!isWeeklyFreeRotation(leader)) return "";
+        var remaining = Number(rotationEndsAt) - Number(nowSeconds);
+        if (!Number.isFinite(remaining) || remaining <= 0 || remaining > HEROES_ROTATION_COUNTDOWN_SECS) return "";
+        var total = Math.ceil(remaining);
+        var days = Math.floor(total / 86400);
+        var hours = Math.floor(total / 3600) % 24;
+        var minutes = Math.floor(total / 60) % 60;
+        var seconds = total % 60;
+        return SOW_t("heroes.rotation_available_for", {
+            days: days,
+            hours: String(hours).padStart(2, "0"),
+            minutes: String(minutes).padStart(2, "0"),
+            seconds: String(seconds).padStart(2, "0")
+        });
+    }
+
+    function updateHeroesRotationCountdown() {
+        var countdown = root.querySelector("[data-hero-rotation-countdown]");
+        if (!countdown) return;
+        var randomSelected = tempSelectedRandom || (!tempSelectedLeader && state && state.prefer_random_leader);
+        var activeLeader = randomSelected ? null : leaderById(tempSelectedLeader || (state && state.selected_leader) || "Caesar");
+        var endsAt = state && state.store && state.store.rotation_ends_at;
+        var value = state && state.phase === "MainMenu"
+            ? rotationCountdownText(activeLeader, endsAt, Date.now() / 1000)
+            : "";
+        countdown.textContent = value;
+        countdown.hidden = !value;
+        var status = root.querySelector("[data-hero-status]");
+        var statusLabel = status && status.querySelector("[data-hero-status-label]");
+        if (statusLabel) statusLabel.hidden = !!value;
+        if (status) status.hidden = !value && (!statusLabel || !statusLabel.textContent.trim());
+    }
+
+    function syncHeroesRotationCountdown() {
+        var shouldRun = !!state && state.phase === "MainMenu" && !root.hidden &&
+            currentScreen() === "heroes" && document.visibilityState === "visible";
+        if (!shouldRun) {
+            if (heroesRotationCountdownInterval !== null) {
+                window.clearInterval(heroesRotationCountdownInterval);
+                heroesRotationCountdownInterval = null;
+            }
+            return;
+        }
+        if (heroesRotationCountdownInterval === null) {
+            heroesRotationCountdownInterval = window.setInterval(updateHeroesRotationCountdown, 1000);
+        }
+        updateHeroesRotationCountdown();
     }
 
     // OWNER DECISION — DO NOT "FIX" THIS MAPPING.
@@ -160,9 +212,12 @@
         if (briefing) briefing.innerHTML = renderHeroBriefing(randomSelected ? "random" : activeLeader, "selection", "sow-heroes-selected");
         if (status) {
             var statusLabel = randomSelected ? "" : heroesStatusLabel(activeLeader);
-            status.textContent = statusLabel;
+            var statusLabelNode = status.querySelector("[data-hero-status-label]");
+            if (statusLabelNode) statusLabelNode.textContent = statusLabel;
+            else status.textContent = statusLabel;
             status.hidden = !statusLabel;
         }
+        updateHeroesRotationCountdown();
         var purchase = featured.querySelector("[data-hero-purchase]");
         if (purchase) purchase.innerHTML = randomSelected ? "" : renderLeaderPurchase(activeLeader);
         if (confirm) {
@@ -332,7 +387,7 @@
         var statusLabel = activeRandom ? "" : heroesStatusLabel(activeLeader);
         return "<main class='sow-menu__main sow-menu__main--heroes' data-screen-panel='heroes'><section class='sow-menu__heroes-slot' aria-label='" + esc(SOW_t("menu.heroes")) + "'>" +
                     "<div class='sow-heroes__workspace'>" +
-                        "<section class='sow-heroes__featured" + (locked ? " is-locked" : "") + "' aria-labelledby='sow-heroes-selected'><button class='sow-menu__icon-button sow-heroes__info' type='button' data-command='open_hero_info' aria-label='" + esc(displayName) + "'" + (activeRandom ? " hidden" : "") + ">i</button><picture><source media='(max-width: 680px), (orientation: portrait)' srcset='" + esc(featuredArt.band) + "'><img src='" + esc(featuredArt.column) + "' alt='" + esc(displayName) + "' width='1080' height='1920' fetchpriority='high'></picture><div class='sow-heroes__featured-copy'><p class='sow-heroes__rotation' data-hero-status" + (!statusLabel ? " hidden" : "") + ">" + esc(statusLabel) + "</p><div data-hero-briefing>" + renderHeroBriefing(activeRandom ? "random" : activeLeader, "selection", "sow-heroes-selected") + "</div><div class='sow-heroes__actions'><div data-hero-purchase>" + (activeRandom ? "" : renderLeaderPurchase(activeLeader)) + "</div><button class='sow-menu__primary sow-heroes__confirm' type='button' data-command='" + (activeRandom ? "confirm_random_leader" : "confirm_leader") + "' data-leader-id='" + (activeRandom ? "" : esc(activeLeader.id)) + "'" + (locked ? " disabled aria-disabled='true'" : "") + ">" + esc(SOW_t(activeRandom ? "heroes.confirm_random_leader" : "heroes.confirm_leader", { name: "" })) + " <span>✓</span></button></div></div></section>" +
+                        "<section class='sow-heroes__featured" + (locked ? " is-locked" : "") + "' aria-labelledby='sow-heroes-selected'><button class='sow-menu__icon-button sow-heroes__info' type='button' data-command='open_hero_info' aria-label='" + esc(displayName) + "'" + (activeRandom ? " hidden" : "") + ">i</button><picture><source media='(max-width: 680px), (orientation: portrait)' srcset='" + esc(featuredArt.band) + "'><img src='" + esc(featuredArt.column) + "' alt='" + esc(displayName) + "' width='1080' height='1920' fetchpriority='high'></picture><div class='sow-heroes__featured-copy'><p class='sow-heroes__rotation' data-hero-status" + (!statusLabel ? " hidden" : "") + "><span data-hero-status-label>" + esc(statusLabel) + "</span><span class='sow-heroes__rotation-countdown' data-hero-rotation-countdown hidden></span></p><div data-hero-briefing>" + renderHeroBriefing(activeRandom ? "random" : activeLeader, "selection", "sow-heroes-selected") + "</div><div class='sow-heroes__actions'><div data-hero-purchase>" + (activeRandom ? "" : renderLeaderPurchase(activeLeader)) + "</div><button class='sow-menu__primary sow-heroes__confirm' type='button' data-command='" + (activeRandom ? "confirm_random_leader" : "confirm_leader") + "' data-leader-id='" + (activeRandom ? "" : esc(activeLeader.id)) + "'" + (locked ? " disabled aria-disabled='true'" : "") + ">" + esc(SOW_t(activeRandom ? "heroes.confirm_random_leader" : "heroes.confirm_leader", { name: "" })) + " <span>✓</span></button></div></div></section>" +
                         "<section class='sow-heroes__roster' aria-label='" + esc(SOW_t("heroes.leader_list")) + "'><div class='sow-heroes__section-head'><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>" + esc(SOW_t("heroes.search_leaders")) + "</span><input data-role='heroes-search' type='search' placeholder='" + esc(SOW_t("heroes.search_leader_civilization")) + "' value=\"" + esc(heroesSearchQuery) + "\" autocomplete='off' spellcheck='false'></label>" + renderHeroesRegionDropdown() + "</div></div><div class='sow-heroes__grid' data-heroes-roster aria-live='polite'>" + renderHeroesRoster(activeId, activeRandom) + "</div></section>" +
                     "</div>" +
         "</section></main>";

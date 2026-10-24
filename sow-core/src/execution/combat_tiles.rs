@@ -4,6 +4,7 @@ use crate::engine::SowEngine;
 use crate::execution::{PrioritizedTile, RETREAT_PENALTY_VS_PLAYER};
 use crate::game::{GameEvent, GamePhase, GameState};
 use crate::game_config::max_tiles_cap_for_troops;
+use crate::geo_entities::{Ability, LossWhen, Side, Source, Target};
 use crate::map::TerrainType;
 use crate::rng::NextIntExt;
 
@@ -43,11 +44,97 @@ pub(crate) fn outnumbered_bonus_applies(
     };
     matches!(
         p.leader.ability(),
-        crate::geo_entities::Ability::OutnumberedStrength { .. }
+        Ability::AttackStrength {
+            against: Target::Outnumbering,
+            ..
+        }
     ) && target != 0
         && state
             .player(target)
             .is_some_and(|rival| rival.troops > army)
+}
+
+/// Whether `target` describes `subject` (0 = neutral land) for an action by `actor`
+/// that sends `army` troops. `actor` is the hero's player: the attacker for attack
+/// strength and conquest, and the defender whose land a retreat leaves for the
+/// retreat penalty.
+pub(crate) fn target_applies(
+    state: &GameState,
+    actor: u16,
+    subject: u16,
+    army: f64,
+    target: Target,
+) -> bool {
+    use crate::player::{Player, PlayerType};
+    let owner = state.player(subject);
+    let compared = |pick: fn(&Player) -> f64, more: bool| match (owner, state.player(actor)) {
+        (Some(theirs), Some(mine)) if subject != 0 => {
+            if more {
+                pick(theirs) > pick(mine)
+            } else {
+                pick(theirs) < pick(mine)
+            }
+        }
+        _ => false,
+    };
+    match target {
+        Target::Anyone => true,
+        Target::Neutral => subject == 0,
+        Target::OtherPlayer => subject != 0,
+        Target::Human => owner.is_some_and(|t| t.player_type == PlayerType::Human),
+        Target::Tribe => owner.is_some_and(|t| t.player_type == PlayerType::Bot),
+        Target::Nation => owner.is_some_and(|t| t.player_type == PlayerType::Nation),
+        Target::ActiveTraitor => owner.is_some_and(|t| is_traitor_active(t, state.tick as u32)),
+        Target::Outnumbering => {
+            subject != 0 && owner.is_some_and(|rival| rival.troops > army)
+        }
+        Target::Outnumbered => {
+            subject != 0 && owner.is_some_and(|rival| rival.troops < army)
+        }
+        Target::Larger => compared(|p| f64::from(p.tile_count), true),
+        Target::Smaller => compared(|p| f64::from(p.tile_count), false),
+        Target::Richer => compared(|p| p.gold, true),
+        Target::Poorer => compared(|p| p.gold, false),
+    }
+}
+
+/// The product of `multiplier` over the targets that describe `subject`. A hero has
+/// one targeted ability, so only that ability's target changes the product.
+pub(crate) fn targeted_multiplier(
+    state: &GameState,
+    actor: u16,
+    subject: u16,
+    army: f64,
+    multiplier: impl Fn(Target) -> f64,
+) -> f64 {
+    Target::ALL
+        .into_iter()
+        .filter(|&target| target_applies(state, actor, subject, army, target))
+        .map(multiplier)
+        .product()
+}
+
+/// Shows an attack's hero ability when it applies to this attack's target. Called
+/// once when the attack launches, so the banner marks the attack, not each tile.
+pub(crate) fn announce_attack_abilities(
+    state: &mut GameState,
+    attacker: u16,
+    target: u16,
+    army: f64,
+    tile: Option<(u32, u32)>,
+) {
+    let Some(ability) = state.player(attacker).map(|p| p.leader.ability()) else {
+        return;
+    };
+    let applies = match ability {
+        Ability::AttackStrength { against, .. } | Ability::ConquestSpeed { against, .. } => {
+            target_applies(state, attacker, target, army, against)
+        }
+        _ => false,
+    };
+    if applies {
+        state.announce_leader_ability(attacker, tile);
+    }
 }
 
 /// How much each of `attacker`'s troops counts against `target` (0 = neutral land)
@@ -56,32 +143,34 @@ pub(crate) fn attack_strength(state: &GameState, attacker: u16, target: u16, arm
     let Some(p) = state.player(attacker) else {
         return 1.0;
     };
-    let rival_bonus = if target == 0 {
-        1.0
-    } else {
-        p.leader.enemy_troop_strength_multiplier()
-    };
-    // Hero traitor ability: against a traitor, each attacking troop counts double.
-    let traitor_bonus = state
-        .player(target)
-        .filter(|t| is_traitor_active(t, state.tick as u32))
-        .map_or(1.0, |_| p.leader.damage_to_traitors_multiplier());
-    let outnumbered_bonus = if outnumbered_bonus_applies(state, attacker, target, army) {
-        p.leader.outnumbered_strength_multiplier()
-    } else {
-        1.0
-    };
-    p.leader.troop_strength_multiplier() * rival_bonus * traitor_bonus * outnumbered_bonus
+    targeted_multiplier(state, attacker, target, army, |t| {
+        p.leader.attack_strength_multiplier(t)
+    })
 }
 
 /// Hero mountain ability: mountain tiles cost the attacker fewer troops.
-fn attacker_loss_multiplier(state: &GameState, attacker: u16, terrain: TerrainType) -> f64 {
-    if terrain != TerrainType::Mountain {
-        return 1.0;
-    }
+fn terrain_attacker_loss(state: &GameState, attacker: u16, terrain: TerrainType) -> f64 {
+    let when = match terrain {
+        TerrainType::Mountain => LossWhen::Mountain,
+        TerrainType::Highland => LossWhen::Highland,
+        _ => return 1.0,
+    };
     state
         .player(attacker)
-        .map_or(1.0, |p| p.leader.mountain_loss_multiplier())
+        .map_or(1.0, |p| p.leader.attacker_loss_multiplier(when))
+}
+
+/// How long (30 s at the standard speed) a recapture discount lasts after a city is taken.
+const RECAPTURE_WINDOW_TICKS: u32 = 300;
+
+/// Hero recapture ability: while the window opened by losing a city to `target` is
+/// open, `attacker`'s attacks on `target` cost less. The window lives on the player who
+/// lost the city, so only that player's leader can ever have a discount.
+fn recapture_multiplier(state: &GameState, attacker: u16, target: u16) -> f64 {
+    state
+        .player(attacker)
+        .filter(|p| p.recapture_ticks > 0 && p.recapture_target == target)
+        .map_or(1.0, |p| p.leader.attacker_loss_multiplier(LossWhen::RecaptureWindow))
 }
 
 /// Hero city abilities: a city tile costs more to take from a defender with `CityDefense`
@@ -97,10 +186,10 @@ fn city_capture_multiplier(
 ) -> f64 {
     let defense = state
         .player(defender)
-        .map_or(1.0, |p| p.leader.city_defense_multiplier());
+        .map_or(1.0, |p| p.leader.city_capture_multiplier(Side::Defender));
     let assault = state
         .player(attacker)
-        .map_or(1.0, |p| p.leader.city_assault_multiplier());
+        .map_or(1.0, |p| p.leader.city_capture_multiplier(Side::Attacker));
     let ratio = defense / assault;
     if ratio == 1.0 || !buildings.city_covers_tile(tile_x, tile_y) {
         return 1.0;
@@ -148,7 +237,29 @@ impl SowEngine {
                     let factor = if execution.target_owner == 0 {
                         1.0
                     } else {
-                        1.0 - RETREAT_PENALTY_VS_PLAYER
+                        // The defender's leader can make retreating from its land costlier;
+                        // the retreating leader's `Retreat` ability softens that loss.
+                        let penalty = self.state.player(execution.target_owner).map_or(1.0, |p| {
+                            targeted_multiplier(
+                                &self.state,
+                                execution.target_owner,
+                                execution.owner_id,
+                                execution.troops,
+                                |t| p.leader.enemy_retreat_penalty_multiplier(t),
+                            )
+                        });
+                        let softening = self
+                            .state
+                            .player(execution.owner_id)
+                            .map_or(1.0, |p| p.leader.attacker_loss_multiplier(LossWhen::Retreat));
+                        if penalty != 1.0 {
+                            self.state
+                                .announce_leader_ability(execution.target_owner, None);
+                        }
+                        if softening != 1.0 {
+                            self.state.announce_leader_ability(execution.owner_id, None);
+                        }
+                        1.0 - RETREAT_PENALTY_VS_PLAYER * penalty * softening
                     };
                     let back = refund * factor;
                     if let Some(player) = self.state.player_mut(execution.owner_id) {
@@ -207,14 +318,13 @@ impl SowEngine {
             // Hero expansion-speed abilities, after the cap so long fronts keep them.
             // Tribes are the bot players (not nations or humans).
             if let Some(player) = self.state.player(execution.owner_id) {
-                budget *= player.leader.expansion_speed_multiplier();
-                if self
-                    .state
-                    .player(execution.target_owner)
-                    .is_some_and(|t| t.player_type == crate::player::PlayerType::Bot)
-                {
-                    budget *= player.leader.tribe_speed_multiplier();
-                }
+                budget *= targeted_multiplier(
+                    &self.state,
+                    execution.owner_id,
+                    execution.target_owner,
+                    execution.troops,
+                    |t| player.leader.conquest_speed_multiplier(t),
+                );
             }
 
             let mut stale_pops = 0u32;
@@ -273,7 +383,7 @@ impl SowEngine {
                         continue; // Skip, edge was severed
                     }
 
-                    // Determine conquest cost for this specific tile (matching OpenFront's terrain & Bunker coefficients)
+                    // Determine conquest cost for this specific tile (matching OpenFront's terrain & Tower coefficients)
                     let base_speed = terrain_capture_speed(terrain_type);
 
                     let defense = self.defense_grid.influence(
@@ -301,14 +411,24 @@ impl SowEngine {
                         let ratio_clamp = ratio.clamp(0.2, 1.5);
                         ratio_clamp * base_speed * defense.capture_multiplier
                     };
-                    let tile_cost = tile_cost
-                        * city_capture_multiplier(
-                            &self.state,
-                            &self.building_grid,
-                            (target_tile.x, target_tile.y),
-                            execution.owner_id,
-                            execution.target_owner,
-                        );
+                    let city_multiplier = city_capture_multiplier(
+                        &self.state,
+                        &self.building_grid,
+                        (target_tile.x, target_tile.y),
+                        execution.owner_id,
+                        execution.target_owner,
+                    );
+                    if city_multiplier != 1.0 {
+                        // The side whose city ability decided the cost is the one shown.
+                        let shown = if city_multiplier > 1.0 {
+                            execution.target_owner
+                        } else {
+                            execution.owner_id
+                        };
+                        self.state
+                            .announce_leader_ability(shown, Some((target_tile.x, target_tile.y)));
+                    }
+                    let tile_cost = tile_cost * city_multiplier;
 
                     // Check if we can afford this tile on this tick using expectation-invariant deterministic RNG
                     if budget < tile_cost {
@@ -325,9 +445,16 @@ impl SowEngine {
                         budget -= tile_cost;
                     }
 
+                    let terrain_loss =
+                        terrain_attacker_loss(&self.state, execution.owner_id, terrain_type);
+                    if terrain_loss != 1.0 {
+                        self.state.announce_leader_ability(
+                            execution.owner_id,
+                            Some((target_tile.x, target_tile.y)),
+                        );
+                    }
                     let terrain_multiplier =
-                        terrain_loss_multiplier(terrain_type, &self.state.config)
-                            * attacker_loss_multiplier(&self.state, execution.owner_id, terrain_type);
+                        terrain_loss_multiplier(terrain_type, &self.state.config) * terrain_loss;
 
                     if execution.target_owner == 0 {
                         // Neutral: attacker pays constant base cost scaled by terrain multiplier
@@ -337,11 +464,13 @@ impl SowEngine {
                     } else {
                         // PvP: Combat resolution
                         let mut def_loss = 0.0;
-                        // Hero bunker-defense ability scales the bunkers' extra losses.
-                        let bunker_defense = self
+                        // Hero tower-defense ability scales the towers' extra losses.
+                        let tower_defense = self
                             .state
                             .player(execution.target_owner)
-                            .map_or(1.0, |player| player.leader.bunker_defense_multiplier());
+                            .map_or(1.0, |player| {
+                                player.leader.tower_loss_multiplier(Side::Defender)
+                            });
                         if let Some(target_player) = self.state.player(execution.target_owner)
                             && target_player.tile_count > 0
                         {
@@ -353,12 +482,38 @@ impl SowEngine {
                                 target_player.troops.max(0.0) / target_player.tile_count as f64;
                         }
 
-                        // Defense posts increase attacker losses slightly
+                        // Defense posts increase attacker losses slightly. The defender's
+                        // tower ability raises that extra, the attacker's tower siege lowers it.
+                        let tower_siege = self
+                            .state
+                            .player(execution.owner_id)
+                            .map_or(1.0, |player| {
+                                player.leader.tower_loss_multiplier(Side::Attacker)
+                            });
+                        let tower_extra =
+                            (defense.attacker_loss_multiplier - 1.0) * tower_defense * tower_siege;
+                        let tile = Some((target_tile.x, target_tile.y));
+                        if defense.attacker_loss_multiplier > 1.0 {
+                            if tower_defense != 1.0 {
+                                self.state
+                                    .announce_leader_ability(execution.target_owner, tile);
+                            }
+                            if tower_siege != 1.0 {
+                                self.state.announce_leader_ability(execution.owner_id, tile);
+                            }
+                        }
+                        let recapture = recapture_multiplier(
+                            &self.state,
+                            execution.owner_id,
+                            execution.target_owner,
+                        );
+                        if recapture != 1.0 {
+                            self.state.announce_leader_ability(execution.owner_id, tile);
+                        }
                         let atk_loss = (self.state.config.attack_cost_enemy
                             * terrain_multiplier
-                            * (defense.attacker_loss_multiplier
-                                + (defense.attacker_loss_multiplier - 1.0)
-                                    * (bunker_defense - 1.0)))
+                            * (1.0 + tower_extra)
+                            * recapture)
                             / troop_strength;
 
                         execution.troops -= atk_loss;
@@ -453,6 +608,26 @@ impl SowEngine {
                             .map(|(victim, x, y)| (victim, execution.owner_id, x, y)),
                     );
 
+                    if self.state.player(execution.owner_id).is_some_and(|player| {
+                        player.leader.has_resource_bonus_from(Source::Territory)
+                    }) {
+                        self.state.announce_leader_ability(
+                            execution.owner_id,
+                            Some((target_tile.x, target_tile.y)),
+                        );
+                    }
+
+                    // A player whose leader can recapture opens its counterattack window when it loses a city.
+                    if self.building_grid.city_covers_tile(target_tile.x, target_tile.y)
+                        && let Some(victim) = self.state.player_mut(execution.target_owner)
+                        && victim
+                            .leader
+                            .has_attacker_loss(LossWhen::RecaptureWindow)
+                    {
+                        victim.recapture_target = execution.owner_id;
+                        victim.recapture_ticks = RECAPTURE_WINDOW_TICKS;
+                    }
+
                     // Send event
                     self.state.events.push(GameEvent::TileCaptured {
                         x: target_tile.x,
@@ -494,6 +669,7 @@ impl SowEngine {
 #[cfg(test)]
 mod tests {
     use super::{terrain_capture_speed, terrain_loss_multiplier};
+    use crate::geo_entities::Target;
     use crate::building::Building;
     use crate::execution::{AttackExecution, PrioritizedTile};
     use crate::game::{BuildingKind, GamePhase, GameState};
@@ -549,7 +725,7 @@ mod tests {
             id: 1,
             owner_id: 2,
             tile_idx: 3 * width + 4,
-            kind: BuildingKind::Bunker,
+            kind: BuildingKind::Tower,
             level: 2,
             under_construction: false,
             ticks_until_complete: 0,
@@ -574,7 +750,7 @@ mod tests {
             .player(1)
             .unwrap()
             .leader
-            .expansion_speed_multiplier();
+            .conquest_speed_multiplier(Target::Anyone);
         engine.state.config.global_speed_multiplier = (tile_cost / base_budget) * (1.0 - 1e-8);
         let troops = 10_000.0;
         let speed = engine
@@ -582,7 +758,7 @@ mod tests {
             .player(1)
             .unwrap()
             .leader
-            .troop_strength_multiplier();
+            .attack_strength_multiplier(Target::Anyone);
         let max_cap = max_tiles_cap_for_troops(troops * speed, &engine.state.config);
         assert!(
             max_cap * engine.state.config.global_speed_multiplier > tile_cost,

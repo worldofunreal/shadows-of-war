@@ -171,7 +171,7 @@ impl SowEngine {
         let mut defense_posts = Vec::new();
         if self.render_defense_dirty {
             for b in &self.buildings {
-                if b.kind == crate::game::BuildingKind::Bunker && !b.under_construction {
+                if b.kind == crate::game::BuildingKind::Tower && !b.under_construction {
                     defense_posts.push(b.tile_idx);
                 }
             }

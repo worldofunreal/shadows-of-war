@@ -90,6 +90,8 @@ pub struct GemBundle {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct StoreCatalog {
     pub rotation_period: u64,
+    #[serde(default)]
+    pub rotation_ends_at: u64,
     pub free_leaders: Vec<String>,
     pub leaders: Vec<LeaderOffer>,
     pub skins: Vec<SkinOffer>,
@@ -117,6 +119,13 @@ pub fn current_rotation_period() -> u64 {
 
 pub const fn rotation_period(unix_seconds: u64) -> u64 {
     unix_seconds.saturating_add(ROTATION_RESET_OFFSET_SECS) / ROTATION_PERIOD_SECS
+}
+
+pub const fn rotation_ends_at(period: u64) -> u64 {
+    period
+        .saturating_add(1)
+        .saturating_mul(ROTATION_PERIOD_SECS)
+        .saturating_sub(ROTATION_RESET_OFFSET_SECS)
 }
 
 pub fn rotation_for_period(period: u64) -> Vec<Leader> {
@@ -324,6 +333,7 @@ pub fn catalog_for_profile(
         .collect();
     StoreCatalog {
         rotation_period: period,
+        rotation_ends_at: rotation_ends_at(period),
         free_leaders: free
             .into_iter()
             .map(|leader| leader_id(leader).to_string())
@@ -364,6 +374,8 @@ mod tests {
         assert_eq!(rotation_period(first_reset), 1);
         assert_eq!(rotation_period(first_reset + ROTATION_PERIOD_SECS - 1), 1);
         assert_eq!(rotation_period(first_reset + ROTATION_PERIOD_SECS), 2);
+        assert_eq!(rotation_ends_at(0), first_reset);
+        assert_eq!(rotation_ends_at(1), first_reset + ROTATION_PERIOD_SECS);
     }
 
     #[test]
