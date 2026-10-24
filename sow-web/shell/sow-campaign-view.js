@@ -673,7 +673,7 @@
             const cameraCueLabel = cameraCue
                 ? gestureType === "zoom_in" ? t("hud.zoom_in")
                     : gestureType === "zoom_out" ? t("hud.zoom_out")
-                        : gestureType === "hover" ? "Hover" : "Move"
+                        : "Move"
                 : "";
             const cameraCueHint = cameraCue && zoomGuide
                 ? context.zoomMode === "wheel" ? "Mouse wheel"

@@ -527,9 +527,23 @@ test("Boudica spoken cards and contact responses require named existing portrait
     const titleStep = titleWithoutKey.steps.find(step => step.id === definition.entry);
     titleStep.show_title = true; delete titleStep.title_key;
     assert.ok(report(titleWithoutKey).errors.some(issue => issue.step === definition.entry && issue.field === "show_title"));
-    const badEmoteText = structuredClone(definition);
-    badEmoteText.emote_texts = { threat: "not_a_tutorial_key" };
-    assert.ok(report(badEmoteText).errors.some(issue => issue.field === "emote_texts"));
+    const episodeEmoteMap = structuredClone(definition);
+    episodeEmoteMap.emote_texts = { threat: "tutorial.campaign_boudica_boudica_council_strike" };
+    assert.ok(report(episodeEmoteMap).errors.some(issue => issue.field === "campaign" && issue.message.includes("emote_texts")), "bubble lines live on their step, not in an episode map");
+    const emoteWithoutLine = structuredClone(definition);
+    delete emoteWithoutLine.steps.find(step => step.id === definition.entry).emote_text_key;
+    assert.ok(report(emoteWithoutLine).errors.some(issue => issue.step === definition.entry && issue.field === "emote_text_key"));
+    const lineWithoutEmote = structuredClone(definition);
+    const releaseStep = lineWithoutEmote.steps.find(step => step.emote === "clear");
+    releaseStep.emote_text_key = "tutorial.campaign_boudica_boudica_council_strike";
+    assert.ok(report(lineWithoutEmote).errors.some(issue => issue.step === releaseStep.id && issue.field === "emote_text_key"));
+    const anonymousEmote = structuredClone(definition);
+    delete anonymousEmote.reactions.find(reaction => reaction.id === "contact_stonea").speaker;
+    assert.ok(report(anonymousEmote).errors.some(issue => issue.field === "reactions.speaker"), "a response names who emotes");
+    const emoteAsDialogue = structuredClone(definition);
+    const dialogueStep = emoteAsDialogue.steps.find(step => step.type === "scene" && step.body_key);
+    dialogueStep.body_key = "tutorial.campaign_boudica_boudica_stand_with_you_emote";
+    assert.ok(report(emoteAsDialogue).errors.some(issue => issue.step === dialogueStep.id && issue.field === "body_key"), "an emote line cannot also be a dialogue line");
     const badEmoteKind = structuredClone(definition);
     badEmoteKind.steps.find(step => step.id === definition.entry).emote = "furious";
     assert.ok(report(badEmoteKind).errors.some(issue => issue.step === definition.entry && issue.field === "emote"));
@@ -784,7 +798,7 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     const cameraHover = { ...cameraZoomOut, id: "boudica_camera_hover", guide: { ...cameraZoomOut.guide, gesture: "hover" } };
     root.clientWidth = 390; root.clientHeight = 844;
     renderer.render({ ...cameraZoomModel, step: cameraHover, line: cameraHover }, { anchor: { x: 190, y: 400 }, zoomMode: "pinch" });
-    assert.equal(root.querySelector(".sow-story__gesture-copy").textContent, "Hover");
+    assert.equal(root.querySelector(".sow-story__gesture-copy").textContent, "Move");
     assert.equal(root.querySelector(".sow-story__gesture-hint").textContent, "Hold");
     assert.equal(root.querySelector(".sow-story__gesture-metric").hidden, true);
 

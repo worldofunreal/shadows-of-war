@@ -488,7 +488,7 @@
             runtime.definition = data.definition;
             runtime.machine = window.SOWCampaign.create(data.definition, undefined, data.roster, undefined, { onStepComplete: applyStepEmote });
             runtime.active = true;
-            window.SOW_emote_text_overrides = data.definition.emote_texts || {};
+            window.SOW_emote_text_overrides = {};
             runtime.lastUnlockCommand = null;
             runtime.uiCounts = Object.create(null);
             runtime.uiPaused = null;
@@ -1136,11 +1136,16 @@
 
     window.SOW_menu_guide = { update: updateMenuGuide, pause: pauseMenuGuide };
 
-    // Each step's emote directive runs when that step completes: a named emote is shown
-    // (pinned when emote_pinned), and "clear" releases the current one.
+    // Each step's or response's emote runs when it completes: a named emote is shown over the speaker
+    // (the player, or the faction the speaker plays) with its own line (pinned when emote_pinned),
+    // and "clear" releases the current one.
     function applyStepEmote(step) {
         if (!step.emote) return;
-        send("tutorial_emote", { kind: step.emote === "clear" ? null : step.emote, pinned: step.emote_pinned === true });
+        var kind = step.emote === "clear" ? null : step.emote;
+        var speaker = runtime.definition && runtime.definition.speakers && runtime.definition.speakers[step.speaker];
+        var factionId = speaker && speaker.faction;
+        if (kind) window.SOW_emote_text_overrides[kind] = step.emote_text_key;
+        send("tutorial_emote", { kind: kind, pinned: step.emote_pinned === true, ...(factionId ? { faction_id: factionId } : {}) });
     }
 
     function continueScene() {

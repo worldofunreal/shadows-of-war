@@ -99,6 +99,22 @@ impl ActiveEmote {
     }
 }
 
+/// Starts `kind` over `player`, replacing any current emote; `None` clears it.
+pub fn express(player: &mut crate::player::Player, kind: Option<EmoteKind>, pinned: bool, tick: u64) {
+    player.active_emote = match kind {
+        Some(kind) => {
+            player.emote_event_id = player.emote_event_id.wrapping_add(1);
+            Some(ActiveEmote {
+                kind,
+                pinned,
+                started_tick: tick,
+                event_id: player.emote_event_id,
+            })
+        }
+        None => None,
+    };
+}
+
 pub fn can_express(player: &crate::player::Player, phase: &crate::game::GamePhase) -> bool {
     matches!(phase, crate::game::GamePhase::Playing)
         && player.player_type == crate::player::PlayerType::Human

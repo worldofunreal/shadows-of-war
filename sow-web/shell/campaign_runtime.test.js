@@ -123,7 +123,7 @@ test("Boudica reveal beats share a fixed 1.1-second wait while tribal contact st
     const waitSteps = definition.steps.filter(step => step.wait_before === true).map(step => step.id);
     assert.equal(campaign.WAIT_MS, 1100);
     assert.deepEqual(waitSteps, [
-        "boudica_city_intro", "boudica_aid_choice", "boudica_ninth_strike"
+        "boudica_found_suetonius", "boudica_city_intro", "boudica_aid_choice", "boudica_ninth_strike"
     ]);
     const next = id => definition.steps.find(step => step.id === id).next;
     assert.equal(next("boudica_share_sent"), "boudica_camulodunum");
@@ -961,6 +961,14 @@ test("Snettisham refuse goes straight to its reply while accept waits for the Sn
     assert.deepEqual(campaign.validate(definition, roster, { hasText: () => true }).errors, [], "the Snettisham branch is valid data");
     assert.equal(step("boudica_second_contact").next, "boudica_snettisham_accept_wait");
     assert.deepEqual(step("boudica_second_contact").routes, [{ when: { choice: "contact_snettisham", equals: "refuse" }, next: "boudica_snettisham_refuse_reply" }]);
+    const completed = [];
+    const greetingMachine = campaign.create(definition, "boudica_first_contact", roster, undefined, { onStepComplete: beat => completed.push(beat) });
+    const greeting = greetingMachine.update({ contact_faction_ids: ["stonea"] }, {});
+    assert.equal(greeting.reactionData.id, "contact_stonea");
+    assert.equal(greeting.step.show_title, true, "contact responses keep their dialogue title");
+    assert.equal(greetingMachine.advance(null, greeting.step.id), true);
+    const stoneaEmote = completed.find(beat => beat.id === "contact_stonea");
+    assert.deepEqual([stoneaEmote.speaker, stoneaEmote.emote, stoneaEmote.emote_text_key], ["stonea", "greet", "tutorial.campaign_boudica_boudica_stand_with_you_emote"], "Stonea emotes once her greeting closes");
     assert.equal(step("boudica_snettisham_refuse_reply").show_title, true);
     assert.equal(step("boudica_snettisham_refuse_reply").speaker, "snettisham");
     assert.equal(step("boudica_snettisham_refuse_reply").title_key, "tutorial.campaign_boudica_boudica_snettisham_refuse_title");
