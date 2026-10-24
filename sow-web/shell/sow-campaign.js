@@ -5,6 +5,12 @@
     const TYPES = ["scene", "choice", "objective", "guide", "end"];
     const TEAMS = Object.freeze(["Red", "Blue"]);
     const CAMERA_SHOTS = Object.freeze(["reveal", "approach", "threat", "link"]);
+    // Emote = short bubble over the speaker's nameplate (the player, or the faction a speaker plays);
+    // the kind picks the face, emote_text_key is the line. It fires when its step or response completes.
+    // Dialogue = modal with a speaker portrait (title_key/body_key). A line is one or the other.
+    const EMOTE_KINDS = Object.freeze(["greet", "help", "threat", "celebrate"]);
+    // Dialogue fields a contact response shows; validated and rendered from this one list.
+    const REACTION_DIALOGUE_FIELDS = Object.freeze(["speaker_role_key", "title_key", "show_title", "body_key"]);
     const WAIT_MS = 1100;
     const METRICS = {
         territory: "tiles_gained", kills: "kills", attack: "attacks", troops: "troops",
@@ -475,7 +481,7 @@
             issue(null, "version", "Campaign logic must use version 2.");
             return { errors, warnings };
         }
-        knownFields(definition, ["version", "episode_id", "default_locale", "text_namespace", "faction_story_names", "require_speaker_portraits", "emote_texts", "settings", "entry", "menu_guide", "speakers", "strings", "layout", "steps", "reactions"], null, "campaign");
+        knownFields(definition, ["version", "episode_id", "default_locale", "text_namespace", "faction_story_names", "require_speaker_portraits", "settings", "entry", "menu_guide", "speakers", "strings", "layout", "steps", "reactions"], null, "campaign");
         if (!id(definition.episode_id)) issue(null, "episode_id", "Invalid episode ID.");
         if (own(definition, "require_speaker_portraits") && typeof definition.require_speaker_portraits !== "boolean") issue(null, "require_speaker_portraits", "Choose whether dialogue needs a named speaker and portrait.");
         const requireSpeakerPortraits = definition.require_speaker_portraits === true;
@@ -549,13 +555,6 @@
             if (typeof key !== "string" || !/^tutorial\.[a-zA-Z0-9_.-]+$/.test(key)) issue(step, field, "Choose a tutorial text key.");
             else if (options.hasText && !options.hasText(key)) issue(step, field, "Missing shared English text: " + key);
         }
-        if (own(definition, "emote_texts")) {
-            if (!object(definition.emote_texts)) issue(null, "emote_texts", "Emote texts must map each emote to a text key.");
-            else Object.entries(definition.emote_texts).forEach(([kind, key]) => {
-                if (!["greet", "help", "threat", "celebrate"].includes(kind)) issue(null, "emote_texts", "Choose a known emote.");
-                text(null, "emote_texts", key, true);
-            });
-        }
         const speakers = definition.speakers || {};
         if (!object(speakers)) issue(null, "speakers", "Invalid character dictionary.");
         else Object.entries(speakers).forEach(([key, speaker]) => {
@@ -619,12 +618,24 @@
             } else if (!Object.values(METRICS).concat(["tiles", "contacts", "defeated", "touch_controls"]).includes(when.fact) || !Number.isFinite(when.gte)) issue(step, "routes", "Invalid game fact condition.");
         }
         const stepFields = {
-            scene: ["id", "type", "title_key", "show_title", "body_key", "speaker", "portrait_expression", "continue_key", "emote", "emote_pinned", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_halt_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks", "camera"],
-            choice: ["id", "type", "title_key", "show_title", "body_key", "speaker", "emote", "emote_pinned", "marker", "choices", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
-            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "emote", "emote_pinned", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "camera", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
-            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "emote", "emote_pinned", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "camera", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
+            scene: ["id", "type", "title_key", "show_title", "body_key", "speaker", "portrait_expression", "continue_key", "emote", "emote_text_key", "emote_pinned", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_halt_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks", "camera"],
+            choice: ["id", "type", "title_key", "show_title", "body_key", "speaker", "emote", "emote_text_key", "emote_pinned", "marker", "choices", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
+            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "emote", "emote_text_key", "emote_pinned", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "camera", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
+            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "emote", "emote_text_key", "emote_pinned", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "camera", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
             end: ["id", "type", "title_key", "show_title", "body_key", "speaker", "presentation", "attack_ratio_on_enter", "pause_game", "unlocks"]
         };
+        const emoteLines = new Set(steps.concat(Array.isArray(definition.reactions) ? definition.reactions : []).filter(object).map(value => value.emote_text_key).filter(Boolean));
+        function notEmoteLine(step, field, key) {
+            if (emoteLines.has(key)) issue(step, field, "This line is an emote bubble; dialogue cannot reuse it.");
+        }
+        function checkEmote(step, value, prefix) {
+            const named = own(value, "emote") && value.emote !== "clear";
+            if (named && !EMOTE_KINDS.includes(value.emote)) issue(step, prefix + "emote", "Choose a known emote or clear.");
+            if (named) text(step, prefix + "emote_text_key", value.emote_text_key, true);
+            else if (own(value, "emote_text_key")) issue(step, prefix + "emote_text_key", "Only a named emote carries a bubble line.");
+            const faction = named && value.speaker && object(speakers[value.speaker]) && speakers[value.speaker].faction;
+            if (faction && roster && !rosterFactions.has(faction) && !allowMissingFactionReferences) issue(step, prefix + "emote", "The emoting speaker must play an existing faction.");
+        }
         steps.filter(object).forEach(step => {
             knownFields(step, stepFields[step.type] || ["id", "type"], step, "fields");
             if (!TYPES.includes(step.type)) issue(step, "type", "Unknown step type.");
@@ -729,7 +740,9 @@
             if (step.presentation && (!["dialogue", "chapter", "celebration", "cinematic"].includes(step.presentation) || step.presentation === "cinematic" && step.type !== "scene")) issue(step, "presentation", "Choose a presentation supported by this step.");
             if (own(step, "portrait_expression") && !["happy", "calm", "fear", "angry"].includes(step.portrait_expression)) issue(step, "portrait_expression", "Choose a portrait expression: happy, calm, fear or angry.");
             text(step, "continue_key", step.continue_key, false);
-            if (own(step, "emote") && !["greet", "help", "threat", "celebrate", "clear"].includes(step.emote)) issue(step, "emote", "Choose a known emote or clear.");
+            checkEmote(step, step, "");
+            notEmoteLine(step, "title_key", step.title_key);
+            notEmoteLine(step, "body_key", step.body_key);
             if (own(step, "show_title") && (typeof step.show_title !== "boolean" || !step.title_key)) issue(step, "show_title", "Set show_title to true only beside a title_key.");
             if (own(step, "emote_pinned") && (typeof step.emote_pinned !== "boolean" || !own(step, "emote") || step.emote === "clear")) issue(step, "emote_pinned", "Pin only a named emote, with true or false.");
             if (step.video_src != null) {
@@ -887,7 +900,11 @@
         const reactionIds = new Set(), reactionEvents = new Set();
         reactions.forEach(reaction => {
             if (!object(reaction)) return issue(null, "reactions", "Invalid story response.");
-            knownFields(reaction, ["id", "after", "when", "speaker", "speaker_role_key", "title_key", "show_title", "body_key", "outcome", "gold_cost", "choices"], null, "reactions");
+            knownFields(reaction, ["id", "after", "when", "speaker", "outcome", "gold_cost", "choices", "emote", "emote_text_key", ...REACTION_DIALOGUE_FIELDS], null, "reactions");
+            checkEmote(null, reaction, "reactions.");
+            if (own(reaction, "emote") && !reaction.speaker) issue(null, "reactions.speaker", "Name the character who emotes.");
+            notEmoteLine(null, "reactions.title_key", reaction.title_key);
+            notEmoteLine(null, "reactions.body_key", reaction.body_key);
             if (own(reaction, "show_title") && (typeof reaction.show_title !== "boolean" || !reaction.title_key)) issue(null, "reactions.show_title", "Set show_title to true only beside a title_key.");
             if (!id(reaction.id) || byId.has(reaction.id) || reactionIds.has(reaction.id)) issue(null, "reactions.id", "Response IDs must be unique and distinct from story steps.");
             reactionIds.add(reaction.id);
@@ -1323,8 +1340,8 @@
                     ? Object.keys(definition.speakers || {}).find(key => definition.speakers[key].faction === activeReaction.target)
                     : null;
                 const response = {
-                    id: "reaction-" + activeReaction.instanceId, type: hasChoices ? "choice" : "scene", speaker: reaction.speaker || factionSpeaker,
-                    speaker_role_key: reaction.speaker_role_key, title_key: reaction.title_key, show_title: reaction.show_title, body_key: reaction.body_key, presentation: "dialogue"
+                    ...Object.fromEntries(REACTION_DIALOGUE_FIELDS.map(field => [field, reaction[field]])),
+                    id: "reaction-" + activeReaction.instanceId, type: hasChoices ? "choice" : "scene", speaker: reaction.speaker || factionSpeaker, presentation: "dialogue"
                 };
                 return { definition, step: response, line: response, progress: progress(), paused: true, paused_action: null, done: false, choices: reaction.choices || [], state, unlocks: copy(state.unlocks), reaction: reaction.id, reactionInstance: activeReaction.instanceId, reactionTarget: activeReaction.target, reactionData: reaction };
             }
@@ -1350,6 +1367,8 @@
                 if (!state.reactionsShown.includes(activeReaction.instanceId)) state.reactionsShown.push(activeReaction.instanceId);
                 if (["contact", "first_contact"].includes(reaction.when.type) && !state.contactsResolved.includes(activeReaction.target)) state.contactsResolved.push(activeReaction.target);
                 activeReaction = null;
+                // A response's emote, like a step's, fires when it completes.
+                if (hooks && typeof hooks.onStepComplete === "function") hooks.onStepComplete(reaction);
                 return true;
             }
             if (expectedStepId && expectedStepId !== state.id) return false;

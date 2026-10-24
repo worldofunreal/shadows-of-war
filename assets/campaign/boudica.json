@@ -35,6 +35,8 @@
       "civ": "Iceni Kingdom",
       "leader": "Boudica",
       "can_attack_player": false,
+      "hold_structures_until_contact": true,
+      "city_requires_gold": true,
       "support_interval_seconds": 15,
       "avatar": "snettisham"
     },
@@ -104,8 +106,8 @@
     {
       "id": "roman_supply_depot",
       "name": "Roman Supply Depot",
-      "x": 795,
-      "y": 120,
+      "x": 794,
+      "y": 118,
       "starting_troops": 500,
       "relation": "enemy",
       "team": "Red",
@@ -119,8 +121,8 @@
     {
       "id": "tax_collectors",
       "name": "Tax Collectors",
-      "x": 750,
-      "y": 125,
+      "x": 747,
+      "y": 134,
       "starting_troops": 250,
       "relation": "enemy",
       "team": "Red",

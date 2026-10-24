@@ -288,6 +288,9 @@ enum WebMenuCommand {
         kind: Option<sow_core::emote::EmoteKind>,
         #[serde(default)]
         pinned: bool,
+        /// Campaign faction that emotes; `None` is the player.
+        #[serde(default)]
+        faction_id: Option<String>,
     },
     ClearEmote,
     SetEmotePinned {
@@ -1419,7 +1422,21 @@ impl SowApp {
                     self.ui.app.settings_state.show_fps_ping = value;
                     self.ui.app.settings_state.persist_local();
                 }
-                WebMenuCommand::TutorialEmote { kind, pinned } => {
+                WebMenuCommand::TutorialEmote {
+                    kind,
+                    pinned,
+                    faction_id: Some(faction_id),
+                } => {
+                    if self.ui.tutorial_active
+                        && self.net.is_offline
+                        && let Some(engine) = self.sim.engine.as_mut()
+                        && engine.state.config.tutorial
+                        && !engine.campaign_faction_emote(&faction_id, kind, pinned)
+                    {
+                        log::warn!("[CAMPAIGN] emote faction is missing: {faction_id}");
+                    }
+                }
+                WebMenuCommand::TutorialEmote { kind, pinned, faction_id: None } => {
                     // Campaign step directive: `None` releases the current emote.
                     let intent = match kind {
                         Some(kind) => sow_core::protocol::GameplayIntent::ExpressEmote { kind, pinned },

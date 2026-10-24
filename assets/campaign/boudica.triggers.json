@@ -3,11 +3,6 @@
   "episode_id": "boudica",
   "text_namespace": "tutorial.campaign_boudica_",
   "require_speaker_portraits": true,
-  "emote_texts": {
-    "threat": "tutorial.campaign_boudica_boudica_council_strike",
-    "celebrate": "tutorial.campaign_boudica_boudica_victory_celebrate",
-    "greet": "tutorial.campaign_boudica_boudica_stand_with_you_emote"
-  },
   "settings": {
     "campaign_support": {
       "after_defeated": "roman_outpost",
@@ -28,6 +23,8 @@
       "outcome": "allied",
       "title_key": "tutorial.campaign_boudica_first_iceni_contact_title",
       "show_title": true,
+      "emote": "greet",
+      "emote_text_key": "tutorial.campaign_boudica_boudica_stand_with_you_emote",
       "body_key": "tutorial.campaign_boudica_first_iceni_contact_body"
     },
     {
@@ -127,6 +124,7 @@
       "speaker": "boudica",
       "portrait_expression": "angry",
       "emote": "threat",
+      "emote_text_key": "tutorial.campaign_boudica_boudica_council_strike",
       "emote_pinned": true,
       "presentation": "cinematic",
       "video_src": "/assets/campaign/boudica/intro.720p.555d0500.webm",
@@ -163,6 +161,7 @@
       "hint_key": "tutorial.campaign_boudica_boudica_first_victory_hint",
       "speaker": "boudica",
       "emote": "celebrate",
+      "emote_text_key": "tutorial.campaign_boudica_boudica_victory_celebrate",
       "emote_pinned": true,
       "trigger": {
         "type": "defeated",
@@ -369,7 +368,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_contact_title",
       "hint_key": "tutorial.campaign_boudica_boudica_contact_hint",
       "speaker": "boudica",
-      "emote": "greet",
       "trigger": {
         "type": "contact",
         "target": "stonea",
@@ -597,6 +595,8 @@
       "title_key": "tutorial.campaign_boudica_boudica_build_city_title",
       "hint_key": "tutorial.campaign_boudica_boudica_build_city_hint",
       "speaker": "boudica",
+      "emote": "celebrate",
+      "emote_text_key": "tutorial.campaign_boudica_boudica_home_rebuilt_emote",
       "trigger": {
         "type": "structure_level",
         "kind": "City",
@@ -606,15 +606,6 @@
       "marker": {
         "target": "player"
       },
-      "next": "boudica_home_rebuilt"
-    },
-    {
-      "id": "boudica_home_rebuilt",
-      "type": "scene",
-      "body_key": "tutorial.campaign_boudica_boudica_home_rebuilt_line",
-      "speaker": "boudica",
-      "portrait_expression": "happy",
-      "presentation": "dialogue",
       "next": "boudica_first_contact"
     },
     {
@@ -658,9 +649,9 @@
       "presentation": "dialogue",
       "next": "boudica_third_contact",
       "camera": {
-        "shot": "reveal",
-        "from": "player",
-        "to": "legio_ix_hispana",
+        "shot": "link",
+        "from": "snettisham",
+        "to": "snettisham",
         "seconds": 3
       }
     },

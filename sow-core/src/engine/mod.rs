@@ -602,17 +602,40 @@ impl SowEngine {
         true
     }
 
-    /// Halt one campaign faction for the rest of the match: no AI actions, no support.
-    pub fn halt_campaign_faction(&mut self, faction_id: &str) -> bool {
-        let Some((&player_id, _)) = self
-            .campaign_faction_ids
+    fn campaign_player_id(&self, faction_id: &str) -> Option<PlayerId> {
+        self.campaign_faction_ids
             .iter()
             .find(|(_, id)| id.as_str() == faction_id)
-        else {
+            .map(|(&player_id, _)| player_id)
+    }
+
+    /// Halt one campaign faction for the rest of the match: no AI actions, no support.
+    pub fn halt_campaign_faction(&mut self, faction_id: &str) -> bool {
+        let Some(player_id) = self.campaign_player_id(faction_id) else {
             return false;
         };
         self.campaign_halted_ids.insert(player_id);
         self.campaign_support_next_tick.remove(&player_id);
+        true
+    }
+
+    /// Campaign directive: a campaign faction shows (or clears) an emote over its own nameplate.
+    /// Bots never send emote intents, so the story drives theirs here.
+    pub fn campaign_faction_emote(
+        &mut self,
+        faction_id: &str,
+        kind: Option<crate::emote::EmoteKind>,
+        pinned: bool,
+    ) -> bool {
+        let tick = self.state.tick;
+        let Some(player) = self
+            .campaign_player_id(faction_id)
+            .and_then(|player_id| self.state.player_mut(player_id))
+            .filter(|player| player.alive)
+        else {
+            return false;
+        };
+        crate::emote::express(player, kind, pinned, tick);
         true
     }
 
@@ -1991,6 +2014,15 @@ mod tests {
                 .alliances
                 .contains(&1)
         );
+
+        assert!(!engine.campaign_faction_emote("missing_faction", Some(crate::emote::EmoteKind::Greet), false));
+        assert!(engine.campaign_faction_emote("trinovantes", Some(crate::emote::EmoteKind::Greet), false));
+        assert_eq!(
+            engine.state.player(trinovantes).unwrap().active_emote.map(|emote| emote.kind),
+            Some(crate::emote::EmoteKind::Greet)
+        );
+        assert!(engine.campaign_faction_emote("trinovantes", None, false));
+        assert!(engine.state.player(trinovantes).unwrap().active_emote.is_none());
 
         assert!(!engine.halt_campaign_faction("missing_faction"));
         engine.campaign_support_next_tick.insert(trinovantes, 100);

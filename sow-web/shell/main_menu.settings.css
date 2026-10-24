@@ -123,14 +123,6 @@
     height: 48px;
 }
 
-.sow-menu__settings-dropdown .sow-control-dropdown__menu:not([hidden]) {
-    max-width: min(280px, calc(100vw - 16px));
-}
-
-.sow-menu__settings-dropdown .sow-control-dropdown__option {
-    white-space: normal;
-}
-
 .sow-menu__settings-actions {
     padding-top: 18px;
     border-top: 1px solid var(--sow-line);
