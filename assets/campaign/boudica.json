@@ -2,16 +2,16 @@
   "_comment": "Boudica tutorial roster — edited via tools/campaign-editor.",
   "map": "eastanglia",
   "player_spawn": [
-    722,
-    79
+    719,
+    88
   ],
   "player_color": "#3380ff",
   "factions": [
     {
       "id": "stonea",
       "name": "Stonea",
-      "x": 692,
-      "y": 77,
+      "x": 694,
+      "y": 88,
       "starting_troops": 500,
       "relation": "neutral",
       "can_request_alliance": true,
@@ -20,13 +20,13 @@
       "civ": "Iceni Kingdom",
       "leader": "Boudica",
       "support_interval_seconds": 15,
-      "avatar": "iceni"
+      "avatar": "stonea"
     },
     {
       "id": "snettisham",
       "name": "Snettisham",
-      "x": 720,
-      "y": 45,
+      "x": 713,
+      "y": 60,
       "starting_troops": 500,
       "relation": "neutral",
       "can_request_alliance": true,
@@ -36,13 +36,13 @@
       "leader": "Boudica",
       "can_attack_player": false,
       "support_interval_seconds": 15,
-      "avatar": "iceni"
+      "avatar": "snettisham"
     },
     {
       "id": "thetford",
       "name": "Thetford",
-      "x": 718,
-      "y": 117,
+      "x": 716,
+      "y": 118,
       "starting_troops": 500,
       "relation": "neutral",
       "can_request_alliance": true,
@@ -51,7 +51,7 @@
       "civ": "Iceni Kingdom",
       "leader": "Boudica",
       "support_interval_seconds": 20,
-      "avatar": "iceni"
+      "avatar": "thetford"
     },
     {
       "id": "trinovantes",
@@ -72,8 +72,8 @@
     {
       "id": "colonia_veterans",
       "name": "Colonia Veterans",
-      "x": 764,
-      "y": 91,
+      "x": 761,
+      "y": 88,
       "starting_troops": 100,
       "relation": "enemy",
       "team": "Red",
@@ -88,7 +88,7 @@
       "id": "roman_outpost",
       "name": "Roman Outpost",
       "x": 715,
-      "y": 79,
+      "y": 88,
       "starting_troops": 1000,
       "relation": "enemy",
       "team": "Red",
@@ -99,13 +99,13 @@
       "leader": "Caesar",
       "can_attack_player": false,
       "gold_loot_override": 200,
-      "avatar": "roman"
+      "avatar": "roman_outpost"
     },
     {
       "id": "roman_supply_depot",
       "name": "Roman Supply Depot",
-      "x": 796,
-      "y": 131,
+      "x": 795,
+      "y": 120,
       "starting_troops": 500,
       "relation": "enemy",
       "team": "Red",
@@ -119,8 +119,8 @@
     {
       "id": "tax_collectors",
       "name": "Tax Collectors",
-      "x": 745,
-      "y": 136,
+      "x": 750,
+      "y": 125,
       "starting_troops": 250,
       "relation": "enemy",
       "team": "Red",
@@ -144,7 +144,7 @@
       "iq": 100,
       "civ": "Roman Empire",
       "leader": "Caesar",
-      "avatar": "roman_praetorian"
+      "avatar": "camulodunum"
     },
     {
       "id": "londinium",
@@ -159,13 +159,13 @@
       "iq": 115,
       "civ": "Roman Empire",
       "leader": "Caesar",
-      "avatar": "roman"
+      "avatar": "londinium"
     },
     {
       "id": "verulamium",
       "name": "Verulamium",
-      "x": 579,
-      "y": 275,
+      "x": 569,
+      "y": 268,
       "starting_troops": 2500,
       "relation": "enemy",
       "team": "Red",
@@ -174,7 +174,7 @@
       "iq": 130,
       "civ": "Roman Empire",
       "leader": "Caesar",
-      "avatar": "roman"
+      "avatar": "verulamium"
     },
     {
       "id": "legio_ix_hispana",
@@ -189,7 +189,7 @@
       "iq": 100,
       "civ": "Roman Empire",
       "leader": "Caesar",
-      "avatar": "roman_legionary"
+      "avatar": "legio_ix_hispana"
     },
     {
       "id": "legio_xiv_gemina",
@@ -206,7 +206,7 @@
       "leader": "Caesar",
       "can_attack_player": false,
       "assault_force": true,
-      "avatar": "roman_legionary"
+      "avatar": "legio_xiv_gemina"
     },
     {
       "id": "legio_xx_valeria",
@@ -223,7 +223,7 @@
       "leader": "Caesar",
       "can_attack_player": false,
       "assault_force": true,
-      "avatar": "roman_praetorian"
+      "avatar": "legio_xx_valeria"
     },
     {
       "id": "suetonius_paulinus",
@@ -240,7 +240,7 @@
       "leader": "Caesar",
       "can_attack_player": false,
       "assault_force": true,
-      "avatar": "roman_praetorian"
+      "avatar": "suetonius_paulinus"
     },
     {
       "id": "suetonius_auxilia",
@@ -257,7 +257,7 @@
       "leader": "Caesar",
       "can_attack_player": false,
       "assault_force": true,
-      "avatar": "roman_legionary"
+      "avatar": "suetonius_auxilia"
     },
     {
       "id": "legio_ii_augusta",
@@ -273,13 +273,13 @@
       "civ": "Roman Empire",
       "leader": "Caesar",
       "can_attack_player": false,
-      "avatar": "colonia_veterans"
+      "avatar": "legio_ii_augusta"
     },
     {
       "id": "catuvellauni",
       "name": "Catuvellauni",
-      "x": 579,
-      "y": 181,
+      "x": 562,
+      "y": 188,
       "starting_troops": 2500,
       "relation": "neutral",
       "can_request_alliance": true,
@@ -315,7 +315,7 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "cantiaci"
+      "avatar": "durovernum"
     },
     {
       "id": "regnenses",
@@ -345,7 +345,7 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "regnenses"
+      "avatar": "noviomagus"
     },
     {
       "id": "atrebates",
@@ -375,13 +375,13 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "atrebates"
+      "avatar": "calleva"
     },
     {
       "id": "lindum",
       "name": "Lindum",
-      "x": 532,
-      "y": 131,
+      "x": 528,
+      "y": 114,
       "starting_troops": 1000,
       "relation": "enemy",
       "team": "Red",
@@ -390,7 +390,7 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "roman"
+      "avatar": "lindum"
     },
     {
       "id": "viroconium",
@@ -405,7 +405,7 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "roman"
+      "avatar": "viroconium"
     },
     {
       "id": "isca_dumnoniorum",
@@ -420,7 +420,7 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "dumnonii"
+      "avatar": "isca_dumnoniorum"
     },
     {
       "id": "brigantes_1",
@@ -482,8 +482,8 @@
     {
       "id": "dobunni_1",
       "name": "Dobunni",
-      "x": 562,
-      "y": 70,
+      "x": 553,
+      "y": 62,
       "starting_troops": 500,
       "relation": "neutral",
       "can_request_alliance": true,
@@ -617,7 +617,7 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "arverni"
+      "avatar": "gaulish_traders_1"
     },
     {
       "id": "irish_raiders_1",
@@ -631,7 +631,7 @@
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "damnonii"
+      "avatar": "irish_raiders_1"
     },
     {
       "id": "picts_1",

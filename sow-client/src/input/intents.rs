@@ -45,7 +45,7 @@ fn paused_tutorial_intent_allowed(
                     *kind,
                     sow_core::game::BuildingKind::City
                         | sow_core::game::BuildingKind::Factory
-                        | sow_core::game::BuildingKind::Bunker
+                        | sow_core::game::BuildingKind::Tower
                 ),
                 _ => false,
             },
@@ -69,7 +69,7 @@ fn paused_tutorial_progress(
             let key = match *kind {
                 sow_core::game::BuildingKind::City => "cities",
                 sow_core::game::BuildingKind::Factory => "factories",
-                sow_core::game::BuildingKind::Bunker => "bunkers",
+                sow_core::game::BuildingKind::Tower => "towers",
                 _ => return None,
             };
             Some(

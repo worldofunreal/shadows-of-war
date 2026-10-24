@@ -196,7 +196,7 @@ impl SowEngine {
         b.under_construction = true;
         b.ticks_until_complete =
             crate::building::structure_upgrade_duration_ticks(b.kind, target_level);
-        if b.kind == BuildingKind::Bunker {
+        if b.kind == BuildingKind::Tower {
             self.defense_grid_dirty = true;
         }
         self.building_aggregates_dirty = true;
@@ -511,14 +511,15 @@ mod tests {
     }
 
     #[test]
-    fn first_city_becomes_affordable_and_is_building_within_two_minutes() {
+    fn first_city_becomes_affordable_and_is_building_within_game_time_budget() {
         let mut game = pacing_match();
         let config = game.state.config.clone();
         assert_eq!(game.state.player(1).unwrap().gold, config.starting_gold);
         let city_tile = 2 * game.state.map.width + 8;
         let mut city_ordered = false;
-        // Four minutes of ticks at the current standard speed (half the earlier pace).
-        for _ in 0..2_400 {
+        // Preserve the original game-time budget when the default speed or tick rate changes.
+        let ticks = (52.8 / config.per_tick(1.0)).ceil() as u64;
+        for _ in 0..ticks {
             game.execute_income();
             game.state.tick += 1;
             if !city_ordered && game.state.player(1).unwrap().gold >= config.cost_city {
@@ -528,7 +529,7 @@ mod tests {
         }
         assert!(
             city_ordered,
-            "starting gold and ordinary income should afford a City within four minutes"
+            "starting gold and ordinary income should afford a City within 52.8 game seconds"
         );
         assert!(game.buildings.iter().any(|building| {
             building.owner_id == 1

@@ -5,40 +5,6 @@
   "cell_size": 64,
   "schema_version": 1,
   "sprites": {
-    "Bunker": {
-      "1": {
-        "height": 64,
-        "sha256": "45ac000e9b3c50efa87616c9d60b8e3f8c9b94b0efc95f0ace0d423a75390972",
-        "source": "bunker-1.png",
-        "width": 64,
-        "x": 138,
-        "y": 138
-      },
-      "2": {
-        "height": 64,
-        "sha256": "bf662d7046f2e0cb53e78057b1f9109859cc707da371e25bd3901bf86c8302c5",
-        "source": "bunker-2.png",
-        "width": 64,
-        "x": 206,
-        "y": 138
-      },
-      "3": {
-        "height": 64,
-        "sha256": "72105e9186d22c71c7dda3626df0a149ef8e2ce74dffebac9bc5506db4cc11f3",
-        "source": "bunker-3.png",
-        "width": 64,
-        "x": 274,
-        "y": 138
-      },
-      "4": {
-        "height": 64,
-        "sha256": "22178a6e7e110b644a9d39f9bb8f85acf286b3f5f76776f7974d23755c7eb260",
-        "source": "bunker-4.png",
-        "width": 64,
-        "x": 2,
-        "y": 206
-      }
-    },
     "City": {
       "1": {
         "height": 64,
@@ -173,6 +139,40 @@
         "width": 64,
         "x": 70,
         "y": 138
+      }
+    },
+    "Tower": {
+      "1": {
+        "height": 64,
+        "sha256": "45ac000e9b3c50efa87616c9d60b8e3f8c9b94b0efc95f0ace0d423a75390972",
+        "source": "tower-1.png",
+        "width": 64,
+        "x": 138,
+        "y": 138
+      },
+      "2": {
+        "height": 64,
+        "sha256": "bf662d7046f2e0cb53e78057b1f9109859cc707da371e25bd3901bf86c8302c5",
+        "source": "tower-2.png",
+        "width": 64,
+        "x": 206,
+        "y": 138
+      },
+      "3": {
+        "height": 64,
+        "sha256": "72105e9186d22c71c7dda3626df0a149ef8e2ce74dffebac9bc5506db4cc11f3",
+        "source": "tower-3.png",
+        "width": 64,
+        "x": 274,
+        "y": 138
+      },
+      "4": {
+        "height": 64,
+        "sha256": "22178a6e7e110b644a9d39f9bb8f85acf286b3f5f76776f7974d23755c7eb260",
+        "source": "tower-4.png",
+        "width": 64,
+        "x": 2,
+        "y": 206
       }
     }
   }

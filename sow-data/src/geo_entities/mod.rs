@@ -46,73 +46,177 @@ pub enum Resource {
     Troops,
 }
 
-/// A playable hero's ability. The list is closed on purpose: every kind is
-/// programmed once in sow-core, and the hero ability test exercises each
-/// hero through the real game formulas, so a hero cannot ship an ability
-/// that does nothing.
+/// A playable hero's ability: one generic effect plus the situation it needs.
+/// The enum is closed on purpose: each kind is programmed once in sow-core, and
+/// the hero ability tests run every hero through the real game formulas, so a
+/// hero cannot ship an ability that does nothing. Hero names live only in the
+/// catalog text. Two heroes must never share a situation (see `situation`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Ability {
-    /// Armies fight stronger (fewer losses, faster conquest).
-    CombatStrength { percent: u32 },
-    /// Attacks capture territory faster.
-    ExpansionSpeed { percent: u32 },
-    /// One district type produces more of one resource.
-    DistrictIncome {
-        district: District,
+    /// Strength per troop of attacks against `against` rises by `percent`.
+    AttackStrength { against: Target, percent: u32 },
+    /// Attacks against `against` conquer `percent` faster.
+    ConquestSpeed { against: Target, percent: u32 },
+    /// `source` pays `percent` more of `resource`.
+    ResourceBonus {
+        source: Source,
         resource: Resource,
         percent: u32,
     },
+    /// Tower fights: a defender's towers make attackers lose `percent` more
+    /// troops; an attacker's armies lose `percent` fewer at enemy towers.
+    TowerLoss { side: Side, percent: u32 },
+    /// City tiles: a defender's city needs `percent` more effort to capture;
+    /// an attacker captures city tiles `percent` faster.
+    CityCapture { side: Side, percent: u32 },
+    /// Attackers lose `percent` fewer troops when `when` holds.
+    AttackerLoss { when: LossWhen, percent: u32 },
     /// Cities raise the troop cap more.
     CityTroopCapacity { percent: u32 },
-    /// Bunkers defend a wider area.
-    BunkerRange { percent: u32 },
-    /// Bunkers make attackers lose more troops.
-    BunkerDefense { percent: u32 },
-    /// More gold for eliminating a player.
-    EliminationGold { percent: u32 },
-    /// Territory produces more gold.
-    TerritoryGold { percent: u32 },
-    /// Troops fight stronger when attacking another player (not neutral land).
-    EnemyTroopStrength { percent: u32 },
-    /// Enemies need more effort to capture this hero's city tiles.
-    CityDefense { percent: u32 },
-    /// Attacks on enemy city tiles capture faster.
-    CityAssault { percent: u32 },
-    /// Campaign alliances cost this much less gold.
-    AllianceCost { percent: u32 },
-    /// Every active alliance pays gold, `percent` more than the base rate.
-    AllianceGold { percent: u32 },
-    /// Against an active traitor, each attacking troop counts `percent` more.
-    DamageToTraitors { percent: u32 },
-    /// Attacks on tribes conquer `percent` faster.
-    TribeSpeed { percent: u32 },
-    /// Attacks on a player with more troops fight `percent` stronger.
-    OutnumberedStrength { percent: u32 },
-    /// Conquering mountain tiles costs `percent` fewer troops.
-    MountainCost { percent: u32 },
+    /// Towers defend a wider area.
+    TowerRange { percent: u32 },
+    /// Campaign alliances with `against` cost this much less gold.
+    AllianceCost { against: Target, percent: u32 },
+    /// Enemy armies of `against` retreating from this hero's land keep fewer
+    /// troops: the retreat penalty is multiplied by `1 + percent/100`.
+    EnemyRetreatPenalty { against: Target, percent: u32 },
+}
+
+/// Who an attack, conquest or retreat is aimed at. `Larger`, `Smaller`, `Richer`
+/// and `Poorer` compare that player with the hero's own player.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Target {
+    /// Any target.
+    Anyone,
+    /// Neutral land (no owner).
+    Neutral,
+    /// Land of a player, not neutral land.
+    OtherPlayer,
+    /// Land of a human player.
+    Human,
+    /// Land of a tribe (a bot owner).
+    Tribe,
+    /// Land of a nation (a nation owner).
+    Nation,
+    /// Land whose owner has an active traitor status.
+    ActiveTraitor,
+    /// Land whose owner has more troops than the army.
+    Outnumbering,
+    /// Land whose owner has fewer troops than the army.
+    Outnumbered,
+    /// Land whose owner has more tiles than the hero's player.
+    Larger,
+    /// Land whose owner has fewer tiles than the hero's player.
+    Smaller,
+    /// Land whose owner has more gold than the hero's player.
+    Richer,
+    /// Land whose owner has less gold than the hero's player.
+    Poorer,
+}
+
+impl Target {
+    /// Every target, for checking which ones describe a player.
+    pub const ALL: [Target; 13] = [
+        Target::Anyone,
+        Target::Neutral,
+        Target::OtherPlayer,
+        Target::Human,
+        Target::Tribe,
+        Target::Nation,
+        Target::ActiveTraitor,
+        Target::Outnumbering,
+        Target::Outnumbered,
+        Target::Larger,
+        Target::Smaller,
+        Target::Richer,
+        Target::Poorer,
+    ];
+}
+
+/// Where a `ResourceBonus` comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Source {
+    District(District),
+    Territory,
+    Alliance,
+    Elimination,
+    /// Trade ships.
+    Trade,
+}
+
+/// Which side of a fight a tower or city modifier works on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Side {
+    Defender,
+    Attacker,
+}
+
+/// When an attacker loses fewer troops, for `AttackerLoss`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LossWhen {
+    /// Conquering mountain tiles.
+    Mountain,
+    /// Conquering highland tiles.
+    Highland,
+    /// Retreating from enemy land.
+    Retreat,
+    /// Attacking an enemy that took one of this hero's cities, while that
+    /// enemy is still inside the recapture window.
+    RecaptureWindow,
 }
 
 impl Ability {
     pub fn percent(self) -> u32 {
         match self {
-            Ability::CombatStrength { percent }
-            | Ability::ExpansionSpeed { percent }
-            | Ability::DistrictIncome { percent, .. }
+            Ability::AttackStrength { percent, .. }
+            | Ability::ConquestSpeed { percent, .. }
+            | Ability::ResourceBonus { percent, .. }
+            | Ability::TowerLoss { percent, .. }
+            | Ability::CityCapture { percent, .. }
+            | Ability::AttackerLoss { percent, .. }
             | Ability::CityTroopCapacity { percent }
-            | Ability::BunkerRange { percent }
-            | Ability::BunkerDefense { percent }
-            | Ability::EliminationGold { percent }
-            | Ability::TerritoryGold { percent }
-            | Ability::EnemyTroopStrength { percent }
-            | Ability::CityDefense { percent }
-            | Ability::CityAssault { percent }
-            | Ability::AllianceCost { percent }
-            | Ability::AllianceGold { percent }
-            | Ability::DamageToTraitors { percent }
-            | Ability::TribeSpeed { percent }
-            | Ability::OutnumberedStrength { percent }
-            | Ability::MountainCost { percent } => percent,
+            | Ability::TowerRange { percent }
+            | Ability::AllianceCost { percent, .. }
+            | Ability::EnemyRetreatPenalty { percent, .. } => percent,
+        }
+    }
+
+    /// The same ability with size zero, used to select a control case for effect tests.
+    pub fn situation(self) -> Ability {
+        match self {
+            Ability::AttackStrength { against, .. } => Ability::AttackStrength {
+                against,
+                percent: 0,
+            },
+            Ability::ConquestSpeed { against, .. } => Ability::ConquestSpeed {
+                against,
+                percent: 0,
+            },
+            Ability::ResourceBonus {
+                source, resource, ..
+            } => Ability::ResourceBonus {
+                source,
+                resource,
+                percent: 0,
+            },
+            Ability::TowerLoss { side, .. } => Ability::TowerLoss { side, percent: 0 },
+            Ability::CityCapture { side, .. } => Ability::CityCapture { side, percent: 0 },
+            Ability::AttackerLoss { when, .. } => Ability::AttackerLoss { when, percent: 0 },
+            Ability::CityTroopCapacity { .. } => Ability::CityTroopCapacity { percent: 0 },
+            Ability::TowerRange { .. } => Ability::TowerRange { percent: 0 },
+            Ability::AllianceCost { against, .. } => Ability::AllianceCost {
+                against,
+                percent: 0,
+            },
+            Ability::EnemyRetreatPenalty { against, .. } => Ability::EnemyRetreatPenalty {
+                against,
+                percent: 0,
+            },
         }
     }
 }
@@ -123,6 +227,9 @@ pub struct Hero {
     /// Short name. Saved as the key of each player's hero XP: never rename.
     pub name: String,
     pub ability: Ability,
+    /// Additional tower-range bonus that can coexist with the hero's main ability.
+    #[serde(default)]
+    pub tower_range_bonus_percent: u32,
     /// NFTROPOLY/WOU-ID card token, only for heroes registered there.
     #[serde(default)]
     pub card: Option<String>,

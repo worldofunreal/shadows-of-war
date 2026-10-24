@@ -19,7 +19,7 @@ pub(super) fn bot_structure_target_count(
     };
 
     match kind {
-        BuildingKind::Bunker => ((city_equivalent as f64) * 0.35 * factor).floor() as u32,
+        BuildingKind::Tower => ((city_equivalent as f64) * 0.35 * factor).floor() as u32,
         BuildingKind::City => {
             let base = (city_equivalent.saturating_add(2) as f64) * factor;
             (base.floor() as u32).max(1)
@@ -202,7 +202,7 @@ pub(super) fn resolve_farm_from_candidates(
 #[inline]
 pub(super) fn cheapest_gold_cost(cfg: &crate::game_config::GameConfig) -> f64 {
     cfg.cost_city
-        .min(cfg.cost_bunker)
+        .min(cfg.cost_tower)
         .min(cfg.cost_factory)
         .min(cfg.cost_port)
         .min(cfg.cost_farm)

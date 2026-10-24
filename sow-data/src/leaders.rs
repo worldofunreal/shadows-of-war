@@ -1,7 +1,7 @@
 //! Playable heroes. A hero is a catalog character (`assets/geo_entities.json`)
 //! with a `hero` entry: adding one there adds it to the game, the store and
 //! the menu, and `hero_ability_tests` proves its ability works.
-use crate::geo_entities::{self, Ability, GeoEntity};
+use crate::geo_entities::{self, Ability, GeoEntity, LossWhen, Side, Source, Target};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::sync::OnceLock;
 
@@ -135,108 +135,108 @@ impl Leader {
         self.ability_bonus(applies).unwrap_or(1.0)
     }
 
-    pub fn troop_strength_multiplier(self) -> f64 {
-        self.ability_multiplier(|a| matches!(a, Ability::CombatStrength { .. }))
+    /// `1 + percent/100` on attack strength against `target`, else `1`.
+    pub fn attack_strength_multiplier(self, target: Target) -> f64 {
+        self.ability_multiplier(
+            |a| matches!(a, Ability::AttackStrength { against, .. } if against == target),
+        )
     }
 
-    pub fn expansion_speed_multiplier(self) -> f64 {
-        self.ability_multiplier(|a| matches!(a, Ability::ExpansionSpeed { .. }))
+    /// `1 + percent/100` on conquest speed against `target`, else `1`.
+    pub fn conquest_speed_multiplier(self, target: Target) -> f64 {
+        self.ability_multiplier(
+            |a| matches!(a, Ability::ConquestSpeed { against, .. } if against == target),
+        )
     }
 
-    /// `Some(bonus)` when this hero's district ability produces `resource` in `district`.
-    /// Only that hero gets the hero-only base income for the pair.
-    pub fn district_income_hero_bonus(
+    /// `Some(bonus)` when this hero's `source` pays `resource` (its hero-only base).
+    pub fn resource_bonus_hero_bonus(
         self,
-        district: geo_entities::District,
+        source: Source,
         resource: geo_entities::Resource,
     ) -> Option<f64> {
         self.ability_bonus(|a| {
-            matches!(a, Ability::DistrictIncome { district: d, resource: r, .. }
-                if d == district && r == resource)
+            matches!(a, Ability::ResourceBonus { source: s, resource: r, .. }
+                if s == source && r == resource)
         })
     }
 
-    pub fn district_income_multiplier(
+    /// `1 + percent/100` when this hero's `source` pays `resource`, else `1`.
+    pub fn resource_bonus_multiplier(
         self,
-        district: geo_entities::District,
+        source: Source,
         resource: geo_entities::Resource,
     ) -> f64 {
-        self.district_income_hero_bonus(district, resource)
-            .unwrap_or(1.0)
+        self.resource_bonus_hero_bonus(source, resource).unwrap_or(1.0)
     }
 
     pub fn city_troop_capacity_multiplier(self) -> f64 {
         self.ability_multiplier(|a| matches!(a, Ability::CityTroopCapacity { .. }))
     }
 
-    pub fn bunker_range_multiplier(self) -> f64 {
-        self.ability_multiplier(|a| matches!(a, Ability::BunkerRange { .. }))
+    pub fn tower_range_multiplier(self) -> f64 {
+        let ability_percent = match self.ability() {
+            Ability::TowerRange { percent } => percent,
+            _ => 0,
+        };
+        let percent = ability_percent.max(self.hero().tower_range_bonus_percent);
+        1.0 + f64::from(percent) / 100.0
     }
 
-    pub fn bunker_defense_multiplier(self) -> f64 {
-        self.ability_multiplier(|a| matches!(a, Ability::BunkerDefense { .. }))
-    }
-
-    pub fn elimination_gold_multiplier(self) -> f64 {
-        self.ability_multiplier(|a| matches!(a, Ability::EliminationGold { .. }))
-    }
-
-    pub fn territory_gold_multiplier(self) -> f64 {
-        self.ability_multiplier(|a| matches!(a, Ability::TerritoryGold { .. }))
-    }
-
-    pub fn enemy_troop_strength_multiplier(self) -> f64 {
-        self.ability_multiplier(|a| matches!(a, Ability::EnemyTroopStrength { .. }))
-    }
-
-    pub fn damage_to_traitors_multiplier(self) -> f64 {
-        self.ability_multiplier(|a| matches!(a, Ability::DamageToTraitors { .. }))
-    }
-
-    /// `1 + percent/100` for an attack on a player with more troops, else `1`.
-    pub fn outnumbered_strength_multiplier(self) -> f64 {
+    /// Tower fights for `side`: a defender gets `1 + percent/100` (attackers lose
+    /// more), an attacker gets `1 - percent/100` (its armies lose less), else `1`.
+    pub fn tower_loss_multiplier(self, side: Side) -> f64 {
         match self.ability() {
-            Ability::OutnumberedStrength { percent } => 1.0 + f64::from(percent) / 100.0,
+            Ability::TowerLoss { side: s, percent } if s == side => match side {
+                Side::Defender => 1.0 + f64::from(percent) / 100.0,
+                Side::Attacker => 1.0 - f64::from(percent) / 100.0,
+            },
             _ => 1.0,
         }
     }
 
-    /// `1 - percent/100` on mountain tiles, else `1`.
-    pub fn mountain_loss_multiplier(self) -> f64 {
+    /// `1 + percent/100` on city-tile capture for `side`, else `1`.
+    pub fn city_capture_multiplier(self, side: Side) -> f64 {
+        self.ability_multiplier(
+            |a| matches!(a, Ability::CityCapture { side: s, .. } if s == side),
+        )
+    }
+
+    /// `1 - percent/100` on the troops this hero's armies lose when `when` holds, else `1`.
+    pub fn attacker_loss_multiplier(self, when: LossWhen) -> f64 {
         match self.ability() {
-            Ability::MountainCost { percent } => 1.0 - f64::from(percent) / 100.0,
+            Ability::AttackerLoss { when: w, percent } if w == when => {
+                1.0 - f64::from(percent) / 100.0
+            }
             _ => 1.0,
         }
     }
 
-    /// Whether this hero's mountain conquests get the conqueror's colour flash.
-    pub fn has_mountain_cost(self) -> bool {
-        matches!(self.ability(), Ability::MountainCost { .. })
+    /// Whether this hero has the attacker-loss ability for `when`.
+    pub fn has_attacker_loss(self, when: LossWhen) -> bool {
+        matches!(self.ability(), Ability::AttackerLoss { when: w, .. } if w == when)
     }
 
-    pub fn tribe_speed_multiplier(self) -> f64 {
-        self.ability_multiplier(|a| matches!(a, Ability::TribeSpeed { .. }))
+    /// Whether this hero's ability pays from `source` (gold or troops).
+    pub fn has_resource_bonus_from(self, source: Source) -> bool {
+        matches!(self.ability(), Ability::ResourceBonus { source: s, .. } if s == source)
     }
 
-    pub fn city_defense_multiplier(self) -> f64 {
-        self.ability_multiplier(|a| matches!(a, Ability::CityDefense { .. }))
+    /// `1 + percent/100` on the troops a `target` army loses when retreating from this hero's land, else `1`.
+    pub fn enemy_retreat_penalty_multiplier(self, target: Target) -> f64 {
+        self.ability_multiplier(
+            |a| matches!(a, Ability::EnemyRetreatPenalty { against, .. } if against == target),
+        )
     }
 
-    pub fn city_assault_multiplier(self) -> f64 {
-        self.ability_multiplier(|a| matches!(a, Ability::CityAssault { .. }))
-    }
-
-    /// Share of a campaign alliance's gold price this hero pays (`1` unless discounted).
-    pub fn alliance_cost_multiplier(self) -> f64 {
+    /// Share of a campaign alliance's gold price with `target` this hero pays (`1` unless discounted).
+    pub fn alliance_cost_multiplier(self, target: Target) -> f64 {
         match self.ability() {
-            Ability::AllianceCost { percent } => 1.0 - f64::from(percent) / 100.0,
+            Ability::AllianceCost { against, percent } if against == target => {
+                1.0 - f64::from(percent) / 100.0
+            }
             _ => 1.0,
         }
-    }
-
-    /// `Some(bonus)` when every active alliance pays this hero gold.
-    pub fn alliance_gold_hero_bonus(self) -> Option<f64> {
-        self.ability_bonus(|a| matches!(a, Ability::AllianceGold { .. }))
     }
 }
 
@@ -306,5 +306,22 @@ mod tests {
                 "{leader:?} needs a territory_color"
             );
         }
+    }
+
+    #[test]
+    fn tower_range_bonuses_keep_other_hero_effects() {
+        assert_eq!(Leader::of("kamehameha").tower_range_multiplier(), 1.5);
+        assert_eq!(
+            Leader::of("kamehameha").enemy_retreat_penalty_multiplier(Target::OtherPlayer),
+            2.0
+        );
+        assert_eq!(
+            Leader::of("leonidas").tower_loss_multiplier(Side::Defender),
+            1.5
+        );
+        assert_eq!(
+            Leader::of("catherine_the_great").tower_loss_multiplier(Side::Attacker),
+            0.5
+        );
     }
 }

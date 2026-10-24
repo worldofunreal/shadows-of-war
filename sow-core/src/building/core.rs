@@ -37,13 +37,31 @@ impl Building {
 
     #[inline]
     pub fn defense_range_cfg(&self, cfg: &crate::game_config::GameConfig) -> i32 {
-        if self.kind == BuildingKind::Bunker && !self.under_construction {
-            (cfg.bunker_range.round() as i32 + (self.active_level().saturating_sub(1) as i32 * 2))
-                .min(20)
+        if self.kind == BuildingKind::Tower && !self.under_construction {
+            tower_range_for_level(self.active_level(), cfg, 1.0)
         } else {
             0
         }
     }
+}
+
+/// Tower range uses the same base, level increments, cap, and hero bonus in
+/// combat and every client range display.
+/// Widest reach a tower can have: its 20-tile cap times the strongest tower-range hero (Sun Tzu, 1.5x).
+pub(crate) const MAX_TOWER_REACH: u32 = 30;
+
+#[inline]
+pub fn tower_range_for_level(
+    level: u8,
+    cfg: &crate::game_config::GameConfig,
+    range_multiplier: f64,
+) -> i32 {
+    if level == 0 {
+        return 0;
+    }
+    let base = cfg.tower_range.round().clamp(0.0, 20.0) as i32;
+    let range = (base + i32::from(level.saturating_sub(1)) * 2).min(20);
+    (f64::from(range) * range_multiplier).round() as i32
 }
 
 pub fn income_level_weight(level: u8) -> f64 {
@@ -54,7 +72,7 @@ pub fn income_level_weight(level: u8) -> f64 {
 #[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct BuildingAggregate {
     pub city_levels: u32,
-    pub bunker_levels: u32,
+    pub tower_levels: u32,
     pub factory_levels: u32,
     pub port_levels: u32,
     pub farm_levels: u32,
@@ -69,7 +87,7 @@ pub struct BuildingAggregate {
     pub ready_factory_count: u32,
     /// Total instances per kind, **including** under construction (for bot build quotas).
     pub count_city: u32,
-    pub count_bunker: u32,
+    pub count_tower: u32,
     pub count_factory: u32,
     pub count_port: u32,
     pub count_farm: u32,
@@ -80,7 +98,7 @@ impl BuildingAggregate {
     pub fn total_structures_of_kind(self, kind: BuildingKind) -> u32 {
         match kind {
             BuildingKind::City => self.count_city,
-            BuildingKind::Bunker => self.count_bunker,
+            BuildingKind::Tower => self.count_tower,
             BuildingKind::Factory => self.count_factory,
             BuildingKind::Port => self.count_port,
             BuildingKind::Farm => self.count_farm,
@@ -92,7 +110,7 @@ impl BuildingAggregate {
     pub fn levels_of_kind(self, kind: BuildingKind) -> u32 {
         match kind {
             BuildingKind::City => self.city_levels,
-            BuildingKind::Bunker => self.bunker_levels,
+            BuildingKind::Tower => self.tower_levels,
             BuildingKind::Factory => self.factory_levels,
             BuildingKind::Port => self.port_levels,
             BuildingKind::Farm => self.farm_levels,
@@ -114,7 +132,7 @@ pub fn aggregate_buildings_per_player(
         let a = &mut out[i];
         match b.kind {
             BuildingKind::City => a.count_city += 1,
-            BuildingKind::Bunker => a.count_bunker += 1,
+            BuildingKind::Tower => a.count_tower += 1,
             BuildingKind::Factory => a.count_factory += 1,
             BuildingKind::Port => a.count_port += 1,
             BuildingKind::Farm => a.count_farm += 1,
@@ -129,8 +147,8 @@ pub fn aggregate_buildings_per_player(
                 a.city_levels += active_lvl as u32;
                 a.ready_city_count += 1;
             }
-            BuildingKind::Bunker => {
-                a.bunker_levels += active_lvl as u32;
+            BuildingKind::Tower => {
+                a.tower_levels += active_lvl as u32;
             }
             BuildingKind::Factory => {
                 a.factory_levels += active_lvl as u32;
@@ -211,8 +229,8 @@ impl DefenseGrid {
         self.rebuild_with_range(buildings, map_width, map_height, cell_size, cfg, |_| 1.0);
     }
 
-    /// Like [`Self::rebuild`], scaling each bunker's range by its owner's
-    /// multiplier (hero bunker-range ability).
+    /// Like [`Self::rebuild`], scaling each tower's range by its owner's
+    /// tower-range hero bonus.
     pub fn rebuild_with_range(
         &mut self,
         buildings: &[Building],
@@ -238,14 +256,17 @@ impl DefenseGrid {
         }
 
         for &b in buildings {
-            if b.kind == BuildingKind::Bunker && b.active_level() > 0 {
+            if b.kind == BuildingKind::Tower && b.active_level() > 0 {
                 let bx = b.tile_idx % map_width;
                 let by = b.tile_idx / map_width;
                 let cx = bx / cell_size;
                 let cy = by / cell_size;
                 let active_level = b.active_level();
-                let range = (f64::from(b.defense_range_cfg(cfg)) * range_multiplier(b.owner_id))
-                    .round() as i32;
+                let range = tower_range_for_level(
+                    active_level,
+                    cfg,
+                    range_multiplier(b.owner_id),
+                );
                 if range > 0 && cx < grid_w && cy < grid_h {
                     self.cells[(cy * grid_w + cx) as usize].push(DefenseTower {
                         owner_id: b.owner_id,
@@ -305,7 +326,7 @@ impl DefenseGrid {
             return (0.0, 0.0);
         }
 
-        let max_range = 20;
+        let max_range = MAX_TOWER_REACH;
         let cx_min = tile_x.saturating_sub(max_range) / self.cell_size;
         let cx_max = ((tile_x + max_range) / self.cell_size).min(self.grid_w - 1);
         let cy_min = tile_y.saturating_sub(max_range) / self.cell_size;
@@ -369,7 +390,7 @@ impl DefenseGrid {
 
         let tile_idx = u64::from(tile_y) * u64::from(map_width) + u64::from(tile_x);
         let sample = defense_sample(match_seed, attacker_id, target_owner, tile_idx);
-        cfg.bunker_priority * weighted_levels * (0.5 + sample)
+        cfg.tower_priority * weighted_levels * (0.5 + sample)
     }
 
     /// Calculate one deterministic, distance-weighted defense sample for a tile.
@@ -396,9 +417,9 @@ impl DefenseGrid {
 
         DefenseInfluence {
             capture_multiplier: 1.0 + 3.0 * strongest_coverage * sample,
-            priority_bonus: cfg.bunker_priority * weighted_levels * (0.5 + sample),
+            priority_bonus: cfg.tower_priority * weighted_levels * (0.5 + sample),
             attacker_loss_multiplier: 1.0
-                + (cfg.bunker_strength * weighted_levels * (0.5 + sample)).clamp(0.0, 0.50),
+                + (cfg.tower_strength * weighted_levels * (0.5 + sample)).clamp(0.0, 0.50),
         }
     }
 }
@@ -629,12 +650,23 @@ impl BuildingGrid {
 mod defense_influence_tests {
     use super::*;
 
+    #[test]
+    fn every_tower_reach_fits_the_search_window() {
+        for hero in crate::player::Leader::all() {
+            let reach = 20.0 * hero.tower_range_multiplier();
+            assert!(
+                reach <= f64::from(MAX_TOWER_REACH),
+                "{hero:?} reaches {reach} tiles, past the search window"
+            );
+        }
+    }
+
     fn tower(x: u32, y: u32, width: u32, owner_id: u16, level: u8) -> Building {
         Building {
             id: 1,
             owner_id,
             tile_idx: y * width + x,
-            kind: BuildingKind::Bunker,
+            kind: BuildingKind::Tower,
             level,
             under_construction: false,
             ticks_until_complete: 0,
@@ -647,7 +679,7 @@ mod defense_influence_tests {
         let target_tower = tower(32, 32, width, 2, 2);
         let other_owners = [tower(32, 32, width, 1, 4), tower(32, 32, width, 3, 4)];
         let cfg = crate::game_config::GameConfig::default();
-        assert_eq!(target_tower.defense_range_cfg(&cfg), 16);
+        assert_eq!(target_tower.defense_range_cfg(&cfg), 8);
         let mut grid = DefenseGrid::default();
         grid.rebuild(
             &[target_tower, other_owners[0], other_owners[1]],
@@ -664,7 +696,7 @@ mod defense_influence_tests {
         assert_eq!(center.capture_multiplier, 1.0 + 3.0 * center_sample);
         assert_eq!(
             center.priority_bonus,
-            cfg.bunker_priority * 2.0 * (0.5 + center_sample)
+            cfg.tower_priority * 2.0 * (0.5 + center_sample)
         );
         assert_eq!(
             center.priority_bonus,
@@ -672,29 +704,29 @@ mod defense_influence_tests {
         );
         assert_eq!(
             center.attacker_loss_multiplier,
-            1.0 + (cfg.bunker_strength * 2.0 * (0.5 + center_sample)).clamp(0.0, 0.50)
+            1.0 + (cfg.tower_strength * 2.0 * (0.5 + center_sample)).clamp(0.0, 0.50)
         );
         assert!((1.0..=4.0).contains(&center.capture_multiplier));
 
-        let at_three_quarters = grid.influence(44, 32, width, 2, 1, seed, &cfg);
-        let sample = defense_sample(seed, 1, 2, 32 * width as u64 + 44);
+        let at_three_quarters = grid.influence(38, 32, width, 2, 1, seed, &cfg);
+        let sample = defense_sample(seed, 1, 2, 32 * width as u64 + 38);
         assert_eq!(at_three_quarters.capture_multiplier, 1.0 + 3.0 * sample);
 
-        let fading = grid.influence(45, 32, width, 2, 1, seed, &cfg);
-        let sample = defense_sample(seed, 1, 2, 32 * width as u64 + 45);
-        assert_eq!(fading.capture_multiplier, 1.0 + 3.0 * 0.75 * sample);
+        let fading = grid.influence(39, 32, width, 2, 1, seed, &cfg);
+        let sample = defense_sample(seed, 1, 2, 32 * width as u64 + 39);
+        assert_eq!(fading.capture_multiplier, 1.0 + 3.0 * 0.5 * sample);
         assert_eq!(
             fading.priority_bonus,
-            cfg.bunker_priority * 1.5 * (0.5 + sample)
+            cfg.tower_priority * (0.5 + sample)
         );
         assert_eq!(
             fading.attacker_loss_multiplier,
-            1.0 + (cfg.bunker_strength * 1.5 * (0.5 + sample)).clamp(0.0, 0.50)
+            1.0 + (cfg.tower_strength * (0.5 + sample)).clamp(0.0, 0.50)
         );
 
-        let edge = grid.influence(48, 32, width, 2, 1, seed, &cfg);
+        let edge = grid.influence(40, 32, width, 2, 1, seed, &cfg);
         assert_eq!(edge, DefenseInfluence::NONE);
-        let outside = grid.influence(49, 32, width, 2, 1, seed, &cfg);
+        let outside = grid.influence(41, 32, width, 2, 1, seed, &cfg);
         assert_eq!(outside, DefenseInfluence::NONE);
 
         let mut no_towers = DefenseGrid::default();
@@ -711,8 +743,27 @@ mod defense_influence_tests {
 
     #[test]
     fn influence_keeps_the_existing_capped_tower_range() {
-        let cfg = crate::game_config::GameConfig::default();
+        let mut cfg = crate::game_config::GameConfig::default();
+        cfg.tower_range = 18.0;
         let tower = tower(32, 32, 64, 2, 4);
         assert_eq!(tower.defense_range_cfg(&cfg), 20);
+    }
+
+    #[test]
+    fn tower_range_uses_base_level_increments_and_hero_bonus() {
+        let cfg = crate::game_config::GameConfig::default();
+        assert_eq!(tower_range_for_level(0, &cfg, 1.0), 0);
+        assert_eq!(
+            (1..=4)
+                .map(|level| tower_range_for_level(level, &cfg, 1.0))
+                .collect::<Vec<_>>(),
+            [6, 8, 10, 12]
+        );
+        assert_eq!(
+            (1..=4)
+                .map(|level| tower_range_for_level(level, &cfg, 1.5))
+                .collect::<Vec<_>>(),
+            [9, 12, 15, 18]
+        );
     }
 }

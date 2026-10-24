@@ -784,8 +784,12 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
         &[
             "--test",
             "sow-web/shell/menu_flow.test.js",
+            "sow-web/shell/map_interaction.test.js",
+            "sow-web/shell/loader_boot.test.js",
+            "sow-web/shell/menu_presentation.test.js",
             "sow-web/shell/campaign_view.test.js",
             "sow-web/shell/gameplay_ui.test.js",
+            "sow-web/shell/gameplay_interaction.test.js",
         ],
         Some(&paths.root),
     )
@@ -825,6 +829,8 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "server-confirmed reward exit tests failed",
         ),
         ("hero_ability", "hero ability client tests failed"),
+        ("status_badge", "nameplate status badge tests failed"),
+        ("troop_transfer", "troop transfer nameplate tests failed"),
     ] {
         run(
             "cargo",

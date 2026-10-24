@@ -32,28 +32,29 @@ pub fn load(map_key: &str) -> Option<Vec<u8>> {
 }
 
 /// Store a map payload after a successful download or SP session.
-pub fn persist(map_key: &str, bytes: &[u8]) {
+pub fn persist(map_key: &str, bytes: &[u8]) -> bool {
     if !validate_payload(bytes) {
         log::warn!("map_cache: skip persist for invalid payload ({map_key})");
-        return;
+        return false;
     }
     let key = maps::map_key(map_key);
     #[cfg(target_arch = "wasm32")]
     {
         let Some(window) = web_sys::window() else {
-            return;
+            return true;
         };
         let Ok(Some(storage)) = window.local_storage() else {
-            return;
+            return true;
         };
         let Some(encoded) = base64_encode(bytes) else {
             log::warn!("map_cache: base64 encode failed for {key}");
-            return;
+            return true;
         };
         if let Err(e) = storage.set_item(&storage_key(&key), &encoded) {
             log::warn!("map_cache: localStorage set failed for {key}: {e:?}");
         }
     }
+    true
 }
 
 /// Map keys with a valid cached payload.

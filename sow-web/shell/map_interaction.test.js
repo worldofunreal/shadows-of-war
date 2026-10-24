@@ -119,7 +119,7 @@ test("primary click selects owned buildings without changing other map gestures"
     const targetEnd = mapClick.indexOf("fn attack_from_tile", targetStart);
     const targetBody = mapClick.slice(targetStart, targetEnd);
     assert.match(targetBody, /target\.owner == target\.my_id\s*\{\s*return;/);
-    assert.match(targetBody, /if target\.is_friendly\(\)\s*\{\s*self\.open_map_context_menu\(x, y\);\s*\} else \{\s*self\.attack_from_tile\(tile_idx\);/);
+    assert.match(targetBody, /if target\.is_friendly\(\)\s*\{\s*self\.open_map_context_menu\(x, y\);\s*\} else if target\.is_attackable\(\) && !self\.can_attack\(tile_idx, target\.owner\)\s*\{\s*self\.launch_fleet_from_tile\(tile_idx\);\s*\} else \{\s*self\.attack_from_tile\(tile_idx\);/);
     assert.doesNotMatch(targetBody, /open_transfer_from_tile/);
 
     const actionStart = mapClick.indexOf("pub(crate) fn handle_map_menu_action");
@@ -128,6 +128,45 @@ test("primary click selects owned buildings without changing other map gestures"
     assert.match(actionBody, /menu\.session != session \|\| menu\.tile_idx != tile_idx/);
     assert.match(actionBody, /!self\.map_menu_actions\(tile_idx\)\.contains\(&action\)/);
     assert.match(actionBody, /MapMenuAction::Transfer => \{\s*self\.open_transfer_from_tile\(tile_idx\);/);
+});
+
+
+test("out-of-range primary clicks reuse fleet routing and report full capacity", () => {
+    const fastStart = mapClick.indexOf("pub(crate) fn try_attack_at");
+    const fastEnd = mapClick.indexOf("pub(crate) fn handle_map_click", fastStart);
+    const fastBody = mapClick.slice(fastStart, fastEnd);
+    assert.match(fastBody, /if !self\.can_attack\(tile_idx, target\.owner\)\s*\{\s*return false;/);
+    assert.doesNotMatch(fastBody, /launch_fleet_from_tile/);
+    const targetStart = mapClick.indexOf("fn primary_target");
+    const targetEnd = mapClick.indexOf("fn attack_from_tile", targetStart);
+    const targetBody = mapClick.slice(targetStart, targetEnd);
+    assert.match(targetBody, /if target\.is_friendly\(\)\s*\{\s*self\.open_map_context_menu\(x, y\);\s*\} else if target\.is_attackable\(\) && !self\.can_attack\(tile_idx, target\.owner\)\s*\{\s*self\.launch_fleet_from_tile\(tile_idx\);\s*\} else\s*\{\s*self\.attack_from_tile\(tile_idx\);/);
+
+    const releaseStart = windowInput.indexOf("if start.action_sent || was_building_drag");
+    const releaseEnd = windowInput.indexOf("} else if right", releaseStart);
+    const releaseBody = windowInput.slice(releaseStart, releaseEnd);
+    assert.match(releaseBody, /if start\.action_sent \|\| was_building_drag\s*\{\s*return;/);
+    assert.match(releaseBody, /self\.handle_map_click\(x, y\)/);
+    const pressStart = windowInput.indexOf("let action_sent = dismisses_radial");
+    const pressEnd = windowInput.indexOf("self.input.map_pointer_start = Some", pressStart);
+    assert.match(windowInput.slice(pressStart, pressEnd), /self\.try_attack_at\(x, y\)/);
+
+    const fleetStart = mapClick.indexOf("pub(crate) fn launch_fleet_from_tile");
+    const fleetEnd = mapClick.indexOf("fn open_transfer_from_tile", fleetStart);
+    const fleetBody = mapClick.slice(fleetStart, fleetEnd);
+    assert.ok(fleetBody.indexOf("has_fleet_capacity") < fleetBody.indexOf("fleet_route_check"));
+    assert.match(fleetBody, /hud\.fleet_capacity_full/);
+    assert.match(fleetBody, /FleetRouteCheck::Path[\s\S]*?show_fleet_unavailable\(error\)/);
+    assert.match(fleetBody, /troops < self\.sim\.config\.attack_cost_neutral[\s\S]*?hud\.fleet_need_troops/);
+    assert.match(fleetBody, /GameplayIntent::LaunchFleet/);
+    for (const validation of ["has_fleet_capacity", "FleetRouteCheck::Path", "attack_cost_neutral"]) {
+        assert.ok(fleetBody.indexOf(validation) < fleetBody.indexOf("self.send_intent"), `${validation} must pass before sending`);
+    }
+
+    const capacityStart = mapClick.indexOf("fn has_fleet_capacity");
+    const capacityEnd = mapClick.indexOf("pub(crate) fn map_menu_actions", capacityStart);
+    const capacityBody = mapClick.slice(capacityStart, capacityEnd);
+    assert.match(capacityBody, /boats_in_use < player\.boat_capacity/);
 });
 
 
@@ -163,15 +202,30 @@ test("map menu keeps context without inventing unavailable actions", () => {
 
 
 
-test("fleet dock uses building buttons for real actions and an automatic-trade status icon", () => {
-    const stripStart = hud.indexOf('<div class="sow-hud__fleet-strip"');
-    const stripEnd = hud.indexOf("</div>", stripStart);
-    const strip = hud.slice(stripStart, stripEnd);
-    assert.match(strip, /<span class="sow-hud__building-btn sow-hud__fleet-status" data-fleet-kind="trade" role="img"/);
-    assert.match(strip, /hudIcon\("trade_ship", "sow-hud__building-icon"\)/);
-    assert.match(strip, /class="sow-hud__building-btn" data-command="select_warship"[\s\S]*?hudIcon\("warship", "sow-hud__building-icon"\)/);
-    assert.match(strip, /class="sow-hud__building-btn" data-command="select_nuke"[\s\S]*?hudIcon\("nuke", "sow-hud__building-icon"\)/);
-    assert.doesNotMatch(strip, /data-command="[^"]+" data-fleet-kind="trade"|<b(?:\s|>)|<small(?:\s|>)/);
+test("bottom bar tiles draw ships as building art, show the gold price and lock with one badge", () => {
+    const start = hud.indexOf("    function unitIcon(");
+    const end = hud.indexOf("    function leaderById(id)", start);
+    const tiles = vm.runInNewContext(hud.slice(start, end) + "\n({ unitIcon, tileCost, tileLock, setTileCost });", {
+        asset: (name) => "/assets/" + name,
+        escapeHudText: (value) => String(value),
+        formatHudMetric: (value) => String(Math.floor(value)),
+        hudIcon: (name, cls) => '<img class="' + cls + '" data-icon="' + name + '">',
+    });
+    for (const unit of ["trade-ship", "warship", "atom-bomb"]) {
+        const icon = tiles.unitIcon(unit);
+        assert.ok(icon.includes("is-pixel-art"), unit);
+        assert.ok(icon.includes("/assets/gameplay/units/" + unit + ".png"), unit);
+        assert.ok(fs.existsSync(path.join(shell, "../../assets/art/units", unit + ".png")), unit);
+    }
+    assert.equal(tiles.tileCost(false).includes("<b>"), false);
+    assert.equal(tiles.tileCost(true).includes("<b>"), true);
+    assert.equal(tiles.tileLock().includes("sow-hud__ring-badge"), true);
+    const label = { textContent: "" };
+    const tile = { querySelector: (selector) => selector === ".sow-hud__tile-cost b" ? label : null };
+    tiles.setTileCost(tile, 175);
+    assert.equal(label.textContent, "175");
+    tiles.setTileCost(tile, 0);
+    assert.equal(label.textContent, "");
 });
 
 
@@ -259,7 +313,7 @@ test("building menus use generated pixel-art sprites with white glyph fallback",
         escapeHudText: (value) => String(value),
     });
     const buildingIcon = load(artManifest);
-    for (const kind of ["City", "Factory", "Port", "Bunker", "Farm"]) {
+    for (const kind of ["City", "Factory", "Port", "Tower", "Farm"]) {
         for (const level of [1, 2, 3, 4]) {
             const icon = buildingIcon(kind, level);
             const sprite = artManifest.sprites[kind][String(level)];
@@ -276,13 +330,13 @@ test("building menus use generated pixel-art sprites with white glyph fallback",
     // Before the manifest arrives the HUD shows the white glyph, never an emoji.
     const glyphSource = (name) => hud.match(new RegExp("\\n        " + name + ": '([^']+)'"))[1];
     const withoutArt = load(undefined);
-    for (const [kind, glyph] of Object.entries({ City: "city", Factory: "factory", Port: "anchor", Bunker: "defense", Farm: "farm" })) {
+    for (const [kind, glyph] of Object.entries({ City: "city", Factory: "factory", Port: "anchor", Tower: "defense", Farm: "farm" })) {
         assert.ok(withoutArt(kind).includes('<g class="sow-hud__glyph-face">' + glyphSource(glyph) + "</g>"), kind);
     }
 
-    const kinds = [...hud.matchAll(/data-command="select_building" data-kind="(City|Factory|Port|Bunker|Farm)"/g)]
+    const kinds = [...hud.matchAll(/data-command="select_building" data-kind="(City|Factory|Port|Tower|Farm)"/g)]
         .map((match) => match[1]);
-    assert.deepEqual(kinds, ["City", "Factory", "Port", "Bunker", "Farm"]);
+    assert.deepEqual(kinds, ["City", "Factory", "Port", "Tower", "Farm"]);
 });
 
 
@@ -296,6 +350,15 @@ test("mobile hover is Rust-owned and the HUD only presents its state", () => {
 
 test("ring center closes at the root and goes back inside submenus", () => {
     assert.match(hud, /if \(back\) back\.click\(\);\s*else send\("close_map_context_menu"\);/);
+});
+
+
+test("a press that only closes the radial is consumed on press and on release", () => {
+    assert.match(windowInput, /fn press_dismisses_radial\(&self, x: f64, y: f64\) -> bool/);
+    assert.match(windowInput, /let dismisses_radial = self\.press_dismisses_radial\(x, y\);/);
+    assert.match(windowInput, /let action_sent = dismisses_radial\s*\|\|/);
+    assert.match(windowInput, /action_sent: dismisses_radial,/);
+    assert.match(windowInput, /action_sent: self\.press_dismisses_radial\(x, y\),/);
 });
 
 
@@ -406,11 +469,11 @@ test("ring slots stay fixed per action and leave notches for inapplicable ones",
     assert.deepEqual(ids([]), ["-", "-", "-", "-", "-", "-"]);
 
     context.mapMenuView = "build";
-    assert.deepEqual(ids(act("emote", "build_city", "build_bunker", "build_farm")), ["build_city", "-", "-", "build_bunker", "build_farm", "-"]);
+    assert.deepEqual(ids(act("emote", "build_city", "build_tower", "build_farm")), ["build_city", "-", "-", "build_tower", "build_farm", "-"]);
     context.mapMenuView = "emote";
     const emotes = [{ kind: "greet" }, { kind: "help" }, { kind: "threat" }, { kind: "celebrate" }];
     assert.deepEqual(ids([], { emotes }), ["emote:greet", "emote:celebrate", "emote:threat", "emote:help", "-", "pin"]);
-    assert.deepEqual(ids([], { emotes, emote_pinned: true }), ["emote:greet", "emote:celebrate", "emote:threat", "emote:help", "clear", "pin"]);
+    assert.deepEqual(ids([], { emotes, emote_active: true, emote_pinned: true }), ["emote:greet", "emote:celebrate", "emote:threat", "emote:help", "clear", "pin"]);
 });
 
 

@@ -27,15 +27,14 @@ pub fn roll(
     rng: &mut impl Rng,
 ) -> MatchmakingPopulation {
     let max_players = roll_human_capacity(game_mode, rng);
-    let (bot_count, nation_count) = if game_mode == "HumansVsNations" {
-        // HvN nations are determined from the final human roster; keep the full
-        // tribe pool as food, independent of map size.
-        (GameConfig::max_tribe_bots(), 0)
+    let bot_count = GameConfig::max_tribe_bots();
+    let nation_count = if game_mode == "HumansVsNations" {
+        // HvN nations are determined from the final human roster.
+        0
     } else {
         let neutral_ai = roll_neutral_ai(map.map(|entry| entry.num_land_tiles).unwrap_or(0), rng);
         let nation_share = rng.gen_range(NATION_SHARE_MIN..=NATION_SHARE_MAX);
-        let nation_count = ((neutral_ai as f64) * nation_share).round() as u32;
-        (neutral_ai - nation_count, nation_count)
+        ((neutral_ai as f64) * nation_share).round() as u32
     };
 
     MatchmakingPopulation {
@@ -138,21 +137,24 @@ mod tests {
     }
 
     #[test]
-    fn ffa_population_splits_a_varied_map_budget() {
-        let mut rng = StdRng::seed_from_u64(29);
+    fn matchmaking_modes_keep_full_tribe_pool_and_vary_nations() {
+        let full_tribe_pool = GameConfig::max_tribe_bots();
+        assert_eq!(full_tribe_pool, 400, "matchmaking requires 400 tribes");
         let map = map(702_702);
-        let mut nation_counts = std::collections::HashSet::new();
 
-        for _ in 0..100 {
-            let population = roll(Some(&map), "FFA", &mut rng);
-            let neutral_total = population.bot_count + population.nation_count;
-            assert!((MIN_NEUTRAL_AI..=MAX_NEUTRAL_AI).contains(&neutral_total));
-            assert!(population.bot_count > 0);
-            assert!(population.nation_count > 0);
-            nation_counts.insert(population.nation_count);
+        for (seed, mode) in [(29, "FFA"), (31, "Teams")] {
+            let mut rng = StdRng::seed_from_u64(seed);
+            let mut nation_counts = std::collections::HashSet::new();
+
+            for _ in 0..100 {
+                let population = roll(Some(&map), mode, &mut rng);
+                assert_eq!(population.bot_count, full_tribe_pool, "mode={mode}");
+                assert!(population.nation_count > 0, "mode={mode}");
+                nation_counts.insert(population.nation_count);
+            }
+
+            assert!(nation_counts.len() > 1, "mode={mode} nations did not vary");
         }
-
-        assert!(nation_counts.len() > 1);
     }
 
     #[test]

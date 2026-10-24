@@ -39,7 +39,7 @@ impl SowEngine {
                     let city_equivalent =
                         agg.ready_city_count.max((player_tile_count / 1000).max(1));
                     let mut build_order = [
-                        BuildingKind::Bunker,
+                        BuildingKind::Tower,
                         BuildingKind::City,
                         BuildingKind::Factory,
                         BuildingKind::Port,
@@ -75,7 +75,7 @@ impl SowEngine {
                         let level_count = agg.levels_of_kind(kind);
                         let mut target_count =
                             bot_structure_target_count(kind, city_equivalent, bot_iq);
-                        if kind == BuildingKind::Bunker && bot_iq >= 110 {
+                        if kind == BuildingKind::Tower && bot_iq >= 110 {
                             let under_attack = self
                                 .ai_attack_index
                                 .get(bot_id as usize)
@@ -85,7 +85,7 @@ impl SowEngine {
                             }
                         }
                         let total_owned = agg.count_city
-                            + agg.count_bunker
+                            + agg.count_tower
                             + agg.count_factory
                             + agg.count_port
                             + agg.count_farm;

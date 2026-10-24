@@ -1419,6 +1419,7 @@
     }
 
     function updateDynamic() {
+        syncHeroesRotationCountdown();
         if (!state || root.hidden) return;
         if (storeOpen && typeof loadStoreCatalog === "function") loadStoreCatalog();
         ensureProgressionDisplay();
@@ -1456,7 +1457,7 @@
         if (musicValBadge && musicInput) musicValBadge.textContent = Math.round(Number(musicInput.value) * 100) + "%";
         var timer = panel.querySelector("[data-live-countdown]");
         var lobby = joinedLobby();
-        if (timer && lobby) timer.textContent = lobby.is_counting_down ? SOW_t("lobbies.starting_in", { seconds: Math.ceil(lobby.timer_secs) }) : SOW_t("lobbies.waiting_for_players");
+        if (timer && lobby) timer.textContent = state.match_preparing ? SOW_t("menu.loading") : lobby.is_counting_down ? SOW_t("lobbies.starting_in", { seconds: Math.ceil(lobby.timer_secs) }) : SOW_t("lobbies.waiting_for_players");
         updateQueueRoster(lobby);
         var cardStatuses = panel.querySelectorAll("[data-lobby-status-for]");
         for (var i = 0; i < cardStatuses.length; i++) {
@@ -2463,6 +2464,7 @@
     });
 
     document.addEventListener("visibilitychange", function () {
+        syncHeroesRotationCountdown();
         if (document.visibilityState !== "visible") {
             if (window.SOW_menu_guide) window.SOW_menu_guide.pause();
             if (state && (rewardAnimationRunning || progressionAnimationTarget)) {

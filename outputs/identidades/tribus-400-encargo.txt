@@ -1,11 +1,4 @@
-FALTAN (6)
-Roman veteran — Roman tutorial | colonia_veterans.jpg
-Roman officer — Roman tutorial | roman.jpg
-Roman legionary — Roman tutorial | roman_legionary.jpg
-Roman praetorian — Roman tutorial | roman_praetorian.jpg
-
-Roman supply officer — Roman tutorial | roman_supply_depot.jpg
-Tax collector — Roman tutorial | tax_collectors.jpg
+FALTAN (0)
 
 TENEMOS (420)
 Ahmad Shah Durrani — Abdalis (Durrani) | abdalis.jpg

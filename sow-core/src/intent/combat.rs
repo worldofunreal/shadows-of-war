@@ -282,6 +282,14 @@ impl SowEngine {
             return;
         }
 
+        crate::execution::combat::announce_attack_abilities(
+            &mut self.state,
+            player_id,
+            target_owner,
+            remaining,
+            None,
+        );
+
         self.refresh_defense_grid();
         let mut rng = WyRand::new(
             self.state
@@ -375,7 +383,7 @@ mod tests {
             id: 1,
             owner_id: 2,
             tile_idx: 3 * width + 3,
-            kind: BuildingKind::Bunker,
+            kind: BuildingKind::Tower,
             level: 2,
             under_construction: false,
             ticks_until_complete: 0,
@@ -420,7 +428,7 @@ mod tests {
             id: 1,
             owner_id: 2,
             tile_idx: 3 * width + 3,
-            kind: BuildingKind::Bunker,
+            kind: BuildingKind::Tower,
             level: 2,
             under_construction: false,
             ticks_until_complete: 0,

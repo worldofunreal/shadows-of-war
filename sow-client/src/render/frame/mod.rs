@@ -659,7 +659,9 @@ fn tile_effect_styles(
     [
         f32::from(skin_style),
         f32::from(u8::from(empowered_attack)),
-        f32::from(u8::from(leader.has_mountain_cost())),
+        f32::from(u8::from(leader.has_attacker_loss(
+            sow_core::geo_entities::LossWhen::Mountain,
+        ))),
         0.0,
     ]
 }
@@ -670,17 +672,16 @@ mod hero_ability_tile_flags {
     use sow_core::player::Leader;
 
     #[wasm_bindgen_test::wasm_bindgen_test]
-    fn napoleon_outnumbered_attack_sets_the_inverted_flash_flag() {
-        let napoleon = Leader::of("napoleon");
-        assert_eq!(tile_effect_styles(3, napoleon, true), [3.0, 1.0, 0.0, 0.0]);
-        assert_eq!(tile_effect_styles(3, napoleon, false), [3.0, 0.0, 0.0, 0.0]);
+    fn tenamaxtli_outnumbered_attack_sets_the_inverted_flash_flag() {
+        let tenamaxtli = Leader::of("tenamaxtli");
+        assert_eq!(tile_effect_styles(3, tenamaxtli, true), [3.0, 1.0, 0.0, 0.0]);
+        assert_eq!(tile_effect_styles(3, tenamaxtli, false), [3.0, 0.0, 0.0, 0.0]);
     }
 
     #[wasm_bindgen_test::wasm_bindgen_test]
-    fn hannibal_sets_the_mountain_flag_and_no_one_else_does() {
-        let hannibal = Leader::of("hannibal");
-        assert_eq!(tile_effect_styles(0, hannibal, false), [0.0, 0.0, 1.0, 0.0]);
-        assert_eq!(tile_effect_styles(0, Leader::of("ragnar"), true), [0.0, 1.0, 0.0, 0.0]);
+    fn highland_hero_sets_no_mountain_flag() {
+        assert_eq!(tile_effect_styles(0, Leader::of("nemequene"), false), [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(tile_effect_styles(0, Leader::of("cleopatra"), true), [0.0, 1.0, 0.0, 0.0]);
     }
 }
 

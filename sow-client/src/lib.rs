@@ -190,7 +190,10 @@ pub enum MapDownloadEvent {
         reason: String,
     },
     Progress(String, u8),
-    Error(String),
+    Error {
+        map_name: String,
+        reason: String,
+    },
 }
 
 pub enum EngineInitEvent {
@@ -242,7 +245,7 @@ pub(crate) fn building_sound_kind(
 ) -> sow_audio::BuildingSoundKind {
     match value {
         sow_core::game::BuildingKind::City => sow_audio::BuildingSoundKind::City,
-        sow_core::game::BuildingKind::Bunker => sow_audio::BuildingSoundKind::Bunker,
+        sow_core::game::BuildingKind::Tower => sow_audio::BuildingSoundKind::Tower,
         sow_core::game::BuildingKind::Factory => sow_audio::BuildingSoundKind::Factory,
         sow_core::game::BuildingKind::Port => sow_audio::BuildingSoundKind::Port,
         sow_core::game::BuildingKind::Farm => sow_audio::BuildingSoundKind::Factory,

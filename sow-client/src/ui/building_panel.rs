@@ -45,11 +45,11 @@ pub(crate) fn building_metrics(
     if level == 0 {
         return Vec::new();
     }
-    use sow_core::geo_entities::{District, Resource};
+    use sow_core::geo_entities::{District, Resource, Source};
     let level_weight = sow_core::building::income_level_weight(level);
     let level = f64::from(level);
     let per_minute = config.global_speed_multiplier * 60.0;
-    let hero = |district, resource| leader.district_income_multiplier(district, resource);
+    let hero = |district, resource| leader.resource_bonus_multiplier(Source::District(district), resource);
     match kind {
         BuildingKind::City => vec![
             BuildingMetric::new(
@@ -97,21 +97,22 @@ pub(crate) fn building_metrics(
             "+",
             "",
         )],
-        BuildingKind::Bunker => {
-            let range =
-                (f64::from((config.bunker_range.round() as u32 + (level as u32 - 1) * 2).min(20))
-                    * leader.bunker_range_multiplier())
-                .round();
+        BuildingKind::Tower => {
+            let range = f64::from(sow_core::building::tower_range_for_level(
+                level as u8,
+                config,
+                leader.tower_range_multiplier(),
+            ));
             let mut stats = vec![
                 BuildingMetric::new(
                     Icon::Shield,
-                    level * 5.0 * leader.bunker_defense_multiplier(),
+                    level * 5.0 * leader.tower_loss_multiplier(sow_core::geo_entities::Side::Defender),
                     "+",
                     "%",
                 ),
                 BuildingMetric::new(Icon::Range, range, "", ""),
             ];
-            if level as u8 >= BuildingKind::Bunker.max_level() {
+            if level as u8 >= BuildingKind::Tower.max_level() {
                 stats.push(BuildingMetric {
                     icon: Icon::Radiation,
                     value: None,
@@ -341,30 +342,30 @@ mod tests {
         assert!(port.contains(&BuildingMetric::new(Icon::Boat, 2.0, "+", "")));
         assert!(port.contains(&BuildingMetric::new(Icon::Gold, 30.0, "+", "")));
         assert!(port.contains(&BuildingMetric::new(Icon::Gold, 24.0, "+", "")));
-        let ragnar = building_metrics(
+        let cleopatra = building_metrics(
             BuildingKind::Port,
             2,
-            sow_core::player::Leader::of("ragnar"),
+            sow_core::player::Leader::of("cleopatra"),
             &config,
         );
-        assert!(ragnar.contains(&BuildingMetric::new(Icon::Gold, 45.0, "+", "")));
+        assert!(cleopatra.contains(&BuildingMetric::new(Icon::Gold, 45.0, "+", "")));
         let farm = building_metrics(BuildingKind::Farm, 2, caesar, &config);
         assert!(farm.contains(&BuildingMetric::new(Icon::Troops, 100.0, "+", "")));
         assert!(farm.contains(&BuildingMetric::new(Icon::Gold, 10.0, "+", "")));
-        let bunker = building_metrics(BuildingKind::Bunker, 2, caesar, &config);
-        assert!(bunker.contains(&BuildingMetric::new(Icon::Shield, 10.0, "+", "%")));
-        assert!(bunker.contains(&BuildingMetric::new(Icon::Range, 16.0, "", "")));
+        let tower = building_metrics(BuildingKind::Tower, 2, caesar, &config);
+        assert!(tower.contains(&BuildingMetric::new(Icon::Shield, 10.0, "+", "%")));
+        assert!(tower.contains(&BuildingMetric::new(Icon::Range, 8.0, "", "")));
 
         let gains = upgrade_gains(
-            &building_metrics(BuildingKind::Bunker, 1, caesar, &config),
-            &bunker,
+            &building_metrics(BuildingKind::Tower, 1, caesar, &config),
+            &tower,
         );
         assert!(gains.contains(&BuildingMetric::new(Icon::Shield, 5.0, "+", "%")));
         assert!(gains.contains(&BuildingMetric::new(Icon::Range, 2.0, "+", "")));
-        let max = BuildingKind::Bunker.max_level();
+        let max = BuildingKind::Tower.max_level();
         let top = upgrade_gains(
-            &building_metrics(BuildingKind::Bunker, max - 1, caesar, &config),
-            &building_metrics(BuildingKind::Bunker, max, caesar, &config),
+            &building_metrics(BuildingKind::Tower, max - 1, caesar, &config),
+            &building_metrics(BuildingKind::Tower, max, caesar, &config),
         );
         assert!(
             top.iter()

@@ -149,6 +149,7 @@ enum WebMenuCommand {
     OpenCreate,
     CloseOverlay,
     LeaveLobby,
+    RetryMapDownload,
     StartPrivate {
         lobby_id: u64,
     },
@@ -221,6 +222,9 @@ enum WebMenuCommand {
         attack_id: u64,
     },
     RecallFleet {
+        fleet_id: u64,
+    },
+    ScuttleFleet {
         fleet_id: u64,
     },
     CounterAttack {
@@ -946,6 +950,7 @@ impl SowApp {
                 WebMenuCommand::LeaveLobby => {
                     self.process_ui_actions(Some(UiAction::LeaveLobby));
                 }
+                WebMenuCommand::RetryMapDownload => self.retry_map_download(),
                 WebMenuCommand::StartPrivate { lobby_id } => {
                     self.process_ui_actions(Some(UiAction::StartPrivateLobby(lobby_id)));
                 }
@@ -991,16 +996,13 @@ impl SowApp {
                     sow_audio::set_master_volume(if value {
                         0.0
                     } else {
-                        self.ui.app.settings_state.music_volume
+                        1.0
                     });
                 }
                 WebMenuCommand::SetMusicVolume { value } => {
                     let volume = value.clamp(0.0, 1.0);
                     self.ui.app.settings_state.music_volume = volume;
                     self.ui.app.settings_state.persist_local();
-                    if !self.ui.app.settings_state.mute_all {
-                        sow_audio::set_master_volume(volume);
-                    }
                 }
                 WebMenuCommand::SetReducedMotion { value } => {
                     self.ui.app.settings_state.set_reduced_motion(value);
@@ -1137,6 +1139,9 @@ impl SowApp {
                 }
                 WebMenuCommand::RecallFleet { fleet_id } => {
                     self.send_intent(sow_core::protocol::GameplayIntent::RecallFleet { fleet_id });
+                }
+                WebMenuCommand::ScuttleFleet { fleet_id } => {
+                    self.send_intent(sow_core::protocol::GameplayIntent::ScuttleFleet { fleet_id });
                 }
                 WebMenuCommand::CounterAttack { target_player_id } => {
                     let counter_attack = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
@@ -2123,7 +2128,7 @@ fn tutorial_building_anchors(
                             sow_core::game::BuildingKind::City => "City",
                             sow_core::game::BuildingKind::Farm => "Farm",
                             sow_core::game::BuildingKind::Factory => "Factory",
-                            sow_core::game::BuildingKind::Bunker => "Bunker",
+                            sow_core::game::BuildingKind::Tower => "Tower",
                             sow_core::game::BuildingKind::Port => "Port",
                         };
                         (
@@ -2645,7 +2650,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "farms": observation.seen_buildings_by_kind.get("farms").map_or(0, |ids| ids.len()),
             "factories": observation.seen_buildings_by_kind.get("factories").map_or(0, |ids| ids.len()),
             "ports": observation.seen_buildings_by_kind.get("ports").map_or(0, |ids| ids.len()),
-            "bunkers": observation.seen_buildings_by_kind.get("bunkers").map_or(0, |ids| ids.len()),
+            "towers": observation.seen_buildings_by_kind.get("towers").map_or(0, |ids| ids.len()),
             "ally_support_deliveries": observation.ally_support_deliveries,
             "support_deliveries_by_faction_id": support_deliveries_by_faction_id,
             "structure_upgrades": observation.structure_upgrades,
@@ -2777,7 +2782,7 @@ fn build_hover_payload(
     let mut cities = 0;
     let mut factories = 0;
     let mut ports = 0;
-    let mut bunkers = 0;
+    let mut towers = 0;
     let mut farms = 0;
     for building in &snapshot.buildings {
         if building.owner_id != owner_id {
@@ -2787,7 +2792,7 @@ fn build_hover_payload(
             sow_core::game::BuildingKind::City => cities += 1,
             sow_core::game::BuildingKind::Factory => factories += 1,
             sow_core::game::BuildingKind::Port => ports += 1,
-            sow_core::game::BuildingKind::Bunker => bunkers += 1,
+            sow_core::game::BuildingKind::Tower => towers += 1,
             sow_core::game::BuildingKind::Farm => farms += 1,
         }
     }
@@ -2795,7 +2800,7 @@ fn build_hover_payload(
     payload["cities"] = serde_json::json!(cities);
     payload["factories"] = serde_json::json!(factories);
     payload["ports"] = serde_json::json!(ports);
-    payload["bunkers"] = serde_json::json!(bunkers);
+    payload["towers"] = serde_json::json!(towers);
     payload["farms"] = serde_json::json!(farms);
     payload
 }
@@ -3079,6 +3084,7 @@ fn build_combat_operations_payload(
                 "avatar": avatar,
                 "neutral": neutral,
                 "troops": fleet.troops.max(0.0),
+                "eta_seconds": if is_outgoing { fleet.eta_seconds } else { None },
                 "retreating": fleet.retreating,
                 "focus_x": focus.map(|point| point.0),
                 "focus_y": focus.map(|point| point.1),
@@ -3256,7 +3262,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         .building_placement
         .map(|placement| match placement.kind {
             sow_core::game::BuildingKind::City => "City",
-            sow_core::game::BuildingKind::Bunker => "Bunker",
+            sow_core::game::BuildingKind::Tower => "Tower",
             sow_core::game::BuildingKind::Factory => "Factory",
             sow_core::game::BuildingKind::Port => "Port",
             sow_core::game::BuildingKind::Farm => "Farm",
@@ -3393,7 +3399,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "selected_building_detail": selected_building_detail,
         "building_costs": {
             "city": costs[0],
-            "bunker": costs[1],
+            "tower": costs[1],
             "factory": costs[2],
             "port": costs[3],
             "farm": costs[4],
@@ -3770,6 +3776,13 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "connected": state.is_connected,
             "connecting": state.is_connecting,
             "waiting": state.is_waiting,
+            "match_preparing": app
+                .ui
+                .app
+                .hud_state
+                .sync_state
+                .as_ref()
+                .is_some_and(|sync| sync.is_starting),
             "player_name": state.player_name,
             "selected_leader": leader_id(state.selected_leader),
             "selected_leader_name": state.selected_leader.name(),
@@ -3790,6 +3803,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "my_player_id": state.my_player_id,
             "downloading_map": state.is_downloading_map,
             "map_download_progress": state.map_download_progress,
+            "map_download_error": state.map_download_error.is_some(),
             "lobbies": state.lobbies,
             "error": state.error_message.as_ref().map(localized_text_payload),
             "notice": notice_name(state.notice),
@@ -4481,6 +4495,7 @@ mod tests {
             make_snapshot(12, 1, UnitType::TradeShip),
             make_snapshot(13, 1, UnitType::Warship),
         ];
+        snapshot.fleets[0].eta_seconds = Some(3.25);
 
         let state = GameState::new(1, 5, 5, GameConfig::default());
         let water = WaterComponents::compute(&state.map, |_| {});
@@ -4534,6 +4549,13 @@ mod tests {
         assert_eq!(operations[1]["direction"], "outgoing");
         assert_eq!(operations[1]["id"], 10);
         assert_eq!(operations[1]["neutral"], true);
+        assert_eq!(operations[1]["eta_seconds"], 3.25);
+        assert!(operations[0]["eta_seconds"].is_null());
+
+        snapshot.fleets[0].retreating = true;
+        snapshot.fleets[0].eta_seconds = Some(1.25);
+        let returning = build_combat_operations_payload(&snapshot, 1, Some(&engine), 5);
+        assert_eq!(returning[1]["eta_seconds"], 1.25);
         snapshot.fleets.clear();
         assert_eq!(
             combat_operations_snapshot_tick(&snapshot, 1, Some(&engine)),

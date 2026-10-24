@@ -205,6 +205,10 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
         clearCompactHudDensity() {}, clearMapFeedback() {}, clearNotificationCard() {}
     });
     vm.runInContext(hud.slice(hud.indexOf("    var hudState ="), hud.indexOf("    function send(")), context);
+    const endgameRefsStart = hud.indexOf("    function endgameStatRefs(");
+    const endgameRefsEnd = hud.indexOf("\n    function renderEndgameStats(", endgameRefsStart);
+    assert.ok(endgameRefsStart >= 0 && endgameRefsEnd > endgameRefsStart);
+    vm.runInContext(hud.slice(endgameRefsStart, endgameRefsEnd), context);
     const refsStart = hud.indexOf("        hudRefs = {");
     const refsEnd = hud.indexOf("\n        };", refsStart) + "\n        };".length;
     assert.ok(refsStart >= 0 && refsEnd > refsStart);
@@ -241,7 +245,7 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
     const operations = [
         { kind: "attack", id: 7, direction: "incoming", player_id: 2, name: "Caesar", troops: 100, avatar: { kind: "portrait", slug: "caesar" }, focus_x: 3, focus_y: 4 },
         { kind: "attack", id: 8, direction: "outgoing", player_id: 0, neutral: true, troops: 200, avatar: { kind: "wilderness" } },
-        { kind: "fleet", id: 9, direction: "outgoing", player_id: 3, name: "Ally", troops: 50, avatar: { kind: "portrait", slug: "queruscos" } }
+        { kind: "fleet", id: 8, direction: "outgoing", player_id: 3, name: "Ally", troops: 50, eta_seconds: 12.1, focus_x: 2, focus_y: 3, avatar: { kind: "portrait", slug: "queruscos" } }
     ];
     const click = button => context.handleHudClick({ target: button });
     const counters = () => calls.filter(call => call.type === "counter_attack");
@@ -254,7 +258,12 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
     assert.equal(context.hudRefs.operations.hidden, false);
     assert.equal(firstRows[0].children[0].children[0].src, "/assets/gameplay/avatars/caesar.webp");
     assert.equal(firstRows[1].children[0].children[1].innerHTML, "wilderness", "unclaimed land uses assets/art/icons/wilderness");
+    assert.equal(firstRows[2].querySelectorAll('[data-command="focus_world"]').length, 1);
     assert.equal(firstRows[2].querySelectorAll('[data-command="recall_fleet"]').length, 1);
+    assert.equal(firstRows[1].querySelectorAll('[data-command="cancel_attack"]').length, 1);
+    assert.equal(firstRows[2].querySelectorAll('[data-command="cancel_attack"]').length, 0, "a fleet ID cannot be sent as an attack ID");
+    assert.equal(firstRows[2].querySelectorAll('[data-command="scuttle_fleet"]').length, 1);
+    assert.match(firstRows[2].children[1].children[1].textContent, /hud\.transport_eta/);
     context.renderHud();
     assert.equal(firstList.replacements, 1, "unchanged operations do not remount rows");
     firstRows.forEach((row, index) => assert.equal(firstList.children[index], row));
@@ -266,9 +275,13 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
     assert.equal(firstRows[0].children[2].textContent, "120");
     click(firstRows[0].querySelectorAll('[data-command="focus_world"]')[0]);
     assert.deepEqual(calls[0], { type: "focus_world", x: 5, y: 4 });
+    click(firstRows[2].querySelectorAll('[data-command="focus_world"]')[0]);
+    assert.deepEqual(calls[calls.length - 1], { type: "focus_world", x: 2, y: 3 });
     click(counter);
     click(counter);
     assert.equal(counters().length, 1);
+    click(firstRows[2].querySelectorAll('[data-command="scuttle_fleet"]')[0]);
+    assert.deepEqual(calls[calls.length - 1], { type: "scuttle_fleet", fleet_id: 8 });
 
     locale = "es";
     listeners["sow:locale-change"]();
@@ -285,6 +298,16 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
     assert.equal(rebuiltCounter.disabled, true, "a rebuild preserves pending commands");
     click(rebuiltCounter);
     assert.equal(counters().length, 1, "locale rebuild cannot resend a pending counterattack");
+
+    operations[2].retreating = true;
+    operations[2].eta_seconds = 3.1;
+    context.renderHud();
+    const returningFleet = context.hudRefs.operationRows.children[2];
+    assert.equal(returningFleet.querySelectorAll('[data-command="focus_world"]').length, 1);
+    assert.equal(returningFleet.querySelectorAll('[data-command="recall_fleet"]').length, 0);
+    assert.equal(returningFleet.querySelectorAll('[data-command="scuttle_fleet"]').length, 1);
+    assert.match(returningFleet.children[1].children[1].textContent, /es:hud\.returning_transport/);
+    assert.match(returningFleet.children[1].children[1].textContent, /es:hud\.transport_eta/);
 
     context.renderCombatOperations(operations.slice(1));
     assert.equal(rebuiltList.children.length, 2);

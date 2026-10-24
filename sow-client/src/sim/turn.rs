@@ -116,7 +116,7 @@ impl TutorialObservation {
                 self.seen_structures.insert(building.id);
                 let kind = match building.kind {
                     sow_core::game::BuildingKind::City => "cities",
-                    sow_core::game::BuildingKind::Bunker => "bunkers",
+                    sow_core::game::BuildingKind::Tower => "towers",
                     sow_core::game::BuildingKind::Factory => "factories",
                     sow_core::game::BuildingKind::Port => "ports",
                     sow_core::game::BuildingKind::Farm => "farms",
@@ -134,7 +134,7 @@ impl TutorialObservation {
             (sow_core::game::BuildingKind::City, "city"),
             (sow_core::game::BuildingKind::Farm, "farm"),
             (sow_core::game::BuildingKind::Factory, "factory"),
-            (sow_core::game::BuildingKind::Bunker, "bunker"),
+            (sow_core::game::BuildingKind::Tower, "tower"),
             (sow_core::game::BuildingKind::Port, "port"),
         ] {
             let level = engine
@@ -286,7 +286,7 @@ impl TutorialObservation {
                 if let Some(kind) = self.owned_structure_kinds.get(id).copied() {
                     let key = match kind {
                         sow_core::game::BuildingKind::City => "cities",
-                        sow_core::game::BuildingKind::Bunker => "bunkers",
+                        sow_core::game::BuildingKind::Tower => "towers",
                         sow_core::game::BuildingKind::Factory => "factories",
                         sow_core::game::BuildingKind::Port => "ports",
                         sow_core::game::BuildingKind::Farm => "farms",

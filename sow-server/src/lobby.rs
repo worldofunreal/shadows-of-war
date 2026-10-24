@@ -3,6 +3,7 @@
 
 use sow_core::game_config::GameConfig;
 use sow_core::protocol::{LobbyInfo, LobbyKind, Team};
+use std::collections::HashSet;
 use tokio::sync::mpsc;
 
 pub const LOBBY_COUNTDOWN_SECS: f32 = 15.0;
@@ -365,6 +366,7 @@ pub struct JoinPlayerOpts {
     pub skin_style: u8,
     pub client_tx: mpsc::Sender<Vec<u8>>,
     pub target_lobby_id: Option<u64>,
+    pub target_is_retired_matchmaking: bool,
     pub host_private: bool,
     pub database_account_id: Option<String>,
     pub host_config: Option<Box<GameConfig>>,
@@ -457,9 +459,10 @@ pub fn join_player(
     } else if let Some(req) = target_lobby_id {
         match resolve_join_target(Some(req), games) {
             Some(id) => id,
-            None if games
-                .iter()
-                .any(|g| g.id == req && g.kind == LobbyKind::Matchmaking) =>
+            None if opts.target_is_retired_matchmaking
+                || games
+                    .iter()
+                    .any(|g| g.id == req && g.kind == LobbyKind::Matchmaking) =>
             {
                 log::info!(
                     "[JOIN] Requested Matchmaking lobby {} is no longer joinable for {}; falling back",
@@ -767,7 +770,7 @@ fn start_match(lobby: &mut ServerLobby) {
 
     // We no longer build map state or SowEngine here. That is handled by sow-relay.
 
-    lobby.countdown_secs = 16.5; // 15s load + 1.5s stabilize
+    lobby.countdown_secs = 0.0;
     lobby.phase = LobbyPhase::Loading;
 
     log::info!(
@@ -843,7 +846,11 @@ pub fn force_start(games: &mut [ServerLobby], lobby_id: u64, player_id: u16) {
     }
 }
 
-pub fn master_tick(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
+pub fn master_tick(
+    games: &mut Vec<ServerLobby>,
+    next_id: &mut u64,
+    retired_matchmaking_ids: &mut HashSet<u64>,
+) {
     ensure_queue_depth(games, next_id);
     promote_countdown(games);
 
@@ -861,6 +868,9 @@ pub fn master_tick(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
                     lobby.countdown_secs -= TICK_SECS;
                     if lobby.countdown_secs <= 0.0 {
                         start_match(lobby);
+                        if lobby.kind == LobbyKind::Matchmaking {
+                            retired_matchmaking_ids.insert(lobby.id);
+                        }
                     }
                     false
                 }
@@ -880,20 +890,10 @@ pub fn master_tick(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
                         })
                         .collect();
 
-                    let all_ready = players.iter().all(|p| p.is_ready) && !players.is_empty();
-
-                    // If everyone is ready, we force the countdown to jump to 1.5s if it was higher,
-                    // serving as the "Stabilizing..." delay to allow the server to spawn the relay.
-                    if all_ready && lobby.countdown_secs > 1.5 {
-                        lobby.countdown_secs = 1.5;
-                    }
-
-                    let is_starting = all_ready;
-
                     let sync_msg = sow_core::protocol::ServerSyncStateMessage {
                         time_remaining: lobby.countdown_secs.max(0.0),
                         players,
-                        is_starting,
+                        is_starting: true,
                     };
                     match bincode::serialize(&sow_core::protocol::ServerMessage::SyncState(
                         sync_msg,
@@ -920,45 +920,10 @@ pub fn master_tick(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
                     }
 
                     if lobby.countdown_secs <= 0.0 {
-                        if !all_ready {
-                            log::warn!(
-                                "Lobby {} loading phase timed out! Removing slow clients.",
-                                lobby.id
-                            );
-                            let closed_msg = sow_core::protocol::ServerLobbyClosedMessage {
-                                lobby_id: lobby.id,
-                                reason: "Sync timeout. Requeueing...".to_string(),
-                            };
-                            if let Ok(closed_json) = bincode::serialize(
-                                &sow_core::protocol::ServerMessage::LobbyClosed(closed_msg),
-                            ) {
-                                lobby.players.retain(|p| {
-                                    if lobby.ready_players.contains(&p.player_id) {
-                                        true
-                                    } else {
-                                        let _ = p.tx.try_send(closed_json.clone());
-                                        false
-                                    }
-                                });
-                            } else {
-                                log::error!(
-                                    "[LOADING] Failed to serialize LobbyClosed for lobby {} — dropping all slow clients",
-                                    lobby.id
-                                );
-                                lobby
-                                    .players
-                                    .retain(|p| lobby.ready_players.contains(&p.player_id));
-                            }
-                        } else {
-                            log::info!(
-                                "Lobby {} all clients ready, starting active match!",
-                                lobby.id
-                            );
-                        }
                         let has_external_players = lobby.players.iter().any(|p| !p.is_internal_bot);
                         if !has_external_players {
                             log::warn!(
-                                "[SERVER ORCHESTRATOR] Lobby {} aborted relay spawn: no validated external players remaining (they disconnected or failed map sync).",
+                                "[SERVER ORCHESTRATOR] Lobby {} aborted relay spawn: no external players remain.",
                                 lobby.id
                             );
                             // No external players left — drop the lobby so it doesn't waste a relay worker.
@@ -967,7 +932,7 @@ pub fn master_tick(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
                             let external_players =
                                 lobby.players.iter().filter(|p| !p.is_internal_bot).count();
                             log::info!(
-                                "[SERVER ORCHESTRATOR] Lobby {} marked ReadyForRelay with {} validated external players ({} total roster).",
+                                "[SERVER ORCHESTRATOR] Lobby {} marked ReadyForRelay with {} external players ({} total roster).",
                                 lobby.id,
                                 external_players,
                                 lobby.players.len()
@@ -1110,6 +1075,7 @@ mod name_tests {
     use sow_core::game_config::GameConfig;
     use sow_core::player::Leader;
     use sow_core::protocol::Team;
+    use std::collections::HashSet;
 
     fn queue_lobby(id: u64, kind: LobbyKind, mode: &str) -> ServerLobby {
         ServerLobby {
@@ -1149,6 +1115,7 @@ mod name_tests {
             skin_style: 0,
             client_tx,
             target_lobby_id,
+            target_is_retired_matchmaking: false,
             host_private: false,
             database_account_id: None,
             host_config: None,
@@ -1349,14 +1316,39 @@ mod name_tests {
             .collect();
         let mut games = vec![full];
 
-        master_tick(&mut games, &mut 20);
+        master_tick(&mut games, &mut 20, &mut HashSet::new());
 
         assert_eq!(games[0].phase, LobbyPhase::CountingDown);
         assert!(games[0].countdown_secs > 0.0);
 
-        master_tick(&mut games, &mut 20);
+        master_tick(&mut games, &mut 20, &mut HashSet::new());
 
         assert_eq!(games[0].phase, LobbyPhase::Loading);
+    }
+
+    #[test]
+    fn loading_starts_with_players_whose_map_is_still_pending() {
+        let (client_tx, mut client_rx) = tokio::sync::mpsc::channel(4);
+        let mut lobby = queue_lobby(10, LobbyKind::Matchmaking, "FFA");
+        lobby.phase = LobbyPhase::Loading;
+        lobby.countdown_secs = 0.1;
+        lobby.players.push(lobby_player(1, client_tx, None));
+        let mut games = vec![lobby];
+
+        master_tick(&mut games, &mut 20, &mut HashSet::new());
+
+        assert_eq!(games[0].phase, LobbyPhase::ReadyForRelay);
+        assert_eq!(games[0].players.len(), 1);
+        assert!(games[0].ready_players.is_empty());
+
+        let sync = client_rx.try_recv().expect("loading SyncState");
+        let message = bincode::deserialize::<sow_core::protocol::ServerMessage>(&sync)
+            .expect("valid loading message");
+        assert!(matches!(
+            message,
+            sow_core::protocol::ServerMessage::SyncState(state)
+                if state.is_starting && state.players.len() == 1
+        ));
     }
 
     #[test]
@@ -1397,6 +1389,29 @@ mod name_tests {
         assert_eq!(games.len(), 2);
         assert_eq!(games[1].kind, LobbyKind::Matchmaking);
         assert_eq!(games[1].players.len(), 1);
+    }
+
+    #[test]
+    fn retired_matchmaking_lobby_id_routes_to_the_next_queue() {
+        let mut stale = queue_lobby(10, LobbyKind::Matchmaking, "FFA");
+        stale.phase = LobbyPhase::CountingDown;
+        stale.countdown_secs = 0.1;
+        stale.players.push(lobby_player(1, channel_sender(), None));
+        let mut games = vec![stale];
+        let mut retired_ids = HashSet::new();
+
+        master_tick(&mut games, &mut 20, &mut retired_ids);
+        assert!(retired_ids.contains(&10));
+
+        games.retain(|lobby| lobby.id != 10);
+        games.push(queue_lobby(20, LobbyKind::Matchmaking, "FFA"));
+        let mut options = join_options(Some(10), channel_sender());
+        options.target_is_retired_matchmaking = retired_ids.contains(&10);
+        let result = join_player(&mut games, &mut 30, options)
+            .expect("retired matchmaking lobby should route to the next queue");
+
+        assert_eq!(result.0, 20);
+        assert_eq!(games[0].players.len(), 1);
     }
 
     #[test]
@@ -1541,6 +1556,7 @@ mod name_tests {
                 skin_style: 0,
                 client_tx,
                 target_lobby_id: Some(10),
+                target_is_retired_matchmaking: false,
                 host_private: false,
                 database_account_id: None,
                 host_config: None,

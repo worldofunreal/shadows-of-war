@@ -29,6 +29,7 @@ impl SowApp {
         let mut relay_session_resumed = false;
         let mut natural_closure = None;
         let mut natural_finish = None;
+        let mut map_download_to_start = None;
 
         // Process network messages
         if let Some(c) = self.net.client.as_ref()
@@ -171,11 +172,8 @@ impl SowApp {
                         if self.ui.app.main_menu_state.is_waiting {
                             self.ui.app.main_menu_state.wait_timer_secs = sync_msg.time_remaining;
 
-                            // SyncState only reports readiness. ServerStartMessage owns the transition.
                             if sync_msg.is_starting {
-                                log::info!(
-                                    "[LOBBY] All ready (is_starting); keeping queue visible until ServerStartMessage"
-                                );
+                                log::info!("[LOBBY] Server preparing match; waiting for Start");
                             }
 
                             // Update lobby player list in UI
@@ -231,6 +229,7 @@ impl SowApp {
                             let request = ehttp::Request::get(&url);
                             let accumulated =
                                 std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+                            let total_bytes = std::sync::Arc::new(std::sync::Mutex::new(0usize));
                             ehttp::streaming::fetch(
                                 request,
                                 move |result: ehttp::Result<ehttp::streaming::Part>| match result {
@@ -240,7 +239,19 @@ impl SowApp {
                                                 "Prefetch failed for {}",
                                                 map_name_for_closure
                                             );
+                                            let _ = tx.send(MapDownloadEvent::Error {
+                                                map_name: map_name_for_closure.clone(),
+                                                reason: format!("HTTP {}", res.status),
+                                            });
                                             return std::ops::ControlFlow::Break(());
+                                        }
+                                        if let Some(length) = res
+                                            .headers
+                                            .get("content-length")
+                                            .or_else(|| res.headers.get("Content-Length"))
+                                            .and_then(|value| value.parse::<usize>().ok())
+                                        {
+                                            *total_bytes.lock().unwrap() = length;
                                         }
                                         std::ops::ControlFlow::Continue(())
                                     }
@@ -254,10 +265,26 @@ impl SowApp {
                                             ));
                                             return std::ops::ControlFlow::Break(());
                                         }
-                                        accumulated.lock().unwrap().extend_from_slice(&chunk);
+                                        let mut bytes = accumulated.lock().unwrap();
+                                        bytes.extend_from_slice(&chunk);
+                                        let total = *total_bytes.lock().unwrap();
+                                        if total > 0 {
+                                            let progress =
+                                                ((bytes.len() as f64 / total as f64) * 100.0) as u8;
+                                            let _ = tx.send(MapDownloadEvent::Progress(
+                                                map_name_for_closure.clone(),
+                                                progress.min(99),
+                                            ));
+                                        }
                                         std::ops::ControlFlow::Continue(())
                                     }
-                                    Err(_) => std::ops::ControlFlow::Break(()),
+                                    Err(error) => {
+                                        let _ = tx.send(MapDownloadEvent::Error {
+                                            map_name: map_name_for_closure.clone(),
+                                            reason: error.to_string(),
+                                        });
+                                        std::ops::ControlFlow::Break(())
+                                    }
                                 },
                             );
                         }
@@ -382,15 +409,16 @@ impl SowApp {
                         seed_joined_lobby_entry(&mut self.ui.app.main_menu_state, &ack);
                         self.sync_portal_room(true);
 
-                        let map_name = ack.map_name.clone();
+                        let map_name = crate::ui::asset_loader::AssetLoader::map_key(&ack.map_name);
                         self.ui.app.main_menu_state.downloading_map_name = Some(map_name.clone());
 
-                        if self.ui.app.asset_loader.has_map(&map_name) {
+                        if self.ui.app.asset_loader.restore_cached_map(&map_name) {
                             log::info!("Map already cached, skipping download.");
                             self.ui.app.main_menu_state.cached_map =
                                 self.ui.app.asset_loader.take_map(&map_name);
                             self.ui.app.main_menu_state.is_downloading_map = false;
                             self.ui.app.main_menu_state.map_download_progress = 100;
+                            self.ui.app.main_menu_state.map_download_error = None;
                             c.send(
                                 bincode::serialize(
                                     &sow_core::protocol::ClientMessage::MapDownloadProgress {
@@ -407,127 +435,17 @@ impl SowApp {
                             };
                             c.send(bincode::serialize(&ready).unwrap());
                         } else {
-                            let tx = self.tasks.map_tx.clone();
-                            self.ui.app.main_menu_state.is_downloading_map = true;
-                            self.ui.app.main_menu_state.cached_map = None;
-
-                            let maps_base = self.asset_config.maps_base.clone();
-                            let url = format!(
-                                "{}/{}/map.bin.br",
-                                maps_base.trim_end_matches('/'),
-                                map_name
-                            );
-                            log::info!("Downloading map from: {}", url);
-
-                            c.send(
-                                bincode::serialize(
-                                    &sow_core::protocol::ClientMessage::MapDownloadProgress {
-                                        lobby_id: ack.lobby_id,
-                                        player_id: ack.player_id,
-                                        progress: 0,
-                                    },
-                                )
-                                .unwrap(),
-                            );
-
-                            let request = ehttp::Request::get(&url);
-                            let map_name_for_closure = map_name.clone();
-                            let accumulated =
-                                std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-                            let total_bytes = std::sync::Arc::new(std::sync::Mutex::new(0usize));
-
-                            ehttp::streaming::fetch(
-                                request,
-                                move |result: ehttp::Result<ehttp::streaming::Part>| match result {
-                                    Ok(ehttp::streaming::Part::Response(res)) => {
-                                        if !res.ok {
-                                            log::error!("Failed to fetch map, HTTP {}", res.status);
-                                            let _ = tx.send(MapDownloadEvent::Error(format!(
-                                                "HTTP Error: {}",
-                                                res.status
-                                            )));
-                                            return std::ops::ControlFlow::Break(());
-                                        }
-                                        log::info!(
-                                            "Server map response ok! headers: {:?}",
-                                            res.headers
-                                        );
-                                        let cl = res
-                                            .headers
-                                            .get("content-length")
-                                            .or_else(|| res.headers.get("Content-Length"));
-                                        if let Some(cl) = cl {
-                                            if let Ok(len) = cl.parse::<usize>() {
-                                                *total_bytes.lock().unwrap() = len;
-                                                log::info!("Map content-length parsed as: {}", len);
-                                            } else {
-                                                log::warn!(
-                                                    "Failed to parse content-length: {}",
-                                                    cl
-                                                );
-                                            }
-                                        } else {
-                                            log::warn!("No content-length header received!");
-                                        }
-                                        std::ops::ControlFlow::Continue(())
-                                    }
-                                    Ok(ehttp::streaming::Part::Chunk(chunk)) => {
-                                        if chunk.is_empty() {
-                                            let final_bytes =
-                                                std::mem::take(&mut *accumulated.lock().unwrap());
-                                            log::info!(
-                                                "Map fully downloaded: {} bytes",
-                                                final_bytes.len()
-                                            );
-                                            let _ = tx.send(MapDownloadEvent::MapReady(
-                                                map_name_for_closure.clone(),
-                                                final_bytes,
-                                            ));
-                                            return std::ops::ControlFlow::Break(());
-                                        }
-                                        let mut acc = accumulated.lock().unwrap();
-                                        acc.extend_from_slice(&chunk);
-                                        let downloaded = acc.len();
-                                        let total = *total_bytes.lock().unwrap();
-                                        if total > 0 {
-                                            let progress =
-                                                ((downloaded as f64 / total as f64) * 100.0) as u8;
-                                            let _ = tx.send(MapDownloadEvent::Progress(
-                                                map_name_for_closure.clone(),
-                                                progress.min(99),
-                                            ));
-                                            if downloaded % 524288 < chunk.len() {
-                                                log::info!(
-                                                    "Downloading map... {} / {} bytes ({}%)",
-                                                    downloaded,
-                                                    total,
-                                                    progress.min(99)
-                                                );
-                                            }
-                                        } else if downloaded % 524288 < chunk.len() {
-                                            log::info!(
-                                                "Downloading map... {} bytes (unknown total)",
-                                                downloaded
-                                            );
-                                        }
-                                        std::ops::ControlFlow::Continue(())
-                                    }
-                                    Err(err) => {
-                                        log::error!("Failed to fetch map: {}", err);
-                                        let _ = tx.send(MapDownloadEvent::Error(format!(
-                                            "Fetch error: {}",
-                                            err
-                                        )));
-                                        std::ops::ControlFlow::Break(())
-                                    }
-                                },
-                            );
+                            map_download_to_start = Some(map_name);
                         }
                     }
                 }
             } // end loop
         } // end if !ws_disconnected
         // end if let Some(c)
+
+        if let Some(map_name) = map_download_to_start {
+            self.start_map_download(map_name);
+        }
 
         self.handle_result_notifications(natural_closure, natural_finish);
         ProcessWsResult {

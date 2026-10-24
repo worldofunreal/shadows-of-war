@@ -1,19 +1,6 @@
-FALTAN (11)
-Muhammad Ahmad (el Mahdi) — Mahdist State | muhammad_ahmad.webp
-Msiri — Yeke Kingdom | msiri.webp
-Pedro II de Brasil — Empire of Brazil | pedro_ii.webp
-Tigranes el Grande — Armenian Empire | tigranes_el_grande.webp
+FALTAN (0)
 
-Parākramabāhu I — Kingdom of Polonnaruwa | parakramabahu_i.webp
-Parameswara — Malacca Sultanate | parameswara.webp
-Walter Lini — Vanuatu | walter_lini.webp
-Tamar de Georgia — Kingdom of Georgia | tamar_de_georgia.webp
-
-María Estuardo — Kingdom of Scotland | maria_estuardo.webp
-Gwenllian ferch Gruffudd — Deheubarth (Wales) | gwenllian.webp
-María I de Portugal — Kingdom of Portugal | maria_i_de_portugal.webp
-
-TENEMOS (202)
+TENEMOS (213)
 Hatshepsut — Ancient Egypt | hatshepsut.webp
 Amanirenas — Kingdom of Kush | amanirenas.webp
 Sundiata Keita — Mali Empire | sundiata_keita.webp
@@ -96,16 +83,13 @@ Benito Juárez — Mexico | benito_juarez.webp
 Elizabeth Peratrovich — Tlingit / Alaska | elizabeth_peratrovich.webp
 José Martí — Cuba | jose_marti.webp
 Wu Zetian — China / Zhou dynasty | wu_zetian.webp
-Gajah Mada — Majapahit | gajah_mada.webp
 Empress Suiko — Japan | emperatriz_suiko.webp
 Chandragupta Maurya — Maurya Empire | chandragupta_maurya.webp
 Empress Genmei — Japan | emperatriz_genmei.webp
 Akbar — Mughal Empire | akbar.webp
-Qin Liangyu — Ming dynasty | qin_liangyu.webp
 Babur — Mughal Empire | babur.webp
 Ahilyabai Holkar — Maratha / Malwa | ahilyabai_holkar.webp
 Kittur Chennamma — Kittur / India | kittur_chennamma.webp
-Solomon — Kingdom of Israel | solomon.webp
 Lakshmibai, Rani of Jhansi — Jhansi / India | rani_lakshmibai.webp
 Cleopatra Thea — Seleucid Empire | cleopatra_thea.webp
 Zenobia — Palmyra | zenobia.webp
@@ -136,7 +120,6 @@ Ranjit Singh — Sikh Empire | ranjit_singh.webp
 Tribhuwana Wijayatunggadewi — Majapahit / Java | tribhuwana_wijayatunggadewi.webp
 Prithvi Narayan Shah — Gorkha Kingdom / Nepal | prithvi_narayan_shah.webp
 Töregene Khatun — Mongol Empire | toregene_khatun.webp
-Sayyid Said — Sultanate of Muscat and Oman | sayyid_said.webp
 Mandukhai — Mongolia | mandukhai_khatun.webp
 Shivaji — Maratha Empire | shivaji.webp
 Sorghaghtani Beki — Mongol Empire | sorghaghtani_beki.webp
@@ -146,17 +129,15 @@ Timur — Timurid Empire | timur.webp
 Empress Dowager Cixi — China / Qing dynasty | emperatriz_viuda_cixi.webp
 Hongwu Emperor — China / Ming dynasty | zhu_yuanzhang.webp
 Taj ul-Alam — Sultanate of Aceh | sultanah_safiatuddin.webp
-Lapu-Lapu — Mactan | lapu_lapu.webp
 Blanche of Castile — France | blanca_de_castilla.webp
 Pericles — Athens | pericles.webp
 Olga of Kiev — Kievan Rus' | olga_de_kiev.webp
 Augustus — Roman Empire | augusto.webp
 Eleanor of Aquitaine — Aquitaine / France | leonor_de_aquitania.webp
 Charlemagne — Carolingian Empire | carlomagno.webp
-Isabella I of Castile — Castile / Spain | isabel_i_de_castilla.webp
+Cartimandua — Brigantes | cartimandua.webp
 Alfred the Great — Wessex / England | alfredo_el_grande.webp
 Elizabeth I — England | isabel_i_de_inglaterra.webp
-Constantine the Great — Roman Empire | constantine.webp
 Louis XIV — France | luis_xiv.webp
 Maria Theresa — Habsburg Monarchy | maria_teresa_de_austria.webp
 Peter the Great — Russia | pedro_el_grande.webp
@@ -164,7 +145,6 @@ Margaret I of Denmark — Kalmar Union | margarita_i_de_dinamarca.webp
 Ivan the Terrible — Russia | ivan_iv_de_rusia.webp
 Irene of Athens — Byzantine Empire | irene_de_atenas.webp
 Skanderbeg — Albania | skanderbeg.webp
-Vlad III the Impaler — Wallachia | vlad_iii.webp
 Amalasuintha — Ostrogothic Kingdom / Italy | amalasunta.webp
 Gustavus Adolphus — Sweden | gustavo_ii_adolfo.webp
 Brunhilda of Austrasia — Austrasia / Franks | brunilda_de_austrasia.webp
@@ -181,7 +161,6 @@ Stefan Dušan — Serbian Empire | stefan_dusan.webp
 Matilda of Tuscany — Tuscany / Italy | matilde_de_toscana.webp
 Cnut — North Sea / England and Denmark | canuto_el_grande.webp
 Fredegund — Frankish Kingdom | fredegunda.webp
-Mary of Burgundy — Burgundian Netherlands | mary_of_burgundy.webp
 Grace O'Malley — Ireland | grace_o_malley.webp
 Stephen the Great — Moldavia | esteban_el_grande_de_moldavia.webp
 Kaʻahumanu — Kingdom of Hawaii | kaahumanu.webp
@@ -197,22 +176,41 @@ Makea Takau Ariki — Rarotonga / Cook Islands | makea_takau_ariki.webp
 Yagan — Noongar people / Australia | yagan.webp
 Angata — Rapa Nui | maria_angata.webp
 George Tupou I — Tonga | george_tupou_i.webp
-Semiramis — Assyrian Empire | semiramis.webp
-Shima — Kalingga | shima_kalingga.webp
-Tomyris — Massagetae | tomyris.webp
-Gorgo — Sparta | gorgo.webp
-José Gervasio Artigas — Banda Oriental | artigas.webp
-Bernardo O'Higgins — Chile | bernardo_ohiggins.webp
-Nezahualcóyotl — Texcoco | nezahualcoyotl.webp
-Tlacaelel — Mexica Empire | tlacaelel.webp
-Tenamaxtli — Caxcanes | tenamaxtli.webp
-Ramesses II — Ancient Egypt | ramesses_ii.webp
-Cosijoeza — Zapotec | cosijoeza.webp
-Thanadelthur — Chipewyan | thanadelthur.webp
-Mangas Coloradas — Chiricahua Apache | mangas_coloradas.webp
-Tomochichi — Yamacraw | tomochichi.webp
-Lobengula — Matabeleland | lobengula.webp
-Eight Deer Jaguar Claw — Mixtec | eight_deer.webp
-Nemequene — Muisca | nemequene.webp
-Artemisia I of Caria — Caria | artemisia_i.webp
-Shajar al-Durr — Mamluk Sultanate | shajar_al_durr.webp
+Muhammad Ahmad — Mahdist State | muhammad_ahmad.webp
+Msiri — Yeke Kingdom | msiri.webp
+Pedro II — Empire of Brazil | pedro_ii.webp
+Tigranes the Great — Armenian Empire | tigranes_el_grande.webp
+Parakramabahu I — Kingdom of Polonnaruwa | parakramabahu_i.webp
+Parameswara — Malacca Sultanate | parameswara.webp
+Walter Lini — Vanuatu | walter_lini.webp
+Tamar of Georgia — Kingdom of Georgia | tamar_de_georgia.webp
+Mary Queen of Scots — Kingdom of Scotland | maria_estuardo.webp
+Gwenllian ferch Gruffudd — Deheubarth (Wales) | gwenllian.webp
+Maria I of Portugal — Kingdom of Portugal | maria_i_de_portugal.webp
+Darius I — Achaemenid Empire | darius_i.webp
+Khutulun — Chagatai Khanate | khutulun.webp
+Kanishka — Kushan Empire | kanishka.webp
+Tipu Sultan — Kingdom of Mysore | tipu_sultan.webp
+Sargon of Akkad — Akkadian Empire | sargon_akkad.webp
+William the Conqueror — Duchy of Normandy | william_the_conqueror.webp
+John III Sobieski — Polish-Lithuanian Commonwealth | john_iii_sobieski.webp
+Cynethryth — Mercia | cynethryth.webp
+Dyah Gitarja — Majapahit | dyah_gitarja.webp
+Khurshid Banu Natavan — Karabakh Khanate | khurshid_banu_natavan.webp
+Mulan — Northern Wei | mulan.webp
+Thusnelda — Cherusci | thusnelda.webp
+Tzintzicha — Purépecha Empire | tzintzicha.webp
+Conín — Otomi | conin.webp
+Hiawatha — Haudenosaunee | hiawatha.webp
+Señora de Cao — Moche | senora_de_cao.webp
+Esther — Achaemenid Empire | esther.webp
+Gudit — Kingdom of Aksum | gudit.webp
+Francisco de Miranda — Venezuela | francisco_de_miranda.webp
+Miguel Hidalgo — New Spain | miguel_hidalgo.webp
+Ezana de Aksum — Kingdom of Aksum | ezana_de_aksum.webp
+Túpac Katari — Upper Peru | tupac_katari.webp
+Osceola — Seminole | osceola.webp
+Hatuey — Taíno | hatuey.webp
+Khama III — Bamangwato | khama_iii.webp
+Lempira — Lenca | lempira.webp
+Tecún Umán — K'iche' Kingdom | tecun_uman.webp

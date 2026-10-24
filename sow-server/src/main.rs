@@ -734,10 +734,12 @@ async fn main() {
     let maps_root = map_catalog::maps_root();
     map_catalog::init(&maps_root);
 
-    master_tick(&mut games, &mut next_lobby_id);
+    let mut retired_matchmaking_ids = HashSet::new();
+    master_tick(&mut games, &mut next_lobby_id, &mut retired_matchmaking_ids);
 
     let games_state = Arc::new(Mutex::new(games));
     let next_id_state = Arc::new(Mutex::new(next_lobby_id));
+    let retired_matchmaking_ids_state = Arc::new(Mutex::new(retired_matchmaking_ids));
 
     let (global_tx, _rx) = broadcast::channel::<Vec<u8>>(100);
     let (event_tx, mut event_rx) = mpsc::channel::<ServerEvent>(100000);
@@ -767,6 +769,8 @@ async fn main() {
 
     let games_clone = Arc::clone(&games_state);
     let next_id_clone = Arc::clone(&next_id_state);
+    let retired_matchmaking_ids_for_tick = Arc::clone(&retired_matchmaking_ids_state);
+    let retired_matchmaking_ids_for_joins = Arc::clone(&retired_matchmaking_ids_state);
     let global_tx_clone = global_tx.clone();
     let relay_tx_clone = relay_tx.clone();
 
@@ -922,7 +926,9 @@ async fn main() {
                     let (ready_candidates, broadcast_json) = {
                         let mut games = games_clone.lock().await;
                         let mut nid = next_id_clone.lock().await;
-                        master_tick(&mut games, &mut nid);
+                        let mut retired_matchmaking_ids =
+                            retired_matchmaking_ids_for_tick.lock().await;
+                        master_tick(&mut games, &mut nid, &mut retired_matchmaking_ids);
 
                         // Extract lobbies that completed Loading and are ready for relay
                         let mut ready_candidates = Vec::new();
@@ -1086,6 +1092,11 @@ async fn main() {
                     match event {
                         ServerEvent::Join { client_tx, name, clan_tag, leader, random_leader, skin_style, target_lobby_id, host_private, build_version, database_account_id, host_config, password, ip, session_id } => {
                             log::info!("Player {} (clan: {}, ip: {}, session_id: {}) joining with version: {}", name, clan_tag, ip, session_id, build_version);
+                            let target_is_retired_matchmaking = if let Some(id) = target_lobby_id {
+                                retired_matchmaking_ids_for_joins.lock().await.contains(&id)
+                            } else {
+                                false
+                            };
                             match join_player(&mut games, &mut nid, JoinPlayerOpts {
                                 name,
                                 clan_tag,
@@ -1094,6 +1105,7 @@ async fn main() {
                                 skin_style,
                                 client_tx: client_tx.clone(),
                                 target_lobby_id,
+                                target_is_retired_matchmaking,
                                 host_private,
                                 database_account_id,
                                 host_config,

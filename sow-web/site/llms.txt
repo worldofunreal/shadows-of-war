@@ -1,6 +1,6 @@
 # Shadows of War
 
-> Shadows of War is a free browser-based real-time multiplayer strategy game (MMORTS) where players pick a historical leader, take territory tile by tile, build cities, factories, ports and bunkers, then ally and betray each other in live territorial wars. Whoever holds the most land when the match ends wins.
+> Shadows of War is a free browser-based real-time multiplayer strategy game (MMORTS) where players pick a historical leader, take territory tile by tile, build cities, factories, ports and towers, then ally and betray each other in live territorial wars. Whoever holds the most land when the match ends wins.
 
 Key facts:
 - Genre: real-time multiplayer strategy, grand strategy, territory control.

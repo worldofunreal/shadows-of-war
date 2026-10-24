@@ -20,7 +20,7 @@ pub fn structure_build_cost_gold(
 ) -> f64 {
     let base_cost = match kind {
         BuildingKind::City => cfg.cost_city,
-        BuildingKind::Bunker => cfg.cost_bunker,
+        BuildingKind::Tower => cfg.cost_tower,
         BuildingKind::Factory => cfg.cost_factory,
         BuildingKind::Port => cfg.cost_port,
         BuildingKind::Farm => cfg.cost_farm,
@@ -163,7 +163,7 @@ mod tests {
         let cfg = crate::game_config::GameConfig::default();
         for (kind, expected) in [
             (BuildingKind::City, 200.0),
-            (BuildingKind::Bunker, 100.0),
+            (BuildingKind::Tower, 100.0),
             (BuildingKind::Factory, 175.0),
             (BuildingKind::Port, 200.0),
             (BuildingKind::Farm, 125.0),

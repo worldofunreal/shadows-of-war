@@ -1,34 +1,28 @@
-FALTAN (27)
+FALTAN (0)
+
+TENEMOS (25)
 Roman outpost — Roman tutorial | roman_outpost.jpg
 Londinium — Roman city | londinium.jpg
 Verulamium — Roman city | verulamium.jpg
 Lindum — Roman city | lindum.jpg
 Viroconium — Roman city | viroconium.jpg
 Camulodunum — Roman city | camulodunum.jpg
-
 Legio XX Valeria — Roman legion | legio_xx_valeria.jpg
 Legio IX Hispana — Roman legion | legio_ix_hispana.jpg
 Legio XIV Gemina — Roman legion | legio_xiv_gemina.jpg
 Legio II Augusta — Roman legion | legio_ii_augusta.jpg
 Gaius Suetonius Paulinus — Roman final boss | suetonius_paulinus.jpg
 Suetonius' Auxilia — Roman army | suetonius_auxilia.jpg
-
 Colonia Veterans — Roman colony | colonia_veterans.jpg
 Roman supply officer — Roman tutorial | roman_supply_depot.jpg
 Tax collector — Roman tutorial | tax_collectors.jpg
-
 Stonea — Iceni city | stonea.jpg
 Snettisham — Iceni city | snettisham.jpg
 Thetford — Iceni city | thetford.jpg
-
 Durovernum — Britannia city | durovernum.jpg
 Noviomagus — Britannia city | noviomagus.jpg
 Calleva — Britannia city | calleva.jpg
 Isca Dumnoniorum — Britannia city | isca_dumnoniorum.jpg
-
 Gaulish Traders 1 — Gaulish traders | gaulish_traders_1.jpg
-Gaulish Traders 2 — Gaulish traders | gaulish_traders_2.jpg
-Gaulish Traders 3 — Gaulish traders | gaulish_traders_3.jpg
 Irish Raiders — Irish raiders | irish_raiders_1.jpg
-
 Roman Reserve — Final assault | roman_reserve.jpg

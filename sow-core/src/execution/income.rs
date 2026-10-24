@@ -1,8 +1,8 @@
 use crate::building::aggregate_buildings_per_player;
 use crate::engine::SowEngine;
 use crate::execution::income_rates::{
-    alliance_gold_per_second, gold_income_per_second, trade_income_per_second,
-    troop_income_per_second,
+    alliance_gold_per_second, alliance_troops_per_second, gold_income_per_second,
+    trade_income_per_second, trade_troops_per_second, troop_income_per_second,
 };
 use crate::game::GamePhase;
 
@@ -76,7 +76,12 @@ impl SowEngine {
             }
             self.state.players[idx].max_troops = max_tr;
 
-            let troop_ps = troop_income_per_second(tiles_owned, agg, leader, &config);
+            let troop_ps = troop_income_per_second(tiles_owned, agg, leader, &config)
+                + alliance_troops_per_second(
+                    self.state.players[idx].alliances.len(),
+                    leader,
+                    &config,
+                );
             let mut troop_income = config.per_tick(troop_ps);
 
             if is_standard_bot {
@@ -112,7 +117,13 @@ impl SowEngine {
             if fleet.unit_type == crate::game::UnitType::TradeShip
                 && let Some(player) = self.state.player_mut(fleet.owner_id)
             {
-                player.credit_gold(config.per_tick(trade_income_per_second(1, &config)));
+                player.credit_gold(config.per_tick(trade_income_per_second(
+                    1,
+                    player.leader,
+                    &config,
+                )));
+                let troops = config.per_tick(trade_troops_per_second(1, player.leader, &config));
+                player.credit_troops_capped(troops, player.max_troops);
             }
         }
 

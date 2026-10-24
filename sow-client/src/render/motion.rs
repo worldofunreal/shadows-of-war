@@ -43,6 +43,22 @@ fn hop(age: f32, start: f32, apex: f32, end: f32, height: f32) -> f32 {
     -height * (1.0 - spring_overshoot(t * 1.7)) * (1.0 - smoothstep(t))
 }
 
+/// Squash, lift and settle in half a second; offset is in font/icon heights.
+pub(crate) fn troop_transfer_motion(age: f32) -> ([f32; 2], f32) {
+    if !(0.0..0.5).contains(&age) {
+        return ([1.0; 2], 0.0);
+    }
+    let anticipation = smoothstep(age / 0.06) * (1.0 - smoothstep((age - 0.06) / 0.09));
+    let stretch = smoothstep((age - 0.06) / 0.08) * (1.0 - smoothstep((age - 0.14) / 0.22));
+    (
+        [
+            1.0 + 0.10 * anticipation - 0.08 * stretch,
+            1.0 - 0.14 * anticipation + 0.16 * stretch,
+        ],
+        hop(age, 0.06, 0.14, 0.5, 0.20),
+    )
+}
+
 pub(crate) fn emote_motion(kind: EmoteKind, age: f32, reduced: bool, pinned: bool) -> EmoteMotion {
     if !age.is_finite() || age < 0.0 || (!pinned && age >= EMOTE_DURATION_SECS) {
         return EmoteMotion::default();
@@ -117,7 +133,10 @@ mod tests {
                 emote_motion(definition.kind, 3.0, false, false),
                 EmoteMotion::default()
             );
-            assert_eq!(emote_motion(definition.kind, 3.0, false, true).bubble_alpha, 1.0);
+            assert_eq!(
+                emote_motion(definition.kind, 3.0, false, true).bubble_alpha,
+                1.0
+            );
             let reduced = emote_motion(definition.kind, 0.18, true, false);
             assert_eq!(reduced.offset, [0.0; 2]);
             assert_eq!(reduced.scale, [1.0; 2]);

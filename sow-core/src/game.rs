@@ -26,7 +26,7 @@ pub enum GamePhase {
 #[repr(u8)]
 pub enum BuildingKind {
     City,
-    Bunker,
+    Tower,
     Factory,
     Port,
     Farm,
@@ -35,7 +35,7 @@ pub enum BuildingKind {
 impl BuildingKind {
     pub const ALL: [BuildingKind; 5] = [
         BuildingKind::City,
-        BuildingKind::Bunker,
+        BuildingKind::Tower,
         BuildingKind::Factory,
         BuildingKind::Port,
         BuildingKind::Farm,
@@ -44,7 +44,7 @@ impl BuildingKind {
     pub fn as_str(self) -> &'static str {
         match self {
             BuildingKind::City => "City",
-            BuildingKind::Bunker => "Defense Tower",
+            BuildingKind::Tower => "Tower",
             BuildingKind::Factory => "Factory",
             BuildingKind::Port => "Port",
             BuildingKind::Farm => "Farm",
@@ -69,10 +69,10 @@ impl BuildingKind {
             (Self::Factory, 2) => "Manufactory",
             (Self::Factory, 3) => "Factory",
             (Self::Factory, 4) => "Industrial Complex",
-            (Self::Bunker, 1) => "Watchpost",
-            (Self::Bunker, 2) => "Watchtower",
-            (Self::Bunker, 3) => "Bastion",
-            (Self::Bunker, 4) => "Citadel",
+            (Self::Tower, 1) => "Watchpost",
+            (Self::Tower, 2) => "Watchtower",
+            (Self::Tower, 3) => "Bastion",
+            (Self::Tower, 4) => "Citadel",
             (Self::Farm, 1) => "Cultivated Plot",
             (Self::Farm, 2) => "Farm",
             (Self::Farm, 3) => "Irrigated Fields",
@@ -84,7 +84,7 @@ impl BuildingKind {
     pub fn construction_duration_ticks(self) -> u32 {
         match self {
             BuildingKind::City => 20,
-            BuildingKind::Bunker => 50,
+            BuildingKind::Tower => 50,
             BuildingKind::Factory => 35,
             BuildingKind::Port => 30,
             BuildingKind::Farm => 25,
@@ -284,6 +284,12 @@ pub enum GameEvent {
         x: u32,
         y: u32,
     },
+    /// A hero ability changed what happened in a situation. The effect is shown
+    /// at `tile`, or as a notice alone when the action has no place on the map.
+    AbilityTriggered {
+        owner_id: u16,
+        tile: Option<(u32, u32)>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -328,6 +334,30 @@ fn default_one() -> u64 {
 }
 
 impl GameState {
+    /// Shows a hero ability's visible effect. Only human owners get it: bots
+    /// fight constantly and the effect exists for the player who sees it. One
+    /// event per owner per tick (each owner has one hero, so one ability), so a
+    /// long fight shows one mark, not one per tile.
+    pub(crate) fn announce_ability(&mut self, owner_id: u16, tile: Option<(u32, u32)>) {
+        if !self
+            .player(owner_id)
+            .is_some_and(|p| p.player_type == crate::player::PlayerType::Human)
+        {
+            return;
+        }
+        let already_shown = self.events.iter().any(|event| {
+            matches!(event, GameEvent::AbilityTriggered { owner_id: o, .. } if *o == owner_id)
+        });
+        if !already_shown {
+            self.events.push(GameEvent::AbilityTriggered { owner_id, tile });
+        }
+    }
+
+    /// Announces the ability of `owner_id`'s own hero, for effects that fired on its behalf.
+    pub(crate) fn announce_leader_ability(&mut self, owner_id: u16, tile: Option<(u32, u32)>) {
+        self.announce_ability(owner_id, tile);
+    }
+
     pub fn new(seed: u64, width: u32, height: u32, config: crate::game_config::GameConfig) -> Self {
         let phase = if !config.random_spawn {
             let ticks = deployment_phase_end_tick(config.tick_rate_ms);

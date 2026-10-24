@@ -599,8 +599,10 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     min-height: 54px;
     flex: 1 1 0;
     display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 1px;
     place-items: center;
-    padding: 0;
+    padding: 3px 2px 2px;
     border: 1px solid var(--sow-line);
     border-radius: 5px 5px 11px 4px;
     background: rgb(255 255 255 / 3%);
@@ -653,6 +655,7 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
 .sow-hud__operation-action:disabled { opacity: .5; cursor: wait; }
 .sow-hud__operation-action-icon { width: 17px; height: 17px; }
 .sow-hud__operation.is-incoming .sow-hud__operation-action[data-command="counter_attack"] { border-color: rgb(222 133 129 / 42%); color: #f0aaa5; }
+.sow-hud__operation-action[data-command="scuttle_fleet"] { border-color: rgb(222 133 129 / 42%); color: #f0aaa5; }
 
 .sow-hud__building-icon {
     display: grid;
@@ -710,23 +713,30 @@ html[dir="rtl"] #sow-hud-dev-layer { --sow-sal: env(safe-area-inset-right, 0px);
     opacity: 0.35;
     filter: grayscale(0.6);
 }
-.sow-hud__building-btn.is-campaign-locked::after {
-    position: absolute;
-    right: 2px;
-    bottom: 2px;
-    left: 2px;
-    overflow: hidden;
-    padding: 1px 2px;
-    border-radius: 3px;
-    background: rgb(9 15 19 / 88%);
-    color: #f2d7a0;
-    content: attr(data-lock-label);
-    font-size: 7px;
-    line-height: 1.2;
-    text-align: center;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+/* Gold price under the art; the lock uses the command ring's badge and shows only when campaign-locked. */
+.sow-hud__tile-cost {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: 11px;
+    color: var(--sow-gold-bright);
+    font: 750 10px/1 var(--sow-ui-font);
+    font-variant-numeric: tabular-nums;
     pointer-events: none;
+}
+
+.sow-hud__tile-cost-icon {
+    width: 10px;
+    height: 10px;
+}
+
+.sow-hud__building-btn .sow-hud__ring-badge { display: none; }
+.sow-hud__building-btn.is-campaign-locked > .sow-hud__ring-badge {
+    display: grid;
+    top: 2px;
+    right: 2px;
+    bottom: auto;
 }
 
 .sow-hud__fleet-strip {
@@ -2780,10 +2790,12 @@ html[dir="rtl"] .sow-hud__dev-play::before { transform: scaleX(-1); }
         width: min(560px, calc(100vw - 124px));
         max-height: min(30vh, 180px);
     }
-    .sow-hud__operation { grid-template-columns: 28px minmax(0, 1fr) max-content; gap: 2px 5px; }
-    .sow-hud__operation-avatar { width: 28px; height: 28px; }
-    .sow-hud__operation-actions { grid-column: 3; grid-row: 2; }
-    .sow-hud__operation-troops { grid-column: 3; grid-row: 1; }
+    .sow-hud__operations-list { grid-auto-rows: max-content; }
+    .sow-hud__operation { grid-template-columns: max-content minmax(0, 1fr); gap: 2px; }
+    .sow-hud__operation-avatar { grid-column: 1; grid-row: 1; width: 28px; height: 28px; }
+    .sow-hud__operation-copy { grid-column: 2; grid-row: 1; }
+    .sow-hud__operation-troops { grid-column: 1; grid-row: 2; }
+    .sow-hud__operation-actions { grid-column: 2; grid-row: 2; gap: 0; }
     .sow-hud__dock-inner {
         display: flex;
         flex-direction: column;
@@ -2932,6 +2944,7 @@ html[dir="rtl"] .sow-hud__dev-play::before { transform: scaleX(-1); }
     #sow-hud[data-compact="true"] .sow-hud__buildings-strip,
     #sow-hud[data-compact="true"] .sow-hud__fleet-strip { flex: 0 0 auto; width: auto; gap: 4px; }
     #sow-hud[data-compact="true"] .sow-hud__building-btn { flex: 0 0 44px; min-height: 44px; }
+    #sow-hud[data-compact="true"] .sow-hud__building-icon { width: 28px; height: 28px; }
     #sow-hud[data-compact="true"] .sow-hud__deploy-panel { min-height: 38px; padding: 2px 8px; }
     #sow-hud[data-compact="true"] .sow-hud__deploy-title { font-size: 11px; }
     #sow-hud[data-compact="true"] .sow-hud__deploy-timer { font-size: 13px; }

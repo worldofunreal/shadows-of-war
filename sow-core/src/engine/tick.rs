@@ -134,7 +134,7 @@ impl SowEngine {
                 if kind == crate::game::BuildingKind::Port {
                     self.sea_lanes_dirty = true;
                 }
-                if kind == crate::game::BuildingKind::Bunker {
+                if kind == crate::game::BuildingKind::Tower {
                     self.defense_grid_dirty = true;
                 }
 
@@ -162,6 +162,7 @@ impl SowEngine {
         for player in &mut self.state.players {
             let pid = player.id;
             player.betrayal_retaliation_ticks = player.betrayal_retaliation_ticks.saturating_sub(1);
+            player.recapture_ticks = player.recapture_ticks.saturating_sub(1);
             if !player.alive
                 || player.active_emote.is_some_and(|event| {
                     event.expired(self.state.tick, self.state.config.tick_rate_ms)

@@ -47,7 +47,7 @@ mod tests {
         let grid_h = map_height.div_ceil(cell_size);
         let mut cells = vec![Vec::new(); (grid_w * grid_h) as usize];
         for building in buildings {
-            if building.kind == BuildingKind::Bunker && building.active_level() > 0 {
+            if building.kind == BuildingKind::Tower && building.active_level() > 0 {
                 let x = building.tile_idx % map_width;
                 let y = building.tile_idx / map_width;
                 cells[((y / cell_size) * grid_w + x / cell_size) as usize].push(*building);
@@ -90,7 +90,7 @@ mod tests {
                         by as i32,
                     ) <= building.defense_range_cfg(config)
                     {
-                        bonus += config.bunker_priority as i64 * building.active_level() as i64;
+                        bonus += config.tower_priority as i64 * building.active_level() as i64;
                     }
                 }
             }
@@ -191,7 +191,7 @@ mod tests {
                 id: i as u64 + 1,
                 owner_id,
                 tile_idx,
-                kind: BuildingKind::Bunker,
+                kind: BuildingKind::Tower,
                 level: 1 + (i % 4) as u8,
                 under_construction: false,
                 ticks_until_complete: 0,
@@ -646,14 +646,15 @@ mod tests {
                 id: u64::from(owner_id),
                 owner_id,
                 tile_idx: center_y * width + center_x,
-                kind: BuildingKind::Bunker,
+                kind: BuildingKind::Tower,
                 level: 4,
                 under_construction: false,
                 ticks_until_complete: 0,
             })
             .collect();
         let mut grid = DefenseGrid::default();
-        let cfg = crate::game_config::GameConfig::default();
+        let mut cfg = crate::game_config::GameConfig::default();
+        cfg.tower_range = 18.0;
         grid.rebuild(&buildings, width, width, DEFENSE_GRID_CELL_SIZE, &cfg);
 
         let first = grid.influence(center_x, center_y, width, 2, 1, 1234, &cfg);
@@ -746,7 +747,7 @@ mod tests {
         let cfg = crate::game_config::GameConfig::default();
         let cases = [
             (BuildingKind::City, cfg.cost_city),
-            (BuildingKind::Bunker, cfg.cost_bunker),
+            (BuildingKind::Tower, cfg.cost_tower),
             (BuildingKind::Factory, cfg.cost_factory),
             (BuildingKind::Port, cfg.cost_port),
         ];

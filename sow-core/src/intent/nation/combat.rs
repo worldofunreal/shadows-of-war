@@ -1324,8 +1324,8 @@ impl SowEngine {
                 self.buildings
                     .iter()
                     .filter(|b| {
-                        b.kind == BuildingKind::Bunker
-                            && b.active_level() >= BuildingKind::Bunker.max_level()
+                        b.kind == BuildingKind::Tower
+                            && b.active_level() >= BuildingKind::Tower.max_level()
                             && !b.under_construction
                     })
                     .map(|b| (b.tile_idx, b.owner_id))
@@ -1350,7 +1350,7 @@ impl SowEngine {
             }
             let mut score = match b.kind {
                 BuildingKind::City => 25000.0 + 10000.0 * (b.active_level() as f64),
-                BuildingKind::Bunker => 5000.0 * (b.level as f64),
+                BuildingKind::Tower => 5000.0 * (b.level as f64),
                 BuildingKind::Factory => 15000.0 * (b.level as f64),
                 BuildingKind::Port => 10000.0 * (b.level as f64),
                 BuildingKind::Farm => 7000.0 * (b.level as f64),

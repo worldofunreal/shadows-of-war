@@ -31,7 +31,7 @@ impl Event {
             Self::Combat(CombatSoundKind::AttackHuman) => 4,
             Self::Combat(CombatSoundKind::CounterAttack) => 5,
             Self::BuildingComplete(BuildingSoundKind::City) => 6,
-            Self::BuildingComplete(BuildingSoundKind::Bunker) => 7,
+            Self::BuildingComplete(BuildingSoundKind::Tower) => 7,
             Self::BuildingComplete(BuildingSoundKind::Factory) => 8,
             Self::BuildingComplete(BuildingSoundKind::Port) => 9,
             Self::NuclearLaunch => 10,
@@ -158,7 +158,7 @@ impl SfxSource {
     fn city_sample(&self, kind: BuildingSoundKind, t: f32, noise: f32) -> f32 {
         let (freqs, decay, shimmer) = match kind {
             BuildingSoundKind::City => ([245.0, 410.0, 635.0], [8.0, 14.0, 24.0], 575.0),
-            BuildingSoundKind::Bunker => ([205.0, 350.0, 545.0], [7.0, 13.0, 22.0], 490.0),
+            BuildingSoundKind::Tower => ([205.0, 350.0, 545.0], [7.0, 13.0, 22.0], 490.0),
             BuildingSoundKind::Factory => ([275.0, 455.0, 700.0], [9.0, 15.0, 25.0], 625.0),
             BuildingSoundKind::Port => ([230.0, 385.0, 590.0], [8.0, 14.0, 23.0], 540.0),
         };

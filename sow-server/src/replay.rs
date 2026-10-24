@@ -59,4 +59,18 @@ mod tests {
             assert!(decode(&bytes, earlier, 4096).is_err(), "format {earlier}");
         }
     }
+
+    #[test]
+    fn current_recordings_round_trip_scuttled_transports() {
+        let turns = vec![Turn {
+            turn_number: 1,
+            intents: vec![StampedIntent {
+                player_id: 7,
+                intent: GameplayIntent::ScuttleFleet { fleet_id: 42 },
+            }],
+        }];
+        let bytes = bincode::serialize(&turns).unwrap();
+        let decoded = decode(&bytes, sow_core::protocol::GAMEPLAY_FORMAT_VERSION, 4096).unwrap();
+        assert_eq!(decoded, turns);
+    }
 }

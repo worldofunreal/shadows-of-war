@@ -8,7 +8,7 @@
     const METRICS = {
         territory: "tiles_gained", kills: "kills", attack: "attacks", troops: "troops",
         building: "buildings", city: "cities", farm: "farms", factory: "factories",
-        port: "ports", bunker: "bunkers", structure_upgrade: "structure_upgrades", structure_level: "structure_levels",
+        port: "ports", tower: "towers", structure_upgrade: "structure_upgrades", structure_level: "structure_levels",
         city_upgrade: "city_upgrades", city_level: "city_levels",
         port_upgrade: "port_upgrades", port_level: "port_levels",
         resource_transfer: "resource_transfers",
@@ -19,7 +19,7 @@
         zoom_out_complete: "zoom_out_complete", zoom_in_complete: "zoom_in_complete", camera_target: "camera_target"
     };
     const WORLD_TARGETS = ["expand", "assault", "target_action", "player", "nameplate", "build_site", "upgrade_building", "upgrade_structure"];
-    const STRUCTURE_LEVEL_LIMITS = { City: 4, Farm: 4, Factory: 4, Bunker: 4, Port: 4 };
+    const STRUCTURE_LEVEL_LIMITS = { City: 4, Farm: 4, Factory: 4, Tower: 4, Port: 4 };
     const CAMPAIGN_ACTIONS = ["transport_fleet", "trade_ship", "warship", "nuke"];
     const CAMPAIGN_ACTION_BUILDING_REQUIREMENTS = Object.freeze({
         transport_fleet: null,
@@ -31,7 +31,7 @@
         city: "City", city_level: "City", city_upgrade: "City",
         farm: "Farm", farm_level: "Farm", farm_upgrade: "Farm",
         factory: "Factory", factory_level: "Factory", factory_upgrade: "Factory",
-        bunker: "Bunker", bunker_level: "Bunker", bunker_upgrade: "Bunker",
+        tower: "Tower", tower_level: "Tower", tower_upgrade: "Tower",
         port: "Port", port_level: "Port", port_upgrade: "Port"
     };
     function emptyCampaignUnlocks() { return { buildings: {}, actions: [] }; }
@@ -141,8 +141,8 @@
         }
         const uiTargets = [trigger.action, step.guide && step.guide.target].filter(value => typeof value === "string");
         uiTargets.forEach(target => {
-            const dock = /^dock_(city|factory|port|bunker|farm)$/.exec(target);
-            if (dock) addBuilding(dock[1] === "bunker" ? "Bunker" : dock[1][0].toUpperCase() + dock[1].slice(1), 1);
+            const dock = /^dock_(city|factory|port|tower|farm)$/.exec(target);
+            if (dock) addBuilding(dock[1] === "tower" ? "Tower" : dock[1][0].toUpperCase() + dock[1].slice(1), 1);
             if (target === "dock_trade_ship") addAction("trade_ship");
             if (target === "dock_warship") addAction("warship");
             if (target === "dock_nuke" || target === "map_nuke" || target === "map_nuke_launch") addAction("nuke");
@@ -177,7 +177,7 @@
         dock_city: '#sow-hud [data-command="select_building"][data-kind="City"]',
         dock_factory: '#sow-hud [data-command="select_building"][data-kind="Factory"]',
         dock_port: '#sow-hud [data-command="select_building"][data-kind="Port"]',
-        dock_bunker: '#sow-hud [data-command="select_building"][data-kind="Bunker"]',
+        dock_tower: '#sow-hud [data-command="select_building"][data-kind="Tower"]',
         dock_farm: '#sow-hud [data-command="select_building"][data-kind="Farm"]',
         dock_trade_ship: '#sow-hud [data-fleet-kind="trade"]',
         dock_warship: '#sow-hud [data-command="select_warship"]',
@@ -197,7 +197,7 @@
         map_build_city: '#sow-hud [data-map-action="build_city"]',
         map_build_factory: '#sow-hud [data-map-action="build_factory"]',
         map_build_port: '#sow-hud [data-map-action="build_port"]',
-        map_build_bunker: '#sow-hud [data-map-action="build_bunker"]',
+        map_build_tower: '#sow-hud [data-map-action="build_tower"]',
         map_nuke_launch: '#sow-hud [data-map-action="nuke"]',
         map_back: '#sow-hud [data-map-back]',
         rankings: '#sow-hud [data-command="toggle_leaderboard"]',
@@ -228,7 +228,7 @@
             return trigger.type === "territory" ? "expand" : "attack";
         }
         if (["contact", "alliance"].includes(trigger.type)) return target === "expand" ? "expand" : "contact";
-        if (["city", "factory", "bunker"].includes(trigger.type)) return "build";
+        if (["city", "factory", "tower"].includes(trigger.type)) return "build";
         if (trigger.type === "ui") {
             if (trigger.action === "map_transfer" || target === "transfer_send") return target === "transfer_send" ? "send" : "select";
             if (target === "hud_center_camera") return "home";
@@ -668,7 +668,7 @@
                 } else if (step.paused_action === "send_resources_stay_paused") {
                     compatible = triggerType === "resource_transfer";
                 } else if (step.paused_action === "build_until_started") {
-                    compatible = ["city", "factory", "bunker"].includes(triggerType);
+                    compatible = ["city", "factory", "tower"].includes(triggerType);
                 } else if (step.paused_action === "upgrade_until_started") {
                     compatible = triggerType === "structure_upgrade";
                 }
@@ -792,7 +792,7 @@
                         if (trigger.outcome != null && (!own(MENU_GUIDE_OUTCOMES, trigger.outcome) || MENU_GUIDE_OUTCOMES[trigger.outcome].control !== trigger.action)) issue(step, "trigger.outcome", "Choose a confirmed outcome registered for this control.");
                         if (trigger.action === "map_menu_open" && !(step.marker && step.marker.target)) issue(step, "marker", "Choose whose map menu must open.");
                     } else if (trigger.type === "building_selected") {
-                        if (!["City", "Farm", "Factory", "Bunker", "Port"].includes(trigger.kind)) issue(step, "trigger.kind", "Choose a supported building type.");
+                        if (!["City", "Farm", "Factory", "Tower", "Port"].includes(trigger.kind)) issue(step, "trigger.kind", "Choose a supported building type.");
                     } else if (trigger.type === "structure_upgrade") {
                         if (!own(STRUCTURE_LEVEL_LIMITS, trigger.kind)) issue(step, "trigger.kind", "Choose a supported building type for this upgrade.");
                         if (!Number.isInteger(trigger.value) || trigger.value < 1) issue(step, "trigger.value", "Choose how many upgrades must complete.");
@@ -804,7 +804,7 @@
                     } else if (trigger.type === "zoom_in_complete" && trigger.target) {
                         if (!Number.isFinite(trigger.distance) || trigger.distance <= 0) issue(step, "trigger.distance", "Set how close the camera must be to the zoom target.");
                     } else if (trigger.type === "structure_level") {
-                        if (!["City", "Farm", "Factory", "Bunker", "Port"].includes(trigger.kind)) issue(step, "trigger.kind", "Choose a supported building type.");
+                        if (!["City", "Farm", "Factory", "Tower", "Port"].includes(trigger.kind)) issue(step, "trigger.kind", "Choose a supported building type.");
                         else if (!Number.isInteger(trigger.value) || trigger.value < 1 || trigger.value > STRUCTURE_LEVEL_LIMITS[trigger.kind]) issue(step, "trigger.value", "Choose a level that this building can reach.");
                     } else {
                         if (!Number.isFinite(trigger.value) || trigger.value <= 0) issue(step, "trigger.value", "Objective value must be greater than zero.");

@@ -10,7 +10,7 @@ pub use sow_data::MAX_MATCH_PARTICIPANTS;
 /// Persisted turn recordings; changing live messages must not change this.
 /// 5: bots spread over all land and take catalog characters (no older replays).
 pub const GAMEPLAY_FORMAT_VERSION: u64 = 5;
-pub const LIVE_PROTOCOL_VERSION: u64 = 4;
+pub const LIVE_PROTOCOL_VERSION: u64 = 5;
 
 pub fn gameplay_build_identity(public_version: &str) -> String {
     format!(
@@ -119,6 +119,9 @@ pub enum GameplayIntent {
     /// Holds or releases the player's current emote without restarting it.
     SetEmotePinned {
         pinned: bool,
+    },
+    ScuttleFleet {
+        fleet_id: u64,
     },
 }
 

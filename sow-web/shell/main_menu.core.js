@@ -457,6 +457,7 @@
             store: state.store && {
                 gems: state.store.gems,
                 crowns: state.store.crowns,
+                rotation_ends_at: state.store.rotation_ends_at,
                 leaders: (state.store.leaders || []).map(function (leader) {
                     return [leader.id, leader.owned, leader.free_rotation, leader.permanently_free,
                         leader.available, leader.cost_crowns, leader.cost_gems];
@@ -479,6 +480,8 @@
             downloading: state.is_downloading_map,
             download_name: state.downloading_map_name,
             download_progress: state.map_download_progress,
+            download_error: state.map_download_error,
+            match_preparing: state.match_preparing,
             error: state.error,
             notice: state.notice,
             maps: (state.map_catalog || []).map(function (map) {

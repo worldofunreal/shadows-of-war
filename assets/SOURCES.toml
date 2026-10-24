@@ -10,7 +10,7 @@ source = "ai_generated"
 tool = "Gemini / Meta AI / Midjourney / OpenAI ImageGen (mixed, historical)"
 license = "CC-BY-SA-4.0"
 license_doc = "docs/legal/LICENSE-ASSETS"
-notes = "One portrait per character, named by its catalog avatar id: nations/ (nation bots), tribes/ (tribe bots and tutorial tribes), campaign/ (tutorial figures that are not tribes), heroes/ (playable heroes, with <id>_1 to <id>_4 expressions). default.webp is the face of a player without a portrait and of any character whose own portrait is still missing. random is original dice-and-map art for the random leader option (AGPL-3.0-or-later)."
+notes = "One avatar source per playable hero: heroes/<id>.webp is a 2x2 Happy, Calm, Fear, Angry sheet; Calm also supplies its static portrait. nations/ (nation bots), tribes/ (tribe bots and tutorial tribes), and campaign/ (tutorial figures that are not tribes) keep one portrait each. default.webp is the face of a player without a portrait and of any character whose own portrait is still missing. random.webp at this folder root is original dice-and-map art for the random leader option (AGPL-3.0-or-later)."
 
 [heroes]
 path = "assets/art/heroes/"
@@ -18,7 +18,7 @@ source = "ai_generated"
 tool = "Gemini / Meta AI / Midjourney / OpenAI ImageGen (mixed, historical)"
 license = "CC-BY-SA-4.0"
 license_doc = "docs/legal/LICENSE-ASSETS"
-notes = "Scene art for the web menu and loader only: <id>_desktop and <id>_mobile."
+notes = "Optional web menu and loader scenes: <id>_desktop and <id>_mobile are published when present. A missing variant has no image fallback in its consumer."
 restored = ["alexander", "caesar", "cleopatra", "genghis_khan", "ragnar", "sun_tzu"]
 themed_placeholder = ["boudica", "leonidas", "napoleon", "richard_the_lionheart", "vercingetorix", "lady_six_sky"]
 
@@ -26,7 +26,7 @@ themed_placeholder = ["boudica", "leonidas", "napoleon", "richard_the_lionheart"
 path = "assets/art/buildings/"
 source = "original_and_twemoji_placeholder"
 license = "farm-1..3: AGPL-3.0-or-later; other slots: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art"
-notes = "<kind>-<level>.png for city, factory, port, bunker and farm, levels 1-4. Packed into assets/generated/buildings-atlas.* for the map and the HUD."
+notes = "<kind>-<level>.png for city, factory, port, tower and farm, levels 1-4. Packed into assets/generated/buildings-atlas.* for the map and the HUD."
 
 [units]
 path = "assets/art/units/"
