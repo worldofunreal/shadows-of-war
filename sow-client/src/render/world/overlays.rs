@@ -386,10 +386,9 @@ fn render_buildings(
             1.0
         };
         let building_center = [center[0] * sf, center[1] * sf];
-        let building_size = [
-            marker_size[0] * sf * BUILDING_FOOTPRINT_FILL,
-            marker_size[1] * sf * BUILDING_FOOTPRINT_FILL,
-        ];
+        let upgrade_scale = 1.25_f32.powi(i32::from(building.level.saturating_sub(1)));
+        let building_size =
+            marker_size.map(|size| size * sf * BUILDING_FOOTPRINT_FILL * upgrade_scale);
         // Every kind and level has art in assets/art/buildings (checked by tests).
         if let Some(uv_rect) =
             crate::render::gpu::building_sprite_uv(building.kind, building.level.max(1))
@@ -464,14 +463,7 @@ fn render_buildings(
         if let Some(status) = &building.status
             && let Some(label) = &status.label
         {
-            render_building_preview_badge(
-                text,
-                [center[0] * sf, center[1] * sf],
-                label,
-                status.color,
-                dev,
-                sf,
-            );
+            render_building_preview_badge(text, [center[0] * sf, center[1] * sf], label, dev, sf);
         }
     }
     ui.building_upgrade_flashes = building_upgrade_flashes;
@@ -646,34 +638,25 @@ fn render_building_selection_focus(
     let top = input.camera_y + footprint.top as f32 * zoom;
     let width = footprint.width as f32 * zoom;
     let height = footprint.height as f32 * zoom;
-    let line = (1.5 * sf).min((zoom * 0.2).max(1.0)).max(1.0);
-    let selected_center = [left + width * 0.5, top + height * 0.5];
     let anchor_center = [
         input.camera_x + (tile_x as f32 + 0.5) * zoom,
         input.camera_y + (tile_y as f32 + 0.5) * zoom,
     ];
 
-    if zoom >= 4.0 * sf {
-        text.push_rect([left, top], [width, height], [0.84, 0.68, 0.38, 0.045]);
-        for (x, y, w, h) in [
-            (left, top, width, line * 1.6),
-            (left, top + height - line * 1.6, width, line * 1.6),
-            (left, top, line * 1.6, height),
-            (left + width - line * 1.6, top, line * 1.6, height),
-        ] {
-            text.push_rect([x, y], [w, h], [0.42, 0.91, 0.94, 0.88]);
-        }
-    } else {
-        text.push_ring(
-            selected_center,
-            (width.max(height) * 0.5).max(9.0 * sf),
-            [0.42, 0.91, 0.94, 0.85],
-            (1.8 * sf).max(1.0),
-        );
-    }
+    let colors = placement_preview_colors(true, true);
+    let metrics = placement_grid_metrics(zoom, sf);
+    render_building_footprint_fill(text, [left, top], [width, height], colors.fill);
+    render_building_footprint_grid(
+        text,
+        footprint,
+        [left, top],
+        [width, height],
+        zoom,
+        metrics,
+        colors.line,
+    );
 
-    if kind == BuildingKind::Tower && menu.building_level > 0 && !menu.building_under_construction
-    {
+    if kind == BuildingKind::Tower && menu.building_level > 0 && !menu.building_under_construction {
         let range_multiplier = sim
             .engine
             .as_ref()
@@ -774,6 +757,47 @@ fn placement_grid_metrics(zoom: f32, sf: f32) -> PlacementGridMetrics {
     }
 }
 
+fn render_building_footprint_fill(
+    text: &mut TextRenderer,
+    top_left: [f32; 2],
+    size: [f32; 2],
+    fill: [f32; 4],
+) {
+    text.push_rect(top_left, size, fill);
+}
+
+fn render_building_footprint_grid(
+    text: &mut TextRenderer,
+    footprint: sow_core::building::BuildingFootprint,
+    top_left: [f32; 2],
+    size: [f32; 2],
+    zoom: f32,
+    metrics: PlacementGridMetrics,
+    color: [f32; 4],
+) {
+    let [left, top] = top_left;
+    let [width, height] = size;
+    if metrics.draw_inner_grid {
+        for i in 1..footprint.width {
+            let x = left + i as f32 * zoom - metrics.inner_line_px * 0.5;
+            text.push_rect([x, top], [metrics.inner_line_px, height], color);
+        }
+        for i in 1..footprint.height {
+            let y = top + i as f32 * zoom - metrics.inner_line_px * 0.5;
+            text.push_rect([left, y], [width, metrics.inner_line_px], color);
+        }
+    }
+    let rim = metrics.outer_border_px;
+    for (pos, border_size) in [
+        ([left - rim, top - rim], [width + 2.0 * rim, rim]),
+        ([left - rim, top + height], [width + 2.0 * rim, rim]),
+        ([left - rim, top], [rim, height]),
+        ([left + width, top], [rim, height]),
+    ] {
+        text.push_rect(pos, border_size, color);
+    }
+}
+
 fn render_building_placement_preview(
     text: &mut TextRenderer,
     sim: &SimState,
@@ -813,10 +837,8 @@ fn render_building_placement_preview(
     let footprint_top_left = geometry.top_left;
     let colors = placement_preview_colors(site_valid, can_confirm);
     let metrics = placement_grid_metrics(zoom, sf);
-    let rim = metrics.outer_border_px;
-    let grout = metrics.inner_line_px;
     let map = &engine.state.map;
-    text.push_rect(footprint_top_left, footprint_size_px, colors.fill);
+    render_building_footprint_fill(text, footprint_top_left, footprint_size_px, colors.fill);
     if metrics.draw_inner_grid && !site_valid {
         for y in footprint.top..footprint.top + footprint.height as i32 {
             for x in footprint.left..footprint.left + footprint.width as i32 {
@@ -849,26 +871,15 @@ fn render_building_placement_preview(
             }
         }
     }
-    let [left, top] = footprint_top_left;
-    let [width, height] = footprint_size_px;
-    if metrics.draw_inner_grid {
-        for i in 1..footprint.width {
-            let x = left + i as f32 * zoom - grout * 0.5;
-            text.push_rect([x, top], [grout, height], colors.line);
-        }
-        for i in 1..footprint.height {
-            let y = top + i as f32 * zoom - grout * 0.5;
-            text.push_rect([left, y], [width, grout], colors.line);
-        }
-    }
-    for (pos, size) in [
-        ([left - rim, top - rim], [width + 2.0 * rim, rim]),
-        ([left - rim, top + height], [width + 2.0 * rim, rim]),
-        ([left - rim, top], [rim, height]),
-        ([left + width, top], [rim, height]),
-    ] {
-        text.push_rect(pos, size, colors.line);
-    }
+    render_building_footprint_grid(
+        text,
+        footprint,
+        footprint_top_left,
+        footprint_size_px,
+        zoom,
+        metrics,
+        colors.line,
+    );
     let dragging = input.building_drag_offset.is_some();
     let sprite_size = building_footprint_marker_size(kind, zoom / sf, BUILDING_MIN_MARKER_SIZE)
         .map(|size| size * sf * BUILDING_FOOTPRINT_FILL);
@@ -959,16 +970,11 @@ fn render_building_placement_controls(
 fn building_badge_label(
     building: &RenderedBuilding,
 ) -> Option<(Option<NameplateStatusSprite>, String)> {
-    let hammer = Some(NameplateStatusSprite::Hammer);
     if building.under_construction {
-        return Some((hammer, String::new()));
+        return None;
     }
     if building.level == 0 {
-        return Some(if building.count > 1 {
-            (hammer, format!("× {}", building.count))
-        } else {
-            (hammer, String::new())
-        });
+        return (building.count > 1).then(|| (None, format!("× {}", building.count)));
     }
     if building.level == 1 && building.count == 1 {
         return None;
@@ -1206,32 +1212,17 @@ fn render_building_preview_badge(
     text: &mut TextRenderer,
     center: [f32; 2],
     label: &str,
-    color: [f32; 4],
     dev: &DevConfig,
     sf: f32,
 ) {
     let font_size = 14.0 * dev.font_size_scale.max(0.1) * sf;
     let measure = text.measure_string(label, font_size, dev.font_char_spacing.max(0.1));
-    let padding = 8.0 * sf;
-    // Construction icon + gap before the time.
-    let width = font_size * 1.25 + measure.width + padding * 2.0;
-    let height = (measure.height + padding).max(22.0 * sf);
-    let top = center[1] - height - 8.0 * sf;
-    text.push_rect(
-        [center[0] - width * 0.5, top],
-        [width, height],
-        [color[0], color[1], color[2], 0.8],
-    );
-    text.push_rect(
-        [center[0] - width * 0.5 + sf, top + sf],
-        [(width - 2.0 * sf).max(1.0), (height - 2.0 * sf).max(1.0)],
-        [0.06, 0.09, 0.16, 0.92],
-    );
+    let top = center[1] - measure.height - 8.0 * sf;
     push_icon_label(
         text,
         Some(NameplateStatusSprite::Construction),
         label,
-        [center[0], top + height * 0.5 + font_size * 0.3],
+        [center[0], top + measure.height * 0.5 + font_size * 0.3],
         font_size,
         crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]),
         dev.font_char_spacing.max(0.1),
@@ -1445,7 +1436,7 @@ mod tests {
     }
 
     #[test]
-    fn zero_level_cluster_uses_construction_badge_and_keeps_count() {
+    fn zero_level_cluster_keeps_count_without_hammer_badge() {
         let mut building = RenderedBuilding {
             bx: 0.0,
             by: 0.0,
@@ -1460,7 +1451,7 @@ mod tests {
         };
         assert_eq!(
             building_badge_label(&building),
-            Some((Some(NameplateStatusSprite::Hammer), "× 4".to_string()))
+            Some((None, "× 4".to_string()))
         );
 
         building.level = 3;

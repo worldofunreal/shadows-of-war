@@ -166,6 +166,26 @@ fn target_attacker_loss(state: &GameState, attacker: u16, target: u16, army: f64
     })
 }
 
+/// Hero coast ability: conquering a land tile next to water costs the attacker fewer troops.
+fn coast_attacker_loss(state: &GameState, (tile_x, tile_y): (u32, u32), attacker: u16) -> f64 {
+    if !crate::building::placement::is_shore_land_tile(&state.map, tile_x, tile_y) {
+        return 1.0;
+    }
+    state
+        .player(attacker)
+        .map_or(1.0, |p| p.leader.attacker_loss_multiplier(LossWhen::Coast))
+}
+
+/// Hero landing ability: troops that came ashore from ships lose less taking land from there.
+fn landing_attacker_loss(state: &GameState, attacker: u16, landed: bool) -> f64 {
+    if !landed {
+        return 1.0;
+    }
+    state
+        .player(attacker)
+        .map_or(1.0, |p| p.leader.attacker_loss_multiplier(LossWhen::Landing))
+}
+
 /// Hero mountain ability: mountain tiles cost the attacker fewer troops.
 fn terrain_attacker_loss(state: &GameState, attacker: u16, terrain: TerrainType) -> f64 {
     let when = match terrain {
@@ -511,7 +531,22 @@ impl SowEngine {
                         (target_tile.x, target_tile.y),
                         execution.owner_id,
                     );
-                    if terrain_loss != 1.0 || city_loss != 1.0 || target_loss != 1.0 {
+                    let coast_loss = coast_attacker_loss(
+                        &self.state,
+                        (target_tile.x, target_tile.y),
+                        execution.owner_id,
+                    );
+                    let landing_loss = landing_attacker_loss(
+                        &self.state,
+                        execution.owner_id,
+                        execution.landed,
+                    );
+                    if terrain_loss != 1.0
+                        || city_loss != 1.0
+                        || target_loss != 1.0
+                        || coast_loss != 1.0
+                        || landing_loss != 1.0
+                    {
                         self.state.announce_leader_ability(
                             execution.owner_id,
                             Some((target_tile.x, target_tile.y)),
@@ -519,8 +554,12 @@ impl SowEngine {
                     }
                     let terrain_multiplier =
                         terrain_loss_multiplier(terrain_type, &self.state.config) * terrain_loss;
-                    // Hero city-tile and target loss abilities scale the same per-tile cost.
-                    let loss_multiplier = terrain_multiplier * city_loss * target_loss;
+                    // Hero city-tile, coast, landing and target loss abilities scale the same per-tile cost.
+                    let loss_multiplier = terrain_multiplier
+                        * city_loss
+                        * target_loss
+                        * coast_loss
+                        * landing_loss;
 
                     if execution.target_owner == 0 {
                         // Neutral: attacker pays constant base cost scaled by terrain multiplier
@@ -832,7 +871,7 @@ mod tests {
             "the test must reach the capture-cost branch without the per-tick cap"
         );
 
-        engine.add_attack(AttackExecution {
+        engine.add_attack(AttackExecution { landed: false,
             id: 1,
             owner_id: 1,
             target_owner: 2,
@@ -914,7 +953,7 @@ mod tests {
             focus_targets: std::collections::HashMap::new(),
             reserve_spawned: false,
         });
-        engine.add_attack(AttackExecution {
+        engine.add_attack(AttackExecution { landed: false,
             id: 1,
             owner_id: 1,
             target_owner: 2,
@@ -947,7 +986,7 @@ mod tests {
             .into_iter()
             .find(|(x, y)| engine.state.map.owner_id(*x, *y) == 2)
             .unwrap();
-        engine.add_attack(AttackExecution {
+        engine.add_attack(AttackExecution { landed: false,
             id: 2,
             owner_id: 1,
             target_owner: 2,

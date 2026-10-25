@@ -178,6 +178,10 @@ pub enum LossWhen {
     RecaptureWindow,
     /// Conquering city tiles.
     City,
+    /// Conquering land on the coast: a land tile next to water.
+    Coast,
+    /// Troops that landed from ships, while they take enemy land.
+    Landing,
     /// Conquering land that the target describes (`{"against": "richer"}`).
     Against(Target),
 }

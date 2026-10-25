@@ -67,9 +67,20 @@ pub struct AttackExecution {
     pub rng: WyRand,
     /// Player cancelled via HUD; next tick refunds remaining troops (with penalty vs players).
     pub retreating: bool,
+    /// The troops came ashore from ships; the Landing hero ability discounts their losses.
+    /// Cleared when landed troops merge with troops that did not land.
+    #[serde(default)]
+    pub landed: bool,
 }
 
 impl AttackExecution {
+    /// Adds troops to this attack. Only all-landed troops keep the landing discount, so
+    /// troops that did not come ashore clear it.
+    pub fn absorb_troops(&mut self, troops: f64, landed: bool) {
+        self.troops += troops;
+        self.landed &= landed;
+    }
+
     /// Centroid of the queued frontier tiles (the attack's leading edge).
     /// Iterates the heap's backing slice — no pop, no alloc.
     pub fn frontier_centroid(&self) -> (f32, f32) {

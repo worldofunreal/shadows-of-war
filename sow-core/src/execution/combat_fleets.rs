@@ -297,6 +297,8 @@ impl SowEngine {
             let f_owner = fleet.owner_id;
             let f_troops = fleet.troops;
             let f_id = fleet.id;
+            // Transports ashore on another player's land: their troops land from ships.
+            let f_landed = fleet.unit_type == crate::game::UnitType::TransportShip && owner_here != 0;
 
             elimination_candidates.extend(
                 self.state
@@ -314,7 +316,7 @@ impl SowEngine {
 
             // Drop mutable borrow of self.fleets before calling method on self
             crate::intent::spawn_or_merge_attack_for_fleet_arrival_pure(
-                self, f_owner, prev_owner, f_troops, f_id,
+                self, f_owner, prev_owner, f_troops, f_id, f_landed,
             );
             to_remove.push(i);
         }
@@ -481,7 +483,7 @@ mod tests {
                     engine.execute_fleets();
                     engine.execute_fleets();
                 } else {
-                    engine.add_attack(AttackExecution {
+                    engine.add_attack(AttackExecution { landed: false,
                         id: 1,
                         owner_id: 1,
                         target_owner: 0,

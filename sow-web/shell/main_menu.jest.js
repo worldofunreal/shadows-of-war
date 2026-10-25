@@ -66,6 +66,7 @@ function renderSettings() {
                             SOW_renderDropdown({ key: "settings-language", className: "sow-menu__settings-dropdown", label: SOW_t("menu.language"), name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: jestLocaleOptions() }) +
                         "</div>" +
                     "</div>" +
+                    renderSettingsPrivacySection("") +
                 "</div>" +
             "</section>" +
         "</div>";

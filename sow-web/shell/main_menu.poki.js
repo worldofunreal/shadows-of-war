@@ -55,8 +55,8 @@ function renderSettings() {
                         SOW_renderDropdown({ key: "settings-language", className: "sow-menu__settings-dropdown", label: SOW_t("menu.language"), name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
                     "</div>" +
                     "</div></section>" +
+                    renderSettingsPrivacySection("<button class='sow-menu__settings-link' type='button' data-command='poki_privacy'>" + esc(SOW_t("menu.privacy")) + "</button>") +
                     "<section class='sow-menu__settings-section'><h3>" + esc(SOW_t("menu.game_links")) + "</h3><nav class='sow-menu__settings-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'>" +
-                        "<button class='sow-menu__settings-link' type='button' data-command='poki_privacy'>" + esc(SOW_t("menu.privacy")) + "</button>" +
                         "<button class='sow-menu__settings-link sow-menu__source-link' type='button' data-command='poki_source'>" + esc(SOW_t("menu.source_code")) + "</button>" +
                         "<button class='sow-menu__settings-link sow-menu__license-link' type='button' data-command='poki_license'>" + esc(SOW_t("menu.license")) + "</button>" +
                     "</nav></section>" +

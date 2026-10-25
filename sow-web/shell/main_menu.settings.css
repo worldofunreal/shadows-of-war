@@ -1,4 +1,4 @@
-/* Settings domain: account, preferences, and sign-out modal. */
+/* Settings domain: account, privacy, preferences, and sign-out. */
 
 .sow-menu__settings-modal {
     width: min(100%, 480px);
@@ -42,6 +42,10 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
+}
+
+.sow-menu__settings-privacy-links {
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .sow-menu__settings-link {
@@ -132,6 +136,27 @@
     margin-top: 0;
 }
 
+.sow-menu__settings-delete {
+    min-height: 48px;
+    justify-content: flex-start;
+    margin-top: 0;
+}
+
+.sow-menu__settings-delete-status,
+.sow-menu__settings-delete-error {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.sow-menu__settings-delete-status {
+    color: var(--sow-gold-bright);
+}
+
+.sow-menu__settings-delete-error {
+    color: #ffb1a2;
+}
+
 .sow-menu__settings-confirm {
     display: flex;
     flex-direction: column;
@@ -147,6 +172,13 @@
     font-size: 12px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+}
+
+.sow-menu__settings-confirm > p {
+    margin: 0;
+    color: #ffb1a2;
+    font-size: 13px;
+    line-height: 1.5;
 }
 
 .sow-menu__settings-confirm-actions {

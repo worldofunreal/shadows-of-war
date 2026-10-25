@@ -4,7 +4,7 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 
 | Héroe | Habilidad | Descripción | Tipo | Número | Ícono |
 |---|---|---|---|---|---|
-| Caesar | Legions of Rome | Armies fight 10% stronger. | attack_strength | 10% | `gameplay/icons/abilities/caesar.webp` |
+| Caesar | Legions of Rome | Troops landed from ships lose 10% fewer troops taking enemy land. | attacker_loss | 10% | `gameplay/icons/abilities/caesar.webp` |
 | Cleopatra | Gift of the Nile | Port districts produce 50% more gold. | resource_bonus (port / gold) | 50% | `gameplay/icons/abilities/cleopatra.webp` |
 | Ragnar | Longship Raid | Conquest of players with fewer troops than your army advances 50% faster. | conquest_speed | 50% | `gameplay/icons/abilities/ragnar.webp` |
 | Sun Tzu | Art of War | Conquest of larger players advances 50% faster. | conquest_speed | 50% | `gameplay/icons/abilities/sun_tzu.webp` |
@@ -44,7 +44,7 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Kamehameha I | Over the Pali | Towers defend a 50% wider area. Other players retreating from your land lose 100% more troops. | enemy_retreat_penalty | 100% | `gameplay/icons/abilities/kamehameha.webp` |
 | Gajah Mada | Palapa Oath | Conquest of neutral land advances 50% faster. | conquest_speed | 50% | `gameplay/icons/abilities/gajah_mada.webp` |
 | Solomon | Treaty of Tyre | Trade ships pay 30% more gold. | resource_bonus (trade / gold) | 30% | `gameplay/icons/abilities/solomon.webp` |
-| Sayyid Said | Coastal Expansion | Tribes retreating from your land lose 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/sayyid_said.webp` |
+| Sayyid Said | Coastal Expansion | Attackers lose 50% fewer troops when conquering coastal land. | attacker_loss | 50% | `gameplay/icons/abilities/sayyid_said.webp` |
 | Lapu-Lapu | Battle of Mactan | Players with fewer troops than your army retreating from your land lose 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/lapu_lapu.webp` |
 | Constantine | Milvian Bridge | Conquest of players with more troops than your army advances 50% faster. | conquest_speed | 50% | `gameplay/icons/abilities/constantine.webp` |
 | Vlad III | Forest of Stakes | Eliminating a player pays 50% more gold. | resource_bonus (elimination / gold) | 50% | `gameplay/icons/abilities/vlad_iii.webp` |

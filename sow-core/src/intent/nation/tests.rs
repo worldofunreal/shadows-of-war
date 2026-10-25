@@ -300,7 +300,7 @@ mod bot_iq_alliance_tests {
         third.troops = 3_000.0;
         engine.state.register_player(third);
         for (id, owner_id, troops) in [(11, 2, 200.0), (12, 3, 500.0)] {
-            engine.attacks.push(crate::execution::AttackExecution {
+            engine.attacks.push(crate::execution::AttackExecution { landed: false,
                 id,
                 owner_id,
                 target_owner: 1,
@@ -328,7 +328,7 @@ mod bot_iq_alliance_tests {
         ghost.player_type = PlayerType::Human;
         ghost.is_ai_controlled = true;
         engine.attacks.extend([
-            crate::execution::AttackExecution {
+            crate::execution::AttackExecution { landed: false,
                 id: 11,
                 owner_id: 2,
                 target_owner: 1,
@@ -339,7 +339,7 @@ mod bot_iq_alliance_tests {
                 rng: wyrand::WyRand::new(11),
                 retreating: false,
             },
-            crate::execution::AttackExecution {
+            crate::execution::AttackExecution { landed: false,
                 id: 12,
                 owner_id: 1,
                 target_owner: 2,
@@ -371,7 +371,7 @@ mod bot_iq_alliance_tests {
         ghost.troops = 10.0;
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
         engine.state.config.attack_cost_neutral = 50.0;
-        engine.attacks.push(crate::execution::AttackExecution {
+        engine.attacks.push(crate::execution::AttackExecution { landed: false,
             id: attack_id,
             owner_id: 2,
             target_owner: 1,
@@ -481,7 +481,7 @@ mod bot_iq_alliance_tests {
         let idle = run_nation_attack(&mut engine, &[2], false);
         assert!(attack_targets(&idle).is_empty());
 
-        engine.attacks.push(crate::execution::AttackExecution {
+        engine.attacks.push(crate::execution::AttackExecution { landed: false,
             id: 1,
             owner_id: 2,
             target_owner: 1,
@@ -507,7 +507,7 @@ mod bot_iq_alliance_tests {
         let idle = run_vanilla_tribe_attack(&mut engine, &[2], false, false);
         assert!(attack_targets(&idle).is_empty());
 
-        engine.attacks.push(crate::execution::AttackExecution {
+        engine.attacks.push(crate::execution::AttackExecution { landed: false,
             id: 1,
             owner_id: 2,
             target_owner: 1,
@@ -684,7 +684,7 @@ mod bot_iq_alliance_tests {
 
         let water = WaterComponents::compute(&state.map, |_| {});
         let mut engine = SowEngine::new(state, water);
-        engine.attacks.push(crate::execution::AttackExecution {
+        engine.attacks.push(crate::execution::AttackExecution { landed: false,
             id: 7,
             owner_id: 2,
             target_owner: 1,
@@ -799,7 +799,7 @@ mod bot_iq_alliance_tests {
         let mut engine = test_engine_two_players(42);
         engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
-        engine.attacks.push(crate::execution::AttackExecution {
+        engine.attacks.push(crate::execution::AttackExecution { landed: false,
             id: 1,
             owner_id: 2,
             target_owner: 1,
@@ -961,7 +961,7 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(1).unwrap().player_type = crate::player::PlayerType::Nation;
 
         // Simulate under attack
-        engine.attacks.push(crate::execution::AttackExecution {
+        engine.attacks.push(crate::execution::AttackExecution { landed: false,
             id: 1,
             owner_id: 2,
             target_owner: 1,
