@@ -1351,7 +1351,6 @@ test("campaign contact, rendered emotes, delayed reply, last words, and defeat c
     machine.jump(gate, { ...contactFacts, contact_faction_ids: [] });
     // The outpost camera shot has played on entry; its emotes wait for that shot, as in the live runtime.
     runtime.cameraShotStepId = gate;
-    runtime.exchangeCameraReadyAt = 0;
 
     let view = machine.update(contactFacts, {});
     const romanCue = commands.find(command => command.type === "tutorial_emote" && command.message === "localized:test.colonia.taunt");
@@ -1428,7 +1427,7 @@ test("pre-defeat exchange uses the shared modal and releases only after its fina
         "boudica_outpost_tax_collectors", "the same defeated fact advances the objective after the authored line");
 });
 
-test("a missing emote delivery falls back to the shared modal and cannot hold a defeat forever", () => {
+test("a missing emote delivery is skipped without a modal and cannot hold a defeat forever", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
         entry: "outpost",
@@ -1453,17 +1452,14 @@ test("a missing emote delivery falls back to the shared modal and cannot hold a 
     });
     machine.jump("outpost", { defeated_faction_ids: [], pre_defeat_faction_ids: [] });
     const model = machine.update({ defeated_faction_ids: [], pre_defeat_faction_ids: ["colonia_veterans"] }, {});
-    assert.equal(model.exchange_phase, "dialogue");
-    assert.equal(model.step.presentation, "dialogue");
-    assert.equal(model.step.body_key, "tutorial.last_words", "the same line is shown in the shared modal when its nameplate is unavailable");
-    assert.deepEqual(model.pre_defeat_targets, ["colonia_veterans"], "the native hold stays armed while the last-words modal is active");
+    assert.equal(model.exchange_phase, undefined, "an emote that cannot show is skipped, not turned into a modal");
+    assert.equal(model.paused, false, "a skipped emote never pauses the game");
     assert.deepEqual(cleared.map(item => item[0]), ["tutorial.last_words"]);
-    assert.equal(machine.advance(null, model.step.id), true);
-    assert.deepEqual(completed, ["last_words"], "continuing the fallback releases the original pre-defeat hold");
+    assert.deepEqual(completed, ["last_words"], "skipping the last emote completes its response");
     assert.deepEqual(machine.view().pre_defeat_targets, [], "the story hold is disarmed as soon as its response completes");
 });
 
-test("a scripted emote that never receives a native render acknowledgement falls back after a bounded wait", () => {
+test("a scripted emote that never receives a native render acknowledgement is skipped after a bounded wait", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     let now = 0, calls = 0;
     const definition = {
@@ -1483,8 +1479,8 @@ test("a scripted emote that never receives a native render acknowledgement falls
     assert.equal(machine.update({}, {}).exchange_phase, "prepare", "the renderer gets time to acknowledge the visible line");
     now = 2600;
     const fallback = machine.update({}, {});
-    assert.equal(fallback.exchange_phase, "dialogue");
-    assert.equal(fallback.step.body_key, "tutorial.taunt");
+    assert.notEqual(fallback.exchange_phase, "dialogue", "an unacknowledged emote never opens a pausing modal");
+    assert.equal(fallback.step.id, "done", "the unacknowledged emote is skipped and the sequence moves on");
 });
 
 test("the three Roman encounters speak once on their active objective and release that defeat after the last word", () => {

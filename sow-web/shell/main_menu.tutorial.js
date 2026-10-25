@@ -61,7 +61,6 @@
         guidedAmountControls: [],
         exchangeCue: null,
         exchangeFocusToken: null,
-        exchangeCameraReadyAt: 0,
         lastPreDefeatTargets: null,
         campaignSessionId: 0,
         emoteSerial: 0
@@ -734,7 +733,6 @@
             }
         })) {
             runtime.cameraShotStepId = step.id;
-            if (step.exchange) runtime.exchangeCameraReadyAt = Date.now() + (Number(camera.seconds) || 3) * 1000;
         }
     }
 
@@ -1206,7 +1204,7 @@
         var player = hud && campaignPlayer(hud, faction);
         if (!player || !onMap(player)) return "unavailable";
         var step = runtime.machine && runtime.machine.view().step;
-        if (step && step.camera && (runtime.cameraShotStepId !== step.id || Date.now() < runtime.exchangeCameraReadyAt)) return false;
+        if (step && step.camera && runtime.cameraShotStepId !== step.id) return false;
         if (tutorial.facts && tutorial.facts.machinima_active) return false;
         if (tutorial.emote_token === nativeToken) return true;
         if (runtime.exchangeFocusToken !== token) {
