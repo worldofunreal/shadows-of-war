@@ -223,7 +223,7 @@ impl SowApp {
                 if !player.alive
                     || event.age_seconds(snap.tick, self.sim.config.tick_rate_ms)
                         >= sow_core::emote::EMOTE_DURATION_SECS
-                    || !sow_core::emote::is_recipient(&snap.players, player.id, my_id)
+                    || !sow_core::emote::is_visible(&snap.players, player, my_id)
                     || existing
                         .players
                         .iter()

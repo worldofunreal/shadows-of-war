@@ -109,12 +109,23 @@ pub(crate) struct NameplateSystem {
     badge_animations: HashMap<u16, PlayerStatusBadgeAnimations>,
     emote_tick: Option<u64>,
     emote_tick_at: Option<Instant>,
+    emote_paused: bool,
     emote_texts: [String; 4],
     prepared_emotes: [sow_render::text::PreparedText; 4],
     emote_text_style_key: Option<u32>,
+    campaign_emote: Option<CampaignEmoteCue>,
     safe_area: [f32; 4],
     /// Campaign portraits of this frame's full plates; the asset loader requests them next frame.
     avatar_wants: Vec<String>,
+}
+
+struct CampaignEmoteCue {
+    player_id: u16,
+    event_id: u64,
+    token: String,
+    message: String,
+    prepared: Option<(u32, sow_render::text::PreparedText)>,
+    visible: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -525,6 +536,49 @@ struct EmoteBubbleLayout {
 }
 
 impl NameplateSystem {
+    /// The authored line belongs to this one visible campaign cue, never to a shared emote kind.
+    pub(crate) fn set_campaign_emote(&mut self, player_id: u16, event_id: u64, token: String, message: String) -> bool {
+        let value = message.trim();
+        if value.is_empty() || value.chars().count() > 160 || value.chars().any(char::is_control) {
+            return false;
+        }
+        self.campaign_emote = Some(CampaignEmoteCue {
+            player_id,
+            event_id,
+            token,
+            message: value.to_owned(),
+            prepared: None,
+            visible: false,
+        });
+        true
+    }
+
+    pub(crate) fn campaign_emote_matches(&self, token: &str, player_id: u16) -> bool {
+        self.campaign_emote.as_ref().is_some_and(|cue| cue.token == token && cue.player_id == player_id)
+    }
+
+    pub(crate) fn clear_campaign_emote(&mut self, token: Option<&str>, player_id: u16) -> bool {
+        if !self.campaign_emote.as_ref().is_some_and(|cue| {
+            cue.player_id == player_id && token.is_none_or(|token| cue.token == token)
+        }) {
+            return false;
+        }
+        self.campaign_emote = None;
+        true
+    }
+
+    pub(crate) fn clear_campaign_emote_token(&mut self, token: &str) -> Option<(u16, u64)> {
+        let cue = self.campaign_emote.as_ref()
+            .filter(|cue| cue.token == token)
+            .map(|cue| (cue.player_id, cue.event_id))?;
+        self.campaign_emote = None;
+        Some(cue)
+    }
+
+    pub(crate) fn campaign_emote_ready_token(&self) -> Option<&str> {
+        self.campaign_emote.as_ref().filter(|cue| cue.visible).map(|cue| cue.token.as_str())
+    }
+
     pub(crate) fn receive_troops(&mut self, receiver_id: u16, troops: f64, now: Instant) {
         if troops.is_finite()
             && troops > 0.0
@@ -585,7 +639,8 @@ impl NameplateSystem {
             self.emote_tick_at = Some(now);
         }
         let fraction = self.emote_tick_at.map_or(0.0, |at| {
-            now.duration_since(at).as_secs_f32().min(tick_secs)
+            let elapsed = now.duration_since(at).as_secs_f32();
+            if self.emote_paused { elapsed } else { elapsed.min(tick_secs) }
         });
         for player in &snapshot.players {
             if !player.alive {
@@ -596,7 +651,10 @@ impl NameplateSystem {
             if let Some(event) = player.active_emote {
                 if old.is_some_and(|old| {
                     old.event.event_id == event.event_id
+                        && old.event.kind == event.kind
                         && old.event.pinned == event.pinned
+                        && old.event.scripted == event.scripted
+                        && old.event.started_tick == event.started_tick
                         && old.release_at.is_none()
                 }) {
                     continue;
@@ -618,7 +676,9 @@ impl NameplateSystem {
                         event,
                         previous,
                         from_motion,
-                        age_bias: if raw_age <= tick_secs * 2.0 {
+                        age_bias: if event.scripted {
+                            raw_age + fraction
+                        } else if raw_age <= tick_secs * 2.0 {
                             raw_age
                         } else {
                             0.0
@@ -646,6 +706,17 @@ impl NameplateSystem {
                     self.emote_visuals.insert(player.id, old);
                 }
             }
+        }
+        let stale_campaign_cue = self.campaign_emote.as_ref().is_some_and(|cue| {
+            self.emote_visuals.get(&cue.player_id).is_none_or(|visual| {
+                visual.event.event_id != cue.event_id
+                    || !visual.event.scripted
+                    || (!visual.event.pinned
+                        && visual.age(snapshot.tick, tick_secs, fraction) >= EMOTE_DURATION_SECS)
+            })
+        });
+        if stale_campaign_cue {
+            self.campaign_emote = None;
         }
     }
 
@@ -683,6 +754,16 @@ impl NameplateSystem {
                 reduced_motion,
             );
         }
+    }
+
+    fn prepare_campaign_emote_message(&mut self, text: &TextRenderer, dev: &DevConfig) {
+        let style_key = nameplate_metrics_style_key(dev);
+        let Some(cue) = self.campaign_emote.as_mut() else { return };
+        if cue.prepared.as_ref().is_some_and(|(key, _)| *key == style_key) {
+            return;
+        }
+        let prepared = text.prepare_string(&cue.message, nameplate_char_spacing(dev), 0.5);
+        cue.prepared = Some((style_key, prepared));
     }
 
     fn prepare_emote_texts(&mut self, text: &TextRenderer, dev: &DevConfig) {
@@ -743,6 +824,7 @@ pub(super) fn render_nameplates(
     {
         system.badge_animations.clear();
     }
+    system.emote_paused = sim.paused;
     system.observe_emotes(
         snapshot,
         (sim.config.tick_rate_ms / 1000.0).max(0.001),
@@ -750,6 +832,7 @@ pub(super) fn render_nameplates(
         reduced_motion,
     );
     system.prepare_emote_texts(text, dev);
+    system.prepare_campaign_emote_message(text, dev);
     system.tutorial_target_hit_bounds = None;
     sample_nameplates(text, snapshot, sim, system, dev, sf, my_id, now);
     system.observe_status_badges(snapshot, my_id, leaderboard_top_three, now, reduced_motion);
@@ -785,7 +868,8 @@ pub(super) fn render_nameplates(
             continue;
         }
         let is_me = player.id == my_id;
-        let has_human_priority = player.player_type == PlayerType::Human;
+        let has_human_priority = player.player_type == PlayerType::Human
+            || system.campaign_emote.as_ref().is_some_and(|cue| cue.player_id == player.id);
         let style = NameplateStyle::for_player(player.player_type, player.is_campaign_faction);
         let Some(state) = visuals.get_mut(&player.id) else {
             continue;
@@ -936,7 +1020,8 @@ pub(super) fn render_nameplates(
             dev.vfx_nameplate_names,
             dev.vfx_nameplate_troops,
         );
-        let show_full = fitted_font_size >= 7.0 && (has_human_priority || full_labels_drawn < 80);
+        let show_full = (fitted_font_size >= 7.0 || system.campaign_emote.as_ref().is_some_and(|cue| cue.player_id == player.id))
+            && (has_human_priority || full_labels_drawn < 80);
         if !show_full {
             frame_plans.push(PreparedNameplate {
                 player_index,
@@ -989,7 +1074,10 @@ pub(super) fn render_nameplates(
         });
     }
 
-    assign_nameplate_capacity(frame_plans, text.remaining_instance_capacity());
+    let campaign_message_instances = system.campaign_emote.as_ref()
+        .and_then(|cue| cue.prepared.as_ref())
+        .map_or(0, |(_, prepared)| prepared.instance_count().saturating_add(5));
+    assign_nameplate_capacity(frame_plans, text.remaining_instance_capacity().saturating_sub(campaign_message_instances));
     let base_reserved = frame_plans
         .iter()
         .map(|plan| match plan.presentation {
@@ -1000,7 +1088,8 @@ pub(super) fn render_nameplates(
         .sum::<usize>();
     let mut decoration_budget = text
         .remaining_instance_capacity()
-        .saturating_sub(base_reserved);
+        .saturating_sub(base_reserved)
+        .saturating_sub(campaign_message_instances);
     let mut tutorial_target_hit_bounds = None;
     for plan in frame_plans.iter() {
         let player = &snapshot.players[plan.player_index];
@@ -1052,12 +1141,16 @@ pub(super) fn render_nameplates(
         }
     }
     // Decorations are a second pass so glyph pressure cannot hide another player's base plate.
-    for plan in frame_plans.iter() {
+    let campaign_speaker = system.campaign_emote.as_ref().map(|cue| cue.player_id);
+    for plan in frame_plans.iter()
+        .filter(|plan| Some(snapshot.players[plan.player_index].id) == campaign_speaker)
+        .chain(frame_plans.iter().filter(|plan| Some(snapshot.players[plan.player_index].id) != campaign_speaker))
+    {
         if plan.presentation != NameplatePresentation::Full {
             continue;
         }
         let player = &snapshot.players[plan.player_index];
-        if !sow_core::emote::is_recipient(&snapshot.players, player.id, my_id) {
+        if !sow_core::emote::is_visible(&snapshot.players, player, my_id) {
             continue;
         }
         let Some(avatar) = plan.full.and_then(|full| full.avatar) else {
@@ -1069,12 +1162,15 @@ pub(super) fn render_nameplates(
         let age = emote.age(snapshot.tick, tick_secs, emote_fraction);
         let motion = emote.motion(age, now, reduced_motion);
         let avatar = apply_emote_avatar_motion(avatar, motion);
-        let prepared = &system.prepared_emotes[emote.event.kind as usize];
+        let prepared = system.campaign_emote.as_ref()
+            .filter(|cue| cue.player_id == player.id && cue.event_id == emote.event.event_id && emote.event.scripted)
+            .and_then(|cue| cue.prepared.as_ref().map(|(_, prepared)| prepared))
+            .unwrap_or(&system.prepared_emotes[emote.event.kind as usize]);
         let needed = prepared.instance_count().saturating_add(5);
         if motion.bubble_alpha <= 0.0 || needed > text.remaining_instance_capacity() {
             continue;
         }
-        paint_emote_bubble(
+        let drawn = paint_emote_bubble(
             text,
             prepared,
             avatar,
@@ -1084,6 +1180,13 @@ pub(super) fn render_nameplates(
             system.safe_area,
             sf,
         );
+        if let Some(cue) = system.campaign_emote.as_mut()
+            && drawn
+            && cue.player_id == player.id
+            && cue.event_id == emote.event.event_id
+        {
+            cue.visible = true;
+        }
     }
     system.tutorial_target_hit_bounds = tutorial_target_hit_bounds;
 }
@@ -1398,6 +1501,7 @@ mod emote_tests {
         ActiveEmote {
             kind: EmoteKind::Threat,
             pinned,
+            scripted: false,
             started_tick: 0,
             event_id: id,
         }
@@ -1615,6 +1719,47 @@ mod emote_tests {
     }
 
     #[wasm_bindgen_test]
+    fn a_new_scripted_line_gets_its_full_lifetime_after_a_long_paused_frame() {
+        let now = Instant::now();
+        let mut system = NameplateSystem::default();
+        let mut snap = snapshot(None);
+        system.emote_paused = true;
+        system.observe_emotes(&snap, 0.1, now, false);
+        let accepted = now + Duration::from_secs(20);
+        snap.players[0].active_emote = Some(ActiveEmote {
+            scripted: true,
+            started_tick: snap.tick,
+            ..event(2, false)
+        });
+        system.observe_emotes(&snap, 0.1, accepted, false);
+        let visual = system.emote_visuals[&1];
+        assert!(visual.age(snap.tick, 0.1, 20.0).abs() < 0.001);
+        assert!((visual.age(snap.tick, 0.1, 21.5) - 1.5).abs() < 0.001);
+        assert!(visual.motion(1.5, accepted + Duration::from_millis(1500), false).bubble_alpha > 0.0);
+        system.observe_emotes(&snap, 0.1, accepted + Duration::from_millis(1500), false);
+        assert_eq!(system.emote_visuals[&1].age_bias, visual.age_bias, "publishing the same event cannot restart it");
+    }
+
+    #[wasm_bindgen_test]
+    fn campaign_bubble_is_reclaimed_after_expiry_or_when_its_event_is_replaced() {
+        let now = Instant::now();
+        let mut system = NameplateSystem::default();
+        let mut snap = snapshot(Some(ActiveEmote { scripted: true, ..event(3, false) }));
+        system.emote_paused = true;
+        assert!(system.set_campaign_emote(1, 3, "story:3".into(), "A story line.".into()));
+        system.observe_emotes(&snap, 0.1, now, false);
+        assert!(system.campaign_emote.is_some());
+
+        system.observe_emotes(&snap, 0.1, now + Duration::from_secs(3), false);
+        assert!(system.campaign_emote.is_none(), "an expired line cannot keep its text reserved");
+
+        assert!(system.set_campaign_emote(1, 3, "story:3".into(), "A story line.".into()));
+        snap.players[0].active_emote = Some(event(4, false));
+        system.observe_emotes(&snap, 0.1, now + Duration::from_secs(3), false);
+        assert!(system.campaign_emote.is_none(), "a reused actor cannot inherit a stale campaign line");
+    }
+
+    #[wasm_bindgen_test]
     fn repeated_emotes_keep_current_pose_and_clear_returns_to_calm() {
         let now = Instant::now();
         let mut system = NameplateSystem::default();
@@ -1677,6 +1822,29 @@ mod emote_tests {
         assert!(system.emote_visuals.is_empty());
         assert_eq!(system.emote_texts[1], "¡Ayuda!");
         assert_eq!(system.safe_area[2], 24.0);
+    }
+
+    #[wasm_bindgen_test]
+    fn authored_campaign_line_stays_with_its_actor_event_and_token() {
+        let mut system = NameplateSystem::default();
+        assert!(system.set_campaign_emote(4, 18, "roman:18".into(), "You are already beaten.".into()));
+        assert!(system.campaign_emote_matches("roman:18", 4));
+        assert!(!system.campaign_emote_matches("roman:18", 5));
+        assert!(!system.clear_campaign_emote(Some("old-token"), 4));
+        assert!(!system.clear_campaign_emote(Some("roman:18"), 5));
+
+        assert!(system.set_campaign_emote(5, 18, "boudica:18".into(), "Then face me.".into()));
+        assert!(!system.clear_campaign_emote(Some("roman:18"), 4), "a delayed clear from another actor cannot remove the current line");
+        assert_eq!(system.campaign_emote.as_ref().map(|cue| cue.message.as_str()), Some("Then face me."));
+        assert!(system.clear_campaign_emote(Some("boudica:18"), 5));
+        assert!(system.campaign_emote.is_none());
+        assert!(!system.set_campaign_emote(4, 19, "bad".into(), "".into()));
+        assert!(system.set_campaign_emote(6, 20, "exit:20".into(), "The story ends.".into()));
+        assert_eq!(system.clear_campaign_emote_token("stale:20"), None);
+        assert!(system.set_campaign_emote(6, 21, "exit:21".into(), "A new line.".into()));
+        assert_eq!(system.clear_campaign_emote_token("exit:20"), None, "an old clear cannot remove a newer line");
+        assert_eq!(system.clear_campaign_emote_token("exit:21"), Some((6, 21)));
+        assert!(system.campaign_emote.is_none(), "a matching exit token clears its bubble without the old campaign session");
     }
 
     #[wasm_bindgen_test]
@@ -2815,7 +2983,7 @@ fn paint_emote_bubble(
     input: &InputState,
     insets: [f32; 4],
     sf: f32,
-) {
+) -> bool {
     let avatar_diameter = avatar.radius * 2.0;
     let safe = insets.map(|value| value * sf + 8.0 * sf);
     let max_width = (avatar_diameter * EMOTE_BUBBLE_MAX_WIDTH_RATIO)
@@ -2823,7 +2991,7 @@ fn paint_emote_bubble(
     let base_font_size = emote_bubble_base_font_size(avatar_diameter, sf);
     let measured = prepared.measure_at(base_font_size);
     let Some(base_bounds) = prepared.visual_bounds_at(base_font_size) else {
-        return;
+        return false;
     };
     let Some(content) = size_emote_bubble_content(
         avatar_diameter,
@@ -2832,7 +3000,7 @@ fn paint_emote_bubble(
         base_bounds,
         max_width,
     ) else {
-        return;
+        return false;
     };
 
     let motion_scale = motion.bubble_scale.clamp(0.0, 1.15);
@@ -2849,7 +3017,7 @@ fn paint_emote_bubble(
         safe,
         sf,
     ) else {
-        return;
+        return false;
     };
     layout.font_size = content.font_size * motion_scale;
     layout.text_bounds = content.text_bounds.map(|value| value * motion_scale);
@@ -2881,7 +3049,7 @@ fn paint_emote_bubble(
         layout.inner_tail_size,
         [0.97, 0.95, 0.90, alpha],
     );
-    let _ = text.push_prepared_text(
+    text.push_prepared_text(
         prepared,
         [
             layout.center[0],
@@ -2894,7 +3062,7 @@ fn paint_emote_bubble(
             outline: sow_render::text::OutlineStyle::NONE,
             underlay_softness: 0.0,
         },
-    );
+    )
 }
 
 fn scale_outline_style(

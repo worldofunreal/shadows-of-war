@@ -147,6 +147,9 @@ pub struct ScriptedSpawn {
     pub campaign_hold_structures_until_contact: bool,
     #[serde(default)]
     pub campaign_city_requires_gold: bool,
+    /// Accepts every alliance request from the human without troop, territory or IQ-point checks.
+    #[serde(default)]
+    pub campaign_accepts_alliance_requests: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -413,7 +416,7 @@ impl Default for GameConfig {
 
             // Core Simulation Pacing
             tick_rate_ms: 100.0, // Server clock ticks every 100ms (10 ticks per second)
-            global_speed_multiplier: 0.15,
+            global_speed_multiplier: 0.5,
 
             // Combat & Expansion Mechanics
             attack_cost_enemy: 2.0,

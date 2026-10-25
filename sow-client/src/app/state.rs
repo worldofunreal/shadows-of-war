@@ -71,6 +71,7 @@ pub struct TutorialObservation {
     pub seen_defeated: std::collections::HashSet<u16>,
     pub seen_defeated_faction_ids: std::collections::HashSet<String>,
     pub eliminated_faction_ids: std::collections::BTreeSet<String>,
+    pub pre_defeat_faction_ids: std::collections::BTreeSet<String>,
     pub seen_contacts: std::collections::HashSet<u16>,
     pub seen_contact_faction_ids: std::collections::HashSet<String>,
     pub seen_nukes: std::collections::HashSet<u64>,
@@ -87,6 +88,7 @@ pub struct TutorialObservation {
     pub port_upgrades: u64,
     pub port_levels: u64,
     pub resource_transfers: u64,
+    pub alliance_requests_submitted: u64,
     pub resource_transfers_by_recipient_faction_id:
         std::collections::BTreeMap<String, ResourceTransferCounts>,
     pub seen_alliances: std::collections::HashSet<u16>,
@@ -114,6 +116,7 @@ pub struct TutorialObservation {
 pub enum TutorialPausedAction {
     ExpandOnceThenResume,
     SendResourcesStayPaused,
+    RequestAllianceStayPaused,
     BuildUntilStarted,
     UpgradeUntilStarted,
 }

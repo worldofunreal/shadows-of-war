@@ -140,6 +140,14 @@ function etag(data) {
 }
 
 function hasText(key, definition) {
+  const value = catalogText(key);
+  if (typeof value === "string" && value.trim().length > 0) return true;
+  const source = readFileSync(path.join(root, "sow-i18n/strings/en/web.toml"), "utf8");
+  const textKey = key.replace(/^tutorial\./, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp("^" + textKey + "\\s*=\\s*\"[^\"]+\"", "m").test(source);
+}
+
+function catalogText(key) {
   const catalogFile = path.join(distLocaleDir, "en");
   try {
     const catalog = JSON.parse(readFileSync(catalogFile, "utf8")).strings;
@@ -147,12 +155,10 @@ function hasText(key, definition) {
     let node = catalog;
     if (parts[0] === "tutorial") node = node && node.tutorial;
     const value = parts.slice(1).reduce((current, part) => current && current[part], node);
-    if (typeof value === "string" && value.trim().length > 0) return true;
+    if (typeof value === "string") return value;
   } catch {
   }
-  const source = readFileSync(path.join(root, "sow-i18n/strings/en/web.toml"), "utf8");
-  const textKey = key.replace(/^tutorial\./, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp("^" + textKey + "\\s*=\\s*\"[^\"]+\"", "m").test(source);
+  return null;
 }
 
 async function validatePair(episodeId, roster, definition) {
@@ -167,8 +173,13 @@ async function validatePair(episodeId, roster, definition) {
     ids.add(faction.id); names.add(faction.name);
   }
   const avatarFiles = new Set(await listAvatarIds());
-  const result = loadCampaignRuntime().validate(definition, roster, {
+  const campaign = loadCampaignRuntime();
+  const result = campaign.validate(definition, roster, {
     hasText: key => hasText(key, definition),
+    getText: key => {
+      const value = catalogText(key);
+      return typeof value === "string" ? campaign.replaceFactionStoryNames(value, definition, roster) : null;
+    },
     hasAvatar: avatar => avatarFiles.has(avatar),
   });
   if (definition.episode_id !== episodeId) throw new Error("Episode ID must match its file name.");

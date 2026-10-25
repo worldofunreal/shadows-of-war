@@ -58,7 +58,13 @@
         modalObserver: null,
         guidedScrollStepId: null,
         guidedControl: null,
-        guidedAmountControls: []
+        guidedAmountControls: [],
+        exchangeCue: null,
+        exchangeFocusToken: null,
+        exchangeCameraReadyAt: 0,
+        lastPreDefeatTargets: null,
+        campaignSessionId: 0,
+        emoteSerial: 0
     };
     var menuJourney = {
         definition: null,
@@ -264,6 +270,9 @@
                         : "tutorial.hand_" + (context.zoomMode === "pinch" ? "tap" : "click") + "_" + action;
                 context.gestureLabel = hasText(actionKey) ? tr(actionKey) : tr(fallbackKey);
             }
+            if (step.trigger && step.trigger.type === "ui" && step.trigger.action === "map_menu_open") {
+                context.gestureOverride = context.zoomMode === "pinch" ? "hold" : "tap";
+            }
             if (hintKey && tr(hintKey) !== hintKey) {
                 context.hintOverride = tr(hintKey);
                 if (step.guide.gesture === "hover") context.gestureHint = context.hintOverride;
@@ -300,7 +309,14 @@
             var roster = files[0], definition = files[1];
             if (!window.SOWCampaign || !window.SOWCampaignView) throw new Error("Campaign runtime is missing.");
             if (definition.episode_id !== episodeId) throw new Error("Campaign filename and episode ID do not match.");
-            var result = window.SOWCampaign.validate(definition, roster, { hasText: hasText });
+            var result = window.SOWCampaign.validate(definition, roster, {
+                hasText: hasText,
+                getText: function (key) {
+                    var value = typeof window.SOW_t === "function" ? window.SOW_t(key) : null;
+                    if (!hasText(key) || !value || value === key || value === "[" + key + "]") return null;
+                    return window.SOWCampaign.replaceFactionStoryNames(value, definition, roster);
+                }
+            });
             if (result.errors.length) throw new Error(result.errors.map(function (issue) { return issue.message; }).join("\n"));
             return { roster: roster, definition: definition };
         });
@@ -486,9 +502,16 @@
             runtime.episodeId = episodeId;
             runtime.roster = data.roster;
             runtime.definition = data.definition;
-            runtime.machine = window.SOWCampaign.create(data.definition, undefined, data.roster, undefined, { onStepComplete: applyStepEmote });
+            runtime.lastPreDefeatTargets = null;
+            runtime.campaignSessionId = Number(runtime.latestHud.tutorial.campaign_session_id) || 0;
+            if (runtime.machine) runtime.machine.dispose();
+            runtime.machine = window.SOWCampaign.create(data.definition, undefined, data.roster, undefined, {
+                onStepComplete: applyStepEmote,
+                onExchangeLine: playExchangeLine,
+                onExchangeClear: clearExchangeLine,
+                onReactionComplete: completeCampaignReaction
+            });
             runtime.active = true;
-            window.SOW_emote_text_overrides = {};
             runtime.lastUnlockCommand = null;
             runtime.uiCounts = Object.create(null);
             runtime.uiPaused = null;
@@ -709,7 +732,10 @@
                 seconds: Number.isFinite(camera.seconds) ? camera.seconds : 3,
                 ...(camera.machinima === true ? { machinima: true } : {})
             }
-        })) runtime.cameraShotStepId = step.id;
+        })) {
+            runtime.cameraShotStepId = step.id;
+            if (step.exchange) runtime.exchangeCameraReadyAt = Date.now() + (Number(camera.seconds) || 3) * 1000;
+        }
     }
 
     function markerTargetFor(step) {
@@ -735,7 +761,7 @@
     }
 
     function update(hud) {
-        if (!runtime.machine || runtime.modalOpen || !hud || !hud.tutorial || !hud.tutorial.active) return;
+        if (!runtime.machine || runtime.modalOpen || document.hidden || !hud || !hud.tutorial || !hud.tutorial.active) return;
         if (!root.isConnected) document.body.appendChild(root);
         var tutorial = hud.tutorial;
         var currentStep = runtime.machine.view().step;
@@ -781,6 +807,7 @@
             selected_building_kind: selectedBuildingKind,
             attack_ratio: Number(hud.attack_ratio)
         });
+        facts.resources_available = availableGold(hud) >= 1 || Number(facts.troops || 0) >= 1 ? 1 : 0;
         if (currentStep.trigger && currentStep.trigger.type === "ui"
             && currentStep.marker && currentStep.marker.target && !runtime.mapUiStepRecorded) {
             var mapAction = currentStep.trigger.action;
@@ -800,6 +827,12 @@
         }
         var machineView = runtime.machine.update(facts, runtime.uiCounts);
         var campaignSessionId = Number(tutorial.campaign_session_id) || 0;
+        var preDefeatTargets = Array.isArray(machineView.pre_defeat_targets) ? machineView.pre_defeat_targets : [];
+        var preDefeatKey = campaignSessionId + ":" + preDefeatTargets.slice().sort().join(",");
+        if (campaignSessionId > 0 && runtime.lastPreDefeatTargets !== preDefeatKey
+            && send("set_campaign_pre_defeat_targets", { faction_ids: preDefeatTargets, campaign_session_id: campaignSessionId })) {
+            runtime.lastPreDefeatTargets = preDefeatKey;
+        }
         var unlockCommandKey = campaignSessionId + ":" + JSON.stringify(machineView.unlocks || { buildings: {}, actions: [] });
         if (campaignSessionId > 0 && runtime.lastUnlockCommand !== unlockCommandKey
             && send("set_campaign_unlocks", { campaign_session_id: campaignSessionId, unlocks: machineView.unlocks || { buildings: {}, actions: [] } })) {
@@ -873,6 +906,12 @@
             if (machineView.step.campaign_halt_on_enter) {
                 send("halt_campaign_faction", machineView.step.campaign_halt_on_enter);
             }
+            if (machineView.step.campaign_accept_alliance_on_enter) {
+                send("accept_campaign_alliance", {
+                    faction_id: machineView.step.campaign_accept_alliance_on_enter.faction_id,
+                    campaign_session_id: Number(tutorial.campaign_session_id)
+                });
+            }
             if (machineView.step.campaign_assault_on_enter) {
                 var assault = machineView.step.campaign_assault_on_enter;
                 send("activate_campaign_assault", {
@@ -889,7 +928,7 @@
             send("continue_observing");
         }
         var targetStep = machineView.step;
-        var targetFactionId = targetStep.type === "choice" && targetStep.marker
+        var targetFactionId = machineView.exchange ? null : targetStep.type === "choice" && targetStep.marker
             ? markerTargetFor(targetStep)
             : targetStep.guide && targetStep.guide.kind === "world"
             && ["target_action", "nameplate", "player"].includes(targetStep.guide.target)
@@ -907,7 +946,8 @@
         }
         syncTutorialPause(machineView);
         var markerId = null;
-        var markerTarget = markerTargetFor(machineView.step);
+        var exchangeSpeaker = machineView.exchange && runtime.definition.speakers[machineView.exchange.speaker];
+        var markerTarget = exchangeSpeaker ? exchangeSpeaker.faction || "player" : markerTargetFor(machineView.step);
         if (markerTarget) {
             var marked = campaignPlayer(hud, markerTarget);
             if (marked && Number.isInteger(Number(marked.id))) markerId = Number(marked.id);
@@ -921,6 +961,7 @@
         if (!runtime.modalOpen) {
             if (machineView.waiting) {
                 runtime.view.render(null);
+                if (machineView.exchange) syncCameraShot(machineView.step, hud);
                 if (runtime.stepRevealStepId !== machineView.step.id) clearStepRevealTimer();
                 if (runtime.stepRevealTimer === null && typeof window.setTimeout === "function") {
                     var waitingMachine = runtime.machine, waitingStepId = machineView.step.id;
@@ -1136,16 +1177,68 @@
 
     window.SOW_menu_guide = { update: updateMenuGuide, pause: pauseMenuGuide };
 
-    // Each step's or response's emote runs when it completes: a named emote is shown over the speaker
-    // (the player, or the faction the speaker plays) with its own line (pinned when emote_pinned),
-    // and "clear" releases the current one.
+    // One emote path for every line: a named emote is shown over the speaker (the player, or the faction the
+    // speaker plays) with its own line (pinned when emote_pinned), and "clear" releases the current one.
+    // A step's or response's emote runs when it completes; exchange lines run as they play.
     function applyStepEmote(step) {
-        if (!step.emote) return;
+        if (step.emote) applyEmote(step);
+    }
+
+    function applyEmote(step) {
         var kind = step.emote === "clear" ? null : step.emote;
         var speaker = runtime.definition && runtime.definition.speakers && runtime.definition.speakers[step.speaker];
         var factionId = speaker && speaker.faction;
-        if (kind) window.SOW_emote_text_overrides[kind] = step.emote_text_key;
-        send("tutorial_emote", { kind: kind, pinned: step.emote_pinned === true, ...(factionId ? { faction_id: factionId } : {}) });
+        var tutorial = runtime.latestHud && runtime.latestHud.tutorial;
+        var fields = { kind: kind, pinned: step.emote_pinned === true, ...(factionId ? { faction_id: factionId } : {}) };
+        if (kind && tutorial) Object.assign(fields, {
+            token: "story:" + runtime.generation + ":" + (++runtime.emoteSerial),
+            campaign_session_id: Number(tutorial.campaign_session_id) || 0,
+            message: tr(step.emote_text_key)
+        });
+        send("tutorial_emote", fields);
+    }
+
+    function playExchangeLine(line, token) {
+        var hud = runtime.latestHud, tutorial = hud && hud.tutorial;
+        var nativeToken = (Number(runtime.generation) || 0) + ":" + token;
+        var speaker = runtime.definition && runtime.definition.speakers[line.speaker];
+        var faction = speaker && speaker.faction || "player";
+        var player = hud && campaignPlayer(hud, faction);
+        if (!player || !onMap(player)) return "unavailable";
+        var step = runtime.machine && runtime.machine.view().step;
+        if (step && step.camera && (runtime.cameraShotStepId !== step.id || Date.now() < runtime.exchangeCameraReadyAt)) return false;
+        if (tutorial.facts && tutorial.facts.machinima_active) return false;
+        if (tutorial.emote_token === nativeToken) return true;
+        if (runtime.exchangeFocusToken !== token) {
+            runtime.exchangeFocusToken = token;
+            send("set_tutorial_marker", { player_id: Number(player.id) });
+            runtime.markerId = Number(player.id);
+            var anchor = cameraTargetAnchor({ marker: { target: faction } }, hud);
+            if (!anchor || anchor.offscreen) send("focus_world", { x: Number(player.centroid_x) + 0.5, y: Number(player.centroid_y) + 0.5 });
+        }
+        if (runtime.exchangeCue && runtime.exchangeCue.token === token) return "pending";
+        var nameplate = tutorial.target_nameplate;
+        if (Number(tutorial.marker_player_id) !== Number(player.id) || !nameplate || nameplate.offscreen
+            || tutorial.facts && tutorial.facts.machinima_active) return false;
+        runtime.exchangeCue = { token: token, nativeToken: nativeToken, line: line, faction: faction, session: Number(tutorial.campaign_session_id) };
+        if (!send("tutorial_emote", { kind: line.emote, token: nativeToken, campaign_session_id: runtime.exchangeCue.session,
+            message: tr(line.emote_text_key), ...(faction !== "player" ? { faction_id: faction } : {}) })) {
+            runtime.exchangeCue = null;
+            return "unavailable";
+        }
+        return false;
+    }
+
+    function clearExchangeLine(line, token) {
+        var cue = runtime.exchangeCue;
+        if (!cue || cue.token !== token) return;
+        send("tutorial_emote", { kind: null, token: cue.nativeToken, campaign_session_id: cue.session,
+            ...(cue.faction !== "player" ? { faction_id: cue.faction } : {}) });
+        runtime.exchangeCue = null;
+    }
+
+    function completeCampaignReaction(reaction, target) {
+        if (reaction.when.type === "pre_defeat") send("continue_campaign_pre_defeat", { faction_id: target, campaign_session_id: runtime.campaignSessionId });
     }
 
     function continueScene() {
@@ -1219,8 +1312,9 @@
         var open = Boolean(modal && !modal.classList.contains("hidden"));
         if (open === runtime.modalOpen) return;
         runtime.modalOpen = open;
-        if (runtime.machine) runtime.machine.setPaused(open);
+        if (runtime.machine) runtime.machine.setPaused(open || Boolean(document.hidden));
         if (open) {
+            clearStepRevealTimer();
             runtime.uiPaused = true;
             runtime.pausedAction = null;
             send("set_tutorial_paused", { paused: true, camera_only: runtime.cameraOnly, paused_action: null });
@@ -1244,6 +1338,12 @@
         runtime.guidedScrollStepId = null;
         redrawCampaign();
     }, { passive: true });
+    document.addEventListener("visibilitychange", function () {
+        if (!runtime.machine) return;
+        runtime.machine.setPaused(Boolean(document.hidden) || runtime.modalOpen);
+        clearStepRevealTimer();
+        if (!document.hidden && !runtime.modalOpen && runtime.latestHud) update(runtime.latestHud);
+    });
 
     if (hudRoot && typeof MutationObserver !== "undefined") {
         runtime.modalObserver = new MutationObserver(modalChanged);
@@ -1305,7 +1405,9 @@
     });
 
     function reset() {
+        if (runtime.campaignSessionId > 0) send("set_campaign_pre_defeat_targets", { faction_ids: [], campaign_session_id: runtime.campaignSessionId });
         runtime.generation++;
+        if (runtime.machine) runtime.machine.dispose();
         clearStepRevealTimer();
         syncTransferGuide(null);
         runtime.priorChoices = Object.create(null);
@@ -1313,8 +1415,11 @@
         runtime.roster = null;
         runtime.definition = null;
         runtime.machine = null;
+        runtime.exchangeCue = null;
+        runtime.exchangeFocusToken = null;
+        runtime.lastPreDefeatTargets = null;
+        runtime.campaignSessionId = 0;
         runtime.active = false;
-        window.SOW_emote_text_overrides = {};
         runtime.starting = null;
         runtime.activating = null;
         runtime.bootEpisode = null;

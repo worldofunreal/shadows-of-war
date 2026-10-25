@@ -146,6 +146,10 @@ impl SowEngine {
                     if is_teammate {
                         continue;
                     }
+                    if self.campaign_accepts_alliance_requests_ids.contains(&bot_id) {
+                        proposals_to_accept.push(proposer);
+                        continue;
+                    }
                     let current_points = self.state.player(bot_id).unwrap().iq_points;
                     if current_points >= alliance_cost {
                         let tick = self.current_tick_u32();

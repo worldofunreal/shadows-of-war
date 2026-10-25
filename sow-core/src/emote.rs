@@ -85,6 +85,9 @@ impl EmoteKind {
 pub struct ActiveEmote {
     pub kind: EmoteKind,
     pub pinned: bool,
+    /// Campaign lines speak to the player even when the speaker is an enemy.
+    #[serde(default)]
+    pub scripted: bool,
     pub started_tick: u64,
     pub event_id: u64,
 }
@@ -100,13 +103,14 @@ impl ActiveEmote {
 }
 
 /// Starts `kind` over `player`, replacing any current emote; `None` clears it.
-pub fn express(player: &mut crate::player::Player, kind: Option<EmoteKind>, pinned: bool, tick: u64) {
+pub fn express(player: &mut crate::player::Player, kind: Option<EmoteKind>, pinned: bool, scripted: bool, tick: u64) {
     player.active_emote = match kind {
         Some(kind) => {
             player.emote_event_id = player.emote_event_id.wrapping_add(1);
             Some(ActiveEmote {
                 kind,
                 pinned,
+                scripted,
                 started_tick: tick,
                 event_id: player.emote_event_id,
             })
@@ -124,6 +128,11 @@ pub fn can_express(player: &crate::player::Player, phase: &crate::game::GamePhas
 }
 
 /// The same audience is used by map bubbles and HUD notices; camera visibility is separate.
+/// Whether `viewer` sees `sender`'s bubble: scripted campaign lines are for everyone, player emotes for allies and team.
+pub fn is_visible(players: &[crate::protocol::PlayerSnapshot], sender: &crate::protocol::PlayerSnapshot, viewer: u16) -> bool {
+    sender.active_emote.is_some_and(|emote| emote.scripted) || is_recipient(players, sender.id, viewer)
+}
+
 pub fn is_recipient(players: &[crate::protocol::PlayerSnapshot], sender: u16, viewer: u16) -> bool {
     if viewer == 0 {
         return false;
@@ -249,6 +258,7 @@ mod tests {
             let mut event = ActiveEmote {
                 kind: definition.kind,
                 pinned: false,
+                scripted: false,
                 started_tick: 5,
                 event_id: 1,
             };

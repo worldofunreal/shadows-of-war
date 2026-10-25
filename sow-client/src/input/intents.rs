@@ -40,6 +40,9 @@ fn paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::SendResourcesStayPaused) => {
                 matches!(intent, GameplayIntent::SendResources { .. })
             }
+            Some(TutorialPausedAction::RequestAllianceStayPaused) => {
+                matches!(intent, GameplayIntent::ProposeAlliance { .. })
+            }
             Some(TutorialPausedAction::BuildUntilStarted) => match intent {
                 GameplayIntent::BuildStructure { kind, .. } => matches!(
                     *kind,
@@ -65,6 +68,7 @@ fn paused_tutorial_progress(
             Some(observation.wilderness_orders_accepted)
         }
         GameplayIntent::SendResources { .. } => Some(observation.resource_transfers),
+        GameplayIntent::ProposeAlliance { .. } => Some(observation.alliance_requests_submitted),
         GameplayIntent::BuildStructure { kind, .. } => {
             let key = match *kind {
                 sow_core::game::BuildingKind::City => "cities",
@@ -95,6 +99,10 @@ impl SowApp {
         let Some(player_id) = self.sim.my_player_id else {
             return false;
         };
+        if self.sim.paused {
+            self.apply_paused_tutorial_intent(intent);
+            return true;
+        }
         self.dispatch_sim_command(sow_core::protocol::SimCommand::Turn(
             sow_core::protocol::Turn {
                 turn_number: 0,
@@ -126,6 +134,11 @@ impl SowApp {
             return false;
         }
         let paused_tutorial = self.ui.tutorial_active && self.net.is_offline && self.sim.paused;
+        if paused_tutorial && self.ui.tutorial_paused_action == Some(TutorialPausedAction::RequestAllianceStayPaused)
+            && matches!(&intent, GameplayIntent::ProposeAlliance { target_player } if Some(*target_player) != self.ui.tutorial_marker_player_id)
+        {
+            return false;
+        }
         if paused_tutorial
             && !paused_tutorial_intent_allowed(self.ui.tutorial_paused_action, &intent)
         {

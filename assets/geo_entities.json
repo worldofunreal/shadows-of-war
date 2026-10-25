@@ -1818,7 +1818,7 @@
    "avatar": "toregene_khatun"
   },
   {
-   "id": "nation_tipu_sultan",
+   "id": "tipu_sultan",
    "name": "Tipu Sultan",
    "entity": "Kingdom of Mysore",
    "role": "nation",
@@ -1827,7 +1827,16 @@
    "lon": 76.68,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Tipu_Sultan",
-   "avatar": "tipu_sultan"
+   "avatar": "tipu_sultan",
+   "territory_color": "#641e16",
+   "hero": {
+    "name": "Tipu Sultan",
+    "ability": {
+     "kind": "conquest_speed",
+     "against": "poorer",
+     "percent": 30
+    }
+   }
   },
   {
    "id": "nation_mandukhai_khatun",
@@ -2058,7 +2067,7 @@
    "avatar": "isabel_i_de_inglaterra"
   },
   {
-   "id": "nation_william_the_conqueror",
+   "id": "william_the_conqueror",
    "name": "William the Conqueror",
    "entity": "Duchy of Normandy",
    "role": "nation",
@@ -2067,7 +2076,15 @@
    "lon": -0.37,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/William_the_Conqueror",
-   "avatar": "william_the_conqueror"
+   "avatar": "william_the_conqueror",
+   "territory_color": "#b9770e",
+   "hero": {
+    "name": "William the Conqueror",
+    "ability": {
+     "kind": "tower_range",
+     "percent": 50
+    }
+   }
   },
   {
    "id": "nation_luis_xiv",
@@ -8597,6 +8614,702 @@
     }
    },
    "territory_color": "#42ae09"
+  },
+  {
+   "id": "ahmad_shah_bahadur",
+   "name": "Ahmad Shah Bahadur",
+   "entity": "Mughal Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 28.61,
+   "lon": 77.21,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ahmad_Shah_Bahadur",
+   "avatar": "ahmad_shah_bahadur",
+   "hero": {
+    "name": "Ahmad Shah Bahadur",
+    "ability": {
+     "kind": "alliance_cost",
+     "against": "active_traitor",
+     "percent": 25
+    }
+   },
+   "territory_color": "#1abc9c"
+  },
+  {
+   "id": "alamgir_ii",
+   "name": "Alamgir II",
+   "entity": "Mughal Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 28.61,
+   "lon": 77.21,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Alamgir_II",
+   "avatar": "alamgir_ii",
+   "hero": {
+    "name": "Alamgir II",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "poorer",
+     "percent": 25
+    }
+   },
+   "territory_color": "#34495e"
+  },
+  {
+   "id": "aurangzeb",
+   "name": "Aurangzeb",
+   "entity": "Mughal Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 28.61,
+   "lon": 77.21,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Aurangzeb",
+   "avatar": "aurangzeb",
+   "hero": {
+    "name": "Aurangzeb",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "kin",
+     "percent": 25
+    }
+   },
+   "territory_color": "#7d3c98"
+  },
+  {
+   "id": "farrukhsiyar",
+   "name": "Farrukhsiyar",
+   "entity": "Mughal Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 28.61,
+   "lon": 77.21,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Farrukhsiyar",
+   "avatar": "farrukhsiyar",
+   "hero": {
+    "name": "Farrukhsiyar",
+    "ability": {
+     "kind": "enemy_retreat_penalty",
+     "against": "richer",
+     "percent": 50
+    }
+   },
+   "territory_color": "#af601a"
+  },
+  {
+   "id": "humayun",
+   "name": "Humayun",
+   "entity": "Mughal Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 28.61,
+   "lon": 77.21,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Humayun",
+   "avatar": "humayun",
+   "hero": {
+    "name": "Humayun",
+    "ability": {
+     "kind": "enemy_retreat_penalty",
+     "against": "kin",
+     "percent": 50
+    }
+   },
+   "territory_color": "#6e2c00"
+  },
+  {
+   "id": "shah_alam_ii",
+   "name": "Shah Alam II",
+   "entity": "Mughal Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 28.61,
+   "lon": 77.21,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Shah_Alam_II",
+   "avatar": "shah_alam_ii",
+   "hero": {
+    "name": "Shah Alam II",
+    "ability": {
+     "kind": "alliance_cost",
+     "against": "foreign",
+     "percent": 30
+    }
+   },
+   "territory_color": "#117a65"
+  },
+  {
+   "id": "shah_jahan",
+   "name": "Shah Jahan",
+   "entity": "Mughal Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 28.61,
+   "lon": 77.21,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Shah_Jahan",
+   "avatar": "shah_jahan",
+   "hero": {
+    "name": "Shah Jahan",
+    "ability": {
+     "kind": "resource_bonus",
+     "source": {"district": "city"},
+     "resource": "troops",
+     "percent": 25
+    }
+   },
+   "territory_color": "#d35400"
+  },
+  {
+   "id": "shah_jahan_iii",
+   "name": "Shah Jahan III",
+   "entity": "Mughal Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 28.61,
+   "lon": 77.21,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Shah_Jahan_III",
+   "avatar": "shah_jahan_iii",
+   "hero": {
+    "name": "Shah Jahan III",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "larger"},
+     "percent": 25
+    }
+   },
+   "territory_color": "#a04000"
+  },
+  {
+   "id": "artaxerxes_i",
+   "name": "Artaxerxes I",
+   "entity": "Achaemenid Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 29.93,
+   "lon": 52.89,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Artaxerxes_I_of_Persia",
+   "avatar": "artaxerxes_i",
+   "hero": {
+    "name": "Artaxerxes I",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "kin"},
+     "percent": 25
+    }
+   },
+   "territory_color": "#148f77"
+  },
+  {
+   "id": "artaxerxes_ii",
+   "name": "Artaxerxes II",
+   "entity": "Achaemenid Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 29.93,
+   "lon": 52.89,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Artaxerxes_II_of_Persia",
+   "avatar": "artaxerxes_ii",
+   "hero": {
+    "name": "Artaxerxes II",
+    "ability": {
+     "kind": "conquest_speed",
+     "against": "kin",
+     "percent": 25
+    }
+   },
+   "territory_color": "#566573"
+  },
+  {
+   "id": "artaxerxes_iii",
+   "name": "Artaxerxes III",
+   "entity": "Achaemenid Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 29.93,
+   "lon": 52.89,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Artaxerxes_III",
+   "avatar": "artaxerxes_iii",
+   "hero": {
+    "name": "Artaxerxes III",
+    "ability": {
+     "kind": "conquest_speed",
+     "against": "foreign",
+     "percent": 25
+    }
+   },
+   "territory_color": "#5d6d7e"
+  },
+  {
+   "id": "cambyses_ii",
+   "name": "Cambyses II",
+   "entity": "Achaemenid Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 29.93,
+   "lon": 52.89,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Cambyses_II",
+   "avatar": "cambyses_ii",
+   "hero": {
+    "name": "Cambyses II",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "foreign"},
+     "percent": 25
+    }
+   },
+   "territory_color": "#884ea0"
+  },
+  {
+   "id": "xerxes_i",
+   "name": "Xerxes I",
+   "entity": "Achaemenid Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 29.93,
+   "lon": 52.89,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Xerxes_I",
+   "avatar": "xerxes_i",
+   "hero": {
+    "name": "Xerxes",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "outnumbered"},
+     "percent": 25
+    }
+   },
+   "territory_color": "#b03a2e"
+  },
+  {
+   "id": "claudius_gothicus",
+   "name": "Claudius Gothicus",
+   "entity": "Roman Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 41.89,
+   "lon": 12.49,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Claudius_Gothicus",
+   "avatar": "claudius_gothicus",
+   "hero": {
+    "name": "Claudius Gothicus",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "tribe"},
+     "percent": 25
+    }
+   },
+   "territory_color": "#1a5276"
+  },
+  {
+   "id": "lucius_verus",
+   "name": "Lucius Verus",
+   "entity": "Roman Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 41.89,
+   "lon": 12.49,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lucius_Verus",
+   "avatar": "lucius_verus",
+   "hero": {
+    "name": "Lucius Verus",
+    "ability": {
+     "kind": "alliance_cost",
+     "against": "kin",
+     "percent": 30
+    }
+   },
+   "territory_color": "#117864"
+  },
+  {
+   "id": "marcus_aurelius",
+   "name": "Marcus Aurelius",
+   "entity": "Roman Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 41.89,
+   "lon": 12.49,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Marcus_Aurelius",
+   "avatar": "marcus_aurelius",
+   "hero": {
+    "name": "Marcus Aurelius",
+    "ability": {
+     "kind": "enemy_retreat_penalty",
+     "against": "foreign",
+     "percent": 50
+    }
+   },
+   "territory_color": "#7e5109"
+  },
+  {
+   "id": "trebonianus_gallus",
+   "name": "Trebonianus Gallus",
+   "entity": "Roman Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 41.89,
+   "lon": 12.49,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Trebonianus_Gallus",
+   "avatar": "trebonianus_gallus",
+   "hero": {
+    "name": "Trebonianus Gallus",
+    "ability": {
+     "kind": "resource_bonus",
+     "source": {"district": "farm"},
+     "resource": "troops",
+     "percent": 25
+    }
+   },
+   "territory_color": "#a93226"
+  },
+  {
+   "id": "majorian",
+   "name": "Majorian",
+   "entity": "Roman Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 44.4161,
+   "lon": 12.2017,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Majorian",
+   "avatar": "majorian",
+   "hero": {
+    "name": "Majorian",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "active_traitor"},
+     "percent": 25
+    }
+   },
+   "territory_color": "#1f618d"
+  },
+  {
+   "id": "libius_severus",
+   "name": "Libius Severus",
+   "entity": "Roman Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 44.4161,
+   "lon": 12.2017,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Libius_Severus",
+   "avatar": "libius_severus",
+   "hero": {
+    "name": "Libius Severus",
+    "ability": {
+     "kind": "enemy_retreat_penalty",
+     "against": "poorer",
+     "percent": 50
+    }
+   },
+   "territory_color": "#512e5f"
+  },
+  {
+   "id": "justin_i",
+   "name": "Justin I",
+   "entity": "Byzantine Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 41.01,
+   "lon": 28.98,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Justin_I",
+   "avatar": "justin_i",
+   "hero": {
+    "name": "Justin I",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": "mountain",
+     "percent": 30
+    }
+   },
+   "territory_color": "#7b7d7d"
+  },
+  {
+   "id": "justin_ii",
+   "name": "Justin II",
+   "entity": "Byzantine Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 41.01,
+   "lon": 28.98,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Justin_II",
+   "avatar": "justin_ii",
+   "hero": {
+    "name": "Justin II",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "foreign",
+     "percent": 25
+    }
+   },
+   "territory_color": "#3498db"
+  },
+  {
+   "id": "justinian_i",
+   "name": "Justinian I",
+   "entity": "Byzantine Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 41.01,
+   "lon": 28.98,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Justinian_I",
+   "avatar": "justinian_i",
+   "hero": {
+    "name": "Justinian I",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": "city",
+     "percent": 25
+    }
+   },
+   "territory_color": "#9b59b6"
+  },
+  {
+   "id": "justinian_ii",
+   "name": "Justinian II",
+   "entity": "Byzantine Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 41.01,
+   "lon": 28.98,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Justinian_II",
+   "avatar": "justinian_ii",
+   "hero": {
+    "name": "Justinian II",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "outnumbering"},
+     "percent": 25
+    }
+   },
+   "territory_color": "#e67e22"
+  },
+  {
+   "id": "ildibad",
+   "name": "Ildibad",
+   "entity": "Ostrogothic Kingdom / Italy",
+   "role": "nation",
+   "region": "europe",
+   "lat": 44.4161,
+   "lon": 12.2017,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ildibad",
+   "avatar": "ildibad",
+   "hero": {
+    "name": "Ildibad",
+    "ability": {
+     "kind": "resource_bonus",
+     "source": "elimination",
+     "resource": "troops",
+     "percent": 30
+    }
+   },
+   "territory_color": "#2ecc71"
+  },
+  {
+   "id": "theodahad",
+   "name": "Theodahad",
+   "entity": "Ostrogothic Kingdom / Italy",
+   "role": "nation",
+   "region": "europe",
+   "lat": 44.4161,
+   "lon": 12.2017,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Theodahad",
+   "avatar": "theodahad",
+   "hero": {
+    "name": "Theodahad",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "smaller"},
+     "percent": 25
+    }
+   },
+   "territory_color": "#f39c12"
+  },
+  {
+   "id": "totila",
+   "name": "Totila",
+   "entity": "Ostrogothic Kingdom / Italy",
+   "role": "nation",
+   "region": "europe",
+   "lat": 44.4161,
+   "lon": 12.2017,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Totila",
+   "avatar": "totila",
+   "hero": {
+    "name": "Totila",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "nation"},
+     "percent": 25
+    }
+   },
+   "territory_color": "#d68910"
+  },
+  {
+   "id": "chilperic_i",
+   "name": "Chilperic I",
+   "entity": "Frankish Kingdom",
+   "role": "nation",
+   "region": "europe",
+   "lat": 49.6481,
+   "lon": 2.57,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Chilperic_I",
+   "avatar": "chilperic_i",
+   "hero": {
+    "name": "Chilperic I",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "anyone"},
+     "percent": 10
+    }
+   },
+   "territory_color": "#ba4a00"
+  },
+  {
+   "id": "charles_the_fat",
+   "name": "Charles the Fat",
+   "entity": "Carolingian Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 47.24,
+   "lon": 6.02,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Charles_the_Fat",
+   "avatar": "charles_the_fat",
+   "hero": {
+    "name": "Charles the Fat",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "other_player"},
+     "percent": 25
+    }
+   },
+   "territory_color": "#633974"
+  },
+  {
+   "id": "lothair_i",
+   "name": "Lothair I",
+   "entity": "Carolingian Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 47.24,
+   "lon": 6.02,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lothair_I",
+   "avatar": "lothair_i",
+   "hero": {
+    "name": "Lothair I",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "poorer"},
+     "percent": 25
+    }
+   },
+   "territory_color": "#154360"
+  },
+  {
+   "id": "frederick_barbarossa",
+   "name": "Frederick Barbarossa",
+   "entity": "Holy Roman Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 50.78,
+   "lon": 6.08,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Frederick_Barbarossa",
+   "avatar": "frederick_barbarossa",
+   "hero": {
+    "name": "Barbarossa",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "neutral"},
+     "percent": 25
+    }
+   },
+   "territory_color": "#0e6251"
+  },
+  {
+   "id": "charles_v",
+   "name": "Charles V",
+   "entity": "Holy Roman Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 50.78,
+   "lon": 6.08,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Charles_V,_Holy_Roman_Emperor",
+   "avatar": "charles_v",
+   "hero": {
+    "name": "Charles V",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "human"},
+     "percent": 15
+    }
+   },
+   "territory_color": "#784212"
+  },
+  {
+   "id": "wanli",
+   "name": "Wanli Emperor",
+   "entity": "China / Ming dynasty",
+   "role": "nation",
+   "region": "asia",
+   "lat": 39.9042,
+   "lon": 116.4074,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Wanli_Emperor",
+   "avatar": "wanli",
+   "hero": {
+    "name": "Wanli",
+    "ability": {
+     "kind": "enemy_retreat_penalty",
+     "against": "smaller",
+     "percent": 50
+    }
+   },
+   "territory_color": "#922b21"
+  },
+  {
+   "id": "jayaatu_khan",
+   "name": "Jayaatu Khan",
+   "entity": "Yuan Dynasty",
+   "role": "nation",
+   "region": "asia",
+   "lat": 39.9042,
+   "lon": 116.4074,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Jayaatu_Khan",
+   "avatar": "jayaatu_khan",
+   "hero": {
+    "name": "Jayaatu Khan",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {"against": "richer"},
+     "percent": 25
+    }
+   },
+   "territory_color": "#4a235a"
   }
  ]
 }

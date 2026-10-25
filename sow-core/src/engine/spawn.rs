@@ -175,7 +175,7 @@ impl SowEngine {
         };
         let config = self.state.config.clone();
         let color = character.territory_color_rgb();
-        let player = if character.role == Role::Nation {
+        let mut player = if character.role == Role::Nation {
             let mut player = Player::new_nation(
                 bot_id,
                 character.name.clone(),
@@ -196,6 +196,8 @@ impl SowEngine {
                 &config,
             )
         };
+        // The bot is shown as its catalog people; its random hero only carries the ability.
+        player.realm = Some(character.entity.clone());
         self.state.spawn_player(player, sx, sy);
         if let Some(avatar) = &character.avatar {
             self.campaign_avatars.insert(bot_id, avatar.clone());
@@ -461,6 +463,9 @@ impl SowEngine {
             }
             if s.campaign_city_requires_gold {
                 self.campaign_city_requires_gold_ids.insert(bot_id);
+            }
+            if s.campaign_accepts_alliance_requests {
+                self.campaign_accepts_alliance_requests_ids.insert(bot_id);
             }
             if let Some(relation) = s.campaign_relation {
                 self.campaign_relations.insert(bot_id, relation);

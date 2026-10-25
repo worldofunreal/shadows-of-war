@@ -580,7 +580,7 @@ test("Trinovantes aid guides radial opening, Transfer, and the confirmed deliver
     };
     let machine, rendered, context;
     const window = {
-        addEventListener() {}, SOW_menu_command() {}, SOW_t: key => key, SOW_hasText: () => true,
+        addEventListener() {}, SOW_menu_command() {}, SOW_t: key => key.startsWith("tutorial.") ? "Text for " + key : key, SOW_hasText: () => true,
         SOWCampaign: { ...campaign, create(data) {
             machine = campaign.create(data, "boudica_transfer_target", roster);
             return machine;
@@ -636,7 +636,8 @@ test("Trinovantes aid guides radial opening, Transfer, and the confirmed deliver
     assert.equal(rendered.step.id, "boudica_transfer_send");
     hud.tutorial.facts.resource_transfers_by_recipient_faction_id.trinovantes = { total: 1 };
     update();
-    assert.equal(rendered.step.id, "boudica_share_sent");
+    assert.equal(machine.view().step.id, "boudica_share_sent");
+    assert.equal(rendered, null, "the scene hides the guide while its emote exchange plays");
 
     machine.jump("boudica_transfer_target");
     hud.tutorial.facts = {};

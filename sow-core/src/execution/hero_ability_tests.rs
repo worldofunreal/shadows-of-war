@@ -96,6 +96,14 @@ fn measurement(ability: Ability) -> u8 {
             when: LossWhen::Highland,
             ..
         } => 23,
+        Ability::AttackerLoss {
+            when: LossWhen::City,
+            ..
+        } => 29,
+        Ability::AttackerLoss {
+            when: LossWhen::Against(against),
+            ..
+        } => 160 + target_index(against),
         Ability::ResourceBonus {
             source: Source::Trade,
             resource: Resource::Gold,
@@ -391,7 +399,7 @@ fn elimination_troops(conqueror: Leader) -> (f64, Marks) {
 }
 
 /// Makes player `subject` (1 or 2) fit `target` against the other player. Sizes are set by
-/// the caller's map split; gold, type and traitor status are set here.
+/// the caller's map split; gold, type, traitor status and people are set here.
 fn shape_subject(engine: &mut SowEngine, subject: u16, target: Target) {
     let actor = if subject == 1 { 2 } else { 1 };
     match target {
@@ -413,7 +421,31 @@ fn shape_subject(engine: &mut SowEngine, subject: u16, target: Target) {
             engine.state.player_mut(rich).unwrap().gold = 1_000.0;
             engine.state.player_mut(poor).unwrap().gold = 0.0;
         }
-        _ => {}
+        // The subject gets the actor's own hero, so both lead the same people.
+        Target::Kin => {
+            let leader = engine.state.player(actor).unwrap().leader;
+            engine.state.player_mut(subject).unwrap().leader = leader;
+        }
+        // The subject keeps its hero unless that hero leads the actor's people.
+        Target::Foreign => {
+            let people = engine.state.player(actor).unwrap().leader.civilization();
+            let foreigner = Leader::all()
+                .find(|leader| leader.civilization() != people)
+                .expect("the catalog has heroes of more than one people");
+            let rival = engine.state.player_mut(subject).unwrap();
+            if rival.leader.civilization() == people {
+                rival.leader = foreigner;
+            }
+        }
+        // Sizes and troops come from the caller; any player fits the rest.
+        Target::Anyone
+        | Target::Neutral
+        | Target::OtherPlayer
+        | Target::Human
+        | Target::Outnumbering
+        | Target::Outnumbered
+        | Target::Larger
+        | Target::Smaller => {}
     }
 }
 
@@ -787,6 +819,23 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
                 let (plain_cost, control_shown) = cost_per_tile(plain, HIGHLAND);
                 (cost < plain_cost, shown[1], control_shown[1])
             }
+            Ability::AttackerLoss {
+                when: LossWhen::City,
+                ..
+            } => {
+                let (cost, shown) = city_cost_per_tile(hero);
+                let (plain_cost, control_shown) = city_cost_per_tile(plain);
+                (cost < plain_cost, shown[1], control_shown[1])
+            }
+            Ability::AttackerLoss {
+                when: LossWhen::Against(against),
+                ..
+            } => {
+                // The mark comes from the tiles the loss discounts, not from the launch.
+                let (cost, shown) = cost_per_tile_against(hero, against);
+                let (plain_cost, control_shown) = cost_per_tile_against(plain, against);
+                (cost < plain_cost, shown[1], control_shown[1])
+            }
         };
         assert!(
             changed,
@@ -1071,6 +1120,12 @@ fn cost_per_tile(leader: Leader, terrain: u8) -> (f64, Marks) {
             troops: Some(10_000.0),
         }),
     );
+    army_loss_per_tile(&mut engine, 3)
+}
+
+/// Troops player 1's attacking army loses per tile it takes over `ticks` ticks of the attack
+/// `engine` already launched, and the marks shown (the launch's marks included).
+fn army_loss_per_tile(engine: &mut SowEngine, ticks: u32) -> (f64, Marks) {
     let army = |engine: &SowEngine| -> f64 {
         engine
             .attacks
@@ -1079,12 +1134,122 @@ fn cost_per_tile(leader: Leader, terrain: u8) -> (f64, Marks) {
             .map(|a| a.troops)
             .sum()
     };
-    let army_start = army(&engine);
+    let army_start = army(engine);
     let start_tiles = engine.state.player(1).unwrap().tile_count;
     let mut marks = [0; 4];
-    tick_counting(&mut engine, 3, &mut marks);
+    tick_counting(engine, ticks, &mut marks);
     let tiles = engine.state.player(1).unwrap().tile_count - start_tiles;
-    ((army_start - army(&engine)) / f64::from(tiles), marks)
+    ((army_start - army(engine)) / f64::from(tiles), marks)
+}
+
+/// Troops the attacking army loses per tile taken from `target` (set up as in
+/// `attack_target`), and the marks shown.
+fn cost_per_tile_against(attacker: Leader, target: Target) -> (f64, Marks) {
+    let mut engine = launch_target(attacker, target);
+    army_loss_per_tile(&mut engine, 20)
+}
+
+/// Troops the attacking army loses per tile when its first front runs through a plain
+/// rival's city (the city sits on the border), and the marks shown.
+fn city_cost_per_tile(attacker: Leader) -> (f64, Marks) {
+    let mut engine = arena(24, 4, attacker, Some(Leader::of("caesar")));
+    add_building(&mut engine, 2, 6, 12, BuildingKind::City);
+    engine.refresh_building_grid();
+    engine.state.player_mut(1).unwrap().troops = 20_000.0;
+    engine.state.player_mut(2).unwrap().troops = 20_000.0;
+    send(
+        &mut engine,
+        1,
+        GameplayIntent::Attack(AttackIntent {
+            target_owner: 2,
+            troops: Some(10_000.0),
+        }),
+    );
+    army_loss_per_tile(&mut engine, 20)
+}
+
+/// Kin and Foreign follow the people each player is shown as, not the hero itself: a rival
+/// led by another hero of the same people is kin, a rival of another people is foreign, a
+/// catalog bot counts as its catalog people whatever random hero carries its ability, and
+/// neutral land and the hero's own land are neither.
+#[test]
+fn kin_and_foreign_follow_the_people_each_hero_leads() {
+    let (hero, kinsman) = Leader::all()
+        .flat_map(|a| Leader::all().map(move |b| (a, b)))
+        .find(|(a, b)| a != b && a.civilization() == b.civilization())
+        .expect("the catalog has two heroes of one people");
+    let stranger = Leader::all()
+        .find(|other| other.civilization() != hero.civilization())
+        .expect("the catalog has heroes of more than one people");
+    // A probe worth 2 on `target` alone: the product is 2 only when `target` describes `subject`.
+    // `bot_people` makes the rival a catalog bot shown as that hero's people, as its spawn does.
+    let describes = |rival: Leader, bot_people: Option<Leader>, subject: u16, target: Target| {
+        let mut engine = arena(24, 4, hero, Some(rival));
+        if let Some(people) = bot_people {
+            let bot = engine.state.player_mut(2).unwrap();
+            bot.player_type = PlayerType::Nation;
+            bot.realm = Some(people.civilization().to_owned());
+        }
+        targeted_multiplier(&engine.state, 1, subject, 10_000.0, |t| {
+            if t == target { 2.0 } else { 1.0 }
+        }) == 2.0
+    };
+    assert!(describes(kinsman, None, 2, Target::Kin), "same people, another hero");
+    assert!(!describes(kinsman, None, 2, Target::Foreign));
+    assert!(describes(stranger, None, 2, Target::Foreign), "another people");
+    assert!(!describes(stranger, None, 2, Target::Kin));
+    assert!(describes(stranger, Some(kinsman), 2, Target::Kin), "a bot shown as the same people");
+    assert!(!describes(stranger, Some(kinsman), 2, Target::Foreign));
+    assert!(describes(kinsman, Some(stranger), 2, Target::Foreign), "a bot shown as another people");
+    assert!(!describes(kinsman, Some(stranger), 2, Target::Kin));
+    for target in [Target::Kin, Target::Foreign] {
+        assert!(!describes(kinsman, None, 0, target), "neutral land leads no people");
+        assert!(!describes(kinsman, None, 1, target), "the hero's own land");
+    }
+
+    // The real spawn gives a catalog bot its catalog people, not its random hero's.
+    let mut engine = arena(24, 4, hero, None);
+    engine.spawn_ai(1, 0);
+    let bot = engine
+        .state
+        .players
+        .iter()
+        .find(|player| player.player_type == PlayerType::Nation)
+        .expect("the nation bot spawned");
+    assert!(
+        crate::geo_entities::bots(crate::geo_entities::Role::Nation)
+            .any(|character| character.name == bot.name && character.entity == bot.realm()),
+        "{} is shown as its catalog people",
+        bot.name
+    );
+}
+
+/// The target loss mark comes from the tiles it discounts, during the attack's ticks: the
+/// launch shows nothing, and the attacker's mark appears at a tile its army just took.
+#[test]
+fn target_loss_marks_the_discounted_tile_during_the_tick() {
+    let (hero, against) = Leader::all()
+        .find_map(|leader| match leader.ability() {
+            Ability::AttackerLoss {
+                when: LossWhen::Against(against),
+                ..
+            } => Some((leader, against)),
+            _ => None,
+        })
+        .expect("the catalog has a target loss hero");
+    let mut engine = launch_target(hero, against);
+    assert_eq!(marks(&engine, 1), 0, "the launch shows no target loss mark");
+    let marked_taken_tile = (0..20).any(|_| {
+        engine.tick();
+        engine.state.events.iter().any(|event| {
+            matches!(
+                event,
+                GameEvent::AbilityTriggered { owner_id: 1, tile: Some((x, y)) }
+                    if engine.state.map.owner_id(*x, *y) == 1
+            )
+        })
+    });
+    assert!(marked_taken_tile, "{hero:?} shows no mark at a tile its {against:?} loss discounts");
 }
 
 /// Tenamaxtli, "Mixtón Stronghold": his attacks fight 25% stronger only against a player

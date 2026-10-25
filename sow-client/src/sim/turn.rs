@@ -32,6 +32,19 @@ fn take_alliance_request_lifecycle_events(events: &mut Vec<GameEvent>) -> Vec<Ga
     lifecycle_events
 }
 
+fn take_ability_events(events: &mut Vec<GameEvent>) -> Vec<GameEvent> {
+    let mut ability_events = Vec::new();
+    events.retain(|event| {
+        if matches!(event, GameEvent::AbilityTriggered { .. }) {
+            ability_events.push(event.clone());
+            false
+        } else {
+            true
+        }
+    });
+    ability_events
+}
+
 fn take_resource_transfer_events(events: &mut Vec<GameEvent>) -> Vec<GameEvent> {
     let mut transfer_events = Vec::new();
     events.retain(|event| {
@@ -52,6 +65,10 @@ impl TutorialObservation {
     pub(crate) fn observe_sim(&mut self, engine: &SowEngine, my_id: u16) {
         if my_id == 0 {
             return;
+        }
+        self.pre_defeat_faction_ids.clear();
+        if let Some(faction_id) = engine.campaign_pre_defeat_faction_id() {
+            self.pre_defeat_faction_ids.insert(faction_id.to_owned());
         }
         for attack in &engine.attacks {
             if attack.owner_id == my_id
@@ -245,6 +262,9 @@ impl TutorialObservation {
 
     pub(crate) fn observe_events(&mut self, engine: &SowEngine, my_id: u16) {
         for event in &engine.state.events {
+            if matches!(event, GameEvent::AllianceRequestLifecycle { proposer_id, status: sow_core::game::AllianceRequestStatus::Submitted, .. } if *proposer_id == my_id) {
+                self.alliance_requests_submitted = self.alliance_requests_submitted.saturating_add(1);
+            }
             if let GameEvent::ResourceTransferred {
                 sender_id,
                 receiver_id,
@@ -361,6 +381,14 @@ impl SowApp {
         &mut self,
         intent: sow_core::protocol::GameplayIntent,
     ) {
+        self.apply_paused_tutorial_intent_as(self.sim.my_player_id.unwrap_or(0), intent);
+    }
+
+    pub(crate) fn apply_paused_tutorial_intent_as(
+        &mut self,
+        actor_id: u16,
+        intent: sow_core::protocol::GameplayIntent,
+    ) {
         let my_id = self.sim.my_player_id.unwrap_or(0);
         let observe_tutorial = self.net.is_offline
             && self.ui.tutorial_active
@@ -387,7 +415,7 @@ impl SowApp {
                 _ => None,
             };
             let intents = [sow_core::protocol::StampedIntent {
-                player_id: my_id,
+                player_id: actor_id,
                 intent,
             }];
             engine.apply_intents(&intents);
@@ -475,6 +503,8 @@ impl SowApp {
                 self.sim.tutorial_observation.observe_sim(e, my_id);
             }
             let mut lifecycle_events = take_alliance_request_lifecycle_events(&mut e.state.events);
+            // Hero cards of launched attacks are announced while intents apply.
+            let mut ability_events = take_ability_events(&mut e.state.events);
             let transfer_events = take_resource_transfer_events(&mut e.state.events);
             e.tick();
             self.sim.config.buildings_enabled = e.state.config.buildings_enabled;
@@ -486,6 +516,7 @@ impl SowApp {
             let snap = e.build_snapshot();
             let mut events = std::mem::take(&mut e.state.events);
             events.append(&mut lifecycle_events);
+            events.append(&mut ability_events);
             (snap, events, local_spawn_target, placement_result)
         };
 
@@ -572,7 +603,7 @@ impl SowApp {
 #[cfg(test)]
 mod tests {
     use super::{
-        SowEngine, TutorialObservation, building_confirmation_result,
+        SowEngine, TutorialObservation, building_confirmation_result, take_ability_events,
         take_alliance_request_lifecycle_events, take_resource_transfer_events,
     };
     use sow_core::building::Building;
@@ -583,6 +614,32 @@ mod tests {
     use sow_core::protocol::{AttackIntent, GameplayIntent, StampedIntent};
     use sow_core::warp_fleet::WarpFleet;
     use sow_core::water_components::WaterComponents;
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn paused_alliance_lesson_uses_submitted_request_and_normal_acceptance_without_a_world_tick() {
+        let mut app = building_app(true);
+        app.ui.tutorial_paused_action = Some(crate::app::TutorialPausedAction::RequestAllianceStayPaused);
+        app.ui.tutorial_marker_player_id = Some(2);
+        let engine = app.sim.engine.as_mut().unwrap();
+        engine.campaign_faction_ids.insert(2, "trinovantes".into());
+        engine.campaign_relations.insert(2, sow_core::protocol::CampaignRelation::Neutral);
+        let tick = engine.state.tick;
+        assert!(!app.send_intent(GameplayIntent::ProposeAlliance { target_player: 3 }));
+        assert_eq!(app.sim.tutorial_observation.alliance_requests_submitted, 0);
+        assert!(app.send_intent(GameplayIntent::ProposeAlliance { target_player: 2 }));
+        assert!(app.sim.paused);
+        assert!(app.sim.engine.as_ref().unwrap().has_alliance_proposal(1, 2));
+        assert_eq!(app.sim.tutorial_observation.alliance_requests_submitted, 1);
+        assert!(!app.sim.current_snapshot.as_ref().unwrap().players.iter().find(|p| p.id == 1).unwrap().alliances.contains(&2));
+        app.apply_paused_tutorial_intent_as(2, GameplayIntent::AcceptAlliance { target_player: 1 });
+        let engine = app.sim.engine.as_ref().unwrap();
+        assert_eq!(engine.state.tick, tick);
+        assert!(!engine.has_alliance_proposal(1, 2));
+        assert!(engine.state.player(1).unwrap().alliances.contains(&2));
+        assert!(engine.state.player(2).unwrap().alliances.contains(&1));
+        assert!(app.sim.tutorial_observation.seen_alliance_faction_ids.contains("trinovantes"));
+    }
 
     #[cfg(target_arch = "wasm32")]
     fn building_app(paused: bool) -> crate::app::SowApp {
@@ -966,6 +1023,22 @@ mod tests {
             take_alliance_request_lifecycle_events(&mut events),
             vec![alliance_event]
         );
+        assert_eq!(events, vec![unrelated_event]);
+    }
+
+    #[test]
+    fn preserves_ability_events_before_tick_clears_action_events() {
+        let ability_event = GameEvent::AbilityTriggered {
+            owner_id: 1,
+            tile: None,
+        };
+        let unrelated_event = GameEvent::ResourceRequestRejected {
+            rejector_id: 2,
+            requester_id: 1,
+        };
+        let mut events = vec![ability_event.clone(), unrelated_event.clone()];
+
+        assert_eq!(take_ability_events(&mut events), vec![ability_event]);
         assert_eq!(events, vec![unrelated_event]);
     }
 

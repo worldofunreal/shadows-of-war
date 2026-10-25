@@ -24,6 +24,39 @@ const campaignModule = fs.readFileSync(path.join(shell, "../../sow-client/src/ca
 const cameraFrameUiSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/frame/ui.rs"), "utf8");
 
 
+test("Campaign Studio keeps timed exchanges on compatible step types and confirms when they would be removed", () => {
+    const start = campaignEditor.indexOf('basics.appendChild(selectField("Step kind", step.type, types');
+    const end = campaignEditor.indexOf('basics.appendChild(selectField("Speaker"', start);
+    assert.ok(start >= 0 && end > start, "the step-type editor exists");
+    function convert(step, type, approve = true) {
+        let changeType, confirmation = "";
+        const state = { definition: { layout: {}, steps: [step, { id: "ending", type: "end" }] }, flow: "campaign" };
+        vm.runInNewContext(campaignEditor.slice(start, end), {
+            basics: { appendChild() {} }, step, state, types: ["scene", "objective", "guide", "choice", "end"],
+            selectField(label, current, options, callback) { if (label === "Step kind") changeType = callback; return {}; },
+            confirm(message) { confirmation = message; return approve; }, inGameUiTargets: () => [],
+            storyKey: suffix => "tutorial." + suffix, notice() {}, markDirty() {}, renderInspector() {}
+        });
+        changeType(type);
+        return confirmation;
+    }
+    const lines = [{ speaker: "tribe", presentation: "emote", emote: "greet", emote_text_key: "greeting" }];
+    const scene = { id: "exchange", type: "scene", exchange: lines, next: "ending", unavailable_next: "ending" };
+    convert(scene, "objective");
+    assert.equal(scene.exchange, lines);
+    assert.equal(scene.unavailable_next, "ending");
+    Object.assign(scene, { type: "objective", trigger: { type: "elapsed", scope: "step", value: 1 }, title_key: "old", body_key: "old" });
+    convert(scene, "scene");
+    assert.equal(scene.exchange, lines);
+    assert.equal(scene.title_key, undefined);
+    assert.equal(scene.body_key, undefined);
+    assert.equal(scene.presentation, undefined);
+    const warning = convert(scene, "choice", false);
+    assert.match(warning, /timed emote exchange/);
+    assert.equal(scene.type, "scene", "declining the warning leaves the conversation intact");
+});
+
+
 test("campaign zoom input mode prioritizes TWA and touch devices, then Mac trackpads", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     assert.equal(campaign.zoomInputMode({ androidTwa: true, platform: "MacIntel" }), "pinch");
@@ -542,7 +575,7 @@ test("Boudica spoken cards and contact responses require named existing portrait
     assert.ok(report(anonymousEmote).errors.some(issue => issue.field === "reactions.speaker"), "a response names who emotes");
     const emoteAsDialogue = structuredClone(definition);
     const dialogueStep = emoteAsDialogue.steps.find(step => step.type === "scene" && step.body_key);
-    dialogueStep.body_key = "tutorial.campaign_boudica_boudica_stand_with_you_emote";
+    dialogueStep.body_key = "tutorial.campaign_boudica_stonea_stand_with_you_emote";
     assert.ok(report(emoteAsDialogue).errors.some(issue => issue.step === dialogueStep.id && issue.field === "body_key"), "an emote line cannot also be a dialogue line");
     const badEmoteKind = structuredClone(definition);
     badEmoteKind.steps.find(step => step.id === definition.entry).emote = "furious";
@@ -550,6 +583,26 @@ test("Boudica spoken cards and contact responses require named existing portrait
     const pinnedRelease = structuredClone(definition);
     Object.assign(pinnedRelease.steps.find(step => step.id === definition.entry), { emote: "clear", emote_pinned: true });
     assert.ok(report(pinnedRelease).errors.some(issue => issue.step === definition.entry && issue.field === "emote_pinned"));
+    const exchangeOnChoice = structuredClone(definition);
+    const decisionStep = exchangeOnChoice.steps.find(step => step.type === "choice");
+    decisionStep.exchange = [{ speaker: "boudica", emote: "calm", emote_text_key: "tutorial.campaign_boudica_boudica_supplies_reply_emote" }];
+    assert.ok(report(exchangeOnChoice).errors.some(issue => issue.step === decisionStep.id && issue.field === "exchange"), "decisions stay dialogue");
+    const exchangeWithDialogue = structuredClone(definition);
+    const replyScene = exchangeWithDialogue.steps.find(step => step.id === "boudica_snettisham_refuse_reply");
+    replyScene.body_key = "tutorial.campaign_boudica_snettisham_refuse_detail";
+    assert.ok(report(exchangeWithDialogue).errors.some(issue => issue.step === replyScene.id && issue.field === "exchange"), "a scene plays an exchange or dialogue, not both");
+    const anonymousLine = structuredClone(definition);
+    anonymousLine.steps.find(step => step.id === "boudica_trinovantes_supplies").exchange[0].speaker = "nobody";
+    assert.ok(report(anonymousLine).errors.some(issue => issue.step === "boudica_trinovantes_supplies" && issue.field === "exchange"));
+    const releasedLine = structuredClone(definition);
+    releasedLine.steps.find(step => step.id === "boudica_trinovantes_supplies").exchange[0].emote = "clear";
+    assert.ok(report(releasedLine).errors.some(issue => issue.step === "boudica_trinovantes_supplies" && issue.field === "exchange"), "an exchange line always names an emote");
+    const lineWithoutText = structuredClone(definition);
+    delete lineWithoutText.steps.find(step => step.id === "boudica_trinovantes_supplies").exchange[0].emote_text_key;
+    assert.ok(report(lineWithoutText).errors.some(issue => issue.step === "boudica_trinovantes_supplies" && issue.field === "exchange.emote_text_key"));
+    const dialogueReusesLine = structuredClone(definition);
+    dialogueReusesLine.steps.find(step => step.id === "boudica_victory_council").body_key = "tutorial.campaign_boudica_boudica_supplies_reply_emote";
+    assert.ok(report(dialogueReusesLine).errors.some(issue => issue.step === "boudica_victory_council" && issue.field === "body_key"), "an exchange line cannot also be dialogue");
     for (const id of ["boudica_poison_end", "boudica_end"]) {
         const completion = definition.steps.find(step => step.id === id);
         assert.equal(completion.type, "end");
@@ -560,6 +613,58 @@ test("Boudica spoken cards and contact responses require named existing portrait
         spokenEnding.steps.find(step => step.id === id).presentation = "dialogue";
         assert.ok(report(spokenEnding).errors.some(issue => issue.step === id && issue.field === "speaker"));
     }
+
+    const campaignExchange = structuredClone(definition);
+    const romanTargets = ["colonia_veterans", "tax_collectors", "roman_supply_depot"];
+    campaignExchange.reactions = campaignExchange.reactions.filter(reaction => !(["contact", "pre_defeat"].includes(reaction.when.type) && romanTargets.includes(reaction.when.target)));
+    const coloniaGate = "boudica_outpost_colonia_veterans";
+    campaignExchange.speakers.colonia_veterans = { faction: "colonia_veterans" };
+    campaignExchange.reactions.push(
+        { id: "colonia_provocation", when: { type: "contact", target: "colonia_veterans" }, during: coloniaGate, presentation: "exchange", exchange: [
+            { speaker: "colonia_veterans", presentation: "emote", emote: "threat", emote_text_key: "tutorial.colonia_taunt", delay_ms: 700 },
+            { speaker: "boudica", presentation: "emote", emote: "threat", emote_text_key: "tutorial.boudica_reply", delay_ms: 0 }
+        ] },
+        { id: "colonia_last_words", when: { type: "pre_defeat", target: "colonia_veterans" }, during: coloniaGate, presentation: "exchange", exchange: [
+            { speaker: "colonia_veterans", presentation: "dialogue", body_key: "tutorial.colonia_last_words", delay_ms: 0 }
+        ] }
+    );
+    for (const encounter of [
+        { target: "tax_collectors", gate: "boudica_outpost_tax_collectors" },
+        { target: "roman_supply_depot", gate: "boudica_outpost_roman_supply_depot" }
+    ]) {
+        const speaker = "roman_" + encounter.target;
+        campaignExchange.speakers[speaker] = { faction: encounter.target };
+        campaignExchange.reactions.push(
+            { id: encounter.target + "_provocation", when: { type: "contact", target: encounter.target }, during: encounter.gate, presentation: "exchange", exchange: [
+                { speaker, presentation: "emote", emote: "threat", emote_text_key: "tutorial." + encounter.target + "_taunt", delay_ms: 700 },
+                { speaker: "boudica", presentation: "emote", emote: "threat", emote_text_key: "tutorial." + encounter.target + "_reply", delay_ms: 0 }
+            ] },
+            { id: encounter.target + "_last_words", when: { type: "pre_defeat", target: encounter.target }, during: encounter.gate, presentation: "exchange", exchange: [
+                { speaker, presentation: "dialogue", body_key: "tutorial." + encounter.target + "_last_words", delay_ms: 0 }
+            ] }
+        );
+    }
+    assert.deepEqual(report(campaignExchange).errors, [], "contact and pre-defeat exchanges validate through the shared campaign schema");
+    const unknownEmoteFaction = structuredClone(campaignExchange);
+    unknownEmoteFaction.speakers.colonia_veterans.faction = "missing_faction";
+    assert.ok(report(unknownEmoteFaction).errors.some(issue => issue.field === "reactions.exchange" || issue.field.includes("speakers")), "a story emote cannot bind to an unknown faction");
+    const invalidDelay = structuredClone(campaignExchange);
+    invalidDelay.reactions.find(reaction => reaction.id === "colonia_provocation").exchange[0].delay_ms = 10001;
+    assert.ok(report(invalidDelay).errors.some(issue => issue.field === "reactions.exchange.delay_ms"), "reply timing is bounded and explicit");
+    const resolvedText = value => key => key === "tutorial.colonia_taunt" ? value : "A short line.";
+    const emoteTextAtLimit = campaign.validate(campaignExchange, roster, { hasText: () => true, getText: resolvedText("x".repeat(160)) });
+    assert.deepEqual(emoteTextAtLimit.errors, [], "the native nameplate accepts a 160-character bubble");
+    const emoteTextTooLong = campaign.validate(campaignExchange, roster, { hasText: () => true, getText: resolvedText("x".repeat(161)) });
+    assert.ok(emoteTextTooLong.errors.some(issue => issue.field === "reactions.exchange.emote_text_key" && /160 characters/.test(issue.message)),
+        "Campaign Studio rejects bubble copy the game would refuse to render");
+    const emoteTextWithControl = campaign.validate(campaignExchange, roster, { hasText: () => true, getText: resolvedText("line\nline") });
+    assert.ok(emoteTextWithControl.errors.some(issue => issue.field === "reactions.exchange.emote_text_key" && /control characters/.test(issue.message)));
+    const duplicateContactEvent = structuredClone(campaignExchange);
+    duplicateContactEvent.reactions.push({ id: "second_colonia_contact", when: { type: "contact", target: "colonia_veterans" }, during: coloniaGate, presentation: "exchange", exchange: campaignExchange.reactions.find(reaction => reaction.id === "colonia_provocation").exchange });
+    assert.ok(report(duplicateContactEvent).errors.some(issue => issue.field === "reactions.when"), "one world event cannot trigger overlapping authored responses");
+    const unrelatedDefeatGate = structuredClone(campaignExchange);
+    unrelatedDefeatGate.reactions.find(reaction => reaction.id === "colonia_last_words").during = "boudica_outpost_tax_collectors";
+    assert.ok(report(unrelatedDefeatGate).errors.some(issue => issue.field === "reactions.during"), "a final line only watches its own active defeat objective");
 
 
 });
@@ -686,10 +791,13 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     assert.equal(portrait.children[0], current);
     late.dispatch("error");
     assert.equal(portrait.children[0], current, "a late error from the previous speaker does not replace the current portrait");
-    assert.equal(root.querySelector(".sow-story__title").hidden, true, "dialogue titles are hidden unless a step opts in");
+    assert.equal(root.querySelector(".sow-story__title").hidden, false, "authored dialogue titles show by default");
     const titled = { id: "titled_scene", type: "scene", speaker: "first", title_key: "titled_title", body_key: "titled_body", presentation: "dialogue", show_title: true };
     renderer.render({ definition, step: titled, line: titled, paused: true, done: false, choices: [], progress: { target: 1, current: 0 }, state: { line: 0 } }, {});
-    assert.equal(root.querySelector(".sow-story__title").hidden, false, "show_title opts one dialogue into its title");
+    assert.equal(root.querySelector(".sow-story__title").hidden, false, "explicitly visible titles still show");
+    titled.show_title = false;
+    renderer.render({ definition, step: titled, line: titled, paused: true, done: false, choices: [], progress: { target: 1, current: 0 }, state: { line: 0 } }, {});
+    assert.equal(root.querySelector(".sow-story__title").hidden, true, "authors can explicitly hide a dialogue title");
 
     const objective = { id: "expand_250", type: "objective", title_key: "expand_title", hint_key: "expand_hint", trigger: { type: "territory", value: 250 }, guide: { kind: "world", target: "expand", gesture: "tap" } };
     const objectiveModel = { definition: { episode_id: "compact_test", speakers: {}, steps: [objective] }, step: objective, line: objective, paused: false, done: false, choices: [], progress: { current: 120, target: 250 }, state: { line: 0 } };
@@ -1480,7 +1588,7 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     const campaignSource = fs.readFileSync(path.join(shell, "sow-campaign.js"), "utf8");
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
     const requested = [
-        "boudica_transfer_choose", "boudica_transfer_send", "boudica_choose_city"
+        "boudica_transfer_choose", "boudica_transfer_send", "boudica_choose_city", "boudica_alliance_request"
     ];
     // The upgrade button is drawn by the game, so its hand points at a world spot.
     const upgradeGuide = definition.steps.find(step => step.id === "boudica_structure_upgrade").guide;
@@ -1553,4 +1661,27 @@ test("construction guidance points to confirmation without advancing on a previe
     assert.equal(model.step.guide.target, "build_site");
 
 
+});
+
+test("shipped Roman outposts speak their taunt, reply and last words with English copy", () => {
+    const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    const copy = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
+    const encounters = [
+        { target: "colonia_veterans", gate: "boudica_outpost_colonia_veterans" },
+        { target: "tax_collectors", gate: "boudica_outpost_tax_collectors" },
+        { target: "roman_supply_depot", gate: "boudica_outpost_roman_supply_depot" }
+    ];
+    for (const encounter of encounters) {
+        const reactions = definition.reactions.filter(reaction => reaction.when.target === encounter.target);
+        const contact = reactions.find(reaction => reaction.when.type === "contact");
+        const lastWords = reactions.find(reaction => reaction.when.type === "pre_defeat");
+        assert.ok(contact && lastWords, encounter.target + " has a first-contact taunt and a last-words reaction");
+        assert.equal(contact.during, encounter.gate);
+        assert.equal(lastWords.during, encounter.gate);
+        for (const line of [...contact.exchange, ...lastWords.exchange]) {
+            assert.ok(definition.speakers[line.speaker], line.speaker + " is a named speaker");
+            const key = line.emote_text_key.replace(/^tutorial\./, "");
+            assert.ok(copy.includes(key + " = "), key + " has English copy");
+        }
+    }
 });

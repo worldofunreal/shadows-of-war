@@ -532,7 +532,7 @@ impl SowEngine {
                 if let Some(player) = self.state.player_mut(stamped.player_id)
                     && crate::emote::can_express(player, &phase)
                 {
-                    crate::emote::express(player, Some(*kind), *pinned, tick);
+                    crate::emote::express(player, Some(*kind), *pinned, false, tick);
                 }
             }
             GameplayIntent::ClearEmote => {

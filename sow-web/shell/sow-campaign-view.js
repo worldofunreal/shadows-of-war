@@ -559,8 +559,8 @@
             root.dir = context.direction || doc.documentElement.dir || "ltr";
             root.dataset.localeScript = context.localeScript || doc.documentElement.dataset.localeScript || "latin";
             const modal = ["scene", "choice", "end"].includes(step.type);
-            // Dialogue titles are opt-in (show_title: true); chapter cards keep theirs.
-            const showTitle = !modal || step.show_title === true || step.presentation === "chapter" || step.presentation === "cinematic";
+            // Authored titles stay visible unless explicitly hidden; chapter cards keep theirs.
+            const showTitle = !modal || step.show_title !== false || step.presentation === "chapter" || step.presentation === "cinematic";
             if (step.guide && step.guide.kind === "ui" && step.guide.target === "attack_ratio") root.dataset.guideTarget = "attack_ratio";
             else delete root.dataset.guideTarget;
             root.classList.toggle("is-modal", modal);
@@ -667,7 +667,7 @@
                 [{ opacity: 0, transform: "translateY(-6px)" }, { opacity: 1, transform: "translateY(0)" }],
                 { duration: 180, easing: "cubic-bezier(.2,.7,.2,1)" }
             );
-            const gestureType = step.guide && step.guide.gesture;
+            const gestureType = context.gestureOverride || step.guide && step.guide.gesture;
             const showGestureText = !step.guide || step.guide.show_label !== false;
             const zoomGuide = gestureType && gestureType.startsWith("zoom_");
             const cameraCueLabel = cameraCue
@@ -718,7 +718,7 @@
             if (guideVisible) {
                 cameraTracking = anchor.cameraTracked === true;
                 gesture.classList.toggle("is-camera-following", cameraTracking);
-                gesture.dataset.gesture = step.guide.gesture;
+                gesture.dataset.gesture = gestureType;
                 gesture.dataset.zoomMode = context.zoomMode || "pinch";
                 if (homeGuide) gesture.dataset.guideTarget = "hud_center_camera";
                 else if (step.guide.kind === "ui" && step.guide.target === "attack_ratio") gesture.dataset.guideTarget = "attack_ratio";

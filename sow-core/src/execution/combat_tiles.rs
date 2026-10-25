@@ -77,6 +77,11 @@ pub(crate) fn target_applies(
         }
         _ => false,
     };
+    // Whether the subject is shown as the same people as the hero's player (None without both).
+    let same_people = || match (owner, state.player(actor)) {
+        (Some(theirs), Some(mine)) if subject != 0 => Some(theirs.realm() == mine.realm()),
+        _ => None,
+    };
     match target {
         Target::Anyone => true,
         Target::Neutral => subject == 0,
@@ -95,6 +100,8 @@ pub(crate) fn target_applies(
         Target::Smaller => compared(|p| f64::from(p.tile_count), false),
         Target::Richer => compared(|p| p.gold, true),
         Target::Poorer => compared(|p| p.gold, false),
+        Target::Kin => subject != actor && same_people() == Some(true),
+        Target::Foreign => same_people() == Some(false),
     }
 }
 
@@ -148,6 +155,17 @@ pub(crate) fn attack_strength(state: &GameState, attacker: u16, target: u16, arm
     })
 }
 
+/// Hero target loss ability: tiles taken from land its target describes cost `attacker`'s
+/// army fewer troops. Judged like `attack_strength`, once per attack tick.
+fn target_attacker_loss(state: &GameState, attacker: u16, target: u16, army: f64) -> f64 {
+    let Some(p) = state.player(attacker) else {
+        return 1.0;
+    };
+    targeted_multiplier(state, attacker, target, army, |t| {
+        p.leader.attacker_loss_multiplier(LossWhen::Against(t))
+    })
+}
+
 /// Hero mountain ability: mountain tiles cost the attacker fewer troops.
 fn terrain_attacker_loss(state: &GameState, attacker: u16, terrain: TerrainType) -> f64 {
     let when = match terrain {
@@ -158,6 +176,23 @@ fn terrain_attacker_loss(state: &GameState, attacker: u16, terrain: TerrainType)
     state
         .player(attacker)
         .map_or(1.0, |p| p.leader.attacker_loss_multiplier(when))
+}
+
+/// Hero city-tile ability: conquering a city tile costs the attacker fewer troops.
+/// Takes disjoint fields because the attack loop holds a mutable borrow of `attacks`.
+fn city_attacker_loss(
+    state: &GameState,
+    buildings: &BuildingGrid,
+    (tile_x, tile_y): (u32, u32),
+    attacker: u16,
+) -> f64 {
+    let loss = state
+        .player(attacker)
+        .map_or(1.0, |p| p.leader.attacker_loss_multiplier(LossWhen::City));
+    if loss == 1.0 || !buildings.city_covers_tile(tile_x, tile_y) {
+        return 1.0;
+    }
+    loss
 }
 
 /// How long (30 s at the standard speed) a recapture discount lasts after a city is taken.
@@ -203,6 +238,7 @@ impl SowEngine {
         if self.state.phase != GamePhase::Playing {
             return;
         }
+        self.release_expired_pre_defeat_hold();
 
         // Poka-Yoke: Collections are now strictly maintained sorted on insertion.
         let map_w = self.state.map.width;
@@ -214,6 +250,8 @@ impl SowEngine {
             .as_ref()
             .filter(|assault| assault.hold_last_tile)
             .map(|assault| assault.root_target);
+        let pre_defeat_targets = self.campaign_pre_defeat_targets.clone();
+        let mut pre_defeat_pending = self.campaign_pre_defeat_pending;
 
         // Rebuild only when buildings changed; each tile then queries nearby cells.
         if !self.attacks.is_empty() {
@@ -287,6 +325,12 @@ impl SowEngine {
                     execution.troops,
                 );
             let effective_troops = execution.troops * troop_strength;
+            let target_loss = target_attacker_loss(
+                &self.state,
+                execution.owner_id,
+                execution.target_owner,
+                execution.troops,
+            );
 
             let max_cap = max_tiles_cap_for_troops(effective_troops, &self.state.config);
 
@@ -332,6 +376,7 @@ impl SowEngine {
 
             loop {
                 if held_target == Some(execution.target_owner)
+                    && !Self::pre_defeat_watches(&pre_defeat_targets, pre_defeat_pending, execution.target_owner)
                     && self
                         .state
                         .player(execution.target_owner)
@@ -381,6 +426,19 @@ impl SowEngine {
                     ) {
                         stale_pops += 1;
                         continue; // Skip, edge was severed
+                    }
+
+                    let target_has_one_tile = execution.target_owner != 0
+                        && self.state.player(execution.target_owner).is_some_and(|target| target.tile_count <= 1);
+                    if target_has_one_tile
+                        && Self::pre_defeat_watches(&pre_defeat_targets, pre_defeat_pending, execution.target_owner)
+                    {
+                        if pre_defeat_pending.is_none() {
+                            pre_defeat_pending = Some(execution.target_owner);
+                            self.campaign_pre_defeat_since = tick_now;
+                        }
+                        execution.to_conquer.push(target_tile);
+                        break;
                     }
 
                     // Determine conquest cost for this specific tile (matching OpenFront's terrain & Tower coefficients)
@@ -447,7 +505,13 @@ impl SowEngine {
 
                     let terrain_loss =
                         terrain_attacker_loss(&self.state, execution.owner_id, terrain_type);
-                    if terrain_loss != 1.0 {
+                    let city_loss = city_attacker_loss(
+                        &self.state,
+                        &self.building_grid,
+                        (target_tile.x, target_tile.y),
+                        execution.owner_id,
+                    );
+                    if terrain_loss != 1.0 || city_loss != 1.0 || target_loss != 1.0 {
                         self.state.announce_leader_ability(
                             execution.owner_id,
                             Some((target_tile.x, target_tile.y)),
@@ -455,11 +519,13 @@ impl SowEngine {
                     }
                     let terrain_multiplier =
                         terrain_loss_multiplier(terrain_type, &self.state.config) * terrain_loss;
+                    // Hero city-tile and target loss abilities scale the same per-tile cost.
+                    let loss_multiplier = terrain_multiplier * city_loss * target_loss;
 
                     if execution.target_owner == 0 {
                         // Neutral: attacker pays constant base cost scaled by terrain multiplier
                         execution.troops -= (self.state.config.attack_cost_neutral
-                            * terrain_multiplier)
+                            * loss_multiplier)
                             / troop_strength;
                     } else {
                         // PvP: Combat resolution
@@ -511,7 +577,7 @@ impl SowEngine {
                             self.state.announce_leader_ability(execution.owner_id, tile);
                         }
                         let atk_loss = (self.state.config.attack_cost_enemy
-                            * terrain_multiplier
+                            * loss_multiplier
                             * (1.0 + tower_extra)
                             * recapture)
                             / troop_strength;
@@ -663,6 +729,7 @@ impl SowEngine {
         for (victim, conqueror, x, y) in elimination_candidates {
             self.eliminate_player(victim, conqueror, x, y, false);
         }
+        self.campaign_pre_defeat_pending = pre_defeat_pending;
     }
 }
 

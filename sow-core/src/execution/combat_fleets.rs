@@ -44,6 +44,8 @@ impl SowEngine {
             .as_ref()
             .filter(|assault| assault.hold_last_tile)
             .map(|assault| assault.root_target);
+        let pre_defeat_targets = self.campaign_pre_defeat_targets.clone();
+        let mut pre_defeat_pending = self.campaign_pre_defeat_pending;
         let w = self.state.map.width;
         for i in 0..self.fleets.len() {
             if self.fleets[i].unit_type == crate::game::UnitType::Warship
@@ -250,6 +252,17 @@ impl SowEngine {
                 continue;
             }
 
+            if owner_here != fleet.owner_id
+                && Self::pre_defeat_watches(&pre_defeat_targets, pre_defeat_pending, owner_here)
+                && self.state.player(owner_here).is_some_and(|target| target.tile_count <= 1)
+            {
+                if pre_defeat_pending.is_none() {
+                    pre_defeat_pending = Some(owner_here);
+                    self.campaign_pre_defeat_since = self.state.tick;
+                }
+                continue;
+            }
+
             if fleet.unit_type == crate::game::UnitType::TransportShip {
                 self.state.events.push(GameEvent::TransportShipLanded {
                     owner_id: fleet.owner_id,
@@ -269,6 +282,7 @@ impl SowEngine {
             }
 
             if held_target == Some(owner_here)
+                && !Self::pre_defeat_watches(&pre_defeat_targets, pre_defeat_pending, owner_here)
                 && self
                     .state
                     .player(owner_here)
@@ -310,6 +324,7 @@ impl SowEngine {
         for i in to_remove.into_iter().rev() {
             self.fleets.swap_remove(i);
         }
+        self.campaign_pre_defeat_pending = pre_defeat_pending;
         if has_removals {
             self.fleets.sort_unstable_by_key(|f| f.id);
         }

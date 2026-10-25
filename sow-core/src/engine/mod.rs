@@ -412,10 +412,21 @@ pub struct SowEngine {
     pub campaign_structure_hold_ids: std::collections::HashSet<PlayerId>,
     /// Campaign factions that must pay for their first city instead of receiving it free.
     pub campaign_city_requires_gold_ids: std::collections::HashSet<PlayerId>,
+    /// Campaign factions that accept every alliance request from the human (scripted, no AI thresholds).
+    pub campaign_accepts_alliance_requests_ids: std::collections::HashSet<PlayerId>,
     /// Next campaign-support send tick for each eligible ally.
     pub campaign_support_next_tick: std::collections::HashMap<PlayerId, u64>,
     /// Campaign factions that stop all AI actions and support for the rest of the match.
     pub campaign_halted_ids: std::collections::HashSet<PlayerId>,
+    /// Objectives currently allowed to pause the last capture of a campaign faction.
+    #[serde(skip)]
+    pub campaign_pre_defeat_targets: std::collections::HashSet<PlayerId>,
+    /// Faction whose final capture is waiting for its authored campaign line.
+    #[serde(skip)]
+    pub campaign_pre_defeat_pending: Option<PlayerId>,
+    /// Tick when the pending final capture started waiting.
+    #[serde(skip)]
+    pub campaign_pre_defeat_since: u64,
     /// Player id -> (first debt tick, rebellion already started this debt episode).
     pub(crate) debt_episodes: std::collections::HashMap<PlayerId, (u64, bool)>,
     pub port_queues:
@@ -520,8 +531,12 @@ impl SowEngine {
             campaign_contact_resolved: std::collections::HashSet::new(),
             campaign_structure_hold_ids: std::collections::HashSet::new(),
             campaign_city_requires_gold_ids: std::collections::HashSet::new(),
+            campaign_accepts_alliance_requests_ids: std::collections::HashSet::new(),
             campaign_support_next_tick: std::collections::HashMap::new(),
             campaign_halted_ids: std::collections::HashSet::new(),
+            campaign_pre_defeat_targets: std::collections::HashSet::new(),
+            campaign_pre_defeat_pending: None,
+            campaign_pre_defeat_since: 0,
             debt_episodes: std::collections::HashMap::new(),
             port_queues: std::collections::HashMap::new(),
             projectiles: Vec::new(),
@@ -602,7 +617,7 @@ impl SowEngine {
         true
     }
 
-    fn campaign_player_id(&self, faction_id: &str) -> Option<PlayerId> {
+    pub fn campaign_player_id(&self, faction_id: &str) -> Option<PlayerId> {
         self.campaign_faction_ids
             .iter()
             .find(|(_, id)| id.as_str() == faction_id)
@@ -635,7 +650,62 @@ impl SowEngine {
         else {
             return false;
         };
-        crate::emote::express(player, kind, pinned, tick);
+        crate::emote::express(player, kind, pinned, true, tick);
+        true
+    }
+
+    /// Ticks a final capture may wait for its last line before it resolves without a reply (10 ticks per second).
+    pub(crate) const PRE_DEFEAT_HOLD_TICKS: u64 = 600;
+
+    /// Whether this owner's final capture is part of an active pre-defeat watch.
+    pub(crate) fn pre_defeat_watches(
+        targets: &std::collections::HashSet<PlayerId>,
+        pending: Option<PlayerId>,
+        owner: PlayerId,
+    ) -> bool {
+        targets.contains(&owner) || pending == Some(owner)
+    }
+
+    /// Lets a waiting final capture resolve when its last line never finishes.
+    pub(crate) fn release_expired_pre_defeat_hold(&mut self) {
+        let Some(owner) = self.campaign_pre_defeat_pending else {
+            return;
+        };
+        if self.state.tick.saturating_sub(self.campaign_pre_defeat_since) < Self::PRE_DEFEAT_HOLD_TICKS {
+            return;
+        }
+        self.campaign_pre_defeat_pending = None;
+        self.campaign_pre_defeat_targets.remove(&owner);
+    }
+
+    /// Limit pre-defeat holds to the campaign targets in the currently active objective.
+    pub fn set_campaign_pre_defeat_targets(&mut self, faction_ids: &[String]) {
+        self.campaign_pre_defeat_targets = faction_ids
+            .iter()
+            .filter_map(|faction_id| self.campaign_player_id(faction_id))
+            .collect();
+        if self.campaign_pre_defeat_pending.is_some_and(|player_id| !self.campaign_pre_defeat_targets.contains(&player_id)) {
+            self.campaign_pre_defeat_pending = None;
+        }
+    }
+
+    /// Campaign faction whose final territory is currently held for its last line.
+    pub fn campaign_pre_defeat_faction_id(&self) -> Option<&str> {
+        self.campaign_pre_defeat_pending
+            .and_then(|player_id| self.campaign_faction_ids.get(&player_id))
+            .map(String::as_str)
+    }
+
+    /// Resume exactly the final capture that was waiting for this faction's exchange.
+    pub fn continue_campaign_pre_defeat(&mut self, faction_id: &str) -> bool {
+        let Some(player_id) = self.campaign_player_id(faction_id) else {
+            return false;
+        };
+        if self.campaign_pre_defeat_pending != Some(player_id) {
+            return false;
+        }
+        self.campaign_pre_defeat_pending = None;
+        self.campaign_pre_defeat_targets.remove(&player_id);
         true
     }
 
@@ -1786,6 +1856,49 @@ mod tests {
         assert!(tutorial.campaign_allows_building(crate::game::BuildingKind::City, 1));
     }
 
+    #[test]
+    fn pre_defeat_hold_is_scoped_to_a_known_faction_and_resumes_only_that_capture() {
+        let mut state = GameState::new(1, 4, 4, GameConfig::default());
+        state.config.tutorial = true;
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.campaign_faction_ids.insert(7, "colonia_veterans".into());
+        engine.set_campaign_pre_defeat_targets(&["colonia_veterans".into(), "unknown".into()]);
+        assert_eq!(engine.campaign_pre_defeat_targets, std::collections::HashSet::from([7]));
+
+        engine.campaign_pre_defeat_pending = Some(7);
+        assert_eq!(engine.campaign_pre_defeat_faction_id(), Some("colonia_veterans"));
+        assert!(!engine.continue_campaign_pre_defeat("tax_collectors"));
+        assert_eq!(engine.campaign_pre_defeat_pending, Some(7));
+        assert!(engine.continue_campaign_pre_defeat("colonia_veterans"));
+        assert_eq!(engine.campaign_pre_defeat_pending, None);
+        assert!(!engine.campaign_pre_defeat_targets.contains(&7));
+
+        engine.set_campaign_pre_defeat_targets(&["colonia_veterans".into()]);
+        engine.campaign_pre_defeat_pending = Some(7);
+        engine.set_campaign_pre_defeat_targets(&[]);
+        assert_eq!(engine.campaign_pre_defeat_pending, None, "removing the active story hold releases a stale final capture");
+    }
+
+    #[test]
+    fn pre_defeat_hold_resolves_on_its_own_after_the_limit() {
+        let mut state = GameState::new(1, 4, 4, GameConfig::default());
+        state.config.tutorial = true;
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.campaign_faction_ids.insert(7, "colonia_veterans".into());
+        engine.set_campaign_pre_defeat_targets(&["colonia_veterans".into()]);
+        engine.campaign_pre_defeat_pending = Some(7);
+        engine.campaign_pre_defeat_since = 10;
+
+        engine.state.tick = 10 + SowEngine::PRE_DEFEAT_HOLD_TICKS - 1;
+        engine.release_expired_pre_defeat_hold();
+        assert_eq!(engine.campaign_pre_defeat_pending, Some(7));
+
+        engine.state.tick = 10 + SowEngine::PRE_DEFEAT_HOLD_TICKS;
+        engine.release_expired_pre_defeat_hold();
+        assert_eq!(engine.campaign_pre_defeat_pending, None);
+        assert!(!engine.campaign_pre_defeat_targets.contains(&7));
+    }
+
     fn assault_candidate(
         target_id: PlayerId,
         committed_troops: f64,
@@ -1886,6 +1999,8 @@ mod tests {
             #[serde(default)]
             can_request_alliance: bool,
             #[serde(default)]
+            accepts_alliance_requests: bool,
+            #[serde(default)]
             can_attack_player: Option<bool>,
             #[serde(default)]
             assault_force: bool,
@@ -1959,6 +2074,7 @@ mod tests {
                 campaign_assault_force: faction.assault_force,
                 campaign_hold_structures_until_contact: false,
                 campaign_city_requires_gold: false,
+                campaign_accepts_alliance_requests: faction.accepts_alliance_requests,
             })
             .collect();
         assert_eq!(config.scripted_spawns.len(), selected.len());
@@ -1998,8 +2114,13 @@ mod tests {
             engine.campaign_relations.get(&legio_ii),
             Some(&CampaignRelation::Enemy)
         );
+        // Trinovantes start neutral: the story teaches the player to request the alliance.
+        assert_eq!(
+            engine.campaign_relations.get(&trinovantes),
+            Some(&CampaignRelation::Neutral)
+        );
         assert!(
-            engine
+            !engine
                 .state
                 .player(1)
                 .unwrap()
@@ -2007,13 +2128,37 @@ mod tests {
                 .contains(&trinovantes)
         );
         assert!(
-            engine
+            !engine
                 .state
                 .player(trinovantes)
                 .unwrap()
                 .alliances
                 .contains(&1)
         );
+        // The tutorial request: Boudica proposes, Trinovantes accepts. The rest of this test runs on the allied state.
+        engine.apply_stamped_intent(
+            &crate::protocol::StampedIntent {
+                player_id: 1,
+                intent: crate::protocol::GameplayIntent::ProposeAlliance {
+                    target_player: trinovantes,
+                },
+            },
+            0,
+        );
+        assert!(engine.has_alliance_proposal(1, trinovantes));
+        engine.apply_stamped_intent(
+            &crate::protocol::StampedIntent {
+                player_id: trinovantes,
+                intent: crate::protocol::GameplayIntent::AcceptAlliance { target_player: 1 },
+            },
+            1,
+        );
+        assert_eq!(
+            engine.campaign_relations.get(&trinovantes),
+            Some(&CampaignRelation::Allied)
+        );
+        assert!(engine.state.player(1).unwrap().alliances.contains(&trinovantes));
+        assert!(engine.state.player(trinovantes).unwrap().alliances.contains(&1));
 
         assert!(!engine.campaign_faction_emote("missing_faction", Some(crate::emote::EmoteKind::Greet), false));
         assert!(engine.campaign_faction_emote("trinovantes", Some(crate::emote::EmoteKind::Greet), false));
@@ -2021,6 +2166,7 @@ mod tests {
             engine.state.player(trinovantes).unwrap().active_emote.map(|emote| emote.kind),
             Some(crate::emote::EmoteKind::Greet)
         );
+        assert!(engine.state.player(trinovantes).unwrap().active_emote.is_some_and(|emote| emote.scripted));
         assert!(engine.campaign_faction_emote("trinovantes", None, false));
         assert!(engine.state.player(trinovantes).unwrap().active_emote.is_none());
 

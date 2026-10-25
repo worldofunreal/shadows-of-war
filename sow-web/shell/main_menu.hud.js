@@ -81,8 +81,7 @@
 
     function syncEmoteTexts(hud) {
         if (!hud || !Array.isArray(hud.emotes) || hud.emotes.length !== 4) return;
-        var overrides = window.SOW_emote_text_overrides || {};
-        var texts = hud.emotes.map(function (definition) { return SOW_t(overrides[definition.kind] || definition.bubble_key); });
+        var texts = hud.emotes.map(function (definition) { return SOW_t(definition.bubble_key); });
         var key = String(window.SOW_LOCALE || "en") + ":" + JSON.stringify(texts) + ":" + hudSafeArea.join(",");
         if (key === emoteTextKey && emoteTextTarget === window.SOW_menu_command) return;
         if (send("set_emote_texts", { texts: texts, safe_area: hudSafeArea })) {
