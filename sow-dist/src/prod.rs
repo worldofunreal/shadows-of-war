@@ -319,7 +319,7 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
         retain_releases(&config)?;
         retain_local_builds(paths)?;
         verify_public(paths, &config, &release)?;
-        verify_live_reward_return(paths, &config)?;
+        verify_live_reward_return(paths, &config, false)?;
         println!("✅ Production already serves the requested content");
         return Ok(());
     }
@@ -370,12 +370,12 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
 
     println!("==> 8/8 Public verification");
     verify_public(paths, &config, &release)?;
-    verify_live_reward_return(paths, &config)?;
+    verify_live_reward_return(paths, &config, plan.relay)?;
     println!("✅ Production {} ready as {}", release.version, release.id);
     Ok(())
 }
 
-fn verify_live_reward_return(paths: &Paths, config: &Config) -> Result<()> {
+fn verify_live_reward_return(paths: &Paths, config: &Config, handover: bool) -> Result<()> {
     let mut websocket = url::Url::parse(&config.public_origin)?;
     let scheme = if websocket.scheme() == "https" {
         "wss"
@@ -390,9 +390,7 @@ fn verify_live_reward_return(paths: &Paths, config: &Config) -> Result<()> {
     let accounts = paths
         .root
         .join("dist/.sow-state/reward-audit-accounts.json");
-    run(
-        "cargo",
-        &[
+    let mut args = vec![
             "run",
             "--locked",
             "-p",
@@ -407,9 +405,9 @@ fn verify_live_reward_return(paths: &Paths, config: &Config) -> Result<()> {
             &database,
             "--audit-accounts-file",
             accounts.to_str().context("invalid audit accounts path")?,
-        ],
-        Some(&paths.root),
-    )
+        ];
+    if handover { args.extend(["--verify-handover-relay-host", config.relay_host.as_str()]); }
+    run("cargo", &args, Some(&paths.root))
     .context("real multiplayer exit and reward presentation failed")
 }
 
@@ -2265,7 +2263,7 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
          export PKG_CONFIG_PATH={}; export SOW_DPDK_VERSION={DPDK_RELEASE}; \
          export SOW_RELAY_FOUNDATION_ID={foundation}; export SOW_RELAY_BUILD_GIT={revision}; \
          export FSTACK_LIB_DIR={}; \
-         cd {}; cargo test --locked --release -p sow-relay -- --test-threads=1; \
+         cd {}; cargo test --locked --release -p fstack-bridge -p sow-relay -- --test-threads=1; \
          cargo build --locked --release -p sow-relay; \
          chown -R 1000:1000 {}/target {}/lib 2>/dev/null || true",
         shell_quote(&pkg_config_path), shell_quote(&format!("{}/lib", config.fstack_repo)),

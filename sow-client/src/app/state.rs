@@ -370,7 +370,58 @@ pub struct TransportImpact {
     pub tile_x: u32,
     pub tile_y: u32,
     pub color: [f32; 3],
+    /// The colour of the hero ability behind this impact, drawn as an outer ring.
+    /// `None` for impacts that are not an ability.
+    pub cue_color: Option<[f32; 3]>,
     pub start_time: web_time::Instant,
+}
+
+/// The colour of an ability family's visual cue. Each family has its own colour, so
+/// the effect is recognisable on the map.
+pub fn ability_cue_rgb(cue: sow_core::geo_entities::Cue) -> [f32; 3] {
+    use sow_core::geo_entities::Cue;
+    match cue {
+        Cue::Strength => [0.86, 0.15, 0.15],
+        Cue::Conquest => [0.98, 0.45, 0.09],
+        Cue::Income => [0.98, 0.80, 0.08],
+        Cue::Tower => [0.58, 0.64, 0.72],
+        Cue::City => [0.91, 0.47, 0.98],
+        Cue::Losses => [0.13, 0.77, 0.37],
+        Cue::Alliance => [0.18, 0.83, 0.75],
+        Cue::Retreat => [0.51, 0.55, 0.97],
+    }
+}
+
+#[cfg(test)]
+mod ability_cue_tests {
+    use super::ability_cue_rgb;
+    use sow_core::geo_entities::Cue;
+    use sow_core::player::Leader;
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn every_cue_family_has_its_own_colour() {
+        for (index, cue) in Cue::ALL.iter().enumerate() {
+            for other in &Cue::ALL[index + 1..] {
+                assert_ne!(
+                    ability_cue_rgb(*cue),
+                    ability_cue_rgb(*other),
+                    "{cue:?} and {other:?} share a colour"
+                );
+            }
+        }
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn a_hero_shows_the_colour_of_its_ability_family() {
+        assert_eq!(
+            ability_cue_rgb(Leader::of("boudica").ability().cue()),
+            ability_cue_rgb(Cue::Strength)
+        );
+        assert_eq!(
+            ability_cue_rgb(Leader::of("justin_i").ability().cue()),
+            ability_cue_rgb(Cue::Losses)
+        );
+    }
 }
 
 pub const MAX_TRANSPORT_IMPACTS: usize = 256;

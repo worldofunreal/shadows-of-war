@@ -376,6 +376,14 @@ fn render_transport_impacts(
             ],
             (2.2 * sf).max(1.0),
         );
+        if let Some(cue) = impact.cue_color {
+            text.push_ring(
+                center_px,
+                radius * 1.35,
+                [cue[0], cue[1], cue[2], 0.9 * fade],
+                (2.6 * sf).max(1.0),
+            );
+        }
         text.push_ring(
             center_px,
             (radius * 0.62).max(2.0 * sf),

@@ -82,6 +82,7 @@ impl SowApp {
                             tile_x: x,
                             tile_y: y,
                             color,
+                            cue_color: None,
                             start_time: now_instant,
                         });
                 }
@@ -103,6 +104,9 @@ impl SowApp {
                                 tile_x: x,
                                 tile_y: y,
                                 color,
+                                cue_color: Some(crate::app::ability_cue_rgb(
+                                    owner.leader.ability().cue(),
+                                )),
                                 start_time: now_instant,
                             });
                     }
