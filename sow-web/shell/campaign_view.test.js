@@ -1106,10 +1106,15 @@ test("Boudica script links resolve and each ending completes the episode", () =>
     }
     const campaign = require(path.join(shell, "sow-campaign.js"));
     for (const choice of step("boudica_final_choice").choices) {
-        const machine = campaign.create(definition, "boudica_final_choice");
+        let now = 0;
+        const machine = campaign.create(definition, "boudica_final_choice", undefined, () => now);
         machine.update({}, {});
         assert.equal(machine.advance(choice.id, "boudica_final_choice"), true);
-        if (choice.id === "fight") machine.update({ eliminated_faction_ids: ["player"] }, {});
+        if (choice.id === "fight") {
+            // The last stand's emotes play out before the fight can end the episode.
+            for (let t = 0; t < 10000 && machine.view().exchange; t += 100) { now += 100; machine.update({}, {}); }
+            machine.update({ eliminated_faction_ids: ["player"] }, {});
+        }
         assert.ok(endings.some(ending => ending.id === machine.view().step.id), "each choice leads to an ending");
         assert.equal(machine.view().done, false, "the epilogue stays open until the player continues");
         assert.equal(machine.advance(null, machine.view().step.id), true);
@@ -1623,16 +1628,24 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     const ratioMachine = campaign.create(definition, ratioStepId, undefined, () => ratioClock);
     for (const value of [0.25, 0.5, 0.99]) assert.equal(ratioMachine.update({ attack_ratio: value }, {}).step.id, ratioStepId);
     assert.equal(ratioMachine.update({ attack_ratio: 1 }, {}).step.id, strikeDialog.id);
-    assert.equal(strikeDialog.wait_before, true);
+    assert.equal(strikeDialog.exchange[0].delay_ms, campaign.WAIT_MS, "the strike emote waits the same reveal beat");
     assert.equal(ratioMachine.view().waiting, true, "the strike dialogue stays hidden during the reveal wait");
     assert.equal(ratioMachine.view().paused, true, "the game remains paused during the reveal wait");
     ratioClock = campaign.WAIT_MS - 1;
     assert.equal(ratioMachine.view().waiting, true);
     ratioClock = campaign.WAIT_MS;
-    assert.equal(ratioMachine.view().waiting, false, "the strike dialogue reveals after the shared 1.1-second wait");
+    assert.equal(ratioMachine.view().exchange.speaker, "legio_ix_hispana", "the Legion's emote appears after the shared 1.1-second wait");
+    for (let t = 0; t < 60000; t += 100) { ratioClock += 100; ratioMachine.update({ attack_ratio: 1 }, {}); }
+    assert.equal(ratioMachine.view().waiting, false, "the strike dialogue reveals after its emote");
     assert.equal(ratioMachine.view().paused, true, "the game remains paused after the dialogue is revealed");
-    assert.equal(ratioMachine.advance(null, strikeDialog.id), true);
-    assert.equal(ratioMachine.view().step.id, legionObjective.id);
+    for (let t = 0; t < 60000; t += 100) {
+        const current = ratioMachine.view();
+        if (current.step.id !== strikeDialog.id && !current.exchange) break;
+        if (current.exchange_phase === "dialogue") assert.equal(ratioMachine.advance(null, current.step.id), true, "the player's continue closes the strike dialogue");
+        ratioClock += 100;
+        ratioMachine.update({ attack_ratio: 1 }, {});
+    }
+    assert.equal(ratioMachine.view().step.id, legionObjective.id, "the strike scene continues once its emote and dialogue have played");
     const english = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
 });
 
@@ -1684,4 +1697,37 @@ test("shipped Roman outposts speak their taunt, reply and last words with Englis
             assert.ok(copy.includes(key + " = "), key + " has English copy");
         }
     }
+});
+
+test("every Boudica objective description ends with its hint line", () => {
+    const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    const catalogValue = key => {
+        const shortKey = key.replace(/^tutorial\./, "");
+        const match = webCatalogEn.match(new RegExp("^" + shortKey + " = (\"(?:\\\\.|[^\"])*\")$", "m"));
+        assert.ok(match, "missing catalog key " + key);
+        return JSON.parse(match[1]);
+    };
+    const objectives = definition.steps.filter(step => step.type === "objective" && step.body_key && step.hint_key);
+    assert.ok(objectives.length >= 6, "the campaign keeps its described objectives");
+    const mismatches = objectives.filter(step => {
+        const lines = catalogValue(step.body_key).trim().split("\n");
+        return lines[lines.length - 1].trim() !== catalogValue(step.hint_key);
+    }).map(step => step.id);
+    assert.deepEqual(mismatches, [], "the last line of each objective description is its hint");
+});
+
+test("every Boudica step is reachable from the entry, so the sequence cannot dead-end", () => {
+    const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    const successors = item => [item.next, ...(item.choices || []).map(choice => choice.next), ...(item.routes || []).map(route => route.next), item.unavailable_next].filter(Boolean);
+    const byId = new Map(definition.steps.map(step => [step.id, step]));
+    const seen = new Set();
+    const queue = [definition.entry];
+    while (queue.length) {
+        const id = queue.shift();
+        if (seen.has(id) || !byId.has(id)) continue;
+        seen.add(id);
+        queue.push(...successors(byId.get(id)));
+    }
+    assert.deepEqual(definition.steps.filter(step => !seen.has(step.id)).map(step => step.id), [], "no step is orphaned");
+    assert.ok(definition.steps.filter(step => step.type === "end").every(step => seen.has(step.id)), "every ending is reachable");
 });

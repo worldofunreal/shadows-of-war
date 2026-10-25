@@ -1,0 +1,63 @@
+diff --git a/dpdk/kernel/linux/meson.build b/dpdk/kernel/linux/meson.build
+index 7558fb9c..28177f27 100644
+--- a/dpdk/kernel/linux/meson.build
++++ b/dpdk/kernel/linux/meson.build
+@@ -1,6 +1,12 @@
+ # SPDX-License-Identifier: BSD-3-Clause
+ # Copyright(c) 2018 Intel Corporation
+ 
++# The relay uses the existing mlx5 kernel driver. Respect the DPDK build
++# option instead of requiring unrelated kernel-module headers in its builder.
++if not get_option('enable_kmods')
++    subdir_done()
++endif
++
+ subdirs = ['igb_uio']
+ 
+ kernel_build_dir = get_option('kernel_dir')
+diff --git a/lib/ff_api.h b/lib/ff_api.h
+index 175dc47c..6c4465c4 100644
+--- a/lib/ff_api.h
++++ b/lib/ff_api.h
+@@ -265,6 +265,9 @@ int ff_route_ctl(enum FF_ROUTE_CTL req, enum FF_ROUTE_FLAG flag,
+  * ownership cannot be split. Dropped and counted if that ring is full or
+  * no reload window is open. */
+ #define FF_DISPATCH_PEER (-3)
++/* Application-owned listeners may belong to a draining generation on a
++ * different RSS queue. Keep forwarding library-owned, just as PEER does. */
++#define FF_DISPATCH_PEER_QUEUE(queue_id) (-4 - (int)(queue_id))
+ 
+ /*
+  * Packet dispatch callback function.
+diff --git a/lib/ff_dpdk_if.c b/lib/ff_dpdk_if.c
+index f1dc0ac6..c424fb5c 100644
+--- a/lib/ff_dpdk_if.c
++++ b/lib/ff_dpdk_if.c
+@@ -2779,7 +2779,17 @@ ff_dpdk_process_packets(uint16_t port_id, uint16_t queue_id,
+                 continue;
+             }
+ 
+-            if (ret == FF_DISPATCH_PEER) {
++            if (ret == FF_DISPATCH_PEER || ret <= FF_DISPATCH_PEER_QUEUE(0)) {
++                uint16_t peer_queue = queue_id;
++                if (ret <= FF_DISPATCH_PEER_QUEUE(0)) {
++                    int target = -(ret + 4);
++                    if (target < 0 || target >= nb_queues) {
++                        ff_traffic.rx_dropped += rtem->nb_segs;
++                        rte_pktmbuf_free(rtem);
++                        continue;
++                    }
++                    peer_queue = (uint16_t)target;
++                }
+                 /* flow-map miss — the flow belongs to the peer
+                  * generation. The mbuf stays owned by this path the whole
+                  * time (the callback never sees it), so there is exactly
+@@ -2789,7 +2799,7 @@ ff_dpdk_process_packets(uint16_t port_id, uint16_t queue_id,
+                  * draining generation catches up. Under USR2 the
+                  * window is the block's OR a live cross-master peer. */
+                 if ((ff_reload_hw_locked() || ff_reload_peer_mirror_draining())
+-                    && ff_drain_ring_rx_enqueue(port_id, queue_id,
++                    && ff_drain_ring_rx_enqueue(port_id, peer_queue,
+                         ff_drain_ring_peer_gen(), rtem) == 0) {
+                     continue;
+                 }

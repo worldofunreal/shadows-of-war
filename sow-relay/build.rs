@@ -21,6 +21,38 @@ fn main() {
         }
     });
     println!("cargo:rerun-if-env-changed=FSTACK_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=PKG_CONFIG_PATH");
+    println!("cargo:rerun-if-env-changed=SOW_RELAY_FOUNDATION_ID");
+    println!("cargo:rerun-if-env-changed=SOW_RELAY_BUILD_GIT");
+    for key in ["SOW_RELAY_FOUNDATION_ID", "SOW_RELAY_BUILD_GIT"] {
+        if let Ok(value) = std::env::var(key) {
+            println!("cargo:rustc-env={key}={value}");
+        }
+    }
+    println!("cargo:rerun-if-changed=src/reload.c");
+    if std::env::var_os("FSTACK_LIB_DIR").is_some() {
+        let foundation = std::env::var("SOW_RELAY_FOUNDATION_ID")
+            .expect("configured relay build needs its foundation identity");
+        assert!(foundation.len() == 64 && foundation.bytes().all(|byte| byte.is_ascii_hexdigit()),
+            "invalid relay foundation identity");
+        let obj = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("reload.o");
+        let result = Command::new("cc").args(["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "-I"])
+            .arg(&fstack_lib_dir).args(["-c", "src/reload.c", "-o"]).arg(&obj)
+            .status().expect("cannot compile F-Stack reload adapter");
+        assert!(result.success(), "F-Stack reload adapter compile failed");
+        println!("cargo:rustc-link-arg={}", obj.display());
+    }
+    match Command::new("pkg-config").args(["--modversion", "libdpdk"]).output() {
+        Ok(version) if version.status.success() => {
+            let version = String::from_utf8_lossy(&version.stdout);
+            assert_eq!(version.trim(), "24.11.8", "relay requires bundled DPDK 24.11.8");
+            println!("cargo:rustc-env=SOW_DPDK_VERSION={}", version.trim());
+        }
+        _ if std::env::var_os("FSTACK_LIB_DIR").is_some() => {
+            panic!("configured relay build cannot locate DPDK 24.11.8");
+        }
+        _ => {}
+    }
     // Without rerun-if-changed on the archive, cargo treats the bin as fresh
     // when only libfstack.a is rebuilt on the build host — f-stack source
     // changes (e.g. the callout_when fix) get compiled into the lib but never

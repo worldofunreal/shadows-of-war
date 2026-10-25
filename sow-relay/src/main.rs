@@ -24,6 +24,7 @@
 //! finalize upload) is the sow-relay logic, now keyed by registry lookup.
 
 mod progress;
+mod supervisor;
 
 use fstack_bridge::bridge::{self, Ev};
 use futures_util::{SinkExt, StreamExt};
@@ -53,7 +54,6 @@ use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::task::{Context, Poll};
 use std::time::{Instant, SystemTime};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use tokio::net::TcpListener;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
 use tokio::time::{Duration, interval};
@@ -65,7 +65,7 @@ use tokio_tungstenite::tungstenite::{
 
 const DEFAULT_MGMT_PORT: u16 = 8080;
 const DYNAMIC_PORT_MIN: u16 = 1024;
-const DEFAULT_EXPECTED_WORKER_COUNT: u16 = 4;
+const DEFAULT_EXPECTED_WORKER_COUNT: u16 = 3;
 const MAX_MGMT_BODY_BYTES: usize = 2 * 1024 * 1024;
 const MGMT_CLOCK_SKEW_SECS: u64 = 30;
 const MGMT_NONCE_TTL_SECS: u64 = 120;
@@ -516,14 +516,19 @@ unsafe extern "C" fn relay_packet_dispatcher(
         return queue_id as c_int;
     }
     let bytes = unsafe { std::slice::from_raw_parts(data as *const u8, *len as usize) };
+    let route = |target| {
+        fstack_bridge::packet::tcp_destination_port(bytes)
+            .map(|port| unsafe { supervisor::native::sow_reload_route(port, target) })
+            .unwrap_or(target as c_int)
+    };
     match fstack_bridge::tcp_destination_queue(bytes, nb_queues, DYNAMIC_PORT_MIN) {
         Some(target) if target == queue_id => {
             DISPATCH_LOCAL.fetch_add(1, Ordering::Relaxed);
-            target as c_int
+            route(target)
         }
         Some(target) => {
             DISPATCH_REDIRECTED.fetch_add(1, Ordering::Relaxed);
-            target as c_int
+            route(target)
         }
         None => {
             DISPATCH_UNMATCHED.fetch_add(1, Ordering::Relaxed);
@@ -876,6 +881,10 @@ type Registry = Arc<RwLock<HashMap<u64, Arc<LobbyState>>>>;
 
 fn main() {
     env_logger::init();
+    if let Some(result) = supervisor::command_line() {
+        if let Err(error) = result { eprintln!("{error}"); std::process::exit(78); }
+        return;
+    }
     if std::env::var("SOW_RELAY_SETTLEMENT_SECRET")
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -896,6 +905,19 @@ fn main() {
         eprintln!("{e}");
         std::process::exit(78);
     }
+    if std::env::args().any(|arg| arg == "--fstack-supervisor") {
+        let args: Vec<_> = std::env::args().collect();
+        let config = args.windows(2).find(|pair| pair[0] == "--conf")
+            .map(|pair| std::path::PathBuf::from(&pair[1]));
+        let result = config.ok_or_else(|| std::io::Error::other("--conf required"))
+            .and_then(supervisor::run);
+        if let Err(error) = result { error!("[reload] {error}"); std::process::exit(78); }
+        return;
+    }
+    let primary = match supervisor::attach_child() {
+        Ok(primary) => primary,
+        Err(error) => { error!("[reload] cannot attach worker: {error}"); std::process::exit(78); }
+    };
 
     let admission = match RelayAdmissionPolicy::from_env() {
         Ok(policy) => policy,
@@ -923,10 +945,10 @@ fn main() {
     );
     // Identity line: the pipeline stamps git/f-stack/knob into the unit drop-in.
     info!(
-        "[BOOT] git={} fstack={} ws_write_timeout_ms={}",
-        std::env::var("SOW_RELAY_GIT").unwrap_or_else(|_| "unknown".to_string()),
+        "[BOOT] git={} fstack={} ws_write_timeout_ms={} dpdk={} foundation={} generation={}",
+        supervisor::BUILD_GIT,
         std::env::var("SOW_FSTACK_VERSION").unwrap_or_else(|_| "unknown".to_string()),
-        ws_write_timeout_ms()
+        ws_write_timeout_ms(), supervisor::DPDK, supervisor::FOUNDATION, supervisor::generation()
     );
 
     let prog_args: Vec<CString> = std::env::args()
@@ -963,6 +985,10 @@ fn main() {
             error!("[sow-relay] init failed (code={})", code);
             std::process::exit(1);
         }
+        if primary {
+            fstack_bridge::ff_run(supervisor::primary_tick, ptr::null_mut());
+            return;
+        }
 
         let (mut pid, mut qid, mut nbq, mut reta) = (0u16, 0u16, 0u16, 0u16);
         if fstack_bridge::ff_rss_self_queue_info(&mut pid, &mut qid, &mut nbq, &mut reta) != 0 {
@@ -983,9 +1009,10 @@ fn main() {
             );
             std::process::exit(1);
         }
-        if pid != qid {
+        let expected_process = qid + u16::from(supervisor::managed());
+        if pid != expected_process {
             error!(
-                "[sow-relay] F-Stack proc_id must equal queue_id for worker ownership: proc_id={pid} queue_id={qid}"
+                "[sow-relay] unexpected worker assignment: proc_id={pid} queue_id={qid} expected_proc_id={expected_process}"
             );
             std::process::exit(1);
         }
@@ -1025,7 +1052,7 @@ fn main() {
             "[BOOT] dynamic game listeners, mgmt :{}, entering ff_run",
             mport
         );
-        fstack_bridge::ff_run(bridge::driver_cb, ptr::null_mut());
+        fstack_bridge::ff_run(supervisor::worker_tick, ptr::null_mut());
     }
 }
 
@@ -1098,6 +1125,13 @@ async fn verify_mgmt_auth(
     if mac.verify_slice(&provided).is_err() {
         return false;
     }
+    if supervisor::managed() {
+        let digest = Sha256::digest(nonce.as_bytes());
+        let result = unsafe { supervisor::native::sow_reload_nonce(
+            digest.as_ptr(), now.as_secs(), MGMT_NONCE_TTL_SECS) };
+        if result < 0 { error!("[mgmt] shared nonce cache unavailable or full"); }
+        return result == 1;
+    }
 
     let mut cache = nonce_cache.lock().await;
     let cutoff = now.as_secs().saturating_sub(MGMT_NONCE_TTL_SECS);
@@ -1122,7 +1156,15 @@ async fn bind_game_port(port: u16) -> Result<(), String> {
     if !(DYNAMIC_PORT_MIN..=u16::MAX).contains(&port) {
         return Err(format!("relay port {port} outside dynamic range"));
     }
-    let newly_bound = bridge::listen_port(port).await?;
+    let claim = unsafe { supervisor::native::sow_reload_claim(port) };
+    if claim < 0 { return Err("relay port belongs to the previous worker generation".into()); }
+    let newly_bound = match bridge::listen_port(port).await {
+        Ok(value) => value,
+        Err(error) => {
+            if claim > 0 { unsafe { supervisor::native::sow_reload_release(port); } }
+            return Err(error);
+        }
+    };
     if !newly_bound {
         return Ok(());
     }
@@ -1151,6 +1193,7 @@ async fn release_game_port(port: u16) {
     if !removed {
         return;
     }
+    unsafe { supervisor::native::sow_reload_release(port); }
     LISTENER_COUNT
         .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
             Some(n.saturating_sub(1))
@@ -1170,13 +1213,17 @@ async fn release_game_port(port: u16) {
 
 async fn mgmt_http(registry: Registry, mport: u16) {
     let listen = mgmt_listen();
-    let listener = match TcpListener::bind((listen.as_str(), mport)).await {
+    let listener = match supervisor::management_listener(&listen, mport).await {
         Ok(l) => l,
         Err(e) => {
             error!("[mgmt] bind {}:{} failed: {}", listen, mport, e);
             return;
         }
     };
+    if let Err(error) = supervisor::start_management(registry.clone()).await {
+        error!("[reload] internal management failed: {error}");
+        std::process::exit(78);
+    }
     info!("[mgmt] http listening on {}:{}", listen, mport);
     let nonce_cache: MgmtNonceCache = Arc::new(Mutex::new(HashMap::new()));
 
@@ -1284,6 +1331,15 @@ async fn handle_http(
     path: &str,
     body: &[u8],
 ) -> (&'static str, serde_json::Value) {
+    supervisor::route_management(registry, method, path, body).await
+}
+
+async fn handle_http_local(
+    registry: &Registry,
+    method: &str,
+    path: &str,
+    body: &[u8],
+) -> (&'static str, serde_json::Value) {
     match (method, path) {
         ("POST", "/internal/match/result") => {
             let command =
@@ -1320,13 +1376,21 @@ async fn handle_http(
             }
             ("200 OK", serde_json::json!({"match_id":id.to_string()}))
         }
-        ("GET", "/healthz") => ("200 OK", serde_json::json!({ "ok": true })),
+        ("GET", "/healthz") => {
+            if supervisor::managed() && unsafe {
+                supervisor::native::sow_reload_ready(supervisor::generation(),
+                    WORKER_QUEUE_ID.load(Ordering::Relaxed).into()) == 0
+            } {
+                return ("503 Service Unavailable", serde_json::json!({"ok":false,"reason":"worker is not polling yet"}));
+            }
+            ("200 OK", serde_json::json!({"ok":true}))
+        }
         ("POST", "/internal/lobby/register") => {
             let _registration = LOBBY_REGISTRATION_GATE
                 .get_or_init(|| RwLock::new(()))
                 .read()
                 .await;
-            if RELAY_DRAINING.load(Ordering::Acquire) {
+            if RELAY_DRAINING.load(Ordering::Acquire) || supervisor::paused() {
                 return (
                     "503 Service Unavailable",
                     serde_json::json!({"error":"relay is paused for deployment"}),
@@ -1446,11 +1510,13 @@ async fn handle_http(
             };
             let gate = LOBBY_REGISTRATION_GATE.get_or_init(|| RwLock::new(()));
             if draining {
-                RELAY_DRAINING.store(true, Ordering::Release);
+                if supervisor::managed() { unsafe { supervisor::native::sow_reload_pause(1); } }
+                else { RELAY_DRAINING.store(true, Ordering::Release); }
                 drop(gate.write().await);
             } else {
                 let _guard = gate.write().await;
-                RELAY_DRAINING.store(false, Ordering::Release);
+                if supervisor::managed() { unsafe { supervisor::native::sow_reload_pause(0); } }
+                else { RELAY_DRAINING.store(false, Ordering::Release); }
             }
             ("200 OK", serde_json::json!({"draining":draining}))
         }
@@ -1461,11 +1527,17 @@ async fn handle_http(
                 "listener_count": LISTENER_COUNT.load(Ordering::Relaxed),
                 "queue_id": WORKER_QUEUE_ID.load(Ordering::Relaxed),
                 "queue_count": WORKER_QUEUE_COUNT.load(Ordering::Relaxed),
+                "generation": supervisor::generation(),
+                "active_generation": supervisor::active(),
+                "foundation": supervisor::FOUNDATION,
+                "dpdk": supervisor::DPDK,
+                "managed_reload": supervisor::managed(),
+                "git": supervisor::BUILD_GIT,
                 "dispatch_local": DISPATCH_LOCAL.load(Ordering::Relaxed),
                 "dispatch_redirected": DISPATCH_REDIRECTED.load(Ordering::Relaxed),
                 "dispatch_unmatched": DISPATCH_UNMATCHED.load(Ordering::Relaxed),
                 "lobby_drain_supported": true,
-                "lobby_registration_paused": RELAY_DRAINING.load(Ordering::Acquire),
+                "lobby_registration_paused": RELAY_DRAINING.load(Ordering::Acquire) || supervisor::paused(),
                 "admission": RELAY_ADMISSION
                     .get()
                     .map(RelayAdmissionPolicy::metrics)

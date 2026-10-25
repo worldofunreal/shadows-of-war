@@ -26,6 +26,20 @@ fn main() {
         }
     });
     println!("cargo:rerun-if-env-changed=FSTACK_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=PKG_CONFIG_PATH");
+    if std::env::var_os("FSTACK_LIB_DIR").is_some() {
+        let config = std::fs::read_to_string(format!("{fstack_lib_dir}/ff_config.h"))
+            .expect("configured F-Stack source header is missing");
+        assert!(config.lines().any(|line| {
+            let fields: Vec<_> = line.split_whitespace().collect();
+            fields == ["#define", "DPDK_CONFIG_NUM", "32"]
+        }), "F-Stack EAL argument table differs from the Rust binding");
+        let version = Command::new("pkg-config").args(["--modversion", "libdpdk"])
+            .output().expect("pkg-config unavailable");
+        assert!(version.status.success(), "configured F-Stack build cannot locate DPDK");
+        assert_eq!(String::from_utf8_lossy(&version.stdout).trim(), "24.11.8",
+            "F-Stack 2.0 requires bundled DPDK 24.11.8");
+    }
     // Without rerun-if-changed on the archive, cargo treats the bin as fresh
     // when only libfstack.a is rebuilt on the build host — f-stack source
     // changes (e.g. the callout_when fix) get compiled into the lib but never

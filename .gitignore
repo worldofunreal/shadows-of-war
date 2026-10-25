@@ -6,6 +6,7 @@ TODO.txt
 resources/images/.DS_Store
 resources/.DS_Store
 .env
+.env.bak_*
 .env.local
 !sow-dist/.env.example
 sow-dist/deploy/keystores/
