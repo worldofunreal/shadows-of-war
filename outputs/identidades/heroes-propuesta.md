@@ -99,9 +99,9 @@ Las siete caras que eran de nación (Yaa Asantewaa, Lozen, Amina, Makeda, Anacao
 
 ## 5. Capacidad del atlas de caras
 
-Los 12 héroes con caras de expresión usan 4 casillas cada uno; los otros 51 usan 1. Con los 63 héroes son 99 casillas, y con las 2 fijas (relleno y dorada) los héroes llegan a la casilla 101. Quedan 91 casillas para retratos de campaña y bots.
+Cada héroe tiene 4 casillas, una por expresión. Con 98 héroes son 392 casillas; con las 2 fijas (relleno y dorada) los héroes llegan a la casilla 393. Quedan 112 casillas para retratos de campaña y bots.
 
-El atlas pasó de 8 × 16 celdas (128 casillas, 4096 × 2048 px) a 16 × 12 celdas (192 casillas, 4096 × 3072 px). Con 4 casillas para cada héroe harían falta 254 casillas: en 4096 px solo quedarían 2 para retratos de campaña y bots, y subir a 17 filas (4352 px) rompe celulares viejos. Por eso solo los 12 con expresiones usan 4. Las 24 filas de 8 columnas habrían dado 6144 px. El costo es ~17 MB más de memoria.
+El atlas es de 23 × 22 celdas de 176 px (506 casillas, 4048 × 3872 px), bajo el tope de 4096 px. Con 192 px solo caben 441 casillas bajo ese tope, por eso la celda bajó a 176. Subir a 23 filas (4048 px) da 529 casillas y 135 para campaña.
 
 ## 6. Decisiones
 

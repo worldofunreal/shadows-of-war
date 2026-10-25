@@ -114,11 +114,11 @@ pub enum Target {
     Richer,
     /// Land whose owner has less gold than the hero's player.
     Poorer,
-    /// Land of another player whose hero leads the same people or realm
-    /// (`GeoEntity::entity`) as the hero's player's hero.
+    /// Land of another player shown as the same people or realm (`GeoEntity::entity`)
+    /// as the hero's player. A catalog bot is shown as its own catalog people.
     Kin,
-    /// Land of a player, not neutral land, whose hero leads a different people
-    /// or realm (`GeoEntity::entity`) than the hero's player's hero.
+    /// Land of a player, not neutral land, shown as a different people or realm
+    /// (`GeoEntity::entity`) than the hero's player.
     Foreign,
 }
 

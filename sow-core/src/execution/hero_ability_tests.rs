@@ -406,6 +406,9 @@ fn shape_subject(engine: &mut SowEngine, subject: u16, target: Target) {
         Target::Tribe => engine.state.player_mut(subject).unwrap().player_type = PlayerType::Bot,
         Target::Nation => {
             engine.state.player_mut(subject).unwrap().player_type = PlayerType::Nation;
+            // Keep the target Nation static so its counterattack cannot swamp
+            // the attacker's own tile count during the measurement window.
+            engine.campaign_halted_ids.insert(subject);
         }
         Target::ActiveTraitor => {
             let rival = engine.state.player_mut(subject).unwrap();

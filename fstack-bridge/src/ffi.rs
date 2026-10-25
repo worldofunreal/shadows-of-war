@@ -9,8 +9,8 @@
 
 use libc::{c_char, c_int, c_void, size_t, sockaddr_in, socklen_t, ssize_t, timespec};
 
-/// DPDK_CONFIG_NUM = 16, so dpdk_argv holds 16 args + 1 NULL sentinel.
-pub const DPDK_ARGV_MAX: usize = 17;
+/// F-Stack 2.0: DPDK_CONFIG_NUM = 32, plus the terminating NULL.
+pub const DPDK_ARGV_MAX: usize = 33;
 
 /// `struct ff_zc_mbuf` (ff_api.h:373). Opaque BSD mbuf chain + cursor.
 /// The `bsd_mbuf`/`bsd_mbuf_off` are FreeBSD `struct mbuf*` (treated as `void*` here).

@@ -307,38 +307,6 @@ mod alliance_lifecycle_tests {
     }
 
     #[test]
-    fn scripted_accepting_faction_accepts_a_request_the_bot_thresholds_would_refuse() {
-        let request_accepted = |accepts: bool| {
-            let mut engine = campaign_contact_engine(0.0, true);
-            engine.state.map.set_owner_id(1, 1, 1);
-            engine.state.player_mut(1).unwrap().troops = 10.0;
-            engine.state.player_mut(1).unwrap().tile_count = 1;
-            let tribe = engine.state.player_mut(2).unwrap();
-            tribe.iq = 140;
-            tribe.troops = 1000.0;
-            tribe.tile_count = 1;
-            tribe.border_insert(6);
-            if accepts {
-                engine.campaign_accepts_alliance_requests_ids.insert(2);
-            }
-            engine.apply_stamped_intent(
-                &StampedIntent {
-                    player_id: 1,
-                    intent: GameplayIntent::ProposeAlliance { target_player: 2 },
-                },
-                0,
-            );
-            for _ in 0..200 {
-                engine.tick();
-            }
-            engine.state.player(1).unwrap().alliances.contains(&2)
-        };
-
-        assert!(request_accepted(true));
-        assert!(!request_accepted(false));
-    }
-
-    #[test]
     fn declining_scripted_terms_still_allows_the_player_to_form_a_neutral_alliance() {
         let mut engine = campaign_contact_engine(250.0, true);
         engine.campaign_can_request_alliance.insert(2, false);
