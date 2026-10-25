@@ -5,4 +5,10 @@ case "$id" in
   0) ;;
   *) echo "invalid worker id: $id" >&2; exit 64 ;;
 esac
-exec /usr/local/libexec/sow-relay/sow-relay --fstack-supervisor --conf /usr/local/etc/sow/echo-vf.ini
+binary=$(readlink -f /usr/local/libexec/sow-relay/sow-relay)
+release_dir=${binary%/*}
+if [ -d "$release_dir/lib" ]; then
+  LD_LIBRARY_PATH="$release_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  export LD_LIBRARY_PATH
+fi
+exec "$binary" --fstack-supervisor --conf /usr/local/etc/sow/echo-vf.ini

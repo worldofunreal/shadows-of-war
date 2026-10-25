@@ -1,5 +1,5 @@
 //! Coordinate F-Stack generations; match state stays in its owning worker.
-use std::ffi::CString;
+use std::ffi::{CString, OsString};
 use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -248,6 +248,7 @@ fn spawn(
     queue: Option<u16>,
 ) -> io::Result<Child> {
     let mut command = Command::new(binary);
+    set_release_library_path(&mut command, binary);
     command
         .arg("--conf")
         .arg(config)
@@ -278,6 +279,19 @@ fn spawn(
         });
     }
     command.spawn()
+}
+
+fn set_release_library_path(command: &mut Command, binary: &Path) {
+    let mut path = binary
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("lib")
+        .into_os_string();
+    if let Some(existing) = std::env::var_os("LD_LIBRARY_PATH") {
+        path.push(OsString::from(":"));
+        path.push(existing);
+    }
+    command.env("LD_LIBRARY_PATH", path);
 }
 
 impl Supervisor {
@@ -334,16 +348,19 @@ impl Supervisor {
             return Err(io::Error::other("previous matches are still draining"));
         }
         let binary = binary.canonicalize()?;
-        let parent = self
+        let release_root = self
             .executable
             .parent()
-            .ok_or_else(|| io::Error::other("missing binary directory"))?;
-        if !binary.starts_with(parent) {
+            .and_then(Path::parent)
+            .ok_or_else(|| io::Error::other("missing release directory"))?;
+        if binary.parent().and_then(Path::parent) != Some(release_root) {
             return Err(io::Error::other(
                 "replacement must be in the relay release directory",
             ));
         }
-        let probe = Command::new(&binary).arg("--fstack-identity").output()?;
+        let mut probe = Command::new(&binary);
+        set_release_library_path(&mut probe, &binary);
+        let probe = probe.arg("--fstack-identity").output()?;
         if !probe.status.success() {
             return Err(io::Error::other("replacement identity failed"));
         }
