@@ -205,10 +205,13 @@ async fn result(http: &reqwest::Client, base: &Url, account: &Value, match_id: u
     .unwrap()
 }
 
-async fn relay_control(host: &str, command: String) -> Value {
+async fn relay_control(host: &str, request: Value) -> Value {
     let host = host.to_string();
+    let request = request.to_string().replace('\'', "'\\''");
+    let command = format!(r#"sudo -u sowrelay python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.settimeout(120); s.connect("/run/sow-relay/upgrade.sock"); s.sendall(sys.argv[1].encode()); s.shutdown(socket.SHUT_WR); print(s.makefile("rb").read(65537).decode())' '{request}'"#);
     let output = tokio::task::spawn_blocking(move || Command::new("ssh")
-        .args(["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", &host, &command])
+        .args(["-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+            "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3", &host, &command])
         .output().unwrap()).await.unwrap();
     assert!(output.status.success(), "relay handover control failed: {}", String::from_utf8_lossy(&output.stderr));
     serde_json::from_slice(&output.stdout).expect("relay control must return JSON")
@@ -216,23 +219,28 @@ async fn relay_control(host: &str, command: String) -> Value {
 
 async fn port_owner(host: &str, port: u16) -> Value {
     // Read the coordinator's existing ownership table, not a second registry.
-    let command = format!(r#"sudo -u sowrelay python3 -c 'import socket,json; s=socket.socket(socket.AF_UNIX); s.settimeout(5); s.connect("/run/sow-relay/upgrade.sock"); s.sendall(json.dumps({{"port_owner":{port}}}).encode()); s.shutdown(socket.SHUT_WR); print(s.makefile("rb").read(65537).decode())'"#);
-    relay_control(host, command).await
+    relay_control(host, json!({"port_owner":port})).await
 }
 
 async fn verify_handover(url: &Url, base: &Url, http: &reqwest::Client, version: &str,
-    host: &str, accounts: &[Value], old_port: u16, first_read: &mut Reader, second_read: &mut Reader)
+    host: &str, binary: &str, accounts: &[Value], old_port: u16,
+    first_write: &mut Writer, first_read: &mut Reader, second_write: &mut Writer, second_read: &mut Reader)
 {
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+    let probe = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64();
+    let probes = [probe, probe + 0.001];
     let continuity = async {
         let mut stopped = stopped;
         let mut last_turn: [Option<u64>; 2] = [None, None];
         let mut counts = [0u32; 2];
+        let mut pongs = [false; 2];
         let mut last_message = [tokio::time::Instant::now(); 2];
         let mut max_gap = std::time::Duration::ZERO;
         loop {
+            let deadline = *last_message.iter().min().unwrap() + std::time::Duration::from_secs(2);
             let (player, message) = tokio::select! {
                 _ = &mut stopped => break,
+                _ = tokio::time::sleep_until(deadline) => fail("an existing player stopped receiving traffic during handover"),
                 message = recv(first_read, 5) => (0, message),
                 message = recv(second_read, 5) => (1, message),
             };
@@ -250,22 +258,35 @@ async fn verify_handover(url: &Url, base: &Url, http: &reqwest::Client, version:
                     last_turn[player] = Some(number);
                     counts[player] += 1;
                 }
-                ServerMessage::Pong { .. } | ServerMessage::RelayReconnectTicket { .. } => {}
+                ServerMessage::Pong { client_time } => {
+                    if client_time == probes[player] { pongs[player] = true; }
+                }
+                ServerMessage::RelayReconnectTicket { .. } => {}
                 message => fail(&format!("existing match was interrupted during handover: {message:?}")),
             }
         }
+        for received_at in last_message {
+            let gap = received_at.elapsed();
+            max_gap = max_gap.max(gap);
+            assert!(gap < std::time::Duration::from_secs(2),
+                "an existing player stopped receiving traffic before handover completed");
+        }
         assert!(counts.iter().all(|count| *count >= 5), "both existing players must remain active through handover");
+        assert!(pongs.iter().all(|received| *received),
+            "both original connections must answer a Ping sent after the replacement starts");
         (counts, max_gap)
     };
     let exercise = async {
         let changed = relay_control(host,
-            "sudo -u sowrelay /usr/local/libexec/sow-relay/sow-relay --fstack-upgrade /usr/local/libexec/sow-relay/sow-relay".into()).await;
+            json!({"binary":binary})).await;
         assert_eq!(changed["ok"], true);
         let new_generation = changed["generation"].as_i64().unwrap();
         let old_owner = port_owner(host, old_port).await;
         assert_eq!(old_owner["owner"].as_i64(), Some(1 - new_generation));
+        ws_send(first_write, &ClientMessage::Ping { client_time:probes[0] }).await;
+        ws_send(second_write, &ClientMessage::Ping { client_time:probes[1] }).await;
         let (mut host_write, mut host_read, host_join) =
-            join_with_match_setup(url, &accounts[0], None, version, 2, true).await;
+            join_with_match_setup(url, &accounts[0], None, version, 0, true).await;
         let (mut peer_write, mut peer_read, peer_join) =
             join(url, &accounts[1], Some(host_join.lobby_id), version).await;
         let id = host_join.lobby_id;
@@ -292,6 +313,7 @@ async fn verify_handover(url: &Url, base: &Url, http: &reqwest::Client, version:
         }
         ws_send(&mut host_relay, &ClientMessage::Leave {}).await;
         voluntary_exit_recorded(&mut host_game, accounts[0]["account_id"].as_str().unwrap(), id).await;
+        let _ = host_relay.close().await;
         natural_finish(&mut peer_game, id).await;
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
         for account in accounts {
@@ -301,7 +323,6 @@ async fn verify_handover(url: &Url, base: &Url, http: &reqwest::Client, version:
                 if receipt["state"] == "confirmed" { break; }
             }
         }
-        let _ = host_relay.close().await;
         let _ = peer_relay.close().await;
         stop.send(()).unwrap();
     };
@@ -309,7 +330,7 @@ async fn verify_handover(url: &Url, base: &Url, http: &reqwest::Client, version:
     pass(&format!("Live handover preserved old streams (turns={counts:?}, max_gap_ms={}); replacement served and settled a new match", max_gap.as_millis()));
 }
 
-pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::path::Path>, handover_host: Option<&str>) {
+pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::path::Path>, handover_host: Option<&str>, handover_binary: Option<&str>) {
     let http = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
         .build()
@@ -633,8 +654,10 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         }
     }
     if let Some(host) = handover_host {
-        verify_handover(url, base, &http, version.trim(), host, &handover_accounts,
-            first_start.relay_port.unwrap(), &mut other_read, &mut survivor_read).await;
+        verify_handover(url, base, &http, version.trim(), host,
+            handover_binary.unwrap_or("/usr/local/libexec/sow-relay/sow-relay"), &handover_accounts,
+            first_start.relay_port.unwrap(), &mut other_write, &mut other_read,
+            &mut survivor_write, &mut survivor_read).await;
         other_write.close().await.unwrap();
         let (write, read, _) = ready_relay(&relay_url, ClientMessage::ReconnectWithTicket {
             lobby_id: match_id, player_id: second_start.my_player_id.unwrap(), ticket: handover_reconnect,

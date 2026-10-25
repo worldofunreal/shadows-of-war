@@ -76,7 +76,7 @@
     "Farm": {
       "1": {
         "height": 64,
-        "sha256": "0d435bef8e73cb2e555a8700f65285ae32da2a895ba2a8f4b250ce90a9b49ff5",
+        "sha256": "c43e8f5068eb1bb5564d083f5aa2fc56781583991279f2c636927016795de3de",
         "source": "farm-1.png",
         "width": 64,
         "x": 70,
@@ -84,7 +84,7 @@
       },
       "2": {
         "height": 64,
-        "sha256": "29c15303adc9e4e62919e0811fbf23d39c15521c275c49ff0e5e6ea4873813fa",
+        "sha256": "4a62e6b6f8bf757dac10086b69b2f81baf17512eecc9b2c9fb629783c43a43ba",
         "source": "farm-2.png",
         "width": 64,
         "x": 138,
@@ -92,7 +92,7 @@
       },
       "3": {
         "height": 64,
-        "sha256": "0822616179f7ec042854f86334b947a86aa0e5e2d0c556b7b2a4c81cf458ce2d",
+        "sha256": "19f21e9bfe6af61ab37c5df2d56091a429cb1de4730a595e7ad4508386b1e1ac",
         "source": "farm-3.png",
         "width": 64,
         "x": 206,
@@ -144,7 +144,7 @@
     "Tower": {
       "1": {
         "height": 64,
-        "sha256": "45ac000e9b3c50efa87616c9d60b8e3f8c9b94b0efc95f0ace0d423a75390972",
+        "sha256": "a0e0372dc2a3909e3b19f9def149d8700dd59c3c0c9e1a55d248e0a5a9f25ac6",
         "source": "tower-1.png",
         "width": 64,
         "x": 138,
@@ -152,7 +152,7 @@
       },
       "2": {
         "height": 64,
-        "sha256": "bf662d7046f2e0cb53e78057b1f9109859cc707da371e25bd3901bf86c8302c5",
+        "sha256": "f06aa46095976c79a2c326020073483237f66e5a74b127e2b2273a167b4bc40f",
         "source": "tower-2.png",
         "width": 64,
         "x": 206,
@@ -160,7 +160,7 @@
       },
       "3": {
         "height": 64,
-        "sha256": "72105e9186d22c71c7dda3626df0a149ef8e2ce74dffebac9bc5506db4cc11f3",
+        "sha256": "4d2e03fd557e5b10b82e11f78c5a1b41e4737c02fd9803cf1a36a8bc70442c5c",
         "source": "tower-3.png",
         "width": 64,
         "x": 274,
@@ -168,7 +168,7 @@
       },
       "4": {
         "height": 64,
-        "sha256": "22178a6e7e110b644a9d39f9bb8f85acf286b3f5f76776f7974d23755c7eb260",
+        "sha256": "f0d0a39e4d3f83c24625bb44df6b33eadb24940564b5064f8e795b226118c10e",
         "source": "tower-4.png",
         "width": 64,
         "x": 2,
