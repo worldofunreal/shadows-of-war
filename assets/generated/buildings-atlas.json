@@ -8,7 +8,7 @@
     "City": {
       "1": {
         "height": 64,
-        "sha256": "8e9f8b80c390b089f7482653617aae0ee9c6c9226313452085ae1974058c4a51",
+        "sha256": "0a88400bfafecdd4ab21d8b211ede1fa1c799118969117664c1be7b792464872",
         "source": "city-1.png",
         "width": 64,
         "x": 2,
@@ -16,7 +16,7 @@
       },
       "2": {
         "height": 64,
-        "sha256": "6b5ae04f3e30a097266b57b6f649a112f4553c4f14b56182c3a5c6bc0adaefb5",
+        "sha256": "815321988df1c1f9f2ba38e3872eda3151f9a7cfe2536ea1a3c0faac1ee43d22",
         "source": "city-2.png",
         "width": 64,
         "x": 70,
@@ -24,7 +24,7 @@
       },
       "3": {
         "height": 64,
-        "sha256": "ab85590185434173f8c04f96547344672ab09327ee44688821d58efcefd1558e",
+        "sha256": "e86e6bd640d572bbab984eabe5076708ddcba27d093ae16acf352e9a168f1c6e",
         "source": "city-3.png",
         "width": 64,
         "x": 138,
@@ -32,7 +32,7 @@
       },
       "4": {
         "height": 64,
-        "sha256": "9c505475b26baee9857b1a7cb56695356e4a970697e8578d4b59df7be2628239",
+        "sha256": "f2b20ef36a9bae8b37e15f69a7b7839020da474573aa07fb958829eb070d638d",
         "source": "city-4.png",
         "width": 64,
         "x": 206,

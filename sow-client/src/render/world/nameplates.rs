@@ -77,6 +77,7 @@ pub(crate) struct NameplateVisualState {
     prepared_troops: sow_render::text::PreparedText,
     text_style_key: Option<u32>,
     troop_change_at: Option<Instant>,
+    troop_change_positive: bool,
 }
 
 impl NameplateVisualState {
@@ -583,8 +584,11 @@ impl NameplateSystem {
         if amount.is_finite()
             && amount != 0.0
             && let Some(state) = self.visuals.get_mut(&player_id)
-            && state.troop_change_age(now, false).is_none()
         {
+            state.troop_change_positive = amount > 0.0;
+            if state.troop_change_age(now, false).is_some() {
+                return;
+            }
             // Merge simultaneous gains or expenses into the current wave.
             state.troop_change_at = Some(now);
         }
@@ -1364,6 +1368,7 @@ fn new_nameplate_visual_state(
         prepared_troops: sow_render::text::PreparedText::default(),
         text_style_key: None,
         troop_change_at: None,
+        troop_change_positive: false,
     }
 }
 
@@ -2317,9 +2322,19 @@ fn paint_prepared_nameplate(
                 NAMEPLATE_TEXT_COLOR,
                 plan.text_style,
                 |index, glyph| {
-                    let (scale, offset) = troop_transfer_motion(
-                        age - TROOP_TRANSFER_TEXT_DELAY - index as f32 * TROOP_TRANSFER_GLYPH_DELAY,
-                    );
+                    let glyph_age =
+                        age - TROOP_TRANSFER_TEXT_DELAY - index as f32 * TROOP_TRANSFER_GLYPH_DELAY;
+                    let (scale, offset) = troop_transfer_motion(glyph_age);
+                    let tint = 1.0 - smoothstep((glyph_age / 0.45).clamp(0.0, 1.0));
+                    let target = if state.troop_change_positive {
+                        [0.35, 1.0, 0.45, 1.0]
+                    } else {
+                        [1.0, 0.35, 0.35, 1.0]
+                    };
+                    for (channel, target) in target.into_iter().enumerate() {
+                        glyph.color[channel] = NAMEPLATE_TEXT_COLOR[channel] * (1.0 - tint)
+                            + target * tint;
+                    }
                     for (axis, scale) in scale.into_iter().enumerate() {
                         glyph.screen_pos[axis] += glyph.size[axis] * (1.0 - scale) * 0.5;
                         glyph.size[axis] *= scale;
@@ -3157,6 +3172,7 @@ mod spawn_center_tests {
             prepared_troops: sow_render::text::PreparedText::default(),
             text_style_key: None,
             troop_change_at: None,
+            troop_change_positive: false,
         }
     }
 

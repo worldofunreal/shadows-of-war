@@ -1527,16 +1527,16 @@
                     return false;
                 }
                 const result = hooks && typeof hooks.onExchangeLine === "function" ? hooks.onExchangeLine(exchange.lines[exchange.index], exchange.token) : true;
+                // An emote is background noise: a line that cannot show is skipped, never turned into a pause.
                 if (result === "unavailable") {
                     clearExchangeLine();
-                    exchange.phase = "dialogue";
-                    return false;
+                    return nextExchangeLine();
                 }
                 if (result === "pending") {
                     if (exchange.ackStartedAt === null) exchange.ackStartedAt = currentTimeMs;
                     if (currentTimeMs - exchange.ackStartedAt >= EXCHANGE_EMOTE_ACK_TIMEOUT_MS) {
                         clearExchangeLine();
-                        exchange.phase = "dialogue";
+                        return nextExchangeLine();
                     }
                     return false;
                 }
@@ -1554,6 +1554,9 @@
                 exchange.until = currentTimeMs + (Number.isInteger(exchange.lines[exchange.index].delay_ms) ? exchange.lines[exchange.index].delay_ms : EXCHANGE_GAP_MS);
                 return false;
             }
+            return nextExchangeLine();
+        }
+        function nextExchangeLine() {
             exchange.index++;
             if (exchange.index < exchange.lines.length) prepareExchangeLine();
             else endExchange();
