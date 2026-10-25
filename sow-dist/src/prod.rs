@@ -344,7 +344,9 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
         None
     };
     activate_control_host(paths, &config, &release, &plan)?;
-    verify_relay_settlement_auth(&config)?;
+    if !plan.relay || !relay_workers_stopped(&config)? {
+        verify_relay_settlement_auth(&config)?;
+    }
     verify_control_certificates(&config)?;
     verify_origin_tls_from_relay(&config)?;
     ensure_relay_certificate_automation(paths, &config)?;
@@ -1591,30 +1593,38 @@ fn activate_relay_handover(config: &Config, release: &Release) -> Result<()> {
     if binary.len() != 64 || !binary.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         bail!("invalid relay binary hash");
     }
-    let destination = format!("/usr/local/libexec/sow-relay/releases/{binary}");
+    let component = relay["sha256"].as_str().context("relay component hash missing")?;
+    let release_dir = format!("/usr/local/libexec/sow-relay/releases/{component}");
+    let destination = format!("{release_dir}/sow-relay");
     let revision = relay["git"].as_str().context("relay revision missing")?;
     let manifest = json!({
         "version":release.version,"release":release.id,"git":revision,
         "fstack":relay["fstack"],"dpdk":relay["dpdk"],"foundation":relay["foundation"],
         "worker_count":relay["worker_count"],"relay_sha256":relay["sha256"],
         "relay_bin_sha256":binary,"ws_write_timeout_ms":relay["ws_write_timeout_ms"],
+        "runtime_libraries_sha256":relay["runtime_libraries_sha256"],
         "drain":"match-owned generations",
         "deployed_at": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs().to_string(),
     }).to_string();
     let command = format!(r#"set -eu
-test "$(sha256sum {stage}/bin/sow-relay | cut -d ' ' -f 1)" = {binary}
-sudo install -d -o root -g {group} -m 0750 /usr/local/libexec/sow-relay/releases
-if ! sudo test -f {destination}; then sudo install -o root -g {group} -m 0750 {stage}/bin/sow-relay {destination}; fi
+stage={stage}
+candidate_ldd=$(LD_LIBRARY_PATH="$stage/lib" ldd "$stage/bin/sow-relay")
+case "$candidate_ldd" in *"not found"*) echo "$candidate_ldd" >&2; exit 78;; esac
+test "$(sha256sum "$stage/bin/sow-relay" | cut -d ' ' -f 1)" = {binary}
+sudo install -d -o root -g {group} -m 0750 {release_dir} {release_dir}/lib
+if ! sudo test -f {destination}; then sudo install -o root -g {group} -m 0550 "$stage/bin/sow-relay" {destination}; fi
+for lib in "$stage"/lib/*.so*; do sudo install -o root -g {group} -m 0440 "$lib" {release_dir}/lib/"$(basename "$lib")"; done
 test "$(sha256sum {destination} | cut -d ' ' -f 1)" = {binary}
-sudo -u {user} env RUNTIME_DIRECTORY=/run/sow-relay {destination} --fstack-upgrade {destination}
-sudo ln -sfn releases/{binary} {exec}.next
+sudo -u {user} env RUNTIME_DIRECTORY=/run/sow-relay LD_LIBRARY_PATH={release_dir}/lib {destination} --fstack-upgrade {destination}
+sudo ln -sfn releases/{component}/sow-relay {exec}.next
 sudo mv -Tf {exec}.next {exec}
 if sudo test -f {manifest_path}; then sudo cp -p {manifest_path} {manifest_path}.bak_$(date +%s); fi
 printf '%s\n' {manifest_json} | sudo tee {manifest_path} >/dev/null
 sudo chmod 0644 {manifest_path}
 "#,
         stage = shell_quote(RELAY_STAGE), binary = binary, group = RELAY_GROUP,
-        user = RELAY_USER, destination = shell_quote(&destination), exec = RELAY_EXEC,
+        user = RELAY_USER, destination = shell_quote(&destination), release_dir = shell_quote(&release_dir),
+        component = component, exec = RELAY_EXEC,
         manifest_path = RELAY_MANIFEST, manifest_json = shell_quote(&manifest));
     run("ssh", &[&config.relay_host, &command], None).context("relay live handover failed")?;
     println!("  relay replacement is serving; previous matches retain their workers");
@@ -1648,6 +1658,7 @@ fn activate_relay_host(config: &Config, release: &Release) -> Result<()> {
         .and_then(|relay| relay.get("bin_sha256"))
         .and_then(serde_json::Value::as_str)
         .context("release.json relay bin_sha256 missing")?;
+    let relay_release = relay_component;
     let control_secret = env::var("SOW_RELAY_CONTROL_SECRET")?;
     let settlement_secret = env::var("SOW_RELAY_SETTLEMENT_SECRET")?;
     let control_path = format!("/tmp/sow-relay-control-secret-{}", std::process::id());
@@ -1666,6 +1677,9 @@ fn activate_relay_host(config: &Config, release: &Release) -> Result<()> {
     let remote = format!(
         r#"set -eu
 stage={stage}
+candidate_ldd=$(LD_LIBRARY_PATH="$stage/lib" ldd "$stage/bin/sow-relay")
+case "$candidate_ldd" in *"not found"*) echo "$candidate_ldd" >&2; exit 78;; esac
+sudo env RUNTIME_DIRECTORY=/run/sow-relay LD_LIBRARY_PATH="$stage/lib" "$stage/bin/sow-relay" --fstack-identity >/dev/null
 ts=$(date +%s)
 for f in {exec} {config} /usr/local/sbin/sow-relay-worker /etc/systemd/system/sow-relay.service /etc/systemd/system/sow-relay@.service /etc/systemd/system/sow-relay@.service.d/override.conf /etc/tmpfiles.d/sow-relay.conf /etc/systemd/journald.conf.d/30-sow-relay.conf; do
   if sudo test -e "$f"; then sudo cp -p "$f" "$f.bak_$ts"; fi
@@ -1717,9 +1731,10 @@ MaxRetentionSec=7day
 RateLimitIntervalSec=30s
 RateLimitBurst=10000
 EOF
-sudo install -d -o root -g {group} -m 0750 /usr/local/libexec/sow-relay/releases
-sudo install -o root -g {group} -m 0750 "$stage/bin/sow-relay" /usr/local/libexec/sow-relay/releases/{relay_bin_sha}
-sudo ln -sfn releases/{relay_bin_sha} {exec}.next
+sudo install -d -o root -g {group} -m 0750 /usr/local/libexec/sow-relay/releases/{relay_release} /usr/local/libexec/sow-relay/releases/{relay_release}/lib
+sudo install -o root -g {group} -m 0550 "$stage/bin/sow-relay" /usr/local/libexec/sow-relay/releases/{relay_release}/sow-relay
+for lib in "$stage"/lib/*.so*; do sudo install -o root -g {group} -m 0440 "$lib" /usr/local/libexec/sow-relay/releases/{relay_release}/lib/"$(basename "$lib")"; done
+sudo ln -sfn releases/{relay_release}/sow-relay {exec}.next
 sudo mv -Tf {exec}.next {exec}
 sudo install -o root -g {group} -m 0640 "$stage/conf/echo-vf.ini" {config}
 sudo install -o root -g root -m 0755 "$stage/ops/linux/sow-relay-worker" /usr/local/sbin/sow-relay-worker
@@ -1748,7 +1763,7 @@ done
 for port in {health_ports}; do
   curl -kfsS --max-time 5 "https://127.0.0.1:$port/healthz" >/dev/null
 done
-test "$(sudo stat -Lc '%a %U:%G' {exec})" = '750 root:{group}'
+test "$(sudo stat -Lc '%a %U:%G' {exec})" = '550 root:{group}'
 test "$(sudo stat -c '%a %U:%G' {config})" = '640 root:{group}'
 test "$(sudo stat -c '%a' /etc/systemd/system/sow-relay@.service.d/override.conf)" = 600
 for u in {units}; do
@@ -1758,7 +1773,7 @@ for u in {units}; do
   test "$(systemctl show "$u" -p ExecMainStatus --value)" = 0
 done
 sudo tee {manifest} >/dev/null <<EOF
-{{"version":"{version}","release":"{release_id}","git":"{revision}","fstack":"{relay_fstack}","dpdk":"{dpdk}","foundation":"{foundation}","worker_count":{worker_count},"relay_sha256":"{relay_component}","relay_bin_sha256":"{relay_bin_sha}","ws_write_timeout_ms":{knob},"drain":"match-owned generations","deployed_at":"$ts"}}
+{{"version":"{version}","release":"{release_id}","git":"{revision}","fstack":"{relay_fstack}","dpdk":"{dpdk}","foundation":"{foundation}","worker_count":{worker_count},"relay_sha256":"{relay_component}","relay_bin_sha256":"{relay_bin_sha}","runtime_libraries_sha256":"{runtime_libraries_sha}","ws_write_timeout_ms":{knob},"drain":"match-owned generations","deployed_at":"$ts"}}
 EOF
 sudo chown root:root {manifest}
 sudo chmod 0644 {manifest}
@@ -1780,6 +1795,8 @@ sudo chmod 0644 {manifest}
         relay_fstack = relay_fstack,
         relay_component = relay_component,
         relay_bin_sha = relay_bin_sha,
+        relay_release = relay_release,
+        runtime_libraries_sha = release_json["relay"]["runtime_libraries_sha256"].as_str().context("relay runtime libraries hash missing")?,
         knob = env.knob,
         dpdk = DPDK_RELEASE,
         foundation = release_json["relay"]["foundation"].as_str().context("relay foundation missing")?,
@@ -1823,11 +1840,19 @@ fn verify_relay_identity(config: &Config, release: &Release) -> Result<()> {
         .get("bin_sha256")
         .and_then(serde_json::Value::as_str)
         .context("release relay bin_sha256 missing")?;
+    let expected_runtime_libraries_sha = relay
+        .get("runtime_libraries_sha256")
+        .and_then(serde_json::Value::as_str)
+        .context("release relay runtime libraries hash missing")?;
+    if directory_sha256(&release.dir.join("relay/lib"))? != expected_runtime_libraries_sha {
+        bail!("release relay runtime library hash mismatch");
+    }
     let manifest = relay_manifest_remote(config)?
         .context("relay host has no registered manifest — relay never deployed through ./sow p")?;
     for (key, expected) in [
         ("relay_sha256", expected_sha),
         ("relay_bin_sha256", expected_bin_sha),
+        ("runtime_libraries_sha256", expected_runtime_libraries_sha),
         ("git", expected_git),
         ("fstack", expected_fstack),
         ("dpdk", DPDK_RELEASE),
@@ -1880,6 +1905,16 @@ fn verify_relay_identity(config: &Config, release: &Release) -> Result<()> {
     )?;
     if !deployed.starts_with(expected_bin_sha) {
         bail!("relay deployed binary mismatch: {deployed} expected {expected_bin_sha}");
+    }
+    for name in ["libfdt.so.1", "libxdp.so.1", "libisal.so.2"] {
+        let expected = file_sha256(&release.dir.join("relay/lib").join(name))?;
+        let path = format!(
+            "/usr/local/libexec/sow-relay/releases/{expected_sha}/lib/{name}"
+        );
+        let deployed = output("ssh", &[&config.relay_host, &format!("sudo sha256sum {path}")])?;
+        if !deployed.starts_with(&expected) {
+            bail!("relay deployed runtime library mismatch: {name}");
+        }
     }
     println!(
         "  relay identity verified (git={expected_git} fstack={expected_fstack} bin={expected_bin_sha} knob={expected_knob})"
@@ -2174,9 +2209,56 @@ test "$(PKG_CONFIG_PATH={pc} pkg-config --modversion libdpdk)" = {version}
     Ok(prefix)
 }
 
+/// Keep the DPDK shared-library dependencies beside the relay generation that
+/// was linked against them. Generations can then coexist during a handover.
+fn collect_relay_runtime_libraries(paths: &Paths) -> Result<PathBuf> {
+    let local = paths.root.join("dist/relay-bin");
+    let libraries = local.join("lib");
+    if libraries.exists() {
+        fs::remove_dir_all(&libraries)?;
+    }
+    fs::create_dir_all(&libraries)?;
+    let repo_mount = paths.root.display().to_string();
+    let script = format!(
+        r#"set -eu
+repo={repo}
+source=/usr/lib/x86_64-linux-gnu
+destination="$repo/dist/relay-bin/lib"
+for name in libfdt.so.1 libxdp.so.1 libisal.so.2; do
+  test -r "$source/$name"
+  cp -L "$source/$name" "$destination/$name"
+done
+chmod 0444 "$destination"/*
+chown -R 1000:1000 "$destination"
+"#,
+        repo = shell_quote(&repo_mount),
+    );
+    run(
+        "sudo",
+        &[
+            "systemd-nspawn",
+            "-q",
+            "-D",
+            "/var/lib/machines/debian12",
+            "--bind",
+            &repo_mount,
+            "--as-pid2",
+            "bash",
+            "-c",
+            &script,
+        ],
+        None,
+    )
+    .context("collect DPDK runtime libraries from the Debian 12 build environment")?;
+    for name in ["libfdt.so.1", "libxdp.so.1", "libisal.so.2"] {
+        require_file(&libraries.join(name), "relay runtime library")?;
+    }
+    Ok(libraries)
+}
+
 /// Build the relay locally in the Debian 12 (bookworm) systemd-nspawn container
 /// (f-stack lib + binary) to produce a glibc 2.36 binary compatible with Ubuntu 24.04.
-/// Azure receives only the packaged binary — zero compiler/source on production.
+/// Azure receives the binary and its DPDK runtime libraries, not source or a compiler.
 fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
     let patch = paths.root.join("fstack-bridge/patches/fstack-2.0.patch");
     let applied = Command::new("git").args(["-C", &config.fstack_repo, "apply", "--reverse", "--check"])
@@ -2187,11 +2269,14 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
     }
     let fstack_hash = fstack_version(config)?;
     let dpdk_prefix = prepare_relay_dpdk(paths, config, &fstack_hash)?;
+    let local = paths.root.join("dist/relay-bin");
+    let runtime_libraries = collect_relay_runtime_libraries(paths)?;
+    let runtime_libraries_sha = directory_sha256(&runtime_libraries)?;
     let pkg_config_path = dpdk_prefix.join("lib/pkgconfig").display().to_string();
     let dependency_identity = format!("{fstack_hash}:DPDK={DPDK_RELEASE}:{FSTACK_BUILD_FLAGS}");
     let relay_env = RelayEnv::load()?;
     let foundation = input_fingerprint("relay-foundation-v1", &format!(
-        "{dependency_identity}:{}:{}:{}:{}:{}:{}:{}",
+        "{dependency_identity}:{runtime_libraries_sha}:{}:{}:{}:{}:{}:{}:{}",
         relay_env.count, relay_env.max_connections, relay_env.max_connections_per_ip,
         relay_env.handshakes_per_ip, relay_env.db_url, relay_env.db_resolve_ip, relay_env.knob), &[
         &paths.root.join("sow-relay/src/reload.c"),
@@ -2203,10 +2288,9 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
     let revision = output("git", &["rev-parse", "--short=12", "HEAD"])?;
     let repo_mount = paths.root.display().to_string();
     let fstack_mount = config.fstack_repo.clone();
-    let local = paths.root.join("dist/relay-bin");
     let fingerprint = input_fingerprint(
         "relay-v2",
-        &format!("{dependency_identity}:{foundation}"),
+        &format!("{dependency_identity}:{runtime_libraries_sha}:{foundation}"),
         &[
             &paths.root.join("Cargo.toml"),
             &paths.root.join("Cargo.lock"),
@@ -2311,6 +2395,10 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
     fs::write(local.join("git"), format!("{revision}\n"))?;
     require_file(&destination, "relay binary")?;
     fs::set_permissions(&destination, fs::Permissions::from_mode(0o550))?;
+    let packaged_libraries = collect_relay_runtime_libraries(paths)?;
+    if directory_sha256(&packaged_libraries)? != runtime_libraries_sha {
+        bail!("DPDK runtime libraries changed while building the relay");
+    }
     fs::create_dir_all(cache.parent().context("relay cache parent missing")?)?;
     fs::write(cache, format!("{fingerprint}\n"))?;
     println!(
@@ -2407,14 +2495,19 @@ fn assemble_release(
         &paths.root.join("sow-dist/deploy/freebsd/snippets"),
         &work.join("ops/snippets"),
     )?;
-    // Relay component: binary, config, systemd units, wrapper, and the rendered
+    // Relay component: binary, runtime libraries, config, systemd units, wrapper, and the rendered
     // drop-in template (secrets stay as placeholders, injected on the host).
     // Everything here is release content — the relay component hash changes
-    // when the knob, admission limits, units, or binary change, so the plan
+    // when the knob, admission limits, units, binary, or runtime libraries change, so the plan
     // diff detects drift instead of ghosting.
     let relay = work.join("relay");
     fs::create_dir_all(relay.join("bin"))?;
     fs::create_dir_all(relay.join("conf"))?;
+    copy_dir(
+        &paths.root.join("dist/relay-bin/lib"),
+        &relay.join("lib"),
+    )?;
+    let runtime_libraries_sha = directory_sha256(&relay.join("lib"))?;
     let relay_source = paths.root.join("dist/relay-bin/sow-relay");
     let relay_destination = relay.join("bin/sow-relay");
     fs::copy(&relay_source, &relay_destination).with_context(|| {
@@ -2585,6 +2678,7 @@ fn assemble_release(
             "relay": json!({
                 "sha256": relay_component,
                 "bin_sha256": relay_bin_sha,
+                "runtime_libraries_sha256": runtime_libraries_sha,
                 "fstack": relay_fstack,
                 "fstack_release": "2.0",
                 "git": fs::read_to_string(paths.root.join("dist/relay-bin/git"))?.trim(),
@@ -2654,6 +2748,21 @@ fn relay_component_hash(relay: &Path) -> Result<String> {
             bytes = normalized.into_bytes();
         }
         hash.update(&bytes);
+    }
+    Ok(format!("{:x}", hash.finalize()))
+}
+
+fn directory_sha256(root: &Path) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    let mut files: Vec<_> = walkdir::WalkDir::new(root)
+        .into_iter()
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    files.retain(|entry| entry.file_type().is_file());
+    files.sort_by_key(|entry| entry.path().to_path_buf());
+    let mut hash = Sha256::new();
+    for entry in files {
+        hash.update(entry.path().strip_prefix(root)?.to_string_lossy().as_bytes());
+        hash.update(fs::read(entry.path())?);
     }
     Ok(format!("{:x}", hash.finalize()))
 }
@@ -2755,6 +2864,7 @@ fn remote_plan(config: &Config, release: &Release) -> Result<ComponentPlan> {
             [
                 ("relay_sha256", expected_relay_sha),
                 ("relay_bin_sha256", expected_bin_sha),
+                ("runtime_libraries_sha256", relay.get("runtime_libraries_sha256").and_then(serde_json::Value::as_str).unwrap_or("")),
                 ("git", expected_git),
                 ("fstack", expected_fstack),
             ]

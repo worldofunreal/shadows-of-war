@@ -42,7 +42,7 @@
     "Factory": {
       "1": {
         "height": 64,
-        "sha256": "f294491b00ac198f2157defec3e67f107a0c7d7be9536b9b9831e05bdc550b86",
+        "sha256": "7b4e141a64176b8a9e180c486f0e7b8d13529559e933f7827a01ad50cede1688",
         "source": "factory-1.png",
         "width": 64,
         "x": 274,
@@ -50,7 +50,7 @@
       },
       "2": {
         "height": 64,
-        "sha256": "64b6377b901a022436a9343a9379743b99b010015578137b7ee73f4e02792b6a",
+        "sha256": "427c3c7f107145e87c1bcf48e76c88f14222fe0929fc95c2a66cf957e34d5e56",
         "source": "factory-2.png",
         "width": 64,
         "x": 2,
@@ -58,7 +58,7 @@
       },
       "3": {
         "height": 64,
-        "sha256": "a0ce8a11300a241e4554fff01b72e7668fdaed5e19e8b6fe90fafaa0c5b85c12",
+        "sha256": "85a80fa3d2f85da21b4d840fb2f38f0ed862300d14dc0cdffc3042486b80bcad",
         "source": "factory-3.png",
         "width": 64,
         "x": 70,
@@ -66,7 +66,7 @@
       },
       "4": {
         "height": 64,
-        "sha256": "41f6e3b8cb17fc904dec38ea200faf1479c863c198117727d784660308654ee2",
+        "sha256": "262f9b7dc68c5e78d08584e101346cf542a1d8377402f9e1e3b413691a7c8858",
         "source": "factory-4.png",
         "width": 64,
         "x": 138,

@@ -30,10 +30,28 @@ index 175dc47c..6c4465c4 100644
  /*
   * Packet dispatch callback function.
 diff --git a/lib/ff_dpdk_if.c b/lib/ff_dpdk_if.c
-index f1dc0ac6..c424fb5c 100644
+index f1dc0ac6..d973b7f3 100644
 --- a/lib/ff_dpdk_if.c
 +++ b/lib/ff_dpdk_if.c
-@@ -2779,7 +2779,17 @@ ff_dpdk_process_packets(uint16_t port_id, uint16_t queue_id,
+@@ -1274,6 +1274,17 @@ init_port_start(void)
+                         if (dev_info.max_lro_pkt_size > 0) {
+                             port_conf.rxmode.max_lro_pkt_size = dev_info.max_lro_pkt_size;
+                         } else {
+                             port_conf.rxmode.max_lro_pkt_size = dev_info.max_rx_pktlen;
+                         }
++                        if (ff_global_cfg.dpdk.mtu_enable) {
++                            uint32_t max_lro_pkt_size =
++                                (uint32_t)ff_global_cfg.dpdk.max_mtu +
++                                RTE_ETHER_HDR_LEN + RTE_VLAN_HLEN +
++                                RTE_ETHER_CRC_LEN;
++                            max_lro_pkt_size =
++                                RTE_ALIGN_CEIL(max_lro_pkt_size, 256U);
++                            port_conf.rxmode.max_lro_pkt_size =
++                                RTE_MIN(port_conf.rxmode.max_lro_pkt_size,
++                                    max_lro_pkt_size);
++                        }
+                     } else {
+@@ -2779,7 +2790,17 @@ ff_dpdk_process_packets(uint16_t port_id, uint16_t queue_id,
                  continue;
              }
  
@@ -52,7 +70,7 @@ index f1dc0ac6..c424fb5c 100644
                  /* flow-map miss — the flow belongs to the peer
                   * generation. The mbuf stays owned by this path the whole
                   * time (the callback never sees it), so there is exactly
-@@ -2789,7 +2799,7 @@ ff_dpdk_process_packets(uint16_t port_id, uint16_t queue_id,
+@@ -2789,7 +2810,7 @@ ff_dpdk_process_packets(uint16_t port_id, uint16_t queue_id,
                   * draining generation catches up. Under USR2 the
                   * window is the block's OR a live cross-master peer. */
                  if ((ff_reload_hw_locked() || ff_reload_peer_mirror_draining())
