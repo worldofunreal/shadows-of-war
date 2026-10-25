@@ -20,6 +20,7 @@ pub use packet::tcp_destination_queue;
 pub use ffi::{
     dispatch_func_t, ev_set, ff_accept, ff_bind, ff_close, ff_dpdk_if_up, ff_dpdk_init,
     ff_freebsd_init, ff_ioctl, ff_kevent, ff_kqueue, ff_listen, ff_load_config, ff_read,
+    ff_is_slim_primary, ff_regist_idle_callback, ff_unregist_idle_callback, idle_func_t,
     ff_regist_packet_dispatcher, ff_rss_self_queue_info, ff_run, ff_setsockopt, ff_shutdown,
     ff_socket, ff_stop_run, ff_write, ff_zc_mbuf_get, ff_zc_mbuf_segment, ff_zc_mbuf_write,
     ff_zc_recv, ff_zc_recv_free, ff_zc_send, kevent, loop_func_t, EVFILT_READ, EVFILT_WRITE,

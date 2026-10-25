@@ -12,19 +12,20 @@
 #include <time.h>
 #include <unistd.h>
 #include "ff_api.h"
+#include "ff_event.h"
 #include "ff_config.h"
 #include "ff_reload.h"
 
 _Static_assert(DPDK_CONFIG_NUM == 32, "F-Stack 2.0 EAL argument ABI changed");
 _Static_assert(sizeof(struct ff_zc_mbuf) == 24, "zero-copy buffer ABI changed");
+_Static_assert(sizeof(struct kevent) == 64, "event ABI changed");
 
 #define SOW_RELOAD_MAGIC 0x534f5732u
 #define SOW_RELOAD_VERSION 1u
 #define SOW_MAX_WORKERS (FF_RELOAD_MAX_PROCS / FF_RELOAD_GEN_MAX)
 
 struct sow_worker {
-    uint32_t pid, ready, lobbies, connections;
-    uint64_t pending, syncache, reported_ms;
+    uint32_t pid, ready, lobbies;
 };
 
 struct sow_reload {
@@ -140,7 +141,14 @@ uint32_t sow_reload_pid(int gen, unsigned qid)
 
 int sow_reload_ready(int gen, unsigned qid)
 {
-    return sow_reload_pid(gen, qid) && LOAD(&shared->worker[gen][qid].ready) == 2;
+    uint32_t pid = sow_reload_pid(gen, qid);
+    if (!pid) return 0;
+    uint64_t word = ff_reload_ready_word(gen * SOW_MAX_WORKERS + qid);
+    if ((uint32_t)word != pid) return 0;
+    /* The old workers' READY epoch predates the open reload window. Only
+     * replacement workers must publish under the current window's epoch. */
+    return !ff_reload_hw_locked() || gen != ff_reload_target_gen()
+        || (uint32_t)(word >> 32) == ff_reload_shared_epoch();
 }
 
 void sow_reload_worker_ready(void)
@@ -157,19 +165,8 @@ void sow_reload_lobbies(uint32_t count)
 
 void sow_reload_tick(void)
 {
-    static uint64_t next_report;
     if (shared && queue >= 0) {
         struct sow_worker *w = &shared->worker[generation][queue];
-        struct timespec ts;
-        if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) return;
-        uint64_t now = (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
-        if (now >= next_report) {
-            STORE(&w->connections, (uint32_t)ff_socket_drain_count());
-            STORE(&w->pending, (uint64_t)ff_socket_snd_pending());
-            STORE(&w->syncache, (uint64_t)ff_syncache_count());
-            STORE(&w->reported_ms, now);
-            next_report = now + 100;
-        }
         if (LOAD(&w->ready) == 1) {
             ff_reload_publish_ready(generation * SOW_MAX_WORKERS + queue, getpid());
             STORE(&w->ready, 2);
@@ -183,9 +180,16 @@ int sow_reload_empty(int gen)
     for (unsigned i = 0; i < shared->workers; ++i) {
         struct sow_worker *w = &shared->worker[gen][i];
         if (!LOAD(&w->pid)) continue; /* parent reaped this worker */
-        if (!LOAD(&w->ready) || LOAD(&w->lobbies) || LOAD(&w->connections)
-            || LOAD(&w->pending) || LOAD(&w->syncache)
-            || LOAD(&w->reported_ms) <= LOAD(&shared->handover_ms)) return 0;
+        if (!LOAD(&w->ready) || LOAD(&w->lobbies)) return 0;
+        uint32_t connections;
+        uint64_t pending, syncache, reported_ms;
+        /* F-Stack's driver already publishes authoritative drain counts,
+         * including UDP flows. Reuse those reports instead of rescanning
+         * or maintaining a second set of socket/drain counters. */
+        if (ff_reload_drain_report(gen * SOW_MAX_WORKERS + i,
+                ff_reload_shared_epoch(), &connections, &pending, &syncache,
+                &reported_ms) != 0 || connections || pending || syncache
+            || reported_ms <= LOAD(&shared->handover_ms)) return 0;
     }
     for (unsigned p = 0; p <= UINT16_MAX; ++p)
         if (LOAD(&shared->port_owner[p]) == gen + 1) return 0;
@@ -220,12 +224,22 @@ int sow_reload_route(uint16_t port, uint16_t target)
         ? FF_DISPATCH_PEER_QUEUE(target) : target;
 }
 
+static void clear_workers(int gen)
+{
+    for (unsigned i = 0; i < shared->workers; ++i) {
+        struct sow_worker *w = &shared->worker[gen][i];
+        STORE(&w->ready, 0);
+        STORE(&w->pid, 0);
+        STORE(&w->lobbies, 0);
+    }
+}
+
 int sow_reload_begin(void)
 {
     uint32_t epoch, target;
     if (!shared || ff_reload_hw_locked()) return -1;
     ff_reload_master_begin(&epoch, &target);
-    memset(shared->worker[target], 0, sizeof(shared->worker[target]));
+    clear_workers((int)target);
     ff_reload_drain_reset();
     return (int)target;
 }
@@ -263,7 +277,7 @@ int sow_reload_handover(int target) {
 void sow_reload_clear(int gen)
 {
     if (shared && gen >= 0 && gen < 2)
-        memset(shared->worker[gen], 0, sizeof(shared->worker[gen]));
+        clear_workers(gen);
 }
 
 void sow_reload_reaped(int gen, unsigned qid, uint32_t pid)

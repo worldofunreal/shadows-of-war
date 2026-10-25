@@ -154,6 +154,9 @@ struct Args {
     database_url: Option<Url>,
     #[arg(long)]
     audit_accounts_file: Option<std::path::PathBuf>,
+    /// Exercise live F-Stack handover during the existing reward acceptance test.
+    #[arg(long, requires = "verify_rewards")]
+    verify_handover_relay_host: Option<String>,
 }
 
 #[tokio::main]
@@ -167,6 +170,7 @@ async fn main() {
                 .as_ref()
                 .expect("--database-url is required for reward verification"),
             args.audit_accounts_file.as_deref(),
+            args.verify_handover_relay_host.as_deref(),
         )
         .await;
         return;

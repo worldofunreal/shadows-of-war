@@ -36,8 +36,12 @@ fn main() {
         assert!(foundation.len() == 64 && foundation.bytes().all(|byte| byte.is_ascii_hexdigit()),
             "invalid relay foundation identity");
         let obj = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("reload.o");
+        let flags = Command::new("pkg-config").args(["--cflags", "libdpdk"])
+            .output().expect("cannot read native DPDK include flags");
+        assert!(flags.status.success(), "native DPDK headers unavailable");
         let result = Command::new("cc").args(["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "-I"])
-            .arg(&fstack_lib_dir).args(["-c", "src/reload.c", "-o"]).arg(&obj)
+            .arg(&fstack_lib_dir).args(String::from_utf8_lossy(&flags.stdout).split_whitespace())
+            .args(["-c", "src/reload.c", "-o"]).arg(&obj)
             .status().expect("cannot compile F-Stack reload adapter");
         assert!(result.success(), "F-Stack reload adapter compile failed");
         println!("cargo:rustc-link-arg={}", obj.display());

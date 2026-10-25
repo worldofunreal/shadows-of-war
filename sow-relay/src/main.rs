@@ -986,6 +986,10 @@ fn main() {
             std::process::exit(1);
         }
         if primary {
+            if fstack_bridge::ff_is_slim_primary() == 0 {
+                error!("[reload] resident primary requires primary_slim=1");
+                std::process::exit(78);
+            }
             fstack_bridge::ff_run(supervisor::primary_tick, ptr::null_mut());
             return;
         }
