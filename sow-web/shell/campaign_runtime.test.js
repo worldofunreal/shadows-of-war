@@ -116,7 +116,7 @@ test("Trinovantes requires a real request, confirmed alliance and positive targe
     facts.resource_transfers_by_recipient_faction_id.trinovantes.total = 1;
     const assault = until("boudica_trinovantes_assault");
     assert.deepEqual(assault.step.campaign_assault_on_enter, { attacker_team: "Blue", target: "camulodunum" });
-    assert.equal(spoken.length, 6, "all six lines play exactly once around the two mechanics");
+    assert.equal(spoken.length, 10, "all ten lines play exactly once around the two mechanics");
     facts.elapsed_seconds = 1.2;
     assert.equal(machine.update(facts, ui).step.id, "boudica_camulodunum");
     assert.equal(machine.view().step.next, "boudica_ninth_legion_intro");
@@ -300,7 +300,9 @@ test("Boudica final decision opens at 5,000 tiles and targets her on the map", (
     const choice = definition.steps.find(step => step.id === "boudica_final_choice");
     assert.equal(stand.trigger.value, 5000);
     assert.deepEqual(choice.marker, { target: "player" });
-    const machine = campaign.create(definition, stand.id, { factions: [] });
+    let now = 0;
+    const machine = campaign.create(definition, stand.id, { factions: [] }, () => now);
+    for (let t = 0; t < 10000 && machine.view().exchange; t += 100) { now += 100; machine.update({ tiles: 5001 }, {}); }
     assert.equal(machine.update({ tiles: 5001 }, {}).step.id, stand.id);
     assert.equal(machine.update({ tiles: 5000 }, {}).step.id, choice.id);
     const editorPreviewFocus = campaignEditor.slice(campaignEditor.indexOf("function applyPreviewFocus"), campaignEditor.indexOf("function renderPreview", campaignEditor.indexOf("function applyPreviewFocus")));
@@ -314,7 +316,7 @@ test("Boudica reveal beats share a fixed 1.1-second wait while tribal contact st
     const waitSteps = definition.steps.filter(step => step.wait_before === true).map(step => step.id);
     assert.equal(campaign.WAIT_MS, 1100);
     assert.deepEqual(waitSteps, [
-        "boudica_found_suetonius", "boudica_city_intro", "boudica_ninth_strike"
+        "boudica_city_intro"
     ]);
     const next = id => definition.steps.find(step => step.id === id).next;
     assert.equal(next("boudica_share_sent"), "boudica_trinovantes_assault");
@@ -1179,12 +1181,13 @@ test("Snettisham refuse goes straight to its reply while accept waits for the Sn
     assert.equal(refuse.advance("refuse", "reaction-contact_snettisham@snettisham", true), true);
     assert.equal(refuse.update(contact, {}).step.id, "boudica_snettisham_refuse_reply", "refuse plays its reply right after the choice");
 
-    const accept = campaign.create(definition, "boudica_second_contact", roster);
+    const accept = campaign.create(definition, "boudica_second_contact", roster, () => now);
     accept.update(contact, {});
     assert.equal(accept.advance("accept", "reaction-contact_snettisham@snettisham", true), true);
     assert.equal(accept.update(contact, {}).step.id, "boudica_snettisham_accept_wait", "accept waits before its reply");
     assert.equal(accept.update({ ...contact, faction_structure_levels: { snettisham: { city: 0 } } }, {}).step.id, "boudica_snettisham_accept_wait");
     assert.equal(accept.update({ ...contact, structure_levels: { city: 1 } }, {}).step.id, "boudica_snettisham_accept_wait", "the player's own City does not count for Snettisham");
+    for (let t = 0; t < 10000; t += 100) { now += 100; accept.update(contact, {}); }
     assert.equal(accept.update({ ...contact, faction_structure_levels: { snettisham: { city: 1 } } }, {}).step.id, "boudica_snettisham_accept_reply");
 });
 
@@ -1346,6 +1349,9 @@ test("campaign contact, rendered emotes, delayed reply, last words, and defeat c
     const contactFacts = { contact_faction_ids: [target], defeated_faction_ids: [], pre_defeat_faction_ids: [] };
     machine.update({ ...contactFacts, contact_faction_ids: [] }, {});
     machine.jump(gate, { ...contactFacts, contact_faction_ids: [] });
+    // The outpost camera shot has played on entry; its emotes wait for that shot, as in the live runtime.
+    runtime.cameraShotStepId = gate;
+    runtime.exchangeCameraReadyAt = 0;
 
     let view = machine.update(contactFacts, {});
     const romanCue = commands.find(command => command.type === "tutorial_emote" && command.message === "localized:test.colonia.taunt");
@@ -1615,4 +1621,23 @@ test("structure triggers can watch a campaign faction and the faction flag is va
     rosterCopy.factions.find(faction => faction.id === "snettisham").hold_structures_until_contact = "yes";
     assert.ok(campaign.validate(definition, rosterCopy, { hasText: () => true }).errors.some(issue => issue.field === "roster.factions.hold_structures_until_contact"));
     assert.equal(roster.factions.find(faction => faction.id === "snettisham").hold_structures_until_contact, true);
+});
+
+test("every Boudica entity objective films its target and speaks an emote", () => {
+    const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    const hasEmote = lines => (lines || []).some(line => line.emote && line.emote_text_key);
+    const entities = definition.steps.filter(step => step.type === "objective" && !step.camera_only && (step.trigger && step.trigger.target || step.camera));
+    assert.ok(entities.length >= 15, "the campaign keeps its entity objectives");
+    const missing = entities.flatMap(step => {
+        const targets = [step.trigger && step.trigger.target, step.camera && step.camera.to].filter(Boolean);
+        const reactionEmote = (definition.reactions || []).some(reaction => targets.includes(reaction.when.target)
+            && (!reaction.during || reaction.during === step.id) && hasEmote(reaction.exchange));
+        // A contact objective's encounter is the step it leads to: its greeting speaks the emote.
+        const nextEmote = hasEmote(definition.steps.find(candidate => candidate.id === step.next)?.exchange);
+        const problems = [];
+        if (!step.camera) problems.push("camera");
+        if (!hasEmote(step.exchange) && !reactionEmote && !nextEmote) problems.push("emote");
+        return problems.map(problem => `${step.id}: ${problem}`);
+    });
+    assert.deepEqual(missing, [], "each entity objective has a camera move and an emote on the objective, its contact reaction or the encounter that follows");
 });

@@ -231,6 +231,48 @@ impl Ability {
             },
         }
     }
+
+    /// The visual family of this ability: the colour its effect is shown in.
+    pub fn cue(self) -> Cue {
+        match self {
+            Ability::AttackStrength { .. } => Cue::Strength,
+            Ability::ConquestSpeed { .. } => Cue::Conquest,
+            Ability::ResourceBonus { .. } => Cue::Income,
+            Ability::TowerLoss { .. } | Ability::TowerRange { .. } => Cue::Tower,
+            Ability::CityCapture { .. } | Ability::CityTroopCapacity { .. } => Cue::City,
+            Ability::AttackerLoss { .. } => Cue::Losses,
+            Ability::AllianceCost { .. } => Cue::Alliance,
+            Ability::EnemyRetreatPenalty { .. } => Cue::Retreat,
+        }
+    }
+}
+
+/// The visual family of an ability. Every family has its own colour on the map, so
+/// a hero's effect is recognisable from its colour before the notice is read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cue {
+    Strength,
+    Conquest,
+    Income,
+    Tower,
+    City,
+    Losses,
+    Alliance,
+    Retreat,
+}
+
+impl Cue {
+    /// Every family, so each one can be checked for its own colour.
+    pub const ALL: [Cue; 8] = [
+        Cue::Strength,
+        Cue::Conquest,
+        Cue::Income,
+        Cue::Tower,
+        Cue::City,
+        Cue::Losses,
+        Cue::Alliance,
+        Cue::Retreat,
+    ];
 }
 
 /// Fields only playable heroes have.
@@ -427,6 +469,19 @@ mod tests {
                     .any(|bot| bot.id == hero.id),
                 "{} is a playable hero and must not be a bot",
                 hero.id
+            );
+        }
+    }
+
+    /// A colour family no hero uses would be a colour that never shows on the map.
+    #[test]
+    fn every_cue_family_is_used_by_some_hero() {
+        for cue in Cue::ALL {
+            assert!(
+                all()
+                    .filter_map(|entity| entity.hero.as_ref())
+                    .any(|hero| hero.ability.cue() == cue),
+                "no playable hero shows the {cue:?} cue"
             );
         }
     }

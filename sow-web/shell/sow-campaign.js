@@ -1458,7 +1458,8 @@
                     title_key: exchangeLine.title_key, show_title: exchangeLine.show_title,
                     body_key: exchangeLine.body_key || exchangeLine.emote_text_key, presentation: "dialogue"
                 } : null;
-                return { definition, step: modalLine || step, line: modalLine || step, progress: progress(), paused: true, paused_action: null, done: false, choices: [], state, unlocks: copy(state.unlocks), waiting: exchange.phase !== "dialogue", wait_remaining_ms: exchange.phase === "prepare" ? 100 : Math.max(1, (exchange.until || currentTimeMs) - currentTimeMs), exchange: exchangeLine, exchange_phase: exchange.phase, exchange_token: exchange.token, pre_defeat_targets: activePreDefeatTargets(), ...(activeReaction ? { reaction: activeReaction.reaction.id, reactionInstance: activeReaction.instanceId, reactionTarget: activeReaction.target, reactionData: activeReaction.reaction } : {}) };
+                const stepPauses = ["scene", "choice", "end"].includes(step.type) || step.pause_game === true;
+                return { definition, step: modalLine || step, line: modalLine || step, progress: progress(), paused: exchange.phase === "dialogue" || stepPauses, paused_action: null, done: false, choices: [], state, unlocks: copy(state.unlocks), waiting: exchange.phase !== "dialogue", wait_remaining_ms: exchange.phase === "prepare" ? 100 : Math.max(1, (exchange.until || currentTimeMs) - currentTimeMs), exchange: exchangeLine, exchange_phase: exchange.phase, exchange_token: exchange.token, pre_defeat_targets: activePreDefeatTargets(), ...(activeReaction ? { reaction: activeReaction.reaction.id, reactionInstance: activeReaction.instanceId, reactionTarget: activeReaction.target, reactionData: activeReaction.reaction } : {}) };
             }
             if (activeReaction) {
                 const reaction = activeReaction.reaction;
