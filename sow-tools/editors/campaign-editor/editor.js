@@ -179,6 +179,7 @@
         if (!state.roster) return { errors: [], warnings: [] };
         return window.SOWCampaign.validate(state.definition, state.roster, {
             hasText: function (key) { return Boolean(catalogValue("en", key)); },
+            getText: function (key) { return textValue(key, "en") || null; },
             hasAvatar: function (avatar) { return state.avatars.includes(avatar); }
         });
     }
@@ -279,6 +280,72 @@
         wrapper.append(input, el("span", {}, label)); return wrapper;
     }
     function section(title) { var node = el("section", { class: "form-section" }); node.appendChild(el("h3", {}, title)); return node; }
+    function renderExchangeLines(host, lines, ownerId, label) {
+        lines.forEach(function (line, index) {
+            var card = el("div", { class: "form-card" });
+            var presentation = line.presentation || "emote";
+            var delay = Number.isInteger(line.delay_ms) ? line.delay_ms : 250;
+            card.appendChild(el("strong", {}, label + " " + (index + 1)));
+            card.appendChild(selectField("Speaker", line.speaker, speakerOptions(), function (value) { line.speaker = value; markDirty(); }));
+            card.appendChild(selectField("Presentation", presentation, [
+                { value: "emote", label: "Short emote bubble" },
+                { value: "dialogue", label: "Dialogue modal" }
+            ], function (value) {
+                if (value === "dialogue") {
+                    line.presentation = "dialogue";
+                    delete line.emote; delete line.emote_text_key;
+                    line.body_key = line.body_key || storyKey(ownerId + "_line_" + (index + 1) + "_body");
+                } else {
+                    line.presentation = "emote";
+                    delete line.title_key; delete line.show_title; delete line.body_key;
+                    line.emote = line.emote || "threat";
+                    line.emote_text_key = line.emote_text_key || storyKey(ownerId + "_line_" + (index + 1) + "_emote");
+                }
+                markDirty(); renderInspector();
+            }));
+            if (presentation === "dialogue") {
+                line.body_key = line.body_key || storyKey(ownerId + "_line_" + (index + 1) + "_body");
+                card.appendChild(inputField("Title text key (optional)", line.title_key || "", function (value) { line.title_key = value.trim(); if (!line.title_key) delete line.title_key; markDirty(); }, {}));
+                card.appendChild(inputField("Dialogue text key", line.body_key, function (value) { line.body_key = value.trim(); markDirty(); }, {}));
+                catalogTextField(card, "Dialogue", line.body_key, 4);
+            } else {
+                line.emote_text_key = line.emote_text_key || storyKey(ownerId + "_line_" + (index + 1) + "_emote");
+                card.appendChild(selectField("Emote", line.emote || "threat", ["greet", "help", "threat", "celebrate"], function (value) { line.emote = value; markDirty(); }));
+                card.appendChild(inputField("Bubble text key", line.emote_text_key, function (value) { line.emote_text_key = value.trim(); markDirty(); }, {}));
+                catalogTextField(card, "Bubble text", line.emote_text_key, 2);
+            }
+            card.appendChild(inputField("Pause after line (ms)", delay, function (value) {
+                var milliseconds = Number(value);
+                if (Number.isInteger(milliseconds) && milliseconds >= 0 && milliseconds <= 10000) line.delay_ms = milliseconds;
+                markDirty();
+            }, { type: "number", min: 0, max: 10000, step: 50 }));
+            card.appendChild(reorderControls(lines, index, label.toLowerCase()));
+            if (lines.length > 1) {
+                var remove = el("button", { type: "button" }, "Remove line");
+                remove.addEventListener("click", function () { lines.splice(index, 1); markDirty(); renderInspector(); });
+                card.appendChild(remove);
+            }
+            host.appendChild(card);
+        });
+    }
+    function renderExchangeFields(host, step) {
+        host.appendChild(checkboxField("Timed emote exchange", Boolean(step.exchange), function (enabled) {
+            if (enabled) {
+                step.exchange = [{ speaker: step.speaker || Object.keys(state.definition.speakers || {})[0], presentation: "emote", emote: "threat", emote_text_key: storyKey(step.id + "_line_1_emote"), delay_ms: window.SOWCampaign.EXCHANGE_DEFAULT_REPLY_DELAY_MS }];
+                if (step.type === "scene") ["title_key", "body_key", "lines", "presentation", "show_title", "wait_before", "video_src"].forEach(function (key) { delete step[key]; });
+                delete step.emote; delete step.emote_text_key; delete step.emote_pinned;
+            } else { delete step.exchange; }
+            markDirty(); renderInspector();
+        }));
+        if (step.exchange) renderExchangeLines(host, step.exchange, step.id, "Line");
+        if (step.exchange && step.exchange.length < 16) {
+            var add = el("button", { type: "button" }, "Add exchange line");
+            add.addEventListener("click", function () { step.exchange.push({ speaker: step.speaker || Object.keys(state.definition.speakers || {})[0], presentation: "emote", emote: "threat", emote_text_key: storyKey(step.id + "_line_" + (step.exchange.length + 1) + "_emote"), delay_ms: window.SOWCampaign.EXCHANGE_DEFAULT_REPLY_DELAY_MS }); markDirty(); renderInspector(); });
+            host.appendChild(add);
+        }
+        host.appendChild(selectField("If conversation partner is unavailable", step.unavailable_next || "", [{ value: "", label: "Continue normally" }].concat(destinationOptions(step.id)), function (value) { if (value) step.unavailable_next = value; else delete step.unavailable_next; markDirty(); }));
+        if (step.campaign_accept_alliance_on_enter) host.appendChild(selectField("Faction accepting a pending player request", step.campaign_accept_alliance_on_enter.faction_id, factionOptions(), function (value) { step.campaign_accept_alliance_on_enter.faction_id = value; markDirty(); }));
+    }
     function storyKey(suffix) { return (state.definition.text_namespace || "tutorial.") + suffix; }
     function stepTextKey(step, suffix) { return (state.definition.text_namespace || "tutorial.") + step.id + suffix; }
     function catalogTextField(container, label, key, rows) {
@@ -363,6 +430,7 @@
             Object.keys(state.definition.menu_guides).forEach(function (id) { if (state.definition.menu_guides[id].entry === old) state.definition.menu_guides[id].entry = value; });
             state.definition.steps.forEach(function (item) {
                 if (item.next === old) item.next = value;
+                if (item.unavailable_next === old) item.unavailable_next = value;
                 (item.routes || []).forEach(function (route) { if (route.next === old) route.next = value; });
                 (item.choices || []).forEach(function (choice) { if (choice.next === old) choice.next = value; });
             });
@@ -507,6 +575,7 @@
             if (state.definition.layout[old]) { state.definition.layout[value] = state.definition.layout[old]; delete state.definition.layout[old]; }
             state.definition.steps.forEach(function (item) {
                 if (item.next === old) item.next = value;
+                if (item.unavailable_next === old) item.unavailable_next = value;
                 (item.choices || []).forEach(function (choice) { if (choice.next === old) choice.next = value; });
                 (item.routes || []).forEach(function (route) { if (route.next === old) route.next = value; });
                 (item.routes || []).forEach(function (route) { if (route.when && route.when.choice === old) route.when.choice = value; });
@@ -525,9 +594,13 @@
             var next = step.type === "choice" ? sharedChoiceTarget : step.next || "";
             var keepsFlow = ["scene", "objective", "guide"].includes(value);
             var keepsMechanics = ["objective", "guide"].includes(value);
+            var keepsExchange = ["scene", "objective", "guide"].includes(value);
             var keepsMarker = ["scene", "choice", "objective", "guide"].includes(value);
             var discarded = [];
             if (step.lines && value !== "scene") discarded.push("dialogue lines");
+            if (step.exchange && !keepsExchange) discarded.push("timed emote exchange");
+            if (step.unavailable_next && !keepsFlow) discarded.push("partner-unavailable fallback");
+            if (step.campaign_accept_alliance_on_enter && !keepsMechanics) discarded.push("alliance response action");
             if (step.choices && value !== "choice") discarded.push("decision answers");
             if (step.trigger && (!keepsMechanics || (value === "guide" && step.trigger.type === "elapsed"))) discarded.push("mechanic condition");
             if (step.guide && (!keepsMechanics || (value === "guide" && step.trigger && step.trigger.type === "elapsed"))) discarded.push("hand guide");
@@ -546,16 +619,21 @@
             if (!next && !divergentChoiceTargets && value !== "end" && value !== "choice" && ending) next = ending.id;
             var menuAction = inGameUiTargets()[0] || "menu_campaign";
             var firstLine = step.lines && step.lines[0];
-            var replacement = { id: id, type: value, title_key: step.title_key || storyKey(id + "_title") };
+            var exchangeScene = value === "scene" && Boolean(step.exchange);
+            var replacement = { id: id, type: value };
+            if (!exchangeScene) replacement.title_key = step.title_key || storyKey(id + "_title");
             var bodyKey = step.body_key || firstLine && firstLine.body_key || (value === "scene" && step.hint_key);
-            if (bodyKey) replacement.body_key = bodyKey;
+            if (bodyKey && !exchangeScene) replacement.body_key = bodyKey;
             if (step.speaker || firstLine && firstLine.speaker) replacement.speaker = step.speaker || firstLine.speaker;
             if (Number.isFinite(step.attack_ratio_on_enter)) replacement.attack_ratio_on_enter = step.attack_ratio_on_enter;
             if (step.campaign_assault_on_enter && value !== "end") replacement.campaign_assault_on_enter = step.campaign_assault_on_enter;
             if (["scene", "choice"].includes(value) && step.wait_before === true) replacement.wait_before = true;
             if (keepsMechanics && step.pause_game === true) replacement.pause_game = true;
             if (keepsMechanics && step.paused_action) replacement.paused_action = step.paused_action;
-            if (["scene", "end"].includes(value)) replacement.presentation = value === "end" && step.presentation === "cinematic" ? "chapter" : step.presentation || "dialogue";
+            if (["scene", "end"].includes(value) && !exchangeScene) replacement.presentation = value === "end" && step.presentation === "cinematic" ? "chapter" : step.presentation || "dialogue";
+            if (keepsExchange && step.exchange) replacement.exchange = step.exchange;
+            if (keepsFlow && step.unavailable_next) replacement.unavailable_next = step.unavailable_next;
+            if (keepsMechanics && step.campaign_accept_alliance_on_enter) replacement.campaign_accept_alliance_on_enter = step.campaign_accept_alliance_on_enter;
             if (value === "scene") {
                 if (step.video_src) replacement.video_src = step.video_src;
                 if (Array.isArray(step.lines)) replacement.lines = step.lines;
@@ -584,13 +662,13 @@
             notice(""); markDirty(); renderInspector();
         }));
         basics.appendChild(selectField("Speaker", step.speaker || "", speakerOptions(), function (value) { step.speaker = value || undefined; if (!value) delete step.speaker; markDirty(); }));
-        if (step.type === "scene" || step.type === "end") basics.appendChild(selectField("Presentation", step.presentation || "dialogue", step.type === "scene" ? ["dialogue", "chapter", "celebration", "cinematic"] : ["dialogue", "chapter", "celebration"], function (value) { step.presentation = value; markDirty(); }));
-        if (step.type === "scene" || step.type === "choice") basics.appendChild(checkboxField("Wait 1.1 seconds before showing", step.wait_before === true, function (value) {
+        if (!step.exchange && (step.type === "scene" || step.type === "end")) basics.appendChild(selectField("Presentation", step.presentation || "dialogue", step.type === "scene" ? ["dialogue", "chapter", "celebration", "cinematic"] : ["dialogue", "chapter", "celebration"], function (value) { step.presentation = value; markDirty(); }));
+        if (!step.exchange && (step.type === "scene" || step.type === "choice")) basics.appendChild(checkboxField("Wait 1.1 seconds before showing", step.wait_before === true, function (value) {
             if (value) step.wait_before = true;
             else delete step.wait_before;
             markDirty();
         }));
-        if (step.type === "scene") {
+        if (step.type === "scene" && !step.exchange) {
             basics.appendChild(inputField("Local cinematic video", step.video_src || "", function (value) {
                 var source = value.trim();
                 if (source) { step.video_src = source; step.presentation = "cinematic"; }
@@ -604,8 +682,9 @@
             else step.attack_ratio_on_enter = Number(value) / 100;
             markDirty();
         }, { type: "number", min: 5, max: 100, step: 1, placeholder: "No change" }));
-        textEditor(basics, "Title", "title_key");
-        if (step.body_key || step.type === "choice" || (step.type === "scene" && !Array.isArray(step.lines))) textEditor(basics, step.type === "end" ? "Closing text" : "Story text", "body_key");
+        if (!step.exchange || step.type !== "scene") textEditor(basics, "Title", "title_key");
+        if (["scene", "objective", "guide"].includes(step.type)) renderExchangeFields(basics, step);
+        if (!step.exchange && (step.body_key || step.type === "choice" || (step.type === "scene" && !Array.isArray(step.lines)))) textEditor(basics, step.type === "end" ? "Closing text" : "Story text", "body_key");
         else if (step.type === "end") {
             var addEnding = el("button", { type: "button" }, "Add closing text");
             addEnding.addEventListener("click", function () { step.body_key = storyKey(step.id + "_body"); markDirty(); renderInspector(); });
@@ -632,7 +711,7 @@
             basics.appendChild(el("button", { type: "button" }, "Add dialogue line")).addEventListener("click", function (event) {
                 event.preventDefault(); step.lines.push({ speaker: step.speaker, body_key: storyKey(step.id + "_line_" + (step.lines.length + 1)) }); markDirty(); renderInspector();
             });
-        } else if (step.type === "scene") {
+        } else if (step.type === "scene" && !step.exchange) {
             var addConversation = el("button", { type: "button" }, "Split into dialogue lines");
             addConversation.addEventListener("click", function () { step.lines = [{ speaker: step.speaker, body_key: step.body_key || storyKey(step.id + "_line_1") }]; delete step.body_key; markDirty(); renderInspector(); });
             basics.appendChild(addConversation);
@@ -1075,7 +1154,9 @@
             var card = el("div", { class: "form-card" });
             var isContact = reaction.when.type === "contact";
             var isFirstContact = reaction.when.type === "first_contact";
-            card.appendChild(el("strong", {}, (isFirstContact ? "First Iceni contact · " : isContact ? "Contact · " : "First support · ") + reaction.id));
+            var isPreDefeat = reaction.when.type === "pre_defeat";
+            var isSupport = reaction.when.type === "support";
+            card.appendChild(el("strong", {}, (isPreDefeat ? "Before defeat · " : isFirstContact ? "First Iceni contact · " : isContact ? "Contact · " : "First support · ") + reaction.id));
             if (isContact) {
                 var contactTargetOptions = [{ value: "any_neutral", label: "Any initially neutral faction" }].concat(factionOptions());
                 card.appendChild(selectField("On contact with", reaction.when.relation === "neutral" ? "any_neutral" : reaction.when.target, contactTargetOptions, function (value) {
@@ -1083,14 +1164,29 @@
                     else { delete reaction.when.relation; reaction.when.target = value; }
                     markDirty(); renderSettings();
                 }));
-                card.appendChild(selectField("Show after", reaction.after || "", [{ value: "", label: "Immediately" }].concat(state.definition.steps.filter(function (step) { return ["objective", "guide"].includes(step.type); }).map(stepOption)), function (value) { if (value) reaction.after = value; else delete reaction.after; markDirty(); }));
+                card.appendChild(selectField("Show after", reaction.after || "", [{ value: "", label: "Immediately" }].concat(state.definition.steps.filter(function (step) { return ["objective", "guide"].includes(step.type); }).map(stepOption)), function (value) { if (value) { reaction.after = value; delete reaction.during; } else { delete reaction.after; delete reaction.during; } markDirty(); renderSettings(); }));
+                if (reaction.when.target) {
+                    var contactGates = state.definition.steps.filter(function (step) {
+                        var trigger = step.trigger || {};
+                        return ["objective", "guide"].includes(step.type) && trigger.type === "defeated"
+                            && (trigger.target === reaction.when.target || Array.isArray(trigger.targets) && trigger.targets.includes(reaction.when.target));
+                    });
+                    if (contactGates.length) card.appendChild(selectField("Only after this defeat objective starts", reaction.during || "", [{ value: "", label: "No active-objective gate" }].concat(contactGates.map(stepOption)), function (value) { if (value) { reaction.during = value; delete reaction.after; } else delete reaction.during; markDirty(); renderSettings(); }));
+                }
             } else if (isFirstContact) {
                 card.appendChild(multiFactionField("Eligible factions (first matching contact)", reaction.when.targets || [], function (value) { reaction.when.targets = value; markDirty(); }));
-            } else {
+            } else if (isSupport) {
                 card.appendChild(selectField("Show after", reaction.after, state.definition.steps.filter(function (step) { return ["objective", "guide"].includes(step.type); }).map(stepOption), function (value) { reaction.after = value; markDirty(); }));
                 card.appendChild(selectField("First aid from", reaction.when.target, supportFactionOptions(), function (value) { reaction.when.target = value; markDirty(); }));
+            } else if (isPreDefeat) {
+                var defeatGates = state.definition.steps.filter(function (step) {
+                    var trigger = step.trigger || {};
+                    return ["objective", "guide"].includes(step.type) && trigger.type === "defeated"
+                        && (trigger.target === reaction.when.target || Array.isArray(trigger.targets) && trigger.targets.includes(reaction.when.target));
+                });
+                card.appendChild(selectField("Active defeat objective", reaction.during || "", defeatGates.map(stepOption), function (value) { reaction.during = value; markDirty(); renderSettings(); }));
             }
-            if (isContact || isFirstContact) {
+            if ((isContact || isFirstContact) && reaction.presentation !== "exchange") {
                 card.appendChild(selectField("Automatic relationship result", reaction.outcome || "", [
                     { value: "", label: reaction.choices ? "Negotiation choices" : "Dialogue only" },
                     { value: "allied", label: "Alliance" }, { value: "enemy", label: "Enemy" }, { value: "neutral", label: "Remain neutral" }
@@ -1130,15 +1226,57 @@
                     card.appendChild(addNegotiation);
                 }
             }
-            card.appendChild(selectField("Speaker", reaction.speaker || "", speakerOptions(), function (value) { if (value) reaction.speaker = value; else delete reaction.speaker; markDirty(); }));
-            if (reaction.speaker_role_key) catalogTextField(card, "Faction speaker role", reaction.speaker_role_key, 2);
-            else if (!reaction.speaker) {
-                var addSpeakerRole = el("button", { type: "button" }, "Identify the contacted faction's speaker");
-                addSpeakerRole.addEventListener("click", function () { reaction.speaker_role_key = storyKey(reaction.id + "_speaker_role"); markDirty(); renderSettings(); });
-                card.appendChild(addSpeakerRole);
+            var responsePresentation = reaction.presentation === "exchange" ? "exchange" : "dialogue";
+            var presentationOptions = [{ value: "dialogue", label: reaction.exchange ? "Dialogue, then exchange" : "Dialogue modal" }];
+            if (!reaction.choices && !reaction.outcome && reaction.gold_cost == null) presentationOptions.push({ value: "exchange", label: "Automatic exchange" });
+            card.appendChild(selectField("Response", responsePresentation, presentationOptions, function (value) {
+                if (value === "exchange") {
+                    var actor = reaction.speaker || Object.keys(state.definition.speakers || {}).find(function (speakerId) {
+                        return state.definition.speakers[speakerId].faction === reaction.when.target;
+                    }) || Object.keys(state.definition.speakers || {}).find(function (speakerId) { return !state.definition.speakers[speakerId].faction; });
+                    if (!reaction.exchange || !reaction.exchange.length) {
+                        reaction.exchange = reaction.body_key
+                            ? [{ speaker: actor, presentation: "dialogue", title_key: reaction.title_key, show_title: reaction.show_title, body_key: reaction.body_key, delay_ms: 0 }]
+                            : [{ speaker: actor, presentation: "emote", emote: "threat", emote_text_key: storyKey(reaction.id + "_line_1_emote"), delay_ms: window.SOWCampaign.EXCHANGE_DEFAULT_REPLY_DELAY_MS }];
+                    }
+                    ["title_key", "body_key", "show_title", "speaker_role_key", "emote", "emote_text_key"].forEach(function (key) { delete reaction[key]; });
+                    reaction.presentation = "exchange";
+                } else {
+                    reaction.presentation = "dialogue";
+                    reaction.body_key = reaction.body_key || storyKey(reaction.id + "_body");
+                }
+                markDirty(); renderSettings();
+            }));
+            if (reaction.presentation !== "exchange") {
+                card.appendChild(selectField("Speaker", reaction.speaker || "", speakerOptions(), function (value) { if (value) reaction.speaker = value; else delete reaction.speaker; markDirty(); renderSettings(); }));
+                if (reaction.speaker_role_key) catalogTextField(card, "Faction speaker role", reaction.speaker_role_key, 2);
+                else if (!reaction.speaker) {
+                    var addSpeakerRole = el("button", { type: "button" }, "Identify the contacted faction's speaker");
+                    addSpeakerRole.addEventListener("click", function () { reaction.speaker_role_key = storyKey(reaction.id + "_speaker_role"); markDirty(); renderSettings(); });
+                    card.appendChild(addSpeakerRole);
+                }
+                reaction.body_key = reaction.body_key || storyKey(reaction.id + "_body");
+                catalogTextField(card, "Title", reaction.title_key, 2);
+                catalogTextField(card, "Dialogue", reaction.body_key, 4);
             }
-            catalogTextField(card, "Title", reaction.title_key, 2);
-            catalogTextField(card, "Dialogue", reaction.body_key, 4);
+            if (reaction.exchange) {
+                renderExchangeLines(card, reaction.exchange, reaction.id, "Exchange line");
+                if (reaction.exchange.length < 16) {
+                    var addExchangeLine = el("button", { type: "button" }, "Add exchange line");
+                    addExchangeLine.addEventListener("click", function () {
+                        var targetSpeaker = Object.keys(state.definition.speakers || {}).find(function (speakerId) { return state.definition.speakers[speakerId].faction === reaction.when.target; })
+                            || Object.keys(state.definition.speakers || {}).find(function (speakerId) { return !state.definition.speakers[speakerId].faction; });
+                        reaction.exchange.push({ speaker: targetSpeaker, presentation: "emote", emote: "threat", emote_text_key: storyKey(reaction.id + "_line_" + (reaction.exchange.length + 1) + "_emote"), delay_ms: window.SOWCampaign.EXCHANGE_DEFAULT_REPLY_DELAY_MS });
+                        markDirty(); renderSettings();
+                    });
+                    card.appendChild(addExchangeLine);
+                }
+                if (reaction.presentation !== "exchange") {
+                    var removeExchange = el("button", { type: "button", class: "danger" }, "Remove exchange");
+                    removeExchange.addEventListener("click", function () { delete reaction.exchange; markDirty(); renderSettings(); });
+                    card.appendChild(removeExchange);
+                }
+            }
             var remove = el("button", { type: "button", class: "danger" }, "Remove response");
             remove.addEventListener("click", function () { state.definition.reactions = state.definition.reactions.filter(function (item) { return item !== reaction; }); markDirty(); renderSettings(); });
             card.appendChild(remove); reactions.appendChild(card);
@@ -1177,7 +1315,61 @@
         var addSupportReaction = el("button", { type: "button" }, "Add support response");
         addSupportReaction.disabled = !state.definition.steps.some(function (step) { return ["objective", "guide"].includes(step.type); }) || !supportFactionOptions().some(function (option) { return !(state.definition.reactions || []).some(function (reaction) { return reaction.when.type === "support" && reaction.when.target === option.value; }); });
         addSupportReaction.addEventListener("click", function () { addReaction("support"); });
-        reactions.append(addContactReaction, addNeutralNegotiation, addFirstContact, addSupportReaction); host.appendChild(reactions);
+        function encounterGates(type) {
+            var speakers = state.definition.speakers || {};
+            var boudica = speakers.boudica ? "boudica" : Object.keys(speakers).find(function (key) { return !speakers[key].faction; });
+            return state.definition.steps.filter(function (step) {
+                var trigger = step.trigger || {};
+                return ["objective", "guide"].includes(step.type) && trigger.type === "defeated";
+            }).flatMap(function (step) {
+                var trigger = step.trigger || {}, targets = Array.isArray(trigger.targets) ? trigger.targets : [trigger.target];
+                return targets.filter(Boolean).map(function (target) {
+                    var roman = Object.keys(speakers).find(function (key) { return speakers[key].faction === target; }) || "faction_" + target;
+                    while (speakers[roman] && speakers[roman].faction !== target) roman += "_2";
+                    var alreadyUsed = (state.definition.reactions || []).some(function (reaction) {
+                        return reaction.when.type === type && reaction.when.target === target && reaction.during === step.id;
+                    });
+                    return !alreadyUsed && roman && (type !== "contact" || boudica)
+                        ? { step: step, target: target, roman: roman, boudica: boudica } : null;
+                }).filter(Boolean);
+            });
+        }
+        function addEncounterReaction(type) {
+            var encounter = encounterGates(type)[0];
+            if (!encounter) return;
+            state.definition.speakers = state.definition.speakers || {};
+            if (!state.definition.speakers[encounter.roman]) state.definition.speakers[encounter.roman] = { faction: encounter.target };
+            var responseId = uniqueId("campaign_" + type + "_" + encounter.target, state.definition.reactions || []);
+            var speaker = encounter.roman;
+            if (type === "contact") {
+                state.definition.reactions.push({
+                    id: responseId,
+                    when: { type: "contact", target: encounter.target },
+                    during: encounter.step.id,
+                    presentation: "exchange",
+                    exchange: [
+                        { speaker: speaker, presentation: "emote", emote: "threat", emote_text_key: storyKey(responseId + "_roman_taunt"), delay_ms: window.SOWCampaign.EXCHANGE_DEFAULT_REPLY_DELAY_MS },
+                        { speaker: encounter.boudica, presentation: "emote", emote: "threat", emote_text_key: storyKey(responseId + "_boudica_reply"), delay_ms: 0 }
+                    ]
+                });
+            } else {
+                state.definition.reactions.push({
+                    id: responseId,
+                    when: { type: "pre_defeat", target: encounter.target },
+                    during: encounter.step.id,
+                    presentation: "exchange",
+                    exchange: [{ speaker: speaker, presentation: "emote", emote: "threat", emote_text_key: storyKey(responseId + "_last_words"), delay_ms: 0 }]
+                });
+            }
+            markDirty(); renderSettings();
+        }
+        var addCampaignProvocation = el("button", { type: "button" }, "Add next active-objective provocation");
+        addCampaignProvocation.disabled = encounterGates("contact").length === 0;
+        addCampaignProvocation.addEventListener("click", function () { addEncounterReaction("contact"); });
+        var addPreDefeatExchange = el("button", { type: "button" }, "Add next pre-defeat exchange");
+        addPreDefeatExchange.disabled = encounterGates("pre_defeat").length === 0;
+        addPreDefeatExchange.addEventListener("click", function () { addEncounterReaction("pre_defeat"); });
+        reactions.append(addContactReaction, addNeutralNegotiation, addFirstContact, addSupportReaction, addCampaignProvocation, addPreDefeatExchange); host.appendChild(reactions);
         host.appendChild(selectField("Opening step", state.definition.entry, state.definition.steps.map(stepOption), function (value) { state.definition.entry = value; markDirty(); }));
         host.appendChild(selectField("Menu guide opening", state.definition.menu_guide && state.definition.menu_guide.entry || "", [{ value: "", label: "Not set" }].concat(state.definition.steps.map(stepOption)), function (value) { if (!value) delete state.definition.menu_guide; else state.definition.menu_guide = Object.assign({}, state.definition.menu_guide, { entry: value, dismissible: true }); markDirty(); if (state.flow === "menu") resetPreview(); }));
         if (state.definition.menu_guide) host.appendChild(checkboxField("Player can dismiss this guide", state.definition.menu_guide.dismissible !== false, function (value) { state.definition.menu_guide.dismissible = value; markDirty(); }));
@@ -1281,6 +1473,7 @@
         if (step.type === "end") return [];
         if (step.type === "choice") return (step.choices || []).map(function (choice) { return { field: "choices." + choice.id + ".next", label: textValue(choice.label_key, state.previewLanguage) || choice.id, target: choice.next, className: "choice-wire" }; });
         var outputs = [{ field: "next", label: "Next", target: step.next }];
+        if (step.unavailable_next) outputs.push({ field: "unavailable_next", label: "Partner unavailable", target: step.unavailable_next, className: "route-wire" });
         (step.routes || []).forEach(function (route, index) {
             var when = route.when || {}, label = "If condition";
             if (when.choice) {
@@ -1375,7 +1568,7 @@
                 : step.id === state.definition.entry ? "IN-GAME START" : state.definition.menu_guide && step.id === state.definition.menu_guide.entry ? "MENU START" : step.id;
             var stepErrors = errorsByStep[step.id] || 0;
             var stepWarnings = warningsByStep[step.id] || 0;
-            var lines = Array.isArray(step.lines) ? step.lines : [];
+            var lines = Array.isArray(step.exchange) ? step.exchange : Array.isArray(step.lines) ? step.lines : [];
             var speakers = state.definition.speakers || {};
             var castIds = Array.from(new Set(lines.map(function (line) { return line && line.speaker || step.speaker; }).concat(step.speaker || []).filter(Boolean)));
             var castNames = castIds.map(function (speakerId) {
@@ -1610,6 +1803,13 @@
         var previousStep = state.playingStep;
         try { model = updateMachine === false ? state.machine.view() : state.machine.update(state.facts, state.ui); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
+        var acceptance = model.step.campaign_accept_alliance_on_enter;
+        if (acceptance && (state.facts.alliance_request_faction_ids || []).includes(acceptance.faction_id)) {
+            state.facts.alliance_faction_ids = Array.from(new Set((state.facts.alliance_faction_ids || []).concat(acceptance.faction_id)));
+            state.facts.alliance_request_faction_ids = state.facts.alliance_request_faction_ids.filter(function (id) { return id !== acceptance.faction_id; });
+            model = state.machine.update(state.facts, state.ui);
+        }
+        paintExchangePreview(model);
         state.playingStep = model.step.id;
         var transferPanel = $("#sow-hud-transfer");
         if (transferPanel && model.step.id === "boudica_transfer_send") transferPanel.hidden = false;
@@ -1659,11 +1859,11 @@
             guideMetric = { text: previewMetric(stepTextKey(model.step, "_progress"), { current: Math.ceil(Number(state.facts.camera_target_distance)), target: model.step.trigger.distance }) };
         }
         if (menuControl) gestureLabel = translated(menuControl.hint_key, state.previewLanguage);
-        try { state.renderer.render(model.waiting ? null : model, { hideObjective: state.isMenuGuides, anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric, gestureLabel: gestureLabel, statusOnly: statusOnly, statusLabel: statusOnly ? gestureLabel : null }); }
+        try { state.renderer.render(model.waiting ? null : model, { hideObjective: state.isMenuGuides, anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric, gestureLabel: gestureLabel, gestureOverride: model.step.trigger && model.step.trigger.action === "map_menu_open" ? (zoomMode === "pinch" ? "hold" : "tap") : null, statusOnly: statusOnly, statusLabel: statusOnly ? gestureLabel : null }); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         $("#engineState").textContent = JSON.stringify(state.isMenuGuides
             ? { journey: state.menuGuideId, step: model.step.id, type: model.step.type, progress: model.progress, facts: state.facts }
-            : { step: model.step.id, type: model.step.type, waiting: model.waiting, wait_remaining_ms: model.wait_remaining_ms, unlocks: model.unlocks, campaign_assault_on_enter: model.step.campaign_assault_on_enter || null, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
+            : { step: model.step.id, type: model.step.type, waiting: model.waiting, wait_remaining_ms: model.wait_remaining_ms, unlocks: model.unlocks, campaign_assault_on_enter: model.step.campaign_assault_on_enter || null, reaction: model.reaction || null, exchange: model.exchange || null, exchange_phase: model.exchange_phase || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
         var guideTarget = model.step.guide && model.step.guide.kind === "ui" ? model.step.guide.target : "";
         var requiredMenu = /^map_(?:build|upgrade)_/.test(guideTarget) ? "build" : "";
         var menuHint = requiredMenu && $("#sow-hud").dataset.previewMapMenu !== requiredMenu ? " · open the " + requiredMenu + " submenu in the preview to reveal this guide" : "";
@@ -1673,7 +1873,9 @@
         }
         var previewTitle = translated(model.step.title_key, state.previewLanguage) || model.step.id.replace(/_/g, " ");
         var assaultHint = model.step.campaign_assault_on_enter ? " · on entry: " + model.step.campaign_assault_on_enter.attacker_team + " attacks " + (model.step.campaign_assault_on_enter.target === "player" ? "player" : model.step.campaign_assault_on_enter.target === "player_and_allies" ? "player and current allies" : factionName(model.step.campaign_assault_on_enter.target)) + (model.step.campaign_assault_on_enter.hold_last_tile ? " · hold at one tile" : "") : "";
-        $("#previewStatus").textContent = (state.demoBackup ? "Sample preview · not saved — " : "Previewing · ") + previewTitle + (model.waiting ? " · appears in " + (model.wait_remaining_ms / 1000).toFixed(1) + "s" : "") + menuHint + assaultHint + (state.validation.errors.length ? " · draft needs fixes before saving" : "");
+        var exchangeText = model.exchange && ((model.exchange.presentation || "emote") === "dialogue"
+            ? translated(model.exchange.body_key, state.previewLanguage) : translated(model.exchange.emote_text_key, state.previewLanguage));
+        $("#previewStatus").textContent = (state.demoBackup ? "Sample preview · not saved — " : "Previewing · ") + previewTitle + (model.exchange ? " · " + model.exchange.speaker + ": " + exchangeText + " · " + model.exchange_phase + " · " + (model.wait_remaining_ms / 1000).toFixed(1) + "s" : model.waiting ? " · appears in " + (model.wait_remaining_ms / 1000).toFixed(1) + "s" : "") + menuHint + assaultHint + (state.validation.errors.length ? " · draft needs fixes before saving" : "");
         if (model.waiting) {
             var waitingMachine = state.machine, waitingStepId = model.step.id, waitingToken = state.previewRevealToken;
             var timerId = window.setTimeout(function () {
@@ -1685,6 +1887,19 @@
         }
         if (previousStep !== model.step.id) renderGraph();
         renderFactControls(model);
+    }
+    function paintExchangePreview(model) {
+        document.querySelectorAll(".campaign-preview-emote").forEach(function (node) { node.remove(); });
+        document.querySelectorAll(".sample-map-marker.is-speaking").forEach(function (node) { node.classList.remove("is-speaking"); });
+        var line = model.exchange;
+        if (!line || model.exchange_phase !== "speaking" || (line.presentation || "emote") !== "emote") return;
+        var speaker = state.definition.speakers && state.definition.speakers[line.speaker];
+        var marker = speaker && speaker.faction
+            ? Array.from(document.querySelectorAll("#campaignPreviewMarkers .sample-faction")).find(function (item) { return item.dataset.factionId === speaker.faction; })
+            : document.querySelector("#campaignPreviewMarkers .player-base");
+        if (!marker) return;
+        marker.appendChild(el("span", { class: "campaign-preview-emote", role: "status" }, translated(line.emote_text_key, state.previewLanguage)));
+        marker.classList.add("is-speaking");
     }
     function previewLocaleScript(locale) {
         var code = String(locale || "").toLowerCase();
@@ -2033,7 +2248,7 @@
                 eliminate.addEventListener("click", function () { simulateObjective(1); });
                 host.appendChild(eliminate);
             }
-            if (trigger.type === "alliance") factionOptions().forEach(function (option) {
+            if (trigger.type === "alliance" || trigger.type === "alliance_request") factionOptions().forEach(function (option) {
                 var alliance = el("button", { type: "button" }, "Alliance · " + option.label);
                 alliance.disabled = (state.facts.alliance_faction_ids || []).includes(option.value);
                 alliance.addEventListener("click", function () { simulateObjective(1, { factionId: option.value }); });
@@ -2068,13 +2283,24 @@
             }
         }
         (state.definition.reactions || []).forEach(function (reaction) {
-            var isContact = reaction.when.type === "contact";
-            var button = el("button", { type: "button" }, "Simulate first " + (isContact ? "contact" : "support") + " · " + factionName(reaction.when.target));
+            var type = reaction.when.type;
+            var isContact = type === "contact" || type === "first_contact";
+            var target = reaction.when.target || (Array.isArray(reaction.when.targets) ? reaction.when.targets.find(function (id) { return !(state.facts.contact_faction_ids || []).includes(id); }) : null);
+            if (type === "contact" && reaction.when.relation) target = (state.roster.factions || []).find(function (faction) {
+                return faction.relation === reaction.when.relation && !(state.facts.contact_faction_ids || []).includes(faction.id);
+            })?.id;
+            var buttonLabel = type === "pre_defeat" ? "Simulate final capture before defeat"
+                : isContact ? "Simulate first contact" : "Simulate first support";
+            var button = el("button", { type: "button" }, buttonLabel + " · " + factionName(target));
             button.disabled = isContact
-                ? (state.facts.contact_faction_ids || []).includes(reaction.when.target)
-                : Boolean((state.facts.support_deliveries_by_faction_id || {})[reaction.when.target]);
+                ? !target || (state.facts.contact_faction_ids || []).includes(target)
+                : type === "pre_defeat"
+                    ? (state.facts.pre_defeat_faction_ids || []).includes(reaction.when.target)
+                    : Boolean((state.facts.support_deliveries_by_faction_id || {})[reaction.when.target]);
             button.addEventListener("click", function () {
-                if (isContact) state.facts.contact_faction_ids = Array.from(new Set((state.facts.contact_faction_ids || []).concat(reaction.when.target)));
+                if (reaction.during && state.machine) state.machine.jump(reaction.during, state.facts, state.ui);
+                if (isContact) state.facts.contact_faction_ids = Array.from(new Set((state.facts.contact_faction_ids || []).concat(target)));
+                else if (type === "pre_defeat") state.facts.pre_defeat_faction_ids = Array.from(new Set((state.facts.pre_defeat_faction_ids || []).concat(reaction.when.target)));
                 else {
                     state.facts.support_deliveries_by_faction_id = state.facts.support_deliveries_by_faction_id || {};
                     state.facts.support_deliveries_by_faction_id[reaction.when.target] = { deliveries: 1, gold: 100, troops: 100, first_tick: ++state.facts.elapsed_ticks };
@@ -2151,6 +2377,9 @@
             state.facts.eliminated_faction_ids = Array.from(new Set((state.facts.eliminated_faction_ids || []).concat(eliminatedTarget)));
         }
         else if (trigger.type === "ui") state.ui[trigger.action] = Number(state.ui[trigger.action] || 0) + amount;
+        else if (trigger.type === "alliance_request") {
+            state.facts.alliance_request_faction_ids = Array.from(new Set((state.facts.alliance_request_faction_ids || []).concat(sample.factionId || trigger.target)));
+        }
         else if (trigger.type === "alliance") {
             state.facts.alliance_faction_ids = Array.from(new Set((state.facts.alliance_faction_ids || []).concat(sample.factionId || trigger.target || "simulated_ally")));
             state.facts.alliances_formed = state.facts.alliance_faction_ids.length;
@@ -2209,7 +2438,7 @@
                 leader_purchase_prompt_opened: 0, leader_purchased: 0, leader_purchase_cancelled: 0, leader_purchase_closed: 0,
                 profile_opened: 0, history_current_match_ready: 0, store_ready: 0, quick_match_accepted: 0 }
         };
-        return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, support_deliveries_by_faction_id: {}, structure_levels: {}, fleets: 0, fleets_by_type: {}, transport_fleets_by_faction_id: {}, nukes: 0, attacks: 0, attacks_by_faction_id: {}, camera_drag_events: 0, camera_key_pan_events: 0, hover_events: 0, zoom_out_events: 0, zoom_in_events: 0, zoom_out_complete: 0, zoom_in_complete: 0, camera_target: 0, camera_target_distance: 30, camera_zoom: 1, camera_zoom_start: 1, camera_zoom_floor: 0.25, camera_zoom_target: 0.8, touch_controls: 0, contact_faction_ids: [], defeated_faction_ids: [], eliminated_faction_ids: [], resource_transfers: 0, resource_transfers_by_recipient_faction_id: {}, alliance_faction_ids: [], elapsed_ticks: 0, elapsed_seconds: 0 };
+        return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, support_deliveries_by_faction_id: {}, structure_levels: {}, fleets: 0, fleets_by_type: {}, transport_fleets_by_faction_id: {}, nukes: 0, attacks: 0, attacks_by_faction_id: {}, camera_drag_events: 0, camera_key_pan_events: 0, hover_events: 0, zoom_out_events: 0, zoom_in_events: 0, zoom_out_complete: 0, zoom_in_complete: 0, camera_target: 0, camera_target_distance: 30, camera_zoom: 1, camera_zoom_start: 1, camera_zoom_floor: 0.25, camera_zoom_target: 0.8, touch_controls: 0, contact_faction_ids: [], defeated_faction_ids: [], eliminated_faction_ids: [], resource_transfers: 0, resource_transfers_by_recipient_faction_id: {}, alliance_faction_ids: [], alliance_request_faction_ids: [], hostile_faction_ids: [], resources_available: 1, elapsed_ticks: 0, elapsed_seconds: 0 };
     }
     function setPreviewMenuScreen(screen) {
         var menu = $("#sow-menu");

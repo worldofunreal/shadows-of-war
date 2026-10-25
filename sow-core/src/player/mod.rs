@@ -164,6 +164,9 @@ pub struct Player {
     pub traitor_tick: u32,
     #[serde(default)]
     pub leader: Leader,
+    /// People or realm a catalog bot is shown as (its catalog `entity`); `None` uses the hero's.
+    #[serde(default)]
+    pub realm: Option<String>,
     #[serde(default)]
     pub skin_style: u8,
     #[serde(default)]
@@ -226,6 +229,7 @@ impl Player {
             traitor: false,
             traitor_tick: 0,
             leader: Leader::default(),
+            realm: None,
             skin_style: 0,
             kills: 0,
             deaths: 0,
@@ -290,6 +294,7 @@ impl Player {
             traitor: false,
             traitor_tick: 0,
             leader,
+            realm: None,
             skin_style: 0,
             kills: 0,
             deaths: 0,
@@ -346,6 +351,7 @@ impl Player {
             traitor: false,
             traitor_tick: 0,
             leader,
+            realm: None,
             skin_style: 0,
             kills: 0,
             deaths: 0,
@@ -385,6 +391,13 @@ impl Player {
 
     pub fn is_human(&self) -> bool {
         self.player_type == PlayerType::Human
+    }
+    /// The people or realm this player is shown as, the one hero `Kin`/`Foreign` targets
+    /// compare: a catalog bot's own catalog entity, otherwise its hero's.
+    pub fn realm(&self) -> &str {
+        self.realm
+            .as_deref()
+            .unwrap_or_else(|| self.leader.civilization())
     }
     pub fn border_coords(&self, map_width: u32) -> impl Iterator<Item = (u32, u32)> + '_ {
         self.border_tiles

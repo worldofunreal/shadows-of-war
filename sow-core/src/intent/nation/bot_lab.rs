@@ -2646,27 +2646,27 @@ fn s16_checkpoint_decision_and_state_reference() {
     // The runtime trace is fixed per target and refreshed after deterministic behavior changes.
     #[cfg(target_os = "freebsd")]
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x40ba_fc1d_378c_631e),
-        (500, 0x1443_ed00_c144_c6bc),
-        (750, 0x193a_458a_6d36_cf39),
-        (1000, 0x5ed4_8869_a71e_2996),
-        (1250, 0xca1b_f316_ff47_1036),
-        (1500, 0x1ef9_e4fb_f727_ebe3),
-        (1750, 0xee2c_9f73_4050_8589),
-        (2000, 0x0672_941e_ed21_3b30),
-        (2102, 0x4a33_d4f8_8173_e62c),
+        (250, 0x755f_0400_99eb_2683),
+        (500, 0x629e_6bed_14f1_7989),
+        (750, 0x8b64_53c8_9da5_b3b9),
+        (1000, 0xa101_a2c4_446a_fa5e),
+        (1250, 0x5945_7cc3_3a39_9aea),
+        (1500, 0x6077_99fa_bb6e_0d1b),
+        (1750, 0x477e_c29c_f61f_8eb0),
+        (2000, 0xd6d2_cfe4_95c7_11c8),
+        (2102, 0x04c8_d208_0edd_22b9),
     ];
     #[cfg(not(target_os = "freebsd"))]
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x40ba_fc1d_378c_631e),
-        (500, 0x1443_ed00_c144_c6bc),
-        (750, 0x193a_458a_6d36_cf39),
-        (1000, 0x5ed4_8869_a71e_2996),
-        (1250, 0xca1b_f316_ff47_1036),
-        (1500, 0x1ef9_e4fb_f727_ebe3),
-        (1750, 0xee2c_9f73_4050_8589),
-        (2000, 0x0672_941e_ed21_3b30),
-        (2102, 0x4a33_d4f8_8173_e62c),
+        (250, 0x755f_0400_99eb_2683),
+        (500, 0x629e_6bed_14f1_7989),
+        (750, 0x8b64_53c8_9da5_b3b9),
+        (1000, 0xa101_a2c4_446a_fa5e),
+        (1250, 0x5945_7cc3_3a39_9aea),
+        (1500, 0x6077_99fa_bb6e_0d1b),
+        (1750, 0x477e_c29c_f61f_8eb0),
+        (2000, 0xd6d2_cfe4_95c7_11c8),
+        (2102, 0x04c8_d208_0edd_22b9),
     ];
     assert_eq!(
         checkpoints,
@@ -2685,14 +2685,15 @@ fn historical_s16_building_rules_keep_recorded_results() {
     // Re-recorded after the hero ability reassignment: bots draw random heroes, so their
     // abilities shape this game. The building rules are unchanged.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x81ef_ab53_9bf2_921b),
-        (500, 0x97ba_6ca9_1129_9457),
-        (750, 0x9adf_211f_d503_8c7d),
-        (1000, 0xced4_e660_6c98_7c39),
-        (1250, 0xfe9e_9c37_6377_a183),
-        (1500, 0xaed7_1ba2_6d98_5f25),
-        (1750, 0xb138_2a3d_de2b_ca2d),
-        (1982, 0x46fb_2ba5_82ec_c71b),
+        (250, 0xb8f3_eb7d_f6c4_8bbc),
+        (500, 0x1e87_a11e_1e7c_24a6),
+        (750, 0x61fa_7ce4_8cda_15c5),
+        (1000, 0xf352_e3ab_101d_72c9),
+        (1250, 0xa25a_5021_6ed5_289b),
+        (1500, 0x2606_3752_913e_bfe1),
+        (1750, 0x92d1_db89_d504_4e33),
+        (2000, 0x3ba3_2ca9_998d_15f2),
+        (2102, 0x9cf5_1b79_0287_0a3d),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

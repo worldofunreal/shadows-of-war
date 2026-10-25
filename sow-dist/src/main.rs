@@ -2533,7 +2533,10 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
                 | "site.discord"
                 | "site.faq"
                 | "site.github"
+                | "site.leader_artaxerxes_ii_ability"
                 | "site.leader_artigas_ability"
+                | "site.leader_cambyses_ii_ability"
+                | "site.leader_claudius_gothicus_ability"
                 | "site.leader_napoleon_ability"
                 | "site.leader_tlacaelel_ability"
                 | "site.terms_maps_license"
@@ -3101,13 +3104,20 @@ fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Resul
 const fs = require("node:fs");
 const campaign = require(process.argv[1]);
 const { catalog, episodes, menuGuides } = JSON.parse(fs.readFileSync(0, "utf8"));
-const hasText = key => {
+const catalogText = key => {
     const value = key.split(".").reduce((node, part) =>
         node && Object.prototype.hasOwnProperty.call(node, part) ? node[part] : undefined, catalog);
-    return typeof value === "string" && value.trim().length > 0;
+    return typeof value === "string" ? value : null;
 };
+const hasText = key => { const value = catalogText(key); return typeof value === "string" && value.trim().length > 0; };
 for (const { episode_id, definition, roster } of episodes) {
-    const result = campaign.validate(definition, roster, { hasText });
+    const result = campaign.validate(definition, roster, {
+        hasText,
+        getText: key => {
+            const value = catalogText(key);
+            return typeof value === "string" ? campaign.replaceFactionStoryNames(value, definition, roster) : null;
+        }
+    });
     for (const issue of result.errors) {
         console.error([episode_id, issue.step, issue.field].filter(Boolean).join(".") + ": " + issue.message);
     }

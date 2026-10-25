@@ -83,8 +83,8 @@ pub enum Ability {
     EnemyRetreatPenalty { against: Target, percent: u32 },
 }
 
-/// Who an attack, conquest or retreat is aimed at. `Larger`, `Smaller`, `Richer`
-/// and `Poorer` compare that player with the hero's own player.
+/// Who an attack, conquest or retreat is aimed at. `Larger`, `Smaller`, `Richer`,
+/// `Poorer`, `Kin` and `Foreign` compare that player with the hero's own player.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Target {
@@ -114,11 +114,17 @@ pub enum Target {
     Richer,
     /// Land whose owner has less gold than the hero's player.
     Poorer,
+    /// Land of another player whose hero leads the same people or realm
+    /// (`GeoEntity::entity`) as the hero's player's hero.
+    Kin,
+    /// Land of a player, not neutral land, whose hero leads a different people
+    /// or realm (`GeoEntity::entity`) than the hero's player's hero.
+    Foreign,
 }
 
 impl Target {
     /// Every target, for checking which ones describe a player.
-    pub const ALL: [Target; 13] = [
+    pub const ALL: [Target; 15] = [
         Target::Anyone,
         Target::Neutral,
         Target::OtherPlayer,
@@ -132,6 +138,8 @@ impl Target {
         Target::Smaller,
         Target::Richer,
         Target::Poorer,
+        Target::Kin,
+        Target::Foreign,
     ];
 }
 
@@ -168,6 +176,10 @@ pub enum LossWhen {
     /// Attacking an enemy that took one of this hero's cities, while that
     /// enemy is still inside the recapture window.
     RecaptureWindow,
+    /// Conquering city tiles.
+    City,
+    /// Conquering land that the target describes (`{"against": "richer"}`).
+    Against(Target),
 }
 
 impl Ability {

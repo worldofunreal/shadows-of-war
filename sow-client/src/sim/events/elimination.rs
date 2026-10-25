@@ -16,10 +16,8 @@ fn tribe_ability_hero(
     victim_type: sow_core::player::PlayerType,
 ) -> Option<sow_core::player::Leader> {
     me.filter(|leader| {
-        let tribe = sow_core::geo_entities::Target::Tribe;
         victim_type == sow_core::player::PlayerType::Bot
-            && (leader.attack_strength_multiplier(tribe) > 1.0
-                || leader.conquest_speed_multiplier(tribe) > 1.0)
+            && leader.attack_ability_targets(sow_core::geo_entities::Target::Tribe)
     })
 }
 

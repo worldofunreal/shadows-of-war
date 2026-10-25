@@ -137,6 +137,8 @@ pub struct Faction {
     pub hold_structures_until_contact: bool,
     /// Pays for its first city from its own gold instead of receiving one free.
     pub city_requires_gold: bool,
+    /// Accepts every alliance request from the player without AI thresholds.
+    pub accepts_alliance_requests: bool,
 }
 
 // Rosters are authored only as JSON (assets/campaign/*.json) and parsed through this module.
@@ -212,6 +214,7 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
             campaign_assault_force: f.assault_force,
             campaign_hold_structures_until_contact: f.hold_structures_until_contact,
             campaign_city_requires_gold: f.city_requires_gold,
+            campaign_accepts_alliance_requests: f.accepts_alliance_requests,
         })
         .collect()
 }
@@ -256,6 +259,8 @@ struct RosterEntry {
     hold_structures_until_contact: bool,
     #[serde(default)]
     city_requires_gold: bool,
+    #[serde(default)]
+    accepts_alliance_requests: bool,
 }
 
 #[derive(serde::Deserialize)]
@@ -389,6 +394,7 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             assault_force: e.assault_force,
             hold_structures_until_contact: e.hold_structures_until_contact,
             city_requires_gold: e.city_requires_gold,
+            accepts_alliance_requests: e.accepts_alliance_requests,
         });
     }
     let player_color = match rf.player_color.as_deref() {

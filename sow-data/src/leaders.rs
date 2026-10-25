@@ -149,6 +149,17 @@ impl Leader {
         )
     }
 
+    /// Whether this hero's attacks gain strength, speed or fewer losses against `target`.
+    pub fn attack_ability_targets(self, target: Target) -> bool {
+        matches!(
+            self.ability(),
+            Ability::AttackStrength { against, .. }
+                | Ability::ConquestSpeed { against, .. }
+                | Ability::AttackerLoss { when: LossWhen::Against(against), .. }
+                if against == target
+        )
+    }
+
     /// `Some(bonus)` when this hero's `source` pays `resource` (its hero-only base).
     pub fn resource_bonus_hero_bonus(
         self,

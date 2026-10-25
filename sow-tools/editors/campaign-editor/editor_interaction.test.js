@@ -397,6 +397,95 @@ test("campaign studio authors cinematic endings and navigable validation notes",
 });
 
 
+test("campaign studio authors ordered Roman exchanges and previews the active speaker", () => {
+    const targets = ["colonia_veterans", "tax_collectors", "roman_supply_depot"];
+    const state = { definition: {
+        speakers: { boudica: {} },
+        steps: targets.map(target => ({ id: "gate_" + target, type: "objective", trigger: { type: "defeated", target } })),
+        reactions: []
+    } };
+    let dirty = 0;
+    const start = campaignEditor.indexOf("        function encounterGates(type)");
+    const end = campaignEditor.indexOf("        var addCampaignProvocation", start);
+    assert.ok(start >= 0 && end > start, "Campaign Studio uses its encounter authoring controls");
+    const author = vm.runInNewContext(campaignEditor.slice(start, end) + "\naddEncounterReaction;", {
+        state,
+        window: { SOWCampaign: { EXCHANGE_DEFAULT_REPLY_DELAY_MS: 700 } },
+        storyKey: id => "tutorial." + id,
+        uniqueId: (prefix, items) => {
+            const ids = new Set(items.map(item => item.id));
+            let value = prefix, suffix = 2;
+            while (ids.has(value)) value = prefix + "_" + suffix++;
+            return value;
+        },
+        markDirty: () => { dirty++; },
+        renderSettings() {}
+    });
+    for (let i = 0; i < targets.length; i++) author("contact");
+    for (let i = 0; i < targets.length; i++) author("pre_defeat");
+
+    const contacts = state.definition.reactions.filter(reaction => reaction.when.type === "contact");
+    const finalWords = state.definition.reactions.filter(reaction => reaction.when.type === "pre_defeat");
+    assert.deepEqual(contacts.map(reaction => reaction.when.target), targets);
+    assert.deepEqual(finalWords.map(reaction => reaction.when.target), targets);
+    for (const reaction of contacts) {
+        assert.equal(reaction.during, "gate_" + reaction.when.target);
+        assert.deepEqual(Array.from(reaction.exchange, line => line.delay_ms), [700, 0]);
+        assert.equal(state.definition.speakers[reaction.exchange[0].speaker].faction, reaction.when.target);
+        assert.equal(reaction.exchange[1].speaker, "boudica");
+    }
+    for (const reaction of finalWords) {
+        assert.equal(reaction.during, "gate_" + reaction.when.target);
+        assert.equal(reaction.exchange.length, 1, "last words do not add an automatic Boudica reply");
+    }
+    assert.equal(dirty, 6);
+    assert.match(campaignEditor, /Short emote bubble[\s\S]*Dialogue modal[\s\S]*Pause after line \(ms\)/);
+    assert.match(campaignEditor, /addCampaignProvocation\.addEventListener\("click", function \(\) \{ addEncounterReaction\("contact"\); \}\)/);
+    assert.match(campaignEditor, /addPreDefeatExchange\.addEventListener\("click", function \(\) \{ addEncounterReaction\("pre_defeat"\); \}\)/);
+    assert.match(campaignEditor, /window\.SOWCampaignView\.mount/);
+
+    const marker = { dataset: { factionId: targets[0] }, bubble: null, speaking: false,
+        appendChild(node) { this.bubble = node; },
+        classList: { add() { marker.speaking = true; }, remove() { marker.speaking = false; } } };
+    const previewStart = campaignEditor.indexOf("    function paintExchangePreview(model)");
+    const previewEnd = campaignEditor.indexOf("    function previewLocaleScript", previewStart);
+    const preview = campaignEditor.slice(previewStart, previewEnd) + "\npaintExchangePreview(model);";
+    vm.runInNewContext(preview, {
+        model: { exchange: { speaker: "faction_colonia_veterans", presentation: "emote", emote_text_key: "tutorial.colonia_taunt" }, exchange_phase: "speaking" },
+        state,
+        document: { querySelectorAll(selector) { return selector === "#campaignPreviewMarkers .sample-faction" ? [marker] : []; }, querySelector() { return null; } },
+        el: (tag, attrs, text) => ({ tag, ...attrs, textContent: text }),
+        translated: key => "en:" + key
+    });
+    assert.equal(marker.bubble.textContent, "en:tutorial.colonia_taunt");
+    assert.equal(marker.speaking, true);
+});
+
+test("campaign studio validates the resolved English emote copy before saving", () => {
+    let validationOptions = null;
+    const context = {
+        state: { isMenuGuides: false, definition: { reactions: [] }, roster: { factions: [] }, avatars: [] },
+        catalogValue: () => "English text",
+        textValue: () => "x".repeat(161),
+        window: {
+            SOWCampaign: {
+                validate: (_definition, _roster, options) => {
+                    validationOptions = options;
+                    return { errors: [], warnings: [] };
+                }
+            }
+        }
+    };
+    const start = campaignEditor.indexOf("    function valid() {");
+    const end = campaignEditor.indexOf("    function markDirty()", start);
+    assert.ok(start >= 0 && end > start, "Campaign Studio uses the shared campaign validator");
+    const valid = vm.runInNewContext(campaignEditor.slice(start, end) + "\nvalid;", context);
+    valid();
+    assert.equal(validationOptions.getText("tutorial.sample").length, 161,
+        "the preview validator sees the resolved English catalog text, not only the key");
+});
+
+
 test("branching sample preview preserves the episode draft and cannot be exported", () => {
     const demo = campaignEditor.slice(campaignEditor.indexOf("function demo()"), campaignEditor.indexOf("function createMenuGuide()"));
     assert.match(demo, /definition: JSON\.parse\(JSON\.stringify\(state\.definition\)\)/);

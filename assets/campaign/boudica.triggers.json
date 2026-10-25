@@ -23,9 +23,19 @@
       "outcome": "allied",
       "title_key": "tutorial.campaign_boudica_first_iceni_contact_title",
       "show_title": true,
-      "emote": "greet",
-      "emote_text_key": "tutorial.campaign_boudica_boudica_stand_with_you_emote",
-      "body_key": "tutorial.campaign_boudica_first_iceni_contact_body"
+      "body_key": "tutorial.campaign_boudica_first_iceni_contact_body",
+      "exchange": [
+        {
+          "speaker": "stonea",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_boudica_stonea_stand_with_you_emote"
+        },
+        {
+          "speaker": "boudica",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_stonea_reply_emote"
+        }
+      ]
     },
     {
       "id": "contact_snettisham",
@@ -80,16 +90,118 @@
       ]
     },
     {
-      "id": "contact_trinovantes",
-      "after": "boudica_trinovantes_contact",
+      "id": "colonia_veterans_contact",
       "when": {
         "type": "contact",
-        "target": "trinovantes"
+        "target": "colonia_veterans"
       },
-      "speaker": "trinovantes",
-      "outcome": "allied",
-      "title_key": "tutorial.campaign_boudica_boudica_trinovantes_offer_title",
-      "body_key": "tutorial.campaign_boudica_boudica_trinovantes_offer_body"
+      "during": "boudica_outpost_colonia_veterans",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "colonia_veterans",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_colonia_veterans_provoke_emote",
+          "delay_ms": 700
+        },
+        {
+          "speaker": "boudica",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_colonia_veterans_reply_emote"
+        }
+      ]
+    },
+    {
+      "id": "colonia_veterans_last_words",
+      "when": {
+        "type": "pre_defeat",
+        "target": "colonia_veterans"
+      },
+      "during": "boudica_outpost_colonia_veterans",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "colonia_veterans",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_colonia_veterans_last_words_emote"
+        }
+      ]
+    },
+    {
+      "id": "tax_collectors_contact",
+      "when": {
+        "type": "contact",
+        "target": "tax_collectors"
+      },
+      "during": "boudica_outpost_tax_collectors",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "tax_collectors",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_tax_collectors_provoke_emote",
+          "delay_ms": 700
+        },
+        {
+          "speaker": "boudica",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_tax_collectors_reply_emote"
+        }
+      ]
+    },
+    {
+      "id": "tax_collectors_last_words",
+      "when": {
+        "type": "pre_defeat",
+        "target": "tax_collectors"
+      },
+      "during": "boudica_outpost_tax_collectors",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "tax_collectors",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_tax_collectors_last_words_emote"
+        }
+      ]
+    },
+    {
+      "id": "roman_supply_depot_contact",
+      "when": {
+        "type": "contact",
+        "target": "roman_supply_depot"
+      },
+      "during": "boudica_outpost_roman_supply_depot",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "roman_supply_depot",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_roman_supply_depot_provoke_emote",
+          "delay_ms": 700
+        },
+        {
+          "speaker": "boudica",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_roman_supply_depot_reply_emote"
+        }
+      ]
+    },
+    {
+      "id": "roman_supply_depot_last_words",
+      "when": {
+        "type": "pre_defeat",
+        "target": "roman_supply_depot"
+      },
+      "during": "boudica_outpost_roman_supply_depot",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "roman_supply_depot",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_roman_supply_depot_last_words_emote"
+        }
+      ]
     }
   ],
   "speakers": {
@@ -112,6 +224,15 @@
     "trinovantes": {
       "name_key": "tutorial.campaign_boudica_speaker_envoy",
       "faction": "trinovantes"
+    },
+    "colonia_veterans": {
+      "faction": "colonia_veterans"
+    },
+    "tax_collectors": {
+      "faction": "tax_collectors"
+    },
+    "roman_supply_depot": {
+      "faction": "roman_supply_depot"
     }
   },
   "steps": [
@@ -404,41 +525,6 @@
       }
     },
     {
-      "id": "boudica_ally_support_wait",
-      "type": "objective",
-      "title_key": "tutorial.campaign_boudica_boudica_support_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_support_hint",
-      "speaker": "boudica",
-      "trigger": {
-        "type": "support",
-        "value": 1,
-        "scope": "total"
-      },
-      "next": "boudica_aid_choice"
-    },
-    {
-      "id": "boudica_aid_choice",
-      "type": "choice",
-      "title_key": "tutorial.campaign_boudica_boudica_aid_choice_title",
-      "body_key": "tutorial.campaign_boudica_boudica_aid_choice_body",
-      "speaker": "boudica",
-      "wait_before": true,
-      "choices": [
-        {
-          "id": "share",
-          "label_key": "tutorial.campaign_boudica_boudica_aid_choice_share",
-          "next": "boudica_transfer_target",
-          "body_key": "tutorial.campaign_boudica_boudica_aid_choice_share_detail"
-        },
-        {
-          "id": "keep",
-          "label_key": "tutorial.campaign_boudica_boudica_aid_choice_keep",
-          "next": "boudica_aid_kept",
-          "body_key": "tutorial.campaign_boudica_boudica_aid_choice_keep_detail"
-        }
-      ]
-    },
-    {
       "id": "boudica_transfer_target",
       "type": "guide",
       "title_key": "tutorial.campaign_boudica_boudica_transfer_target_title",
@@ -458,7 +544,8 @@
         "target": "player",
         "gesture": "tap"
       },
-      "next": "boudica_transfer_choose"
+      "next": "boudica_transfer_choose",
+      "unavailable_next": "boudica_aid_kept"
     },
     {
       "id": "boudica_transfer_choose",
@@ -480,7 +567,8 @@
         "target": "map_transfer",
         "gesture": "tap"
       },
-      "next": "boudica_transfer_send"
+      "next": "boudica_transfer_send",
+      "unavailable_next": "boudica_aid_kept"
     },
     {
       "id": "boudica_transfer_send",
@@ -501,46 +589,41 @@
         "target": "transfer_send",
         "gesture": "tap"
       },
-      "next": "boudica_share_sent"
+      "next": "boudica_share_sent",
+      "unavailable_next": "boudica_aid_kept"
     },
     {
       "id": "boudica_share_sent",
       "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_share_sent_title",
-      "show_title": true,
-      "body_key": "tutorial.campaign_boudica_boudica_share_sent_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "campaign_assault_on_enter": {
-        "attacker_team": "Blue",
-        "target": "camulodunum"
+      "exchange": [
+        {
+          "speaker": "trinovantes",
+          "emote": "celebrate",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_trinovantes_ready_emote"
+        },
+        {
+          "speaker": "boudica",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_camulodunum_order_emote"
+        }
+      ],
+      "next": "boudica_trinovantes_assault",
+      "marker": {
+        "target": "trinovantes"
       },
-      "next": "boudica_camulodunum",
-      "camera": {
-        "shot": "link",
-        "from": "trinovantes",
-        "to": "camulodunum",
-        "seconds": 3
-      }
+      "unavailable_next": "boudica_aid_kept"
     },
     {
       "id": "boudica_aid_kept",
       "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_aid_kept_title",
-      "show_title": true,
-      "body_key": "tutorial.campaign_boudica_boudica_aid_kept_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "campaign_halt_on_enter": {
-        "faction_id": "trinovantes"
-      },
-      "next": "boudica_camulodunum",
-      "camera": {
-        "shot": "reveal",
-        "from": "player",
-        "to": "camulodunum",
-        "seconds": 3
-      }
+      "exchange": [
+        {
+          "speaker": "boudica",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_march_alone_emote"
+        }
+      ],
+      "next": "boudica_camulodunum"
     },
     {
       "id": "boudica_choose_city",
@@ -595,8 +678,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_build_city_title",
       "hint_key": "tutorial.campaign_boudica_boudica_build_city_hint",
       "speaker": "boudica",
-      "emote": "celebrate",
-      "emote_text_key": "tutorial.campaign_boudica_boudica_home_rebuilt_emote",
       "trigger": {
         "type": "structure_level",
         "kind": "City",
@@ -606,6 +687,18 @@
       "marker": {
         "target": "player"
       },
+      "next": "boudica_city_rebuilt"
+    },
+    {
+      "id": "boudica_city_rebuilt",
+      "type": "scene",
+      "exchange": [
+        {
+          "speaker": "boudica",
+          "emote": "celebrate",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_home_rebuilt_emote"
+        }
+      ],
       "next": "boudica_first_contact"
     },
     {
@@ -642,11 +735,18 @@
     {
       "id": "boudica_snettisham_refuse_reply",
       "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_snettisham_refuse_title",
-      "show_title": true,
-      "body_key": "tutorial.campaign_boudica_boudica_snettisham_refuse_body",
-      "speaker": "snettisham",
-      "presentation": "dialogue",
+      "exchange": [
+        {
+          "speaker": "snettisham",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_snettisham_refuse_emote"
+        },
+        {
+          "speaker": "boudica",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_refuse_reply_emote"
+        }
+      ],
       "next": "boudica_third_contact",
       "camera": {
         "shot": "link",
@@ -658,8 +758,8 @@
     {
       "id": "boudica_snettisham_accept_wait",
       "type": "objective",
-      "title_key": "tutorial.campaign_boudica_boudica_build_city_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_build_city_hint",
+      "title_key": "tutorial.campaign_boudica_boudica_snettisham_rebuild_title",
+      "hint_key": "tutorial.campaign_boudica_boudica_snettisham_rebuild_hint",
       "speaker": "snettisham",
       "trigger": {
         "type": "structure_level",
@@ -676,11 +776,18 @@
     {
       "id": "boudica_snettisham_accept_reply",
       "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_snettisham_accept_title",
-      "show_title": true,
-      "body_key": "tutorial.campaign_boudica_boudica_snettisham_accept_body",
-      "speaker": "snettisham",
-      "presentation": "dialogue",
+      "exchange": [
+        {
+          "speaker": "snettisham",
+          "emote": "celebrate",
+          "emote_text_key": "tutorial.campaign_boudica_snettisham_accept_emote"
+        },
+        {
+          "speaker": "boudica",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_accept_reply_emote"
+        }
+      ],
       "next": "boudica_third_contact",
       "camera": {
         "shot": "link",
@@ -800,7 +907,175 @@
         "target": "expand",
         "gesture": "tap"
       },
-      "next": "boudica_ally_support_wait"
+      "next": "boudica_trinovantes_greeting",
+      "unavailable_next": "boudica_aid_kept"
+    },
+    {
+      "id": "boudica_trinovantes_greeting",
+      "type": "scene",
+      "exchange": [
+        {
+          "speaker": "trinovantes",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_trinovantes_greeting_emote"
+        }
+      ],
+      "next": "boudica_alliance_target",
+      "marker": {
+        "target": "trinovantes"
+      },
+      "unavailable_next": "boudica_aid_kept",
+      "camera": {
+        "shot": "approach",
+        "from": "player",
+        "to": "trinovantes",
+        "seconds": 1,
+        "machinima": true
+      }
+    },
+    {
+      "id": "boudica_alliance_target",
+      "type": "guide",
+      "title_key": "tutorial.campaign_boudica_boudica_alliance_target_title",
+      "hint_key": "tutorial.campaign_boudica_boudica_alliance_target_hint",
+      "speaker": "boudica",
+      "pause_game": true,
+      "trigger": {
+        "type": "ui",
+        "action": "map_menu_open",
+        "scope": "step"
+      },
+      "marker": {
+        "target": "trinovantes"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "player",
+        "gesture": "tap"
+      },
+      "unavailable_next": "boudica_aid_kept",
+      "next": "boudica_alliance_request"
+    },
+    {
+      "id": "boudica_alliance_request",
+      "type": "guide",
+      "title_key": "tutorial.campaign_boudica_boudica_alliance_request_title",
+      "hint_key": "tutorial.campaign_boudica_boudica_alliance_request_hint",
+      "speaker": "boudica",
+      "pause_game": true,
+      "trigger": {
+        "type": "alliance_request",
+        "target": "trinovantes",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "trinovantes"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "map_alliance",
+        "gesture": "tap"
+      },
+      "unavailable_next": "boudica_aid_kept",
+      "next": "boudica_alliance_reply",
+      "paused_action": "request_alliance_stay_paused"
+    },
+    {
+      "id": "boudica_alliance_reply",
+      "type": "scene",
+      "exchange": [
+        {
+          "speaker": "boudica",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_alliance_reply_emote"
+        }
+      ],
+      "next": "boudica_alliance_wait",
+      "marker": {
+        "target": "trinovantes"
+      },
+      "unavailable_next": "boudica_aid_kept"
+    },
+    {
+      "id": "boudica_alliance_wait",
+      "type": "objective",
+      "title_key": "tutorial.campaign_boudica_boudica_alliance_wait_title",
+      "speaker": "boudica",
+      "pause_game": true,
+      "trigger": {
+        "type": "alliance",
+        "target": "trinovantes",
+        "scope": "total",
+        "value": 1
+      },
+      "marker": {
+        "target": "trinovantes"
+      },
+      "campaign_accept_alliance_on_enter": {
+        "faction_id": "trinovantes"
+      },
+      "unavailable_next": "boudica_aid_kept",
+      "next": "boudica_trinovantes_supplies"
+    },
+    {
+      "id": "boudica_trinovantes_supplies",
+      "type": "scene",
+      "exchange": [
+        {
+          "speaker": "trinovantes",
+          "emote": "help",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_trinovantes_supplies_emote"
+        },
+        {
+          "speaker": "boudica",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_boudica_boudica_supplies_reply_emote"
+        }
+      ],
+      "next": "boudica_supplies_available",
+      "marker": {
+        "target": "trinovantes"
+      },
+      "unavailable_next": "boudica_aid_kept"
+    },
+    {
+      "id": "boudica_supplies_available",
+      "type": "objective",
+      "title_key": "tutorial.campaign_boudica_boudica_supplies_available_title",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "resources_available",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "trinovantes"
+      },
+      "unavailable_next": "boudica_aid_kept",
+      "next": "boudica_transfer_target"
+    },
+    {
+      "id": "boudica_trinovantes_assault",
+      "type": "objective",
+      "title_key": "tutorial.campaign_boudica_boudica_trinovantes_assault_title",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "elapsed",
+        "value": 1.2,
+        "scope": "step"
+      },
+      "campaign_assault_on_enter": {
+        "attacker_team": "Blue",
+        "target": "camulodunum"
+      },
+      "camera": {
+        "shot": "link",
+        "from": "trinovantes",
+        "to": "camulodunum",
+        "seconds": 1.2
+      },
+      "next": "boudica_camulodunum"
     },
     {
       "id": "boudica_outpost_colonia_veterans",
@@ -1189,14 +1464,6 @@
       "x": 2310,
       "y": 450
     },
-    "boudica_ally_support_wait": {
-      "x": 70,
-      "y": 640
-    },
-    "boudica_aid_choice": {
-      "x": 350,
-      "y": 640
-    },
     "boudica_transfer_target": {
       "x": 630,
       "y": 640
@@ -1227,6 +1494,10 @@
     },
     "boudica_city_construction_wait": {
       "x": 350,
+      "y": 1210
+    },
+    "boudica_city_rebuilt": {
+      "x": 630,
       "y": 1210
     },
     "boudica_structure_upgrade": {
@@ -1312,6 +1583,38 @@
     "boudica_outpost_roman_supply_depot": {
       "x": 70,
       "y": 1850
+    },
+    "boudica_trinovantes_greeting": {
+      "x": 70,
+      "y": 640
+    },
+    "boudica_alliance_target": {
+      "x": 350,
+      "y": 640
+    },
+    "boudica_alliance_request": {
+      "x": 630,
+      "y": 640
+    },
+    "boudica_alliance_reply": {
+      "x": 910,
+      "y": 640
+    },
+    "boudica_alliance_wait": {
+      "x": 70,
+      "y": 830
+    },
+    "boudica_trinovantes_supplies": {
+      "x": 350,
+      "y": 830
+    },
+    "boudica_supplies_available": {
+      "x": 630,
+      "y": 830
+    },
+    "boudica_trinovantes_assault": {
+      "x": 910,
+      "y": 830
     }
   },
   "faction_story_names": {

@@ -316,7 +316,7 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const pendingTutorialFetches = [];
     const tutorialCommands = [];
-    window.SOW_t = key => key;
+    window.SOW_t = key => key.startsWith("tutorial.") ? "Text for " + key : key;
     window.SOW_hasText = key => Boolean(window.SOW_t(key));
     window.SOW_menu_command = message => tutorialCommands.push(JSON.parse(message));
     window.SOWCampaign = campaign;

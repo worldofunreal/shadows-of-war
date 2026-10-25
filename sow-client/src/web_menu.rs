@@ -71,6 +71,10 @@ enum WebMenuCommand {
         #[serde(default)]
         hold_last_tile: bool,
     },
+    AcceptCampaignAlliance {
+        faction_id: String,
+        campaign_session_id: u32,
+    },
     SetTutorialPaused {
         paused: bool,
         #[serde(default)]
@@ -291,6 +295,20 @@ enum WebMenuCommand {
         /// Campaign faction that emotes; `None` is the player.
         #[serde(default)]
         faction_id: Option<String>,
+        #[serde(default)]
+        token: Option<String>,
+        #[serde(default)]
+        campaign_session_id: Option<u32>,
+        #[serde(default)]
+        message: Option<String>,
+    },
+    SetCampaignPreDefeatTargets {
+        faction_ids: Vec<String>,
+        campaign_session_id: u32,
+    },
+    ContinueCampaignPreDefeat {
+        faction_id: String,
+        campaign_session_id: u32,
     },
     ClearEmote,
     SetEmotePinned {
@@ -467,6 +485,7 @@ struct HudPublishKey {
     tutorial_camera_zoom_hundredths: i32,
     tutorial_target_zoom_hundredths: i32,
     tutorial_marker_player_id: Option<u16>,
+    tutorial_emote_token: Option<String>,
     tutorial_pointer: Option<(u64, u64)>,
     tutorial_camera_viewport: Option<(u32, u32, u32, u32)>,
     hovered_tile: u32,
@@ -765,6 +784,20 @@ impl SowApp {
                         && !engine.halt_campaign_faction(&faction_id)
                     {
                         log::warn!("[CAMPAIGN] halt target is missing: {faction_id}");
+                    }
+                }
+                WebMenuCommand::AcceptCampaignAlliance { faction_id, campaign_session_id } => {
+                    if !self.ui.tutorial_active || !self.net.is_offline || campaign_session_id != self.ui.campaign_session_id {
+                        continue;
+                    }
+                    let Some(human) = self.sim.my_player_id else { continue; };
+                    let actor = self.sim.engine.as_ref().and_then(|engine| {
+                        let actor = engine.campaign_player_id(&faction_id)?;
+                        (engine.state.config.tutorial && engine.has_alliance_proposal(human, actor))
+                            .then_some(actor)
+                    });
+                    if let Some(actor) = actor {
+                        self.apply_paused_tutorial_intent_as(actor, sow_core::protocol::GameplayIntent::AcceptAlliance { target_player: human });
                     }
                 }
                 WebMenuCommand::ActivateCampaignAssault {
@@ -1422,27 +1455,101 @@ impl SowApp {
                     self.ui.app.settings_state.show_fps_ping = value;
                     self.ui.app.settings_state.persist_local();
                 }
-                WebMenuCommand::TutorialEmote {
-                    kind,
-                    pinned,
-                    faction_id: Some(faction_id),
-                } => {
-                    if self.ui.tutorial_active
-                        && self.net.is_offline
-                        && let Some(engine) = self.sim.engine.as_mut()
-                        && engine.state.config.tutorial
-                        && !engine.campaign_faction_emote(&faction_id, kind, pinned)
-                    {
-                        log::warn!("[CAMPAIGN] emote faction is missing: {faction_id}");
+                WebMenuCommand::TutorialEmote { kind, pinned, faction_id, token, campaign_session_id, message } => {
+                    let has_scripted_line = token.is_some() || message.is_some();
+                    if kind.is_none() && message.is_none() && let Some(token) = token.as_deref() {
+                        if !self.net.is_offline { continue; }
+                        if let Some((player_id, event_id)) = self.ui.nameplates.clear_campaign_emote_token(token)
+                            && let Some(engine) = self.sim.engine.as_mut()
+                        {
+                            let tick = engine.state.tick;
+                            if let Some(player) = engine.state.player_mut(player_id)
+                                && player.active_emote.is_some_and(|event| event.scripted && event.event_id == event_id)
+                            {
+                                sow_core::emote::express(player, None, false, true, tick);
+                                self.sim.current_snapshot = Some(engine.build_snapshot());
+                            }
+                        }
+                        continue;
                     }
-                }
-                WebMenuCommand::TutorialEmote { kind, pinned, faction_id: None } => {
-                    // Campaign step directive: `None` releases the current emote.
-                    let intent = match kind {
-                        Some(kind) => sow_core::protocol::GameplayIntent::ExpressEmote { kind, pinned },
-                        None => sow_core::protocol::GameplayIntent::ClearEmote,
+                    if !self.ui.tutorial_active || !self.net.is_offline
+                        || (has_scripted_line && (self.ui.campaign_session_id == 0 || campaign_session_id != Some(self.ui.campaign_session_id)))
+                        || token.as_ref().is_some_and(|value| value.len() > 192)
+                        || message.as_ref().is_some_and(|value| {
+                            let trimmed = value.trim();
+                            trimmed.is_empty() || trimmed.chars().count() > 160 || trimmed.chars().any(char::is_control)
+                        })
+                        || (message.is_some() && token.is_none())
+                        || (token.is_some() && kind.is_some() && message.is_none())
+                        || (token.is_some() && kind.is_none() && message.is_some())
+                    {
+                        continue;
+                    }
+                    if faction_id.is_none() && token.is_none() && message.is_none() {
+                        if let Some(player_id) = self.sim.my_player_id {
+                            self.ui.nameplates.clear_campaign_emote(None, player_id);
+                        }
+                        let intent = match kind {
+                            Some(kind) => sow_core::protocol::GameplayIntent::ExpressEmote { kind, pinned },
+                            None => sow_core::protocol::GameplayIntent::ClearEmote,
+                        };
+                        self.send_intent(intent);
+                        continue;
+                    }
+                    let Some(engine) = self.sim.engine.as_mut().filter(|engine| engine.state.config.tutorial) else { continue; };
+                    let player_id = faction_id.as_deref().and_then(|id| engine.campaign_player_id(id))
+                        .or_else(|| faction_id.is_none().then_some(self.sim.my_player_id).flatten());
+                    let Some(player_id) = player_id else {
+                        log::warn!("[CAMPAIGN] emote speaker is missing: {faction_id:?}");
+                        continue;
                     };
-                    self.send_intent(intent);
+                    if let Some(token) = token.as_deref()
+                        && kind.is_none()
+                        && !self.ui.nameplates.campaign_emote_matches(token, player_id)
+                    {
+                        continue;
+                    }
+                    let tick = engine.state.tick;
+                    let Some(player) = engine.state.player_mut(player_id).filter(|player| player.alive) else { continue; };
+                    sow_core::emote::express(player, kind, pinned, true, tick);
+                    if let (Some(token), Some(message), Some(event)) = (token.as_ref(), message, player.active_emote) {
+                        if !self.ui.nameplates.set_campaign_emote(player_id, event.event_id, token.clone(), message) {
+                            log::warn!("[CAMPAIGN] invalid authored emote line rejected");
+                            continue;
+                        }
+                    } else {
+                        self.ui.nameplates.clear_campaign_emote(token.as_deref(), player_id);
+                    }
+                    // Story commands publish immediately, including while the simulation is paused.
+                    self.sim.current_snapshot = Some(engine.build_snapshot());
+                }
+                WebMenuCommand::SetCampaignPreDefeatTargets { faction_ids, campaign_session_id } => {
+                    if !self.ui.tutorial_active || !self.net.is_offline || self.ui.campaign_session_id == 0
+                        || campaign_session_id != self.ui.campaign_session_id || faction_ids.len() > 16
+                    {
+                        continue;
+                    }
+                    let mut unique = std::collections::HashSet::new();
+                    if faction_ids.iter().any(|id| !unique.insert(id.as_str())) {
+                        continue;
+                    }
+                    let Some(engine) = self.sim.engine.as_mut().filter(|engine| engine.state.config.tutorial) else { continue; };
+                    if faction_ids.iter().any(|id| engine.campaign_player_id(id).is_none()) {
+                        log::warn!("[CAMPAIGN] pre-defeat watch references an unknown faction");
+                        continue;
+                    }
+                    engine.set_campaign_pre_defeat_targets(&faction_ids);
+                }
+                WebMenuCommand::ContinueCampaignPreDefeat { faction_id, campaign_session_id } => {
+                    if !self.ui.tutorial_active || !self.net.is_offline || self.ui.campaign_session_id == 0
+                        || campaign_session_id != self.ui.campaign_session_id
+                    {
+                        continue;
+                    }
+                    let Some(engine) = self.sim.engine.as_mut().filter(|engine| engine.state.config.tutorial) else { continue; };
+                    if !engine.continue_campaign_pre_defeat(&faction_id) {
+                        log::warn!("[CAMPAIGN] ignored pre-defeat continuation without a matching held faction");
+                    }
                 }
                 WebMenuCommand::ExpressEmote {
                     session,
@@ -1749,6 +1856,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         } else {
             None
         },
+        tutorial_emote_token: if tutorial_active { app.ui.nameplates.campaign_emote_ready_token().map(str::to_owned) } else { None },
         tutorial_pointer: if tutorial_active {
             Some((
                 app.input.last_mouse_x.to_bits(),
@@ -2670,6 +2778,14 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             )
         })
         .collect::<std::collections::BTreeMap<_, _>>();
+    let alliance_request_faction_ids: Vec<String> = app.sim.engine.as_ref().map(|engine| {
+        engine.alliances_proposed.iter().filter(|proposal| proposal.proposer == my_pid)
+            .filter_map(|proposal| engine.campaign_faction_ids.get(&proposal.target).cloned()).collect()
+    }).unwrap_or_default();
+    let hostile_faction_ids: Vec<String> = app.sim.engine.as_ref().map(|engine| {
+        engine.campaign_relations.iter().filter(|(_, relation)| **relation == sow_core::protocol::CampaignRelation::Enemy)
+            .filter_map(|(id, _)| engine.campaign_faction_ids.get(id).cloned()).collect()
+    }).unwrap_or_default();
     serde_json::json!({
         "active": true,
         "episode_id": app.ui.tutorial_campaign.episode_id(),
@@ -2699,6 +2815,8 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         "upgrading_buildings": upgrading_buildings,
         "nameplate": nameplate_screen,
         "target_nameplate": target_nameplate,
+        "marker_player_id": marker_player_id,
+        "emote_token": app.ui.nameplates.campaign_emote_ready_token(),
         "player": player_screen,
         "camera": {
             "x": app.input.camera_x,
@@ -2710,6 +2828,9 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         },
         "pointer": hover_pointer,
         "facts": {
+            "alliance_request_faction_ids": alliance_request_faction_ids,
+            "hostile_faction_ids": hostile_faction_ids,
+            "alliance_requests_submitted": observation.alliance_requests_submitted,
             "tutorial_target_hovered": tutorial_target_hovered,
             "tiles": me.map(|player| player.tile_count).unwrap_or(0),
             "tiles_gained": observation.tiles_gained,
@@ -2733,6 +2854,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "defeated": observation.seen_defeated.len(),
             "defeated_faction_ids": observation.seen_defeated_faction_ids,
             "eliminated_faction_ids": observation.eliminated_faction_ids,
+            "pre_defeat_faction_ids": observation.pre_defeat_faction_ids,
             "contacts": observation.seen_contacts.len(),
             "contact_faction_ids": observation.seen_contact_faction_ids,
             "attacks": observation.seen_attacks.len(),
