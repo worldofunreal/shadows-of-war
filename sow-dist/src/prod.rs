@@ -1501,6 +1501,9 @@ fn relay_active_match_count(config: &Config) -> Result<usize> {
 }
 
 fn relay_can_handover(config: &Config, release: &Release) -> Result<bool> {
+    // A saved manifest describes installed content, not a living coordinator.
+    // Stopped services must use controlled recovery rather than live handover.
+    if relay_workers_stopped(config)? { return Ok(false); }
     let candidate: serde_json::Value = serde_json::from_slice(&fs::read(release.dir.join("release.json"))?)?;
     let Some(running) = relay_manifest_remote(config)? else { return Ok(false) };
     let expected = candidate["relay"]["foundation"].as_str().context("relay foundation missing")?;
@@ -1624,7 +1627,11 @@ fn activate_relay_host(config: &Config, release: &Release) -> Result<()> {
     if relay_can_handover(config, release)? {
         return activate_relay_handover(config, release);
     }
-    let active = relay_active_match_count(config)?;
+    let active = if relay_workers_stopped(config)? {
+        0
+    } else {
+        relay_active_match_count(config)?
+    };
     if active != 0 { bail!("refusing network-library replacement while {active} matches remain"); }
     let env = RelayEnv::load()?;
     let relay_fstack = fstack_version(config)?;
@@ -2140,6 +2147,10 @@ fn prepare_relay_dpdk(paths: &Paths, config: &Config, source: &str) -> Result<Pa
     fs::create_dir_all(&root)?;
     let script = format!(
         r#"set -eu
+if ! /usr/bin/python3 -c 'import elftools' >/dev/null 2>&1; then
+  apt-get update
+  apt-get install -y --no-install-recommends python3-pyelftools
+fi
 configure=
 if [ -f {build}/build.ninja ]; then configure=--reconfigure; fi
 meson setup $configure {build} {src} --prefix {prefix} --libdir lib -Dplatform=generic -Ddefault_library=static -Denable_kmods=false -Dtests=false -Dexamples=

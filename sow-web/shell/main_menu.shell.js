@@ -19,6 +19,7 @@
     var completedLoaderCycleId = -1;
     var deleteArmed = false;
     var deleteBusy = false;
+    var deleteError = "";
     var activeMenuPointerId = null;
     var renderPending = false;
     var renderFlushTimer = null;
@@ -479,7 +480,6 @@
         return renderSettingsLink("https://shadowsofwar.io/#faq", "site.faq") +
             renderSettingsLink("https://shadowsofwar.io/support/", "menu.support") +
             renderSettingsLink("https://shadowsofwar.io/terms/", "menu.terms") +
-            renderSettingsLink("https://shadowsofwar.io/privacy/", "menu.privacy") +
             renderSettingsLink("https://shadowsofwar.io/cookies/", "menu.cookies") +
             cookieSettings +
             renderSettingsLink("https://discord.gg/d6ZDeChSE", "menu.discord") +
@@ -568,6 +568,7 @@
                                 SOW_renderDropdown({ key: "settings-language", className: "sow-menu__settings-dropdown", label: SOW_t("menu.language"), name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
                             "</div>" +
                         "</div></section>" +
+                        renderSettingsPrivacySection(renderSettingsLink("https://shadowsofwar.io/privacy/", "menu.privacy")) +
                         "<section class='sow-menu__settings-section'><h3>" + esc(SOW_t("menu.game_links")) + "</h3><nav class='sow-menu__settings-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'>" + renderSettingsLinks() + "</nav></section>" +
                     "</div>" +
                 "</section>" +
@@ -732,6 +733,25 @@
     }
 
     /* POKI_RENDER_REPLACEMENT_END */
+
+    function renderSettingsPrivacySection(privacyLinkMarkup) {
+        var deleteControl = "";
+        if (selfCreds()) {
+            deleteControl = deleteBusy
+                ? "<p class='sow-menu__settings-delete-status' role='status'>" + esc(SOW_t("profile.deleting_account")) + "</p>"
+                : deleteArmed
+                    ? "<section class='sow-menu__settings-confirm' role='alertdialog' aria-label='" + esc(SOW_t("profile.delete_account")) + "'><p>" + esc(SOW_t("profile.permanent_delete")) + "</p><div class='sow-menu__settings-confirm-actions'><button class='sow-menu__secondary' type='button' data-command='cancel_delete'>" + esc(SOW_t("lobbies.cancel")) + "</button><button class='sow-menu__danger' type='button' data-command='confirm_delete'>" + esc(SOW_t("profile.delete_confirm")) + "</button></div></section>"
+                    : "<button class='sow-menu__danger sow-menu__settings-delete' type='button' data-command='request_delete'>" + esc(SOW_t("profile.delete_account")) + "</button>";
+        }
+        var error = deleteError
+            ? "<p class='sow-menu__settings-delete-error' role='alert'>" + esc(deleteError) + "</p>"
+            : "";
+        var privacyLink = privacyLinkMarkup
+            ? "<nav class='sow-menu__settings-links sow-menu__settings-privacy-links' aria-label='" + esc(SOW_t("menu.privacy")) + "'>" + privacyLinkMarkup + "</nav>"
+            : "";
+        return "<section class='sow-menu__settings-section sow-menu__settings-privacy'><h3>" + esc(SOW_t("menu.privacy")) + "</h3>" + privacyLink + deleteControl + error + "</section>";
+    }
+
     function renderScreenPanel(screen) {
         if (screen === "home") return renderHome();
         if (screen === "campaign") return renderCampaign();
@@ -1619,7 +1639,7 @@
             }
             return;
         }
-        if (command === "open_profile" || command === "open_public_profile") {
+        if (command === "open_profile") {
             storeOpen = false;
             heroesOpen = false;
             campaignOpen = false;
@@ -1632,7 +1652,6 @@
             heroesOpen = false;
             profileAccountId = null;
             profileData = null;
-            profileSearchResults = [];
             profileMatchDetail = null;
             profileDetailLoading = false;
             profileDetailRequestKey = null;
@@ -1758,30 +1777,37 @@
             return;
         }
         if (command === "request_delete") {
+            if (!settingsOpen || !selfCreds() || deleteBusy) return;
             deleteArmed = true;
+            deleteError = "";
             render();
             return;
         }
         if (command === "cancel_delete") {
             deleteArmed = false;
+            deleteError = "";
             render();
             return;
         }
         if (command === "confirm_delete") {
             var delCreds = selfCreds();
-            if (!delCreds || deleteBusy) {
+            if (!settingsOpen || !deleteArmed || !delCreds || deleteBusy) {
                 deleteArmed = false;
                 render();
                 return;
             }
             deleteBusy = true;
+            deleteError = "";
             render();
             fetch(profileApi("/profile/anonymous/delete"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Accept": "application/json" },
                 body: JSON.stringify({ account_id: delCreds.account_id, auth_secret: delCreds.auth_secret })
             }).then(function (response) {
-                if (!response.ok) throw new Error("delete failed");
+                return response.json().catch(function () { return {}; }).then(function (data) {
+                    if (!response.ok || data.deleted !== true) throw new Error("delete failed");
+                });
+            }).then(function () {
                 try {
                     ["sow_account_id", "sow_account_secret", "sow_player_progress", "poki_ignore_sow_pending_display_name"].forEach(function (k) {
                         window.localStorage.removeItem(k);
@@ -1791,7 +1817,7 @@
             }).catch(function () {
                 deleteBusy = false;
                 deleteArmed = false;
-                    state.error = SOW_t("menu.account_deletion_unavailable");
+                deleteError = SOW_t("menu.account_deletion_unavailable");
                 render();
             });
             return;
@@ -1800,7 +1826,6 @@
             profileOpen = false;
             profileAccountId = null;
             profileMatchDetail = null;
-            profileSearchResults = [];
             storeOpen = false;
             campaignOpen = false;
             heroesOpen = true;
@@ -1961,7 +1986,11 @@
         }
         if (command === "toggle_settings") {
             settingsOpen = !settingsOpen;
-            if (!settingsOpen) signOutConfirmOpen = false;
+            if (!settingsOpen) {
+                signOutConfirmOpen = false;
+                deleteArmed = false;
+                deleteError = "";
+            }
             authModalOpen = false;
             render();
             return;
@@ -2218,6 +2247,8 @@
             }
             settingsOpen = false;
             signOutConfirmOpen = false;
+            deleteArmed = false;
+            deleteError = "";
             dropdownOpenKey = null;
             render();
             return;
@@ -2274,29 +2305,6 @@
             return;
         }
         /* POKI_SHARED_AUTH_SUBMIT_END */
-        if (form.dataset.form === "profile-search") {
-            event.preventDefault();
-            var query = form.elements.q.value.trim();
-            fetch(profileApi("/profiles/search?q=" + encodeURIComponent(query) + "&limit=20"), {
-                headers: { "Accept": "application/json" }
-            }).then(function (response) {
-                if (!response.ok) throw new Error("profile search failed");
-                return response.json();
-            }).then(function (data) {
-                profileSearchResults = Array.isArray(data.items) ? data.items : [];
-                profileSearchResults = profileSearchResults.filter(function (s) {
-                    return !isBlockedAccountId(s && s.account_id);
-                });
-                profileSearchResults.forEach(function (summary) {
-                    cacheProfileSeed(summary.account_id, profileSeedFromSummary(summary));
-                });
-            }).catch(function () {
-                profileSearchResults = [];
-            }).finally(function () {
-                render();
-            });
-            return;
-        }
         if (form.dataset.form === "report") {
             event.preventDefault();
             if (reportBusy) return;

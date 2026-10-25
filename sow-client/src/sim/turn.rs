@@ -395,7 +395,7 @@ impl SowApp {
             && self.sim.config.tutorial
             && my_id != 0;
         let pending = self.ui.app.hud_state.building_placement;
-        let (mut snap, events, placement_result) = {
+        let (mut snap, events, placement_result, troops_spent) = {
             let Some(engine) = self.sim.engine.as_mut() else {
                 return;
             };
@@ -418,7 +418,8 @@ impl SowApp {
                 player_id: actor_id,
                 intent,
             }];
-            engine.apply_intents(&intents);
+            let troops_spent =
+                engine.apply_intents_tracking_troop_spend(&intents, Some(my_id));
             let placement_result =
                 building_confirmation_result(pending, my_id, &intents, &engine.state.events);
             if let Some(before) = neutral_attack_troops_before {
@@ -442,8 +443,13 @@ impl SowApp {
             }
             let snap = engine.build_snapshot();
             let events = std::mem::take(&mut engine.state.events);
-            (snap, events, placement_result)
+            (snap, events, placement_result, troops_spent)
         };
+        self.ui.nameplates.animate_troop_change(
+            my_id,
+            -troops_spent,
+            web_time::Instant::now(),
+        );
         self.process_tick_events(events, &snap, my_id);
         self.apply_snapshot_fx(&mut snap, my_id);
         self.sim.current_snapshot = Some(snap);
@@ -461,7 +467,7 @@ impl SowApp {
         let my_id = self.sim.my_player_id.unwrap_or(0);
         let observe_tutorial = self.net.is_offline && self.sim.config.tutorial && my_id != 0;
         let pending = self.ui.app.hud_state.building_placement;
-        let (mut snap, events, local_spawn_target, placement_result) = {
+        let (mut snap, events, local_spawn_target, placement_result, troops_spent) = {
             let Some(e) = self.sim.engine.as_mut() else {
                 return;
             };
@@ -490,7 +496,8 @@ impl SowApp {
                 } else {
                     Vec::new()
                 };
-            e.apply_intents(&turn.intents);
+            let troops_spent =
+                e.apply_intents_tracking_troop_spend(&turn.intents, Some(my_id));
             let placement_result =
                 building_confirmation_result(pending, my_id, &turn.intents, &e.state.events);
             let local_spawn_target = local_spawn_targets
@@ -517,8 +524,14 @@ impl SowApp {
             let mut events = std::mem::take(&mut e.state.events);
             events.append(&mut lifecycle_events);
             events.append(&mut ability_events);
-            (snap, events, local_spawn_target, placement_result)
+            (snap, events, local_spawn_target, placement_result, troops_spent)
         };
+
+        self.ui.nameplates.animate_troop_change(
+            my_id,
+            -troops_spent,
+            web_time::Instant::now(),
+        );
 
         let turn_defeats = self.process_tick_events(events, &snap, my_id);
 

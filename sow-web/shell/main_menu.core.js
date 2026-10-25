@@ -31,7 +31,6 @@
     var profileData = null;
     var profileHistory = [];
     var profileMatchDetail = null;
-    var profileSearchResults = [];
     var profileCache = Object.create(null);
     var profileSnapshotLoading = false;
     var profileHistoryLoading = false;

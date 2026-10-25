@@ -15,8 +15,8 @@
    "hero": {
     "name": "Caesar",
     "ability": {
-     "kind": "attack_strength",
-     "against": "anyone",
+     "kind": "attacker_loss",
+     "when": "landing",
      "percent": 10
     },
     "card": "sow-caesar"
@@ -8100,8 +8100,8 @@
    "hero": {
     "name": "Sayyid Said",
     "ability": {
-     "kind": "enemy_retreat_penalty",
-     "against": "tribe",
+     "kind": "attacker_loss",
+     "when": "coast",
      "percent": 50
     }
    },

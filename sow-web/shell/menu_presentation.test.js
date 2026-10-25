@@ -24,6 +24,8 @@ const menuCss = Object.fromEntries(menuCssFiles.map((file) => [file, fs.readFile
 const storeSource = fs.readFileSync(path.join(shell, "main_menu.store.js"), "utf8");
 const profileCss = fs.readFileSync(path.join(shell, "main_menu.profile.css"), "utf8");
 const profileSource = fs.readFileSync(path.join(shell, "main_menu.profile.js"), "utf8");
+const serverSource = fs.readFileSync(path.join(shell, "../../sow-data/src/main.rs"), "utf8");
+const privacyPage = fs.readFileSync(path.join(shell, "../site/privacy/index.html"), "utf8");
 const nativeProfileSource = [
     "../../sow-client/src/app/account.rs",
     "../../sow-client/src/asset.rs",
@@ -34,6 +36,7 @@ const nativeProfileSource = [
     "../../sow-client/src/ui.rs"
 ].map((file) => fs.readFileSync(path.join(shell, file), "utf8")).join("\n");
 const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.js"), "utf8");
+const jestSource = fs.readFileSync(path.join(shell, "main_menu.jest.js"), "utf8");
 const storyCss = fs.readFileSync(path.join(shell, "main_menu.tutorial.css"), "utf8");
 const siteDistSource = fs.readFileSync(path.join(shell, "../../sow-dist/src/main.rs"), "utf8");
 const prodDistSource = fs.readFileSync(path.join(shell, "../../sow-dist/src/prod.rs"), "utf8");
@@ -301,10 +304,31 @@ test("settings panel keeps only useful controls and real account state", () => {
         assert.match(body, /menu\.music_volume/);
         assert.match(body, /menu\.motion_animation/);
         assert.match(body, /menu\.language/);
+        assert.match(body, /renderSettingsPrivacySection/);
         assert.match(body, /account-value/);
         assert.match(body, /settings-account/);
         assert.doesNotMatch(body, /system_configuration|menu\.done|master_audio|settings-mute|account-row|WOU-ID|\+1/);
     }
+    assert.match(renderSettingsBody(jestSource, "function renderMenuAttribution"), /renderSettingsPrivacySection/);
+});
+
+test("profile stays full-width and account erasure requires settings confirmation and server success", () => {
+    assert.match(profileCss, /\.sow-profile__page\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+    assert.doesNotMatch(profileSource, /profile\.find_player|data-form='profile-search'|data-command='request_delete'|data-command='confirm_delete'/);
+
+    const requestDelete = shellSource.slice(shellSource.indexOf('if (command === "request_delete")'), shellSource.indexOf('if (command === "cancel_delete")'));
+    const confirmDelete = shellSource.slice(shellSource.indexOf('if (command === "confirm_delete")'), shellSource.indexOf('if (command === "open_leader_picker")'));
+    assert.match(requestDelete, /!settingsOpen/);
+    assert.match(confirmDelete, /!settingsOpen \|\| !deleteArmed/);
+    assert.match(confirmDelete, /profile\/anonymous\/delete/);
+    assert.match(confirmDelete, /data\.deleted !== true/);
+    assert.ok(confirmDelete.indexOf("data.deleted !== true") < confirmDelete.indexOf("localStorage.removeItem"));
+    assert.match(privacyPage, /Settings → Privacy → Delete my account/);
+
+    const selfDelete = serverSource.slice(serverSource.indexOf("async fn handle_self_delete"), serverSource.indexOf("/// /profile/anonymous response"));
+    assert.match(selfDelete, /verify_self_service/);
+    assert.match(selfDelete, /state\.db\.delete_account\(account_id\)/);
+    assert.match(selfDelete, /deleted: true/);
 });
 
 

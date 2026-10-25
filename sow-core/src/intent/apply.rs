@@ -251,9 +251,27 @@ impl SowEngine {
     }
 
     pub fn apply_intents(&mut self, intents: &[StampedIntent]) {
+        self.apply_intents_tracking_troop_spend(intents, None);
+    }
+
+    pub fn apply_intents_tracking_troop_spend(
+        &mut self,
+        intents: &[StampedIntent],
+        player_id: Option<u16>,
+    ) -> f64 {
+        let mut troops_spent = 0.0;
         for (i, stamped) in intents.iter().enumerate() {
+            let troops_before = player_id
+                .filter(|id| *id == stamped.player_id)
+                .and_then(|id| self.state.player(id).map(|player| player.troops));
             self.apply_stamped_intent(stamped, i as u32);
+            if let Some(before) = troops_before
+                && let Some(after) = self.state.player(stamped.player_id).map(|player| player.troops)
+            {
+                troops_spent += (before - after).max(0.0);
+            }
         }
+        troops_spent
     }
 
     pub(crate) fn apply_stamped_intent_with_fleet_route(
@@ -1100,16 +1118,17 @@ mod tests {
         let gold_before = engine.state.player(2).unwrap().gold_received;
         let troops_before = engine.state.player(2).unwrap().troops_received;
 
-        engine.apply_stamped_intent(
-            &StampedIntent {
-                player_id: 1,
-                intent: GameplayIntent::SendResources {
-                    target_player: 2,
-                    gold: 20.0,
-                    troops: 10.0,
-                },
+        let transfer = StampedIntent {
+            player_id: 1,
+            intent: GameplayIntent::SendResources {
+                target_player: 2,
+                gold: 20.0,
+                troops: 10.0,
             },
-            0,
+        };
+        assert_eq!(
+            engine.apply_intents_tracking_troop_spend(std::slice::from_ref(&transfer), Some(1)),
+            5.0
         );
 
         let recipient = engine.state.player(2).unwrap();
@@ -1117,6 +1136,10 @@ mod tests {
         assert_eq!(recipient.troops, 105.0);
         assert_eq!(recipient.gold_received, gold_before + 20.0);
         assert_eq!(recipient.troops_received, troops_before + 5.0);
+        assert_eq!(
+            engine.apply_intents_tracking_troop_spend(&[transfer], Some(1)),
+            0.0
+        );
     }
 
     #[test]

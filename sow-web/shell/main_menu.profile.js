@@ -65,29 +65,6 @@
         };
     }
 
-    function profileSeedFromSummary(summary) {
-        if (!summary || !summary.account_id) return null;
-        return {
-            account_id: summary.account_id,
-            handle: summary.handle || "",
-            display_name: summary.display_name || SOW_t("profile.player"),
-            level: profileStat(summary.level) || 1,
-            matches_played: profileStat(summary.matches_played),
-            wins: profileStat(summary.wins),
-            win_rate: Number(summary.win_rate) || 0,
-            kills: profileStat(summary.kills),
-            deaths: profileStat(summary.deaths),
-            assists: profileStat(summary.assists),
-            laurels: 0,
-            players_defeated: 0,
-            empires_defeated: 0,
-            tribes_defeated: 0,
-            preferred_leader: null,
-            leaders: [],
-            recent_matches: []
-        };
-    }
-
     function cacheProfileSeed(id, seed) {
         var entry = profileCacheEntry(id);
         if (!entry || !seed || entry.complete) return entry;
@@ -304,7 +281,6 @@
                 profileHistoryLoading = false;
                 profileDetailLoading = false;
                 profileDetailRequestKey = null;
-                profileSearchResults = [];
                 render();
                 return;
             }
@@ -319,7 +295,6 @@
         profileDetailError = "";
         profileDetailId = null;
         profileDetailRequestKey = null;
-        profileSearchResults = [];
         if (state && state.account_id === targetId) invalidateProfileCache(targetId);
         cacheProfileSeed(targetId, profileSeedFromState(targetId));
         activateProfileEntry(targetId);
@@ -480,15 +455,10 @@
         if (typeof window.SOW_isAndroidTwa === "function" && window.SOW_isAndroidTwa()) {
             playGamesActions = "<section class='sow-profile__section' aria-label='" + esc(SOW_t("profile.google_play_games")) + "'><div class='sow-profile__section-head'><h2>" + esc(SOW_t("profile.google_play_games")) + "</h2><span class='sow-profile__section-note'>" + esc(SOW_t("profile.android")) + "</span></div><div class='sow-profile__actions'><button type='button' class='sow-menu__ghost-button' data-command='open_play_games' data-play-games-section='achievements'>" + esc(SOW_t("profile.achievements")) + "</button><button type='button' class='sow-menu__ghost-button' data-command='open_play_games' data-play-games-section='leaderboards'>" + esc(SOW_t("profile.leaderboards")) + "</button></div></section>";
         }
-        var search = "<section class='sow-profile__directory'><div><h2>" + esc(SOW_t("profile.find_player")) + "</h2><p>" + esc(SOW_t("profile.search_public_profiles")) + "</p></div><form class='sow-profile__search' data-form='profile-search'><label class='sow-profile__sr-only' for='sow-profile-search-input'>" + esc(SOW_t("profile.player_name_handle")) + "</label><input id='sow-profile-search-input' name='q' type='search' autocomplete='off' placeholder='" + esc(SOW_t("profile.name_handle_placeholder")) + "' aria-label='" + esc(SOW_t("profile.player_name_handle")) + "'><button type='submit'>" + esc(SOW_t("profile.search")) + "</button></form></section>";
-        var searchResults = profileSearchResults.length
-            ? "<div class='sow-profile__search-results' aria-live='polite'>" + profileSearchResults.map(function (summary) {
-                return "<button type='button' class='sow-profile__search-result' data-command='open_public_profile' data-account-id='" + esc(summary.account_id) + "'><strong>" + esc(summary.display_name) + "</strong><span>" + esc(summary.handle) + " · " + esc(SOW_t("menu.level_short")) + " " + esc(summary.level) + "</span></button>";
-            }).join("") + "</div>"
-            : "";
+        var profileActions = playGamesActions + renderModeration(own);
         return "<main class='sow-menu__main sow-profile__main' data-screen-panel='profile'><section class='sow-profile__page'><div class='sow-profile__dossier'>" + header +
             "<nav class='sow-profile__tabs' role='tablist' aria-label='" + esc(SOW_t("profile.profile_sections")) + "'>" + tabs + "</nav><div data-profile-content class='sow-profile__content'>" + profileContentMarkup(data) + "</div></div>" +
-            "<aside class='sow-profile__tools'>" + playGamesActions + search + searchResults + renderModeration(own) + "</aside></section></main>";
+            (profileActions ? "<aside class='sow-profile__tools'>" + profileActions + "</aside>" : "") + "</section></main>";
     }
 
     function syncProfileDom() {
@@ -543,21 +513,9 @@
         }).join("") + "</div></section></div>";
     }
 
-    // Conduct + privacy controls on profiles. Own profile: self-service
-    // erasure (double-confirm, ownership-proofed server-side). Others:
-    // report with closed-reason dropdown + free text for Other; filing
-    // also blocks the account client-side and notifies moderation.
+    // Other-player profiles can be reported here; account deletion lives in Settings.
     function renderModeration(own) {
-        if (own) {
-            if (!selfCreds()) return "";
-            var delAction = deleteBusy
-                ? "<p class='sow-profile__empty'>" + esc(SOW_t("profile.deleting_account")) + "</p>"
-                : deleteArmed
-                    ? "<p>" + esc(SOW_t("profile.permanent_delete")) + "</p><button type='button' class='sow-menu__danger' data-command='confirm_delete'>" + esc(SOW_t("profile.delete_confirm")) + "</button> <button type='button' class='sow-menu__ghost-button' data-command='cancel_delete'>" + esc(SOW_t("lobbies.cancel")) + "</button>"
-                    : "<button type='button' class='sow-menu__ghost-button' data-command='request_delete'>" + esc(SOW_t("profile.delete_account")) + "</button>";
-            return "<section class='sow-profile__section' aria-label='" + esc(SOW_t("profile.danger_zone")) + "'><div class='sow-profile__section-head'><h2>" + esc(SOW_t("profile.danger_zone")) + "</h2></div>" + delAction + "</section>";
-        }
-        if (!profileAccountId || !selfCreds()) return "";
+        if (own || !profileAccountId || !selfCreds()) return "";
         if (reportSent) {
             return "<section class='sow-profile__section' aria-label='" + esc(SOW_t("profile.report_filed")) + "'><div class='sow-profile__section-head'><h2>" + esc(SOW_t("profile.report_filed")) + "</h2></div><p class='sow-profile__empty'>" + esc(SOW_t("profile.thanks_report")) + "</p></section>";
         }

@@ -60,7 +60,7 @@ impl SowApp {
                 } => {
                     self.ui
                         .nameplates
-                        .receive_troops(receiver_id, troops, now_instant);
+                        .animate_troop_change(receiver_id, troops, now_instant);
                 }
                 sow_core::game::GameEvent::TransportShipLanded { owner_id, x, y } => {
                     let color = snap

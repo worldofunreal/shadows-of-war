@@ -38,9 +38,9 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__page {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(228px, 272px);
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
-    gap: clamp(20px, 2.5vw, 32px);
+    gap: 20px;
     min-width: 0;
     min-height: min-content;
 }
@@ -442,8 +442,7 @@
     margin-bottom: 14px;
 }
 
-#sow-menu[data-screen="profile"] .sow-profile__section h2,
-#sow-menu[data-screen="profile"] .sow-profile__directory h2 {
+#sow-menu[data-screen="profile"] .sow-profile__section h2 {
     margin: 0;
     color: #f5f6f7;
     font-size: 18px;
@@ -630,14 +629,6 @@
     opacity: 0.6;
 }
 
-#sow-menu[data-screen="profile"] .sow-profile__directory {
-    display: block;
-    padding: 18px;
-    border: 1px solid var(--sow-profile-line);
-    border-inline-start: 2px solid var(--sow-cyan);
-    background: var(--sow-profile-panel);
-}
-
 #sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__section {
     padding: 18px;
     border: 1px solid var(--sow-profile-line);
@@ -649,12 +640,7 @@
     margin-bottom: 10px;
 }
 
-#sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__search-results {
-    grid-column: 1 / -1;
-}
-
-#sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__section h2,
-#sow-menu[data-screen="profile"] .sow-profile__directory h2 {
+#sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__section h2 {
     font-size: 14px;
 }
 
@@ -668,99 +654,6 @@
     width: 100%;
     min-height: 42px;
     text-align: start;
-}
-
-#sow-menu[data-screen="profile"] .sow-profile__directory p {
-    margin: 5px 0 0;
-    color: var(--sow-muted);
-    font-size: 12px;
-}
-
-#sow-menu[data-screen="profile"] .sow-profile__search {
-    display: flex;
-    width: 100%;
-    gap: 8px;
-    margin: 0;
-}
-
-#sow-menu[data-screen="profile"] .sow-profile__search input {
-    min-width: 0;
-    flex: 1;
-    min-height: 44px;
-    padding: 0 12px;
-    border: 1px solid var(--sow-line);
-    outline: 0;
-    background: rgba(0, 0, 0, 0.28);
-    color: var(--sow-text);
-    font-size: 14px;
-}
-
-#sow-menu[data-screen="profile"] .sow-profile__search input:focus-visible {
-    border-color: var(--sow-gold);
-    box-shadow: 0 0 0 2px rgba(243, 177, 43, 0.2);
-}
-
-#sow-menu[data-screen="profile"] .sow-profile__search button {
-    min-height: 44px;
-    padding: 0 18px;
-    border: 1px solid var(--sow-button-primary-border);
-    border-radius: var(--sow-button-radius);
-    background: var(--sow-button-primary-bg);
-    box-shadow: var(--sow-button-primary-shadow);
-    color: var(--sow-button-primary-text);
-    font-size: 11px;
-    font-weight: var(--sow-button-weight);
-    letter-spacing: var(--sow-button-tracking);
-    text-transform: uppercase;
-    cursor: pointer;
-}
-
-#sow-menu[data-screen="profile"] .sow-profile__search button:hover,
-#sow-menu[data-screen="profile"] .sow-profile__search button:focus-visible {
-    filter: brightness(1.12);
-}
-
-#sow-menu[data-screen="profile"] .sow-profile__search-results {
-    width: 100%;
-    margin: -6px 0 0;
-    border: 1px solid var(--sow-profile-line);
-    background: var(--sow-profile-surface);
-    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.22);
-}
-
-#sow-menu[data-screen="profile"] .sow-profile__search-result {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    min-height: 48px;
-    padding: 8px 14px;
-    border: 0;
-    border-top: 1px solid rgba(255, 221, 153, 0.14);
-    background: transparent;
-    color: #fff;
-    text-align: start;
-    cursor: pointer;
-}
-
-#sow-menu[data-screen="profile"] .sow-profile__search-result:first-child { border-top: 0; }
-
-#sow-menu[data-screen="profile"] .sow-profile__search-result:hover,
-#sow-menu[data-screen="profile"] .sow-profile__search-result:focus-visible {
-    background: rgba(255, 255, 255, 0.045);
-}
-
-#sow-menu[data-screen="profile"] .sow-profile__search-result strong,
-#sow-menu[data-screen="profile"] .sow-profile__search-result span {
-    min-width: 0;
-    overflow-wrap: anywhere;
-}
-
-#sow-menu[data-screen="profile"] .sow-profile__search-result span {
-    color: var(--sow-muted);
-    font-size: 11px;
-    text-align: end;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__detail-backdrop {
@@ -870,20 +763,6 @@
 @media (max-width: 900px) {
     #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
         width: min(100% - 28px, 720px);
-    }
-
-    #sow-menu[data-screen="profile"] .sow-profile__page {
-        grid-template-columns: minmax(0, 1fr);
-        gap: 20px;
-    }
-
-    #sow-menu[data-screen="profile"] .sow-profile__tools {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
-    }
-
-    #sow-menu[data-screen="profile"] .sow-profile__directory {
-        grid-column: 1 / -1;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__identity-card {
@@ -1022,38 +901,8 @@
         text-align: start;
     }
 
-    #sow-menu[data-screen="profile"] .sow-profile__directory {
-        display: block;
-    }
-
-    #sow-menu[data-screen="profile"] .sow-profile__tools {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
-    #sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__section,
-    #sow-menu[data-screen="profile"] .sow-profile__directory {
+    #sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__section {
         padding: 16px;
-    }
-
-    #sow-menu[data-screen="profile"] .sow-profile__directory p {
-        margin-bottom: 12px;
-    }
-
-    #sow-menu[data-screen="profile"] .sow-profile__search {
-        width: 100%;
-    }
-
-    #sow-menu[data-screen="profile"] .sow-profile__search-results {
-        margin-top: -6px;
-    }
-
-    #sow-menu[data-screen="profile"] .sow-profile__search-result {
-        grid-template-columns: 1fr;
-        gap: 3px;
-    }
-
-    #sow-menu[data-screen="profile"] .sow-profile__search-result span {
-        text-align: start;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__detail-backdrop {

@@ -76,15 +76,15 @@ pub(crate) struct NameplateVisualState {
     prepared_name: sow_render::text::PreparedText,
     prepared_troops: sow_render::text::PreparedText,
     text_style_key: Option<u32>,
-    troop_transfer_at: Option<Instant>,
+    troop_change_at: Option<Instant>,
 }
 
 impl NameplateVisualState {
-    fn troop_transfer_age(&self, now: Instant, reduced_motion: bool) -> Option<f32> {
+    fn troop_change_age(&self, now: Instant, reduced_motion: bool) -> Option<f32> {
         if reduced_motion {
             return None;
         }
-        let age = now.duration_since(self.troop_transfer_at?).as_secs_f32();
+        let age = now.duration_since(self.troop_change_at?).as_secs_f32();
         let duration = TROOP_TRANSFER_TEXT_DELAY
             + TROOP_TRANSFER_GLYPH_DELAY
                 * self.prepared_troops.instance_count().saturating_sub(1) as f32
@@ -579,14 +579,14 @@ impl NameplateSystem {
         self.campaign_emote.as_ref().filter(|cue| cue.visible).map(|cue| cue.token.as_str())
     }
 
-    pub(crate) fn receive_troops(&mut self, receiver_id: u16, troops: f64, now: Instant) {
-        if troops.is_finite()
-            && troops > 0.0
-            && let Some(state) = self.visuals.get_mut(&receiver_id)
-            && state.troop_transfer_age(now, false).is_none()
+    pub(crate) fn animate_troop_change(&mut self, player_id: u16, amount: f64, now: Instant) {
+        if amount.is_finite()
+            && amount != 0.0
+            && let Some(state) = self.visuals.get_mut(&player_id)
+            && state.troop_change_age(now, false).is_none()
         {
-            // Merge simultaneous gifts into the current wave rather than queueing or restarting it.
-            state.troop_transfer_at = Some(now);
+            // Merge simultaneous gains or expenses into the current wave.
+            state.troop_change_at = Some(now);
         }
     }
 
@@ -910,9 +910,9 @@ pub(super) fn render_nameplates(
             continue;
         }
 
-        if state.troop_transfer_at.is_some() {
-            if state.troop_transfer_age(now, false).is_some() {
-                // Receipt must update the count immediately, ahead of the slower spatial sampling.
+        if state.troop_change_at.is_some() {
+            if state.troop_change_age(now, false).is_some() {
+                // A troop change must update the count ahead of slower spatial sampling.
                 refresh_nameplate_text_cache(
                     text,
                     state,
@@ -922,7 +922,7 @@ pub(super) fn render_nameplates(
                     sf,
                 );
             } else {
-                state.troop_transfer_at = None;
+                state.troop_change_at = None;
             }
         }
 
@@ -1363,7 +1363,7 @@ fn new_nameplate_visual_state(
         prepared_name: sow_render::text::PreparedText::default(),
         prepared_troops: sow_render::text::PreparedText::default(),
         text_style_key: None,
-        troop_transfer_at: None,
+        troop_change_at: None,
     }
 }
 
@@ -2020,7 +2020,7 @@ fn prepare_full_nameplate(
                 position: [text_anchor.0[0] * sf, text_anchor.0[1] * sf],
                 final_font_size: troops_font_size * sf * fit_scale,
             },
-            transfer_age: state.troop_transfer_age(now, reduced_motion),
+            transfer_age: state.troop_change_age(now, reduced_motion),
         }
     });
     let instance_count = avatar
@@ -2685,7 +2685,7 @@ mod status_badge_tests {
                 .nameplates
                 .visuals
                 .values()
-                .all(|v| v.troop_transfer_at.is_none())
+                .all(|v| v.troop_change_at.is_none())
         );
         app.process_tick_events(
             vec![GameEvent::ResourceTransferred {
@@ -2697,8 +2697,8 @@ mod status_badge_tests {
             &snap,
             1,
         );
-        let received_at = app.ui.nameplates.visuals[&2].troop_transfer_at.unwrap();
-        assert!(app.ui.nameplates.visuals[&1].troop_transfer_at.is_none());
+        let received_at = app.ui.nameplates.visuals[&2].troop_change_at.unwrap();
+        assert!(app.ui.nameplates.visuals[&1].troop_change_at.is_none());
         assert_eq!(troop_transfer_motion(0.0), ([1.0; 2], 0.0));
         assert_ne!(troop_transfer_motion(0.07), ([1.0; 2], 0.0));
         assert_eq!(
@@ -2715,22 +2715,28 @@ mod status_badge_tests {
         );
         app.ui
             .nameplates
-            .receive_troops(2, 50.0, received_at + Duration::from_millis(120));
+            .animate_troop_change(2, 50.0, received_at + Duration::from_millis(120));
         assert_eq!(
-            app.ui.nameplates.visuals[&2].troop_transfer_at,
+            app.ui.nameplates.visuals[&2].troop_change_at,
             Some(received_at)
         );
+        app.ui.nameplates.animate_troop_change(
+            1,
+            -50.0,
+            received_at + Duration::from_millis(120),
+        );
+        assert!(app.ui.nameplates.visuals[&1].troop_change_at.is_some());
         let state = &app.ui.nameplates.visuals[&2];
-        assert!(state.troop_transfer_age(received_at, true).is_none());
+        assert!(state.troop_change_age(received_at, true).is_none());
         let sample_at = received_at + Duration::from_millis(200);
-        let expected = state.troop_transfer_age(sample_at, false);
+        let expected = state.troop_change_age(sample_at, false);
         for ms in 0..1000 {
-            let _ = state.troop_transfer_age(received_at + Duration::from_millis(ms), false);
+            let _ = state.troop_change_age(received_at + Duration::from_millis(ms), false);
         }
-        assert_eq!(state.troop_transfer_age(sample_at, false), expected);
+        assert_eq!(state.troop_change_age(sample_at, false), expected);
         assert!(
             state
-                .troop_transfer_age(received_at + Duration::from_secs(1), false)
+                .troop_change_age(received_at + Duration::from_secs(1), false)
                 .is_none()
         );
         let mut previous = troop_transfer_motion(0.0);
@@ -3150,7 +3156,7 @@ mod spawn_center_tests {
             prepared_name: sow_render::text::PreparedText::default(),
             prepared_troops: sow_render::text::PreparedText::default(),
             text_style_key: None,
-            troop_transfer_at: None,
+            troop_change_at: None,
         }
     }
 

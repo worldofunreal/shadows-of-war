@@ -11,12 +11,13 @@ use crate::execution::income_rates::{
     alliance_gold_per_second, alliance_troops_per_second, gold_income_per_second,
     trade_income_per_second, trade_troops_per_second, troop_income_per_second,
 };
-use crate::game::{BuildingKind, GameEvent, GamePhase, GameState};
+use crate::game::{BuildingKind, GameEvent, GamePhase, GameState, UnitType};
 use crate::game_config::GameConfig;
 use crate::geo_entities::{Ability, LossWhen, Side, Source, District, Resource, Target};
 use crate::map::MapTile;
 use crate::player::{Leader, Player, PlayerType};
 use crate::protocol::{AttackIntent, CampaignRelation, GameplayIntent, StampedIntent};
+use crate::warp_fleet::WarpFleet;
 use crate::water_components::WaterComponents;
 
 /// The experiment that measures an ability. Every concrete situation has one,
@@ -100,6 +101,14 @@ fn measurement(ability: Ability) -> u8 {
             when: LossWhen::City,
             ..
         } => 29,
+        Ability::AttackerLoss {
+            when: LossWhen::Coast,
+            ..
+        } => 30,
+        Ability::AttackerLoss {
+            when: LossWhen::Landing,
+            ..
+        } => 31,
         Ability::AttackerLoss {
             when: LossWhen::Against(against),
             ..
@@ -403,11 +412,15 @@ fn elimination_troops(conqueror: Leader) -> (f64, Marks) {
 fn shape_subject(engine: &mut SowEngine, subject: u16, target: Target) {
     let actor = if subject == 1 { 2 } else { 1 };
     match target {
-        Target::Tribe => engine.state.player_mut(subject).unwrap().player_type = PlayerType::Bot,
-        Target::Nation => {
-            engine.state.player_mut(subject).unwrap().player_type = PlayerType::Nation;
-            // Keep the target Nation static so its counterattack cannot swamp
-            // the attacker's own tile count during the measurement window.
+        // An AI rival (tribe or nation) is kept static so its counterattack cannot swamp
+        // the attacker's own tile count during the measurement window.
+        Target::Tribe | Target::Nation => {
+            let kind = if target == Target::Tribe {
+                PlayerType::Bot
+            } else {
+                PlayerType::Nation
+            };
+            engine.state.player_mut(subject).unwrap().player_type = kind;
             engine.campaign_halted_ids.insert(subject);
         }
         Target::ActiveTraitor => {
@@ -831,6 +844,22 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
                 (cost < plain_cost, shown[1], control_shown[1])
             }
             Ability::AttackerLoss {
+                when: LossWhen::Coast,
+                ..
+            } => {
+                let (cost, shown) = cost_per_tile(hero, COASTAL);
+                let (plain_cost, control_shown) = cost_per_tile(plain, COASTAL);
+                (cost < plain_cost, shown[1], control_shown[1])
+            }
+            Ability::AttackerLoss {
+                when: LossWhen::Landing,
+                ..
+            } => {
+                let (cost, shown) = landing_cost_per_tile(hero);
+                let (plain_cost, control_shown) = landing_cost_per_tile(plain);
+                (cost < plain_cost, shown[1], control_shown[1])
+            }
+            Ability::AttackerLoss {
                 when: LossWhen::Against(against),
                 ..
             } => {
@@ -1089,6 +1118,8 @@ fn genghis_khan_crushes_tribes() {
 
 const MOUNTAIN: u8 = 0x80 | 25;
 const HIGHLAND: u8 = 0x80 | 15;
+// Land with the shoreline bit: every tile is next to water.
+const COASTAL: u8 = 0x80 | 0x40;
 
 /// Tiles `attacker` (5,000 troops) takes from a rival holding `rival_troops`, in 20 ticks.
 fn outnumbered_tiles(attacker: Leader, rival_troops: f64) -> u32 {
@@ -1142,6 +1173,7 @@ fn army_loss_per_tile(engine: &mut SowEngine, ticks: u32) -> (f64, Marks) {
     let mut marks = [0; 4];
     tick_counting(engine, ticks, &mut marks);
     let tiles = engine.state.player(1).unwrap().tile_count - start_tiles;
+    assert!(tiles > 0, "the army took no tile, so its loss per tile is undefined");
     ((army_start - army(engine)) / f64::from(tiles), marks)
 }
 
@@ -1168,6 +1200,26 @@ fn city_cost_per_tile(attacker: Leader) -> (f64, Marks) {
             troops: Some(10_000.0),
         }),
     );
+    army_loss_per_tile(&mut engine, 20)
+}
+
+/// Troops the attacking army loses per tile it takes after landing from ships on a rival's
+/// shore, and the marks shown. The landing spawns the attack, so its losses start there.
+fn landing_cost_per_tile(attacker: Leader) -> (f64, Marks) {
+    let mut engine = arena(24, 4, attacker, Some(Leader::of("caesar")));
+    engine.state.player_mut(2).unwrap().troops = 20_000.0;
+    // The transport's path ends on the rival's first tile of row 12, so it lands this tick.
+    let shore = 12 * 24 + 4;
+    engine.add_fleet(WarpFleet::new(
+        1,
+        1,
+        2,
+        UnitType::TransportShip,
+        10_000.0,
+        (shore, shore),
+        vec![shore],
+    ));
+    engine.execute_fleets();
     army_loss_per_tile(&mut engine, 20)
 }
 

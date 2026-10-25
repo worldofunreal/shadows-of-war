@@ -142,7 +142,7 @@ impl SowEngine {
             let is_standard_bot = player.player_type == crate::player::PlayerType::Bot;
             let needs_city = if is_standard_bot {
                 player.cities == 0
-                    && !self.campaign_city_requires_gold_ids.contains(&player.id)
+                    && (!self.campaign_city_requires_gold_ids.contains(&player.id) || player.gold > 0.0)
             } else {
                 !has_city
             };
@@ -481,5 +481,34 @@ mod zero_troop_bot_income_tests {
                 .count(),
             2
         );
+    }
+    #[test]
+    fn gold_gated_campaign_bot_rebuilds_its_city_once_it_has_gold() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 20, 20, config.clone());
+        state.phase = GamePhase::Playing;
+        let mut player = Player::new_bot(1, "Snettisham".into(), [0.2, 0.5, 1.0], &config);
+        player.alive = true;
+        player.tile_count = 200;
+        player.troops = 500.0;
+        player.gold = 0.0;
+        state.players.push(player);
+        for tile in 0..200 {
+            state.map.set_owner_id(tile % 20, tile / 20, 1);
+            let ref_id = state.map.ref_id(tile % 20, tile / 20);
+            state.map.terrain[ref_id] = MapTile::from_byte(0b1000_0000);
+        }
+        state.player_lookup = vec![None, Some(0)];
+
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.campaign_city_requires_gold_ids.insert(1);
+        engine.state.tick = 29;
+        engine.execute_income();
+        let cities = engine
+            .buildings
+            .iter()
+            .filter(|b| b.owner_id == 1 && b.kind == BuildingKind::City)
+            .count();
+        assert_eq!(cities, 1, "gold-gated bot with tile income must rebuild its city");
     }
 }

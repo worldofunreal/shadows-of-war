@@ -2643,30 +2643,28 @@ fn s16_building_rules_trace(legacy: bool) -> Vec<(u64, u64)> {
 #[test]
 fn s16_checkpoint_decision_and_state_reference() {
     let checkpoints = s16_building_rules_trace(false);
-    // The runtime trace is fixed per target and refreshed after deterministic behavior changes.
+    // Uses the current hero catalog, including Caesar's landing and Sayyid Said's coast abilities.
     #[cfg(target_os = "freebsd")]
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x3d29_ca08_b938_23e0),
-        (500, 0xc0ec_ea23_dfcf_d88a),
-        (750, 0x38c6_8f1f_881b_77db),
-        (1000, 0x6aaf_8b9e_9f2e_b178),
-        (1250, 0xb564_3d69_b7b3_cbd0),
-        (1500, 0x71fd_5a67_7703_b213),
-        (1750, 0xa590_0a1c_845e_511b),
-        (2000, 0x8d7d_a3b9_8d84_710b),
-        (2102, 0x7518_9256_93b0_2b19),
+        (250, 0x5153_1c96_e203_cfa1),
+        (500, 0x7b1b_1471_3456_a291),
+        (750, 0xc7e6_e116_de5c_a7aa),
+        (1000, 0xa87c_dcc9_2f07_ae10),
+        (1250, 0xa416_23b6_5d39_edcd),
+        (1500, 0xe32e_92d4_9957_2d0d),
+        (1750, 0xf9a8_1ba2_bef8_a93d),
+        (1847, 0x1a76_8d41_a0f2_e771),
     ];
     #[cfg(not(target_os = "freebsd"))]
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x3d29_ca08_b938_23e0),
-        (500, 0xc0ec_ea23_dfcf_d88a),
-        (750, 0x38c6_8f1f_881b_77db),
-        (1000, 0x6aaf_8b9e_9f2e_b178),
-        (1250, 0xb564_3d69_b7b3_cbd0),
-        (1500, 0x71fd_5a67_7703_b213),
-        (1750, 0xa590_0a1c_845e_511b),
-        (2000, 0x8d7d_a3b9_8d84_710b),
-        (2102, 0x7518_9256_93b0_2b19),
+        (250, 0x5153_1c96_e203_cfa1),
+        (500, 0x7b1b_1471_3456_a291),
+        (750, 0xc7e6_e116_de5c_a7aa),
+        (1000, 0xa87c_dcc9_2f07_ae10),
+        (1250, 0xa416_23b6_5d39_edcd),
+        (1500, 0xe32e_92d4_9957_2d0d),
+        (1750, 0xf9a8_1ba2_bef8_a93d),
+        (1847, 0x1a76_8d41_a0f2_e771),
     ];
     assert_eq!(
         checkpoints,
@@ -2682,16 +2680,15 @@ fn s16_checkpoint_decision_and_state_reference() {
 #[test]
 fn historical_s16_building_rules_keep_recorded_results() {
     let checkpoints = s16_building_rules_trace(true);
-    // Re-recorded after the full hero roster and abilities changed bot match outcomes.
-    // The historical building rules themselves are unchanged.
+    // Historical building rules with the current hero catalog, including landing/coast abilities.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x558c_88fe_d616_8863),
-        (500, 0xf1f1_820a_148c_80c7),
-        (750, 0xa12c_15e9_a1a1_6899),
-        (1000, 0xe995_4735_b488_980d),
-        (1250, 0x01ec_498b_6f05_f88c),
-        (1500, 0x9e30_f637_8e5d_4014),
-        (1612, 0x50b5_a6c7_0cb2_da90),
+        (250, 0xd6fa_cadc_3466_692d),
+        (500, 0x8b39_ac5d_f460_904e),
+        (750, 0x8998_a6f7_ce02_5a89),
+        (1000, 0xa4bf_1cb0_ec10_d6dd),
+        (1250, 0x8bb3_7367_299a_664b),
+        (1500, 0xec2f_9d26_ec90_ad0a),
+        (1725, 0x3def_ea8d_e3c5_e0ba),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

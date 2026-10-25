@@ -86,6 +86,7 @@ pub fn spawn_or_merge_attack_for_fleet_arrival_pure(
     target_owner: u16,
     troops: f64,
     fleet_id: u64,
+    landed: bool,
 ) {
     if troops < engine.state.config.attack_cost_neutral || !troops.is_finite() {
         if let Some(p) = engine.state.player_mut(owner_id) {
@@ -133,7 +134,7 @@ pub fn spawn_or_merge_attack_for_fleet_arrival_pure(
 
     if let Some(i) = merge_idx {
         let ex = &mut engine.attacks[i];
-        ex.troops += troops;
+        ex.absorb_troops(troops, landed);
         let merged = merge_frontiers(std::mem::take(&mut ex.to_conquer), fresh);
         ex.to_conquer = merged;
         return;
@@ -144,6 +145,7 @@ pub fn spawn_or_merge_attack_for_fleet_arrival_pure(
     let created_tick = engine.state.tick;
 
     engine.add_attack(AttackExecution {
+        landed,
         id: exec_id,
         owner_id,
         target_owner,
@@ -327,7 +329,7 @@ impl SowEngine {
 
         if let Some(i) = merge_idx {
             let ex = &mut self.attacks[i];
-            ex.troops += remaining;
+            ex.absorb_troops(remaining, false);
             let merged = merge_frontiers(std::mem::take(&mut ex.to_conquer), fresh);
             ex.to_conquer = merged;
             return;
@@ -337,6 +339,7 @@ impl SowEngine {
         self.state.next_attack_id = self.state.next_attack_id.wrapping_add(1).max(1);
         let created_tick = self.state.tick;
         self.add_attack(AttackExecution {
+            landed: false,
             id: exec_id,
             owner_id: player_id,
             target_owner,
@@ -434,7 +437,7 @@ mod tests {
             ticks_until_complete: 0,
         });
         let fleet_id = 9;
-        spawn_or_merge_attack_for_fleet_arrival_pure(&mut engine, 1, 2, 10_000.0, fleet_id);
+        spawn_or_merge_attack_for_fleet_arrival_pure(&mut engine, 1, 2, 10_000.0, fleet_id, false);
 
         let frontier = &engine.attacks[0].to_conquer;
         assert_eq!(frontier.len(), 1);
@@ -464,5 +467,42 @@ mod tests {
             tile.priority,
             base_priority + influence.priority_bonus as i64
         );
+    }
+
+    /// A landed attack keeps the landing discount only while every troop in it landed. An
+    /// ordinary attack merging in brings troops that never came ashore, so the flag clears.
+    #[test]
+    fn ordinary_attack_merging_into_landed_troops_clears_the_landing_discount() {
+        let width = 8;
+        let mut game = GameState::new(77, width, width, GameConfig::default());
+        game.phase = GamePhase::Playing;
+        game.map.terrain.fill(MapTile::from_byte(0x80));
+        for id in [1, 2] {
+            game.register_player(Player::new_human(
+                id,
+                format!("P{id}"),
+                [0.5; 3],
+                &game.config,
+            ));
+        }
+        game.set_tile_owner(2, 3, 1);
+        game.set_tile_owner(3, 3, 2);
+        game.player_mut(1).unwrap().troops = 20_000.0;
+
+        let mut engine = crate::engine::SowEngine::new(game, WaterComponents::default());
+        spawn_or_merge_attack_for_fleet_arrival_pure(&mut engine, 1, 2, 10_000.0, 9, true);
+        assert!(engine.attacks[0].landed);
+
+        engine.apply_intents(&[crate::protocol::StampedIntent {
+            player_id: 1,
+            intent: crate::protocol::GameplayIntent::Attack(crate::protocol::AttackIntent {
+                target_owner: 2,
+                troops: Some(5_000.0),
+            }),
+        }]);
+
+        assert_eq!(engine.attacks.len(), 1, "the ordinary attack merges into the landed one");
+        assert!(!engine.attacks[0].landed);
+        assert_eq!(engine.attacks[0].troops, 15_000.0);
     }
 }
