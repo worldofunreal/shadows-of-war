@@ -319,7 +319,9 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
         retain_releases(&config)?;
         retain_local_builds(paths)?;
         verify_public(paths, &config, &release)?;
-        verify_live_reward_return(paths, &config, false)?;
+        let handover_pending = relay_handover_pending(&config)?;
+        verify_live_reward_return(paths, &config, handover_pending.then_some(RELAY_EXEC))?;
+        if handover_pending { mark_relay_handover_verified(&config, &release)?; }
         println!("✅ Production already serves the requested content");
         return Ok(());
     }
@@ -336,8 +338,8 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     }
 
     println!("==> 6/8 Activate changed components only");
+    let hot = plan.relay && relay_can_handover(&config, &release)?;
     let mut admission = if plan.server || plan.database || plan.maps || plan.ops || plan.relay {
-        let hot = plan.relay && relay_can_handover(&config, &release)?;
         Some(RelayAdmissionPause::acquire(&config,
             plan.server || plan.database || plan.maps || plan.ops || !hot)?)
     } else {
@@ -351,7 +353,11 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     verify_origin_tls_from_relay(&config)?;
     ensure_relay_certificate_automation(paths, &config)?;
     // Relay last, so the control host is healthy before relay workers change.
-    if plan.relay {
+    if hot {
+        verify_control_host(&config, &plan)?;
+        if let Some(pause) = admission.as_mut() { pause.resume()?; }
+        activate_relay_handover(paths, &config, &release)?;
+    } else if plan.relay {
         activate_relay_host(&config, &release)?;
     }
     verify_relay_certificate_served(&config)?;
@@ -372,12 +378,16 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
 
     println!("==> 8/8 Public verification");
     verify_public(paths, &config, &release)?;
-    verify_live_reward_return(paths, &config, plan.relay)?;
+    if !hot {
+        let handover_pending = relay_handover_pending(&config)?;
+        verify_live_reward_return(paths, &config, handover_pending.then_some(RELAY_EXEC))?;
+        if handover_pending { mark_relay_handover_verified(&config, &release)?; }
+    }
     println!("✅ Production {} ready as {}", release.version, release.id);
     Ok(())
 }
 
-fn verify_live_reward_return(paths: &Paths, config: &Config, handover: bool) -> Result<()> {
+fn verify_live_reward_return(paths: &Paths, config: &Config, handover_binary: Option<&str>) -> Result<()> {
     let mut websocket = url::Url::parse(&config.public_origin)?;
     let scheme = if websocket.scheme() == "https" {
         "wss"
@@ -408,7 +418,10 @@ fn verify_live_reward_return(paths: &Paths, config: &Config, handover: bool) -> 
             "--audit-accounts-file",
             accounts.to_str().context("invalid audit accounts path")?,
         ];
-    if handover { args.extend(["--verify-handover-relay-host", config.relay_host.as_str()]); }
+    if let Some(binary) = handover_binary {
+        args.extend(["--verify-handover-relay-host", config.relay_host.as_str(),
+            "--verify-handover-relay-binary", binary]);
+    }
     run("cargo", &args, Some(&paths.root))
     .context("real multiplayer exit and reward presentation failed")
 }
@@ -1513,6 +1526,37 @@ fn relay_can_handover(config: &Config, release: &Release) -> Result<bool> {
         && running["dpdk"].as_str() == Some(DPDK_RELEASE))
 }
 
+fn relay_handover_pending(config: &Config) -> Result<bool> {
+    let manifest = relay_manifest_remote(config)?.context("relay manifest missing")?;
+    Ok(manifest["handover_verified"] != true)
+}
+
+fn mark_relay_handover_verified(config: &Config, release: &Release) -> Result<()> {
+    let metadata: serde_json::Value = serde_json::from_slice(&fs::read(release.dir.join("release.json"))?)?;
+    let component = metadata["relay"]["sha256"].as_str().context("relay component hash missing")?;
+    let binary = metadata["relay"]["bin_sha256"].as_str().context("relay binary hash missing")?;
+    let command = format!(r#"sudo python3 - {manifest} {component} {binary} {exec} <<'VERIFY_RELAY_HANDOVER'
+import hashlib, json, os, pathlib, shutil, sys, time
+path = pathlib.Path(sys.argv[1])
+manifest = json.loads(path.read_text())
+if manifest.get("relay_sha256") != sys.argv[2] or manifest.get("relay_bin_sha256") != sys.argv[3]:
+    raise RuntimeError("relay changed before handover acceptance was recorded")
+if hashlib.sha256(pathlib.Path(sys.argv[4]).read_bytes()).hexdigest() != sys.argv[3]:
+    raise RuntimeError("installed relay differs from the verified binary")
+shutil.copy2(path, str(path) + ".bak_" + str(int(time.time())))
+manifest["handover_verified"] = True
+temporary = path.with_name(path.name + ".next")
+temporary.write_text(json.dumps(manifest) + "\n")
+os.chmod(temporary, 0o644)
+os.replace(temporary, path)
+VERIFY_RELAY_HANDOVER
+"#,
+        manifest = shell_quote(RELAY_MANIFEST), component = shell_quote(component),
+        binary = shell_quote(binary), exec = shell_quote(RELAY_EXEC));
+    run("ssh", &[&config.relay_host, &command], None)
+        .context("record relay connection handover acceptance")
+}
+
 fn relay_set_lobby_drain(config: &Config, draining: bool) -> Result<()> {
     let body = serde_json::json!({"draining":draining}).to_string();
     for (worker_id, response) in relay_authed_post_json(config, "/internal/drain", &body)? {
@@ -1586,7 +1630,7 @@ fn stage_relay(config: &Config, release: &Release) -> Result<()> {
     Ok(())
 }
 
-fn activate_relay_handover(config: &Config, release: &Release) -> Result<()> {
+fn activate_relay_handover(paths: &Paths, config: &Config, release: &Release) -> Result<()> {
     let metadata: serde_json::Value = serde_json::from_slice(&fs::read(release.dir.join("release.json"))?)?;
     let relay = &metadata["relay"];
     let binary = relay["bin_sha256"].as_str().context("relay binary hash missing")?;
@@ -1603,7 +1647,7 @@ fn activate_relay_handover(config: &Config, release: &Release) -> Result<()> {
         "worker_count":relay["worker_count"],"relay_sha256":relay["sha256"],
         "relay_bin_sha256":binary,"ws_write_timeout_ms":relay["ws_write_timeout_ms"],
         "runtime_libraries_sha256":relay["runtime_libraries_sha256"],
-        "drain":"match-owned generations",
+        "drain":"match-owned generations","handover_verified":true,
         "deployed_at": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs().to_string(),
     }).to_string();
     let command = format!(r#"set -eu
@@ -1615,15 +1659,18 @@ sudo install -d -o root -g {group} -m 0750 {release_dir} {release_dir}/lib
 if ! sudo test -f {destination}; then sudo install -o root -g {group} -m 0550 "$stage/bin/sow-relay" {destination}; fi
 for lib in "$stage"/lib/*.so*; do sudo install -o root -g {group} -m 0440 "$lib" {release_dir}/lib/"$(basename "$lib")"; done
 test "$(sha256sum {destination} | cut -d ' ' -f 1)" = {binary}
-sudo -u {user} env RUNTIME_DIRECTORY=/run/sow-relay LD_LIBRARY_PATH={release_dir}/lib {destination} --fstack-upgrade {destination}
+"#,
+        stage = shell_quote(RELAY_STAGE), binary = binary, group = RELAY_GROUP,
+        destination = shell_quote(&destination), release_dir = shell_quote(&release_dir));
+    run("ssh", &[&config.relay_host, &command], None).context("prepare relay live handover")?;
+    verify_live_reward_return(paths, config, Some(&destination))?;
+    let command = format!(r#"set -eu
 sudo ln -sfn releases/{component}/sow-relay {exec}.next
 sudo mv -Tf {exec}.next {exec}
 if sudo test -f {manifest_path}; then sudo cp -p {manifest_path} {manifest_path}.bak_$(date +%s); fi
 printf '%s\n' {manifest_json} | sudo tee {manifest_path} >/dev/null
 sudo chmod 0644 {manifest_path}
 "#,
-        stage = shell_quote(RELAY_STAGE), binary = binary, group = RELAY_GROUP,
-        user = RELAY_USER, destination = shell_quote(&destination), release_dir = shell_quote(&release_dir),
         component = component, exec = RELAY_EXEC,
         manifest_path = RELAY_MANIFEST, manifest_json = shell_quote(&manifest));
     run("ssh", &[&config.relay_host, &command], None).context("relay live handover failed")?;
@@ -1631,12 +1678,9 @@ sudo chmod 0644 {manifest_path}
     Ok(())
 }
 
-/// Hand over compatible application updates. A library replacement must first
-/// prove that every running generation has completed its matches and delivery.
+/// A library replacement must first prove that every running generation has
+/// completed its matches and delivery. Compatible updates use the live fixture.
 fn activate_relay_host(config: &Config, release: &Release) -> Result<()> {
-    if relay_can_handover(config, release)? {
-        return activate_relay_handover(config, release);
-    }
     let active = if relay_workers_stopped(config)? {
         0
     } else {
@@ -1773,7 +1817,7 @@ for u in {units}; do
   test "$(systemctl show "$u" -p ExecMainStatus --value)" = 0
 done
 sudo tee {manifest} >/dev/null <<EOF
-{{"version":"{version}","release":"{release_id}","git":"{revision}","fstack":"{relay_fstack}","dpdk":"{dpdk}","foundation":"{foundation}","worker_count":{worker_count},"relay_sha256":"{relay_component}","relay_bin_sha256":"{relay_bin_sha}","runtime_libraries_sha256":"{runtime_libraries_sha}","ws_write_timeout_ms":{knob},"drain":"match-owned generations","deployed_at":"$ts"}}
+{{"version":"{version}","release":"{release_id}","git":"{revision}","fstack":"{relay_fstack}","dpdk":"{dpdk}","foundation":"{foundation}","worker_count":{worker_count},"relay_sha256":"{relay_component}","relay_bin_sha256":"{relay_bin_sha}","runtime_libraries_sha256":"{runtime_libraries_sha}","ws_write_timeout_ms":{knob},"drain":"match-owned generations","handover_verified":false,"deployed_at":"$ts"}}
 EOF
 sudo chown root:root {manifest}
 sudo chmod 0644 {manifest}

@@ -157,6 +157,9 @@ struct Args {
     /// Exercise live F-Stack handover during the existing reward acceptance test.
     #[arg(long, requires = "verify_rewards")]
     verify_handover_relay_host: Option<String>,
+    /// Candidate binary installed by the official deployment pipeline.
+    #[arg(long, requires = "verify_handover_relay_host")]
+    verify_handover_relay_binary: Option<String>,
 }
 
 #[tokio::main]
@@ -171,6 +174,7 @@ async fn main() {
                 .expect("--database-url is required for reward verification"),
             args.audit_accounts_file.as_deref(),
             args.verify_handover_relay_host.as_deref(),
+            args.verify_handover_relay_binary.as_deref(),
         )
         .await;
         return;
