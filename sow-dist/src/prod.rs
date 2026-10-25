@@ -15,6 +15,9 @@ const RELAY_STATE: &str = "/var/lib/sow-relay";
 const RELAY_MANIFEST: &str = "/var/lib/sow-relay/manifest.json";
 const RELAY_STAGE: &str = "/home/azureuser/.sow-deploy/relay";
 const FSTACK_LOCAL_REPO: &str = "/home/bizkit/Github/infra/f-stack";
+const FSTACK_RELEASE_REV: &str = "6a520b386d3f15265e54d87fe0e9fdc83d4da794";
+const DPDK_RELEASE: &str = "24.11.8";
+const FSTACK_BUILD_FLAGS: &str = "FF_ZC_RECV=1 FF_KERNEL_COEXIST=1";
 const REMOTE_STAGE: &str = "/home/bizkit/.sow-deploy";
 const REMOTE_RELEASES: &str = "/srv/sow/releases";
 const PUBLIC_ORIGIN: &str = "https://shadowsofwar.io";
@@ -1999,12 +2002,63 @@ fn fstack_version(config: &Config) -> Result<String> {
         &["-C", &config.fstack_repo, "rev-parse", "--short=12", "HEAD"],
     )
     .with_context(|| format!("f-stack repo has no HEAD: {}", config.fstack_repo))?;
-    let dirty = output("git", &["-C", &config.fstack_repo, "status", "--porcelain"])?;
-    Ok(if dirty.is_empty() {
+    let changes = output("git", &["-C", &config.fstack_repo, "diff", "--binary", "HEAD"])?;
+    let extra = output("git", &["-C", &config.fstack_repo, "ls-files", "--others", "--exclude-standard"])?;
+    let mut hash = Sha256::new();
+    hash.update(changes.as_bytes());
+    for file in extra.lines() {
+        hash.update(file.as_bytes());
+        hash.update(fs::read(Path::new(&config.fstack_repo).join(file))?);
+    }
+    Ok(if changes.is_empty() && extra.is_empty() {
         rev
     } else {
-        format!("{rev}-dirty")
+        format!("{rev}-{:x}", hash.finalize())
     })
+}
+
+/// Build the DPDK bundled with the pinned F-Stack release. A private prefix
+/// keeps the builder's unrelated installed libraries out of the relay.
+fn prepare_relay_dpdk(paths: &Paths, config: &Config, source: &str) -> Result<PathBuf> {
+    let revision = output("git", &["-C", &config.fstack_repo, "rev-parse", "HEAD"])?;
+    if revision != FSTACK_RELEASE_REV {
+        bail!("relay requires F-Stack 2.0 ({FSTACK_RELEASE_REV}), found {revision}");
+    }
+    let version = fs::read_to_string(Path::new(&config.fstack_repo).join("dpdk/VERSION"))?;
+    if version.trim() != DPDK_RELEASE {
+        bail!("F-Stack 2.0 requires bundled DPDK {DPDK_RELEASE}, found {}", version.trim());
+    }
+    let root = paths.root.join("dist/.sow-state/dpdk").join(source);
+    let prefix = root.join("installed");
+    let pc = prefix.join("lib/pkgconfig/libdpdk.pc");
+    let marker = root.join("complete");
+    if marker.is_file() && pc.is_file() {
+        let metadata = fs::read_to_string(&pc)?;
+        if metadata.lines().any(|line| line == format!("Version: {DPDK_RELEASE}")) {
+            return Ok(prefix);
+        }
+    }
+    fs::create_dir_all(&root)?;
+    let script = format!(
+        "set -eu\n\
+         meson setup {build} {src} --prefix {prefix} --libdir lib \\\n+           -Dplatform=generic -Ddefault_library=static -Denable_kmods=false -Dtests=false -Dexamples=\n\
+         meson compile -C {build} -j 8\n\
+         meson install -C {build}\n\
+         test \"$(PKG_CONFIG_PATH={pc} pkg-config --modversion libdpdk)\" = {version}\n",
+        build = shell_quote(&root.join("build").display().to_string()),
+        src = shell_quote(&format!("{}/dpdk", config.fstack_repo)),
+        prefix = shell_quote(&prefix.display().to_string()),
+        pc = shell_quote(&prefix.join("lib/pkgconfig").display().to_string()),
+        version = shell_quote(DPDK_RELEASE),
+    );
+    println!("==> Building bundled DPDK {DPDK_RELEASE} for F-Stack 2.0");
+    run("sudo", &[
+        "systemd-nspawn", "-q", "-D", "/var/lib/machines/debian12",
+        "--bind", &paths.root.display().to_string(),
+        "--bind", &config.fstack_repo, "--as-pid2", "bash", "-c", &script,
+    ], None)?;
+    fs::write(marker, format!("{source}:DPDK={DPDK_RELEASE}\n"))?;
+    Ok(prefix)
 }
 
 /// Build the relay locally in the Debian 12 (bookworm) systemd-nspawn container
@@ -2012,12 +2066,15 @@ fn fstack_version(config: &Config) -> Result<String> {
 /// Azure receives only the packaged binary — zero compiler/source on production.
 fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
     let fstack_hash = fstack_version(config)?;
+    let dpdk_prefix = prepare_relay_dpdk(paths, config, &fstack_hash)?;
+    let pkg_config_path = dpdk_prefix.join("lib/pkgconfig").display().to_string();
+    let dependency_identity = format!("{fstack_hash}:DPDK={DPDK_RELEASE}:{FSTACK_BUILD_FLAGS}");
     let repo_mount = paths.root.display().to_string();
     let fstack_mount = config.fstack_repo.clone();
     let local = paths.root.join("dist/relay-bin");
     let fingerprint = input_fingerprint(
-        "relay-v1",
-        &fstack_hash,
+        "relay-v2",
+        &dependency_identity,
         &[
             &paths.root.join("Cargo.toml"),
             &paths.root.join("Cargo.lock"),
@@ -2043,28 +2100,15 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
     println!("==> Building relay in local Debian 12 container (nspawn)...");
 
     let fstack_cache = paths.root.join("dist/.sow-state/fstack-build");
-    let dpdk_version = output(
-        "sudo",
-        &[
-            "systemd-nspawn",
-            "-D",
-            "/var/lib/machines/debian12",
-            "--as-pid2",
-            "pkg-config",
-            "--modversion",
-            "libdpdk",
-        ],
-    )
-    .context("reading DPDK version in Debian 12 relay builder")?;
-    let fstack_key = format!("{fstack_hash}:DPDK={dpdk_version}:FF_ZC_RECV=1");
+    let fstack_key = dependency_identity;
     if !fs::read_to_string(&fstack_cache).is_ok_and(|value| value.trim() == fstack_key) {
         println!(
             "==> F-Stack changed ({}) — rebuilding libfstack.a in Debian 12 container",
             &fstack_hash[..12]
         );
         let prepare = format!(
-            "set -eu; cd {}/lib && make clean >/dev/null 2>&1 || true; make -j$(nproc) FF_ZC_RECV=1",
-            shell_quote(&config.fstack_repo)
+            "set -eu; export PKG_CONFIG_PATH={}; cd {}/lib; make clean; make -j8 {FSTACK_BUILD_FLAGS}",
+            shell_quote(&pkg_config_path), shell_quote(&config.fstack_repo)
         );
         run(
             "sudo",
@@ -2093,11 +2137,12 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
 
     let build = format!(
         "set -eu; export PATH=$HOME/.cargo/bin:$PATH; \
+         export PKG_CONFIG_PATH={}; export SOW_DPDK_VERSION={DPDK_RELEASE}; \
          export FSTACK_LIB_DIR={}; \
          cd {}; cargo test --locked --release -p sow-relay -- --test-threads=1; \
          cargo build --locked --release -p sow-relay; \
          chown -R 1000:1000 {}/target {}/lib 2>/dev/null || true",
-        shell_quote(&format!("{}/lib", config.fstack_repo)),
+        shell_quote(&pkg_config_path), shell_quote(&format!("{}/lib", config.fstack_repo)),
         shell_quote(&paths.root.display().to_string()),
         shell_quote(&paths.root.display().to_string()),
         shell_quote(&config.fstack_repo)

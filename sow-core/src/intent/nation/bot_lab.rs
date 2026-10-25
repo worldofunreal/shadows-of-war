@@ -2646,27 +2646,27 @@ fn s16_checkpoint_decision_and_state_reference() {
     // The runtime trace is fixed per target and refreshed after deterministic behavior changes.
     #[cfg(target_os = "freebsd")]
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x755f_0400_99eb_2683),
-        (500, 0x629e_6bed_14f1_7989),
-        (750, 0x8b64_53c8_9da5_b3b9),
-        (1000, 0xa101_a2c4_446a_fa5e),
-        (1250, 0x5945_7cc3_3a39_9aea),
-        (1500, 0x6077_99fa_bb6e_0d1b),
-        (1750, 0x477e_c29c_f61f_8eb0),
-        (2000, 0xd6d2_cfe4_95c7_11c8),
-        (2102, 0x04c8_d208_0edd_22b9),
+        (250, 0x3d29_ca08_b938_23e0),
+        (500, 0xc0ec_ea23_dfcf_d88a),
+        (750, 0x38c6_8f1f_881b_77db),
+        (1000, 0x6aaf_8b9e_9f2e_b178),
+        (1250, 0xb564_3d69_b7b3_cbd0),
+        (1500, 0x71fd_5a67_7703_b213),
+        (1750, 0xa590_0a1c_845e_511b),
+        (2000, 0x8d7d_a3b9_8d84_710b),
+        (2102, 0x7518_9256_93b0_2b19),
     ];
     #[cfg(not(target_os = "freebsd"))]
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x755f_0400_99eb_2683),
-        (500, 0x629e_6bed_14f1_7989),
-        (750, 0x8b64_53c8_9da5_b3b9),
-        (1000, 0xa101_a2c4_446a_fa5e),
-        (1250, 0x5945_7cc3_3a39_9aea),
-        (1500, 0x6077_99fa_bb6e_0d1b),
-        (1750, 0x477e_c29c_f61f_8eb0),
-        (2000, 0xd6d2_cfe4_95c7_11c8),
-        (2102, 0x04c8_d208_0edd_22b9),
+        (250, 0x3d29_ca08_b938_23e0),
+        (500, 0xc0ec_ea23_dfcf_d88a),
+        (750, 0x38c6_8f1f_881b_77db),
+        (1000, 0x6aaf_8b9e_9f2e_b178),
+        (1250, 0xb564_3d69_b7b3_cbd0),
+        (1500, 0x71fd_5a67_7703_b213),
+        (1750, 0xa590_0a1c_845e_511b),
+        (2000, 0x8d7d_a3b9_8d84_710b),
+        (2102, 0x7518_9256_93b0_2b19),
     ];
     assert_eq!(
         checkpoints,
@@ -2682,22 +2682,20 @@ fn s16_checkpoint_decision_and_state_reference() {
 #[test]
 fn historical_s16_building_rules_keep_recorded_results() {
     let checkpoints = s16_building_rules_trace(true);
-    // Re-recorded after the hero ability reassignment: bots draw random heroes, so their
-    // abilities shape this game. The building rules are unchanged.
+    // Re-recorded after the full hero roster and abilities changed bot match outcomes.
+    // The historical building rules themselves are unchanged.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0xb8f3_eb7d_f6c4_8bbc),
-        (500, 0x1e87_a11e_1e7c_24a6),
-        (750, 0x61fa_7ce4_8cda_15c5),
-        (1000, 0xf352_e3ab_101d_72c9),
-        (1250, 0xa25a_5021_6ed5_289b),
-        (1500, 0x2606_3752_913e_bfe1),
-        (1750, 0x92d1_db89_d504_4e33),
-        (2000, 0x3ba3_2ca9_998d_15f2),
-        (2102, 0x9cf5_1b79_0287_0a3d),
+        (250, 0x558c_88fe_d616_8863),
+        (500, 0xf1f1_820a_148c_80c7),
+        (750, 0xa12c_15e9_a1a1_6899),
+        (1000, 0xe995_4735_b488_980d),
+        (1250, 0x01ec_498b_6f05_f88c),
+        (1500, 0x9e30_f637_8e5d_4014),
+        (1612, 0x50b5_a6c7_0cb2_da90),
     ];
     assert_eq!(
         checkpoints, REFERENCE,
-        "pre-v3 building rules changed recorded outcomes"
+        "historical S16 configuration changed recorded outcomes"
     );
 }
 

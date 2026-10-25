@@ -61,7 +61,11 @@ pub unsafe fn init(config_args: &[CString], extra_eal: &[&str]) -> Result<(), i3
     }
 
     // Inject extra EAL tokens into the global dpdk_argv built by ff_load_config.
-    // dpdk_argv has DPDK_ARGV_MAX slots (16 args + NULL); abort if we would overflow.
+    // Validate the library's count before indexing its C argument table.
+    if dpdk_argc() < 0 || dpdk_argc() as usize >= ffi::DPDK_ARGV_MAX {
+        eprintln!("[fstack-bridge] invalid F-Stack EAL argument count");
+        return Err(2);
+    }
     for tok in extra_eal {
         if dpdk_argc() as usize + 1 >= ffi::DPDK_ARGV_MAX {
             eprintln!("[fstack-bridge] dpdk_argv overflow adding {:?}", tok);

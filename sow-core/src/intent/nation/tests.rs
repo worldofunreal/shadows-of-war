@@ -138,6 +138,59 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
+    fn scripted_faction_accepts_a_request_without_regular_bot_thresholds() {
+        for scripted_acceptance in [false, true] {
+            let mut engine = test_engine_two_players(42);
+            {
+                let faction = engine.state.player_mut(1).unwrap();
+                faction.iq = 140;
+                faction.iq_points = 0.0;
+                faction.troops = 1_000.0;
+                faction.tile_count = 10;
+            }
+            {
+                let proposer = engine.state.player_mut(2).unwrap();
+                proposer.player_type = PlayerType::Human;
+                proposer.troops = 10.0;
+                proposer.tile_count = 1;
+            }
+            engine.push_alliance_proposal(2, 1);
+            if scripted_acceptance {
+                engine.campaign_accepts_alliance_requests_ids.insert(1);
+            }
+
+            let mut decisions = Vec::new();
+            engine.nation_run_diplomacy_for_slot(
+                (1, 140),
+                (5.0, 5.0),
+                &[2],
+                false,
+                false,
+                &mut decisions,
+            );
+            let accepted = decisions.iter().any(|decision| matches!(
+                decision.intent,
+                GameplayIntent::AcceptAlliance { target_player: 2 }
+            ));
+            assert_eq!(accepted, scripted_acceptance);
+
+            for decision in decisions {
+                engine.apply_stamped_intent(
+                    &crate::protocol::StampedIntent {
+                        player_id: decision.bot_id,
+                        intent: decision.intent,
+                    },
+                    0,
+                );
+            }
+            assert_eq!(
+                engine.state.player(1).unwrap().alliances.contains(&2),
+                scripted_acceptance
+            );
+        }
+    }
+
+    #[test]
     fn ghost_accepts_and_offers_to_humans_and_ghosts_by_the_same_rule() {
         for other_is_ghost in [false, true] {
             let mut engine = test_engine_two_players(42);
