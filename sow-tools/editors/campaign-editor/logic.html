@@ -1,84 +1,324 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SOW · Campaign studio</title>
-<link rel="stylesheet" href="/fonts/fonts.css">
-<link rel="stylesheet" href="/shell/sow-controls.css">
-<link rel="stylesheet" href="/shell/main_menu.tutorial.css">
-<link rel="stylesheet" href="editor.css">
-<script defer src="/shell/sow-campaign.js"></script>
-<script defer src="/shell/sow-campaign-view.js"></script>
-<script defer src="map-preview.js"></script>
-<script defer src="editor.js"></script>
-</head>
-<body class="logic-editor">
-<header class="studio-bar">
-  <a class="brand" href="index.html">SOW <span>CAMPAIGN STUDIO</span></a>
-  <nav aria-label="Editor"><a id="mapLink" href="index.html" title="Unsaved story changes are saved before opening Map">Map</a><a id="logicLink" aria-current="page" href="logic.html">Story &amp; logic</a></nav>
-  <label class="episode-control">Episode <select id="episodeSelect"><option value="boudica">Boudica</option><option value="six_sky_ep1">Six Sky · I</option><option value="six_sky_ep2">Six Sky · II</option><option value="six_sky_ep3">Six Sky · III</option><option value="menu">Menu guides</option></select></label>
-  <span class="status" id="saveStatus" role="status">Loading…</span>
-  <button id="reloadBtn">Reload saved</button><button id="exportBtn" class="primary">Save</button>
-</header>
-<div id="notice" role="alert" hidden></div>
-<main class="studio-layout">
-  <section id="graphPanel" class="graph-panel" aria-label="Story graph">
-    <div class="panel-bar"><div><span class="eyebrow">MISSION FLOW</span><h1 id="episodeLabel">Episode</h1></div><label id="flowControl">Flow <select id="flowSelect"><option value="episode">In-game</option><option value="menu">After return</option></select></label><label id="menuGuideControl" hidden>Journey <select id="menuGuideSelect"><option value="welcome">Welcome</option><option value="first_multiplayer">First multiplayer</option></select></label><button id="flowEntryBtn" type="button">Use selected as opening</button><span id="stepCount" class="muted"></span></div>
-    <div class="palette" id="palette" aria-label="Add a step"></div>
-    <div id="stage" tabindex="0" aria-label="Drag steps or empty space. Scroll to zoom.">
-      <svg id="wires" aria-hidden="true"></svg><div id="nodes"></div>
-      <div class="zoom-controls"><button data-zoom="out" aria-label="Zoom out">−</button><span id="zlabel">100%</span><button data-zoom="in" aria-label="Zoom in">+</button><button data-zoom="fit">Fit</button><button id="arrangeGraphBtn" type="button">Arrange</button></div>
-      <div class="graph-hint" role="status" aria-live="polite">Drag outputs to inputs · keyboard: Enter on output, then Enter on destination · Escape cancels</div>
-    </div>
-    <details class="diagnostics" open><summary id="validationStatus">Validation</summary><div id="errors"></div></details>
-    <div class="graph-footer"><label class="file-button">Import JSON<input id="fileIn" type="file" accept=".json,application/json"></label><button id="downloadBtn">Download draft</button><button id="menuGuideBtn">Create / open menu guide</button>
-    <details class="workflow-help"><summary>Quick start</summary><ol><li>Add and select a step; set its text key, speaker, and pacing in the inspector. Story copy lives in the shared language catalogs. For an objective or guide, use Pick target on map to assign a faction. Scenes wait for Continue; objectives wait for a game action; choose Wait (seconds) for a timed beat.</li><li>Use Create next step on each decision answer to build its path in place, then connect paths where the story rejoins. The selected answer remains available to later scenes.</li><li>Use a hand guide only to teach a mechanic or control. Decisions stay free of prompts; use the Language selector in the preview to check available catalog text.</li><li>Preview the branching sample without changing this episode. Simulate choices and objectives, then return to your draft. Save, wait for the local update, and restart the episode in the game.</li></ol></details>
-    </div>
-  </section>
-  <aside id="inspectorPanel" class="inspector-panel" aria-label="Step inspector">
-    <div class="panel-bar"><span class="eyebrow">INSPECTOR</span></div>
-    <div id="inspectorScroll" class="inspector-scroll">
-      <div id="inspector"></div>
-      <details class="episode-settings"><summary>Episode settings & speakers</summary><div id="settings"></div></details>
-    </div>
-  </aside>
-  <section class="preview-panel" aria-label="Campaign preview">
-    <div class="panel-bar"><div><span class="eyebrow">LIVE PREVIEW</span><h2>Player experience</h2></div><button id="demoBtn" class="sample-toggle" type="button" aria-pressed="false">Preview branching sample</button><span class="simulation-badge">SIMULATION</span></div>
-    <div class="preview-toolbar"><label>Viewport <select id="device"><option value="desktop">Desktop</option><option value="mobile">Mobile</option></select></label><label>Language <select id="previewLocale"><option value="en">English</option><option value="es">Español</option></select></label><label class="check"><input id="factionLabels" type="checkbox"> Show faction labels</label><button id="pickFactionTarget" class="faction-pick" type="button" aria-pressed="false" disabled>Pick target on map</button><label class="check"><input id="reducedMotion" type="checkbox"> Reduced motion</label></div>
-    <div class="preview-scroll"><div id="previewFrame" class="preview-frame" data-device="desktop">
-      <div class="sample-world" role="group" aria-label="Selected campaign map preview">
-        <div id="campaignPreviewLayer"><canvas id="campaignMapPreview"></canvas><div id="campaignPreviewMarkers"></div></div>
-        <div class="sample-hud"><span id="previewMapLabel">Loading map…</span><span id="previewFactionCount"></span></div>
-        <p id="previewMapStatus" role="status" hidden></p>
-      </div>
-      <div id="sow-menu" class="sample-menu" aria-label="Simulated campaign menu" hidden>
-        <nav class="sample-menu-nav" aria-label="Menu preview navigation"><button type="button" data-nav-screen="battle">HOME</button><button type="button" data-nav-screen="heroes">HEROES</button><button type="button" data-nav-screen="profile">PROFILE</button><button type="button" data-nav-screen="store">STORE</button></nav>
-        <div class="sample-menu-screen" data-preview-menu-screen="home"><div class="sow-menu__home-public"><article class="sample-lobby-card" data-lobby-card>OPEN LOBBY</article></div><label>NAME <input data-role="display-name" value="Player"></label><button type="button" data-command="open_campaign">CAMPAIGN</button><button type="button" data-command="quick_match">MULTIPLAYER</button></div>
-        <div class="sample-menu-screen sample-menu-screen--campaign" data-preview-menu-screen="campaign" hidden><button class="sample-campaign-back" type="button" data-preview-menu-back>← BACK</button><article class="sample-campaign-card"><p>CAMPAIGN</p><h3 data-preview-episode-title>Boudica</h3><button type="button" data-command="start_campaign_episode" data-episode-id="boudica">REPLAY TUTORIAL</button></article></div>
-        <div class="sample-menu-screen sample-menu-screen--campaign" data-preview-menu-screen="heroes" data-screen-panel="heroes" hidden><div class="sample-menu-row"><button type="button" data-command="preview_leader" data-leader-id="owned">OWNED HERO</button><button type="button" data-command="preview_leader" data-leader-id="free">FREE HERO</button><button type="button" class="is-locked" data-command="preview_leader" data-leader-id="gem_offer">GEM HERO · 100 GEMS</button></div><div data-hero-purchase><button type="button" data-command="unlock_leader" data-currency="gems" data-leader-id="gem_offer">BUY WITH GEMS</button></div><button type="button" data-command="confirm_leader">CONFIRM HERO</button></div>
-        <div class="sample-menu-screen sample-menu-screen--campaign" data-preview-menu-screen="profile" data-screen-panel="profile" hidden><button type="button" data-preview-menu-back>← BACK</button><article data-own-profile>MY PROFILE</article><button type="button" data-command="profile_tab" data-profile-tab="history">MATCH HISTORY</button></div>
-        <div class="sample-menu-screen sample-menu-screen--campaign" data-preview-menu-screen="store" data-screen-panel="store" hidden><button type="button" data-preview-menu-back>← BACK</button><article>STORE · CATALOG READY</article></div>
-        <div class="sample-menu-screen sample-menu-screen--campaign" data-preview-menu-screen="purchase" data-screen-panel="purchase" hidden><button type="button" data-command="confirm_purchase">CONFIRM GEM PURCHASE</button><button type="button" data-command="cancel_purchase">CANCEL</button></div>
-      </div>
-      <div id="sow-hud" class="sample-hud-root" aria-label="Simulated game controls">
-        <div class="sample-toolbar"><button type="button" data-command="toggle_leaderboard">RANKINGS</button><button type="button" data-command="toggle_settings">SETTINGS</button><button type="button" data-command="toggle_inbox">INBOX</button><button type="button" data-command="zoom_in" aria-label="Zoom in">+</button><button type="button" data-command="zoom_out" aria-label="Zoom out">−</button><button type="button" data-command="center_camera" aria-label="Center camera">⌖</button></div>
-        <label class="sample-troop-control">TROOPS <b id="sampleTroops">1,000</b><input id="sow-hud-slider" type="range" min="5" max="100" value="50"></label>
-        <div class="sample-dock" aria-label="Simulated build dock"><button type="button" data-command="select_building" data-kind="City">CITY</button><button type="button" data-command="select_building" data-kind="Factory">FACTORY</button><button type="button" data-command="select_building" data-kind="Port">PORT</button><button type="button" data-command="select_building" data-kind="Tower">TOWER</button><button type="button" data-command="select_building" data-kind="Farm">FARM</button><button type="button" id="sow-hud-building-card-upgrade" data-map-action="upgrade_structure">UPGRADE</button><button type="button" data-fleet-kind="trade" disabled>TRADE SHIP</button><button type="button" data-command="select_warship">WARSHIP</button><button type="button" data-command="select_nuke">NUKE</button></div>
-        <aside id="sow-hud-transfer" class="sample-transfer" hidden><label>GOLD <input id="sow-hud-transfer-gold" type="number" value="0"></label><label>TROOPS <input id="sow-hud-transfer-troops" type="number" value="0"></label><button type="button" data-command="send_resources">SEND</button><button type="button" data-command="request_resources">REQUEST</button></aside>
-        <div class="sample-map-menu" aria-label="Simulated map action menu">
-          <div class="sample-map-popup" hidden><button class="sample-map-back" type="button" data-map-back>BACK</button>
-            <div class="sample-map-submenu" data-preview-map-menu="build" hidden><button type="button" data-map-action="build_city">CITY</button><button type="button" data-map-action="build_factory">FACTORY</button><button type="button" data-map-action="build_port">PORT</button><button type="button" data-map-action="build_tower">TOWER</button><button type="button" data-map-action="build_farm">FARM</button></div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SOW · Campaign studio</title>
+    <link rel="stylesheet" href="/fonts/fonts.css" />
+    <link rel="stylesheet" href="/shell/sow-controls.css" />
+    <link rel="stylesheet" href="/shell/main_menu.tutorial.css" />
+    <link rel="stylesheet" href="editor.css" />
+    <script defer src="/shell/sow-campaign.ts"></script>
+    <script defer src="/shell/sow-campaign-view.ts"></script>
+    <script defer src="map-preview.ts"></script>
+    <script defer src="editor.ts"></script>
+  </head>
+  <body class="logic-editor">
+    <header class="studio-bar">
+      <a class="brand" href="index.html">SOW <span>CAMPAIGN STUDIO</span></a>
+      <nav aria-label="Editor">
+        <a id="mapLink" href="index.html" title="Unsaved story changes are saved before opening Map">Map</a
+        ><a id="logicLink" aria-current="page" href="logic.html">Story &amp; logic</a>
+      </nav>
+      <label class="episode-control"
+        >Episode
+        <select id="episodeSelect">
+          <option value="boudica">Boudica</option>
+          <option value="six_sky_ep1">Six Sky · I</option>
+          <option value="six_sky_ep2">Six Sky · II</option>
+          <option value="six_sky_ep3">Six Sky · III</option>
+          <option value="menu">Menu guides</option>
+        </select></label
+      >
+      <span class="status" id="saveStatus" role="status">Loading…</span>
+      <button id="reloadBtn">Reload saved</button><button id="exportBtn" class="primary">Save</button>
+    </header>
+    <div id="notice" role="alert" hidden></div>
+    <main class="studio-layout">
+      <section id="graphPanel" class="graph-panel" aria-label="Story graph">
+        <div class="panel-bar">
+          <div>
+            <span class="eyebrow">MISSION FLOW</span>
+            <h1 id="episodeLabel">Episode</h1>
           </div>
-          <div class="sample-controls"><button type="button" data-map-action="spawn">SPAWN</button><button type="button" data-map-action="attack">ATTACK</button><button type="button" data-map-action="transfer">TRANSFER</button><button type="button" data-map-action="fleet">FLEET</button><button type="button" data-map-action="alliance">ALLIANCE</button><button type="button" data-map-group="build">BUILD</button><button type="button" data-map-action="nuke">NUKE</button></div>
+          <label id="flowControl"
+            >Flow
+            <select id="flowSelect">
+              <option value="episode">In-game</option>
+              <option value="menu">After return</option>
+            </select></label
+          ><label id="menuGuideControl" hidden
+            >Journey
+            <select id="menuGuideSelect">
+              <option value="welcome">Welcome</option>
+              <option value="first_multiplayer">First multiplayer</option>
+            </select></label
+          ><button id="flowEntryBtn" type="button">Use selected as opening</button
+          ><span id="stepCount" class="muted"></span>
         </div>
-      </div>
-      <div id="previewRoot"></div>
-    </div></div>
-    <div class="preview-actions"><label id="previewBranchWrap" class="preview-branch" hidden>Simulate branch <select id="previewBranchSelect"><option value="">Current preview state</option></select></label><button id="playSelected" class="primary">Play selected</button><button id="restartBtn">Restart episode</button><button id="simulateBtn" hidden>Complete objective</button><button id="tickBtn" hidden>+1 second</button></div>
-    <div id="previewStatus" role="status" class="preview-status">Shared campaign renderer</div>
-    <details class="simulation-facts"><summary>Simulation facts & state</summary><div id="factControls"></div><pre id="engineState"></pre></details>
-  </section>
-</main>
-</body>
+        <div class="palette" id="palette" aria-label="Add a step"></div>
+        <div id="stage" tabindex="0" aria-label="Drag steps or empty space. Scroll to zoom.">
+          <svg id="wires" aria-hidden="true"></svg>
+          <div id="nodes"></div>
+          <div class="zoom-controls">
+            <button data-zoom="out" aria-label="Zoom out">−</button><span id="zlabel">100%</span
+            ><button data-zoom="in" aria-label="Zoom in">+</button><button data-zoom="fit">Fit</button
+            ><button id="arrangeGraphBtn" type="button">Arrange</button>
+          </div>
+          <div class="graph-hint" role="status" aria-live="polite">
+            Drag outputs to inputs · keyboard: Enter on output, then Enter on destination · Escape cancels
+          </div>
+        </div>
+        <details class="diagnostics" open>
+          <summary id="validationStatus">Validation</summary>
+          <div id="errors"></div>
+        </details>
+        <div class="graph-footer">
+          <label class="file-button"
+            >Import JSON<input id="fileIn" type="file" accept=".json,application/json" /></label
+          ><button id="downloadBtn">Download draft</button
+          ><button id="menuGuideBtn">Create / open menu guide</button>
+          <details class="workflow-help">
+            <summary>Quick start</summary>
+            <ol>
+              <li>
+                Add and select a step; set its text key, speaker, and pacing in the inspector. Story copy
+                lives in the shared language catalogs. For an objective or guide, use Pick target on map to
+                assign a faction. Scenes wait for Continue; objectives wait for a game action; choose Wait
+                (seconds) for a timed beat.
+              </li>
+              <li>
+                Use Create next step on each decision answer to build its path in place, then connect paths
+                where the story rejoins. The selected answer remains available to later scenes.
+              </li>
+              <li>
+                Use a hand guide only to teach a mechanic or control. Decisions stay free of prompts; use the
+                Language selector in the preview to check available catalog text.
+              </li>
+              <li>
+                Preview the branching sample without changing this episode. Simulate choices and objectives,
+                then return to your draft. Save, wait for the local update, and restart the episode in the
+                game.
+              </li>
+            </ol>
+          </details>
+        </div>
+      </section>
+      <aside id="inspectorPanel" class="inspector-panel" aria-label="Step inspector">
+        <div class="panel-bar"><span class="eyebrow">INSPECTOR</span></div>
+        <div id="inspectorScroll" class="inspector-scroll">
+          <div id="inspector"></div>
+          <details class="episode-settings">
+            <summary>Episode settings & speakers</summary>
+            <div id="settings"></div>
+          </details>
+        </div>
+      </aside>
+      <section class="preview-panel" aria-label="Campaign preview">
+        <div class="panel-bar">
+          <div>
+            <span class="eyebrow">LIVE PREVIEW</span>
+            <h2>Player experience</h2>
+          </div>
+          <button id="demoBtn" class="sample-toggle" type="button" aria-pressed="false">
+            Preview branching sample</button
+          ><span class="simulation-badge">SIMULATION</span>
+        </div>
+        <div class="preview-toolbar">
+          <label
+            >Viewport
+            <select id="device">
+              <option value="desktop">Desktop</option>
+              <option value="mobile">Mobile</option>
+            </select></label
+          ><label
+            >Language
+            <select id="previewLocale">
+              <option value="en">English</option>
+              <option value="es">Español</option>
+            </select></label
+          ><label class="check"><input id="factionLabels" type="checkbox" /> Show faction labels</label
+          ><button id="pickFactionTarget" class="faction-pick" type="button" aria-pressed="false" disabled>
+            Pick target on map</button
+          ><label class="check"><input id="reducedMotion" type="checkbox" /> Reduced motion</label>
+        </div>
+        <div class="preview-scroll">
+          <div id="previewFrame" class="preview-frame" data-device="desktop">
+            <div class="sample-world" role="group" aria-label="Selected campaign map preview">
+              <div id="campaignPreviewLayer">
+                <canvas id="campaignMapPreview"></canvas>
+                <div id="campaignPreviewMarkers"></div>
+              </div>
+              <div class="sample-hud">
+                <span id="previewMapLabel">Loading map…</span><span id="previewFactionCount"></span>
+              </div>
+              <p id="previewMapStatus" role="status" hidden></p>
+            </div>
+            <div id="sow-menu" class="sample-menu" aria-label="Simulated campaign menu" hidden>
+              <nav class="sample-menu-nav" aria-label="Menu preview navigation">
+                <button type="button" data-nav-screen="battle">HOME</button
+                ><button type="button" data-nav-screen="heroes">HEROES</button
+                ><button type="button" data-nav-screen="profile">PROFILE</button
+                ><button type="button" data-nav-screen="store">STORE</button>
+              </nav>
+              <div class="sample-menu-screen" data-preview-menu-screen="home">
+                <div class="sow-menu__home-public">
+                  <article class="sample-lobby-card" data-lobby-card>OPEN LOBBY</article>
+                </div>
+                <label>NAME <input data-role="display-name" value="Player" /></label
+                ><button type="button" data-command="open_campaign">CAMPAIGN</button
+                ><button type="button" data-command="quick_match">MULTIPLAYER</button>
+              </div>
+              <div
+                class="sample-menu-screen sample-menu-screen--campaign"
+                data-preview-menu-screen="campaign"
+                hidden
+              >
+                <button class="sample-campaign-back" type="button" data-preview-menu-back>← BACK</button>
+                <article class="sample-campaign-card">
+                  <p>CAMPAIGN</p>
+                  <h3 data-preview-episode-title>Boudica</h3>
+                  <button type="button" data-command="start_campaign_episode" data-episode-id="boudica">
+                    REPLAY TUTORIAL
+                  </button>
+                </article>
+              </div>
+              <div
+                class="sample-menu-screen sample-menu-screen--campaign"
+                data-preview-menu-screen="heroes"
+                data-screen-panel="heroes"
+                hidden
+              >
+                <div class="sample-menu-row">
+                  <button type="button" data-command="preview_leader" data-leader-id="owned">
+                    OWNED HERO</button
+                  ><button type="button" data-command="preview_leader" data-leader-id="free">FREE HERO</button
+                  ><button
+                    type="button"
+                    class="is-locked"
+                    data-command="preview_leader"
+                    data-leader-id="gem_offer"
+                  >
+                    GEM HERO · 100 GEMS
+                  </button>
+                </div>
+                <div data-hero-purchase>
+                  <button
+                    type="button"
+                    data-command="unlock_leader"
+                    data-currency="gems"
+                    data-leader-id="gem_offer"
+                  >
+                    BUY WITH GEMS
+                  </button>
+                </div>
+                <button type="button" data-command="confirm_leader">CONFIRM HERO</button>
+              </div>
+              <div
+                class="sample-menu-screen sample-menu-screen--campaign"
+                data-preview-menu-screen="profile"
+                data-screen-panel="profile"
+                hidden
+              >
+                <button type="button" data-preview-menu-back>← BACK</button>
+                <article data-own-profile>MY PROFILE</article>
+                <button type="button" data-command="profile_tab" data-profile-tab="history">
+                  MATCH HISTORY
+                </button>
+              </div>
+              <div
+                class="sample-menu-screen sample-menu-screen--campaign"
+                data-preview-menu-screen="store"
+                data-screen-panel="store"
+                hidden
+              >
+                <button type="button" data-preview-menu-back>← BACK</button>
+                <article>STORE · CATALOG READY</article>
+              </div>
+              <div
+                class="sample-menu-screen sample-menu-screen--campaign"
+                data-preview-menu-screen="purchase"
+                data-screen-panel="purchase"
+                hidden
+              >
+                <button type="button" data-command="confirm_purchase">CONFIRM GEM PURCHASE</button
+                ><button type="button" data-command="cancel_purchase">CANCEL</button>
+              </div>
+            </div>
+            <div id="sow-hud" class="sample-hud-root" aria-label="Simulated game controls">
+              <div class="sample-toolbar">
+                <button type="button" data-command="toggle_leaderboard">RANKINGS</button
+                ><button type="button" data-command="toggle_settings">SETTINGS</button
+                ><button type="button" data-command="toggle_inbox">INBOX</button
+                ><button type="button" data-command="zoom_in" aria-label="Zoom in">+</button
+                ><button type="button" data-command="zoom_out" aria-label="Zoom out">−</button
+                ><button type="button" data-command="center_camera" aria-label="Center camera">⌖</button>
+              </div>
+              <label class="sample-troop-control"
+                >TROOPS <b id="sampleTroops">1,000</b
+                ><input id="sow-hud-slider" type="range" min="5" max="100" value="50"
+              /></label>
+              <div class="sample-dock" aria-label="Simulated build dock">
+                <button type="button" data-command="select_building" data-kind="City">CITY</button
+                ><button type="button" data-command="select_building" data-kind="Factory">FACTORY</button
+                ><button type="button" data-command="select_building" data-kind="Port">PORT</button
+                ><button type="button" data-command="select_building" data-kind="Tower">TOWER</button
+                ><button type="button" data-command="select_building" data-kind="Farm">FARM</button
+                ><button type="button" id="sow-hud-building-card-upgrade" data-map-action="upgrade_structure">
+                  UPGRADE</button
+                ><button type="button" data-fleet-kind="trade" disabled>TRADE SHIP</button
+                ><button type="button" data-command="select_warship">WARSHIP</button
+                ><button type="button" data-command="select_nuke">NUKE</button>
+              </div>
+              <aside id="sow-hud-transfer" class="sample-transfer" hidden>
+                <label>GOLD <input id="sow-hud-transfer-gold" type="number" value="0" /></label
+                ><label>TROOPS <input id="sow-hud-transfer-troops" type="number" value="0" /></label
+                ><button type="button" data-command="send_resources">SEND</button
+                ><button type="button" data-command="request_resources">REQUEST</button>
+              </aside>
+              <div class="sample-map-menu" aria-label="Simulated map action menu">
+                <div class="sample-map-popup" hidden>
+                  <button class="sample-map-back" type="button" data-map-back>BACK</button>
+                  <div class="sample-map-submenu" data-preview-map-menu="build" hidden>
+                    <button type="button" data-map-action="build_city">CITY</button
+                    ><button type="button" data-map-action="build_factory">FACTORY</button
+                    ><button type="button" data-map-action="build_port">PORT</button
+                    ><button type="button" data-map-action="build_tower">TOWER</button
+                    ><button type="button" data-map-action="build_farm">FARM</button>
+                  </div>
+                </div>
+                <div class="sample-controls">
+                  <button type="button" data-map-action="spawn">SPAWN</button
+                  ><button type="button" data-map-action="attack">ATTACK</button
+                  ><button type="button" data-map-action="transfer">TRANSFER</button
+                  ><button type="button" data-map-action="fleet">FLEET</button
+                  ><button type="button" data-map-action="alliance">ALLIANCE</button
+                  ><button type="button" data-map-group="build">BUILD</button
+                  ><button type="button" data-map-action="nuke">NUKE</button>
+                </div>
+              </div>
+            </div>
+            <div id="previewRoot"></div>
+          </div>
+        </div>
+        <div class="preview-actions">
+          <label id="previewBranchWrap" class="preview-branch" hidden
+            >Simulate branch
+            <select id="previewBranchSelect">
+              <option value="">Current preview state</option>
+            </select></label
+          ><button id="playSelected" class="primary">Play selected</button
+          ><button id="restartBtn">Restart episode</button
+          ><button id="simulateBtn" hidden>Complete objective</button
+          ><button id="tickBtn" hidden>+1 second</button>
+        </div>
+        <div id="previewStatus" role="status" class="preview-status">Shared campaign renderer</div>
+        <details class="simulation-facts">
+          <summary>Simulation facts & state</summary>
+          <div id="factControls"></div>
+          <pre id="engineState"></pre>
+        </details>
+      </section>
+    </main>
+  </body>
 </html>

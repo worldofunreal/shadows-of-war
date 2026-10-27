@@ -137,7 +137,7 @@ struct Args {
     url: Url,
 
     /// Authentication provider used by the join proof
-    #[arg(long)]
+    #[arg(long, required_unless_present = "verify_rewards")]
     auth_provider: Option<String>,
 
     /// Account ID for providers that use an explicit account identity
@@ -145,7 +145,7 @@ struct Args {
     auth_account_id: Option<String>,
 
     /// Provider token or anonymous account secret
-    #[arg(long)]
+    #[arg(long, required_unless_present = "verify_rewards")]
     auth_token: Option<String>,
     /// Run the real client return and two-player reward acceptance gate.
     #[arg(long)]
@@ -485,7 +485,7 @@ mod tests {
             "secret",
         ])
         .unwrap();
-        assert_eq!(args.auth_provider, "anonymous");
-        assert_eq!(args.auth_token, "secret");
+        assert_eq!(args.auth_provider.as_deref(), Some("anonymous"));
+        assert_eq!(args.auth_token.as_deref(), Some("secret"));
     }
 }

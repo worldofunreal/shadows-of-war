@@ -1,0 +1,754 @@
+/**
+ * Web boot loader — splash + progress bar until Rust publishes loader_done.
+ */
+(function () {
+    "use strict";
+
+    const FADEOUT_MS = 250;
+    const BAR_ASPECT = 2064 / 512;
+    const MOBILE_BREAKPOINT = 600;
+    const BOOT_SPLASH_MEDIA = "(max-width: 599px)";
+    const LEADER_ART_MEDIA = "(orientation: portrait)";
+
+    const LAYOUT = {
+        portrait: {
+            barWidthRatio: 0.76,
+            barSidePadPx: 32,
+            bottomRatio: 0.06,
+            bottomMinPx: 24,
+            textSizePx: 11,
+            textNudgePx: -1,
+        },
+        landscape: {
+            barMaxWidth: 480,
+            barWidthRatio: 0.42,
+            bottomRatio: 0.07,
+            bottomMinPx: 32,
+            textSizePx: 13,
+            textNudgePx: -2,
+        },
+    };
+
+    function assetPathVariants(file, folder?: string) {
+        folder = folder || "loader";
+        const bootBase = window.SOW_BOOT_UI_BASE;
+        if (bootBase && typeof bootBase === "string") {
+            const root = bootBase.replace(/\/$/, "");
+            if (folder === "loader") return [root + "/" + file];
+            return [root.replace(/\/loader$/, "") + "/" + folder + "/" + file];
+        }
+        const base = window.SOW_ASSETS_URL;
+        if (base && typeof base === "string") {
+            const root = base.replace(/\/$/, "");
+            return [root + "/shell/" + folder + "/" + file];
+        }
+        // Strict endpoints: a missing SOW_ASSETS_URL is a packaging bug —
+        // fail loudly instead of guessing a CDN URL (guessing once loaded
+        // the wrong origin).
+        throw new Error("SOW_ASSETS_URL is not set; cannot resolve boot UI asset: " + file);
+    }
+
+    function wireAssetFallback(img, file) {
+        const variants = assetPathVariants(file);
+        let attempt = 0;
+        img.onerror = function () {
+            attempt += 1;
+            if (attempt < variants.length) {
+                setImgSrc(img, assetUrl(variants[attempt]));
+            }
+        };
+    }
+
+    function assetUrl(path) {
+        const versions = window.SOW_ASSET_TS || {};
+        let keyed;
+        for (const root of ["/assets/", "/"]) {
+            const at = path.indexOf(root);
+            if (at >= 0) {
+                keyed = versions[path.slice(at)];
+                if (keyed !== undefined) break;
+            }
+        }
+        if (keyed === undefined) keyed = window.SOW_BUILD_TS;
+        if (keyed && keyed !== "__BUILD_TS__") {
+            return path + "?v=" + encodeURIComponent(keyed);
+        }
+        return path;
+    }
+
+    function leaderArtUrl(slug, variant) {
+        if (!/^[a-z0-9_]+$/.test(String(slug || ""))) return "";
+        variant = variant || leaderArtVariant();
+        if (variant !== "desktop" && variant !== "mobile") return "";
+        return assetUrl(assetPathVariants(encodeURIComponent(slug) + "_" + variant + ".webp", "leaders")[0]);
+    }
+
+    function leaderArtVariant() {
+        return window.matchMedia
+            ? window.matchMedia(LEADER_ART_MEDIA).matches
+                ? "mobile"
+                : "desktop"
+            : window.innerHeight >= window.innerWidth
+              ? "mobile"
+              : "desktop";
+    }
+
+    function prepareLeaderArt(slug, fetchPriority) {
+        slug = String(slug || "");
+        if (!/^[a-z0-9_]+$/.test(slug)) return Promise.resolve(false);
+
+        const variant = leaderArtVariant();
+        const url = leaderArtUrl(slug, variant);
+        if (preparedLeaderArt && preparedLeaderArt.url === url) return preparedLeaderArt.promise;
+
+        const image = new Image();
+        image.decoding = "async";
+        // The boot loader paints its inline splash and never waits on this art,
+        // so at Boot it must not compete with the WASM download; match
+        // transitions do wait on it and keep the high priority.
+        image.fetchPriority = fetchPriority === "low" ? "low" : "high";
+        const prepared = { slug, variant, url, image, ready: false, promise: null };
+        preparedLeaderArt = prepared;
+        prepared.promise = new Promise((resolve) => {
+            let settled = false;
+            const finish = (ready) => {
+                if (settled) return;
+                settled = true;
+                image.onload = null;
+                image.onerror = null;
+                if (preparedLeaderArt === prepared) {
+                    if (ready) prepared.ready = true;
+                    else preparedLeaderArt = null;
+                }
+                if (!ready && activeMatchArt === prepared) activeMatchArt = null;
+                resolve(ready);
+            };
+            image.onload = function () {
+                if (typeof image.decode !== "function") return finish(true);
+                try {
+                    image.decode().then(
+                        () => finish(true),
+                        () => finish(false),
+                    );
+                } catch {
+                    finish(false);
+                }
+            };
+            image.onerror = function () {
+                finish(false);
+            };
+            if (isCrossOriginAssetUrl(url)) image.crossOrigin = "anonymous";
+            image.src = url;
+        });
+        return prepared.promise;
+    }
+
+    function localizedLoaderText() {
+        if (typeof window.SOW_t === "function") {
+            const value = window.SOW_t("menu.loading");
+            if (value && value !== "[menu.loading]") return value;
+        }
+        return "Loading...";
+    }
+
+    function refreshLoaderText() {
+        if (loaderText) loaderText.textContent = localizedLoaderText();
+    }
+
+    function setLoaderMapError(state) {
+        const box = document.getElementById("loader-map-error");
+        const message = document.getElementById("loader-map-error-text");
+        const retry = document.getElementById("loader-map-retry");
+        if (!box || !message || !retry) return;
+        const failed = !!(state && state.map_download_error === true);
+        box.hidden = !failed;
+        if (failed) {
+            message.textContent =
+                typeof window.SOW_t === "function"
+                    ? window.SOW_t("lobbies.map_download_failed")
+                    : "Map download failed.";
+            retry.textContent =
+                typeof window.SOW_t === "function"
+                    ? window.SOW_t("lobbies.map_download_retry")
+                    : "RETRY DOWNLOAD";
+        }
+    }
+
+    function isCrossOriginAssetUrl(url) {
+        try {
+            const resolved = new URL(url, window.location.href);
+            return resolved.origin !== window.location.origin;
+        } catch {
+            return false;
+        }
+    }
+
+    /** Set src after crossOrigin so CDN boot art can be read in canvas (portal iframe). */
+    function setImgSrc(img, url) {
+        if (!img || !url) {
+            return;
+        }
+        if (isCrossOriginAssetUrl(url)) {
+            img.crossOrigin = "anonymous";
+        } else {
+            img.removeAttribute("crossorigin");
+        }
+        img.src = url;
+    }
+
+    function replaceLoaderPicture(media, mobileUrl, preparedImage?) {
+        const picture = document.createElement("picture");
+        picture.className = "splash-picture";
+        let image = preparedImage;
+        if (!image) {
+            const source = document.createElement("source");
+            source.id = "splash-mobile";
+            source.media = media;
+            source.srcset = mobileUrl;
+            picture.appendChild(source);
+            image = document.createElement("img");
+        }
+        image.id = "splash-bg";
+        image.className = "splash-bg";
+        image.alt = "";
+        image.decoding = "async";
+        image.fetchPriority = "high";
+        picture.appendChild(image);
+
+        const previous = document.querySelector("#web-loader .splash-picture");
+        if (previous && previous.parentNode) {
+            previous.parentNode.replaceChild(picture, previous);
+        } else if (root) {
+            root.insertBefore(picture, root.firstChild);
+        }
+        return { picture, image };
+    }
+
+    function clearLoaderPicture(key) {
+        const picture = document.querySelector("#web-loader .splash-picture");
+        if (picture) picture.remove();
+        loaderArtKey = key;
+    }
+
+    function showBootSplash(key) {
+        if (loaderReadyDispatched || !bootSplashPicture || !root) {
+            clearLoaderPicture(key);
+            return;
+        }
+        const current = document.querySelector("#web-loader .splash-picture");
+        if (current !== bootSplashPicture) {
+            if (current) current.remove();
+            root.insertBefore(bootSplashPicture, root.firstChild);
+        }
+        loaderArtKey = key;
+    }
+
+    function applySplashArt() {
+        if (loaderReadyDispatched) {
+            clearLoaderPicture(null);
+            return;
+        }
+        const desktopSplash = assetUrl(assetPathVariants("sow-splash-desktop.webp")[0]);
+        const mobileSplash = assetUrl(assetPathVariants("sow-splash-mobile.webp")[0]);
+        const { picture, image } = replaceLoaderPicture(BOOT_SPLASH_MEDIA, mobileSplash);
+        if (!bootSplashPicture) bootSplashPicture = picture;
+        wireAssetFallback(image, isMobile() ? "sow-splash-mobile.webp" : "sow-splash-desktop.webp");
+        setImgSrc(image, isMobile() ? mobileSplash : desktopSplash);
+        loaderArtKey = "boot";
+    }
+
+    function leaderSlugForState(state) {
+        const selected = String((state && state.loader_leader) || "");
+        if (selected === "random") return "random";
+        const leaders = state && Array.isArray(state.leaders) ? state.leaders : [];
+        const leader = leaders.find(
+            (entry) =>
+                String((entry && entry.id) || "") === selected ||
+                String((entry && entry.slug) || "") === selected,
+        );
+        const slug = leader && typeof leader.slug === "string" ? leader.slug : "";
+        return /^[a-z0-9_]+$/.test(slug) ? slug : null;
+    }
+
+    function loaderInfoSlug(state) {
+        const slug = String((state && state.loader_info_leader) || "");
+        if (/^[a-z0-9_]+$/.test(slug)) return slug;
+        const artSlug = leaderSlugForState(state);
+        return artSlug && artSlug !== "random" ? artSlug : null;
+    }
+
+    function loaderCycleId(state) {
+        const value = state && state.loader_cycle_id;
+        return Number.isSafeInteger(value) && value >= 0 ? value : null;
+    }
+
+    function waitForExitLeaderArt(prepared, slug, cycleId) {
+        if (pendingExitArt && pendingExitArt.prepared === prepared && pendingExitArt.cycleId === cycleId)
+            return;
+        pendingExitArt = { prepared, cycleId };
+        prepared.promise.then(() => {
+            if (!pendingExitArt || pendingExitArt.prepared !== prepared || pendingExitArt.cycleId !== cycleId)
+                return;
+            pendingExitArt = null;
+            if (activeLoaderCycleId !== cycleId || completedLoaderCycleId >= cycleId) return;
+            const current = latestLoaderState;
+            if (
+                !current ||
+                loaderCycleId(current) !== cycleId ||
+                current.loader_job !== "ExitGame" ||
+                leaderSlugForState(current) !== slug
+            )
+                return;
+            if (prepared.ready && activeMatchArt !== prepared && preparedLeaderArt !== prepared) return;
+            const stillPending = syncLoaderArt(current);
+            if (current.loader_done === true && !stillPending) finish(cycleId);
+        });
+    }
+
+    function setLoaderInfo(state) {
+        const box = document.getElementById("loader-ability");
+        if (!box) return;
+        if (
+            !state ||
+            state.loader_show_hero_briefing !== true ||
+            typeof window.SOW_renderHeroBriefing !== "function"
+        ) {
+            box.hidden = true;
+            box.innerHTML = "";
+            loaderBriefingKey = null;
+            return;
+        }
+        const slug = state.loader_leader === "random" ? "random" : loaderInfoSlug(state);
+        if (!slug) {
+            box.hidden = true;
+            box.innerHTML = "";
+            loaderBriefingKey = null;
+            return;
+        }
+        const key = String(state.loader_cycle_id || 0) + ":" + slug;
+        if (loaderBriefingKey !== key) {
+            const markup = window.SOW_renderHeroBriefing(slug, "loader");
+            if (!markup) {
+                box.hidden = true;
+                box.innerHTML = "";
+                loaderBriefingKey = null;
+                return;
+            }
+            box.innerHTML = markup;
+            loaderBriefingKey = key;
+        }
+        box.hidden = false;
+    }
+
+    function syncLoaderArt(state) {
+        setLoaderInfo(state);
+        if (loaderArtKey === "boot" && state && state.loader_job === "EnterGame") {
+            const slug = leaderSlugForState(state);
+            if (slug) {
+                prepareLeaderArt(slug, "low");
+                if (preparedLeaderArt && preparedLeaderArt.slug === slug) {
+                    activeMatchArt = preparedLeaderArt;
+                }
+            }
+            return null;
+        }
+
+        const transition = state && (state.loader_job === "EnterGame" || state.loader_job === "ExitGame");
+        const hasBootLeader = state && state.loader_job === "Boot" && state.loader_leader;
+        const slug = transition || hasBootLeader ? leaderSlugForState(state) : null;
+        if (!slug) {
+            if (transition) {
+                const key = state.loader_job + ":none";
+                if (loaderArtKey !== key) showBootSplash(key);
+            } else if (loaderArtKey !== "boot") {
+                applySplashArt();
+            }
+            return null;
+        }
+
+        const key = slug;
+        if (state.loader_job === "EnterGame") {
+            if (!activeMatchArt || activeMatchArt.slug !== slug) {
+                activeMatchArt =
+                    preparedLeaderArt && preparedLeaderArt.slug === slug ? preparedLeaderArt : null;
+            }
+        }
+
+        if (loaderArtKey === key || loaderArtKey === key + ":failed") return null;
+
+        const prepared =
+            state.loader_job === "ExitGame" && activeMatchArt && activeMatchArt.slug === slug
+                ? activeMatchArt
+                : preparedLeaderArt && preparedLeaderArt.slug === slug
+                  ? preparedLeaderArt
+                  : null;
+        if (!prepared) {
+            if (loaderArtKey !== key + ":unready") {
+                showBootSplash(key + ":unready");
+            }
+            return null;
+        }
+        if (!prepared.ready) {
+            if (loaderArtKey !== key + ":unready") {
+                showBootSplash(key + ":unready");
+            }
+            if (state.loader_job === "ExitGame") waitForExitLeaderArt(prepared, slug, loaderCycleId(state));
+            return state.loader_job === "ExitGame" ? prepared : null;
+        }
+
+        const image = prepared.image;
+        const { picture } = replaceLoaderPicture(null, null, image);
+        loaderArtKey = key;
+        const cycleId = loaderCycleId(state);
+        image.onerror = function () {
+            if (activeLoaderCycleId !== cycleId || completedLoaderCycleId >= cycleId) return;
+            if (preparedLeaderArt && preparedLeaderArt.image === image) preparedLeaderArt = null;
+            if (activeMatchArt && activeMatchArt.image === image) activeMatchArt = null;
+            if (loaderArtKey === key && document.querySelector("#web-loader .splash-picture") === picture) {
+                showBootSplash(key + ":failed");
+            }
+        };
+        return null;
+    }
+
+    let root = null;
+    let barFill = null;
+    let barFull = null;
+    let loaderText = null;
+    let finishing = false;
+    let rafId = 0;
+    let finishTimer = 0;
+    let reportedProgress = null;
+    let initialized = false;
+    let listenersBound = false;
+    let mapRetryListenerBound = false;
+    let loaderVisible = false;
+    let loaderReadyDispatched = false;
+    let loaderArtKey = null;
+    let loaderBriefingKey = null;
+    let preparedLeaderArt = null;
+    let activeMatchArt = null;
+    let activeLoaderCycleId = -1;
+    let completedLoaderCycleId = -1;
+    let finishingLoaderCycleId = -1;
+    let bootSplashPicture = null;
+    let latestLoaderState = null;
+    let pendingExitArt = null;
+
+    function isMobile() {
+        return window.innerWidth < MOBILE_BREAKPOINT;
+    }
+
+    function layoutMode() {
+        if (isMobile() && window.innerWidth <= window.innerHeight) {
+            return "portrait";
+        }
+        return "landscape";
+    }
+
+    function layoutConfig(mode) {
+        return LAYOUT[mode];
+    }
+
+    function barWidthFor(mode, screenW) {
+        const cfg = layoutConfig(mode);
+        if (mode === "portrait") {
+            const inner = Math.max(160, screenW - cfg.barSidePadPx * 2);
+            return inner * cfg.barWidthRatio;
+        }
+        return Math.min(cfg.barMaxWidth, screenW * cfg.barWidthRatio);
+    }
+
+    function stageSize() {
+        const vv = window.visualViewport;
+        if (vv && vv.width > 0 && vv.height > 0) {
+            return {
+                w: vv.width,
+                h: vv.height,
+                top: vv.offsetTop,
+                left: vv.offsetLeft,
+            };
+        }
+        return {
+            w: window.innerWidth,
+            h: window.innerHeight,
+            top: 0,
+            left: 0,
+        };
+    }
+
+    function layout() {
+        if (!root) return;
+        const mode = layoutMode();
+        const cfg = layoutConfig(mode);
+        const { w: screenW, h: screenH, top, left } = stageSize();
+
+        root.style.top = top + "px";
+        root.style.left = left + "px";
+        root.style.width = screenW + "px";
+        root.style.height = screenH + "px";
+        const barWidth = barWidthFor(mode, screenW);
+        const barHeight = barWidth / BAR_ASPECT;
+        const bottomPadding = Math.max(screenH * cfg.bottomRatio, cfg.bottomMinPx);
+
+        root.dataset.layout = mode;
+
+        const barWrapEl = document.getElementById("loader-bar-wrap");
+        if (barWrapEl) {
+            barWrapEl.style.width = barWidth + "px";
+            barWrapEl.style.height = barHeight + "px";
+        }
+        const footerEl = document.getElementById("loader-footer");
+        if (footerEl) footerEl.style.bottom = "max(" + bottomPadding + "px, var(--sow-sab))";
+        if (barFull) {
+            barFull.style.width = barWidth + "px";
+        }
+        if (loaderText) {
+            loaderText.style.fontSize = cfg.textSizePx + "px";
+            loaderText.style.marginTop = cfg.textNudgePx + "px";
+        }
+    }
+
+    function stopProgress() {
+        if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = 0;
+        }
+    }
+
+    /** Slow creep toward 88% while WASM loads; Rust owns completion. */
+    function startProgress() {
+        if (!barFill) return;
+        const t0 = performance.now();
+        const durationMs = 2500;
+
+        function tick(now) {
+            if (!barFill || finishing) return;
+            const t = Math.min(1, (now - t0) / durationMs);
+            const eased = 1 - Math.pow(1 - t, 2);
+            const progress = reportedProgress == null ? eased * 88 : reportedProgress * 100;
+            barFill.style.width = Math.min(100, progress).toFixed(1) + "%";
+            rafId = requestAnimationFrame(tick);
+        }
+
+        barFill.style.transition = "none";
+        barFill.style.width = "0%";
+        reportedProgress = null;
+        rafId = requestAnimationFrame(tick);
+    }
+
+    function cancelFinishTimers() {
+        if (finishTimer) {
+            clearTimeout(finishTimer);
+            finishTimer = 0;
+        }
+    }
+
+    function buildDom() {
+        root = document.getElementById("web-loader");
+        if (!root) {
+            root = document.createElement("div");
+            root.id = "web-loader";
+            root.setAttribute("aria-live", "polite");
+            root.setAttribute("aria-busy", "true");
+            root.innerHTML = `
+                <picture class="splash-picture">
+                    <source id="splash-mobile" media="(max-width: 599px)">
+                    <img id="splash-bg" class="splash-bg" alt="" decoding="async" fetchpriority="high">
+                </picture>
+                <div id="loader-footer" class="loader-footer">
+                    <section id="loader-map-error" class="loader-map-error" hidden aria-live="assertive">
+                        <span id="loader-map-error-text"></span>
+                        <button id="loader-map-retry" type="button"></button>
+                    </section>
+                    <section id="loader-ability" class="loader-ability" hidden aria-live="polite"></section>
+                    <div id="loader-bar-wrap" class="loader-bar-wrap">
+                        <img id="loader-bar-empty" class="loader-bar-empty" alt="" decoding="async" fetchpriority="high">
+                        <div id="loader-bar-fill" class="loader-bar-fill">
+                            <img id="loader-bar-full" class="loader-bar-full" alt="" decoding="async" fetchpriority="low">
+                        </div>
+                        <p id="loader-text" class="loader-text">Loading...</p>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(root);
+        }
+
+        barFill = document.getElementById("loader-bar-fill");
+        barFull = document.getElementById("loader-bar-full");
+        loaderText = document.getElementById("loader-text");
+        const retryButton = document.getElementById("loader-map-retry");
+        if (retryButton && !mapRetryListenerBound && typeof retryButton.addEventListener === "function") {
+            retryButton.addEventListener("click", () => {
+                if (typeof window.SOW_menu_command === "function") {
+                    window.SOW_menu_command(JSON.stringify({ type: "retry_map_download" }));
+                }
+            });
+            mapRetryListenerBound = true;
+        }
+
+        if (!initialized) {
+            const splashImage = document.getElementById("splash-bg");
+            if (!splashImage || !splashImage.getAttribute("src")) applySplashArt();
+            else loaderArtKey = "boot";
+            if (!bootSplashPicture) bootSplashPicture = document.querySelector("#web-loader .splash-picture");
+            setImgSrc(
+                document.getElementById("loader-bar-empty"),
+                assetUrl(assetPathVariants("loader_empty.webp")[0]),
+            );
+            setImgSrc(
+                document.getElementById("loader-bar-full"),
+                assetUrl(assetPathVariants("loader_full.webp")[0]),
+            );
+            wireAssetFallback(document.getElementById("loader-bar-empty"), "loader_empty.webp");
+            wireAssetFallback(document.getElementById("loader-bar-full"), "loader_full.webp");
+        }
+
+        layout();
+        if (!listenersBound) {
+            window.addEventListener("resize", layout);
+            window.addEventListener("orientationchange", layout);
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener("resize", layout);
+                window.visualViewport.addEventListener("scroll", layout);
+            }
+            listenersBound = true;
+        }
+        if (!initialized) {
+            initialized = true;
+            loaderVisible = true;
+            root.style.visibility = "visible";
+            root.style.opacity = "1";
+            root.style.pointerEvents = "auto";
+            root.setAttribute("aria-hidden", "false");
+            startProgress();
+        }
+    }
+
+    function finish(cycleId) {
+        if (!root || !loaderVisible || cycleId !== activeLoaderCycleId || cycleId <= completedLoaderCycleId)
+            return;
+        if (finishing) return;
+        const closingRoot = root;
+        finishing = true;
+        finishingLoaderCycleId = cycleId;
+        cancelFinishTimers();
+        if (typeof window.SOW_trackExperienceEvent === "function") {
+            window.SOW_trackExperienceEvent({ name: "shell_loaded" });
+        }
+        stopProgress();
+        root.style.pointerEvents = "none";
+
+        if (barFill) {
+            barFill.style.transition = "width 150ms ease-out";
+            barFill.style.width = "100%";
+        }
+
+        root.style.transition = `opacity ${FADEOUT_MS}ms ease-out`;
+        finishTimer = setTimeout(() => {
+            finishTimer = 0;
+            if (root !== closingRoot || activeLoaderCycleId !== cycleId || finishingLoaderCycleId !== cycleId)
+                return;
+            root.style.opacity = "0";
+            root.style.visibility = "hidden";
+            root.style.pointerEvents = "none";
+            root.setAttribute("aria-hidden", "true");
+            root.setAttribute("aria-busy", "false");
+            loaderVisible = false;
+            finishing = false;
+            finishingLoaderCycleId = -1;
+            completedLoaderCycleId = cycleId;
+            clearLoaderPicture(null);
+            bootSplashPicture = null;
+            if (latestLoaderState && latestLoaderState.loader_job === "ExitGame") {
+                activeMatchArt = null;
+                pendingExitArt = null;
+            }
+            if (!loaderReadyDispatched) {
+                loaderReadyDispatched = true;
+                window.dispatchEvent(new Event("sow:loader-ready"));
+            }
+            window.dispatchEvent(
+                new CustomEvent("sow:loader-cycle-ready", { detail: { cycle_id: cycleId } }),
+            );
+        }, 160);
+    }
+
+    function sync(state) {
+        if (!state) return;
+        const cycleId = loaderCycleId(state);
+        if (cycleId === null || cycleId < activeLoaderCycleId || cycleId <= completedLoaderCycleId) return;
+        if (cycleId > activeLoaderCycleId) {
+            activeLoaderCycleId = cycleId;
+            pendingExitArt = null;
+            if (finishing) {
+                cancelFinishTimers();
+                finishing = false;
+                finishingLoaderCycleId = -1;
+                loaderVisible = false;
+            }
+        }
+        if (finishing && finishingLoaderCycleId === cycleId) return;
+        latestLoaderState = state;
+        if (state.loader_done === true && state.loader_job !== "ExitGame") {
+            finish(cycleId);
+            return;
+        }
+
+        if (!root) {
+            finishing = false;
+            buildDom();
+        } else if (finishing || !loaderVisible) {
+            cancelFinishTimers();
+            finishing = false;
+            root.style.transition = "none";
+            root.style.opacity = "1";
+            root.style.visibility = "visible";
+            root.style.pointerEvents = "auto";
+            root.setAttribute("aria-hidden", "false");
+            loaderVisible = true;
+            startProgress();
+        }
+        const pendingArt = syncLoaderArt(state);
+        setLoaderMapError(state);
+        const progress = Number(state.loader_progress);
+        if (Number.isFinite(progress)) {
+            const nextProgress = Math.max(0, Math.min(1, progress));
+            // Keep the single visible loader moving forward across Boot -> EnterGame.
+            reportedProgress = Math.max(reportedProgress == null ? 0 : reportedProgress, nextProgress);
+            if (barFill) barFill.style.width = (reportedProgress * 100).toFixed(1) + "%";
+        }
+        if (loaderText) {
+            loaderText.textContent = localizedLoaderText();
+        }
+        if (root) root.setAttribute("aria-busy", "true");
+        if (state.loader_done === true) {
+            if (pendingArt) return;
+            finish(cycleId);
+        }
+    }
+
+    function initWebLoader() {
+        buildDom();
+    }
+
+    window.SOW_initWebLoader = initWebLoader;
+    window.SOW_refreshWebLoaderText = refreshLoaderText;
+    window.SOW_leaderArtUrl = leaderArtUrl;
+    window.SOW_prepareLeaderArt = prepareLeaderArt;
+    window.SOW_assetUrl = assetUrl;
+    window.addEventListener("sow:locale-change", () => {
+        refreshLoaderText();
+        if (latestLoaderState) setLoaderInfo(latestLoaderState);
+    });
+    window.SOW_syncWebLoader = sync;
+
+    // Game shell (play subdomain / portal): #web-loader in index.html auto-starts.
+    if (document.getElementById("web-loader")) {
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", initWebLoader);
+        } else {
+            initWebLoader();
+        }
+    }
+})();

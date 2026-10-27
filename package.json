@@ -1,0 +1,22 @@
+{
+  "name": "shadows-of-war",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint . && python3 scripts/typecheck-shell.py --lint && python3 scripts/typecheck-shell.py --variant poki --lint && python3 scripts/typecheck-shell.py --variant jest --lint",
+    "format": "prettier --write . && python3 scripts/typecheck-shell.py --format",
+    "format:check": "prettier --check . && python3 scripts/typecheck-shell.py --format-check",
+    "typecheck": "python3 scripts/typecheck-shell.py && python3 scripts/typecheck-shell.py --variant poki && python3 scripts/typecheck-shell.py --variant jest && bunx tsc -p sow-web/tsconfig.json --noEmit",
+    "test": "bun test",
+    "verify": "bun run lint && bun run format:check && bun run typecheck && bun run test && cargo check"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "jiti": "^2.7.0",
+    "prettier": "^3.9.10",
+    "typescript": "^6.0.0",
+    "typescript-eslint": "^8.72.0"
+  }
+}

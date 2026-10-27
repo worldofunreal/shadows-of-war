@@ -1,0 +1,266 @@
+// Minimal Poki runtime bridge. This file is copied to the Poki artifact as
+// sdk/store_portals.js; it intentionally contains no account, store, or
+// CrazyGames integration.
+(function () {
+    "use strict";
+
+    let sdk = null;
+    let sdkInitPromise = null;
+    let loadingFinished = false;
+    let gameplayReady = false;
+    let gameplayActive = false;
+    let firstInputSeen = false;
+    let resumePending = false;
+    let inputInstalled = false;
+    const progressKey = "sow_player_progress";
+    let adFocus = null;
+
+    function pokiSdk() {
+        return window.PokiSDK || null;
+    }
+
+    function safeLocalGet(key) {
+        try {
+            return window.localStorage.getItem(key);
+        } catch {
+            return null;
+        }
+    }
+
+    function safeLocalSet(key, value) {
+        try {
+            window.localStorage.setItem(key, value);
+        } catch {}
+    }
+
+    function portalAdPause() {
+        window.SOW_adPlaying = true;
+        adFocus = document.activeElement || null;
+        document.querySelectorAll("audio,video").forEach(function (el) {
+            el.dataset.sowWasPaused = el.paused ? "1" : "0";
+            el.dataset.sowWasMuted = el.muted ? "1" : "0";
+            el.pause();
+            el.muted = true;
+        });
+    }
+
+    function portalAdResume() {
+        window.SOW_adPlaying = false;
+        document.querySelectorAll("audio,video").forEach(function (el) {
+            el.muted = window.SOW_PORTAL_MUTE_AUDIO || el.dataset.sowWasMuted === "1";
+            if (el.dataset.sowWasPaused !== "1") el.play().catch(function () {});
+            delete el.dataset.sowWasPaused;
+            delete el.dataset.sowWasMuted;
+        });
+        const focus = adFocus;
+        adFocus = null;
+        if (
+            focus &&
+            focus !== document.body &&
+            typeof focus.focus === "function" &&
+            typeof document.contains === "function" &&
+            document.contains(focus)
+        ) {
+            focus.focus();
+        }
+    }
+
+    function muteGameAudio() {
+        window.SOW_PORTAL_MUTE_AUDIO = true;
+        document.querySelectorAll("audio,video").forEach(function (el) {
+            el.muted = true;
+        });
+    }
+
+    function unmuteGameAudio() {
+        window.SOW_PORTAL_MUTE_AUDIO = false;
+        if (window.SOW_adPlaying) return;
+        document.querySelectorAll("audio,video").forEach(function (el) {
+            el.muted = false;
+        });
+    }
+
+    function startGameplayAfterAd() {
+        if (!gameplayReady || gameplayActive || !sdk || typeof sdk.gameplayStart !== "function") return;
+        gameplayActive = true;
+        sdk.gameplayStart();
+    }
+
+    function requestCommercialBreakThenStart() {
+        if (!sdk || typeof sdk.commercialBreak !== "function") {
+            startGameplayAfterAd();
+            return;
+        }
+        portalAdPause();
+        try {
+            Promise.resolve(sdk.commercialBreak())
+                .then(function () {
+                    portalAdResume();
+                    startGameplayAfterAd();
+                })
+                .catch(function (error) {
+                    console.warn("Poki commercialBreak failed:", error);
+                    portalAdResume();
+                    startGameplayAfterAd();
+                });
+        } catch (error) {
+            console.warn("Poki commercialBreak failed:", error);
+            portalAdResume();
+            startGameplayAfterAd();
+        }
+    }
+
+    function onFirstInput() {
+        if (!gameplayReady || firstInputSeen || window.SOW_adPlaying) return;
+        firstInputSeen = true;
+        if (resumePending) {
+            resumePending = false;
+            requestCommercialBreakThenStart();
+        } else {
+            startGameplayAfterAd();
+        }
+    }
+
+    function blockGameInputDuringAd(event) {
+        if (!window.SOW_adPlaying) return;
+        const target = event.target;
+        const gameSurface = target && target.closest && target.closest("canvas, #sow-menu");
+        if (!gameSurface) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }
+
+    function installFirstInputListener() {
+        if (inputInstalled) return;
+        inputInstalled = true;
+        ["pointerdown", "touchstart", "keydown"].forEach(function (type) {
+            document.addEventListener(type, onFirstInput, { capture: true, passive: true });
+            document.addEventListener(type, blockGameInputDuringAd, { capture: true, passive: false });
+        });
+    }
+
+    function refreshPortalFlags() {
+        window.SOW_RUNTIME = { portal_embed: true, site_embed: false, crazygames: false, poki: true };
+        window.SOW_isSiteEmbed = false;
+        window.SOW_isPortalEmbed = function () {
+            return true;
+        };
+        window.SOW_isOnCrazyGames = function () {
+            return false;
+        };
+        window.SOW_isOnPoki = function () {
+            return true;
+        };
+        window.SOW_DISABLE_CHAT = true;
+        window.SOW_PORTAL_PROGRESS_JSON = safeLocalGet(progressKey);
+    }
+
+    function measure(category, what, action) {
+        if (!sdk || typeof sdk.measure !== "function") return;
+        if (arguments.length === 1) {
+            const parts = String(category || "").split("|");
+            category = parts[0] || "gameplay";
+            what = parts[1] || "event";
+            action = parts[2] || "interact";
+        }
+        try {
+            sdk.measure(String(category), String(what), String(action));
+        } catch {}
+    }
+
+    window.SOW_REFRESH_POKI_FLAGS = refreshPortalFlags;
+    window.SOW_refreshPortalFlags = refreshPortalFlags;
+    window.SOW_PORTAL_PROGRESS_JSON = null;
+    window.SOW_PLATFORM_IDENTITY = null;
+    window.SOW_PENDING_INVITE_LOBBY_ID = null;
+    window.SOW_HOST_PRIVATE_PENDING = false;
+    window.SOW_PORTAL_MUTE_AUDIO = false;
+    window.SOW_adPlaying = false;
+    window.SOW_DISABLE_CHAT = true;
+    window.SOW_BLOCKED_IDS = [];
+
+    window.SOW_isAndroidTwa = function () {
+        return false;
+    };
+
+    window.SOW_portalMuteGameAudio = muteGameAudio;
+    window.SOW_portalUnmuteGameAudio = unmuteGameAudio;
+    window.SOW_portalAdPause = portalAdPause;
+    window.SOW_portalAdResume = portalAdResume;
+    window.SOW_portalConsumeBootIntent = function () {};
+    window.SOW_portalClearPendingInvite = function () {
+        window.SOW_PENDING_INVITE_LOBBY_ID = null;
+    };
+    window.SOW_portalClearHostPrivatePending = function () {
+        window.SOW_HOST_PRIVATE_PENDING = false;
+    };
+    window.SOW_portalUpdateRoom = function () {};
+    window.SOW_portalLeftRoom = function () {};
+    window.SOW_portalHappytime = function () {};
+    window.SOW_portalSaveProgress = function (json) {
+        window.SOW_PORTAL_PROGRESS_JSON = String(json || "");
+        safeLocalSet(progressKey, window.SOW_PORTAL_PROGRESS_JSON);
+    };
+
+    window.SOW_pokiMeasure = measure;
+    window.SOW_pokiOpenExternalLink = function (url) {
+        if (sdk && typeof sdk.openExternalLink === "function") sdk.openExternalLink(String(url));
+    };
+
+    window.SOW_initPortalSdk = async function () {
+        if (sdkInitPromise) return sdkInitPromise;
+        refreshPortalFlags();
+        sdk = pokiSdk();
+        installFirstInputListener();
+        if (!sdk || typeof sdk.init !== "function") {
+            console.warn("Poki SDK unavailable; continuing anonymously");
+            sdkInitPromise = Promise.resolve();
+            return sdkInitPromise;
+        }
+        sdkInitPromise = Promise.resolve()
+            .then(function () {
+                return sdk.init();
+            })
+            .then(function () {
+                console.info("Poki SDK initialized");
+            })
+            .catch(function (error) {
+                console.warn("Poki SDK init failed; continuing anonymously:", error);
+            });
+        return sdkInitPromise;
+    };
+
+    window.SOW_portalGameLoadingFinished = function () {
+        if (loadingFinished) return;
+        loadingFinished = true;
+        if (sdk && typeof sdk.gameLoadingFinished === "function") {
+            try {
+                sdk.gameLoadingFinished();
+            } catch {}
+        }
+    };
+
+    window.SOW_portalGameplayStart = function () {
+        if (gameplayReady) return;
+        gameplayReady = true;
+        installFirstInputListener();
+    };
+
+    window.SOW_portalGameplayStop = function () {
+        if (!gameplayReady && !gameplayActive) return;
+        gameplayReady = false;
+        firstInputSeen = false;
+        resumePending = gameplayActive;
+        if (gameplayActive && sdk && typeof sdk.gameplayStop === "function") {
+            try {
+                sdk.gameplayStop();
+            } catch {}
+        }
+        gameplayActive = false;
+    };
+
+    window.SOW_portalLoadStart = function () {};
+    window.SOW_portalLoadStop = window.SOW_portalGameLoadingFinished;
+
+    refreshPortalFlags();
+})();

@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["shell/**/*.ts"],
+  "exclude": [
+    "shell/**/*.test.ts",
+    "shell/sdk/**/*.ts",
+    "shell/main_menu.core.ts",
+    "shell/main_menu.motion.ts",
+    "shell/main_menu.lobbies.ts",
+    "shell/main_menu.store.ts",
+    "shell/main_menu.heroes.ts",
+    "shell/main_menu.profile.ts",
+    "shell/main_menu.shell.ts",
+    "shell/main_menu.hud.ts",
+    "shell/main_menu.poki.ts",
+    "shell/main_menu.jest.ts",
+    "shell/typescript-test-support.ts"
+  ]
+}

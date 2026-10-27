@@ -790,7 +790,7 @@ fn publish_android(paths: &Paths, version_code: u32) -> Result<()> {
 
 fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     for command in [
-        "cargo", "curl", "magick", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt",
+        "bun", "cargo", "curl", "magick", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt",
     ] {
         if !Command::new("/bin/sh")
             .args(["-c", &format!("command -v {command} >/dev/null")])
@@ -800,19 +800,33 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             bail!("{command} is required");
         }
     }
+    for (entry, context) in [
+        ("sow-web/shell/sow-campaign.ts", "campaign engine TypeScript check failed"),
+        ("sow-web/shell/sow-campaign-view.ts", "campaign view TypeScript check failed"),
+        ("sow-web/shell/main_menu.menu-guide.ts", "menu guide TypeScript check failed"),
+    ] {
+        run(
+            "bun",
+            &[
+                "build", "--check", "--target=browser", "--format=iife", "--outfile=/dev/null", entry,
+            ],
+            Some(&paths.root),
+        )
+        .context(context)?;
+    }
     super::pack_art_atlases(paths)?;
     super::validate_current_ui_contract(paths)?;
     run(
-        "node",
+        "bun",
         &[
-            "--test",
-            "sow-web/shell/menu_flow.test.js",
-            "sow-web/shell/map_interaction.test.js",
-            "sow-web/shell/loader_boot.test.js",
-            "sow-web/shell/menu_presentation.test.js",
-            "sow-web/shell/campaign_view.test.js",
-            "sow-web/shell/gameplay_ui.test.js",
-            "sow-web/shell/gameplay_interaction.test.js",
+            "test",
+            "sow-web/shell/menu_flow.test.ts",
+            "sow-web/shell/map_interaction.test.ts",
+            "sow-web/shell/loader_boot.test.ts",
+            "sow-web/shell/menu_presentation.test.ts",
+            "sow-web/shell/campaign_view.test.ts",
+            "sow-web/shell/gameplay_ui.test.ts",
+            "sow-web/shell/gameplay_interaction.test.ts",
         ],
         Some(&paths.root),
     )

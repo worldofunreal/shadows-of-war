@@ -1,272 +1,414 @@
 <!doctype html>
 <html lang="en">
-
-<head>
-  <meta charset="utf-8">
-  <!-- SOW_SITE_LOCALE -->
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0a1015">
-  <title data-i18n="site.title">Shadows of War — Multiplayer Strategy</title>
-  <meta name="description"
-    content="Pick a historical leader, take land, build cities and ports, ally and betray in live territory wars."
-    data-i18n="site.description" data-i18n-attr="content">
-  <link rel="canonical" href="https://shadowsofwar.io/">
-  <meta name="robots" content="index, follow">
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Shadows of War">
-  <meta property="og:title" content="Shadows of War — Multiplayer Strategy" data-i18n="site.title" data-i18n-attr="content">
-  <meta property="og:description"
-    content="Pick a historical leader, take land, build cities and ports, ally and betray in live territory wars."
-    data-i18n="site.description" data-i18n-attr="content">
-  <meta property="og:url" content="https://shadowsofwar.io/">
-  <meta property="og:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Shadows of War — Multiplayer Strategy" data-i18n="site.title" data-i18n-attr="content">
-  <meta name="twitter:description"
-    content="Pick a historical leader, take land, build cities and ports, ally and betray in live territory wars."
-    data-i18n="site.description" data-i18n-attr="content">
-  <meta name="twitter:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp">
-  <link rel="icon" type="image/svg+xml" href="/sow.svg">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="./fonts/fonts.css">
-  <link rel="stylesheet" href="./sow-controls.css">
-  <link rel="stylesheet" href="./styles.css">
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@graph": [
+  <head>
+    <meta charset="utf-8" />
+    <!-- SOW_SITE_LOCALE -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a1015" />
+    <title data-i18n="site.title">Shadows of War — Multiplayer Strategy</title>
+    <meta
+      name="description"
+      content="Pick a historical leader, take land, build cities and ports, ally and betray in live territory wars."
+      data-i18n="site.description"
+      data-i18n-attr="content"
+    />
+    <link rel="canonical" href="https://shadowsofwar.io/" />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Shadows of War" />
+    <meta
+      property="og:title"
+      content="Shadows of War — Multiplayer Strategy"
+      data-i18n="site.title"
+      data-i18n-attr="content"
+    />
+    <meta
+      property="og:description"
+      content="Pick a historical leader, take land, build cities and ports, ally and betray in live territory wars."
+      data-i18n="site.description"
+      data-i18n-attr="content"
+    />
+    <meta property="og:url" content="https://shadowsofwar.io/" />
+    <meta property="og:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Shadows of War — Multiplayer Strategy"
+      data-i18n="site.title"
+      data-i18n-attr="content"
+    />
+    <meta
+      name="twitter:description"
+      content="Pick a historical leader, take land, build cities and ports, ally and betray in live territory wars."
+      data-i18n="site.description"
+      data-i18n-attr="content"
+    />
+    <meta
+      name="twitter:image"
+      content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp"
+    />
+    <link rel="icon" type="image/svg+xml" href="/sow.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="./fonts/fonts.css" />
+    <link rel="stylesheet" href="./sow-controls.css" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="application/ld+json">
       {
-        "@type": "Organization",
-        "@id": "https://shadowsofwar.io/#organization",
-        "name": "World of Unreal",
-        "url": "https://worldofunreal.com",
-        "sameAs": [
-          "https://discord.gg/d6ZDeChSE",
-          "https://t.me/shadowsofwario"
-        ]
-      },
-      {
-        "@type": "WebSite",
-        "@id": "https://shadowsofwar.io/#website",
-        "url": "https://shadowsofwar.io/",
-        "name": "Shadows of War",
-        "inLanguage": "en",
-        "publisher": { "@id": "https://shadowsofwar.io/#organization" },
-        "about": { "@id": "https://shadowsofwar.io/#game" }
-      },
-      {
-        "@type": "VideoGame",
-        "@id": "https://shadowsofwar.io/#game",
-        "name": "Shadows of War",
-        "description": "Free browser-based real-time multiplayer strategy game. Pick a historical leader, take land tile by tile, build cities, factories, ports and towers, then ally and betray in live territory wars.",
-        "genre": ["Strategy", "MMORTS", "Real-Time Strategy", "Grand Strategy"],
-        "gamePlatform": ["Web Browser", "Android", "iOS"],
-        "operatingSystem": "Any",
-        "applicationCategory": "Game",
-        "playMode": "MultiPlayer",
-        "url": "https://shadowsofwar.io/",
-        "image": "https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp",
-        "inLanguage": ["ar", "de", "en", "es", "fil", "fr", "id", "it", "ja", "ko", "pt-BR", "ru", "tr", "vi", "zh-CN"],
-        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-        "publisher": { "@id": "https://shadowsofwar.io/#organization" }
-      },
-      {
-        "@type": "FAQPage",
-        "@id": "https://shadowsofwar.io/#faq",
-        "isPartOf": { "@id": "https://shadowsofwar.io/#website" },
-        "mainEntity": [
+        "@context": "https://schema.org",
+        "@graph": [
           {
-            "@type": "Question",
-            "name": "How do I start a match?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Open the game, choose a leader, and join an active lobby." }
+            "@type": "Organization",
+            "@id": "https://shadowsofwar.io/#organization",
+            "name": "World of Unreal",
+            "url": "https://worldofunreal.com",
+            "sameAs": ["https://discord.gg/d6ZDeChSE", "https://t.me/shadowsofwario"]
           },
           {
-            "@type": "Question",
-            "name": "What happens during a match?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Take land, build cities, factories, ports and towers, ally, attack, and hold the map." }
+            "@type": "WebSite",
+            "@id": "https://shadowsofwar.io/#website",
+            "url": "https://shadowsofwar.io/",
+            "name": "Shadows of War",
+            "inLanguage": "en",
+            "publisher": { "@id": "https://shadowsofwar.io/#organization" },
+            "about": { "@id": "https://shadowsofwar.io/#game" }
           },
           {
-            "@type": "Question",
-            "name": "Which game modes are available?",
-            "acceptedAnswer": { "@type": "Answer", "text": "The matchmaking queue rotates through Free-For-All, Teams, and Humans vs Nations on active maps." }
+            "@type": "VideoGame",
+            "@id": "https://shadowsofwar.io/#game",
+            "name": "Shadows of War",
+            "description": "Free browser-based real-time multiplayer strategy game. Pick a historical leader, take land tile by tile, build cities, factories, ports and towers, then ally and betray in live territory wars.",
+            "genre": ["Strategy", "MMORTS", "Real-Time Strategy", "Grand Strategy"],
+            "gamePlatform": ["Web Browser", "Android", "iOS"],
+            "operatingSystem": "Any",
+            "applicationCategory": "Game",
+            "playMode": "MultiPlayer",
+            "url": "https://shadowsofwar.io/",
+            "image": "https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp",
+            "inLanguage": [
+              "ar",
+              "de",
+              "en",
+              "es",
+              "fil",
+              "fr",
+              "id",
+              "it",
+              "ja",
+              "ko",
+              "pt-BR",
+              "ru",
+              "tr",
+              "vi",
+              "zh-CN"
+            ],
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "publisher": { "@id": "https://shadowsofwar.io/#organization" }
           },
           {
-            "@type": "Question",
-            "name": "Do I need an account?",
-            "acceptedAnswer": { "@type": "Answer", "text": "No. You can join a match without registering." }
-          },
-          {
-            "@type": "Question",
-            "name": "What do leaders change?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Each gives one bonus: attack, expansion, gold, troops, or capacity." }
+            "@type": "FAQPage",
+            "@id": "https://shadowsofwar.io/#faq",
+            "isPartOf": { "@id": "https://shadowsofwar.io/#website" },
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "How do I start a match?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Open the game, choose a leader, and join an active lobby."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What happens during a match?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Take land, build cities, factories, ports and towers, ally, attack, and hold the map."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Which game modes are available?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "The matchmaking queue rotates through Free-For-All, Teams, and Humans vs Nations on active maps."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Do I need an account?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. You can join a match without registering."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What do leaders change?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Each gives one bonus: attack, expansion, gold, troops, or capacity."
+                }
+              }
+            ]
           }
         ]
       }
-    ]
-  }
-  </script>
-</head>
+    </script>
+  </head>
 
-<body>
-  <!-- SOW_SITE_HEADER -->
+  <body>
+    <!-- SOW_SITE_HEADER -->
 
-  <main>
-    <section class="hero" id="top">
-      <div class="hero-media" aria-hidden="true"><!-- SOW_SITE_HERO_MEDIA --></div>
-      <div class="container">
-        <h1><span data-i18n="site.hero_command">Command</span> <em data-i18n="site.hero_map">the map.</em></h1>
-        <p class="hero-lede" data-i18n="site.hero_lede">Pick a historical leader. Take land, build cities,
-          factories, ports and towers, and fight for the map. New leaders keep joining the roster.</p>
-        <div class="hero-actions">
-          <a class="button button-orange" href="/play/"><span data-i18n="site.play">Play</span></a>
-          <a class="hero-link" href="#game" data-i18n="site.how_matches_work">How matches work</a>
+    <main>
+      <section class="hero" id="top">
+        <div class="hero-media" aria-hidden="true"><!-- SOW_SITE_HERO_MEDIA --></div>
+        <div class="container">
+          <h1>
+            <span data-i18n="site.hero_command">Command</span> <em data-i18n="site.hero_map">the map.</em>
+          </h1>
+          <p class="hero-lede" data-i18n="site.hero_lede">
+            Pick a historical leader. Take land, build cities, factories, ports and towers, and fight for the
+            map. New leaders keep joining the roster.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-orange" href="/play/"><span data-i18n="site.play">Play</span></a>
+            <a class="hero-link" href="#game" data-i18n="site.how_matches_work">How matches work</a>
+          </div>
+          <div class="hero-alpha" role="group" aria-labelledby="hero-alpha-label">
+            <p class="hero-alpha-label" id="hero-alpha-label" data-i18n="site.mobile_alpha_testing">
+              Mobile alpha testing
+            </p>
+            <div class="hero-alpha-links">
+              <a
+                class="hero-alpha-badge hero-alpha-badge--testflight"
+                href="https://testflight.apple.com/join/Y8fu4zch"
+                target="_blank"
+                rel="noopener"
+              >
+                <img
+                  class="hero-alpha-icon hero-alpha-icon--testflight"
+                  src="/assets/site/media/testflight-badge.svg"
+                  width="30"
+                  height="30"
+                  alt=""
+                  aria-hidden="true"
+                />
+                <span class="hero-alpha-copy"
+                  ><small data-i18n="site.testflight_badge_action">Join on</small><b>TestFlight</b></span
+                >
+              </a>
+              <a
+                class="hero-alpha-badge"
+                href="https://play.google.com/apps/testing/com.shadowsofwar"
+                target="_blank"
+                rel="noopener"
+              >
+                <img
+                  class="hero-alpha-icon hero-alpha-icon--google-play"
+                  src="/assets/site/media/google-play-badge.svg"
+                  width="30"
+                  height="30"
+                  alt=""
+                  aria-hidden="true"
+                />
+                <span class="hero-alpha-copy"
+                  ><small data-i18n="site.google_play_badge_action">Get it on</small><b>Google Play</b></span
+                >
+              </a>
+            </div>
+          </div>
         </div>
-        <div class="hero-alpha" role="group" aria-labelledby="hero-alpha-label">
-          <p class="hero-alpha-label" id="hero-alpha-label" data-i18n="site.mobile_alpha_testing">Mobile alpha testing</p>
-          <div class="hero-alpha-links">
-            <a class="hero-alpha-badge hero-alpha-badge--testflight" href="https://testflight.apple.com/join/Y8fu4zch" target="_blank" rel="noopener">
-              <img class="hero-alpha-icon hero-alpha-icon--testflight" src="/assets/site/media/testflight-badge.svg" width="30" height="30" alt="" aria-hidden="true">
-              <span class="hero-alpha-copy"><small data-i18n="site.testflight_badge_action">Join on</small><b>TestFlight</b></span>
-            </a>
-            <a class="hero-alpha-badge" href="https://play.google.com/apps/testing/com.shadowsofwar" target="_blank" rel="noopener">
-              <img class="hero-alpha-icon hero-alpha-icon--google-play" src="/assets/site/media/google-play-badge.svg" width="30" height="30" alt="" aria-hidden="true">
-              <span class="hero-alpha-copy"><small data-i18n="site.google_play_badge_action">Get it on</small><b>Google Play</b></span>
-            </a>
+      </section>
+
+      <section class="landing-section steps" id="game">
+        <div class="container">
+          <header class="section-head">
+            <p class="eyebrow" data-i18n="site.how_matches_work">How matches work</p>
+            <h2>
+              <span data-i18n="site.build_expand">Build, expand,</span> <em data-i18n="site.fight">fight.</em>
+            </h2>
+            <p data-i18n="site.game_summary">
+              Start small, turn territory into an economy, and decide when cooperation ends. Any alliance can
+              break at any time; whoever holds most of the map wins.
+            </p>
+          </header>
+          <ol class="step-list">
+            <li class="step">
+              <img src="/assets/site/media/step-expand.webp" alt="" loading="lazy" decoding="async" />
+              <h3 data-i18n="site.build_momentum">Take land</h3>
+              <p data-i18n="site.build_momentum_body">Every tile you hold pays gold and troops.</p>
+            </li>
+            <li class="step">
+              <img src="/assets/site/media/step-build.webp" alt="" loading="lazy" decoding="async" />
+              <h3 data-i18n="site.step_build">Build districts</h3>
+              <p data-i18n="site.step_build_body">
+                Cities, factories, ports and towers turn land into troops and gold.
+              </p>
+            </li>
+            <li class="step">
+              <img src="/assets/site/media/step-war.webp" alt="" loading="lazy" decoding="async" />
+              <h3 data-i18n="site.break_frontier">Break the frontier</h3>
+              <p data-i18n="site.break_frontier_body">Attack, ally, betray. Hold the map to win.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="landing-section leaders" id="leaders">
+        <div class="container">
+          <header class="section-head">
+            <p class="eyebrow" data-i18n="site.leaders">Leaders</p>
+            <h2><span data-i18n="site.choose">Choose</span> <em data-i18n="site.a_leader">a leader.</em></h2>
+            <p data-i18n="site.leaders_summary">
+              Choose a leader that matches how you play: economy, expansion, defense, production, or border
+              pressure.
+            </p>
+          </header>
+          <div class="showcase" data-leader-detail aria-live="polite">
+            <!-- SOW_SITE_LEADER_SHOWCASE -->
+          </div>
+          <div class="roster" data-leaders-grid>
+            <!-- SOW_SITE_LEADERS -->
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-section maps" id="maps">
+        <div class="container">
+          <header class="section-head">
+            <p class="eyebrow" data-i18n="site.maps">Maps</p>
+            <h2>
+              <span data-i18n="site.maps_fight_on">Fight on</span>
+              <em data-i18n="site.maps_every_continent">every continent.</em>
+            </h2>
+            <p data-i18n="site.maps_summary">
+              Matchmaking rotates through the world and regional maps, from Europe to the Pacific.
+            </p>
+          </header>
+        </div>
+        <ul class="map-strip">
+          <!-- SOW_SITE_MAPS -->
+        </ul>
+      </section>
+
+      <!-- SOW_SITE_TRAILER -->
+
+      <section class="landing-section faq" id="faq">
+        <div class="container">
+          <header class="section-head">
+            <p class="eyebrow" data-i18n="site.game_systems">Game systems</p>
+            <h2><span data-i18n="site.matches">How matches</span> <em data-i18n="site.work">work.</em></h2>
+            <p data-i18n="site.rules_summary">
+              Land control wins, districts pay, terrain punishes attackers, modes rotate.
+            </p>
+          </header>
+          <div class="faq-list">
+            <details class="faq-item" name="faq" open>
+              <summary data-i18n="site.faq_start">How do I start a match?</summary>
+              <p data-i18n="site.faq_start_answer">
+                Open the game, choose a leader, and join an active lobby.
+              </p>
+            </details>
+            <details class="faq-item" name="faq">
+              <summary data-i18n="site.faq_during">What happens during a match?</summary>
+              <p data-i18n="site.faq_during_answer">
+                Take land, build cities, factories, ports and towers, ally, attack, and hold the map.
+              </p>
+            </details>
+            <details class="faq-item" name="faq">
+              <summary data-i18n="site.faq_modes">Which game modes are available?</summary>
+              <p data-i18n="site.faq_modes_answer">
+                The matchmaking queue rotates through Free-For-All, Teams, and Humans vs Nations on active
+                maps.
+              </p>
+            </details>
+            <details class="faq-item" name="faq">
+              <summary data-i18n="site.faq_account">Do I need an account?</summary>
+              <p data-i18n="site.faq_account_answer">No. You can join a match without registering.</p>
+            </details>
+            <details class="faq-item" name="faq">
+              <summary data-i18n="site.faq_leader">What do leaders change?</summary>
+              <p data-i18n="site.faq_leader_answer">
+                Each gives one bonus: attack, expansion, gold, troops, or capacity.
+              </p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-section closing" id="play">
+        <div class="container">
+          <p class="eyebrow" data-i18n="site.are_you_ready">Are you ready?</p>
+          <h2><span data-i18n="site.play_now_title">Play</span> <em data-i18n="site.now">now!</em></h2>
+          <p data-i18n="site.play_now_body">Join a lobby, ally, betray, and take the map.</p>
+          <a class="button button-orange" href="/play/"><span data-i18n="site.open_game">Open game</span></a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-updates">
+          <div>
+            <p class="eyebrow" data-i18n="site.updates">Updates</p>
+            <h2 data-i18n="site.game_updates">Game updates.</h2>
+            <p data-i18n="site.updates_body">New builds, demos, and release news.</p>
+          </div>
+          <div class="footer-signup">
+            <a
+              class="button button-orange"
+              href="https://discord.gg/d6ZDeChSE"
+              target="_blank"
+              rel="noopener"
+              data-i18n="site.discord"
+              >Discord</a
+            >
+            <a
+              class="button button-outline"
+              href="https://t.me/shadowsofwario"
+              target="_blank"
+              rel="noopener"
+              data-i18n="site.telegram"
+              >Telegram</a
+            >
+          </div>
+        </div>
+        <div class="footer-top">
+          <a
+            class="brand"
+            href="#top"
+            aria-label="Shadows of War home"
+            data-i18n="site.home"
+            data-i18n-attr="aria-label"
+            ><img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="24"
+          /></a>
+          <div class="footer-links">
+            <a href="/#faq" data-i18n="site.faq">FAQ</a
+            ><a href="/support/" data-i18n="site.support">Support</a
+            ><a href="/privacy/" data-i18n="site.privacy">Privacy</a
+            ><a href="/cookies/" data-i18n="site.cookies">Cookies</a
+            ><a href="/terms/" data-i18n="site.terms">Terms</a
+            ><a href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener" data-i18n="site.discord"
+              >Discord</a
+            ><a href="https://t.me/shadowsofwario" target="_blank" rel="noopener" data-i18n="site.telegram"
+              >Telegram</a
+            ><a
+              href="https://github.com/worldofunreal/shadows-of-war"
+              target="_blank"
+              rel="noopener"
+              data-i18n="site.github"
+              >GitHub</a
+            >
           </div>
         </div>
       </div>
-    </section>
-
-    <section class="landing-section steps" id="game">
-      <div class="container">
-        <header class="section-head">
-          <p class="eyebrow" data-i18n="site.how_matches_work">How matches work</p>
-          <h2><span data-i18n="site.build_expand">Build, expand,</span> <em data-i18n="site.fight">fight.</em></h2>
-          <p data-i18n="site.game_summary">Start small, turn territory into an economy, and decide when cooperation ends. Any alliance can break at
-            any time; whoever holds most of the map wins.</p>
-        </header>
-        <ol class="step-list">
-          <li class="step">
-            <img src="/assets/site/media/step-expand.webp" alt="" loading="lazy" decoding="async">
-            <h3 data-i18n="site.build_momentum">Take land</h3>
-            <p data-i18n="site.build_momentum_body">Every tile you hold pays gold and troops.</p>
-          </li>
-          <li class="step">
-            <img src="/assets/site/media/step-build.webp" alt="" loading="lazy" decoding="async">
-            <h3 data-i18n="site.step_build">Build districts</h3>
-            <p data-i18n="site.step_build_body">Cities, factories, ports and towers turn land into troops and gold.</p>
-          </li>
-          <li class="step">
-            <img src="/assets/site/media/step-war.webp" alt="" loading="lazy" decoding="async">
-            <h3 data-i18n="site.break_frontier">Break the frontier</h3>
-            <p data-i18n="site.break_frontier_body">Attack, ally, betray. Hold the map to win.</p>
-          </li>
-        </ol>
+      <div class="container footer-bottom">
+        <span data-i18n="site.copyright">© 2026 World of Unreal</span>
       </div>
-    </section>
-
-    <section class="landing-section leaders" id="leaders">
-      <div class="container">
-        <header class="section-head">
-          <p class="eyebrow" data-i18n="site.leaders">Leaders</p>
-          <h2><span data-i18n="site.choose">Choose</span> <em data-i18n="site.a_leader">a leader.</em></h2>
-          <p data-i18n="site.leaders_summary">Choose a leader that matches how you play: economy, expansion, defense, production, or border pressure.</p>
-        </header>
-        <div class="showcase" data-leader-detail aria-live="polite">
-          <!-- SOW_SITE_LEADER_SHOWCASE -->
-        </div>
-        <div class="roster" data-leaders-grid>
-<!-- SOW_SITE_LEADERS -->
-        </div>
-      </div>
-    </section>
-
-    <section class="landing-section maps" id="maps">
-      <div class="container">
-        <header class="section-head">
-          <p class="eyebrow" data-i18n="site.maps">Maps</p>
-          <h2><span data-i18n="site.maps_fight_on">Fight on</span> <em data-i18n="site.maps_every_continent">every continent.</em></h2>
-          <p data-i18n="site.maps_summary">Matchmaking rotates through the world and regional maps, from Europe to the Pacific.</p>
-        </header>
-      </div>
-      <ul class="map-strip">
-<!-- SOW_SITE_MAPS -->
-      </ul>
-    </section>
-
-    <!-- SOW_SITE_TRAILER -->
-
-    <section class="landing-section faq" id="faq">
-      <div class="container">
-        <header class="section-head">
-          <p class="eyebrow" data-i18n="site.game_systems">Game systems</p>
-          <h2><span data-i18n="site.matches">How matches</span> <em data-i18n="site.work">work.</em></h2>
-          <p data-i18n="site.rules_summary">Land control wins, districts pay, terrain punishes attackers, modes rotate.</p>
-        </header>
-        <div class="faq-list">
-          <details class="faq-item" name="faq" open>
-            <summary data-i18n="site.faq_start">How do I start a match?</summary>
-            <p data-i18n="site.faq_start_answer">Open the game, choose a leader, and join an active lobby.</p>
-          </details>
-          <details class="faq-item" name="faq">
-            <summary data-i18n="site.faq_during">What happens during a match?</summary>
-            <p data-i18n="site.faq_during_answer">Take land, build cities, factories, ports and towers, ally, attack, and hold the map.</p>
-          </details>
-          <details class="faq-item" name="faq">
-            <summary data-i18n="site.faq_modes">Which game modes are available?</summary>
-            <p data-i18n="site.faq_modes_answer">The matchmaking queue rotates through Free-For-All, Teams, and Humans vs Nations on active maps.</p>
-          </details>
-          <details class="faq-item" name="faq">
-            <summary data-i18n="site.faq_account">Do I need an account?</summary>
-            <p data-i18n="site.faq_account_answer">No. You can join a match without registering.</p>
-          </details>
-          <details class="faq-item" name="faq">
-            <summary data-i18n="site.faq_leader">What do leaders change?</summary>
-            <p data-i18n="site.faq_leader_answer">Each gives one bonus: attack, expansion, gold, troops, or capacity.</p>
-          </details>
-        </div>
-      </div>
-    </section>
-
-    <section class="landing-section closing" id="play">
-      <div class="container">
-        <p class="eyebrow" data-i18n="site.are_you_ready">Are you ready?</p>
-        <h2><span data-i18n="site.play_now_title">Play</span> <em data-i18n="site.now">now!</em></h2>
-        <p data-i18n="site.play_now_body">Join a lobby, ally, betray, and take the map.</p>
-        <a class="button button-orange" href="/play/"><span data-i18n="site.open_game">Open game</span></a>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <div class="container">
-      <div class="footer-updates">
-        <div>
-          <p class="eyebrow" data-i18n="site.updates">Updates</p>
-          <h2 data-i18n="site.game_updates">Game updates.</h2>
-          <p data-i18n="site.updates_body">New builds, demos, and release news.</p>
-        </div>
-        <div class="footer-signup">
-          <a class="button button-orange" href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener" data-i18n="site.discord">Discord</a>
-          <a class="button button-outline" href="https://t.me/shadowsofwario" target="_blank" rel="noopener" data-i18n="site.telegram">Telegram</a>
-        </div>
-      </div>
-      <div class="footer-top">
-        <a class="brand" href="#top" aria-label="Shadows of War home" data-i18n="site.home" data-i18n-attr="aria-label"><img class="brand-wordmark" src="/sow-long.svg"
-            alt="Shadows of War" height="24"></a>
-        <div class="footer-links"><a href="/#faq" data-i18n="site.faq">FAQ</a><a
-            href="/support/" data-i18n="site.support">Support</a><a href="/privacy/" data-i18n="site.privacy">Privacy</a><a href="/cookies/" data-i18n="site.cookies">Cookies</a><a href="/terms/" data-i18n="site.terms">Terms</a><a
-            href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener" data-i18n="site.discord">Discord</a><a
-            href="https://t.me/shadowsofwario" target="_blank" rel="noopener" data-i18n="site.telegram">Telegram</a><a
-            href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener" data-i18n="site.github">GitHub</a></div>
-      </div>
-    </div>
-    <div class="container footer-bottom"><span data-i18n="site.copyright">© 2026 World of Unreal</span></div>
-  </footer>
-  <script data-cfasync="false" src="./sow-dropdown.js"></script>
-  <script data-cfasync="false" src="./site-chrome.js"></script>
-  <script src="./analytics.js"></script>
-  <script src="./app.js"></script>
-</body>
-
+    </footer>
+    <script data-cfasync="false" src="./sow-dropdown.js"></script>
+    <script data-cfasync="false" src="./site-chrome.js"></script>
+    <script src="./analytics.js"></script>
+    <script src="./app.js"></script>
+  </body>
 </html>

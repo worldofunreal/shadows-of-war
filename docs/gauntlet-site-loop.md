@@ -47,7 +47,7 @@ Objetivo: que la página sea (a) crawleable y citable por buscadores y motores d
 **F. Calidad de ejecución**
 21. Lighthouse móvil: Performance ≥ 90, Accessibility ≥ 95, Best Practices ≥ 95, SEO = 100.
 22. LCP < 2.5 s en 4G simulada; sin CLS > 0.1; fuentes con `font-display: swap` y sin FOIT.
-23. Tests del sitio (`site_interaction.test.js`, `analytics.test.js`) verdes; sin regresión de analytics/consent.
+23. Tests del sitio (`site_interaction.test.ts`, `analytics.test.ts`) verdes; sin regresión de analytics/consent.
 24. Nada de texto placeholder, lorem, links muertos, `href="#"` ni imágenes rotas.
 25. Todo claim numérico rastreable a una fuente del repo o eliminado.
 

@@ -2115,7 +2115,7 @@ pub(crate) mod reward_exit_tests {
         app.ui.tutorial_campaign = crate::campaign::CampaignId::Boudica;
         let command = Closure::<dyn FnMut(String)>::new(crate::web_menu::sow_menu_command);
         click_tutorial_exit(
-            include_str!("../../../sow-web/shell/main_menu.hud.js"),
+            include_str!("../../../sow-web/shell/main_menu.hud.ts"),
             command.as_ref().unchecked_ref(),
         );
         app.process_web_menu_commands();
@@ -2621,7 +2621,7 @@ pub(crate) mod reward_exit_tests {
         use wasm_bindgen::{JsCast, closure::Closure};
         let command = Closure::<dyn FnMut(String)>::new(crate::web_menu::sow_menu_command);
         click_tutorial_exit(
-            include_str!("../../../sow-web/shell/main_menu.hud.js"),
+            include_str!("../../../sow-web/shell/main_menu.hud.ts"),
             command.as_ref().unchecked_ref(),
         );
         app.process_web_menu_commands();

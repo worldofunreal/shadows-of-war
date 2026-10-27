@@ -883,7 +883,7 @@ pub struct TaskState {
     pub engine_init_queued_msg: Option<sow_core::protocol::ServerStartMessage>,
 }
 
-/// The durable handoff consumed by main_menu.flow.js. An empty receipt list
+/// The durable handoff consumed by main_menu.flow.ts. An empty receipt list
 /// never means a reward-bearing return has finished.
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct MenuReturnContext {
