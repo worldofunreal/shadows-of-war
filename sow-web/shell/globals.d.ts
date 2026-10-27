@@ -68,6 +68,7 @@ declare global {
         SOW_BUILDING_ART: SowBuildingArt;
         SOW_BLOCKED_IDS?: string[];
         SOW_onStateUpdate: (state: unknown) => void;
+        SOW_hover_card_update: (raw: string) => void;
         SOW_t: (key: string, ...args: unknown[]) => string;
         SOW_assetUrl: (url: string) => string;
         SOW_menu_command: (message: string) => void;

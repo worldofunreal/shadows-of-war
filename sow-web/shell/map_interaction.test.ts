@@ -395,6 +395,8 @@ test("building menus use generated pixel-art sprites with white glyph fallback",
     const artManifest = JSON.parse(
         fs.readFileSync(path.join(shell, "../../assets/generated/buildings-atlas.json"), "utf8"),
     );
+    assert.deepEqual([artManifest.atlas_width, artManifest.atlas_height], [660, 528]);
+    assert.equal(artManifest.cell_size, 128);
     const load = (art) => (kind, level, cls) =>
         vm.runInNewContext(hud.slice(iconStart, iconEnd) + "\nbuildingIcon(...buildingIconArgs);", {
             window: { SOW_BUILDING_ART: art, SOW_ASSETS_URL: "/assets" },
@@ -412,7 +414,7 @@ test("building menus use generated pixel-art sprites with white glyph fallback",
             const x = ((sprite.x * 100) / (artManifest.atlas_width - artManifest.cell_size)).toFixed(4);
             const y = ((sprite.y * 100) / (artManifest.atlas_height - artManifest.cell_size)).toFixed(4);
             assert.ok(icon.includes("background-position:" + x + "% " + y + "%"));
-            assert.equal(sprite.width, 64);
+            assert.equal(sprite.width, 128);
             assert.match(sprite.sha256, /^[a-f0-9]{64}$/);
         }
     }

@@ -29,8 +29,6 @@
   --sow-green: #a6c5a8;
   --sow-panel-soft: rgb(255 255 255 / 4%);
   --sow-hud-layout-top-reserve: 72px;
-  --sow-hud-layout-action-top: 56px;
-  --sow-hud-layout-dock-height: 72px;
   --sow-hud-layout-bottom-edge: calc(100dvh - 80px);
   --sow-button-radius: 4px;
   --sow-button-dark-bg: linear-gradient(145deg, rgb(35 46 51 / 92%), rgb(15 22 27 / 98%));

@@ -48,7 +48,11 @@ impl BuildingFootprint {
 impl BuildingKind {
     #[inline]
     pub const fn footprint_dimensions(self) -> (u32, u32) {
-        (4, 4)
+        if matches!(self, BuildingKind::City) {
+            (4, 4)
+        } else {
+            (2, 2)
+        }
     }
 }
 

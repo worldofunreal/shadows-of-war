@@ -103,7 +103,13 @@ impl ActiveEmote {
 }
 
 /// Starts `kind` over `player`, replacing any current emote; `None` clears it.
-pub fn express(player: &mut crate::player::Player, kind: Option<EmoteKind>, pinned: bool, scripted: bool, tick: u64) {
+pub fn express(
+    player: &mut crate::player::Player,
+    kind: Option<EmoteKind>,
+    pinned: bool,
+    scripted: bool,
+    tick: u64,
+) {
     player.active_emote = match kind {
         Some(kind) => {
             player.emote_event_id = player.emote_event_id.wrapping_add(1);
@@ -129,8 +135,13 @@ pub fn can_express(player: &crate::player::Player, phase: &crate::game::GamePhas
 
 /// The same audience is used by map bubbles and HUD notices; camera visibility is separate.
 /// Whether `viewer` sees `sender`'s bubble: scripted campaign lines are for everyone, player emotes for allies and team.
-pub fn is_visible(players: &[crate::protocol::PlayerSnapshot], sender: &crate::protocol::PlayerSnapshot, viewer: u16) -> bool {
-    sender.active_emote.is_some_and(|emote| emote.scripted) || is_recipient(players, sender.id, viewer)
+pub fn is_visible(
+    players: &[crate::protocol::PlayerSnapshot],
+    sender: &crate::protocol::PlayerSnapshot,
+    viewer: u16,
+) -> bool {
+    sender.active_emote.is_some_and(|emote| emote.scripted)
+        || is_recipient(players, sender.id, viewer)
 }
 
 pub fn is_recipient(players: &[crate::protocol::PlayerSnapshot], sender: u16, viewer: u16) -> bool {
@@ -275,7 +286,7 @@ mod tests {
         let current = crate::protocol::gameplay_build_identity("0.1.3");
         assert_eq!(
             current,
-            format!("0.1.3/turns-5/net-5/rules-{}", crate::SIMULATION_RULES_ID)
+            format!("0.1.3/turns-6/net-5/rules-{}", crate::SIMULATION_RULES_ID)
         );
         assert_ne!(current, "0.1.3");
         let mut engine = engine();

@@ -15,6 +15,8 @@ const {
     EXCHANGE_MAX_DELAY_MS,
     EMOTE_TEXT_MAX_CHARS,
     METRICS,
+    ROUTE_FACTS,
+    FACTION_FIELDS,
     WORLD_TARGETS,
     STRUCTURE_LEVEL_LIMITS,
     CAMPAIGN_ACTIONS,
@@ -167,35 +169,7 @@ export function validate(
                 issue(null, "roster", "Faction IDs and names must be valid, unique and nonempty.");
                 return;
             }
-            knownFields(
-                faction,
-                [
-                    "id",
-                    "name",
-                    "x",
-                    "y",
-                    "starting_troops",
-                    "relation",
-                    "team",
-                    "can_request_alliance",
-                    "can_attack_player",
-                    "color",
-                    "iq",
-                    "civ",
-                    "leader",
-                    "avatar",
-                    "support_interval_seconds",
-                    "gold_loot_bonus",
-                    "gold_loot_override",
-                    "alliance_group",
-                    "assault_force",
-                    "hold_structures_until_contact",
-                    "city_requires_gold",
-                    "accepts_alliance_requests",
-                ],
-                null,
-                "roster.factions",
-            );
+            knownFields(faction, FACTION_FIELDS, null, "roster.factions");
             factions.add(faction.id);
             factionNames.add(faction.name);
             rosterFactions.add(faction.id);
@@ -532,12 +506,7 @@ export function validate(
                 choice && choice.type === "choice" ? choice.choices : response && response.choices;
             if (!Array.isArray(answers) || !answers.some((option) => option && option.id === when.equals))
                 issue(step, "routes", "Condition refers to an unknown decision or answer.");
-        } else if (
-            !Object.values(METRICS)
-                .concat(["tiles", "contacts", "defeated", "touch_controls"])
-                .includes(when.fact) ||
-            !Number.isFinite(when.gte)
-        )
+        } else if (!ROUTE_FACTS.includes(when.fact) || !Number.isFinite(when.gte))
             issue(step, "routes", "Invalid game fact condition.");
     }
     const stepFields = {

@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 pub use sow_data::MAX_MATCH_PARTICIPANTS;
 
 /// Persisted turn recordings; changing live messages must not change this.
-/// 5: bots spread over all land and take catalog characters (no older replays).
-pub const GAMEPLAY_FORMAT_VERSION: u64 = 5;
+/// 6: buildings use kind-specific footprints.
+pub const GAMEPLAY_FORMAT_VERSION: u64 = 6;
 pub const LIVE_PROTOCOL_VERSION: u64 = 5;
 
 pub fn gameplay_build_identity(public_version: &str) -> String {

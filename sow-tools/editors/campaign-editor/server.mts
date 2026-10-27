@@ -47,6 +47,12 @@ function loadCampaignRuntime() {
 }
 
 function compileShellTypeScript(file) {
+  // A script with no import/export is a CommonJS module to Bun: its top-level code is wrapped and never runs in
+  // the page. Same rule as sow-dist shell_part_is_module: strip the types only and keep it a plain script.
+  const source = readFileSync(file, "utf8");
+  if (!/^\s*(import|export)\s/m.test(source)) {
+    return Buffer.from(new Bun.Transpiler({ loader: "ts", target: "browser" }).transformSync(source));
+  }
   const result = spawnSync("bun", ["build", "--target=browser", "--format=iife", file], {
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,

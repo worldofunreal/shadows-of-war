@@ -273,7 +273,13 @@ fn structure_marks_leader(leader: Leader, kind: BuildingKind) -> bool {
     match (leader.ability(), kind) {
         (Ability::TowerRange { .. }, BuildingKind::Tower) => true,
         (Ability::CityTroopCapacity { .. }, BuildingKind::City) => true,
-        (Ability::ResourceBonus { source: Source::District(district), .. }, _) => matches!(
+        (
+            Ability::ResourceBonus {
+                source: Source::District(district),
+                ..
+            },
+            _,
+        ) => matches!(
             (district, kind),
             (District::City, BuildingKind::City)
                 | (District::Factory, BuildingKind::Factory)

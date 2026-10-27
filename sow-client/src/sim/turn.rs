@@ -597,7 +597,7 @@ impl SowApp {
                 .blocks
                 .resize((self.sim.map_w * self.sim.map_h + 63) as usize / 64, 0);
             let dev = crate::theme::dev_config::DevConfig::get();
-            crate::sim::visibility::compute_visibility(
+            let visibility_changed = crate::sim::visibility::compute_visibility(
                 (self.sim.map_w, self.sim.map_h),
                 my_id,
                 owners,
@@ -606,7 +606,9 @@ impl SowApp {
                 &mut self.sim.fog_visible,
                 dev.fog_of_war,
             );
-            self.sim.force_fog_upload = true;
+            if visibility_changed {
+                self.sim.force_fog_upload = true;
+            }
         }
 
         self.time.interp.stamp_applied(web_time::Instant::now());

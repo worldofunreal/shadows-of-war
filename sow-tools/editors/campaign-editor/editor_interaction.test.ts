@@ -27,8 +27,11 @@ const campaignEditorHtml = fs.readFileSync(
   "utf8",
 );
 void fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/editor.css"), "utf8");
-const mapRostersHtml = fs.readFileSync(
-  path.join(shell, "../../sow-tools/editors/campaign-editor/map-rosters.html"),
+// Page scripts are TypeScript now; strip the types the same way the editor server serves them before parsing.
+const transpileForVm = (source) =>
+  new Bun.Transpiler({ loader: "ts", target: "browser" }).transformSync(source);
+const mapRostersScript = fs.readFileSync(
+  path.join(shell, "../../sow-tools/editors/campaign-editor/map-rosters.ts"),
   "utf8",
 );
 const atlasEntityPickerSource = fs.readFileSync(
@@ -37,14 +40,14 @@ const atlasEntityPickerSource = fs.readFileSync(
 );
 void fs.readFileSync(path.join(shell, "../../sow-tools/src/map_roster.rs"), "utf8");
 void fs.readFileSync(path.join(shell, "../../sow-web/site/fonts/fonts.css"), "utf8");
-const campaignMapEditorHtml = fs.readFileSync(
-  path.join(shell, "../../sow-tools/editors/campaign-editor/index.html"),
+const campaignMapEditorScript = fs.readFileSync(
+  path.join(shell, "../../sow-tools/editors/campaign-editor/index.ts"),
   "utf8",
 );
 void fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/map-preview.ts"), "utf8");
 import campaignMapPreviewApi from "./map-preview.ts";
-const atlasHtml = fs.readFileSync(
-  path.join(shell, "../../sow-tools/editors/campaign-editor/atlas.html"),
+const atlasPageScript = fs.readFileSync(
+  path.join(shell, "../../sow-tools/editors/campaign-editor/atlas.ts"),
   "utf8",
 );
 void fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
@@ -944,14 +947,12 @@ test("branching sample preview preserves the episode draft and cannot be exporte
 });
 
 test("campaign story preview uses the selected episode map and faction positions", () => {
-  for (const viewer of [campaignMapEditorHtml, atlasHtml, mapRostersHtml]) {
+  for (const viewer of [campaignMapEditorScript, atlasPageScript, mapRostersScript]) {
     assert.match(viewer, /SOWCampaignMapPreview\.resizeCanvas\(/);
     assert.match(viewer, /SOWCampaignMapPreview\.fitMapView\(/);
     assert.match(viewer, /SOWCampaignMapPreview\.zoomMapView\(/);
   }
-  const atlasScript = atlasHtml.match(/<script>\s*([\s\S]*?)<\/script>/);
-  assert.ok(atlasScript, "Atlas inline script exists");
-  assert.doesNotThrow(() => new vm.Script(atlasScript[1]));
+  assert.doesNotThrow(() => new vm.Script(transpileForVm(atlasPageScript)));
 
   const islandGuides = JSON.parse(
     fs.readFileSync(path.join(shell, "../../assets/map_sources/world_island_guides.json"), "utf8"),
@@ -1236,9 +1237,7 @@ test("Map Rosters reads binary presets and leaves unmatched map anchors intact",
       entries: [{ entity_id: "iceland", role: "nation", x: 2, y: 0, legacy_anchor: 0 }],
     },
   ]);
-  const rosterScript = mapRostersHtml.match(/<script>\s*([\s\S]*?)<\/script>/);
-  assert.ok(rosterScript, "Map Rosters inline script exists");
-  assert.doesNotThrow(() => new vm.Script(rosterScript[1]));
+  assert.doesNotThrow(() => new vm.Script(transpileForVm(mapRostersScript)));
 });
 
 test("Atlas picker visibly selects a catalog entity by stable ID in both editors", async () => {
@@ -1290,9 +1289,7 @@ test("Atlas picker visibly selects a catalog entity by stable ID in both editors
   input.value = "ICENI";
   await input.dispatch("input");
   assert.equal(picker.getSelected().id, "iceni", "exact name input resolves to its stable Atlas ID");
-  const episodeEditorScript = campaignMapEditorHtml.match(/<script>\s*([\s\S]*?)<\/script>/);
-  assert.ok(episodeEditorScript, "Campaign Studio Episode script exists");
-  assert.doesNotThrow(() => new vm.Script(episodeEditorScript[1]));
+  assert.doesNotThrow(() => new vm.Script(transpileForVm(campaignMapEditorScript)));
 });
 
 test("campaign studio preview matches the real build submenu and direct nuke action", () => {

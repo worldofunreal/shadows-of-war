@@ -218,6 +218,13 @@ const ART_FOLDERS: [(&str, &str); 6] = [
     ("music", "gameplay/music"),
     ("units", "gameplay/units"),
 ];
+const GAMEPLAY_UNIT_ART: [&str; 5] = [
+    "transport-ship.png",
+    "trade-ship.png",
+    "warship.png",
+    "atom-bomb.png",
+    "sam-missile.png",
+];
 /// Tool output in assets/generated: (file, published path).
 const GENERATED_FILES: [(&str, &str); 3] = [
     ("buildings-atlas.webp", "gameplay/buildings/atlas.webp"),
@@ -886,6 +893,10 @@ fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
     copy_dir(
         &src.join("gameplay/buildings"),
         &dst.join("gameplay/buildings"),
+    )?;
+    copy_dir(
+        &src.join("gameplay/units"),
+        &dst.join("gameplay/units"),
     )?;
     copy_dir(&src.join("gameplay/music"), &dst.join("gameplay/music"))?;
     copy_dir(
@@ -3327,6 +3338,15 @@ fn export_locales(out: &Path) -> Result<()> {
     Ok(())
 }
 
+fn verify_gameplay_unit_art(dir: &Path, package: &str) -> Result<()> {
+    for file in GAMEPLAY_UNIT_ART {
+        if !dir.join("assets/gameplay/units").join(file).is_file() {
+            bail!("{package} missing assets/gameplay/units/{file}");
+        }
+    }
+    Ok(())
+}
+
 fn verify_layout(dir: &Path) -> Result<()> {
     verify_exported_locales(dir)?;
     let (mut wn, mut jn) = (None, None);
@@ -3393,6 +3413,7 @@ fn verify_layout(dir: &Path) -> Result<()> {
             bail!("webroot missing {}", required);
         }
     }
+    verify_gameplay_unit_art(dir, "webroot")?;
     if dir.join("admin").exists() {
         bail!("webroot must not contain admin/ (dashboard was removed)");
     }
@@ -3696,6 +3717,7 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
             bail!("poki bundle missing {required}");
         }
     }
+    verify_gameplay_unit_art(dir, "Poki bundle")?;
     for forbidden in [
         "admin",
         "play",
@@ -3874,6 +3896,10 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     copy_dir(
         &paths.assets_gameplay.join("buildings"),
         &assets.join("gameplay/buildings"),
+    )?;
+    copy_dir(
+        &paths.assets_gameplay.join("units"),
+        &assets.join("gameplay/units"),
     )?;
     copy_dir(
         &paths.assets_gameplay.join("music"),
@@ -4121,6 +4147,7 @@ fn native_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.assets_gameplay.join("currency"),
         paths.assets_gameplay.join("store"),
         paths.assets_gameplay.join("buildings"),
+        paths.assets_gameplay.join("units"),
         paths.assets_gameplay.join("music"),
         paths.root.join("assets/campaign"),
         paths.root.join("assets/guides"),
@@ -4162,6 +4189,9 @@ fn package_native_web(
             .is_file()
         && out.join("assets/gameplay/buildings/atlas.webp").is_file()
         && out.join("assets/gameplay/buildings/atlas.json").is_file()
+        && GAMEPLAY_UNIT_ART
+            .iter()
+            .all(|file| out.join("assets/gameplay/units").join(file).is_file())
         && out
             .join("assets/gameplay/music/shadows-of-war.webm")
             .is_file();
@@ -4181,6 +4211,7 @@ fn package_native_web(
             "currency",
             "store",
             "buildings",
+            "units",
             "music",
         ] {
             copy_dir(
@@ -4534,6 +4565,7 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
             bail!("jest bundle missing {required}");
         }
     }
+    verify_gameplay_unit_art(dir, "Jest bundle")?;
     for forbidden in [
         "admin",
         "play",

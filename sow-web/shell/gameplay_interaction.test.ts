@@ -584,7 +584,13 @@ test("HUD notifications coalesce, prioritize, reuse both entity avatars, and exp
             },
         },
     };
-    const renderer = hud.slice(start, end) + "\nthis.renderNotifications = renderNotifications;";
+    const screenStart = hud.indexOf("    function measureHudScreen() {");
+    const screenEnd = hud.indexOf("    function compactHudDensity(", screenStart);
+    assert.ok(screenStart >= 0 && screenEnd > screenStart);
+    const renderer =
+        hud.slice(screenStart, screenEnd) +
+        hud.slice(start, end) +
+        "\nthis.renderNotifications = renderNotifications;";
     vm.runInNewContext(renderer, context);
     const add = (id, key, priority, group, values, avatars, sumValues = false) => {
         now += 100;

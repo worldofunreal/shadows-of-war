@@ -341,6 +341,37 @@ export const UI_TARGETS = {
     rankings: '#sow-hud [data-command="toggle_leaderboard"]',
     settings: '#sow-hud [data-command="toggle_settings"]',
 };
+export const ROUTE_FACTS: readonly string[] = Object.freeze([
+    ...Object.values(METRICS),
+    "tiles",
+    "contacts",
+    "defeated",
+    "touch_controls",
+]);
+export const FACTION_FIELDS: readonly string[] = Object.freeze([
+    "id",
+    "name",
+    "x",
+    "y",
+    "starting_troops",
+    "relation",
+    "team",
+    "can_request_alliance",
+    "can_attack_player",
+    "color",
+    "iq",
+    "civ",
+    "leader",
+    "avatar",
+    "support_interval_seconds",
+    "gold_loot_bonus",
+    "gold_loot_override",
+    "alliance_group",
+    "assault_force",
+    "hold_structures_until_contact",
+    "city_requires_gold",
+    "accepts_alliance_requests",
+]);
 export const MENU_GUIDE_OUTCOMES: Record<string, CampaignRecord> = Object.freeze({
     heroes_ready: Object.freeze({ control: "menu_heroes", kind: "screen", screen: "heroes" }),
 });

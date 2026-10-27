@@ -432,6 +432,8 @@ thread_local! {
         RefCell<Option<(u64, u16, serde_json::Value)>> = const { RefCell::new(None) };
     static LAST_WEB_HOVER_PAYLOAD:
         RefCell<Option<(u64, u32, u16, u16, serde_json::Value)>> = const { RefCell::new(None) };
+    /// Last hover card JSON handed to JS. The hover card is published every frame, so it dedupes here.
+    static LAST_HOVER_CARD: RefCell<String> = RefCell::new(String::new());
     static LAST_WEB_INBOX_PAYLOAD:
         RefCell<Option<(u64, u16, serde_json::Value)>> = const { RefCell::new(None) };
 
@@ -488,8 +490,6 @@ struct HudPublishKey {
     tutorial_emote_token: Option<String>,
     tutorial_pointer: Option<(u64, u64)>,
     tutorial_camera_viewport: Option<(u32, u32, u32, u32)>,
-    hovered_tile: u32,
-    hovered_owner: u16,
     map_menu_view: Option<MapContextMenuView>,
     map_menu_session: u64,
     map_menu_tile: u32,
@@ -1733,7 +1733,6 @@ fn endgame_stats_snapshot(app: &SowApp, player_id: u16) -> Option<[u64; 5]> {
 
 fn hud_publish_key(app: &SowApp) -> HudPublishKey {
     let hud = &app.ui.app.hud_state;
-    let (hovered_tile, hovered_owner) = hovered_tile_owner(app);
     let tutorial_active = app.ui.tutorial_active && app.net.is_offline;
     let map_menu = app.input.map_context_menu;
     let (dev_sidebar_open, dev_config_key) = dev_config_key(app);
@@ -1755,7 +1754,6 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         .unwrap_or(0);
     let cold_open = app.ui.show_leaderboard
         || hud.building_placement.is_some()
-        || hovered_owner != 0
         || hud.show_alliance_inbox
         || hud.show_ask_panel.is_some()
         || hud.show_betrayal_warning.is_some()
@@ -1876,8 +1874,6 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         dev_preview,
         snapshot_tick: if cold_open { snapshot_tick } else { 0 },
         combat_operations_tick,
-        hovered_tile,
-        hovered_owner,
         map_menu_view: map_menu.map(|menu| menu.view),
         map_menu_session: map_menu.map(|menu| menu.session).unwrap_or(0),
         map_menu_tile: map_menu.map(|menu| menu.tile_idx).unwrap_or(u32::MAX),
@@ -3454,7 +3450,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         })
         .map(|player| player.name.clone())
         .unwrap_or_default();
-    let (hovered_tile, hovered_owner) = hovered_tile_owner(app);
     // The store is only shown after a match. Keep its catalog out of the hot HUD path,
     // and use the browser clock because SystemTime::now() panics on wasm32.
     let featured_skin = if match_over {
@@ -3487,11 +3482,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         sow_core::game::NukeKind::AtomBomb => "AtomBomb",
     });
     let costs = &hud.building_costs;
-    let selected_building_detail = map_menu
-        .get("building")
-        .cloned()
-        .unwrap_or(serde_json::Value::Null);
-    let (port_levels, city_level, trade_ships, warships) = snapshot
+    let (port_levels, city_level, trade_ships) = snapshot
         .map(|snapshot| {
             let port_levels = snapshot
                 .buildings
@@ -3521,16 +3512,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                         && fleet.unit_type == sow_core::game::UnitType::TradeShip
                 })
                 .count() as u32;
-            let warships = snapshot
-                .fleets
-                .iter()
-                .filter(|fleet| {
-                    fleet.owner_id == my_pid
-                        && fleet.troops > 0.0
-                        && fleet.unit_type == sow_core::game::UnitType::Warship
-                })
-                .count() as u32;
-            (port_levels, city_level, trade_ships, warships)
+            (port_levels, city_level, trade_ships)
         })
         .unwrap_or_default();
     let trade_ship = sow_core::game::UnitType::TradeShip;
@@ -3599,7 +3581,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "fleet_panel": {
             "trade_ships": trade_ships,
             "trade_capacity": port_levels,
-            "warships": warships,
             "port_levels": port_levels,
             "city_level": city_level,
             "trade_required_port_level": trade_ship.required_port_level(),
@@ -3612,7 +3593,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "military_used": me.map(|player| player.boats_in_use).unwrap_or(0),
             "military_capacity": me.map(|player| player.boat_capacity).unwrap_or(0),
         },
-        "selected_building_detail": selected_building_detail,
         "building_costs": {
             "city": costs[0],
             "tower": costs[1],
@@ -3625,8 +3605,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "emote_pinned": me.is_some_and(|player| player.emote_pinned),
         "fps": (app.time.current_fps > 0).then_some(app.time.current_fps),
         "ping": app.net.current_ping_ms,
-        "hovered_tile": if hovered_tile == u32::MAX { serde_json::Value::Null } else { serde_json::json!(hovered_tile) },
-        "hovered": serde_json::Value::Null,
         "inbox_count": me.map(|player| player.inbox_count).unwrap_or(0),
         "match_over": match_over,
         "is_spectating": app.ui.is_spectating,
@@ -3668,10 +3646,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     }
 
     if let Some(snapshot) = snapshot {
-        if hovered_owner != 0 {
-            payload["hovered"] =
-                cached_hover_payload(snapshot, hovered_tile, hovered_owner, my_pid);
-        }
         if app.ui.show_leaderboard && include_leaderboard {
             payload["leaderboard"] = cached_leaderboard_payload(snapshot, my_pid);
         }
@@ -3851,6 +3825,46 @@ pub(crate) fn publish_tutorial_camera_anchor_frame(app: &SowApp) {
     }
 }
 
+/// The hover card has its own channel. The hovered tile follows the mouse, so folding it into the
+/// HUD payload rebuilt and re-parsed the whole HUD on every tile crossing.
+pub(crate) fn publish_hover_card(app: &SowApp) {
+    let (hovered_tile, hovered_owner) = hovered_tile_owner(app);
+    let my_pid = app.sim.my_player_id.unwrap_or(app.ui.app.hud_state.my_player_id);
+    let hovered = match app.sim.current_snapshot.as_ref() {
+        Some(snapshot) if hovered_owner != 0 => {
+            cached_hover_payload(snapshot, hovered_tile, hovered_owner, my_pid)
+        }
+        _ => serde_json::Value::Null,
+    };
+    let Ok(serialized) = serde_json::to_string(&hovered) else {
+        return;
+    };
+    let unchanged = LAST_HOVER_CARD.with(|last| last.borrow().as_str() == serialized.as_str());
+    if unchanged {
+        return;
+    }
+    LAST_HOVER_CARD.with(|last| *last.borrow_mut() = serialized.clone());
+
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Ok(value) = js_sys::Reflect::get(
+        window.as_ref(),
+        &JsValue::from_str("SOW_hover_card_update"),
+    ) else {
+        return;
+    };
+    let Ok(update) = value.dyn_into::<js_sys::Function>() else {
+        return;
+    };
+    if let Err(error) = update.call1(window.as_ref(), &JsValue::from_str(&serialized)) {
+        web_sys::console::error_2(
+            &JsValue::from_str("[WEB MENU] hover card update failed"),
+            &error,
+        );
+    }
+}
+
 /// DOM never receives transient textures, map bytes, or internal auth/session material.
 pub(crate) fn publish_state(app: &mut SowApp) {
     refresh_web_leaderboard_cache(app);
@@ -3858,6 +3872,10 @@ pub(crate) fn publish_state(app: &mut SowApp) {
     let state = &app.ui.app.main_menu_state;
     let progress = &app.progress;
     let selected_leader_for_loader = state.selected_leader;
+    // Whole percent: the loader bar shows no finer step, and a steady value lets the dedupe
+    // below skip the JS side while the loader creeps forward.
+    let loader_progress =
+        (app.ui.app.splash_state.progress.clamp(0.0, 1.0) * 100.0).round() / 100.0;
 
     let payload = if app.ui.app.phase == crate::ClientPhase::Playing {
         let include_leaderboard = if app.ui.show_leaderboard {
@@ -3898,7 +3916,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "loader_leader": loader_leader_id(&app.ui.app.splash_state),
             "loader_info_leader": loader_info_leader_slug(&app.ui.app.splash_state, selected_leader_for_loader),
             "loader_show_hero_briefing": app.ui.app.splash_state.show_hero_briefing,
-            "loader_progress": app.ui.app.splash_state.progress.clamp(0.0, 1.0),
+            "loader_progress": loader_progress,
             "loader_done": app.ui.app.splash_state.done,
             "hud": hud_payload,
             "settings": {
@@ -3917,6 +3935,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         LAST_WEB_TOP_THREE_TICK.with(|tick| tick.set(None));
         LAST_WEB_LEADERBOARD_PAYLOAD.with(|cache| *cache.borrow_mut() = None);
         LAST_WEB_HOVER_PAYLOAD.with(|cache| *cache.borrow_mut() = None);
+        LAST_HOVER_CARD.with(|last| last.borrow_mut().clear());
         LAST_WEB_INBOX_PAYLOAD.with(|cache| *cache.borrow_mut() = None);
         app.ui.leaderboard_top_three = [None; 3];
         app.ui.leaderboard_refresh_at = None;
@@ -3986,7 +4005,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "loader_leader": loader_leader_id(&app.ui.app.splash_state),
             "loader_info_leader": loader_info_leader_slug(&app.ui.app.splash_state, selected_leader_for_loader),
             "loader_show_hero_briefing": app.ui.app.splash_state.show_hero_briefing,
-            "loader_progress": app.ui.app.splash_state.progress.clamp(0.0, 1.0),
+            "loader_progress": loader_progress,
             "loader_done": app.ui.app.splash_state.done,
             "boot_campaign": app.boot_campaign_pending.clone(),
             "connected": state.is_connected,
