@@ -14,6 +14,7 @@ const BUILDING_MIN_MARKER_SIZE: f32 = 14.0;
 const BUILDING_CLUSTER_TARGET_SIZE: f32 = 40.0;
 const BUILDING_ZOOM_STEPS_PER_OCTAVE: f32 = 8.0;
 const BUILDING_FOOTPRINT_FILL: f32 = 0.9;
+const BUILDING_UPGRADE_SCALES: [f32; 4] = [1.0, 1.15, 1.3, 1.5];
 const BUILDING_LEVEL_FONT_RATIO: f32 = 0.58;
 const BUILDING_CELEBRATION_OFFSETS: [[f32; 2]; 4] =
     [[-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0], [1.0, 1.0]];
@@ -386,7 +387,11 @@ fn render_buildings(
             1.0
         };
         let building_center = [center[0] * sf, center[1] * sf];
-        let upgrade_scale = 1.25_f32.powi(i32::from(building.level.saturating_sub(1)));
+        let level_exponent = building.level.saturating_sub(1);
+        let upgrade_scale = BUILDING_UPGRADE_SCALES
+            .get(usize::from(level_exponent))
+            .copied()
+            .unwrap_or_else(|| 1.25_f32.powi(i32::from(level_exponent)));
         let building_size =
             marker_size.map(|size| size * sf * BUILDING_FOOTPRINT_FILL * upgrade_scale);
         // Every kind and level has art in assets/art/buildings (checked by tests).
@@ -966,7 +971,7 @@ fn render_building_placement_controls(
     }
 }
 
-/// Corner badge: the hammer icon while building, then the level and cluster count.
+/// Keep cluster counts visible without overlaying building levels on the art.
 fn building_badge_label(
     building: &RenderedBuilding,
 ) -> Option<(Option<NameplateStatusSprite>, String)> {
@@ -979,11 +984,7 @@ fn building_badge_label(
     if building.level == 1 && building.count == 1 {
         return None;
     }
-    Some(if building.count > 1 {
-        (None, format!("{} × {}", building.level, building.count))
-    } else {
-        (None, building.level.to_string())
-    })
+    (building.count > 1).then(|| (None, format!("× {}", building.count)))
 }
 
 /// Text centered on `center`, with an optional badge icon before it.
@@ -1370,10 +1371,11 @@ mod tests {
     fn placement_sprite_keeps_built_scale_and_remains_visible_when_zooming_out() {
         for kind in BuildingKind::ALL {
             let footprint = sow_core::building::BuildingFootprint::at(kind, 17, 23);
-            assert_eq!([footprint.width, footprint.height], [4, 4]);
+            let expected = if kind == BuildingKind::City { 4.0 } else { 2.0 };
+            assert_eq!([footprint.width, footprint.height], [expected as u32; 2]);
             for zoom in [0.5, 4.0, 12.0] {
                 let geometry = placement_footprint_geometry(footprint, [31.0, -12.0], zoom);
-                assert_eq!(geometry.size, [4.0 * zoom, 4.0 * zoom]);
+                assert_eq!(geometry.size, [expected * zoom, expected * zoom]);
                 assert_eq!(
                     geometry.center,
                     [
@@ -1457,7 +1459,19 @@ mod tests {
         building.level = 3;
         assert_eq!(
             building_badge_label(&building),
-            Some((None, "3 × 4".to_string()))
+            Some((None, "× 4".to_string()))
+        );
+        building.count = 1;
+        assert_eq!(building_badge_label(&building), None);
+    }
+
+    #[test]
+    fn building_upgrade_visual_scale_never_exceeds_one_hundred_fifty_percent() {
+        assert_eq!(BUILDING_UPGRADE_SCALES, [1.0, 1.15, 1.3, 1.5]);
+        assert!(
+            BUILDING_UPGRADE_SCALES
+                .into_iter()
+                .all(|scale| scale <= 1.5)
         );
     }
 

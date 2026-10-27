@@ -1,7 +1,82 @@
-const mapPreview = (function (host) {
+interface MapGeoBounds {
+  minLon: number;
+  minLat: number;
+  maxLon: number;
+  maxLat: number;
+}
+
+interface MapPoint {
+  x: number;
+  y: number;
+}
+
+interface MapGeoPoint {
+  lat: number;
+  lon: number;
+}
+
+interface MapTile {
+  x: number;
+  y: number;
+}
+
+interface MapTransform {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+interface MapView extends MapTransform {
+  fitScale: number;
+  minScale: number;
+}
+
+interface MapCanvasSize {
+  width: number;
+  height: number;
+  dpr: number;
+}
+
+interface MapSpawn {
+  name: string;
+  flag: string;
+  x: number;
+  y: number;
+}
+
+interface MapRosterEntry {
+  entity_id: string;
+  role: "nation" | "tribe";
+  x: number;
+  y: number;
+  legacy_anchor: number | null;
+}
+
+interface MapRoster {
+  id: string;
+  name: string;
+  entries: MapRosterEntry[];
+}
+
+interface MapData {
+  displayName: string;
+  width: number;
+  height: number;
+  terrain: Uint8Array;
+  geoBounds: MapGeoBounds | null;
+  spawns: MapSpawn[];
+  defaultRoster: string | null;
+  rosters: MapRoster[];
+  // Added by load().
+  id?: string;
+  etag?: string | null;
+  image?: HTMLCanvasElement;
+}
+
+const mapPreview = (function (host: typeof globalThis) {
   "use strict";
 
-  function parse(buffer) {
+  function parse(buffer: ArrayBuffer): MapData {
     const view = new DataView(buffer);
     let offset = 4;
     if (
@@ -18,7 +93,7 @@ const mapPreview = (function (host) {
     const height = view.getUint32(offset, true);
     offset += 4;
     offset += 4; // land-tile count
-    function readString() {
+    function readString(): string {
       if (offset + 2 > buffer.byteLength) throw new Error("Invalid SOW map string.");
       const length = view.getUint16(offset, true);
       offset += 2;
@@ -31,7 +106,7 @@ const mapPreview = (function (host) {
     if (offset + 2 > buffer.byteLength) throw new Error("Invalid SOW map header.");
     const spawnCount = view.getUint16(offset, true);
     offset += 2;
-    const spawns = [];
+    const spawns: MapSpawn[] = [];
     for (let i = 0; i < spawnCount; i++) {
       const name = readString(),
         flag = readString();
@@ -41,7 +116,7 @@ const mapPreview = (function (host) {
       offset += 8;
       spawns.push({ name: name, flag: flag, x: x, y: y });
     }
-    let geoBounds = null;
+    let geoBounds: MapGeoBounds | null = null;
     if (version === 2) {
       if (offset >= buffer.byteLength) throw new Error("Missing SOW map geographic bounds tag.");
       const inlineGeoTag = view.getUint8(offset++);
@@ -67,8 +142,8 @@ const mapPreview = (function (host) {
     }
     const terrain = new Uint8Array(buffer, offset, tileCount);
     let tail = offset + tileCount;
-    let defaultRoster = null;
-    const rosters = [];
+    let defaultRoster: string | null = null;
+    const rosters: MapRoster[] = [];
     if (tail < buffer.byteLength) {
       if (version === 1) {
         const tag = view.getUint8(tail++);
@@ -97,19 +172,19 @@ const mapPreview = (function (host) {
         let cursor = tail;
         if (!Number.isSafeInteger(rosterEnd) || rosterEnd > buffer.byteLength || rosterEnd - cursor < 4)
           throw new Error("Invalid SOW map roster length.");
-        function rosterU16() {
+        function rosterU16(): number {
           if (cursor + 2 > rosterEnd) throw new Error("Truncated SOW map roster.");
           const n = view.getUint16(cursor, true);
           cursor += 2;
           return n;
         }
-        function rosterU32() {
+        function rosterU32(): number {
           if (cursor + 4 > rosterEnd) throw new Error("Truncated SOW map roster.");
           const n = view.getUint32(cursor, true);
           cursor += 4;
           return n;
         }
-        function rosterString() {
+        function rosterString(): string {
           const length = rosterU16();
           if (cursor + length > rosterEnd) throw new Error("Truncated SOW map roster string.");
           const s = new TextDecoder().decode(new Uint8Array(buffer, cursor, length));
@@ -120,7 +195,7 @@ const mapPreview = (function (host) {
         defaultRoster = rosterString();
         const presetCount = rosterU16();
         for (let p = 0; p < presetCount; p++) {
-          const preset = { id: rosterString(), name: rosterString(), entries: [] };
+          const preset: MapRoster = { id: rosterString(), name: rosterString(), entries: [] };
           const entryCount = rosterU16();
           for (let e = 0; e < entryCount; e++) {
             const entityId = rosterString();
@@ -161,7 +236,13 @@ const mapPreview = (function (host) {
     };
   }
 
-  function geoToMapPoint(lat, lon, bounds, width, height) {
+  function geoToMapPoint(
+    lat: number,
+    lon: number,
+    bounds: MapGeoBounds | null,
+    width: number,
+    height: number,
+  ): MapPoint | null {
     if (!bounds || !Number.isFinite(lat) || !Number.isFinite(lon) || !width || !height) return null;
     const normalizedLon = bounds.maxLon > 180 && lon < bounds.minLon ? lon + 360 : lon;
     const lonSpan = bounds.maxLon - bounds.minLon,
@@ -181,7 +262,13 @@ const mapPreview = (function (host) {
     };
   }
 
-  function mapPointToGeo(x, y, bounds, width, height) {
+  function mapPointToGeo(
+    x: number,
+    y: number,
+    bounds: MapGeoBounds | null,
+    width: number,
+    height: number,
+  ): MapGeoPoint | null {
     if (
       !bounds ||
       !Number.isFinite(x) ||
@@ -208,11 +295,17 @@ const mapPreview = (function (host) {
     };
   }
 
-  function geoToMapPoints(lat, lon, bounds, width, height) {
+  function geoToMapPoints(
+    lat: number,
+    lon: number,
+    bounds: MapGeoBounds | null,
+    width: number,
+    height: number,
+  ): MapPoint[] {
     if (!bounds || !Number.isFinite(lat) || !Number.isFinite(lon) || !width || !height) return [];
     const firstWrap = Math.ceil((bounds.minLon - lon) / 360);
     const lastWrap = Math.floor((bounds.maxLon - lon) / 360);
-    const points = [];
+    const points: MapPoint[] = [];
     for (let wrap = firstWrap; wrap <= lastWrap; wrap++) {
       const point = geoToMapPoint(lat, lon + wrap * 360, bounds, width, height);
       if (
@@ -227,14 +320,14 @@ const mapPreview = (function (host) {
     return points;
   }
 
-  function centerMapOffsets(point, scale, viewWidth, viewHeight) {
+  function centerMapOffsets(point: MapPoint, scale: number, viewWidth: number, viewHeight: number): MapPoint {
     return {
       x: viewWidth / 2 - point.x * scale,
       y: viewHeight / 2 - point.y * scale,
     };
   }
 
-  function resizeCanvas(canvas, dpr) {
+  function resizeCanvas(canvas: HTMLCanvasElement, dpr: number): MapCanvasSize {
     const rect = canvas.getBoundingClientRect();
     dpr = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
     canvas.width = Math.max(1, Math.round(rect.width * dpr));
@@ -242,7 +335,12 @@ const mapPreview = (function (host) {
     return { width: rect.width, height: rect.height, dpr: dpr };
   }
 
-  function fitMapView(mapWidth, mapHeight, viewWidth, viewHeight) {
+  function fitMapView(
+    mapWidth: number,
+    mapHeight: number,
+    viewWidth: number,
+    viewHeight: number,
+  ): MapView | null {
     if (
       ![mapWidth, mapHeight, viewWidth, viewHeight].every(function (value) {
         return Number.isFinite(value) && value > 0;
@@ -259,19 +357,25 @@ const mapPreview = (function (host) {
     };
   }
 
-  function mapToScreen(point, view) {
+  function mapToScreen(point: readonly number[], view: MapTransform): [number, number] {
     return [point[0] * view.scale + view.x, point[1] * view.scale + view.y];
   }
 
-  function screenToMap(point, view) {
+  function screenToMap(point: readonly number[], view: MapTransform): [number, number] {
     return [(point[0] - view.x) / view.scale, (point[1] - view.y) / view.scale];
   }
 
-  function panMapView(view, dx, dy) {
+  function panMapView(view: MapTransform, dx: number, dy: number): MapTransform {
     return { scale: view.scale, x: view.x + dx, y: view.y + dy };
   }
 
-  function zoomMapView(view, point, factor, minScale, maxScale) {
+  function zoomMapView(
+    view: MapTransform,
+    point: readonly number[],
+    factor: number,
+    minScale: number,
+    maxScale: number,
+  ): MapTransform {
     const mapPoint = screenToMap(point, view);
     const scale = Math.max(minScale, Math.min(maxScale, view.scale * factor));
     return {
@@ -281,12 +385,24 @@ const mapPreview = (function (host) {
     };
   }
 
-  function geoToTile(lat, lon, bounds, width, height) {
+  function geoToTile(
+    lat: number,
+    lon: number,
+    bounds: MapGeoBounds | null,
+    width: number,
+    height: number,
+  ): MapTile | null {
     const point = geoToMapPoint(lat, lon, bounds, width, height);
     return point && { x: Math.trunc(point.x), y: Math.trunc(point.y) };
   }
 
-  function drawMapLabel(ctx, name, x, y, bold) {
+  function drawMapLabel(
+    ctx: CanvasRenderingContext2D,
+    name: string,
+    x: number,
+    y: number,
+    bold: boolean,
+  ): void {
     ctx.font = (bold ? "bold " : "") + "11px system-ui";
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(0,0,0,.6)";
@@ -295,7 +411,13 @@ const mapPreview = (function (host) {
     ctx.fillText(name, x, y);
   }
 
-  function tileToGeo(x, y, bounds, width, height) {
+  function tileToGeo(
+    x: number,
+    y: number,
+    bounds: MapGeoBounds | null,
+    width: number,
+    height: number,
+  ): MapGeoPoint | null {
     if (
       !bounds ||
       !Number.isInteger(x) ||
@@ -308,7 +430,7 @@ const mapPreview = (function (host) {
       return null;
     let lon = bounds.minLon + ((x + 0.5) / width) * (bounds.maxLon - bounds.minLon);
     if (lon > 180) lon -= 360;
-    const geo = {
+    const geo: MapGeoPoint = {
       lat: bounds.maxLat - ((y + 0.5) / height) * (bounds.maxLat - bounds.minLat),
       lon: lon,
     };
@@ -316,19 +438,19 @@ const mapPreview = (function (host) {
     return projected && projected.x === x && projected.y === y ? geo : null;
   }
 
-  function isLand(terrain, width, height, x, y) {
+  function isLand(terrain: Uint8Array | null, width: number, height: number, x: number, y: number): boolean {
     x = Math.floor(x);
     y = Math.floor(y);
     return !!terrain && x >= 0 && y >= 0 && x < width && y < height && (terrain[y * width + x] & 0x80) !== 0;
   }
 
-  function clampTile(value, size) {
+  function clampTile(value: number | string, size: number): number {
     const coordinate = Number(value);
     if (!Number.isFinite(coordinate) || !Number.isInteger(size) || size < 1) return 0;
     return Math.max(0, Math.min(size - 1, Math.round(coordinate)));
   }
 
-  function terrainCanvas(terrain, width, height) {
+  function terrainCanvas(terrain: Uint8Array, width: number, height: number): HTMLCanvasElement {
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
@@ -351,7 +473,7 @@ const mapPreview = (function (host) {
     return canvas;
   }
 
-  function load(mapId) {
+  function load(mapId: string): Promise<MapData> {
     return fetch("/assets/maps/" + encodeURIComponent(mapId) + "/map.bin", { cache: "no-store" })
       .then(function (response) {
         if (!response.ok) throw new Error("Map unavailable: " + mapId);

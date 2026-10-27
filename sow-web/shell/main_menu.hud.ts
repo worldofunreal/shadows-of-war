@@ -568,8 +568,9 @@
         if (!notificationLayoutStarted) {
             notificationLayoutStarted = true;
             const onViewportChange = function () {
-                syncCompactHudBounds();
-                renderNotifications([], false);
+                const hudScreen = measureHudScreen();
+                syncCompactHudBounds(hudScreen);
+                renderNotifications([], false, hudScreen);
                 scheduleNotificationPlacement();
             };
             window.addEventListener("resize", onViewportChange, { passive: true });
@@ -580,7 +581,10 @@
             document.addEventListener(
                 "focusout",
                 function () {
-                    if (window.requestAnimationFrame) window.requestAnimationFrame(syncCompactHudBounds);
+                    if (window.requestAnimationFrame)
+                        window.requestAnimationFrame(function () {
+                            syncCompactHudBounds();
+                        });
                     else syncCompactHudBounds();
                 },
                 { passive: true },
@@ -1920,10 +1924,18 @@
     function renderMapMenu(mapMenu) {
         if (!hudRefs || !hudRefs.mapMenu) return false;
         const menu = hudRefs.mapMenu;
+        const wasVisible = !menu.classList.contains("hidden");
         const open = Boolean(mapMenu && mapMenu.open);
         const showRadial = Boolean(open && mapMenu.view === "radial");
         menu.classList.toggle("hidden", !showRadial);
         if (!showRadial) {
+            if (wasVisible)
+                console.info("[MAP MENU TRACE] HUD hid radial", {
+                    phase: hudState && hudState.phase,
+                    open: Boolean(mapMenu && mapMenu.open),
+                    view: mapMenu && mapMenu.view,
+                    session: mapMenu && mapMenu.session,
+                });
             if (menu.dataset.renderKey) menu.replaceChildren();
             menu.dataset.renderKey = "";
             ring.session = "";
@@ -2820,6 +2832,13 @@
         hudRefs.mapFeedback.style.top = top + "px";
     }
 
+    function measureHudScreen() {
+        return {
+            width: (hudRoot && hudRoot.clientWidth) || window.innerWidth || 0,
+            height: (hudRoot && hudRoot.clientHeight) || window.innerHeight || 0,
+        };
+    }
+
     function compactHudDensity(width, height) {
         width = Number(width);
         height = Number(height);
@@ -2871,22 +2890,20 @@
 
     let compactHudDensityValue = null;
 
-    function syncCompactHudDensity() {
+    function syncCompactHudDensity(hudScreen = measureHudScreen()) {
         if (!hudRoot) return 1;
         const active = document.activeElement;
         const isEditingHudField =
             active && hudRoot.contains(active) && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName || "");
-        const width = hudRoot.clientWidth || window.innerWidth || 0;
-        const height = hudRoot.clientHeight || window.innerHeight || 0;
         const density =
             isEditingHudField && compactHudDensityValue !== null
                 ? compactHudDensityValue
-                : compactHudDensity(width, height);
+                : compactHudDensity(hudScreen.width, hudScreen.height);
         compactHudDensityValue = density;
         writeHudDensity(hudRoot, density, false);
         writeHudDensity(document.getElementById("sow-story"), density, true);
         if (density < 1) {
-            const operationCap = Math.max(0, (height * 0.2) / density).toFixed(1) + "px";
+            const operationCap = Math.max(0, (hudScreen.height * 0.2) / density).toFixed(1) + "px";
             if (hudRoot.style.getPropertyValue("--sow-hud-layout-operations-max-height") !== operationCap) {
                 hudRoot.style.setProperty("--sow-hud-layout-operations-max-height", operationCap);
             }
@@ -2916,12 +2933,12 @@
         }
     }
 
-    function syncCompactHudBounds() {
+    function syncCompactHudBounds(hudScreen = measureHudScreen()) {
         if (!hudRoot || !hudRefs) return;
         const viewport = window.visualViewport;
-        const viewHeight = (viewport && viewport.height) || hudRoot.clientHeight || window.innerHeight;
+        const viewHeight = (viewport && viewport.height) || hudScreen.height;
         const viewTop = (viewport && viewport.offsetTop) || 0;
-        const viewBottom = Math.max(0, (hudRoot.clientHeight || window.innerHeight) - viewHeight - viewTop);
+        const viewBottom = Math.max(0, hudScreen.height - viewHeight - viewTop);
         const viewportValues = {
             "--sow-hud-dialog-view-height": viewHeight + "px",
             "--sow-hud-dialog-view-top": viewTop + "px",
@@ -2931,74 +2948,49 @@
             if (hudRoot.style.getPropertyValue(key) !== viewportValues[key])
                 hudRoot.style.setProperty(key, viewportValues[key]);
         });
-        const density = syncCompactHudDensity();
+        const density = syncCompactHudDensity(hudScreen);
         const coarsePointer =
             window.matchMedia && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
-        hudRoot.style.removeProperty("--sow-hud-layout-operations-bottom");
+        const compact = coarsePointer && density < 1;
+        // Measure before writing. The stack rects below are read after the writes they depend on.
         let operationAnchorTop = window.innerHeight;
         [hudRefs.dock].forEach(function (element) {
             if (!element || element.hidden || !element.getClientRects().length) return;
             operationAnchorTop = Math.min(operationAnchorTop, element.getBoundingClientRect().top);
         });
+        let top = 0;
+        let actionTop = 56;
+        if (compact) {
+            [
+                hudRefs.topbar,
+                hudRefs.nameplate,
+                document.querySelector("#sow-story .sow-story__objective"),
+            ].forEach(function (element) {
+                if (!element || element.hidden || !element.getClientRects().length) return;
+                top = Math.max(top, element.getBoundingClientRect().bottom);
+            });
+            if (hudRefs.topbar && hudRefs.topbar.getClientRects().length)
+                actionTop = Math.ceil(hudRefs.topbar.getBoundingClientRect().bottom + 8);
+        }
         if (operationAnchorTop < window.innerHeight) {
             hudRoot.style.setProperty(
                 "--sow-hud-layout-operations-bottom",
                 Math.ceil(window.innerHeight - operationAnchorTop + 2) + "px",
             );
+        } else {
+            hudRoot.style.removeProperty("--sow-hud-layout-operations-bottom");
         }
-        if (!coarsePointer) {
-            [
-                "--sow-hud-layout-top-reserve",
-                "--sow-hud-layout-action-top",
-                "--sow-hud-layout-dock-height",
-                "--sow-hud-layout-bottom-edge",
-            ].forEach(function (property) {
+        if (!compact) {
+            ["--sow-hud-layout-top-reserve", "--sow-hud-layout-bottom-edge"].forEach(function (property) {
                 hudRoot.style.removeProperty(property);
             });
             syncDefaultDockReserve();
             return;
         }
-        if (density >= 1) {
-            [
-                "--sow-hud-layout-top-reserve",
-                "--sow-hud-layout-action-top",
-                "--sow-hud-layout-dock-height",
-                "--sow-hud-layout-bottom-edge",
-            ].forEach(function (property) {
-                hudRoot.style.removeProperty(property);
-            });
-            syncDefaultDockReserve();
-            return;
-        }
-        let top = 0;
-        [
-            hudRefs.topbar,
-            hudRefs.nameplate,
-            document.querySelector("#sow-story .sow-story__objective"),
-        ].forEach(function (element) {
-            if (!element || element.hidden || !element.getClientRects().length) return;
-            top = Math.max(top, element.getBoundingClientRect().bottom);
-        });
         hudRoot.style.setProperty("--sow-hud-layout-top-reserve", Math.ceil(top + 8) + "px");
-        const actionTop =
-            hudRefs.topbar && hudRefs.topbar.getClientRects().length
-                ? Math.ceil(hudRefs.topbar.getBoundingClientRect().bottom + 8)
-                : 56;
-        hudRoot.style.setProperty("--sow-hud-layout-action-top", actionTop + "px");
         const dockInner = hudRefs.dock && hudRefs.dock.querySelector(".sow-hud__dock-inner");
-        const dockHeight = dockInner
-            ? Math.ceil(dockInner.getBoundingClientRect().height)
-            : hudRefs.dock
-              ? Math.ceil(hudRefs.dock.getBoundingClientRect().height)
-              : 0;
         const safeBottom =
             Number.parseFloat(window.getComputedStyle(hudRoot).getPropertyValue("--sow-sab")) || 0;
-        hudRoot.style.setProperty("--sow-hud-layout-dock-height", dockHeight + "px");
-        let dockAnchorTop = window.innerHeight;
-        [hudRefs.dock].forEach(function (element) {
-            if (!element || element.hidden || !element.getClientRects().length) return;
-            dockAnchorTop = Math.min(dockAnchorTop, element.getBoundingClientRect().top);
-        });
         let stackTop = window.innerHeight;
         let stackBottom = 0;
         [dockInner, hudRefs.operations].forEach(function (element) {
@@ -3014,7 +3006,7 @@
         hudRoot.style.setProperty("--sow-hud-layout-bottom-edge", Math.floor(stackTop - 8) + "px");
         const freeOperationsHeight = Math.max(
             0,
-            dockAnchorTop - Math.max(actionTop, top + 8) - safeBottom - 6,
+            operationAnchorTop - Math.max(actionTop, top + 8) - safeBottom - 6,
         );
         const operationCap =
             Math.max(0, Math.min(window.innerHeight * 0.2, freeOperationsHeight) / density).toFixed(1) + "px";
@@ -3240,12 +3232,11 @@
         }
     }
 
-    function renderNotifications(entries, forceRefresh) {
+    function renderNotifications(entries, forceRefresh, hudScreen = measureHudScreen()) {
         if (!hudRefs || !hudRefs.notifications || !Array.isArray(entries)) return;
         let changed = Boolean(forceRefresh);
-        const width = hudRoot.clientWidth || window.innerWidth || 0;
-        const height = hudRoot.clientHeight || window.innerHeight || 0;
-        const limit = window.SOWCampaignView.isCompactViewport(hudRoot, width, height) ? 1 : 3;
+        const limit =
+            window.SOWCampaignView.isCompactViewport(hudRoot, hudScreen.width, hudScreen.height) ? 1 : 3;
         const now = Date.now();
         const unexpired = activeNotifications.filter(function (item) {
             return item.expiresAt > now;
@@ -3587,6 +3578,41 @@
         hudRefs.operations.hidden = nextKeys.length === 0;
     }
 
+    function renderHoverCard(hov) {
+        if (!hudRefs.hoverCard) return;
+        if (hov) {
+            hudRefs.hoverCard.classList.remove("hidden");
+            if (hudRefs.hoverName) hudRefs.hoverName.textContent = hov.name || SOW_t("hud.territory");
+            if (hudRefs.hoverPct)
+                hudRefs.hoverPct.textContent = Math.round((hov.territory_pct || 0) * 100) + "%";
+            if (hudRefs.hoverTroops)
+                hudRefs.hoverTroops.textContent =
+                    hov.troops > 1000
+                        ? (hov.troops / 1000).toFixed(1) + "k"
+                        : String(Math.floor(hov.troops || 0));
+            if (hudRefs.hoverGold)
+                hudRefs.hoverGold.textContent = Math.floor(hov.gold || 0).toLocaleString();
+            if (hudRefs.hoverBlds) {
+                const bldText = [];
+                if (hov.cities > 0)
+                    bldText.push(buildingIcon("City", 1, "sow-hud__inline-icon") + " x" + hov.cities);
+                if (hov.factories > 0)
+                    bldText.push(
+                        buildingIcon("Factory", 1, "sow-hud__inline-icon") + " x" + hov.factories,
+                    );
+                if (hov.ports > 0)
+                    bldText.push(buildingIcon("Port", 1, "sow-hud__inline-icon") + " x" + hov.ports);
+                if (hov.towers > 0)
+                    bldText.push(buildingIcon("Tower", 1, "sow-hud__inline-icon") + " x" + hov.towers);
+                if (hov.farms > 0)
+                    bldText.push(buildingIcon("Farm", 1, "sow-hud__inline-icon") + " x" + hov.farms);
+                hudRefs.hoverBlds.innerHTML = bldText.join(" ");
+            }
+        } else {
+            hudRefs.hoverCard.classList.add("hidden");
+        }
+    }
+
     function renderHud(forceNotifications?) {
         if (!hudRoot) return;
         if (!hudState || hudState.phase !== "Playing" || !hudState.hud) {
@@ -3600,7 +3626,13 @@
 
             hudRoot.dataset.overlayOpen = "false";
             hudRoot.dataset.notificationsVisible = "false";
-            if (hudRefs && hudRefs.mapMenu) hudRefs.mapMenu.classList.add("hidden");
+            if (hudRefs && hudRefs.mapMenu && !hudRefs.mapMenu.classList.contains("hidden")) {
+                console.info("[MAP MENU TRACE] HUD hidden", {
+                    phase: hudState && hudState.phase,
+                    mapOpen: Boolean(hudState && hudState.hud && hudState.hud.map_menu),
+                });
+                hudRefs.mapMenu.classList.add("hidden");
+            }
             leaderboardRows = Object.create(null);
             leaderboardRenderKey = "";
             lastLeaderboardPlayers = [];
@@ -3624,7 +3656,8 @@
         }
         ensureHudDom();
         hudRoot.hidden = false;
-        syncCompactHudDensity();
+        const hudScreen = measureHudScreen();
+        syncCompactHudDensity(hudScreen);
 
         const hud = hudState.hud;
         const settings = hudState.settings || {};
@@ -3737,40 +3770,7 @@
         }
 
         // Hover Card
-        if (hudRefs.hoverCard) {
-            const hov = hud.hovered;
-            if (hov) {
-                hudRefs.hoverCard.classList.remove("hidden");
-                if (hudRefs.hoverName) hudRefs.hoverName.textContent = hov.name || SOW_t("hud.territory");
-                if (hudRefs.hoverPct)
-                    hudRefs.hoverPct.textContent = Math.round((hov.territory_pct || 0) * 100) + "%";
-                if (hudRefs.hoverTroops)
-                    hudRefs.hoverTroops.textContent =
-                        hov.troops > 1000
-                            ? (hov.troops / 1000).toFixed(1) + "k"
-                            : String(Math.floor(hov.troops || 0));
-                if (hudRefs.hoverGold)
-                    hudRefs.hoverGold.textContent = Math.floor(hov.gold || 0).toLocaleString();
-                if (hudRefs.hoverBlds) {
-                    const bldText = [];
-                    if (hov.cities > 0)
-                        bldText.push(buildingIcon("City", 1, "sow-hud__inline-icon") + " x" + hov.cities);
-                    if (hov.factories > 0)
-                        bldText.push(
-                            buildingIcon("Factory", 1, "sow-hud__inline-icon") + " x" + hov.factories,
-                        );
-                    if (hov.ports > 0)
-                        bldText.push(buildingIcon("Port", 1, "sow-hud__inline-icon") + " x" + hov.ports);
-                    if (hov.towers > 0)
-                        bldText.push(buildingIcon("Tower", 1, "sow-hud__inline-icon") + " x" + hov.towers);
-                    if (hov.farms > 0)
-                        bldText.push(buildingIcon("Farm", 1, "sow-hud__inline-icon") + " x" + hov.farms);
-                    hudRefs.hoverBlds.innerHTML = bldText.join(" ");
-                }
-            } else {
-                hudRefs.hoverCard.classList.add("hidden");
-            }
-        }
+        renderHoverCard(hud.hovered);
 
         // Left Rail Slider
         if (hudRefs.slider && document.activeElement !== hudRefs.slider) {
@@ -4048,7 +4048,7 @@
             }
         }
 
-        renderNotifications(hud.notifications, forceNotifications);
+        renderNotifications(hud.notifications, forceNotifications, hudScreen);
         renderCombatOperations(hud.operations);
         renderMapFeedback(hud.map_feedback);
 
@@ -4165,7 +4165,7 @@
         const dockHidden = !(isDeploying || hasBuildingItems || hasFleetItems);
         if (hudRefs.dock && hudRefs.dock.hidden !== dockHidden) {
             hudRefs.dock.hidden = dockHidden;
-            syncCompactHudBounds();
+            syncCompactHudBounds(hudScreen);
         }
     }
 
@@ -4434,19 +4434,16 @@
         bindRingInput();
     }
 
-    function handleHudStateUpdate(raw) {
+    function handleHudStateUpdate(raw, parsed) {
         if (typeof raw !== "string" || raw === lastHudRaw) return;
         lastHudRaw = raw;
         const previousHud = hudState && hudState.phase === "Playing" ? hudState.hud : null;
-        try {
-            hudState = JSON.parse(raw);
-        } catch (error) {
-            console.warn("[WEB HUD] invalid state:", error);
-            return;
-        }
+        hudState = parsed;
         if (hudState.phase === "Playing") {
             if (!previousHud) emoteTextKey = "";
             hudState.hud = hudState.hud || previousHud;
+            // Hover arrives on its own channel (SOW_hover_card_update), so keep the last one.
+            if (hudState.hud && previousHud) hudState.hud.hovered = previousHud.hovered;
             if (hudState.hud && hudState.hud.dev_tools && typeof hudState.hud.dev_tools.open === "boolean") {
                 devSidebarOpen = hudState.hud.dev_tools.open;
             }
@@ -4458,10 +4455,29 @@
     }
 
     window.SOW_onStateUpdate = function (raw) {
-        if (typeof window.SOW_menu_state_update === "function") {
-            window.SOW_menu_state_update(raw);
+        let parsed = null;
+        if (typeof raw === "string") {
+            try {
+                parsed = JSON.parse(raw);
+            } catch (error) {
+                console.warn("[WEB STATE] invalid state:", error);
+                return;
+            }
         }
-        handleHudStateUpdate(raw);
+        if (typeof window.SOW_menu_state_update === "function") {
+            window.SOW_menu_state_update(raw, parsed);
+        }
+        handleHudStateUpdate(raw, parsed);
+    };
+
+    window.SOW_hover_card_update = function (raw) {
+        if (!hudState || hudState.phase !== "Playing" || !hudState.hud) return;
+        const hovered = JSON.parse(raw);
+        hudState.hud.hovered = hovered;
+        renderHoverCard(hovered);
+        if (typeof window.SOW_tutorial_state_update === "function") {
+            window.SOW_tutorial_state_update(hudState);
+        }
     };
 
     if (window.SOW_I18N_READY && typeof window.SOW_I18N_READY.then === "function") {

@@ -416,7 +416,7 @@ impl MapRenderer {
 
         // 2. Update vision fade targets based on current visibility (only when visibility changes)
         let mut any_fade_changed = false;
-        if force_full_upload || !dirty_tiles.is_empty() {
+        if force_full_upload {
             for tile_idx in 0..total as u32 {
                 let is_vis = visible.contains(tile_idx);
                 let current_fade = self.vision_fade[tile_idx as usize];

@@ -2493,18 +2493,13 @@
         else maybePresentRewards();
     });
 
-    function handleMenuStateUpdate(raw) {
+    function handleMenuStateUpdate(raw, parsed) {
         if (typeof raw !== "string" || raw === lastRaw) {
             updateDynamic();
             return;
         }
         lastRaw = raw;
-        try {
-            state = JSON.parse(raw);
-        } catch (error) {
-            console.warn("[WEB MENU] invalid state:", error);
-            return;
-        }
+        state = parsed;
         if (!Number.isSafeInteger(state.loader_cycle_id) || state.loader_cycle_id < latestLoaderCycleId) return;
         latestLoaderCycleId = state.loader_cycle_id;
         state = normalizeCompletedExitState(state);

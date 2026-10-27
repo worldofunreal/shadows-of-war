@@ -1,0 +1,1213 @@
+(function () {
+  interface Faction {
+    id: string;
+    name: string;
+    x: number;
+    y: number;
+    starting_troops: number;
+    relation: string;
+    team?: string;
+    can_request_alliance?: boolean;
+    can_attack_player?: boolean;
+    assault_force?: boolean;
+    color?: string;
+    iq?: number;
+    civ: string;
+    leader: string;
+    avatar?: string;
+    support_interval_seconds?: number;
+    gold_loot_bonus?: number;
+    gold_loot_override?: number;
+    alliance_group?: string;
+  }
+
+  interface Roster {
+    _comment?: string;
+    map: string;
+    player_spawn: [number, number];
+    player_color: string;
+    factions: Faction[];
+  }
+
+  const PLAYER_COLOR = "#f0902a";
+  const ALLY_COLOR = "#4b91ff",
+    ENEMY_COLOR = "#ff5656";
+  const FACTION_COLORS = ["#4ca572", "#a88c40", "#8c59a8", "#40999e", "#b87366", "#7380b8"];
+  const RELATIONS = { neutral: "Neutral", allied: "Ally", enemy: "Enemy" };
+  function factionColor(f: Faction): string {
+    return f.relation === "allied"
+      ? ALLY_COLOR
+      : f.relation === "enemy"
+        ? ENEMY_COLOR
+        : f.color || FACTION_COLORS[0];
+  }
+  // Bot IQ tiers grounded in the engine (sow-core player/diplomacy/intent): default 100; AI smarts
+  // unlock at 100 and 130; bots roll 130–180; lower roster IQ values remain valid.
+  function iqTier(iq: number): string {
+    return iq >= 130 ? "sharp (≥130)" : iq >= 100 ? "standard" : "dull";
+  }
+  function escapeHtml(value: string): string {
+    return String(value).replace(
+      /[&<>"']/g,
+      (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character],
+    );
+  }
+
+  const query = new URLSearchParams(location.search);
+  const episodeId = /^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(query.get("episode") || "")
+    ? query.get("episode")
+    : "boudica";
+  let MAPW = 896,
+    MAPH = 504;
+  let terrain: Uint8Array | null = null; // Uint8Array length MAPW*MAPH, bit7 = land
+  // prettier-ignore
+  let roster: Roster = { map: "eastanglia", player_spawn: [696, 45], player_color: PLAYER_COLOR, factions: [] };
+  let avatarCatalog: string[] = [];
+  let entityCatalog: AtlasEntity[] | null = null;
+  let atlasEntityPicker: ReturnType<AtlasEntityPickerApi["attach"]> | null = null;
+  let rosterEtag: string | null = null;
+  let rosterDirty = false,
+    rosterExternal = false,
+    rosterSaving = false;
+  const factionRenameOrigins = new WeakMap<Faction, string>(),
+    factionRenames = new Map<string, string>();
+  let sel = -1; // index into factions, or -2 = player spawn
+  let scale = 1,
+    ox = 0,
+    oy = 0,
+    fitScale = 1,
+    minScale = 0.5,
+    maxScale = 12,
+    viewWidth = 1,
+    viewHeight = 1,
+    dpr = 1; // view: sx = mx*scale+ox
+  let hovered = -1,
+    panning = false,
+    panStart: { mx: number; my: number; ox: number; oy: number } | null = null;
+
+  const cv = document.getElementById("cv") as HTMLCanvasElement,
+    ctx = cv.getContext("2d");
+  const hud = document.getElementById("hud");
+  let mapImage: HTMLCanvasElement | null = null; // offscreen ImageData rendered once
+  document.getElementById("episodeLabel").textContent = episodeId;
+  (document.getElementById("logicLink") as HTMLAnchorElement).href =
+    `logic.html?episode=${encodeURIComponent(episodeId)}`;
+
+  function markRosterDirty() {
+    rosterDirty = true;
+    document.getElementById("rosterStatus").textContent = rosterExternal
+      ? "Changed elsewhere · draft preserved"
+      : "Unsaved changes";
+    document.getElementById("rosterStatus").className = "hint warn";
+  }
+  document.getElementById("side").addEventListener("input", (e) => {
+    if (
+      (e.target as Element).matches(
+        "#psx,#psy,#fn,#ftroops,#frelation,#fcanrequest,#fattack,#fx,#fy,#fiq,#fiqn,#fa",
+      )
+    )
+      markRosterDirty();
+  });
+  document.getElementById("side").addEventListener("change", (e) => {
+    if (
+      (e.target as Element).matches(
+        "#psx,#psy,#fn,#ftroops,#frelation,#fcanrequest,#fattack,#fx,#fy,#fiq,#fiqn,#fa",
+      )
+    )
+      markRosterDirty();
+  });
+
+  function isLand(mx: number, my: number): boolean | null {
+    if (!terrain) return null;
+    return SOWCampaignMapPreview.isLand(terrain, MAPW, MAPH, mx, my);
+  }
+
+  // ---- shared map view ----
+  function viewState() {
+    return { scale, x: ox, y: oy };
+  }
+  function applyView(view) {
+    scale = view.scale;
+    ox = view.x;
+    oy = view.y;
+  }
+  function computeFitView() {
+    return SOWCampaignMapPreview.fitMapView(MAPW, MAPH, viewWidth, viewHeight);
+  }
+  function fitView() {
+    const view = computeFitView();
+    if (!view) return;
+    fitScale = view.fitScale;
+    minScale = view.minScale;
+    maxScale = Math.max(12, fitScale * 10);
+    applyView(view);
+    clampView();
+  }
+  // Keep the map from drifting fully off-screen (centered when it fits within the view).
+  function clampView() {
+    const w = MAPW * scale,
+      h = MAPH * scale,
+      m = 60;
+    ox = w <= viewWidth ? (viewWidth - w) / 2 : Math.min(m, Math.max(viewWidth - w - m, ox));
+    oy = h <= viewHeight ? (viewHeight - h) / 2 : Math.min(m, Math.max(viewHeight - h - m, oy));
+  }
+  // Zoom toward a screen point, keeping the world point under it fixed.
+  function zoomAt(sx: number, sy: number, factor: number) {
+    applyView(SOWCampaignMapPreview.zoomMapView(viewState(), [sx, sy], factor, minScale, maxScale));
+    clampView();
+    draw();
+  }
+  const m2s = (mx: number, my: number) => SOWCampaignMapPreview.mapToScreen([mx, my], viewState());
+  const s2m = (sx: number, sy: number) => SOWCampaignMapPreview.screenToMap([sx, sy], viewState());
+  function focusFaction(index: number) {
+    const faction = roster.factions[index];
+    if (!faction || faction.x < 0 || faction.y < 0 || faction.x >= MAPW || faction.y >= MAPH) return;
+    const offset = SOWCampaignMapPreview.centerMapOffsets(
+      { x: faction.x, y: faction.y },
+      scale,
+      viewWidth,
+      viewHeight,
+    );
+    ox = offset.x;
+    oy = offset.y;
+    clampView();
+    draw();
+  }
+
+  // ---- draw ----
+  function draw() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, viewWidth, viewHeight);
+    if (mapImage) ctx.drawImage(mapImage, ox, oy, MAPW * scale, MAPH * scale);
+
+    const showLabels = (document.getElementById("labelsChk") as HTMLInputElement).checked;
+    const showRings = (document.getElementById("ringsChk") as HTMLInputElement).checked;
+    const [px, py] = roster.player_spawn;
+
+    // reach rings from player spawn (visualize contact radius)
+    if (showRings) {
+      const [psx, psy] = m2s(px, py);
+      ctx.strokeStyle = "rgba(240,144,42,.35)";
+      for (const rr of [20, 40, 60, 80, 120]) {
+        ctx.beginPath();
+        ctx.arc(psx, psy, rr * scale, 0, 7);
+        ctx.stroke();
+      }
+    }
+
+    // factions
+    roster.factions.forEach((f, i) => {
+      const [sx, sy] = m2s(f.x, f.y);
+      const water = isLand(f.x, f.y) === false;
+      const hov = i === hovered;
+      const r = hov ? 7.5 : 6;
+      if (hov && i !== sel) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, r + 5, 0, 7);
+        ctx.strokeStyle = "rgba(255,255,255,.55)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, 7);
+      ctx.fillStyle = factionColor(f);
+      ctx.fill();
+      ctx.lineWidth = i === sel ? 3 : 1.5;
+      ctx.strokeStyle = water ? "#ff4d4d" : i === sel ? "#fff" : "rgba(0,0,0,.5)";
+      ctx.stroke();
+      if (water) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, r + 4, 0, 7);
+        ctx.strokeStyle = "#ff4d4d";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+      if (showLabels || hov) {
+        SOWCampaignMapPreview.drawMapLabel(ctx, f.name, sx, sy - r - 4, hov);
+      }
+    });
+
+    // player spawn (star-ish)
+    const [sx, sy] = m2s(px, py);
+    const phov = hovered === -2;
+    if (phov && sel !== -2) {
+      ctx.beginPath();
+      ctx.arc(sx, sy, 13, 0, 7);
+      ctx.strokeStyle = "rgba(255,255,255,.55)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(sx, sy, 8, 0, 7);
+    ctx.fillStyle = roster.player_color || PLAYER_COLOR;
+    ctx.fill();
+    ctx.lineWidth = sel === -2 ? 3 : 2;
+    ctx.strokeStyle = sel === -2 ? "#fff" : "#1a1206";
+    ctx.stroke();
+    ctx.fillStyle = "#1a1206";
+    ctx.font = "bold 10px system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText("★", sx, sy + 3.5);
+  }
+
+  // ---- hit testing ----
+  function pick(sx: number, sy: number): number {
+    // player spawn first if close
+    const [psx, psy] = m2s(roster.player_spawn[0], roster.player_spawn[1]);
+    if (Math.hypot(sx - psx, sy - psy) <= 10) return -2;
+    for (let i = roster.factions.length - 1; i >= 0; i--) {
+      const [fx, fy] = m2s(roster.factions[i].x, roster.factions[i].y);
+      if (Math.hypot(sx - fx, sy - fy) <= 8) return i;
+    }
+    return -1;
+  }
+
+  // ---- interaction ----
+  let dragging = false;
+  cv.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return; // left button only; right-click adds a tribe (contextmenu)
+    const r = cv.getBoundingClientRect();
+    const sx = e.clientX - r.left,
+      sy = e.clientY - r.top;
+    const hit = pick(sx, sy);
+    if (hit === -1) {
+      panning = true;
+      panStart = { mx: e.clientX, my: e.clientY, ox, oy };
+      cv.style.cursor = "grabbing";
+      return;
+    }
+    sel = hit;
+    dragging = true;
+    renderSide();
+    draw();
+  });
+  cv.addEventListener("mousemove", (e) => {
+    const r = cv.getBoundingClientRect();
+    const sx = e.clientX - r.left,
+      sy = e.clientY - r.top;
+    if (panning) {
+      applyView(
+        SOWCampaignMapPreview.panMapView(
+          { scale, x: panStart.ox, y: panStart.oy },
+          e.clientX - panStart.mx,
+          e.clientY - panStart.my,
+        ),
+      );
+      clampView();
+      draw();
+      return;
+    }
+    const [mx, my] = s2m(sx, sy);
+    const cx = Math.round(mx),
+      cy = Math.round(my);
+    const land = isLand(cx, cy);
+    hud.textContent = `x ${cx}  y ${cy}  ·  ${land === null ? "loading map…" : land ? "land" : "WATER"}  ·  ${Math.round((scale / fitScale) * 100)}%`;
+    hud.className = land === false ? "warn" : "";
+    if (dragging && sel !== -1) {
+      const nx = Math.max(0, Math.min(MAPW - 1, cx)),
+        ny = Math.max(0, Math.min(MAPH - 1, cy));
+      if (sel === -2) roster.player_spawn = [nx, ny];
+      else {
+        roster.factions[sel].x = nx;
+        roster.factions[sel].y = ny;
+      }
+      markRosterDirty();
+      renderSide();
+      draw();
+    } else {
+      const h = pick(sx, sy);
+      cv.style.cursor = h !== -1 ? "pointer" : "grab";
+      if (h !== hovered) {
+        hovered = h;
+        draw();
+      }
+    }
+  });
+  window.addEventListener("mouseup", () => {
+    dragging = false;
+    if (panning) {
+      panning = false;
+      cv.style.cursor = "grab";
+    }
+  });
+  cv.addEventListener("mouseleave", () => {
+    if (hovered !== -1) {
+      hovered = -1;
+      draw();
+    }
+  });
+  // wheel = zoom toward the cursor (the only scroll on the page)
+  cv.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const r = cv.getBoundingClientRect();
+      zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015));
+    },
+    { passive: false },
+  );
+
+  // ---- side panel ----
+  function renderSide() {
+    const host = document.getElementById("seleditor");
+    if (sel === -2) {
+      const spawnLand = isLand(...roster.player_spawn);
+      host.innerHTML = `<label>Player spawn</label>
+      <div class="row"><input id="psx" type="number" min="0" max="${MAPW - 1}" value="${roster.player_spawn[0]}"><input id="psy" type="number" min="0" max="${MAPH - 1}" value="${roster.player_spawn[1]}"></div>
+      <label>Player color</label><input id="playerColor" type="color" value="${escapeHtml(roster.player_color || PLAYER_COLOR)}">
+      <div class="hint">${spawnLand === null ? "Checking map…" : spawnLand ? "on land ✓" : "⚠ in water"}</div>`;
+      document.getElementById("psx").oninput = (e) => {
+        if (
+          (e.target as HTMLInputElement).value === "" ||
+          !Number.isFinite(Number((e.target as HTMLInputElement).value))
+        )
+          return;
+        roster.player_spawn[0] = Math.round(Number((e.target as HTMLInputElement).value));
+        markRosterDirty();
+        draw();
+      };
+      document.getElementById("psy").oninput = (e) => {
+        if (
+          (e.target as HTMLInputElement).value === "" ||
+          !Number.isFinite(Number((e.target as HTMLInputElement).value))
+        )
+          return;
+        roster.player_spawn[1] = Math.round(Number((e.target as HTMLInputElement).value));
+        markRosterDirty();
+        draw();
+      };
+      document.getElementById("psx").onchange = (e) => {
+        roster.player_spawn[0] = SOWCampaignMapPreview.clampTile((e.target as HTMLInputElement).value, MAPW);
+        (e.target as HTMLInputElement).value = String(roster.player_spawn[0]);
+        markRosterDirty();
+        draw();
+      };
+      document.getElementById("psy").onchange = (e) => {
+        roster.player_spawn[1] = SOWCampaignMapPreview.clampTile((e.target as HTMLInputElement).value, MAPH);
+        (e.target as HTMLInputElement).value = String(roster.player_spawn[1]);
+        markRosterDirty();
+        draw();
+      };
+      document.getElementById("playerColor").oninput = (e) => {
+        roster.player_color = (e.target as HTMLInputElement).value;
+        markRosterDirty();
+        draw();
+      };
+    } else if (sel >= 0) {
+      const f = roster.factions[sel];
+      const originalName = factionRenameOrigins.get(f) || f.name;
+      factionRenameOrigins.set(f, originalName);
+      const relationOpts = Object.entries(RELATIONS)
+        .map(
+          ([value, label]) =>
+            `<option value="${value}" ${value === f.relation ? "selected" : ""}>${label}</option>`,
+        )
+        .join("");
+      const teamOpts = [["", "No team"], ...SOWCampaign.TEAMS.map((team) => [team, `${team} team`])]
+        .map(
+          ([value, label]) =>
+            `<option value="${value}" ${value === (f.team || "") ? "selected" : ""}>${label}</option>`,
+        )
+        .join("");
+      const avatarOpts = [
+        { id: "", label: "Generic portrait" },
+        ...avatarCatalog.map((id) => ({
+          id,
+          label: id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        })),
+      ];
+      if (f.avatar && !avatarCatalog.includes(f.avatar))
+        avatarOpts.push({ id: f.avatar, label: "Missing asset · " + f.avatar });
+      const avatarHtml = avatarOpts
+        .map(
+          (a) =>
+            `<option value="${escapeHtml(a.id)}" ${a.id === (f.avatar || "") ? "selected" : ""}>${escapeHtml(a.label)}</option>`,
+        )
+        .join("");
+      const iq = f.iq ?? 100;
+      const goldLootBonus = f.gold_loot_bonus ?? 0;
+      const standardGoldBounty = 500;
+      const goldLootOverride = f.gold_loot_override;
+      host.innerHTML = `<label>Stable ID</label><input value="${escapeHtml(f.id)}" readonly>
+      <label>Name</label><input id="fn" value="${escapeHtml(f.name)}">
+      <label>Starting troops</label><input id="ftroops" type="number" min="0" max="1000000" step="1" value="${f.starting_troops}">
+      <label>Initial relationship to the player</label><select id="frelation">${relationOpts}</select>
+      <label>Fixed combat team</label><select id="fteam">${teamOpts}</select>
+      <div class="hint">Factions on the same team won't attack each other. Diplomacy stays separate.</div>
+      <label><input id="fassaultforce" type="checkbox" style="width:auto" ${f.assault_force === true ? "checked" : ""}> Eligible for configured campaign assaults</label>
+      <label><input id="fcanrequest" type="checkbox" style="width:auto" ${f.can_request_alliance !== false ? "checked" : ""}> Allow AI requests and generic neutral terms</label>
+      <label>Autonomous attacks against player</label><select id="fattack"><option value="" ${f.can_attack_player == null ? "selected" : ""}>Follow relationship</option><option value="true" ${f.can_attack_player === true ? "selected" : ""}>Allowed</option><option value="false" ${f.can_attack_player === false ? "selected" : ""}>Passive</option></select>
+      <label>Neutral faction color</label><input id="fcolor" type="color" value="${escapeHtml(f.color || FACTION_COLORS[0])}">
+      <label>Nameplate and dialogue portrait</label><div class="faction-avatar-picker"><img id="fportrait" width="256" height="256" alt=""><select id="fa">${avatarHtml}</select></div>
+      <label>Ally support interval (seconds; blank disables)</label><input id="finterval" type="number" min="5" max="600" value="${f.support_interval_seconds ?? ""}" placeholder="Disabled">
+      <label>Fixed gold loot on defeat (blank uses normal scaling)</label><input id="fgoldlootoverride" type="number" min="0" max="1000000" step="1" value="${goldLootOverride ?? ""}" placeholder="Normal: ${standardGoldBounty} base">
+      <label>Bonus gold loot on defeat</label><input id="fgoldloot" type="number" min="0" max="1000000" step="1" value="${goldLootBonus}">
+      <div class="hint" id="goldLootPreview"></div>
+      <label>Alliance group</label><input id="fgroup" value="${escapeHtml(f.alliance_group || "")}" placeholder="e.g. trinovantes">
+      <label>Position (x, y)</label><div class="row"><input id="fx" type="number" min="0" max="${MAPW - 1}" value="${f.x}"><input id="fy" type="number" min="0" max="${MAPH - 1}" value="${f.y}"></div>
+      <label>Bot IQ — <span id="iqtier">${iqTier(iq)}</span></label>
+      <div class="row"><input id="fiq" type="range" min="0" max="180" step="5" value="${iq}" style="flex:3"><input id="fiqn" type="number" min="0" max="180" value="${iq}" style="flex:1;min-width:56px"></div>
+      <div class="hint" id="factionHint"></div>
+      <div class="btns" style="margin-top:10px"><button class="danger" id="del">Delete</button></div>`;
+      const updateFactionHint = () => {
+        const distance = Math.round(Math.hypot(f.x - roster.player_spawn[0], f.y - roster.player_spawn[1]));
+        const onLand = isLand(f.x, f.y),
+          hint = document.getElementById("factionHint");
+        hint.classList.toggle("warn", onLand === false);
+        hint.textContent = `${RELATIONS[f.relation] || "Neutral"} · ${distance.toLocaleString()} tiles from player · ${onLand === null ? "checking map…" : onLand ? "land ✓" : "⚠ in water"}`;
+      };
+      updateFactionHint();
+      const factionPortrait = document.getElementById("fportrait") as HTMLImageElement;
+      const updateFactionPortrait = (slug: string) => {
+        const imageSlug = slug && avatarCatalog.includes(slug) ? slug : "null";
+        factionPortrait.hidden = false;
+        factionPortrait.dataset.fallback = "";
+        factionPortrait.src = `/assets/gameplay/avatars/${encodeURIComponent(imageSlug)}.webp`;
+        factionPortrait.alt = `${f.name} portrait`;
+      };
+      factionPortrait.onerror = () => {
+        if (factionPortrait.dataset.fallback === "true") {
+          factionPortrait.hidden = true;
+          return;
+        }
+        factionPortrait.dataset.fallback = "true";
+        factionPortrait.src = "/assets/gameplay/avatars/null.webp";
+      };
+      updateFactionPortrait(f.avatar);
+      document.getElementById("fn").oninput = (e) => {
+        f.name = (e.target as HTMLInputElement).value;
+        if (f.name === originalName) factionRenames.delete(originalName);
+        else factionRenames.set(originalName, f.name);
+        factionPortrait.alt = `${f.name} portrait`;
+        markRosterDirty();
+        renderList();
+        draw();
+      };
+      document.getElementById("frelation").onchange = (e) => {
+        f.relation = (e.target as HTMLSelectElement).value;
+        markRosterDirty();
+        updateFactionHint();
+        renderList();
+        draw();
+      };
+      document.getElementById("fteam").onchange = (e) => {
+        if ((e.target as HTMLSelectElement).value) f.team = (e.target as HTMLSelectElement).value;
+        else delete f.team;
+        markRosterDirty();
+      };
+      document.getElementById("fassaultforce").onchange = (e) => {
+        if ((e.target as HTMLInputElement).checked) f.assault_force = true;
+        else delete f.assault_force;
+        markRosterDirty();
+      };
+      document.getElementById("fcanrequest").onchange = (e) => {
+        f.can_request_alliance = (e.target as HTMLInputElement).checked;
+        markRosterDirty();
+      };
+      document.getElementById("fattack").onchange = (e) => {
+        if ((e.target as HTMLSelectElement).value === "") delete f.can_attack_player;
+        else f.can_attack_player = (e.target as HTMLSelectElement).value === "true";
+        markRosterDirty();
+      };
+      document.getElementById("ftroops").oninput = (e) => {
+        f.starting_troops = Number((e.target as HTMLInputElement).value);
+        markRosterDirty();
+        renderList();
+      };
+      document.getElementById("fcolor").oninput = (e) => {
+        f.color = (e.target as HTMLInputElement).value;
+        markRosterDirty();
+        draw();
+      };
+      document.getElementById("fa").onchange = (e) => {
+        if ((e.target as HTMLSelectElement).value) f.avatar = (e.target as HTMLSelectElement).value;
+        else delete f.avatar;
+        updateFactionPortrait(f.avatar);
+        markRosterDirty();
+      };
+      document.getElementById("finterval").oninput = (e) => {
+        if ((e.target as HTMLInputElement).value === "") delete f.support_interval_seconds;
+        else f.support_interval_seconds = Number((e.target as HTMLInputElement).value);
+        markRosterDirty();
+      };
+      const updateGoldLootPreview = () => {
+        const override = f.gold_loot_override;
+        const bonus = f.gold_loot_bonus ?? 0;
+        document.getElementById("goldLootPreview").textContent =
+          override == null
+            ? `Defeat loot: ${standardGoldBounty.toLocaleString()} base + ${bonus.toLocaleString()} bonus; base grows 0.01% per game tick.`
+            : `Defeat loot: ${override.toLocaleString()} fixed; ignores the bonus and survival-time increase.`;
+      };
+      updateGoldLootPreview();
+      document.getElementById("fgoldlootoverride").oninput = (e) => {
+        if ((e.target as HTMLInputElement).value === "") delete f.gold_loot_override;
+        else f.gold_loot_override = Number((e.target as HTMLInputElement).value);
+        updateGoldLootPreview();
+        markRosterDirty();
+      };
+      document.getElementById("fgoldloot").oninput = (e) => {
+        const value =
+          (e.target as HTMLInputElement).value === "" ? 0 : Number((e.target as HTMLInputElement).value);
+        if (value > 0) f.gold_loot_bonus = value;
+        else delete f.gold_loot_bonus;
+        updateGoldLootPreview();
+        markRosterDirty();
+      };
+      document.getElementById("fgroup").oninput = (e) => {
+        if ((e.target as HTMLInputElement).value.trim())
+          f.alliance_group = (e.target as HTMLInputElement).value.trim();
+        else delete f.alliance_group;
+        markRosterDirty();
+      };
+      document.getElementById("fx").oninput = (e) => {
+        if (
+          (e.target as HTMLInputElement).value === "" ||
+          !Number.isFinite(Number((e.target as HTMLInputElement).value))
+        )
+          return;
+        f.x = Math.round(Number((e.target as HTMLInputElement).value));
+        markRosterDirty();
+        updateFactionHint();
+        renderList();
+        draw();
+      };
+      document.getElementById("fy").oninput = (e) => {
+        if (
+          (e.target as HTMLInputElement).value === "" ||
+          !Number.isFinite(Number((e.target as HTMLInputElement).value))
+        )
+          return;
+        f.y = Math.round(Number((e.target as HTMLInputElement).value));
+        markRosterDirty();
+        updateFactionHint();
+        renderList();
+        draw();
+      };
+      document.getElementById("fx").onchange = (e) => {
+        f.x = SOWCampaignMapPreview.clampTile((e.target as HTMLInputElement).value, MAPW);
+        (e.target as HTMLInputElement).value = String(f.x);
+        markRosterDirty();
+        updateFactionHint();
+        renderList();
+        draw();
+      };
+      document.getElementById("fy").onchange = (e) => {
+        f.y = SOWCampaignMapPreview.clampTile((e.target as HTMLInputElement).value, MAPH);
+        (e.target as HTMLInputElement).value = String(f.y);
+        markRosterDirty();
+        updateFactionHint();
+        renderList();
+        draw();
+      };
+      const setIq = (v: number) => {
+        v = Math.max(0, Math.min(180, v | 0));
+        f.iq = v;
+        (document.getElementById("fiq") as HTMLInputElement).value = String(v);
+        (document.getElementById("fiqn") as HTMLInputElement).value = String(v);
+        document.getElementById("iqtier").textContent = iqTier(v);
+      };
+      document.getElementById("fiq").oninput = (e) => setIq(+(e.target as HTMLInputElement).value);
+      document.getElementById("fiqn").oninput = (e) => setIq(+(e.target as HTMLInputElement).value);
+      document.getElementById("del").onclick = deleteSelected;
+    } else {
+      host.innerHTML = `<div class="hint">Click a tribe on the map or in the list.</div>`;
+    }
+  }
+
+  function renderList() {
+    let html = "";
+    for (const [i, f] of roster.factions.entries()) {
+      const water = isLand(f.x, f.y) === false;
+      html += `<div class="item ${i === sel ? "sel" : ""}" data-i="${i}">
+      <span class="dot" style="background:${factionColor(f)}"></span>
+      <span class="nm">${escapeHtml(f.name)}${water ? ' <span class="warn">⚠</span>' : ""}</span>
+      <span class="troops">${Number(f.starting_troops).toLocaleString()}</span></div>`;
+    }
+    const list = document.getElementById("list");
+    const scrollTop = list.scrollTop;
+    list.innerHTML = html;
+    list.scrollTop = scrollTop;
+    list.querySelectorAll<HTMLElement>(".item").forEach(
+      (el) =>
+        (el.onclick = () => {
+          sel = +el.dataset.i;
+          focusFaction(sel);
+          renderSide();
+          renderList();
+          draw();
+        }),
+    );
+    const waterHint = document.getElementById("waterhint");
+    if (!terrain) waterHint.textContent = "Checking map…";
+    else {
+      const inWater = roster.factions.filter((f) => isLand(f.x, f.y) === false).map((f) => f.name);
+      waterHint.innerHTML = inWater.length
+        ? `<span class="warn">⚠ ${inWater.length} in water:</span> ${inWater.map(escapeHtml).join(", ")}`
+        : "All on land ✓";
+    }
+  }
+
+  function renderAll() {
+    renderSide();
+    renderList();
+    draw();
+  }
+
+  // ---- toolbar ----
+  function newLocalFactionId() {
+    return "campaign_" + crypto.randomUUID().replace(/-/g, "");
+  }
+  function addFactionAt(mx: number, my: number) {
+    const x = Math.max(0, Math.min(MAPW - 1, Math.round(mx)));
+    const y = Math.max(0, Math.min(MAPH - 1, Math.round(my)));
+    roster.factions.push({
+      id: newLocalFactionId(),
+      name: "New faction",
+      x,
+      y,
+      starting_troops: 500,
+      relation: "neutral",
+      can_request_alliance: true,
+      civ: "Gallic Tribes",
+      leader: "Caesar",
+      color: FACTION_COLORS[roster.factions.length % FACTION_COLORS.length],
+      iq: 100,
+    });
+    markRosterDirty();
+    sel = roster.factions.length - 1;
+    renderAll();
+  }
+  function deleteSelected() {
+    if (sel >= 0) {
+      const faction = roster.factions[sel];
+      const nm = faction.name;
+      roster.factions.splice(sel, 1);
+      markRosterDirty();
+      sel = -1;
+      renderAll();
+      toast("Deleted " + nm + "; story references will be adjusted when saved");
+    } else if (sel === -2) {
+      toast("Boudica's spawn can't be deleted — she's the main character");
+    }
+  }
+  // Hotkeys: Del/Suppr removes the selected tribe (not the player spawn); Esc deselects.
+  // Ignored while typing in a field so text editing still works.
+  window.addEventListener("keydown", (e) => {
+    const t = document.activeElement;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
+    if (e.key === "Delete" || e.key === "Backspace") {
+      if (sel !== -1) {
+        e.preventDefault();
+        deleteSelected();
+      }
+    } else if (e.key === "Escape") {
+      sel = -1;
+      renderSide();
+      draw();
+    }
+  });
+  document.getElementById("addBtn").onclick = () => {
+    const [px, py] = roster.player_spawn;
+    addFactionAt(px + 30, py + 30);
+  };
+  async function ensureEntityCatalog(): Promise<AtlasEntity[]> {
+    if (entityCatalog) return entityCatalog;
+    const response = await fetch("/__entities", { cache: "no-store" });
+    if (!response.ok) throw new Error("entity catalog unavailable");
+    const value = await response.json();
+    if (!value || value.version !== 2 || !Array.isArray(value.entities))
+      throw new Error("invalid entity catalog");
+    entityCatalog = value.entities;
+    return entityCatalog;
+  }
+  atlasEntityPicker = SOWAtlasEntityPicker.attach({
+    input: document.getElementById("atlasEntityInput") as HTMLInputElement,
+    results: document.getElementById("atlasEntityResults"),
+    status: document.getElementById("atlasEntityStatus"),
+    getEntities: ensureEntityCatalog,
+    onChange: (entity) => {
+      (document.getElementById("addAtlasEntity") as HTMLButtonElement).disabled = !entity;
+    },
+  });
+  document.getElementById("addAtlasEntity").onclick = async () => {
+    try {
+      const entity = atlasEntityPicker.getSelected();
+      if (!entity) {
+        toast("Choose an Atlas search result");
+        return;
+      }
+      if (
+        roster.factions.some(
+          (f) => f.id === entity.id || f.name.toLocaleLowerCase() === entity.name.toLocaleLowerCase(),
+        )
+      ) {
+        toast("That entity is already in this episode");
+        return;
+      }
+      const [px, py] = roster.player_spawn;
+      const faction: Faction = {
+        id: entity.id,
+        name: entity.name,
+        x: Math.max(0, Math.min(MAPW - 1, Math.round(px + 30))),
+        y: Math.max(0, Math.min(MAPH - 1, Math.round(py + 30))),
+        starting_troops: 500,
+        relation: "neutral",
+        can_request_alliance: true,
+        civ: "Gallic Tribes",
+        leader: "Caesar",
+        color: FACTION_COLORS[roster.factions.length % FACTION_COLORS.length],
+        iq: 100,
+      };
+      if (entity.avatar && avatarCatalog.includes(entity.avatar)) faction.avatar = entity.avatar;
+      roster.factions.push(faction);
+      atlasEntityPicker.clear();
+      markRosterDirty();
+      sel = roster.factions.length - 1;
+      renderAll();
+      toast("Added from Entity Atlas — adjust episode position and troops");
+    } catch (error) {
+      toast("Could not load entity catalog: " + error.message);
+    }
+  };
+  // Right-click the map = drop a new tribe right there (same as + Add tribe, placed at the cursor).
+  cv.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    const r = cv.getBoundingClientRect();
+    const [mx, my] = s2m(e.clientX - r.left, e.clientY - r.top);
+    addFactionAt(mx, my);
+    toast("Faction added — edit name and troops on the right");
+  });
+  document.getElementById("spawnBtn").onclick = () => {
+    sel = -2;
+    renderSide();
+    draw();
+    toast("Drag the ★ to move player spawn");
+  };
+  document.getElementById("labelsChk").onchange = draw;
+  document.getElementById("ringsChk").onchange = draw;
+
+  function serialize(): string {
+    validateRoster(roster);
+    const out = {
+      _comment: roster._comment || `${episodeId} campaign roster — edited via tools/campaign-editor.`,
+      map: roster.map || "eastanglia",
+      player_spawn: roster.player_spawn.map((n) => Math.round(n)),
+      player_color: roster.player_color || PLAYER_COLOR,
+      factions: roster.factions.map((f) => ({
+        id: f.id,
+        name: f.name,
+        x: Math.round(f.x),
+        y: Math.round(f.y),
+        starting_troops: Number(f.starting_troops),
+        relation: f.relation,
+        ...(f.team ? { team: f.team } : {}),
+        can_request_alliance: f.can_request_alliance !== false,
+        color: f.color,
+        iq: f.iq ?? 100,
+        civ: f.civ,
+        leader: f.leader,
+        ...(f.can_attack_player != null ? { can_attack_player: f.can_attack_player } : {}),
+        ...(f.support_interval_seconds != null
+          ? { support_interval_seconds: Number(f.support_interval_seconds) }
+          : {}),
+        ...(f.gold_loot_bonus != null ? { gold_loot_bonus: Number(f.gold_loot_bonus) } : {}),
+        ...(f.gold_loot_override != null ? { gold_loot_override: Number(f.gold_loot_override) } : {}),
+        ...(f.alliance_group ? { alliance_group: f.alliance_group } : {}),
+        ...(f.assault_force ? { assault_force: true } : {}),
+        ...(f.avatar ? { avatar: f.avatar } : {}),
+      })),
+    };
+    return JSON.stringify(out, null, 2) + "\n";
+  }
+  function clampRosterPositions(): boolean {
+    let changed = false;
+    for (let axis = 0; axis < 2; axis++) {
+      const size = axis === 0 ? MAPW : MAPH;
+      const value = SOWCampaignMapPreview.clampTile(roster.player_spawn[axis], size);
+      if (value !== roster.player_spawn[axis]) {
+        roster.player_spawn[axis] = value;
+        changed = true;
+      }
+    }
+    roster.factions.forEach((faction) => {
+      const x = SOWCampaignMapPreview.clampTile(faction.x, MAPW),
+        y = SOWCampaignMapPreview.clampTile(faction.y, MAPH);
+      if (x !== faction.x || y !== faction.y) {
+        faction.x = x;
+        faction.y = y;
+        changed = true;
+      }
+    });
+    return changed;
+  }
+  async function saveRoster(): Promise<boolean> {
+    if (rosterSaving) return false;
+    rosterSaving = true;
+    try {
+      if (clampRosterPositions()) {
+        markRosterDirty();
+        renderAll();
+      }
+      const file = `${episodeId}.json`;
+      const savedDraft = serialize();
+      const renames = Array.from(factionRenames, ([from, to]) => ({ from, to }));
+      const body = renames.length
+        ? JSON.stringify({ roster: JSON.parse(savedDraft), faction_renames: renames })
+        : savedDraft;
+      const res = await fetch(`/__save?file=${encodeURIComponent(file)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "If-Match": rosterEtag || "" },
+        body,
+      });
+      if (!res.ok) {
+        if (res.status === 409) {
+          rosterExternal = true;
+          document.getElementById("rosterStatus").textContent = "Changed elsewhere · draft preserved";
+        }
+        throw new Error(await res.text());
+      }
+      const result = await res.json();
+      rosterEtag = res.headers.get("ETag");
+      rosterDirty = serialize() !== savedDraft;
+      rosterExternal = false;
+      const savedRoster = JSON.parse(savedDraft);
+      factionRenames.clear();
+      roster.factions.forEach((faction, index) => {
+        const savedName = savedRoster.factions[index].name;
+        factionRenameOrigins.set(faction, savedName);
+        if (faction.name !== savedName) factionRenames.set(savedName, faction.name);
+      });
+      document.getElementById("rosterStatus").textContent = rosterDirty ? "Newer edits not saved" : "Saved";
+      document.getElementById("rosterStatus").className = rosterDirty ? "hint warn" : "hint";
+      const adjusted = result.auto_adjusted;
+      const changedStory =
+        adjusted &&
+        (adjusted.steps_to_scenes ||
+          adjusted.reactions_removed ||
+          adjusted.speakers_unlinked ||
+          adjusted.settings_cleared);
+      toast(
+        rosterDirty
+          ? "Saved; newer map edits remain"
+          : changedStory
+            ? `Saved; story adjusted (${adjusted.steps_to_scenes} objectives became scenes, ${adjusted.reactions_removed} faction responses removed)`
+            : renames.length
+              ? "Saved name and updated campaign references"
+              : `Saved → assets/campaign/${file}`,
+      );
+      return !rosterDirty;
+    } catch (e) {
+      toast("Save failed: " + e.message);
+    } finally {
+      rosterSaving = false;
+    }
+    return false;
+  }
+  document.getElementById("exportBtn").onclick = saveRoster;
+  document.getElementById("logicLink").addEventListener("click", async (e) => {
+    if (!rosterDirty) return;
+    e.preventDefault();
+    const href = (e.currentTarget as HTMLAnchorElement).href;
+    if ((await saveRoster()) && !rosterDirty) location.href = href;
+  });
+  window.addEventListener("beforeunload", (e) => {
+    if (!rosterDirty) return;
+    e.preventDefault();
+    e.returnValue = "";
+  });
+  document.getElementById("reloadBtn").onclick = async () => {
+    if (rosterDirty && !confirm("Discard unsaved map changes and reload from disk?")) return;
+    const previousMap = roster.map;
+    await loadRoster();
+    if (previousMap !== roster.map) await loadMap();
+  };
+  document.getElementById("fileIn").onchange = (e) => {
+    const file = (e.target as HTMLInputElement).files[0];
+    if (!file) return;
+    const fr = new FileReader();
+    fr.onload = () => {
+      try {
+        roster = normalize(JSON.parse(fr.result as string));
+        rosterExternal = false;
+        markRosterDirty();
+        sel = -1;
+        renderAll();
+        toast("Loaded " + file.name);
+      } catch (err) {
+        toast("Bad JSON: " + err.message);
+      }
+    };
+    fr.readAsText(file);
+  };
+
+  function toast(msg: string) {
+    const t = document.getElementById("toast") as HTMLElement & { _t?: ReturnType<typeof setTimeout> };
+    t.textContent = msg;
+    t.style.opacity = "1";
+    clearTimeout(t._t);
+    t._t = setTimeout(() => (t.style.opacity = "0"), 2200);
+  }
+
+  function normalize(j: Partial<Roster>): Roster {
+    const factionFields = new Set(SOWCampaign.FACTION_FIELDS);
+    const factions = (j.factions || []).map((f, index) => {
+      if (!f || Object.keys(f).some((key) => !factionFields.has(key)))
+        throw new Error("unsupported faction field");
+      if (
+        typeof f.id !== "string" ||
+        typeof f.name !== "string" ||
+        !Number.isInteger(f.x) ||
+        !Number.isInteger(f.y) ||
+        !Number.isInteger(f.starting_troops) ||
+        typeof f.civ !== "string" ||
+        typeof f.leader !== "string"
+      )
+        throw new Error("faction needs stable ID, name, position, troops, civilization and leader");
+      if (f.can_request_alliance != null && typeof f.can_request_alliance !== "boolean")
+        throw new Error("alliance offer setting must be true or false");
+      if (f.can_attack_player != null && typeof f.can_attack_player !== "boolean")
+        throw new Error("attack permission must be true or false");
+      if (f.assault_force != null && typeof f.assault_force !== "boolean")
+        throw new Error("assault force setting must be true or false");
+      if (
+        String(f.civ)
+          .replace(/[^a-z0-9]/gi, "")
+          .toLowerCase() === "romanempire" &&
+        f.relation === "neutral"
+      )
+        throw new Error("Roman Empire factions cannot be neutral");
+      return {
+        id: f.id,
+        name: f.name,
+        x: f.x,
+        y: f.y,
+        starting_troops: f.starting_troops,
+        relation: f.relation,
+        ...(f.team ? { team: f.team } : {}),
+        can_request_alliance: f.can_request_alliance !== false,
+        color: f.color || FACTION_COLORS[index % FACTION_COLORS.length],
+        iq: f.iq == null ? 100 : f.iq,
+        civ: f.civ,
+        leader: f.leader,
+        ...(f.can_attack_player != null ? { can_attack_player: f.can_attack_player } : {}),
+        ...(f.support_interval_seconds != null
+          ? { support_interval_seconds: Number(f.support_interval_seconds) }
+          : {}),
+        ...(f.gold_loot_bonus != null ? { gold_loot_bonus: Number(f.gold_loot_bonus) } : {}),
+        ...(f.gold_loot_override != null ? { gold_loot_override: Number(f.gold_loot_override) } : {}),
+        ...(f.alliance_group ? { alliance_group: f.alliance_group } : {}),
+        ...(f.assault_force === true ? { assault_force: true } : {}),
+        ...(f.avatar ? { avatar: f.avatar } : {}),
+      };
+    });
+    const result: Roster = {
+      _comment: j._comment,
+      map: j.map || "eastanglia",
+      player_spawn: j.player_spawn || [696, 45],
+      player_color: j.player_color || PLAYER_COLOR,
+      factions,
+    };
+    validateRoster(result);
+    return result;
+  }
+  function validateRoster(value: Roster): void {
+    if (
+      !value ||
+      typeof value.map !== "string" ||
+      !Array.isArray(value.player_spawn) ||
+      value.player_spawn.length !== 2 ||
+      !value.player_spawn.every(Number.isFinite) ||
+      !/^#[0-9a-fA-F]{6}$/.test(value.player_color || PLAYER_COLOR)
+    )
+      throw new Error("invalid roster");
+    const names = new Set(),
+      ids = new Set();
+    if (!Array.isArray(value.factions)) throw new Error("factions must be a list");
+    for (const f of value.factions) {
+      if (
+        !/^[a-z][a-z0-9_]{0,95}$/.test(f.id) ||
+        ids.has(f.id) ||
+        !f.name.trim() ||
+        names.has(f.name) ||
+        !Number.isInteger(f.starting_troops) ||
+        f.starting_troops < 0 ||
+        f.starting_troops > 1000000 ||
+        !Object.prototype.hasOwnProperty.call(RELATIONS, f.relation) ||
+        (f.team != null && !SOWCampaign.TEAMS.includes(f.team)) ||
+        typeof f.can_request_alliance !== "boolean" ||
+        (f.can_attack_player != null && typeof f.can_attack_player !== "boolean") ||
+        (f.assault_force != null && typeof f.assault_force !== "boolean") ||
+        !/^#[0-9a-fA-F]{6}$/.test(f.color) ||
+        !Number.isInteger(f.x) ||
+        !Number.isInteger(f.y) ||
+        !f.civ ||
+        !f.leader ||
+        (f.iq != null && (!Number.isInteger(f.iq) || f.iq < 0 || f.iq > 180)) ||
+        (f.support_interval_seconds != null &&
+          (!Number.isInteger(f.support_interval_seconds) ||
+            f.support_interval_seconds < 5 ||
+            f.support_interval_seconds > 600)) ||
+        (f.gold_loot_bonus != null &&
+          (!Number.isInteger(f.gold_loot_bonus) || f.gold_loot_bonus < 0 || f.gold_loot_bonus > 1000000)) ||
+        (f.gold_loot_override != null &&
+          (!Number.isInteger(f.gold_loot_override) ||
+            f.gold_loot_override < 0 ||
+            f.gold_loot_override > 1000000)) ||
+        (f.alliance_group != null && !/^[a-z][a-z0-9_]{0,63}$/.test(f.alliance_group)) ||
+        (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))
+      )
+        throw new Error("invalid faction, duplicate identity/name, or missing portrait asset");
+      ids.add(f.id);
+      names.add(f.name);
+    }
+  }
+
+  // ---- boot ----
+  function resize() {
+    const size = SOWCampaignMapPreview.resizeCanvas(cv, Math.min(window.devicePixelRatio || 1, 2));
+    viewWidth = size.width;
+    viewHeight = size.height;
+    dpr = size.dpr;
+    const view = computeFitView();
+    if (view) {
+      fitScale = view.fitScale;
+      minScale = view.minScale;
+      maxScale = Math.max(12, fitScale * 10);
+      scale = Math.max(scale, minScale);
+    }
+    clampView();
+    draw();
+  }
+  window.addEventListener("resize", resize);
+  document.getElementById("zin").onclick = () => zoomAt(viewWidth / 2, viewHeight / 2, 1.3);
+  document.getElementById("zout").onclick = () => zoomAt(viewWidth / 2, viewHeight / 2, 1 / 1.3);
+  document.getElementById("zfit").onclick = () => {
+    fitView();
+    draw();
+  };
+
+  async function loadMap() {
+    const mapId = roster.map || "eastanglia";
+    const map = await SOWCampaignMapPreview.load(mapId);
+    MAPW = map.width;
+    MAPH = map.height;
+    terrain = map.terrain;
+    mapImage = map.image;
+    renderAll();
+  }
+  async function loadRoster() {
+    try {
+      const res = await fetch(`/assets/campaign/${encodeURIComponent(episodeId)}.json`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("campaign roster unavailable");
+      rosterEtag = res.headers.get("ETag");
+      roster = normalize(await res.json());
+      rosterDirty = false;
+      rosterExternal = false;
+      document.getElementById("rosterStatus").textContent = "Saved";
+      document.getElementById("rosterStatus").className = "hint";
+    } catch (e) {
+      const message = "Roster load failed: " + e.message;
+      const status = document.getElementById("rosterStatus");
+      status.textContent = message;
+      status.className = "hint warn";
+      toast(message);
+    }
+    sel = -1;
+    renderAll();
+  }
+
+  async function watchRosterFile() {
+    if (document.visibilityState !== "visible" || !rosterEtag) return;
+    try {
+      const res = await fetch(`/assets/campaign/${encodeURIComponent(episodeId)}.json`, {
+        method: "HEAD",
+        cache: "no-store",
+      });
+      if (!res.ok || res.headers.get("ETag") === rosterEtag) return;
+      if (rosterDirty) {
+        if (!rosterExternal) {
+          rosterExternal = true;
+          document.getElementById("rosterStatus").textContent = "Changed elsewhere · draft preserved";
+          document.getElementById("rosterStatus").className = "hint warn";
+          toast("Map file changed elsewhere. Your draft is safe; reload to see it.");
+        }
+        return;
+      }
+      const previousMap = roster.map;
+      await loadRoster();
+      if (previousMap !== roster.map) await loadMap();
+      toast("Map updated from disk");
+    } catch {
+      /* Keep the current draft if the editor server briefly restarts. */
+    }
+  }
+  document.addEventListener("visibilitychange", watchRosterFile);
+  window.setInterval(watchRosterFile, 1500);
+
+  async function fillEpisodePicker() {
+    const select = document.getElementById("episodeSelect") as HTMLSelectElement;
+    try {
+      const res = await fetch("/__episodes", { cache: "no-store" });
+      if (!res.ok) throw new Error("episode list unavailable");
+      const episodes = await res.json();
+      if (
+        !Array.isArray(episodes) ||
+        !episodes.length ||
+        episodes.some((id) => typeof id !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(id))
+      )
+        throw new Error("invalid episode list");
+      if (!episodes.includes(episodeId)) episodes.unshift(episodeId);
+      select.replaceChildren(
+        ...episodes.map((id) => {
+          const option = document.createElement("option");
+          option.value = id;
+          option.textContent = id.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+          return option;
+        }),
+      );
+      select.value = episodeId;
+    } catch (e) {
+      const option = document.createElement("option");
+      option.value = episodeId;
+      option.textContent = episodeId;
+      select.replaceChildren(option);
+      toast("Campaign list unavailable: " + e.message);
+    }
+    select.addEventListener("change", () => {
+      if (select.value === episodeId) return;
+      if (rosterDirty && !confirm("Discard unsaved map changes and switch episode?")) {
+        select.value = episodeId;
+        return;
+      }
+      location.href = "index.html?episode=" + encodeURIComponent(select.value);
+    });
+  }
+
+  (async function () {
+    resize();
+    await fillEpisodePicker();
+    try {
+      const response = await fetch("/__avatars", { cache: "no-store" });
+      if (!response.ok) throw new Error("avatar list unavailable");
+      avatarCatalog = await response.json();
+      if (
+        !Array.isArray(avatarCatalog) ||
+        avatarCatalog.some((id) => typeof id !== "string" || !/^[a-z][a-z0-9_]*$/.test(id))
+      )
+        throw new Error("invalid avatar list");
+    } catch (e) {
+      toast("Portrait list unavailable: " + e.message);
+    }
+    await loadRoster();
+    try {
+      await loadMap();
+    } catch (e) {
+      hud.textContent = "map load failed: " + e.message;
+      hud.className = "warn";
+    }
+    fitView();
+    draw();
+  })();
+})();

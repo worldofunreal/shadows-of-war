@@ -100,6 +100,8 @@ export interface CampaignApi {
     TYPES: readonly CampaignStepType[];
     TEAMS: readonly string[];
     METRICS: Record<string, string>;
+    ROUTE_FACTS: readonly string[];
+    FACTION_FIELDS: readonly string[];
     WAIT_MS: number;
     EXCHANGE_DEFAULT_REPLY_DELAY_MS: number;
     EXCHANGE_MAX_DELAY_MS: number;

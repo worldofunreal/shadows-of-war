@@ -1002,14 +1002,8 @@
     if (step.type === "guide" || step.type === "scene") {
       const routes = section("Conditional paths");
       (step.routes || []).forEach(function (route, index) {
-        const routeLabels = {
-          commerce_available: "The store is available on this platform",
-          commerce_offer_available: "An affordable gem hero is available",
-          leader_purchase_modal_open: "The gem purchase window is open",
-          leader_purchase_confirmed: "The selected gem hero purchase is confirmed",
-        };
-        const routeOptions = window.SOWCampaign.MENU_GUIDE_ROUTE_FACTS.map(function (fact) {
-          return { value: fact, label: routeLabels[fact] || fact.replace(/_/g, " ") };
+        const routeOptions = window.SOWCampaign.ROUTE_FACTS.map(function (fact) {
+          return { value: fact, label: fact.replace(/_/g, " ") };
         });
         routes.appendChild(
           selectField("When", (route.when && route.when.fact) || "", routeOptions, function (fact) {
@@ -1043,7 +1037,7 @@
         routes.appendChild(removeRoute);
       });
       const addRoute = el("button", { type: "button" }, "Add conditional path");
-      addRoute.disabled = (step.routes || []).length >= window.SOWCampaign.MENU_GUIDE_ROUTE_FACTS.length;
+      addRoute.disabled = (step.routes || []).length >= window.SOWCampaign.ROUTE_FACTS.length;
       addRoute.addEventListener("click", function () {
         step.routes = step.routes || [];
         const used = new Set(
@@ -1051,7 +1045,7 @@
             return route.when && route.when.fact;
           }),
         );
-        const fact = window.SOWCampaign.MENU_GUIDE_ROUTE_FACTS.find(function (candidate) {
+        const fact = window.SOWCampaign.ROUTE_FACTS.find(function (candidate) {
           return !used.has(candidate);
         });
         if (!fact) return;
@@ -4362,15 +4356,7 @@
       state.previewActionRatio = actionRatio;
       if (actionRatio != null) $("#sow-hud-slider").value = String(Math.round(actionRatio * 100));
     }
-    const menuControl = state.isMenuGuides
-      ? window.SOWCampaign.menuGuideControl(model.step, state.facts)
-      : null;
-    const anchorStep = menuControl
-      ? Object.assign({}, model.step, {
-          guide: Object.assign({}, model.step.guide, { target: menuControl.target }),
-        })
-      : model.step;
-    const anchor = previewAnchor(anchorStep, state.facts);
+    const anchor = previewAnchor(model.step, state.facts);
     const previewPlatform =
       (window.navigator && window.navigator.userAgentData && window.navigator.userAgentData.platform) ||
       (window.navigator && window.navigator.platform) ||
@@ -4454,7 +4440,6 @@
         }),
       };
     }
-    if (menuControl) gestureLabel = translated(menuControl.hint_key, state.previewLanguage);
     try {
       state.renderer.render(model.waiting ? null : model, {
         hideObjective: state.isMenuGuides,

@@ -289,7 +289,10 @@ impl SowApp {
             }
         }
         crate::web_menu::publish_tutorial_camera_anchor_frame(self);
-        crate::web_menu::publish_state(self);
+        if self.ui.app.phase == ClientPhase::Playing {
+            crate::web_menu::publish_state(self);
+            crate::web_menu::publish_hover_card(self);
+        }
 
         let Some(mut render_ctx) = self.gfx.render_ctx.take() else {
             return;

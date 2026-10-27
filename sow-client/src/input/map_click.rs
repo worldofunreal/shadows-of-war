@@ -462,7 +462,16 @@ impl SowApp {
         });
     }
 
+    #[track_caller]
     pub(crate) fn close_map_context_menu(&mut self) {
+        if let Some(menu) = self.input.map_context_menu {
+            log::info!(
+                "[MAP MENU TRACE] closed session={} view={:?} at {}",
+                menu.session,
+                menu.view,
+                std::panic::Location::caller()
+            );
+        }
         self.input.map_context_menu = None;
     }
 

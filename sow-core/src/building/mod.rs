@@ -304,20 +304,38 @@ mod tests {
     }
 
     #[test]
-    fn building_footprints_are_fixed_and_anchor_centered() {
-        for kind in BuildingKind::ALL {
-            assert_eq!(kind.footprint_dimensions(), (4, 4), "{kind:?}");
+    fn city_uses_four_by_four_footprint_and_other_buildings_two_by_two() {
+        assert_eq!(BuildingKind::City.footprint_dimensions(), (4, 4));
+        for kind in [
+            BuildingKind::Factory,
+            BuildingKind::Farm,
+            BuildingKind::Port,
+            BuildingKind::Tower,
+        ] {
+            assert_eq!(kind.footprint_dimensions(), (2, 2), "{kind:?}");
         }
 
         let city = BuildingFootprint::at(BuildingKind::City, 10, 10);
         assert_eq!((city.left, city.top, city.width, city.height), (8, 8, 4, 4));
         assert!(city.contains(10, 10));
         assert!(!city.contains(12, 10));
-        for kind in BuildingKind::ALL {
-            assert!(
-                city.intersects(BuildingFootprint::at(kind, 8, 8)),
-                "{kind:?}"
+        for kind in [
+            BuildingKind::Factory,
+            BuildingKind::Farm,
+            BuildingKind::Port,
+            BuildingKind::Tower,
+        ] {
+            let footprint = BuildingFootprint::at(kind, 8, 8);
+            assert_eq!(
+                (
+                    footprint.left,
+                    footprint.top,
+                    footprint.width,
+                    footprint.height
+                ),
+                (7, 7, 2, 2)
             );
+            assert!(city.intersects(footprint), "{kind:?}");
         }
     }
 

@@ -7,7 +7,8 @@ use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const CELL_PX: u32 = 64;
+const BUILDING_CELL_PX: u32 = 128;
+const UNIT_CELL_PX: u32 = 64;
 const BADGE_CELL_PX: u32 = 128;
 const GUTTER_PX: u32 = 2;
 const ART_MARGIN_PX: u32 = 2;
@@ -86,7 +87,10 @@ pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sy
             )?;
             let bytes = fs::read(&source)?;
             let image = image::load_from_memory(&bytes)?.to_rgba8();
-            entries.push((format!("{kind}:{level}"), pixel_cell(&image, CELL_PX)?));
+            entries.push((
+                format!("{kind}:{level}"),
+                pixel_cell(&image, BUILDING_CELL_PX)?,
+            ));
             let filename = source
                 .file_name()
                 .unwrap_or_default()
@@ -96,15 +100,15 @@ pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sy
         }
     }
 
-    let packed = pack_grid(&entries, CELL_PX, GUTTER_PX)?;
+    let packed = pack_grid(&entries, BUILDING_CELL_PX, GUTTER_PX)?;
     let atlas_path = args.generated_root.join("buildings-atlas.webp");
     write_webp_if_changed(&packed.atlas, &atlas_path)?;
 
     let mut sprites = serde_json::Map::new();
     for ((kind, level, filename, digest), rect) in metadata.iter().zip(&packed.rects) {
         if rect.name != format!("{kind}:{level}")
-            || rect.w != CELL_PX
-            || rect.h != CELL_PX
+            || rect.w != BUILDING_CELL_PX
+            || rect.h != BUILDING_CELL_PX
             || rect.x + rect.w > packed.atlas.width()
             || rect.y + rect.h > packed.atlas.height()
         {
@@ -134,7 +138,7 @@ pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sy
         "atlas": BUILDING_ATLAS_URL,
         "atlas_width": packed.atlas.width(),
         "atlas_height": packed.atlas.height(),
-        "cell_size": CELL_PX,
+        "cell_size": BUILDING_CELL_PX,
         "sprites": sprites,
     });
     write_if_changed(
@@ -162,17 +166,20 @@ pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sy
 
 fn pack_units(args: &PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sync>> {
     let rows = (UNITS.len() as u32).div_ceil(UNIT_COLUMNS);
-    let mut grid =
-        ImageBuffer::from_pixel(CELL_PX * UNIT_COLUMNS, CELL_PX * rows, Rgba([0, 0, 0, 0]));
+    let mut grid = ImageBuffer::from_pixel(
+        UNIT_CELL_PX * UNIT_COLUMNS,
+        UNIT_CELL_PX * rows,
+        Rgba([0, 0, 0, 0]),
+    );
     for (index, name) in UNITS.iter().enumerate() {
         let source = art_source(&args.art_root.join("units"), name)?;
         let image = image::load_from_memory(&fs::read(&source)?)?.to_rgba8();
         let index = index as u32;
         image::imageops::overlay(
             &mut grid,
-            &pixel_cell(&image, CELL_PX)?,
-            i64::from(index % UNIT_COLUMNS * CELL_PX),
-            i64::from(index / UNIT_COLUMNS * CELL_PX),
+            &pixel_cell(&image, UNIT_CELL_PX)?,
+            i64::from(index % UNIT_COLUMNS * UNIT_CELL_PX),
+            i64::from(index / UNIT_COLUMNS * UNIT_CELL_PX),
         );
     }
     write_webp_if_changed(&grid, &args.generated_root.join("units-atlas.webp"))

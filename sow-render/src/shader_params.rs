@@ -2731,7 +2731,7 @@ pub static PARAMS: &[ParamDef] = &[
         "mover.trade_ship.minimum_px",
         "Minimum trade ship size",
         "Movers",
-        0.0,
+        16.0,
         0.0,
         64.0,
         0.5,
@@ -2742,7 +2742,7 @@ pub static PARAMS: &[ParamDef] = &[
         "mover.warship.minimum_px",
         "Minimum warship size",
         "Movers",
-        0.0,
+        16.0,
         0.0,
         64.0,
         0.5,
@@ -2753,7 +2753,7 @@ pub static PARAMS: &[ParamDef] = &[
         "mover.nuke.minimum_px",
         "Minimum nuclear projectile size",
         "Movers",
-        11.0,
+        16.0,
         0.0,
         64.0,
         0.5,
@@ -3198,6 +3198,19 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join(" ");
             assert!(!prepare_shader(prefix, &source).contains("__"));
+        }
+    }
+
+    #[test]
+    fn ships_and_nuclear_projectiles_have_visible_default_minimum_sizes() {
+        let defaults = shader_defaults();
+        for (id, expected) in [
+            ("mover.trade_ship.minimum_px", 16.0),
+            ("mover.warship.minimum_px", 16.0),
+            ("mover.nuke.minimum_px", 16.0),
+        ] {
+            let slot = shader_slot(id).expect("mover size setting exists");
+            assert_eq!(defaults[slot][0], expected, "{id}");
         }
     }
 

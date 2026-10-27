@@ -262,11 +262,7 @@ impl DefenseGrid {
                 let cx = bx / cell_size;
                 let cy = by / cell_size;
                 let active_level = b.active_level();
-                let range = tower_range_for_level(
-                    active_level,
-                    cfg,
-                    range_multiplier(b.owner_id),
-                );
+                let range = tower_range_for_level(active_level, cfg, range_multiplier(b.owner_id));
                 if range > 0 && cx < grid_w && cy < grid_h {
                     self.cells[(cy * grid_w + cx) as usize].push(DefenseTower {
                         owner_id: b.owner_id,
@@ -715,10 +711,7 @@ mod defense_influence_tests {
         let fading = grid.influence(39, 32, width, 2, 1, seed, &cfg);
         let sample = defense_sample(seed, 1, 2, 32 * width as u64 + 39);
         assert_eq!(fading.capture_multiplier, 1.0 + 3.0 * 0.5 * sample);
-        assert_eq!(
-            fading.priority_bonus,
-            cfg.tower_priority * (0.5 + sample)
-        );
+        assert_eq!(fading.priority_bonus, cfg.tower_priority * (0.5 + sample));
         assert_eq!(
             fading.attacker_loss_multiplier,
             1.0 + (cfg.tower_strength * (0.5 + sample)).clamp(0.0, 0.50)

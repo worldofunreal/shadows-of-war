@@ -1,3 +1,7 @@
+fn already_fully_visible(visible: &sow_core::bitset::DenseBitSet, total_blocks: usize) -> bool {
+    visible.blocks.len() == total_blocks && visible.blocks.iter().all(|&block| block == !0u64)
+}
+
 pub(crate) fn compute_visibility(
     map_size: (u32, u32),
     my_id: u16,
@@ -6,10 +10,10 @@ pub(crate) fn compute_visibility(
     fog_explored: &mut sow_core::bitset::DenseBitSet,
     fog_visible: &mut sow_core::bitset::DenseBitSet,
     fog_of_war_enabled: bool,
-) {
+) -> bool {
     let (map_w, map_h) = map_size;
     if map_w == 0 || map_h == 0 {
-        return;
+        return true;
     }
 
     let my_player = snap.players.iter().find(|p| p.id == my_id);
@@ -20,6 +24,7 @@ pub(crate) fn compute_visibility(
         // SPECTATOR, GAME OVER, DEAD PLAYER or FOG DISABLED: Make everything fully visible and explored
         let total_tiles = map_w * map_h;
         let total_blocks = (total_tiles + 63) as usize / 64;
+        let visibility_changed = !already_fully_visible(fog_visible, total_blocks);
         fog_visible.blocks.resize(total_blocks, 0);
         fog_explored.blocks.resize(total_blocks, 0);
         for i in 0..total_blocks {
@@ -28,13 +33,14 @@ pub(crate) fn compute_visibility(
         }
         fog_visible.rebuild_index();
         fog_explored.rebuild_index();
-        return;
+        return visibility_changed;
     }
 
     if matches!(snap.phase, sow_core::game::GamePhase::Spawning { .. }) {
         // SPAWNING/DEPLOYMENT PHASE: Make everything fully visible, but unexplored
         let total_tiles = map_w * map_h;
         let total_blocks = (total_tiles + 63) as usize / 64;
+        let visibility_changed = !already_fully_visible(fog_visible, total_blocks);
         fog_visible.blocks.resize(total_blocks, 0);
         fog_explored.blocks.resize(total_blocks, 0);
         for i in 0..total_blocks {
@@ -43,7 +49,7 @@ pub(crate) fn compute_visibility(
         }
         fog_visible.rebuild_index();
         fog_explored.rebuild_index();
-        return;
+        return visibility_changed;
     }
 
     // Reset current visibility
@@ -215,4 +221,5 @@ pub(crate) fn compute_visibility(
     PLAYER_TILE_COUNTS_CACHE.with(|cache| {
         *cache.borrow_mut() = player_tile_counts;
     });
+    true
 }

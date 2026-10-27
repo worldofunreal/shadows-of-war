@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "globals.d.ts",
+    "index.ts",
+    "atlas.ts",
+    "map-rosters.ts",
+    "atlas-entity-picker.ts",
+    "map-preview.ts"
+  ]
+}

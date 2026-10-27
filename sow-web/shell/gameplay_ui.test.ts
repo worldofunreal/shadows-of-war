@@ -414,10 +414,10 @@ function makePlayerDialogsHarness() {
         calls,
         listeners,
         canvas,
-        update: (hudValue, extra = {}) =>
-            context.handleHudStateUpdate(
-                JSON.stringify({ phase: "Playing", hud: { attack_ratio: 0.25, ...hudValue }, ...extra }),
-            ),
+        update: (hudValue, extra = {}) => {
+            const raw = JSON.stringify({ phase: "Playing", hud: { attack_ratio: 0.25, ...hudValue }, ...extra });
+            return context.handleHudStateUpdate(raw, JSON.parse(raw));
+        },
         click: (command) =>
             context.handleHudClick({
                 target: {
@@ -1281,8 +1281,8 @@ test("player dialogs share identities, preserve drafts and focus, and prioritize
 });
 
 test("shared dialog viewport tracks the available keyboard area without scaling or per-dialog listeners", () => {
-    const start = hud.indexOf("    function syncCompactHudBounds() {");
-    const end = hud.search(/ {8}(?:const|let|var) density = syncCompactHudDensity\(\);/);
+    const start = hud.indexOf("    function syncCompactHudBounds(");
+    const end = hud.search(/ {8}(?:const|let|var) density = syncCompactHudDensity\(/);
     assert.ok(start >= 0 && end > start);
     const { Element } = makeHudDocument();
     const root = new Element("root");
@@ -1299,18 +1299,18 @@ test("shared dialog viewport tracks the available keyboard area without scaling 
         context.window.innerWidth = width;
         context.window.innerHeight = root.clientHeight = height;
         context.window.visualViewport = { height, offsetTop: 0 };
-        context.syncCompactHudBounds();
+        context.syncCompactHudBounds({ width, height });
         assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-height"), height + "px");
         assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-bottom"), "0px");
     }
     root.clientHeight = context.window.innerHeight = 844;
     context.window.visualViewport = { height: 360, offsetTop: 80 };
-    context.syncCompactHudBounds();
+    context.syncCompactHudBounds({ width: 844, height: 844 });
     assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-height"), "360px");
     assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-top"), "80px");
     assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-bottom"), "404px");
     context.window.visualViewport = null;
-    context.syncCompactHudBounds();
+    context.syncCompactHudBounds({ width: 844, height: 844 });
     assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-height"), "844px");
     assert.equal(root.style.getPropertyValue("--sow-hud-dialog-view-bottom"), "0px");
 });
