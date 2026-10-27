@@ -122,7 +122,7 @@ mod tests {
         )
         .unwrap();
 
-        let request = br#"{"default_roster":"historical","rosters":[{"id":"historical","name":"Historical","entries":[{"entity_id":"iceland","role":"nation","x":2,"y":1,"legacy_anchor":0}]}]}"#;
+        let request = br#"{"default_roster":"historical","rosters":[{"id":"historical","name":"Historical","entries":[{"entity_id":"nation_hatshepsut","role":"nation","x":2,"y":1,"legacy_anchor":0}]}]}"#;
         save_payload("testmap", &maps_root, request).unwrap();
 
         let raw = fs::read(map_dir.join("map.bin")).unwrap();

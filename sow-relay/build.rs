@@ -10,6 +10,37 @@
 // exactly like the validated live relay build.
 use std::process::Command;
 
+fn bundled_dpdk_pkg_config_path() -> Option<std::path::PathBuf> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent()?;
+    let cache = root.join("dist/.sow-state/dpdk");
+    let mut paths: Vec<_> = std::fs::read_dir(cache)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path().join("installed/lib/pkgconfig"))
+        .collect();
+    paths.sort();
+    paths.into_iter().find(|path| {
+        std::fs::read_to_string(path.join("libdpdk.pc"))
+            .map(|metadata| {
+                metadata
+                    .lines()
+                    .any(|line| line == "Version: 24.11.8")
+            })
+            .unwrap_or(false)
+    })
+}
+
+fn pkg_config(args: &[&str]) -> std::io::Result<std::process::Output> {
+    let mut command = Command::new("pkg-config");
+    if std::env::var_os("PKG_CONFIG_PATH").is_none() {
+        if let Some(path) = bundled_dpdk_pkg_config_path() {
+            println!("cargo:rerun-if-changed={}", path.join("libdpdk.pc").display());
+            command.env("PKG_CONFIG_PATH", path);
+        }
+    }
+    command.args(args).output()
+}
+
 fn main() {
     let fstack_lib_dir = std::env::var("FSTACK_LIB_DIR").unwrap_or_else(|_| {
         if std::path::Path::new("/usr/local/lib/libfstack.a").exists() {
@@ -36,8 +67,8 @@ fn main() {
         assert!(foundation.len() == 64 && foundation.bytes().all(|byte| byte.is_ascii_hexdigit()),
             "invalid relay foundation identity");
         let obj = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("reload.o");
-        let flags = Command::new("pkg-config").args(["--cflags", "libdpdk"])
-            .output().expect("cannot read native DPDK include flags");
+        let flags = pkg_config(&["--cflags", "libdpdk"])
+            .expect("cannot read native DPDK include flags");
         assert!(flags.status.success(), "native DPDK headers unavailable");
         let result = Command::new("cc").args(["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "-I"])
             .arg(&fstack_lib_dir).args(String::from_utf8_lossy(&flags.stdout).split_whitespace())
@@ -46,7 +77,7 @@ fn main() {
         assert!(result.success(), "F-Stack reload adapter compile failed");
         println!("cargo:rustc-link-arg={}", obj.display());
     }
-    match Command::new("pkg-config").args(["--modversion", "libdpdk"]).output() {
+    match pkg_config(&["--modversion", "libdpdk"]) {
         Ok(version) if version.status.success() => {
             let version = String::from_utf8_lossy(&version.stdout);
             assert_eq!(version.trim(), "24.11.8", "relay requires bundled DPDK 24.11.8");
@@ -62,9 +93,7 @@ fn main() {
     // changes (e.g. the callout_when fix) get compiled into the lib but never
     // relinked into the deployed binary.
     println!("cargo:rerun-if-changed={fstack_lib_dir}/libfstack.a");
-    let out = Command::new("pkg-config")
-        .args(["--static", "--libs", "libdpdk"])
-        .output();
+    let out = pkg_config(&["--static", "--libs", "libdpdk"]);
     match out {
         Ok(out) if out.status.success() => {
             for tok in String::from_utf8_lossy(&out.stdout).split_whitespace() {

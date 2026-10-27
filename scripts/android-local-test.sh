@@ -117,20 +117,20 @@ rg -q 'playgames_silent_auth|"restore"' \
     "$PROJECT/app/src/main/kotlin/com/shadowsofwar/TwaLauncherActivity.kt" ||
     die "native bridge is missing silent auth or restore"
 rg -q 'if \(isAndroidTwa\(\)\).*SOW_requestAndroidPurchase|SOW_requestAndroidPurchase' \
-    "$ROOT/sow-web/shell/main_menu.screens.js" ||
+    "$ROOT/sow-web/shell/main_menu.store.ts" ||
     die "Android purchase path is not native"
 rg -q 'SOW_requestAndroidRestore|restore_purchases' \
-    "$ROOT/sow-web/shell/main_menu.screens.js" ||
+    "$ROOT/sow-web/shell/main_menu.store.ts" ||
     die "Android restore caller is missing"
 rg -q 'data-command=.sign_in.|SOW_signInAndroidPlayGames' \
-    "$ROOT/sow-web/shell/main_menu.screens.js" "$ROOT/sow-web/shell/sdk/store_portals.js" ||
+    "$ROOT/sow-web/shell/main_menu.store.ts" "$ROOT/sow-web/shell/sdk/store_portals.ts" ||
     die "explicit Play Games sign-in button path is missing"
 LOADER_HOOK_LINE="$(rg -n "sow:loader-ready" "$ROOT/sow-web/shell/index.html.template" | head -1 | cut -d: -f1 || true)"
 AUTO_AUTH_LINE="$(rg -n "SOW_startAndroidPlayGamesAutoAuth" "$ROOT/sow-web/shell/index.html.template" | head -1 | cut -d: -f1 || true)"
 [[ -n "$LOADER_HOOK_LINE" && -n "$AUTO_AUTH_LINE" && $AUTO_AUTH_LINE -gt $LOADER_HOOK_LINE ]] ||
     die "native silent auth is not gated by loader-ready"
 PREP_SOURCE="$(sed -n '/window\.SOW_prepareAndroidAuthState/,/^  };$/p' \
-    "$ROOT/sow-web/shell/sdk/store_portals.js")"
+    "$ROOT/sow-web/shell/sdk/store_portals.ts")"
 ! rg -q 'fetch|playgames/consume|playgames_silent_auth|\.signIn\(|PlayGamesSdk' <<<"$PREP_SOURCE" ||
     die "pre-WASM Android preparation still starts authentication"
 PURCHASE_ANDROID_BLOCK="$(awk '
@@ -142,7 +142,7 @@ PURCHASE_ANDROID_BLOCK="$(awk '
         depth += opens - closes
         if (depth == 0) exit
     }
-' "$ROOT/sow-web/shell/main_menu.screens.js")"
+' "$ROOT/sow-web/shell/main_menu.store.ts")"
 rg -q 'SOW_requestAndroidPurchase\(' <<<"$PURCHASE_ANDROID_BLOCK" ||
     die "Android purchase branch does not call the native bridge"
 ! rg -q 'loadStripeJs|/store/checkout|REVENUECAT|Stripe|stripe' <<<"$PURCHASE_ANDROID_BLOCK" ||

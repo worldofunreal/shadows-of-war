@@ -676,11 +676,11 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
             settled_first["profile"]["crowns"]
         );
     }
-    let status = Command::new("node")
+    let status = Command::new("bun")
         .args([
-            "--test",
+            "test",
             "--test-name-pattern=live multiplayer return uses the confirmed client state",
-            "sow-web/shell/menu_flow.test.js",
+            "sow-web/shell/menu_flow.test.ts",
         ])
         .env("SOW_LIVE_RETURN_STATE_FILE", &state_path)
         .env("SOW_LIVE_MATCH_EXIT_FILE", &fixture_path)

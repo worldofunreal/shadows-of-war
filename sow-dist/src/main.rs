@@ -40,7 +40,7 @@ const POKI_FORBIDDEN_MARKERS: &[&str] = &[
     "class='sow-menu__signin'",
     "SIGN IN",
     "/store/",
-    "main_menu.store.js",
+    "main_menu.store.ts",
     "allowfullscreen",
     "web-share",
     "focus-without-user-activation",
@@ -1296,27 +1296,199 @@ fn minify_js(path: &Path) -> Result<()> {
     Ok(())
 }
 
+fn compile_shell_ts(shell: &Path, part: &str) -> Result<String> {
+    compile_browser_ts(&shell.join(part), "iife", &format!("shell part {part}"))
+}
+
+fn compile_browser_ts(path: &Path, format: &str, context: &str) -> Result<String> {
+    let output = Command::new("bun")
+        .args(["build", "--target=browser", &format!("--format={format}")])
+        .arg(path)
+        .output()
+        .with_context(|| format!("compile TypeScript {context} (Bun required)"))?;
+    if !output.status.success() {
+        bail!(
+            "compile TypeScript {context}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    String::from_utf8(output.stdout).with_context(|| format!("TypeScript {context} is not UTF-8"))
+}
+
+fn shell_part_is_module(source: &str) -> bool {
+    source.lines().any(|line| {
+        let line = line.trim_start();
+        line.starts_with("import ") || line.starts_with("export ")
+    })
+}
+
+/// Compiles one composed shell entry. Menu parts share a single closure that
+/// spans several files, so the bundle has to be compiled as one unit instead
+/// of file by file; module parts are pre-compiled and inlined first.
+fn compile_shell_entry(shell: &Path, name: &str, source: &str) -> Result<String> {
+    // Bun classifies an entry that mentions CommonJS (main_menu.flow.ts keeps a
+    // `module.exports` line for the Node tests) as a CommonJS module and then
+    // emits a lazy `__commonJS` wrapper whose factory is never called. The whole
+    // shell bundle would load without executing a single statement. Marking the
+    // entry as an ES module keeps the composed parts at the top level.
+    let mut source = String::from(source);
+    source.push_str("\nexport {};\n");
+    let source = source.as_str();
+    let mut file = tempfile::Builder::new()
+        .prefix(".sow-shell-")
+        .suffix(".ts")
+        .tempfile_in(shell)
+        .with_context(|| format!("create temporary TypeScript entry for {name}"))?;
+    file.write_all(source.as_bytes())
+        .with_context(|| format!("write temporary TypeScript entry for {name}"))?;
+    file.flush()
+        .with_context(|| format!("flush temporary TypeScript entry for {name}"))?;
+    let output = Command::new("bun")
+        .args(["build", "--target=browser", "--format=iife"])
+        .arg(file.path())
+        .output()
+        .with_context(|| format!("compile {name} shell bundle (Bun required)"))?;
+    if !output.status.success() {
+        bail!(
+            "compile {name} shell bundle: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    String::from_utf8(output.stdout).with_context(|| format!("{name} shell bundle is not UTF-8"))
+}
+
 fn read_shell_bundle(shell: &Path, manifest: &str, parts: &[&str]) -> Result<String> {
+    read_shell_bundle_variant(shell, manifest, parts, false)
+}
+
+fn read_shell_bundle_variant(
+    shell: &Path,
+    manifest: &str,
+    parts: &[&str],
+    portal: bool,
+) -> Result<String> {
     let manifest_source = fs::read_to_string(shell.join(manifest))?;
-    let mut bundle = String::new();
+    let mut entry = String::new();
+    let mut has_typescript = false;
     for part in parts {
         if !manifest_source.contains(part) {
             bail!("{manifest}: missing bundle part {part}");
         }
-        let source = fs::read_to_string(shell.join(part))
-            .with_context(|| format!("read shell bundle part {part}"))?;
-        bundle.push_str("\n/* --- ");
-        bundle.push_str(part);
-        bundle.push_str(" --- */\n");
-        bundle.push_str(&source);
-        if !source.ends_with('\n') {
-            bundle.push('\n');
+        let path = shell.join(part);
+        if path.extension().and_then(|value| value.to_str()) == Some("ts") {
+            has_typescript = true;
+            let source = fs::read_to_string(&path)
+                .with_context(|| format!("read shell bundle part {part}"))?;
+            if shell_part_is_module(&source) {
+                entry.push_str(&compile_shell_ts(shell, part)?);
+            } else {
+                entry.push_str(&source);
+            }
+        } else {
+            entry.push_str(
+                &fs::read_to_string(&path)
+                    .with_context(|| format!("read shell bundle part {part}"))?,
+            );
         }
+        entry.push('\n');
     }
-    if manifest == "main_menu.js" {
+    let entry = if portal {
+        strip_portal_menu_sections(&entry)?
+    } else {
+        entry
+    };
+    let code = if has_typescript {
+        compile_shell_entry(shell, manifest, &entry)?
+    } else {
+        entry
+    };
+    ensure_shell_entry_runs(manifest, &code)?;
+    // Bun strips comments while bundling, so the part banner is attached after.
+    let mut bundle = format!("/* shell bundle parts: {} */\n", parts.join(" "));
+    bundle.push_str(&code);
+    if !bundle.ends_with('\n') {
+        bundle.push('\n');
+    }
+    if manifest == "main_menu.ts" {
         validate_web_bundle(&bundle)?;
     }
     Ok(bundle)
+}
+
+fn ensure_shell_entry_runs(manifest: &str, code: &str) -> Result<()> {
+    // A bundled entry has to execute at load time. Bun wraps CommonJS entries in
+    // a `var require_x = __commonJS(function (...) { ... })` factory and, when
+    // the entry is not an ES module, never invokes it: the bundle parses, puts
+    // nothing on `window`, and the loader stays on "Loading..." forever.
+    let Some(pos) = code.find("= __commonJS(") else {
+        return Ok(());
+    };
+    let Some(decl) = code[..pos].rfind("var ") else {
+        return Ok(());
+    };
+    let ident = code[decl + 4..pos].trim();
+    if ident.is_empty()
+        || !ident
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
+    {
+        return Ok(());
+    }
+    if !code.contains(&format!("{ident}()")) {
+        bail!("{manifest}: shell bundle entry {ident} is never invoked (CommonJS entry wrapper)");
+    }
+    Ok(())
+}
+
+fn strip_portal_menu_sections(source: &str) -> Result<String> {
+    let mut source = strip_marked_section(
+        source,
+        "/* POKI_RENDER_REPLACEMENT_BEGIN */",
+        "/* POKI_RENDER_REPLACEMENT_END */",
+    )?;
+    for (begin, end) in [
+        (
+            "/* POKI_SHARED_STORE_ACTIONS_BEGIN */",
+            "/* POKI_SHARED_STORE_ACTIONS_END */",
+        ),
+        (
+            "/* POKI_SHARED_STORE_UNLOCK_BEGIN */",
+            "/* POKI_SHARED_STORE_UNLOCK_END */",
+        ),
+        (
+            "/* POKI_SHARED_AUTH_ACTIONS_BEGIN */",
+            "/* POKI_SHARED_AUTH_ACTIONS_END */",
+        ),
+        (
+            "/* POKI_SHARED_AUTH_EVENTS_BEGIN */",
+            "/* POKI_SHARED_AUTH_EVENTS_END */",
+        ),
+        (
+            "/* POKI_SHARED_STORE_EVENTS_BEGIN */",
+            "/* POKI_SHARED_STORE_EVENTS_END */",
+        ),
+        (
+            "/* POKI_SHARED_AUTH_SUBMIT_BEGIN */",
+            "/* POKI_SHARED_AUTH_SUBMIT_END */",
+        ),
+    ] {
+        source = strip_marked_section(&source, begin, end)?;
+    }
+    for (begin, end) in [
+        (
+            "/* POKI_SHARED_AUTH_LOOKUP_BEGIN */",
+            "/* POKI_SHARED_AUTH_LOOKUP_END */",
+        ),
+        (
+            "/* POKI_SHARED_SIGNIN_MARKUP_BEGIN */",
+            "/* POKI_SHARED_SIGNIN_MARKUP_END */",
+        ),
+    ] {
+        while source.contains(begin) {
+            source = strip_marked_section(&source, begin, end)?;
+        }
+    }
+    Ok(source)
 }
 
 fn web_catalog_value<'a>(
@@ -1540,7 +1712,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     let jest = target == WebTarget::Jest;
     let portal = cg || poki || jest;
     let tpl = fs::read_to_string(paths.shell.join("index.html.template"))?;
-    let experience_events = fs::read_to_string(paths.shell.join("experience_events.js"))?
+    let experience_events = compile_shell_ts(&paths.shell, "experience_events.ts")?
         .replace("</script>", "<\\/script>");
     let experience_events_slot = "/* __INLINE_EXPERIENCE_EVENTS_JS__ */";
     if tpl.matches(experience_events_slot).count() != 1 {
@@ -1736,7 +1908,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     };
     fs::create_dir_all(index.parent().unwrap())?;
     fs::write(&index, &html)?;
-    let mut loader = fs::read_to_string(paths.shell.join("loader.js"))?;
+    let mut loader = compile_shell_ts(&paths.shell, "loader.ts")?;
     if poki || jest {
         loader = strip_optional_marked_section(
             &loader,
@@ -1765,54 +1937,54 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     )?;
     let menu_parts: Vec<&str> = if poki {
         vec![
-            "sow-i18n.js",
-            "sow-dropdown.js",
-            "sow-campaign.js",
-            "sow-campaign-view.js",
-            "main_menu.flow.js",
-            "main_menu.core.js",
-            "main_menu.motion.js",
-            "main_menu.lobbies.js",
-            "main_menu.heroes.js",
-            "main_menu.profile.js",
-            "main_menu.poki.js",
-            "main_menu.tutorial.js",
-            "main_menu.shell.js",
-            "main_menu.hud.js",
+            "sow-i18n.ts",
+            "sow-dropdown.ts",
+            "sow-campaign.ts",
+            "sow-campaign-view.ts",
+            "main_menu.flow.ts",
+            "main_menu.core.ts",
+            "main_menu.motion.ts",
+            "main_menu.lobbies.ts",
+            "main_menu.heroes.ts",
+            "main_menu.profile.ts",
+            "main_menu.poki.ts",
+            "main_menu.tutorial.ts",
+            "main_menu.shell.ts",
+            "main_menu.hud.ts",
         ]
     } else if jest {
         vec![
-            "sow-i18n.js",
-            "sow-dropdown.js",
-            "sow-campaign.js",
-            "sow-campaign-view.js",
-            "main_menu.flow.js",
-            "main_menu.core.js",
-            "main_menu.motion.js",
-            "main_menu.lobbies.js",
-            "main_menu.heroes.js",
-            "main_menu.profile.js",
-            "main_menu.jest.js",
-            "main_menu.tutorial.js",
-            "main_menu.shell.js",
-            "main_menu.hud.js",
+            "sow-i18n.ts",
+            "sow-dropdown.ts",
+            "sow-campaign.ts",
+            "sow-campaign-view.ts",
+            "main_menu.flow.ts",
+            "main_menu.core.ts",
+            "main_menu.motion.ts",
+            "main_menu.lobbies.ts",
+            "main_menu.heroes.ts",
+            "main_menu.profile.ts",
+            "main_menu.jest.ts",
+            "main_menu.tutorial.ts",
+            "main_menu.shell.ts",
+            "main_menu.hud.ts",
         ]
     } else {
         vec![
-            "sow-i18n.js",
-            "sow-dropdown.js",
-            "sow-campaign.js",
-            "sow-campaign-view.js",
-            "main_menu.flow.js",
-            "main_menu.core.js",
-            "main_menu.motion.js",
-            "main_menu.lobbies.js",
-            "main_menu.store.js",
-            "main_menu.heroes.js",
-            "main_menu.profile.js",
-            "main_menu.tutorial.js",
-            "main_menu.shell.js",
-            "main_menu.hud.js",
+            "sow-i18n.ts",
+            "sow-dropdown.ts",
+            "sow-campaign.ts",
+            "sow-campaign-view.ts",
+            "main_menu.flow.ts",
+            "main_menu.core.ts",
+            "main_menu.motion.ts",
+            "main_menu.lobbies.ts",
+            "main_menu.store.ts",
+            "main_menu.heroes.ts",
+            "main_menu.profile.ts",
+            "main_menu.tutorial.ts",
+            "main_menu.shell.ts",
+            "main_menu.hud.ts",
         ]
     };
     let building_manifest: serde_json::Value = serde_json::from_slice(
@@ -1826,57 +1998,10 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     );
     let mut menu_js = format!(
         "{building_manifest_js}{}",
-        read_shell_bundle(&paths.shell, "main_menu.js", &menu_parts)?
+        read_shell_bundle_variant(&paths.shell, "main_menu.ts", &menu_parts, poki || jest)?
     )
     .replace("</script>", "<\\/script>");
     if poki || jest {
-        menu_js = strip_marked_section(
-            &menu_js,
-            "/* POKI_RENDER_REPLACEMENT_BEGIN */",
-            "/* POKI_RENDER_REPLACEMENT_END */",
-        )?;
-        for (begin, end) in [
-            (
-                "/* POKI_SHARED_STORE_ACTIONS_BEGIN */",
-                "/* POKI_SHARED_STORE_ACTIONS_END */",
-            ),
-            (
-                "/* POKI_SHARED_STORE_UNLOCK_BEGIN */",
-                "/* POKI_SHARED_STORE_UNLOCK_END */",
-            ),
-            (
-                "/* POKI_SHARED_AUTH_ACTIONS_BEGIN */",
-                "/* POKI_SHARED_AUTH_ACTIONS_END */",
-            ),
-            (
-                "/* POKI_SHARED_AUTH_EVENTS_BEGIN */",
-                "/* POKI_SHARED_AUTH_EVENTS_END */",
-            ),
-            (
-                "/* POKI_SHARED_STORE_EVENTS_BEGIN */",
-                "/* POKI_SHARED_STORE_EVENTS_END */",
-            ),
-            (
-                "/* POKI_SHARED_AUTH_SUBMIT_BEGIN */",
-                "/* POKI_SHARED_AUTH_SUBMIT_END */",
-            ),
-        ] {
-            menu_js = strip_marked_section(&menu_js, begin, end)?;
-        }
-        while menu_js.contains("/* POKI_SHARED_AUTH_LOOKUP_BEGIN */") {
-            menu_js = strip_marked_section(
-                &menu_js,
-                "/* POKI_SHARED_AUTH_LOOKUP_BEGIN */",
-                "/* POKI_SHARED_AUTH_LOOKUP_END */",
-            )?;
-        }
-        while menu_js.contains("/* POKI_SHARED_SIGNIN_MARKUP_BEGIN */") {
-            menu_js = strip_marked_section(
-                &menu_js,
-                "/* POKI_SHARED_SIGNIN_MARKUP_BEGIN */",
-                "/* POKI_SHARED_SIGNIN_MARKUP_END */",
-            )?;
-        }
         for forbidden in [
             "https://id.worldofunreal.com",
             "https://discord.gg/d6ZDeChSE",
@@ -2025,23 +2150,39 @@ fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
             out.join("tower.svg"),
         )?;
     }
-    fs::copy(paths.shell.join("loader.js"), out.join("loader.js"))?;
+    fs::write(
+        out.join("loader.js"),
+        compile_shell_ts(&paths.shell, "loader.ts")?,
+    )?;
     if matches!(target, WebTarget::Local) {
-        fs::copy(
-            paths.root.join("sow-web/site/analytics.js"),
+        fs::write(
             out.join("analytics.js"),
+            compile_browser_ts(
+                &paths.root.join("sow-web/site/analytics.ts"),
+                "iife",
+                "site analytics",
+            )?,
         )?;
     }
-    fs::copy(paths.shell.join("sow-i18n.js"), out.join("sow-i18n.js"))?;
-    fs::copy(
-        paths.shell.join("sow-dropdown.js"),
+    fs::write(
+        out.join("sow-i18n.js"),
+        compile_shell_ts(&paths.shell, "sow-i18n.ts")?,
+    )?;
+    fs::write(
         out.join("sow-dropdown.js"),
+        compile_shell_ts(&paths.shell, "sow-dropdown.ts")?,
     )?;
     fs::copy(
         paths.shell.join("sow-controls.css"),
         out.join("sow-controls.css"),
     )?;
-    copy_dir(&paths.shell.join("sdk"), &out.join("sdk"))?;
+    fs::create_dir_all(out.join("sdk"))?;
+    for bridge in ["store_portals", "poki_portals", "jest_portals"] {
+        fs::write(
+            out.join("sdk").join(format!("{bridge}.js")),
+            compile_shell_ts(&paths.shell, &format!("sdk/{bridge}.ts"))?,
+        )?;
+    }
     for (source, destination) in [
         ("LICENSE", "LICENSE"),
         ("docs/legal/NOTICE", "NOTICE"),
@@ -2827,7 +2968,7 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
         if !entry.file_type().is_file()
             || !matches!(
                 path.extension().and_then(|extension| extension.to_str()),
-                Some("html") | Some("js")
+                Some("html") | Some("ts")
             )
         {
             continue;
@@ -2835,7 +2976,7 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
         if path
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with(".test.js"))
+            .is_some_and(|name| name.ends_with(".test.ts"))
         {
             continue;
         }
@@ -2853,14 +2994,14 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
         let entry = entry?;
         let path = entry.path();
         if !entry.file_type().is_file()
-            || path.extension().and_then(|ext| ext.to_str()) != Some("js")
+            || path.extension().and_then(|ext| ext.to_str()) != Some("ts")
         {
             continue;
         }
         if path
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with(".test.js"))
+            .is_some_and(|name| name.ends_with(".test.ts"))
         {
             continue;
         }
@@ -3102,7 +3243,7 @@ fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Resul
             "-e",
             r#"
 const fs = require("node:fs");
-const campaign = require(process.argv[1]);
+const campaign = require(process.argv[1]).default;
 const { catalog, episodes, menuGuides } = JSON.parse(fs.readFileSync(0, "utf8"));
 const catalogText = key => {
     const value = key.split(".").reduce((node, part) =>
@@ -3133,7 +3274,7 @@ for (const issue of menuReport.errors) {
 if (menuReport.errors.length) process.exitCode = 1;
 "#,
         ])
-        .arg(paths.shell.join("sow-campaign.js"))
+        .arg(paths.shell.join("sow-campaign.ts"))
         .stdin(Stdio::piped())
         .spawn()
         .context("start shared campaign validator (Node.js required)")?;
@@ -3812,11 +3953,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     let site = paths.root.join("sow-web/site");
     for name in [
         "index.html",
-        "analytics.js",
-        "app.js",
-        "site-chrome.js",
         "styles.css",
-        "wou-auth.js",
         "8d227b8f9e6140d39e3381a1829e1db3.txt",
         "manifest.webmanifest",
     ] {
@@ -3825,6 +3962,21 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
             bail!("website source missing: {}", src.display());
         }
         fs::copy(&src, out.join(name))?;
+    }
+    for (source, destination, format) in [
+        ("analytics.ts", "analytics.js", "iife"),
+        ("app.ts", "app.js", "iife"),
+        ("site-chrome.ts", "site-chrome.js", "iife"),
+        ("wou-auth.ts", "wou-auth.js", "esm"),
+    ] {
+        let src = site.join(source);
+        if !src.is_file() {
+            bail!("website source missing: {}", src.display());
+        }
+        fs::write(
+            out.join(destination),
+            compile_browser_ts(&src, format, &format!("website {source}"))?,
+        )?;
     }
     for name in ["icon-192.png", "icon-512.png", "icon-512-maskable.png"] {
         fs::copy(paths.assets_site.join("icons").join(name), out.join(name))?;
@@ -4270,7 +4422,7 @@ fn package_poki(
 "##,
     )?;
     let loader_path = out.join("loader.js");
-    let loader = fs::read_to_string(paths.shell.join("loader.js"))?;
+    let loader = compile_shell_ts(&paths.shell, "loader.ts")?;
     fs::write(
         &loader_path,
         strip_optional_marked_section(
@@ -4279,9 +4431,9 @@ fn package_poki(
             "/* SOW_FIRST_PARTY_ANALYTICS_END */",
         )?,
     )?;
-    fs::copy(
-        paths.shell.join("sdk/poki_portals.js"),
+    fs::write(
         out.join("sdk/store_portals.js"),
+        compile_shell_ts(&paths.shell, "sdk/poki_portals.ts")?,
     )?;
     let poki_source = out.join("sdk/poki_portals.js");
     if poki_source.is_file() {
@@ -4417,7 +4569,7 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         "window.SOW_BUILDING_ART =",
         "gameplay/buildings/atlas.webp",
         "window.SOW_DISABLE_CHAT = true",
-        "main_menu.jest.js",
+        "main_menu.jest.ts",
         "window.JestSDK",
         "markGameLoaded",
         "getPlayer",
@@ -4438,8 +4590,8 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         "rewardedBreak",
         "PokiSDK",
         "openExternalLink",
-        "main_menu.poki.js",
-        "main_menu.store.js",
+        "main_menu.poki.ts",
+        "main_menu.store.ts",
     ] {
         if html.contains(forbidden) || loader.contains(forbidden) || sdk.contains(forbidden) {
             bail!("jest bundle contains forbidden content {forbidden}");
@@ -4558,7 +4710,7 @@ fn package_jest(
 "##,
     )?;
     let loader_path = out.join("loader.js");
-    let loader = fs::read_to_string(paths.shell.join("loader.js"))?;
+    let loader = compile_shell_ts(&paths.shell, "loader.ts")?;
     fs::write(
         &loader_path,
         strip_optional_marked_section(
@@ -4567,9 +4719,9 @@ fn package_jest(
             "/* SOW_FIRST_PARTY_ANALYTICS_END */",
         )?,
     )?;
-    fs::copy(
-        paths.shell.join("sdk/jest_portals.js"),
+    fs::write(
         out.join("sdk/store_portals.js"),
+        compile_shell_ts(&paths.shell, "sdk/jest_portals.ts")?,
     )?;
     for stale in ["sdk/jest_portals.js", "sdk/poki_portals.js"] {
         let stale = out.join(stale);
@@ -5659,9 +5811,9 @@ mod tests {
         let site = root.join("sow-web/site");
         for required in [
             "index.html",
-            "analytics.js",
-            "app.js",
-            "site-chrome.js",
+            "analytics.ts",
+            "app.ts",
+            "site-chrome.ts",
             "site-header.html",
             "styles.css",
             "fonts/fonts.css",
@@ -5669,7 +5821,7 @@ mod tests {
             "fonts/work-sans-latin-ext.woff2",
             "fonts/work-sans-italic-latin.woff2",
             "fonts/work-sans-italic-latin-ext.woff2",
-            "wou-auth.js",
+            "wou-auth.ts",
             "auth/callback/index.html",
             "8d227b8f9e6140d39e3381a1829e1db3.txt",
             "privacy/index.html",
@@ -5686,9 +5838,11 @@ mod tests {
         for required in [
             "index.html.template",
             "main_menu.css",
-            "main_menu.js",
-            "sow-i18n.js",
-            "sow-dropdown.js",
+            "main_menu.ts",
+            "sow-i18n.ts",
+            "sow-dropdown.ts",
+            "experience_events.ts",
+            "loader.ts",
             "sow-controls.css",
             "main_menu.base.css",
             "main_menu.layout.css",
@@ -5701,20 +5855,27 @@ mod tests {
             "main_menu.hud.css",
             "main_menu.tutorial.css",
             "main_menu.profile.css",
-            "sow-campaign.js",
-            "sow-campaign-view.js",
-            "main_menu.core.js",
-            "main_menu.motion.js",
-            "main_menu.lobbies.js",
-            "main_menu.store.js",
-            "main_menu.poki.js",
-            "main_menu.jest.js",
-            "main_menu.heroes.js",
-            "main_menu.profile.js",
-            "main_menu.tutorial.js",
-            "main_menu.shell.js",
-            "main_menu.hud.js",
-            "main_menu.flow.js",
+            "sow-campaign.ts",
+            "sow-campaign-view.ts",
+            "campaign/types.ts",
+            "campaign/rules.ts",
+            "campaign/view.ts",
+            "campaign/validation.ts",
+            "campaign/menu-guide-validation.ts",
+            "campaign/runtime.ts",
+            "main_menu.menu-guide.ts",
+            "main_menu.core.ts",
+            "main_menu.motion.ts",
+            "main_menu.lobbies.ts",
+            "main_menu.store.ts",
+            "main_menu.poki.ts",
+            "main_menu.jest.ts",
+            "main_menu.heroes.ts",
+            "main_menu.profile.ts",
+            "main_menu.tutorial.ts",
+            "main_menu.shell.ts",
+            "main_menu.hud.ts",
+            "main_menu.flow.ts",
         ] {
             assert!(
                 root.join("sow-web/shell").join(required).is_file(),
@@ -5722,16 +5883,24 @@ mod tests {
             );
         }
         for required in [
-            "sdk/store_portals.js",
-            "LICENSE",
-            "NOTICE",
-            "LICENSE-ASSETS",
-            "sdk/poki_portals.js",
-            "sdk/jest_portals.js",
+            "sdk/store_portals.ts",
+            "sdk/poki_portals.ts",
+            "sdk/jest_portals.ts",
         ] {
             assert!(
                 root.join("sow-web/shell").join(required).is_file(),
                 "Required game shell source file missing: {required}"
+            );
+        }
+        for required in [
+            "LICENSE",
+            "docs/legal/NOTICE",
+            "docs/legal/LICENSE-ASSETS",
+            "docs/legal/WASM-THIRD-PARTY-NOTICES.zip",
+        ] {
+            assert!(
+                root.join(required).is_file(),
+                "Required package source file missing: {required}"
             );
         }
         Ok(())
@@ -5848,7 +6017,7 @@ mod tests {
         );
         let bundle = fs::read_to_string(out.path().join("play").join(&menu_name))?;
         assert!(
-            bundle.contains("sow-campaign-view.js"),
+            bundle.contains("sow-campaign-view.ts"),
             "external bundle keeps the shell part banners"
         );
         assert!(
@@ -5882,8 +6051,8 @@ mod tests {
         assert!(html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\""));
         assert!(html.contains("href=\"fonts/fonts.css?v=test\""));
         assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
-        assert!(html.contains("main_menu.poki.js"));
-        assert!(!html.contains("main_menu.store.js"));
+        assert!(html.contains("main_menu.poki.ts"));
+        assert!(!html.contains("main_menu.store.ts"));
         assert_eq!(html.matches("function selfCreds()").count(), 1);
         assert!(!html.contains("<iframe"));
         assert!(!html.contains("href=\"https://"));
@@ -5920,10 +6089,10 @@ mod tests {
         assert!(html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\""));
         assert!(html.contains("href=\"fonts/fonts.css?v=test\""));
         assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
-        assert!(html.contains("main_menu.jest.js"));
+        assert!(html.contains("main_menu.jest.ts"));
         assert!(html.contains("jestLocaleOptions"));
-        assert!(!html.contains("main_menu.store.js"));
-        assert!(!html.contains("main_menu.poki.js"));
+        assert!(!html.contains("main_menu.store.ts"));
+        assert!(!html.contains("main_menu.poki.ts"));
         assert!(!html.contains("SOW_startWouOAuth"));
         assert_eq!(html.matches("function selfCreds()").count(), 1);
         assert!(!html.contains("<iframe"));
@@ -5948,7 +6117,7 @@ mod tests {
         let world_map_path = paths.root.join("assets/maps/world/map.bin.br");
         let map_shader_path = paths.root.join("sow-render/src/shaders/map.wgsl");
         let css_path = paths.root.join("sow-web/shell/main_menu.base.css");
-        let tutorial_js_path = paths.root.join("sow-web/shell/main_menu.tutorial.js");
+        let tutorial_js_path = paths.root.join("sow-web/shell/main_menu.tutorial.ts");
         let html_path = paths.root.join("sow-web/site/index.html");
         let other_map_path = paths.root.join("assets/maps/europe/map.bin.br");
         let roster_path = paths.root.join("assets/campaign/boudica.json");
@@ -6158,8 +6327,7 @@ mod tests {
                 "analytics_body": "Usamos la actividad del sitio y del juego para mejorar Shadows of War. Solo se activa si la permites.",
             }
         });
-        let missing =
-            serde_json::json!({ "site": { "analytics_body": "La analítica queda apagada." } });
+        let missing = serde_json::json!({ "site": {} });
 
         assert!(validate_web_node("es", &expected, &localized).is_ok());
         assert!(validate_web_node("fr", &expected, &missing).is_err());
@@ -6275,6 +6443,40 @@ mod tests {
         assert!(
             security.contains("map $is_cloudflare_or_local $is_origin_bypass"),
             "Nginx security config missing origin cloaking map"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn web_menu_bundle_executes_on_load() -> Result<()> {
+        // The shell bundle is one shared closure. If Bun wraps it as a CommonJS
+        // entry the factory is never invoked and the menu/campaign runtime never
+        // reaches `window`, which leaves the loader stuck on "Loading...".
+        let paths = Paths::discover()?;
+        let parts = [
+            "sow-i18n.ts",
+            "sow-dropdown.ts",
+            "sow-campaign.ts",
+            "sow-campaign-view.ts",
+            "main_menu.flow.ts",
+            "main_menu.core.ts",
+            "main_menu.motion.ts",
+            "main_menu.lobbies.ts",
+            "main_menu.store.ts",
+            "main_menu.heroes.ts",
+            "main_menu.profile.ts",
+            "main_menu.tutorial.ts",
+            "main_menu.shell.ts",
+            "main_menu.hud.ts",
+        ];
+        let bundle = read_shell_bundle(&paths.shell, "main_menu.ts", &parts)?;
+        assert!(
+            bundle.contains("window.SOWCampaign ="),
+            "shell bundle lost the campaign runtime"
+        );
+        assert!(
+            !bundle.contains("= __commonJS("),
+            "shell bundle entry became a lazy CommonJS wrapper that never runs"
         );
         Ok(())
     }
