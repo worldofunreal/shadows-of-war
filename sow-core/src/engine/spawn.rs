@@ -174,12 +174,17 @@ impl SowEngine {
             return false;
         };
         let config = self.state.config.clone();
-        let color = character.territory_color_rgb();
+        let color = match character.role {
+            Role::Nation => character
+                .territory_color_rgb()
+                .unwrap_or_else(|| crate::player::human_shader_territory_rgb(bot_id)),
+            Role::Tribe => [0.5; 3],
+        };
         let mut player = if character.role == Role::Nation {
             let mut player = Player::new_nation(
                 bot_id,
                 character.name.clone(),
-                color.unwrap_or_else(|| crate::player::human_shader_territory_rgb(bot_id)),
+                color,
                 &config,
             );
             // Nations form the opposing team in Humans vs Nations.
@@ -191,8 +196,7 @@ impl SowEngine {
             Player::new_bot(
                 bot_id,
                 character.name.clone(),
-                color
-                    .unwrap_or_else(|| crate::player::bot_territory_color(self.state.seed, bot_id)),
+                color,
                 &config,
             )
         };

@@ -258,7 +258,7 @@ mod tests {
         for (kind, x, y) in [
             (BuildingKind::City, 12, 16),
             (BuildingKind::City, 28, 16),
-            (BuildingKind::Port, 16, 16),
+            (BuildingKind::Port, 15, 16),
             (BuildingKind::Farm, 0, 0),
         ] {
             let site = nearest_structure_site(&map, owner, kind, x, y, 12, &grid)
@@ -418,7 +418,7 @@ mod tests {
             .contains(&click)
         );
 
-        let water = map.ref_id(7, 9);
+        let water = map.ref_id(8, 9);
         map.terrain[water] = MapTile::from_byte(0);
         let choices = valid_land_structure_indices(
             &map,
@@ -472,15 +472,15 @@ mod tests {
                 (2, 2),
                 (8, 8),
                 (20, 10),
-                (23, 20),
+                (13, 8),
                 (30, 30),
                 (39, 39),
                 (42, 10),
             ] {
                 let click = xy_idx(x, y, w);
-                let expected = if matches!((x, y), (2, 2) | (20, 10) | (30, 30))
-                    && kind != BuildingKind::Port
-                {
+                let known_open = matches!((x, y), (2, 2) | (20, 10) | (30, 30))
+                    || ((x, y) == (39, 39) && kind != BuildingKind::City);
+                let expected = if known_open && kind != BuildingKind::Port {
                     Some(click)
                 } else {
                     None
@@ -518,9 +518,30 @@ mod tests {
             };
             let mut grid = BuildingGrid::default();
             grid.rebuild([&building].into_iter(), 40, 40);
+            let existing = BuildingFootprint::at(existing_kind, 16, 16);
             for kind in BuildingKind::ALL {
-                for (x, y) in [(12, 16), (20, 16), (16, 12), (16, 20), (12, 12), (20, 20)] {
-                    let result = validate_structure_site(&map, 1, kind, xy_idx(x, y, 40), &grid);
+                let (width, height) = kind.footprint_dimensions();
+                let half_width = (width / 2) as i32;
+                let half_height = (height / 2) as i32;
+                let west = existing.left - half_width;
+                let east = existing.left + existing.width as i32 + half_width;
+                let north = existing.top - half_height;
+                let south = existing.top + existing.height as i32 + half_height;
+                for (x, y) in [
+                    (west, 16),
+                    (east, 16),
+                    (16, north),
+                    (16, south),
+                    (west, north),
+                    (east, south),
+                ] {
+                    let result = validate_structure_site(
+                        &map,
+                        1,
+                        kind,
+                        xy_idx(x as u32, y as u32, 40),
+                        &grid,
+                    );
                     assert_eq!(
                         result,
                         if kind == BuildingKind::Port {
@@ -528,13 +549,20 @@ mod tests {
                         } else {
                             Ok(())
                         },
-                        "{existing_kind:?} / {kind:?} at {x},{y}"
+                        "{existing_kind:?} / {kind:?} touching at {x},{y}"
                     );
                 }
-                for (x, y) in [(13, 16), (19, 16), (16, 13), (16, 19), (19, 19)] {
+                for (x, y) in [(east - 1, 16), (16, south - 1), (east - 1, south - 1)] {
                     assert_eq!(
-                        validate_structure_site(&map, 1, kind, xy_idx(x, y, 40), &grid),
-                        Err(PlacementError::Occupied)
+                        validate_structure_site(
+                            &map,
+                            1,
+                            kind,
+                            xy_idx(x as u32, y as u32, 40),
+                            &grid,
+                        ),
+                        Err(PlacementError::Occupied),
+                        "{existing_kind:?} / {kind:?} overlaps at {x},{y}"
                     );
                 }
             }
@@ -557,7 +585,7 @@ mod tests {
                 Err(PlacementError::OutsideMap)
             );
         }
-        let water = map.ref_id(12, 10);
+        let water = map.ref_id(11, 10);
         map.terrain[water] = MapTile::from_byte(0);
         assert_eq!(
             validate_structure_site(&map, 1, BuildingKind::Port, tile, &grid),
@@ -569,7 +597,7 @@ mod tests {
             Err(PlacementError::OwnLand)
         );
         map.set_owner_id(8, 8, 1);
-        let high = map.ref_id(8, 8);
+        let high = map.ref_id(9, 9);
         map.terrain[high] = MapTile::from_byte(0x80 | 10);
         assert_eq!(
             validate_structure_site(&map, 1, BuildingKind::Farm, tile, &grid),

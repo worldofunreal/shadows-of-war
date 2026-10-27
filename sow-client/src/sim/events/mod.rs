@@ -68,9 +68,11 @@ impl SowApp {
                         .iter()
                         .find(|player| player.id == owner_id)
                         .map(|player| {
-                            player
-                                .team
-                                .map_or(player.color, sow_core::player::team_territory_rgb)
+                            sow_core::player::player_territory_rgb(
+                                player.player_type,
+                                player.team,
+                                player.color,
+                            )
                         })
                         .unwrap_or([0.13, 0.83, 0.94]);
                     if self.ui.transport_impacts.len() == crate::app::MAX_TRANSPORT_IMPACTS {
@@ -92,9 +94,11 @@ impl SowApp {
                         continue;
                     };
                     if let Some((x, y)) = tile {
-                        let color = owner
-                            .team
-                            .map_or(owner.color, sow_core::player::team_territory_rgb);
+                        let color = sow_core::player::player_territory_rgb(
+                            owner.player_type,
+                            owner.team,
+                            owner.color,
+                        );
                         if self.ui.transport_impacts.len() == crate::app::MAX_TRANSPORT_IMPACTS {
                             self.ui.transport_impacts.pop_front();
                         }

@@ -267,10 +267,11 @@ impl SowApp {
                     if let Some(snap) = &self.sim.current_snapshot {
                         for p in &snap.players {
                             if (p.id as usize) < 256 {
-                                // Team players render with the planar team color;
-                                // everyone else keeps their personal color.
-                                let rgb =
-                                    p.team.map_or(p.color, sow_core::player::team_territory_rgb);
+                                let rgb = sow_core::player::player_territory_rgb(
+                                    p.player_type,
+                                    p.team,
+                                    p.color,
+                                );
                                 player_colors[p.id as usize] = [rgb[0], rgb[1], rgb[2], 1.0];
                                 player_skin_styles[p.id as usize] = tile_effect_styles(
                                     p.skin_style,

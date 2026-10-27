@@ -250,9 +250,11 @@ fn render_transport_targets(
         .iter()
         .find(|player| player.id == my_id)
         .map(|player| {
-            player
-                .team
-                .map_or(player.color, sow_core::player::team_territory_rgb)
+            sow_core::player::player_territory_rgb(
+                player.player_type,
+                player.team,
+                player.color,
+            )
         })
         .unwrap_or([0.5, 0.5, 0.5]);
 

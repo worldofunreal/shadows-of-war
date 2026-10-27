@@ -338,9 +338,11 @@ impl MoverScene {
         self.player_colors.clear();
         self.player_colors.reserve(snap.players.len());
         for player in &snap.players {
-            let rgb = player
-                .team
-                .map_or(player.color, sow_core::player::team_territory_rgb);
+            let rgb = sow_core::player::player_territory_rgb(
+                player.player_type,
+                player.team,
+                player.color,
+            );
             self.player_colors.insert(player.id, rgb);
         }
 

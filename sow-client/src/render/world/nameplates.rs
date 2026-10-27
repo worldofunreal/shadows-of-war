@@ -3131,9 +3131,11 @@ fn paint_lod_marker(text: &mut TextRenderer, marker: LodMarker, sf: f32) {
 }
 
 pub(crate) fn player_color(player: &PlayerSnapshot) -> [f32; 4] {
-    let rgb = player
-        .team
-        .map_or(player.color, sow_core::player::team_territory_rgb);
+    let rgb = sow_core::player::player_territory_rgb(
+        player.player_type,
+        player.team,
+        player.color,
+    );
     let luminance = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
     let factor = if luminance < 0.60 {
         (0.60 - luminance) / (1.0 - luminance).max(0.001)

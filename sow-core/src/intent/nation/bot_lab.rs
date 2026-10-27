@@ -2643,33 +2643,35 @@ fn s16_building_rules_trace(legacy: bool) -> Vec<(u64, u64)> {
 #[test]
 fn s16_checkpoint_decision_and_state_reference() {
     let checkpoints = s16_building_rules_trace(false);
-    // Uses the current hero catalog, including Caesar's landing and Sayyid Said's coast abilities.
+    // Uses current building footprints and hero abilities; historical footprints are tested below.
     #[cfg(target_os = "freebsd")]
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x5153_1c96_e203_cfa1),
-        (500, 0x7b1b_1471_3456_a291),
-        (750, 0xc7e6_e116_de5c_a7aa),
-        (1000, 0xa87c_dcc9_2f07_ae10),
-        (1250, 0xa416_23b6_5d39_edcd),
-        (1500, 0xe32e_92d4_9957_2d0d),
-        (1750, 0xf9a8_1ba2_bef8_a93d),
-        (1847, 0x1a76_8d41_a0f2_e771),
+        (250, 0xf29f_f54a_90ab_d201),
+        (500, 0xe681_a6b3_e548_323a),
+        (750, 0x6d41_4f0d_298b_bbeb),
+        (1000, 0x6d45_85be_f824_305e),
+        (1250, 0x05e9_63c8_aaef_9737),
+        (1500, 0xf7b4_306c_423c_1757),
+        (1750, 0x3dea_c0e4_f4b0_634b),
+        (2000, 0x215a_0672_4705_954f),
+        (2102, 0xeacb_d26b_c004_d486),
     ];
     #[cfg(not(target_os = "freebsd"))]
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x5153_1c96_e203_cfa1),
-        (500, 0x7b1b_1471_3456_a291),
-        (750, 0xc7e6_e116_de5c_a7aa),
-        (1000, 0xa87c_dcc9_2f07_ae10),
-        (1250, 0xa416_23b6_5d39_edcd),
-        (1500, 0xe32e_92d4_9957_2d0d),
-        (1750, 0xf9a8_1ba2_bef8_a93d),
-        (1847, 0x1a76_8d41_a0f2_e771),
+        (250, 0x4e90_614c_b888_98d1),
+        (500, 0xc59c_9439_ae9b_eb82),
+        (750, 0x08c0_5d40_b799_c3d3),
+        (1000, 0x3842_8b3f_dfcd_dfe2),
+        (1250, 0x2550_6444_631e_f9a7),
+        (1500, 0xb432_c93f_dd80_67ab),
+        (1750, 0x62fe_e45b_188e_253f),
+        (2000, 0xec59_5645_deba_8f33),
+        (2102, 0xfec1_81a7_51f2_844a),
     ];
     assert_eq!(
         checkpoints,
         s16_building_rules_trace(false),
-        "same seed must reproduce v4 checkpoints"
+        "same seed must reproduce the current format-6 checkpoints"
     );
     assert_eq!(
         checkpoints, REFERENCE,
@@ -2681,6 +2683,17 @@ fn s16_checkpoint_decision_and_state_reference() {
 fn historical_s16_building_rules_keep_recorded_results() {
     let checkpoints = s16_building_rules_trace(true);
     // Historical building rules with the current hero catalog, including landing/coast abilities.
+    #[cfg(target_os = "freebsd")]
+    const REFERENCE: &[(u64, u64)] = &[
+        (250, 0x218a_8e4d_0fcb_b261),
+        (500, 0x7027_4e37_3f64_a176),
+        (750, 0x063a_9dc4_8cf2_0091),
+        (1000, 0xd37f_6e5a_1ecd_c735),
+        (1250, 0x3109_3a0c_f9ed_3c17),
+        (1500, 0x399a_b869_b41a_73be),
+        (1725, 0xf0d9_535b_44d9_8cea),
+    ];
+    #[cfg(not(target_os = "freebsd"))]
     const REFERENCE: &[(u64, u64)] = &[
         (250, 0xd6fa_cadc_3466_692d),
         (500, 0x8b39_ac5d_f460_904e),

@@ -20,6 +20,16 @@ impl BuildingFootprint {
     #[inline]
     pub const fn at(kind: BuildingKind, anchor_x: u32, anchor_y: u32) -> Self {
         let (width, height) = kind.footprint_dimensions();
+        Self::with_size(anchor_x, anchor_y, width, height)
+    }
+
+    #[inline]
+    pub(crate) const fn legacy_at(anchor_x: u32, anchor_y: u32) -> Self {
+        Self::with_size(anchor_x, anchor_y, 4, 4)
+    }
+
+    #[inline]
+    const fn with_size(anchor_x: u32, anchor_y: u32, width: u32, height: u32) -> Self {
         Self {
             left: anchor_x as i32 - (width as i32 / 2),
             top: anchor_y as i32 - (height as i32 / 2),
@@ -319,7 +329,11 @@ fn for_each_valid_land_structure_index(
             scratch.candidates_examined += 1;
         }
 
-        let footprint = BuildingFootprint::at(kind, x, y);
+        let footprint = if legacy {
+            BuildingFootprint::legacy_at(x, y)
+        } else {
+            BuildingFootprint::at(kind, x, y)
+        };
         let valid_placement = if !legacy {
             validate_structure_site(map, owner_id, kind, idx, existing).is_ok()
         } else {
@@ -335,7 +349,7 @@ fn for_each_valid_land_structure_index(
                         let dy = yi - building.y as i64;
                         let min_dist = legacy_minimum_building_spacing(kind, building.kind) as i64;
                         let too_close = dx * dx + dy * dy < min_dist * min_dist;
-                        let other = BuildingFootprint::at(building.kind, building.x, building.y);
+                        let other = BuildingFootprint::legacy_at(building.x, building.y);
                         too_close || footprint.intersects(other)
                     })
                 && (kind != BuildingKind::Port || footprint_touches_water(map, footprint))

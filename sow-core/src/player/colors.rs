@@ -62,6 +62,21 @@ pub fn team_territory_rgb(team: crate::protocol::Team) -> [f32; 3] {
     }
 }
 
+/// Territory color after team colors are applied. Nations are blended halfway
+/// toward gray; heroes and other player types keep their existing colors.
+pub fn player_territory_rgb(
+    player_type: crate::player::PlayerType,
+    team: Option<crate::protocol::Team>,
+    color: [f32; 3],
+) -> [f32; 3] {
+    let color = team.map_or(color, team_territory_rgb);
+    if player_type == crate::player::PlayerType::Nation {
+        color.map(|channel| channel * 0.5 + 0.25)
+    } else {
+        color
+    }
+}
+
 /// Campaign diplomacy colors are visual state only; they do not assign gameplay teams.
 #[inline]
 pub fn campaign_relation_rgb(relation: crate::protocol::CampaignRelation) -> Option<[f32; 3]> {
