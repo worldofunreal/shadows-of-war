@@ -60,7 +60,7 @@ impl SowEngine {
             let map = &self.state.map;
             let x = target_tile % w;
             let y = target_tile / w;
-            let footprint = crate::building::BuildingFootprint::at(kind, x, y);
+            let footprint = crate::building::BuildingFootprint::legacy_at(x, y);
             if map.owner_id(x, y) != player_id
                 || map.terrain_type(x, y) != crate::map::TerrainType::Land
                 || !crate::building::footprint_fits(map, player_id, footprint)
@@ -68,10 +68,8 @@ impl SowEngine {
                     .building_grid
                     .iter_all_in_range(x, y, 3)
                     .any(|building| {
-                        footprint.intersects(crate::building::BuildingFootprint::at(
-                            building.kind,
-                            building.x,
-                            building.y,
+                        footprint.intersects(crate::building::BuildingFootprint::legacy_at(
+                            building.x, building.y,
                         ))
                     })
             {
@@ -452,7 +450,7 @@ mod tests {
 
         let unowned_tile = game.state.map.ref_id(2, 2) as u32;
         let water_tile = game.state.map.ref_id(4, 4) as u32;
-        let invalid_footprint_tile = game.state.map.ref_id(2, 5) as u32;
+        let invalid_footprint_tile = game.state.map.ref_id(1, 4) as u32;
         game.apply_build_structure_intent(1, BuildingKind::Farm, unowned_tile);
         game.apply_build_structure_intent(1, BuildingKind::Farm, water_tile);
         game.apply_build_structure_intent(1, BuildingKind::Farm, invalid_footprint_tile);

@@ -1672,7 +1672,7 @@ test "$(sha256sum "$stage/bin/sow-relay" | cut -d ' ' -f 1)" = {binary}
 sudo install -d -o root -g {group} -m 0750 {release_dir} {release_dir}/lib
 if ! sudo test -f {destination}; then sudo install -o root -g {group} -m 0550 "$stage/bin/sow-relay" {destination}; fi
 for lib in "$stage"/lib/*.so*; do sudo install -o root -g {group} -m 0440 "$lib" {release_dir}/lib/"$(basename "$lib")"; done
-test "$(sha256sum {destination} | cut -d ' ' -f 1)" = {binary}
+test "$(sudo sha256sum {destination} | cut -d ' ' -f 1)" = {binary}
 "#,
         stage = shell_quote(RELAY_STAGE), binary = binary, group = RELAY_GROUP,
         destination = shell_quote(&destination), release_dir = shell_quote(&release_dir));
@@ -3960,5 +3960,11 @@ mod build_fingerprint_tests {
 
         fs::write(&map, b"map-v2").unwrap();
         assert_ne!(after_atlas, freebsd_build_fingerprint(root.path()).unwrap());
+    }
+
+    #[test]
+    fn relay_handover_hashes_root_owned_candidate_with_sudo() {
+        let source = include_str!("prod.rs");
+        assert!(source.contains("test \"$(sudo sha256sum {destination}"));
     }
 }

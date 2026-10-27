@@ -350,8 +350,9 @@ fn render_buildings(
 
         let center = world_to_screen(building.bx, building.by, input, sf);
         let marker_size = building_marker_size(building, zoom_scaled);
-        let half_width = marker_size[0] * 0.5;
-        let half_height = marker_size[1] * 0.5;
+        let building_size = building_sprite_size(marker_size, sf, building.level.max(1));
+        let half_width = building_size[0] * 0.5;
+        let half_height = building_size[1] * 0.5;
         if center[0] + half_width < 0.0
             || center[0] - half_width > screen_w
             || center[1] + half_height < 0.0
@@ -387,13 +388,6 @@ fn render_buildings(
             1.0
         };
         let building_center = [center[0] * sf, center[1] * sf];
-        let level_exponent = building.level.saturating_sub(1);
-        let upgrade_scale = BUILDING_UPGRADE_SCALES
-            .get(usize::from(level_exponent))
-            .copied()
-            .unwrap_or_else(|| 1.25_f32.powi(i32::from(level_exponent)));
-        let building_size =
-            marker_size.map(|size| size * sf * BUILDING_FOOTPRINT_FILL * upgrade_scale);
         // Every kind and level has art in assets/art/buildings (checked by tests).
         if let Some(uv_rect) =
             crate::render::gpu::building_sprite_uv(building.kind, building.level.max(1))
@@ -610,6 +604,14 @@ fn building_footprint_marker_size(kind: BuildingKind, zoom_scaled: f32, minimum:
         (width as f32 * zoom_scaled * BUILDING_FOOTPRINT_FILL).max(minimum),
         (height as f32 * zoom_scaled * BUILDING_FOOTPRINT_FILL).max(minimum),
     ]
+}
+
+fn building_sprite_size(marker_size: [f32; 2], sf: f32, level: u8) -> [f32; 2] {
+    let scale = BUILDING_UPGRADE_SCALES
+        .get(usize::from(level.saturating_sub(1)))
+        .copied()
+        .unwrap_or(1.5);
+    marker_size.map(|size| size * sf * scale)
 }
 
 fn render_building_selection_focus(
@@ -886,8 +888,11 @@ fn render_building_placement_preview(
         colors.line,
     );
     let dragging = input.building_drag_offset.is_some();
-    let sprite_size = building_footprint_marker_size(kind, zoom / sf, BUILDING_MIN_MARKER_SIZE)
-        .map(|size| size * sf * BUILDING_FOOTPRINT_FILL);
+    let sprite_size = building_sprite_size(
+        building_footprint_marker_size(kind, zoom / sf, BUILDING_MIN_MARKER_SIZE),
+        sf,
+        1,
+    );
     let lift = if dragging && !ui.app.settings_state.reduced_motion {
         5.0 * sf
     } else {
@@ -1473,6 +1478,7 @@ mod tests {
                 .into_iter()
                 .all(|scale| scale <= 1.5)
         );
+        assert_eq!(building_sprite_size([100.0; 2], 1.0, 4), [150.0; 2]);
     }
 
     #[test]
