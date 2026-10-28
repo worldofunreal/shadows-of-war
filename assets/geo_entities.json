@@ -21,7 +21,7 @@
     },
     "card": "sow-caesar"
    },
-   "territory_color": "#bf262e"
+   "territory_color": "#c01c30"
   },
   {
    "id": "cleopatra",
@@ -44,7 +44,7 @@
     },
     "card": "sow-cleopatra"
    },
-   "territory_color": "#d9a626"
+   "territory_color": "#cab02e"
   },
   {
    "id": "ragnar",
@@ -88,7 +88,7 @@
     },
     "card": "sow-sun-tzu"
    },
-   "territory_color": "#268c6b"
+   "territory_color": "#448c5c"
   },
   {
    "id": "alexander",
@@ -132,7 +132,7 @@
     },
     "card": "sow-genghis-khan"
    },
-   "territory_color": "#8c6b38"
+   "territory_color": "#876638"
   },
   {
    "id": "richard_the_lionheart",
@@ -155,7 +155,7 @@
     },
     "card": "sow-richard"
    },
-   "territory_color": "#b82e26"
+   "territory_color": "#c72e24"
   },
   {
    "id": "vercingetorix",
@@ -223,7 +223,7 @@
     },
     "card": "sow-lady-six-sky"
    },
-   "territory_color": "#1f9485"
+   "territory_color": "#289494"
   },
   {
    "id": "leonidas",
@@ -424,7 +424,7 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Amina_of_Zazzau",
    "avatar": "amina_de_zazzau",
-   "territory_color": "#c2552b",
+   "territory_color": "#c05430",
    "hero": {
     "name": "Amina of Zazzau",
     "ability": {
@@ -2077,7 +2077,7 @@
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/William_the_Conqueror",
    "avatar": "william_the_conqueror",
-   "territory_color": "#b9770e",
+   "territory_color": "#b87808",
    "hero": {
     "name": "William the Conqueror",
     "ability": {
@@ -2445,7 +2445,7 @@
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Hongi_Hika",
    "avatar": "hongi_hika",
-   "territory_color": "#1c5e4a",
+   "territory_color": "#1a684f",
    "hero": {
     "name": "Hongi Hika",
     "ability": {
@@ -2491,7 +2491,7 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/S%C4%81lote_Tupou_III",
    "avatar": "salote_tupou_iii",
-   "territory_color": "#c77d2a",
+   "territory_color": "#c27d29",
    "hero": {
     "name": "Sālote Tupou III",
     "ability": {
@@ -7443,7 +7443,7 @@
    "lon": 112.45,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Hua_Mulan",
-   "avatar": "mulan"
+   "avatar": "mulan_nation"
   },
   {
    "id": "nation_thusnelda",
@@ -7757,7 +7757,7 @@
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Hannibal",
    "avatar": "hannibal",
-   "territory_color": "#7b3f8f",
+   "territory_color": "#803a7b",
    "hero": {
     "name": "Hannibal",
     "ability": {
@@ -7778,7 +7778,7 @@
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Sim%C3%B3n_Bol%C3%ADvar",
    "avatar": "bolivar",
-   "territory_color": "#c0392b",
+   "territory_color": "#c04434",
    "hero": {
     "name": "Simón Bolívar",
     "ability": {
@@ -7800,7 +7800,7 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Joan_of_Arc",
    "avatar": "joan_of_arc",
-   "territory_color": "#16a085",
+   "territory_color": "#1ca084",
    "hero": {
     "name": "Joan of Arc",
     "ability": {
@@ -7842,7 +7842,7 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Isabella_I_of_Castile",
    "avatar": "isabella_of_castile",
-   "territory_color": "#2e86c1",
+   "territory_color": "#4884c8",
    "hero": {
     "name": "Isabella I of Castile",
     "ability": {
@@ -7863,7 +7863,7 @@
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Cyrus_the_Great",
    "avatar": "cyrus_the_great",
-   "territory_color": "#2c3e50",
+   "territory_color": "#333955",
    "hero": {
     "name": "Cyrus the Great",
     "ability": {
@@ -7947,7 +7947,7 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Lady_Tri%E1%BB%87u",
    "avatar": "trieu_thi_trinh",
-   "territory_color": "#00cec9",
+   "territory_color": "#00cece",
    "hero": {
     "name": "Lady Triệu",
     "ability": {
@@ -8105,7 +8105,7 @@
      "percent": 50
     }
    },
-   "territory_color": "#0c90df"
+   "territory_color": "#0890e0"
   },
   {
    "id": "lapu_lapu",
@@ -8126,7 +8126,7 @@
      "percent": 50
     }
    },
-   "territory_color": "#e3f42a"
+   "territory_color": "#e4f428"
   },
   {
    "id": "constantine",
@@ -8486,7 +8486,7 @@
      "percent": 50
     }
    },
-   "territory_color": "#3be364"
+   "territory_color": "#48e464"
   },
   {
    "id": "thanadelthur",
@@ -8576,17 +8576,18 @@
   },
   {
    "id": "qin_liangyu",
-   "name": "Qin Liangyu",
-   "entity": "Ming dynasty",
+   "name": "Mulan",
+   "entity": "Northern Wei",
    "role": "nation",
    "region": "asia",
-   "lat": 30.57,
-   "lon": 104.07,
+   "lat": 34.62,
+   "lon": 112.45,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Qin_Liangyu",
-   "avatar": "qin_liangyu",
+   "wikipedia": "https://en.wikipedia.org/wiki/Hua_Mulan",
+   "avatar": "mulan",
    "hero": {
     "name": "Qin Liangyu",
+    "art_slug": "mulan",
     "ability": {
      "kind": "enemy_retreat_penalty",
      "against": "anyone",
@@ -8613,7 +8614,7 @@
      "percent": 50
     }
    },
-   "territory_color": "#42ae09"
+   "territory_color": "#4cac00"
   },
   {
    "id": "ahmad_shah_bahadur",
@@ -8655,7 +8656,7 @@
      "percent": 25
     }
    },
-   "territory_color": "#34495e"
+   "territory_color": "#394459"
   },
   {
    "id": "aurangzeb",
@@ -8697,7 +8698,7 @@
      "percent": 50
     }
    },
-   "territory_color": "#af601a"
+   "territory_color": "#a46010"
   },
   {
    "id": "humayun",
@@ -8739,7 +8740,7 @@
      "percent": 30
     }
    },
-   "territory_color": "#117a65"
+   "territory_color": "#0c8c58"
   },
   {
    "id": "shah_jahan",
@@ -8824,7 +8825,7 @@
      "percent": 25
     }
    },
-   "territory_color": "#566573"
+   "territory_color": "#516573"
   },
   {
    "id": "artaxerxes_iii",
@@ -8887,7 +8888,7 @@
      "percent": 25
     }
    },
-   "territory_color": "#b03a2e"
+   "territory_color": "#a13f2e"
   },
   {
    "id": "claudius_gothicus",
@@ -8972,7 +8973,7 @@
      "percent": 25
     }
    },
-   "territory_color": "#a93226"
+   "territory_color": "#ac2c24"
   },
   {
    "id": "majorian",
@@ -9098,7 +9099,7 @@
      "percent": 25
     }
    },
-   "territory_color": "#e67e22"
+   "territory_color": "#e87c24"
   },
   {
    "id": "ildibad",
@@ -9225,7 +9226,7 @@
      "percent": 25
     }
    },
-   "territory_color": "#154360"
+   "territory_color": "#104460"
   },
   {
    "id": "frederick_barbarossa",
@@ -9246,7 +9247,7 @@
      "percent": 25
     }
    },
-   "territory_color": "#0e6251"
+   "territory_color": "#0c6050"
   },
   {
    "id": "charles_v",

@@ -29,7 +29,15 @@ impl SowApp {
         if let Some(win) = self.gfx.window.as_ref() {
             win.pre_present_notify();
         }
-        let Some(frame) = self.gfx.surface.as_mut().map(|s| s.acquire_frame()) else {
+        let acquire_started_at = crate::diag::startup_perf_timer();
+        let acquired = self.gfx.surface.as_mut().map(|s| s.acquire_frame());
+        if let Some(started_at) = acquire_started_at {
+            crate::diag::record_startup_perf(
+                crate::diag::StartupMetric::SurfaceAcquire,
+                started_at,
+            );
+        }
+        let Some(frame) = acquired else {
             return;
         };
 
@@ -78,12 +86,24 @@ impl SowApp {
             };
 
             if let Some(sp) = self.gfx.prev_sync_point.take() {
+                let wait_started_at = crate::diag::startup_perf_timer();
                 let _ = render_ctx.context.wait_for(&sp, !0);
+                if let Some(started_at) = wait_started_at {
+                    crate::diag::record_startup_perf(
+                        crate::diag::StartupMetric::GpuWait,
+                        started_at,
+                    );
+                }
             }
 
             render_ctx.command_encoder.start();
             render_ctx.command_encoder.init_texture(frame.texture());
 
+            let world_render_started_at = if draw_world {
+                crate::diag::startup_perf_timer()
+            } else {
+                None
+            };
             let mut map_drawn = false;
             if let Some(ref mut mr) = self.gfx.map_renderer {
                 // Upload map state on first frame or after each tick (runs during splash for loader step 2).
@@ -250,6 +270,7 @@ impl SowApp {
                         force_fog_upload = true;
                     }
 
+                    let map_update_started_at = crate::diag::startup_perf_timer();
                     mr.update(
                         &mut render_ctx.command_encoder,
                         &render_ctx.context,
@@ -258,21 +279,40 @@ impl SowApp {
                         &self.sim.fog_visible,
                         force_fog_upload,
                     );
+                    if let Some(started_at) = map_update_started_at {
+                        crate::diag::record_startup_perf(
+                            crate::diag::StartupMetric::MapUpdate,
+                            started_at,
+                        );
+                    }
                     if let Some(snap) = &mut self.sim.current_snapshot {
                         snap.dirty_tiles.clear();
                     }
 
-                    let mut player_colors = [[0.5, 0.5, 0.5, 1.0]; 256];
+                    let mut player_colors =
+                        [[0x0080_8080u32; 4]; crate::render::gpu::PLAYER_COLOR_SLOTS / 4];
                     let mut player_skin_styles = [[0.0f32; 4]; 256];
                     if let Some(snap) = &self.sim.current_snapshot {
                         for p in &snap.players {
-                            if (p.id as usize) < 256 {
+                            if (p.id as usize) < crate::render::gpu::PLAYER_COLOR_SLOTS {
                                 let rgb = sow_core::player::player_territory_rgb(
                                     p.player_type,
                                     p.team,
                                     p.color,
                                 );
-                                player_colors[p.id as usize] = [rgb[0], rgb[1], rgb[2], 1.0];
+                                let packed = rgb.iter().enumerate().fold(
+                                    0u32,
+                                    |packed, (i, channel)| {
+                                        packed
+                                            | ((((*channel).clamp(0.0, 1.0) * 255.0).round()
+                                                as u32)
+                                                << (i * 8))
+                                    },
+                                );
+                                let id = p.id as usize;
+                                player_colors[id / 4][id % 4] = packed;
+                            }
+                            if (p.id as usize) < player_skin_styles.len() {
                                 player_skin_styles[p.id as usize] = tile_effect_styles(
                                     p.skin_style,
                                     p.leader,
@@ -638,13 +678,27 @@ impl SowApp {
                 drop(pass);
             }
 
+            if let Some(started_at) = world_render_started_at {
+                crate::diag::record_startup_perf(
+                    crate::diag::StartupMetric::WorldRender,
+                    started_at,
+                );
+            }
+
             // Restore the context so UI-action handlers (e.g. opening the map
             // editor) can take ownership of it during `run_ui` below. The
             // command encoder stays mid-frame on the same object across the
             // put/re-take, so UI painting continues recording into it.
             self.gfx.render_ctx = Some(render_ctx);
 
+            let ui_render_started_at = crate::diag::startup_perf_timer();
             self.render_frame_ui_and_present(sf, frame, dt);
+            if let Some(started_at) = ui_render_started_at {
+                crate::diag::record_startup_perf(
+                    crate::diag::StartupMetric::UiRender,
+                    started_at,
+                );
+            }
         }
     }
 }

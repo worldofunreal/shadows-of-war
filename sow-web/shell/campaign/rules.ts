@@ -88,7 +88,7 @@ export const CAMPAIGN_ACTION_BUILDING_REQUIREMENTS: Record<string, { kind: strin
         warship: Object.freeze({ kind: "Port", level: 2 }),
         nuke: Object.freeze({ kind: "City", level: STRUCTURE_LEVEL_LIMITS.City }),
     });
-export const BUILDING_METRIC_KINDS = {
+export const BUILDING_METRIC_KINDS: Record<string, string> = {
     city: "City",
     city_level: "City",
     city_upgrade: "City",
@@ -113,18 +113,18 @@ export function applyCampaignUnlocks(
     grant: Partial<CampaignUnlocks> | null,
 ): CampaignUnlocks {
     const result = copy(previous || emptyCampaignUnlocks());
-    const buildings = object(grant && grant.buildings) ? grant.buildings : {};
+    const buildings: Record<string, number> = grant && object(grant.buildings) ? grant.buildings : {};
     Object.keys(buildings).forEach((kind) => {
         result.buildings[kind] = Math.max(Number(result.buildings[kind]) || 0, Number(buildings[kind]) || 0);
     });
     const actions = new Set(
-        (result.actions || []).concat(Array.isArray(grant && grant.actions) ? grant.actions : []),
+        (result.actions || []).concat(grant && Array.isArray(grant.actions) ? grant.actions : []),
     );
     result.actions = CAMPAIGN_ACTIONS.filter((action) => actions.has(action));
     return result;
 }
 export function intersectCampaignUnlocks(a: CampaignUnlocks, b: CampaignUnlocks): CampaignUnlocks {
-    const buildings = {};
+    const buildings: Record<string, number> = {};
     Object.keys(STRUCTURE_LEVEL_LIMITS).forEach((kind) => {
         const level = Math.min(
             Number(a && a.buildings && a.buildings[kind]) || 0,
@@ -169,13 +169,20 @@ export function campaignAllowsAction(unlocks: CampaignUnlocks | null, action: st
     const requirement = CAMPAIGN_ACTION_BUILDING_REQUIREMENTS[action];
     return !requirement || campaignAllowsBuilding(unlocks, requirement.kind, requirement.level);
 }
-export function campaignEdges(step, byId, choices?, facts?) {
+export function campaignEdges(
+    step: CampaignStep,
+    byId: Map<string, CampaignStep>,
+    choices?: CampaignRecord,
+    facts?: CampaignRecord,
+): string[] {
     if (step.type === "choice" && choices && choices[step.id]) {
-        const selected = (step.choices || []).find((choice) => choice && choice.id === choices[step.id]);
+        const selected = (step.choices || []).find(
+            (choice: CampaignRecord) => choice && choice.id === choices[step.id],
+        );
         return selected && byId.has(selected.next) ? [selected.next] : [];
     }
     if (Array.isArray(step.routes) && (choices || facts)) {
-        const route = step.routes.find((candidate) => {
+        const route = step.routes.find((candidate: CampaignRecord) => {
             const when = candidate && candidate.when;
             if (!object(when)) return false;
             if (when.choice) return choices && choices[when.choice] === when.equals;
@@ -184,7 +191,7 @@ export function campaignEdges(step, byId, choices?, facts?) {
             return false;
         });
         if (route) return byId.has(route.next) ? [route.next] : [];
-        const allConditionsKnown = step.routes.every((candidate) => {
+        const allConditionsKnown = step.routes.every((candidate: CampaignRecord) => {
             const when = candidate && candidate.when;
             return (
                 object(when) &&
@@ -193,13 +200,22 @@ export function campaignEdges(step, byId, choices?, facts?) {
                     : when.fact && facts && Number.isFinite(Number(facts[when.fact])))
             );
         });
-        if (allConditionsKnown) return byId.has(step.next) ? [step.next] : [];
+        if (allConditionsKnown)
+            return typeof step.next === "string" && byId.has(step.next) ? [step.next] : [];
     }
     return [step.next]
         .concat(step.unavailable_next || [])
-        .concat((Array.isArray(step.routes) ? step.routes : []).map((route) => route && route.next))
-        .concat((Array.isArray(step.choices) ? step.choices : []).map((choice) => choice && choice.next))
-        .filter((target) => byId.has(target));
+        .concat(
+            (Array.isArray(step.routes) ? step.routes : []).map(
+                (route: CampaignRecord) => route && route.next,
+            ),
+        )
+        .concat(
+            (Array.isArray(step.choices) ? step.choices : []).map(
+                (choice: CampaignRecord) => choice && choice.next,
+            ),
+        )
+        .filter((target): target is string => typeof target === "string" && byId.has(target));
 }
 export function campaignUnlockStates(
     byId: Map<string, CampaignStep>,
@@ -207,16 +223,16 @@ export function campaignUnlockStates(
     choices?: CampaignRecord,
     facts?: CampaignRecord,
 ): Map<string, CampaignUnlocks> {
-    const states = new Map();
+    const states = new Map<string, CampaignUnlocks>();
     if (!byId.has(entry)) return states;
     states.set(entry, emptyCampaignUnlocks());
     const queue = [entry];
     const queued = new Set(queue);
     while (queue.length) {
-        const key = queue.shift();
+        const key = queue.shift()!;
         queued.delete(key);
-        const step = byId.get(key);
-        const outgoing = applyCampaignUnlocks(states.get(key), step && step.unlocks);
+        const step = byId.get(key)!;
+        const outgoing = applyCampaignUnlocks(states.get(key) ?? null, step && step.unlocks);
         campaignEdges(step, byId, choices, facts).forEach((target) => {
             const previous = states.get(target);
             const merged = previous ? intersectCampaignUnlocks(previous, outgoing) : outgoing;
@@ -240,17 +256,20 @@ export function campaignUnlocksAtStep(
 ): CampaignUnlocks {
     const step = byId.get(key);
     return step
-        ? applyCampaignUnlocks(campaignUnlockStates(byId, entry, choices, facts).get(key), step.unlocks)
+        ? applyCampaignUnlocks(
+              campaignUnlockStates(byId, entry, choices, facts).get(key) ?? null,
+              step.unlocks,
+          )
         : emptyCampaignUnlocks();
 }
-export function stepCampaignRequirements(step) {
-    const requirements = [];
+export function stepCampaignRequirements(step: CampaignStep): CampaignRecord[] {
+    const requirements: CampaignRecord[] = [];
     const trigger = (step && step.trigger) || {};
-    const addBuilding = (kind, level) => {
+    const addBuilding = (kind: string, level: number) => {
         if (STRUCTURE_LEVEL_LIMITS[kind])
             requirements.push({ type: "building", kind, level: Math.max(1, Number(level) || 1) });
     };
-    const addAction = (action) => {
+    const addAction = (action: string) => {
         if (!CAMPAIGN_ACTIONS.includes(action)) return;
         requirements.push({ type: "action", action });
         const building = CAMPAIGN_ACTION_BUILDING_REQUIREMENTS[action];
@@ -268,9 +287,12 @@ export function stepCampaignRequirements(step) {
     if (trigger.type === "structure_upgrade") addBuilding(trigger.kind, 2);
     if (trigger.type === "nuke") addAction("nuke");
     if (trigger.type === "fleet") {
-        const fleetAction = { TransportShip: "transport_fleet", TradeShip: "trade_ship", Warship: "warship" }[
-            trigger.unit
-        ];
+        const fleetActions: Record<string, string> = {
+            TransportShip: "transport_fleet",
+            TradeShip: "trade_ship",
+            Warship: "warship",
+        };
+        const fleetAction = fleetActions[trigger.unit];
         if (fleetAction) addAction(fleetAction);
     }
     const uiTargets = [trigger.action, step.guide && step.guide.target].filter(
@@ -287,7 +309,7 @@ export function stepCampaignRequirements(step) {
     });
     return requirements;
 }
-export function zoomOutProgress(facts) {
+export function zoomOutProgress(facts: CampaignRecord): number {
     const start = Number(facts && facts.camera_zoom_start);
     const floor = Number(facts && facts.camera_zoom_floor);
     const current = Number(facts && facts.camera_zoom);
@@ -295,7 +317,7 @@ export function zoomOutProgress(facts) {
         return Number((facts && facts.zoom_out_complete) || 0);
     return Math.max(0, Math.min(1, (start - current) / (start - floor)));
 }
-export function zoomOutTarget(facts, amount) {
+export function zoomOutTarget(facts: CampaignRecord, amount: number): number {
     const start = Number(facts && facts.camera_zoom_start);
     const floor = Number(facts && facts.camera_zoom_floor);
     const portion = Number(amount);
@@ -304,7 +326,7 @@ export function zoomOutTarget(facts, amount) {
     if (normalizedPortion === 1) return floor;
     return start - (start - floor) * normalizedPortion;
 }
-export const UI_TARGETS = {
+export const UI_TARGETS: Record<string, string> = {
     menu_campaign: '#sow-menu [data-command="open_campaign"]',
     campaign_replay: '#sow-menu [data-command="start_campaign_episode"][data-episode-id]',
     menu_lobby: "#sow-menu .sow-menu__home-public [data-lobby-card]",
@@ -424,7 +446,7 @@ export const id = (value: unknown): value is string =>
     !["constructor", "prototype", "__proto__"].includes(value);
 export const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 
-export function replaceFactionNames(text, replacements) {
+export function replaceFactionNames(text: string, replacements: Map<string, string>): string {
     if (typeof text !== "string" || !(replacements instanceof Map) || !replacements.size) return text;
     const names = Array.from(replacements.keys()).sort((a, b) => b.length - a.length);
     const pattern = new RegExp(
@@ -483,7 +505,7 @@ export function replaceFactionStoryNames(
     const factions = Array.isArray(roster && roster.factions) ? roster.factions : [];
     const replacements = new Map();
     Object.keys(sourceNames).forEach((id) => {
-        const faction = factions.find((item) => item && item.id === id);
+        const faction = factions.find((item: CampaignFaction) => item && item.id === id);
         const source = sourceNames[id];
         if (
             faction &&
@@ -499,7 +521,7 @@ export function replaceFactionStoryNames(
 
 export function factionReferenceIds(definition: CampaignDefinition): Set<string> {
     const refs = new Set<string>();
-    const add = (value) => {
+    const add = (value: unknown) => {
         if (typeof value === "string" && value && value !== "player") refs.add(value);
     };
     if (!object(definition)) return refs;
@@ -634,7 +656,7 @@ export function removeFactionReferences(
                 return false;
             }
             if (Array.isArray(when.targets)) {
-                when.targets = when.targets.filter((target) => !removed.has(target));
+                when.targets = when.targets.filter((target: string) => !removed.has(target));
                 if (!when.targets.length) {
                     adjusted.reactions_removed++;
                     return false;

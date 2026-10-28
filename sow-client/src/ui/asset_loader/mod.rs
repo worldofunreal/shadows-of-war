@@ -88,13 +88,8 @@ impl AssetLoader {
     pub fn avatar_filename(key: &AvatarFetchKey) -> String {
         match key {
             AvatarFetchKey::Fallback => "null.webp".into(),
-            AvatarFetchKey::Leader(leader) => format!(
-                "spritesheets/{}.webp",
-                sow_data::commerce::leader_id(*leader)
-            ),
-            AvatarFetchKey::LeaderPortrait(leader) => {
-                format!("{}.webp", sow_data::commerce::leader_id(*leader))
-            }
+            AvatarFetchKey::Leader(leader) => format!("spritesheets/{}.webp", leader.art_slug()),
+            AvatarFetchKey::LeaderPortrait(leader) => format!("{}.webp", leader.art_slug()),
             AvatarFetchKey::Campaign { slug, .. } => format!("{slug}.webp"),
         }
     }
@@ -524,7 +519,7 @@ mod tests {
         for leader in Leader::all() {
             let key = AvatarFetchKey::Leader(leader);
             let id = sow_data::commerce::leader_id(leader);
-            let path = avatars.join(format!("{id}.webp"));
+            let path = avatars.join(format!("{}.webp", leader.art_slug()));
             let sheet = image::open(&path)
                 .unwrap_or_else(|error| panic!("{}: {error}", path.display()))
                 .to_rgba8();

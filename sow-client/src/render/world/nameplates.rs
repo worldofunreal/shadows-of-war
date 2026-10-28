@@ -103,6 +103,10 @@ pub(crate) struct NameplateSystem {
     active_ids: HashSet<u16>,
     visuals: HashMap<u16, NameplateVisualState>,
     land_cache: NameplateLandCache,
+    land_cache_build_started_at: Option<Instant>,
+    land_cache_build_cpu: Duration,
+    land_cache_build_max_step: Duration,
+    last_land_cache_build: Option<(u64, u64, u64)>,
     local_spawn_tick: Option<u64>,
     frame_plans: Vec<PreparedNameplate>,
     tutorial_target_hit_bounds: Option<(u16, [f32; 4])>,
@@ -537,6 +541,55 @@ struct EmoteBubbleLayout {
 }
 
 impl NameplateSystem {
+    pub(crate) fn prepare_land_cache(
+        &mut self,
+        map: &sow_core::map::GameMap,
+        tick: u64,
+    ) -> bool {
+        if self.land_cache.is_ready_for(map) {
+            return true;
+        }
+        if self.land_cache_build_started_at.is_none() {
+            self.land_cache_build_started_at = Some(Instant::now());
+            self.land_cache_build_cpu = Duration::ZERO;
+            self.land_cache_build_max_step = Duration::ZERO;
+        }
+
+        let step_started_at = Instant::now();
+        let result = self
+            .land_cache
+            .step_rebuild(map, tick, Duration::from_millis(2));
+        let step_duration = step_started_at.elapsed();
+        self.land_cache_build_cpu += step_duration;
+        self.land_cache_build_max_step = self.land_cache_build_max_step.max(step_duration);
+
+        match result {
+            Ok(true) => {
+                let wall = self
+                    .land_cache_build_started_at
+                    .take()
+                    .map_or(Duration::ZERO, |started_at| started_at.elapsed());
+                self.last_land_cache_build = Some((
+                    self.land_cache_build_cpu.as_micros() as u64,
+                    wall.as_micros() as u64,
+                    self.land_cache_build_max_step.as_micros() as u64,
+                ));
+                true
+            }
+            Ok(false) => false,
+            Err(()) => {
+                self.land_cache_build_started_at = None;
+                self.land_cache_build_cpu = Duration::ZERO;
+                self.land_cache_build_max_step = Duration::ZERO;
+                false
+            }
+        }
+    }
+
+    pub(crate) fn take_land_cache_build_stats(&mut self) -> Option<(u64, u64, u64)> {
+        self.last_land_cache_build.take()
+    }
+
     /// The authored line belongs to this one visible campaign cue, never to a shared emote kind.
     pub(crate) fn set_campaign_emote(&mut self, player_id: u16, event_id: u64, token: String, message: String) -> bool {
         let value = message.trim();
@@ -838,7 +891,14 @@ pub(super) fn render_nameplates(
     system.prepare_emote_texts(text, dev);
     system.prepare_campaign_emote_message(text, dev);
     system.tutorial_target_hit_bounds = None;
+    let sample_started_at = crate::diag::startup_perf_timer();
     sample_nameplates(text, snapshot, sim, system, dev, sf, my_id, now);
+    if let Some(started_at) = sample_started_at {
+        crate::diag::record_startup_perf(
+            crate::diag::StartupMetric::NameplateSample,
+            started_at,
+        );
+    }
     system.observe_status_badges(snapshot, my_id, leaderboard_top_three, now, reduced_motion);
 
     let my_player = snapshot.players.iter().find(|player| player.id == my_id);
@@ -1226,16 +1286,25 @@ fn sample_nameplates(
     let new_player_needs_landmass = snapshot.players.iter().any(|player| {
         player.alive && player.tile_count > 0 && !system.land_cache.has_landmass(player.id)
     });
-    if system
+    let needs_rebuild = system
         .land_cache
-        .needs_rebuild(&engine.state.map, snapshot.tick, new_player_needs_landmass)
-        && !system.land_cache.rebuild(&engine.state.map, snapshot.tick)
-    {
-        system.order.clear();
-        system.active_ids.clear();
-        system.visuals.clear();
-        system.badge_animations.clear();
-        return;
+        .needs_rebuild(&engine.state.map, snapshot.tick, new_player_needs_landmass);
+    if needs_rebuild {
+        let rebuild_started_at = crate::diag::startup_perf_timer();
+        let rebuilt = system.land_cache.rebuild(&engine.state.map, snapshot.tick);
+        if let Some(started_at) = rebuild_started_at {
+            crate::diag::record_startup_perf(
+                crate::diag::StartupMetric::LandCacheRebuild,
+                started_at,
+            );
+        }
+        if !rebuilt {
+            system.order.clear();
+            system.active_ids.clear();
+            system.visuals.clear();
+            system.badge_animations.clear();
+            return;
+        }
     }
     let animate_local_spawn = if let Some((tick, x, y)) = local_spawn {
         let updated = system
@@ -3136,18 +3205,7 @@ pub(crate) fn player_color(player: &PlayerSnapshot) -> [f32; 4] {
         player.team,
         player.color,
     );
-    let luminance = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
-    let factor = if luminance < 0.60 {
-        (0.60 - luminance) / (1.0 - luminance).max(0.001)
-    } else {
-        0.0
-    };
-    [
-        rgb[0] + (1.0 - rgb[0]) * factor,
-        rgb[1] + (1.0 - rgb[1]) * factor,
-        rgb[2] + (1.0 - rgb[2]) * factor,
-        1.0,
-    ]
+    [rgb[0], rgb[1], rgb[2], 1.0]
 }
 
 #[cfg(test)]

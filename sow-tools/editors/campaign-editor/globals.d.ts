@@ -29,3 +29,12 @@ interface AtlasEntityPickerApi {
 declare var SOWCampaign: typeof import("../../../sow-web/shell/sow-campaign.ts").default;
 declare var SOWCampaignMapPreview: typeof import("./map-preview.ts").default;
 declare var SOWAtlasEntityPicker: AtlasEntityPickerApi;
+
+// Campaign types owned by sow-web; the editor reads them as plain script globals (no imports, so pages stay classic scripts).
+type CampaignRecord = import("../../../sow-web/shell/campaign/types.ts").CampaignRecord;
+type CampaignDefinition = import("../../../sow-web/shell/campaign/types.ts").CampaignDefinition;
+type CampaignRoster = import("../../../sow-web/shell/campaign/types.ts").CampaignRoster;
+type CampaignMachine = import("../../../sow-web/shell/campaign/types.ts").CampaignMachine;
+type CampaignValidationReport = import("../../../sow-web/shell/campaign/types.ts").CampaignValidationReport;
+type CampaignStep = import("../../../sow-web/shell/campaign/types.ts").CampaignStep;
+type CampaignStepType = import("../../../sow-web/shell/campaign/types.ts").CampaignStepType;

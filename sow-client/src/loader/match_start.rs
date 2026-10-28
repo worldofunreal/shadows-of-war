@@ -262,7 +262,7 @@ impl SowApp {
                 id: 1,
                 name: {
                     if tutorial {
-                        leader.name().to_string()
+                        leader.display_name().to_string()
                     } else {
                         let name = &self.ui.app.main_menu_state.player_name;
                         let tag = &self.ui.app.main_menu_state.clan_tag;

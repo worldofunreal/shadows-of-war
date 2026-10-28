@@ -1792,6 +1792,7 @@ test("campaign start keeps its loaded script and replay clicks belong to that ep
     vm.runInNewContext(tutorialBundle, {
         window,
         document,
+        Node: Object,
         performance: { now: () => 0 },
         console,
         fetch(url) {

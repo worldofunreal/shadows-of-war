@@ -84,7 +84,7 @@
       },
       "2": {
         "height": 128,
-        "sha256": "4a62e6b6f8bf757dac10086b69b2f81baf17512eecc9b2c9fb629783c43a43ba",
+        "sha256": "295385f3e6611c11403a9b8bc4e630a80ebba7b9cb23f12e81ae8ccdf719c6f8",
         "source": "farm-2.png",
         "width": 128,
         "x": 266,
@@ -100,7 +100,7 @@
       },
       "4": {
         "height": 128,
-        "sha256": "90b590091c6f060db4f2e04f4463d7e7a7cc0997f68aeef300971370a4e0b395",
+        "sha256": "be792c544f487cfc04ccd3842b24f44257c5a054252117d8942beb896f558584",
         "source": "farm-4.png",
         "width": 128,
         "x": 530,
@@ -110,7 +110,7 @@
     "Port": {
       "1": {
         "height": 128,
-        "sha256": "dabddbd911de6c63372f3972f98d8840174916679e3f3a698dc14b7fe5794e2c",
+        "sha256": "6447321c11fa1e9afda171fd9d3d3e9c9d436298eb6cda0293d3ebf0bcbfb399",
         "source": "port-1.png",
         "width": 128,
         "x": 398,
@@ -118,7 +118,7 @@
       },
       "2": {
         "height": 128,
-        "sha256": "a600b26033f43157a9f6b555fd2bc9012b238b0ce62f163163b46677ec79ca58",
+        "sha256": "4848c863a67ee194cb29ea165f94af884f810828474178124ae40ac6b3730004",
         "source": "port-2.png",
         "width": 128,
         "x": 530,
@@ -126,7 +126,7 @@
       },
       "3": {
         "height": 128,
-        "sha256": "93f141747e2d8ad9deed35ed08cc2301a95a2988f96cc221176b75481e696884",
+        "sha256": "cf30e29c35b297f35973b6ac8566120deee88e3317af8996cf0b2117e994fbe4",
         "source": "port-3.png",
         "width": 128,
         "x": 2,
@@ -134,7 +134,7 @@
       },
       "4": {
         "height": 128,
-        "sha256": "05f9f3023d151022a03cfe630b09dad1eb611aa5e92984876f5eec485412a5a0",
+        "sha256": "b7263e9b0805d5163991b6992b817bba1f885aba884ecd9dc508cfcc9759eabc",
         "source": "port-4.png",
         "width": 128,
         "x": 134,

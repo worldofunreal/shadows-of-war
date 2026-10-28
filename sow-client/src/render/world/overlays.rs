@@ -75,6 +75,7 @@ pub(crate) fn render_overlays(
     render_building_placement_preview(text, sim, ui, input, sf, placement_can_confirm);
     let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
     let leaderboard_top_three = ui.leaderboard_top_three;
+    let nameplate_render_started_at = crate::diag::startup_perf_timer();
     super::nameplates::render_nameplates(
         text,
         snapshot,
@@ -93,6 +94,12 @@ pub(crate) fn render_overlays(
             .flatten(),
         ui.app.settings_state.reduced_motion,
     );
+    if let Some(started_at) = nameplate_render_started_at {
+        crate::diag::record_startup_perf(
+            crate::diag::StartupMetric::NameplateRender,
+            started_at,
+        );
+    }
     feedback::render(
         text,
         snapshot,
@@ -259,13 +266,8 @@ fn construction_progress(
     Some(1.0 - (ticks_until_complete as f32 / duration_current as f32).clamp(0.0, 1.0))
 }
 
-fn construction_status_label(
-    target_level: Option<u8>,
-    ticks_remaining: u32,
-    tick_rate_ms: f32,
-) -> String {
-    let time = format_construction_time(ticks_remaining, tick_rate_ms);
-    target_level.map_or_else(|| time.clone(), |level| format!("{level} · {time}"))
+fn construction_status_label(ticks_remaining: u32, tick_rate_ms: f32) -> String {
+    format_construction_time(ticks_remaining, tick_rate_ms)
 }
 
 fn building_visual_status(
@@ -286,13 +288,8 @@ fn building_visual_status(
     )?;
     Some(BuildingVisualStatus {
         progress,
-        label: show_label.then(|| {
-            construction_status_label(
-                (active_level > 0).then_some(building.level),
-                building.ticks_until_complete,
-                tick_rate_ms,
-            )
-        }),
+        label: show_label
+            .then(|| construction_status_label(building.ticks_until_complete, tick_rate_ms)),
         color: if active_level == 0 {
             [0.0, 0.86, 1.0, 1.0]
         } else {
@@ -641,23 +638,17 @@ fn render_building_selection_focus(
     let tile_x = menu.tile_idx % sim.map_w;
     let tile_y = menu.tile_idx / sim.map_w;
     let footprint = sow_core::building::BuildingFootprint::at(kind, tile_x, tile_y);
-    let left = input.camera_x + footprint.left as f32 * zoom;
-    let top = input.camera_y + footprint.top as f32 * zoom;
-    let width = footprint.width as f32 * zoom;
-    let height = footprint.height as f32 * zoom;
-    let anchor_center = [
-        input.camera_x + (tile_x as f32 + 0.5) * zoom,
-        input.camera_y + (tile_y as f32 + 0.5) * zoom,
-    ];
+    let geometry = placement_footprint_geometry(footprint, [input.camera_x, input.camera_y], zoom);
+    let anchor_center = geometry.center;
 
     let colors = placement_preview_colors(true, true);
     let metrics = placement_grid_metrics(zoom, sf);
-    render_building_footprint_fill(text, [left, top], [width, height], colors.fill);
+    render_building_footprint_fill(text, geometry.top_left, geometry.size, colors.fill);
     render_building_footprint_grid(
         text,
         footprint,
-        [left, top],
-        [width, height],
+        geometry.top_left,
+        geometry.size,
         zoom,
         metrics,
         colors.line,
@@ -1388,6 +1379,11 @@ mod tests {
                         geometry.top_left[1] + geometry.size[1] * 0.5,
                     ]
                 );
+                assert_eq!(
+                    geometry.center,
+                    [31.0 + 17.0 * zoom, -12.0 + 23.0 * zoom],
+                    "placement and selected-building focus share the footprint anchor"
+                );
             }
             let building = RenderedBuilding {
                 bx: 0.0,
@@ -1629,7 +1625,7 @@ mod tests {
         let upgrade = building_snapshot(BuildingKind::City, 2, true, upgrade_ticks);
         let status = building_visual_status(&upgrade, upgrade.active_level(), 7, 100.0, true)
             .expect("upgrade status");
-        assert_eq!(status.label.as_deref(), Some("2 · 2.2s"));
+        assert_eq!(status.label.as_deref(), Some("2.2s"));
         assert_eq!(status.color, [1.0, 0.82, 0.22, 1.0]);
         assert_eq!(status.progress, 0.0);
     }
@@ -1643,10 +1639,7 @@ mod tests {
             .expect("upgrade status");
         assert_eq!(
             status.label,
-            Some(format!(
-                "2 · {}",
-                format_construction_time(remaining, 100.0)
-            ))
+            Some(format_construction_time(remaining, 100.0))
         );
         let expected_progress = 1.0 - (remaining as f32 / duration_two as f32);
         assert!((status.progress - expected_progress).abs() < 0.001);

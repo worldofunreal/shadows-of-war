@@ -1,10 +1,16 @@
 import * as rules from "./rules.ts";
-import type { CampaignDefinition, CampaignValidationReport, CampaignStep } from "./types.ts";
+import type {
+    CampaignDefinition,
+    CampaignStep,
+    CampaignValidationIssue,
+    CampaignValidationReport,
+} from "./types.ts";
 const { UI_TARGETS, MENU_GUIDE_OUTCOMES, own, object, id } = rules;
 
 export function validateMenuGuides(definition: CampaignDefinition): CampaignValidationReport {
-    const errors = [];
-    const issue = (step, field, message) => errors.push({ step: step && step.id, field, message });
+    const errors: CampaignValidationIssue[] = [];
+    const issue = (step: CampaignStep | null | undefined, field: string, message: string) =>
+        errors.push({ step: step && step.id, field, message });
     const allowedGuides = ["welcome"];
     if (!object(definition) || definition.version !== 1 || definition.episode_id !== "menu") {
         issue(null, "version", "Menu guides must use version 1 and episode_id menu.");
@@ -130,7 +136,7 @@ export function validateMenuGuides(definition: CampaignDefinition): CampaignVali
         if (step.wait_before != null && typeof step.wait_before !== "boolean")
             issue(step, "wait_before", "Choose whether to pause before showing this step.");
     });
-    function destinations(step) {
+    function destinations(step: CampaignStep) {
         return [step.next]
             .concat((Array.isArray(step.routes) ? step.routes : []).map((route) => route && route.next))
             .concat((Array.isArray(step.choices) ? step.choices : []).map((choice) => choice && choice.next))
@@ -166,10 +172,10 @@ export function validateMenuGuides(definition: CampaignDefinition): CampaignVali
             return;
         }
         const reached = new Set<string>();
-        const visit = (stepId) => {
+        const visit = (stepId: string) => {
             if (reached.has(stepId) || !byId.has(stepId)) return;
             reached.add(stepId);
-            destinations(byId.get(stepId)).forEach(visit);
+            destinations(byId.get(stepId)!).forEach(visit);
         };
         visit(guide.entry);
         const ends = new Set<string>(

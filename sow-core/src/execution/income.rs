@@ -265,12 +265,23 @@ impl SowEngine {
             let Some(rebel_id) = self.state.next_free_player_id() else {
                 continue;
             };
+            let Some(color) = crate::player::best_available_nation_palette_color(
+                &self.state.players,
+                None,
+            ) else {
+                log::error!(
+                    "debt rebellion: no Nation color remains at the required perceptual distance"
+                );
+                self.debt_episodes
+                    .insert(player_id, (debt_start_tick, true));
+                continue;
+            };
             let building = self.buildings[building_index];
             let parent_name = self.state.players[index].name.clone();
             let mut rebel = crate::player::Player::new_nation(
                 rebel_id,
                 format!("{} Rebels", parent_name),
-                [0.88, 0.20, 0.18],
+                color,
                 config,
             );
             rebel.has_spawned = true;

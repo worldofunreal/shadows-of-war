@@ -90,6 +90,11 @@ impl Leader {
         &self.character().id
     }
 
+    /// Asset filename slug, independent of the saved hero id.
+    pub fn art_slug(self) -> &'static str {
+        self.hero().art_slug.as_deref().unwrap_or_else(|| self.id())
+    }
+
     /// Id in game messages and profiles (`Caesar`, `SunTzu`).
     pub fn wire_id(self) -> &'static str {
         &self.entry().wire_id
@@ -97,6 +102,10 @@ impl Leader {
 
     pub fn name(self) -> &'static str {
         &self.hero().name
+    }
+
+    pub fn display_name(self) -> &'static str {
+        &self.character().name
     }
 
     /// The people or realm the hero leads.

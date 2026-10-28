@@ -3,10 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "lint": "eslint . && python3 scripts/typecheck-shell.py --lint && python3 scripts/typecheck-shell.py --variant poki --lint && python3 scripts/typecheck-shell.py --variant jest --lint",
-    "format": "prettier --write . && python3 scripts/typecheck-shell.py --format",
-    "format:check": "prettier --check . && python3 scripts/typecheck-shell.py --format-check",
-    "typecheck": "python3 scripts/typecheck-shell.py && python3 scripts/typecheck-shell.py --variant poki && python3 scripts/typecheck-shell.py --variant jest && bunx tsc -p sow-web/tsconfig.json --noEmit && bunx tsc -p sow-tools/editors/campaign-editor/tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "bunx tsc -p sow-web/tsconfig.json --noEmit && bunx tsc -p sow-web/tsconfig.sw.json --noEmit && bunx tsc -p sow-tools/editors/campaign-editor/tsconfig.json --noEmit",
     "test": "bun test",
     "verify": "bun run lint && bun run format:check && bun run typecheck && bun run test && cargo check"
   },

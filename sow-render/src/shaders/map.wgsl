@@ -55,7 +55,7 @@ struct Globals {
 }
 
 struct PlayerColors {
-    colors: array<vec4<f32>, 256>,
+    colors: array<vec4<u32>, 1024>,
 }
 
 struct PlayerSkinStyles {
@@ -167,8 +167,13 @@ fn ocean_shore_edge(cell_hex: vec2<i32>, local_pos: vec2<f32>) -> f32 {
 }
 
 fn owner_albedo(owner_id: u32) -> vec3<f32> {
-    if owner_id < 256u {
-        return player_colors.colors[owner_id].rgb;
+    if owner_id < 4096u {
+        let packed = player_colors.colors[owner_id / 4u][owner_id % 4u];
+        return vec3<f32>(
+            f32(packed & 0xFFu),
+            f32((packed >> 8u) & 0xFFu),
+            f32((packed >> 16u) & 0xFFu)
+        ) / 255.0;
     }
     return vec3<f32>(0.5, 0.5, 0.5); // Fallback if out of bounds
 }

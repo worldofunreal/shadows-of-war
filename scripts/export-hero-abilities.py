@@ -21,6 +21,7 @@ def main():
     site = strings["site"]
     heroes = [entity for entity in catalog["entities"] if entity.get("hero")]
 
+    heroes_strings = strings["heroes"]
     lines = [
         "# Habilidades de héroes",
         "",
@@ -38,9 +39,10 @@ def main():
         district = source.get("district") if isinstance(source, dict) else source
         extra = " / ".join(part for part in (district, ability.get("resource")) if part)
         kind = ability["kind"] + (f" ({extra})" if extra else "")
-        icon = f"gameplay/icons/abilities/{hero_id}.webp"
+        icon = f"gameplay/icons/abilities/{hero['hero'].get('art_slug') or hero['id']}.webp"
+        hero_name = heroes_strings.get(f"leader_{hero_id}_name", hero["hero"]["name"])
         lines.append(
-            f"| {hero['hero']['name']} | {name} | {description} | {kind} | "
+            f"| {hero_name} | {name} | {description} | {kind} | "
             f"{ability['percent']}% | `{icon}` |"
         )
 

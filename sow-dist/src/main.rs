@@ -131,6 +131,14 @@ struct Paths {
 
 impl Paths {
     fn discover() -> Result<Self> {
+        Self::discover_with_runtime_assets("runtime-assets")
+    }
+
+    fn discover_for_prod() -> Result<Self> {
+        Self::discover_with_runtime_assets("prod-runtime-assets")
+    }
+
+    fn discover_with_runtime_assets(runtime_assets_name: &str) -> Result<Self> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .canonicalize()?;
@@ -138,7 +146,7 @@ impl Paths {
             .map(PathBuf::from)
             .unwrap_or_else(|_| root.join("target"));
         let s = root.join("dist/.sow-state");
-        let runtime_assets = s.join("runtime-assets");
+        let runtime_assets = s.join(runtime_assets_name);
         stage_runtime_assets(&root, &runtime_assets)?;
         Ok(Self {
             wasm_input: t.join("wasm32-unknown-unknown/wasm-release/sow_client.wasm"),
@@ -308,8 +316,8 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
 
     // Avatars: ordinary portraits plus one 2×2 source sheet per playable hero.
     let mut avatar_sources = std::collections::BTreeMap::new();
-    let hero_ids = sow_core::player::Leader::all()
-        .map(sow_core::player::Leader::id)
+    let hero_art_slugs = sow_core::player::Leader::all()
+        .map(sow_core::player::Leader::art_slug)
         .collect::<std::collections::BTreeSet<_>>();
     for folder in ["heroes", "nations", "tribes", "campaign"] {
         for file in sorted_files(&art.join("avatars").join(folder))? {
@@ -321,7 +329,7 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
                         file.display()
                     );
                 }
-                if hero_ids.contains(stem.as_str()) {
+                if hero_art_slugs.contains(stem.as_str()) {
                     continue;
                 }
                 bail!(
@@ -364,10 +372,10 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
     )?;
     let hero_crop_dir = tempfile::tempdir().context("create temporary hero avatar crops")?;
     for leader in sow_core::player::Leader::all() {
-        let base = leader.id();
+        let base = leader.art_slug();
         let source = art.join("avatars/heroes").join(format!("{base}.webp"));
         if !source.is_file() {
-            bail!("hero {base} needs one 2 x 2 sheet at {}", source.display());
+            bail!("hero art {base} needs one 2 x 2 sheet at {}", source.display());
         }
         if let Some(first) = avatar_sources.insert(base.to_owned(), source.clone()) {
             bail!(
@@ -389,9 +397,7 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
             .zip(["happy", "calm", "fear", "angry"])
         {
             let crop = hero_expression_crop(&sheet, expression)?;
-            let crop_path = hero_crop_dir
-                .path()
-                .join(format!("{base}_{name}.png"));
+            let crop_path = hero_crop_dir.path().join(format!("{base}_{name}.png"));
             crop.save(&crop_path)
                 .with_context(|| format!("write {name} crop for hero {base}"))?;
             publish(
@@ -413,7 +419,7 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
         let stem = file_stem(&file);
         if !stem.ends_with("_desktop") && !stem.ends_with("_mobile") {
             bail!(
-                "unknown hero scene {}: use <id>_desktop or <id>_mobile",
+                "unknown hero scene {}: use <avatar>_desktop or <avatar>_mobile",
                 file.display()
             );
         }
@@ -894,10 +900,7 @@ fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
         &src.join("gameplay/buildings"),
         &dst.join("gameplay/buildings"),
     )?;
-    copy_dir(
-        &src.join("gameplay/units"),
-        &dst.join("gameplay/units"),
-    )?;
+    copy_dir(&src.join("gameplay/units"), &dst.join("gameplay/units"))?;
     copy_dir(&src.join("gameplay/music"), &dst.join("gameplay/music"))?;
     copy_dir(
         &src.join("gameplay/currency"),
@@ -1326,103 +1329,50 @@ fn compile_browser_ts(path: &Path, format: &str, context: &str) -> Result<String
     String::from_utf8(output.stdout).with_context(|| format!("TypeScript {context} is not UTF-8"))
 }
 
-fn shell_part_is_module(source: &str) -> bool {
-    source.lines().any(|line| {
-        let line = line.trim_start();
-        line.starts_with("import ") || line.starts_with("export ")
-    })
-}
-
-/// Compiles one composed shell entry. Menu parts share a single closure that
-/// spans several files, so the bundle has to be compiled as one unit instead
-/// of file by file; module parts are pre-compiled and inlined first.
-fn compile_shell_entry(shell: &Path, name: &str, source: &str) -> Result<String> {
-    // Bun classifies an entry that mentions CommonJS (main_menu.flow.ts keeps a
-    // `module.exports` line for the Node tests) as a CommonJS module and then
-    // emits a lazy `__commonJS` wrapper whose factory is never called. The whole
-    // shell bundle would load without executing a single statement. Marking the
-    // entry as an ES module keeps the composed parts at the top level.
-    let mut source = String::from(source);
-    source.push_str("\nexport {};\n");
-    let source = source.as_str();
-    let mut file = tempfile::Builder::new()
-        .prefix(".sow-shell-")
-        .suffix(".ts")
-        .tempfile_in(shell)
-        .with_context(|| format!("create temporary TypeScript entry for {name}"))?;
-    file.write_all(source.as_bytes())
-        .with_context(|| format!("write temporary TypeScript entry for {name}"))?;
-    file.flush()
-        .with_context(|| format!("flush temporary TypeScript entry for {name}"))?;
-    let output = Command::new("bun")
-        .args(["build", "--target=browser", "--format=iife"])
-        .arg(file.path())
-        .output()
-        .with_context(|| format!("compile {name} shell bundle (Bun required)"))?;
-    if !output.status.success() {
-        bail!(
-            "compile {name} shell bundle: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-    String::from_utf8(output.stdout).with_context(|| format!("{name} shell bundle is not UTF-8"))
-}
-
 fn read_shell_bundle(shell: &Path, manifest: &str, parts: &[&str]) -> Result<String> {
-    read_shell_bundle_variant(shell, manifest, parts, false)
-}
-
-fn read_shell_bundle_variant(
-    shell: &Path,
-    manifest: &str,
-    parts: &[&str],
-    portal: bool,
-) -> Result<String> {
     let manifest_source = fs::read_to_string(shell.join(manifest))?;
-    let mut entry = String::new();
-    let mut has_typescript = false;
+    // The part banner is attached first so it stays visible in the output.
+    let mut bundle = format!("/* shell bundle parts: {} */\n", parts.join(" "));
     for part in parts {
         if !manifest_source.contains(part) {
             bail!("{manifest}: missing bundle part {part}");
         }
-        let path = shell.join(part);
-        if path.extension().and_then(|value| value.to_str()) == Some("ts") {
-            has_typescript = true;
-            let source = fs::read_to_string(&path)
-                .with_context(|| format!("read shell bundle part {part}"))?;
-            if shell_part_is_module(&source) {
-                entry.push_str(&compile_shell_ts(shell, part)?);
-            } else {
-                entry.push_str(&source);
-            }
-        } else {
-            entry.push_str(
-                &fs::read_to_string(&path)
-                    .with_context(|| format!("read shell bundle part {part}"))?,
-            );
-        }
-        entry.push('\n');
+        bundle.push_str(
+            &fs::read_to_string(shell.join(part))
+                .with_context(|| format!("read shell bundle part {part}"))?,
+        );
+        bundle.push('\n');
     }
-    let entry = if portal {
-        strip_portal_menu_sections(&entry)?
-    } else {
-        entry
-    };
-    let code = if has_typescript {
-        compile_shell_entry(shell, manifest, &entry)?
-    } else {
-        entry
-    };
-    ensure_shell_entry_runs(manifest, &code)?;
-    // Bun strips comments while bundling, so the part banner is attached after.
-    let mut bundle = format!("/* shell bundle parts: {} */\n", parts.join(" "));
-    bundle.push_str(&code);
+    Ok(bundle)
+}
+
+/// Bundles the menu from its ES entry, which imports the whole menu graph.
+/// Portal builds compile a copy of the shell in which the surface seam
+/// (main_menu.surfaces.ts) is the portal's surface, so every importer of the
+/// seam gets the portal implementation, not only the entry.
+fn read_menu_bundle(shell: &Path, portal_surface: Option<&str>) -> Result<String> {
+    let scratch = tempfile::Builder::new()
+        .prefix(".sow-menu-")
+        .tempdir_in(shell.parent().context("shell directory has no parent")?)
+        .context("create menu build directory")?;
+    let build = scratch.path().join("shell");
+    copy_dir(shell, &build)?;
+    if let Some(surface) = portal_surface {
+        fs::copy(shell.join(surface), build.join("main_menu.surfaces.ts"))
+            .with_context(|| format!("copy portal surface {surface}"))?;
+        let shell_file = build.join("main_menu.shell.ts");
+        let source = fs::read_to_string(&shell_file)?;
+        fs::write(&shell_file, strip_portal_menu_sections(&source)?)?;
+    }
+    let code = compile_browser_ts(&build.join("main_menu.ts"), "iife", "main menu")?;
+    ensure_shell_entry_runs("main_menu.ts", &code)?;
+    // Bun strips comments while bundling, so the banner is attached after.
+    let surface = portal_surface.unwrap_or("main_menu.surfaces.ts");
+    let mut bundle = format!("/* menu bundle: main_menu.ts surface {surface} */\n{code}");
     if !bundle.ends_with('\n') {
         bundle.push('\n');
     }
-    if manifest == "main_menu.ts" {
-        validate_web_bundle(&bundle)?;
-    }
+    validate_web_bundle(&bundle)?;
     Ok(bundle)
 }
 
@@ -1452,11 +1402,7 @@ fn ensure_shell_entry_runs(manifest: &str, code: &str) -> Result<()> {
 }
 
 fn strip_portal_menu_sections(source: &str) -> Result<String> {
-    let mut source = strip_marked_section(
-        source,
-        "/* POKI_RENDER_REPLACEMENT_BEGIN */",
-        "/* POKI_RENDER_REPLACEMENT_END */",
-    )?;
+    let mut source = source.to_string();
     for (begin, end) in [
         (
             "/* POKI_SHARED_STORE_ACTIONS_BEGIN */",
@@ -1723,8 +1669,8 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     let jest = target == WebTarget::Jest;
     let portal = cg || poki || jest;
     let tpl = fs::read_to_string(paths.shell.join("index.html.template"))?;
-    let experience_events = compile_shell_ts(&paths.shell, "experience_events.ts")?
-        .replace("</script>", "<\\/script>");
+    let experience_events =
+        compile_shell_ts(&paths.shell, "experience_events.ts")?.replace("</script>", "<\\/script>");
     let experience_events_slot = "/* __INLINE_EXPERIENCE_EVENTS_JS__ */";
     if tpl.matches(experience_events_slot).count() != 1 {
         bail!("game HTML template must contain one experience-events slot");
@@ -1946,57 +1892,12 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "main_menu.profile.css",
         ],
     )?;
-    let menu_parts: Vec<&str> = if poki {
-        vec![
-            "sow-i18n.ts",
-            "sow-dropdown.ts",
-            "sow-campaign.ts",
-            "sow-campaign-view.ts",
-            "main_menu.flow.ts",
-            "main_menu.core.ts",
-            "main_menu.motion.ts",
-            "main_menu.lobbies.ts",
-            "main_menu.heroes.ts",
-            "main_menu.profile.ts",
-            "main_menu.poki.ts",
-            "main_menu.tutorial.ts",
-            "main_menu.shell.ts",
-            "main_menu.hud.ts",
-        ]
+    let menu_surface = if poki {
+        Some("main_menu.poki.ts")
     } else if jest {
-        vec![
-            "sow-i18n.ts",
-            "sow-dropdown.ts",
-            "sow-campaign.ts",
-            "sow-campaign-view.ts",
-            "main_menu.flow.ts",
-            "main_menu.core.ts",
-            "main_menu.motion.ts",
-            "main_menu.lobbies.ts",
-            "main_menu.heroes.ts",
-            "main_menu.profile.ts",
-            "main_menu.jest.ts",
-            "main_menu.tutorial.ts",
-            "main_menu.shell.ts",
-            "main_menu.hud.ts",
-        ]
+        Some("main_menu.jest.ts")
     } else {
-        vec![
-            "sow-i18n.ts",
-            "sow-dropdown.ts",
-            "sow-campaign.ts",
-            "sow-campaign-view.ts",
-            "main_menu.flow.ts",
-            "main_menu.core.ts",
-            "main_menu.motion.ts",
-            "main_menu.lobbies.ts",
-            "main_menu.store.ts",
-            "main_menu.heroes.ts",
-            "main_menu.profile.ts",
-            "main_menu.tutorial.ts",
-            "main_menu.shell.ts",
-            "main_menu.hud.ts",
-        ]
+        None
     };
     let building_manifest: serde_json::Value = serde_json::from_slice(
         &fs::read(paths.assets_gameplay.join("buildings/atlas.json"))
@@ -2009,7 +1910,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     );
     let mut menu_js = format!(
         "{building_manifest_js}{}",
-        read_shell_bundle_variant(&paths.shell, "main_menu.ts", &menu_parts, poki || jest)?
+        read_menu_bundle(&paths.shell, menu_surface)?
     )
     .replace("</script>", "<\\/script>");
     if poki || jest {
@@ -2328,11 +2229,13 @@ fn landing_hero_media(media: &Path) -> String {
 }
 
 fn landing_leader_showcase(english: &serde_json::Value) -> Result<String> {
-    let id = sow_core::player::Leader::default().id();
+    let leader = sow_core::player::Leader::default();
+    let id = leader.id();
+    let art_slug = leader.art_slug();
     let name = english_text(english, &format!("heroes.leader_{id}_name"))?;
     let historical = english_text(english, &format!("heroes.leader_{id}_historical"))?;
     Ok(format!(
-        r#"<picture class="showcase-art"><source media="(max-width: 700px)" srcset="/assets/shell/leaders/{id}_mobile.webp" data-detail-image-mobile><img data-detail-image src="/assets/shell/leaders/{id}_desktop.webp" alt="{name}" decoding="async"></picture>
+        r#"<picture class="showcase-art"><source media="(max-width: 700px)" srcset="/assets/shell/leaders/{art_slug}_mobile.webp" data-detail-image-mobile><img data-detail-image src="/assets/shell/leaders/{art_slug}_desktop.webp" alt="{name}" decoding="async"></picture>
           <div class="showcase-copy">
             <p class="eyebrow" data-detail-civ data-i18n="heroes.leader_{id}_civilization">{civ}</p>
             <h3 data-detail-name data-i18n="heroes.leader_{id}_name">{name}</h3>
@@ -2352,9 +2255,10 @@ fn landing_leaders(english: &serde_json::Value) -> Result<String> {
     let mut html = String::new();
     for leader in sow_core::player::Leader::all() {
         let id = leader.id();
+        let art_slug = leader.art_slug();
         let active = leader == sow_core::player::Leader::default();
         html += &format!(
-            r#"<button class="roster-card{class}" type="button" aria-pressed="{active}" data-leader-id="{id}" data-name="{name}" data-civ="{civ}" data-historical="{historical}" data-ability="{ability}" data-description="{description}"><img src="/assets/gameplay/avatars/{id}.webp" alt="" width="128" height="128" loading="lazy" decoding="async"><span data-i18n="heroes.leader_{id}_name">{name}</span></button>
+            r#"<button class="roster-card{class}" type="button" aria-pressed="{active}" data-leader-id="{id}" data-art-slug="{art_slug}" data-name="{name}" data-civ="{civ}" data-historical="{historical}" data-ability="{ability}" data-description="{description}"><img src="/assets/gameplay/avatars/{art_slug}.webp" alt="" width="128" height="128" loading="lazy" decoding="async"><span data-i18n="heroes.leader_{id}_name">{name}</span></button>
 "#,
             class = if active { " is-active" } else { "" },
             name = english_text(english, &format!("heroes.leader_{id}_name"))?,
@@ -2418,16 +2322,9 @@ fn landing_trailer(media: &Path, english: &serde_json::Value) -> Result<String> 
     ))
 }
 
-fn write_sw(out: &Path, version: &str, js: &str, wasm: &str, ts: &str) -> Result<()> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-    let tpl = fs::read_to_string(root.join("sow-web/shell/sw.js.template"))?;
-    fs::write(
-        out.join("sw.js"),
-        tpl.replace("__VERSION__", version)
-            .replace("__JS_FILE__", js)
-            .replace("__WASM_FILE__", wasm)
-            .replace("__BUILD_TS__", ts),
-    )?;
+fn write_sw(paths: &Paths, out: &Path, ts: &str) -> Result<()> {
+    let js = compile_shell_ts(&paths.shell, "sw.ts")?;
+    fs::write(out.join("sw.js"), js.replace("__BUILD_TS__", ts))?;
     Ok(())
 }
 
@@ -2896,9 +2793,8 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
                     bail!("web locale entry is not a file: {}", entry.path().display());
                 }
                 let name = entry.file_name().to_string_lossy().into_owned();
-                let is_timestamped_backup = name
-                    .strip_prefix("web.toml.bak_")
-                    .is_some_and(|suffix| {
+                let is_timestamped_backup =
+                    name.strip_prefix("web.toml.bak_").is_some_and(|suffix| {
                         !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit())
                     });
                 if name != "web.toml" && !is_timestamped_backup {
@@ -3389,6 +3285,7 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "fonts/work-sans-italic-latin.woff2",
         "fonts/work-sans-italic-latin-ext.woff2",
         "wou-auth.js",
+        "auth-callback.js",
         "privacy/index.html",
         "terms/index.html",
         "cookies/index.html",
@@ -3972,7 +3869,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
             brotli_file(&out.join(&js))?;
         }
     }
-    write_sw(out, version, &js, &wasm, &ts)?;
+    write_sw(paths, out, &ts)?;
     write_manifest(paths, out, version, &js, &wasm, &ts)?;
 
     // Marketing website at the webroot root (game shell lives under play/).
@@ -3994,6 +3891,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         ("app.ts", "app.js", "iife"),
         ("site-chrome.ts", "site-chrome.js", "iife"),
         ("wou-auth.ts", "wou-auth.js", "esm"),
+        ("auth-callback.ts", "auth-callback.js", "esm"),
     ] {
         let src = site.join(source);
         if !src.is_file() {
@@ -4065,31 +3963,28 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         out.join("llms.txt"),
     )
     .context("publish llms.txt")?;
-    fs::write(
-        out.join("sitemap.xml"),
-        {
-            let today = today_iso();
-            // Landing and client are rebuilt every release; legal pages only change on edit.
-            let pages: [(&str, &str, &str, &str); 6] = [
-                ("", &today, "weekly", "1.0"),
-                ("play/", &today, "weekly", "0.9"),
-                ("support/", "2026-09-03", "monthly", "0.4"),
-                ("privacy/", "2026-09-03", "yearly", "0.3"),
-                ("terms/", "2026-09-03", "yearly", "0.3"),
-                ("cookies/", "2026-09-03", "yearly", "0.3"),
-            ];
-            let mut xml = String::from(
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
-            );
-            for (path, lastmod, freq, priority) in pages {
-                xml.push_str(&format!(
+    fs::write(out.join("sitemap.xml"), {
+        let today = today_iso();
+        // Landing and client are rebuilt every release; legal pages only change on edit.
+        let pages: [(&str, &str, &str, &str); 6] = [
+            ("", &today, "weekly", "1.0"),
+            ("play/", &today, "weekly", "0.9"),
+            ("support/", "2026-09-03", "monthly", "0.4"),
+            ("privacy/", "2026-09-03", "yearly", "0.3"),
+            ("terms/", "2026-09-03", "yearly", "0.3"),
+            ("cookies/", "2026-09-03", "yearly", "0.3"),
+        ];
+        let mut xml = String::from(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+        );
+        for (path, lastmod, freq, priority) in pages {
+            xml.push_str(&format!(
                     "  <url>\n    <loc>https://shadowsofwar.io/{path}</loc>\n    <lastmod>{lastmod}</lastmod>\n    <changefreq>{freq}</changefreq>\n    <priority>{priority}</priority>\n  </url>\n"
                 ));
-            }
-            xml.push_str("</urlset>\n");
-            xml
-        },
-    )?;
+        }
+        xml.push_str("</urlset>\n");
+        xml
+    })?;
     println!("✅ Website staged at webroot root");
 
     prune_qs(out)?;
@@ -4333,7 +4228,7 @@ fn package_cg(
         fs::remove_file(stale_bridge)?;
     }
     export_locales(out)?;
-    write_sw(out, version, "sow_client.js", "sow_client_bg.wasm", &jh)?;
+    write_sw(paths, out, &jh)?;
     fs::write(
         out.join("game-manifest.json"),
         format!(
@@ -5568,7 +5463,6 @@ fn main() -> Result<()> {
     ensure_generated_secret(&root, "SOW_RELAY_SETTLEMENT_SECRET")?;
     ensure_generated_secret(&root, "SOW_REVENUECAT_WEBHOOK_SECRET")?;
 
-    let paths = Paths::discover()?;
     let mut cmd = String::new();
     let mut bump = false;
 
@@ -5582,6 +5476,12 @@ fn main() -> Result<()> {
         }
         i += 1;
     }
+
+    let paths = if cmd == "p" || cmd == "prod" {
+        Paths::discover_for_prod()?
+    } else {
+        Paths::discover()?
+    };
 
     match cmd.as_str() {
         "p" | "prod" => prod::execute(&paths, bump),
@@ -5614,7 +5514,10 @@ mod tests {
             let row = usize::from(y >= 32);
             *pixel = image::Rgba(colors[row * 2 + column]);
         }
-        for (index, expression) in sow_core::emote::AvatarExpression::ALL.into_iter().enumerate() {
+        for (index, expression) in sow_core::emote::AvatarExpression::ALL
+            .into_iter()
+            .enumerate()
+        {
             let crop = hero_expression_crop(&sheet, expression)?;
             assert_eq!(crop.dimensions(), (PORTRAIT_PX, PORTRAIT_PX));
             assert!(crop.pixels().all(|pixel| pixel.0 == colors[index]));
@@ -5854,6 +5757,7 @@ mod tests {
             "fonts/work-sans-italic-latin.woff2",
             "fonts/work-sans-italic-latin-ext.woff2",
             "wou-auth.ts",
+            "auth-callback.ts",
             "auth/callback/index.html",
             "8d227b8f9e6140d39e3381a1829e1db3.txt",
             "privacy/index.html",
@@ -5900,6 +5804,8 @@ mod tests {
             "main_menu.motion.ts",
             "main_menu.lobbies.ts",
             "main_menu.store.ts",
+            "main_menu.surfaces.ts",
+            "main_menu.portal-stubs.ts",
             "main_menu.poki.ts",
             "main_menu.jest.ts",
             "main_menu.heroes.ts",
@@ -6122,7 +6028,7 @@ mod tests {
         assert!(html.contains("href=\"fonts/fonts.css?v=test\""));
         assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
         assert!(html.contains("main_menu.jest.ts"));
-        assert!(html.contains("jestLocaleOptions"));
+        assert!(html.contains("jest_login"));
         assert!(!html.contains("main_menu.store.ts"));
         assert!(!html.contains("main_menu.poki.ts"));
         assert!(!html.contains("SOW_startWouOAuth"));
@@ -6485,23 +6391,7 @@ mod tests {
         // entry the factory is never invoked and the menu/campaign runtime never
         // reaches `window`, which leaves the loader stuck on "Loading...".
         let paths = Paths::discover()?;
-        let parts = [
-            "sow-i18n.ts",
-            "sow-dropdown.ts",
-            "sow-campaign.ts",
-            "sow-campaign-view.ts",
-            "main_menu.flow.ts",
-            "main_menu.core.ts",
-            "main_menu.motion.ts",
-            "main_menu.lobbies.ts",
-            "main_menu.store.ts",
-            "main_menu.heroes.ts",
-            "main_menu.profile.ts",
-            "main_menu.tutorial.ts",
-            "main_menu.shell.ts",
-            "main_menu.hud.ts",
-        ];
-        let bundle = read_shell_bundle(&paths.shell, "main_menu.ts", &parts)?;
+        let bundle = read_menu_bundle(&paths.shell, None)?;
         assert!(
             bundle.contains("window.SOWCampaign ="),
             "shell bundle lost the campaign runtime"

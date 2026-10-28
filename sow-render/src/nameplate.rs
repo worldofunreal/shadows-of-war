@@ -275,18 +275,211 @@ struct HistogramEntry {
     height: u32,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct MapIdentity {
+    width: u32,
+    height: u32,
+    tile_count: usize,
+    terrain_ptr: usize,
+    owner_ptr: usize,
+}
+
+impl MapIdentity {
+    fn of(map: &sow_core::map::GameMap) -> Option<Self> {
+        let tile_count = (map.width as usize).checked_mul(map.height as usize)?;
+        if map.width == 0
+            || map.height == 0
+            || map.terrain.len() != tile_count
+            || map.owner_states().len() != tile_count
+        {
+            return None;
+        }
+        Some(Self {
+            width: map.width,
+            height: map.height,
+            tile_count,
+            terrain_ptr: map.terrain.as_ptr() as usize,
+            owner_ptr: map.owner_states().as_ptr() as usize,
+        })
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RebuildPhase {
+    PrepareOwners,
+    Prepare,
+    Components,
+    Rectangles,
+}
+
+const COMPONENT_ID_CHUNK_TILES: usize = 4096;
+const OWNER_PREPARE_CHUNK: usize = 256;
+const OWNER_COUNT: usize = sow_core::map::GameMap::PLAYER_ID_MASK as usize + 1;
+
+#[derive(Debug, Default)]
+struct ComponentIdBuffer {
+    chunks: Vec<Box<[u32]>>,
+    len: usize,
+}
+
+impl ComponentIdBuffer {
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn set_len(&mut self, len: usize) {
+        self.len = len;
+    }
+
+    fn prepare(&mut self, index: usize) {
+        assert!(index < self.len);
+        let chunk_index = index / COMPONENT_ID_CHUNK_TILES;
+        if chunk_index == self.chunks.len() {
+            self.chunks
+                .push(vec![0; COMPONENT_ID_CHUNK_TILES].into_boxed_slice());
+        }
+        self.chunks[chunk_index][index % COMPONENT_ID_CHUNK_TILES] = 0;
+    }
+
+    fn get(&self, index: usize) -> u32 {
+        assert!(index < self.len);
+        self.chunks[index / COMPONENT_ID_CHUNK_TILES][index % COMPONENT_ID_CHUNK_TILES]
+    }
+
+    fn set(&mut self, index: usize, value: u32) {
+        assert!(index < self.len);
+        self.chunks[index / COMPONENT_ID_CHUNK_TILES][index % COMPONENT_ID_CHUNK_TILES] = value;
+    }
+}
+
+impl PartialEq for ComponentIdBuffer {
+    fn eq(&self, other: &Self) -> bool {
+        self.len == other.len && (0..self.len).all(|index| self.get(index) == other.get(index))
+    }
+}
+
+impl Eq for ComponentIdBuffer {}
+
+#[derive(Default)]
+struct OwnerLandmassBuffer {
+    chunks: Vec<Option<Box<[LargestLandmass]>>>,
+    len: usize,
+}
+
+impl OwnerLandmassBuffer {
+    fn prepare(&mut self, index: usize) {
+        self.ensure_chunk(index);
+        *self.get_mut(index).unwrap() = LargestLandmass::default();
+    }
+
+    fn get(&self, index: usize) -> Option<&LargestLandmass> {
+        if index >= self.len {
+            return None;
+        }
+        self.chunks
+            .get(index / OWNER_PREPARE_CHUNK)?
+            .as_deref()?
+            .get(index % OWNER_PREPARE_CHUNK)
+    }
+
+    fn get_mut(&mut self, index: usize) -> Option<&mut LargestLandmass> {
+        if index >= self.len {
+            return None;
+        }
+        self.chunks
+            .get_mut(index / OWNER_PREPARE_CHUNK)?
+            .as_deref_mut()?
+            .get_mut(index % OWNER_PREPARE_CHUNK)
+    }
+
+    fn set(&mut self, index: usize, value: LargestLandmass) {
+        self.ensure_chunk(index);
+        *self.get_mut(index).unwrap() = value;
+    }
+
+    fn clear(&mut self) {
+        self.len = 0;
+    }
+
+    fn ensure_chunk(&mut self, index: usize) {
+        let chunk_index = index / OWNER_PREPARE_CHUNK;
+        if self.chunks.len() <= chunk_index {
+            self.chunks.resize_with(chunk_index + 1, || None);
+        }
+        if self.chunks[chunk_index].is_none() {
+            self.chunks[chunk_index] =
+                Some(vec![LargestLandmass::default(); OWNER_PREPARE_CHUNK].into_boxed_slice());
+        }
+        self.len = self.len.max(index + 1);
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RectanglePhase {
+    ScanRow,
+    ScanRuns,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum HistogramPhase {
+    FindEnd,
+    Evaluate,
+}
+
+#[derive(Clone, Copy)]
+struct ActiveComponent {
+    id: u32,
+    owner_id: u16,
+    count: usize,
+    min_x: u32,
+    max_x: u32,
+    min_y: u32,
+    max_y: u32,
+}
+
+#[derive(Clone, Copy)]
+struct HistogramRun {
+    component_id: u32,
+    owner_id: u16,
+    start: usize,
+    end: usize,
+    column: usize,
+    rectangle_start: usize,
+    current_height: Option<u32>,
+    phase: HistogramPhase,
+}
+
+struct RebuildWork {
+    identity: MapIdentity,
+    ownership_revision: u64,
+    tick: u64,
+    phase: RebuildPhase,
+    owner_prepare_index: usize,
+    prepare_index: usize,
+    seed_cursor: usize,
+    next_component_id: u32,
+    active_component: Option<ActiveComponent>,
+    row: usize,
+    row_cursor: usize,
+    row_phase: RectanglePhase,
+    run_cursor: usize,
+    histogram_run: Option<HistogramRun>,
+}
+
 #[derive(Default)]
 pub struct NameplateLandCache {
-    component_ids: Vec<u32>,
+    component_ids: ComponentIdBuffer,
     flood_stack: Vec<usize>,
     column_heights: Vec<u32>,
     column_components: Vec<u32>,
     histogram_stack: Vec<HistogramEntry>,
-    largest_by_owner: Vec<LargestLandmass>,
+    largest_by_owner: OwnerLandmassBuffer,
     map_width: u32,
     map_height: u32,
     last_rebuild_tick: Option<u64>,
     ownership_revision: u64,
+    completed_map_identity: Option<MapIdentity>,
+    rebuild_work: Option<RebuildWork>,
 }
 
 impl NameplateLandCache {
@@ -296,6 +489,14 @@ impl NameplateLandCache {
                 player_id & sow_core::map::GameMap::PLAYER_ID_MASK,
             ))?
             .name_rect
+    }
+
+    pub fn is_ready_for(&self, map: &sow_core::map::GameMap) -> bool {
+        MapIdentity::of(map).is_some_and(|identity| {
+            self.rebuild_work.is_none()
+                && self.completed_map_identity == Some(identity)
+                && self.ownership_revision == map.ownership_revision()
+        })
     }
 
     pub fn has_landmass(&self, player_id: u16) -> bool {
@@ -316,19 +517,18 @@ impl NameplateLandCache {
         let owner_id = player_id & sow_core::map::GameMap::PLAYER_ID_MASK;
         let landmass = spawn_landmass(map, owner_id, spawn_x, spawn_y, &mut self.flood_stack)?;
         let owner_index = usize::from(owner_id);
-        if self.largest_by_owner.len() <= owner_index {
-            self.largest_by_owner
-                .resize_with(owner_index + 1, Default::default);
-        }
-        self.largest_by_owner[owner_index] = landmass;
+        self.largest_by_owner.set(owner_index, landmass);
         landmass.name_rect
     }
 
     pub fn needs_rebuild(&self, map: &sow_core::map::GameMap, tick: u64, force: bool) -> bool {
-        self.map_width != map.width
+        let Some(identity) = MapIdentity::of(map) else {
+            return true;
+        };
+        self.completed_map_identity != Some(identity)
+            || self.map_width != map.width
             || self.map_height != map.height
-            || self.component_ids.len() != map.owner_states().len()
-            || map.terrain.len() != map.owner_states().len()
+            || self.component_ids.len() != identity.tile_count
             || force
             || (self.ownership_revision != map.ownership_revision()
                 && self
@@ -337,181 +537,423 @@ impl NameplateLandCache {
     }
 
     pub fn rebuild(&mut self, map: &sow_core::map::GameMap, tick: u64) -> bool {
-        let Some(tile_count) = (map.width as usize).checked_mul(map.height as usize) else {
-            self.largest_by_owner.clear();
+        let Some(identity) = MapIdentity::of(map) else {
+            self.invalidate();
             return false;
         };
-        if map.width == 0
-            || map.height == 0
-            || map.terrain.len() != tile_count
-            || map.owner_states().len() != tile_count
-        {
-            self.largest_by_owner.clear();
-            return false;
+        self.begin_rebuild(identity, map.ownership_revision(), tick);
+        loop {
+            match self.advance_rebuild(map, tick, None, None) {
+                Ok(true) => return true,
+                Ok(false) => continue,
+                Err(()) => return false,
+            }
+        }
+    }
+
+    pub fn step_rebuild(
+        &mut self,
+        map: &sow_core::map::GameMap,
+        tick: u64,
+        budget: web_time::Duration,
+    ) -> Result<bool, ()> {
+        self.advance_rebuild(map, tick, Some(budget), None)
+    }
+
+    fn advance_rebuild(
+        &mut self,
+        map: &sow_core::map::GameMap,
+        tick: u64,
+        budget: Option<web_time::Duration>,
+        operation_limit: Option<usize>,
+    ) -> Result<bool, ()> {
+        let started_at = web_time::Instant::now();
+        let Some(identity) = MapIdentity::of(map) else {
+            self.invalidate();
+            return Err(());
+        };
+        if self.is_ready_for(map) {
+            return Ok(true);
+        }
+        let ownership_revision = map.ownership_revision();
+        if !self.rebuild_work.as_ref().is_some_and(|work| {
+            work.identity == identity && work.ownership_revision == ownership_revision
+        }) {
+            self.begin_rebuild(identity, ownership_revision, tick);
         }
 
-        self.largest_by_owner.resize_with(
-            usize::from(sow_core::map::GameMap::PLAYER_ID_MASK) + 1,
-            Default::default,
-        );
-        self.largest_by_owner.fill(LargestLandmass::default());
-        self.component_ids.resize(tile_count, 0);
-        self.component_ids.fill(0);
-        self.flood_stack.clear();
+        let width = identity.width as usize;
+        let height = identity.height as usize;
+        let tile_count = identity.tile_count;
+        let mut operations = 0usize;
 
-        let width = map.width as usize;
-        let height = map.height as usize;
-        let mut next_component_id = 0u32;
-
-        // Flood-fill each owned land component once. Row-major seeds make equal
-        // components deterministic: the first component for an owner wins.
-        for seed in 0..tile_count {
-            let owner_id = map.owner_states()[seed] & sow_core::map::GameMap::PLAYER_ID_MASK;
-            if owner_id == 0 || !map.terrain[seed].is_land() || self.component_ids[seed] != 0 {
-                continue;
+        loop {
+            if operation_limit.is_some_and(|limit| operations >= limit) {
+                return Ok(false);
             }
-            let Some(component_id) = next_component_id.checked_add(1) else {
-                self.largest_by_owner.fill(LargestLandmass::default());
-                return false;
-            };
-            next_component_id = component_id;
-            self.component_ids[seed] = component_id;
-            self.flood_stack.push(seed);
+            if operations != 0
+                && operations.is_multiple_of(256)
+                && budget.is_some_and(|budget| started_at.elapsed() >= budget)
+            {
+                return Ok(false);
+            }
 
-            let mut count = 0usize;
-            let mut min_x = (seed % width) as u32;
-            let mut max_x = min_x;
-            let mut min_y = (seed / width) as u32;
-            let mut max_y = min_y;
-            while let Some(index) = self.flood_stack.pop() {
-                let x = index % width;
-                let y = index / width;
-                count += 1;
-                min_x = min_x.min(x as u32);
-                max_x = max_x.max(x as u32);
-                min_y = min_y.min(y as u32);
-                max_y = max_y.max(y as u32);
+            let phase = self.rebuild_work.as_ref().unwrap().phase;
+            match phase {
+                RebuildPhase::PrepareOwners => {
+                    let index = self.rebuild_work.as_ref().unwrap().owner_prepare_index;
+                    if index == OWNER_COUNT {
+                        self.rebuild_work.as_mut().unwrap().phase = RebuildPhase::Prepare;
+                        continue;
+                    }
+                    self.largest_by_owner.prepare(index);
+                    self.rebuild_work.as_mut().unwrap().owner_prepare_index += 1;
+                    operations += 1;
+                }
+                RebuildPhase::Prepare => {
+                    let index = self.rebuild_work.as_ref().unwrap().prepare_index;
+                    if index == tile_count {
+                        self.rebuild_work.as_mut().unwrap().phase = RebuildPhase::Components;
+                        continue;
+                    }
+                    self.component_ids.prepare(index);
+                    self.rebuild_work.as_mut().unwrap().prepare_index += 1;
+                    operations += 1;
+                }
+                RebuildPhase::Components => {
+                    let seed = self.rebuild_work.as_ref().unwrap().seed_cursor;
+                    if self
+                        .rebuild_work
+                        .as_ref()
+                        .unwrap()
+                        .active_component
+                        .is_none()
+                    {
+                        if seed == tile_count {
+                            self.column_heights.resize(width, 0);
+                            self.column_heights.fill(0);
+                            self.column_components.resize(width, 0);
+                            self.column_components.fill(0);
+                            let work = self.rebuild_work.as_mut().unwrap();
+                            work.phase = RebuildPhase::Rectangles;
+                            work.row = 0;
+                            work.row_cursor = 0;
+                            work.row_phase = RectanglePhase::ScanRow;
+                            work.run_cursor = 0;
+                            continue;
+                        }
 
-                let first_y = y.saturating_sub(1);
-                let last_y = (y + 1).min(height - 1);
-                let first_x = x.saturating_sub(1);
-                let last_x = (x + 1).min(width - 1);
-                for neighbor_y in first_y..=last_y {
-                    let row = neighbor_y * width;
-                    for neighbor_x in first_x..=last_x {
-                        let neighbor = row + neighbor_x;
-                        if self.component_ids[neighbor] != 0
-                            || !map.terrain[neighbor].is_land()
-                            || map.owner_states()[neighbor] & sow_core::map::GameMap::PLAYER_ID_MASK
-                                != owner_id
+                        let owner_id =
+                            map.owner_states()[seed] & sow_core::map::GameMap::PLAYER_ID_MASK;
+                        self.rebuild_work.as_mut().unwrap().seed_cursor += 1;
+                        operations += 1;
+                        if owner_id == 0
+                            || !map.terrain[seed].is_land()
+                            || self.component_ids.get(seed) != 0
                         {
                             continue;
                         }
-                        self.component_ids[neighbor] = component_id;
-                        self.flood_stack.push(neighbor);
-                    }
-                }
-            }
-
-            let best = &mut self.largest_by_owner[usize::from(owner_id)];
-            if count > best.tile_count {
-                best.component_id = component_id;
-                best.tile_count = count;
-                best.bounds = TileRect {
-                    x0: min_x,
-                    y0: min_y,
-                    x1: max_x + 1,
-                    y1: max_y + 1,
-                };
-            }
-        }
-
-        self.column_heights.resize(width, 0);
-        self.column_heights.fill(0);
-        self.column_components.resize(width, 0);
-        self.column_components.fill(0);
-
-        // Exact maximal-rectangle scan, split at component boundaries so a plate
-        // cannot bridge water or another player's territory.
-        for y in 0..height {
-            let row = y * width;
-            for x in 0..width {
-                let index = row + x;
-                let component_id = self.component_ids[index];
-                let owner_id = map.owner_states()[index] & sow_core::map::GameMap::PLAYER_ID_MASK;
-                let selected = component_id != 0
-                    && self.largest_by_owner[usize::from(owner_id)].component_id == component_id;
-                if selected {
-                    self.column_heights[x] = if self.column_components[x] == component_id {
-                        self.column_heights[x].saturating_add(1)
-                    } else {
-                        1
-                    };
-                    self.column_components[x] = component_id;
-                } else {
-                    self.column_heights[x] = 0;
-                    self.column_components[x] = 0;
-                }
-            }
-            let mut x = 0usize;
-            while x < width {
-                let component_id = self.column_components[x];
-                if component_id == 0 {
-                    x += 1;
-                    continue;
-                }
-                let start = x;
-                while x < width && self.column_components[x] == component_id {
-                    x += 1;
-                }
-                let end = x;
-                let owner_id =
-                    map.owner_states()[row + start] & sow_core::map::GameMap::PLAYER_ID_MASK;
-                self.histogram_stack.clear();
-                for column in start..=end {
-                    let current_height = if column == end {
-                        0
-                    } else {
-                        self.column_heights[column]
-                    };
-                    let mut rectangle_start = column;
-                    while self
-                        .histogram_stack
-                        .last()
-                        .is_some_and(|entry| entry.height > current_height)
-                    {
-                        let entry = self.histogram_stack.pop().expect("stack was checked");
-                        let candidate = TileRect {
-                            x0: entry.start as u32,
-                            y0: y as u32 + 1 - entry.height,
-                            x1: column as u32,
-                            y1: y as u32 + 1,
+                        let Some(component_id) = self
+                            .rebuild_work
+                            .as_ref()
+                            .unwrap()
+                            .next_component_id
+                            .checked_add(1)
+                        else {
+                            self.invalidate();
+                            return Err(());
                         };
-                        let best = &mut self.largest_by_owner[usize::from(owner_id)];
-                        if preferred_name_rect(candidate, best.name_rect, best.bounds) {
-                            best.name_rect = Some(candidate);
-                        }
-                        rectangle_start = entry.start;
+                        let x = (seed % width) as u32;
+                        let y = (seed / width) as u32;
+                        self.component_ids.set(seed, component_id);
+                        self.flood_stack.push(seed);
+                        let work = self.rebuild_work.as_mut().unwrap();
+                        work.next_component_id = component_id;
+                        work.active_component = Some(ActiveComponent {
+                            id: component_id,
+                            owner_id,
+                            count: 0,
+                            min_x: x,
+                            max_x: x,
+                            min_y: y,
+                            max_y: y,
+                        });
+                        continue;
                     }
-                    if current_height > 0
-                        && self
+
+                    let Some(index) = self.flood_stack.pop() else {
+                        self.invalidate();
+                        return Err(());
+                    };
+                    let x = index % width;
+                    let y = index / width;
+                    let mut component = self
+                        .rebuild_work
+                        .as_ref()
+                        .unwrap()
+                        .active_component
+                        .unwrap();
+                    component.count += 1;
+                    component.min_x = component.min_x.min(x as u32);
+                    component.max_x = component.max_x.max(x as u32);
+                    component.min_y = component.min_y.min(y as u32);
+                    component.max_y = component.max_y.max(y as u32);
+
+                    let first_y = y.saturating_sub(1);
+                    let last_y = (y + 1).min(height - 1);
+                    let first_x = x.saturating_sub(1);
+                    let last_x = (x + 1).min(width - 1);
+                    for neighbor_y in first_y..=last_y {
+                        let row = neighbor_y * width;
+                        for neighbor_x in first_x..=last_x {
+                            let neighbor = row + neighbor_x;
+                            if self.component_ids.get(neighbor) != 0
+                                || !map.terrain[neighbor].is_land()
+                                || map.owner_states()[neighbor]
+                                    & sow_core::map::GameMap::PLAYER_ID_MASK
+                                    != component.owner_id
+                            {
+                                continue;
+                            }
+                            self.component_ids.set(neighbor, component.id);
+                            self.flood_stack.push(neighbor);
+                        }
+                    }
+                    operations += 1;
+                    if self.flood_stack.is_empty() {
+                        let best = self
+                            .largest_by_owner
+                            .get_mut(usize::from(component.owner_id))
+                            .expect("owner buffers are prepared before component traversal");
+                        if component.count > best.tile_count {
+                            best.component_id = component.id;
+                            best.tile_count = component.count;
+                            best.bounds = TileRect {
+                                x0: component.min_x,
+                                y0: component.min_y,
+                                x1: component.max_x + 1,
+                                y1: component.max_y + 1,
+                            };
+                        }
+                        self.rebuild_work.as_mut().unwrap().active_component = None;
+                    } else {
+                        self.rebuild_work.as_mut().unwrap().active_component = Some(component);
+                    }
+                }
+                RebuildPhase::Rectangles => {
+                    let row = self.rebuild_work.as_ref().unwrap().row;
+                    if row == height {
+                        let work = self.rebuild_work.take().unwrap();
+                        self.map_width = identity.width;
+                        self.map_height = identity.height;
+                        self.ownership_revision = work.ownership_revision;
+                        self.last_rebuild_tick = Some(work.tick);
+                        self.completed_map_identity = Some(work.identity);
+                        return Ok(true);
+                    }
+
+                    let work = self.rebuild_work.as_ref().unwrap();
+                    if work.row_phase == RectanglePhase::ScanRow {
+                        if work.row_cursor == width {
+                            let work = self.rebuild_work.as_mut().unwrap();
+                            work.row_phase = RectanglePhase::ScanRuns;
+                            work.run_cursor = 0;
+                            continue;
+                        }
+                        let x = work.row_cursor;
+                        let index = row * width + x;
+                        let component_id = self.component_ids.get(index);
+                        let owner_id =
+                            map.owner_states()[index] & sow_core::map::GameMap::PLAYER_ID_MASK;
+                        let selected = component_id != 0
+                            && self
+                                .largest_by_owner
+                                .get(usize::from(owner_id))
+                                .is_some_and(|landmass| landmass.component_id == component_id);
+                        if selected {
+                            self.column_heights[x] = if self.column_components[x] == component_id {
+                                self.column_heights[x].saturating_add(1)
+                            } else {
+                                1
+                            };
+                            self.column_components[x] = component_id;
+                        } else {
+                            self.column_heights[x] = 0;
+                            self.column_components[x] = 0;
+                        }
+                        self.rebuild_work.as_mut().unwrap().row_cursor += 1;
+                        operations += 1;
+                        continue;
+                    }
+
+                    if let Some(run) = self.rebuild_work.as_ref().unwrap().histogram_run {
+                        if run.phase == HistogramPhase::FindEnd {
+                            let same_component = run.end < width
+                                && self.column_components[run.end] == run.component_id;
+                            let run = self
+                                .rebuild_work
+                                .as_mut()
+                                .unwrap()
+                                .histogram_run
+                                .as_mut()
+                                .unwrap();
+                            if same_component {
+                                run.end += 1;
+                            } else {
+                                run.phase = HistogramPhase::Evaluate;
+                                run.column = run.start;
+                            }
+                            operations += 1;
+                            continue;
+                        }
+
+                        if run.column > run.end {
+                            let work = self.rebuild_work.as_mut().unwrap();
+                            work.run_cursor = run.end;
+                            work.histogram_run = None;
+                            self.histogram_stack.clear();
+                            continue;
+                        }
+
+                        let current_height = run.current_height.unwrap_or_else(|| {
+                            if run.column == run.end {
+                                0
+                            } else {
+                                self.column_heights[run.column]
+                            }
+                        });
+                        if run.current_height.is_none() {
+                            let active_run = self
+                                .rebuild_work
+                                .as_mut()
+                                .unwrap()
+                                .histogram_run
+                                .as_mut()
+                                .unwrap();
+                            active_run.current_height = Some(current_height);
+                            active_run.rectangle_start = run.column;
+                        }
+                        let rectangle_start = self
+                            .rebuild_work
+                            .as_ref()
+                            .unwrap()
+                            .histogram_run
+                            .unwrap()
+                            .rectangle_start;
+
+                        if self
                             .histogram_stack
                             .last()
-                            .is_none_or(|entry| entry.height < current_height)
-                    {
-                        self.histogram_stack.push(HistogramEntry {
-                            start: rectangle_start,
-                            height: current_height,
-                        });
+                            .is_some_and(|entry| entry.height > current_height)
+                        {
+                            let entry = self.histogram_stack.pop().expect("stack was checked");
+                            let candidate = TileRect {
+                                x0: entry.start as u32,
+                                y0: row as u32 + 1 - entry.height,
+                                x1: run.column as u32,
+                                y1: row as u32 + 1,
+                            };
+                            let best = self
+                                .largest_by_owner
+                                .get_mut(usize::from(run.owner_id))
+                                .expect("owner buffers are prepared before rectangle traversal");
+                            if preferred_name_rect(candidate, best.name_rect, best.bounds) {
+                                best.name_rect = Some(candidate);
+                            }
+                            self.rebuild_work
+                                .as_mut()
+                                .unwrap()
+                                .histogram_run
+                                .as_mut()
+                                .unwrap()
+                                .rectangle_start = entry.start;
+                        } else {
+                            if current_height > 0
+                                && self
+                                    .histogram_stack
+                                    .last()
+                                    .is_none_or(|entry| entry.height < current_height)
+                            {
+                                self.histogram_stack.push(HistogramEntry {
+                                    start: rectangle_start,
+                                    height: current_height,
+                                });
+                            }
+                            let active_run = self
+                                .rebuild_work
+                                .as_mut()
+                                .unwrap()
+                                .histogram_run
+                                .as_mut()
+                                .unwrap();
+                            active_run.column += 1;
+                            active_run.current_height = None;
+                        }
+                        operations += 1;
+                        continue;
                     }
+
+                    let run_cursor = work.run_cursor;
+                    if run_cursor == width {
+                        let work = self.rebuild_work.as_mut().unwrap();
+                        work.row += 1;
+                        work.row_cursor = 0;
+                        work.row_phase = RectanglePhase::ScanRow;
+                        continue;
+                    }
+                    let component_id = self.column_components[run_cursor];
+                    if component_id == 0 {
+                        self.rebuild_work.as_mut().unwrap().run_cursor += 1;
+                        operations += 1;
+                        continue;
+                    }
+                    let owner_id = map.owner_states()[row * width + run_cursor]
+                        & sow_core::map::GameMap::PLAYER_ID_MASK;
+                    self.histogram_stack.clear();
+                    self.rebuild_work.as_mut().unwrap().histogram_run = Some(HistogramRun {
+                        component_id,
+                        owner_id,
+                        start: run_cursor,
+                        end: run_cursor,
+                        column: run_cursor,
+                        rectangle_start: run_cursor,
+                        current_height: None,
+                        phase: HistogramPhase::FindEnd,
+                    });
                 }
             }
         }
-        self.map_width = map.width;
-        self.map_height = map.height;
-        self.ownership_revision = map.ownership_revision();
-        self.last_rebuild_tick = Some(tick);
-        true
+    }
+
+    fn begin_rebuild(&mut self, identity: MapIdentity, ownership_revision: u64, tick: u64) {
+        self.completed_map_identity = None;
+        self.component_ids.set_len(identity.tile_count);
+        self.flood_stack.clear();
+        self.column_heights.clear();
+        self.column_components.clear();
+        self.histogram_stack.clear();
+        self.rebuild_work = Some(RebuildWork {
+            identity,
+            ownership_revision,
+            tick,
+            phase: RebuildPhase::PrepareOwners,
+            owner_prepare_index: 0,
+            prepare_index: 0,
+            seed_cursor: 0,
+            next_component_id: 0,
+            active_component: None,
+            row: 0,
+            row_cursor: 0,
+            row_phase: RectanglePhase::ScanRow,
+            run_cursor: 0,
+            histogram_run: None,
+        });
+    }
+
+    fn invalidate(&mut self) {
+        self.completed_map_identity = None;
+        self.rebuild_work = None;
+        self.largest_by_owner.clear();
     }
 }
 
@@ -1181,6 +1623,139 @@ mod tests {
         map.set_owner_id(x, y, owner);
     }
 
+    fn rebuild_in_small_steps(cache: &mut NameplateLandCache, map: &sow_core::map::GameMap) {
+        while !cache.is_ready_for(map) {
+            cache
+                .advance_rebuild(map, 0, None, Some(1))
+                .expect("valid map rebuild");
+        }
+    }
+
+    #[test]
+    fn incremental_rebuild_matches_full_rebuild_for_islands_holes_and_multiple_owners() {
+        let mut map = test_map(14, 10);
+        for y in 1..6 {
+            for x in 1..6 {
+                if (x, y) != (3, 3) {
+                    own_tile(&mut map, x, y, 1);
+                }
+            }
+        }
+        own_tile(&mut map, 11, 8, 1);
+        for y in 1..5 {
+            for x in 7..11 {
+                own_tile(&mut map, x, y, 2);
+            }
+        }
+        own_tile(&mut map, 0, 9, 3);
+
+        let mut full = NameplateLandCache::default();
+        assert!(full.rebuild(&map, 0));
+        let mut incremental = NameplateLandCache::default();
+        rebuild_in_small_steps(&mut incremental, &map);
+
+        assert_eq!(incremental.component_ids, full.component_ids);
+        for owner in 1..=3 {
+            assert_eq!(incremental.has_landmass(owner), full.has_landmass(owner));
+            assert_eq!(incremental.rect_for(owner), full.rect_for(owner));
+        }
+    }
+
+    #[test]
+    fn incremental_rebuild_completes_for_a_map_without_land() {
+        let map = test_map(8, 6);
+        let mut full = NameplateLandCache::default();
+        assert!(full.rebuild(&map, 0));
+        let mut incremental = NameplateLandCache::default();
+        rebuild_in_small_steps(&mut incremental, &map);
+
+        assert!(incremental.is_ready_for(&map));
+        assert_eq!(incremental.component_ids, full.component_ids);
+        assert_eq!(incremental.rect_for(1), None);
+    }
+
+    #[test]
+    fn component_id_buffer_prepares_each_chunk_and_reuses_it() {
+        let mut ids = ComponentIdBuffer::default();
+        ids.set_len(COMPONENT_ID_CHUNK_TILES + 1);
+
+        ids.prepare(0);
+        ids.set(0, 17);
+        ids.prepare(COMPONENT_ID_CHUNK_TILES);
+        ids.set(COMPONENT_ID_CHUNK_TILES, 23);
+        ids.prepare(0);
+
+        assert_eq!(ids.len(), COMPONENT_ID_CHUNK_TILES + 1);
+        assert_eq!(ids.get(0), 0);
+        assert_eq!(ids.get(COMPONENT_ID_CHUNK_TILES), 23);
+    }
+
+    #[test]
+    fn explicit_rebuild_runs_even_when_the_cache_is_already_ready() {
+        let map = test_map(8, 6);
+        let mut cache = NameplateLandCache::default();
+
+        assert!(cache.rebuild(&map, 1));
+        assert_eq!(cache.last_rebuild_tick, Some(1));
+        assert!(cache.rebuild(&map, 2));
+        assert_eq!(cache.last_rebuild_tick, Some(2));
+    }
+
+    #[test]
+    fn changing_maps_during_incremental_rebuild_discards_the_old_result() {
+        let mut old_map = test_map(16, 12);
+        let mut new_map = test_map(16, 12);
+        for y in 2..7 {
+            for x in 2..7 {
+                own_tile(&mut old_map, x, y, 1);
+                own_tile(&mut new_map, x, y, 2);
+            }
+        }
+        assert_eq!(old_map.ownership_revision(), new_map.ownership_revision());
+
+        let mut cache = NameplateLandCache::default();
+        assert!(
+            !cache
+                .advance_rebuild(&old_map, 0, None, Some(1))
+                .expect("valid old map")
+        );
+        assert!(!cache.is_ready_for(&old_map));
+
+        rebuild_in_small_steps(&mut cache, &new_map);
+        assert!(cache.is_ready_for(&new_map));
+        assert!(!cache.is_ready_for(&old_map));
+        assert_eq!(cache.rect_for(1), None);
+        assert!(cache.rect_for(2).is_some());
+    }
+
+    #[test]
+    fn ownership_revision_change_restarts_incremental_rebuild() {
+        let mut map = test_map(16, 12);
+        for y in 2..7 {
+            for x in 2..7 {
+                own_tile(&mut map, x, y, 1);
+            }
+        }
+        let mut cache = NameplateLandCache::default();
+        assert!(
+            !cache
+                .advance_rebuild(&map, 0, None, Some(1))
+                .expect("valid map")
+        );
+        let old_revision = map.ownership_revision();
+        map.set_owner_id(3, 3, 2);
+        assert_ne!(map.ownership_revision(), old_revision);
+        assert!(!cache.is_ready_for(&map));
+
+        rebuild_in_small_steps(&mut cache, &map);
+        let mut expected = NameplateLandCache::default();
+        assert!(expected.rebuild(&map, 0));
+        assert!(cache.is_ready_for(&map));
+        assert_eq!(cache.component_ids, expected.component_ids);
+        assert_eq!(cache.rect_for(1), expected.rect_for(1));
+        assert_eq!(cache.rect_for(2), expected.rect_for(2));
+    }
+
     #[test]
     fn chooses_the_largest_island_and_keeps_its_rectangle_on_owned_land() {
         let mut map = test_map(10, 8);
@@ -1210,7 +1785,7 @@ mod tests {
         assert!(cache.needs_rebuild(&map, 1, true));
         assert!(cache.rebuild(&map, LAND_REFRESH_TICKS));
         assert!(!cache.needs_rebuild(&map, LAND_REFRESH_TICKS, false));
-        assert_eq!(cache.component_ids[hole], 0);
+        assert_eq!(cache.component_ids.get(hole), 0);
         let rect = cache.rect_for(1).expect("largest landmass rectangle");
         assert!(rect.area() < 25, "selected rectangle: {rect:?}");
         assert!(rect.x0 >= 1 && rect.x1 <= 6 && rect.y0 >= 1 && rect.y1 <= 6);

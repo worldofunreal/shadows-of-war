@@ -176,7 +176,12 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
             this.parentNode = null;
             this.dataset = {};
             this.attributes = {};
-            this.classList = { toggle() {}, add() {} };
+            this.classList = {
+                toggle() {},
+                add() {},
+                remove() {},
+                contains: (name) => name === "hidden",
+            };
             this.hidden = false;
             this.textContent = "";
             this.replacements = 0;
@@ -226,12 +231,22 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
         closest(selector) {
             return selector === "[data-command]" && this.dataset.command ? this : null;
         }
+        contains() {
+            return false;
+        }
     }
     const calls = [];
     const listeners = {};
     let locale = "en";
     let elements = new Map();
     const context = vm.createContext({
+        Element,
+        HTMLElement: Element,
+        HTMLButtonElement: Element,
+        HTMLImageElement: Element,
+        HTMLInputElement: Element,
+        Node: Object,
+        avatarIdentityKeys: new WeakMap(),
         hudRoot: new Element("root"),
         hudDevLayer: null,
         document: {
@@ -240,6 +255,13 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
             getElementById: (id) => elements.get(id) || null,
             querySelector: () => null,
         },
+        requiredHudElement: (id) => elements.get(id) || new Element("div"),
+        requiredHudInput: (id) => elements.get(id) || new Element("input"),
+        requiredHudImage: (id) => elements.get(id) || new Element("img"),
+        requiredHudButton: (id) => elements.get(id) || new Element("button"),
+        requiredHudButtonQuery: () => new Element("button"),
+        requiredHudQuery: () => new Element("div"),
+        createPlayerIdentity: () => ({ element: new Element("div") }),
         window: {
             addEventListener: (type, listener) => {
                 listeners[type] = listener;
@@ -257,7 +279,7 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
         clearNotificationCard() {},
     });
     const stateSource = hud
-        .slice(hud.indexOf("    let hudState ="), hud.indexOf("    function send("))
+        .slice(hud.indexOf("    let hudState:"), hud.indexOf("    function send("))
         .replace(/^(\s*)(?:const|let)(?=\s)/gm, "$1var");
     vm.runInContext(stateSource, context);
     const endgameRefsStart = hud.indexOf("    function endgameStatRefs(");
@@ -272,7 +294,7 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
     const renderHudStart = hud.indexOf("\n    function renderHud(", rendererStart);
     const avatarStart = hud.indexOf("    function bindAvatarFallback(");
     const avatarEnd = hud.indexOf("\n    function clearNotificationCard(", avatarStart);
-    const clickStart = hud.indexOf("        function handleHudClick(event) {");
+    const clickStart = hud.indexOf("        function handleHudClick(event");
     const clickEnd = hud.indexOf('        hudRoot.addEventListener("click", handleHudClick)', clickStart);
     vm.runInContext(
         hud.slice(hud.indexOf("    function send("), hud.indexOf("    function setHudPanel(")) +
@@ -530,7 +552,7 @@ test("all HUD message classes have one explicit presentation", () => {
 });
 
 test("HUD notifications coalesce, prioritize, reuse both entity avatars, and expire within fixed bounds", () => {
-    const start = hud.indexOf("    function createNotificationCard(container, contextual) {");
+    const start = hud.indexOf("    function createNotificationCard(");
     const end = hud.indexOf("\n    function renderHud(", start);
     assert.ok(start >= 0 && end > start);
     const avatarSlot = () => ({
@@ -558,9 +580,11 @@ test("HUD notifications coalesce, prioritize, reuse both entity avatars, and exp
     const timers = [];
     const context = {
         hudRefs: { notifications: {} },
+        avatarIdentityKeys: new WeakMap(),
         hudRoot: { dataset: {} },
         notificationCursor: 0,
         notificationTimer: null,
+        hudScreenSize: null,
         activeNotifications: [],
         notificationCards: cards,
         Date: { now: () => now },
@@ -584,13 +608,13 @@ test("HUD notifications coalesce, prioritize, reuse both entity avatars, and exp
             },
         },
     };
-    const screenStart = hud.indexOf("    function measureHudScreen() {");
+    const screenStart = hud.indexOf("    function measureHudScreen(");
     const screenEnd = hud.indexOf("    function compactHudDensity(", screenStart);
     assert.ok(screenStart >= 0 && screenEnd > screenStart);
     const renderer =
         hud.slice(screenStart, screenEnd) +
         hud.slice(start, end) +
-        "\nthis.renderNotifications = renderNotifications;";
+        "\nthis.renderNotifications = renderNotifications; this.measureHudScreen = measureHudScreen;";
     vm.runInNewContext(renderer, context);
     const add = (id, key, priority, group, values, avatars, sumValues = false) => {
         now += 100;
@@ -779,7 +803,7 @@ test("HUD notifications coalesce, prioritize, reuse both entity avatars, and exp
     );
     context.window.innerWidth = 390;
     context.window.innerHeight = 844;
-    context.renderNotifications([], false);
+    context.renderNotifications([], false, context.measureHudScreen());
     assert.equal(
         context.activeNotifications.length,
         1,
@@ -829,7 +853,7 @@ test("HUD notifications coalesce, prioritize, reuse both entity avatars, and exp
 
     context.window.innerWidth = 1366;
     context.window.innerHeight = 768;
-    context.renderNotifications([], false);
+    context.renderNotifications([], false, context.measureHudScreen());
     assert.equal(
         context.activeNotifications.length,
         1,
@@ -841,7 +865,7 @@ test("HUD notifications coalesce, prioritize, reuse both entity avatars, and exp
     context.window.innerWidth = 844;
     context.window.innerHeight = 390;
     context.hudRoot.dataset.compact = "true";
-    context.renderNotifications([], false);
+    context.renderNotifications([], false, context.measureHudScreen());
     assert.equal(context.activeNotifications.length, 1, "compact landscape has the same single-card policy");
     assert.equal(context.activeNotifications[0].entry.id, 119);
     add(120, "hud.betrayal", 4, "betrayal:8", {}, portraitPair);
@@ -859,7 +883,7 @@ test("HUD notifications coalesce, prioritize, reuse both entity avatars, and exp
 });
 
 test("notification cards render typed avatars, recover failed art, and clear reused slots", () => {
-    const start = hud.indexOf("    function createNotificationCard(container, contextual) {");
+    const start = hud.indexOf("    function createNotificationCard(");
     const end = hud.indexOf("\n    function renderHud(", start);
     assert.ok(start >= 0 && end > start);
     class Element {
@@ -892,6 +916,7 @@ test("notification cards render typed avatars, recover failed art, and clear reu
     const container = new Element("container");
     const context = {
         document: { createElement: (tagName) => new Element(tagName) },
+        avatarIdentityKeys: new WeakMap(),
         asset: (path) => "/assets/" + path,
         hudIcon: (name) => name,
         statusIcon: (name) => name,
@@ -979,6 +1004,7 @@ test("hero ability notices show that hero's ability icon in the seal", () => {
         asset: (p) => "/assets/" + p,
         hudIcon: (name) => "<svg data-icon='" + name + "'></svg>",
         statusIcon: (name) => "<svg data-icon='" + name + "'></svg>",
+        leaderById: (id) => ({ art_slug: id }),
     });
     assert.match(
         notificationIcon("hud.elimination", { hero: "lady_six_sky", victim: "Tribe" }),

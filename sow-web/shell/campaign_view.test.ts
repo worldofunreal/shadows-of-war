@@ -2221,7 +2221,7 @@ test("campaign dialogue keeps a compact speaker portrait on narrow screens", () 
 });
 
 test("campaign dialogue resolves story copy through the shared catalog", () => {
-    const resolverStart = tutorial.indexOf("function tr(key)");
+    const resolverStart = tutorial.indexOf("function tr(key");
     const resolverEnd = tutorial.indexOf("function zoomMode()", resolverStart);
     assert.ok(resolverStart >= 0 && resolverEnd > resolverStart);
     const resolver = tutorial.slice(resolverStart, resolverEnd);
@@ -2279,7 +2279,7 @@ test("player nameplate keeps the active leader portrait and shows the nickname r
     assert.ok(plateStart >= 0 && plateEnd > plateStart);
     const plateUpdate = hud.slice(plateStart, plateEnd);
     assert.match(plateUpdate, /plateLeader = leaderById\(hud\.player_leader/);
-    assert.match(plateUpdate, /gameplay\/avatars\/"\s*\+\s*plateLeader\.slug/);
+    assert.match(plateUpdate, /gameplay\/avatars\/"\s*\+\s*\(plateLeader\.art_slug \|\| plateLeader\.slug\)/);
     assert.match(plateUpdate, /platePlayerName = String\(hud\.player_name/);
     assert.match(plateUpdate, /plateName\.textContent = platePlayerName/);
     assert.doesNotMatch(plateUpdate, /plateName\.textContent = plateLeader\.name/);
@@ -2652,6 +2652,7 @@ test("a compact campaign guide scrolls a dock target into view once per step", (
     };
     const target = {
         disabled: false,
+        matches: () => false,
         closest: () => strip,
         getBoundingClientRect: () => ({ left: 370, right: 410 }),
         scrollIntoView: (options) => {
@@ -2773,7 +2774,7 @@ test("campaign replay hand resolves the selected episode card, not always Boudic
 });
 
 test("tutorial hand selectors stay tied to controls rendered by the game", () => {
-    const targetBlock = campaignEngine.match(/export const UI_TARGETS = \{([\s\S]*?)\n\};/);
+    const targetBlock = campaignEngine.match(/export const UI_TARGETS(?::[^=]+)?\s*=\s*\{([\s\S]*?)\n\};/);
     assert.ok(targetBlock);
     const sources = [shellSource, lobbiesSource, coreSource, hud].join("\n");
     for (const [, selector] of targetBlock[1].matchAll(/:\s*'([^']+)'/g)) {
@@ -2795,6 +2796,21 @@ test("tutorial hand selectors stay tied to controls rendered by the game", () =>
         }
         if (selector === "#sow-hud-slider") assert.match(hud, /id="sow-hud-slider"/);
     }
+});
+
+test("tutorial pointer has its own channel so mouse moves do not rebuild the HUD", () => {
+    const pointerStart = webMenu.indexOf("pub(crate) fn publish_tutorial_pointer");
+    const pointerPublisher = webMenu.slice(
+        pointerStart,
+        webMenu.indexOf("pub(crate) fn publish_state", pointerStart),
+    );
+    assert.match(pointerPublisher, /SOW_tutorial_pointer_update/);
+    assert.doesNotMatch(pointerPublisher, /publish_state|LAST_HUD_KEY/);
+
+    const hudKeyStart = webMenu.indexOf("fn hud_publish_key");
+    const hudKey = webMenu.slice(hudKeyStart, webMenu.indexOf("\n#[cfg", hudKeyStart));
+    assert.doesNotMatch(hudKey, /last_mouse_[xy]/);
+    assert.match(hudKey, /tutorial_target_under_pointer\(/);
 });
 
 test("tutorial camera anchors and paused build guides publish current map coordinates", () => {
@@ -3070,7 +3086,7 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     );
     assert.match(
         anchorSource,
-        /resolveUiTarget\(\s*guide\.target,\s*document,\s*runtime\.episodeId,\s*guideFacts,?\s*\)/,
+        /resolveUiTarget\(\s*guide\.target,\s*document,\s*runtime\.episodeId(?:\s*\|\|\s*undefined)?,\s*guideFacts,?\s*\)/,
     );
     assert.match(
         anchorSource,

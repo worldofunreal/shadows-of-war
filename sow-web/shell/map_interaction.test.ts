@@ -37,9 +37,9 @@ void fs.readFileSync(path.join(shell, "../../sow-client/src/render/world/overlay
 // Loads the command-ring helpers (ringSlots … ringActivate) with stubbed HUD dependencies.
 function loadRing(overrides = {}) {
     const start = hud.indexOf("    const RING_SLOTS = 6;");
-    const end = hud.indexOf("    function renderMapMenu(mapMenu) {", start);
-    const labelsStart = hud.indexOf("const mapActionLabels =");
-    const labelsEnd = hud.indexOf("function mapLabel(action)", labelsStart);
+    const end = hud.indexOf("    function renderMapMenu(", start);
+    const labelsStart = hud.indexOf("const mapActionLabels");
+    const labelsEnd = hud.indexOf("function mapLabel(", labelsStart);
     const context = Object.assign(
         {
             mapMenuView: "root",
@@ -243,7 +243,7 @@ test("map menu keeps context without inventing unavailable actions", () => {
     );
     assert.match(openBody, /self\.input\.map_context_menu = Some\(MapContextMenu/);
 
-    const renderStart = hud.indexOf("function renderMapMenu(mapMenu)");
+    const renderStart = hud.indexOf("function renderMapMenu(");
     const renderEnd = hud.indexOf("function updateLeaderboard", renderStart);
     const renderBody = hud.slice(renderStart, renderEnd);
     assert.doesNotMatch(renderBody, /if \(!items\.length\)/);
@@ -253,7 +253,7 @@ test("map menu keeps context without inventing unavailable actions", () => {
 
 test("bottom bar tiles draw ships as building art, show the gold price and lock with one badge", () => {
     const start = hud.indexOf("    function unitIcon(");
-    const end = hud.indexOf("    function leaderById(id)", start);
+    const end = hud.indexOf("    function leaderById(", start);
     const tiles = vm.runInNewContext(
         hud.slice(start, end) + "\n({ unitIcon, tileCost, tileLock, setTileCost });",
         {
@@ -281,8 +281,8 @@ test("bottom bar tiles draw ships as building art, show the gold price and lock 
 });
 
 test("radial and HUD icons use one concept-based visual contract", () => {
-    const configStart = hud.indexOf("const mapActionLabels =");
-    const configEnd = hud.indexOf("function mapLabel(action)", configStart);
+    const configStart = hud.indexOf("const mapActionLabels");
+    const configEnd = hud.indexOf("function mapLabel(", configStart);
     const config = vm.runInNewContext(
         hud.slice(configStart, configEnd) + "({ mapActionLabels, allianceActionLabels });",
     );
@@ -329,11 +329,13 @@ test("radial and HUD icons use one concept-based visual contract", () => {
         firstChild: { textContent: "" },
         lastChild: { innerHTML: "", hidden: false },
         dataset: {},
+        querySelector: (selector) => (selector === "strong" ? readout.firstChild : readout.lastChild),
     };
     const button = {
         disabled: false,
         dataset: {},
         lastChild: { innerHTML: "" },
+        querySelector: () => ({ innerHTML: "" }),
         attributes: {},
         setAttribute(name, value) {
             this.attributes[name] = String(value);
@@ -390,13 +392,23 @@ test("only the confirmed center attack can break an alliance", () => {
 });
 
 test("building menus use generated pixel-art sprites with white glyph fallback", () => {
-    const iconStart = hud.indexOf("const HUD_ICONS = {");
-    const iconEnd = hud.indexOf("function leaderById(id)", iconStart);
+    const iconStart = hud.indexOf("const HUD_ICONS");
+    const iconEnd = hud.indexOf("function leaderById(", iconStart);
     const artManifest = JSON.parse(
         fs.readFileSync(path.join(shell, "../../assets/generated/buildings-atlas.json"), "utf8"),
     );
+    const uvRegistry = fs.readFileSync(
+        path.join(shell, "../../sow-render/src/text/building_atlas.rs"),
+        "utf8",
+    );
     assert.deepEqual([artManifest.atlas_width, artManifest.atlas_height], [660, 528]);
     assert.equal(artManifest.cell_size, 128);
+    assert.deepEqual(Object.keys(artManifest.sprites).sort(), ["City", "Factory", "Farm", "Port", "Tower"]);
+    assert.equal(
+        Object.values(artManifest.sprites).reduce((count, levels) => count + Object.keys(levels).length, 0),
+        20,
+    );
+    const cells = new Set();
     const load = (art) => (kind, level, cls) =>
         vm.runInNewContext(hud.slice(iconStart, iconEnd) + "\nbuildingIcon(...buildingIconArgs);", {
             window: { SOW_BUILDING_ART: art, SOW_ASSETS_URL: "/assets" },
@@ -409,15 +421,28 @@ test("building menus use generated pixel-art sprites with white glyph fallback",
         for (const level of [1, 2, 3, 4]) {
             const icon = buildingIcon(kind, level);
             const sprite = artManifest.sprites[kind][String(level)];
+            const cell = `${sprite.x},${sprite.y}`;
+            assert.equal(cells.has(cell), false, `${kind} level ${level} has a unique UV cell`);
+            cells.add(cell);
             assert.match(icon, /class="sow-hud__building-icon is-pixel-art"/, kind + level);
             assert.match(icon, /assets\/gameplay\/buildings\/atlas\.webp/);
             const x = ((sprite.x * 100) / (artManifest.atlas_width - artManifest.cell_size)).toFixed(4);
             const y = ((sprite.y * 100) / (artManifest.atlas_height - artManifest.cell_size)).toFixed(4);
             assert.ok(icon.includes("background-position:" + x + "% " + y + "%"));
             assert.equal(sprite.width, 128);
+            assert.equal(sprite.height, 128);
+            assert.ok(sprite.x + sprite.width <= artManifest.atlas_width);
+            assert.ok(sprite.y + sprite.height <= artManifest.atlas_height);
+            assert.ok(
+                uvRegistry.includes(
+                    `(sow_core::game::BuildingKind::${kind}, ${level}) => Some([${sprite.x}, ${sprite.y}, 128, 128])`,
+                ),
+                `${kind} level ${level} UV matches its manifest cell`,
+            );
             assert.match(sprite.sha256, /^[a-f0-9]{64}$/);
         }
     }
+    assert.equal(cells.size, 20);
     assert.match(
         buildingIcon("Port", 1, "sow-hud__inline-icon"),
         /^<span class="sow-hud__inline-icon is-pixel-art"/,
@@ -505,13 +530,16 @@ test("tutorial hand uses the map radial action's exact icon anchor", () => {
         querySelector: (selector) => (selector === ".sow-hud__map-action-title" ? icon : null),
     };
     assert.deepEqual(campaignViewApi.resolveUiAnchor(radial), { x: 250, y: 75, width: 24, height: 28 });
-    assert.deepEqual(campaignViewApi.resolveUiAnchor({ getBoundingClientRect: () => rect(10, 20, 40, 60) }), {
-        x: 30,
-        y: 50,
-        width: 40,
-        height: 60,
-    });
-    const send = { getBoundingClientRect: () => rect(100, 100, 60, 30) };
+    assert.deepEqual(
+        campaignViewApi.resolveUiAnchor({ dataset: {}, getBoundingClientRect: () => rect(10, 20, 40, 60) }),
+        {
+            x: 30,
+            y: 50,
+            width: 40,
+            height: 60,
+        },
+    );
+    const send = { dataset: {}, getBoundingClientRect: () => rect(100, 100, 60, 30) };
     const panel = { getBoundingClientRect: () => rect(20, 40, 300, 200) };
     assert.deepEqual(campaignViewApi.resolveUiAnchor(send, panel), {
         x: 130,
@@ -524,6 +552,7 @@ test("tutorial hand uses the map radial action's exact icon anchor", () => {
         spotlightHeight: 200,
     });
     const range = {
+        dataset: {},
         min: "5",
         max: "100",
         ownerDocument: {
@@ -714,7 +743,7 @@ test("ring resolves pointer direction, keeps live values in place, and gates the
     assert.equal(context.ring.holdConfirmed, false);
 
     // Countdown values patch the ring; only the structure key rebuilds it.
-    const renderStart = hud.indexOf("function renderMapMenu(mapMenu)");
+    const renderStart = hud.indexOf("function renderMapMenu(");
     const renderBody = hud.slice(renderStart, hud.indexOf("function openRingMenu()", renderStart));
     const keyLine = renderBody.slice(
         renderBody.indexOf("let renderKey"),

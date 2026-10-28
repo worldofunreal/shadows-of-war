@@ -31,7 +31,7 @@ export interface CampaignUnlocks {
 
 export interface CampaignValidationIssue extends CampaignRecord {
     message: string;
-    step?: string;
+    step?: string | null;
     field?: string;
 }
 
@@ -51,8 +51,8 @@ export interface CampaignMachine {
     state: CampaignRecord;
     update(facts?: CampaignRecord, ui?: CampaignRecord): CampaignMachineView;
     advance(choice?: string | null, expectedStepId?: string, allowUnavailable?: boolean): boolean;
-    jump(stepId: string, resetProgress?: boolean): boolean;
-    replaceDefinition(definition: CampaignDefinition, resetProgress?: boolean): boolean;
+    jump(stepId: string, nextFacts?: CampaignRecord, priorChoices?: CampaignRecord): CampaignMachineView;
+    replaceDefinition(definition: CampaignDefinition): boolean;
     setPaused(paused: boolean): void;
     view(): CampaignMachineView;
     dispose(): void;
@@ -66,8 +66,8 @@ export interface CampaignAnchor extends CampaignRecord {
 }
 
 export interface CampaignViewOptions extends CampaignRecord {
-    translate?: (key: string) => string;
-    asset?: (path: string) => string;
+    translate: (key: string) => string;
+    asset: (path: string) => string;
     onDismiss?: () => void;
 }
 
@@ -78,7 +78,7 @@ export interface CampaignView {
 }
 
 export interface CampaignViewApi {
-    mount(root: HTMLElement, options?: CampaignViewOptions): CampaignView;
+    mount(root: HTMLElement, options: CampaignViewOptions): CampaignView;
     isCompactViewport(root?: HTMLElement | null, width?: number, height?: number): boolean;
     compactGuideMetric(step: CampaignStep, progress: CampaignRecord): { text: string } | null;
     resolveUiTarget(

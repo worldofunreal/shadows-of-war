@@ -1,16 +1,21 @@
-import type { CampaignRecord, CampaignStep } from "./campaign/types.ts";
+import type {
+    CampaignDefinition,
+    CampaignMachineView,
+    CampaignRecord,
+    CampaignStep,
+} from "./campaign/types.ts";
 
 interface MenuGuideDependencies {
     root: HTMLElement;
     tr(key: string): string;
     asset(path: string): string;
     send(type: string, fields?: CampaignRecord): boolean;
-    anchorFor(step: CampaignStep, hud?: CampaignRecord, facts?: CampaignRecord): CampaignRecord;
+    anchorFor(step: CampaignStep, hud?: CampaignRecord | null, facts?: CampaignRecord): CampaignRecord | null;
     renderContext(
         step: CampaignStep,
         hud: CampaignRecord | null,
-        anchor: CampaignRecord,
-        machineView: CampaignRecord,
+        anchor: CampaignRecord | null,
+        machineView: CampaignMachineView,
     ): CampaignRecord;
 }
 
@@ -52,11 +57,11 @@ export function createMenuGuide(dependencies: MenuGuideDependencies): MenuGuideC
         return String((state && state.account_id) || "");
     }
 
-    function menuGuideLocalKey(accountId) {
+    function menuGuideLocalKey(accountId: string) {
         return "sow.menu_guide.v1." + encodeURIComponent(accountId) + ".welcome";
     }
 
-    function readMenuGuideLocal(accountId) {
+    function readMenuGuideLocal(accountId: string) {
         try {
             const value = JSON.parse(window.localStorage.getItem(menuGuideLocalKey(accountId)) || "null");
             return value && ["active", "completed", "skipped"].includes(value.status) ? value : null;
@@ -65,7 +70,7 @@ export function createMenuGuide(dependencies: MenuGuideDependencies): MenuGuideC
         }
     }
 
-    function normalizeMenuGuideRecord(record: CampaignRecord = {}) {
+    function normalizeMenuGuideRecord(record: CampaignRecord | null = {}) {
         record = record || {};
         const completed = Array.isArray(record.completed_steps) ? record.completed_steps : [];
         const status = ["completed", "skipped"].includes(record.status)
@@ -148,7 +153,7 @@ export function createMenuGuide(dependencies: MenuGuideDependencies): MenuGuideC
         return menuJourney.loading;
     }
 
-    function menuGuideTranslate(key) {
+    function menuGuideTranslate(key: string) {
         const definition = menuJourney.definition,
             strings = (definition && definition.strings) || {};
         const locale =
@@ -247,7 +252,7 @@ export function createMenuGuide(dependencies: MenuGuideDependencies): MenuGuideC
         }
         const updateRevision = ++menuJourney.updateRevision;
         loadMenuGuideDefinition()
-            .then(function (definition) {
+            .then(function (definition: CampaignDefinition) {
                 if (updateRevision !== menuJourney.updateRevision || !menuGuideAuthorized()) return;
                 if (!menuJourney.machine) {
                     menuJourney.machine = window.SOWCampaign.create(
@@ -261,7 +266,7 @@ export function createMenuGuide(dependencies: MenuGuideDependencies): MenuGuideC
                 menuJourney.machine.setPaused(false);
                 updateMenuGuideRender();
             })
-            .catch(function (error) {
+            .catch(function (error: unknown) {
                 if (updateRevision !== menuJourney.updateRevision) return;
                 console.error("[SOW MENU GUIDE]", error);
                 menuJourney.loading = null;

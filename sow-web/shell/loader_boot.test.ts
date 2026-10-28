@@ -136,8 +136,8 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.match(bootIntro, /boot_campaign_pending = Some\(campaign\.episode_id\(\)\.to_string\(\)\)/);
     assert.match(bootIntro, /begin_enter_game_loader\(campaign\.advisor\(\)\)/);
     assert.doesNotMatch(bootIntro, /hide_web_loader|splash_state\.done = true|phase = ClientPhase::MainMenu/);
-    const tutorialStateUpdate = shellSource.indexOf("window.SOW_tutorial_menu_state_update(state)");
-    const loaderStateSync = shellSource.indexOf("syncWebLoaderForState(state)", tutorialStateUpdate);
+    const tutorialStateUpdate = shellSource.indexOf("window.SOW_tutorial_menu_state_update(menuUi.state)");
+    const loaderStateSync = shellSource.indexOf("syncWebLoaderForState(menuUi.state)", tutorialStateUpdate);
     assert.ok(
         tutorialStateUpdate >= 0 && loaderStateSync > tutorialStateUpdate,
         "the same menu-state update starts the tutorial request before syncing the existing loader",

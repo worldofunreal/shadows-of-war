@@ -2,6 +2,7 @@ import * as rules from "./rules.ts";
 import type {
     CampaignDefinition,
     CampaignRoster,
+    CampaignValidationIssue,
     CampaignValidationReport,
     CampaignRecord,
     CampaignStep,
@@ -39,10 +40,16 @@ export function validate(
 ): CampaignValidationReport {
     options = options || {};
     const allowMissingFactionReferences = options.allowMissingFactionReferences === true;
-    const errors = [],
-        warnings = [];
-    const issue = (step, field, message) => errors.push({ step: step && step.id, field, message });
-    const knownFields = (value, allowed, step, field) => {
+    const errors: CampaignValidationIssue[] = [],
+        warnings: CampaignValidationIssue[] = [];
+    const issue = (step: CampaignStep | null | undefined, field: string, message: string) =>
+        errors.push({ step: step && step.id, field, message });
+    const knownFields = (
+        value: CampaignRecord,
+        allowed: readonly string[],
+        step: CampaignStep | null,
+        field: string,
+    ) => {
         if (object(value))
             Object.keys(value)
                 .filter((key) => !allowed.includes(key))
@@ -362,14 +369,14 @@ export function validate(
             !/^tutorial\.[a-zA-Z0-9_-]+_$/.test(definition.text_namespace))
     )
         issue(null, "text_namespace", "Use a tutorial text-key namespace ending in an underscore.");
-    function text(step, field, key, required) {
+    function text(step: CampaignStep | null, field: string, key: string, required: boolean) {
         if (key == null && !required) return;
         if (typeof key !== "string" || !/^tutorial\.[a-zA-Z0-9_.-]+$/.test(key))
             issue(step, field, "Choose a tutorial text key.");
         else if (options.hasText && !options.hasText(key))
             issue(step, field, "Missing shared English text: " + key);
     }
-    function checkEmoteText(step, field, key) {
+    function checkEmoteText(step: CampaignStep | null, field: string, key: string) {
         if (typeof options.getText !== "function") return;
         let value;
         try {
@@ -385,7 +392,7 @@ export function validate(
         let length = 0;
         for (const character of normalized) {
             const code = character.codePointAt(0);
-            if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) {
+            if (code! <= 0x1f || (code! >= 0x7f && code! <= 0x9f)) {
                 issue(step, field, "Emote text cannot contain control characters.");
                 return;
             }
@@ -432,7 +439,7 @@ export function validate(
                 text(null, "speakers", speaker.name_key, false);
             }
         });
-    function availableAvatar(avatar) {
+    function availableAvatar(avatar: string) {
         return (
             typeof avatar === "string" &&
             avatar !== "null" &&
@@ -440,7 +447,7 @@ export function validate(
             (!options.hasAvatar || options.hasAvatar(avatar))
         );
     }
-    function speakerHasPortrait(speakerKey) {
+    function speakerHasPortrait(speakerKey: string) {
         const character = speakers[speakerKey];
         if (!object(character)) return false;
         if (character.faction) {
@@ -449,7 +456,7 @@ export function validate(
         }
         return availableAvatar(character.avatar);
     }
-    function checkDialogueSpeaker(step, speakerKey) {
+    function checkDialogueSpeaker(step: CampaignStep | null, speakerKey: string) {
         if (!speakerKey || !own(speakers, speakerKey))
             issue(step, "speaker", "Spoken dialogue needs a known character.");
         else if (!speakerHasPortrait(speakerKey))
@@ -489,10 +496,11 @@ export function validate(
             "The optional menu guide needs an existing opening step and a dismissible setting.",
         );
     }
-    function destination(step, field, target) {
-        if (!byId.has(target)) issue(step, field, "Unknown destination: " + String(target || "(empty)"));
+    function destination(step: CampaignStep, field: string, target: string | undefined) {
+        if (typeof target !== "string" || !byId.has(target))
+            issue(step, field, "Unknown destination: " + String(target || "(empty)"));
     }
-    function condition(step, when) {
+    function condition(step: CampaignStep, when: CampaignRecord) {
         if (!object(when) || ["choice", "fact"].filter((key) => own(when, key)).length !== 1)
             return issue(step, "routes", "Choose one condition: player decision or game fact.");
         knownFields(when, own(when, "choice") ? ["choice", "equals"] : ["fact", "gte"], step, "routes.when");
@@ -500,7 +508,7 @@ export function validate(
             // A condition may name a player decision or a contact response (its id) and the answer picked there.
             const choice = byId.get(when.choice);
             const response = (definition.reactions || []).find(
-                (reaction) => reaction && reaction.id === when.choice,
+                (reaction: CampaignRecord) => reaction && reaction.id === when.choice,
             );
             const answers =
                 choice && choice.type === "choice" ? choice.choices : response && response.choices;
@@ -635,11 +643,11 @@ export function validate(
             .map((value) => value.emote_text_key)
             .filter(Boolean),
     );
-    function notEmoteLine(step, field, key) {
+    function notEmoteLine(step: CampaignStep | null, field: string, key: string) {
         if (emoteLines.has(key))
             issue(step, field, "This line is an emote bubble; dialogue cannot reuse it.");
     }
-    function checkEmote(step, value, prefix) {
+    function checkEmote(step: CampaignStep | null, value: CampaignRecord, prefix: string) {
         const named = own(value, "emote") && value.emote !== "clear";
         if (named && !own(speakers, value.speaker))
             issue(step, prefix + "speaker", "Name the character who emotes.");
@@ -655,7 +663,7 @@ export function validate(
         if (faction && roster && !rosterFactions.has(faction) && !allowMissingFactionReferences)
             issue(step, prefix + "emote", "The emoting speaker must play an existing faction.");
     }
-    function checkExchange(step, lines, field) {
+    function checkExchange(step: CampaignStep | null, lines: CampaignRecord[], field: string) {
         if (!Array.isArray(lines) || !lines.length || lines.length > 16)
             return issue(step, field, "An exchange needs 1–16 lines.");
         lines.forEach((line) => {
@@ -994,7 +1002,7 @@ export function validate(
         ["title_key", "body_key", "hint_key"].forEach((field) => text(step, field, step[field], false));
         const textNamespace =
             typeof definition.text_namespace === "string" ? definition.text_namespace : "tutorial.";
-        const dynamicText = (suffix) => {
+        const dynamicText = (suffix: string) => {
             const key = textNamespace + step.id + suffix;
             if (options.hasText && !options.hasText(key)) return;
             text(step, "guide.text." + suffix, key, true);
@@ -1172,7 +1180,7 @@ export function validate(
                     condition(step, route.when);
                     const when = route.when;
                     if (!object(when)) return;
-                    const shadowed = step.routes.slice(0, index).findIndex((previous) => {
+                    const shadowed = step.routes.slice(0, index).findIndex((previous: CampaignRecord) => {
                         const prior = previous && previous.when;
                         if (!object(prior)) return false;
                         if (typeof when.choice === "string")
@@ -1812,13 +1820,13 @@ export function validate(
         )
             issue(null, "reactions", "Support notices cannot change diplomacy.");
     });
-    const edges = (step) => campaignEdges(step, byId);
+    const edges = (step: CampaignStep) => campaignEdges(step, byId);
     const menuFlowReachable = new Set<string>();
     if (object(definition.menu_guide) && byId.has(definition.menu_guide.entry)) {
-        const visitMenu = (key) => {
+        const visitMenu = (key: string) => {
             if (menuFlowReachable.has(key) || !byId.has(key)) return;
             menuFlowReachable.add(key);
-            edges(byId.get(key)).forEach(visitMenu);
+            edges(byId.get(key)!).forEach(visitMenu);
         };
         visitMenu(definition.menu_guide.entry);
         const menuEnds = new Set<string>(
@@ -1843,30 +1851,30 @@ export function validate(
             const step = byId.get(key);
             if (!menuEnds.has(key)) issue(step, "next", "Every menu-guide path must lead to an ending.");
             if (
-                ["objective", "guide"].includes(step.type) &&
-                (!step.trigger || step.trigger.type !== "ui" || (step.guide && step.guide.kind !== "ui"))
+                ["objective", "guide"].includes(step!.type) &&
+                (!step!.trigger || step!.trigger.type !== "ui" || (step!.guide && step!.guide.kind !== "ui"))
             )
                 issue(step, "trigger", "The menu guide can teach menu controls, not battlefield actions.");
             if (
-                step.trigger &&
-                step.trigger.type === "ui" &&
-                (typeof step.trigger.action !== "string" ||
-                    (!step.trigger.action.startsWith("menu_") && step.trigger.action !== "campaign_replay"))
+                step!.trigger &&
+                step!.trigger.type === "ui" &&
+                (typeof step!.trigger.action !== "string" ||
+                    (!step!.trigger.action.startsWith("menu_") && step!.trigger.action !== "campaign_replay"))
             )
                 issue(step, "trigger.action", "Choose a campaign-menu control for the return guide.");
         });
     }
     const reached = new Set<string>();
-    const visit = (key) => {
+    const visit = (key: string) => {
         if (reached.has(key) || !byId.has(key)) return;
         reached.add(key);
-        edges(byId.get(key)).forEach(visit);
+        edges(byId.get(key)!).forEach(visit);
     };
     visit(definition.entry);
     const unlockStateByStep = campaignUnlockStates(byId, definition.entry);
     reached.forEach((key) => {
-        const step = byId.get(key);
-        const policy = applyCampaignUnlocks(unlockStateByStep.get(key), step.unlocks);
+        const step = byId.get(key)!;
+        const policy = applyCampaignUnlocks(unlockStateByStep.get(key) ?? null, step!.unlocks);
         const seenRequirements = new Set();
         stepCampaignRequirements(step).forEach((requirement) => {
             const requirementKey = JSON.stringify(requirement);
@@ -1924,7 +1932,7 @@ export function validate(
     });
     const checked = new Set<string>(),
         visiting = new Set<string>();
-    const canAdvanceWithoutInput = (step) => {
+    const canAdvanceWithoutInput = (step: CampaignStep) => {
         if (!step || !["objective", "guide"].includes(step.type) || !step.trigger) return false;
         const trigger = step.trigger;
         const canLoseTarget =
@@ -1947,8 +1955,8 @@ export function validate(
             canLoseTarget
         );
     };
-    function cycle(key) {
-        const step = byId.get(key);
+    function cycle(key: string) {
+        const step = byId.get(key)!;
         if (!canAdvanceWithoutInput(step) || checked.has(key)) return;
         if (visiting.has(key)) {
             issue(step, "next", "Automatic steps form a loop. Add a conversation or decision.");

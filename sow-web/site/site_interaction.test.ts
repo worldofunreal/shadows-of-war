@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { vm } from "../shell/typescript-test-support.ts";
 const shell = path.resolve(__dirname, "../shell");
-const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.ts"), "utf8");
+const surfacesSource = fs.readFileSync(path.join(shell, "main_menu.surfaces.ts"), "utf8");
 void fs.readFileSync(path.join(shell, "sdk/store_portals.ts"), "utf8");
 const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.ts"), "utf8");
 const licenseJestSource = fs.readFileSync(path.join(shell, "main_menu.jest.ts"), "utf8");
@@ -52,7 +52,10 @@ test("public landing builds heroes, maps and videos from game data at publish ti
 });
 
 test("CrazyGames menu links open the matching pages on the public site", () => {
-  const helper = shellSource.match(/function renderSiteLink\(path, key, className\) \{[\s\S]*?\n {4}\}/)?.[0];
+  const helperStart = surfacesSource.indexOf("function renderSiteLink(");
+  const helperEnd = surfacesSource.indexOf("\n}", helperStart) + 2;
+  const helper =
+    helperStart >= 0 && helperEnd > helperStart ? surfacesSource.slice(helperStart, helperEnd) : "";
   assert.ok(helper, "main menu has no shared site-link renderer");
   const portal = { SOW_PORTAL: "crazygames" };
   const render = vm.runInNewContext(`(${helper})`, {
@@ -206,7 +209,7 @@ test("mobile navigation and footers reuse the same localization key per link", (
 
 test("AGPL attribution stays visible while legal links live in settings", () => {
   for (const [platform, source] of [
-    ["standard", shellSource],
+    ["standard", surfacesSource],
     ["Poki", pokiSource],
     ["Jest", licenseJestSource],
   ]) {

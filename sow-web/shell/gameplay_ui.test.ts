@@ -72,7 +72,7 @@ test("endgame shows the five match stats with exact combat counts and compact to
     assert.ok(hud.includes('endgameStatsMarkup("endgame")'));
     assert.doesNotMatch(hud, /sow-hud__exit-content/);
     assert.ok(hud.includes('id="sow-hud-surrender-save-note"'));
-    assert.ok(hud.includes("renderEndgameStats(hudRefs.surrenderStatValues, hud.player_endgame_stats)"));
+    assert.ok(hud.includes("renderEndgameStats(hudRefs!.surrenderStatValues, hud.player_endgame_stats)"));
     assert.ok(hud.includes('send("request_endgame_stats")'));
     assert.ok(hud.includes('send("clear_endgame_stats")'));
 
@@ -301,6 +301,12 @@ function makePlayerDialogsHarness() {
     const calls = [],
         listeners = {};
     const context = vm.createContext({
+        Element,
+        HTMLElement: Element,
+        HTMLButtonElement: Element,
+        HTMLImageElement: Element,
+        HTMLInputElement: Element,
+        Node: Object,
         document: doc,
         hudRoot: new Element("root"),
         hudDevLayer: null,
@@ -325,7 +331,7 @@ function makePlayerDialogsHarness() {
         assert.ok(begin >= 0 && finish > begin, start);
         return hud.slice(begin, finish);
     };
-    const stateSource = part("    let hudState =", "    function send(").replace(
+    const stateSource = part("    let hudState:", "    function send(").replace(
         /^(\s*)(?:const|let)(?=\s)/gm,
         "$1var",
     );
@@ -335,7 +341,7 @@ function makePlayerDialogsHarness() {
             part("    function bindAvatarFallback(", "    function clearNotificationCard(") +
             part("    function createPlayerIdentity(", "    function createInboxRequest(") +
             part(
-                "        function handleHudClick(event) {",
+                "        function handleHudClick(event",
                 '        hudRoot.addEventListener("click", handleHudClick)',
             ) +
             part("    function handleHudStateUpdate(", "    window.SOW_onStateUpdate ="),
@@ -381,7 +387,7 @@ function makePlayerDialogsHarness() {
     };
     context.hudRefs = makeRefs();
     const renderStart = hud.indexOf("    function renderHud(");
-    const transferStart = hud.indexOf("if (hudRefs.transfer)", renderStart);
+    const transferStart = hud.indexOf("if (hudRefs!.transfer)", renderStart);
     const transferEnd = hud.indexOf("renderNotifications(", transferStart);
     const overlayStart = hud.indexOf("hudRoot.dataset.overlayOpen =", transferEnd);
     const overlayEnd = hud.search(/(?:const|let|var)\s+dockHidden/, overlayStart);
@@ -415,16 +421,19 @@ function makePlayerDialogsHarness() {
         listeners,
         canvas,
         update: (hudValue, extra = {}) => {
-            const raw = JSON.stringify({ phase: "Playing", hud: { attack_ratio: 0.25, ...hudValue }, ...extra });
+            const raw = JSON.stringify({
+                phase: "Playing",
+                hud: { attack_ratio: 0.25, ...hudValue },
+                ...extra,
+            });
             return context.handleHudStateUpdate(raw, JSON.parse(raw));
         },
-        click: (command) =>
-            context.handleHudClick({
-                target: {
-                    closest: (selector) =>
-                        selector === "[data-command]" ? { dataset: { command, playerId: "2" } } : null,
-                },
-            }),
+        click: (command) => {
+            const target = new Element("button");
+            target.dataset.command = command;
+            target.dataset.playerId = "2";
+            context.handleHudClick({ target });
+        },
         key: (key, shiftKey = false) => {
             const event = {
                 key,
@@ -462,6 +471,13 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
     const calls = [],
         listeners = {};
     const context = vm.createContext({
+        Element,
+        HTMLElement: Element,
+        HTMLButtonElement: Element,
+        HTMLImageElement: Element,
+        HTMLInputElement: Element,
+        Node: Object,
+        avatarIdentityKeys: new WeakMap(),
         document: doc,
         hudRefs: makeRefs(),
         hudRoot: new Element("root"),
@@ -486,7 +502,7 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
     const avatarEnd = hud.indexOf("    function clearNotificationCard(", avatarStart);
     const inboxStart = hud.indexOf("    function createPlayerIdentity(");
     const inboxEnd = hud.indexOf("    function renderNotifications(", inboxStart);
-    const clickStart = hud.indexOf("        function handleHudClick(event) {");
+    const clickStart = hud.indexOf("        function handleHudClick(event");
     const clickEnd = hud.indexOf('        hudRoot.addEventListener("click", handleHudClick)', clickStart);
     for (const [start, end] of [
         [avatarStart, avatarEnd],
@@ -616,19 +632,22 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
     assert.equal(doc.activeElement, context.hudRefs.inboxClose);
 
     const visibilityStart = hud.indexOf(
-        "        if (hudRefs.inbox) {",
+        "        if (hudRefs!.inbox) {",
         hud.indexOf("    function renderHud("),
     );
-    const visibilityEnd = hud.indexOf("        if (hudRefs.transfer)", visibilityStart);
+    const visibilityEnd = hud.indexOf("        if (hudRefs!.transfer)", visibilityStart);
     const visibility = new vm.Script(hud.slice(visibilityStart, visibilityEnd));
     context.activeHudPanel = "inbox";
     context.hud = { inbox: requests };
+    let renderInboxOpen = true;
     context.renderHud = () => {
-        context.inboxOpen = context.activeHudPanel === "inbox";
+        context.inboxOpen = renderInboxOpen;
         visibility.runInContext(context);
+        renderInboxOpen = false;
     };
     context.renderHud();
     assert.equal(doc.activeElement, context.hudRefs.inboxClose, "opening the inbox moves focus inside it");
+    assert.equal(context.hudRefs.inbox.contains(doc.activeElement), true);
     context.hudRoot.addEventListener = (name, listener) => {
         listeners[name] = listener;
     };
@@ -658,7 +677,7 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
 });
 
 test("map feedback reuses one compact card, clamps to the viewport, and releases message data", () => {
-    const start = hud.indexOf("    function createNotificationCard(container, contextual) {");
+    const start = hud.indexOf("    function createNotificationCard(");
     const end = hud.indexOf("\n    function renderHud(", start);
     const durationMatch = hud.match(/const MAP_FEEDBACK_DURATION_MS = (\d+);/);
     const fadeOutMatch = hud.match(/const MAP_FEEDBACK_FADE_OUT_MS = (\d+);/);
@@ -725,6 +744,7 @@ test("map feedback reuses one compact card, clamps to the viewport, and releases
     const timers = [];
     const context = {
         hudRefs: { mapFeedback: container },
+        avatarIdentityKeys: new WeakMap(),
         mapFeedbackCursor: 0,
         mapFeedbackTimer: null,
         activeMapFeedback: null,
@@ -791,7 +811,7 @@ test("map feedback reuses one compact card, clamps to the viewport, and releases
 });
 
 test("Campaign Studio avoids rebuilding the route graph on progress-only updates", () => {
-    const start = campaignEditor.indexOf("function paintPreview(updateMachine) {");
+    const start = campaignEditor.indexOf("function paintPreview(updateMachine?: boolean) {");
     const end = campaignEditor.indexOf("function previewLocaleScript", start);
     assert.ok(start >= 0 && end > start);
     const paint = campaignEditor.slice(start, end);
@@ -812,14 +832,16 @@ test("Trinovantes aid guides radial opening, Transfer, and the confirmed deliver
             .validate(missingTarget, roster)
             .errors.some((issue) => issue.step === "boudica_transfer_target" && issue.field === "marker"),
     );
-    const root = { hidden: true, isConnected: false, contains: () => false };
+    const root = { dataset: {}, hidden: true, isConnected: false, contains: () => false };
     const radial = {
+        dataset: {},
         disabled: false,
         matches: () => false,
         getClientRects: () => [{}],
         contains: (target) => target === radial,
     };
     const transferButton = {
+        dataset: {},
         disabled: false,
         matches: () => false,
         getClientRects: () => [{}],
@@ -884,6 +906,7 @@ test("Trinovantes aid guides radial opening, Transfer, and the confirmed deliver
     vm.runInNewContext(tutorialBundle, {
         window,
         document,
+        Node: Object,
         performance: { now: () => 0 },
         console,
         fetch(url) {

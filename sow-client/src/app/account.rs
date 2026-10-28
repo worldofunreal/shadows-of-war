@@ -1860,13 +1860,20 @@ pub(crate) mod reward_exit_tests {
             return JSON.parse(initial).account_id;
         }
         export function clickTutorialExit(source, command) {
-            const handler = source.slice(source.indexOf('function handleHudClick(event) {'),
-                source.indexOf('hudRoot.addEventListener("click", handleHudClick)'));
-            const click = new Function('send', 'renderHud',
+            const start = source.indexOf('function handleHudClick(');
+            const bodyStart = source.indexOf('{', start);
+            const handlerEnd = source.indexOf('hudRoot.addEventListener("click", handleHudClick)', bodyStart);
+            const handler = 'function handleHudClick(event) {' + source.slice(bodyStart + 1, handlerEnd)
+                .replace(/\.(closest|querySelector|querySelectorAll)<[^>\n]+>/g, '.$1')
+                .replace(/([A-Za-z_$][\w$]*)!(?=[.[(])/g, '$1');
+            const ElementStub = class {};
+            const click = new Function('send', 'renderHud', 'Element',
                 'let surrenderModalOpen = true, surrenderMessage = null; ' + handler + '; return handleHudClick;')(
-                type => command(JSON.stringify({ type })), () => {});
+                type => command(JSON.stringify({ type })), () => {}, ElementStub);
             const button = { dataset: { command: 'confirm_surrender' } };
-            click({ target: { closest: selector => selector === '[data-command]' ? button : null } });
+            const target = new ElementStub();
+            target.closest = selector => selector === '[data-command]' ? button : null;
+            click({ target });
         }
         export function rewardRequestCount() { return tutorialRequests; }
         export function setupMultiplayerExit(initial, completed) {

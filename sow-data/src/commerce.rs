@@ -161,7 +161,12 @@ pub fn leader_from_id(value: &str) -> Option<Leader> {
     };
     let normalized = normalize(value);
     Leader::all().find(|leader| {
-        [leader.id(), leader.wire_id(), leader.name()]
+        [
+            leader.id(),
+            leader.wire_id(),
+            leader.name(),
+            leader.display_name(),
+        ]
             .into_iter()
             .any(|candidate| normalize(candidate) == normalized)
     })
@@ -304,7 +309,7 @@ pub fn catalog_for_profile(
             let permanently_free = leader.always_free();
             LeaderOffer {
                 id: leader_id(leader).to_string(),
-                name: leader.name().to_string(),
+                name: leader.display_name().to_string(),
                 civilization: leader.civilization().to_string(),
                 cost_crowns: if permanently_free {
                     0

@@ -687,9 +687,9 @@ impl MoverScene {
         let height_scale = setting("mover.height_scale", 0.5);
         let height_limit = setting("mover.height_limit", 2.0);
         let min_transport_px = setting("mover.transport.minimum_px", MIN_TRANSPORT_SCREEN_PX);
-        let min_trade_ship_px = setting("mover.trade_ship.minimum_px", 0.0);
-        let min_warship_px = setting("mover.warship.minimum_px", 0.0);
-        let min_nuke_px = setting("mover.nuke.minimum_px", 11.0);
+        let min_trade_ship_px = setting("mover.trade_ship.minimum_px", 16.0);
+        let min_warship_px = setting("mover.warship.minimum_px", 16.0);
+        let min_nuke_px = setting("mover.nuke.minimum_px", 16.0);
         let min_sam_px = setting("mover.sam.minimum_px", 11.0);
         let transport_scale = setting("mover.transport.scale", 1.0);
         let trade_ship_scale = setting("mover.trade_ship.scale", 1.0);

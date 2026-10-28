@@ -6,7 +6,16 @@ import { vm } from "./typescript-test-support.ts";
 const shell = __dirname;
 import { bundleTs } from "./typescript-test-support.ts";
 const coreSource = fs.readFileSync(path.join(shell, "main_menu.core.ts"), "utf8");
+const leaderArtSlugStart = coreSource.indexOf("export function leaderArtSlug(");
+const leaderArtSlugEnd = coreSource.indexOf("\n}", leaderArtSlugStart);
+if (leaderArtSlugStart < 0 || leaderArtSlugEnd <= leaderArtSlugStart)
+    throw new Error("main_menu.core.ts must export leaderArtSlug()");
+const leaderArtSlug = vm.runInNewContext(
+    coreSource.slice(leaderArtSlugStart, leaderArtSlugEnd + 2).replace(/\bexport\s+/g, "") +
+        "\nleaderArtSlug;",
+);
 const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.ts"), "utf8");
+const surfacesSource = fs.readFileSync(path.join(shell, "main_menu.surfaces.ts"), "utf8");
 const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.ts"), "utf8");
 const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.ts"), "utf8");
 const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.ts"), "utf8");
@@ -108,30 +117,42 @@ test("profile presents verified history, career commanders, localized achievemen
     assert.match(matchRow, /const verified = !!match\.verified;/);
     assert.match(
         matchRow,
-        /const result = verified\s+\? \(match\.won \? SOW_t\("profile\.win"\) : SOW_t\("profile\.loss"\)\)/,
+        /const result = verified[\s\S]*?SOW_t\("profile\.win"\)[\s\S]*?SOW_t\("profile\.loss"\)/,
     );
 });
 
 test("profile banner always uses landscape leader art", () => {
-    const start = coreSource.indexOf("function heroImage(");
-    const end = coreSource.indexOf("function avatarImage(", start);
+    const start = coreSource.indexOf("export function profileHeroImage(");
+    const end = coreSource.indexOf("export function avatarImage(", start);
     assert.ok(start >= 0 && end > start);
     const context = {
         state: null,
         window: {},
-        leaderById: (id) => ({ slug: String(id).toLowerCase() }),
-        leaderArtUrl: (slug, variant) => `${slug}:${variant || "viewport-default"}`,
+        heroImage: (leaderId, variant) =>
+            `${String(leaderId).toLowerCase()}:${variant || "viewport-default"}`,
     };
-    vm.runInNewContext(coreSource.slice(start, end) + "; this.profileHeroImage = profileHeroImage;", context);
+    vm.runInNewContext(
+        coreSource.slice(start, end).replace(/\bexport\s+/g, "") +
+            "; this.profileHeroImage = profileHeroImage;",
+        context,
+    );
     assert.equal(context.profileHeroImage("Boudica"), "boudica:desktop");
 });
 
 test("the main-menu art and hero briefing both honor Random", () => {
-    const start = coreSource.indexOf("function heroImage(");
-    const end = coreSource.indexOf("function profileHeroImage(", start);
+    const start = coreSource.indexOf("export function heroImage(");
+    const end = coreSource.indexOf("export function profileHeroImage(", start);
     assert.ok(start >= 0 && end > start);
     const prepared = [];
     const context = {
+        menuUi: {
+            state: {
+                prefer_random_leader: true,
+                phase: "MainMenu",
+                loader_job: "Boot",
+                selected_leader: "Caesar",
+            },
+        },
         state: {
             prefer_random_leader: true,
             phase: "MainMenu",
@@ -144,16 +165,19 @@ test("the main-menu art and hero briefing both honor Random", () => {
         currentLeaderSelection: () => ({ selected_leader: "Caesar", prefer_random_leader: true }),
         prepareLeaderArt() {},
     };
-    vm.runInNewContext(coreSource.slice(start, end) + "; this.heroImage = heroImage;", context);
+    vm.runInNewContext(
+        coreSource.slice(start, end).replace(/\bexport\s+/g, "") + "; this.heroImage = heroImage;",
+        context,
+    );
     assert.equal(context.heroImage(), "random:viewport-default");
     assert.deepEqual(prepared, [["random", "low"]]);
 });
 
 test("confirmed leader choice stays current until the published state catches up", () => {
-    const selectionStart = coreSource.indexOf("    function normalizeLeaderSelectionId(");
-    const selectionEnd = coreSource.indexOf("    function asset(path)", selectionStart);
-    const artStart = coreSource.indexOf("    function heroImage(");
-    const artEnd = coreSource.indexOf("    function lobbyThumb(", artStart);
+    const selectionStart = coreSource.indexOf("function normalizeLeaderSelectionId(");
+    const selectionEnd = coreSource.indexOf("function asset(", selectionStart);
+    const artStart = coreSource.indexOf("export function heroImage(");
+    const artEnd = coreSource.indexOf("export function lobbyThumb(", artStart);
     assert.ok(selectionStart >= 0 && selectionEnd > selectionStart);
     assert.ok(artStart >= 0 && artEnd > artStart);
 
@@ -166,16 +190,20 @@ test("confirmed leader choice stays current until the published state catches up
     };
     const context = {
         state: initialState,
+        menuUi: { state: initialState },
         pendingLeaderSelection: null,
         asset: (path) => path,
         leaderById: (id) => ({ slug: String(id || "caesar").toLowerCase() }),
+        leaderArtSlug,
         leaderArtUrl: (slug) => "hero:" + slug,
         prepareLeaderArt() {},
         window: { SOW_prepareLeaderArt() {} },
     };
     vm.runInNewContext(
-        coreSource.slice(selectionStart, selectionEnd) +
-            coreSource.slice(artStart, artEnd) +
+        (coreSource.slice(selectionStart, selectionEnd) + coreSource.slice(artStart, artEnd)).replace(
+            /\bexport\s+/g,
+            "",
+        ) +
             "this.currentLeaderSelection = currentLeaderSelection;" +
             "this.stageLeaderSelection = stageLeaderSelection;" +
             "this.reconcileLeaderSelection = reconcileLeaderSelection;" +
@@ -211,6 +239,7 @@ test("confirmed leader choice stays current until the published state catches up
         "Random keeps the concrete preference as a hidden server-side backup",
     );
     context.state = randomState;
+    context.menuUi.state = randomState;
     context.reconcileLeaderSelection(randomState);
     assert.equal(context.pendingLeaderSelection, null);
     assert.equal(context.currentLeaderSelection().prefer_random_leader, true);
@@ -229,6 +258,7 @@ test("confirmed leader choice stays current until the published state catches up
 
     const concreteState = { ...randomState, selected_leader: "Napoleon", prefer_random_leader: false };
     context.state = concreteState;
+    context.menuUi.state = concreteState;
     context.reconcileLeaderSelection(concreteState);
     assert.equal(context.pendingLeaderSelection, null);
     assert.equal(context.currentLeaderSelection().selected_leader, "Napoleon");
@@ -237,6 +267,7 @@ test("confirmed leader choice stays current until the published state catches up
     context.stageLeaderSelection(false, "caesar");
     const switchedAccount = { ...concreteState, account_id: "account-b", selected_leader: "SunTzu" };
     context.state = switchedAccount;
+    context.menuUi.state = switchedAccount;
     context.reconcileLeaderSelection(switchedAccount);
     assert.equal(
         context.pendingLeaderSelection,
@@ -269,16 +300,19 @@ test("leader confirmation and reopening use the staged choice, not the previous 
         concreteConfirm,
         /stageLeaderSelection\(false, leaderId\);\s*send\("set_leader", \{ leader_id: leaderId \}\)/,
     );
-    assert.match(randomConfirm, /tempSelectedLeader = null;\s*tempSelectedRandom = false;/);
-    assert.match(concreteConfirm, /tempSelectedLeader = null;\s*tempSelectedRandom = false;/);
+    assert.match(randomConfirm, /menuUi\.tempSelectedLeader = null;\s*menuUi\.tempSelectedRandom = false;/);
+    assert.match(concreteConfirm, /menuUi\.tempSelectedLeader = null;\s*menuUi\.tempSelectedRandom = false;/);
     assert.match(pickerOpen, /currentLeaderSelection\(\)/);
-    assert.match(heroesNavigation, /tempSelectedLeader = null;\s*tempSelectedRandom = false;/);
+    assert.match(
+        heroesNavigation,
+        /menuUi\.tempSelectedLeader = null;\s*menuUi\.tempSelectedRandom = false;/,
+    );
     assert.match(heroesNavigation, /currentLeaderSelection\(\)/);
 });
 
 test("header keeps only the nickname and sizes it to the available space", () => {
-    const topbarStart = shellSource.indexOf("    function renderTopbar()");
-    const topbarEnd = shellSource.indexOf("\n    function ", topbarStart + 1);
+    const topbarStart = shellSource.indexOf("function renderTopbar()");
+    const topbarEnd = shellSource.indexOf("\nfunction ", topbarStart + 1);
     assert.ok(topbarStart >= 0 && topbarEnd > topbarStart);
     const topbar = shellSource.slice(topbarStart, topbarEnd);
     assert.match(topbar, /data-role='display-name'/);
@@ -331,6 +365,7 @@ test("match history row shows the leader and verified KDA while provisional exit
         esc: (value) => String(value),
         formatMapName: () => "Britain",
         leaderById: (id) => ({ slug: id.toLowerCase() }),
+        leaderArtSlug,
         leaderDisplayName: () => "Boudica",
         profileMatchDate: () => "Today",
         profileMatchDuration: () => "12m 4s",
@@ -368,7 +403,7 @@ test("match history row shows the leader and verified KDA while provisional exit
 
 test("settings panel keeps only useful controls and real account state", () => {
     const settings = [
-        renderSettingsBody(shellSource, "function authApi"),
+        renderSettingsBody(surfacesSource, "export function renderAuthModal"),
         renderSettingsBody(pokiSource, "function pokiLicenseUrl"),
     ];
     for (const body of settings) {
@@ -409,8 +444,8 @@ test("profile stays full-width and account erasure requires settings confirmatio
         shellSource.indexOf('if (command === "confirm_delete")'),
         shellSource.indexOf('if (command === "open_leader_picker")'),
     );
-    assert.match(requestDelete, /!settingsOpen/);
-    assert.match(confirmDelete, /!settingsOpen \|\| !deleteArmed/);
+    assert.match(requestDelete, /!menuUi\.settingsOpen/);
+    assert.match(confirmDelete, /!menuUi\.settingsOpen \|\| !menuUi\.deleteArmed/);
     assert.match(confirmDelete, /profile\/anonymous\/delete/);
     assert.match(confirmDelete, /data\.deleted !== true/);
     assert.ok(
@@ -428,8 +463,8 @@ test("profile stays full-width and account erasure requires settings confirmatio
 });
 
 test("Opus theme preserves its crossfade and resumes from ordinary trusted clicks", async () => {
-    const start = shellSource.indexOf("    const menuMusic = {");
-    const end = shellSource.indexOf("    function renderTopbar()", start);
+    const start = shellSource.indexOf("const menuMusic");
+    const end = shellSource.indexOf("function renderTopbar()", start);
     assert.ok(start >= 0 && end > start, "shared shell has no menu music lifecycle");
 
     function createHarness(assetsUrl = "https://cdn.test/assets/") {
@@ -567,6 +602,7 @@ test("Opus theme preserves its crossfade and resumes from ordinary trusted click
             window,
             document,
             root,
+            Node: Object,
             console: {
                 error: (...args) => logs.push(["error", ...args]),
                 warn: (...args) => logs.push(["warn", ...args]),
@@ -838,10 +874,15 @@ test("music volume no longer controls SFX and music assets reach every shared-sh
 test("hero purchase stays server-backed, direct, and visually honest", () => {
     // One price per item: leaders and skins cost gems or crowns, never dollars.
     // Real money is taken only by Google Play in the Android app: no web checkout.
-    const leaderStart = coreSource.indexOf("function leaderById(id)");
+    const leaderStart = coreSource.indexOf("export function leaderById(");
     const leaderEnd = coreSource.indexOf("function leaderPerk", leaderStart);
     const context = { state: { leaders: [{ id: "SunTzu", slug: "sun_tzu" }] } };
-    vm.runInNewContext(coreSource.slice(leaderStart, leaderEnd) + "this.leaderById = leaderById;", context);
+    context.menuUi = { state: { leaders: context.state.leaders } };
+    vm.runInNewContext(
+        coreSource.slice(leaderStart, leaderEnd).replace(/\bexport\s+/g, "") +
+            "this.leaderById = leaderById;",
+        context,
+    );
     assert.equal(context.leaderById("sun_tzu").slug, "sun_tzu");
 });
 
@@ -852,8 +893,8 @@ test("hero selection opens the shared catalog for equipped and purchasable skins
 });
 
 test("leader display names use the catalog translation keys for every leader", () => {
-    const start = coreSource.indexOf("function leaderTranslationSlug(leader)");
-    const end = coreSource.indexOf("function heroBriefingLeader", start);
+    const start = coreSource.indexOf("function leaderTranslationSlug(");
+    const end = coreSource.indexOf("function heroBriefingLeader(", start);
     assert.ok(start >= 0 && end > start);
     const requestedKeys = [];
     const context = {
@@ -863,7 +904,7 @@ test("leader display names use the catalog translation keys for every leader", (
         },
     };
     vm.runInNewContext(
-        coreSource.slice(start, end) +
+        coreSource.slice(start, end).replace(/\bexport\s+/g, "") +
             "this.leaderDisplayName = leaderDisplayName; this.leaderHistoricalName = leaderHistoricalName;",
         context,
     );
@@ -899,7 +940,7 @@ test("leader display names use the catalog translation keys for every leader", (
 
 test("one hero briefing renders identity and the named ability without exposing missing translations", () => {
     const start = coreSource.indexOf("function heroBriefingLeader");
-    const end = coreSource.indexOf("function mapInfo(key)", start);
+    const end = coreSource.indexOf("function mapInfo(", start);
     assert.ok(start >= 0 && end > start);
     const translations = {
         "heroes.leader_amina_de_zazzau_name": "Amina of Zazzau",
@@ -914,6 +955,7 @@ test("one hero briefing renders identity and the named ability without exposing 
         window: {},
         document: { addEventListener() {} },
         SOW_t: (key) => translations[key] || `[${key}]`,
+        leaderArtSlug,
         esc: (value) =>
             String(value)
                 .replace(/&/g, "&amp;")
@@ -924,7 +966,7 @@ test("one hero briefing renders identity and the named ability without exposing 
         asset: (path) => "/assets/" + path,
     };
     vm.runInNewContext(
-        coreSource.slice(start, end) +
+        coreSource.slice(start, end).replace(/\bexport\s+/g, "") +
             "; this.renderHeroBriefing = renderHeroBriefing; this.hideBrokenHeroBriefingIcon = hideBrokenHeroBriefingIcon;",
         context,
     );
@@ -991,7 +1033,7 @@ test("weekly free rotation is a splash-only status", () => {
     assert.ok(predicateStart >= 0 && predicateEnd > predicateStart);
     const context = {};
     vm.runInNewContext(
-        heroesSource.slice(predicateStart, predicateEnd) +
+        heroesSource.slice(predicateStart, predicateEnd).replace(/\bexport\s+/g, "") +
             "this.isWeeklyFreeRotation = isWeeklyFreeRotation;",
         context,
     );
@@ -1026,6 +1068,11 @@ test("weekly rotation countdown replaces its label, observes the four-day window
         },
         Date: { now: () => nowMs },
         state: { phase: "MainMenu", selected_leader: "free", store: { rotation_ends_at: 0 } },
+        menuUi: {
+            state: null,
+            tempSelectedLeader: "",
+            tempSelectedRandom: false,
+        },
         tempSelectedLeader: "",
         tempSelectedRandom: false,
         leaderById: (id) => leaders[id],
@@ -1053,10 +1100,11 @@ test("weekly rotation countdown replaces its label, observes the four-day window
             renders++;
         },
     };
+    context.menuUi.state = context.state;
     context.state.store.rotation_ends_at = nowMs / 1000 + 4 * 86400;
     vm.runInNewContext(
         "var HEROES_ROTATION_COUNTDOWN_SECS = 4 * 24 * 60 * 60; var heroesRotationCountdownInterval = null;\n" +
-            heroesSource.slice(helperStart, helperEnd) +
+            heroesSource.slice(helperStart, helperEnd).replace(/\bexport\s+/g, "") +
             "this.heroesStatusLabel = heroesStatusLabel; this.rotationCountdownText = rotationCountdownText; this.syncHeroesRotationCountdown = syncHeroesRotationCountdown;",
         context,
     );
@@ -1173,7 +1221,7 @@ test("heroes preview never resolves the random option through leader i18n keys",
     );
     assert.match(
         previewBody,
-        /briefing\.innerHTML = renderHeroBriefing\(randomSelected \? "random" : activeLeader, "selection", "sow-heroes-selected"\)/,
+        /briefing\.innerHTML[\s\S]*?renderHeroBriefing\([\s\S]*?randomSelected \? "random" : activeLeader[\s\S]*?"selection"[\s\S]*?"sow-heroes-selected"/,
     );
     assert.doesNotMatch(previewBody, /leaderHistoricalName\(|sow-heroes__ability-icon/);
 });
@@ -1184,9 +1232,8 @@ test("skill icons stay beside full hero details and out of compact avatar cards"
     const card = heroesSource.slice(cardStart, cardEnd);
     assert.doesNotMatch(card, /sow-heroes__ability-icon/);
     assert.doesNotMatch(card, /renderHeroBriefing/);
-    const fullStart = heroesSource.indexOf("function renderHeroes()");
-    const fullEnd = heroesSource.indexOf("function renderHeroes", fullStart + 1);
-    const full = heroesSource.slice(fullStart, fullEnd);
+    const fullStart = heroesSource.indexOf("export function renderHeroes()");
+    const full = heroesSource.slice(fullStart);
     assert.match(
         full,
         /data-hero-briefing[\s\S]*renderHeroBriefing\(activeRandom \? "random" : activeLeader, "selection", "sow-heroes-selected"\)/,
@@ -1202,7 +1249,10 @@ test("skill icons stay beside full hero details and out of compact avatar cards"
     const homeStart = lobbiesSource.indexOf("function renderHome()");
     const homeEnd = lobbiesSource.indexOf("const campaignCinematicAvailability", homeStart);
     const home = lobbiesSource.slice(homeStart, homeEnd);
-    assert.match(home, /state\.prefer_random_leader \? "random" : leaderById\(state\.selected_leader\)/);
+    assert.match(
+        home,
+        /menuUi\.state!\.prefer_random_leader \? "random" : leaderById\(menuUi\.state!\.selected_leader\)/,
+    );
     assert.match(home, /renderHeroBriefing\(leader, "home", "sow-home-selected"\)/);
 });
 
@@ -1290,9 +1340,9 @@ test("hero selection stacks the skill below identity and the home briefing stays
         /#sow-menu\[data-screen="home"\] \.sow-menu__command\s*\{[^}]*z-index:\s*1/,
         "the map and menu controls retain their layer and normal flow",
     );
-    const commandStart = shellSource.indexOf("function renderCommandPanel()");
-    const commandEnd = shellSource.indexOf("\n    function ", commandStart + 1);
-    const commandPanel = shellSource.slice(commandStart, commandEnd);
+    const commandStart = surfacesSource.indexOf("export function renderCommandPanel()");
+    const commandEnd = surfacesSource.indexOf("\nexport function ", commandStart + 1);
+    const commandPanel = surfacesSource.slice(commandStart, commandEnd);
     assert.match(
         commandPanel,
         /<section class='sow-menu__command'>[\s\S]*sow-menu__home-public[\s\S]*renderPublicPanel\("home"\)[\s\S]*sow-menu__home-actions/,

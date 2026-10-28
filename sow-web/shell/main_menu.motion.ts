@@ -1,53 +1,58 @@
-    const sowScreenMotion = (function () {
-        function reducedMotion() {
-            return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        }
+export const sowScreenMotion = (function () {
+    function reducedMotion() {
+        return (
+            typeof window.matchMedia === "function" &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        );
+    }
 
-        function setInactive(panel) {
-            panel.classList.remove("is-active", "sow-screen-panel--entering");
-            panel.classList.add("sow-screen-panel--leaving");
-            panel.setAttribute("aria-hidden", "true");
-            if ("inert" in panel) panel.inert = true;
-        }
+    function setInactive(panel: Element) {
+        panel.classList.remove("is-active", "sow-screen-panel--entering");
+        panel.classList.add("sow-screen-panel--leaving");
+        panel.setAttribute("aria-hidden", "true");
+        if ("inert" in panel) panel.inert = true;
+    }
 
-        function setActive(panel) {
-            panel.classList.add("is-active");
-            panel.classList.remove("sow-screen-panel--leaving");
-            panel.removeAttribute("aria-hidden");
-            if ("inert" in panel) panel.inert = false;
-        }
+    function setActive(panel: Element) {
+        panel.classList.add("is-active");
+        panel.classList.remove("sow-screen-panel--leaving");
+        panel.removeAttribute("aria-hidden");
+        if ("inert" in panel) panel.inert = false;
+    }
 
-        function finish(event) {
-            const panel = event.target;
-            if (!panel || panel.parentNode !== event.currentTarget || !panel.matches("[data-screen-panel]")) return;
-            if (event.animationName === "sow-screen-panel-leave") panel.remove();
-            if (event.animationName === "sow-screen-panel-enter") panel.classList.remove("sow-screen-panel--entering");
-        }
+    function finish(event: AnimationEvent) {
+        const panel = event.target as Element | null;
+        if (!panel || panel.parentNode !== event.currentTarget || !panel.matches("[data-screen-panel]"))
+            return;
+        if (event.animationName === "sow-screen-panel-leave") panel.remove();
+        if (event.animationName === "sow-screen-panel-enter")
+            panel.classList.remove("sow-screen-panel--entering");
+    }
 
-        function bind(stage) {
-            if (stage.dataset.motionBound) return;
-            stage.dataset.motionBound = "true";
-            stage.addEventListener("animationend", finish);
-            stage.addEventListener("animationcancel", finish);
-        }
+    function bind(stage: HTMLElement) {
+        if (stage.dataset.motionBound) return;
+        stage.dataset.motionBound = "true";
+        stage.addEventListener("animationend", finish);
+        stage.addEventListener("animationcancel", finish);
+    }
 
-        function show(stage, next, disableMotion) {
-            bind(stage);
-            const current = stage.querySelector("[data-screen-panel].is-active") || stage.lastElementChild;
-            const panels = stage.querySelectorAll("[data-screen-panel]");
-            for (let i = 0; i < panels.length; i++) {
-                if (panels[i] !== current) panels[i].remove();
-            }
-            if (current) setInactive(current);
-            setActive(next);
-            if (disableMotion || reducedMotion()) {
-                if (current) current.remove();
-                stage.appendChild(next);
-                return;
-            }
-            next.classList.add("sow-screen-panel--entering");
+    function show(stage: HTMLElement, next: HTMLElement, disableMotion: boolean) {
+        bind(stage);
+        const current = stage.querySelector("[data-screen-panel].is-active") || stage.lastElementChild;
+        const panels = stage.querySelectorAll("[data-screen-panel]");
+        for (let i = 0; i < panels.length; i++) {
+            if (panels[i] !== current) panels[i].remove();
+        }
+        if (current) setInactive(current);
+        setActive(next);
+        if (disableMotion || reducedMotion()) {
+            if (current) current.remove();
             stage.appendChild(next);
+            return;
         }
+        next.classList.add("sow-screen-panel--entering");
+        stage.appendChild(next);
+    }
 
-        return { show: show };
-    })();
+    return { show: show };
+})();

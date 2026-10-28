@@ -883,7 +883,9 @@ test("campaign studio authors ordered Roman exchanges and previews the active sp
   };
   const previewStart = campaignEditor.indexOf("function paintExchangePreview(");
   const previewEnd = campaignEditor.indexOf("function previewLocaleScript", previewStart);
-  const preview = campaignEditor.slice(previewStart, previewEnd) + "\npaintExchangePreview(model);";
+  const preview = transpileForVm(
+    campaignEditor.slice(previewStart, previewEnd) + "\npaintExchangePreview(model);",
+  );
   vm.runInNewContext(preview, {
     model: {
       exchange: {
@@ -1354,7 +1356,7 @@ test("campaign studio preview matches the real build submenu and direct nuke act
         .join(" "),
     )
     .join(" ");
-  const targetBlock = campaignEngine.match(/export const UI_TARGETS = \{([\s\S]*?)\n\};/);
+  const targetBlock = campaignEngine.match(/export const UI_TARGETS(?::[^=]+)?\s*=\s*\{([\s\S]*?)\n\};/);
   assert.ok(targetBlock);
   const selectors = [...targetBlock[1].matchAll(/:\s*'([^']+)'/g)].flatMap((match) => match[1].split(","));
   for (const selector of selectors) {

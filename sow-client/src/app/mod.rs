@@ -25,7 +25,12 @@ impl SowApp {
         self.poll_reward_profile_sync(now);
         self.poll_profile_actions(now);
         self.poll_pointer_hold();
+        let sim_started_at = crate::diag::startup_perf_timer();
         self.update_sim(now);
+        if let Some(started_at) = sim_started_at {
+            crate::diag::record_startup_perf(crate::diag::StartupMetric::UpdateSim, started_at);
+        }
+        crate::diag::finish_startup_perf_window_if_due(now);
         if self.ui.app.phase != crate::ClientPhase::Playing {
             crate::web_menu::publish_state(self);
         }

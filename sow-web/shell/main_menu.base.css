@@ -1065,6 +1065,46 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   flex: 1;
 }
 
+.sow-menu__system-overlay {
+  z-index: 100;
+  background: rgba(4, 5, 8, 0.82);
+}
+
+.sow-menu__system-modal {
+  width: min(100%, 520px);
+  text-align: center;
+}
+
+.sow-menu__system-modal p {
+  margin: 14px 0 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.sow-menu__system-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.sow-menu__system-primary {
+  justify-content: center;
+  min-height: 68px;
+  border-color: rgba(255, 170, 70, 0.95);
+  background: linear-gradient(135deg, #ff9e32, #eb5d19);
+  color: #17100a;
+  box-shadow: 0 10px 30px rgba(235, 93, 25, 0.32);
+  font-size: 19px;
+}
+
+.sow-menu__system-secondary {
+  justify-content: center;
+  margin-top: 0;
+  min-height: 52px;
+  text-align: center;
+}
+
 .sow-menu__modal.sow-purchase-modal {
   width: min(100%, 920px);
   max-height: min(92vh, 760px);

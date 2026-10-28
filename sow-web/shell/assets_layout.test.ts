@@ -158,19 +158,21 @@ test("the game draws no emoji: every icon and portrait is art from assets/art", 
 test("every playable hero is complete: ability, art and texts in every language", () => {
     const catalog = JSON.parse(fs.readFileSync(path.join(assets, "geo_entities.json"), "utf8")).entities;
     const locales = fs.readdirSync(path.join(root, "sow-i18n/strings"));
-    const heroes = catalog.filter((entity) => entity.hero).map((entity) => entity.id);
+    const heroes = catalog.filter((entity) => entity.hero);
+    const artSlug = (entity) => entity.hero.art_slug || entity.id;
     assert.ok(heroes.length >= 12);
     const heroAvatarDir = path.join(art, "avatars/heroes");
     assert.deepEqual(
         fs.readdirSync(heroAvatarDir).sort(),
-        heroes.map((hero) => `${hero}.webp`).sort(),
+        heroes.map((hero) => `${artSlug(hero)}.webp`).sort(),
         "avatars/heroes only contains one spritesheet per playable hero",
     );
     assert.ok(fs.existsSync(path.join(art, "avatars/random.webp")), "Random keeps its shared avatar");
-    for (const hero of heroes) {
-        const entry = catalog.find((entity) => entity.id === hero);
+    for (const entry of heroes) {
+        const hero = entry.id;
+        const slug = artSlug(entry);
         assert.ok(entry.hero.ability && entry.hero.name, `${hero} needs a catalog name and ability`);
-        const expressionFaces = [1, 2, 3, 4].map((n) => `avatars/heroes/${hero}_${n}.webp`);
+        const expressionFaces = [1, 2, 3, 4].map((n) => `avatars/heroes/${slug}_${n}.webp`);
         assert.equal(
             entry.hero.expressions,
             undefined,
@@ -180,7 +182,7 @@ test("every playable hero is complete: ability, art and texts in every language"
             !expressionFaces.some((file) => fs.existsSync(path.join(art, file))),
             `${hero} must use one sheet, not separate face files`,
         );
-        const heroFiles = [`avatars/heroes/${hero}.webp`, `icons/abilities/${hero}.webp`];
+        const heroFiles = [`avatars/heroes/${slug}.webp`, `icons/abilities/${slug}.webp`];
         for (const file of heroFiles) {
             assert.ok(fs.existsSync(path.join(art, file)), `${hero} needs assets/art/${file}`);
         }

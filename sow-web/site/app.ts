@@ -36,6 +36,7 @@
   const cards = $$(".roster-card[data-leader-id]");
   const leaders = cards.map((card) => ({
     id: card.dataset.leaderId,
+    artSlug: card.dataset.artSlug || card.dataset.leaderId,
     name: card.dataset.name,
     civilization: card.dataset.civ,
     historical: card.dataset.historical,
@@ -64,14 +65,14 @@
     const name = showText($("[data-detail-name]"), leader, "name");
     const image = $("[data-detail-image]");
     if (image) {
-      image.src = `/assets/shell/leaders/${leader.id}_desktop.webp`;
+      image.src = `/assets/shell/leaders/${leader.artSlug}_desktop.webp`;
       image.alt = name;
       if (animate && !prefersReducedMotion.matches) {
         image.animate?.([{ opacity: 0.2 }, { opacity: 1 }], { duration: 320, easing: "ease-out" });
       }
     }
     const mobileImage = $("[data-detail-image-mobile]");
-    if (mobileImage) mobileImage.srcset = `/assets/shell/leaders/${leader.id}_mobile.webp`;
+    if (mobileImage) mobileImage.srcset = `/assets/shell/leaders/${leader.artSlug}_mobile.webp`;
     showText($("[data-detail-civ]"), leader, "civilization");
     const historical = $("[data-detail-historical]");
     if (historical) historical.hidden = showText(historical, leader, "historical") === name;
