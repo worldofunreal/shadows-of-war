@@ -1621,110 +1621,6 @@ fn s7_every_match_ends_somebody_wins() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// S9 — CLUSTER REPRO: prod-shaped lobby. Multiple AI entities spawn packed
-// near the human spawn zone (matches tick.rs staggered deployment), FFA, all
-// land. Goal: make the mid-game stall EMERGE in simulation so we can dissect
-// it entity-by-entity instead of guessing against production.
-// ──────────────────────────────────────────────────────────────────────────
-#[test]
-fn s9_cluster_lobby_stall_emergence() {
-    const W: u32 = 24;
-    let mut specs = Vec::new();
-    // Pack 6 ghosts loosely around center-left, like the human-spawn ring.
-    let ring = [(6u32, 8u32), (8, 6), (10, 8), (8, 10), (10, 11), (11, 9)];
-    for (i, (x, y)) in ring.iter().enumerate() {
-        let mut g = LabPlayer::ghost((i + 1) as u16, *x, *y);
-        g.gold = 100_000.0;
-        specs.push(g);
-    }
-    // Distant nations & tribes holding their own corners.
-    let mut nation = LabPlayer::nation(7, 20, 20);
-    nation.gold = 100_000.0;
-    specs.push(nation);
-    specs.push(LabPlayer::tribe(8, 2, 20));
-    specs.push(LabPlayer::tribe(9, 20, 2));
-
-    let mut engine = build_lab(W, W, "FFA", &specs);
-    engine.state.config.global_speed_multiplier = 1.0;
-
-    let start: std::collections::HashMap<u16, u32> =
-        specs.iter().map(|s| (s.id, tiles(&engine, s.id))).collect();
-
-    let mut prev_counts = start.clone();
-    for window in 0..MAX_WINDOWS {
-        let live = run_window(&mut engine, WINDOW_TICKS);
-        let mut row = String::new();
-        let mut stalls = Vec::new();
-        for spec in specs.iter() {
-            let now = tiles(&engine, spec.id);
-            let grew = now.saturating_sub(*prev_counts.get(&spec.id).unwrap_or(&0));
-            row.push_str(&format!(" p{}={}", spec.id, now));
-            if grew == 0
-                && engine
-                    .state
-                    .player(spec.id)
-                    .map(|p| p.alive)
-                    .unwrap_or(false)
-            {
-                stalls.push(spec.id);
-            }
-            prev_counts.insert(spec.id, now);
-        }
-        eprintln!(
-            "S9 w={window} total_live={} |{}{} stalls={:?}",
-            window,
-            row,
-            if live { "" } else { " [GAME OVER]" },
-            stalls
-        );
-    }
-
-    // ── Dissection of every still-living stalled entity ──
-    if std::env::var("SOW_LAB_VERBOSE").is_ok() {
-        for spec in specs.iter() {
-            let Some(p) = engine.state.player(spec.id) else {
-                continue;
-            };
-            if !p.alive {
-                continue;
-            }
-            let stats = (
-                p.tile_count,
-                p.troops,
-                p.max_troops,
-                p.iq_points,
-                p.gold,
-                p.player_type,
-                p.is_ai_controlled,
-            );
-            let (neighbors, has_neutral) = engine.nation_scan_neighbors(spec.id);
-            let tier = match ai_tier(stats.5, stats.6) {
-                Some(t) => t,
-                None => continue, // real human: no brain
-            };
-            let profile = ai_profile_for(tier, crate::game_config::BotDifficulty::Vanilla);
-            let armed = stats.1 >= stats.2 * profile.trigger_ratio;
-            eprintln!(
-                "DISSECT id={} alive=true tiles={} troops={:.0}/max{:.0} pts={:.0} gold={:.0} \
-                 neighbors={:?} neutral={} armed={} next_att_id={}",
-                spec.id,
-                stats.0,
-                stats.1,
-                stats.2,
-                stats.3,
-                stats.4,
-                neighbors,
-                has_neutral,
-                armed,
-                engine.state.next_attack_id
-            );
-        }
-        eprintln!("DISSECT attacks_out={}", engine.attacks.len());
-    }
-}
-
-// ──────────────────────────────────────────────────────────────────────────
 // S11 — ENDGAME REPRO: world fully partitioned, ZERO neutral land, everyone
 // armed (the user's screenshot state). Only path to growth is WAR against a
 // neighbor. A bot that "wants to win" must keep fighting; freezing here is
@@ -2541,12 +2437,6 @@ fn s15_no_suicide_against_dwarfing_player() {
 // total freeze (windows going quiet) and the gray-carpet win.
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
-fn s16_setup_contract() {
-    let scenario = build_s16_scenario();
-    scenario.assert_setup();
-}
-
-#[test]
 fn s16_early_ecosystem_contract() {
     let mut scenario = build_s16_scenario();
     scenario.assert_setup();
@@ -2598,6 +2488,12 @@ fn s16_building_rules_trace(legacy: bool) -> Vec<(u64, u64)> {
 
     let mut scenario = build_s16_scenario();
     scenario.assert_setup();
+    // Keep these AI/building regression traces stable as heroes are added or removed.
+    // Hero-specific effects are covered by hero_ability_tests.
+    let leader = crate::player::Leader::of("caesar");
+    for player in &mut scenario.engine.state.players {
+        player.leader = leader;
+    }
     // Recorded checkpoints were produced at the previous standard speed.
     scenario.engine.state.config.global_speed_multiplier = 0.35;
     if legacy {
@@ -2643,17 +2539,17 @@ fn s16_building_rules_trace(legacy: bool) -> Vec<(u64, u64)> {
 #[test]
 fn s16_checkpoint_decision_and_state_reference() {
     let checkpoints = s16_building_rules_trace(false);
-    // Uses current building footprints and hero abilities; historical footprints are tested below.
+    // Uses current building footprints; historical footprints are tested below.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0xe426_3184_4d37_b938),
-        (500, 0xe6e9_93e1_decb_b4c8),
-        (750, 0x7fe6_06fe_0f80_1c65),
-        (1000, 0xc00e_4275_d245_f3a2),
-        (1250, 0x28f4_0948_854a_336e),
-        (1500, 0x7530_8b69_c312_b3a1),
-        (1750, 0xa3f7_5afa_5710_a24b),
-        (2000, 0xf6f5_a89e_946c_f50d),
-        (2102, 0xcc1c_bb7c_d6de_4b12),
+        (250, 0x3932_acc5_c591_74d8),
+        (500, 0xa570_5518_dfd7_6143),
+        (750, 0x6c27_eda4_85c6_3611),
+        (1000, 0x07ed_b28d_1145_f86d),
+        (1250, 0x910c_a632_de70_848d),
+        (1500, 0x7017_4f3c_eaec_7884),
+        (1750, 0x3503_57f0_43a4_6e7f),
+        (2000, 0x5f48_db0f_8ae0_8222),
+        (2102, 0xc40e_854a_f8e5_0c85),
     ];
     assert_eq!(
         checkpoints,
@@ -2669,14 +2565,16 @@ fn s16_checkpoint_decision_and_state_reference() {
 #[test]
 fn historical_s16_building_rules_keep_recorded_results() {
     let checkpoints = s16_building_rules_trace(true);
-    // Historical building rules with the current hero catalog, including landing/coast abilities.
+    // Historical building rules with the same fixed leader as the current trace.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x6acf_551d_adab_213f),
-        (500, 0x182e_2daa_6b4c_e4cb),
-        (750, 0xd128_92c1_332c_81b8),
-        (1000, 0x60a8_fbcf_e84b_0758),
-        (1250, 0xfc1f_c04b_a273_47f5),
-        (1388, 0xd957_f7bb_a346_b873),
+        (250, 0x7d50_5153_13df_36f7),
+        (500, 0x5650_af52_58e1_9f2f),
+        (750, 0x6e19_4040_a5aa_434e),
+        (1000, 0xdc04_e6dd_f4f3_22dd),
+        (1250, 0xe61b_79ec_103d_0cb1),
+        (1500, 0x2017_81c3_0590_4c3d),
+        (1750, 0x75a9_d30d_de55_8aeb),
+        (1912, 0x3437_bfe0_17da_a62d),
     ];
     assert_eq!(
         checkpoints, REFERENCE,
@@ -2969,29 +2867,3 @@ fn s18_world_map_team_spawn_zones() {
     );
 }
 
-#[test]
-fn s18_probe_area_seeds() {
-    use crate::engine::SowEngine;
-    use crate::maps::{WORLD_MAP_BYTES, load_map_from_payload};
-    use wyrand::WyRand;
-
-    let mapfile = load_map_from_payload(WORLD_MAP_BYTES).expect("world map decodes");
-    let (mw, mh) = (mapfile.width, mapfile.height);
-    let mut game = GameState::new(31, mw, mh, crate::game_config::GameConfig::default());
-    game.map.terrain = mapfile
-        .terrain
-        .iter()
-        .map(|b| crate::map::MapTile::from_byte(*b))
-        .collect();
-    let water = crate::water_components::WaterComponents::default();
-    let mut engine = SowEngine::new(game, water);
-    engine.spawn_ai(128, 420); // explicit lab fixture, not matchmaking defaults
-
-    let area = engine.team_spawn_area(&Team::Red);
-    eprintln!("S18PROBE red area={area:?} map={mw}x{mh}");
-    for pid in 1..=8u16 {
-        let mut rng = WyRand::new(31u64.wrapping_add(pid as u64).wrapping_add(77));
-        let r = engine.find_spawn_in_area(&mut rng, area);
-        eprintln!("S18PROBE pid={pid} -> {r:?}");
-    }
-}

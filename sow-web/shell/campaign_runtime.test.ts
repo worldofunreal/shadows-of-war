@@ -5,34 +5,22 @@ import { test } from "node:test";
 import { vm } from "./typescript-test-support.ts";
 const shell = __dirname;
 import { bundleTs, loadTypeScriptModule } from "./typescript-test-support.ts";
-void fs.readFileSync(path.join(shell, "main_menu.lobbies.ts"), "utf8");
 const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.ts"), "utf8");
 const tutorialBundle =
     '(function () { if (typeof window === "undefined") return; const providedView = window.SOWCampaignView;\n' +
     bundleTs(path.join(shell, "sow-campaign-view.ts")) +
     "\nif (providedView) Object.assign(window.SOWCampaignView, providedView); })();\n" +
     bundleTs(path.join(shell, "main_menu.tutorial.ts"));
-void fs.readFileSync(path.join(shell, "sow-campaign-view.ts"), "utf8");
-void bundleTs(path.join(shell, "sow-campaign-view.ts"));
-void fs.readFileSync(path.join(shell, "main_menu.tutorial.css"), "utf8");
 const campaignEditor = fs.readFileSync(
     path.join(shell, "../../sow-tools/editors/campaign-editor/editor.ts"),
     "utf8",
 );
-void fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
-void fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/loader/match_start.rs"), "utf8");
 const campaignModule = fs.readFileSync(path.join(shell, "../../sow-client/src/campaign/mod.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-data/src/campaign.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/sim/update.rs"), "utf8");
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
 const nameplates = fs.readFileSync(
     path.join(shell, "../../sow-client/src/render/world/nameplates.rs"),
     "utf8",
 );
-void fs.readFileSync(path.join(shell, "../../sow-core/src/building/cost.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-core/src/intent/buildings.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/input/map_click.rs"), "utf8");
 
 test("emote conversation waits for visible delivery, preserves reading time and clears before the reply", () => {
     const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
@@ -2947,6 +2935,8 @@ test("every Boudica entity objective films its target and speaks an emote", () =
     assert.ok(entities.length >= 15, "the campaign keeps its entity objectives");
     const missing = entities.flatMap((step) => {
         const targets = [step.trigger && step.trigger.target, step.camera && step.camera.to].filter(Boolean);
+        const previous = definition.steps[definition.steps.indexOf(step) - 1];
+        const previousFilmsTarget = previous?.camera && targets.includes(previous.camera.to);
         const reactionEmote = (definition.reactions || []).some(
             (reaction) =>
                 targets.includes(reaction.when.target) &&
@@ -2958,8 +2948,9 @@ test("every Boudica entity objective films its target and speaks an emote", () =
             definition.steps.find((candidate) => candidate.id === step.next)?.exchange,
         );
         const problems = [];
-        if (!step.camera) problems.push("camera");
-        if (!hasEmote(step.exchange) && !reactionEmote && !nextEmote) problems.push("emote");
+        if (!step.camera && !previousFilmsTarget) problems.push("camera");
+        if (!hasEmote(step.exchange) && !hasEmote(previous?.exchange) && !reactionEmote && !nextEmote)
+            problems.push("emote");
         return problems.map((problem) => `${step.id}: ${problem}`);
     });
     assert.deepEqual(

@@ -342,38 +342,7 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_victory_council",
-      "camera": {
-        "shot": "approach",
-        "to": "player",
-        "seconds": 2
-      },
-      "body_key": "tutorial.campaign_boudica_first_victory_body",
-      "exchange": [
-        {
-          "speaker": "boudica",
-          "emote": "celebrate",
-          "emote_text_key": "tutorial.campaign_boudica_boudica_victory_celebrate"
-        }
-      ]
-    },
-    {
-      "id": "boudica_victory_council",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_victory_council_title",
-      "show_title": true,
-      "body_key": "tutorial.campaign_boudica_boudica_victory_council_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "portrait_expression": "calm",
-      "emote": "clear",
-      "next": "boudica_first_expansion",
-      "camera": {
-        "shot": "reveal",
-        "from": "player",
-        "to": "stonea",
-        "seconds": 3
-      }
+      "next": "boudica_first_expansion"
     },
     {
       "id": "boudica_first_expansion",
@@ -452,23 +421,18 @@
         "target": "player",
         "gesture": "drag"
       },
-      "next": "boudica_camera_hover",
-      "exchange": [
-        {
-          "speaker": "suetonius_paulinus",
-          "emote": "threat",
-          "emote_text_key": "tutorial.campaign_boudica_suetonius_drag_emote"
-        }
-      ]
+      "next": "boudica_camera_hover"
     },
     {
       "id": "boudica_camera_hover",
       "type": "objective",
       "title_key": "tutorial.campaign_boudica_boudica_camera_hover_title",
       "hint_key": "tutorial.campaign_boudica_boudica_camera_hover_desktop_hint",
-      "speaker": "stonea",
+      "speaker": "suetonius_paulinus",
       "pause_game": true,
       "camera_only": true,
+      "emote": "threat",
+      "emote_text_key": "tutorial.campaign_boudica_suetonius_zoom_emote",
       "trigger": {
         "type": "hover",
         "target": "suetonius_paulinus",
@@ -483,14 +447,7 @@
         "target": "player",
         "gesture": "hover"
       },
-      "next": "boudica_zoom_in",
-      "exchange": [
-        {
-          "speaker": "suetonius_paulinus",
-          "emote": "threat",
-          "emote_text_key": "tutorial.campaign_boudica_suetonius_hover_emote"
-        }
-      ]
+      "next": "boudica_zoom_in"
     },
     {
       "id": "boudica_zoom_in",
@@ -515,14 +472,7 @@
         "target": "player",
         "gesture": "zoom_in"
       },
-      "next": "boudica_found_suetonius",
-      "exchange": [
-        {
-          "speaker": "suetonius_paulinus",
-          "emote": "threat",
-          "emote_text_key": "tutorial.campaign_boudica_suetonius_zoom_emote"
-        }
-      ]
+      "next": "boudica_found_suetonius"
     },
     {
       "id": "boudica_found_suetonius",

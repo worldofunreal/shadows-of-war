@@ -15,6 +15,8 @@ pub const PLAYER_MATCH_INDEX_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("player_match_index");
 pub const SEASON_RATINGS_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("season_ratings");
+pub const RANKED_BOTS_TABLE: TableDefinition<&str, &[u8]> =
+    TableDefinition::new("ranked_bots");
 pub const SEASONS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("seasons");
 pub const PUBLIC_PROFILES_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("public_profiles");
@@ -48,6 +50,7 @@ pub fn init_database<P: AsRef<Path>>(path: P) -> Result<Database, Box<dyn std::e
     write_txn.open_table(MATCHES_TABLE)?;
     write_txn.open_table(PLAYER_MATCH_INDEX_TABLE)?;
     write_txn.open_table(SEASON_RATINGS_TABLE)?;
+    write_txn.open_table(RANKED_BOTS_TABLE)?;
     write_txn.open_table(SEASONS_TABLE)?;
     write_txn.open_table(PUBLIC_PROFILES_TABLE)?;
     write_txn.open_table(MATCH_STARTS_TABLE)?;

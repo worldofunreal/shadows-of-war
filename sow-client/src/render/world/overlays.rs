@@ -92,6 +92,7 @@ pub(crate) fn render_overlays(
         ui.tutorial_active
             .then_some(ui.tutorial_marker_player_id)
             .flatten(),
+        ui.tutorial_active,
         ui.app.settings_state.reduced_motion,
     );
     if let Some(started_at) = nameplate_render_started_at {

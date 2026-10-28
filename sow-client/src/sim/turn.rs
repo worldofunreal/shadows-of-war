@@ -1046,6 +1046,7 @@ mod tests {
         let ability_event = GameEvent::AbilityTriggered {
             owner_id: 1,
             tile: None,
+            affected: Vec::new(),
         };
         let unrelated_event = GameEvent::ResourceRequestRejected {
             rejector_id: 2,

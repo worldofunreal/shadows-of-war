@@ -418,7 +418,7 @@ mod ability_cue_tests {
             ability_cue_rgb(Cue::Strength)
         );
         assert_eq!(
-            ability_cue_rgb(Leader::of("justin_i").ability().cue()),
+            ability_cue_rgb(Leader::of("caesar").ability().cue()),
             ability_cue_rgb(Cue::Losses)
         );
     }
@@ -909,6 +909,10 @@ pub(crate) struct MenuReturnContext {
     pub exit_recorded: bool,
     #[serde(default)]
     pub server_state: Option<sow_data::profile::MatchExitState>,
+    #[serde(default)]
+    pub ranked_result: Option<sow_data::profile::RankedResultPresentation>,
+    #[serde(default)]
+    pub ranked_result_presented: bool,
     #[serde(skip)]
     pub result_request_id: Option<u64>,
     #[serde(skip)]

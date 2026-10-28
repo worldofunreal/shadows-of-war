@@ -104,6 +104,20 @@ export interface MenuReturn {
     requested_screen: string | null;
     status: string;
     receipt_ids: string[];
+    ranked_result?: RankedResult | null;
+    ranked_result_presented?: boolean;
+}
+
+export interface RankedResult {
+    score_before: number;
+    score_after: number;
+    rating_delta: number;
+    tier_before: string;
+    tier_after: string;
+    division_before: string | null;
+    division_after: string | null;
+    games_played: number;
+    placements_complete: boolean;
 }
 
 export interface MenuLeaderOffer {
@@ -188,6 +202,8 @@ export interface MenuState {
     connecting: boolean;
     update_available: boolean;
     waiting: boolean;
+    ranked_search_active?: boolean;
+    ranked_search_elapsed_secs?: number;
     match_preparing: boolean;
     player_name: string;
     selected_leader: string;
@@ -415,7 +431,14 @@ export interface MenuHudPayload {
         military_capacity: number;
     };
     building_costs: Record<string, number>;
-    emotes: { kind: string; expression: string; menu_key: string; bubble_key: string; notice_key: string }[];
+    emotes: {
+        kind: string;
+        expression: string;
+        menu_key: string;
+        bubble_key: string;
+        notice_key: string;
+        fallback: string;
+    }[];
     emote_active: boolean;
     emote_pinned: boolean;
     fps: number | null;

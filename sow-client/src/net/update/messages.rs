@@ -307,6 +307,10 @@ impl SowApp {
                         log::info!("Received version update: {}", version);
                         self.ui.update_available = true;
                     }
+                    ServerMessage::RankedSearching { elapsed_secs } => {
+                        self.ui.app.main_menu_state.ranked_search_active = true;
+                        self.ui.app.main_menu_state.ranked_search_elapsed_secs = elapsed_secs;
+                    }
                     ServerMessage::LobbyClosed(closed) => {
                         if self.sim.my_lobby_id != Some(closed.lobby_id)
                             && self.ui.app.main_menu_state.joined_lobby_id != Some(closed.lobby_id)
@@ -317,7 +321,40 @@ impl SowApp {
                         self.ui.app.hud_state.sync_state = None;
                         // Preserve the registered match identity until the common
                         // return owner captures it for the server receipt.
-                        if closed.reason.contains("Requeueing") {
+                        if closed.reason == "RANKED_CANCELLED" {
+                            clear_lobby_snapshot(&mut self.ui.app.main_menu_state);
+                            let menu = &mut self.ui.app.main_menu_state;
+                            menu.joined_lobby_id = None;
+                            menu.pending_join_lobby_id = None;
+                            menu.in_private_match = false;
+                            menu.is_lobby_host = false;
+                            menu.my_player_id = None;
+                            menu.ranked_search_active = false;
+                            menu.ranked_search_elapsed_secs = 0;
+                            menu.is_waiting = false;
+                            self.ui.app.phase = ClientPhase::MainMenu;
+                            self.sim.my_lobby_id = None;
+                            self.sim.my_player_id = None;
+                            self.sim.relay_ticket = None;
+                            self.join_matchmaking = false;
+                            self.net.relay_handoff_done = false;
+                        } else if closed.reason == "RANKED_REQUEUE" {
+                            clear_lobby_snapshot(&mut self.ui.app.main_menu_state);
+                            let menu = &mut self.ui.app.main_menu_state;
+                            menu.joined_lobby_id = None;
+                            menu.pending_join_lobby_id = None;
+                            menu.in_private_match = false;
+                            menu.is_lobby_host = false;
+                            menu.my_player_id = None;
+                            menu.ranked_search_active = true;
+                            menu.ranked_search_elapsed_secs = 0;
+                            menu.is_waiting = true;
+                            self.ui.app.phase = ClientPhase::MainMenu;
+                            self.sim.my_lobby_id = None;
+                            self.sim.my_player_id = None;
+                            self.sim.relay_ticket = None;
+                            self.net.relay_handoff_done = false;
+                        } else if closed.reason.contains("Requeueing") {
                             log::info!("Auto-requeueing to a new lobby...");
                             clear_lobby_snapshot(&mut self.ui.app.main_menu_state);
                             self.ui.app.main_menu_state.joined_lobby_id = None;
@@ -372,6 +409,8 @@ impl SowApp {
                         }
                         let menu = &mut self.ui.app.main_menu_state;
                         menu.is_waiting = false;
+                        menu.ranked_search_active = false;
+                        menu.ranked_search_elapsed_secs = 0;
                         menu.pending_join_lobby_id = None;
                         menu.joined_lobby_id = None;
                         menu.is_lobby_host = false;
@@ -390,6 +429,8 @@ impl SowApp {
                         }
                     }
                     ServerMessage::JoinAck(ack) => {
+                        self.ui.app.main_menu_state.ranked_search_active = false;
+                        self.ui.app.main_menu_state.ranked_search_elapsed_secs = 0;
                         if self.join_matchmaking {
                             crate::store_portals::track_product_event("matchmaking_joined");
                         }

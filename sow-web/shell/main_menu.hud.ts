@@ -341,11 +341,18 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
     function syncEmoteTexts(hud: MenuHudPayload | null | undefined) {
         if (!hud || !Array.isArray(hud.emotes) || hud.emotes.length !== 4) return;
+        const tutorialActive = hud.tutorial && hud.tutorial.active;
         const texts = hud.emotes.map(function (definition) {
-            return SOW_t(definition.bubble_key);
+            return tutorialActive && typeof definition.fallback === "string"
+                ? definition.fallback
+                : SOW_t(definition.bubble_key);
         });
         const key =
-            String(window.SOW_LOCALE || "en") + ":" + JSON.stringify(texts) + ":" + hudSafeArea.join(",");
+            String(tutorialActive ? "en" : window.SOW_LOCALE || "en") +
+            ":" +
+            JSON.stringify(texts) +
+            ":" +
+            hudSafeArea.join(",");
         if (key === emoteTextKey && emoteTextTarget === window.SOW_menu_command) return;
         if (send("set_emote_texts", { texts: texts, safe_area: hudSafeArea })) {
             emoteTextKey = key;

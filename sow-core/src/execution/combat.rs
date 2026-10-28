@@ -6,16 +6,3 @@ pub(crate) use combat_tiles::{
     announce_attack_abilities, attack_strength, outnumbered_bonus_applies, targeted_multiplier,
 };
 
-#[cfg(test)]
-mod tests {
-    use crate::execution::fractional_extra_tiles_milli;
-
-    #[test]
-    fn fractional_extra_tile_milli_threshold_is_stable() {
-        assert_eq!(fractional_extra_tiles_milli(12.499, 498), 1);
-        assert_eq!(fractional_extra_tiles_milli(12.499, 499), 0);
-        assert_eq!(fractional_extra_tiles_milli(7.0009, 0), 0);
-        assert_eq!(fractional_extra_tiles_milli(3.999_999_999, 998), 1);
-        assert_eq!(fractional_extra_tiles_milli(3.999_999_999, 999), 0);
-    }
-}

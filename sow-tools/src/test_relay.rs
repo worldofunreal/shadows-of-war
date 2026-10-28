@@ -215,6 +215,7 @@ async fn main() {
             random_leader: false,
             host_config: None,
             password: None,
+            ranked_1v1: false,
         }),
         auth,
     };

@@ -5,15 +5,11 @@ import { test } from "node:test";
 import { vm } from "../shell/typescript-test-support.ts";
 const shell = path.resolve(__dirname, "../shell");
 const surfacesSource = fs.readFileSync(path.join(shell, "main_menu.surfaces.ts"), "utf8");
-void fs.readFileSync(path.join(shell, "sdk/store_portals.ts"), "utf8");
 const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.ts"), "utf8");
 const licenseJestSource = fs.readFileSync(path.join(shell, "main_menu.jest.ts"), "utf8");
-void fs.readFileSync(path.join(shell, "main_menu.layout.css"), "utf8");
 const landingHtml = fs.readFileSync(path.join(shell, "../../sow-web/site/index.html"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-dist/src/main.rs"), "utf8");
 const readme = fs.readFileSync(path.join(shell, "../../README.md"), "utf8");
 const siteHeader = fs.readFileSync(path.join(shell, "../../sow-web/site/site-header.html"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-web/site/site-chrome.ts"), "utf8");
 const gameControlsCss = fs.readFileSync(path.join(shell, "sow-controls.css"), "utf8");
 const siteApp = fs.readFileSync(path.join(shell, "../../sow-web/site/app.ts"), "utf8");
 const siteCss = fs.readFileSync(path.join(shell, "../../sow-web/site/styles.css"), "utf8");
@@ -24,7 +20,6 @@ const siteRedirectConfig = fs.readFileSync(
   path.join(shell, "../../sow-dist/deploy/freebsd/conf.d/shadowsofwar.io.conf"),
   "utf8",
 );
-void fs.readFileSync(path.join(shell, "index.html.template"), "utf8");
 
 test("public landing builds heroes, maps and videos from game data at publish time", () => {
   for (const marker of [

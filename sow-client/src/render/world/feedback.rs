@@ -254,6 +254,7 @@ fn render_transport_targets(
                 player.player_type,
                 player.team,
                 player.color,
+                player.is_campaign_faction,
             )
         })
         .unwrap_or([0.5, 0.5, 0.5]);

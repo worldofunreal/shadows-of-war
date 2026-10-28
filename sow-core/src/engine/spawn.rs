@@ -244,7 +244,11 @@ impl SowEngine {
                     .wrapping_add(player_id as u64)
                     .wrapping_add(0xA11CE),
             );
-            Some(iq_rng.next_int(160, 181) as u32)
+            Some(if config.ranked_1v1 {
+                config.ranked_bot_iq.unwrap_or(100)
+            } else {
+                iq_rng.next_int(160, 181) as u32
+            })
         } else {
             None
         };

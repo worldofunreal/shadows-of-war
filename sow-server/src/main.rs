@@ -583,6 +583,628 @@ async fn init_bot_pool() -> Result<(), String> {
     Err(format!("seed failed after 5 attempts: {url}"))
 }
 
+/// Create the persistent, ranked-only IQ roster once per account identity.
+async fn init_ranked_bot_pool() -> Result<(), String> {
+    let db_base_url = env::var("SOW_DB_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:25585".to_string());
+    let secret = env::var("SOW_DB_SECRET")
+        .map_err(|_| "SOW_DB_SECRET missing — cannot seed ranked bots".to_string())?;
+    let url = format!("{}/internal/ranked-bot", db_base_url.trim_end_matches('/'));
+    let leaders: Vec<_> = (0..sow_core::player::Leader::count())
+        .filter_map(sow_core::player::Leader::nth)
+        .collect();
+    if leaders.is_empty() {
+        return Err("ranked bot leader catalog is empty".into());
+    }
+    let bots: Vec<_> = (60..=180).step_by(20).flat_map(|iq| {
+        let leaders = &leaders;
+        (0..8).map(move |index| {
+            let leader = leaders[(iq as usize / 20 + index) % leaders.len()];
+            serde_json::json!({
+                "external_id": format!("ranked-iq-{iq}-{index:02}"),
+                "display_name": format!("Ranked {iq}-{:02}", index + 1),
+                "leader": leader.name(),
+                "iq": iq,
+            })
+        })
+    }).collect();
+    let body = serde_json::json!({ "action": "seed", "bots": bots });
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|error| format!("ranked bot seed client: {error}"))?;
+    for attempt in 1..=5 {
+        match client.post(&url)
+            .header("Authorization", format!("Bearer {secret}"))
+            .json(&body).send().await
+        {
+            Ok(response) if response.status().is_success() => {
+                let body: serde_json::Value = response.json().await
+                    .map_err(|error| format!("ranked bot seed response: {error}"))?;
+                let count = body.get("accounts").and_then(serde_json::Value::as_array).map_or(0, Vec::len);
+                if count == 56 {
+                    log::info!("[RANKED_BOTS] initialized {count} persistent ranked accounts");
+                    return Ok(());
+                }
+                return Err(format!("ranked bot seed returned {count} accounts, expected 56"));
+            }
+            Ok(response) => log::warn!("[RANKED_BOTS] seed HTTP {} (attempt {attempt}/5)", response.status()),
+            Err(error) => log::warn!("[RANKED_BOTS] seed unreachable: {error} (attempt {attempt}/5)"),
+        }
+        if attempt < 5 { tokio::time::sleep(Duration::from_secs(2u64.pow(attempt as u32))).await; }
+    }
+    Err(format!("ranked bot seed failed after 5 attempts: {url}"))
+}
+
+#[derive(Clone)]
+struct RankedQueuePlayer {
+    account_id: String,
+    rating: f64,
+    name: String,
+    clan_tag: String,
+    leader: sow_core::player::Leader,
+    skin_style: u8,
+    client_tx: mpsc::Sender<Vec<u8>>,
+    ip: String,
+    session_id: u64,
+    search_started_at: tokio::time::Instant,
+}
+
+struct RankedQueueEntry {
+    player: RankedQueuePlayer,
+    last_reported_secs: u32,
+    last_bot_attempt: Option<tokio::time::Instant>,
+}
+
+enum RankedQueueMessage {
+    Search(RankedQueuePlayer),
+    Cancel { account_id: String, session_id: u64 },
+    ReleaseBot { account_id: String, match_id: u64 },
+}
+
+async fn ranked_db_post(
+    client: &reqwest::Client,
+    db_url: &str,
+    secret: &str,
+    path: &str,
+    body: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    client.post(format!("{}/{}", db_url.trim_end_matches('/'), path))
+        .bearer_auth(secret)
+        .json(&body)
+        .send().await
+        .map_err(|error| error.to_string())?
+        .error_for_status().map_err(|error| error.to_string())?
+        .json().await.map_err(|error| error.to_string())
+}
+
+fn send_ranked_failure(tx: &mpsc::Sender<Vec<u8>>, reason: &str) {
+    let message = sow_core::protocol::ServerMessage::JoinFailed(ServerJoinFailedMessage {
+        reason: reason.to_string(),
+    });
+    if let Ok(bytes) = bincode::serialize(&message) {
+        let _ = tx.try_send(bytes);
+    }
+}
+
+fn consume_ranked_queue_message(pending: &mut Vec<RankedQueueEntry>, message: RankedQueueMessage) {
+    match message {
+        RankedQueueMessage::Search(mut player) => {
+            if let Some(entry) = pending.iter_mut().find(|entry| entry.player.account_id == player.account_id) {
+                player.search_started_at = entry.player.search_started_at;
+                entry.player = player;
+            } else {
+                pending.push(RankedQueueEntry {
+                    player,
+                    last_reported_secs: u32::MAX,
+                    last_bot_attempt: None,
+                });
+            }
+        }
+        RankedQueueMessage::Cancel { account_id, session_id } => {
+            pending.retain(|entry| !(entry.player.account_id == account_id && entry.player.session_id == session_id));
+        }
+        RankedQueueMessage::ReleaseBot { .. } => {}
+    }
+}
+
+fn ranked_requeue_players(lobby: &ServerLobby, leaving_player_id: u16) -> Vec<RankedQueuePlayer> {
+    lobby.players.iter()
+        .filter(|member| member.player_id != leaving_player_id && !member.is_internal_bot)
+        .filter_map(|member| Some(RankedQueuePlayer {
+            account_id: member.database_account_id.clone()?,
+            rating: member.ranked_rating.filter(|rating| rating.is_finite())?,
+            name: member.name.clone(),
+            clan_tag: member.clan_tag.clone(),
+            leader: member.leader,
+            skin_style: member.skin_style,
+            client_tx: member.tx.clone(),
+            ip: member.ip.clone(),
+            session_id: member.session_id?,
+            search_started_at: member.ranked_search_started_at?,
+        }))
+        .filter(|player| !player.client_tx.is_closed())
+        .collect()
+}
+
+fn send_ranked_lobby_closed(tx: &mpsc::Sender<Vec<u8>>, lobby_id: u64, reason: &str) {
+    let closed = sow_core::protocol::ServerMessage::LobbyClosed(
+        sow_core::protocol::ServerLobbyClosedMessage {
+            lobby_id,
+            reason: reason.to_string(),
+        },
+    );
+    if let Ok(bytes) = bincode::serialize(&closed)
+        && tx.try_send(bytes).is_err()
+    {
+        log::warn!("[RANKED] could not deliver {reason} for match {lobby_id}");
+    }
+}
+
+fn notify_ranked_requeue(player: &RankedQueuePlayer, lobby_id: u64) {
+    send_ranked_lobby_closed(&player.client_tx, lobby_id, "RANKED_REQUEUE");
+}
+
+async fn cancel_ranked_search(
+    games: &Mutex<Vec<ServerLobby>>,
+    pending: &mut Vec<RankedQueueEntry>,
+    account_id: &str,
+    session_id: u64,
+    db_client: &reqwest::Client,
+    db_url: &str,
+    db_secret: &str,
+) {
+    pending.retain(|entry| !(entry.player.account_id == account_id && entry.player.session_id == session_id));
+    let (lobby_id, cancelled_tx, requeue, bot_ids) = {
+        let mut games = games.lock().await;
+        let Some(index) = games.iter().position(|lobby| {
+            lobby.kind == sow_core::protocol::LobbyKind::Ranked1v1
+                && lobby.players.iter().any(|member| {
+                    member.database_account_id.as_deref() == Some(account_id)
+                        && member.session_id == Some(session_id)
+                })
+        }) else {
+            return;
+        };
+        let lobby = &games[index];
+        let leaving_player = lobby.players.iter()
+            .find(|member| member.database_account_id.as_deref() == Some(account_id)
+                && member.session_id == Some(session_id));
+        let leaving_player_id = leaving_player
+            .map(|member| member.player_id)
+            .expect("ranked lobby match was found above");
+        let cancelled_tx = leaving_player.map(|member| member.tx.clone())
+            .expect("ranked lobby match was found above");
+        let requeue = ranked_requeue_players(lobby, leaving_player_id);
+        for player in &requeue {
+            notify_ranked_requeue(player, lobby.id);
+        }
+        let bot_ids = lobby.players.iter()
+            .filter(|member| member.is_internal_bot)
+            .filter_map(|member| member.database_account_id.clone())
+            .collect::<Vec<_>>();
+        let lobby_id = lobby.id;
+        games.remove(index);
+        (lobby_id, cancelled_tx, requeue, bot_ids)
+    };
+    send_ranked_lobby_closed(&cancelled_tx, lobby_id, "RANKED_CANCELLED");
+    for bot_id in bot_ids {
+        release_ranked_bot(db_client, db_url, db_secret, &bot_id, lobby_id).await;
+    }
+    for player in requeue {
+        consume_ranked_queue_message(pending, RankedQueueMessage::Search(player));
+    }
+}
+
+async fn accept_ranked_queue_message(
+    games: &Mutex<Vec<ServerLobby>>,
+    pending: &mut Vec<RankedQueueEntry>,
+    message: RankedQueueMessage,
+    db_client: &reqwest::Client,
+    db_url: &str,
+    db_secret: &str,
+) {
+    match &message {
+        RankedQueueMessage::ReleaseBot { account_id, match_id } => {
+            release_ranked_bot(db_client, db_url, db_secret, account_id, *match_id).await;
+            return;
+        }
+        RankedQueueMessage::Cancel { account_id, session_id } => {
+            cancel_ranked_search(games, pending, account_id, *session_id, db_client, db_url, db_secret).await;
+            return;
+        }
+        RankedQueueMessage::Search(_) => {}
+    }
+    let RankedQueueMessage::Search(player) = message else { unreachable!() };
+    let ack = {
+        let mut games = games.lock().await;
+        games.iter_mut().find(|game| game.kind == sow_core::protocol::LobbyKind::Ranked1v1
+            && game.players.iter().any(|member| member.database_account_id.as_deref() == Some(player.account_id.as_str())))
+            .and_then(|game| {
+                if let Some(member) = game.players.iter_mut().find(|member| member.database_account_id.as_deref() == Some(player.account_id.as_str())) {
+                    if member.is_internal_bot { return None; }
+                    member.tx = player.client_tx.clone();
+                    member.session_id = Some(player.session_id);
+                    Some(ServerJoinAckMessage {
+                        lobby_id: game.id,
+                        player_id: member.player_id,
+                        map_name: game.config.map_name.clone(),
+                        is_private: true,
+                        lobby_info: lobby_to_info(game),
+                    })
+                } else { None }
+            })
+    };
+    if let Some(ack) = ack {
+        if let Ok(bytes) = bincode::serialize(&sow_core::protocol::ServerMessage::JoinAck(ack)) {
+            let _ = player.client_tx.try_send(bytes);
+        }
+    } else {
+        consume_ranked_queue_message(pending, RankedQueueMessage::Search(player));
+    }
+}
+
+fn ranked_bot_fields(account: &serde_json::Value) -> Result<(String, String, sow_core::player::Leader, u32), String> {
+    let account_id = account.get("account_id").and_then(serde_json::Value::as_str)
+        .ok_or("ranked bot account id missing")?.to_string();
+    let name = account.get("display_name").and_then(serde_json::Value::as_str)
+        .ok_or("ranked bot display name missing")?.to_string();
+    let bot = account.get("profile").and_then(|profile| profile.get("ranked_bot"))
+        .ok_or("ranked bot profile missing")?;
+    let leader_name = bot.get("leader").and_then(serde_json::Value::as_str)
+        .ok_or("ranked bot leader missing")?;
+    let iq = bot.get("iq").and_then(serde_json::Value::as_u64)
+        .and_then(|iq| u32::try_from(iq).ok()).ok_or("ranked bot IQ missing")?;
+    let leader = sow_data::commerce::leader_from_id(leader_name)
+        .ok_or("ranked bot leader is not in the catalog")?;
+    Ok((account_id, name, leader, iq))
+}
+
+async fn allocate_match_id(next_id: &Mutex<u64>) -> Result<u64, String> {
+    let mut next = next_id.lock().await;
+    let id = *next;
+    *next = next.checked_add(1).ok_or("match id space exhausted")?;
+    Ok(id)
+}
+
+async fn ranked_candidates(
+    client: &reqwest::Client,
+    db_url: &str,
+    secret: &str,
+) -> Result<Vec<(serde_json::Value, f64)>, String> {
+    let payload = ranked_db_post(client, db_url, secret, "internal/ranked-bots/available", serde_json::json!({})).await?;
+    let candidates = payload.get("candidates").and_then(serde_json::Value::as_array)
+        .ok_or("ranked bot candidates missing")?;
+    candidates.iter().map(|candidate| {
+        let account = candidate.get("account").cloned().ok_or("ranked bot account missing")?;
+        let rating = candidate.get("rating").and_then(|rating| rating.get("mu"))
+            .and_then(serde_json::Value::as_f64).ok_or("ranked bot rating missing")?;
+        if !rating.is_finite() { return Err("ranked bot rating is invalid".into()); }
+        Ok((account, rating))
+    }).collect()
+}
+
+async fn fetch_ranked_rating(
+    client: &reqwest::Client,
+    db_url: &str,
+    secret: &str,
+    account_id: &str,
+) -> Result<f64, String> {
+    let payload = ranked_db_post(client, db_url, secret, "internal/ranked-rating", serde_json::json!({
+        "account_id": account_id
+    })).await?;
+    let rating = payload.get("mu").and_then(serde_json::Value::as_f64)
+        .ok_or("ranked rating value missing")?;
+    if rating.is_finite() { Ok(rating) } else { Err("ranked rating value is invalid".into()) }
+}
+
+async fn reserve_ranked_bot(
+    client: &reqwest::Client,
+    db_url: &str,
+    secret: &str,
+    account_id: &str,
+    match_id: u64,
+) -> Result<Option<serde_json::Value>, String> {
+    let payload = ranked_db_post(client, db_url, secret, "internal/ranked-bot", serde_json::json!({
+        "action": "reserve", "account_id": account_id, "match_id": match_id.to_string()
+    })).await?;
+    Ok(payload.get("accounts").and_then(serde_json::Value::as_array).and_then(|items| items.first()).cloned())
+}
+
+async fn release_ranked_bot(client: &reqwest::Client, db_url: &str, secret: &str, account_id: &str, match_id: u64) {
+    if let Err(error) = ranked_db_post(client, db_url, secret, "internal/ranked-bot", serde_json::json!({
+        "action": "release", "account_id": account_id, "match_id": match_id.to_string()
+    })).await {
+        log::error!("[RANKED_BOTS] failed to release reservation for match {match_id}: {error}");
+    }
+}
+
+async fn recover_ranked_bot_reservations(
+    client: &reqwest::Client,
+    db_url: &str,
+    db_secret: &str,
+    workers: &[RelayWorker],
+) -> Result<usize, String> {
+    let relay_secret = std::env::var("SOW_RELAY_CONTROL_SECRET")
+        .map_err(|_| "SOW_RELAY_CONTROL_SECRET missing".to_string())?;
+    let mut live_match_ids = std::collections::BTreeSet::new();
+    for worker in workers {
+        let path = "/internal/lobbies";
+        let url = format!("{}{}", worker.mgmt_url.trim_end_matches('/'), path);
+        let (timestamp, nonce, signature) = relay_mgmt_headers(&relay_secret, "GET", path, &[])?;
+        let response = relay_mgmt_client(&url)?
+            .get(&url)
+            .header("X-SOW-Timestamp", timestamp)
+            .header("X-SOW-Nonce", nonce)
+            .header("X-SOW-Signature", signature)
+            .send().await
+            .map_err(|error| format!("relay worker {} roster request: {error}", worker.id))?
+            .error_for_status()
+            .map_err(|error| format!("relay worker {} roster response: {error}", worker.id))?
+            .json::<serde_json::Value>().await
+            .map_err(|error| format!("relay worker {} roster payload: {error}", worker.id))?;
+        let lobbies = response.get("lobbies").and_then(serde_json::Value::as_array)
+            .ok_or_else(|| format!("relay worker {} roster is missing lobbies", worker.id))?;
+        for lobby in lobbies {
+            let id = lobby.get("lobby_id").and_then(serde_json::Value::as_u64)
+                .ok_or_else(|| format!("relay worker {} returned an invalid lobby id", worker.id))?;
+            live_match_ids.insert(id.to_string());
+        }
+    }
+    let result = ranked_db_post(client, db_url, db_secret, "internal/ranked-bot", serde_json::json!({
+        "action": "recover",
+        "live_match_ids": live_match_ids.into_iter().collect::<Vec<_>>(),
+    })).await?;
+    result.get("released").and_then(serde_json::Value::as_u64)
+        .and_then(|count| usize::try_from(count).ok())
+        .ok_or("ranked bot recovery response is missing released count".into())
+}
+
+async fn retry_ranked_bot_reservation_recovery(
+    client: reqwest::Client,
+    db_url: String,
+    db_secret: String,
+    workers: Vec<RelayWorker>,
+) {
+    loop {
+        match recover_ranked_bot_reservations(&client, &db_url, &db_secret, &workers).await {
+            Ok(released) if released > 0 => log::info!("[RANKED_BOTS] recovered {released} stale reservations"),
+            Ok(_) => {}
+            Err(error) => log::error!("[RANKED_BOTS] reservation recovery failed: {error}"),
+        }
+        tokio::time::sleep(Duration::from_secs(30)).await;
+    }
+}
+
+fn take_ranked_pair(pending: &mut Vec<RankedQueueEntry>, now: tokio::time::Instant) -> Option<[RankedQueuePlayer; 2]> {
+    let searches = pending.iter().map(|entry| lobby::RankedSearch {
+        account_id: entry.player.account_id.clone(),
+        rating: entry.player.rating,
+        entered_at: entry.player.search_started_at.into_std(),
+    }).collect::<Vec<_>>();
+    let (first, second) = lobby::ranked_human_pair(&searches, now.into_std())?;
+    let high = first.max(second);
+    let low = first.min(second);
+    let second_player = pending.remove(high).player;
+    let first_player = pending.remove(low).player;
+    Some([first_player, second_player])
+}
+
+async fn start_ranked_lobby(
+    games: &Mutex<Vec<ServerLobby>>,
+    id: u64,
+    humans: Vec<RankedQueuePlayer>,
+    bot: Option<serde_json::Value>,
+    reserved_bot: Option<String>,
+    db_url: &str,
+    db_secret: &str,
+    db_client: &reqwest::Client,
+) {
+    let failure_txs = humans.iter().map(|human| human.client_tx.clone()).collect::<Vec<_>>();
+    let mut participants = Vec::with_capacity(2);
+    for human in humans {
+        participants.push(lobby::RankedLobbyPlayer {
+            name: human.name,
+            clan_tag: human.clan_tag,
+            leader: human.leader,
+            skin_style: human.skin_style,
+            account_id: human.account_id,
+            tx: human.client_tx,
+            ip: human.ip,
+            session_id: Some(human.session_id),
+            is_bot: false,
+            bot_iq: None,
+            ranked_rating: Some(human.rating),
+            ranked_search_started_at: Some(human.search_started_at),
+        });
+    }
+    if let Some(bot) = bot {
+        match ranked_bot_fields(&bot) {
+            Ok((account_id, name, leader, iq)) => {
+                let (tx, _rx) = mpsc::channel(1);
+                participants.push(lobby::RankedLobbyPlayer {
+                    name,
+                    clan_tag: String::new(),
+                    leader,
+                    skin_style: 0,
+                    account_id,
+                    tx,
+                    ip: "127.0.0.1".into(),
+                    session_id: None,
+                    is_bot: true,
+                    bot_iq: Some(iq),
+                    ranked_rating: None,
+                    ranked_search_started_at: None,
+                });
+            }
+            Err(error) => {
+                log::error!("[RANKED_BOTS] invalid bot selected for match {id}: {error}");
+                if let Some(account_id) = reserved_bot { release_ranked_bot(db_client, db_url, db_secret, &account_id, id).await; }
+                return;
+            }
+        }
+    }
+    let participants: [lobby::RankedLobbyPlayer; 2] = match participants.try_into() {
+        Ok(participants) => participants,
+        Err(_) => {
+            log::error!("[RANKED] match {id} did not have exactly two participants");
+            if let Some(account_id) = reserved_bot { release_ranked_bot(db_client, db_url, db_secret, &account_id, id).await; }
+            return;
+        }
+    };
+    let acks = {
+        let mut games = games.lock().await;
+        match lobby::spawn_ranked_lobby(&mut games, id, participants) {
+            Ok(lobby_id) => {
+                let Some(game) = games.iter().find(|game| game.id == lobby_id) else { return; };
+                let lobby_info = lobby_to_info(game);
+                game.players.iter().filter(|player| !player.is_internal_bot).map(|player| {
+                    let ack = ServerJoinAckMessage {
+                        lobby_id,
+                        player_id: player.player_id,
+                        map_name: game.config.map_name.clone(),
+                        is_private: true,
+                        lobby_info: lobby_info.clone(),
+                    };
+                    (player.tx.clone(), ack)
+                }).collect::<Vec<_>>()
+            }
+            Err(error) => {
+                log::error!("[RANKED] match {id} could not be created: {error}");
+                Vec::new()
+            }
+        }
+    };
+    if acks.is_empty() {
+        for tx in failure_txs { send_ranked_failure(&tx, "RANKED_MATCH_PREPARATION_FAILED"); }
+        if let Some(account_id) = reserved_bot { release_ranked_bot(db_client, db_url, db_secret, &account_id, id).await; }
+        return;
+    }
+    for (tx, ack) in acks {
+        if let Ok(bytes) = bincode::serialize(&sow_core::protocol::ServerMessage::JoinAck(ack)) {
+            let _ = tx.try_send(bytes);
+        }
+    }
+}
+
+async fn run_ranked_queue(
+    mut rx: mpsc::Receiver<RankedQueueMessage>,
+    games: Arc<Mutex<Vec<ServerLobby>>>,
+    next_id: Arc<Mutex<u64>>,
+    db_url: String,
+    db_secret: String,
+) {
+    let db_client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build()
+        .expect("ranked matchmaking HTTP client");
+    let mut pending = Vec::<RankedQueueEntry>::new();
+    let mut interval = tokio::time::interval(Duration::from_millis(100));
+    loop {
+        tokio::select! {
+            message = rx.recv() => match message {
+                Some(message) => accept_ranked_queue_message(&games, &mut pending, message, &db_client, &db_url, &db_secret).await,
+                None => return,
+            },
+            _ = interval.tick() => {
+                while let Ok(message) = rx.try_recv() { accept_ranked_queue_message(&games, &mut pending, message, &db_client, &db_url, &db_secret).await; }
+                let now = tokio::time::Instant::now();
+                for entry in &mut pending {
+                    let elapsed = now.saturating_duration_since(entry.player.search_started_at).as_secs().min(u64::from(u32::MAX)) as u32;
+                    if elapsed != entry.last_reported_secs {
+                        entry.last_reported_secs = elapsed;
+                        let update = sow_core::protocol::ServerMessage::RankedSearching { elapsed_secs: elapsed };
+                        if let Ok(bytes) = bincode::serialize(&update) { let _ = entry.player.client_tx.try_send(bytes); }
+                    }
+                }
+                if let Some(pair) = take_ranked_pair(&mut pending, now) {
+                    let Ok(id) = allocate_match_id(&next_id).await else {
+                        for player in pair { send_ranked_failure(&player.client_tx, "RANKED_QUEUE_UNAVAILABLE"); }
+                        continue;
+                    };
+                    start_ranked_lobby(&games, id, pair.into(), None, None, &db_url, &db_secret, &db_client).await;
+                    continue;
+                }
+                let Some(expired_index) = pending.iter().enumerate()
+                    .filter(|(_, entry)| now.saturating_duration_since(entry.player.search_started_at) > Duration::from_secs(3)
+                        && !entry.player.client_tx.is_closed()
+                        && entry.last_bot_attempt.is_none_or(|attempt| now.saturating_duration_since(attempt) >= Duration::from_secs(5)))
+                    .min_by_key(|(_, entry)| entry.player.search_started_at).map(|(index, _)| index) else { continue; };
+                pending[expired_index].last_bot_attempt = Some(now);
+                let account_id = pending[expired_index].player.account_id.clone();
+                let mut candidates = match ranked_candidates(&db_client, &db_url, &db_secret).await {
+                    Ok(candidates) => candidates,
+                    Err(error) => {
+                        log::error!("[RANKED_BOTS] candidate lookup failed: {error}");
+                        continue;
+                    }
+                };
+                while let Ok(message) = rx.try_recv() { accept_ranked_queue_message(&games, &mut pending, message, &db_client, &db_url, &db_secret).await; }
+                if let Some(pair) = take_ranked_pair(&mut pending, tokio::time::Instant::now()) {
+                    let Ok(id) = allocate_match_id(&next_id).await else { continue; };
+                    start_ranked_lobby(&games, id, pair.into(), None, None, &db_url, &db_secret, &db_client).await;
+                    continue;
+                }
+                let Some(index) = pending.iter().position(|entry| entry.player.account_id == account_id) else { continue; };
+                let Some(player) = pending.get(index).map(|entry| entry.player.clone()) else { continue; };
+                let id = match allocate_match_id(&next_id).await {
+                    Ok(id) => id,
+                    Err(error) => { log::error!("[RANKED] {error}"); continue; }
+                };
+                let mut reserved: Option<(String, serde_json::Value)> = None;
+                candidates.sort_by(|a, b| (a.1 - player.rating).abs().total_cmp(&(b.1 - player.rating).abs()));
+                for (candidate, _) in &candidates {
+                    let Ok((bot_id, _, _, _)) = ranked_bot_fields(candidate) else { continue; };
+                    match reserve_ranked_bot(&db_client, &db_url, &db_secret, &bot_id, id).await {
+                        Ok(Some(account)) => { reserved = Some((bot_id, account)); break; }
+                        Ok(None) => continue,
+                        Err(error) => { log::error!("[RANKED_BOTS] reserve failed: {error}"); break; }
+                    }
+                }
+                if reserved.is_none() {
+                    let iq = (60..=180).step_by(20).min_by_key(|iq| {
+                        ((1000.0 + f64::from(*iq - 60) * 20.0) - player.rating).abs() as u32
+                    }).unwrap_or(60);
+                    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+                    let leader = sow_core::player::Leader::default().name();
+                    let created = ranked_db_post(&db_client, &db_url, &db_secret, "internal/ranked-bot", serde_json::json!({
+                        "action": "create", "external_id": format!("dynamic-{}-{stamp}", player.account_id),
+                        "display_name": format!("Ranked {iq}"), "leader": leader, "iq": iq,
+                        "actor": "matchmaking"
+                    })).await;
+                    if let Ok(payload) = created {
+                        if let Some(account) = payload.get("accounts").and_then(serde_json::Value::as_array).and_then(|items| items.first()).cloned()
+                            && let Ok((bot_id, _, _, _)) = ranked_bot_fields(&account)
+                        {
+                            if let Ok(Some(account)) = reserve_ranked_bot(&db_client, &db_url, &db_secret, &bot_id, id).await {
+                                reserved = Some((bot_id, account));
+                            }
+                        }
+                    }
+                }
+            let Some((bot_id, account)) = reserved else {
+                    log::error!("[RANKED_BOTS] no bot could be reserved for player {}", player.account_id);
+                    continue;
+                };
+                while let Ok(message) = rx.try_recv() { accept_ranked_queue_message(&games, &mut pending, message, &db_client, &db_url, &db_secret).await; }
+                if let Some(pair) = take_ranked_pair(&mut pending, tokio::time::Instant::now()) {
+                    release_ranked_bot(&db_client, &db_url, &db_secret, &bot_id, id).await;
+                    start_ranked_lobby(&games, id, pair.into(), None, None, &db_url, &db_secret, &db_client).await;
+                    continue;
+                }
+                let Some(index) = pending.iter().position(|entry| entry.player.account_id == account_id) else {
+                    release_ranked_bot(&db_client, &db_url, &db_secret, &bot_id, id).await;
+                    continue;
+                };
+                let player = pending.remove(index).player;
+                if player.client_tx.is_closed() {
+                    release_ranked_bot(&db_client, &db_url, &db_secret, &bot_id, id).await;
+                    continue;
+                }
+                start_ranked_lobby(&games, id, vec![player], Some(account), Some(bot_id), &db_url, &db_secret, &db_client).await;
+            }
+        }
+    }
+}
+
 // =============================================================================
 // RELAY INTEGRATION — worker-per-queue DPDK relay (no per-lobby processes)
 // =============================================================================
@@ -616,6 +1238,7 @@ enum ServerEvent {
     Leave {
         lobby_id: u64,
         player_id: u16,
+        session_id: u64,
     },
     MapDownloadProgress {
         lobby_id: u64,
@@ -705,6 +1328,11 @@ async fn main() {
     if let Err(error) = init_bot_pool().await {
         panic!("[BOT_POOL] startup failed: {error}");
     }
+    tokio::spawn(async {
+        if let Err(error) = init_ranked_bot_pool().await {
+            log::error!("[RANKED_BOTS] roster seed unavailable; ranked will create bots on demand: {error}");
+        }
+    });
 
     let mut games: Vec<ServerLobby> = Vec::new();
     // Reward receipts and guide source IDs survive restarts; the match sequence must too.
@@ -743,6 +1371,7 @@ async fn main() {
 
     let (global_tx, _rx) = broadcast::channel::<Vec<u8>>(100);
     let (event_tx, mut event_rx) = mpsc::channel::<ServerEvent>(100000);
+    let (ranked_queue_tx, ranked_queue_rx) = mpsc::channel::<RankedQueueMessage>(10000);
     let (relay_tx, mut relay_rx) = mpsc::unbounded_channel::<RelayCandidate>();
     let relay_workers = match relay_workers() {
         Ok(workers) => workers,
@@ -760,6 +1389,23 @@ async fn main() {
         );
         return;
     }
+    let recovery_client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(8))
+        .build()
+        .expect("ranked reservation recovery client");
+    tokio::spawn(retry_ranked_bot_reservation_recovery(
+        recovery_client,
+        db_url.clone(),
+        db_secret.clone(),
+        relay_workers.clone(),
+    ));
+    tokio::spawn(run_ranked_queue(
+        ranked_queue_rx,
+        Arc::clone(&games_state),
+        Arc::clone(&next_id_state),
+        db_url.clone(),
+        db_secret.clone(),
+    ));
     let relay_ports = Arc::new(Mutex::new(RelayPortAllocator::new()));
     log::info!(
         "Relay worker catalog: {} worker(s) {:?}",
@@ -773,6 +1419,7 @@ async fn main() {
     let retired_matchmaking_ids_for_joins = Arc::clone(&retired_matchmaking_ids_state);
     let global_tx_clone = global_tx.clone();
     let relay_tx_clone = relay_tx.clone();
+    let ranked_queue_tx_for_lobby = ranked_queue_tx.clone();
 
     // ── DEDICATED ASYNC RELAY WORKER TASK ──
     // A worker owns many lobbies. The destination port is the ownership key;
@@ -1143,8 +1790,22 @@ async fn main() {
                             }
                         }
 
-                        ServerEvent::Leave { lobby_id, player_id } => {
-                            if is_host_teardown(&games, lobby_id, player_id) {
+                        ServerEvent::Leave { lobby_id, player_id, session_id } => {
+                            let ranked_member = games.iter().find(|lobby| lobby.id == lobby_id
+                                && lobby.kind == sow_core::protocol::LobbyKind::Ranked1v1)
+                                .and_then(|lobby| lobby.players.iter().find(|member| {
+                                    member.player_id == player_id && member.session_id == Some(session_id)
+                                }))
+                                .and_then(|member| member.database_account_id.clone());
+                            if let Some(account_id) = ranked_member {
+                                if ranked_queue_tx_for_lobby.try_send(RankedQueueMessage::Cancel { account_id, session_id }).is_err() {
+                                    log::error!("[RANKED] cancel/requeue request could not be queued for match {lobby_id}");
+                                }
+                            } else if games.iter().any(|lobby| lobby.id == lobby_id
+                                && lobby.kind == sow_core::protocol::LobbyKind::Ranked1v1)
+                            {
+                                log::info!("[RANKED] ignored stale leave for match {lobby_id} session {session_id}");
+                            } else if is_host_teardown(&games, lobby_id, player_id) {
                                 if let Some(lobby) = games.iter().find(|g| g.id == lobby_id) {
                                     notify_lobby_closed(lobby, "HOST_LEFT");
                                 }
@@ -1334,6 +1995,9 @@ async fn main() {
         let ev_tx = event_tx.clone();
         let games_state_conn = Arc::clone(&games_state);
         let identity_state_conn = identity_state.clone();
+        let ranked_queue_tx_conn = ranked_queue_tx.clone();
+        let db_url_conn = db_url.clone();
+        let db_secret_conn = db_secret.clone();
         tokio::spawn(async move {
             let _connection_permit = permit;
             let session_id = next_session_id();
@@ -1390,6 +2054,7 @@ async fn main() {
 
             let mut my_lobby_id: Option<u64> = None;
             let mut my_player_id: Option<u16> = None;
+            let mut ranked_account_id: Option<String> = None;
 
             loop {
                 tokio::select! {
@@ -1442,6 +2107,44 @@ async fn main() {
                                                     }
                                                 };
 
+                                                if payload.ranked_1v1 {
+                                                    if payload.target_lobby_id.is_some() || payload.host_private || payload.host_config.is_some() {
+                                                        send_ranked_failure(&direct_tx, "INVALID_RANKED_REQUEST");
+                                                        continue;
+                                                    }
+                                                    let Some(account_id) = database_account_id else {
+                                                        send_ranked_failure(&direct_tx, "RANKED_ACCOUNT_REQUIRED");
+                                                        continue;
+                                                    };
+                                                    let db_client = reqwest::Client::new();
+                                                    let rating = match fetch_ranked_rating(&db_client, &db_url_conn, &db_secret_conn, &account_id).await {
+                                                        Ok(rating) => rating,
+                                                        Err(error) => {
+                                                            log::error!("[RANKED] rating lookup failed for {account_id}: {error}");
+                                                            send_ranked_failure(&direct_tx, "RANKED_QUEUE_UNAVAILABLE");
+                                                            continue;
+                                                        }
+                                                    };
+                                                    ranked_account_id = Some(account_id.clone());
+                                                    let search_started_at = tokio::time::Instant::now();
+                                                    let player = RankedQueuePlayer {
+                                                        account_id,
+                                                        rating,
+                                                        name: payload.name,
+                                                        clan_tag: payload.clan_tag,
+                                                        leader,
+                                                        skin_style,
+                                                        client_tx: direct_tx.clone(),
+                                                        ip: ip_str.clone(),
+                                                        session_id,
+                                                        search_started_at,
+                                                    };
+                                                    if ranked_queue_tx_conn.send(RankedQueueMessage::Search(player)).await.is_err() {
+                                                        send_ranked_failure(&direct_tx, "RANKED_QUEUE_UNAVAILABLE");
+                                                    }
+                                                    continue;
+                                                }
+
                                                 let _ = ev_tx.send(ServerEvent::Join {
                                                     name: payload.name,
                                                     clan_tag: payload.clan_tag,
@@ -1463,14 +2166,23 @@ async fn main() {
                                                 // Orchestrator ignores gameplay intents
                                             }
                                             sow_core::protocol::ClientMessage::Leave {} => {
+                                                if let Some(account_id) = ranked_account_id.take() {
+                                                    let _ = ranked_queue_tx_conn.send(RankedQueueMessage::Cancel { account_id, session_id }).await;
+                                                }
                                                 if let (Some(l_id), Some(p_id)) = (my_lobby_id, my_player_id) {
                                                     let _ = ev_tx.send(ServerEvent::Leave {
                                                         lobby_id: l_id,
                                                         player_id: p_id,
+                                                        session_id,
                                                     }).await;
                                                 }
                                                 my_lobby_id = None;
                                                 my_player_id = None;
+                                            }
+                                            sow_core::protocol::ClientMessage::CancelRankedSearch => {
+                                                if let Some(account_id) = ranked_account_id.take() {
+                                                    let _ = ranked_queue_tx_conn.send(RankedQueueMessage::Cancel { account_id, session_id }).await;
+                                                }
                                             }
                                             sow_core::protocol::ClientMessage::ReadyWithTicket { .. } => {
                                                 // Relay tickets are valid only on the direct relay
@@ -1610,11 +2322,15 @@ async fn main() {
                 }
             }
 
+            if let Some(account_id) = ranked_account_id.take() {
+                let _ = ranked_queue_tx_conn.send(RankedQueueMessage::Cancel { account_id, session_id }).await;
+            }
             if let (Some(l_id), Some(p_id)) = (my_lobby_id, my_player_id) {
                 let _ = ev_tx
                     .send(ServerEvent::Leave {
                         lobby_id: l_id,
                         player_id: p_id,
+                        session_id,
                     })
                     .await;
             }
@@ -2074,6 +2790,7 @@ fn replay_result(
         engine.state.winner,
         engine.state.winning_team,
         relay_players,
+        config.ranked_1v1,
         allow_winner,
     );
     let mut participants = Vec::with_capacity(if closure.is_some() {
@@ -2140,6 +2857,7 @@ fn verified_winner_identity(
     winner: Option<u16>,
     winning_team: Option<sow_core::protocol::Team>,
     relay_players: &[ReplayStartPlayer],
+    ranked_1v1: bool,
     allow_winner: bool,
 ) -> (Option<u16>, Option<String>) {
     if !allow_winner {
@@ -2159,8 +2877,8 @@ fn verified_winner_identity(
     let winner = winner.filter(|winner| {
         relay_players.iter().any(|player| {
             player.player_id == *winner
-                && !player.is_internal
                 && player.database_account_id.is_some()
+                && (!player.is_internal || ranked_1v1)
         })
     });
     (winner, None)
@@ -2406,8 +3124,166 @@ async fn catalog_json_handler() -> impl axum::response::IntoResponse {
 mod relay_worker_tests {
     use super::{
         DEFAULT_RELAY_WORKER_COUNT, RELAY_PORT_MAX, RELAY_PORT_MIN, RelayPortAllocator,
-        ReplayStartPlayer, parse_relay_worker, send_relay_handoff_frame, verified_winner_identity,
+        RankedQueueEntry, RankedQueueMessage, RankedQueuePlayer, ReplayStartPlayer,
+        cancel_ranked_search, consume_ranked_queue_message, parse_relay_worker,
+        send_relay_handoff_frame, verified_winner_identity,
     };
+    use crate::lobby::{LobbyPhase, PlayerConnection, ServerLobby};
+    use std::collections::HashSet;
+    use std::time::Duration;
+
+    fn ranked_player(
+        account_id: &str,
+        session_id: u64,
+        search_started_at: tokio::time::Instant,
+        client_tx: tokio::sync::mpsc::Sender<Vec<u8>>,
+    ) -> RankedQueuePlayer {
+        RankedQueuePlayer {
+            account_id: account_id.into(),
+            rating: 1000.0,
+            name: account_id.into(),
+            clan_tag: String::new(),
+            leader: sow_core::player::Leader::default(),
+            skin_style: 0,
+            client_tx,
+            ip: "127.0.0.1".into(),
+            session_id,
+            search_started_at,
+        }
+    }
+
+    fn ranked_member(
+        player_id: u16,
+        account_id: &str,
+        session_id: u64,
+        search_started_at: tokio::time::Instant,
+        tx: tokio::sync::mpsc::Sender<Vec<u8>>,
+    ) -> PlayerConnection {
+        PlayerConnection {
+            name: account_id.into(),
+            clan_tag: String::new(),
+            player_id,
+            tx,
+            download_progress: 100,
+            leader: sow_core::player::Leader::default(),
+            random_leader: false,
+            skin_style: 0,
+            database_account_id: Some(account_id.into()),
+            team: None,
+            ip: "127.0.0.1".into(),
+            session_id: Some(session_id),
+            is_internal_bot: false,
+            ranked_rating: Some(1000.0),
+            ranked_search_started_at: Some(search_started_at),
+        }
+    }
+
+    fn ranked_lobby(
+        id: u64,
+        players: Vec<PlayerConnection>,
+    ) -> ServerLobby {
+        ServerLobby {
+            id,
+            kind: sow_core::protocol::LobbyKind::Ranked1v1,
+            is_private: true,
+            phase: LobbyPhase::Loading,
+            countdown_secs: 0.0,
+            players,
+            ready_players: HashSet::new(),
+            seed: 0,
+            config: sow_core::game_config::GameConfig {
+                ranked_1v1: true,
+                ..Default::default()
+            },
+            game_mode: "FFA".into(),
+            relay_port: None,
+            host_player_id: None,
+            password: None,
+            host_name: String::new(),
+            banned: HashSet::new(),
+            bot_fill_target: None,
+            pending_bots: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn duplicate_ranked_search_reconnects_without_resetting_queue_time() {
+        let started = tokio::time::Instant::now() - Duration::from_secs(4);
+        let (first_tx, _first_rx) = tokio::sync::mpsc::channel(4);
+        let (reconnected_tx, _reconnected_rx) = tokio::sync::mpsc::channel(4);
+        let mut pending = Vec::<RankedQueueEntry>::new();
+        consume_ranked_queue_message(
+            &mut pending,
+            RankedQueueMessage::Search(ranked_player("account-a", 11, started, first_tx)),
+        );
+        consume_ranked_queue_message(
+            &mut pending,
+            RankedQueueMessage::Search(ranked_player(
+                "account-a",
+                12,
+                tokio::time::Instant::now(),
+                reconnected_tx,
+            )),
+        );
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].player.session_id, 12);
+        assert_eq!(pending[0].player.search_started_at, started);
+    }
+
+    #[tokio::test]
+    async fn cancel_during_preparation_requeues_only_the_opponent_with_original_wait() {
+        let started = tokio::time::Instant::now() - Duration::from_secs(7);
+        let (leaving_tx, mut leaving_rx) = tokio::sync::mpsc::channel(4);
+        let (opponent_tx, mut opponent_rx) = tokio::sync::mpsc::channel(4);
+        let lobby = ranked_lobby(
+            73,
+            vec![
+                ranked_member(1, "leaving", 101, started, leaving_tx),
+                ranked_member(2, "opponent", 202, started, opponent_tx),
+            ],
+        );
+        let games = std::sync::Arc::new(tokio::sync::Mutex::new(vec![lobby]));
+        let mut pending = Vec::new();
+        let db_client = reqwest::Client::new();
+        cancel_ranked_search(
+            &games,
+            &mut pending,
+            "leaving",
+            101,
+            &db_client,
+            "http://127.0.0.1:1",
+            "unused",
+        )
+        .await;
+
+        assert!(games.lock().await.is_empty());
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].player.account_id, "opponent");
+        assert_eq!(pending[0].player.session_id, 202);
+        assert_eq!(pending[0].player.search_started_at, started);
+        let cancelled = bincode::deserialize::<sow_core::protocol::ServerMessage>(
+            &leaving_rx.recv().await.unwrap(),
+        )
+        .unwrap();
+        assert!(matches!(cancelled, sow_core::protocol::ServerMessage::LobbyClosed(message) if message.reason == "RANKED_CANCELLED"));
+        let requeued = bincode::deserialize::<sow_core::protocol::ServerMessage>(
+            &opponent_rx.recv().await.unwrap(),
+        )
+        .unwrap();
+        assert!(matches!(requeued, sow_core::protocol::ServerMessage::LobbyClosed(message) if message.reason == "RANKED_REQUEUE"));
+
+        cancel_ranked_search(
+            &games,
+            &mut pending,
+            "leaving",
+            101,
+            &db_client,
+            "http://127.0.0.1:1",
+            "unused",
+        )
+        .await;
+        assert_eq!(pending.len(), 1);
+    }
 
     fn registered_human() -> ReplayStartPlayer {
         ReplayStartPlayer {
@@ -2430,8 +3306,24 @@ mod relay_worker_tests {
             is_internal: true,
         };
         assert_eq!(
-            verified_winner_identity(Some(ai.player_id), None, &[human, ai], true),
+            verified_winner_identity(Some(ai.player_id), None, &[human, ai], false, true),
             (None, None),
+        );
+    }
+
+    #[test]
+    fn a_registered_ranked_bot_victory_is_not_recorded_as_a_draw() {
+        let human = registered_human();
+        let bot = ReplayStartPlayer {
+            player_id: 99,
+            database_account_id: Some("abcdef0123456789abcdef0123456789".to_string()),
+            leader: sow_core::player::Leader::default(),
+            team: None,
+            is_internal: true,
+        };
+        assert_eq!(
+            verified_winner_identity(Some(bot.player_id), None, &[human, bot], true, true),
+            (Some(99), None),
         );
     }
 
@@ -2456,6 +3348,7 @@ mod relay_worker_tests {
                 Some(ai.player_id),
                 Some(sow_core::protocol::Team::Red),
                 &[red_human, blue_human, ai],
+                false,
                 true
             ),
             (Some(7), Some("Red".into())),
@@ -2469,13 +3362,6 @@ mod relay_worker_tests {
         assert_eq!(worker.id, 2);
         assert_eq!(worker.host, "relay-a.example");
         assert_eq!(worker.mgmt_url, "https://mgmt.example:8083");
-    }
-
-    #[test]
-    fn parses_separate_game_and_management_hosts() {
-        let worker = parse_relay_worker("data.example:mgmt.example:8080", 0).expect("valid worker");
-        assert_eq!(worker.host, "data.example");
-        assert_eq!(worker.mgmt_url, "https://mgmt.example:8080");
     }
 
     #[test]

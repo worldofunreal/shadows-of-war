@@ -13,38 +13,23 @@ const menuGuideDefinition = JSON.parse(
 import menuFlowApi from "./main_menu.flow.ts";
 const campaignRuntime = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
 const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.ts"), "utf8");
-void fs.readFileSync(path.join(shell, "main_menu.lobbies.ts"), "utf8");
-void fs.readFileSync(path.join(shell, "sdk/store_portals.ts"), "utf8");
-void fs.readFileSync(path.join(shell, "main_menu.tutorial.ts"), "utf8");
 const tutorialBundle =
     '(function () { if (typeof window === "undefined") return; const providedView = window.SOWCampaignView;\n' +
     bundleTs(path.join(shell, "sow-campaign-view.ts")) +
     "\nif (providedView) Object.assign(window.SOWCampaignView, providedView); })();\n" +
     bundleTs(path.join(shell, "main_menu.tutorial.ts"));
-void fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/net/session.rs"), "utf8");
 const actionsSource = fs.readFileSync(
     path.join(shell, "../../sow-client/src/render/interact/actions.rs"),
     "utf8",
 );
-void fs.readFileSync(path.join(shell, "../../sow-client/src/net/update/mod.rs"), "utf8");
 const messageHandlingSource = fs.readFileSync(
     path.join(shell, "../../sow-client/src/net/update/messages.rs"),
     "utf8",
 );
-void fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/app/progress.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-data/src/db.rs"), "utf8");
 const dataMainSource = fs.readFileSync(path.join(shell, "../../sow-data/src/main.rs"), "utf8");
 const accountSource = fs.readFileSync(path.join(shell, "../../sow-client/src/app/account.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/app/bootstrap.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/anonymous_identity.rs"), "utf8");
 const assetSource = fs.readFileSync(path.join(shell, "../../sow-client/src/asset.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-relay/src/main.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-server/src/main.rs"), "utf8");
 const verificationSource = fs.readFileSync(path.join(shell, "../../sow-server/src/verification.rs"), "utf8");
-const menuCssFiles = ["main_menu.base.css", "main_menu.lobbies.css"];
-void Object.fromEntries(menuCssFiles.map((file) => [file, fs.readFileSync(path.join(shell, file), "utf8")]));
 
 function extractShellFunction(name, nextName) {
     const declaration = (functionName) =>
@@ -476,7 +461,6 @@ function confirmedMenuReturn(overrides = {}) {
     return { state: Object.assign(state, overrides), receipt };
 }
 
-void fs.readFileSync(path.join(shell, "main_menu.profile.css"), "utf8");
 
 test(
     "live multiplayer return uses the confirmed client state",
@@ -618,6 +602,44 @@ test("menu return waits for its exact server receipt and finished presentation",
     assert.equal(storeFlow.update(nextReturn, view), "guide");
 });
 
+test("ranked rating presentation follows rewards and stays ahead of menu guides", () => {
+    const flow = menuFlowApi.create();
+    const { state, receipt } = confirmedMenuReturn();
+    state.menu_return = {
+        ...state.menu_return,
+        ranked_result: {
+            score_before: 1000,
+            score_after: 1024,
+            rating_delta: 24,
+            tier_before: "Bronze",
+            tier_after: "Bronze",
+            division_before: "IV",
+            division_after: "IV",
+            games_played: 1,
+            placements_complete: false,
+        },
+        ranked_result_presented: false,
+    };
+    const view = { visible: true, ready: true, running: false, receipts: [], screen: "home" };
+
+    assert.equal(flow.update(state, { ...view, receipts: [receipt] }), "rewards");
+    assert.equal(flow.canGuide(), false);
+    assert.equal(flow.update(state, view), "ranked");
+    assert.equal(flow.canPresentRanked(), true);
+    assert.equal(flow.canGuide(), false);
+    assert.equal(
+        flow.update(
+            {
+                ...state,
+                menu_return: { ...state.menu_return, ranked_result_presented: true },
+            },
+            view,
+        ),
+        "guide",
+        "the saved dismissal releases the menu guide gate after reload",
+    );
+});
+
 test("the shell presents only settled receipts and accepts a final rejected verification", () => {
     const { state } = confirmedMenuReturn();
     state.menu_return = undefined;
@@ -732,7 +754,6 @@ test("participation receipt stays synced until match verification resolves", () 
     const rejectStart = dataMainSource.indexOf("async fn reject_match_verification");
     const rejectEnd = dataMainSource.indexOf("async fn handle_bot_pool_seed", rejectStart);
     assert.ok(rejectStart >= 0 && rejectEnd > rejectStart);
-    void fs.readFileSync(path.join(shell, "../../sow-client/src/loader/engine.rs"), "utf8");
 });
 
 test("return observation cannot issue a second exit command", () => {
@@ -795,7 +816,6 @@ test("missing maps stay retryable and turn batches wait for server acceptance", 
         /reqwest::StatusCode::BAD_REQUEST \| reqwest::StatusCode::UNPROCESSABLE_ENTITY/,
     );
     assert.doesNotMatch(permanentRejection, /SERVICE_UNAVAILABLE/);
-    void fs.readFileSync(path.join(shell, "../../sow-relay/src/progress.rs"), "utf8");
 });
 
 test("queued identity refresh is applied before an older profile response", () => {

@@ -4,6 +4,7 @@ import type {
     ProfileData,
     ProfileMatch,
     ProfileMatchDetail,
+    ProfileRating,
 } from "./main_menu.profile.ts";
 
 export interface PurchaseIntent {
@@ -63,6 +64,7 @@ interface MenuUi {
     profileAccountId: string | null;
     profileTab: string;
     profileData: ProfileData | null;
+    rankedRating: ProfileRating | null;
     profileHistory: ProfileMatch[];
     profileMatchDetail: ProfileMatchDetail | null;
     profileSnapshotLoading: boolean;
@@ -123,6 +125,7 @@ export const menuUi: MenuUi = {
     profileAccountId: null,
     profileTab: "overview",
     profileData: null,
+    rankedRating: null,
     profileHistory: [],
     profileMatchDetail: null,
     profileSnapshotLoading: false,

@@ -53,6 +53,7 @@ import {
     invalidateProfileCache,
     loadMoreProfileHistory,
     loadProfile,
+    loadRankedLeaderboard,
     loadVictoryLeaderboard,
     openProfile,
     profileApi,
@@ -86,7 +87,7 @@ import {
     resumeExternalPurchaseDelivery,
     verifyAuthOtp,
 } from "./main_menu.surfaces.ts";
-import type { MenuRewardReceipt, MenuState } from "./main_menu.state.ts";
+import type { MenuRewardReceipt, MenuState, RankedResult } from "./main_menu.state.ts";
 
 // Shared menu chrome, overlays, lifecycle, events, and state bridge.
 
@@ -123,6 +124,7 @@ const rewardAnimationShown = new Set<string>();
 let rewardAckTimes: Record<string, number> = Object.create(null);
 export let rewardAnimationToken = 0;
 let activeRewardStage: HTMLElement | null = null;
+let rankedResultDismissedKey: string | null = null;
 let rewardPresentationReady = false;
 const menuFlow = menuFlowApi.create();
 window.SOW_menu_flow = menuFlow;
@@ -1699,6 +1701,74 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
     });
 }
 
+function rankedResultKey(state: MenuState) {
+    return [state.account_id || "", state.menu_return && state.menu_return.match_id].join(":");
+}
+
+function presentRankedResult(result: RankedResult) {
+    const layer = document.createElement("section");
+    layer.className = "sow-menu__reward-stage sow-menu__ranked-result-stage";
+    layer.setAttribute("role", "dialog");
+    layer.setAttribute("aria-modal", "true");
+    layer.setAttribute("aria-label", SOW_t("lobbies.ranked_result_title"));
+    const card = document.createElement("div");
+    card.className = "sow-menu__ranked-result-card";
+    const before = result.tier_before + (result.division_before ? " " + result.division_before : "");
+    const after = result.tier_after + (result.division_after ? " " + result.division_after : "");
+    const moved = before !== after;
+    const movement = moved
+        ? result.score_after > result.score_before
+            ? SOW_t("lobbies.rank_promoted")
+            : SOW_t("lobbies.rank_demoted")
+        : SOW_t("lobbies.rank_updated");
+    const emblem = document.createElement("span");
+    emblem.className = "sow-menu__ranked-result-emblem";
+    emblem.setAttribute("aria-hidden", "true");
+    emblem.textContent = result.tier_after.slice(0, 1);
+    const kicker = document.createElement("span");
+    kicker.className = "sow-menu__ranked-result-kicker";
+    kicker.textContent = SOW_t("lobbies.ranked_1v1");
+    const title = document.createElement("h2");
+    title.textContent = movement;
+    const rank = document.createElement("strong");
+    rank.className = "sow-menu__ranked-result-rank";
+    rank.textContent = after;
+    const score = document.createElement("span");
+    score.className = "sow-menu__ranked-result-score";
+    score.textContent = SOW_t("lobbies.rank_score", { score: result.score_after });
+    const change = document.createElement("p");
+    change.className = "sow-menu__ranked-result-change";
+    change.textContent = (result.rating_delta > 0 ? "+" : "") + result.rating_delta + " MMR";
+    const previous = document.createElement("p");
+    previous.className = "sow-menu__ranked-result-previous";
+    previous.textContent = SOW_t("lobbies.rank_previous", { score: result.score_before });
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "sow-menu__primary sow-menu__ranked-result-continue";
+    close.textContent = SOW_t("lobbies.rank_continue");
+    const dismiss = function (event: Event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!menuUi.state) return;
+        rankedResultDismissedKey = rankedResultKey(menuUi.state);
+        send("dismiss_ranked_result");
+        removeRewardStage();
+    };
+    close.addEventListener("click", dismiss);
+    layer.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") dismiss(event);
+    });
+    card.append(emblem, kicker, title, rank, score, change, previous, close);
+    layer.appendChild(card);
+    layer._shell = root.querySelector<HTMLElement>(".sow-menu__shell");
+    layer._shellWasInert = Boolean(layer._shell && layer._shell.inert);
+    layer._restoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    root.appendChild(layer);
+    activeRewardStage = layer;
+    if (layer._shell && "inert" in layer._shell) layer._shell.inert = true;
+    close.focus({ preventScroll: true });
+}
+
 function maybePresentRewards() {
     if (!menuUi.state) return;
     const pending = pendingRewardReceipts().filter(function (receipt) {
@@ -1727,6 +1797,17 @@ function maybePresentRewards() {
     if (menuFlow.canPresent() && !rewardAnimationRunning && pending.length) {
         ensureProgressionDisplay();
         runRewardPresentation(pending);
+        return;
+    }
+    const rankedResult = menuUi.state.menu_return && menuUi.state.menu_return.ranked_result;
+    const rankedKey = rankedResultKey(menuUi.state);
+    if (
+        menuFlow.canPresentRanked() &&
+        rankedResult &&
+        !activeRewardStage &&
+        rankedResultDismissedKey !== rankedKey
+    ) {
+        presentRankedResult(rankedResult);
         return;
     }
     if (menuUi.state.phase === "MainMenu") acknowledgeShownReceipts(menuUi.state.account_id);
@@ -2012,6 +2093,7 @@ root.addEventListener("click", function (event) {
             )
                 loadMoreProfileHistory();
         } else if (menuUi.profileTab === "victories") {
+            loadRankedLeaderboard();
             loadVictoryLeaderboard();
         }
         return;

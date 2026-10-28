@@ -120,6 +120,18 @@ pub(super) fn ai_profile_for(tier: AiTier, difficulty: BotDifficulty) -> BotAiPr
     }
 }
 
+/// Ranked opponents use the same AI machinery with a fixed, server-assigned skill.
+pub(super) fn ranked_ghost_profile(iq: u32) -> BotAiProfile {
+    let skill = (f64::from(iq.clamp(60, 180)) - 60.0) / 120.0;
+    BotAiProfile {
+        trigger_ratio: 0.50 - 0.45 * skill,
+        reserve_ratio: 0.35 - 0.33 * skill,
+        expand_ratio: 0.15 - 0.13 * skill,
+        refuse_human_chance: 0,
+        attacks_players: true,
+    }
+}
+
 /// Describes which behaviours an AI entity should run this tick.
 pub(super) struct AiSlot {
     pub(super) bot_id: u16,

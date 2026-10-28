@@ -7,7 +7,7 @@ use crate::profile::{
 };
 use crate::redb_store::{
     MATCH_STARTS_TABLE, MATCHES_TABLE, PENDING_REPLAY_VERIFICATIONS_TABLE,
-    PLAYER_MATCH_INDEX_TABLE, PUBLIC_PROFILES_TABLE, SEASON_RATINGS_TABLE, SEASONS_TABLE,
+    PLAYER_MATCH_INDEX_TABLE, PUBLIC_PROFILES_TABLE, RANKED_BOTS_TABLE, SEASON_RATINGS_TABLE, SEASONS_TABLE,
     VERIFIED_VICTORY_BOARD_TABLE,
 };
 use log::{error, info};
@@ -496,6 +496,36 @@ pub struct PlayerProfile {
     pub crazygames_synced_revision: u64,
     #[serde(default)]
     pub intro_completed: bool,
+    /// Present only for managed ranked opponents, never for public fillers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ranked_bot: Option<RankedBotProfile>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RankedBotProfile {
+    pub iq: u32,
+    pub leader: String,
+    pub paused: bool,
+    #[serde(default)]
+    pub reserved_match_id: Option<String>,
+    #[serde(default)]
+    pub manual_changes: Vec<RankedBotChange>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RankedBotChange {
+    pub changed_at: u64,
+    pub actor: String,
+    pub field: String,
+    pub old_value: String,
+    pub new_value: String,
+}
+
+#[derive(Clone, Debug)]
+pub enum RankedBotManualUpdate {
+    SetPaused { paused: bool, actor: String },
+    SetIq { iq: u32, actor: String },
+    SetRating { score: u16, actor: String },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -547,6 +577,7 @@ impl Default for PlayerProfile {
             playgames_synced_revision: 0,
             crazygames_synced_revision: 0,
             intro_completed: false,
+            ranked_bot: None,
         }
     }
 }
@@ -899,6 +930,125 @@ impl PlayerDb {
         account_id: &str,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         self.load_account(account_id).await
+    }
+
+    /// Return the server-owned current-season 1v1 rating, including its
+    /// initial value for an account that has not played yet.
+    pub async fn ranked_rating(
+        &self,
+        account_id: &str,
+    ) -> Result<SeasonRating, Box<dyn std::error::Error + Send + Sync>> {
+        let account = self.load_account(account_id).await?;
+        let initial_mmr = match account.kind {
+            AccountKind::Human => 1000.0,
+            AccountKind::Bot => {
+                let bot = account.profile.ranked_bot.as_ref().ok_or("account is not a ranked bot")?;
+                1000.0 + f64::from(bot.iq.saturating_sub(60)) * 20.0
+            }
+        };
+        let key = format!("rating:{}:{}:Ranked1v1:FFA", account.id, crate::profile::CURRENT_SEASON_ID);
+        let Some(db) = &self.redb_db else {
+            return Err("rating database unavailable".into());
+        };
+        let read_txn = db.begin_read()?;
+        let table = read_txn.open_table(SEASON_RATINGS_TABLE)?;
+        if let Some(value) = table.get(key.as_str())? {
+            let rating = serde_json::from_slice::<SeasonRating>(value.value())?;
+            if rating.account_id != account.id || rating.season_id != crate::profile::CURRENT_SEASON_ID
+                || rating.queue != "Ranked1v1" || rating.mode != "FFA" || !rating.mu.is_finite()
+            {
+                return Err("stored ranked rating identity is invalid".into());
+            }
+            return Ok(rating);
+        }
+        Ok(crate::profile::initial_ranked_rating(account.id, initial_mmr, 0))
+    }
+
+    pub async fn available_ranked_bots(
+        &self,
+    ) -> Result<Vec<(PlayerAccount, SeasonRating)>, Box<dyn std::error::Error + Send + Sync>> {
+        let Some(db) = &self.redb_db else {
+            return Err("ranked bot database unavailable".into());
+        };
+        let read_txn = db.begin_read()?;
+        let table = read_txn.open_table(RANKED_BOTS_TABLE)?;
+        let mut account_ids = Vec::new();
+        for row in table.iter()? {
+            let (key, _) = row?;
+            account_ids.push(key.value().to_string());
+        }
+        drop(table);
+        drop(read_txn);
+        let rating_txn = db.begin_read()?;
+        let ratings = rating_txn.open_table(SEASON_RATINGS_TABLE)?;
+        let mut stored_ratings = std::collections::HashMap::new();
+        for account_id in &account_ids {
+            let key = format!("rating:{}:{}:Ranked1v1:FFA", account_id, crate::profile::CURRENT_SEASON_ID);
+            if let Some(value) = ratings.get(key.as_str())? {
+                stored_ratings.insert(account_id.clone(), serde_json::from_slice::<SeasonRating>(value.value())?);
+            }
+        }
+        drop(ratings);
+        drop(rating_txn);
+        let mut candidates = Vec::new();
+        for account_id in account_ids {
+            let account = self.load_account(&account_id).await?;
+            let Some(bot) = account.profile.ranked_bot.as_ref() else {
+                return Err(format!("ranked bot index points to non-ranked account {}", account.id).into());
+            };
+            if account.kind != AccountKind::Bot || bot.paused || bot.reserved_match_id.is_some() {
+                continue;
+            }
+            let rating = match stored_ratings.remove(&account.id) {
+                Some(rating) => rating,
+                None => crate::profile::initial_ranked_rating(
+                    account.id.clone(),
+                    1000.0 + f64::from(bot.iq.saturating_sub(60)) * 20.0,
+                    0,
+                ),
+            };
+            if !rating.mu.is_finite() || rating.account_id != account.id {
+                return Err(format!("invalid ranked bot rating for {}", account.id).into());
+            }
+            candidates.push((account, rating));
+        }
+        Ok(candidates)
+    }
+
+    /// Read the settled, server-recorded rating change for one verified duel.
+    pub fn ranked_match_result(
+        &self,
+        account_id: &str,
+        match_id: &str,
+    ) -> Result<Option<crate::profile::RankedResultPresentation>, Box<dyn std::error::Error + Send + Sync>> {
+        let Some(record) = self.load_match_record(match_id)? else {
+            return Ok(None);
+        };
+        if record.queue != "Ranked1v1" || !record.verified || !record.rating_eligible {
+            return Ok(None);
+        }
+        let Some(participant) = record.participants.iter().find(|item| item.account_id == account_id) else {
+            return Ok(None);
+        };
+        let (Some(score_before), Some(score_after), Some(tier_before), Some(tier_after)) = (
+            participant.rating_before,
+            participant.rating_after,
+            participant.tier_before.as_ref(),
+            participant.tier_after.as_ref(),
+        ) else {
+            return Ok(None);
+        };
+        Ok(Some(crate::profile::RankedResultPresentation {
+            score_before,
+            score_after,
+            rating_delta: participant.rating_delta.unwrap_or_default(),
+            tier_before: tier_before.clone(),
+            tier_after: tier_after.clone(),
+            division_before: participant.division_before.clone(),
+            division_after: participant.division_after.clone(),
+            games_played: participant.games_played_after.unwrap_or_default(),
+            placements_complete: participant.placements_complete_after.unwrap_or(false),
+        }))
     }
 
     /// Record an already validated batch in one Redis round trip. The Lua
@@ -1456,6 +1606,7 @@ impl PlayerDb {
             verified: record.verified,
             provisional: record.provisional,
             rating_delta: participant.rating_delta,
+            ranked_bot_iq: record.ranked_bot_iq,
         })
     }
 
@@ -1482,11 +1633,14 @@ impl PlayerDb {
         &self,
         account_id: &str,
     ) -> Result<Option<PublicProfileView>, Box<dyn std::error::Error + Send + Sync>> {
-        let Some(index) = self.public_index(account_id)? else {
-            return Ok(None);
+        let account = match self.public_index(account_id)? {
+            Some(index) => self.load_account(&index.account_id).await?,
+            None => match self.load_account(account_id).await {
+                Ok(account) if account.kind == AccountKind::Bot && account.profile.ranked_bot.is_some() => account,
+                _ => return Ok(None),
+            },
         };
-        let account = self.load_account(&index.account_id).await?;
-        if account.kind == AccountKind::Bot {
+        if account.kind == AccountKind::Bot && account.profile.ranked_bot.is_none() {
             return Ok(None);
         }
         let mut leader_stats = account.profile.leader_stats.clone();
@@ -1523,6 +1677,7 @@ impl PlayerDb {
             .iter()
             .filter_map(|record| Self::public_match_summary(&account.id, record))
             .collect();
+        let ratings = self.public_ratings(&account.id).await?.unwrap_or_default();
         Ok(Some(PublicProfileView {
             account_id: account.id.clone(),
             handle: public_handle(&account.display_name, &account.id),
@@ -1545,6 +1700,7 @@ impl PlayerDb {
             achievements: account.profile.achievement_views(),
             leaders,
             recent_matches,
+            ratings,
         }))
     }
 
@@ -1682,6 +1838,8 @@ impl PlayerDb {
                 players_defeated: participant.players_defeated,
                 verified: record.verified,
                 rating_delta: participant.rating_delta,
+                rating_before: participant.rating_before,
+                rating_after: participant.rating_after,
             })
             .collect();
         Ok(Some(PublicMatchDetail {
@@ -1696,6 +1854,7 @@ impl PlayerDb {
             verified: record.verified,
             provisional: record.provisional,
             rating_eligible: record.rating_eligible,
+            ranked_bot_iq: record.ranked_bot_iq,
             participants,
         }))
     }
@@ -1745,13 +1904,14 @@ impl PlayerDb {
         &self,
         account_id: &str,
     ) -> Result<Option<Vec<PublicRatingView>>, Box<dyn std::error::Error + Send + Sync>> {
-        let Some(index) = self.public_index(account_id)? else {
-            return Ok(None);
+        let indexed = self.public_index(account_id)?;
+        let account = match indexed {
+            Some(index) => self.load_account(&index.account_id).await?,
+            None => match self.load_account(account_id).await {
+                Ok(account) if account.kind == AccountKind::Bot && account.profile.ranked_bot.is_some() => account,
+                _ => return Ok(None),
+            },
         };
-        let account = self.load_account(&index.account_id).await?;
-        if account.kind == AccountKind::Bot {
-            return Ok(None);
-        }
         let Some(db) = &self.redb_db else {
             return Ok(Some(Vec::new()));
         };
@@ -1762,11 +1922,21 @@ impl PlayerDb {
         for item in table.iter()? {
             let (key, value) = item?;
             if key.value().starts_with(&prefix) {
-                ratings.push(serde_json::from_slice::<SeasonRating>(value.value())?);
+                let rating = serde_json::from_slice::<SeasonRating>(value.value())?;
+                if account.kind == AccountKind::Human || rating.queue == "Ranked1v1" {
+                    ratings.push(rating);
+                }
             }
         }
         drop(table);
         drop(read_txn);
+        if !ratings.iter().any(|rating| {
+            rating.season_id == crate::profile::CURRENT_SEASON_ID
+                && rating.queue == "Ranked1v1"
+                && rating.mode == "FFA"
+        }) {
+            ratings.push(self.ranked_rating(&account.id).await?);
+        }
         ratings.sort_by(|left, right| {
             right
                 .season_id
@@ -1825,10 +1995,12 @@ impl PlayerDb {
             let Ok(account) = self.load_account(&rating.account_id).await else {
                 continue;
             };
-            if account.kind == AccountKind::Bot {
+            if account.kind == AccountKind::Bot
+                && (queue != "Ranked1v1" || account.profile.ranked_bot.is_none())
+            {
                 continue;
             }
-            entries.push((rating, account.id, account.display_name));
+            entries.push((rating, account.id, account.display_name, account.kind == AccountKind::Bot));
         }
         entries.sort_by_key(|left| std::cmp::Reverse(left.0.score));
         Ok(entries
@@ -1836,10 +2008,11 @@ impl PlayerDb {
             .take(limit)
             .enumerate()
             .map(
-                |(index, (rating, account_id, display_name))| PublicLeaderboardEntry {
+                |(index, (rating, account_id, display_name, is_bot))| PublicLeaderboardEntry {
                     rank: index as u32 + 1,
                     account_id: account_id.clone(),
                     handle: public_handle(&display_name, &account_id),
+                    is_bot,
                     queue: rating.queue,
                     mode: rating.mode,
                     score: rating.score,
@@ -2611,6 +2784,10 @@ impl PlayerDb {
                 verified: false,
                 provisional: true,
                 rating_eligible: false,
+                ranked_bot_iq: config
+                    .and_then(|value| value.get("ranked_bot_iq"))
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|value| u32::try_from(value).ok()),
                 participants: vec![participant.clone()],
             });
         if !record
@@ -3787,6 +3964,258 @@ impl PlayerDb {
         );
         Ok(account_ids)
     }
+
+    /// Resolve a separate ranked identity and initialize its fixed profile once.
+    pub async fn get_or_create_ranked_bot(
+        &self,
+        external_id: &str,
+        display_name: &str,
+        leader: &str,
+        iq: u32,
+        actor: Option<&str>,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        if external_id.is_empty() || external_id.len() > 100 || !(60..=180).contains(&iq) || iq % 20 != 0 {
+            return Err("invalid ranked bot identity or IQ".into());
+        }
+        let actor = actor.map(str::trim).filter(|value| !value.is_empty());
+        if actor.is_some_and(|value| value.len() > 100 || value.chars().any(char::is_control)) {
+            return Err("invalid ranked bot change actor".into());
+        }
+        let display_name = normalize_display_name(display_name).map_err(str::to_string)?;
+        let leader = crate::rewards::canonical_leader_name(leader).ok_or("invalid ranked bot leader")?;
+        let account = self.get_or_create_bot_account("production".into(), format!("ranked:{external_id}")).await?;
+        let account = self.update_account_atomic(&account.id, &[], |account| {
+            if account.kind == AccountKind::Bot && account.profile.ranked_bot.is_none() {
+                let created_at = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+                account.display_name = display_name.clone();
+                account.profile.ranked_bot = Some(RankedBotProfile {
+                    iq,
+                    leader: leader.clone(),
+                    paused: false,
+                    reserved_match_id: None,
+                    manual_changes: actor.map(|actor| vec![RankedBotChange {
+                        changed_at: created_at,
+                        actor: actor.to_string(),
+                        field: "created".to_string(),
+                        old_value: String::new(),
+                        new_value: format!("{}; IQ {iq}; leader {leader}", display_name),
+                    }]).unwrap_or_default(),
+                });
+                account.updated_at = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+            }
+        }).await?;
+        if let Some(db) = &self.redb_db {
+            let txn = db.begin_write()?;
+            txn.open_table(RANKED_BOTS_TABLE)?
+                .insert(account.id.as_str(), b"1".as_slice())?;
+            txn.commit()?;
+        }
+        Ok(account)
+    }
+
+    pub async fn ranked_bots(
+        &self,
+    ) -> Result<Vec<(PlayerAccount, SeasonRating)>, Box<dyn std::error::Error + Send + Sync>> {
+        let Some(db) = &self.redb_db else {
+            return Err("ranked bot database unavailable".into());
+        };
+        let read_txn = db.begin_read()?;
+        let table = read_txn.open_table(RANKED_BOTS_TABLE)?;
+        let ids = table.iter()?.map(|row| {
+            row.map(|(key, _)| key.value().to_string())
+        }).collect::<Result<Vec<_>, _>>()?;
+        drop(table);
+        drop(read_txn);
+        let mut bots = Vec::with_capacity(ids.len());
+        for id in ids {
+            let account = self.load_account(&id).await?;
+            if account.kind != AccountKind::Bot || account.profile.ranked_bot.is_none() {
+                return Err(format!("ranked bot index points to a non-ranked account {}", account.id).into());
+            }
+            let rating = self.ranked_rating(&account.id).await?;
+            bots.push((account, rating));
+        }
+        Ok(bots)
+    }
+
+    pub async fn update_ranked_bot(
+        &self,
+        account_id: &str,
+        update: RankedBotManualUpdate,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        if !is_valid_account_id(account_id) {
+            return Err("invalid ranked bot account id".into());
+        }
+        let actor = match &update {
+            RankedBotManualUpdate::SetPaused { actor, .. }
+            | RankedBotManualUpdate::SetIq { actor, .. }
+            | RankedBotManualUpdate::SetRating { actor, .. } => actor.trim().to_string(),
+        };
+        if actor.is_empty() || actor.len() > 100 || actor.chars().any(char::is_control) {
+            return Err("invalid ranked bot change actor".into());
+        }
+        if let RankedBotManualUpdate::SetIq { iq, .. } = &update
+            && (!(60..=180).contains(iq) || iq % 20 != 0)
+        {
+            return Err("ranked bot IQ must be 60 through 180 in steps of 20".into());
+        }
+        if let RankedBotManualUpdate::SetRating { score, .. } = &update
+            && !(800..=4000).contains(score)
+        {
+            return Err("ranked bot rating must be between 800 and 4000".into());
+        }
+        let account_id = account_id.to_string();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+        let (_, mut accounts) = self.update_accounts_atomic(
+            vec![account_id.clone()],
+            Vec::new(),
+            move |txn, accounts| {
+                let account = &mut accounts[0];
+                if account.kind != AccountKind::Bot {
+                    return Err("ranked bot account is not a bot".into());
+                }
+                let bot = account.profile.ranked_bot.as_mut().ok_or("account is not a ranked bot")?;
+                let (field, old_value, new_value) = match update {
+                    RankedBotManualUpdate::SetPaused { paused, .. } => {
+                        let old = bot.paused.to_string();
+                        bot.paused = paused;
+                        ("paused", old, paused.to_string())
+                    }
+                    RankedBotManualUpdate::SetIq { iq, .. } => {
+                        if !(60..=180).contains(&iq) || iq % 20 != 0 {
+                            return Err("ranked bot IQ must be 60 through 180 in steps of 20".into());
+                        }
+                        let old = bot.iq.to_string();
+                        bot.iq = iq;
+                        ("iq", old, iq.to_string())
+                    }
+                    RankedBotManualUpdate::SetRating { score, .. } => {
+                        if !(800..=4000).contains(&score) {
+                            return Err("ranked bot rating must be between 800 and 4000".into());
+                        }
+                        let key = format!("rating:{}:{}:Ranked1v1:FFA", account_id, crate::profile::CURRENT_SEASON_ID);
+                        let mut ratings = txn.open_table(SEASON_RATINGS_TABLE)?;
+                        let mut rating = match ratings.get(key.as_str())? {
+                            Some(value) => serde_json::from_slice::<SeasonRating>(value.value())?,
+                            None => crate::profile::initial_ranked_rating(
+                                account_id.clone(),
+                                1000.0 + f64::from(bot.iq.saturating_sub(60)) * 20.0,
+                                now,
+                            ),
+                        };
+                        let old = rating.score.to_string();
+                        rating.mu = f64::from(score);
+                        rating.score = score;
+                        let (tier, division) = crate::profile::tier_for_score(score);
+                        rating.tier = tier.to_string();
+                        rating.division = division;
+                        rating.peak_score = rating.peak_score.max(score);
+                        rating.updated_at = now;
+                        let encoded = serde_json::to_vec(&rating)?;
+                        ratings.insert(key.as_str(), encoded.as_slice())?;
+                        ("rating", old, score.to_string())
+                    }
+                };
+                let changes = &mut bot.manual_changes;
+                if old_value != new_value {
+                    changes.push(RankedBotChange {
+                        changed_at: now,
+                        actor: actor.trim().to_string(),
+                        field: field.to_string(),
+                        old_value,
+                        new_value,
+                    });
+                    account.updated_at = now;
+                }
+                Ok(())
+            },
+        ).await?;
+        Ok(accounts.remove(0))
+    }
+
+    /// Reserve a managed bot for exactly one match, atomically with its account.
+    pub async fn reserve_ranked_bot(
+        &self,
+        account_id: &str,
+        match_id: &str,
+    ) -> Result<Option<PlayerAccount>, Box<dyn std::error::Error + Send + Sync>> {
+        if !is_valid_account_id(account_id) || match_id.parse::<u64>().is_err() {
+            return Err("invalid ranked bot reservation".into());
+        }
+        let account = self.update_account_atomic(account_id, &[], |account| {
+            if account.kind == AccountKind::Bot
+                && let Some(bot) = &mut account.profile.ranked_bot
+                && !bot.paused && bot.reserved_match_id.is_none()
+            {
+                bot.reserved_match_id = Some(match_id.to_string());
+            }
+        }).await?;
+        Ok(account.profile.ranked_bot.as_ref()
+            .filter(|bot| !bot.paused && bot.reserved_match_id.as_deref() == Some(match_id))
+            .map(|_| account.clone()))
+    }
+
+    /// Release only the reservation belonging to this match.
+    pub async fn release_ranked_bot(
+        &self,
+        account_id: &str,
+        match_id: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if !is_valid_account_id(account_id) || match_id.parse::<u64>().is_err() {
+            return Err("invalid ranked bot reservation".into());
+        }
+        self.update_account_atomic(account_id, &[], |account| {
+            if account.kind == AccountKind::Bot
+                && let Some(bot) = &mut account.profile.ranked_bot
+                && bot.reserved_match_id.as_deref() == Some(match_id)
+            {
+                bot.reserved_match_id = None;
+            }
+        }).await?;
+        Ok(())
+    }
+
+    pub async fn recover_ranked_bot_reservations(
+        &self,
+        live_match_ids: &[String],
+    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+        let Some(db) = &self.redb_db else {
+            return Err("ranked bot database unavailable".into());
+        };
+        let read_txn = db.begin_read()?;
+        let table = read_txn.open_table(RANKED_BOTS_TABLE)?;
+        let account_ids = table.iter()?.map(|row| {
+            row.map(|(key, _)| key.value().to_string())
+        }).collect::<Result<Vec<_>, _>>()?;
+        drop(table);
+        drop(read_txn);
+        if account_ids.is_empty() {
+            return Ok(0);
+        }
+        let live_match_ids = live_match_ids.iter().cloned().collect::<std::collections::BTreeSet<_>>();
+        let (released, _) = self.update_accounts_atomic(
+            account_ids,
+            Vec::new(),
+            move |_, accounts| {
+                let mut released = 0usize;
+                for account in accounts {
+                    if let Some(bot) = &mut account.profile.ranked_bot
+                        && bot.reserved_match_id.as_ref().is_some_and(|id| !live_match_ids.contains(id))
+                    {
+                        bot.reserved_match_id = None;
+                        account.updated_at = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+                        released += 1;
+                    }
+                }
+                Ok(released)
+            },
+        ).await?;
+        Ok(released)
+    }
     /// Update the SOW display name after the request handler has authenticated
     /// the account through its anonymous or platform identity.
     pub async fn update_display_name(
@@ -4724,6 +5153,18 @@ impl PlayerDb {
                         })
                         .map(|participant| participant.account_id.clone());
                     record.winning_team = result_for_write.winning_team.clone();
+                    if record.queue == "Ranked1v1" && !record.rating_eligible {
+                        settle_ranked_ratings(txn, &mut record, &result_for_write, accounts, now)?;
+                    }
+                    if record.queue == "Ranked1v1" && record.rating_eligible {
+                        for account in accounts.iter_mut() {
+                            if let Some(bot) = &mut account.profile.ranked_bot
+                                && bot.reserved_match_id.as_deref() == Some(match_id.as_str())
+                            {
+                                bot.reserved_match_id = None;
+                            }
+                        }
+                    }
                     record.verified = true;
                     record.provisional = false;
                     write_match_record_in_transaction(txn, &record)?;
@@ -4988,6 +5429,74 @@ fn should_skip_full_match_participant(
             && receipt.is_some_and(|receipt| receipt.personal_closure_turn.is_some()))
 }
 
+fn settle_ranked_ratings(
+    txn: &WriteTransaction,
+    record: &mut MatchRecord,
+    result: &VerifiedMatchResult,
+    accounts: &[PlayerAccount],
+    now: u64,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if result.participants.len() != 2 || accounts.len() != 2 || record.mode != "FFA"
+        || result.winning_team.is_some()
+        || result.winner_player_id.is_some_and(|winner| !result.participants.iter().any(|p| p.player_id == winner))
+    {
+        return Err("invalid verified ranked result".into());
+    }
+    let mut table = txn.open_table(SEASON_RATINGS_TABLE)?;
+    let mut ratings = Vec::with_capacity(2);
+    let mut keys = Vec::with_capacity(2);
+    for (participant, account) in result.participants.iter().zip(accounts) {
+        if participant.account_id != account.id {
+            return Err("ranked participant account mismatch".into());
+        }
+        let key = format!("rating:{}:{}:Ranked1v1:FFA", account.id, record.season_id);
+        let rating = match table.get(key.as_str())? {
+            Some(value) => serde_json::from_slice::<SeasonRating>(value.value())?,
+            None => {
+                let initial = match account.kind {
+                    AccountKind::Bot => {
+                        let bot = account.profile.ranked_bot.as_ref().ok_or("ranked bot profile missing")?;
+                        1000.0 + f64::from(bot.iq.saturating_sub(60)) * 20.0
+                    }
+                    AccountKind::Human => 1000.0,
+                };
+                crate::profile::initial_ranked_rating(account.id.clone(), initial, now)
+            }
+        };
+        if rating.account_id != account.id || rating.season_id != record.season_id || rating.schema_version != 2 {
+            return Err("ranked rating identity mismatch".into());
+        }
+        keys.push(key);
+        ratings.push(rating);
+    }
+    let before = ratings.clone();
+    for i in 0..2 {
+        let player = &result.participants[i];
+        let outcome = match result.winner_player_id {
+            Some(winner) if winner == player.player_id => 1.0,
+            Some(_) => 0.0,
+            None => 0.5,
+        };
+        crate::profile::apply_ranked_result(&mut ratings[i], &before[1 - i], outcome, now)?;
+        let participant = record.participants.iter_mut().find(|p| p.account_id == player.account_id)
+            .ok_or("ranked history participant missing")?;
+        participant.rating_delta = Some((i32::from(ratings[i].score) - i32::from(before[i].score))
+            .clamp(i16::MIN as i32, i16::MAX as i32) as i16);
+        participant.rating_before = Some(before[i].score);
+        participant.rating_after = Some(ratings[i].score);
+        participant.tier_before = Some(before[i].tier.clone());
+        participant.tier_after = Some(ratings[i].tier.clone());
+        participant.division_before = before[i].division.clone();
+        participant.division_after = ratings[i].division.clone();
+        participant.games_played_after = Some(ratings[i].games_played);
+        participant.placements_complete_after = Some(ratings[i].placements_complete);
+        let encoded = serde_json::to_vec(&ratings[i])?;
+        table.insert(keys[i].as_str(), encoded.as_slice())?;
+    }
+    record.rating_eligible = true;
+    Ok(())
+}
+
 fn provisional_match_record(start: &MatchStartRecord, now: u64) -> MatchRecord {
     let metadata = &start.metadata;
     let config = metadata.get("config");
@@ -5023,6 +5532,10 @@ fn provisional_match_record(start: &MatchStartRecord, now: u64) -> MatchRecord {
         verified: false,
         provisional: true,
         rating_eligible: false,
+        ranked_bot_iq: config
+            .and_then(|value| value.get("ranked_bot_iq"))
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok()),
         participants: Vec::new(),
     }
 }
@@ -5455,6 +5968,99 @@ mod tests {
             created_at: 0,
             updated_at: 0,
         }
+    }
+
+    #[test]
+    fn ranked_bot_victory_updates_both_ratings_in_one_transaction() {
+        use crate::profile::{
+            MatchParticipantRecord, MatchStartRecord, ReplayVerificationStatus,
+            VerifiedMatchParticipant, VerifiedMatchResult,
+        };
+
+        let temp = tempfile::tempdir().unwrap();
+        let redb = std::sync::Arc::new(
+            crate::redb_store::init_database(temp.path().join("ranked-bot-result.redb")).unwrap(),
+        );
+        let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(redb));
+        let mut human = test_account(AccountKind::Human);
+        human.id = "0123456789abcdef0123456789abcdef".into();
+        let mut bot = test_account(AccountKind::Bot);
+        bot.id = "fedcba9876543210fedcba9876543210".into();
+        bot.profile.ranked_bot = Some(super::RankedBotProfile {
+            iq: 60,
+            leader: "Caesar".into(),
+            paused: false,
+            reserved_match_id: Some("9100".into()),
+            manual_changes: Vec::new(),
+        });
+        let start = MatchStartRecord {
+            match_id: "9100".into(),
+            player_ids: vec![human.id.clone(), bot.id.clone()],
+            metadata: serde_json::json!({
+                "kind": "Ranked1v1",
+                "started_at": 1,
+                "config": {"game_mode": "FFA", "map_name": "world", "ranked_bot_iq": 60}
+            }),
+            replay_status: ReplayVerificationStatus::Pending,
+        };
+        let mut record = super::provisional_match_record(&start, 10);
+        record.participants = vec![
+            MatchParticipantRecord {
+                account_id: human.id.clone(),
+                display_name: human.display_name.clone(),
+                ..Default::default()
+            },
+            MatchParticipantRecord {
+                account_id: bot.id.clone(),
+                display_name: bot.display_name.clone(),
+                is_bot: true,
+                ..Default::default()
+            },
+        ];
+        let result = VerifiedMatchResult {
+            match_id: start.match_id.clone(),
+            winner_player_id: Some(2),
+            participants: vec![
+                VerifiedMatchParticipant {
+                    player_id: 1,
+                    account_id: human.id.clone(),
+                    ..Default::default()
+                },
+                VerifiedMatchParticipant {
+                    player_id: 2,
+                    account_id: bot.id.clone(),
+                    won: true,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let txn = db.redb_db.as_ref().unwrap().begin_write().unwrap();
+        super::settle_ranked_ratings(&txn, &mut record, &result, &[human, bot], 10).unwrap();
+        txn.commit().unwrap();
+
+        let read = db.redb_db.as_ref().unwrap().begin_read().unwrap();
+        let table = read.open_table(super::SEASON_RATINGS_TABLE).unwrap();
+        let human_key = format!(
+            "rating:{}:{}:Ranked1v1:FFA",
+            record.participants[0].account_id, record.season_id
+        );
+        let bot_key = format!(
+            "rating:{}:{}:Ranked1v1:FFA",
+            record.participants[1].account_id, record.season_id
+        );
+        let human_rating: crate::profile::SeasonRating =
+            serde_json::from_slice(table.get(human_key.as_str()).unwrap().unwrap().value()).unwrap();
+        let bot_rating: crate::profile::SeasonRating =
+            serde_json::from_slice(table.get(bot_key.as_str()).unwrap().unwrap().value()).unwrap();
+        assert!(record.rating_eligible);
+        assert!(record.participants[0].rating_delta.unwrap() < 0);
+        assert!(record.participants[1].rating_delta.unwrap() > 0);
+        assert_eq!(human_rating.games_played, 1);
+        assert_eq!(bot_rating.games_played, 1);
+        assert!(human_rating.mu < 1000.0);
+        assert!(bot_rating.mu > 1000.0);
     }
 
     #[tokio::test]
@@ -5945,6 +6551,7 @@ mod tests {
             verified: !provisional,
             provisional,
             rating_eligible: false,
+            ranked_bot_iq: None,
             participants: accounts
                 .iter()
                 .map(|account_id| crate::profile::MatchParticipantRecord {
@@ -6403,6 +7010,7 @@ mod tests {
             verified: false,
             provisional: true,
             rating_eligible: false,
+            ranked_bot_iq: None,
             participants: vec![
                 crate::profile::MatchParticipantRecord {
                     account_id: alice.to_string(),

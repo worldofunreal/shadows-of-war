@@ -314,6 +314,8 @@ impl SowApp {
         self.ui.app.main_menu_state.notice = None;
         let matchmaking_join = lobby_id.is_none() && !is_private && config.is_none();
         self.join_matchmaking = matchmaking_join;
+        self.ui.app.main_menu_state.ranked_search_active = matchmaking_join;
+        self.ui.app.main_menu_state.ranked_search_elapsed_secs = 0;
         if let Some(cfg) = config {
             self.ui.app.main_menu_state.custom_game_config = cfg;
         }

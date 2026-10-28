@@ -1873,6 +1873,9 @@ async fn main() {
             post(handle_internal_profile_reset_test_data),
         )
         .route("/internal/bot-pool/seed", post(handle_bot_pool_seed))
+        .route("/internal/ranked-bot", post(handle_ranked_bot))
+        .route("/internal/ranked-bots/available", post(handle_available_ranked_bots))
+        .route("/internal/ranked-rating", post(handle_ranked_rating))
         .layer(DefaultBodyLimit::max(MAX_INTERNAL_REQUEST_BYTES))
         .layer(cors)
         .with_state(state);
@@ -3772,6 +3775,140 @@ async fn handle_bot_pool_seed(
             }),
         )
             .into_response(),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct RankedBotSeed {
+    external_id: String,
+    display_name: String,
+    leader: String,
+    iq: u32,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+enum RankedBotRequest {
+    List,
+    Create { external_id: String, display_name: String, leader: String, iq: u32, actor: String },
+    Seed { bots: Vec<RankedBotSeed> },
+    Reserve { account_id: String, match_id: String },
+    Release { account_id: String, match_id: String },
+    Pause { account_id: String, actor: String },
+    Reactivate { account_id: String, actor: String },
+    SetIq { account_id: String, iq: u32, actor: String },
+    SetRating { account_id: String, score: u16, actor: String },
+    Recover { live_match_ids: Vec<String> },
+}
+
+#[derive(serde::Deserialize)]
+struct RankedRatingRequest {
+    account_id: String,
+}
+
+async fn handle_ranked_rating(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(request): Json<RankedRatingRequest>,
+) -> axum::response::Response {
+    if !verify_internal_auth(&headers, &state.secret_token) {
+        return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error: "Unauthorized".into() })).into_response();
+    }
+    match state.db.ranked_rating(&request.account_id).await {
+        Ok(rating) => (StatusCode::OK, Json(rating)).into_response(),
+        Err(error) => {
+            error!("ranked rating lookup failed: {error}");
+            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "ranked rating unavailable".into() })).into_response()
+        }
+    }
+}
+
+async fn handle_available_ranked_bots(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> axum::response::Response {
+    if !verify_internal_auth(&headers, &state.secret_token) {
+        return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error: "Unauthorized".into() })).into_response();
+    }
+    match state.db.available_ranked_bots().await {
+        Ok(candidates) => {
+            let candidates = candidates.into_iter().map(|(account, rating)| serde_json::json!({
+                "account": account.without_auth_secret(),
+                "rating": rating,
+            })).collect::<Vec<_>>();
+            (StatusCode::OK, Json(serde_json::json!({ "candidates": candidates }))).into_response()
+        }
+        Err(error) => {
+            error!("ranked bot candidate lookup failed: {error}");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "ranked bot candidates unavailable".into() })).into_response()
+        }
+    }
+}
+
+async fn handle_ranked_bot(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(request): Json<RankedBotRequest>,
+) -> axum::response::Response {
+    if !verify_internal_auth(&headers, &state.secret_token) {
+        return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error: "Unauthorized".into() })).into_response();
+    }
+    let request = match request {
+        RankedBotRequest::List => return match state.db.ranked_bots().await {
+            Ok(bots) => (StatusCode::OK, Json(serde_json::json!({"bots": bots.into_iter().map(|(account, rating)| serde_json::json!({
+                "account": account.without_auth_secret(), "rating": rating,
+            })).collect::<Vec<_>>()}))).into_response(),
+            Err(error) => {
+                error!("ranked bot list failed: {error}");
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "ranked bot list unavailable".into() })).into_response()
+            }
+        },
+        RankedBotRequest::Recover { live_match_ids } => return match state.db.recover_ranked_bot_reservations(&live_match_ids).await {
+            Ok(released) => (StatusCode::OK, Json(serde_json::json!({"released": released}))).into_response(),
+            Err(error) => {
+                error!("ranked bot reservation recovery failed: {error}");
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "ranked bot recovery failed".into() })).into_response()
+            }
+        },
+        request => request,
+    };
+    let result = match request {
+        RankedBotRequest::Create { external_id, display_name, leader, iq, actor } => state.db
+            .get_or_create_ranked_bot(&external_id, &display_name, &leader, iq, Some(&actor)).await.map(|account| vec![account]),
+        RankedBotRequest::Seed { bots } if bots.len() <= 64 => {
+            let mut accounts = Vec::with_capacity(bots.len());
+            let mut failure = None;
+            for bot in bots {
+                match state.db.get_or_create_ranked_bot(&bot.external_id, &bot.display_name, &bot.leader, bot.iq, None).await {
+                    Ok(account) => accounts.push(account),
+                    Err(error) => { failure = Some(error); break; }
+                }
+            }
+            match failure { Some(error) => Err(error), None => Ok(accounts) }
+        }
+        RankedBotRequest::Seed { .. } => Err("ranked bot seed exceeds 64 entries".into()),
+        RankedBotRequest::Reserve { account_id, match_id } => state.db
+            .reserve_ranked_bot(&account_id, &match_id).await.map(|account| account.into_iter().collect()),
+        RankedBotRequest::Release { account_id, match_id } => state.db
+            .release_ranked_bot(&account_id, &match_id).await.map(|()| Vec::new()),
+        RankedBotRequest::Pause { account_id, actor } => state.db
+            .update_ranked_bot(&account_id, sow_data::db::RankedBotManualUpdate::SetPaused { paused: true, actor }).await.map(|account| vec![account]),
+        RankedBotRequest::Reactivate { account_id, actor } => state.db
+            .update_ranked_bot(&account_id, sow_data::db::RankedBotManualUpdate::SetPaused { paused: false, actor }).await.map(|account| vec![account]),
+        RankedBotRequest::SetIq { account_id, iq, actor } => state.db
+            .update_ranked_bot(&account_id, sow_data::db::RankedBotManualUpdate::SetIq { iq, actor }).await.map(|account| vec![account]),
+        RankedBotRequest::SetRating { account_id, score, actor } => state.db
+            .update_ranked_bot(&account_id, sow_data::db::RankedBotManualUpdate::SetRating { score, actor }).await.map(|account| vec![account]),
+        RankedBotRequest::List | RankedBotRequest::Recover { .. } => unreachable!("handled above"),
+    };
+    match result {
+        Ok(accounts) => (StatusCode::OK, Json(serde_json::json!({
+            "accounts": accounts.into_iter().map(|account| account.without_auth_secret()).collect::<Vec<_>>()
+        }))).into_response(),
+        Err(error) => {
+            error!("ranked bot operation failed: {error}");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "ranked bot operation failed".into() })).into_response()
+        }
     }
 }
 async fn handle_internal_stats(

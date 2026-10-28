@@ -11,7 +11,6 @@ export function validateFlow(context: CampaignValidationContext) {
         campaignUnlockStates,
         stepCampaignRequirements,
         object,
-        id,
     } = rules;
 
     const edges = (step: CampaignStep) => campaignEdges(step, byId);

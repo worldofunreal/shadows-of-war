@@ -140,7 +140,7 @@ pub(crate) fn announce_attack_abilities(
         _ => false,
     };
     if applies {
-        state.announce_leader_ability(attacker, tile);
+        state.announce_leader_ability_to(attacker, &[target], tile);
     }
 }
 
@@ -321,11 +321,18 @@ impl SowEngine {
                             .player(execution.owner_id)
                             .map_or(1.0, |p| p.leader.attacker_loss_multiplier(LossWhen::Retreat));
                         if penalty != 1.0 {
-                            self.state
-                                .announce_leader_ability(execution.target_owner, None);
+                            self.state.announce_leader_ability_to(
+                                execution.target_owner,
+                                &[execution.owner_id],
+                                None,
+                            );
                         }
                         if softening != 1.0 {
-                            self.state.announce_leader_ability(execution.owner_id, None);
+                            self.state.announce_leader_ability_to(
+                                execution.owner_id,
+                                &[execution.target_owner],
+                                None,
+                            );
                         }
                         1.0 - RETREAT_PENALTY_VS_PLAYER * penalty * softening
                     };
@@ -478,8 +485,9 @@ impl SowEngine {
                     }
 
                     if defense_strength != 1.0 {
-                        self.state.announce_leader_ability(
+                        self.state.announce_leader_ability_to(
                             execution.target_owner,
+                            &[execution.owner_id],
                             Some((target_tile.x, target_tile.y)),
                         );
                     }
@@ -520,14 +528,18 @@ impl SowEngine {
                         execution.target_owner,
                     );
                     if city_multiplier != 1.0 {
-                        // The side whose city ability decided the cost is the one shown.
-                        let shown = if city_multiplier > 1.0 {
-                            execution.target_owner
+                        // The side whose city ability decided the cost is the one shown,
+                        // and the other side is the player it hit.
+                        let (shown, other) = if city_multiplier > 1.0 {
+                            (execution.target_owner, execution.owner_id)
                         } else {
-                            execution.owner_id
+                            (execution.owner_id, execution.target_owner)
                         };
-                        self.state
-                            .announce_leader_ability(shown, Some((target_tile.x, target_tile.y)));
+                        self.state.announce_leader_ability_to(
+                            shown,
+                            &[other],
+                            Some((target_tile.x, target_tile.y)),
+                        );
                     }
                     let tile_cost = tile_cost * city_multiplier;
 
@@ -570,8 +582,9 @@ impl SowEngine {
                         || coast_loss != 1.0
                         || landing_loss != 1.0
                     {
-                        self.state.announce_leader_ability(
+                        self.state.announce_leader_ability_to(
                             execution.owner_id,
+                            &[execution.target_owner],
                             Some((target_tile.x, target_tile.y)),
                         );
                     }
@@ -623,11 +636,18 @@ impl SowEngine {
                         let tile = Some((target_tile.x, target_tile.y));
                         if defense.attacker_loss_multiplier > 1.0 {
                             if tower_defense != 1.0 {
-                                self.state
-                                    .announce_leader_ability(execution.target_owner, tile);
+                                self.state.announce_leader_ability_to(
+                                    execution.target_owner,
+                                    &[execution.owner_id],
+                                    tile,
+                                );
                             }
                             if tower_siege != 1.0 {
-                                self.state.announce_leader_ability(execution.owner_id, tile);
+                                self.state.announce_leader_ability_to(
+                                    execution.owner_id,
+                                    &[execution.target_owner],
+                                    tile,
+                                );
                             }
                         }
                         let recapture = recapture_multiplier(
@@ -636,7 +656,11 @@ impl SowEngine {
                             execution.target_owner,
                         );
                         if recapture != 1.0 {
-                            self.state.announce_leader_ability(execution.owner_id, tile);
+                            self.state.announce_leader_ability_to(
+                                execution.owner_id,
+                                &[execution.target_owner],
+                                tile,
+                            );
                         }
                         let atk_loss = (self.state.config.attack_cost_enemy
                             * loss_multiplier

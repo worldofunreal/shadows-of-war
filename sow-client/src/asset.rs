@@ -368,6 +368,7 @@ impl SowApp {
                     progress,
                     state,
                     closure_recorded,
+                    ranked_result,
                 } => {
                     if !self.matches_exit_response(&account_id, &match_id, cycle_id)
                         || self
@@ -382,7 +383,14 @@ impl SowApp {
                     context.result_request_id = None;
                     context.server_state = Some(state);
                     context.exit_recorded |= closure_recorded;
+                    if let Some(ranked_result) = ranked_result
+                        && context.ranked_result.as_ref() != Some(&ranked_result)
+                    {
+                        context.ranked_result = Some(ranked_result);
+                        context.ranked_result_presented = false;
+                    }
                     let preparing = context.preparation_only;
+                    self.save_menu_return_context();
                     if closure_recorded
                         && !preparing
                         && self.ui.app.phase == crate::ClientPhase::Playing

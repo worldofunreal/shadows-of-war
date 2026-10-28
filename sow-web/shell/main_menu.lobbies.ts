@@ -1047,7 +1047,13 @@ export function updateQueueRoster(lobby: MenuLobby | null) {
 
 export function renderQueue() {
     const lobby = joinedLobby();
-    const title = lobby ? formatMapName(lobby).toUpperCase() : SOW_t("lobbies.matchmaking");
+    const rankedSearch = !!menuUi.state!.ranked_search_active && !lobby;
+    const elapsed = menuUi.state!.ranked_search_elapsed_secs || 0;
+    const title = lobby
+        ? formatMapName(lobby).toUpperCase()
+        : rankedSearch
+          ? SOW_t("lobbies.ranked_1v1")
+          : SOW_t("lobbies.matchmaking");
     const mapThumbUrl = lobbyThumb(lobby || { map_name: "world" });
     const isCustom = lobby && lobby.kind === "Custom";
     const isHost = menuUi.state && menuUi.state.is_lobby_host && isCustom;
@@ -1057,7 +1063,9 @@ export function renderQueue() {
         ? lobby.game_mode === "Teams"
             ? SOW_t("lobbies.teams_red_blue")
             : gameModeLabel(lobby.game_mode)
-        : SOW_t("lobbies.matchmaking");
+        : rankedSearch
+          ? SOW_t("lobbies.ranked_1v1")
+          : SOW_t("lobbies.matchmaking");
 
     let feedback = "";
     if (menuUi.state!.map_download_error) {
@@ -1089,6 +1097,11 @@ export function renderQueue() {
         feedback =
             "<div class='sow-menu__queue-feedback sow-menu__queue-feedback--error'>" +
             esc(localizedText(menuUi.state!.error)) +
+            "</div>";
+    } else if (rankedSearch) {
+        feedback =
+            "<div class='sow-menu__queue-countdown'>" +
+            esc(SOW_t("lobbies.ranked_searching", { seconds: elapsed })) +
             "</div>";
     }
 
@@ -1168,7 +1181,7 @@ export function renderQueue() {
               " <span>↗</span></button>"
             : "") +
         "<button class='sow-menu__danger sow-menu__queue-leave-btn' type='button' data-command='leave_lobby'>" +
-        esc(SOW_t("lobbies.leave_lobby")) +
+        esc(SOW_t(rankedSearch ? "lobbies.cancel" : "lobbies.leave_lobby")) +
         " <span>×</span></button>" +
         "</div>" +
         "</section>" +
@@ -1189,7 +1202,9 @@ export function renderQueue() {
         "<div class='sow-menu__queue-roster-wrap' data-queue-roster data-roster-key='" +
         esc(rosterKey) +
         "'>" +
-        rosterHtml +
+        (rankedSearch
+            ? "<div class='sow-menu__queue-countdown'>" + esc(SOW_t("lobbies.waiting_for_players")) + "</div>"
+            : rosterHtml) +
         "</div>" +
         "</section>" +
         "</main>"

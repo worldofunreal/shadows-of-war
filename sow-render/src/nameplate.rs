@@ -556,6 +556,31 @@ impl NameplateLandCache {
         landmass.name_rect
     }
 
+    /// Anchors an owner whose whole territory is one fresh spawn blob around `(x, y)` without a
+    /// full-map rebuild. Refuses (returns false) when the local flood does not cover all
+    /// `tile_count` tiles, so a partial answer is never cached.
+    pub fn anchor_fresh_owner(
+        &mut self,
+        map: &sow_core::map::GameMap,
+        player_id: u16,
+        x: u32,
+        y: u32,
+        tile_count: u32,
+    ) -> bool {
+        let owner_id = player_id & sow_core::map::GameMap::PLAYER_ID_MASK;
+        if !self.has_result_for(map) || tile_count as usize > SPAWN_LOCAL_AREA {
+            return false;
+        }
+        let Some(landmass) = spawn_landmass(map, owner_id, x, y, &mut self.flood_stack) else {
+            return false;
+        };
+        if landmass.tile_count != tile_count as usize {
+            return false;
+        }
+        self.largest_by_owner.set(usize::from(owner_id), landmass);
+        true
+    }
+
     pub fn needs_rebuild(&self, map: &sow_core::map::GameMap, tick: u64, force: bool) -> bool {
         let Some(identity) = MapIdentity::of(map) else {
             return true;
@@ -1988,6 +2013,29 @@ mod tests {
                 assert_eq!(map.owner_id(x, y), 1);
             }
         }
+    }
+
+    #[test]
+    fn fresh_owner_anchor_matches_full_rebuild_and_refuses_partial_territory() {
+        let mut map = test_map(30, 16);
+        own_tile(&mut map, 1, 1, 1);
+        let mut cache = NameplateLandCache::default();
+        assert!(cache.rebuild(&map, 0));
+        for y in 5..8 {
+            for x in 18..21 {
+                own_tile(&mut map, x, y, 2);
+            }
+        }
+        assert!(cache.anchor_fresh_owner(&map, 2, 19, 6, 9));
+        let mut full = NameplateLandCache::default();
+        assert!(full.rebuild(&map, 0));
+        assert_eq!(cache.rect_for(2), full.rect_for(2));
+
+        // A second island the local window cannot see must not be cached as a partial answer.
+        own_tile(&mut map, 2, 12, 3);
+        own_tile(&mut map, 28, 2, 3);
+        assert!(!cache.anchor_fresh_owner(&map, 3, 2, 12, 2));
+        assert!(!cache.has_landmass(3));
     }
 
     #[test]

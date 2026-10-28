@@ -331,12 +331,31 @@ impl SowEngine {
         let win_threshold = (self.state.total_land_tiles as f32
             * self.state.config.map_control_win_percentage) as u32;
 
-        if self.state.config.game_mode == "Teams"
+        if self.state.config.ranked_1v1 {
+            self.check_ranked_duel_winner(win_threshold);
+        } else if self.state.config.game_mode == "Teams"
             || self.state.config.game_mode == "HumansVsNations"
         {
             self.check_team_winner(win_threshold);
         } else {
             self.check_ffa_winner(win_threshold);
+        }
+    }
+
+    fn check_ranked_duel_winner(&mut self, win_threshold: u32) {
+        let contenders: Vec<_> = self.state.players.iter().filter(|p| p.is_human()).collect();
+        if contenders.len() != 2 {
+            return;
+        }
+        let winner = contenders.iter().filter(|p| p.alive && p.tile_count > 0)
+            .filter(|p| p.tile_count >= win_threshold)
+            .max_by_key(|p| (p.tile_count, std::cmp::Reverse(p.id)))
+            .map(|p| p.id);
+        let alive: Vec<_> = contenders.iter().filter(|p| p.alive && p.tile_count > 0).collect();
+        if let Some(id) = winner.or_else(|| (alive.len() == 1).then(|| alive[0].id)) {
+            self.end_game(id, None);
+        } else if alive.is_empty() {
+            self.state.phase = crate::game::GamePhase::GameOver;
         }
     }
 
@@ -773,6 +792,25 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn ranked_duel_ends_when_a_contender_is_eliminated_even_with_tribes_alive() {
+        let config = GameConfig { ranked_1v1: true, ..Default::default() };
+        let mut state = GameState::new(42, 10, 10, config.clone());
+        state.total_land_tiles = 100;
+        for (id, tiles, kind) in [(1, 10, PlayerType::Human), (2, 0, PlayerType::Human), (3, 10, PlayerType::Bot)] {
+            let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &config);
+            player.player_type = kind;
+            player.tile_count = tiles;
+            player.alive = tiles > 0;
+            player.has_spawned = true;
+            state.register_player(player);
+        }
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.check_winner();
+        assert_eq!(engine.state.winner, Some(1));
+        assert_eq!(engine.state.phase, GamePhase::GameOver);
     }
 
     #[test]

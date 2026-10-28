@@ -69,34 +69,12 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Ramesses II | Pi-Ramesses Workshops | Factory districts produce 25% more troops. | resource_bonus (factory / troops) | 25% | `gameplay/icons/abilities/ramesses_ii.webp` |
 | Mulan | Northern Wei Defense | Armies retreating from your land lose 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/mulan.webp` |
 | Lobengula | Bulawayo Garrison | Cities raise your troop cap 50% more. | city_troop_capacity | 50% | `gameplay/icons/abilities/lobengula.webp` |
-| Ahmad Shah Bahadur | Vizier's Bargain | Campaign alliances with traitors cost 25% less gold. | alliance_cost | 25% | `gameplay/icons/abilities/ahmad_shah_bahadur.webp` |
-| Alamgir II | Strike the Poor | Attacks on poorer players are 25% stronger. | attack_strength | 25% | `gameplay/icons/abilities/alamgir_ii.webp` |
-| Aurangzeb | War Within the Realm | Attacks on lands of your own realm are 25% stronger. | attack_strength | 25% | `gameplay/icons/abilities/aurangzeb.webp` |
-| Farrukhsiyar | Treasury Guard | Richer players' armies retreating from your land cost 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/farrukhsiyar.webp` |
-| Humayun | Brothers' Revolt | Armies of your own realm retreating from your land cost 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/humayun.webp` |
-| Shah Alam II | Foreign Protection | Campaign alliances with foreign powers cost 30% less gold. | alliance_cost | 30% | `gameplay/icons/abilities/shah_alam_ii.webp` |
 | Shah Jahan | Monumental Cities | Cities pay 25% more troops. | resource_bonus (city / troops) | 25% | `gameplay/icons/abilities/shah_jahan.webp` |
-| Shah Jahan III | Puppet Throne | Attackers lose 25% fewer troops when attacking larger players. | attacker_loss | 25% | `gameplay/icons/abilities/shah_jahan_iii.webp` |
-| Artaxerxes I | Rebel Satrapies | Attackers lose 25% fewer troops when attacking lands of your own realm. | attacker_loss | 25% | `gameplay/icons/abilities/artaxerxes_i.webp` |
-| Artaxerxes II | Cunaxa | Conquests of lands in your own realm are 25% faster. | conquest_speed | 25% | `gameplay/icons/abilities/artaxerxes_ii.webp` |
-| Artaxerxes III | Reconquest of Egypt | Conquests against foreign powers are 25% faster. | conquest_speed | 25% | `gameplay/icons/abilities/artaxerxes_iii.webp` |
-| Cambyses II | Pelusium | Attackers lose 25% fewer troops when attacking foreign powers. | attacker_loss | 25% | `gameplay/icons/abilities/cambyses_ii.webp` |
 | Xerxes I | Host of Xerxes | Attackers lose 25% fewer troops when attacking outnumbered players. | attacker_loss | 25% | `gameplay/icons/abilities/xerxes_i.webp` |
-| Claudius Gothicus | Naissus | Attackers lose 25% fewer troops when attacking tribes. | attacker_loss | 25% | `gameplay/icons/abilities/claudius_gothicus.webp` |
-| Lucius Verus | Co-Emperors | Campaign alliances with lands of your own realm cost 30% less gold. | alliance_cost | 30% | `gameplay/icons/abilities/lucius_verus.webp` |
 | Marcus Aurelius | Danube Frontier | Foreign armies retreating from your land cost 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/marcus_aurelius.webp` |
-| Trebonianus Gallus | Plague Years | Farms pay 25% more troops. | resource_bonus (farm / troops) | 25% | `gameplay/icons/abilities/trebonianus_gallus.webp` |
-| Majorian | Traitors' Fleet | Attackers lose 25% fewer troops when attacking traitors. | attacker_loss | 25% | `gameplay/icons/abilities/majorian.webp` |
-| Libius Severus | Ricimer's Shadow | Poorer players' armies retreating from your land cost 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/libius_severus.webp` |
-| Justin I | Mountain Passes | Attackers lose 30% fewer troops when conquering mountain tiles. | attacker_loss | 30% | `gameplay/icons/abilities/justin_i.webp` |
-| Justin II | Persian War | Attacks on foreign powers are 25% stronger. | attack_strength | 25% | `gameplay/icons/abilities/justin_ii.webp` |
 | Justinian I | Imperial Sieges | Attackers lose 25% fewer troops when conquering city tiles. | attacker_loss | 25% | `gameplay/icons/abilities/justinian_i.webp` |
-| Justinian II | Return from Exile | Attackers lose 25% fewer troops when attacking players with more troops. | attacker_loss | 25% | `gameplay/icons/abilities/justinian_ii.webp` |
-| Ildibad | Gepid Guard | Eliminating a player gives you 30% more troops. | resource_bonus (elimination / troops) | 30% | `gameplay/icons/abilities/ildibad.webp` |
-| Theodahad | Cousin's Throne | Attackers lose 25% fewer troops when attacking smaller players. | attacker_loss | 25% | `gameplay/icons/abilities/theodahad.webp` |
 | Totila | Siege of Rome | Attackers lose 25% fewer troops when attacking nations. | attacker_loss | 25% | `gameplay/icons/abilities/totila.webp` |
 | Chilperic I | Frankish Campaigns | Attackers lose 10% fewer troops in every attack. | attacker_loss | 10% | `gameplay/icons/abilities/chilperic_i.webp` |
-| Charles the Fat | Imperial Inheritance | Attackers lose 25% fewer troops when attacking other players. | attacker_loss | 25% | `gameplay/icons/abilities/charles_the_fat.webp` |
 | Lothair I | Treaty of Verdun | Attackers lose 25% fewer troops when attacking poorer players. | attacker_loss | 25% | `gameplay/icons/abilities/lothair_i.webp` |
 | Frederick Barbarossa | Road to the Holy Land | Attackers lose 25% fewer troops when attacking neutral land. | attacker_loss | 25% | `gameplay/icons/abilities/frederick_barbarossa.webp` |
 | Charles V | Diet of Worms | Attackers lose 15% fewer troops when attacking human players. | attacker_loss | 15% | `gameplay/icons/abilities/charles_v.webp` |
@@ -104,3 +82,5 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Jayaatu Khan | Yuan Treasury | Attackers lose 25% fewer troops when attacking richer players. | attacker_loss | 25% | `gameplay/icons/abilities/jayaatu_khan.webp` |
 | Sitting Bull | Unceded Territory | Nation armies need 25% more effort to conquer your territory. | defense_strength | 25% | `gameplay/icons/abilities/sitting_bull.webp` |
 | Pocahontas | Peace of Pocahontas | Foreign armies need 25% more effort to conquer your territory. | defense_strength | 25% | `gameplay/icons/abilities/pocahontas.webp` |
+| Burebista | Carpathian Fortresses | Armies need 25% more effort to conquer your territory. | defense_strength | 25% | `gameplay/icons/abilities/burebista.webp` |
+| Bolesław II the Bold | Kievan Expeditions | Conquest of foreign players advances 25% faster. | conquest_speed | 25% | `gameplay/icons/abilities/boleslaw_ii.webp` |

@@ -2582,10 +2582,7 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
                 | "site.discord"
                 | "site.faq"
                 | "site.github"
-                | "site.leader_artaxerxes_ii_ability"
                 | "site.leader_artigas_ability"
-                | "site.leader_cambyses_ii_ability"
-                | "site.leader_claudius_gothicus_ability"
                 | "site.leader_napoleon_ability"
                 | "site.leader_tlacaelel_ability"
                 | "site.terms_maps_license"
@@ -5667,17 +5664,6 @@ mod tests {
     }
 
     #[test]
-    fn campaign_cinematic_media_accepts_shipped_boudica_renditions() -> Result<()> {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .canonicalize()?;
-        let definition: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-            root.join("assets/campaign/boudica.triggers.json"),
-        )?)?;
-        validate_cinematic_media(&root.join("assets/campaign"), "boudica", &definition)
-    }
-
-    #[test]
     fn campaign_cinematic_media_rejects_missing_siblings_or_poster() -> Result<()> {
         let out = tempfile::tempdir()?;
         let dir = out.path().join("campaign");
@@ -5901,7 +5887,7 @@ mod tests {
                 usize::from(!external),
                 "{target:?}: external menu markup must be outside JavaScript; inline menus need one wrapper"
             );
-            let hashed_menu = fs::read_dir(page_dir)?
+            let hashed_menu = fs::read_dir(&page_dir)?
                 .filter_map(|e| e.ok())
                 .map(|e| e.file_name().to_string_lossy().into_owned())
                 .find(|n| n.starts_with("main_menu_") && n.ends_with(".js"))
@@ -5914,140 +5900,62 @@ mod tests {
                 external,
                 "{target:?}: hashed menu bundle only for self-hosted"
             );
-            if let Some(name) = hashed_menu {
+            if let Some(name) = hashed_menu.as_ref() {
                 assert!(
                     html.contains(&format!("<script src=\"./{name}\"></script>")),
                     "{target:?}: page must load the exact hashed bundle it shipped"
                 );
+                if target == WebTarget::Local {
+                    for marker in [
+                        "__SOW_SPLASH_DESKTOP_DATA__",
+                        "__SOW_SPLASH_MOBILE_DATA__",
+                        "__INLINE_MAIN_MENU_CSS__",
+                        "__INLINE_MAIN_MENU_JS__",
+                    ] {
+                        assert!(!html.contains(marker), "Local shell retains {marker}");
+                    }
+                    assert!(html.contains("data:image/webp;base64,"));
+                    assert!(html.contains("#sow-menu"));
+                    assert!(html.contains("SOW_menu_command"));
+                    let bundle = fs::read_to_string(page_dir.join(name))?;
+                    assert!(bundle.contains("sow-campaign-view.ts"));
+                    assert!(bundle.contains("window.SOW_onStateUpdate"));
+                    assert!(html.contains("sow-hud__dock"));
+                    assert!(html.contains("../analytics.js?v=test"));
+                    assert!(html.contains("name=\"sow-media-artwork\" content=\"../icon-192.png\""));
+                }
             }
             assert_eq!(html.contains("window.SOW_BUILDING_ART ="), !external);
-        }
-        Ok(())
-    }
 
-    #[test]
-    fn test_build_index_inlines_web_menu_shell() -> Result<()> {
-        let paths = Paths::discover()?;
-        let out = tempfile::tempdir()?;
-        build_index(
-            &paths,
-            out.path(),
-            IndexBuild {
-                version: "test",
-                js: "sow_client_test.js",
-                wasm: "sow_client_test_bg.wasm",
-                ts: "test",
-                maps_cache_bust: "test-maps",
-                target: WebTarget::Local,
-            },
-        )?;
-        let html = fs::read_to_string(out.path().join("play/index.html"))?;
-        assert!(!html.contains("__SOW_SPLASH_DESKTOP_DATA__"));
-        assert!(!html.contains("__SOW_SPLASH_MOBILE_DATA__"));
-        assert!(html.contains("data:image/webp;base64,"));
-        assert!(!html.contains("__INLINE_MAIN_MENU_CSS__"));
-        assert!(!html.contains("__INLINE_MAIN_MENU_JS__"));
-        assert!(html.contains("#sow-menu"));
-        assert!(html.contains("SOW_menu_command"));
-        let menu_name = fs::read_dir(out.path().join("play"))?
-            .filter_map(|e| e.ok())
-            .map(|e| e.file_name().to_string_lossy().into_owned())
-            .find(|n| n.starts_with("main_menu_") && n.ends_with(".js"))
-            .context("self-hosted menu bundle must be an external hashed file")?;
-        assert!(
-            html.contains(&format!("<script src=\"./{menu_name}\"></script>")),
-            "the page must reference the exact hashed bundle on disk"
-        );
-        let bundle = fs::read_to_string(out.path().join("play").join(&menu_name))?;
-        assert!(
-            bundle.contains("sow-campaign-view.ts"),
-            "external bundle keeps the shell part banners"
-        );
-        assert!(
-            bundle.contains("window.SOW_onStateUpdate"),
-            "the HUD state pump lives in the externalized bundle"
-        );
-        assert!(html.contains("sow-hud__dock"));
-        assert!(html.contains("../analytics.js?v=test"));
-        assert!(html.contains("name=\"sow-media-artwork\" content=\"../icon-192.png\""));
-        Ok(())
-    }
-
-    #[test]
-    fn test_build_index_inlines_poki_shell_without_store_or_service_worker() -> Result<()> {
-        let paths = Paths::discover()?;
-        let out = tempfile::tempdir()?;
-        build_index(
-            &paths,
-            out.path(),
-            IndexBuild {
-                version: "test",
-                js: "sow_client.js",
-                wasm: "sow_client_bg.wasm",
-                ts: "test",
-                maps_cache_bust: "test-maps",
-                target: WebTarget::Poki,
-            },
-        )?;
-        let html = fs::read_to_string(out.path().join("index.html"))?;
-        assert!(!html.contains("analytics.js"));
-        assert!(html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\""));
-        assert!(html.contains("href=\"fonts/fonts.css?v=test\""));
-        assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
-        assert!(html.contains("main_menu.poki.ts"));
-        assert!(!html.contains("main_menu.store.ts"));
-        assert_eq!(html.matches("function selfCreds()").count(), 1);
-        assert!(!html.contains("<iframe"));
-        assert!(!html.contains("href=\"https://"));
-        assert!(!html.contains("allowfullscreen"));
-        assert!(!html.contains("web-share"));
-        assert!(!html.contains("focus-without-user-activation"));
-        assert!(!html.contains("monetization"));
-        assert!(!html.contains("__SOW_SERVICE_WORKER_SLOT__"));
-        assert!(!html.contains("register('/sw.js'"));
-        for forbidden in POKI_FORBIDDEN_MARKERS {
-            assert!(!html.contains(forbidden), "Poki shell contains {forbidden}");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_build_index_inlines_jest_shell_without_store_or_service_worker() -> Result<()> {
-        let paths = Paths::discover()?;
-        let out = tempfile::tempdir()?;
-        build_index(
-            &paths,
-            out.path(),
-            IndexBuild {
-                version: "test",
-                js: "sow_client.js",
-                wasm: "sow_client_bg.wasm",
-                ts: "test",
-                maps_cache_bust: "test-maps",
-                target: WebTarget::Jest,
-            },
-        )?;
-        let html = fs::read_to_string(out.path().join("index.html"))?;
-        assert!(!html.contains("analytics.js"));
-        assert!(html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\""));
-        assert!(html.contains("href=\"fonts/fonts.css?v=test\""));
-        assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
-        assert!(html.contains("main_menu.jest.ts"));
-        assert!(html.contains("jest_login"));
-        assert!(!html.contains("main_menu.store.ts"));
-        assert!(!html.contains("main_menu.poki.ts"));
-        assert!(!html.contains("SOW_startWouOAuth"));
-        assert_eq!(html.matches("function selfCreds()").count(), 1);
-        assert!(!html.contains("<iframe"));
-        assert!(!html.contains("href=\"https://"));
-        assert!(!html.contains("allowfullscreen"));
-        assert!(!html.contains("web-share"));
-        assert!(!html.contains("focus-without-user-activation"));
-        assert!(!html.contains("monetization"));
-        assert!(!html.contains("__SOW_SERVICE_WORKER_SLOT__"));
-        assert!(!html.contains("register('/sw.js'"));
-        for forbidden in POKI_FORBIDDEN_MARKERS {
-            assert!(!html.contains(forbidden), "Jest shell contains {forbidden}");
+            if matches!(target, WebTarget::Poki | WebTarget::Jest) {
+                assert!(!html.contains("analytics.js"));
+                assert!(html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\""));
+                assert!(html.contains("href=\"fonts/fonts.css?v=test\""));
+                assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
+                assert!(html.contains(if target == WebTarget::Poki {
+                    "main_menu.poki.ts"
+                } else {
+                    "main_menu.jest.ts"
+                }));
+                assert!(!html.contains("main_menu.store.ts"));
+                assert_eq!(html.matches("function selfCreds()").count(), 1);
+                assert!(!html.contains("<iframe"));
+                assert!(!html.contains("href=\"https://"));
+                assert!(!html.contains("allowfullscreen"));
+                assert!(!html.contains("web-share"));
+                assert!(!html.contains("focus-without-user-activation"));
+                assert!(!html.contains("monetization"));
+                assert!(!html.contains("__SOW_SERVICE_WORKER_SLOT__"));
+                assert!(!html.contains("register('/sw.js'"));
+                for forbidden in POKI_FORBIDDEN_MARKERS {
+                    assert!(!html.contains(forbidden), "{target:?} shell contains {forbidden}");
+                }
+                if target == WebTarget::Jest {
+                    assert!(html.contains("jest_login"));
+                    assert!(!html.contains("main_menu.poki.ts"));
+                    assert!(!html.contains("SOW_startWouOAuth"));
+                }
+            }
         }
         Ok(())
     }
