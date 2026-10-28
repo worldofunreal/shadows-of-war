@@ -101,7 +101,11 @@ impl<'a> RelayAdmissionPause<'a> {
         };
         if require_empty {
             let active = relay_active_match_count(config)?;
-            if active != 0 { bail!("network-library replacement postponed: {active} active or closing matches remain"); }
+            if active != 0 {
+                bail!(
+                    "network-library replacement postponed: {active} active or closing matches remain"
+                );
+            }
             verify_no_pending_reward_calculations(config)?;
         }
         Ok(pause)
@@ -321,7 +325,9 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
         verify_public(paths, &config, &release)?;
         let handover_pending = relay_handover_pending(&config)?;
         verify_live_reward_return(paths, &config, handover_pending.then_some(RELAY_EXEC))?;
-        if handover_pending { mark_relay_handover_verified(&config, &release)?; }
+        if handover_pending {
+            mark_relay_handover_verified(&config, &release)?;
+        }
         println!("✅ Production already serves the requested content");
         return Ok(());
     }
@@ -340,8 +346,10 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     println!("==> 6/8 Activate changed components only");
     let hot = plan.relay && relay_can_handover(&config, &release)?;
     let mut admission = if plan.server || plan.database || plan.maps || plan.ops || plan.relay {
-        Some(RelayAdmissionPause::acquire(&config,
-            plan.server || plan.database || plan.maps || plan.ops || !hot)?)
+        Some(RelayAdmissionPause::acquire(
+            &config,
+            plan.server || plan.database || plan.maps || plan.ops || !hot,
+        )?)
     } else {
         None
     };
@@ -355,7 +363,9 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     // Relay last, so the control host is healthy before relay workers change.
     if hot {
         verify_control_host(&config, &plan)?;
-        if let Some(pause) = admission.as_mut() { pause.resume()?; }
+        if let Some(pause) = admission.as_mut() {
+            pause.resume()?;
+        }
         activate_relay_handover(paths, &config, &release)?;
     } else if plan.relay {
         activate_relay_host(&config, &release)?;
@@ -381,13 +391,19 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     if !hot {
         let handover_pending = relay_handover_pending(&config)?;
         verify_live_reward_return(paths, &config, handover_pending.then_some(RELAY_EXEC))?;
-        if handover_pending { mark_relay_handover_verified(&config, &release)?; }
+        if handover_pending {
+            mark_relay_handover_verified(&config, &release)?;
+        }
     }
     println!("✅ Production {} ready as {}", release.version, release.id);
     Ok(())
 }
 
-fn verify_live_reward_return(paths: &Paths, config: &Config, handover_binary: Option<&str>) -> Result<()> {
+fn verify_live_reward_return(
+    paths: &Paths,
+    config: &Config,
+    handover_binary: Option<&str>,
+) -> Result<()> {
     let mut websocket = url::Url::parse(&config.public_origin)?;
     let scheme = if websocket.scheme() == "https" {
         "wss"
@@ -403,27 +419,31 @@ fn verify_live_reward_return(paths: &Paths, config: &Config, handover_binary: Op
         .root
         .join("dist/.sow-state/reward-audit-accounts.json");
     let mut args = vec![
-            "run",
-            "--locked",
-            "-p",
-            "sow-tools",
-            "--bin",
-            "test-relay",
-            "--",
-            "--verify-rewards",
-            "--url",
-            websocket.as_str(),
-            "--database-url",
-            &database,
-            "--audit-accounts-file",
-            accounts.to_str().context("invalid audit accounts path")?,
-        ];
+        "run",
+        "--locked",
+        "-p",
+        "sow-tools",
+        "--bin",
+        "test-relay",
+        "--",
+        "--verify-rewards",
+        "--url",
+        websocket.as_str(),
+        "--database-url",
+        &database,
+        "--audit-accounts-file",
+        accounts.to_str().context("invalid audit accounts path")?,
+    ];
     if let Some(binary) = handover_binary {
-        args.extend(["--verify-handover-relay-host", config.relay_host.as_str(),
-            "--verify-handover-relay-binary", binary]);
+        args.extend([
+            "--verify-handover-relay-host",
+            config.relay_host.as_str(),
+            "--verify-handover-relay-binary",
+            binary,
+        ]);
     }
     run("cargo", &args, Some(&paths.root))
-    .context("real multiplayer exit and reward presentation failed")
+        .context("real multiplayer exit and reward presentation failed")
 }
 
 /// `./sow a` — Android-only track, decoupled from `./sow p` on purpose.
@@ -801,14 +821,28 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
         }
     }
     for (entry, context) in [
-        ("sow-web/shell/sow-campaign.ts", "campaign engine TypeScript check failed"),
-        ("sow-web/shell/sow-campaign-view.ts", "campaign view TypeScript check failed"),
-        ("sow-web/shell/main_menu.menu-guide.ts", "menu guide TypeScript check failed"),
+        (
+            "sow-web/shell/sow-campaign.ts",
+            "campaign engine TypeScript check failed",
+        ),
+        (
+            "sow-web/shell/sow-campaign-view.ts",
+            "campaign view TypeScript check failed",
+        ),
+        (
+            "sow-web/shell/main_menu.menu-guide.ts",
+            "menu guide TypeScript check failed",
+        ),
     ] {
         run(
             "bun",
             &[
-                "build", "--check", "--target=browser", "--format=iife", "--outfile=/dev/null", entry,
+                "build",
+                "--check",
+                "--target=browser",
+                "--format=iife",
+                "--outfile=/dev/null",
+                entry,
             ],
             Some(&paths.root),
         )
@@ -1102,8 +1136,11 @@ fn relay_worker_count() -> Result<usize> {
 fn relay_runtime_command(start_missing: bool) -> Result<String> {
     let recovery = if start_missing {
         "if [ \"$active\" -eq 0 ]; then for unit in $relay_units; do timeout 90s sudo systemctl start \"$unit\"; done; elif [ \"$active\" -ne \"$total\" ]; then echo 'partial relay failure; preserving surviving matches' >&2; exit 78; fi;"
-    } else { "" };
-    Ok(format!(r#"set -eu
+    } else {
+        ""
+    };
+    Ok(format!(
+        r#"set -eu
 relay_units=
 active=0
 total=0
@@ -1134,7 +1171,8 @@ while [ "$id" -lt "$count" ]; do
   curl -kfsS --max-time 5 https://127.0.0.1:$port/healthz >/dev/null
   id=$((id+1))
 done
-"#))
+"#
+    ))
 }
 
 fn ensure_relay_runtime(config: &Config) -> Result<()> {
@@ -1146,13 +1184,22 @@ fn ensure_relay_runtime(config: &Config) -> Result<()> {
 }
 
 fn relay_workers_stopped(config: &Config) -> Result<bool> {
-    let active = output("ssh", &[&config.relay_host,
-        "systemctl list-units --type=service --state=running --no-legend 'sow-relay@*.service'"])?;
+    let active = output(
+        "ssh",
+        &[
+            &config.relay_host,
+            "systemctl list-units --type=service --state=running --no-legend 'sow-relay@*.service'",
+        ],
+    )?;
     Ok(active.is_empty())
 }
 
 fn relay_current_worker_count(config: &Config) -> Result<usize> {
-    let value = output("ssh", &[&config.relay_host, r#"set -eu
+    let value = output(
+        "ssh",
+        &[
+            &config.relay_host,
+            r#"set -eu
 if grep -q -- --fstack-supervisor /usr/local/sbin/sow-relay-worker; then
   pid=$(systemctl show sow-relay@0.service -p MainPID --value)
   if [ "$pid" -gt 1 ]; then
@@ -1164,10 +1211,18 @@ else
     case "$unit" in sow-relay@*.service) count=$((count+1));; esac
   done
   echo "$count"
-fi"#])?;
-    if value.is_empty() { return relay_worker_count(); }
-    let count: usize = value.parse().context("running relay worker count is invalid")?;
-    if !(1..=64).contains(&count) { bail!("running relay worker count is out of range"); }
+fi"#,
+        ],
+    )?;
+    if value.is_empty() {
+        return relay_worker_count();
+    }
+    let count: usize = value
+        .parse()
+        .context("running relay worker count is invalid")?;
+    if !(1..=64).contains(&count) {
+        bail!("running relay worker count is out of range");
+    }
     Ok(count)
 }
 
@@ -1451,9 +1506,15 @@ fn relay_authed_request(
     let mut responses = Vec::new();
     let mut workers = relay_management_workers()?;
     let count = relay_current_worker_count(config)?;
-    let host = workers.first().context("relay management workers missing")?.0.clone();
+    let host = workers
+        .first()
+        .context("relay management workers missing")?
+        .0
+        .clone();
     workers.truncate(count);
-    while workers.len() < count { workers.push((host.clone(), 8080 + workers.len() as u16)); }
+    while workers.len() < count {
+        workers.push((host.clone(), 8080 + workers.len() as u16));
+    }
     for (worker_id, (host, port)) in workers.into_iter().enumerate() {
         let timestamp = output("ssh", &[&config.control_host, "date -u +%s"])?;
         let mut nonce_bytes = [0u8; 16];
@@ -1524,7 +1585,10 @@ fn relay_active_match_count(config: &Config) -> Result<usize> {
     let mut count = 0;
     for (_, body) in relay_authed_get(config, "/internal/lobbies")? {
         let value: serde_json::Value = serde_json::from_str(&body)?;
-        count += value["lobbies"].as_array().context("relay did not confirm its match registry")?.len();
+        count += value["lobbies"]
+            .as_array()
+            .context("relay did not confirm its match registry")?
+            .len();
     }
     Ok(count)
 }
@@ -1532,10 +1596,17 @@ fn relay_active_match_count(config: &Config) -> Result<usize> {
 fn relay_can_handover(config: &Config, release: &Release) -> Result<bool> {
     // A saved manifest describes installed content, not a living coordinator.
     // Stopped services must use controlled recovery rather than live handover.
-    if relay_workers_stopped(config)? { return Ok(false); }
-    let candidate: serde_json::Value = serde_json::from_slice(&fs::read(release.dir.join("release.json"))?)?;
-    let Some(running) = relay_manifest_remote(config)? else { return Ok(false) };
-    let expected = candidate["relay"]["foundation"].as_str().context("relay foundation missing")?;
+    if relay_workers_stopped(config)? {
+        return Ok(false);
+    }
+    let candidate: serde_json::Value =
+        serde_json::from_slice(&fs::read(release.dir.join("release.json"))?)?;
+    let Some(running) = relay_manifest_remote(config)? else {
+        return Ok(false);
+    };
+    let expected = candidate["relay"]["foundation"]
+        .as_str()
+        .context("relay foundation missing")?;
     Ok(running["foundation"].as_str() == Some(expected)
         && running["dpdk"].as_str() == Some(DPDK_RELEASE))
 }
@@ -1546,10 +1617,16 @@ fn relay_handover_pending(config: &Config) -> Result<bool> {
 }
 
 fn mark_relay_handover_verified(config: &Config, release: &Release) -> Result<()> {
-    let metadata: serde_json::Value = serde_json::from_slice(&fs::read(release.dir.join("release.json"))?)?;
-    let component = metadata["relay"]["sha256"].as_str().context("relay component hash missing")?;
-    let binary = metadata["relay"]["bin_sha256"].as_str().context("relay binary hash missing")?;
-    let command = format!(r#"sudo python3 - {manifest} {component} {binary} {exec} <<'VERIFY_RELAY_HANDOVER'
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(release.dir.join("release.json"))?)?;
+    let component = metadata["relay"]["sha256"]
+        .as_str()
+        .context("relay component hash missing")?;
+    let binary = metadata["relay"]["bin_sha256"]
+        .as_str()
+        .context("relay binary hash missing")?;
+    let command = format!(
+        r#"sudo python3 - {manifest} {component} {binary} {exec} <<'VERIFY_RELAY_HANDOVER'
 import hashlib, json, os, pathlib, shutil, sys, time
 path = pathlib.Path(sys.argv[1])
 manifest = json.loads(path.read_text())
@@ -1565,8 +1642,11 @@ os.chmod(temporary, 0o644)
 os.replace(temporary, path)
 VERIFY_RELAY_HANDOVER
 "#,
-        manifest = shell_quote(RELAY_MANIFEST), component = shell_quote(component),
-        binary = shell_quote(binary), exec = shell_quote(RELAY_EXEC));
+        manifest = shell_quote(RELAY_MANIFEST),
+        component = shell_quote(component),
+        binary = shell_quote(binary),
+        exec = shell_quote(RELAY_EXEC)
+    );
     run("ssh", &[&config.relay_host, &command], None)
         .context("record relay connection handover acceptance")
 }
@@ -1645,13 +1725,18 @@ fn stage_relay(config: &Config, release: &Release) -> Result<()> {
 }
 
 fn activate_relay_handover(paths: &Paths, config: &Config, release: &Release) -> Result<()> {
-    let metadata: serde_json::Value = serde_json::from_slice(&fs::read(release.dir.join("release.json"))?)?;
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(release.dir.join("release.json"))?)?;
     let relay = &metadata["relay"];
-    let binary = relay["bin_sha256"].as_str().context("relay binary hash missing")?;
+    let binary = relay["bin_sha256"]
+        .as_str()
+        .context("relay binary hash missing")?;
     if binary.len() != 64 || !binary.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         bail!("invalid relay binary hash");
     }
-    let component = relay["sha256"].as_str().context("relay component hash missing")?;
+    let component = relay["sha256"]
+        .as_str()
+        .context("relay component hash missing")?;
     let release_dir = format!("/usr/local/libexec/sow-relay/releases/{component}");
     let destination = format!("{release_dir}/sow-relay");
     let revision = relay["git"].as_str().context("relay revision missing")?;
@@ -1664,7 +1749,8 @@ fn activate_relay_handover(paths: &Paths, config: &Config, release: &Release) ->
         "drain":"match-owned generations","handover_verified":true,
         "deployed_at": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs().to_string(),
     }).to_string();
-    let command = format!(r#"set -eu
+    let command = format!(
+        r#"set -eu
 stage={stage}
 candidate_ldd=$(LD_LIBRARY_PATH="$stage/lib" ldd "$stage/bin/sow-relay")
 case "$candidate_ldd" in *"not found"*) echo "$candidate_ldd" >&2; exit 78;; esac
@@ -1674,19 +1760,27 @@ if ! sudo test -f {destination}; then sudo install -o root -g {group} -m 0550 "$
 for lib in "$stage"/lib/*.so*; do sudo install -o root -g {group} -m 0440 "$lib" {release_dir}/lib/"$(basename "$lib")"; done
 test "$(sudo sha256sum {destination} | cut -d ' ' -f 1)" = {binary}
 "#,
-        stage = shell_quote(RELAY_STAGE), binary = binary, group = RELAY_GROUP,
-        destination = shell_quote(&destination), release_dir = shell_quote(&release_dir));
+        stage = shell_quote(RELAY_STAGE),
+        binary = binary,
+        group = RELAY_GROUP,
+        destination = shell_quote(&destination),
+        release_dir = shell_quote(&release_dir)
+    );
     run("ssh", &[&config.relay_host, &command], None).context("prepare relay live handover")?;
     verify_live_reward_return(paths, config, Some(&destination))?;
-    let command = format!(r#"set -eu
+    let command = format!(
+        r#"set -eu
 sudo ln -sfn releases/{component}/sow-relay {exec}.next
 sudo mv -Tf {exec}.next {exec}
 if sudo test -f {manifest_path}; then sudo cp -p {manifest_path} {manifest_path}.bak_$(date +%s); fi
 printf '%s\n' {manifest_json} | sudo tee {manifest_path} >/dev/null
 sudo chmod 0644 {manifest_path}
 "#,
-        component = component, exec = RELAY_EXEC,
-        manifest_path = RELAY_MANIFEST, manifest_json = shell_quote(&manifest));
+        component = component,
+        exec = RELAY_EXEC,
+        manifest_path = RELAY_MANIFEST,
+        manifest_json = shell_quote(&manifest)
+    );
     run("ssh", &[&config.relay_host, &command], None).context("relay live handover failed")?;
     println!("  relay replacement is serving; previous matches retain their workers");
     Ok(())
@@ -1700,12 +1794,16 @@ fn activate_relay_host(config: &Config, release: &Release) -> Result<()> {
     } else {
         relay_active_match_count(config)?
     };
-    if active != 0 { bail!("refusing network-library replacement while {active} matches remain"); }
+    if active != 0 {
+        bail!("refusing network-library replacement while {active} matches remain");
+    }
     let env = RelayEnv::load()?;
     let relay_fstack = fstack_version(config)?;
     let release_json: serde_json::Value =
         serde_json::from_slice(&fs::read(release.dir.join("release.json"))?)?;
-    let revision = release_json["relay"]["git"].as_str().context("relay git missing")?;
+    let revision = release_json["relay"]["git"]
+        .as_str()
+        .context("relay git missing")?;
     let relay_component = release_json
         .get("relay")
         .and_then(|relay| relay.get("sha256"))
@@ -1854,12 +1952,19 @@ sudo chmod 0644 {manifest}
         relay_component = relay_component,
         relay_bin_sha = relay_bin_sha,
         relay_release = relay_release,
-        runtime_libraries_sha = release_json["relay"]["runtime_libraries_sha256"].as_str().context("relay runtime libraries hash missing")?,
+        runtime_libraries_sha = release_json["relay"]["runtime_libraries_sha256"]
+            .as_str()
+            .context("relay runtime libraries hash missing")?,
         knob = env.knob,
         dpdk = DPDK_RELEASE,
-        foundation = release_json["relay"]["foundation"].as_str().context("relay foundation missing")?,
+        foundation = release_json["relay"]["foundation"]
+            .as_str()
+            .context("relay foundation missing")?,
         worker_count = env.count,
-        health_ports = (8080..8080 + env.count).map(|port| port.to_string()).collect::<Vec<_>>().join(" "),
+        health_ports = (8080..8080 + env.count)
+            .map(|port| port.to_string())
+            .collect::<Vec<_>>()
+            .join(" "),
     );
     run("ssh", &[&config.relay_host, &remote], None).context("relay activation failed")?;
     println!(
@@ -1914,7 +2019,12 @@ fn verify_relay_identity(config: &Config, release: &Release) -> Result<()> {
         ("git", expected_git),
         ("fstack", expected_fstack),
         ("dpdk", DPDK_RELEASE),
-        ("foundation", relay["foundation"].as_str().context("relay foundation missing")?),
+        (
+            "foundation",
+            relay["foundation"]
+                .as_str()
+                .context("relay foundation missing")?,
+        ),
     ] {
         let actual = manifest
             .get(key)
@@ -1933,7 +2043,8 @@ fn verify_relay_identity(config: &Config, release: &Release) -> Result<()> {
     }
     for (queue, body) in relay_authed_get(config, "/internal/metrics")? {
         let metrics: serde_json::Value = serde_json::from_str(&body)?;
-        if metrics["managed_reload"] != true || metrics["foundation"] != relay["foundation"]
+        if metrics["managed_reload"] != true
+            || metrics["foundation"] != relay["foundation"]
             || metrics["dpdk"].as_str() != Some(DPDK_RELEASE)
             || metrics["git"].as_str() != Some(expected_git)
             || metrics["queue_count"].as_u64() != relay["worker_count"].as_u64()
@@ -1966,10 +2077,11 @@ fn verify_relay_identity(config: &Config, release: &Release) -> Result<()> {
     }
     for name in ["libfdt.so.1", "libxdp.so.1", "libisal.so.2"] {
         let expected = file_sha256(&release.dir.join("relay/lib").join(name))?;
-        let path = format!(
-            "/usr/local/libexec/sow-relay/releases/{expected_sha}/lib/{name}"
-        );
-        let deployed = output("ssh", &[&config.relay_host, &format!("sudo sha256sum {path}")])?;
+        let path = format!("/usr/local/libexec/sow-relay/releases/{expected_sha}/lib/{name}");
+        let deployed = output(
+            "ssh",
+            &[&config.relay_host, &format!("sudo sha256sum {path}")],
+        )?;
         if !deployed.starts_with(&expected) {
             bail!("relay deployed runtime library mismatch: {name}");
         }
@@ -2201,8 +2313,20 @@ fn fstack_version(config: &Config) -> Result<String> {
         &["-C", &config.fstack_repo, "rev-parse", "--short=12", "HEAD"],
     )
     .with_context(|| format!("f-stack repo has no HEAD: {}", config.fstack_repo))?;
-    let changes = output("git", &["-C", &config.fstack_repo, "diff", "--binary", "HEAD"])?;
-    let extra = output("git", &["-C", &config.fstack_repo, "ls-files", "--others", "--exclude-standard"])?;
+    let changes = output(
+        "git",
+        &["-C", &config.fstack_repo, "diff", "--binary", "HEAD"],
+    )?;
+    let extra = output(
+        "git",
+        &[
+            "-C",
+            &config.fstack_repo,
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+        ],
+    )?;
     let mut hash = Sha256::new();
     hash.update(changes.as_bytes());
     for file in extra.lines() {
@@ -2225,7 +2349,10 @@ fn prepare_relay_dpdk(paths: &Paths, config: &Config, source: &str) -> Result<Pa
     }
     let version = fs::read_to_string(Path::new(&config.fstack_repo).join("dpdk/VERSION"))?;
     if version.trim() != DPDK_RELEASE {
-        bail!("F-Stack 2.0 requires bundled DPDK {DPDK_RELEASE}, found {}", version.trim());
+        bail!(
+            "F-Stack 2.0 requires bundled DPDK {DPDK_RELEASE}, found {}",
+            version.trim()
+        );
     }
     let root = paths.root.join("dist/.sow-state/dpdk").join(source);
     let prefix = root.join("installed");
@@ -2233,7 +2360,10 @@ fn prepare_relay_dpdk(paths: &Paths, config: &Config, source: &str) -> Result<Pa
     let marker = root.join("complete");
     if marker.is_file() && pc.is_file() && prefix.join("lib/librte_eal.a").is_file() {
         let metadata = fs::read_to_string(&pc)?;
-        if metadata.lines().any(|line| line == format!("Version: {DPDK_RELEASE}")) {
+        if metadata
+            .lines()
+            .any(|line| line == format!("Version: {DPDK_RELEASE}"))
+        {
             return Ok(prefix);
         }
     }
@@ -2258,11 +2388,24 @@ test "$(PKG_CONFIG_PATH={pc} pkg-config --modversion libdpdk)" = {version}
         version = shell_quote(DPDK_RELEASE),
     );
     println!("==> Building bundled DPDK {DPDK_RELEASE} for F-Stack 2.0");
-    run("sudo", &[
-        "systemd-nspawn", "-q", "-D", "/var/lib/machines/debian12",
-        "--bind", &paths.root.display().to_string(),
-        "--bind", &config.fstack_repo, "--as-pid2", "bash", "-c", &script,
-    ], None)?;
+    run(
+        "sudo",
+        &[
+            "systemd-nspawn",
+            "-q",
+            "-D",
+            "/var/lib/machines/debian12",
+            "--bind",
+            &paths.root.display().to_string(),
+            "--bind",
+            &config.fstack_repo,
+            "--as-pid2",
+            "bash",
+            "-c",
+            &script,
+        ],
+        None,
+    )?;
     fs::write(marker, format!("{source}:DPDK={DPDK_RELEASE}\n"))?;
     Ok(prefix)
 }
@@ -2319,11 +2462,34 @@ chown -R 1000:1000 "$destination"
 /// Azure receives the binary and its DPDK runtime libraries, not source or a compiler.
 fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
     let patch = paths.root.join("fstack-bridge/patches/fstack-2.0.patch");
-    let applied = Command::new("git").args(["-C", &config.fstack_repo, "apply", "--reverse", "--check"])
-        .arg(&patch).output()?.status.success();
+    let applied = Command::new("git")
+        .args(["-C", &config.fstack_repo, "apply", "--reverse", "--check"])
+        .arg(&patch)
+        .output()?
+        .status
+        .success();
     if !applied {
-        run("git", &["-C", &config.fstack_repo, "apply", "--check", &patch.display().to_string()], None)?;
-        run("git", &["-C", &config.fstack_repo, "apply", &patch.display().to_string()], None)?;
+        run(
+            "git",
+            &[
+                "-C",
+                &config.fstack_repo,
+                "apply",
+                "--check",
+                &patch.display().to_string(),
+            ],
+            None,
+        )?;
+        run(
+            "git",
+            &[
+                "-C",
+                &config.fstack_repo,
+                "apply",
+                &patch.display().to_string(),
+            ],
+            None,
+        )?;
     }
     let fstack_hash = fstack_version(config)?;
     let dpdk_prefix = prepare_relay_dpdk(paths, config, &fstack_hash)?;
@@ -2333,16 +2499,26 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
     let pkg_config_path = dpdk_prefix.join("lib/pkgconfig").display().to_string();
     let dependency_identity = format!("{fstack_hash}:DPDK={DPDK_RELEASE}:{FSTACK_BUILD_FLAGS}");
     let relay_env = RelayEnv::load()?;
-    let foundation = input_fingerprint("relay-foundation-v1", &format!(
-        "{dependency_identity}:{runtime_libraries_sha}:{}:{}:{}:{}:{}:{}:{}",
-        relay_env.count, relay_env.max_connections, relay_env.max_connections_per_ip,
-        relay_env.handshakes_per_ip, relay_env.db_url, relay_env.db_resolve_ip, relay_env.knob), &[
-        &paths.root.join("sow-relay/src/reload.c"),
-        &paths.root.join("sow-relay/src/supervisor.rs"),
-        &paths.root.join("sow-relay/build.rs"),
-        &paths.root.join("fstack-bridge/echo-vf.ini"),
-        &paths.root.join("sow-dist/deploy/linux"),
-    ])?;
+    let foundation = input_fingerprint(
+        "relay-foundation-v1",
+        &format!(
+            "{dependency_identity}:{runtime_libraries_sha}:{}:{}:{}:{}:{}:{}:{}",
+            relay_env.count,
+            relay_env.max_connections,
+            relay_env.max_connections_per_ip,
+            relay_env.handshakes_per_ip,
+            relay_env.db_url,
+            relay_env.db_resolve_ip,
+            relay_env.knob
+        ),
+        &[
+            &paths.root.join("sow-relay/src/reload.c"),
+            &paths.root.join("sow-relay/src/supervisor.rs"),
+            &paths.root.join("sow-relay/build.rs"),
+            &paths.root.join("fstack-bridge/echo-vf.ini"),
+            &paths.root.join("sow-dist/deploy/linux"),
+        ],
+    )?;
     let revision = output("git", &["rev-parse", "--short=12", "HEAD"])?;
     let repo_mount = paths.root.display().to_string();
     let fstack_mount = config.fstack_repo.clone();
@@ -2384,7 +2560,8 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
         );
         let prepare = format!(
             "set -eu; export PKG_CONFIG_PATH={}; cd {}/lib; make clean; make -j8 {FSTACK_BUILD_FLAGS}",
-            shell_quote(&pkg_config_path), shell_quote(&config.fstack_repo)
+            shell_quote(&pkg_config_path),
+            shell_quote(&config.fstack_repo)
         );
         run(
             "sudo",
@@ -2419,7 +2596,8 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
          cd {}; cargo test --locked --release -p fstack-bridge -p sow-relay -- --test-threads=1; \
          cargo build --locked --release -p sow-relay; \
          chown -R 1000:1000 {}/target {}/lib 2>/dev/null || true",
-        shell_quote(&pkg_config_path), shell_quote(&format!("{}/lib", config.fstack_repo)),
+        shell_quote(&pkg_config_path),
+        shell_quote(&format!("{}/lib", config.fstack_repo)),
         shell_quote(&paths.root.display().to_string()),
         shell_quote(&paths.root.display().to_string()),
         shell_quote(&config.fstack_repo)
@@ -2561,10 +2739,7 @@ fn assemble_release(
     let relay = work.join("relay");
     fs::create_dir_all(relay.join("bin"))?;
     fs::create_dir_all(relay.join("conf"))?;
-    copy_dir(
-        &paths.root.join("dist/relay-bin/lib"),
-        &relay.join("lib"),
-    )?;
+    copy_dir(&paths.root.join("dist/relay-bin/lib"), &relay.join("lib"))?;
     let runtime_libraries_sha = directory_sha256(&relay.join("lib"))?;
     let relay_source = paths.root.join("dist/relay-bin/sow-relay");
     let relay_destination = relay.join("bin/sow-relay");
@@ -2643,7 +2818,12 @@ fn assemble_release(
         ("__SOW_DB_URL__", env.db_url.clone()),
         ("__SOW_DB_RESOLVE_IP__", env.db_resolve_ip.clone()),
         ("__SOW_WS_WRITE_TIMEOUT_MS__", env.knob.to_string()),
-        ("__SOW_RELAY_GIT__", fs::read_to_string(paths.root.join("dist/relay-bin/git"))?.trim().to_string()),
+        (
+            "__SOW_RELAY_GIT__",
+            fs::read_to_string(paths.root.join("dist/relay-bin/git"))?
+                .trim()
+                .to_string(),
+        ),
         ("__SOW_FSTACK_VERSION__", relay_fstack.clone()),
     ] {
         override_tpl = override_tpl.replace(token, &value);
@@ -2819,7 +2999,13 @@ fn directory_sha256(root: &Path) -> Result<String> {
     files.sort_by_key(|entry| entry.path().to_path_buf());
     let mut hash = Sha256::new();
     for entry in files {
-        hash.update(entry.path().strip_prefix(root)?.to_string_lossy().as_bytes());
+        hash.update(
+            entry
+                .path()
+                .strip_prefix(root)?
+                .to_string_lossy()
+                .as_bytes(),
+        );
         hash.update(fs::read(entry.path())?);
     }
     Ok(format!("{:x}", hash.finalize()))
@@ -2922,7 +3108,13 @@ fn remote_plan(config: &Config, release: &Release) -> Result<ComponentPlan> {
             [
                 ("relay_sha256", expected_relay_sha),
                 ("relay_bin_sha256", expected_bin_sha),
-                ("runtime_libraries_sha256", relay.get("runtime_libraries_sha256").and_then(serde_json::Value::as_str).unwrap_or("")),
+                (
+                    "runtime_libraries_sha256",
+                    relay
+                        .get("runtime_libraries_sha256")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or(""),
+                ),
                 ("git", expected_git),
                 ("fstack", expected_fstack),
             ]

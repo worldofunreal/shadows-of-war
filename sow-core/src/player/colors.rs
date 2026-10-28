@@ -1,59 +1,8 @@
-use wyrand::WyRand;
-
-use crate::rng::NextIntExt;
 use sow_data::PREMIUM_COLORS;
+use super::{Player, PlayerType};
 
-fn rgb_to_hsv(r: f32, g: f32, b: f32) -> [f32; 3] {
-    let min = r.min(g).min(b);
-    let max = r.max(g).max(b);
-    let delta = max - min;
-    let v = max;
-    let s = if max == 0.0 { 0.0 } else { delta / max };
-    let mut h = 0.0;
-    if delta > 0.00001 {
-        if r == max {
-            h = (g - b) / delta;
-        } else if g == max {
-            h = 2.0 + (b - r) / delta;
-        } else {
-            h = 4.0 + (r - g) / delta;
-        }
-        h /= 6.0;
-        if h < 0.0 {
-            h += 1.0;
-        }
-    }
-    [h, s, v]
-}
-
-fn hsv_to_rgb(h: f32, s: f32, v: f32) -> [f32; 3] {
-    let h = h.clamp(0.0, 1.0).fract();
-    let s = s.clamp(0.0, 1.0);
-    let v = v.clamp(0.0, 1.0);
-    let i = (h * 6.0).floor() as i32;
-    let f = h * 6.0 - i as f32;
-    let p = v * (1.0 - s);
-    let q = v * (1.0 - f * s);
-    let t = v * (1.0 - (1.0 - f) * s);
-    let (r, g, b) = match i.rem_euclid(6) {
-        0 => (v, t, p),
-        1 => (q, v, p),
-        2 => (p, v, t),
-        3 => (p, q, v),
-        4 => (t, p, v),
-        _ => (v, p, q),
-    };
-    [r, g, b]
-}
-
-pub fn premium_color(index: usize) -> [f32; 3] {
-    PREMIUM_COLORS[index % 300].rgb
-}
-
-/// Planar team territory color (Red/Blue). Every teammate shares the exact
-/// same color so the whole team reads as one bloc on the map and in the HUD.
-/// This is the single canonical palette for team colors — leaderboard,
-/// map shader, nameplates and endgame all derive from here.
+/// Red/Blue tint used to keep teams recognizable while preserving each
+/// player's own territory color.
 #[inline]
 pub fn team_territory_rgb(team: crate::protocol::Team) -> [f32; 3] {
     match team {
@@ -62,19 +11,124 @@ pub fn team_territory_rgb(team: crate::protocol::Team) -> [f32; 3] {
     }
 }
 
-/// Territory color after team colors are applied. Nations are blended halfway
-/// toward gray; heroes and other player types keep their existing colors.
+/// Final territory color shared by the map, nameplates, movers and feedback.
 pub fn player_territory_rgb(
     player_type: crate::player::PlayerType,
     team: Option<crate::protocol::Team>,
     color: [f32; 3],
 ) -> [f32; 3] {
-    let color = team.map_or(color, team_territory_rgb);
+    if player_type == PlayerType::Bot {
+        return [0.5; 3];
+    }
+    const TEAM_TINT: f32 = 0.08;
+    let color = team.map_or(color, |team| {
+        let team_color = team_territory_rgb(team);
+        std::array::from_fn(|i| color[i] * (1.0 - TEAM_TINT) + team_color[i] * TEAM_TINT)
+    });
     if player_type == crate::player::PlayerType::Nation {
-        color.map(|channel| channel * 0.5 + 0.25)
+        muted_nation_rgb(color)
     } else {
         color
     }
+}
+
+/// First palette color not currently used by a living Nation.
+pub fn next_nation_palette_color(players: &[Player]) -> Option<[f32; 3]> {
+    let used = used_nation_palette_slots(players);
+    PREMIUM_COLORS
+        .iter()
+        .enumerate()
+        .find(|(index, _)| !used[*index])
+        .map(|(_, color)| color.rgb)
+}
+
+/// Pick the free Nation color that stays farthest from the colors in this match.
+/// Used for breakaway Nations, whose team can differ from the catalog Nations.
+pub fn best_available_nation_palette_color(
+    players: &[Player],
+    team: Option<crate::protocol::Team>,
+) -> Option<[f32; 3]> {
+    const MIN_COLOR_GAP: f32 = 0.03;
+    let used = used_nation_palette_slots(players);
+    let existing: Vec<[f32; 3]> = players
+        .iter()
+        .filter(|player| {
+            player.alive
+                && matches!(player.player_type, PlayerType::Human | PlayerType::Nation)
+        })
+        .map(|player| {
+            player_territory_rgb(player.player_type, player.team, player.color)
+        })
+        .map(oklab2)
+        .collect();
+
+    PREMIUM_COLORS
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !used[*index])
+        .filter_map(|(_, color)| {
+            let rendered = oklab2(player_territory_rgb(
+                PlayerType::Nation,
+                team,
+                color.rgb,
+            ));
+            let gap = existing
+                .iter()
+                .map(|other| distance_ok2(rendered, *other))
+                .fold(f32::INFINITY, f32::min);
+            (gap >= MIN_COLOR_GAP).then_some((gap, color.rgb))
+        })
+        .max_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, color)| color)
+}
+
+fn used_nation_palette_slots(players: &[Player]) -> Vec<bool> {
+    let mut used = vec![false; PREMIUM_COLORS.len()];
+    for player in players
+        .iter()
+        .filter(|player| player.alive && player.player_type == PlayerType::Nation)
+    {
+        if let Some((index, _)) = PREMIUM_COLORS
+            .iter()
+            .enumerate()
+            .find(|(_, color)| color.rgb == player.color)
+        {
+            used[index] = true;
+        }
+    }
+    used
+}
+
+fn oklab2(rgb: [f32; 3]) -> [f32; 3] {
+    let linear = rgb.map(|channel| {
+        if channel <= 0.04045 {
+            channel / 12.92
+        } else {
+            ((channel + 0.055) / 1.055).powf(2.4)
+        }
+    });
+    let [r, g, b] = linear;
+    let l = (0.4122214708 * r + 0.5363325363 * g + 0.0519036911 * b).cbrt();
+    let m = (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b).cbrt();
+    let s = (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b).cbrt();
+    [
+        0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+        2.0 * (1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s),
+        2.0 * (0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s),
+    ]
+}
+
+fn distance_ok2(a: [f32; 3], b: [f32; 3]) -> f32 {
+    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+}
+
+fn muted_nation_rgb(color: [f32; 3]) -> [f32; 3] {
+    const MAX_CHANNEL: f32 = 0.72;
+    let gray = 0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2];
+    let muted = color.map(|channel| channel * 0.5 + gray * 0.5);
+    let peak = muted[0].max(muted[1]).max(muted[2]);
+    let scale = (MAX_CHANNEL / peak.max(0.001)).min(1.0);
+    muted.map(|channel| channel * scale)
 }
 
 /// Campaign diplomacy colors are visual state only; they do not assign gameplay teams.
@@ -87,58 +141,3 @@ pub fn campaign_relation_rgb(relation: crate::protocol::CampaignRelation) -> Opt
     }
 }
 
-/// RGB used for human-owned territory in the sow-render map shader (`map.wgsl`).
-/// Matches WGSL `owner_id <= 16` branch so UI (nameplates) matches the map tint.
-#[inline]
-pub fn human_shader_territory_rgb(player_id: u16) -> [f32; 3] {
-    let base_color = &PREMIUM_COLORS[(player_id as usize).saturating_sub(1) % 300];
-    if (1..=300).contains(&player_id) {
-        base_color.rgb
-    } else {
-        let [r, g, b] = base_color.rgb;
-        let [h, s, v] = rgb_to_hsv(r, g, b);
-
-        let seed = (player_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
-        let mut rng = WyRand::new(seed);
-
-        let hj = h + (rng.next_int(0, 1000) as f32 / 1000.0 - 0.5) * 0.03;
-        let sj = (s + (rng.next_int(0, 1000) as f32 / 1000.0 - 0.5) * 0.08).clamp(0.4, 1.0);
-        let mut vj = (v + (rng.next_int(0, 1000) as f32 / 1000.0 - 0.5) * 0.08).clamp(0.45, 1.0);
-
-        if hj.fract().abs() >= 0.03 && hj.fract().abs() <= 0.15 && vj < 0.60 {
-            vj = 0.65 + (vj * 0.3);
-        }
-
-        hsv_to_rgb(hj, sj, vj)
-    }
-}
-
-pub fn bot_territory_color(game_seed: u64, bot_id: u16) -> [f32; 3] {
-    let base_color = &PREMIUM_COLORS[(bot_id as usize).saturating_sub(1) % 300];
-    if (1..=300).contains(&bot_id) {
-        base_color.rgb
-    } else {
-        let [r, g, b] = base_color.rgb;
-        let [h, s, v] = rgb_to_hsv(r, g, b);
-
-        let mix = game_seed.wrapping_mul(0x9E37_79B9_7F4A_7C15)
-            ^ (bot_id as u64).wrapping_shl(32)
-            ^ (bot_id as u64);
-        let mut rng = WyRand::new(mix);
-
-        let hj = h + (rng.next_int(0, 1000) as f32 / 1000.0 - 0.5) * 0.03;
-        let sj = (s + (rng.next_int(0, 1000) as f32 / 1000.0 - 0.5) * 0.08).clamp(0.4, 1.0);
-        let mut vj = (v + (rng.next_int(0, 1000) as f32 / 1000.0 - 0.5) * 0.08).clamp(0.45, 1.0);
-
-        if hj.fract().abs() >= 0.03 && hj.fract().abs() <= 0.15 && vj < 0.60 {
-            vj = 0.65 + (vj * 0.3);
-        }
-
-        let [r_res, g_res, b_res] = hsv_to_rgb(hj, sj, vj);
-        [
-            r_res.clamp(0.05, 0.95),
-            g_res.clamp(0.05, 0.95),
-            b_res.clamp(0.05, 0.95),
-        ]
-    }
-}

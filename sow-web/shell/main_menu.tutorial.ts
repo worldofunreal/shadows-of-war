@@ -1,7 +1,16 @@
 // This legacy browser controller is incrementally typed as its responsibilities move into modules.
 import { createMenuGuide } from "./main_menu.menu-guide.ts";
+import type {
+    CampaignDefinition,
+    CampaignMachine,
+    CampaignMachineView,
+    CampaignRecord,
+    CampaignRoster,
+    CampaignStep,
+    CampaignView,
+} from "./campaign/types.ts";
 
-type TutorialAnchor = {
+type TutorialAnchor = CampaignRecord & {
     x: number;
     y: number;
     offscreen?: boolean;
@@ -10,8 +19,8 @@ type TutorialAnchor = {
     toY?: number;
 };
 
-type TutorialRenderContext = {
-    anchor: TutorialAnchor | null;
+type TutorialRenderContext = CampaignRecord & {
+    anchor: CampaignRecord | null;
     reducedMotion: boolean;
     direction: string;
     zoomMode?: string;
@@ -30,6 +39,73 @@ type TutorialRenderContext = {
     statusLabel?: string;
 };
 
+interface LoadedTutorialEpisode {
+    definition: CampaignDefinition;
+    roster: CampaignRoster;
+}
+
+interface TutorialExchangeCue {
+    token: string | number;
+    nativeToken: string;
+    line: CampaignRecord;
+    faction: string;
+    session: number;
+}
+
+interface TutorialRuntime {
+    generation: number;
+    episodeId: string | null;
+    roster: CampaignRoster | null;
+    activating: string | null;
+    definition: CampaignDefinition | null;
+    machine: CampaignMachine | null;
+    view: CampaignView | null;
+    active: boolean;
+    starting: string | null;
+    loading: Record<string, Promise<LoadedTutorialEpisode> | undefined>;
+    latestHud: CampaignRecord | null;
+    uiCounts: Record<string, number>;
+    uiPaused: boolean | null;
+    cameraOnly: boolean | null;
+    pausedAction: string | null;
+    hoverEvents: number;
+    hoveredEntityId: number | null;
+    hoverStepId: string | null;
+    hoverStepRecorded: boolean;
+    hoverPointerAway: boolean;
+    mapUiStepRecorded: boolean;
+    cameraTargetFactionId: string | null;
+    cameraShotStepId: string | null;
+    reactionHighlightPlayerId: number | null;
+    stepRevealTimer: number | null;
+    stepRevealStepId: string | null;
+    stepRevealToken: number;
+    completionSent: boolean;
+    analyticsStepId: string | null;
+    analyticsStartedStepIds: Set<string>;
+    analyticsCompletedStepIds: Set<string>;
+    observingAfterDefeat: boolean;
+    lastActionStepId: string | null;
+    resolvedReactions: Set<string>;
+    priorChoices: CampaignRecord;
+    failedEpisode: string | null;
+    lastUnlockCommand: string | null;
+    bootEpisode: string | null;
+    lastPhase: string | null;
+    modalObserver: MutationObserver | null;
+    guidedScrollStepId: string | null;
+    guidedControl: HTMLElement | null;
+    guidedAmountControls: HTMLElement[];
+    exchangeCue: TutorialExchangeCue | null;
+    exchangeFocusToken: string | number | null;
+    lastPreDefeatTargets: string | null;
+    campaignSessionId: number;
+    emoteSerial: number;
+    markerId: number | null | undefined;
+    modalOpen: boolean | undefined;
+    cameraReactionTarget: string | null | undefined;
+}
+
 (function () {
     "use strict";
 
@@ -43,11 +119,11 @@ type TutorialRenderContext = {
     cinematicPreviewRoot.className = "sow-story--menu-preview";
     cinematicPreviewRoot.hidden = true;
     document.body.appendChild(cinematicPreviewRoot);
-    let cinematicPreviewView = null;
+    let cinematicPreviewView: CampaignView | null = null;
     let cinematicPreviewGeneration = 0;
     const HOVER_TARGET_RADIUS = 72;
 
-    const runtime = {
+    const runtime: TutorialRuntime = {
         generation: 0,
         episodeId: null,
         roster: null,
@@ -98,7 +174,7 @@ type TutorialRenderContext = {
         emoteSerial: 0,
         markerId: undefined as number | null | undefined,
         modalOpen: undefined as boolean | undefined,
-        cameraReactionTarget: null as unknown,
+        cameraReactionTarget: null,
     };
 
     function clearStepRevealTimer() {
@@ -109,25 +185,25 @@ type TutorialRenderContext = {
         runtime.stepRevealStepId = null;
     }
 
-    function asset(path) {
+    function asset(path: string) {
         const base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
         const url = base + "/" + path.split("/").map(encodeURIComponent).join("/");
         return window.SOW_assetUrl ? window.SOW_assetUrl(url) : url;
     }
 
-    function send(type, fields?) {
+    function send(type: string, fields?: CampaignRecord) {
         if (typeof window.SOW_menu_command !== "function") return false;
         window.SOW_menu_command(JSON.stringify(Object.assign({ type: type }, fields || {})));
         return true;
     }
 
-    function trackExperience(name, props?) {
+    function trackExperience(name: string, props?: CampaignRecord) {
         if (typeof window.SOW_trackExperienceEvent === "function") {
             window.SOW_trackExperienceEvent(JSON.stringify({ name: name, props: props || null }));
         }
     }
 
-    function trackTutorialStep(action, stepId) {
+    function trackTutorialStep(action: string, stepId: string) {
         const steps = (runtime.definition && runtime.definition.steps) || [];
         const index = steps.findIndex(function (step) {
             return step.id === stepId;
@@ -141,7 +217,7 @@ type TutorialRenderContext = {
         });
     }
 
-    function tutorialExitContext(episodeId) {
+    function tutorialExitContext(episodeId: string) {
         if (!runtime.active || runtime.episodeId !== episodeId) return null;
         if (runtime.completionSent || (runtime.machine && runtime.machine.view().done)) return false;
         const stepId = runtime.analyticsStepId;
@@ -160,21 +236,21 @@ type TutorialRenderContext = {
         return { step_id: stepId, step_index: stepIndex, action: "fail" };
     }
 
-    function availableGold(hud) {
+    function availableGold(hud: CampaignRecord | null) {
         const gold = Number(hud && hud.gold);
         return Number.isFinite(gold) ? Math.max(0, gold) : 0;
     }
 
-    function tr(key) {
+    function tr(key: string) {
         const definition = runtime.definition;
         const value = typeof window.SOW_t === "function" ? window.SOW_t(key) : "[" + key + "]";
         if (!value || value === "[" + key + "]") return key;
-        return window.SOWCampaign && typeof window.SOWCampaign.replaceFactionStoryNames === "function"
+        return window.SOWCampaign && definition && runtime.roster
             ? window.SOWCampaign.replaceFactionStoryNames(value, definition, runtime.roster)
             : value;
     }
 
-    function stepTextKey(step, suffix) {
+    function stepTextKey(step: CampaignStep, suffix: string) {
         const namespace = runtime.definition && runtime.definition.text_namespace;
         return (typeof namespace === "string" ? namespace : "tutorial.") + step.id + suffix;
     }
@@ -192,17 +268,17 @@ type TutorialRenderContext = {
         });
     }
 
-    function targetPlayer(step, hud) {
+    function targetPlayer(step: CampaignRecord | null, hud: CampaignRecord | null | undefined) {
         const target = step && ((step.trigger && step.trigger.target) || (step.marker && step.marker.target));
         const players = (hud && hud.players) || [];
         return (
-            players.find(function (player) {
+            players.find(function (player: CampaignRecord) {
                 return player && (target === "player" ? player.is_me : player.campaign_faction_id === target);
             }) || null
         );
     }
 
-    function targetMapMenuOpen(step, hud) {
+    function targetMapMenuOpen(step: CampaignStep, hud: CampaignRecord | null | undefined) {
         const target = targetPlayer(step, hud),
             menu = hud && hud.map_menu;
         return Boolean(
@@ -214,7 +290,7 @@ type TutorialRenderContext = {
         );
     }
 
-    function cameraTargetDistance(step, hud) {
+    function cameraTargetDistance(step: CampaignStep, hud: CampaignRecord | null) {
         const player = targetPlayer(step, hud),
             camera = (hud && hud.tutorial && hud.tutorial.camera) || {};
         const zoom = Number(camera.zoom),
@@ -235,7 +311,10 @@ type TutorialRenderContext = {
         return Math.hypot(Number(player.centroid_x) - centerX, Number(player.centroid_y) - centerY);
     }
 
-    function cameraTargetAnchor(step, hud): TutorialAnchor | null {
+    function cameraTargetAnchor(
+        step: CampaignRecord,
+        hud: CampaignRecord | null | undefined,
+    ): TutorialAnchor | null {
         const player = targetPlayer(step, hud),
             camera = (hud && hud.tutorial && hud.tutorial.camera) || {};
         const zoom = Number(camera.zoom),
@@ -262,7 +341,7 @@ type TutorialRenderContext = {
         };
     }
 
-    function metricText(key, values) {
+    function metricText(key: string, values: CampaignRecord) {
         let text = tr(key);
         Object.keys(values).forEach(function (name) {
             text = text.replace(new RegExp("\\{" + name + "\\}", "g"), String(values[name]));
@@ -270,7 +349,12 @@ type TutorialRenderContext = {
         return text;
     }
 
-    function renderContext(step, hud, anchor, machineView) {
+    function renderContext(
+        step: CampaignStep,
+        hud: CampaignRecord | null,
+        anchor: CampaignRecord | null,
+        machineView: CampaignMachineView,
+    ) {
         const context: TutorialRenderContext = {
             anchor: anchor,
             reducedMotion: Boolean(hud && hud.settings && hud.settings.reduced_motion),
@@ -324,7 +408,7 @@ type TutorialRenderContext = {
                     if (!Number.isFinite(targetRadius) || targetRadius <= 0)
                         targetRadius = step.trigger.distance;
                     const progressKey = stepTextKey(step, "_progress");
-                    if (Number.isFinite(distance)) {
+                    if (distance !== null && Number.isFinite(distance)) {
                         const currentDistance = Math.ceil(distance),
                             targetDistance = Math.ceil(targetRadius);
                         context.guideMetric = {
@@ -386,34 +470,34 @@ type TutorialRenderContext = {
         return context;
     }
 
-    function fetchJson(path) {
+    function fetchJson(path: string): Promise<CampaignRecord> {
         return fetch(asset(path), { cache: "no-store", credentials: "same-origin" }).then(
             function (response) {
                 if (!response.ok) throw new Error(path + " returned " + response.status);
-                return response.json();
+                return response.json() as Promise<CampaignRecord>;
             },
         );
     }
 
-    function hasText(key) {
+    function hasText(key: string) {
         return typeof window.SOW_hasText === "function" && window.SOW_hasText(key);
     }
 
-    function loadEpisode(episodeId) {
+    function loadEpisode(episodeId: string): Promise<LoadedTutorialEpisode> {
         if (runtime.loading[episodeId]) return runtime.loading[episodeId];
         const request = Promise.all([
             fetchJson("campaign/" + episodeId + ".json"),
             fetchJson("campaign/" + episodeId + ".triggers.json"),
         ]).then(function (files) {
-            const roster = files[0],
-                definition = files[1];
+            const roster = files[0] as CampaignRoster,
+                definition = files[1] as CampaignDefinition;
             if (!window.SOWCampaign || !window.SOWCampaignView)
                 throw new Error("Campaign runtime is missing.");
             if (definition.episode_id !== episodeId)
                 throw new Error("Campaign filename and episode ID do not match.");
             const result = window.SOWCampaign.validate(definition, roster, {
                 hasText: hasText,
-                getText: function (key) {
+                getText: function (key: string) {
                     const value = typeof window.SOW_t === "function" ? window.SOW_t(key) : null;
                     if (!hasText(key) || !value || value === key || value === "[" + key + "]") return null;
                     return window.SOWCampaign.replaceFactionStoryNames(value, definition, roster);
@@ -445,7 +529,7 @@ type TutorialRenderContext = {
         cinematicPreviewRoot.classList.remove("sow-story--menu-preview");
     }
 
-    function watchCampaignCinematic(episodeId) {
+    function watchCampaignCinematic(episodeId: string) {
         episodeId = String(episodeId || "");
         if (!/^[a-z][a-z0-9_]{0,63}$/.test(episodeId)) return;
         if (cinematicPreviewView) cinematicPreviewView.destroy();
@@ -467,7 +551,7 @@ type TutorialRenderContext = {
                 ) {
                     throw new Error("This episode has no opening cinematic.");
                 }
-                const translate = function (key) {
+                const translate = function (key: string) {
                     const value = typeof window.SOW_t === "function" ? window.SOW_t(key) : "[" + key + "]";
                     if (!value || value === "[" + key + "]") return key;
                     return window.SOWCampaign.replaceFactionStoryNames(value, data.definition, data.roster);
@@ -501,7 +585,12 @@ type TutorialRenderContext = {
             });
     }
 
-    function showError(error, episodeId, retryAction?, dismissAction?) {
+    function showError(
+        error: { message?: string } | string | null,
+        episodeId: string,
+        retryAction?: () => void,
+        dismissAction?: () => void,
+    ) {
         console.error("[SOW CAMPAIGN]", error);
         if (runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.active) {
             runtime.uiPaused = true;
@@ -550,7 +639,8 @@ type TutorialRenderContext = {
             dismiss.addEventListener("click", function () {
                 panel.remove();
                 dismissAction();
-                if (focusBefore && focusBefore.isConnected) focusBefore.focus({ preventScroll: true });
+                if (focusBefore instanceof HTMLElement && focusBefore.isConnected)
+                    focusBefore.focus({ preventScroll: true });
             });
             panel.appendChild(dismiss);
         }
@@ -570,16 +660,15 @@ type TutorialRenderContext = {
             onContinue: continueScene,
             onChoice: choose,
             onFocus: focusMarker,
-            onCinematicChange: function (active) {
+            onCinematicChange: function (active: boolean) {
                 if (typeof window.SOW_menu_music_cinematic === "function") {
                     window.SOW_menu_music_cinematic(active);
                 }
             },
-            onDismiss: null,
         });
     }
 
-    function startEpisode(episodeId, fromBoot) {
+    function startEpisode(episodeId: string, fromBoot: boolean) {
         episodeId = String(episodeId || "");
         if (
             !/^[a-z][a-z0-9_]{0,63}$/.test(episodeId) ||
@@ -643,7 +732,7 @@ type TutorialRenderContext = {
         if (fromBoot) runtime.bootEpisode = episodeId;
     }
 
-    function activate(tutorial, hud) {
+    function activate(tutorial: CampaignRecord, hud: CampaignRecord) {
         if (runtime.machine && runtime.episodeId === tutorial.episode_id) {
             runtime.latestHud = hud;
             update(hud);
@@ -726,7 +815,7 @@ type TutorialRenderContext = {
             });
     }
 
-    function placementGuideView(model, hud) {
+    function placementGuideView(model: CampaignMachineView, hud: CampaignRecord | null): CampaignMachineView {
         if (
             !model ||
             !model.step ||
@@ -743,15 +832,19 @@ type TutorialRenderContext = {
         return Object.assign({}, model, { step: step });
     }
 
-    function anchorFor(step, hud, guideFacts?): TutorialAnchor | null {
+    function anchorFor(
+        step: CampaignStep,
+        hud: CampaignRecord | null | undefined,
+        guideFacts?: CampaignRecord,
+    ): TutorialAnchor | null {
         if (!step) return null;
         const tutorial = (hud && hud.tutorial) || {};
         const triggerType = step.trigger && step.trigger.type;
         if (!step.guide) {
             if (step.type !== "objective") return null;
             if (triggerType === "structure_level") {
-                const passiveKind =
-                    step.trigger.kind || { city_level: "City", port_level: "Port" }[triggerType];
+                const buildingNames: Record<string, string> = { city_level: "City", port_level: "Port" };
+                const passiveKind = step.trigger.kind || buildingNames[String(triggerType)];
                 const passiveBuilding =
                     tutorial.upgrading_buildings && tutorial.upgrading_buildings[passiveKind];
                 if (
@@ -795,7 +888,8 @@ type TutorialRenderContext = {
 
         if (guide.kind === "world" && guide.target === "upgrade_building") {
             const trigger = step.trigger || {};
-            const buildingKind = trigger.kind || { city_level: "City", port_level: "Port" }[trigger.type];
+            const buildingNames: Record<string, string> = { city_level: "City", port_level: "Port" };
+            const buildingKind = trigger.kind || buildingNames[String(trigger.type)];
             const anchors = ["structure_level", "city_level", "port_level"].includes(trigger.type)
                 ? tutorial.upgrading_buildings
                 : tutorial.upgrade_buildings;
@@ -887,10 +981,10 @@ type TutorialRenderContext = {
             const source = window.SOWCampaignView.resolveUiTarget(
                 guide.target,
                 document,
-                runtime.episodeId,
+                runtime.episodeId || undefined,
                 guideFacts,
             );
-            if (!source || source.disabled || source.getClientRects().length === 0) return null;
+            if (!source || source.matches(":disabled") || source.getClientRects().length === 0) return null;
             const spotlightPanel =
                 step.id === "boudica_transfer_send" && source.closest
                     ? (source.closest("#sow-hud-transfer") as HTMLElement | null)
@@ -906,10 +1000,10 @@ type TutorialRenderContext = {
                 step.trigger &&
                 step.trigger.type === "ui" &&
                 step.trigger.action === "attack_ratio" &&
-                source.tagName === "INPUT" &&
+                source instanceof HTMLInputElement &&
                 source.type === "range"
             ) {
-                const slider = source as HTMLInputElement;
+                const slider = source;
                 const sliderMin = Number(slider.min),
                     sliderMax = Number(slider.max);
                 const ratioTarget = sliderMin + (sliderMax - sliderMin) * Number(step.trigger.value || 1);
@@ -936,9 +1030,10 @@ type TutorialRenderContext = {
                 const destination = window.SOWCampaignView.resolveUiTarget(
                     guide.to,
                     document,
-                    runtime.episodeId,
+                    runtime.episodeId || undefined,
                 );
-                if (!destination || destination.disabled || !destination.getClientRects().length) return null;
+                if (!destination || destination.matches(":disabled") || !destination.getClientRects().length)
+                    return null;
                 const targetAnchor = window.SOWCampaignView.resolveUiAnchor(destination);
                 result.toX = targetAnchor.x;
                 result.toY = targetAnchor.y;
@@ -947,7 +1042,7 @@ type TutorialRenderContext = {
         return result;
     }
 
-    function revealGuidedUiTarget(step) {
+    function revealGuidedUiTarget(step: CampaignStep) {
         if (
             !step ||
             !step.guide ||
@@ -957,9 +1052,14 @@ type TutorialRenderContext = {
             typeof window.SOWCampaignView.resolveUiTarget !== "function"
         )
             return;
-        const target = window.SOWCampaignView.resolveUiTarget(step.guide.target, document, runtime.episodeId);
+        const target = window.SOWCampaignView.resolveUiTarget(
+            step.guide.target,
+            document,
+            runtime.episodeId || undefined,
+        );
         const strip = target && target.closest(".sow-hud__dock-actions");
-        if (!target || target.disabled || !strip || strip.scrollWidth <= strip.clientWidth + 1) return;
+        if (!target || target.matches(":disabled") || !strip || strip.scrollWidth <= strip.clientWidth + 1)
+            return;
         const stripRect = strip.getBoundingClientRect();
         const targetRect = target.getBoundingClientRect();
         if (targetRect.left >= stripRect.left && targetRect.right <= stripRect.right) {
@@ -970,7 +1070,7 @@ type TutorialRenderContext = {
         runtime.guidedScrollStepId = step.id;
     }
 
-    function syncTransferGuide(step) {
+    function syncTransferGuide(step: CampaignStep | null) {
         const highlightAmounts = Boolean(
             step && step.guide && step.guide.kind === "ui" && step.guide.target === "transfer_send",
         );
@@ -979,9 +1079,13 @@ type TutorialRenderContext = {
             ["transfer_troops", "transfer_gold", "transfer_send"].includes(guideTarget) &&
             window.SOWCampaignView &&
             typeof window.SOWCampaignView.resolveUiTarget === "function"
-                ? window.SOWCampaignView.resolveUiTarget(guideTarget, document, runtime.episodeId)
+                ? window.SOWCampaignView.resolveUiTarget(
+                      guideTarget,
+                      document,
+                      runtime.episodeId || undefined,
+                  )
                 : null;
-        let amountControls = [];
+        let amountControls: HTMLElement[] = [];
         if (
             highlightAmounts &&
             window.SOWCampaignView &&
@@ -989,9 +1093,13 @@ type TutorialRenderContext = {
         ) {
             amountControls = ["transfer_troops", "transfer_gold"]
                 .map(function (key) {
-                    return window.SOWCampaignView.resolveUiTarget(key, document, runtime.episodeId);
+                    return window.SOWCampaignView.resolveUiTarget(
+                        key,
+                        document,
+                        runtime.episodeId || undefined,
+                    );
                 })
-                .filter(Boolean);
+                .filter((input): input is HTMLElement => input !== null);
         }
         runtime.guidedAmountControls.forEach(function (input) {
             if (!amountControls.includes(input)) input.classList.remove("sow-tutorial-guide-target");
@@ -1007,18 +1115,19 @@ type TutorialRenderContext = {
         if (target) target.classList.add("sow-tutorial-guide-target");
     }
 
-    function campaignPlayer(hud, factionId) {
+    function campaignPlayer(hud: CampaignRecord | null, factionId: string) {
+        if (!hud) return null;
         return factionId === "player"
-            ? (hud.players || []).find(function (player) {
+            ? (hud.players || []).find(function (player: CampaignRecord) {
                   return player && player.is_me;
               })
             : factionId &&
-                  (hud.players || []).find(function (player) {
+                  (hud.players || []).find(function (player: CampaignRecord) {
                       return player && player.campaign_faction_id === factionId;
                   });
     }
 
-    function onMap(player) {
+    function onMap(player: CampaignRecord | null) {
         return Boolean(
             player &&
             player.is_alive === true &&
@@ -1028,7 +1137,7 @@ type TutorialRenderContext = {
     }
 
     // Narration shots run once per scene, from the speaker's land to the faction the scene is about.
-    function syncCameraShot(step, hud) {
+    function syncCameraShot(step: CampaignStep, hud: CampaignRecord) {
         const camera = step.camera;
         if (!camera || runtime.cameraShotStepId === step.id) return;
         const to = campaignPlayer(hud, camera.to);
@@ -1052,7 +1161,7 @@ type TutorialRenderContext = {
         }
     }
 
-    function markerTargetFor(step) {
+    function markerTargetFor(step: CampaignStep) {
         const facts =
             (runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.facts) || {};
         const eliminated = facts.eliminated_faction_ids || [];
@@ -1061,7 +1170,7 @@ type TutorialRenderContext = {
                 step.trigger.type === "contact"
                     ? facts.contact_faction_ids || []
                     : facts.defeated_faction_ids || [];
-            const remaining = step.trigger.targets.find(function (target) {
+            const remaining = step.trigger.targets.find(function (target: string) {
                 return !observed.includes(target) && !eliminated.includes(target);
             });
             if (remaining) return remaining;
@@ -1096,7 +1205,7 @@ type TutorialRenderContext = {
         return step.marker && !eliminated.includes(step.marker.target) ? step.marker.target : null;
     }
 
-    function update(hud) {
+    function update(hud: CampaignRecord | null) {
         if (
             !runtime.machine ||
             runtime.modalOpen ||
@@ -1146,7 +1255,7 @@ type TutorialRenderContext = {
         const hoverMatchesTarget =
             tutorialTargetHovered ||
             !hoverTarget ||
-            (hud.players || []).some(function (player) {
+            (hud.players || []).some(function (player: CampaignRecord) {
                 return (
                     player &&
                     Number(player.id) === hoveredEntityId &&
@@ -1242,7 +1351,7 @@ type TutorialRenderContext = {
             runtime.lastUnlockCommand = unlockCommandKey;
         }
         if (machineView.step) {
-            const visibleStep = runtime.definition.steps.find(function (step) {
+            const visibleStep = runtime.definition!.steps.find(function (step) {
                 return step.id === machineView.step.id;
             });
             if (visibleStep && runtime.analyticsStepId !== visibleStep.id) {
@@ -1278,7 +1387,7 @@ type TutorialRenderContext = {
             resolveReaction(machineView.reactionData, machineView.reactionTarget, null, hud);
         }
         if (machineView.reactionData && machineView.reactionTarget !== runtime.cameraReactionTarget) {
-            const faction = (hud.players || []).find(function (item) {
+            const faction = (hud.players || []).find(function (item: CampaignRecord) {
                 return item && item.campaign_faction_id === machineView.reactionTarget;
             });
             if (
@@ -1309,7 +1418,7 @@ type TutorialRenderContext = {
         }
         if (machineView.choices && machineView.choices.length) {
             const gold = availableGold(hud);
-            machineView.choices = machineView.choices.map(function (choice) {
+            machineView.choices = machineView.choices.map(function (choice: CampaignRecord) {
                 if (Number(choice.gold_cost || 0) <= 0) return choice;
                 return Object.assign({}, choice, {
                     gold_available: Math.max(0, gold),
@@ -1374,7 +1483,7 @@ type TutorialRenderContext = {
         syncTutorialPause(machineView);
         let markerId = null;
         const exchangeSpeaker =
-            machineView.exchange && runtime.definition.speakers[machineView.exchange.speaker];
+            machineView.exchange && runtime.definition!.speakers[machineView.exchange.speaker];
         const markerTarget = exchangeSpeaker
             ? exchangeSpeaker.faction || "player"
             : markerTargetFor(machineView.step);
@@ -1390,7 +1499,7 @@ type TutorialRenderContext = {
         revealGuidedUiTarget(machineView.step);
         if (!runtime.modalOpen) {
             if (machineView.waiting) {
-                runtime.view.render(null);
+                runtime.view!.render(null);
                 if (machineView.exchange) syncCameraShot(machineView.step, hud);
                 if (runtime.stepRevealStepId !== machineView.step.id) clearStepRevealTimer();
                 if (runtime.stepRevealTimer === null && typeof window.setTimeout === "function") {
@@ -1422,7 +1531,7 @@ type TutorialRenderContext = {
             } else {
                 clearStepRevealTimer();
                 const displayView = placementGuideView(machineView, hud);
-                runtime.view.render(
+                runtime.view!.render(
                     displayView,
                     renderContext(displayView.step, hud, anchorFor(displayView.step, hud), displayView),
                 );
@@ -1442,11 +1551,11 @@ type TutorialRenderContext = {
     // One emote path for every line: a named emote is shown over the speaker (the player, or the faction the
     // speaker plays) with its own line (pinned when emote_pinned), and "clear" releases the current one.
     // A step's or response's emote runs when it completes; exchange lines run as they play.
-    function applyStepEmote(step) {
+    function applyStepEmote(step: CampaignStep) {
         if (step.emote) applyEmote(step);
     }
 
-    function applyEmote(step) {
+    function applyEmote(step: CampaignStep) {
         const kind = step.emote === "clear" ? null : step.emote;
         const speaker =
             runtime.definition && runtime.definition.speakers && runtime.definition.speakers[step.speaker];
@@ -1466,7 +1575,7 @@ type TutorialRenderContext = {
         send("tutorial_emote", fields);
     }
 
-    function playExchangeLine(line, token) {
+    function playExchangeLine(line: CampaignRecord, token: string | number) {
         const hud = runtime.latestHud,
             tutorial = hud && hud.tutorial;
         const nativeToken = (Number(runtime.generation) || 0) + ":" + token;
@@ -1476,8 +1585,8 @@ type TutorialRenderContext = {
         if (!player || !onMap(player)) return "unavailable";
         const step = runtime.machine && runtime.machine.view().step;
         if (step && step.camera && runtime.cameraShotStepId !== step.id) return false;
-        if (tutorial.facts && tutorial.facts.machinima_active) return false;
-        if (tutorial.emote_token === nativeToken) return true;
+        if (tutorial!.facts && tutorial!.facts.machinima_active) return false;
+        if (tutorial!.emote_token === nativeToken) return true;
         if (runtime.exchangeFocusToken !== token) {
             runtime.exchangeFocusToken = token;
             send("set_tutorial_marker", { player_id: Number(player.id) });
@@ -1490,12 +1599,12 @@ type TutorialRenderContext = {
                 });
         }
         if (runtime.exchangeCue && runtime.exchangeCue.token === token) return "pending";
-        const nameplate = tutorial.target_nameplate;
+        const nameplate = tutorial!.target_nameplate;
         if (
-            Number(tutorial.marker_player_id) !== Number(player.id) ||
+            Number(tutorial!.marker_player_id) !== Number(player.id) ||
             !nameplate ||
             nameplate.offscreen ||
-            (tutorial.facts && tutorial.facts.machinima_active)
+            (tutorial!.facts && tutorial!.facts.machinima_active)
         )
             return false;
         runtime.exchangeCue = {
@@ -1503,13 +1612,13 @@ type TutorialRenderContext = {
             nativeToken: nativeToken,
             line: line,
             faction: faction,
-            session: Number(tutorial.campaign_session_id),
+            session: Number(tutorial!.campaign_session_id),
         };
         if (
             !send("tutorial_emote", {
                 kind: line.emote,
                 token: nativeToken,
-                campaign_session_id: runtime.exchangeCue.session,
+                campaign_session_id: runtime.exchangeCue!.session,
                 message: tr(line.emote_text_key),
                 ...(faction !== "player" ? { faction_id: faction } : {}),
             })
@@ -1520,7 +1629,7 @@ type TutorialRenderContext = {
         return false;
     }
 
-    function clearExchangeLine(line, token) {
+    function clearExchangeLine(line: CampaignRecord, token: string | number) {
         const cue = runtime.exchangeCue;
         if (!cue || cue.token !== token) return;
         send("tutorial_emote", {
@@ -1532,7 +1641,7 @@ type TutorialRenderContext = {
         runtime.exchangeCue = null;
     }
 
-    function completeCampaignReaction(reaction, target) {
+    function completeCampaignReaction(reaction: CampaignRecord, target: string) {
         if (reaction.when.type === "pre_defeat")
             send("continue_campaign_pre_defeat", {
                 faction_id: target,
@@ -1546,13 +1655,13 @@ type TutorialRenderContext = {
         if (runtime.machine.advance(null, step.id)) update(runtime.latestHud);
     }
 
-    function choose(choiceId) {
+    function choose(choiceId: string) {
         if (!runtime.machine) return;
         const model = runtime.machine.view();
         const step = model.step;
         const isDialogChoice = Boolean(model.reactionData || (step && step.type === "choice"));
         if (model.reactionData) {
-            let answer = (model.reactionData.choices || []).find(function (choice) {
+            let answer = (model.reactionData.choices || []).find(function (choice: CampaignRecord) {
                 return choice.id === choiceId;
             });
             if (!answer) return;
@@ -1560,7 +1669,7 @@ type TutorialRenderContext = {
                 answer.relation === "allied" &&
                 Number(answer.gold_cost || 0) > availableGold(runtime.latestHud)
             ) {
-                answer = (model.reactionData.choices || []).find(function (choice) {
+                answer = (model.reactionData.choices || []).find(function (choice: CampaignRecord) {
                     return choice.relation !== "allied" && Number(choice.gold_cost || 0) === 0;
                 });
                 if (!answer) return;
@@ -1574,15 +1683,20 @@ type TutorialRenderContext = {
         }
     }
 
-    function resolveReaction(reaction, targetName, choice, hud) {
+    function resolveReaction(
+        reaction: CampaignRecord,
+        targetName: string,
+        choice: CampaignRecord | null,
+        hud: CampaignRecord | null,
+    ) {
         const outcome = choice ? choice.relation : reaction.outcome;
         if (!outcome) return true;
         const key = reaction.id + "@" + targetName;
         if (runtime.resolvedReactions.has(key)) return true;
-        const target = ((hud && hud.players) || []).find(function (player) {
+        const target = ((hud && hud.players) || []).find(function (player: CampaignRecord) {
             return player && player.campaign_faction_id === targetName;
         });
-        const human = ((hud && hud.players) || []).find(function (player) {
+        const human = ((hud && hud.players) || []).find(function (player: CampaignRecord) {
             return player && player.is_me;
         });
         const goldCost = Number(choice ? choice.gold_cost || 0 : reaction.gold_cost || 0);
@@ -1606,19 +1720,19 @@ type TutorialRenderContext = {
         const target = markerTargetFor(step);
         const player =
             target === "player"
-                ? (hud.players || []).find(function (item) {
+                ? (hud.players || []).find(function (item: CampaignRecord) {
                       return item && item.is_me;
                   })
-                : (hud.players || []).find(function (item) {
+                : (hud.players || []).find(function (item: CampaignRecord) {
                       return item && item.campaign_faction_id === target;
                   });
         if (player) send("focus_player", { player_id: Number(player.id) });
     }
 
-    function syncTutorialPause(machineView) {
+    function syncTutorialPause(machineView: CampaignMachineView | null) {
         const paused = Boolean(machineView && machineView.paused);
-        const cameraOnly = paused && machineView.step.camera_only === true;
-        const pausedAction = paused ? machineView.paused_action || null : null;
+        const cameraOnly = Boolean(paused && machineView && machineView.step.camera_only === true);
+        const pausedAction = paused && machineView ? machineView.paused_action || null : null;
         if (
             paused !== runtime.uiPaused ||
             cameraOnly !== runtime.cameraOnly ||
@@ -1684,23 +1798,24 @@ type TutorialRenderContext = {
     );
     document.addEventListener("visibilitychange", function () {
         if (!runtime.machine) return;
-        runtime.machine.setPaused(Boolean(document.hidden) || runtime.modalOpen);
+        runtime.machine.setPaused(Boolean(document.hidden) || Boolean(runtime.modalOpen));
         clearStepRevealTimer();
         if (!document.hidden && !runtime.modalOpen && runtime.latestHud) update(runtime.latestHud);
     });
 
     if (hudRoot && typeof MutationObserver !== "undefined") {
         runtime.modalObserver = new MutationObserver(modalChanged);
-        runtime.modalObserver.observe(hudRoot, {
+        runtime.modalObserver!.observe(hudRoot, {
             subtree: true,
             attributes: true,
             attributeFilter: ["class"],
         });
     }
 
-    function recordUiAction(event) {
+    function recordUiAction(event: Event) {
         if (!runtime.machine) return;
-        if (root.contains(event.target)) return;
+        const eventTarget = event.target;
+        if (eventTarget instanceof Node && root.contains(eventTarget)) return;
         let changed = false;
         const currentStep = runtime.machine.view().step;
         Object.keys(window.SOWCampaign.UI_TARGETS).forEach(function (key) {
@@ -1715,14 +1830,19 @@ type TutorialRenderContext = {
                     currentStep.trigger.action === key)
             )
                 return;
-            const control = window.SOWCampaignView.resolveUiTarget(key, document, runtime.episodeId);
+            const control = window.SOWCampaignView.resolveUiTarget(
+                key,
+                document,
+                runtime.episodeId || undefined,
+            );
             const actionEvent = control && control.matches("input") ? "change" : "click";
             if (
                 event.type === actionEvent &&
                 control &&
-                !control.disabled &&
+                !control.matches(":disabled") &&
                 control.getClientRects().length &&
-                (control === event.target || control.contains(event.target))
+                eventTarget instanceof Node &&
+                (control === eventTarget || control.contains(eventTarget))
             ) {
                 if (
                     key === "attack_ratio" &&
@@ -1742,12 +1862,12 @@ type TutorialRenderContext = {
         document.addEventListener(type, recordUiAction, true);
     });
 
-    window.SOW_startCampaignEpisode = function (episodeId) {
+    window.SOW_startCampaignEpisode = function (episodeId: string) {
         startEpisode(episodeId, false);
     };
     window.SOW_watchCampaignCinematic = watchCampaignCinematic;
     window.SOW_tutorial_exit_context = tutorialExitContext;
-    window.SOW_tutorial_menu_state_update = function (state) {
+    window.SOW_tutorial_menu_state_update = function (state: CampaignRecord) {
         const phase = state && state.phase;
         if (phase !== "MainMenu") menuGuide.pause();
         if (phase === "MainMenu" && runtime.lastPhase !== "MainMenu" && !(state && state.boot_campaign)) {
@@ -1757,10 +1877,10 @@ type TutorialRenderContext = {
         if (state && state.boot_campaign && runtime.bootEpisode !== state.boot_campaign)
             startEpisode(state.boot_campaign, true);
     };
-    window.SOW_tutorial_camera_anchor_update = function (x, y) {
+    window.SOW_tutorial_camera_anchor_update = function (x: number, y: number) {
         if (runtime.view) runtime.view.updateCameraAnchor(Number(x), Number(y));
     };
-    window.SOW_tutorial_state_update = function (state) {
+    window.SOW_tutorial_state_update = function (state: CampaignRecord) {
         if (!state || state.phase !== "MainMenu") menuGuide.pause();
         const hud = state && state.phase === "Playing" ? state.hud : null;
         const tutorial = hud && hud.tutorial;

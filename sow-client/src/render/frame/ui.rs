@@ -274,6 +274,7 @@ impl SowApp {
             if self.ui.app.phase == ClientPhase::Playing {
                 let campaign_avatar_slots =
                     std::mem::take(&mut self.ui.app.asset_loader.campaign_avatar_slots);
+                let overlays_started_at = crate::diag::startup_perf_timer();
                 crate::render::world::render_overlays(
                     text,
                     &self.sim,
@@ -285,19 +286,34 @@ impl SowApp {
                     placement_can_confirm,
                     building_panel.as_ref(),
                 );
+                if let Some(started_at) = overlays_started_at {
+                    crate::diag::record_startup_perf(
+                        crate::diag::StartupMetric::WorldOverlays,
+                        started_at,
+                    );
+                }
                 self.ui.app.asset_loader.campaign_avatar_slots = campaign_avatar_slots;
             }
         }
+        let menu_publish_started_at = crate::diag::startup_perf_timer();
         crate::web_menu::publish_tutorial_camera_anchor_frame(self);
         if self.ui.app.phase == ClientPhase::Playing {
             crate::web_menu::publish_state(self);
             crate::web_menu::publish_hover_card(self);
+            crate::web_menu::publish_tutorial_pointer(self);
+        }
+        if let Some(started_at) = menu_publish_started_at {
+            crate::diag::record_startup_perf(
+                crate::diag::StartupMetric::MenuPublish,
+                started_at,
+            );
         }
 
         let Some(mut render_ctx) = self.gfx.render_ctx.take() else {
             return;
         };
         if let Some(text) = &mut self.gfx.text_renderer {
+            let text_draw_started_at = crate::diag::startup_perf_timer();
             text.draw(
                 &mut render_ctx.command_encoder,
                 frame.texture_view(),
@@ -305,9 +321,19 @@ impl SowApp {
                 &crate::theme::dev_config::DevConfig::get().shader_params,
                 &render_ctx.context,
             );
+            if let Some(started_at) = text_draw_started_at {
+                crate::diag::record_startup_perf(
+                    crate::diag::StartupMetric::TextDraw,
+                    started_at,
+                );
+            }
         }
         render_ctx.command_encoder.present(frame);
+        let submit_started_at = crate::diag::startup_perf_timer();
         let sync_point = render_ctx.context.submit(&mut render_ctx.command_encoder);
+        if let Some(started_at) = submit_started_at {
+            crate::diag::record_startup_perf(crate::diag::StartupMetric::GpuSubmit, started_at);
+        }
         self.net.load_telemetry.mark_gpu_upload_complete();
         self.gfx.prev_sync_point = Some(sync_point);
         self.gfx.render_ctx = Some(render_ctx);

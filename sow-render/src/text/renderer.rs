@@ -1261,6 +1261,51 @@ mod tests {
     use super::*;
 
     #[test]
+    fn generated_building_uvs_match_all_manifest_cells() {
+        let manifest: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../assets/generated/buildings-atlas.json"
+        ))
+        .expect("building atlas manifest is valid JSON");
+        assert_eq!(manifest["atlas_width"], 660);
+        assert_eq!(manifest["atlas_height"], 528);
+        assert_eq!(manifest["cell_size"], 128);
+
+        let kinds = [
+            (sow_core::game::BuildingKind::City, "City"),
+            (sow_core::game::BuildingKind::Factory, "Factory"),
+            (sow_core::game::BuildingKind::Farm, "Farm"),
+            (sow_core::game::BuildingKind::Port, "Port"),
+            (sow_core::game::BuildingKind::Tower, "Tower"),
+        ];
+        let mut cells = std::collections::HashSet::new();
+        for (kind, name) in kinds {
+            for level in 1..=4 {
+                let sprite = &manifest["sprites"][name][level.to_string()];
+                let x = sprite["x"].as_u64().expect("sprite x") as f32;
+                let y = sprite["y"].as_u64().expect("sprite y") as f32;
+                assert_eq!(sprite["width"], 128);
+                assert_eq!(sprite["height"], 128);
+                assert!(
+                    cells.insert((x as u32, y as u32)),
+                    "duplicate cell: {name} {level}"
+                );
+
+                let uv = building_sprite_uv(kind, level).expect("building sprite UV exists");
+                let expected = [
+                    x / 660.0,
+                    y / 528.0,
+                    (x + 128.0) / 660.0,
+                    (y + 128.0) / 528.0,
+                ];
+                for (actual, expected) in uv.into_iter().zip(expected) {
+                    assert!((actual - expected).abs() < f32::EPSILON, "{name} level {level}");
+                }
+            }
+        }
+        assert_eq!(cells.len(), 20);
+    }
+
+    #[test]
     fn troop_icon_keeps_atlas_rgb_and_uses_alpha_only() {
         assert_eq!(troop_icon_tint(1.0), [1.0, 1.0, 1.0, 1.0]);
         assert_eq!(troop_icon_tint(0.35), [1.0, 1.0, 1.0, 0.35]);

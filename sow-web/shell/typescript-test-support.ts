@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import * as path from "node:path";
 import * as nodeVm from "node:vm";
+import * as ts from "typescript";
 import campaignApi from "./sow-campaign.ts";
 import campaignViewApi from "./sow-campaign-view.ts";
 
@@ -12,13 +13,48 @@ function transpileTypeScript(source: string): string {
     return `var exports = globalThis;\n${transpiler.transformSync(source)}`;
 }
 
-function scriptSource(source: string): string {
+let scriptResultSequence = 0;
+
+function isSimpleResultExpression(expression: ts.Expression): boolean {
+    if (ts.isParenthesizedExpression(expression)) return isSimpleResultExpression(expression.expression);
+    return (
+        ts.isIdentifier(expression) ||
+        ts.isPropertyAccessExpression(expression) ||
+        ts.isObjectLiteralExpression(expression) ||
+        ts.isArrayLiteralExpression(expression) ||
+        ts.isFunctionExpression(expression) ||
+        ts.isArrowFunction(expression) ||
+        (ts.isCallExpression(expression) &&
+            (ts.isIdentifier(expression.expression) || ts.isPropertyAccessExpression(expression.expression)))
+    );
+}
+
+function scriptSource(source: string, resultKey: string) {
     try {
         new nodeVm.Script(source);
-        return source;
+        return { source, resultKey: null as string | null };
     } catch (error) {
         if (!(error instanceof SyntaxError)) throw error;
-        return transpileTypeScript(source);
+        const sourceFile = ts.createSourceFile("test-snippet.ts", source, ts.ScriptTarget.Latest, true);
+        const lastStatement = sourceFile.statements.at(-1);
+        let capturesResult = false;
+        if (
+            !sourceFile.parseDiagnostics.length &&
+            lastStatement &&
+            ts.isExpressionStatement(lastStatement) &&
+            isSimpleResultExpression(lastStatement.expression)
+        ) {
+            const expression = lastStatement.expression;
+            source =
+                source.slice(0, lastStatement.getStart(sourceFile)) +
+                `globalThis[${JSON.stringify(resultKey)}] = (${source.slice(expression.getStart(sourceFile), expression.end)});` +
+                source.slice(lastStatement.end);
+            capturesResult = true;
+        }
+        return {
+            source: transpileTypeScript(source),
+            resultKey: capturesResult ? resultKey : null,
+        };
     }
 }
 
@@ -126,7 +162,11 @@ function runInContext(source, context, options) {
     const raw = unwrapContext(context);
     const state = contexts.get(context) || contexts.get(raw);
     const before = state ? contextSnapshot(raw) : null;
-    const result = nodeVm.runInContext(scriptSource(source), raw, options);
+    const resultKey = `__sowVmResult${++scriptResultSequence}`;
+    const compiled = scriptSource(source, resultKey);
+    const scriptResult = nodeVm.runInContext(compiled.source, raw, options);
+    const result = compiled.resultKey ? raw[compiled.resultKey] : scriptResult;
+    if (compiled.resultKey) delete raw[compiled.resultKey];
     if (state) rememberGlobals(state, before);
     return result;
 }
@@ -141,7 +181,11 @@ function runInNewContext(source, sandbox = {}, options) {
           );
     const state = contexts.get(context) || trackContext(context);
     const before = contextSnapshot(context);
-    const result = nodeVm.runInContext(scriptSource(source), context, options);
+    const resultKey = `__sowVmResult${++scriptResultSequence}`;
+    const compiled = scriptSource(source, resultKey);
+    const scriptResult = nodeVm.runInContext(compiled.source, context, options);
+    const result = compiled.resultKey ? context[compiled.resultKey] : scriptResult;
+    if (compiled.resultKey) delete context[compiled.resultKey];
     rememberGlobals(state, before);
     return typeof result === "function" ? wrapFunction(state, result) : result;
 }
@@ -159,15 +203,22 @@ const vm = new Proxy(nodeVm, {
         if (property === "runInNewContext") return runInNewContext;
         if (property === "Script") {
             return class TypeScriptScript extends nodeVm.Script {
+                resultKey: string | null;
+
                 constructor(source, options) {
-                    super(scriptSource(source), options);
+                    const resultKey = `__sowVmScriptResult${++scriptResultSequence}`;
+                    const compiled = scriptSource(source, resultKey);
+                    super(compiled.source, options);
+                    this.resultKey = compiled.resultKey;
                 }
 
                 runInContext(context, options) {
                     const raw = unwrapContext(context);
                     const state = contexts.get(context) || contexts.get(raw);
                     const before = state ? contextSnapshot(raw) : null;
-                    const result = super.runInContext(raw, options);
+                    const scriptResult = super.runInContext(raw, options);
+                    const result = this.resultKey ? raw[this.resultKey] : scriptResult;
+                    if (this.resultKey) delete raw[this.resultKey];
                     if (state) rememberGlobals(state, before);
                     return result;
                 }

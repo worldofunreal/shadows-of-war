@@ -280,7 +280,14 @@ impl ApplicationHandler for SowApp {
             return;
         }
         if let winit::event::WindowEvent::RedrawRequested = event {
+            let render_started_at = crate::diag::startup_perf_timer();
             self.render_frame(event_loop);
+            if let Some(started_at) = render_started_at {
+                crate::diag::record_startup_perf(
+                    crate::diag::StartupMetric::RenderFrame,
+                    started_at,
+                );
+            }
         } else {
             self.handle_window_event(event_loop, event);
         }

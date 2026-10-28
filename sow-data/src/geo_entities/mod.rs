@@ -284,6 +284,9 @@ impl Cue {
 pub struct Hero {
     /// Short name. Saved as the key of each player's hero XP: never rename.
     pub name: String,
+    /// Art filenames; defaults to the catalog id.
+    #[serde(default)]
+    pub art_slug: Option<String>,
     pub ability: Ability,
     /// Additional tower-range bonus that can coexist with the hero's main ability.
     #[serde(default)]

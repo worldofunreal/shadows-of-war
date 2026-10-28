@@ -2,6 +2,38 @@ use crate::engine::SowEngine;
 use crate::game::{BuildingKind, GameEvent, GamePhase, UnitType};
 use crate::geo_entities::{Ability, District, Source};
 use crate::player::Leader;
+
+fn port_ship_spawn_tile(map: &crate::map::GameMap, port_tile: u32) -> Option<u32> {
+    if map.width == 0 || port_tile as usize >= map.terrain.len() {
+        return None;
+    }
+
+    let anchor_x = port_tile % map.width;
+    let anchor_y = port_tile / map.width;
+    let footprint = crate::building::BuildingFootprint::at(BuildingKind::Port, anchor_x, anchor_y);
+    let mut candidates = Vec::new();
+
+    for y in footprint.top..footprint.top + footprint.height as i32 {
+        for x in footprint.left..footprint.left + footprint.width as i32 {
+            if !map.is_valid_coord(x, y) {
+                continue;
+            }
+            map.for_each_neighbor(x as u32, y as u32, |nx, ny| {
+                if footprint.contains(nx as i32, ny as i32)
+                    || !map.terrain[map.ref_id(nx, ny)].is_water()
+                {
+                    return;
+                }
+                let dx = nx.abs_diff(anchor_x);
+                let dy = ny.abs_diff(anchor_y);
+                candidates.push((dx + dy, ny * map.width + nx));
+            });
+        }
+    }
+
+    candidates.into_iter().min().map(|(_, tile)| tile)
+}
+
 /// Advance construction timers; emits [`GameEvent::StructureReady`].
 /// Split out for unit tests (`advance_building_construction_tick`).
 impl SowEngine {
@@ -56,54 +88,45 @@ impl SowEngine {
         let mut new_fleets = Vec::new();
 
         for (port_id, queue) in self.port_queues.iter_mut() {
-            if let Some(prod) = queue.front_mut() {
-                if prod.ticks_until_complete > 0 {
-                    prod.ticks_until_complete -= 1;
-                }
-                if prod.ticks_until_complete == 0 {
-                    let prod = queue.pop_front().unwrap();
-                    if let Some(port) = self.buildings.iter().find(|b| b.id == *port_id) {
-                        let owner_id = port.owner_id;
-                        let src_tile = port.tile_idx;
-                        let map = &self.state.map;
-                        let x = src_tile % map.width;
-                        let y = src_tile / map.width;
-                        let mut spawn_tile = src_tile;
-                        let neighbors = [
-                            (x.wrapping_sub(1), y),
-                            (x + 1, y),
-                            (x, y.wrapping_sub(1)),
-                            (x, y + 1),
-                        ];
-                        for (nx, ny) in neighbors {
-                            if map.is_valid_coord(nx as i32, ny as i32) {
-                                let idx = ny * map.width + nx;
-                                if map.terrain[idx as usize].is_water() {
-                                    spawn_tile = idx;
-                                    break;
-                                }
-                            }
-                        }
-
-                        let fid = self.state.next_fleet_id;
-                        self.state.next_fleet_id = self.state.next_fleet_id.wrapping_add(1).max(1);
-                        let mut fleet = crate::warp_fleet::WarpFleet::new(
-                            fid,
-                            owner_id,
-                            0,
-                            prod.kind,
-                            prod.kind.max_health(), // Treat troops as health for ships
-                            (spawn_tile, spawn_tile),
-                            vec![],
-                        );
-                        fleet.set_speed_bonus_percent(crate::building::player_boat_speed_bonus(
-                            &self.buildings,
-                            owner_id,
-                        ));
-                        new_fleets.push(fleet);
-                    }
-                }
+            let Some(prod) = queue.front_mut() else {
+                continue;
+            };
+            prod.ticks_until_complete = prod.ticks_until_complete.saturating_sub(1);
+            if prod.ticks_until_complete > 0 {
+                continue;
             }
+
+            let Some(port) = self
+                .buildings
+                .iter()
+                .find(|building| building.id == *port_id)
+            else {
+                queue.pop_front();
+                continue;
+            };
+            let owner_id = port.owner_id;
+            let Some(spawn_tile) = port_ship_spawn_tile(&self.state.map, port.tile_idx) else {
+                // A legal port always touches water; leave the order queued if a
+                // malformed map or legacy save temporarily violates that rule.
+                continue;
+            };
+            let prod = queue.pop_front().expect("completed ship production exists");
+            let fid = self.state.next_fleet_id;
+            self.state.next_fleet_id = self.state.next_fleet_id.wrapping_add(1).max(1);
+            let mut fleet = crate::warp_fleet::WarpFleet::new(
+                fid,
+                owner_id,
+                0,
+                prod.kind,
+                prod.kind.max_health(), // Treat troops as health for ships
+                (spawn_tile, spawn_tile),
+                vec![],
+            );
+            fleet.set_speed_bonus_percent(crate::building::player_boat_speed_bonus(
+                &self.buildings,
+                owner_id,
+            ));
+            new_fleets.push(fleet);
         }
 
         for f in new_fleets {
@@ -429,6 +452,36 @@ pub(crate) mod tests {
             port_b_id: b,
             path: path.to_vec(),
         }
+    }
+
+    #[test]
+    fn warship_spawns_on_water_outside_the_complete_port_footprint() {
+        let width = 64;
+        let anchor_x = 20;
+        let anchor_y = 20;
+        let port_tile = anchor_y * width + anchor_x;
+        let water_tile = anchor_y * width + (anchor_x - 2);
+        let mut engine = engine_with_ports(&[port(1, 1, port_tile)], vec![]);
+        engine
+            .state
+            .map
+            .terrain
+            .fill(crate::map::MapTile::from_byte(0x80));
+        engine.state.map.terrain[water_tile as usize] = crate::map::MapTile::from_byte(0x20);
+        engine.port_queues.insert(
+            1,
+            std::collections::VecDeque::from([crate::game::ShipProduction {
+                kind: UnitType::Warship,
+                ticks_until_complete: 1,
+            }]),
+        );
+
+        engine.execute_ship_production();
+
+        assert_eq!(engine.fleets.len(), 1);
+        assert_eq!(engine.fleets[0].current_tile, water_tile);
+        assert_eq!(engine.fleets[0].unit_type, UnitType::Warship);
+        assert!(engine.state.map.terrain[engine.fleets[0].current_tile as usize].is_water());
     }
 
     #[test]

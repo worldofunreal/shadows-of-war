@@ -365,27 +365,28 @@ impl SowApp {
                         crate::store_portals::track_product_event("lobby_join_failed");
                         log::warn!("[JOIN] Failed: {}", fail.reason);
                         crate::store_portals::left_room();
-                        if fail.reason == "VERSION_MISMATCH" {
+                        let version_mismatch = fail.reason == "VERSION_MISMATCH";
+                        if version_mismatch {
                             log::info!("[JOIN] Version mismatch — prompting user to update...");
                             self.ui.update_available = true;
                         }
-                        self.ui.app.main_menu_state.is_waiting = false;
-                        self.ui.app.main_menu_state.pending_join_lobby_id = None;
-                        self.ui.app.main_menu_state.joined_lobby_id = None;
-                        self.ui.app.main_menu_state.is_lobby_host = false;
-                        self.ui.app.main_menu_state.my_player_id = None;
-                        self.ui.app.main_menu_state.in_private_match = false;
-                        self.ui.app.main_menu_state.error_message =
-                            Some(crate::ui::UiText::new("menu.connection_lost"));
-                        if fail.reason == "BANNED" {
-                            // Banned from that lobby — show the banned notice instead of
-                            // the raw connection-error modal.
-                            self.ui.app.main_menu_state.notice = Some(crate::LobbyNotice::Banned);
-                            self.ui.app.main_menu_state.notice_at = None;
+                        let menu = &mut self.ui.app.main_menu_state;
+                        menu.is_waiting = false;
+                        menu.pending_join_lobby_id = None;
+                        menu.joined_lobby_id = None;
+                        menu.is_lobby_host = false;
+                        menu.my_player_id = None;
+                        menu.in_private_match = false;
+                        if version_mismatch {
+                            menu.error_message = None;
+                            menu.notice = None;
+                        } else if fail.reason == "BANNED" {
+                            menu.error_message = None;
+                            menu.notice = Some(crate::LobbyNotice::Banned);
+                            menu.notice_at = None;
                         } else {
-                            self.ui.app.main_menu_state.notice =
-                                Some(crate::LobbyNotice::ConnectionLost);
-                            self.ui.app.main_menu_state.notice_at = None;
+                            menu.error_message = Some(crate::ui::UiText::new("menu.join_failed"));
+                            menu.notice = None;
                         }
                     }
                     ServerMessage::JoinAck(ack) => {

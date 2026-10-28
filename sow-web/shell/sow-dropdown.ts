@@ -1,7 +1,7 @@
 (function () {
     "use strict";
 
-    function escapeHtml(value) {
+    function escapeHtml(value: unknown) {
         return String(value == null ? "" : value)
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
@@ -10,7 +10,7 @@
             .replace(/'/g, "&#39;");
     }
 
-    window.SOW_renderDropdown = function (config) {
+    window.SOW_renderDropdown = function (config: Parameters<typeof SOW_renderDropdown>[0]) {
         const value = config.value == null ? "" : String(config.value);
         const options = config.options || [];
         const key = String(config.key);

@@ -4,6 +4,26 @@
 (function () {
     "use strict";
 
+    type LeaderArt = {
+        slug: string;
+        variant: string;
+        url: string;
+        image: HTMLImageElement;
+        ready: boolean;
+        promise: Promise<boolean>;
+    };
+    type LoaderState = {
+        loader_job?: string;
+        loader_leader?: unknown;
+        loader_info_leader?: unknown;
+        loader_show_hero_briefing?: boolean;
+        loader_cycle_id?: unknown;
+        loader_done?: boolean;
+        loader_progress?: unknown;
+        map_download_error?: boolean;
+        leaders?: { id?: unknown; slug?: unknown; art_slug?: unknown }[];
+    };
+
     const FADEOUT_MS = 250;
     const BAR_ASPECT = 2064 / 512;
     const MOBILE_BREAKPOINT = 600;
@@ -29,7 +49,7 @@
         },
     };
 
-    function assetPathVariants(file, folder?: string) {
+    function assetPathVariants(file: string, folder?: string) {
         folder = folder || "loader";
         const bootBase = window.SOW_BOOT_UI_BASE;
         if (bootBase && typeof bootBase === "string") {
@@ -48,7 +68,7 @@
         throw new Error("SOW_ASSETS_URL is not set; cannot resolve boot UI asset: " + file);
     }
 
-    function wireAssetFallback(img, file) {
+    function wireAssetFallback(img: HTMLImageElement, file: string) {
         const variants = assetPathVariants(file);
         let attempt = 0;
         img.onerror = function () {
@@ -59,9 +79,9 @@
         };
     }
 
-    function assetUrl(path) {
-        const versions = window.SOW_ASSET_TS || {};
-        let keyed;
+    function assetUrl(path: string) {
+        const versions: Record<string, string | undefined> = window.SOW_ASSET_TS || {};
+        let keyed: string | undefined;
         for (const root of ["/assets/", "/"]) {
             const at = path.indexOf(root);
             if (at >= 0) {
@@ -76,7 +96,7 @@
         return path;
     }
 
-    function leaderArtUrl(slug, variant) {
+    function leaderArtUrl(slug: string, variant?: string) {
         if (!/^[a-z0-9_]+$/.test(String(slug || ""))) return "";
         variant = variant || leaderArtVariant();
         if (variant !== "desktop" && variant !== "mobile") return "";
@@ -93,7 +113,7 @@
               : "desktop";
     }
 
-    function prepareLeaderArt(slug, fetchPriority) {
+    function prepareLeaderArt(slug: string, fetchPriority?: string) {
         slug = String(slug || "");
         if (!/^[a-z0-9_]+$/.test(slug)) return Promise.resolve(false);
 
@@ -107,11 +127,9 @@
         // so at Boot it must not compete with the WASM download; match
         // transitions do wait on it and keep the high priority.
         image.fetchPriority = fetchPriority === "low" ? "low" : "high";
-        const prepared = { slug, variant, url, image, ready: false, promise: null };
-        preparedLeaderArt = prepared;
-        prepared.promise = new Promise((resolve) => {
+        const promise = new Promise<boolean>((resolve) => {
             let settled = false;
-            const finish = (ready) => {
+            const finish = (ready: boolean) => {
                 if (settled) return;
                 settled = true;
                 image.onload = null;
@@ -140,7 +158,9 @@
             if (isCrossOriginAssetUrl(url)) image.crossOrigin = "anonymous";
             image.src = url;
         });
-        return prepared.promise;
+        const prepared: LeaderArt = { slug, variant, url, image, ready: false, promise };
+        preparedLeaderArt = prepared;
+        return promise;
     }
 
     function localizedLoaderText() {
@@ -155,7 +175,7 @@
         if (loaderText) loaderText.textContent = localizedLoaderText();
     }
 
-    function setLoaderMapError(state) {
+    function setLoaderMapError(state: LoaderState | null | undefined) {
         const box = document.getElementById("loader-map-error");
         const message = document.getElementById("loader-map-error-text");
         const retry = document.getElementById("loader-map-retry");
@@ -174,7 +194,7 @@
         }
     }
 
-    function isCrossOriginAssetUrl(url) {
+    function isCrossOriginAssetUrl(url: string) {
         try {
             const resolved = new URL(url, window.location.href);
             return resolved.origin !== window.location.origin;
@@ -184,7 +204,7 @@
     }
 
     /** Set src after crossOrigin so CDN boot art can be read in canvas (portal iframe). */
-    function setImgSrc(img, url) {
+    function setImgSrc(img: HTMLImageElement | null, url: string) {
         if (!img || !url) {
             return;
         }
@@ -196,15 +216,19 @@
         img.src = url;
     }
 
-    function replaceLoaderPicture(media, mobileUrl, preparedImage?) {
+    function replaceLoaderPicture(
+        media: string | null,
+        mobileUrl: string | null,
+        preparedImage?: HTMLImageElement,
+    ) {
         const picture = document.createElement("picture");
         picture.className = "splash-picture";
         let image = preparedImage;
         if (!image) {
             const source = document.createElement("source");
             source.id = "splash-mobile";
-            source.media = media;
-            source.srcset = mobileUrl;
+            source.media = media!;
+            source.srcset = mobileUrl!;
             picture.appendChild(source);
             image = document.createElement("img");
         }
@@ -217,20 +241,20 @@
 
         const previous = document.querySelector("#web-loader .splash-picture");
         if (previous && previous.parentNode) {
-            previous.parentNode.replaceChild(picture, previous);
+            previous.replaceWith(picture);
         } else if (root) {
             root.insertBefore(picture, root.firstChild);
         }
         return { picture, image };
     }
 
-    function clearLoaderPicture(key) {
+    function clearLoaderPicture(key: string | null) {
         const picture = document.querySelector("#web-loader .splash-picture");
         if (picture) picture.remove();
         loaderArtKey = key;
     }
 
-    function showBootSplash(key) {
+    function showBootSplash(key: string) {
         if (loaderReadyDispatched || !bootSplashPicture || !root) {
             clearLoaderPicture(key);
             return;
@@ -257,32 +281,48 @@
         loaderArtKey = "boot";
     }
 
-    function leaderSlugForState(state) {
+    function stateLeader(state: LoaderState | null | undefined) {
         const selected = String((state && state.loader_leader) || "");
-        if (selected === "random") return "random";
+        if (selected === "random") return null;
         const leaders = state && Array.isArray(state.leaders) ? state.leaders : [];
-        const leader = leaders.find(
+        return leaders.find(
             (entry) =>
                 String((entry && entry.id) || "") === selected ||
                 String((entry && entry.slug) || "") === selected,
         );
+    }
+
+    function leaderSlugForState(state: LoaderState | null | undefined) {
+        const selected = String((state && state.loader_leader) || "");
+        if (selected === "random") return "random";
+        const leader = stateLeader(state);
+        const slug =
+            leader && typeof leader.art_slug === "string"
+                ? leader.art_slug
+                : leader && typeof leader.slug === "string"
+                  ? leader.slug
+                  : "";
+        return /^[a-z0-9_]+$/.test(slug) ? slug : null;
+    }
+
+    function leaderIdSlugForState(state: LoaderState | null | undefined) {
+        const leader = stateLeader(state);
         const slug = leader && typeof leader.slug === "string" ? leader.slug : "";
         return /^[a-z0-9_]+$/.test(slug) ? slug : null;
     }
 
-    function loaderInfoSlug(state) {
+    function loaderInfoSlug(state: LoaderState | null | undefined) {
         const slug = String((state && state.loader_info_leader) || "");
         if (/^[a-z0-9_]+$/.test(slug)) return slug;
-        const artSlug = leaderSlugForState(state);
-        return artSlug && artSlug !== "random" ? artSlug : null;
+        return leaderIdSlugForState(state);
     }
 
-    function loaderCycleId(state) {
+    function loaderCycleId(state: LoaderState | null | undefined) {
         const value = state && state.loader_cycle_id;
-        return Number.isSafeInteger(value) && value >= 0 ? value : null;
+        return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
     }
 
-    function waitForExitLeaderArt(prepared, slug, cycleId) {
+    function waitForExitLeaderArt(prepared: LeaderArt, slug: string, cycleId: number | null) {
         if (pendingExitArt && pendingExitArt.prepared === prepared && pendingExitArt.cycleId === cycleId)
             return;
         pendingExitArt = { prepared, cycleId };
@@ -301,11 +341,11 @@
                 return;
             if (prepared.ready && activeMatchArt !== prepared && preparedLeaderArt !== prepared) return;
             const stillPending = syncLoaderArt(current);
-            if (current.loader_done === true && !stillPending) finish(cycleId);
+            if (current.loader_done === true && !stillPending && cycleId !== null) finish(cycleId);
         });
     }
 
-    function setLoaderInfo(state) {
+    function setLoaderInfo(state: LoaderState | null | undefined) {
         const box = document.getElementById("loader-ability");
         if (!box) return;
         if (
@@ -340,7 +380,7 @@
         box.hidden = false;
     }
 
-    function syncLoaderArt(state) {
+    function syncLoaderArt(state: LoaderState): LeaderArt | null {
         setLoaderInfo(state);
         if (loaderArtKey === "boot" && state && state.loader_job === "EnterGame") {
             const slug = leaderSlugForState(state);
@@ -401,7 +441,8 @@
         loaderArtKey = key;
         const cycleId = loaderCycleId(state);
         image.onerror = function () {
-            if (activeLoaderCycleId !== cycleId || completedLoaderCycleId >= cycleId) return;
+            if (cycleId === null || activeLoaderCycleId !== cycleId || completedLoaderCycleId >= cycleId)
+                return;
             if (preparedLeaderArt && preparedLeaderArt.image === image) preparedLeaderArt = null;
             if (activeMatchArt && activeMatchArt.image === image) activeMatchArt = null;
             if (loaderArtKey === key && document.querySelector("#web-loader .splash-picture") === picture) {
@@ -411,29 +452,29 @@
         return null;
     }
 
-    let root = null;
-    let barFill = null;
-    let barFull = null;
-    let loaderText = null;
+    let root: HTMLElement | null = null;
+    let barFill: HTMLElement | null = null;
+    let barFull: HTMLElement | null = null;
+    let loaderText: HTMLElement | null = null;
     let finishing = false;
     let rafId = 0;
     let finishTimer = 0;
-    let reportedProgress = null;
+    let reportedProgress: number | null = null;
     let initialized = false;
     let listenersBound = false;
     let mapRetryListenerBound = false;
     let loaderVisible = false;
     let loaderReadyDispatched = false;
-    let loaderArtKey = null;
-    let loaderBriefingKey = null;
-    let preparedLeaderArt = null;
-    let activeMatchArt = null;
+    let loaderArtKey: string | null = null;
+    let loaderBriefingKey: string | null = null;
+    let preparedLeaderArt: LeaderArt | null = null;
+    let activeMatchArt: LeaderArt | null = null;
     let activeLoaderCycleId = -1;
     let completedLoaderCycleId = -1;
     let finishingLoaderCycleId = -1;
-    let bootSplashPicture = null;
-    let latestLoaderState = null;
-    let pendingExitArt = null;
+    let bootSplashPicture: HTMLElement | null = null;
+    let latestLoaderState: LoaderState | null = null;
+    let pendingExitArt: { prepared: LeaderArt; cycleId: number | null } | null = null;
 
     function isMobile() {
         return window.innerWidth < MOBILE_BREAKPOINT;
@@ -446,17 +487,16 @@
         return "landscape";
     }
 
-    function layoutConfig(mode) {
+    function layoutConfig(mode: "portrait" | "landscape") {
         return LAYOUT[mode];
     }
 
-    function barWidthFor(mode, screenW) {
-        const cfg = layoutConfig(mode);
+    function barWidthFor(mode: "portrait" | "landscape", screenW: number) {
         if (mode === "portrait") {
-            const inner = Math.max(160, screenW - cfg.barSidePadPx * 2);
-            return inner * cfg.barWidthRatio;
+            const inner = Math.max(160, screenW - LAYOUT.portrait.barSidePadPx * 2);
+            return inner * LAYOUT.portrait.barWidthRatio;
         }
-        return Math.min(cfg.barMaxWidth, screenW * cfg.barWidthRatio);
+        return Math.min(LAYOUT.landscape.barMaxWidth, screenW * LAYOUT.landscape.barWidthRatio);
     }
 
     function stageSize() {
@@ -522,7 +562,7 @@
         const t0 = performance.now();
         const durationMs = 2500;
 
-        function tick(now) {
+        function tick(now: number) {
             if (!barFill || finishing) return;
             const t = Math.min(1, (now - t0) / durationMs);
             const eased = 1 - Math.pow(1 - t, 2);
@@ -591,17 +631,24 @@
             const splashImage = document.getElementById("splash-bg");
             if (!splashImage || !splashImage.getAttribute("src")) applySplashArt();
             else loaderArtKey = "boot";
-            if (!bootSplashPicture) bootSplashPicture = document.querySelector("#web-loader .splash-picture");
+            if (!bootSplashPicture)
+                bootSplashPicture = document.querySelector<HTMLElement>("#web-loader .splash-picture");
             setImgSrc(
-                document.getElementById("loader-bar-empty"),
+                document.getElementById("loader-bar-empty") as HTMLImageElement,
                 assetUrl(assetPathVariants("loader_empty.webp")[0]),
             );
             setImgSrc(
-                document.getElementById("loader-bar-full"),
+                document.getElementById("loader-bar-full") as HTMLImageElement,
                 assetUrl(assetPathVariants("loader_full.webp")[0]),
             );
-            wireAssetFallback(document.getElementById("loader-bar-empty"), "loader_empty.webp");
-            wireAssetFallback(document.getElementById("loader-bar-full"), "loader_full.webp");
+            wireAssetFallback(
+                document.getElementById("loader-bar-empty") as HTMLImageElement,
+                "loader_empty.webp",
+            );
+            wireAssetFallback(
+                document.getElementById("loader-bar-full") as HTMLImageElement,
+                "loader_full.webp",
+            );
         }
 
         layout();
@@ -625,7 +672,7 @@
         }
     }
 
-    function finish(cycleId) {
+    function finish(cycleId: number) {
         if (!root || !loaderVisible || cycleId !== activeLoaderCycleId || cycleId <= completedLoaderCycleId)
             return;
         if (finishing) return;
@@ -647,7 +694,12 @@
         root.style.transition = `opacity ${FADEOUT_MS}ms ease-out`;
         finishTimer = setTimeout(() => {
             finishTimer = 0;
-            if (root !== closingRoot || activeLoaderCycleId !== cycleId || finishingLoaderCycleId !== cycleId)
+            if (
+                !root ||
+                root !== closingRoot ||
+                activeLoaderCycleId !== cycleId ||
+                finishingLoaderCycleId !== cycleId
+            )
                 return;
             root.style.opacity = "0";
             root.style.visibility = "hidden";
@@ -674,7 +726,7 @@
         }, 160);
     }
 
-    function sync(state) {
+    function sync(state: LoaderState | null | undefined) {
         if (!state) return;
         const cycleId = loaderCycleId(state);
         if (cycleId === null || cycleId < activeLoaderCycleId || cycleId <= completedLoaderCycleId) return;

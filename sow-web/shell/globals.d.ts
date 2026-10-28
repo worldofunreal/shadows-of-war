@@ -12,9 +12,8 @@ type DropdownConfig = {
 };
 
 declare global {
-    const SOW_t: (key: string, ...args: unknown[]) => string;
+    const SOW_t: (key: string, values?: Record<string, unknown>) => string;
     const SOW_renderDropdown: (config: DropdownConfig) => string;
-    const module: { exports?: unknown };
 
     interface SowAuthState {
         linked?: boolean;
@@ -50,15 +49,6 @@ declare global {
         SOW_hudIcon: (name: string) => string;
         SOW_leaderArtUrl: (slug: string, variant?: string) => string;
         SOW_prepareLeaderArt: (slug: string, priority?: string) => Promise<boolean>;
-        SOWMenuFlow: {
-            create(): {
-                update(state: unknown, presentation: unknown): string;
-                canGuide(): boolean;
-                canPresent(): boolean;
-                takeDestination(): string | null;
-                phase(): string;
-            };
-        };
         SOW_menu_flow: { canGuide(): boolean };
         SOW_menu_guide: {
             update(state: unknown, facts?: unknown): void;
@@ -69,7 +59,8 @@ declare global {
         SOW_BLOCKED_IDS?: string[];
         SOW_onStateUpdate: (state: unknown) => void;
         SOW_hover_card_update: (raw: string) => void;
-        SOW_t: (key: string, ...args: unknown[]) => string;
+        SOW_tutorial_pointer_update: (raw: string) => void;
+        SOW_t: (key: string, values?: Record<string, unknown>) => string;
         SOW_assetUrl: (url: string) => string;
         SOW_menu_command: (message: string) => void;
         SOW_trackExperienceEvent: (payload: unknown) => void;
@@ -79,9 +70,9 @@ declare global {
         SOW_getLocale: () => string;
         SOW_getLocaleLabel: (locale: string) => string;
         SOW_getSupportedLocales: () => string[];
-        SOW_setLocale: (locale: string) => Promise<boolean>;
+        SOW_setLocale: (locale: string) => Promise<unknown>;
         SOW_tutorial_exit_context: (episodeId: string) => unknown;
-        SOW_pokiMeasure: (category: string, event: string, value?: number) => void;
+        SOW_pokiMeasure: (category: string, what?: string, action?: string) => void;
         SOW_portalCaptureExperienceEvent: (event: unknown) => void;
         SOW_analyticsTrack: (name: string, props?: unknown) => void;
         SOW_menu_music_cinematic: (active: boolean) => void;
@@ -99,45 +90,13 @@ declare global {
         SOW_PORTAL: string;
         SOW_SOURCE_URL: string;
         SOW_MENU_STATE: unknown;
-        SOW_I18N_READY: Promise<void>;
-    }
-
-    interface Element {
-        value: string;
-        checked: boolean;
-        dataset: DOMStringMap;
-        hidden: string | boolean;
-        src: string;
-        alt: string;
-        content: string;
-        name: string;
-        disabled: boolean;
-        open: boolean;
-        title: string;
-        type: string;
-        selectionStart: number | null;
-        selectionEnd: number | null;
-        style: CSSStyleDeclaration;
-        click(): void;
+        SOW_I18N_READY: Promise<unknown>;
     }
 
     interface HTMLElement {
         _shell?: HTMLElement | null;
         _shellWasInert?: boolean;
-        _restoreFocus?: Element | null;
-    }
-
-    interface EventTarget {
-        value: string;
-        checked: boolean;
-        dataset: DOMStringMap;
-        name: string;
-        style: CSSStyleDeclaration;
-        closest(selector: string): Element | null;
-        matches(selector: string): boolean;
-        focus(options?: FocusOptions): void;
-        blur(): void;
-        click(): void;
+        _restoreFocus?: HTMLElement | null;
     }
 
     interface Event {

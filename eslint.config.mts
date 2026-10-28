@@ -8,25 +8,11 @@ const toolFiles = ["sow-tools/**/*.ts", "sow-tools/**/*.mts"];
 const shellGlobals = {
   SOW_t: "readonly",
   SOW_renderDropdown: "readonly",
-  module: "writable",
 };
 
 export default defineConfig([
   {
-    ignores: [
-      "**/node_modules/**",
-      "**/target/**",
-      "**/dist/**",
-      "sow-web/shell/main_menu.core.ts",
-      "sow-web/shell/main_menu.motion.ts",
-      "sow-web/shell/main_menu.lobbies.ts",
-      "sow-web/shell/main_menu.store.ts",
-      "sow-web/shell/main_menu.heroes.ts",
-      "sow-web/shell/main_menu.profile.ts",
-      "sow-web/shell/main_menu.shell.ts",
-      "sow-web/shell/main_menu.poki.ts",
-      "sow-web/shell/main_menu.jest.ts",
-    ],
+    ignores: ["**/node_modules/**", "**/target/**", "**/dist/**"],
   },
   {
     files: [...webFiles, ...toolFiles],

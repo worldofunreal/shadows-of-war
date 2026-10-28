@@ -11,18 +11,22 @@
  * What we DO cache here:
  *   - index.html (network-first, fallback to cache offline)
  *   - The four loader webp graphics + sow.svg (precached on install)
+ *
+ * Compiled as a classic script by sow-dist (write_sw); `__BUILD_TS__` is
+ * replaced with the release build timestamp in the compiled output.
  */
+export {};
 
-const CACHE_NAME = 'sow-__BUILD_TS__';
+declare const self: ServiceWorkerGlobalScope;
+
+const CACHE_NAME = "sow-__BUILD_TS__";
 
 // Loader art is inlined in the boot HTML (splash) or fetched with a
 // content-hashed ?v= that the browser and CDN keep for a year; precaching it
 // here only made the install phase double-download it.
-const PRECACHE = [
-    './sow.svg',
-];
+const PRECACHE: readonly string[] = ["./sow.svg"];
 
-self.addEventListener('install', (event) => {
+self.addEventListener("install", (event) => {
     self.skipWaiting();
     event.waitUntil(
         (async () => {
@@ -31,48 +35,48 @@ self.addEventListener('install', (event) => {
             await Promise.allSettled(
                 PRECACHE.map((url) =>
                     cache.add(url).catch((e) => {
-                        console.warn('[sw] skip precache', url, e);
-                    })
-                )
+                        console.warn("[sw] skip precache", url, e);
+                    }),
+                ),
             );
-        })()
+        })(),
     );
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener("activate", (event) => {
     event.waitUntil(
         (async () => {
             const keys = await caches.keys();
             await Promise.all(
-                keys
-                    .filter((k) => k.startsWith('sow-') && k !== CACHE_NAME)
-                    .map((k) => caches.delete(k))
+                keys.filter((k) => k.startsWith("sow-") && k !== CACHE_NAME).map((k) => caches.delete(k)),
             );
             await self.clients.claim();
-        })()
+        })(),
     );
 });
 
-function isHtmlEntry(pathname) {
-    return pathname === '/' || pathname.endsWith('/index.html');
+function isHtmlEntry(pathname: string): boolean {
+    return pathname === "/" || pathname.endsWith("/index.html");
 }
 
-function isStaticUiAsset(pathname) {
-    return pathname.endsWith('/sow.svg') || pathname.endsWith('/sow-long.svg') || pathname.endsWith('/tower.svg');
-}
-
-function isCachedMapAsset(pathname) {
+function isStaticUiAsset(pathname: string): boolean {
     return (
-        pathname.includes('/assets/maps/') &&
-        (pathname.endsWith('/map.bin.br') ||
-            pathname.endsWith('/thumbnail.webp') ||
-            pathname.endsWith('/catalog.bin'))
+        pathname.endsWith("/sow.svg") || pathname.endsWith("/sow-long.svg") || pathname.endsWith("/tower.svg")
     );
 }
 
-self.addEventListener('fetch', (event) => {
+function isCachedMapAsset(pathname: string): boolean {
+    return (
+        pathname.includes("/assets/maps/") &&
+        (pathname.endsWith("/map.bin.br") ||
+            pathname.endsWith("/thumbnail.webp") ||
+            pathname.endsWith("/catalog.bin"))
+    );
+}
+
+self.addEventListener("fetch", (event) => {
     const req = event.request;
-    if (req.method !== 'GET') return;
+    if (req.method !== "GET") return;
 
     const url = new URL(req.url);
     if (url.origin !== self.location.origin) return;
@@ -80,12 +84,12 @@ self.addEventListener('fetch', (event) => {
     // CRITICAL: never intercept anything that could be a streaming WASM/JS
     // fetch. Let the browser handle those directly (HTTP cache works fine).
     if (
-        url.pathname.endsWith('.wasm') ||
-        url.pathname.endsWith('.wasm.br') ||
-        url.pathname.endsWith('.js') ||
-        url.pathname.endsWith('.js.br') ||
-        url.pathname.endsWith('.bin') ||
-        url.pathname.endsWith('.bin.br')
+        url.pathname.endsWith(".wasm") ||
+        url.pathname.endsWith(".wasm.br") ||
+        url.pathname.endsWith(".js") ||
+        url.pathname.endsWith(".js.br") ||
+        url.pathname.endsWith(".bin") ||
+        url.pathname.endsWith(".bin.br")
     ) {
         return;
     }
@@ -108,13 +112,13 @@ self.addEventListener('fetch', (event) => {
     // Everything else: pass through, no SW involvement.
 });
 
-async function cacheFirst(request) {
+async function cacheFirst(request: Request): Promise<Response> {
     const cache = await caches.open(CACHE_NAME);
     const cached = await cache.match(request);
     if (cached) return cached;
     try {
         const response = await fetch(request);
-        if (response.ok && response.type !== 'opaque') {
+        if (response.ok && response.type !== "opaque") {
             cache.put(request, response.clone()).catch(() => {});
         }
         return response;
@@ -125,10 +129,10 @@ async function cacheFirst(request) {
     }
 }
 
-async function networkFirst(request) {
+async function networkFirst(request: Request): Promise<Response> {
     try {
         const response = await fetch(request);
-        if (response.ok && response.type !== 'opaque') {
+        if (response.ok && response.type !== "opaque") {
             const cache = await caches.open(CACHE_NAME);
             cache.put(request, response.clone()).catch(() => {});
         }

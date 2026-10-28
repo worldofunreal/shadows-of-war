@@ -1,3 +1,235 @@
+import type {
+    HudAvatarIdentity,
+    HudCombatOperation,
+    HudDevTools,
+    HudInboxRequest,
+    HudLeaderboardPlayer,
+    HudMapFeedback,
+    HudMapMenu,
+    HudMapMenuItem,
+    HudNotification,
+    HudStateEnvelope,
+    HudDevParameter,
+    MenuHudPayload,
+    MenuLeader,
+    MenuSettings,
+} from "./main_menu.state.ts";
+
+type HudPanel = "leaderboard" | "inbox" | "settings" | null;
+type HudCommandValue = string | number | boolean | null | number[] | string[];
+type HudCommandPayload = Record<string, HudCommandValue>;
+type HudScreenSize = { width: number; height: number };
+type HudEndgameStats = NonNullable<MenuHudPayload["player_endgame_stats"]>;
+type HudEndgameRefs = Record<
+    "kills" | "assists" | "maxTerritory" | "goldReceived" | "troopsReceived",
+    HTMLElement | null
+>;
+type HudNotificationAvatar = { wrapper: HTMLElement; image: HTMLImageElement; emblem: HTMLElement };
+type HudNotificationCard = {
+    card: HTMLElement;
+    seal: HTMLElement;
+    avatars: HudNotificationAvatar[];
+    copy: HTMLElement;
+    renderKey: string;
+};
+type ActiveHudNotification = {
+    entry: HudNotification | HudMapFeedback;
+    priority: number;
+    group: string;
+    sumValues: boolean;
+    expiresAt: number;
+    createdAt: number;
+    totals: Record<string, number> | null;
+};
+type ActiveMapFeedback = { entry: HudMapFeedback; priority: number; expiresAt: number };
+type NotificationRenderItem = { entry: HudNotification | HudMapFeedback; priority: number };
+type PlayerIdentityParts = {
+    element: HTMLElement;
+    portrait: HTMLImageElement;
+    emblem: HTMLElement;
+    copy: HTMLElement;
+    name: HTMLElement;
+};
+type InboxRequestParts = PlayerIdentityParts & {
+    type: HTMLElement;
+    resources: HTMLElement;
+    amounts: Record<"gold" | "troops", { element: HTMLElement; value: HTMLElement }>;
+    accept: HTMLButtonElement;
+    reject: HTMLButtonElement;
+};
+type LeaderboardRow = {
+    card: HTMLElement;
+    rank: HTMLElement;
+    name: HTMLElement;
+    territory: HTMLElement;
+    troops: HTMLElement;
+    key: string;
+};
+type CombatOperationRow = {
+    element: HTMLElement;
+    portrait: HTMLImageElement;
+    emblem: HTMLElement;
+    glyph: HTMLElement;
+    name: HTMLElement;
+    details: HTMLElement;
+    detailsLabel: HTMLElement;
+    detailsSeparator: HTMLElement;
+    detailsEta: HTMLElement;
+    troops: HTMLElement;
+    actions: HTMLElement;
+    actionKey: string;
+};
+type RingEmote = NonNullable<MenuHudPayload["emotes"]>[number];
+type RingActionSlot = {
+    type: "action";
+    item: HudMapMenuItem;
+    presentation: { state: string; key: string; status: string; disabled: boolean } | null | undefined;
+};
+type HudActionReasonItem = Partial<HudMapMenuItem>;
+type RingSlot =
+    | RingActionSlot
+    | { type: "group"; group: "build" | "emote" }
+    | { type: "emote"; definition: RingEmote }
+    | { type: "pin"; enabled: boolean }
+    | { type: "clear" };
+type RingPress = { id: number | null; fromOpen: boolean };
+type RingHold = { index: number; started: number };
+type CompleteHudDevTools = HudDevTools & {
+    schema: NonNullable<HudDevTools["schema"]>;
+    groups: NonNullable<HudDevTools["groups"]>;
+};
+type HudRingState = Partial<
+    Pick<MenuHudPayload, "emotes" | "emote_active" | "emote_pinned" | "player_leader" | "gold">
+> & {
+    map_menu?: HudMapMenu | null;
+};
+type HudRefs = {
+    fps: HTMLElement;
+    ping: HTMLElement;
+    diagnostics: HTMLElement;
+    nameplate: HTMLElement;
+    plateAvatar: HTMLImageElement;
+    plateName: HTMLElement;
+    plateFill: HTMLElement;
+    plateTroops: HTMLElement;
+    plateGold: HTMLElement;
+    plateGoldWrap: HTMLElement;
+    plateGoldRate: HTMLElement;
+    plateTroopRate: HTMLElement;
+    inboxCount: HTMLElement;
+    hoverCard: HTMLElement;
+    hoverName: HTMLElement;
+    hoverPct: HTMLElement;
+    hoverTroops: HTMLElement;
+    hoverGold: HTMLElement;
+    hoverBlds: HTMLElement;
+    leftRail: HTMLElement;
+    slider: HTMLInputElement;
+    armyAllocation: HTMLElement;
+    armyRatio: HTMLElement;
+    rightRail: HTMLElement;
+    devSidebar: HTMLElement;
+    devBtn: HTMLElement;
+    settings: HTMLElement;
+    deployBtn: HTMLElement;
+    deployTimer: HTMLElement;
+    buildingsStrip: HTMLElement;
+    buildingButtons: HTMLButtonElement[];
+    fleetStrip: HTMLElement;
+    fleetTrade: HTMLElement;
+    fleetWarship: HTMLButtonElement;
+    fleetNuke: HTMLButtonElement;
+    panelButtons: HTMLButtonElement[];
+    leaderboard: HTMLElement;
+    rows: HTMLElement;
+    inbox: HTMLElement;
+    inboxRows: HTMLElement;
+    inboxClose: HTMLElement;
+    inboxButton: HTMLElement;
+    inboxTotal: HTMLElement;
+    inboxEmpty: HTMLElement;
+    inboxRequests: Record<string, InboxRequestParts>;
+    inboxRequestKeys: string[];
+    inboxRenderKey: string;
+    transfer: HTMLElement;
+    transferTarget: HTMLElement;
+    transferClose: HTMLElement;
+    transferReturnFocus: HTMLElement | null;
+    transferGold: HTMLInputElement;
+    transferTroops: HTMLInputElement;
+    transferIdentity: PlayerIdentityParts;
+    betrayal: HTMLElement;
+    betrayalTarget: HTMLElement;
+    betrayalCancel: HTMLElement;
+    betrayalReturnFocus: HTMLElement | null;
+    betrayalIdentity: PlayerIdentityParts;
+    surrender: HTMLElement;
+    surrenderTitle: HTMLElement;
+    surrenderDesc: HTMLElement;
+    surrenderStats: HTMLElement;
+    surrenderStatValues: HudEndgameRefs;
+    surrenderSaveNote: HTMLElement;
+    surrenderPortrait: HTMLImageElement;
+    surrenderCancel: HTMLElement;
+    surrenderActionLabel: HTMLElement;
+    endgame: HTMLElement;
+    endgameCard: HTMLElement;
+    endgameBanner: HTMLElement;
+    endgamePortrait: HTMLImageElement;
+    endgameStatValues: HudEndgameRefs;
+    endgameStore: HTMLElement;
+    endgameStoreName: HTMLElement;
+    endgameStoreCopy: HTMLElement;
+    endgameStoreAction: HTMLElement;
+    endgameObserve: HTMLButtonElement;
+    mapMenu: HTMLElement;
+    operations: HTMLElement;
+    operationRows: HTMLElement;
+    combatOperationRows: Record<string, CombatOperationRow>;
+    combatOperationsOrderKey: string;
+    notifications: HTMLDivElement;
+    topbar: HTMLElement;
+    dock: HTMLElement;
+    dockStack: HTMLElement;
+    mapFeedback: HTMLDivElement;
+};
+
+function requiredHudElement(id: string): HTMLElement {
+    const element = document.getElementById(id);
+    if (!(element instanceof HTMLElement)) throw new Error("Missing HUD element: " + id);
+    return element;
+}
+
+function requiredHudInput(id: string): HTMLInputElement {
+    const element = requiredHudElement(id);
+    if (!(element instanceof HTMLInputElement)) throw new Error("HUD element is not an input: " + id);
+    return element;
+}
+
+function requiredHudImage(id: string): HTMLImageElement {
+    const element = requiredHudElement(id);
+    if (!(element instanceof HTMLImageElement)) throw new Error("HUD element is not an image: " + id);
+    return element;
+}
+
+function requiredHudButton(id: string): HTMLButtonElement {
+    const element = requiredHudElement(id);
+    if (!(element instanceof HTMLButtonElement)) throw new Error("HUD element is not a button: " + id);
+    return element;
+}
+
+function requiredHudButtonQuery(root: ParentNode, selector: string): HTMLButtonElement {
+    const element = root.querySelector(selector);
+    if (!(element instanceof HTMLButtonElement)) throw new Error("Missing HUD button: " + selector);
+    return element;
+}
+
+function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
+    const element = root.querySelector(selector);
+    if (!(element instanceof HTMLElement)) throw new Error("Missing HUD element: " + selector);
+    return element;
+}
+
 (function () {
     "use strict";
 
@@ -6,61 +238,75 @@
     // ─────────────────────────────────────────────────────────
     const hudRoot = document.getElementById("sow-hud");
     let hudDevLayer = document.getElementById("sow-hud-dev-layer");
-    let hudState = null;
+    let hudState: HudStateEnvelope | null = null;
     let lastHudRaw = "";
-    let activeHudPanel = null;
+    let hudScreenSize: HudScreenSize | null = null;
+    let activeHudPanel: HudPanel = null;
     let betrayalOpen = false;
     let emoteTextKey = "";
-    let emoteTextTarget = null;
+    let emoteTextTarget: Window["SOW_menu_command"] | null = null;
     let hudSafeArea = [0, 0, 0, 0];
     let surrenderModalOpen = false;
-    let surrenderMessage = null;
+    let surrenderMessage: string | null = null;
     let devSidebarOpen = false;
     let devToolsSchemaKey = "";
     let devTab = "";
-    let devControlIndex = Object.create(null);
+    let devControlIndex: Record<string, HTMLElement> = Object.create(null);
     let devStepTimer = 0;
     let devResetTimer = 0;
 
     let hudInitialized = false;
     let hudRefs: ReturnType<typeof createHudRefs> | null = null;
-    let leaderboardRows = Object.create(null);
+    let leaderboardRows: Record<string, LeaderboardRow> = Object.create(null);
     let leaderboardRenderKey = "";
-    let pendingCounterAttacks = Object.create(null);
-    let lastLeaderboardPlayers = [];
+    let pendingCounterAttacks: Record<string, number> = Object.create(null);
+    let lastLeaderboardPlayers: HudLeaderboardPlayer[] = [];
     let notificationCursor = 0;
-    let notificationTimer = null;
-    let activeNotifications = [];
-    let notificationCards = [];
+    let notificationTimer: number | null = null;
+    let activeNotifications: ActiveHudNotification[] = [];
+    let notificationCards: HudNotificationCard[] = [];
     let notificationLayoutFrame = 0;
-    let notificationResizeObserver = null;
-    let notificationMutationObserver = null;
+    let notificationResizeObserver: ResizeObserver | null = null;
+    let notificationMutationObserver: MutationObserver | null = null;
     let notificationLayoutStarted = false;
-    let notificationLayoutStory = null;
-    let notificationLayoutObjective = null;
-    let notificationLayoutNameplate = null;
-    let notificationLayoutNotifications = null;
+    let notificationLayoutStory: HTMLElement | null = null;
+    let notificationLayoutObjective: HTMLElement | null = null;
+    let notificationLayoutNameplate: HTMLElement | null = null;
+    let notificationLayoutNotifications: HTMLElement | null = null;
     let notificationLayoutState = "";
     let mapFeedbackCursor = 0;
-    let mapFeedbackTimer = null;
-    let activeMapFeedback = null;
-    let mapFeedbackCard = null;
+    let mapFeedbackTimer: number | null = null;
+    let activeMapFeedback: ActiveMapFeedback | null = null;
+    let mapFeedbackCard: HudNotificationCard | null = null;
+    const avatarIdentityKeys = new WeakMap<HTMLImageElement, string>();
     const MAP_FEEDBACK_DURATION_MS = 2000;
     const MAP_FEEDBACK_FADE_OUT_MS = 180;
-    let mapMenuView = "root";
+    let mapMenuView: "root" | "build" | "emote" = "root";
     const ring = {
         session: "",
         hot: -1,
-        slots: [],
-        press: null,
-        hold: null,
+        slots: [] as (RingSlot | null)[],
+        press: null as RingPress | null,
+        hold: null as RingHold | null,
         holdConfirmed: false,
         pointerDown: false,
-        pointerId: null,
+        pointerId: null as number | null,
     };
     const allocationHoverNone = window.matchMedia ? window.matchMedia("(hover: none)") : null;
     let lastAllocationKey = "";
-    const EMPTY_CAMPAIGN_UNLOCKS = { buildings: {}, actions: [] };
+    const EMPTY_CAMPAIGN_UNLOCKS: { buildings: Record<string, number>; actions: string[] } = {
+        buildings: {},
+        actions: [],
+    };
+    const DEFAULT_HUD_SETTINGS: MenuSettings = {
+        mute_all: false,
+        music_volume: 0.8,
+        reduced_motion: false,
+        free_zoom_out: false,
+        show_fps_ping: false,
+        show_dev_tools: false,
+        show_dev_tools_available: false,
+    };
 
     const surrenderMessageKeys = [
         "endgame.match_message_1",
@@ -70,7 +316,7 @@
         "endgame.match_message_5",
     ];
 
-    function send(type, extra?) {
+    function send(type: string, extra?: HudCommandPayload): boolean {
         if (typeof window.SOW_menu_command !== "function") return false;
         const command = Object.assign({ type: type }, extra || {});
         window.SOW_menu_command(JSON.stringify(command));
@@ -93,7 +339,7 @@
         syncEmoteTexts(hudState && hudState.hud);
     }
 
-    function syncEmoteTexts(hud) {
+    function syncEmoteTexts(hud: MenuHudPayload | null | undefined) {
         if (!hud || !Array.isArray(hud.emotes) || hud.emotes.length !== 4) return;
         const texts = hud.emotes.map(function (definition) {
             return SOW_t(definition.bubble_key);
@@ -107,7 +353,7 @@
         }
     }
 
-    function setHudPanel(panel) {
+    function setHudPanel(panel: HudPanel) {
         const previous = activeHudPanel;
         const next = previous === panel ? null : panel;
         if (previous === "leaderboard" && next !== previous) send("toggle_leaderboard");
@@ -121,26 +367,26 @@
         if (next === "inbox") send("toggle_inbox");
     }
 
-    function asset(path) {
+    function asset(path: string): string {
         const base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
         const url = base + "/" + path.split("/").map(encodeURIComponent).join("/");
         return window.SOW_assetUrl ? window.SOW_assetUrl(url) : url;
     }
 
-    function currencyAsset(kind) {
+    function currencyAsset(kind: string): string {
         return asset("gameplay/currency/" + kind + ".webp");
     }
 
     // One icon per concept: painted art for resources, the shared pixel
     // atlases for relationships and buildings, white glyphs for actions.
-    const HUD_ICONS = {
+    const HUD_ICONS: Record<string, string> = {
         troops: "gameplay/icons/battle_icon_cutout.webp",
         gold: "gameplay/currency/gold.webp",
         surrender: "gameplay/icons/surrender_flag.webp",
     };
 
     // Cell order of the badge strip packed from assets/art/icons (assets/generated/badges-atlas.json).
-    const STATUS_CELLS = [
+    const STATUS_CELLS: string[] = [
         "request",
         "allied",
         "traitor",
@@ -170,7 +416,7 @@
         "speed",
     ];
 
-    const BUILDING_GLYPHS = {
+    const BUILDING_GLYPHS: Record<string, string> = {
         city: "city",
         factory: "factory",
         port: "anchor",
@@ -178,7 +424,7 @@
         farm: "farm",
     };
 
-    const HUD_GLYPHS = {
+    const HUD_GLYPHS: Record<string, string> = {
         plus: '<path d="M12 4v16M4 12h16"/>',
         minus: '<path d="M4 12h16"/>',
         inbox: '<path d="M4 4h16v16H4zM4 13h4l2 3h4l2-3h4M4 7l8 6 8-6"/>',
@@ -212,7 +458,7 @@
         solo: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
     };
 
-    function hudIcon(name, cls?) {
+    function hudIcon(name: string, cls?: string): string {
         const glyph = HUD_GLYPHS[BUILDING_GLYPHS[name] || name];
         if (glyph)
             return (
@@ -235,11 +481,11 @@
     }
 
     // The menu shares the same line icons (lock, dice, settings...).
-    window.SOW_hudIcon = function (name) {
+    window.SOW_hudIcon = function (name: string) {
         return hudIcon(name, "sow-menu__inline-icon");
     };
 
-    function statusIcon(kind, cls) {
+    function statusIcon(kind: string, cls?: string): string {
         const style =
             "background-image:url(&quot;" +
             escapeHudText(asset("gameplay/icons/nameplate_status_atlas.webp")) +
@@ -259,11 +505,11 @@
         );
     }
 
-    function formatEndgameExact(value) {
+    function formatEndgameExact(value: number | string | null | undefined): string {
         return String(Math.max(0, Math.trunc(Number(value) || 0)));
     }
 
-    function formatEndgameCompact(value) {
+    function formatEndgameCompact(value: number | string | null | undefined): string {
         const amount = Number(value);
         if (!Number.isFinite(amount) || amount <= 0) return "0";
         if (amount < 1000) return String(Math.round(amount));
@@ -274,7 +520,7 @@
         return String(rounded).replace(/\.0$/, "") + suffix;
     }
 
-    function endgameStatsMarkup(prefix) {
+    function endgameStatsMarkup(prefix: string): string {
         return (
             '<div class="sow-hud__endgame-stats" id="sow-hud-' +
             prefix +
@@ -318,7 +564,7 @@
         );
     }
 
-    function endgameStatRefs(prefix) {
+    function endgameStatRefs(prefix: string): HudEndgameRefs {
         return {
             kills: document.getElementById("sow-hud-" + prefix + "-kills"),
             assists: document.getElementById("sow-hud-" + prefix + "-assists"),
@@ -328,7 +574,7 @@
         };
     }
 
-    function renderEndgameStats(refs, stats) {
+    function renderEndgameStats(refs: HudEndgameRefs, stats: HudEndgameStats | null | undefined): void {
         stats = stats || {};
         if (refs.kills) refs.kills.textContent = formatEndgameExact(stats.kills);
         if (refs.assists) refs.assists.textContent = formatEndgameExact(stats.assists);
@@ -338,7 +584,7 @@
             refs.troopsReceived.textContent = formatEndgameCompact(stats.troops_received);
     }
 
-    function buildingIcon(kind, level?, cls?) {
+    function buildingIcon(kind: string, level?: number, cls?: string): string {
         const name = String(kind || "");
         const art = window.SOW_BUILDING_ART;
         const canonical = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
@@ -381,7 +627,7 @@
     }
 
     // Ships and nukes use the same pixel-art path as buildings, at the same size.
-    function unitIcon(name) {
+    function unitIcon(name: string): string {
         return (
             '<span class="sow-hud__building-icon is-pixel-art" style="background-image:url(&quot;' +
             escapeHudText(asset("gameplay/units/" + name + ".png")) +
@@ -390,7 +636,7 @@
     }
 
     // Gold price row under the art. Unpriced tiles keep the empty row so every tile lines up.
-    function tileCost(priced) {
+    function tileCost(priced: boolean): string {
         return (
             '<span class="sow-hud__tile-cost">' +
             (priced ? hudIcon("gold", "sow-hud__tile-cost-icon") + "<b></b>" : "") +
@@ -406,13 +652,13 @@
         );
     }
 
-    function setTileCost(tile, cost) {
+    function setTileCost(tile: HTMLElement, cost: number): void {
         const label = tile.querySelector(".sow-hud__tile-cost b");
         const text = cost > 0 ? formatHudMetric(cost) : "";
         if (label && label.textContent !== text) label.textContent = text;
     }
 
-    function leaderById(id) {
+    function leaderById(id: string | null | undefined): MenuLeader {
         const leaders = hudState && Array.isArray(hudState.leaders) ? hudState.leaders : [];
         const found = leaders.find(function (leader) {
             return leader.id === id;
@@ -431,14 +677,14 @@
         return leaders[0] || { id: "Caesar", name: "Caesar", slug: "caesar" };
     }
 
-    function formatNameplateTroops(value) {
+    function formatNameplateTroops(value: number | string | null | undefined): string {
         const count = Math.max(0, Math.floor(Number(value) || 0));
         if (count < 100000) return count.toLocaleString();
         const useMillions = count >= 999950;
         return (count / (useMillions ? 1000000 : 1000)).toFixed(1) + (useMillions ? "M" : "K");
     }
 
-    function formatHudMetric(value) {
+    function formatHudMetric(value: number | string | null | undefined): string {
         const amount = Number(value);
         if (!Number.isFinite(amount)) return "0";
         const abs = Math.abs(amount);
@@ -448,12 +694,19 @@
         return amount.toLocaleString(undefined, { maximumFractionDigits: 1 });
     }
 
-    function formatHudRate(value) {
+    function formatHudRate(value: number | string | null | undefined): string {
         const amount = Number(value) || 0;
         return (amount > 0 ? "+" : "") + formatHudMetric(amount) + "/s";
     }
 
-    function notificationAnchor(storyRoot, objective, nameplate, gap) {
+    function notificationAnchor(
+        storyRoot: HTMLElement | null,
+        objective: HTMLElement | null,
+        nameplate: HTMLElement | null,
+        gap: number,
+    ):
+        | { source: "objective" | "nameplate"; left: number; right: number; top: number }
+        | { source: "safe"; left: null; right: null; top: null } {
         if (storyRoot && !storyRoot.hidden && objective && !objective.hidden) {
             const objectiveRect = objective.getBoundingClientRect();
             if (objectiveRect.width > 0 && objectiveRect.height > 0) {
@@ -489,7 +742,7 @@
 
     function observeNotificationAnchors() {
         const story = document.getElementById("sow-story");
-        const objective = story && story.querySelector(".sow-story__objective");
+        const objective = story && story.querySelector<HTMLElement>(".sow-story__objective");
         const nameplate = hudRefs && hudRefs.nameplate;
         if (
             story === notificationLayoutStory &&
@@ -598,12 +851,12 @@
         if (!hudRefs || !hudRefs.notifications) return;
         const notifications = hudRefs.notifications;
         const story = document.getElementById("sow-story");
-        const objective = story && story.querySelector(".sow-story__objective");
+        const objective = story && story.querySelector<HTMLElement>(".sow-story__objective");
         const anchor = notificationAnchor(story, objective, hudRefs.nameplate, 12);
         let inlineStart = null;
         if (anchor.source !== "safe") {
             const direction = window.getComputedStyle
-                ? window.getComputedStyle(hudRoot).direction
+                ? window.getComputedStyle(hudRoot!).direction
                 : document.documentElement.dir;
             inlineStart = direction === "rtl" ? window.innerWidth - anchor.right : anchor.left;
             const fallbackWidth = Math.min(
@@ -627,7 +880,7 @@
         const hasVisibleNotification = notificationCards.some(function (parts) {
             return parts && parts.card && !parts.card.hidden;
         });
-        if (hasVisibleNotification && !hudRoot.classList.contains("is-reduced-motion")) {
+        if (hasVisibleNotification && !hudRoot!.classList.contains("is-reduced-motion")) {
             notifications.classList.remove("is-reanchoring");
             void notifications.offsetWidth;
             notifications.classList.add("is-reanchoring");
@@ -636,110 +889,102 @@
         }
     }
 
-    function createHudRefs() {
-        return Object.assign(
-            {
-                fps: document.getElementById("sow-hud-fps"),
-                ping: document.getElementById("sow-hud-ping"),
-                diagnostics: hudRoot.querySelector(".sow-hud__diagnostics"),
-                nameplate: document.getElementById("sow-hud-nameplate"),
-                plateAvatar: document.getElementById("sow-hud-nameplate-avatar"),
-                plateName: document.getElementById("sow-hud-nameplate-name"),
-                plateFill: document.getElementById("sow-hud-nameplate-fill"),
-                plateTroops: document.getElementById("sow-hud-nameplate-troops"),
-                plateGold: document.getElementById("sow-hud-nameplate-gold"),
-                plateGoldWrap: hudRoot.querySelector(".sow-hud__nameplate-stat--gold"),
-                plateGoldRate: document.getElementById("sow-hud-nameplate-gold-rate"),
-                plateTroopRate: document.getElementById("sow-hud-nameplate-troop-rate"),
-                inboxCount: document.getElementById("sow-hud-inbox-count"),
-                hoverCard: document.getElementById("sow-hud-hover-card"),
-                hoverName: document.getElementById("sow-hud-hover-name"),
-                hoverPct: document.getElementById("sow-hud-hover-pct"),
-                hoverTroops: document.getElementById("sow-hud-hover-troops"),
-                hoverGold: document.getElementById("sow-hud-hover-gold"),
-                hoverBlds: document.getElementById("sow-hud-hover-blds"),
-                leftRail: document.getElementById("sow-hud-left-rail"),
-                slider: document.getElementById("sow-hud-slider"),
-                armyAllocation: document.getElementById("sow-hud-army-allocation"),
-                armyRatio: document.getElementById("sow-hud-army-ratio"),
-                rightRail: document.getElementById("sow-hud-right-rail"),
-                devSidebar: document.getElementById("sow-hud-dev-sidebar"),
-                devBtn: document.getElementById("sow-hud-dev-btn"),
-                settings: document.getElementById("sow-hud-settings"),
-                deployBtn: document.getElementById("sow-hud-deploy-btn"),
-                deployTimer: document.getElementById("sow-hud-deploy-timer"),
-                buildingsStrip: document.getElementById("sow-hud-buildings-strip"),
-                buildingButtons: Array.from(
-                    hudRoot.querySelectorAll<HTMLElement>("[data-command='select_building']"),
-                ),
-                fleetStrip: document.getElementById("sow-hud-fleet-strip"),
-                fleetTrade: hudRoot.querySelector("[data-fleet-kind='trade']"),
-                fleetWarship: hudRoot.querySelector("[data-fleet-kind='warship']"),
-                fleetNuke: hudRoot.querySelector("[data-fleet-kind='nuke']"),
-                panelButtons: Array.from(
-                    hudRoot.querySelectorAll<HTMLElement>(".sow-hud__topbar [data-command^='toggle_']"),
-                ),
-                leaderboard: document.getElementById("sow-hud-leaderboard"),
-                rows: document.getElementById("sow-hud-lb-rows"),
-                inbox: document.getElementById("sow-hud-inbox"),
-                inboxRows: document.getElementById("sow-hud-inbox-rows"),
-                inboxClose: document.getElementById("sow-hud-inbox-close"),
-                inboxButton: hudRoot.querySelector(".sow-hud__inbox-pill"),
-                inboxTotal: document.getElementById("sow-hud-inbox-total"),
-                inboxEmpty: document.getElementById("sow-hud-inbox-empty"),
-                inboxRequests: Object.create(null) as Record<string, ReturnType<typeof createInboxRequest>>,
-                inboxRequestKeys: [],
-                inboxRenderKey: "",
-                transfer: document.getElementById("sow-hud-transfer"),
-                transferTarget: document.getElementById("sow-hud-transfer-target"),
-                transferClose: document.getElementById("sow-hud-transfer-close"),
-                transferReturnFocus: null,
-                transferGold: document.getElementById("sow-hud-transfer-gold"),
-                transferTroops: document.getElementById("sow-hud-transfer-troops"),
-                betrayal: document.getElementById("sow-hud-betrayal-modal"),
-                betrayalTarget: document.getElementById("sow-hud-betrayal-target"),
-                betrayalCancel: document.getElementById("sow-hud-betrayal-cancel"),
-                betrayalReturnFocus: null,
-                surrender: document.getElementById("sow-hud-surrender-modal"),
-                surrenderTitle: document.getElementById("sow-hud-surrender-title"),
-                surrenderDesc: document.getElementById("sow-hud-surrender-desc"),
-                surrenderStats: document.getElementById("sow-hud-surrender-stats"),
-                surrenderStatValues: endgameStatRefs("surrender"),
-                surrenderSaveNote: document.getElementById("sow-hud-surrender-save-note"),
-                surrenderPortrait: document.getElementById("sow-hud-surrender-portrait"),
-                surrenderCancel: document.getElementById("sow-hud-surrender-cancel"),
-                surrenderActionLabel: document.getElementById("sow-hud-surrender-action-label"),
-                endgame: document.getElementById("sow-hud-endgame-modal"),
-                endgameCard: document.querySelector("#sow-hud-endgame-modal .sow-hud__endgame-card"),
-                endgameBanner: document.getElementById("sow-hud-endgame-banner"),
-                endgamePortrait: document.getElementById("sow-hud-endgame-portrait"),
-                endgameStatValues: endgameStatRefs("endgame"),
-                endgameStore: document.getElementById("sow-hud-endgame-store"),
-                endgameStoreName: document.getElementById("sow-hud-endgame-store-name"),
-                endgameStoreCopy: document.getElementById("sow-hud-endgame-store-copy"),
-                endgameStoreAction: document.getElementById("sow-hud-endgame-store-action"),
-                endgameObserve: document.getElementById("sow-hud-endgame-observe"),
-                mapMenu: document.getElementById("sow-hud-map-menu"),
-                operations: document.getElementById("sow-hud-operations"),
-                operationRows: document.getElementById("sow-hud-operations-list"),
-                combatOperationRows: Object.create(null) as Record<
-                    string,
-                    ReturnType<typeof createCombatOperationRow>
-                >,
-                combatOperationsOrderKey: "",
-                notifications: document.createElement("div"),
-                topbar: hudRoot.querySelector(".sow-hud__topbar"),
-                dock: document.getElementById("sow-hud-dock"),
-                dockStack: document.getElementById("sow-hud-dock-stack"),
-                mapFeedback: document.createElement("div"),
-            },
-            {
-                transferIdentity: null as ReturnType<typeof createPlayerIdentity> | null,
-                betrayalIdentity: null as ReturnType<typeof createPlayerIdentity> | null,
-                transferReturnFocus: null as Element | null,
-                betrayalReturnFocus: null as Element | null,
-            },
-        );
+    function createHudRefs(): HudRefs {
+        const root = hudRoot!;
+        return {
+            fps: requiredHudElement("sow-hud-fps"),
+            ping: requiredHudElement("sow-hud-ping"),
+            diagnostics: requiredHudQuery(root, ".sow-hud__diagnostics"),
+            nameplate: requiredHudElement("sow-hud-nameplate"),
+            plateAvatar: requiredHudImage("sow-hud-nameplate-avatar"),
+            plateName: requiredHudElement("sow-hud-nameplate-name"),
+            plateFill: requiredHudElement("sow-hud-nameplate-fill"),
+            plateTroops: requiredHudElement("sow-hud-nameplate-troops"),
+            plateGold: requiredHudElement("sow-hud-nameplate-gold"),
+            plateGoldWrap: requiredHudQuery(root, ".sow-hud__nameplate-stat--gold"),
+            plateGoldRate: requiredHudElement("sow-hud-nameplate-gold-rate"),
+            plateTroopRate: requiredHudElement("sow-hud-nameplate-troop-rate"),
+            inboxCount: requiredHudElement("sow-hud-inbox-count"),
+            hoverCard: requiredHudElement("sow-hud-hover-card"),
+            hoverName: requiredHudElement("sow-hud-hover-name"),
+            hoverPct: requiredHudElement("sow-hud-hover-pct"),
+            hoverTroops: requiredHudElement("sow-hud-hover-troops"),
+            hoverGold: requiredHudElement("sow-hud-hover-gold"),
+            hoverBlds: requiredHudElement("sow-hud-hover-blds"),
+            leftRail: requiredHudElement("sow-hud-left-rail"),
+            slider: requiredHudInput("sow-hud-slider"),
+            armyAllocation: requiredHudElement("sow-hud-army-allocation"),
+            armyRatio: requiredHudElement("sow-hud-army-ratio"),
+            rightRail: requiredHudElement("sow-hud-right-rail"),
+            devSidebar: requiredHudElement("sow-hud-dev-sidebar"),
+            devBtn: requiredHudElement("sow-hud-dev-btn"),
+            settings: requiredHudElement("sow-hud-settings"),
+            deployBtn: requiredHudElement("sow-hud-deploy-btn"),
+            deployTimer: requiredHudElement("sow-hud-deploy-timer"),
+            buildingsStrip: requiredHudElement("sow-hud-buildings-strip"),
+            buildingButtons: Array.from(
+                root.querySelectorAll<HTMLButtonElement>("[data-command='select_building']"),
+            ),
+            fleetStrip: requiredHudElement("sow-hud-fleet-strip"),
+            fleetTrade: requiredHudQuery(root, "[data-fleet-kind='trade']"),
+            fleetWarship: requiredHudButtonQuery(root, "[data-fleet-kind='warship']"),
+            fleetNuke: requiredHudButtonQuery(root, "[data-fleet-kind='nuke']"),
+            panelButtons: Array.from(
+                root.querySelectorAll<HTMLButtonElement>(".sow-hud__topbar [data-command^='toggle_']"),
+            ),
+            leaderboard: requiredHudElement("sow-hud-leaderboard"),
+            rows: requiredHudElement("sow-hud-lb-rows"),
+            inbox: requiredHudElement("sow-hud-inbox"),
+            inboxRows: requiredHudElement("sow-hud-inbox-rows"),
+            inboxClose: requiredHudElement("sow-hud-inbox-close"),
+            inboxButton: requiredHudQuery(root, ".sow-hud__inbox-pill"),
+            inboxTotal: requiredHudElement("sow-hud-inbox-total"),
+            inboxEmpty: requiredHudElement("sow-hud-inbox-empty"),
+            inboxRequests: Object.create(null),
+            inboxRequestKeys: [],
+            inboxRenderKey: "",
+            transfer: requiredHudElement("sow-hud-transfer"),
+            transferTarget: requiredHudElement("sow-hud-transfer-target"),
+            transferClose: requiredHudElement("sow-hud-transfer-close"),
+            transferReturnFocus: null,
+            transferGold: requiredHudInput("sow-hud-transfer-gold"),
+            transferTroops: requiredHudInput("sow-hud-transfer-troops"),
+            transferIdentity: createPlayerIdentity(),
+            betrayal: requiredHudElement("sow-hud-betrayal-modal"),
+            betrayalTarget: requiredHudElement("sow-hud-betrayal-target"),
+            betrayalCancel: requiredHudElement("sow-hud-betrayal-cancel"),
+            betrayalReturnFocus: null,
+            betrayalIdentity: createPlayerIdentity(),
+            surrender: requiredHudElement("sow-hud-surrender-modal"),
+            surrenderTitle: requiredHudElement("sow-hud-surrender-title"),
+            surrenderDesc: requiredHudElement("sow-hud-surrender-desc"),
+            surrenderStats: requiredHudElement("sow-hud-surrender-stats"),
+            surrenderStatValues: endgameStatRefs("surrender"),
+            surrenderSaveNote: requiredHudElement("sow-hud-surrender-save-note"),
+            surrenderPortrait: requiredHudImage("sow-hud-surrender-portrait"),
+            surrenderCancel: requiredHudElement("sow-hud-surrender-cancel"),
+            surrenderActionLabel: requiredHudElement("sow-hud-surrender-action-label"),
+            endgame: requiredHudElement("sow-hud-endgame-modal"),
+            endgameCard: requiredHudQuery(document, "#sow-hud-endgame-modal .sow-hud__endgame-card"),
+            endgameBanner: requiredHudElement("sow-hud-endgame-banner"),
+            endgamePortrait: requiredHudImage("sow-hud-endgame-portrait"),
+            endgameStatValues: endgameStatRefs("endgame"),
+            endgameStore: requiredHudElement("sow-hud-endgame-store"),
+            endgameStoreName: requiredHudElement("sow-hud-endgame-store-name"),
+            endgameStoreCopy: requiredHudElement("sow-hud-endgame-store-copy"),
+            endgameStoreAction: requiredHudElement("sow-hud-endgame-store-action"),
+            endgameObserve: requiredHudButton("sow-hud-endgame-observe"),
+            mapMenu: requiredHudElement("sow-hud-map-menu"),
+            operations: requiredHudElement("sow-hud-operations"),
+            operationRows: requiredHudElement("sow-hud-operations-list"),
+            combatOperationRows: Object.create(null),
+            combatOperationsOrderKey: "",
+            notifications: document.createElement("div"),
+            topbar: requiredHudQuery(root, ".sow-hud__topbar"),
+            dock: requiredHudElement("sow-hud-dock"),
+            dockStack: requiredHudElement("sow-hud-dock-stack"),
+            mapFeedback: document.createElement("div"),
+        };
     }
 
     function ensureHudDom() {
@@ -924,7 +1169,7 @@
             '    <label class="sow-hud__setting-row"><span>' +
             SOW_t("hud.show_fps_ping") +
             '</span><input class="sow-hud__switch" type="checkbox" data-hud-setting="show_fps_ping"></label>' +
-            (hudState.settings && hudState.settings.show_dev_tools_available
+            (hudState && hudState.settings && hudState.settings.show_dev_tools_available
                 ? '    <label class="sow-hud__setting-row"><span>' +
                   SOW_t("hud.show_dev_tools") +
                   '</span><input class="sow-hud__switch" type="checkbox" data-hud-setting="show_dev_tools"></label>'
@@ -1161,25 +1406,23 @@
             '"></div>';
 
         if (hudDevLayer) {
-            hudDevLayer.appendChild(hudRoot.querySelector("#sow-hud-dev-sidebar"));
+            hudDevLayer.appendChild(requiredHudQuery(hudRoot, "#sow-hud-dev-sidebar"));
         }
 
         hudRefs = createHudRefs();
 
-        hudRefs.transferIdentity = createPlayerIdentity();
-        hudRefs.transferTarget.appendChild(hudRefs.transferIdentity.element);
-        hudRefs.betrayalIdentity = createPlayerIdentity();
-        hudRefs.betrayalTarget.appendChild(hudRefs.betrayalIdentity.element);
+        hudRefs.transferTarget!.appendChild(hudRefs.transferIdentity.element);
+        hudRefs.betrayalTarget!.appendChild(hudRefs.betrayalIdentity.element);
 
         hudRefs.notifications.className = "sow-hud__notifications";
         hudRefs.notifications.setAttribute("aria-live", "polite");
-        hudRoot.appendChild(hudRefs.notifications);
+        hudRoot!.appendChild(hudRefs.notifications);
         hudRefs.mapFeedback.className = "sow-hud__map-feedback";
         hudRefs.mapFeedback.setAttribute("aria-live", "polite");
         hudRefs.mapFeedback.hidden = true;
-        hudRoot.appendChild(hudRefs.mapFeedback);
+        hudRoot!.appendChild(hudRefs.mapFeedback);
         notificationCards = Array.from({ length: 3 }, function () {
-            return createNotificationCard(hudRefs.notifications, false);
+            return createNotificationCard(hudRefs!.notifications, false);
         });
         mapFeedbackCard = createNotificationCard(hudRefs.mapFeedback, true);
         observeNotificationLayout();
@@ -1192,9 +1435,9 @@
         if (hudRefs.slider) {
             const allocationRail = hudRefs.leftRail;
             const refreshAllocationDetail = function () {
-                const currentHud = hudState && hudState.hud ? hudState.hud : {};
-                const ratio = hudRefs.slider ? Number(hudRefs.slider.value) / 100 : 0.5;
-                updateArmyAllocation(currentHud.troops, ratio, true);
+                const currentHud = hudState?.hud;
+                const ratio = Number(hudRefs!.slider.value) / 100;
+                updateArmyAllocation(currentHud?.troops, ratio, true);
             };
             hudRefs.slider.addEventListener("pointerdown", function () {
                 if (allocationRail) allocationRail.classList.add("is-adjusting");
@@ -1216,10 +1459,12 @@
                 if (allocationRail) allocationRail.classList.remove("is-adjusting");
             });
             hudRefs.slider.addEventListener("input", function (e) {
-                const val = parseFloat(e.target.value);
+                const input = e.currentTarget;
+                if (!(input instanceof HTMLInputElement)) return;
+                const val = parseFloat(input.value);
                 const ratio = val / 100.0;
-                const currentHud = hudState && hudState.hud ? hudState.hud : {};
-                updateArmyAllocation(currentHud.troops, ratio);
+                const currentHud = hudState?.hud;
+                updateArmyAllocation(currentHud?.troops, ratio);
                 send("set_attack_ratio", { ratio: ratio });
             });
             if (allocationRail) {
@@ -1231,39 +1476,46 @@
                 });
             }
         }
-        hudDevLayer.addEventListener("input", function (event) {
-            const previewInput = event.target.closest("[data-dev-preview]");
+        hudDevLayer!.addEventListener("input", function (event) {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const previewInput = target.closest<HTMLInputElement>("[data-dev-preview]");
             if (previewInput) {
+                if (!(previewInput instanceof HTMLInputElement)) return;
                 const field = previewInput.dataset.devPreview;
-                if (field === "target") return;
+                if (!field || field === "target") return;
                 const value =
                     previewInput.type === "checkbox" ? previewInput.checked : Number(previewInput.value);
                 if (typeof value === "number" && !Number.isFinite(value)) return;
                 if (field === "phase") {
-                    hudDevLayer.querySelectorAll('[data-dev-preview="phase"]').forEach(function (sibling) {
-                        if (sibling !== previewInput) sibling.value = previewInput.value;
-                    });
+                    hudDevLayer!
+                        .querySelectorAll<HTMLInputElement>('[data-dev-preview="phase"]')
+                        .forEach(function (sibling) {
+                            if (sibling !== previewInput) sibling.value = previewInput.value;
+                        });
                 }
-                const previewUpdate = {};
+                const previewUpdate: HudCommandPayload = {};
                 previewUpdate[field] = value;
                 send("set_dev_vfx_preview", previewUpdate);
                 return;
             }
-            if (event.target.matches("[data-dev-search]")) {
+            if (target.matches("[data-dev-search]")) {
                 renderDevControls((hudState && hudState.hud && hudState.hud.dev_tools) || {});
                 return;
             }
-            if (event.target.matches("[data-dev-picker]")) {
-                sendDevControl(event.target);
+            if (target.matches("[data-dev-picker]") && target instanceof HTMLInputElement) {
+                sendDevControl(target);
                 return;
             }
-            const input = event.target.closest("[data-dev]");
-            if (!input) return;
+            const input = target.closest("[data-dev]");
+            if (!(input instanceof HTMLInputElement)) return;
             sendDevControl(input);
         });
-        hudDevLayer.addEventListener("pointerdown", function (event) {
-            const button = event.target.closest('[data-command="dev_step"]');
-            if (!button) return;
+        hudDevLayer!.addEventListener("pointerdown", function (event) {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const button = target.closest('[data-command="dev_step"]');
+            if (!(button instanceof HTMLButtonElement)) return;
             event.preventDefault();
             devStepOnce(button);
             let delay = 380;
@@ -1286,8 +1538,10 @@
             );
         });
         hudRoot.addEventListener("change", function (event) {
-            const input = event.target.closest("[data-hud-setting]");
-            if (!input) return;
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const input = target.closest("[data-hud-setting]");
+            if (!(input instanceof HTMLInputElement)) return;
             const setting = input.dataset.hudSetting;
             if (setting === "mute_all") send("set_mute", { value: !input.checked });
             if (setting === "music_volume") send("set_music_volume", { value: Number(input.value) });
@@ -1304,7 +1558,7 @@
         });
     }
 
-    const mapActionLabels = {
+    const mapActionLabels: Record<string, { icon?: string; key: string; status?: string }> = {
         emote: { icon: "emote", key: "hud.map_action_emote" },
         spawn: { icon: "spawn", key: "hud.map_action_deploy" },
         attack: { icon: "attack", key: "hud.map_action_attack" },
@@ -1320,7 +1574,10 @@
         nuke: { icon: "nuke", key: "hud.map_action_nuke" },
     };
 
-    const allianceActionLabels = {
+    const allianceActionLabels: Record<
+        string,
+        { state: string; key: string; status: string; disabled: boolean }
+    > = {
         request: {
             state: "request",
             key: "hud.map_action_request_alliance",
@@ -1338,12 +1595,16 @@
         renew: { state: "renew", key: "hud.map_action_renew_alliance", status: "allied", disabled: false },
     };
 
-    function mapLabel(action) {
-        const label = mapActionLabels[action] || { icon: "•", text: action };
-        return label.key ? SOW_t(label.key) : label.text;
+    function mapLabel(action: string): string {
+        const label = mapActionLabels[action];
+        return label ? SOW_t(label.key) : action;
     }
 
-    function updateArmyAllocation(totalTroops, ratio, forceDetails?) {
+    function updateArmyAllocation(
+        totalTroops: number | undefined,
+        ratio: number,
+        forceDetails = false,
+    ): void {
         if (!hudRefs) return;
         const troopCount = Math.max(0, Number(totalTroops) || 0);
         const total = Math.floor(troopCount);
@@ -1383,7 +1644,7 @@
         }
     }
 
-    function mapActionReason(item, availableGold) {
+    function mapActionReason(item: HudActionReasonItem, availableGold: number | undefined): string {
         if (item.reason_key) {
             let reason = SOW_t(
                 item.reason_key,
@@ -1406,22 +1667,31 @@
         });
     }
 
-    function campaignUnlocks(hud) {
+    function campaignUnlocks(
+        hud: MenuHudPayload | null | undefined,
+    ): { buildings: Record<string, number>; actions: string[] } | null {
         return hud && hud.tutorial && hud.tutorial.active
             ? hud.tutorial.effective_unlocks || EMPTY_CAMPAIGN_UNLOCKS
             : null;
     }
-    function campaignAllowsBuilding(unlocks, kind, level) {
+    function campaignAllowsBuilding(
+        unlocks: { buildings: Record<string, number>; actions: string[] } | null,
+        kind: string,
+        level: number,
+    ): boolean {
         return unlocks === null || window.SOWCampaign.campaignAllowsBuilding(unlocks, kind, level);
     }
-    function campaignAllowsAction(unlocks, action) {
+    function campaignAllowsAction(
+        unlocks: { buildings: Record<string, number>; actions: string[] } | null,
+        action: string,
+    ): boolean {
         return unlocks === null || window.SOWCampaign.campaignAllowsAction(unlocks, action);
     }
-    function setCampaignLock(element, locked) {
+    function setCampaignLock(element: HTMLElement, locked: boolean): void {
         element.classList.toggle("is-campaign-locked", Boolean(locked));
     }
 
-    function mapItems(mapMenu) {
+    function mapItems(mapMenu: HudMapMenu): HudMapMenuItem[] {
         const actions = Array.isArray(mapMenu.actions) ? mapMenu.actions : [];
         const supplied = Array.isArray(mapMenu.items) ? mapMenu.items : [];
         return actions.map(function (action) {
@@ -1456,7 +1726,7 @@
     const RING_INNER_RADIUS = 21;
     const RING_OUTER_RADIUS = 48;
     const RING_ICON_RADIUS = 34.5;
-    const RING_ROOT_SLOTS = {
+    const RING_ROOT_SLOTS: Record<string, number> = {
         attack: 0,
         spawn: 0,
         upgrade_structure: 0,
@@ -1467,15 +1737,15 @@
         transfer: 4,
         emote: 5,
     };
-    const RING_BUILD_SLOTS = {
+    const RING_BUILD_SLOTS: Record<string, number> = {
         build_city: 0,
         build_factory: 1,
         build_port: 2,
         build_tower: 3,
         build_farm: 4,
     };
-    const RING_EMOTE_SLOTS = { greet: 0, celebrate: 1, threat: 2, help: 3 };
-    const RING_ACCENTS = {
+    const RING_EMOTE_SLOTS: Record<string, number> = { greet: 0, celebrate: 1, threat: 2, help: 3 };
+    const RING_ACCENTS: Record<string, string> = {
         attack: "red",
         nuke: "red",
         spawn: "green",
@@ -1483,11 +1753,11 @@
         transfer: "green",
         fleet: "cyan",
     };
-    const RING_HOLD_ACTIONS = { nuke: true };
-    const EXPRESSION_CELLS = ["happy", "calm", "fear", "angry"];
+    const RING_HOLD_ACTIONS: Record<string, boolean> = { nuke: true };
+    const EXPRESSION_CELLS: string[] = ["happy", "calm", "fear", "angry"];
 
-    function ringSlots(mapMenu, items, hud) {
-        const slots = new Array(RING_SLOTS).fill(null);
+    function ringSlots(mapMenu: HudMapMenu, items: HudMapMenuItem[], hud: HudRingState): (RingSlot | null)[] {
+        const slots: (RingSlot | null)[] = new Array(RING_SLOTS).fill(null);
         if (mapMenuView === "emote") {
             (hud.emotes || []).forEach(function (definition) {
                 const index = RING_EMOTE_SLOTS[definition.kind];
@@ -1500,7 +1770,7 @@
         if (mapMenuView === "build") {
             items.forEach(function (item) {
                 const index = RING_BUILD_SLOTS[item.action];
-                if (index != null) slots[index] = { type: "action", item: item };
+                if (index != null) slots[index] = { type: "action", item: item, presentation: null };
             });
             return slots;
         }
@@ -1512,14 +1782,16 @@
                     type: "action",
                     item: item,
                     presentation:
-                        item.action === "alliance" ? allianceActionLabels[mapMenu.alliance_state] : null,
+                        item.action === "alliance" && mapMenu.alliance_state
+                            ? allianceActionLabels[mapMenu.alliance_state]
+                            : null,
                 };
             }
         });
         return slots;
     }
 
-    function ringSlotIdentity(slot) {
+    function ringSlotIdentity(slot: RingSlot | null): string {
         if (!slot) return "-";
         if (slot.type === "action") return slot.item.action;
         if (slot.type === "group") return "group:" + slot.group;
@@ -1527,12 +1799,12 @@
         return slot.type;
     }
 
-    function ringSlotAccent(slot) {
+    function ringSlotAccent(slot: RingSlot | null): string {
         if (slot && slot.type === "action") return RING_ACCENTS[slot.item.action] || "gold";
         return "gold";
     }
 
-    function ringSlotLabel(slot) {
+    function ringSlotLabel(slot: RingSlot): string {
         if (slot.type === "action")
             return slot.presentation ? SOW_t(slot.presentation.key) : mapLabel(slot.item.action);
         if (slot.type === "group")
@@ -1541,7 +1813,7 @@
         return SOW_t(slot.type === "clear" ? "hud.emote_clear" : "hud.emote_pin");
     }
 
-    function ringSlotDisabled(slot) {
+    function ringSlotDisabled(slot: RingSlot): boolean {
         if (slot.type === "pin") return !slot.enabled;
         return Boolean(
             slot.type === "action" &&
@@ -1549,7 +1821,7 @@
         );
     }
 
-    function ringSlotDetail(slot, availableGold) {
+    function ringSlotDetail(slot: RingSlot, availableGold: number | undefined): string {
         if (slot.type !== "action") return "";
         const reason = mapActionReason(slot.item, availableGold);
         if (reason) return escapeHudText(reason);
@@ -1563,14 +1835,14 @@
         return parts.join(" · ");
     }
 
-    function ringPoint(angle, radius) {
+    function ringPoint(angle: number, radius: number): string {
         const radians = (angle * Math.PI) / 180;
         return (
             (50 + Math.sin(radians) * radius).toFixed(2) + " " + (50 - Math.cos(radians) * radius).toFixed(2)
         );
     }
 
-    function ringSectorMarkup(slot, index) {
+    function ringSectorMarkup(slot: RingSlot | null, index: number): string {
         const span = 360 / RING_SLOTS;
         const start = index * span - span / 2 + 1.6;
         const end = index * span + span / 2 - 1.6;
@@ -1624,14 +1896,14 @@
         );
     }
 
-    function ringFace(expression) {
-        const hud = (hudState && hudState.hud) || {};
-        const leader = leaderById(hud.player_leader || (hudState && hudState.selected_leader));
+    function ringFace(expression: string): HTMLElement {
+        const hud = hudState?.hud;
+        const leader = leaderById(hud?.player_leader || hudState?.selected_leader);
         const cell = EXPRESSION_CELLS.indexOf(expression);
         const face = document.createElement("span");
         face.className = "sow-hud__ring-face";
         face.innerHTML = hudIcon("emote", "sow-hud__ring-icon");
-        if (cell < 0 || !leader || !leader.slug) return face;
+        if (cell < 0 || !leader || !(leader.art_slug || leader.slug)) return face;
         face.style.setProperty("--face-x", String(cell % 2));
         face.style.setProperty("--face-y", String(Math.floor(cell / 2)));
         const image = document.createElement("img");
@@ -1639,12 +1911,12 @@
         image.onerror = function () {
             this.remove();
         };
-        image.src = asset("gameplay/avatars/spritesheets/" + leader.slug + ".webp");
+        image.src = asset("gameplay/avatars/spritesheets/" + (leader.art_slug || leader.slug) + ".webp");
         face.appendChild(image);
         return face;
     }
 
-    function ringSlotIcon(slot, mapMenu) {
+    function ringSlotIcon(slot: RingSlot, mapMenu: HudMapMenu): HTMLElement {
         if (slot.type === "emote") return ringFace(slot.definition.expression);
         if (slot.type === "clear") return ringFace("calm");
         const title = document.createElement("span");
@@ -1675,7 +1947,12 @@
         return title;
     }
 
-    function ringSlotButton(slot, index, mapMenu, hud) {
+    function ringSlotButton(
+        slot: RingSlot,
+        index: number,
+        mapMenu: HudMapMenu,
+        hud: HudRingState,
+    ): HTMLButtonElement {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "sow-hud__ring-slot";
@@ -1709,7 +1986,7 @@
         return button;
     }
 
-    function ringHub(mapMenu) {
+    function ringHub(mapMenu: HudMapMenu): HTMLElement {
         let hub;
         if (mapMenuView === "root") {
             hub = document.createElement("span");
@@ -1737,10 +2014,10 @@
         return hub;
     }
 
-    function renderRingReadout(menu) {
-        const readout = menu.querySelector(".sow-hud__ring-readout");
+    function renderRingReadout(menu: HTMLElement): void {
+        const readout = menu.querySelector<HTMLElement>(".sow-hud__ring-readout");
         if (!readout) return;
-        const hud = (hudState && hudState.hud) || {};
+        const hud: HudRingState = hudState?.hud || {};
         const mapMenu = hud.map_menu || {};
         const slot = ring.hot >= 0 ? ring.slots[ring.hot] : null;
         let title, detail;
@@ -1756,12 +2033,20 @@
             detail = title === relation ? "" : escapeHudText(relation);
         }
         readout.dataset.state = slot ? (ringSlotDisabled(slot) ? "blocked" : "action") : "target";
-        if (readout.firstChild.textContent !== title) readout.firstChild.textContent = title;
-        if (readout.lastChild.innerHTML !== detail) readout.lastChild.innerHTML = detail;
-        readout.lastChild.hidden = !detail;
+        const titleNode = readout.querySelector("strong");
+        const detailNode = readout.querySelector("small");
+        if (!titleNode || !detailNode) return;
+        if (titleNode.textContent !== title) titleNode.textContent = title;
+        if (detailNode.innerHTML !== detail) detailNode.innerHTML = detail;
+        detailNode.hidden = !detail;
     }
 
-    function buildRing(menu, slots, mapMenu, hud) {
+    function buildRing(
+        menu: HTMLElement,
+        slots: (RingSlot | null)[],
+        mapMenu: HudMapMenu,
+        hud: HudRingState,
+    ): void {
         menu.replaceChildren();
         menu.dataset.level = mapMenuView;
         menu.style.setProperty("--ring-hold-ms", RING_HOLD_MS + "ms");
@@ -1796,10 +2081,16 @@
 
     // Live values (cost, reason, countdown) patch the built ring in place, so a
     // ticking timer never rebuilds it and hover/focus survive.
-    function patchRing(menu, slots, availableGold) {
+    function patchRing(
+        menu: HTMLElement,
+        slots: (RingSlot | null)[],
+        availableGold: number | undefined,
+    ): void {
         slots.forEach(function (slot, index) {
             if (!slot) return;
-            const button = menu.querySelector('.sow-hud__ring-slot[data-slot="' + index + '"]');
+            const button = menu.querySelector<HTMLButtonElement>(
+                '.sow-hud__ring-slot[data-slot="' + index + '"]',
+            );
             if (!button) return;
             const disabled = ringSlotDisabled(slot);
             const name = ringSlotLabel(slot);
@@ -1814,20 +2105,23 @@
                 blocked = slot.item.reason_seconds != null ? "clock" : slot.item.reason_key ? "lock" : "gold";
             if (button.dataset.blocked !== blocked) {
                 button.dataset.blocked = blocked;
-                button.lastChild.innerHTML = blocked ? hudIcon(blocked, "sow-hud__ring-badge-icon") : "";
+                const badge = button.querySelector<HTMLElement>(".sow-hud__ring-badge");
+                if (badge) badge.innerHTML = blocked ? hudIcon(blocked, "sow-hud__ring-badge-icon") : "";
             }
-            const sector = menu.querySelector('.sow-hud__ring-sector[data-slot="' + index + '"]');
+            const sector = menu.querySelector<HTMLElement>(
+                '.sow-hud__ring-sector[data-slot="' + index + '"]',
+            );
             if (sector) sector.classList.toggle("is-disabled", disabled);
         });
         ring.slots = slots;
         renderRingReadout(menu);
     }
 
-    function positionRing(menu, mapMenu) {
+    function positionRing(menu: HTMLElement, mapMenu: HudMapMenu): void {
         const x = Number(mapMenu.x || 0);
         const y = Number(mapMenu.y || 0);
         const half = menu.offsetWidth * 0.5;
-        const readout = menu.querySelector(".sow-hud__ring-readout");
+        const readout = menu.querySelector<HTMLElement>(".sow-hud__ring-readout");
         const readoutSpace = readout ? readout.offsetHeight + 10 : 0;
         const minX = half + 8;
         const minY = half + 8;
@@ -1850,7 +2144,12 @@
 
     // Returns "hub", a slot index, or null. Direction picks the slot; while a
     // drag that opened the ring is in progress any distance past the hub counts.
-    function ringSlotAt(menu, clientX, clientY, unbounded) {
+    function ringSlotAt(
+        menu: HTMLElement,
+        clientX: number,
+        clientY: number,
+        unbounded: boolean,
+    ): "hub" | number | null {
         const radial = menu.querySelector(".sow-hud__map-radial");
         if (!radial) return null;
         const rect = radial.getBoundingClientRect();
@@ -1864,40 +2163,42 @@
         return Math.round(angle / (360 / RING_SLOTS)) % RING_SLOTS;
     }
 
-    function ringSlotButtonAt(menu, index) {
-        return menu.querySelector('.sow-hud__ring-slot[data-slot="' + index + '"]');
+    function ringSlotButtonAt(menu: HTMLElement, index: number): HTMLButtonElement | null {
+        return menu.querySelector<HTMLButtonElement>('.sow-hud__ring-slot[data-slot="' + index + '"]');
     }
 
-    function setRingHot(menu, index) {
+    function setRingHot(menu: HTMLElement, index: number): void {
         if (ring.hold && ring.hold.index !== index) ringHoldCancel(menu);
         if (ring.hot === index) return;
         ring.hot = index;
-        menu.querySelectorAll(".sow-hud__ring-sector, .sow-hud__ring-slot").forEach(function (element) {
-            element.classList.toggle("is-hot", Number(element.dataset.slot) === index);
-        });
+        menu.querySelectorAll<HTMLElement>(".sow-hud__ring-sector, .sow-hud__ring-slot").forEach(
+            function (element) {
+                element.classList.toggle("is-hot", Number(element.dataset.slot) === index);
+            },
+        );
         renderRingReadout(menu);
     }
 
-    function ringHoldStart(menu, index) {
+    function ringHoldStart(menu: HTMLElement, index: number): void {
         if (ring.hold && ring.hold.index === index) return;
         ringHoldCancel(menu);
         ring.hold = { index: index, started: performance.now() };
-        const sector = menu.querySelector('.sow-hud__ring-sector[data-slot="' + index + '"]');
+        const sector = menu.querySelector<HTMLElement>('.sow-hud__ring-sector[data-slot="' + index + '"]');
         if (sector) sector.classList.add("is-arming");
     }
 
-    function ringHoldCancel(menu) {
+    function ringHoldCancel(menu: HTMLElement | null): void {
         ring.hold = null;
         if (menu)
-            menu.querySelectorAll(".sow-hud__ring-sector.is-arming").forEach(function (sector) {
+            menu.querySelectorAll<HTMLElement>(".sow-hud__ring-sector.is-arming").forEach(function (sector) {
                 sector.classList.remove("is-arming");
             });
     }
 
-    function ringActivate(menu, target) {
+    function ringActivate(menu: HTMLElement, target: "hub" | number | null): void {
         if (target === "hub") {
             // The center is "back" inside a submenu and "close" at the root.
-            const back = menu.querySelector("[data-map-back]");
+            const back = menu.querySelector<HTMLButtonElement>("[data-map-back]");
             if (back) back.click();
             else send("close_map_context_menu");
             return;
@@ -1921,12 +2222,12 @@
         button.click();
     }
 
-    function renderMapMenu(mapMenu) {
+    function renderMapMenu(mapMenu: HudMapMenu | null | undefined): boolean {
         if (!hudRefs || !hudRefs.mapMenu) return false;
         const menu = hudRefs.mapMenu;
         const wasVisible = !menu.classList.contains("hidden");
         const open = Boolean(mapMenu && mapMenu.open);
-        const showRadial = Boolean(open && mapMenu.view === "radial");
+        const showRadial = Boolean(open && mapMenu && mapMenu.view === "radial");
         menu.classList.toggle("hidden", !showRadial);
         if (!showRadial) {
             if (wasVisible)
@@ -1945,7 +2246,8 @@
             ringHoldCancel(null);
             return false;
         }
-        const hud = (hudState && hudState.hud) || {};
+        if (!mapMenu) return false;
+        const hud: HudRingState = hudState?.hud || {};
         const session = String(mapMenu.session) + ":" + String(mapMenu.tile_idx);
         if (ring.session !== session) {
             ring.session = session;
@@ -1990,12 +2292,12 @@
         return true;
     }
 
-    function openRingMenu() {
+    function openRingMenu(): HTMLElement | null {
         const menu = hudRefs && hudRefs.mapMenu;
         return menu && !menu.classList.contains("hidden") && menu.dataset.level ? menu : null;
     }
 
-    function ringPointer(menu, event) {
+    function ringPointer(menu: HTMLElement, event: PointerEvent): void {
         const target = ringSlotAt(
             menu,
             event.clientX,
@@ -2061,14 +2363,17 @@
         );
     }
 
-    function escapeHudText(value) {
+    function escapeHudText(value: string | number | boolean | null | undefined): string {
         return String(value).replace(/[&<>"']/g, function (character) {
-            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character];
+            return (
+                { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character] ||
+                character
+            );
         });
     }
 
-    function devColorHex(value, linear) {
-        function channel(v) {
+    function devColorHex(value: number[], linear: boolean): string {
+        function channel(v: number): string {
             v = Math.max(0, Math.min(1, Number(v) || 0));
             if (linear) v = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
             return Math.round(v * 255)
@@ -2078,7 +2383,7 @@
         return "#" + channel(value[0]) + channel(value[1]) + channel(value[2]);
     }
 
-    function devColorFromHex(hex, linear) {
+    function devColorFromHex(hex: string, linear: boolean): number[] {
         const value = [1, 3, 5].map(function (offset) {
             const v = parseInt(hex.slice(offset, offset + 2), 16) / 255;
             return linear ? (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)) : v;
@@ -2089,21 +2394,21 @@
     const DEV_RESET_ICON =
         '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/></svg>';
 
-    function devDecimals(step) {
+    function devDecimals(step: number): number {
         const text = String(step);
         const dot = text.indexOf(".");
         return dot < 0 ? 0 : Math.min(2, text.length - dot - 1);
     }
 
     // At most 2 decimals; a nonzero value never reads as 0.00.
-    function devFormat(value, decimals) {
+    function devFormat(value: number | string, decimals: number): string {
         const number = Number(value);
         if (!Number.isFinite(number)) return "";
         const text = number.toFixed(decimals);
         return number !== 0 && Number(text) === 0 ? number.toFixed(3) : text;
     }
 
-    function devIsDirty(def, current) {
+    function devIsDirty(def: HudDevParameter, current: boolean | number | number[] | undefined): boolean {
         const now = Array.isArray(current) ? current : [current];
         const base = Array.isArray(def.default) ? def.default : [def.default];
         return now.some(function (part, index) {
@@ -2111,20 +2416,21 @@
         });
     }
 
-    function sendDevControl(input) {
-        const control = input.closest("[data-dev-control]");
+    function sendDevControl(input: HTMLInputElement): void {
+        const control = input.closest<HTMLElement>("[data-dev-control]");
         if (!control) return;
         const id = control.dataset.devControl;
         const kind = control.dataset.devKind;
+        if (!id || !kind) return;
         const decimals = Number(control.dataset.devDecimals) || 0;
-        let value;
+        let value: boolean | number | number[];
         if (kind === "bool") {
             value = input.checked;
         } else if (kind === "number" || kind === "select") {
             value = Number(input.value);
             if (!Number.isFinite(value)) return;
             if (kind === "number") {
-                const range = control.querySelector('input[type="range"]');
+                const range = control.querySelector<HTMLInputElement>('input[type="range"]');
                 if (range && input.type !== "range") {
                     const rangeMin = Number(range.dataset.devMin);
                     const rangeMax = Number(range.dataset.devMax);
@@ -2132,36 +2438,39 @@
                     range.min = String(value < rangeMin ? value - margin : rangeMin);
                     range.max = String(value > rangeMax ? value + margin : rangeMax);
                 }
-                control.querySelectorAll('[data-dev="' + id + '"]').forEach(function (sibling) {
-                    if (sibling !== input)
-                        sibling.value =
-                            sibling.type === "range" ? input.value : devFormat(input.value, decimals);
-                });
+                control
+                    .querySelectorAll<HTMLInputElement>('[data-dev="' + id + '"]')
+                    .forEach(function (sibling) {
+                        if (sibling !== input)
+                            sibling.value =
+                                sibling.type === "range" ? input.value : devFormat(input.value, decimals);
+                    });
             }
         } else {
-            const config =
-                (hudState && hudState.hud && hudState.hud.dev_tools && hudState.hud.dev_tools.config) || {};
-            value = Array.isArray(config[id])
-                ? config[id].slice()
+            const config = hudState?.hud?.dev_tools?.config || {};
+            const configuredValue = config[id];
+            const vector = Array.isArray(configuredValue)
+                ? configuredValue.slice()
                 : kind === "color"
                   ? [1, 1, 1, 1]
                   : [0, 0, 0];
+            value = vector;
             if (input.hasAttribute("data-dev-picker")) {
                 const rgb = devColorFromHex(input.value, input.dataset.devLinear === "1");
-                value[0] = rgb[0];
-                value[1] = rgb[1];
-                value[2] = rgb[2];
-                control.querySelectorAll("[data-dev-channel]").forEach(function (channel) {
+                vector[0] = rgb[0];
+                vector[1] = rgb[1];
+                vector[2] = rgb[2];
+                control.querySelectorAll<HTMLInputElement>("[data-dev-channel]").forEach(function (channel) {
                     const channelIndex = Number(channel.dataset.devChannel);
-                    if (channelIndex < 3) channel.value = value[channelIndex];
+                    if (channelIndex < 3) channel.value = String(vector[channelIndex]);
                 });
             } else {
                 const index = Number(input.dataset.devChannel);
-                value[index] = Number(input.value);
-                if (!Number.isFinite(value[index])) return;
+                vector[index] = Number(input.value);
+                if (!Number.isFinite(vector[index])) return;
                 devReadout(input, decimals);
-                const picker = control.querySelector("[data-dev-picker]");
-                if (picker && index < 3) picker.value = devColorHex(value, picker.dataset.devLinear === "1");
+                const picker = control.querySelector<HTMLInputElement>("[data-dev-picker]");
+                if (picker && index < 3) picker.value = devColorHex(vector, picker.dataset.devLinear === "1");
             }
         }
         send("set_dev_config", { field: id, value: value });
@@ -2175,24 +2484,23 @@
         if (button) button.textContent = "Reset all";
     }
 
-    function setDevMenu(open) {
+    function setDevMenu(open: boolean): void {
         disarmDevReset();
-        const menu = hudRefs.devSidebar.querySelector("#sow-hud-dev-menu");
-        menu.hidden = !open;
-        hudRefs.devSidebar
-            .querySelector('[data-command="dev_menu"]')
-            .setAttribute("aria-expanded", open ? "true" : "false");
+        const menu = hudRefs!.devSidebar.querySelector<HTMLElement>("#sow-hud-dev-menu");
+        const trigger = hudRefs!.devSidebar.querySelector<HTMLElement>('[data-command="dev_menu"]');
+        if (menu) menu.hidden = !open;
+        if (trigger) trigger.setAttribute("aria-expanded", open ? "true" : "false");
     }
 
-    function devReadout(input, decimals) {
+    function devReadout(input: HTMLInputElement, decimals: number): void {
         const readout = input.parentElement && input.parentElement.querySelector("output");
         if (readout) readout.textContent = devFormat(input.value, decimals);
     }
 
-    function devStepOnce(button) {
-        const control = button.closest("[data-dev-control]");
-        const range = control && control.querySelector('input[type="range"]');
-        const chip = control && control.querySelector('input[type="text"][data-dev]');
+    function devStepOnce(button: HTMLButtonElement): void {
+        const control = button.closest<HTMLElement>("[data-dev-control]");
+        const range = control && control.querySelector<HTMLInputElement>('input[type="range"]');
+        const chip = control && control.querySelector<HTMLInputElement>('input[type="text"][data-dev]');
         if (!range || !chip) return;
         const next = Number(range.value) + Number(button.dataset.devStepDir) * (Number(range.step) || 0.01);
         if (!Number.isFinite(next)) return;
@@ -2201,7 +2509,7 @@
         chip.value = devFormat(next, Number(control.dataset.devDecimals) || 0);
     }
 
-    function devControlMarkup(def) {
+    function devControlMarkup(def: HudDevParameter): string {
         const id = escapeHudText(def.id);
         const label = escapeHudText(def.label);
         const decimals = def.kind === "color" || def.kind === "vector" ? 2 : devDecimals(def.step);
@@ -2224,7 +2532,15 @@
             '">' +
             DEV_RESET_ICON +
             "</button>";
-        const channel = function (text, index, min, max, step, tone, readout?) {
+        const channel = function (
+            text: string,
+            index: number,
+            min: number,
+            max: number,
+            step: number,
+            tone: string,
+            readout = false,
+        ): string {
             return (
                 '<label class="sow-hud__dev-channel" data-tone="' +
                 tone +
@@ -2264,7 +2580,7 @@
         }
         let html = '<div class="sow-hud__dev-control"' + attrs + '><div class="sow-hud__dev-head">' + name;
         if (def.kind === "number") {
-            const unit = { s: "s", "screen px": "px" }[def.unit];
+            const unit = ({ s: "s", "screen px": "px" } as Record<string, string>)[def.unit];
             html +=
                 '<input class="sow-hud__dev-chip-input" type="text" inputmode="decimal" autocomplete="off" data-dev="' +
                 id +
@@ -2343,8 +2659,8 @@
         return html + "</div>";
     }
 
-    function buildDevPanel(devTools, sidebar, host) {
-        const bySection = Object.create(null);
+    function buildDevPanel(devTools: CompleteHudDevTools, sidebar: HTMLElement, host: HTMLElement): void {
+        const bySection: Record<string, NonNullable<HudDevTools["schema"]>> = Object.create(null);
         devTools.schema.forEach(function (def) {
             (bySection[def.section] || (bySection[def.section] = [])).push(def);
         });
@@ -2392,19 +2708,29 @@
             tabs +=
                 '<button type="button" role="tab" data-command="dev_tab" data-dev-tab="Perf">Perf<i></i></button>';
         }
-        sidebar.querySelector("#sow-hud-dev-tabs").innerHTML = tabs;
+        const tabRoot = sidebar.querySelector<HTMLElement>("#sow-hud-dev-tabs");
+        if (tabRoot) tabRoot.innerHTML = tabs;
         host.innerHTML = html;
-        host.querySelectorAll("[data-dev-control]").forEach(function (control) {
-            devControlIndex[control.dataset.devControl] = control;
+        host.querySelectorAll<HTMLElement>("[data-dev-control]").forEach(function (control) {
+            const id = control.dataset.devControl;
+            if (id) devControlIndex[id] = control;
         });
     }
 
-    function renderDevControls(devTools) {
+    function renderDevControls(devTools: Partial<HudDevTools>): void {
         const sidebar = hudRefs && hudRefs.devSidebar;
-        const host = sidebar && sidebar.querySelector("#sow-hud-dev-controls");
-        if (!host || !Array.isArray(devTools.schema) || !Array.isArray(devTools.groups)) return;
+        const host = sidebar && sidebar.querySelector<HTMLElement>("#sow-hud-dev-controls");
+        if (!host || !devTools.schema || !devTools.groups) return;
+        const completeDevTools: CompleteHudDevTools = {
+            open: devTools.open === true,
+            config: devTools.config,
+            schema: devTools.schema,
+            groups: devTools.groups,
+            perf: devTools.perf,
+            preview: devTools.preview,
+        };
         const key =
-            devTools.schema
+            completeDevTools.schema
                 .map(function (def) {
                     return [
                         def.id,
@@ -2419,19 +2745,22 @@
                 })
                 .join("|") +
             "#" +
-            JSON.stringify(devTools.groups) +
-            (Array.isArray(devTools.perf) && devTools.perf.length ? "#perf" : "");
+            JSON.stringify(completeDevTools.groups) +
+            (Array.isArray(completeDevTools.perf) && completeDevTools.perf.length ? "#perf" : "");
         if (key !== devToolsSchemaKey) {
-            buildDevPanel(devTools, sidebar, host);
+            buildDevPanel(completeDevTools, sidebar, host);
             devToolsSchemaKey = key;
         }
-        const perfHost = sidebar.querySelector("#sow-hud-dev-perf");
-        const perf = Array.isArray(devTools.perf) ? devTools.perf : [];
+        const perfHost = sidebar.querySelector<HTMLElement>("#sow-hud-dev-perf");
+        const perf = Array.isArray(completeDevTools.perf) ? completeDevTools.perf : [];
         if (perfHost) {
             if (
                 perfHost.children.length !== perf.length ||
                 perf.some(function (item, index) {
-                    return perfHost.children[index].dataset.devPerf !== item.name;
+                    return (
+                        perfHost.querySelectorAll<HTMLButtonElement>("button[data-dev-perf]")[index]?.dataset
+                            .devPerf !== item.name
+                    );
                 })
             ) {
                 perfHost.innerHTML = perf
@@ -2447,22 +2776,25 @@
                     })
                     .join("");
             }
-            perf.forEach(function (item, index) {
-                const button = perfHost.children[index];
-                if (button.dataset.state !== item.state) button.dataset.state = item.state;
-                button.setAttribute(
-                    "aria-pressed",
-                    item.state === "on" ? "true" : item.state === "mixed" ? "mixed" : "false",
-                );
-            });
+            perfHost
+                .querySelectorAll<HTMLButtonElement>("button[data-dev-perf]")
+                .forEach(function (button, index) {
+                    const item = perf[index];
+                    if (!item) return;
+                    if (button.dataset.state !== item.state) button.dataset.state = item.state;
+                    button.setAttribute(
+                        "aria-pressed",
+                        item.state === "on" ? "true" : item.state === "mixed" ? "mixed" : "false",
+                    );
+                });
         }
-        const tabs = Array.from(sidebar.querySelectorAll("[data-dev-tab]")) as Element[];
+        const tabs = Array.from(sidebar.querySelectorAll<HTMLElement>("[data-dev-tab]"));
         if (
             !tabs.some(function (tab) {
                 return tab.dataset.devTab === devTab;
             })
         ) {
-            devTab = tabs.length ? tabs[0].dataset.devTab : "";
+            devTab = tabs[0]?.dataset.devTab || "";
             try {
                 const saved = window.localStorage.getItem("sow_dev_tab");
                 if (
@@ -2476,7 +2808,7 @@
                 /* storage unavailable */
             }
         }
-        const search = sidebar.querySelector("[data-dev-search]");
+        const search = sidebar.querySelector<HTMLInputElement>("[data-dev-search]");
         const query = search ? search.value.trim().toLowerCase() : "";
         const perfTab = devTab === "Perf" && query === "";
         if (perfHost) perfHost.hidden = !perfTab;
@@ -2485,9 +2817,9 @@
             tab.classList.toggle("is-active", selected);
             tab.setAttribute("aria-selected", selected ? "true" : "false");
         });
-        const config = devTools.config || {};
-        const dirtyBySection = Object.create(null);
-        devTools.schema.forEach(function (def) {
+        const config = completeDevTools.config || {};
+        const dirtyBySection: Record<string, number> = Object.create(null);
+        completeDevTools.schema.forEach(function (def) {
             const control = devControlIndex[def.id];
             if (!control) return;
             const current = config[def.id];
@@ -2499,7 +2831,7 @@
                 control.dataset.warn = Number(current) > Number(config["water.depth_cap"]) ? "true" : "false";
             }
             if (def.kind === "number") {
-                const range = control.querySelector('input[type="range"]');
+                const range = control.querySelector<HTMLInputElement>('input[type="range"]');
                 const active = document.activeElement;
                 const editingControl =
                     active &&
@@ -2516,14 +2848,17 @@
                 }
             }
         });
-        const dirtyByGroup = Object.create(null);
-        host.querySelectorAll(".sow-hud__dev-section").forEach(function (section) {
-            const count = dirtyBySection[section.dataset.devName] || 0;
+        const dirtyByGroup: Record<string, boolean> = Object.create(null);
+        host.querySelectorAll<HTMLDetailsElement>(".sow-hud__dev-section").forEach(function (section) {
+            const sectionName = section.dataset.devName;
+            const groupName = section.dataset.devGroup;
+            if (!sectionName || !groupName) return;
+            const count = dirtyBySection[sectionName] || 0;
             section.dataset.dirty = count ? "true" : "false";
-            if (count) dirtyByGroup[section.dataset.devGroup] = true;
+            if (count) dirtyByGroup[groupName] = true;
             let matches = 0;
-            section.querySelectorAll("[data-dev-control]").forEach(function (control) {
-                const hide = query !== "" && control.dataset.devSearchText.indexOf(query) < 0;
+            section.querySelectorAll<HTMLElement>("[data-dev-control]").forEach(function (control) {
+                const hide = query !== "" && control.dataset.devSearchText!.indexOf(query) < 0;
                 control.hidden = hide;
                 if (!hide) matches++;
             });
@@ -2534,19 +2869,35 @@
             return item.state !== "on";
         });
         tabs.forEach(function (tab) {
-            tab.dataset.dirty = dirtyByGroup[tab.dataset.devTab] ? "true" : "false";
+            const tabName = tab.dataset.devTab;
+            if (tabName) tab.dataset.dirty = dirtyByGroup[tabName] ? "true" : "false";
         });
-        const preview = devTools.preview || {};
-        const transport = sidebar.querySelector("#sow-hud-dev-transport");
+        const preview = completeDevTools.preview || {
+            target: null,
+            phase: 0,
+            paused: false,
+            repeat: false,
+            active: false,
+            playing: false,
+        };
+        const transport = sidebar.querySelector<HTMLElement>("#sow-hud-dev-transport");
         if (transport) transport.hidden = !preview.active;
-        sidebar.querySelectorAll("[data-dev-preview]").forEach(function (input) {
+        sidebar.querySelectorAll<HTMLInputElement>("[data-dev-preview]").forEach(function (input) {
             if (document.activeElement === input) return;
-            const value = preview[input.dataset.devPreview];
+            const field = input.dataset.devPreview;
+            if (!field) return;
+            const previewValues: Record<string, string | number | boolean | null> = {
+                target: preview.target,
+                phase: preview.phase,
+                paused: preview.paused,
+                repeat: preview.repeat,
+            };
+            const value = previewValues[field];
             if (value == null) return;
             if (input.type === "checkbox") input.checked = Boolean(value);
-            else input.value = value;
+            else input.value = String(value);
         });
-        sidebar.querySelectorAll(".sow-hud__dev-play").forEach(function (button) {
+        sidebar.querySelectorAll<HTMLButtonElement>(".sow-hud__dev-play").forEach(function (button) {
             button.classList.toggle(
                 "is-playing",
                 Boolean(preview.active) && Number(button.dataset.devTarget) === preview.target,
@@ -2554,7 +2905,7 @@
         });
     }
 
-    function updateLeaderboard(players) {
+    function updateLeaderboard(players: HudLeaderboardPlayer[]): void {
         if (!hudRefs || !hudRefs.rows) return;
         if (Array.isArray(players)) {
             lastLeaderboardPlayers = players;
@@ -2650,7 +3001,7 @@
         leaderboardRenderKey = renderKey;
     }
 
-    function createNotificationCard(container, contextual) {
+    function createNotificationCard(container: HTMLElement, contextual: boolean): HudNotificationCard {
         const card = document.createElement("div");
         card.className =
             "sow-hud__notification sow-hud__notification--premium" +
@@ -2686,7 +3037,7 @@
         return { card: card, seal: seal, avatars: avatars, copy: copy, renderKey: "" };
     }
 
-    function bindAvatarFallback(image) {
+    function bindAvatarFallback(image: HTMLImageElement): void {
         image.onerror = function () {
             const fallback = asset("gameplay/avatars/null.webp");
             if (this.getAttribute("src") !== fallback) {
@@ -2699,10 +3050,14 @@
         };
     }
 
-    function renderAvatarIdentity(image, emblem, presentation) {
+    function renderAvatarIdentity(
+        image: HTMLImageElement,
+        emblem: HTMLElement,
+        presentation: HudAvatarIdentity | null | undefined,
+    ): void {
         const identityKey = presentation ? JSON.stringify(presentation) : "";
-        if (image._sowAvatarIdentityKey === identityKey) return;
-        image._sowAvatarIdentityKey = identityKey;
+        if (avatarIdentityKeys.get(image) === identityKey) return;
+        avatarIdentityKeys.set(image, identityKey);
         image.hidden = true;
         if (image.removeAttribute) image.removeAttribute("src");
         else image.src = "";
@@ -2725,7 +3080,7 @@
         if (image.getAttribute("src") !== src) image.src = src;
     }
 
-    function clearNotificationCard(parts) {
+    function clearNotificationCard(parts: HudNotificationCard): void {
         parts.card.hidden = true;
         parts.renderKey = "";
         parts.seal.innerHTML = "";
@@ -2734,7 +3089,7 @@
             avatar.wrapper.hidden = true;
             avatar.wrapper.className = "sow-hud__notification-avatar";
             avatar.image.hidden = true;
-            avatar.image._sowAvatarIdentityKey = null;
+            avatarIdentityKeys.delete(avatar.image);
             if (avatar.image.removeAttribute) avatar.image.removeAttribute("src");
             else avatar.image.src = "";
             avatar.emblem.hidden = true;
@@ -2743,17 +3098,18 @@
     }
 
     // A notice may name a hero ability by its catalog key; that name fills {ability}.
-    function withAbilityName(values) {
+    function withAbilityName(values: Record<string, string>): Record<string, string> {
         if (!values.ability_key) return values;
         return Object.assign({}, values, { ability: SOW_t(values.ability_key, {}) });
     }
 
-    function notificationIcon(key, values) {
+    function notificationIcon(key: string, values: Record<string, string>): string {
         // A notice that names the hero whose ability fired shows that ability's icon.
         if (/^[a-z][a-z0-9_]*$/.test(values.hero || "")) {
+            const artSlug = leaderById(values.hero).art_slug || values.hero;
             return (
                 "<img class='sow-hud__notification-ability' src='" +
-                asset("gameplay/icons/abilities/" + values.hero + ".webp") +
+                asset("gameplay/icons/abilities/" + artSlug + ".webp") +
                 "' alt='' draggable='false'>"
             );
         }
@@ -2768,10 +3124,18 @@
         return '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v10M7 12h10"></path></svg>';
     }
 
-    function renderNotificationCard(parts, item, contextual) {
+    function renderNotificationCard(
+        parts: HudNotificationCard,
+        item: NotificationRenderItem,
+        contextual: boolean,
+    ): void {
         const entry = item.entry || {};
         const key = String(entry.key || "hud.event");
-        const avatars = contextual ? [] : Array.isArray(entry.avatars) ? entry.avatars : [];
+        const avatars = contextual
+            ? []
+            : "avatars" in entry && Array.isArray(entry.avatars)
+              ? entry.avatars
+              : [];
         const renderKey =
             String(entry.id) +
             ":" +
@@ -2802,12 +3166,10 @@
         parts.copy.textContent = SOW_t(key, withAbilityName(entry.values || {}));
     }
 
-    function positionMapFeedback(entry) {
+    function positionMapFeedback(entry: HudMapFeedback, card: HudNotificationCard): void {
         const width = Math.max(1, window.innerWidth || 1);
         const height = Math.max(1, window.innerHeight || 1);
-        const rect = mapFeedbackCard.card.getBoundingClientRect
-            ? mapFeedbackCard.card.getBoundingClientRect()
-            : null;
+        const rect = card.card.getBoundingClientRect ? card.card.getBoundingClientRect() : null;
         const cardWidth = Math.min(rect && rect.width ? rect.width : 320, width - 16);
         const cardHeight = rect && rect.height ? rect.height : 52;
         let dockReserve = 0;
@@ -2828,18 +3190,24 @@
         let top = y - cardHeight - 14;
         if (top < safeTop) top = y + 14;
         top = Math.max(safeTop, Math.min(maxTop, top));
-        hudRefs.mapFeedback.style.left = left + "px";
-        hudRefs.mapFeedback.style.top = top + "px";
+        hudRefs!.mapFeedback.style.left = left + "px";
+        hudRefs!.mapFeedback.style.top = top + "px";
     }
 
-    function measureHudScreen() {
-        return {
+    function measureHudScreen(): HudScreenSize {
+        hudScreenSize = {
             width: (hudRoot && hudRoot.clientWidth) || window.innerWidth || 0,
             height: (hudRoot && hudRoot.clientHeight) || window.innerHeight || 0,
         };
+        return hudScreenSize;
     }
 
-    function compactHudDensity(width, height) {
+    // Observers reuse the reading from the last update or viewport change instead of forcing another layout.
+    function cachedHudScreen(): HudScreenSize {
+        return hudScreenSize || measureHudScreen();
+    }
+
+    function compactHudDensity(width: number, height: number): number {
         width = Number(width);
         height = Number(height);
         if (
@@ -2853,11 +3221,11 @@
         return Math.max(0.65, Math.min(1, width / 960, height / 720));
     }
 
-    function writeHudDensity(target, density, storyRoot) {
+    function writeHudDensity(target: HTMLElement | null, density: number, storyRoot: boolean): void {
         if (!target) return;
         if (density < 1) {
             if (target.dataset.compact !== "true") target.dataset.compact = "true";
-            const values = {
+            const values: Record<string, string> = {
                 "--sow-hud-density": density.toFixed(4),
                 "--sow-hud-hit-target-zoom": (1 / density).toFixed(4),
                 "--sow-hud-text-primary-size": (12 / density).toFixed(2) + "px",
@@ -2888,9 +3256,9 @@
         }
     }
 
-    let compactHudDensityValue = null;
+    let compactHudDensityValue: number | null = null;
 
-    function syncCompactHudDensity(hudScreen = measureHudScreen()) {
+    function syncCompactHudDensity(hudScreen = cachedHudScreen()) {
         if (!hudRoot) return 1;
         const active = document.activeElement;
         const isEditingHudField =
@@ -2926,20 +3294,20 @@
     }
 
     function syncDefaultDockReserve() {
-        if (hudRefs.dock && hudRefs.dock.hidden) {
-            hudRoot.style.setProperty("--sow-dock-reserve", "0px");
+        if (hudRefs!.dock && hudRefs!.dock.hidden) {
+            hudRoot!.style.setProperty("--sow-dock-reserve", "0px");
         } else {
-            hudRoot.style.removeProperty("--sow-dock-reserve");
+            hudRoot!.style.removeProperty("--sow-dock-reserve");
         }
     }
 
-    function syncCompactHudBounds(hudScreen = measureHudScreen()) {
+    function syncCompactHudBounds(hudScreen = cachedHudScreen()) {
         if (!hudRoot || !hudRefs) return;
         const viewport = window.visualViewport;
         const viewHeight = (viewport && viewport.height) || hudScreen.height;
         const viewTop = (viewport && viewport.offsetTop) || 0;
         const viewBottom = Math.max(0, hudScreen.height - viewHeight - viewTop);
-        const viewportValues = {
+        const viewportValues: Record<string, string> = {
             "--sow-hud-dialog-view-height": viewHeight + "px",
             "--sow-hud-dialog-view-top": viewTop + "px",
             "--sow-hud-dialog-view-bottom": viewBottom + "px",
@@ -2964,7 +3332,7 @@
             [
                 hudRefs.topbar,
                 hudRefs.nameplate,
-                document.querySelector("#sow-story .sow-story__objective"),
+                document.querySelector<HTMLElement>("#sow-story .sow-story__objective"),
             ].forEach(function (element) {
                 if (!element || element.hidden || !element.getClientRects().length) return;
                 top = Math.max(top, element.getBoundingClientRect().bottom);
@@ -2988,7 +3356,7 @@
             return;
         }
         hudRoot.style.setProperty("--sow-hud-layout-top-reserve", Math.ceil(top + 8) + "px");
-        const dockInner = hudRefs.dock && hudRefs.dock.querySelector(".sow-hud__dock-inner");
+        const dockInner = hudRefs.dock && hudRefs.dock.querySelector<HTMLElement>(".sow-hud__dock-inner");
         const safeBottom =
             Number.parseFloat(window.getComputedStyle(hudRoot).getPropertyValue("--sow-sab")) || 0;
         let stackTop = window.innerHeight;
@@ -3013,8 +3381,8 @@
         if (hudRoot.style.getPropertyValue("--sow-hud-layout-operations-max-height") !== operationCap) {
             hudRoot.style.setProperty("--sow-hud-layout-operations-max-height", operationCap);
         }
-        if (activeMapFeedback && hudRefs.mapFeedback && !hudRefs.mapFeedback.hidden)
-            positionMapFeedback(activeMapFeedback.entry);
+        if (activeMapFeedback && mapFeedbackCard && hudRefs.mapFeedback && !hudRefs.mapFeedback.hidden)
+            positionMapFeedback(activeMapFeedback.entry, mapFeedbackCard);
     }
 
     function clearMapFeedback() {
@@ -3032,8 +3400,9 @@
         }
     }
 
-    function renderMapFeedback(entry) {
+    function renderMapFeedback(entry: HudMapFeedback | null): void {
         if (!hudRefs || !hudRefs.mapFeedback || !mapFeedbackCard) return;
+        const card = mapFeedbackCard;
         if (!entry) {
             if (activeMapFeedback || mapFeedbackTimer) clearMapFeedback();
             return;
@@ -3045,30 +3414,31 @@
         clearMapFeedback();
         if (age >= MAP_FEEDBACK_DURATION_MS) return;
         const now = Date.now();
-        activeMapFeedback = {
+        const feedback: ActiveMapFeedback = {
             entry: entry,
             priority: 1,
             expiresAt: now + MAP_FEEDBACK_DURATION_MS - age,
         };
+        activeMapFeedback = feedback;
         hudRefs.mapFeedback.hidden = false;
-        renderNotificationCard(mapFeedbackCard, activeMapFeedback, true);
-        positionMapFeedback(entry);
-        mapFeedbackCard.card.classList.remove("sow-hud__map-feedback-card--visible");
-        void mapFeedbackCard.card.offsetWidth;
-        mapFeedbackCard.card.classList.add("sow-hud__map-feedback-card--visible");
+        renderNotificationCard(card, feedback, true);
+        positionMapFeedback(entry, card);
+        card.card.classList.remove("sow-hud__map-feedback-card--visible");
+        void card.card.offsetWidth;
+        card.card.classList.add("sow-hud__map-feedback-card--visible");
         mapFeedbackTimer = window.setTimeout(
             function () {
-                mapFeedbackCard.card.classList.remove("sow-hud__map-feedback-card--visible");
+                card.card.classList.remove("sow-hud__map-feedback-card--visible");
                 mapFeedbackTimer = window.setTimeout(function () {
                     mapFeedbackTimer = null;
                     clearMapFeedback();
                 }, MAP_FEEDBACK_FADE_OUT_MS);
             },
-            Math.max(0, activeMapFeedback.expiresAt - Date.now()),
+            Math.max(0, feedback.expiresAt - Date.now()),
         );
     }
 
-    function createPlayerIdentity() {
+    function createPlayerIdentity(): PlayerIdentityParts {
         const identity = document.createElement("div");
         identity.className = "sow-hud__request-identity";
         const avatar = document.createElement("span");
@@ -3090,20 +3460,24 @@
         return { element: identity, portrait: portrait, emblem: emblem, copy: copy, name: name };
     }
 
-    function renderPlayerIdentity(parts, name, avatar) {
+    function renderPlayerIdentity(
+        parts: PlayerIdentityParts,
+        name: string | null | undefined,
+        avatar: HudAvatarIdentity | null | undefined,
+    ): void {
         const displayName = name || SOW_t("hud.player_name");
         if (parts.name.textContent !== displayName) parts.name.textContent = displayName;
         renderAvatarIdentity(parts.portrait, parts.emblem, avatar || { kind: "fallback" });
     }
 
-    function restoreHudFocus(target) {
+    function restoreHudFocus(target: HTMLElement | null): void {
         if (target && !target.isConnected && target.id) target = document.getElementById(target.id);
         if (!target || !target.isConnected || !target.getClientRects().length)
             target = document.getElementById("blade");
         if (target && typeof target.focus === "function") target.focus({ preventScroll: true });
     }
 
-    function createInboxRequest(request) {
+    function createInboxRequest(request: HudInboxRequest): InboxRequestParts {
         const element = document.createElement("article");
         element.className = "sow-hud__request-card";
         const identity = createPlayerIdentity();
@@ -3111,9 +3485,12 @@
         type.className = "sow-hud__request-type";
         const resources = document.createElement("div");
         resources.className = "sow-hud__request-resources";
-        const amounts = {};
-        ["gold", "troops"].forEach(function (kind) {
-            const metric = document.createElement("span");
+        const amounts: InboxRequestParts["amounts"] = {
+            gold: { element: document.createElement("span"), value: document.createElement("bdi") },
+            troops: { element: document.createElement("span"), value: document.createElement("bdi") },
+        };
+        (["gold", "troops"] as const).forEach(function (kind) {
+            const metric = amounts[kind].element;
             metric.className = "sow-hud__request-metric";
             if (kind === "gold") {
                 const icon = document.createElement("img");
@@ -3122,7 +3499,7 @@
                 icon.alt = "";
                 metric.appendChild(icon);
             } else metric.innerHTML = hudIcon("troops", "sow-hud__inline-icon");
-            const value = document.createElement("bdi");
+            const value = amounts[kind].value;
             metric.appendChild(value);
             resources.appendChild(metric);
             amounts[kind] = { element: metric, value: value };
@@ -3130,7 +3507,7 @@
         identity.copy.append(type, resources);
         const actions = document.createElement("div");
         actions.className = "sow-hud__request-actions";
-        const buttons = ["accept", "reject"].map(function (action) {
+        const buttons = (["accept", "reject"] as const).map(function (action) {
             const button = document.createElement("button");
             button.type = "button";
             button.className = "sow-hud__request-" + action;
@@ -3145,6 +3522,7 @@
             element: element,
             portrait: identity.portrait,
             emblem: identity.emblem,
+            copy: identity.copy,
             name: identity.name,
             type: type,
             resources: resources,
@@ -3154,7 +3532,7 @@
         };
     }
 
-    function renderInbox(requests) {
+    function renderInbox(requests: HudInboxRequest[]): void {
         if (!hudRefs || !hudRefs.inboxRows || !Array.isArray(requests)) return;
         const renderKey = String(window.SOW_LOCALE || "en") + ":" + JSON.stringify(requests);
         if (renderKey === hudRefs.inboxRenderKey) return;
@@ -3163,8 +3541,8 @@
         const focusedKey = previousKeys.find(function (key) {
             return previous[key].element.contains(document.activeElement);
         });
-        const next = Object.create(null);
-        const keys = [];
+        const next: Record<string, InboxRequestParts> = Object.create(null);
+        const keys: string[] = [];
         const numbers = new Intl.NumberFormat(window.SOW_LOCALE || "en", { maximumFractionDigits: 0 });
         requests.forEach(function (request) {
             if (
@@ -3182,8 +3560,8 @@
             row.type.textContent = SOW_t(
                 request.kind === "resources" ? "hud.resource_request_title" : "hud.alliance_request_title",
             );
-            const values = { name: name };
-            ["gold", "troops"].forEach(function (kind) {
+            const values: Record<string, string> = { name: name };
+            (["gold", "troops"] as const).forEach(function (kind) {
                 let value = Number(request[kind]);
                 value = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
                 values[kind] = numbers.format(value);
@@ -3212,15 +3590,15 @@
         });
         keys.forEach(function (key, index) {
             const row = next[key].element;
-            const before = hudRefs.inboxRows.children[index] || null;
-            if (before !== row) hudRefs.inboxRows.insertBefore(row, before);
+            const before = hudRefs!.inboxRows!.children[index] || null;
+            if (before !== row) hudRefs!.inboxRows.insertBefore(row, before);
         });
         hudRefs.inboxRequests = next;
         hudRefs.inboxRequestKeys = keys;
         hudRefs.inboxRenderKey = renderKey;
         hudRefs.inboxRows.hidden = keys.length === 0;
-        hudRefs.inboxEmpty.hidden = keys.length !== 0;
-        hudRefs.inboxTotal.textContent = numbers.format(keys.length);
+        hudRefs.inboxEmpty!.hidden = keys.length !== 0;
+        hudRefs.inboxTotal!.textContent = numbers.format(keys.length);
         if (focusedKey && !next[focusedKey]) {
             const nextRow = next[keys[Math.min(previousKeys.indexOf(focusedKey), keys.length - 1)]];
             (nextRow
@@ -3232,11 +3610,16 @@
         }
     }
 
-    function renderNotifications(entries, forceRefresh, hudScreen = measureHudScreen()) {
+    function renderNotifications(
+        entries: HudNotification[],
+        forceRefresh: boolean,
+        hudScreen: HudScreenSize = cachedHudScreen(),
+    ): void {
         if (!hudRefs || !hudRefs.notifications || !Array.isArray(entries)) return;
         let changed = Boolean(forceRefresh);
-        const limit =
-            window.SOWCampaignView.isCompactViewport(hudRoot, hudScreen.width, hudScreen.height) ? 1 : 3;
+        const limit = window.SOWCampaignView.isCompactViewport(hudRoot, hudScreen.width, hudScreen.height)
+            ? 1
+            : 3;
         const now = Date.now();
         const unexpired = activeNotifications.filter(function (item) {
             return item.expiresAt > now;
@@ -3329,7 +3712,7 @@
                 changed = true;
             }
         });
-        hudRoot.dataset.notificationsVisible = String(activeNotifications.length > 0);
+        hudRoot!.dataset.notificationsVisible = String(activeNotifications.length > 0);
         if (!changed) return;
         activeNotifications.sort(function (a, b) {
             return b.priority - a.priority || a.createdAt - b.createdAt;
@@ -3360,7 +3743,7 @@
         }
     }
 
-    function createCombatOperationRow() {
+    function createCombatOperationRow(): CombatOperationRow {
         const element = document.createElement("article");
         const portrait = document.createElement("img");
         const glyph = document.createElement("span");
@@ -3414,7 +3797,12 @@
         };
     }
 
-    function operationAction(command, glyph, label, operation) {
+    function operationAction(
+        command: string,
+        glyph: string,
+        label: string,
+        operation: HudCombatOperation,
+    ): HTMLButtonElement {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "sow-hud__operation-action";
@@ -3441,10 +3829,10 @@
         return button;
     }
 
-    function renderCombatOperations(operations) {
+    function renderCombatOperations(operations: HudCombatOperation[]): void {
         if (!hudRefs || !hudRefs.operations || !hudRefs.operationRows) return;
         operations = Array.isArray(operations) ? operations : [];
-        const incomingTotals = Object.create(null);
+        const incomingTotals: Record<string, number> = Object.create(null);
         operations.forEach(function (operation) {
             if (operation.direction === "incoming" && !operation.retreating) {
                 const playerId = String(operation.player_id);
@@ -3458,13 +3846,13 @@
             }
         });
 
-        const nextRows = Object.create(null);
-        const nextKeys = [];
+        const nextRows: Record<string, CombatOperationRow> = Object.create(null);
+        const nextKeys: string[] = [];
         operations.forEach(function (operation) {
             if (!operation || (operation.kind !== "attack" && operation.kind !== "fleet")) return;
             const key = operation.kind + ":" + operation.id;
             nextKeys.push(key);
-            const row = hudRefs.combatOperationRows[key] || createCombatOperationRow();
+            const row = hudRefs!.combatOperationRows[key] || createCombatOperationRow();
             const incoming = operation.direction === "incoming";
             const outgoing = operation.direction === "outgoing";
             const neutral = Boolean(operation.neutral);
@@ -3555,13 +3943,17 @@
                 }
                 row.actionKey = actionKey;
             }
-            row.actions.querySelectorAll('[data-command="focus_world"]').forEach(function (button) {
-                button.dataset.focusX = String(operation.focus_x);
-                button.dataset.focusY = String(operation.focus_y);
-            });
-            row.actions.querySelectorAll('[data-command="counter_attack"]').forEach(function (button) {
-                button.dataset.incomingTroops = String(incomingTotals[playerId] || 0);
-            });
+            row.actions
+                .querySelectorAll<HTMLButtonElement>('[data-command="focus_world"]')
+                .forEach(function (button) {
+                    button.dataset.focusX = String(operation.focus_x);
+                    button.dataset.focusY = String(operation.focus_y);
+                });
+            row.actions
+                .querySelectorAll<HTMLButtonElement>('[data-command="counter_attack"]')
+                .forEach(function (button) {
+                    button.dataset.incomingTroops = String(incomingTotals[playerId] || 0);
+                });
             nextRows[key] = row;
         });
 
@@ -3578,42 +3970,40 @@
         hudRefs.operations.hidden = nextKeys.length === 0;
     }
 
-    function renderHoverCard(hov) {
-        if (!hudRefs.hoverCard) return;
+    function renderHoverCard(hov: NonNullable<MenuHudPayload["hovered"]> | null): void {
+        if (!hudRefs!.hoverCard) return;
         if (hov) {
-            hudRefs.hoverCard.classList.remove("hidden");
-            if (hudRefs.hoverName) hudRefs.hoverName.textContent = hov.name || SOW_t("hud.territory");
-            if (hudRefs.hoverPct)
-                hudRefs.hoverPct.textContent = Math.round((hov.territory_pct || 0) * 100) + "%";
-            if (hudRefs.hoverTroops)
-                hudRefs.hoverTroops.textContent =
+            hudRefs!.hoverCard.classList.remove("hidden");
+            if (hudRefs!.hoverName) hudRefs!.hoverName.textContent = hov.name || SOW_t("hud.territory");
+            if (hudRefs!.hoverPct)
+                hudRefs!.hoverPct.textContent = Math.round((hov.territory_pct || 0) * 100) + "%";
+            if (hudRefs!.hoverTroops)
+                hudRefs!.hoverTroops.textContent =
                     hov.troops > 1000
                         ? (hov.troops / 1000).toFixed(1) + "k"
                         : String(Math.floor(hov.troops || 0));
-            if (hudRefs.hoverGold)
-                hudRefs.hoverGold.textContent = Math.floor(hov.gold || 0).toLocaleString();
-            if (hudRefs.hoverBlds) {
+            if (hudRefs!.hoverGold)
+                hudRefs!.hoverGold.textContent = Math.floor(hov.gold || 0).toLocaleString();
+            if (hudRefs!.hoverBlds) {
                 const bldText = [];
                 if (hov.cities > 0)
                     bldText.push(buildingIcon("City", 1, "sow-hud__inline-icon") + " x" + hov.cities);
                 if (hov.factories > 0)
-                    bldText.push(
-                        buildingIcon("Factory", 1, "sow-hud__inline-icon") + " x" + hov.factories,
-                    );
+                    bldText.push(buildingIcon("Factory", 1, "sow-hud__inline-icon") + " x" + hov.factories);
                 if (hov.ports > 0)
                     bldText.push(buildingIcon("Port", 1, "sow-hud__inline-icon") + " x" + hov.ports);
                 if (hov.towers > 0)
                     bldText.push(buildingIcon("Tower", 1, "sow-hud__inline-icon") + " x" + hov.towers);
                 if (hov.farms > 0)
                     bldText.push(buildingIcon("Farm", 1, "sow-hud__inline-icon") + " x" + hov.farms);
-                hudRefs.hoverBlds.innerHTML = bldText.join(" ");
+                hudRefs!.hoverBlds.innerHTML = bldText.join(" ");
             }
         } else {
-            hudRefs.hoverCard.classList.add("hidden");
+            hudRefs!.hoverCard.classList.add("hidden");
         }
     }
 
-    function renderHud(forceNotifications?) {
+    function renderHud(forceNotifications = false): void {
         if (!hudRoot) return;
         if (!hudState || hudState.phase !== "Playing" || !hudState.hud) {
             hudRoot.hidden = true;
@@ -3660,7 +4050,7 @@
         syncCompactHudDensity(hudScreen);
 
         const hud = hudState.hud;
-        const settings = hudState.settings || {};
+        const settings = hudState.settings || DEFAULT_HUD_SETTINGS;
         const settingsOpen = activeHudPanel === "settings";
         const inboxOpen = activeHudPanel === "inbox";
         const leaderboardOpen = activeHudPanel === "leaderboard";
@@ -3668,38 +4058,50 @@
             "is-reduced-motion",
             Boolean(hudState.settings && hudState.settings.reduced_motion),
         );
-        const devTools = hud.dev_tools || {};
+        const devTools = hud.dev_tools;
         const showDevTools = settings.show_dev_tools_available && settings.show_dev_tools;
         const diagnosticsVisible = settings.show_fps_ping === true || showDevTools || devSidebarOpen;
-        if (hudRefs.diagnostics) hudRefs.diagnostics.hidden = !diagnosticsVisible;
-        if (hudRefs.devBtn) {
-            hudRefs.devBtn.classList.toggle("hidden", !showDevTools);
+        if (hudRefs!.diagnostics) hudRefs!.diagnostics.hidden = !diagnosticsVisible;
+        if (hudRefs!.devBtn) {
+            hudRefs!.devBtn.classList.toggle("hidden", !showDevTools);
         }
         if (hudDevLayer) hudDevLayer.hidden = !diagnosticsVisible;
-        if (devTools.schema && hudRefs.devSidebar) renderDevControls(devTools);
-        if (devTools.config && hudRefs.devSidebar) {
-            hudRefs.devSidebar.querySelectorAll("[data-dev]").forEach(function (input) {
+        if (devTools.schema && hudRefs!.devSidebar) renderDevControls(devTools);
+        const devConfig = devTools.config || {};
+        if (hudRefs!.devSidebar) {
+            hudRefs!.devSidebar.querySelectorAll<HTMLInputElement>("[data-dev]").forEach(function (input) {
                 if (document.activeElement === input) return;
-                const value = devTools.config[input.dataset.dev];
+                const field = input.dataset.dev;
+                if (!field) return;
+                const value = devConfig[field];
                 if (value == null) return;
-                const control = input.closest("[data-dev-control]");
+                const control = input.closest<HTMLElement>("[data-dev-control]");
                 if (!control) return;
                 const decimals = Number(control.dataset.devDecimals) || 0;
                 if (control.dataset.devKind === "bool") input.checked = Boolean(value);
                 else if (input.type === "radio") input.checked = Number(input.value) === Number(value);
                 else if (control.dataset.devKind === "color" || control.dataset.devKind === "vector") {
-                    if (input.hasAttribute("data-dev-channel")) {
+                    if (input.hasAttribute("data-dev-channel") && Array.isArray(value)) {
                         const part = value[Number(input.dataset.devChannel)];
-                        input.value = input.type === "range" ? part : devFormat(part, decimals);
+                        if (part === undefined) return;
+                        input.value = input.type === "range" ? String(part) : devFormat(part, decimals);
                         devReadout(input, decimals);
                     }
-                } else input.value = input.type === "range" ? value : devFormat(value, decimals);
+                } else {
+                    const numericValue = typeof value === "number" ? value : Number(value);
+                    input.value =
+                        input.type === "range" ? String(numericValue) : devFormat(numericValue, decimals);
+                }
             });
-            hudRefs.devSidebar.querySelectorAll("[data-dev-picker]").forEach(function (picker) {
-                const value = devTools.config[picker.dataset.devPicker];
-                if (Array.isArray(value) && document.activeElement !== picker)
-                    picker.value = devColorHex(value, picker.dataset.devLinear === "1");
-            });
+            hudRefs!.devSidebar
+                .querySelectorAll<HTMLInputElement>("[data-dev-picker]")
+                .forEach(function (picker) {
+                    const field = picker.dataset.devPicker;
+                    if (!field) return;
+                    const value = devConfig[field];
+                    if (Array.isArray(value) && document.activeElement !== picker)
+                        picker.value = devColorHex(value, picker.dataset.devLinear === "1");
+                });
         }
         const gold = Math.floor(hud.gold || 0);
         const goldRate = Number(hud.gold_rate) || 0;
@@ -3713,87 +4115,92 @@
         let hasFleetItems = false;
 
         const goldText = formatHudMetric(gold);
-        if (hudRefs.plateGold && hudRefs.plateGold.dataset.val !== goldText) {
-            hudRefs.plateGold.textContent = goldText;
-            hudRefs.plateGold.dataset.val = goldText;
+        if (hudRefs!.plateGold && hudRefs!.plateGold.dataset.val !== goldText) {
+            hudRefs!.plateGold.textContent = goldText;
+            hudRefs!.plateGold.dataset.val = goldText;
         }
         const goldRateText = formatHudRate(goldRate);
-        if (hudRefs.plateGoldRate && hudRefs.plateGoldRate.textContent !== goldRateText) {
-            hudRefs.plateGoldRate.textContent = goldRateText;
+        if (hudRefs!.plateGoldRate && hudRefs!.plateGoldRate.textContent !== goldRateText) {
+            hudRefs!.plateGoldRate.textContent = goldRateText;
         }
-        if (hudRefs.plateGoldRate) hudRefs.plateGoldRate.classList.toggle("is-negative", goldRate < 0);
-        if (hudRefs.plateGoldWrap) hudRefs.plateGoldWrap.classList.toggle("is-in-debt", gold < 0);
+        if (hudRefs!.plateGoldRate) hudRefs!.plateGoldRate.classList.toggle("is-negative", goldRate < 0);
+        if (hudRefs!.plateGoldWrap) hudRefs!.plateGoldWrap.classList.toggle("is-in-debt", gold < 0);
         const troopRateText = formatHudRate(prod);
-        if (hudRefs.plateTroopRate && hudRefs.plateTroopRate.textContent !== troopRateText) {
-            hudRefs.plateTroopRate.textContent = troopRateText;
+        if (hudRefs!.plateTroopRate && hudRefs!.plateTroopRate.textContent !== troopRateText) {
+            hudRefs!.plateTroopRate.textContent = troopRateText;
         }
 
         const playerPlateHidden = Boolean(hud.is_spectating);
-        if (hudRefs.nameplate) {
-            if (hudRefs.nameplate.hidden !== playerPlateHidden) hudRefs.nameplate.hidden = playerPlateHidden;
+        if (hudRefs!.nameplate) {
+            if (hudRefs!.nameplate.hidden !== playerPlateHidden)
+                hudRefs!.nameplate.hidden = playerPlateHidden;
             if (!playerPlateHidden) {
                 const plateLeader = leaderById(hud.player_leader || (hudState && hudState.selected_leader));
-                const plateSrc = asset("gameplay/avatars/" + plateLeader.slug + ".webp");
+                const plateSrc = asset(
+                    "gameplay/avatars/" + (plateLeader.art_slug || plateLeader.slug) + ".webp",
+                );
                 const platePlayerName = String(hud.player_name || "");
-                if (hudRefs.plateAvatar && hudRefs.plateAvatar.getAttribute("src") !== plateSrc) {
-                    hudRefs.plateAvatar.src = plateSrc;
+                if (hudRefs!.plateAvatar && hudRefs!.plateAvatar.getAttribute("src") !== plateSrc) {
+                    hudRefs!.plateAvatar.src = plateSrc;
                 }
-                if (hudRefs.plateName && hudRefs.plateName.textContent !== platePlayerName) {
-                    hudRefs.plateName.textContent = platePlayerName;
+                if (hudRefs!.plateName && hudRefs!.plateName.textContent !== platePlayerName) {
+                    hudRefs!.plateName.textContent = platePlayerName;
                 }
                 const plateText = formatNameplateTroops(troops) + " / " + formatNameplateTroops(maxTroops);
-                if (hudRefs.plateTroops && hudRefs.plateTroops.textContent !== plateText) {
-                    hudRefs.plateTroops.textContent = plateText;
+                if (hudRefs!.plateTroops && hudRefs!.plateTroops.textContent !== plateText) {
+                    hudRefs!.plateTroops.textContent = plateText;
                 }
                 const plateFillPct =
                     maxTroops > 0 ? Math.min(100, Math.max(0, (troops / maxTroops) * 100)) : 0;
                 const plateFillStr = plateFillPct.toFixed(1) + "%";
-                if (hudRefs.plateFill && hudRefs.plateFill.style.width !== plateFillStr) {
-                    hudRefs.plateFill.style.width = plateFillStr;
+                if (hudRefs!.plateFill && hudRefs!.plateFill.style.width !== plateFillStr) {
+                    hudRefs!.plateFill.style.width = plateFillStr;
                 }
             }
         }
 
-        if (hudRefs.fps) {
-            hudRefs.fps.hidden = settings.show_fps_ping !== true;
-            const hasFps = Number.isFinite(hud.fps) && hud.fps > 0;
-            hudRefs.fps.textContent = SOW_t("hud.fps", { fps: hasFps ? hud.fps : "--" });
+        if (hudRefs!.fps) {
+            hudRefs!.fps.hidden = settings.show_fps_ping !== true;
+            const fps = hud.fps;
+            const hasFps = fps !== null && Number.isFinite(fps) && fps > 0;
+            hudRefs!.fps.textContent = SOW_t("hud.fps", { fps: hasFps ? fps : "--" });
         }
-        if (hudRefs.ping) {
-            const hasPing = settings.show_fps_ping === true && Number.isFinite(hud.ping);
-            hudRefs.ping.hidden = !hasPing;
-            if (hasPing) hudRefs.ping.textContent = Math.floor(hud.ping) + "ms";
+        if (hudRefs!.ping) {
+            const ping = hud.ping;
+            const hasPing = settings.show_fps_ping === true && ping !== null && Number.isFinite(ping);
+            hudRefs!.ping.hidden = !hasPing;
+            if (hasPing && ping !== null) hudRefs!.ping.textContent = Math.floor(ping) + "ms";
         }
-        if (hudRefs.inboxCount) {
-            hudRefs.inboxCount.textContent = String(hud.inbox_count || 0);
-            hudRefs.inboxCount.hidden = !hud.inbox_count;
+        if (hudRefs!.inboxCount) {
+            hudRefs!.inboxCount.textContent = String(hud.inbox_count || 0);
+            hudRefs!.inboxCount.hidden = !hud.inbox_count;
         }
 
         // Hover Card
-        renderHoverCard(hud.hovered);
+        renderHoverCard(hud.hovered || null);
 
         // Left Rail Slider
-        if (hudRefs.slider && document.activeElement !== hudRefs.slider) {
-            hudRefs.slider.value = String(Math.round(currentRatio * 100));
+        if (hudRefs!.slider && document.activeElement !== hudRefs!.slider) {
+            hudRefs!.slider.value = String(Math.round(currentRatio * 100));
         }
         const displayRatio =
-            hudRefs.slider && document.activeElement === hudRefs.slider
-                ? Number(hudRefs.slider.value) / 100
+            hudRefs!.slider && document.activeElement === hudRefs!.slider
+                ? Number(hudRefs!.slider.value) / 100
                 : currentRatio;
         updateArmyAllocation(hud.troops, displayRatio);
 
         // Bottom Dock: Phase Transformation
-        if (hudRefs.deployBtn) {
-            hudRefs.deployBtn.style.display = isDeploying ? "flex" : "none";
-            if (isDeploying && hudRefs.deployTimer) {
-                hudRefs.deployTimer.textContent = spawnSecs.toFixed(1) + "s";
+        if (hudRefs!.deployBtn) {
+            hudRefs!.deployBtn.style.display = isDeploying ? "flex" : "none";
+            if (isDeploying && hudRefs!.deployTimer) {
+                hudRefs!.deployTimer.textContent = spawnSecs.toFixed(1) + "s";
             }
         }
-        if (hudRefs.buildingsStrip) {
+        if (hudRefs!.buildingsStrip) {
             const selectedBuilding = hud.selected_building;
             const buildingCosts = hud.building_costs || {};
             const buildUnlocks = campaignUnlocks(hud);
-            hudRefs.buildingButtons.forEach(function (button) {
+            hudRefs!.buildingButtons.forEach(function (button) {
                 const kind = button.dataset.kind || "";
                 const available = campaignAllowsBuilding(buildUnlocks, kind, 1);
                 button.hidden = !available;
@@ -3821,12 +4228,12 @@
                 button.setAttribute("aria-label", accessibleLabel);
                 if (button.title !== accessibleLabel) button.title = accessibleLabel;
             });
-            hasBuildingItems = hudRefs.buildingButtons.some(function (button) {
+            hasBuildingItems = hudRefs!.buildingButtons.some(function (button) {
                 return !button.hidden;
             });
-            hudRefs.buildingsStrip.style.display = !isDeploying && hasBuildingItems ? "flex" : "none";
+            hudRefs!.buildingsStrip.style.display = !isDeploying && hasBuildingItems ? "flex" : "none";
         }
-        if (hudRefs.fleetStrip) {
+        if (hudRefs!.fleetStrip) {
             const fleetPanel = hud.fleet_panel || {};
             const fleetUnlocks = campaignUnlocks(hud);
             const portLevels = Math.max(0, Number(fleetPanel.port_levels) || 0);
@@ -3848,10 +4255,10 @@
             const nukeUnlocked = !nukeCampaignLocked && cityLevel >= nukeRequiredCityLevel;
             const militaryFull = Number(fleetPanel.military_used) >= Number(fleetPanel.military_capacity);
             const warshipSelected = Boolean(hud.selected_warship_build);
-            if (hudRefs.fleetTrade) {
+            if (hudRefs!.fleetTrade) {
                 const hideTrade = fleetUnlocks !== null && tradeCampaignLocked;
-                hudRefs.fleetTrade.hidden = hideTrade;
-                hudRefs.fleetTrade.style.display = hideTrade ? "none" : "";
+                hudRefs!.fleetTrade.hidden = hideTrade;
+                hudRefs!.fleetTrade.style.display = hideTrade ? "none" : "";
                 const tradeCount = Math.floor(Number(fleetPanel.trade_ships) || 0);
                 const tradeCapacity = Math.floor(Number(fleetPanel.trade_capacity) || 0);
                 let tradeStatus = SOW_t("hud.map_action_fleet") + " · " + tradeCount + "/" + tradeCapacity;
@@ -3859,23 +4266,23 @@
                     ? SOW_t("hud.map_action_port") + " " + tradeRequiredPortLevel
                     : "";
                 if (tradeReason) tradeStatus += " · " + tradeReason;
-                hudRefs.fleetTrade.setAttribute("aria-label", tradeStatus);
-                hudRefs.fleetTrade.title = tradeStatus;
-                hudRefs.fleetTrade.classList.toggle("is-locked", !tradeUnlocked);
-                setCampaignLock(hudRefs.fleetTrade, fleetUnlocks === null && !tradeUnlocked);
+                hudRefs!.fleetTrade.setAttribute("aria-label", tradeStatus);
+                hudRefs!.fleetTrade.title = tradeStatus;
+                hudRefs!.fleetTrade.classList.toggle("is-locked", !tradeUnlocked);
+                setCampaignLock(hudRefs!.fleetTrade, fleetUnlocks === null && !tradeUnlocked);
             }
-            if (hudRefs.fleetWarship) {
+            if (hudRefs!.fleetWarship) {
                 const hideWarship = fleetUnlocks !== null && warshipCampaignLocked;
-                hudRefs.fleetWarship.hidden = hideWarship;
-                hudRefs.fleetWarship.style.display = hideWarship ? "none" : "";
+                hudRefs!.fleetWarship.hidden = hideWarship;
+                hudRefs!.fleetWarship.style.display = hideWarship ? "none" : "";
                 const warshipCost = Math.max(0, Number(fleetPanel.warship_cost) || 0);
                 const warshipDisabled =
                     warshipCampaignLocked || !warshipUnlocked || militaryFull || gold < warshipCost;
-                hudRefs.fleetWarship.disabled = warshipDisabled;
-                hudRefs.fleetWarship.setAttribute("aria-disabled", String(warshipDisabled));
-                hudRefs.fleetWarship.setAttribute("aria-pressed", String(warshipSelected));
-                hudRefs.fleetWarship.classList.toggle("active", warshipSelected);
-                hudRefs.fleetWarship.classList.toggle("is-locked", warshipDisabled && !warshipSelected);
+                hudRefs!.fleetWarship.disabled = warshipDisabled;
+                hudRefs!.fleetWarship.setAttribute("aria-disabled", String(warshipDisabled));
+                hudRefs!.fleetWarship.setAttribute("aria-pressed", String(warshipSelected));
+                hudRefs!.fleetWarship.classList.toggle("active", warshipSelected);
+                hudRefs!.fleetWarship.classList.toggle("is-locked", warshipDisabled && !warshipSelected);
                 const warshipReason = !warshipUnlocked
                     ? SOW_t("lobbies.locked") +
                       " · " +
@@ -3898,25 +4305,25 @@
                           Math.floor(warshipCost).toLocaleString() +
                           "g";
                 const warshipLabel = SOW_t("hud.map_action_build_warship") + " · " + warshipReason;
-                hudRefs.fleetWarship.setAttribute("aria-label", warshipLabel);
-                hudRefs.fleetWarship.title = warshipLabel;
-                setCampaignLock(hudRefs.fleetWarship, fleetUnlocks === null && warshipDisabled);
-                setTileCost(hudRefs.fleetWarship, warshipCost);
+                hudRefs!.fleetWarship.setAttribute("aria-label", warshipLabel);
+                hudRefs!.fleetWarship.title = warshipLabel;
+                setCampaignLock(hudRefs!.fleetWarship, fleetUnlocks === null && warshipDisabled);
+                setTileCost(hudRefs!.fleetWarship, warshipCost);
             }
-            if (hudRefs.fleetNuke) {
+            if (hudRefs!.fleetNuke) {
                 const hideNuke = fleetUnlocks !== null && nukeCampaignLocked;
-                hudRefs.fleetNuke.hidden = hideNuke;
-                hudRefs.fleetNuke.style.display = hideNuke ? "none" : "";
+                hudRefs!.fleetNuke.hidden = hideNuke;
+                hudRefs!.fleetNuke.style.display = hideNuke ? "none" : "";
                 const cooldownTicks = Math.max(0, Number(fleetPanel.nuke_cooldown_ticks) || 0);
                 const nukeCost = Math.max(0, Number(fleetPanel.nuke_cost) || 0);
                 const nukeReady =
                     Boolean(fleetPanel.nuke_available) && cooldownTicks === 0 && gold >= nukeCost;
                 const nukeDisabled = nukeCampaignLocked || !nukeUnlocked || !nukeReady;
-                hudRefs.fleetNuke.disabled = nukeDisabled;
-                hudRefs.fleetNuke.setAttribute("aria-disabled", String(nukeDisabled));
-                hudRefs.fleetNuke.setAttribute("aria-pressed", String(hud.selected_nuke === "AtomBomb"));
-                hudRefs.fleetNuke.classList.toggle("is-locked", nukeDisabled);
-                hudRefs.fleetNuke.classList.toggle("active", hud.selected_nuke === "AtomBomb");
+                hudRefs!.fleetNuke.disabled = nukeDisabled;
+                hudRefs!.fleetNuke.setAttribute("aria-disabled", String(nukeDisabled));
+                hudRefs!.fleetNuke.setAttribute("aria-pressed", String(hud.selected_nuke === "AtomBomb"));
+                hudRefs!.fleetNuke.classList.toggle("is-locked", nukeDisabled);
+                hudRefs!.fleetNuke.classList.toggle("active", hud.selected_nuke === "AtomBomb");
                 const nukeReason = !nukeUnlocked
                     ? SOW_t("lobbies.locked") +
                       " · " +
@@ -3937,39 +4344,51 @@
                             Math.floor(nukeCost).toLocaleString() +
                             "g";
                 const nukeLabel = SOW_t("hud.map_action_nuke") + " · " + nukeReason;
-                hudRefs.fleetNuke.setAttribute("aria-label", nukeLabel);
-                hudRefs.fleetNuke.title = nukeLabel;
-                setCampaignLock(hudRefs.fleetNuke, fleetUnlocks === null && nukeDisabled);
-                setTileCost(hudRefs.fleetNuke, nukeCost);
+                hudRefs!.fleetNuke.setAttribute("aria-label", nukeLabel);
+                hudRefs!.fleetNuke.title = nukeLabel;
+                setCampaignLock(hudRefs!.fleetNuke, fleetUnlocks === null && nukeDisabled);
+                setTileCost(hudRefs!.fleetNuke, nukeCost);
             }
             hasFleetItems =
-                (hudRefs.fleetTrade && !hudRefs.fleetTrade.hidden) ||
-                (hudRefs.fleetWarship && !hudRefs.fleetWarship.hidden) ||
-                (hudRefs.fleetNuke && !hudRefs.fleetNuke.hidden);
-            hudRefs.fleetStrip.style.display = isDeploying || !hasFleetItems ? "none" : "flex";
+                (hudRefs!.fleetTrade && !hudRefs!.fleetTrade.hidden) ||
+                (hudRefs!.fleetWarship && !hudRefs!.fleetWarship.hidden) ||
+                (hudRefs!.fleetNuke && !hudRefs!.fleetNuke.hidden);
+            hudRefs!.fleetStrip.style.display = isDeploying || !hasFleetItems ? "none" : "flex";
         }
 
         syncEmoteTexts(hud);
-        if (hudRefs.devSidebar) {
-            hudRefs.devSidebar.classList.toggle("hidden", !showDevTools || !devSidebarOpen);
+        if (hudRefs!.devSidebar) {
+            hudRefs!.devSidebar.classList.toggle("hidden", !showDevTools || !devSidebarOpen);
         }
-        if (hudRefs.devBtn) {
-            hudRefs.devBtn.classList.toggle("active", devSidebarOpen);
+        if (hudRefs!.devBtn) {
+            hudRefs!.devBtn.classList.toggle("active", devSidebarOpen);
         }
 
-        if (hudRefs.settings) {
-            hudRefs.settings.classList.toggle("hidden", !settingsOpen);
+        if (hudRefs!.settings) {
+            hudRefs!.settings.classList.toggle("hidden", !settingsOpen);
             if (settingsOpen && hudState.settings) {
                 const settings = hudState.settings;
-                const muteInput = hudRefs.settings.querySelector('[data-hud-setting="mute_all"]');
-                const musicInput = hudRefs.settings.querySelector('[data-hud-setting="music_volume"]');
-                const motionInput = hudRefs.settings.querySelector('[data-hud-setting="reduced_motion"]');
-                const freeZoomInput = hudRefs.settings.querySelector('[data-hud-setting="free_zoom_out"]');
-                const fpsPingInput = hudRefs.settings.querySelector('[data-hud-setting="show_fps_ping"]');
-                const devToolsInput = hudRefs.settings.querySelector('[data-hud-setting="show_dev_tools"]');
+                const muteInput = hudRefs!.settings.querySelector<HTMLInputElement>(
+                    '[data-hud-setting="mute_all"]',
+                );
+                const musicInput = hudRefs!.settings.querySelector<HTMLInputElement>(
+                    '[data-hud-setting="music_volume"]',
+                );
+                const motionInput = hudRefs!.settings.querySelector<HTMLInputElement>(
+                    '[data-hud-setting="reduced_motion"]',
+                );
+                const freeZoomInput = hudRefs!.settings.querySelector<HTMLInputElement>(
+                    '[data-hud-setting="free_zoom_out"]',
+                );
+                const fpsPingInput = hudRefs!.settings.querySelector<HTMLInputElement>(
+                    '[data-hud-setting="show_fps_ping"]',
+                );
+                const devToolsInput = hudRefs!.settings.querySelector<HTMLInputElement>(
+                    '[data-hud-setting="show_dev_tools"]',
+                );
                 if (muteInput && document.activeElement !== muteInput) muteInput.checked = !settings.mute_all;
                 if (musicInput && document.activeElement !== musicInput)
-                    musicInput.value = settings.music_volume == null ? 0.8 : settings.music_volume;
+                    musicInput.value = String(settings.music_volume == null ? 0.8 : settings.music_volume);
                 if (motionInput && document.activeElement !== motionInput)
                     motionInput.checked = Boolean(settings.reduced_motion);
                 if (freeZoomInput && document.activeElement !== freeZoomInput)
@@ -3981,31 +4400,31 @@
             }
         }
 
-        if (hudRefs.inbox) {
-            const inboxWasHidden = hudRefs.inbox.classList.contains("hidden");
-            hudRefs.inbox.classList.toggle("hidden", !inboxOpen);
+        if (hudRefs!.inbox) {
+            const inboxWasHidden = hudRefs!.inbox.classList.contains("hidden");
+            hudRefs!.inbox.classList.toggle("hidden", !inboxOpen);
             if (inboxOpen) {
-                renderInbox(hud.inbox);
-                if (inboxWasHidden && hudRefs.inboxClose) hudRefs.inboxClose.focus();
+                renderInbox(hud.inbox || []);
+                if (inboxWasHidden && hudRefs!.inboxClose) hudRefs!.inboxClose.focus();
             } else if (
                 !inboxWasHidden &&
-                hudRefs.inbox.contains(document.activeElement) &&
-                hudRefs.inboxButton
+                hudRefs!.inbox.contains(document.activeElement) &&
+                hudRefs!.inboxButton
             ) {
-                hudRefs.inboxButton.focus();
+                hudRefs!.inboxButton.focus();
             }
         }
-        if (hudRefs.transfer) {
-            const transferWasHidden = hudRefs.transfer.classList.contains("hidden");
-            hudRefs.transfer.classList.toggle("hidden", !hud.transfer);
+        if (hudRefs!.transfer) {
+            const transferWasHidden = hudRefs!.transfer.classList.contains("hidden");
+            hudRefs!.transfer.classList.toggle("hidden", !hud.transfer);
             if (hud.transfer) {
-                hudRefs.transfer.dataset.targetId = String(hud.transfer.target_id);
+                hudRefs!.transfer.dataset.targetId = String(hud.transfer.target_id);
                 renderPlayerIdentity(
-                    hudRefs.transferIdentity,
+                    hudRefs!.transferIdentity,
                     hud.transfer.target_name,
                     hud.transfer.target_avatar,
                 );
-                hudRefs.transferTarget.setAttribute(
+                hudRefs!.transferTarget.setAttribute(
                     "aria-label",
                     SOW_t("hud.target_player", {
                         name: hud.transfer.target_name || SOW_t("hud.player_name"),
@@ -4013,38 +4432,41 @@
                 );
                 if (
                     transferWasHidden ||
-                    hudRefs.transfer.dataset.suggestedTarget !== String(hud.transfer.target_id)
+                    hudRefs!.transfer.dataset.suggestedTarget !== String(hud.transfer.target_id)
                 ) {
-                    hudRefs.transfer.dataset.suggestedTarget = String(hud.transfer.target_id);
-                    if (hudRefs.transferGold)
-                        hudRefs.transferGold.value = String(Math.floor(hud.transfer.suggested_gold || 0));
-                    if (hudRefs.transferTroops)
-                        hudRefs.transferTroops.value = String(Math.floor(hud.transfer.suggested_troops || 0));
+                    hudRefs!.transfer.dataset.suggestedTarget = String(hud.transfer.target_id);
+                    if (hudRefs!.transferGold)
+                        hudRefs!.transferGold.value = String(Math.floor(hud.transfer.suggested_gold || 0));
+                    if (hudRefs!.transferTroops)
+                        hudRefs!.transferTroops.value = String(
+                            Math.floor(hud.transfer.suggested_troops || 0),
+                        );
                 }
                 if (transferWasHidden) {
-                    hudRefs.transferReturnFocus = document.activeElement;
-                    hudRefs.transferClose.focus({ preventScroll: true });
+                    const activeElement = document.activeElement;
+                    hudRefs!.transferReturnFocus =
+                        activeElement instanceof HTMLElement ? activeElement : null;
+                    hudRefs!.transferClose.focus({ preventScroll: true });
                 }
-            } else if (!transferWasHidden && hudRefs.transfer.contains(document.activeElement)) {
-                restoreHudFocus(hudRefs.transferReturnFocus);
+            } else if (!transferWasHidden && hudRefs!.transfer.contains(document.activeElement)) {
+                restoreHudFocus(hudRefs!.transferReturnFocus);
             }
         }
-        if (hudRefs.betrayal) {
-            const betrayalWasHidden = hudRefs.betrayal.classList.contains("hidden");
-            betrayalOpen = Boolean(hud.betrayal);
-            hudRefs.betrayal.classList.toggle("hidden", !betrayalOpen);
-            if (betrayalOpen) {
-                renderPlayerIdentity(
-                    hudRefs.betrayalIdentity,
-                    hud.betrayal.ally_name,
-                    hud.betrayal.ally_avatar,
-                );
+        if (hudRefs!.betrayal) {
+            const betrayalWasHidden = hudRefs!.betrayal.classList.contains("hidden");
+            const betrayal = hud.betrayal;
+            betrayalOpen = Boolean(betrayal);
+            hudRefs!.betrayal.classList.toggle("hidden", !betrayalOpen);
+            if (betrayal) {
+                renderPlayerIdentity(hudRefs!.betrayalIdentity, betrayal.ally_name, betrayal.ally_avatar);
                 if (betrayalWasHidden) {
-                    hudRefs.betrayalReturnFocus = document.activeElement;
-                    hudRefs.betrayalCancel.focus({ preventScroll: true });
+                    const activeElement = document.activeElement;
+                    hudRefs!.betrayalReturnFocus =
+                        activeElement instanceof HTMLElement ? activeElement : null;
+                    hudRefs!.betrayalCancel.focus({ preventScroll: true });
                 }
-            } else if (!betrayalWasHidden && hudRefs.betrayal.contains(document.activeElement)) {
-                restoreHudFocus(hudRefs.betrayalReturnFocus);
+            } else if (!betrayalWasHidden && hudRefs!.betrayal.contains(document.activeElement)) {
+                restoreHudFocus(hudRefs!.betrayalReturnFocus);
             }
         }
 
@@ -4053,16 +4475,16 @@
         renderMapFeedback(hud.map_feedback);
 
         // Leaderboard
-        if (hudRefs.leaderboard) {
-            hudRefs.leaderboard.classList.toggle("hidden", !leaderboardOpen);
+        if (hudRefs!.leaderboard) {
+            hudRefs!.leaderboard.classList.toggle("hidden", !leaderboardOpen);
         }
         if (leaderboardOpen) {
             updateLeaderboard(Array.isArray(hud.leaderboard) ? hud.leaderboard : lastLeaderboardPlayers);
         }
 
         // Surrender Modal
-        if (hudRefs.surrender) {
-            hudRefs.surrender.classList.toggle("hidden", !surrenderModalOpen);
+        if (hudRefs!.surrender) {
+            hudRefs!.surrender.classList.toggle("hidden", !surrenderModalOpen);
             const tutorialActive = Boolean(hud.tutorial && hud.tutorial.active);
             const surrenderLeader = leaderById(
                 (hud && hud.player_leader) || (hudState && hudState.selected_leader),
@@ -4076,27 +4498,29 @@
                     : "";
             }
             if (tutorialActive) surrenderMessage = null;
-            if (hudRefs.surrenderTitle)
-                hudRefs.surrenderTitle.textContent = tutorialActive
+            if (hudRefs!.surrenderTitle)
+                hudRefs!.surrenderTitle.textContent = tutorialActive
                     ? SOW_t("endgame.leave_tutorial")
                     : SOW_t("endgame.leave_match");
-            if (hudRefs.surrenderDesc)
-                hudRefs.surrenderDesc.textContent = tutorialActive
+            if (hudRefs!.surrenderDesc)
+                hudRefs!.surrenderDesc.textContent = tutorialActive
                     ? SOW_t("endgame.tutorial_description")
                     : surrenderMessage || SOW_t("endgame.your_battle_will_end");
-            if (hudRefs.surrenderStats) hudRefs.surrenderStats.classList.toggle("hidden", tutorialActive);
-            renderEndgameStats(hudRefs.surrenderStatValues, hud.player_endgame_stats);
-            if (hudRefs.surrenderSaveNote) {
-                hudRefs.surrenderSaveNote.textContent = SOW_t("endgame.leave_rewards_saved");
-                hudRefs.surrenderSaveNote.classList.toggle("hidden", tutorialActive);
+            if (hudRefs!.surrenderStats) hudRefs!.surrenderStats.classList.toggle("hidden", tutorialActive);
+            renderEndgameStats(hudRefs!.surrenderStatValues, hud.player_endgame_stats);
+            if (hudRefs!.surrenderSaveNote) {
+                hudRefs!.surrenderSaveNote.textContent = SOW_t("endgame.leave_rewards_saved");
+                hudRefs!.surrenderSaveNote.classList.toggle("hidden", tutorialActive);
             }
-            if (hudRefs.surrenderPortrait) {
-                hudRefs.surrenderPortrait.src = asset("gameplay/avatars/" + surrenderLeader.slug + ".webp");
-                hudRefs.surrenderPortrait.alt = surrenderLeader.name || SOW_t("hud.leader_avatar");
+            if (hudRefs!.surrenderPortrait) {
+                hudRefs!.surrenderPortrait.src = asset(
+                    "gameplay/avatars/" + (surrenderLeader.art_slug || surrenderLeader.slug) + ".webp",
+                );
+                hudRefs!.surrenderPortrait.alt = surrenderLeader.name || SOW_t("hud.leader_avatar");
             }
-            if (hudRefs.surrenderCancel) hudRefs.surrenderCancel.textContent = SOW_t("endgame.cancel");
-            if (hudRefs.surrenderActionLabel)
-                hudRefs.surrenderActionLabel.textContent = tutorialActive
+            if (hudRefs!.surrenderCancel) hudRefs!.surrenderCancel.textContent = SOW_t("endgame.cancel");
+            if (hudRefs!.surrenderActionLabel)
+                hudRefs!.surrenderActionLabel.textContent = tutorialActive
                     ? SOW_t("endgame.leave_tutorial")
                     : SOW_t("endgame.leave_match");
         }
@@ -4104,47 +4528,52 @@
         // Endgame Screen
         const isOver = Boolean(hud.match_over);
         const isWinner = Boolean(hud.is_winner);
-        if (hudRefs.endgame) {
-            hudRefs.endgame.classList.toggle("hidden", !isOver);
+        if (hudRefs!.endgame) {
+            hudRefs!.endgame.classList.toggle("hidden", !isOver);
             if (isOver) {
                 const result = isWinner ? "victory" : "defeat";
                 const stats = hud.player_endgame_stats || {};
-                if (hudRefs.endgameCard) hudRefs.endgameCard.dataset.result = result;
-                if (hudRefs.endgameBanner)
-                    hudRefs.endgameBanner.textContent = isWinner ? SOW_t("hud.victory") : SOW_t("hud.defeat");
+                if (hudRefs!.endgameCard) hudRefs!.endgameCard.dataset.result = result;
+                if (hudRefs!.endgameBanner)
+                    hudRefs!.endgameBanner.textContent = isWinner
+                        ? SOW_t("hud.victory")
+                        : SOW_t("hud.defeat");
                 const activeLeaderId = (hud && hud.player_leader) || (hudState && hudState.selected_leader);
                 const activeLeader = leaderById(activeLeaderId);
-                if (hudRefs.endgamePortrait) {
-                    hudRefs.endgamePortrait.src = asset("gameplay/avatars/" + activeLeader.slug + ".webp");
-                    hudRefs.endgamePortrait.alt = activeLeader.name || SOW_t("hud.leader_avatar");
+                if (hudRefs!.endgamePortrait) {
+                    hudRefs!.endgamePortrait.src = asset(
+                        "gameplay/avatars/" + (activeLeader.art_slug || activeLeader.slug) + ".webp",
+                    );
+                    hudRefs!.endgamePortrait.alt = activeLeader.name || SOW_t("hud.leader_avatar");
                 }
-                renderEndgameStats(hudRefs.endgameStatValues, stats);
+                renderEndgameStats(hudRefs!.endgameStatValues, stats);
                 const featuredSkin =
                     window.SOW_PORTAL === "poki" || window.SOW_PORTAL === "jest" ? null : hud.featured_skin;
-                if (hudRefs.endgameStore) hudRefs.endgameStore.classList.toggle("hidden", !featuredSkin);
+                if (hudRefs!.endgameStore) hudRefs!.endgameStore.classList.toggle("hidden", !featuredSkin);
                 if (featuredSkin) {
-                    if (hudRefs.endgameStoreName)
-                        hudRefs.endgameStoreName.textContent =
+                    if (hudRefs!.endgameStoreName)
+                        hudRefs!.endgameStoreName.textContent =
                             featuredSkin.name || SOW_t("store.featured_skin");
-                    if (hudRefs.endgameStoreCopy)
-                        hudRefs.endgameStoreCopy.textContent =
+                    if (hudRefs!.endgameStoreCopy)
+                        hudRefs!.endgameStoreCopy.textContent =
                             SOW_t("store.gems_count", { amount: featuredSkin.cost_gems || 0 }) +
                             " · " +
                             SOW_t("store.original_cosmetic");
                 }
-                if (hudRefs.endgameObserve)
-                    hudRefs.endgameObserve.classList.toggle("hidden", isWinner || Boolean(hud.winner_name));
+                if (hudRefs!.endgameObserve)
+                    hudRefs!.endgameObserve.classList.toggle("hidden", isWinner || Boolean(hud.winner_name));
             }
         }
         const mapMenuOpen = renderMapMenu(hud.map_menu);
-        const panelStates = {
+        const panelStates: Record<string, boolean> = {
             toggle_leaderboard: leaderboardOpen,
             toggle_inbox: inboxOpen,
             toggle_settings: settingsOpen,
             toggle_dev_sidebar: devSidebarOpen,
         };
-        hudRefs.panelButtons.forEach(function (button) {
-            const expanded = Boolean(panelStates[button.dataset.command]);
+        hudRefs!.panelButtons.forEach(function (button) {
+            const command = button.dataset.command;
+            const expanded = Boolean(command && panelStates[command]);
             button.classList.toggle("active", expanded);
             const value = String(expanded);
             if (button.getAttribute("aria-expanded") !== value) button.setAttribute("aria-expanded", value);
@@ -4163,21 +4592,22 @@
             ),
         );
         const dockHidden = !(isDeploying || hasBuildingItems || hasFleetItems);
-        if (hudRefs.dock && hudRefs.dock.hidden !== dockHidden) {
-            hudRefs.dock.hidden = dockHidden;
+        if (hudRefs!.dock && hudRefs!.dock.hidden !== dockHidden) {
+            hudRefs!.dock.hidden = dockHidden;
             syncCompactHudBounds(hudScreen);
         }
     }
 
     if (hudRoot) {
-        let zoomHold = null;
+        let zoomHold: { button: HTMLButtonElement; repeat: number } | null = null;
         function stopZoomHold() {
-            if (!zoomHold) return;
-            window.clearInterval(zoomHold.repeat);
-            zoomHold.button.classList.remove("is-holding", "is-zoom-limited");
+            const hold = zoomHold;
+            if (!hold) return;
+            window.clearInterval(hold.repeat);
+            hold.button.classList.remove("is-holding", "is-zoom-limited");
             zoomHold = null;
         }
-        function zoomAtLimit(command) {
+        function zoomAtLimit(command: string): boolean {
             const zoom = hudState && hudState.hud && hudState.hud.camera_zoom_state;
             if (!zoom || !Number.isFinite(Number(zoom.current))) return false;
             return command === "zoom_out"
@@ -4185,44 +4615,49 @@
                 : Number(zoom.current) >= Number(zoom.ceiling) - 0.02;
         }
         hudRoot.addEventListener("pointerdown", function (event) {
-            const button =
-                event.target.closest &&
-                event.target.closest('[data-command="zoom_in"], [data-command="zoom_out"]');
-            if (!button || button.disabled || event.button !== 0) return;
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const button = target.closest('[data-command="zoom_in"], [data-command="zoom_out"]');
+            if (!(button instanceof HTMLButtonElement) || button.disabled || event.button !== 0) return;
             stopZoomHold();
             event.preventDefault();
             event.stopPropagation();
             const command = button.dataset.command;
+            if (!command) return;
             button.classList.add("is-holding");
             send(command);
-            zoomHold = {
-                button: button,
-                repeat: window.setInterval(function () {
-                    if (zoomAtLimit(command)) {
-                        window.clearInterval(zoomHold.repeat);
-                        button.classList.add("is-zoom-limited");
-                        return;
-                    }
-                    send(command);
-                }, 180),
-            };
+            const hold = { button: button, repeat: 0 };
+            zoomHold = hold;
+            hold.repeat = window.setInterval(function () {
+                if (zoomHold !== hold) return;
+                if (zoomAtLimit(command)) {
+                    window.clearInterval(hold.repeat);
+                    button.classList.add("is-zoom-limited");
+                    return;
+                }
+                send(command);
+            }, 180);
         });
         ["pointerup", "pointercancel", "blur"].forEach(function (type) {
             window.addEventListener(type, stopZoomHold, { passive: true });
         });
-        function handleHudClick(event) {
-            const emoteChoice = event.target.closest("[data-emote-kind]");
+        function handleHudClick(event: MouseEvent): void {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const emoteChoice = target.closest<HTMLElement>("[data-emote-kind]");
             if (emoteChoice) {
+                const emoteKind = emoteChoice.dataset.emoteKind;
+                if (!emoteKind) return;
                 event.preventDefault();
                 event.stopPropagation();
                 send("express_emote", {
-                    session: Number(hudRefs.mapMenu.dataset.session),
-                    tile_idx: Number(hudRefs.mapMenu.dataset.tileIdx),
-                    kind: emoteChoice.dataset.emoteKind,
+                    session: Number(hudRefs!.mapMenu!.dataset.session),
+                    tile_idx: Number(hudRefs!.mapMenu!.dataset.tileIdx),
+                    kind: emoteKind,
                 });
                 return;
             }
-            const pinButton = event.target.closest("[data-emote-pin-toggle]");
+            const pinButton = target.closest<HTMLElement>("[data-emote-pin-toggle]");
             if (pinButton) {
                 event.preventDefault();
                 event.stopPropagation();
@@ -4230,9 +4665,9 @@
                 send("set_emote_pinned", { pinned: pinButton.getAttribute("aria-pressed") !== "true" });
                 return;
             }
-            const mapButton = event.target.closest("[data-map-action]");
-            const mapGroup = event.target.closest("[data-map-group]");
-            const mapBack = event.target.closest("[data-map-back]");
+            const mapButton = target.closest<HTMLButtonElement>("[data-map-action]");
+            const mapGroup = target.closest<HTMLElement>("[data-map-group]");
+            const mapBack = target.closest<HTMLButtonElement>("[data-map-back]");
             if (mapButton || mapGroup || mapBack) {
                 event.preventDefault();
                 event.stopPropagation();
@@ -4242,28 +4677,35 @@
                     const fromGroup = mapMenuView;
                     mapMenuView = "root";
                     renderMapMenu(hudState && hudState.hud && hudState.hud.map_menu);
-                    const groupSlot = mapMenu.querySelector('[data-map-group="' + fromGroup + '"]');
+                    const groupSlot = mapMenu.querySelector<HTMLElement>(
+                        '[data-map-group="' + fromGroup + '"]',
+                    );
                     if (groupSlot) groupSlot.focus({ preventScroll: true });
                 } else if (mapGroup) {
-                    mapMenuView = mapGroup.dataset.mapGroup || "build";
+                    mapMenuView = mapGroup.dataset.mapGroup === "emote" ? "emote" : "build";
                     renderMapMenu(hudState && hudState.hud && hudState.hud.map_menu);
-                    const firstChoice = mapMenu.querySelector(".sow-hud__ring-slot:not(:disabled)");
+                    const firstChoice = mapMenu.querySelector<HTMLButtonElement>(
+                        ".sow-hud__ring-slot:not(:disabled)",
+                    );
                     if (firstChoice) firstChoice.focus({ preventScroll: true });
-                } else {
+                } else if (mapButton) {
                     if (mapButton.disabled) return;
                     // Hold-to-confirm actions only fire from a completed hold.
                     if (mapButton.dataset.ringHold === "true" && !ring.holdConfirmed) return;
+                    const action = mapButton.dataset.mapAction;
+                    if (!action) return;
                     send("map_menu_action", {
                         session: Number(mapMenu.dataset.session),
                         tile_idx: Number(mapMenu.dataset.tileIdx),
-                        action: mapButton.dataset.mapAction,
+                        action,
                     });
                 }
                 return;
             }
-            const btn = event.target.closest("[data-command]");
+            const btn = target.closest<HTMLElement>("[data-command]");
             if (!btn) return;
             const cmd = btn.dataset.command;
+            if (!cmd) return;
             if (cmd === "zoom_in" || cmd === "zoom_out") {
                 if (event.detail === 0) send(cmd);
                 return;
@@ -4288,20 +4730,22 @@
                     field: btn.dataset.devField || null,
                 });
             } else if (cmd === "dev_step") {
-                if (event.detail === 0) devStepOnce(btn);
+                if (event.detail === 0 && btn instanceof HTMLButtonElement) devStepOnce(btn);
             } else if (cmd === "dev_tab") {
-                devTab = btn.dataset.devTab;
+                devTab = btn.dataset.devTab || "";
                 try {
                     window.localStorage.setItem("sow_dev_tab", devTab);
                 } catch {
                     /* storage unavailable */
                 }
-                const devSearch = hudRefs.devSidebar.querySelector("[data-dev-search]");
+                const devSearch = hudRefs!.devSidebar!.querySelector<HTMLInputElement>("[data-dev-search]");
                 if (devSearch) devSearch.value = "";
                 renderDevControls((hudState && hudState.hud && hudState.hud.dev_tools) || {});
-                hudRefs.devSidebar.querySelector(".sow-hud__dev-body").scrollTop = 0;
+                const devBody = hudRefs!.devSidebar.querySelector<HTMLElement>(".sow-hud__dev-body");
+                if (devBody) devBody.scrollTop = 0;
             } else if (cmd === "dev_menu") {
-                setDevMenu(hudRefs.devSidebar.querySelector("#sow-hud-dev-menu").hidden);
+                const devMenu = hudRefs!.devSidebar!.querySelector<HTMLElement>("#sow-hud-dev-menu");
+                if (devMenu) setDevMenu(devMenu.hasAttribute("hidden"));
             } else if (cmd === "dev_preview") {
                 send("set_dev_vfx_preview", { target: Number(btn.dataset.devTarget) });
                 send("replay_dev_vfx_preview");
@@ -4314,7 +4758,8 @@
                     devResetTimer = window.setTimeout(disarmDevReset, 3000);
                 }
             } else if (cmd === "dev_perf") {
-                send("dev_vfx_group", { group: btn.dataset.devPerf, on: btn.dataset.state === "off" });
+                const group = btn.dataset.devPerf;
+                if (group) send("dev_vfx_group", { group, on: btn.dataset.state === "off" });
             } else if (cmd === "dev_vfx_all") {
                 setDevMenu(false);
                 send("dev_vfx_all", { on: btn.dataset.on === "1" });
@@ -4356,7 +4801,8 @@
             } else if (cmd === "cancel_attack" || cmd === "recall_fleet" || cmd === "scuttle_fleet") {
                 const isAttack = cmd === "cancel_attack";
                 const id = Number(isAttack ? btn.dataset.attackId : btn.dataset.fleetId);
-                if (id > 0) btn.disabled = send(cmd, isAttack ? { attack_id: id } : { fleet_id: id });
+                if (id > 0 && btn instanceof HTMLButtonElement)
+                    btn.disabled = send(cmd, isAttack ? { attack_id: id } : { fleet_id: id });
             } else if (cmd === "counter_attack") {
                 const counterTarget = Number(btn.dataset.playerId);
                 const incomingTotal = Number(btn.dataset.incomingTroops);
@@ -4364,7 +4810,7 @@
                     pendingCounterAttacks[counterTarget] = incomingTotal;
                     if (hudRefs && hudRefs.operationRows) {
                         hudRefs.operationRows
-                            .querySelectorAll('[data-command="counter_attack"]')
+                            .querySelectorAll<HTMLButtonElement>('[data-command="counter_attack"]')
                             .forEach(function (button) {
                                 if (Number(button.dataset.playerId) === counterTarget) button.disabled = true;
                             });
@@ -4373,7 +4819,7 @@
                         delete pendingCounterAttacks[counterTarget];
                         if (hudRefs && hudRefs.operationRows) {
                             hudRefs.operationRows
-                                .querySelectorAll('[data-command="counter_attack"]')
+                                .querySelectorAll<HTMLButtonElement>('[data-command="counter_attack"]')
                                 .forEach(function (button) {
                                     if (Number(button.dataset.playerId) === counterTarget)
                                         button.disabled = false;
@@ -4408,14 +4854,17 @@
             } else if (cmd === "center_camera") {
                 send("center_camera");
             } else if (cmd === "focus_player") {
-                const pid = parseInt(btn.dataset.playerId, 10);
+                const playerId = btn.dataset.playerId;
+                if (!playerId) return;
+                const pid = parseInt(playerId, 10);
                 if (!isNaN(pid)) {
                     send("focus_player", { player_id: pid });
                 }
             } else if (cmd === "spawn_troops") {
                 send("spawn_troops");
             } else if (cmd === "select_building") {
-                send("select_building", { kind: btn.dataset.kind });
+                const kind = btn.dataset.kind;
+                if (kind) send("select_building", { kind });
             } else if (cmd === "select_warship") {
                 send("select_warship");
             } else if (cmd === "select_nuke") {
@@ -4430,11 +4879,11 @@
             }
         }
         hudRoot.addEventListener("click", handleHudClick);
-        hudDevLayer.addEventListener("click", handleHudClick);
+        hudDevLayer!.addEventListener("click", handleHudClick);
         bindRingInput();
     }
 
-    function handleHudStateUpdate(raw, parsed) {
+    function handleHudStateUpdate(raw: string, parsed: HudStateEnvelope): void {
         if (typeof raw !== "string" || raw === lastHudRaw) return;
         lastHudRaw = raw;
         const previousHud = hudState && hudState.phase === "Playing" ? hudState.hud : null;
@@ -4444,6 +4893,9 @@
             hudState.hud = hudState.hud || previousHud;
             // Hover arrives on its own channel (SOW_hover_card_update), so keep the last one.
             if (hudState.hud && previousHud) hudState.hud.hovered = previousHud.hovered;
+            // The tutorial pointer arrives on its own channel (SOW_tutorial_pointer_update), so keep the last one.
+            if (hudState.hud && hudState.hud.tutorial && previousHud && previousHud.tutorial)
+                hudState.hud.tutorial.pointer = previousHud.tutorial.pointer;
             if (hudState.hud && hudState.hud.dev_tools && typeof hudState.hud.dev_tools.open === "boolean") {
                 devSidebarOpen = hudState.hud.dev_tools.open;
             }
@@ -4455,14 +4907,13 @@
     }
 
     window.SOW_onStateUpdate = function (raw) {
-        let parsed = null;
-        if (typeof raw === "string") {
-            try {
-                parsed = JSON.parse(raw);
-            } catch (error) {
-                console.warn("[WEB STATE] invalid state:", error);
-                return;
-            }
+        if (typeof raw !== "string") return;
+        let parsed: HudStateEnvelope;
+        try {
+            parsed = JSON.parse(raw) as HudStateEnvelope;
+        } catch (error) {
+            console.warn("[WEB STATE] invalid state:", error);
+            return;
         }
         if (typeof window.SOW_menu_state_update === "function") {
             window.SOW_menu_state_update(raw, parsed);
@@ -4475,6 +4926,14 @@
         const hovered = JSON.parse(raw);
         hudState.hud.hovered = hovered;
         renderHoverCard(hovered);
+        if (typeof window.SOW_tutorial_state_update === "function") {
+            window.SOW_tutorial_state_update(hudState);
+        }
+    };
+
+    window.SOW_tutorial_pointer_update = function (raw) {
+        if (!hudState || hudState.phase !== "Playing" || !hudState.hud || !hudState.hud.tutorial) return;
+        hudState.hud.tutorial.pointer = JSON.parse(raw);
         if (typeof window.SOW_tutorial_state_update === "function") {
             window.SOW_tutorial_state_update(hudState);
         }
@@ -4497,10 +4956,10 @@
                     return;
                 }
                 if (event.key === "Tab") {
-                    const buttons = Array.prototype.slice.call(
-                        hudRefs.betrayal.querySelectorAll("button:not(:disabled)"),
+                    const buttons = Array.from(
+                        hudRefs.betrayal.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
                     );
-                    const index = buttons.indexOf(document.activeElement);
+                    const index = buttons.findIndex((button) => button === document.activeElement);
                     if (
                         buttons.length &&
                         (index < 0 ||
@@ -4533,51 +4992,56 @@
                 renderHud();
                 return;
             }
+            const target = event.target;
             const menu = hudRefs && hudRefs.mapMenu;
             if (!menu || menu.classList.contains("hidden") || !menu.contains(event.target as Node)) return;
             if (event.key === "Escape") {
                 event.preventDefault();
                 event.stopPropagation();
-                const back = menu.querySelector("[data-map-back]");
+                const back = menu.querySelector<HTMLButtonElement>("[data-map-back]");
                 if (back) back.click();
                 else send("close_map_context_menu");
             } else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].indexOf(event.key) >= 0) {
                 // Arrows walk the ring clockwise/counter-clockwise, skipping empty and blocked slots.
-                const choices = Array.prototype.slice.call(
-                    menu.querySelectorAll(".sow-hud__ring-slot:not(:disabled)"),
+                const choices = Array.from(
+                    menu.querySelectorAll<HTMLButtonElement>(".sow-hud__ring-slot:not(:disabled)"),
                 );
                 if (!choices.length) return;
                 event.preventDefault();
                 event.stopPropagation();
                 const direction = event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1;
-                let index = choices.indexOf(document.activeElement);
+                let index = choices.findIndex((choice) => choice === document.activeElement);
                 if (index < 0) index = direction > 0 ? -1 : 0;
                 choices[(index + direction + choices.length) % choices.length].focus({ preventScroll: true });
             } else if (
                 (event.key === "Enter" || event.key === " ") &&
-                event.target.dataset.ringHold === "true"
+                target instanceof HTMLElement &&
+                target.dataset.ringHold === "true"
             ) {
                 event.preventDefault();
-                if (!event.repeat) ringHoldStart(menu, Number(event.target.dataset.slot));
+                if (!event.repeat) ringHoldStart(menu, Number(target.dataset.slot));
             }
         });
     if (hudRoot)
         hudRoot.addEventListener("keyup", function (event) {
             const menu = openRingMenu();
+            const target = event.target;
             if (
                 !menu ||
                 (event.key !== "Enter" && event.key !== " ") ||
-                event.target.dataset.ringHold !== "true"
+                !(target instanceof HTMLElement) ||
+                target.dataset.ringHold !== "true"
             )
                 return;
             event.preventDefault();
-            ringActivate(menu, Number(event.target.dataset.slot));
+            ringActivate(menu, Number(target.dataset.slot));
         });
     if (hudRoot)
         hudRoot.addEventListener("focusin", function (event) {
             const menu = openRingMenu();
-            if (menu && menu.contains(event.target as Node) && event.target.dataset.slot != null)
-                setRingHot(menu, Number(event.target.dataset.slot));
+            const target = event.target;
+            if (menu && target instanceof HTMLElement && menu.contains(target) && target.dataset.slot != null)
+                setRingHot(menu, Number(target.dataset.slot));
         });
 
     window.addEventListener("sow:locale-change", function () {
@@ -4588,14 +5052,14 @@
             hudRefs && hudRefs.transfer && !hudRefs.transfer.classList.contains("hidden")
                 ? {
                       target: hudRefs.transfer.dataset.targetId,
-                      gold: hudRefs.transferGold.value,
-                      troops: hudRefs.transferTroops.value,
-                      focus: hudRefs.transfer.contains(active) ? active.id : null,
+                      gold: hudRefs.transferGold!.value,
+                      troops: hudRefs.transferTroops!.value,
+                      focus: hudRefs.transfer.contains(active) ? active!.id : null,
                       returnFocus: hudRefs.transferReturnFocus,
                   }
                 : null;
         const betrayalFocus =
-            hudRefs && hudRefs.betrayal && hudRefs.betrayal.contains(active) ? active.id : null;
+            hudRefs && hudRefs.betrayal && hudRefs.betrayal.contains(active) ? active!.id : null;
         const betrayalReturnFocus = hudRefs && hudRefs.betrayalReturnFocus;
         hudInitialized = false;
         hudRefs = null;
@@ -4606,14 +5070,19 @@
             hudDevLayer = freshDevLayer;
         }
         renderHud(true);
-        if (transferDraft && hudRefs && hudRefs.transfer.dataset.targetId === transferDraft.target) {
-            hudRefs.transferGold.value = transferDraft.gold;
-            hudRefs.transferTroops.value = transferDraft.troops;
-            hudRefs.transferReturnFocus = transferDraft.returnFocus;
+        const refreshedRefs = hudRefs as HudRefs | null;
+        if (
+            transferDraft &&
+            refreshedRefs &&
+            refreshedRefs.transfer.dataset.targetId === transferDraft.target
+        ) {
+            refreshedRefs.transferGold.value = transferDraft.gold;
+            refreshedRefs.transferTroops.value = transferDraft.troops;
+            refreshedRefs.transferReturnFocus = transferDraft.returnFocus;
             if (transferDraft.focus) restoreHudFocus(document.getElementById(transferDraft.focus));
         }
-        if (betrayalFocus && hudRefs) {
-            hudRefs.betrayalReturnFocus = betrayalReturnFocus;
+        if (betrayalFocus && refreshedRefs) {
+            refreshedRefs.betrayalReturnFocus = betrayalReturnFocus;
             restoreHudFocus(document.getElementById(betrayalFocus));
         }
     });
@@ -4622,5 +5091,5 @@
     updateHudSafeArea();
     if (hudRoot) hudRoot.hidden = true;
     if (hudDevLayer) hudDevLayer.hidden = true;
-    window.SOW_onStateUpdate(window.SOW_MENU_STATE);
+    if (typeof window.SOW_MENU_STATE === "string") window.SOW_onStateUpdate(window.SOW_MENU_STATE);
 })();

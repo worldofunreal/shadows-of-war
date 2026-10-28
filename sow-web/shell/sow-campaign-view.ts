@@ -6,6 +6,10 @@ import {
     resolveUiRangeGuideAnchor,
 } from "./campaign/view.ts";
 import type {
+    CampaignAnchor,
+    CampaignDefinition,
+    CampaignFaction,
+    CampaignMachineView,
     CampaignRecord,
     CampaignStep,
     CampaignView,
@@ -13,7 +17,7 @@ import type {
     CampaignViewOptions,
 } from "./campaign/types.ts";
 
-const host = typeof window === "undefined" ? globalThis : window;
+const host = (typeof window === "undefined" ? globalThis : window) as Window & typeof globalThis;
 let instance = 0;
 export function isCompactViewport(root?: HTMLElement | null, width?: number, height?: number): boolean {
     if (root && root.dataset && root.dataset.compact === "true") return true;
@@ -44,7 +48,7 @@ export function compactGuideMetric(step: CampaignStep, progress: CampaignRecord)
         target = Number(progress.target);
     if (!Number.isFinite(current) || !Number.isFinite(target)) return null;
     if (trigger.type === "ui" && trigger.action === "attack_ratio") {
-        const percent = (value) => Math.round(Math.max(0, Math.min(1, value)) * 100) + "%";
+        const percent = (value: number) => Math.round(Math.max(0, Math.min(1, value)) * 100) + "%";
         return { text: percent(current) + " / " + percent(target) };
     }
     if (target > 1)
@@ -63,31 +67,30 @@ export function compactStatusLabel(
     }
     return translate(step.hint_key || step.body_key);
 }
-export function mount(root: HTMLElement, options: CampaignViewOptions = {}): CampaignView {
-    options = options || {};
+export function mount(root: HTMLElement, options: CampaignViewOptions): CampaignView {
     const doc = root.ownerDocument;
     const uid = "sow-story-" + ++instance;
-    let model = null,
+    let model: CampaignMachineView | null = null,
         renderKey = "",
         lastBeatKey = "",
-        focusBefore = null,
+        focusBefore: HTMLElement | null = null,
         wasModal = false,
         lastAction = -Infinity;
     let compactViewport = false,
-        lastRenderContext = null,
+        lastRenderContext: CampaignRecord | null = null,
         compactStatusVisible = false;
     let renderedWidth = 0,
         renderedHeight = 0;
     let guideWasVisible = false,
         cameraTracking = false,
-        guideX = null,
-        guideY = null,
+        guideX: number | null = null,
+        guideY: number | null = null,
         guideLabelWidth = 0,
         guideLabelHeight = 0,
         guideLabelMeasureKey = "",
         nudgeTimer = 0;
-    let homeGuideAnimation = null,
-        homeGuideAnimationStep = null;
+    let homeGuideAnimation: Animation | null = null,
+        homeGuideAnimationStep: string | null = null;
     root.classList.add("sow-story");
     root.classList.toggle("has-guide-skip", Boolean(options.guideSkipLabel));
     root.innerHTML =
@@ -112,13 +115,13 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         '<div class="sow-story__spotlight" aria-hidden="true" hidden></div>' +
         '<button class="sow-story__guide-skip" type="button" data-story-guide-skip hidden></button>' +
         '<div class="sow-story__gesture" data-tutorial-hand hidden><span class="sow-story__ripple" aria-hidden="true"></span><span class="sow-story__hand" aria-hidden="true"><img alt="" draggable="false"></span><span class="sow-story__zoom" aria-hidden="true"><span class="sow-story__zoom-fingers"><i></i><i></i><b></b></span><span class="sow-story__zoom-wheel"></span></span><span class="sow-story__pan-keys" aria-hidden="true"><kbd>↑</kbd><span><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span></span><span class="sow-story__gesture-label" role="status" aria-live="polite" aria-atomic="true" hidden><span class="sow-story__gesture-copy"></span><span class="sow-story__gesture-hint" hidden></span><span class="sow-story__gesture-metric" hidden><span class="sow-story__distance-tile" aria-hidden="true"></span><b class="sow-story__zoom-current"></b><i aria-hidden="true">→</i><span class="sow-story__distance-target" aria-hidden="true">⌖</span><b class="sow-story__zoom-target"></b></span></span></div>';
-    const find = (selector) => root.querySelector(selector);
+    const find = <T extends Element = HTMLElement>(selector: string): T => root.querySelector<T>(selector)!;
     const dialog = find(".sow-story__dialog"),
         shade = find(".sow-story__shade");
     const guideSkip = find("[data-story-guide-skip]");
     const portrait = find(".sow-story__portrait"),
-        portraitLine = portrait.querySelector(".sow-story__portrait-line");
-    let image = portrait.querySelector("img");
+        portraitLine = portrait.querySelector<HTMLElement>(".sow-story__portrait-line")!;
+    let image = portrait.querySelector<HTMLImageElement>("img")!;
     const title = find(".sow-story__title"),
         body = find(".sow-story__body");
     const heading = find(".sow-story__heading"),
@@ -130,15 +133,15 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
     const continueButton = find("[data-story-continue]"),
         lines = find(".sow-story__lines");
     const cinematic = find(".sow-story__cinematic"),
-        cinematicVideo = cinematic.querySelector("video");
+        cinematicVideo = cinematic.querySelector<HTMLVideoElement>("video")!;
     const cinematicStart = find("[data-story-start]"),
         cinematicHold = find("[data-story-hold]"),
-        cinematicHoldProgress = cinematicHold.querySelector("b");
+        cinematicHoldProgress = cinematicHold.querySelector<HTMLElement>("b")!;
     const objective = find(".sow-story__objective"),
-        objectiveTitle = objective.querySelector("h3"),
-        hint = objective.querySelector("p");
-    const meter = objective.querySelector("progress"),
-        amount = objective.querySelector("output");
+        objectiveTitle = objective.querySelector<HTMLHeadingElement>("h3")!,
+        hint = objective.querySelector<HTMLParagraphElement>("p")!;
+    const meter = objective.querySelector<HTMLProgressElement>("progress")!,
+        amount = objective.querySelector<HTMLOutputElement>("output")!;
     const gesture = find(".sow-story__gesture"),
         gestureLabel = find(".sow-story__gesture-label"),
         gestureCopy = find(".sow-story__gesture-copy"),
@@ -146,7 +149,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
     const gestureMetric = find(".sow-story__gesture-metric"),
         guideCurrent = find(".sow-story__zoom-current"),
         guideTarget = find(".sow-story__zoom-target");
-    function guideTransform(x, y) {
+    function guideTransform(x: number, y: number) {
         return "translate3d(" + x + "px, " + y + "px, 0)";
     }
     function clearHomeGuideAnimation() {
@@ -161,18 +164,18 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         cinematicStatus = "none",
         cinematicHoldTimer = 0,
         cinematicHoldFrame = 0,
-        cinematicPointerId = null;
+        cinematicPointerId: number | null = null;
     let cinematicAudioActive = false,
-        cinematicLoaderWait = null,
+        cinematicLoaderWait: { target: EventTarget; start: () => void } | null = null,
         cinematicMediaArmed = false;
     let portraitFrame = 0,
         guideStepId = "",
         guideLastPulseValue = NaN,
         guideLastPulseAt = 0,
-        guidePulse = null;
+        guidePulse: Animation | null = null;
     let portraitRequestId = 0,
         destroyed = false;
-    const portraitCache = new Map(),
+    const portraitCache = new Map<string, Promise<HTMLImageElement | null>>(),
         preparedDefinitions = new WeakSet(),
         reportedPortraitFailures = new Set();
     const fallbackPortrait =
@@ -180,7 +183,13 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         encodeURIComponent(
             "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><rect width='128' height='128' rx='16' fill='#13221f'/><circle cx='64' cy='48' r='24' fill='#a97a50'/><path d='M20 128c3-32 19-49 44-49s41 17 44 49' fill='#a97a50'/><path d='M38 44c2-23 15-34 28-34 17 0 28 13 28 34-8-9-17-13-28-13s-20 5-28 13' fill='#302419'/><path d='M0 4h128v5H0zM0 119h128v5H0z' fill='#d9aa55'/></svg>",
         );
-    function reportPortraitFailure(source, speakerKey, stepId, episodeId, attempt) {
+    function reportPortraitFailure(
+        source: string,
+        speakerKey: string,
+        stepId: string,
+        episodeId: string,
+        attempt: number | string,
+    ) {
         const failureKey = source + "\n" + stepId + "\n" + attempt;
         if (reportedPortraitFailures.has(failureKey)) return;
         reportedPortraitFailures.add(failureKey);
@@ -193,9 +202,14 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
                 attempt,
             });
     }
-    function portraitImage(source, speakerKey, stepId, episodeId) {
-        if (portraitCache.has(source)) return portraitCache.get(source);
-        const promise = new Promise((resolve) => {
+    function portraitImage(
+        source: string,
+        speakerKey: string,
+        stepId: string,
+        episodeId: string,
+    ): Promise<HTMLImageElement | null> {
+        if (portraitCache.has(source)) return portraitCache.get(source)!;
+        const promise = new Promise<HTMLImageElement | null>((resolve) => {
             const candidate = doc.createElement("img");
             candidate.alt = "";
             candidate.draggable = false;
@@ -217,7 +231,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         portraitCache.set(source, promise);
         return promise;
     }
-    function preparePortraits(definition) {
+    function preparePortraits(definition: CampaignDefinition) {
         if (preparedDefinitions.has(definition)) return;
         preparedDefinitions.add(definition);
         const roster = typeof options.roster === "function" ? options.roster() : options.roster;
@@ -226,15 +240,19 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
                 let avatar = character.avatar;
                 if (character.faction) {
                     const faction = ((roster && roster.factions) || []).find(
-                        (item) => item.id === character.faction,
+                        (item: CampaignFaction) => item.id === character.faction,
                     );
                     avatar = faction && (faction.avatar || avatar);
                 }
                 if (!avatar || avatar === "null") return;
                 const step = (definition.steps || []).find(
-                    (item) => item.speaker === key || (item.lines || []).some((line) => line.speaker === key),
+                    (item) =>
+                        item.speaker === key ||
+                        (item.lines || []).some((line: CampaignRecord) => line.speaker === key),
                 );
-                const reaction = (definition.reactions || []).find((item) => item.speaker === key);
+                const reaction = (definition.reactions || []).find(
+                    (item: CampaignRecord) => item.speaker === key,
+                );
                 portraitImage(
                     options.asset("gameplay/avatars/" + avatar + ".webp"),
                     key,
@@ -259,7 +277,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
             },
         );
     }
-    function showPortrait(source, speakerKey, stepId, episodeId) {
+    function showPortrait(source: string, speakerKey: string, stepId: string, episodeId: string) {
         const requestId = ++portraitRequestId;
         const fallback = doc.createElement("img");
         fallback.src = fallbackPortrait;
@@ -350,13 +368,14 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         portraitObserver.observe(conversation);
         portraitObserver.observe(root);
     }
-    find(".sow-story__hand img").src = options.asset("gameplay/icons/tutorial_hand.webp");
+    find<HTMLImageElement>(".sow-story__hand img").src = options.asset("gameplay/icons/tutorial_hand.webp");
     const dismissButtons = Array.from(root.querySelectorAll<HTMLButtonElement>("[data-story-dismiss]"));
-    const t = (key) => (key ? options.translate(key) : "");
-    function positionGuideLabel(anchor, statusOnly) {
+    const t = (key: string) => (key ? options.translate(key) : "");
+    function positionGuideLabel(anchor: CampaignAnchor, statusOnly: boolean) {
         if (!anchor || !Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) return;
         const ratioGuide =
             !statusOnly &&
+            model &&
             model.step.guide &&
             model.step.guide.kind === "ui" &&
             model.step.guide.target === "attack_ratio";
@@ -440,7 +459,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         cinematicHoldProgress.style.transition = "none";
         cinematicHoldProgress.style.transform = "scaleX(0)";
     }
-    function cinematicVariants(source) {
+    function cinematicVariants(source: string) {
         const dot = source.lastIndexOf(".");
         const stem = dot > 0 ? source.slice(0, dot) : source;
         return { stem, poster: stem + ".poster.webp" };
@@ -451,13 +470,13 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         cinematicVideo.removeAttribute("poster");
         if (typeof cinematicVideo.replaceChildren === "function") cinematicVideo.replaceChildren();
     }
-    function showCinematicPoster(source) {
+    function showCinematicPoster(source: string) {
         cinematicMediaArmed = false;
         cinematicVideo.removeAttribute("src");
         if (typeof cinematicVideo.replaceChildren === "function") cinematicVideo.replaceChildren();
         cinematicVideo.setAttribute("poster", cinematicVariants(source).poster);
     }
-    function attachCinematicMedia(source) {
+    function attachCinematicMedia(source: string) {
         const variants = cinematicVariants(source);
         if (cinematicMediaArmed && cinematicVideo.getAttribute("poster") === variants.poster) return;
         const candidates = [
@@ -480,7 +499,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
     function loaderVisible() {
         if (typeof doc.getElementById !== "function") return false;
         const loader = doc.getElementById("web-loader");
-        return Boolean(loader) && loader.getAttribute("aria-hidden") !== "true";
+        return Boolean(loader) && loader!.getAttribute("aria-hidden") !== "true";
     }
     function clearCinematicLoaderWait() {
         if (!cinematicLoaderWait) return;
@@ -491,7 +510,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
             target.removeEventListener("sow:loader-cycle-ready", start);
         }
     }
-    function setCinematicAudioActive(active) {
+    function setCinematicAudioActive(active: boolean) {
         if (cinematicAudioActive === active) return;
         cinematicAudioActive = active;
         if (typeof options.onCinematicChange === "function") options.onCinematicChange(active);
@@ -508,7 +527,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         cinematic.hidden = true;
         root.classList.remove("is-cinematic");
     }
-    function startCinematic(sourceKey) {
+    function startCinematic(sourceKey: string) {
         if (
             !cinematicStepKey ||
             sourceKey !== cinematicStepKey ||
@@ -517,7 +536,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
             cinematicStatus === "ended"
         )
             return;
-        if (loaderVisible() && (doc.defaultView || doc).addEventListener) {
+        if (loaderVisible()) {
             if (!cinematicLoaderWait) {
                 const target = doc.defaultView || doc;
                 const start = () => {
@@ -539,18 +558,18 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         cinematicVideo.muted = false;
         requestCinematicPlayback(sourceKey);
     }
-    function requestCinematicPlayback(sourceKey) {
+    function requestCinematicPlayback(sourceKey: string) {
         let playback;
         try {
             playback = cinematicVideo.play();
         } catch (error) {
-            playbackRejected(error, sourceKey);
+            playbackRejected(error as Error, sourceKey);
             return;
         }
         if (playback && typeof playback.catch === "function")
-            playback.catch((error) => playbackRejected(error, sourceKey));
+            playback.catch((error: Error) => playbackRejected(error, sourceKey));
     }
-    function playbackRejected(error, sourceKey) {
+    function playbackRejected(error: Error | null | undefined, sourceKey: string) {
         if (
             sourceKey !== cinematicStepKey ||
             !model ||
@@ -565,7 +584,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
             requestCinematicPlayback(sourceKey);
         } else if (!error || error.name !== "AbortError") failCinematic();
     }
-    function recoverCinematicFromClick(event) {
+    function recoverCinematicFromClick(event: Event | null) {
         if (
             !event ||
             !event.isTrusted ||
@@ -588,7 +607,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
             cinematicVideo.muted = false;
         }
     }
-    function syncCinematic(step) {
+    function syncCinematic(step: CampaignStep) {
         const source = step.type === "scene" && step.presentation === "cinematic" ? step.video_src || "" : "";
         const nextKey = source ? step.id + "\u0000" + source : "";
         if (nextKey !== cinematicStepKey) {
@@ -614,7 +633,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         cinematicStart.textContent = t("lobbies.play");
         cinematicStart.setAttribute("aria-label", t("lobbies.play"));
         cinematicHold.hidden = !active;
-        cinematicHold.querySelector("span").textContent = t("tutorial.hold_to_skip");
+        cinematicHold.querySelector<HTMLSpanElement>("span")!.textContent = t("tutorial.hold_to_skip");
         root.classList.toggle("is-cinematic", active);
         root.classList.toggle(
             "is-chapter",
@@ -642,18 +661,20 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         }
     }
     cinematicVideo.addEventListener("playing", () => {
-        if (!cinematicStepKey || cinematicStatus === "fallback" || cinematicStatus === "ended") return;
+        if (!model || !cinematicStepKey || cinematicStatus === "fallback" || cinematicStatus === "ended")
+            return;
         cinematicStatus = "playing";
         syncCinematic(model.step);
         if (doc.activeElement === cinematicStart) cinematic.focus({ preventScroll: true });
     });
     cinematicVideo.addEventListener("pause", () => {
-        if (!cinematicStepKey || cinematicStatus !== "playing" || cinematicVideo.ended) return;
+        if (!model || !cinematicStepKey || cinematicStatus !== "playing" || cinematicVideo.ended) return;
         cinematicStatus = "paused";
         syncCinematic(model.step);
     });
     function finishCinematic() {
-        if (!cinematicStepKey || cinematicStatus === "fallback" || cinematicStatus === "ended") return;
+        if (!model || !cinematicStepKey || cinematicStatus === "fallback" || cinematicStatus === "ended")
+            return;
         clearCinematicHold();
         clearCinematicLoaderWait();
         cinematicStatus = "ended";
@@ -663,7 +684,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
     }
     cinematicVideo.addEventListener("ended", finishCinematic);
     cinematicVideo.addEventListener("error", failCinematic);
-    function beginCinematicHold(event) {
+    function beginCinematicHold(event: PointerEvent) {
         if (
             !model ||
             cinematicStatus !== "playing" ||
@@ -692,7 +713,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         else cinematicHoldFrame = setTimeout(progress, 16);
         cinematicHoldTimer = setTimeout(finishCinematic, 1250);
     }
-    function endCinematicHold(event) {
+    function endCinematicHold(event: PointerEvent) {
         if (
             cinematicPointerId === null ||
             (event.pointerId != null && event.pointerId !== cinematicPointerId)
@@ -721,10 +742,10 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         if (options.onDismiss) options.onDismiss();
         else if (options.onContinue) options.onContinue();
     }
-    function setText(node, value) {
+    function setText(node: Node, value: string) {
         if (node.textContent !== value) node.textContent = value;
     }
-    function formatZoom(value) {
+    function formatZoom(value: number) {
         const number = Number(value);
         return Number.isFinite(number) ? number.toFixed(2).replace(/\.?0+$/, "") + "×" : "";
     }
@@ -744,7 +765,11 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         setText(guideCurrent, "");
         setText(guideTarget, "");
     }
-    function renderGuideMetric(metric, reducedMotion, stepId) {
+    function renderGuideMetric(
+        metric: CampaignRecord | null | undefined,
+        reducedMotion: boolean,
+        stepId: string,
+    ) {
         if (!metric) {
             clearGuideMetric();
             return;
@@ -867,9 +892,10 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         focusBefore = null;
     }
     function focusAction() {
+        if (!model) return;
         const target =
             model.step.type === "choice"
-                ? choices.querySelector("button")
+                ? choices.querySelector<HTMLButtonElement>("button")
                 : !cinematic.hidden
                   ? cinematicStart.hidden
                       ? cinematic
@@ -879,7 +905,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
                     : continueButton;
         (target || dialog).focus({ preventScroll: true });
     }
-    function render(next, context) {
+    function render(next: CampaignMachineView | null, context: CampaignRecord | null = null) {
         context = context || {};
         lastRenderContext = context;
         model = next;
@@ -888,7 +914,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         compactViewport = isCompactViewport(root, renderedWidth, renderedHeight);
         const wasHidden = root.hidden;
         root.hidden = !model || model.done;
-        if (root.hidden) {
+        if (!model || root.hidden) {
             portraitRequestId++;
             guideWasVisible = false;
             cameraTracking = false;
@@ -945,7 +971,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         );
         dialog.setAttribute("aria-describedby", uid + "-body");
         const focusModal = modal && (!wasModal || wasHidden);
-        if (modal && !wasModal) focusBefore = doc.activeElement;
+        if (modal && !wasModal) focusBefore = doc.activeElement as HTMLElement | null;
         if (!modal && wasModal) releaseFocus();
         const speakerKey = line.speaker || step.speaker;
         const character = Object.assign({}, (model.definition.speakers || {})[speakerKey] || {});
@@ -954,7 +980,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         if (character.faction || model.reactionTarget) {
             const roster = typeof options.roster === "function" ? options.roster() : options.roster;
             const factionId = character.faction || model.reactionTarget;
-            const faction = ((roster && roster.factions) || []).find(function (item) {
+            const faction = ((roster && roster.factions) || []).find(function (item: CampaignFaction) {
                 return item.id === factionId;
             });
             if (faction) {
@@ -979,7 +1005,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
             character.avatar,
             step.presentation,
             step.video_src,
-            model.choices.map((c) => [
+            model.choices.map((c: CampaignRecord) => [
                 c.id,
                 t(c.label_key),
                 t(c.body_key),
@@ -1017,7 +1043,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
                 portraitRequestId++;
             }
             choices.replaceChildren();
-            model.choices.forEach((choice) => {
+            model.choices.forEach((choice: CampaignRecord) => {
                 const button = doc.createElement("button");
                 button.type = "button";
                 button.className = "sow-story__choice";
@@ -1040,7 +1066,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
                     icon.alt = "";
                     icon.setAttribute("aria-hidden", "true");
                     const amounts = doc.createElement("span");
-                    const formatGold = (value) =>
+                    const formatGold = (value: number) =>
                         Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
                     amounts.textContent =
                         formatGold(choice.gold_available) + " / " + formatGold(choice.gold_cost);
@@ -1055,12 +1081,14 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
                 choices.appendChild(button);
             });
             lines.replaceChildren();
-            if (step.lines && step.lines.length > 1)
-                step.lines.forEach((_, index) => {
+            if (step.lines && step.lines.length > 1) {
+                const currentLine = model.state.line;
+                step.lines.forEach((_: unknown, index: number) => {
                     const dot = doc.createElement("i");
-                    dot.className = index === model.state.line ? "is-current" : "";
+                    dot.className = index === currentLine ? "is-current" : "";
                     lines.appendChild(dot);
                 });
+            }
             if (modal && (focusModal || beatChanged)) focusAction();
             if (beatChanged && !reducedMotion) {
                 [title, body, image, choices].forEach((node) => {
@@ -1077,7 +1105,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         } else if (focusModal) focusAction();
         wasModal = modal;
         setText(
-            continueButton.querySelector("span"),
+            continueButton.querySelector<HTMLSpanElement>("span")!,
             t(step.continue_key || (step.type === "end" ? "tutorial.complete" : "tutorial.continue")),
         );
         const dismissContinues = modal && step.type !== "choice" && model.choices.length === 0;
@@ -1095,7 +1123,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         setText(hint, context.hintOverride || t(step.hint_key || step.body_key));
         hint.hidden = !hint.textContent;
         const progress = model.progress;
-        objective.querySelector(".sow-story__meter").hidden = progress.target <= 1;
+        objective.querySelector<HTMLElement>(".sow-story__meter")!.hidden = progress.target <= 1;
         meter.max = Math.max(1, progress.target);
         meter.value = progress.current;
         meter.setAttribute("aria-label", t(step.title_key));
@@ -1337,7 +1365,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
             guideWasVisible = false;
         }
     }
-    function updateCameraAnchor(x, y) {
+    function updateCameraAnchor(x: number, y: number) {
         if (!cameraTracking || root.hidden || !Number.isFinite(x) || !Number.isFinite(y)) return false;
         if (x !== guideX || y !== guideY) gesture.style.transform = guideTransform(x, y);
         guideX = x;
@@ -1346,10 +1374,10 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
             positionGuideLabel({ x: x, y: y }, true);
         return true;
     }
-    function click(event) {
+    function click(event: MouseEvent) {
         event.stopPropagation();
         if (!model) return;
-        const button = event.target.closest("button");
+        const button = (event.target as Element).closest("button");
         if (!button || !root.contains(button)) return;
         event.preventDefault();
         if (event.timeStamp - lastAction < 220) return;
@@ -1363,18 +1391,19 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         else if (button.hasAttribute("data-story-dismiss") || button.hasAttribute("data-story-guide-skip"))
             dismissDialog();
     }
-    function outsideClick(event) {
+    function outsideClick(event: MouseEvent) {
+        const target = event.target as Element;
         if (
             !model ||
             root.hidden ||
             !model.paused ||
             !root.classList.contains("is-modal") ||
-            root.contains(event.target)
+            root.contains(target)
         )
             return;
         const control =
-            event.target.closest &&
-            event.target.closest(
+            target.closest &&
+            target.closest(
                 "button, a[href], input:not([type='hidden']), select, textarea, [role='button'], [data-command], [data-map-action]",
             );
         if (control) return;
@@ -1389,10 +1418,10 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         // An outside tap acts as Continue, but only where Continue is on screen (not during a cinematic or a pause_game step).
         if (!dialog.hidden && !footer.hidden) options.onContinue();
     }
-    function stop(event) {
+    function stop(event: Event) {
         event.stopPropagation();
     }
-    function keys(event) {
+    function keys(event: KeyboardEvent) {
         if (!model || root.hidden) return;
         if (model.paused) event.stopPropagation();
         if (event.repeat) return;
@@ -1416,7 +1445,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
                               Number(a.hasAttribute("data-story-dismiss")) -
                               Number(b.hasAttribute("data-story-dismiss")),
                       );
-            const index = buttons.indexOf(doc.activeElement);
+            const index = buttons.indexOf(doc.activeElement as HTMLElement);
             const next = event.shiftKey
                 ? index <= 0
                     ? buttons.length - 1
@@ -1443,7 +1472,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
         root.addEventListener(type, stop, { passive: true }),
     );
     const keyboardTarget = options.guideSkipLabel ? doc : root;
-    keyboardTarget.addEventListener("keydown", keys, Boolean(options.guideSkipLabel));
+    keyboardTarget.addEventListener("keydown", keys as EventListener, Boolean(options.guideSkipLabel));
     return {
         render,
         updateCameraAnchor,
@@ -1459,7 +1488,11 @@ export function mount(root: HTMLElement, options: CampaignViewOptions = {}): Cam
             reportedPortraitFailures.clear();
             if (portraitObserver) portraitObserver.disconnect();
             root.removeEventListener("click", click);
-            keyboardTarget.removeEventListener("keydown", keys, Boolean(options.guideSkipLabel));
+            keyboardTarget.removeEventListener(
+                "keydown",
+                keys as EventListener,
+                Boolean(options.guideSkipLabel),
+            );
             doc.removeEventListener("click", recoverCinematicFromClick, true);
             doc.removeEventListener("click", outsideClick, true);
             doc.removeEventListener("visibilitychange", clearHoldWhenHidden);

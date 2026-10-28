@@ -5,7 +5,33 @@ import type {
     CampaignRoster,
     CampaignRecord,
     CampaignStep,
+    CampaignUnlocks,
 } from "./types.ts";
+
+type Exchange = {
+    lines: CampaignRecord[];
+    index: number;
+    reactionInstance: string | null;
+    phase: "prepare" | "speaking" | "gap" | "dialogue";
+    token: string | null;
+    until: number | null;
+    ackStartedAt: number | null;
+    remainingGap?: number;
+};
+type ActiveReaction = { reaction: CampaignRecord; target: string; instanceId: string };
+type RuntimeState = {
+    id: string;
+    line: number;
+    choices: CampaignRecord;
+    completed: string[];
+    reactionsShown: string[];
+    reactionChoices: CampaignRecord;
+    contactsResolved: string[];
+    firstContactTarget: string | null;
+    done: boolean;
+    unlocks: CampaignUnlocks;
+};
+
 const {
     REACTION_DIALOGUE_FIELDS,
     WAIT_MS,
@@ -33,8 +59,8 @@ export function create(
     definition = copy(definition);
     const byId = new Map<string, CampaignStep>(definition.steps.map((step) => [step.id, step]));
     const campaignEntry = entry || definition.entry;
-    const state = {
-        id: null,
+    const state: RuntimeState = {
+        id: "",
         line: 0,
         choices: Object.create(null),
         completed: [],
@@ -45,7 +71,7 @@ export function create(
         done: false,
         unlocks: emptyCampaignUnlocks(),
     };
-    const readClock = () => {
+    const readClock = (): number => {
         const value =
             typeof clock === "function"
                 ? clock()
@@ -62,29 +88,29 @@ export function create(
         uiBaseline: CampaignRecord = {},
         externallyPaused = false;
     let currentTimeMs = readClock(),
-        waitUntilMs = null,
-        exchange = null,
+        waitUntilMs: number | null = null,
+        exchange: Exchange | null = null,
         exchangeSerial = 0;
-    function enter(key) {
+    function enter(key: string) {
         if (!byId.has(key)) throw new Error("Unknown campaign destination: " + key);
         clearExchange();
         state.id = key;
         state.line = 0;
         state.done = false;
-        state.unlocks = applyCampaignUnlocks(state.unlocks, byId.get(key).unlocks);
+        state.unlocks = applyCampaignUnlocks(state.unlocks, byId.get(key)!.unlocks);
         baseline = copy(facts);
         uiBaseline = { ...ui };
         currentTimeMs = readClock();
-        waitUntilMs = byId.get(key).wait_before === true ? currentTimeMs + WAIT_MS : null;
-        if (byId.get(key).exchange) beginExchange(byId.get(key).exchange, null);
+        waitUntilMs = byId.get(key)!.wait_before === true ? currentTimeMs + WAIT_MS : null;
+        if (byId.get(key)!.exchange) beginExchange(byId.get(key)!.exchange, null);
     }
-    function matches(when) {
+    function matches(when: CampaignRecord) {
         if (when.choice) return state.choices[when.choice] === when.equals;
         return Number(facts[when.fact] || 0) >= when.gte;
     }
     function progress() {
         const step = byId.get(state.id),
-            trigger = step.trigger;
+            trigger = step!.trigger;
         if (!trigger) return { current: 0, target: 0 };
         const reference =
             trigger.scope === "step" ? baseline : trigger.scope === "episode" ? initial || {} : {};
@@ -99,14 +125,14 @@ export function create(
                       : "eliminated_faction_ids";
             if (trigger.type === "contact" && Array.isArray(trigger.targets)) {
                 current = trigger.targets.filter(
-                    (factionId) =>
+                    (factionId: string) =>
                         (facts[field] || []).includes(factionId) &&
                         !(reference[field] || []).includes(factionId),
                 ).length;
                 target = Number(trigger.value || 1);
             } else if (trigger.type === "defeated" && Array.isArray(trigger.targets)) {
                 current = trigger.targets.filter(
-                    (factionId) =>
+                    (factionId: string) =>
                         (facts[field] || []).includes(factionId) &&
                         !(reference[field] || []).includes(factionId),
                 ).length;
@@ -134,7 +160,7 @@ export function create(
                     const currentOutcomes = facts.menu_outcomes || {};
                     const referenceOutcomes = reference.menu_outcomes || {};
                     current = outcomes.reduce(
-                        (sum, outcomeId) =>
+                        (sum: number, outcomeId: string) =>
                             sum +
                             Number(currentOutcomes[outcomeId] || 0) -
                             Number(referenceOutcomes[outcomeId] || 0),
@@ -245,14 +271,16 @@ export function create(
         }
         return { current: Math.min(target, Math.max(0, current)), target };
     }
-    function targetUnavailable(step, result) {
+    function targetUnavailable(step: CampaignStep, result: { current: number; target: number }) {
         const trigger = step.trigger;
         if (!trigger || !["objective", "guide"].includes(step.type)) return false;
         const eliminated = facts.eliminated_faction_ids || [];
         const targets = Array.isArray(trigger.targets)
             ? trigger.targets
             : [trigger.target || trigger.recipient];
-        const factionTargets = targets.filter((target) => typeof target === "string" && target !== "player");
+        const factionTargets: string[] = targets.filter(
+            (target: unknown): target is string => typeof target === "string" && target !== "player",
+        );
         if (!factionTargets.length) return false;
         const field =
             trigger.type === "contact"
@@ -267,7 +295,7 @@ export function create(
             trigger.scope === "step" ? baseline : trigger.scope === "episode" ? initial || {} : {};
         const priorObserved = field ? reference[field] || [] : [];
         const remaining = factionTargets.filter(
-            (target) =>
+            (target: string) =>
                 !eliminated.includes(target) &&
                 !(observed.includes(target) && !priorObserved.includes(target)) &&
                 !(trigger.type === "contact" && observed.includes(target)),
@@ -287,7 +315,7 @@ export function create(
             return true;
         return eliminated.includes(factionTargets[0]) && result.current < result.target;
     }
-    let activeReaction = null;
+    let activeReaction: ActiveReaction | null = null;
     function activePreDefeatTargets() {
         if (state.done) return [];
         const step = byId.get(state.id);
@@ -303,30 +331,30 @@ export function create(
             : [step.trigger.target];
         return (definition.reactions || [])
             .filter(
-                (reaction) =>
+                (reaction: CampaignRecord) =>
                     reaction.when.type === "pre_defeat" &&
                     reaction.during === step.id &&
                     objectiveTargets.includes(reaction.when.target) &&
                     !state.reactionsShown.includes(reaction.id + "@" + reaction.when.target),
             )
-            .map((reaction) => reaction.when.target);
+            .map((reaction: CampaignRecord) => reaction.when.target);
     }
     function nextReaction() {
         const contactFactionIds = facts.contact_faction_ids || [];
-        const gameplayActive = !["scene", "choice", "end"].includes(byId.get(state.id).type);
+        const gameplayActive = !["scene", "choice", "end"].includes(byId.get(state.id)!.type);
         return (
             (definition.reactions || [])
-                .flatMap((reaction, index) => {
+                .flatMap((reaction: CampaignRecord, index: number) => {
                     const type = reaction.when.type;
                     const isFirstContact = type === "first_contact";
                     const isContact = type === "contact" || isFirstContact;
                     const duringActive = !reaction.during || reaction.during === state.id;
-                    let targets = [];
+                    let targets: string[] = [];
                     if (isFirstContact && !state.firstContactTarget) {
                         const eligible = reaction.when.targets || [];
                         targets = eligible
                             .filter(
-                                (factionId) =>
+                                (factionId: string) =>
                                     contactFactionIds.includes(factionId) &&
                                     !state.contactsResolved.includes(factionId),
                             )
@@ -346,7 +374,7 @@ export function create(
                         const factions = new Map<string, CampaignRecord>(
                             ((roster && roster.factions) || []).map((faction) => [faction.id, faction]),
                         );
-                        targets = contactFactionIds.filter((factionId) => {
+                        targets = contactFactionIds.filter((factionId: string) => {
                             const faction = factions.get(factionId);
                             return (
                                 !state.contactsResolved.includes(factionId) &&
@@ -411,9 +439,9 @@ export function create(
                           ]
                         : [];
                 })
-                .filter((item) => !state.reactionsShown.includes(item.instanceId))
+                .filter((item: CampaignRecord) => !state.reactionsShown.includes(item.instanceId))
                 .sort(
-                    (a, b) =>
+                    (a: CampaignRecord, b: CampaignRecord) =>
                         a.priority - b.priority ||
                         Number((a.receipt && a.receipt.first_tick) || 0) -
                             Number((b.receipt && b.receipt.first_tick) || 0) ||
@@ -423,10 +451,10 @@ export function create(
     }
     function view() {
         currentTimeMs = readClock();
-        const step = byId.get(state.id);
+        const step = byId.get(state.id)!;
         if (exchange) {
             const exchangeLine = exchange.lines[exchange.index];
-            const modalLine =
+            const modalLine: CampaignStep | null =
                 exchange.phase === "dialogue"
                     ? {
                           id: "exchange-" + exchange.token,
@@ -438,7 +466,7 @@ export function create(
                           presentation: "dialogue",
                       }
                     : null;
-            const stepPauses = ["scene", "choice", "end"].includes(step.type) || step.pause_game === true;
+            const stepPauses = ["scene", "choice", "end"].includes(step!.type) || step!.pause_game === true;
             return {
                 definition,
                 step: modalLine || step,
@@ -475,10 +503,10 @@ export function create(
             const factionSpeaker =
                 reaction.when.type === "first_contact" || reaction.when.relation
                     ? Object.keys(definition.speakers || {}).find(
-                          (key) => definition.speakers[key].faction === activeReaction.target,
+                          (key) => definition.speakers[key].faction === activeReaction!.target,
                       )
                     : null;
-            const response = {
+            const response: CampaignStep = {
                 ...Object.fromEntries(REACTION_DIALOGUE_FIELDS.map((field) => [field, reaction[field]])),
                 id: "reaction-" + activeReaction.instanceId,
                 type: hasChoices ? "choice" : "scene",
@@ -496,6 +524,7 @@ export function create(
                 choices: reaction.choices || [],
                 state,
                 unlocks: copy(state.unlocks),
+                waiting: false,
                 reaction: reaction.id,
                 reactionInstance: activeReaction.instanceId,
                 reactionTarget: activeReaction.target,
@@ -503,22 +532,23 @@ export function create(
                 pre_defeat_targets: activePreDefeatTargets(),
             };
         }
-        const line = step.lines ? step.lines[state.line] : step;
+        const line = step!.lines ? step!.lines[state.line] : step;
         const waitRemainingMs = waitUntilMs === null ? 0 : Math.max(0, waitUntilMs - currentTimeMs);
         const expansionStarted =
-            step.paused_action === "expand_once_then_resume" &&
+            step!.paused_action === "expand_once_then_resume" &&
             Number(facts.wilderness_orders_accepted || 0) > Number(baseline.wilderness_orders_accepted || 0);
         const paused =
-            ["scene", "choice", "end"].includes(step.type) || (step.pause_game === true && !expansionStarted);
+            ["scene", "choice", "end"].includes(step!.type) ||
+            (step!.pause_game === true && !expansionStarted);
         return {
             definition,
             step,
             line,
             progress: progress(),
             paused,
-            paused_action: paused ? step.paused_action || null : null,
+            paused_action: paused ? step!.paused_action || null : null,
             done: state.done,
-            choices: step.choices || [],
+            choices: step!.choices || [],
             state,
             unlocks: copy(state.unlocks),
             waiting: waitRemainingMs > 0,
@@ -526,10 +556,10 @@ export function create(
             pre_defeat_targets: activePreDefeatTargets(),
         };
     }
-    function setPaused(paused) {
+    function setPaused(paused: boolean) {
         paused = Boolean(paused);
         if (paused && !externallyPaused && exchange) {
-            if (exchange.phase === "gap") exchange.remainingGap = Math.max(0, exchange.until - readClock());
+            if (exchange.phase === "gap") exchange.remainingGap = Math.max(0, exchange.until! - readClock());
             else if (exchange.phase !== "dialogue") {
                 clearExchangeLine();
                 // Replay only the interrupted line on return; never consume reading time off screen.
@@ -554,34 +584,43 @@ export function create(
         clearExchangeLine();
         exchange = null;
     }
-    function beginExchange(lines, reactionInstance) {
+    function beginExchange(lines: CampaignRecord[], reactionInstance: string | null) {
         clearExchange();
-        exchange = { lines, index: 0, reactionInstance, phase: "prepare", token: null, until: null };
+        exchange = {
+            lines,
+            index: 0,
+            reactionInstance,
+            phase: "prepare",
+            token: null,
+            until: null,
+            ackStartedAt: null,
+        };
         prepareExchangeLine();
     }
     function prepareExchangeLine() {
-        exchange.phase = "prepare";
-        exchange.token = state.id + ":" + ++exchangeSerial + ":" + exchange.index;
-        exchange.until = null;
-        exchange.ackStartedAt = null;
+        const current = exchange!;
+        current.phase = "prepare";
+        current.token = state.id + ":" + ++exchangeSerial + ":" + current.index;
+        current.until = null;
+        current.ackStartedAt = null;
     }
     function updateExchange() {
-        if (exchange.phase === "prepare") {
-            const speaker =
-                definition.speakers && definition.speakers[exchange.lines[exchange.index].speaker];
+        const current = exchange!;
+        if (current.phase === "prepare") {
+            const speaker = definition.speakers && definition.speakers[current.lines[current.index].speaker];
             if (speaker && (facts.eliminated_faction_ids || []).includes(speaker.faction || "player")) {
-                exchange.phase = "gap";
-                exchange.until = readClock() + EXCHANGE_GAP_MS;
+                current.phase = "gap";
+                current.until = readClock() + EXCHANGE_GAP_MS;
                 return false;
             }
-            const line = exchange.lines[exchange.index];
+            const line = current.lines[current.index];
             if ((line.presentation || "emote") === "dialogue") {
-                exchange.phase = "dialogue";
+                current.phase = "dialogue";
                 return false;
             }
             const result =
                 hooks && typeof hooks.onExchangeLine === "function"
-                    ? hooks.onExchangeLine(exchange.lines[exchange.index], exchange.token)
+                    ? hooks.onExchangeLine(current.lines[current.index], current.token)
                     : true;
             // An emote is background noise: a line that cannot show is skipped, never turned into a pause.
             if (result === "unavailable") {
@@ -589,8 +628,8 @@ export function create(
                 return nextExchangeLine();
             }
             if (result === "pending") {
-                if (exchange.ackStartedAt === null) exchange.ackStartedAt = currentTimeMs;
-                if (currentTimeMs - exchange.ackStartedAt >= EXCHANGE_EMOTE_ACK_TIMEOUT_MS) {
+                if (current.ackStartedAt === null) current.ackStartedAt = currentTimeMs;
+                if (currentTimeMs - current.ackStartedAt >= EXCHANGE_EMOTE_ACK_TIMEOUT_MS) {
                     clearExchangeLine();
                     return nextExchangeLine();
                 }
@@ -598,32 +637,33 @@ export function create(
             }
             const shown = result !== false;
             if (!shown) return false;
-            exchange.phase = "speaking";
-            exchange.until = readClock() + EXCHANGE_LINE_MS;
+            current.phase = "speaking";
+            current.until = readClock() + EXCHANGE_LINE_MS;
             return false;
         }
-        if (exchange.phase === "dialogue") return false;
-        if (currentTimeMs < exchange.until) return false;
-        if (exchange.phase === "speaking") {
+        if (current.phase === "dialogue") return false;
+        if (currentTimeMs < current.until!) return false;
+        if (current.phase === "speaking") {
             clearExchangeLine();
-            exchange.phase = "gap";
-            exchange.until =
+            current.phase = "gap";
+            current.until =
                 currentTimeMs +
-                (Number.isInteger(exchange.lines[exchange.index].delay_ms)
-                    ? exchange.lines[exchange.index].delay_ms
+                (Number.isInteger(current.lines[current.index].delay_ms)
+                    ? current.lines[current.index].delay_ms
                     : EXCHANGE_GAP_MS);
             return false;
         }
         return nextExchangeLine();
     }
     function nextExchangeLine() {
-        exchange.index++;
-        if (exchange.index < exchange.lines.length) prepareExchangeLine();
+        const current = exchange!;
+        current.index++;
+        if (current.index < current.lines.length) prepareExchangeLine();
         else endExchange();
         return true;
     }
     function endExchange() {
-        const finished = exchange;
+        const finished = exchange!;
         exchange = null;
         waitUntilMs = null;
         if (finished.reactionInstance !== null) completeReaction();
@@ -633,15 +673,15 @@ export function create(
         externallyPaused = true;
     }
     function completeReaction() {
-        const reaction = activeReaction.reaction;
-        const target = activeReaction.target;
-        if (!state.reactionsShown.includes(activeReaction.instanceId))
-            state.reactionsShown.push(activeReaction.instanceId);
+        const active = activeReaction!;
+        const reaction = active.reaction;
+        const target = active.target;
+        if (!state.reactionsShown.includes(active.instanceId)) state.reactionsShown.push(active.instanceId);
         if (
             ["contact", "first_contact"].includes(reaction.when.type) &&
-            !state.contactsResolved.includes(activeReaction.target)
+            !state.contactsResolved.includes(active.target)
         )
-            state.contactsResolved.push(activeReaction.target);
+            state.contactsResolved.push(active.target);
         activeReaction = null;
         // A response's emote, like a step's, fires when it completes.
         if (hooks && typeof hooks.onStepComplete === "function") hooks.onStepComplete(reaction);
@@ -670,7 +710,7 @@ export function create(
             const reaction = activeReaction.reaction;
             if (expectedStepId !== "reaction-" + activeReaction.instanceId) return false;
             if (reaction.choices && reaction.choices.length) {
-                const answer = reaction.choices.find((option) => option.id === choiceId);
+                const answer = reaction.choices.find((option: CampaignRecord) => option.id === choiceId);
                 if (!answer) return false;
                 state.reactionChoices[activeReaction.instanceId] = answer.id;
                 state.choices[reaction.id] = answer.id;
@@ -681,40 +721,40 @@ export function create(
         }
         if (expectedStepId && expectedStepId !== state.id) return false;
         currentTimeMs = readClock();
-        const step = byId.get(state.id);
+        const step = byId.get(state.id)!;
         if (waitUntilMs !== null && currentTimeMs < waitUntilMs) return false;
-        if (step.type === "scene" && step.lines && state.line + 1 < step.lines.length) {
+        if (step!.type === "scene" && step!.lines && state.line + 1 < step!.lines.length) {
             state.line++;
             return true;
         }
-        if (["objective", "guide"].includes(step.type)) {
+        if (["objective", "guide"].includes(step!.type)) {
             const result = progress();
             const unavailable = allowUnavailable && targetUnavailable(step, result);
             if (result.current < result.target && !unavailable) return false;
         }
-        if (step.type === "end") {
-            if (!state.completed.includes(step.id)) state.completed.push(step.id);
+        if (step!.type === "end") {
+            if (!state.completed.includes(step!.id)) state.completed.push(step!.id);
             state.done = true;
             return true;
         }
-        let destination = step.next;
-        if (step.type === "choice") {
-            const answer = step.choices.find((option) => option.id === choiceId);
+        let destination = step!.next;
+        if (step!.type === "choice") {
+            const answer = step!.choices.find((option: CampaignRecord) => option.id === choiceId);
             if (!answer) return false;
-            state.choices[step.id] = answer.id;
+            state.choices[step!.id] = answer.id;
             destination = answer.next;
         } else {
-            const route = (step.routes || []).find((route) => matches(route.when));
+            const route = (step!.routes || []).find((route: CampaignRecord) => matches(route.when));
             if (route) destination = route.next;
         }
-        if (!byId.has(destination)) return false;
-        if (!state.completed.includes(step.id)) state.completed.push(step.id);
+        if (typeof destination !== "string" || !byId.has(destination)) return false;
+        if (!state.completed.includes(step!.id)) state.completed.push(step!.id);
         // A step's emote directive takes effect exactly when the step completes.
         if (hooks && typeof hooks.onStepComplete === "function") hooks.onStepComplete(step);
         enter(destination);
         return true;
     }
-    function update(nextFacts, nextUi) {
+    function update(nextFacts?: CampaignRecord, nextUi?: CampaignRecord) {
         currentTimeMs = readClock();
         facts = copy(nextFacts || {});
         ui = { ...(nextUi || {}) };
@@ -724,31 +764,32 @@ export function create(
             baseline = copy(facts);
             uiBaseline = { ...ui };
             if (!exchange)
-                waitUntilMs = byId.get(state.id).wait_before === true ? currentTimeMs + WAIT_MS : null;
+                waitUntilMs = byId.get(state.id)!.wait_before === true ? currentTimeMs + WAIT_MS : null;
         }
         if (state.done || externallyPaused) return view();
         while (!state.done) {
             const availableStep = byId.get(state.id);
             const partner =
-                (availableStep.marker && availableStep.marker.target) ||
-                (availableStep.trigger && (availableStep.trigger.target || availableStep.trigger.recipient));
+                (availableStep!.marker && availableStep!.marker.target) ||
+                (availableStep!.trigger &&
+                    (availableStep!.trigger.target || availableStep!.trigger.recipient));
             if (
-                availableStep.unavailable_next &&
+                availableStep!.unavailable_next &&
                 ((facts.eliminated_faction_ids || []).includes(partner) ||
                     (facts.hostile_faction_ids || []).includes(partner))
             ) {
                 activeReaction = null;
-                enter(availableStep.unavailable_next);
+                enter(availableStep!.unavailable_next);
                 continue;
             }
             if (exchange) {
                 if (!updateExchange()) return view();
                 continue;
             }
-            const step = byId.get(state.id);
-            const objectiveStep = ["objective", "guide"].includes(step.type);
+            const step = byId.get(state.id)!;
+            const objectiveStep = ["objective", "guide"].includes(step!.type);
             const result = objectiveStep ? progress() : null;
-            const unavailable = objectiveStep && targetUnavailable(step, result);
+            const unavailable = objectiveStep && targetUnavailable(step, result!);
             if (!activeReaction) {
                 const next = nextReaction();
                 if (next) {
@@ -766,13 +807,13 @@ export function create(
             }
             if (activeReaction) return view();
             // A scene that only plays an exchange has nothing to read, so it continues once the exchange ends.
-            if (step.type === "scene" && step.exchange) {
-                if (!advance(null, step.id)) break;
+            if (step!.type === "scene" && step!.exchange) {
+                if (!advance(null, step!.id)) break;
                 continue;
             }
             if (!objectiveStep) break;
-            if (result.current < result.target && !unavailable) break;
-            if (!advance(null, step.id, true)) break;
+            if (result!.current < result!.target && !unavailable) break;
+            if (!advance(null, step!.id, true)) break;
         }
         return view();
     }
@@ -812,7 +853,9 @@ export function create(
             JSON.stringify(previousStep.trigger) !== JSON.stringify(nextStep.trigger);
         const previousExchangeOwner = activeReaction ? activeReaction.reaction : previousStep;
         const nextExchangeOwner = activeReaction
-            ? (replacement.reactions || []).find((reaction) => reaction.id === activeReaction.reaction.id)
+            ? (replacement.reactions || []).find(
+                  (reaction: CampaignRecord) => reaction.id === activeReaction!.reaction.id,
+              )
             : nextStep;
         const exchangeChanged =
             exchange &&
@@ -861,5 +904,5 @@ export function create(
         setPaused,
         view,
         dispose,
-    } as unknown as CampaignMachine;
+    };
 }

@@ -4,18 +4,18 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 
 | Héroe | Habilidad | Descripción | Tipo | Número | Ícono |
 |---|---|---|---|---|---|
-| Caesar | Legions of Rome | Troops landed from ships lose 10% fewer troops taking enemy land. | attacker_loss | 10% | `gameplay/icons/abilities/caesar.webp` |
-| Cleopatra | Gift of the Nile | Port districts produce 50% more gold. | resource_bonus (port / gold) | 50% | `gameplay/icons/abilities/cleopatra.webp` |
-| Ragnar | Longship Raid | Conquest of players with fewer troops than your army advances 50% faster. | conquest_speed | 50% | `gameplay/icons/abilities/ragnar.webp` |
+| Julius Caesar | Legions of Rome | Troops landed from ships lose 10% fewer troops taking enemy land. | attacker_loss | 10% | `gameplay/icons/abilities/caesar.webp` |
+| Cleopatra VII | Gift of the Nile | Port districts produce 50% more gold. | resource_bonus (port / gold) | 50% | `gameplay/icons/abilities/cleopatra.webp` |
+| Ragnar Lothbrok | Longship Raid | Conquest of players with fewer troops than your army advances 50% faster. | conquest_speed | 50% | `gameplay/icons/abilities/ragnar.webp` |
 | Sun Tzu | Art of War | Conquest of larger players advances 50% faster. | conquest_speed | 50% | `gameplay/icons/abilities/sun_tzu.webp` |
-| Alexander | Great Conquest | Conquest of richer players advances 15% faster. | conquest_speed | 15% | `gameplay/icons/abilities/alexander.webp` |
+| Alexander the Great | Great Conquest | Conquest of richer players advances 15% faster. | conquest_speed | 15% | `gameplay/icons/abilities/alexander.webp` |
 | Genghis Khan | Horde Momentum | Armies fight 50% stronger against tribes. | attack_strength | 50% | `gameplay/icons/abilities/genghis_khan.webp` |
 | Richard the Lionheart | Crusader Subsidies | Each active alliance produces 50% more gold. | resource_bonus (alliance / gold) | 50% | `gameplay/icons/abilities/richard_the_lionheart.webp` |
 | Vercingetorix | Gallic Uprising | Each active alliance produces 50% more troops. | resource_bonus (alliance / troops) | 50% | `gameplay/icons/abilities/vercingetorix.webp` |
 | Boudica | Revenge | Armies fight 100% stronger against players with fewer troops than your army. | attack_strength | 100% | `gameplay/icons/abilities/boudica.webp` |
 | Lady Six Sky | Villages Kneel | Armies fight 50% stronger against smaller players. | attack_strength | 50% | `gameplay/icons/abilities/lady_six_sky.webp` |
-| Leonidas | Spartan Phalanx | Towers make attackers lose 50% more troops. | tower_loss | 50% | `gameplay/icons/abilities/leonidas.webp` |
-| Napoleon | Montenotte Blitz | Conquest of other players advances 35% faster. | conquest_speed | 35% | `gameplay/icons/abilities/napoleon.webp` |
+| King Leonidas | Spartan Phalanx | Towers make attackers lose 50% more troops. | tower_loss | 50% | `gameplay/icons/abilities/leonidas.webp` |
+| Napoleon Bonaparte | Montenotte Blitz | Conquest of other players advances 35% faster. | conquest_speed | 35% | `gameplay/icons/abilities/napoleon.webp` |
 | Amina of Zazzau | Walls of Zazzau | Enemies need 50% more effort to capture your cities. | city_capture | 50% | `gameplay/icons/abilities/amina_de_zazzau.webp` |
 | Yaa Asantewaa | Siege of the Fort | Armies fight 30% stronger against nations. | attack_strength | 30% | `gameplay/icons/abilities/yaa_asantewaa.webp` |
 | Anacaona | Taíno Resistance | Armies fight 50% stronger against traitors. | attack_strength | 50% | `gameplay/icons/abilities/anacaona.webp` |
@@ -67,7 +67,7 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Artemisia I | Salamis Fleet | Port districts produce 50% more troops. | resource_bonus (port / troops) | 50% | `gameplay/icons/abilities/artemisia_i.webp` |
 | Shajar al-Durr | Crusader Wars | Traitors retreating from your land lose 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/shajar_al_durr.webp` |
 | Ramesses II | Pi-Ramesses Workshops | Factory districts produce 25% more troops. | resource_bonus (factory / troops) | 25% | `gameplay/icons/abilities/ramesses_ii.webp` |
-| Qin Liangyu | Shizhou Defense | Armies retreating from your land lose 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/qin_liangyu.webp` |
+| Mulan | Northern Wei Defense | Armies retreating from your land lose 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/mulan.webp` |
 | Lobengula | Bulawayo Garrison | Cities raise your troop cap 50% more. | city_troop_capacity | 50% | `gameplay/icons/abilities/lobengula.webp` |
 | Ahmad Shah Bahadur | Vizier's Bargain | Campaign alliances with traitors cost 25% less gold. | alliance_cost | 25% | `gameplay/icons/abilities/ahmad_shah_bahadur.webp` |
 | Alamgir II | Strike the Poor | Attacks on poorer players are 25% stronger. | attack_strength | 25% | `gameplay/icons/abilities/alamgir_ii.webp` |
@@ -81,7 +81,7 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Artaxerxes II | Cunaxa | Conquests of lands in your own realm are 25% faster. | conquest_speed | 25% | `gameplay/icons/abilities/artaxerxes_ii.webp` |
 | Artaxerxes III | Reconquest of Egypt | Conquests against foreign powers are 25% faster. | conquest_speed | 25% | `gameplay/icons/abilities/artaxerxes_iii.webp` |
 | Cambyses II | Pelusium | Attackers lose 25% fewer troops when attacking foreign powers. | attacker_loss | 25% | `gameplay/icons/abilities/cambyses_ii.webp` |
-| Xerxes | Host of Xerxes | Attackers lose 25% fewer troops when attacking outnumbered players. | attacker_loss | 25% | `gameplay/icons/abilities/xerxes_i.webp` |
+| Xerxes I | Host of Xerxes | Attackers lose 25% fewer troops when attacking outnumbered players. | attacker_loss | 25% | `gameplay/icons/abilities/xerxes_i.webp` |
 | Claudius Gothicus | Naissus | Attackers lose 25% fewer troops when attacking tribes. | attacker_loss | 25% | `gameplay/icons/abilities/claudius_gothicus.webp` |
 | Lucius Verus | Co-Emperors | Campaign alliances with lands of your own realm cost 30% less gold. | alliance_cost | 30% | `gameplay/icons/abilities/lucius_verus.webp` |
 | Marcus Aurelius | Danube Frontier | Foreign armies retreating from your land cost 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/marcus_aurelius.webp` |
@@ -98,7 +98,7 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Chilperic I | Frankish Campaigns | Attackers lose 10% fewer troops in every attack. | attacker_loss | 10% | `gameplay/icons/abilities/chilperic_i.webp` |
 | Charles the Fat | Imperial Inheritance | Attackers lose 25% fewer troops when attacking other players. | attacker_loss | 25% | `gameplay/icons/abilities/charles_the_fat.webp` |
 | Lothair I | Treaty of Verdun | Attackers lose 25% fewer troops when attacking poorer players. | attacker_loss | 25% | `gameplay/icons/abilities/lothair_i.webp` |
-| Barbarossa | Road to the Holy Land | Attackers lose 25% fewer troops when attacking neutral land. | attacker_loss | 25% | `gameplay/icons/abilities/frederick_barbarossa.webp` |
+| Frederick Barbarossa | Road to the Holy Land | Attackers lose 25% fewer troops when attacking neutral land. | attacker_loss | 25% | `gameplay/icons/abilities/frederick_barbarossa.webp` |
 | Charles V | Diet of Worms | Attackers lose 15% fewer troops when attacking human players. | attacker_loss | 15% | `gameplay/icons/abilities/charles_v.webp` |
-| Wanli | Tribute Era | Smaller players' armies retreating from your land cost 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/wanli.webp` |
+| Wanli Emperor | Tribute Era | Smaller players' armies retreating from your land cost 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/wanli.webp` |
 | Jayaatu Khan | Yuan Treasury | Attackers lose 25% fewer troops when attacking richer players. | attacker_loss | 25% | `gameplay/icons/abilities/jayaatu_khan.webp` |

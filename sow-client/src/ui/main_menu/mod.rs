@@ -6,7 +6,6 @@ pub enum LobbyNotice {
     HostLeft,
     Kicked,
     Banned,
-    ConnectionLost,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MainMenuRoute {

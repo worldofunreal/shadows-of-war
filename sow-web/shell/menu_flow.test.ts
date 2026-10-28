@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { vm } from "./typescript-test-support.ts";
 const shell = __dirname;
 import { bundleTs, loadTypeScriptModule } from "./typescript-test-support.ts";
-void fs.readFileSync(path.join(shell, "main_menu.core.ts"), "utf8");
+const menuCoreSource = fs.readFileSync(path.join(shell, "main_menu.core.ts"), "utf8");
 const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.ts"), "utf8");
 const menuGuideDefinition = JSON.parse(
     fs.readFileSync(path.join(shell, "../../assets/guides/menu.triggers.json"), "utf8"),
@@ -28,6 +28,10 @@ const actionsSource = fs.readFileSync(
     "utf8",
 );
 void fs.readFileSync(path.join(shell, "../../sow-client/src/net/update/mod.rs"), "utf8");
+const messageHandlingSource = fs.readFileSync(
+    path.join(shell, "../../sow-client/src/net/update/messages.rs"),
+    "utf8",
+);
 void fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
 void fs.readFileSync(path.join(shell, "../../sow-client/src/app/progress.rs"), "utf8");
 void fs.readFileSync(path.join(shell, "../../sow-data/src/db.rs"), "utf8");
@@ -41,6 +45,148 @@ void fs.readFileSync(path.join(shell, "../../sow-server/src/main.rs"), "utf8");
 const verificationSource = fs.readFileSync(path.join(shell, "../../sow-server/src/verification.rs"), "utf8");
 const menuCssFiles = ["main_menu.base.css", "main_menu.lobbies.css"];
 void Object.fromEntries(menuCssFiles.map((file) => [file, fs.readFileSync(path.join(shell, file), "utf8")]));
+
+function extractShellFunction(name, nextName) {
+    const declaration = (functionName) =>
+        new RegExp(`(?:^|\\n)(?:export\\s+)?function\\s+${functionName}\\s*\\(`);
+    const startMatch = declaration(name).exec(shellSource);
+    const start = startMatch ? startMatch.index + startMatch[0].lastIndexOf("function") : -1;
+    const endMatch = start >= 0 ? declaration(nextName).exec(shellSource.slice(start + name.length)) : null;
+    const end = endMatch ? start + name.length + endMatch.index : -1;
+    assert.ok(start >= 0 && end > start, name + " is present before " + nextName);
+    return shellSource.slice(start, end).replace(/\bexport\s+/g, "");
+}
+
+test("menu disconnect notice waits 30 seconds, clears on recovery, and can be dismissed offline", () => {
+    const timers = new Map();
+    let nextTimerId = 0;
+    let renders = 0;
+    let reloads = 0;
+    const context = {
+        state: null,
+        menuUi: { state: null },
+        disconnectNoticeTimer: null,
+        disconnectNoticeDismissed: false,
+        disconnectNoticeVisible: false,
+        window: {
+            setTimeout(callback, delay) {
+                const id = ++nextTimerId;
+                timers.set(id, { callback, delay });
+                return id;
+            },
+            clearTimeout(id) {
+                timers.delete(id);
+            },
+            location: {
+                reload() {
+                    reloads += 1;
+                },
+            },
+        },
+        render() {
+            renders += 1;
+        },
+    };
+    const functions = [
+        extractShellFunction("syncDisconnectNotice", "renderSystemNotice"),
+        extractShellFunction("dismissDisconnectNotice", "handleSystemNoticeCommand"),
+        extractShellFunction("handleSystemNoticeCommand", "renderSettingsPrivacySection"),
+    ].join("\n");
+    vm.runInNewContext(
+        functions +
+            "\nthis.syncDisconnectNotice = syncDisconnectNotice; this.handleSystemNoticeCommand = handleSystemNoticeCommand;",
+        context,
+    );
+
+    context.state = { phase: "MainMenu", connected: false };
+    context.menuUi.state = context.state;
+    context.syncDisconnectNotice(context.state);
+    assert.equal([...timers.values()][0].delay, 30_000);
+    const initialTimer = context.disconnectNoticeTimer;
+    context.syncDisconnectNotice(context.state);
+    assert.equal(
+        context.disconnectNoticeTimer,
+        initialTimer,
+        "state updates do not restart the outage timer",
+    );
+    context.state = { phase: "MainMenu", connected: true };
+    context.menuUi.state = context.state;
+    context.syncDisconnectNotice(context.state);
+    assert.equal(timers.size, 0, "a recovered connection cancels the notice");
+    assert.equal(context.disconnectNoticeVisible, false);
+
+    context.state = { phase: "MainMenu", connected: false };
+    context.menuUi.state = context.state;
+    context.syncDisconnectNotice(context.state);
+    const [timeoutId, timeout] = [...timers.entries()][0];
+    timers.delete(timeoutId);
+    timeout.callback();
+    assert.equal(context.disconnectNoticeVisible, true, "a sustained outage opens the notice");
+    assert.equal(renders, 1);
+    assert.equal(context.handleSystemNoticeCommand("system_notice_continue_offline"), true);
+    assert.equal(context.disconnectNoticeDismissed, true);
+    assert.equal(context.disconnectNoticeVisible, false);
+    context.syncDisconnectNotice(context.state);
+    assert.equal(timers.size, 0, "the offline choice stays dismissed for this outage");
+    assert.equal(context.handleSystemNoticeCommand("system_notice_refresh"), true);
+    assert.equal(reloads, 1, "retry reloads the browser");
+    context.state = { phase: "MainMenu", connected: true };
+    context.menuUi.state = context.state;
+    context.syncDisconnectNotice(context.state);
+    assert.equal(context.disconnectNoticeDismissed, false, "recovery clears the dismissal");
+});
+
+test("system notice modal prioritizes version updates and keeps connection actions separate", () => {
+    const renderSystemNotice = extractShellFunction("renderSystemNotice", "dismissDisconnectNotice");
+    const context = {
+        state: { phase: "MainMenu", connected: false, update_available: true },
+        menuUi: { state: { phase: "MainMenu", connected: false, update_available: true } },
+        disconnectNoticeVisible: false,
+        SOW_t: (key) => key,
+        esc: (value) => String(value),
+    };
+    vm.runInNewContext(renderSystemNotice + "\nthis.renderSystemNotice = renderSystemNotice;", context);
+    const updateMarkup = context.renderSystemNotice();
+    assert.match(updateMarkup, /menu\.version_update_title/);
+    assert.match(updateMarkup, /menu\.update_now/);
+    assert.doesNotMatch(updateMarkup, /system_notice_continue_offline/);
+
+    context.state.update_available = false;
+    context.menuUi.state = context.state;
+    assert.equal(context.renderSystemNotice(), "", "a short disconnect has no visible notice");
+    context.disconnectNoticeVisible = true;
+    const connectionMarkup = context.renderSystemNotice();
+    assert.match(connectionMarkup, /menu\.connection_lost_body/);
+    assert.match(connectionMarkup, /menu\.retry_connection/);
+    assert.match(connectionMarkup, /menu\.continue_offline/);
+
+    const joinStart = messageHandlingSource.indexOf("ServerMessage::JoinFailed(fail) =>");
+    const joinEnd = messageHandlingSource.indexOf("ServerMessage::JoinAck(ack) =>", joinStart);
+    const joinHandler = messageHandlingSource.slice(joinStart, joinEnd);
+    assert.match(joinHandler, /fail\.reason == "VERSION_MISMATCH"[\s\S]*?self\.ui\.update_available = true/);
+    assert.match(joinHandler, /menu\.join_failed/);
+    assert.match(joinHandler, /LobbyNotice::Banned/);
+    assert.doesNotMatch(joinHandler, /menu\.connection_lost|LobbyNotice::ConnectionLost/);
+    const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
+    const menuInputsStart = webMenu.indexOf("fn menu_inputs(app: &SowApp) -> MenuInputs {");
+    const menuInputsEnd = webMenu.indexOf("\nfn ", menuInputsStart + 1);
+    assert.ok(menuInputsStart >= 0 && menuInputsEnd > menuInputsStart);
+    assert.match(
+        webMenu.slice(menuInputsStart, menuInputsEnd),
+        /update_available: app\.ui\.update_available/,
+    );
+    assert.match(webMenu, /"update_available": inputs\.update_available/);
+    const renderKeyStart = menuCoreSource.indexOf("function renderKey()");
+    const renderKeyEnd = menuCoreSource.indexOf("\n    function ", renderKeyStart + 1);
+    const renderKey = menuCoreSource.slice(renderKeyStart, renderKeyEnd);
+    assert.match(renderKey, /connected: state\.connected/);
+    assert.match(renderKey, /update_available: state\.update_available/);
+    const baseCss = fs.readFileSync(path.join(shell, "main_menu.base.css"), "utf8");
+    assert.match(
+        baseCss,
+        /\.sow-menu__system-primary\s*\{[^}]*background:\s*linear-gradient\(135deg, #ff9e32, #eb5d19\)/,
+    );
+});
 
 function makeMenuGuideHarness(storage = new Map()) {
     const calls = [],
@@ -165,19 +311,9 @@ function makeMenuGuideHarness(storage = new Map()) {
 }
 
 function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = "home") {
-    const progressionStart = shellSource.indexOf("    function progressionFromState()");
-    const progressionEnd = shellSource.indexOf("    function animateProgressionTo(", progressionStart);
-    const presentationStart = shellSource.indexOf("    function runRewardPresentation(receipts)");
-    const presentationEnd = shellSource.indexOf("    function maybePresentRewards()", presentationStart);
-    const flowEnd = shellSource.indexOf("    function updateDynamic()", presentationEnd);
-    assert.ok(
-        progressionStart >= 0 &&
-            progressionEnd > progressionStart &&
-            presentationStart >= 0 &&
-            presentationEnd > presentationStart &&
-            flowEnd > presentationEnd,
-        "the shell reward presenter and guide handoff are present",
-    );
+    const progressionSource = extractShellFunction("progressionFromState", "animateProgressionTo");
+    const presentationSource = extractShellFunction("runRewardPresentation", "maybePresentRewards");
+    const handoffSource = extractShellFunction("maybePresentRewards", "updateDynamic");
     const rewardStageSets = [],
         rewardStageRuns = [],
         rewardPulses = [],
@@ -193,6 +329,7 @@ function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = 
         Array,
         Math,
         state: initialState,
+        menuUi: { state: initialState },
         rewardStageSets,
         rewardStageRuns,
         rewardPulses,
@@ -275,7 +412,7 @@ function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = 
         Promise,
         Set,
         render: () => {
-            context.screen = context.storeOpen ? "store" : context.screen;
+            context.screen = context.menuUi.storeOpen ? "store" : context.screen;
         },
     };
     const scheduleSave = context.window.setTimeout;
@@ -293,16 +430,13 @@ function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = 
         },
         error() {},
     };
-    const rewardSource =
-        shellSource.slice(progressionStart, progressionEnd) +
-        shellSource.slice(presentationStart, presentationEnd) +
-        shellSource.slice(presentationEnd, flowEnd);
+    const rewardSource = (progressionSource + presentationSource + handoffSource).replace(/\bexport\s+/g, "");
     const animationShim =
         "function animateProgressionTo(target, duration, token, levelOverride) { var values = Object.assign({}, target); if (levelOverride != null) values.level = levelOverride; writeProgression(values); return Promise.resolve(true); }\n";
     vm.runInNewContext(
         rewardSource +
             animationShim +
-            "this.menuRewardApi = { maybePresentRewards, menuGuideFacts, setState(value) { state = value; }, setRunning(value) { rewardAnimationRunning = value; }, setScreen(value) { screen = value; storeOpen = false; }, getScreen() { return screen; }, holdPresentation, releasePresentation, get phase() { return menuFlow.phase(); }, get shownReceipts() { return Array.from(rewardAnimationShown); }, get pendingReceipts() { return pendingRewardReceipts().map(function (receipt) { return receipt.id; }); }, get progression() { return displayedProgression; }, get facts() { return menuGuideFacts(); }, rewardStageSets, rewardStageRuns, rewardPulses, acknowledgements, logs };",
+            "this.menuRewardApi = { maybePresentRewards, menuGuideFacts, setState(value) { state = value; menuUi.state = value; }, setRunning(value) { rewardAnimationRunning = value; }, setScreen(value) { screen = value; storeOpen = false; }, getScreen() { return screen; }, holdPresentation, releasePresentation, get phase() { return menuFlow.phase(); }, get shownReceipts() { return Array.from(rewardAnimationShown); }, get pendingReceipts() { return pendingRewardReceipts().map(function (receipt) { return receipt.id; }); }, get progression() { return displayedProgression; }, get facts() { return menuGuideFacts(); }, rewardStageSets, rewardStageRuns, rewardPulses, acknowledgements, logs };",
         context,
     );
     return context.menuRewardApi;
@@ -618,10 +752,7 @@ test("return observation cannot issue a second exit command", () => {
     );
     assert.match(observeClient, /profile\/match-result/);
     assert.doesNotMatch(observeClient, /profile\/match-exit/);
-    const loaderSync = shellSource.slice(
-        shellSource.indexOf("    function syncWebLoaderForState("),
-        shellSource.indexOf("    function scheduleRewardPresentation("),
-    );
+    const loaderSync = extractShellFunction("syncWebLoaderForState", "scheduleRewardPresentation");
     const ready = { phase: "MainMenu", loader_job: "ExitGame", loader_cycle_id: 4, loader_done: true };
     let delivered = null;
     vm.runInNewContext(loaderSync + "; syncWebLoaderForState(ready);", {
@@ -701,6 +832,13 @@ test("random leader remains available regardless of legacy guide progress", () =
     const start = heroesSource.indexOf("function randomLeaderName");
     const end = heroesSource.indexOf("function heroesRoster", start);
     const context = {
+        menuUi: {
+            state: {
+                menu_guides: { welcome: { status: "active", current_step: "welcome_owned_selection" } },
+            },
+            heroesSearchQuery: "",
+            heroesRegionFilter: "all",
+        },
         state: { menu_guides: { welcome: { status: "active", current_step: "welcome_owned_selection" } } },
         heroesSearchQuery: "",
         heroesRegionFilter: "all",
@@ -708,6 +846,7 @@ test("random leader remains available regardless of legacy guide progress", () =
         asset: (path) => "/assets/" + path,
         esc: (value) => String(value),
     };
+    context.menuUi.state = context.state;
     vm.runInNewContext(
         heroesSource.slice(start, end) + "this.renderRandomLeaderCard = renderRandomLeaderCard;",
         context,
@@ -719,21 +858,18 @@ test("random leader remains available regardless of legacy guide progress", () =
 
 test("hero roster keeps available heroes first and preserves order after filtering", () => {
     const start = heroesSource.indexOf("function heroesRoster");
-    const end = heroesSource.indexOf("function refreshHeroesRoster", start);
+    const end = heroesSource.indexOf("function renderHeroesRegionDropdown", start);
     assert.ok(start >= 0 && end > start);
+    const leaders = [
+        { id: "locked-first", name: "Locked first", available: false, region: "europe" },
+        { id: "owned", name: "Owned", available: true, region: "europe" },
+        { id: "locked-other-region", name: "Locked other", available: false, region: "americas" },
+        { id: "weekly", name: "Weekly", available: true, region: "europe" },
+        { id: "permanent", name: "Permanent", available: true, region: "europe" },
+        { id: "locked-last", name: "Locked last", available: false, region: "europe" },
+    ];
     const context = {
-        state: {
-            leaders: [
-                { id: "locked-first", name: "Locked first", available: false, region: "europe" },
-                { id: "owned", name: "Owned", available: true, region: "europe" },
-                { id: "locked-other-region", name: "Locked other", available: false, region: "americas" },
-                { id: "weekly", name: "Weekly", available: true, region: "europe" },
-                { id: "permanent", name: "Permanent", available: true, region: "europe" },
-                { id: "locked-last", name: "Locked last", available: false, region: "europe" },
-            ],
-        },
-        heroesSearchQuery: "",
-        heroesRegionFilter: "all",
+        menuUi: { state: { leaders }, heroesSearchQuery: "", heroesRegionFilter: "all" },
         leaderDisplayName: (leader) => leader.name,
         leaderHistoricalName: () => "",
         leaderCivilization: () => "",
@@ -742,19 +878,22 @@ test("hero roster keeps available heroes first and preserves order after filteri
         esc: String,
         SOW_t: (key) => key,
     };
-    vm.runInNewContext(
-        heroesSource.slice(start, end) + "this.renderHeroesRoster = renderHeroesRoster;",
-        context,
-    );
+    vm.runInNewContext(heroesSource.slice(start, end) + "this.heroesRoster = heroesRoster;", context);
 
     assert.equal(
-        context.renderHeroesRoster("", false),
-        "Random|owned|weekly|permanent|locked-first|locked-other-region|locked-last|",
+        context
+            .heroesRoster(context.menuUi.state.leaders)
+            .map((leader) => leader.id)
+            .join("|"),
+        "owned|weekly|permanent|locked-first|locked-other-region|locked-last",
     );
-    context.heroesRegionFilter = "europe";
+    context.menuUi.heroesRegionFilter = "europe";
     assert.equal(
-        context.renderHeroesRoster("", false),
-        "Random|owned|weekly|permanent|locked-first|locked-last|",
+        context
+            .heroesRoster(context.menuUi.state.leaders)
+            .map((leader) => leader.id)
+            .join("|"),
+        "owned|weekly|permanent|locked-first|locked-last",
     );
 });
 
@@ -782,11 +921,12 @@ test("heroes featured art follows the panel shape, not the device name", () => {
         "heroesFeaturedArt() must exist as the single owner of the mapping — " + why,
     );
     const helper = heroesSource.slice(helperStart, helperEnd);
-    assert.match(helper, /band: leaderArtUrl\(slug, "desktop"\)/, why);
-    assert.match(helper, /column: leaderArtUrl\(slug, "mobile"\)/, why);
+    assert.match(helper, /const artSlug = leaderArtSlug\(leaderById\(slug\)\)/, why);
+    assert.match(helper, /band: leaderArtUrl\(artSlug, "desktop"\)/, why);
+    assert.match(helper, /column: leaderArtUrl\(artSlug, "mobile"\)/, why);
     const previewStart = heroesSource.indexOf("function updateHeroesPreview");
     const previewEnd = heroesSource.indexOf("function renderHeroInfoModal", previewStart);
-    const renderStart = heroesSource.indexOf("function renderHeroes()");
+    const renderStart = heroesSource.indexOf("export function renderHeroes()");
     assert.ok(previewStart >= 0 && previewEnd > previewStart && renderStart > previewEnd);
     const previewBody = heroesSource.slice(previewStart, previewEnd);
     const renderBody = heroesSource.slice(renderStart);
@@ -804,12 +944,12 @@ test("heroes featured art follows the panel shape, not the device name", () => {
     assert.match(previewBody, /image\.src = featuredArt\.column/, why);
     assert.match(
         renderBody,
-        /source media='\(max-width: 680px\), \(orientation: portrait\)' srcset='" \+ esc\(featuredArt\.band\)/,
+        /source media='\(max-width: 680px\), \(orientation: portrait\)' srcset='"\s*\+\s*esc\(featuredArt\.band\)/,
         why,
     );
     assert.match(
         renderBody,
-        /img src='" \+ esc\(featuredArt\.column\) \+ "' alt='[^']*' width='1080' height='1920'/,
+        /img src='"\s*\+\s*esc\(featuredArt\.column\)\s*\+\s*"' alt='[^']*' width='1080' height='1920'/,
         "the fallback <img> is the tall art, so 1080x1920 must stay — " + why,
     );
     // The <picture> switches on exactly the media query that turns the panel

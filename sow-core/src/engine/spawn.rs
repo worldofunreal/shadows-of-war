@@ -175,9 +175,14 @@ impl SowEngine {
         };
         let config = self.state.config.clone();
         let color = match character.role {
-            Role::Nation => character
-                .territory_color_rgb()
-                .unwrap_or_else(|| crate::player::human_shader_territory_rgb(bot_id)),
+            Role::Nation => {
+                let Some(color) = crate::player::next_nation_palette_color(&self.state.players)
+                else {
+                    log::error!("spawn_ai: Nation color palette is exhausted");
+                    return false;
+                };
+                color
+            }
             Role::Tribe => [0.5; 3],
         };
         let mut player = if character.role == Role::Nation {

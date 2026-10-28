@@ -377,7 +377,12 @@ impl GameConfig {
     }
 
     pub fn max_nation_bots() -> u32 {
-        crate::geo_entities::bots(crate::geo_entities::Role::Nation).count() as u32
+        let count = crate::geo_entities::bots(crate::geo_entities::Role::Nation).count();
+        assert!(
+            count <= crate::player::PREMIUM_COLORS.len(),
+            "the Nation color palette needs one slot per spawnable Nation"
+        );
+        count as u32
     }
 
     pub fn clamp_bot_counts(&mut self) {

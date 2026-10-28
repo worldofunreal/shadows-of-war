@@ -1296,6 +1296,7 @@ async fn main() {
             .route("/admin/api/status", axum::routing::get(admin_status))
             .route("/admin/api/analytics", axum::routing::get(admin_analytics))
             .route("/admin/analytics", axum::routing::get(admin_analytics_page))
+            .route("/admin/analytics.js", axum::routing::get(admin_analytics_script))
             .with_state(state);
 
         let app = catalog_route
@@ -2302,6 +2303,20 @@ async fn admin_analytics_page() -> axum::response::Response {
             "../assets/admin_analytics.html"
         )))
         .expect("valid analytics dashboard response")
+}
+
+async fn admin_analytics_script() -> axum::response::Response {
+    axum::response::Response::builder()
+        .status(axum::http::StatusCode::OK)
+        .header(
+            axum::http::header::CONTENT_TYPE,
+            "text/javascript; charset=utf-8",
+        )
+        .header(axum::http::header::CACHE_CONTROL, "no-store")
+        .body(axum::body::Body::from(include_str!(
+            "../assets/admin_analytics.js"
+        )))
+        .expect("valid analytics dashboard script response")
 }
 
 async fn admin_analytics(

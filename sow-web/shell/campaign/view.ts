@@ -22,8 +22,8 @@ export function resolveUiTarget(
 
 export function resolveUiAnchor(element: HTMLElement, spotlightElement?: HTMLElement | null): CampaignAnchor {
     const rect = element.getBoundingClientRect();
-    const x = Number.parseFloat(element.dataset && element.dataset.tutorialAnchorX);
-    const y = Number.parseFloat(element.dataset && element.dataset.tutorialAnchorY);
+    const x = Number.parseFloat(element.dataset.tutorialAnchorX ?? "");
+    const y = Number.parseFloat(element.dataset.tutorialAnchorY ?? "");
     const focus =
         Number.isFinite(x) &&
         Number.isFinite(y) &&

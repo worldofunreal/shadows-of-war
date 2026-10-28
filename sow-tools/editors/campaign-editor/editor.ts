@@ -1,9 +1,10 @@
 (function () {
   "use strict";
 
-  const $ = function (selector) {
-    return document.querySelector(selector);
-  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- page lookups are read as their element kind at each use site.
+  function $<T extends HTMLElement = any>(selector: string): T {
+    return document.querySelector<T>(selector) as T;
+  }
   const query = new URLSearchParams(location.search);
   const episodeId = /^[a-z][a-z0-9_]{0,63}$/.test(query.get("episode") || "")
     ? query.get("episode")
@@ -25,7 +26,48 @@
     "ur",
     "yi",
   ]);
-  const state = {
+  type EditorState = {
+    roster: CampaignRoster | null;
+    definition: CampaignDefinition | null;
+    etag: string | null;
+    rosterEtag: string | null;
+    externalChangeTag: string | null;
+    dirty: boolean;
+    saving: boolean;
+    demoBackup: CampaignRecord | null;
+    selected: string | null;
+    previewBranch: { stepId: string; routeIndex: number } | null;
+    previewFocusActive: boolean;
+    previewActionStep: string | null;
+    previewActionRatio: number | null;
+    previewRevealTimer: ReturnType<typeof setTimeout> | null;
+    previewRevealToken: number;
+    pickingFaction: boolean;
+    flow: string;
+    isMenuGuides: boolean;
+    menuGuideId: string;
+    previewLanguage: string;
+    catalogs: Record<string, CampaignRecord>;
+    localeFailures: string[];
+    localeRegistryFailed: boolean;
+    avatars: string[];
+    machine: CampaignMachine | null;
+    renderer: CampaignRecord | null;
+    facts: CampaignRecord;
+    ui: CampaignRecord;
+    mapPreview: CampaignRecord | null;
+    mapResizeObserver: ResizeObserver | null;
+    mapResizeFallback: boolean;
+    mapPreviewLoadingId: string | null;
+    zoom: number;
+    pan: { x: number; y: number };
+    drag: CampaignRecord | null;
+    wire: CampaignRecord | null;
+    keyboardWire: CampaignRecord | null;
+    validation: CampaignValidationReport;
+    playingStep?: string | null;
+  };
+  const state: EditorState = {
     roster: null,
     definition: null,
     etag: null,
@@ -65,7 +107,7 @@
     keyboardWire: null,
     validation: { errors: [], warnings: [] },
   };
-  const types = ["scene", "choice", "objective", "guide", "end"];
+  const types: CampaignStepType[] = ["scene", "choice", "objective", "guide", "end"];
   const triggerTypes = [
     { value: "territory", label: "Gain territory" },
     { value: "kills", label: "Defeat troops" },
@@ -106,18 +148,38 @@
     localeNames = { en: "English", es: "Español" };
   const catalogLoads = Object.create(null);
 
-  function el(tag, attrs, text) {
+  type OptionValue = string | { value: string; label: string };
+  interface InputFieldOptions {
+    class?: string;
+    type?: string;
+    multiline?: boolean;
+    input?: boolean;
+    placeholder?: string;
+    min?: string | number;
+    max?: string | number;
+    step?: string | number;
+  }
+  function el<K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    attrs?: Record<string, unknown>,
+    text?: string,
+  ): HTMLElementTagNameMap[K] {
     const node = document.createElement(tag);
     Object.keys(attrs || {}).forEach(function (key) {
-      if (key === "class") node.className = attrs[key];
+      if (key === "class") node.className = String(attrs[key]);
       else if (key === "dataset") Object.assign(node.dataset, attrs[key]);
       else if (key === "checked" || key === "disabled" || key === "hidden") node[key] = attrs[key];
-      else node.setAttribute(key, attrs[key]);
+      else node.setAttribute(key, String(attrs[key]));
     });
     if (text != null) node.textContent = text;
     return node;
   }
-  function optionList(select, values, current, label) {
+  function optionList(
+    select: HTMLSelectElement,
+    values: OptionValue[],
+    current: string,
+    label?: (value: string) => string,
+  ) {
     select.replaceChildren();
     values.forEach(function (value) {
       const item = el(
@@ -363,7 +425,7 @@
     if (state.previewRevealTimer !== null) window.clearTimeout(state.previewRevealTimer);
     state.previewRevealTimer = null;
   }
-  function status(message, kind) {
+  function status(message: string, kind?: string) {
     const node = $("#saveStatus");
     node.textContent = message;
     node.className = "status" + (kind ? " " + kind : "");
@@ -409,21 +471,21 @@
         markDirty();
         renderInspector();
         const nextLabel = "Move " + label + " " + (index + move.offset + 1) + " " + move.direction;
-        let nextButton = Array.from($("#inspector").querySelectorAll(".order-actions button")).find(
-          function (candidate) {
-            return candidate.getAttribute("aria-label") === nextLabel;
-          },
-        );
+        let nextButton = Array.from<HTMLButtonElement>(
+          $("#inspector").querySelectorAll(".order-actions button"),
+        ).find(function (candidate) {
+          return candidate.getAttribute("aria-label") === nextLabel;
+        });
         if (!nextButton || nextButton.disabled) {
           const otherDirection = move.direction === "up" ? "down" : "up";
-          nextButton = Array.from($("#inspector").querySelectorAll(".order-actions button")).find(
-            function (candidate) {
-              return (
-                candidate.getAttribute("aria-label") ===
-                "Move " + label + " " + (index + move.offset + 1) + " " + otherDirection
-              );
-            },
-          );
+          nextButton = Array.from<HTMLButtonElement>(
+            $("#inspector").querySelectorAll(".order-actions button"),
+          ).find(function (candidate) {
+            return (
+              candidate.getAttribute("aria-label") ===
+              "Move " + label + " " + (index + move.offset + 1) + " " + otherDirection
+            );
+          });
         }
         if (nextButton && !nextButton.disabled) nextButton.focus();
       });
@@ -431,19 +493,23 @@
     });
     return controls;
   }
-  function inputField(label, value, onChange, options) {
-    options = options || {};
+  function inputField(
+    label: string,
+    value: string | number | null | undefined,
+    onChange: (value: string) => void,
+    options: InputFieldOptions = {},
+  ) {
     const wrapper = el("label", { class: options.class || "" });
     wrapper.appendChild(el("span", {}, label));
     const input = el(options.multiline ? "textarea" : "input", {
       type: options.type || "text",
       value: value == null ? "" : value,
       placeholder: options.placeholder || "",
-    });
-    if (options.min != null) input.min = options.min;
-    if (options.max != null) input.max = options.max;
-    if (options.step != null) input.step = options.step;
-    if (options.multiline) input.value = value || "";
+    }) as HTMLInputElement;
+    if (options.min != null) input.min = String(options.min);
+    if (options.max != null) input.max = String(options.max);
+    if (options.step != null) input.step = String(options.step);
+    if (options.multiline) input.value = String(value || "");
     input.addEventListener(options.input ? "input" : "change", function () {
       onChange(input.value);
     });
@@ -716,7 +782,7 @@
       : "Missing shared English text. Add this key to sow-i18n/strings/en/web.toml.";
     container.appendChild(el("small", { class: "translation-fallback", role: "status" }, note));
   }
-  function textEditor(container, label, keyPath, valuePath) {
+  function textEditor(container: HTMLElement, label: string, keyPath: string, valuePath?: string) {
     const step = state.definition.steps.find(function (item) {
       return item.id === state.selected;
     });
@@ -1243,7 +1309,7 @@
         const menuAction = inGameUiTargets()[0] || "menu_campaign";
         const firstLine = step.lines && step.lines[0];
         const exchangeScene = value === "scene" && Boolean(step.exchange);
-        const replacement = { id: id, type: value };
+        const replacement: CampaignStep = { id: id, type: value as CampaignStepType };
         if (!exchangeScene) replacement.title_key = step.title_key || storyKey(id + "_title");
         const bodyKey =
           step.body_key || (firstLine && firstLine.body_key) || (value === "scene" && step.hint_key);
@@ -1731,7 +1797,7 @@
             markDirty();
           }),
         );
-        let branchType = "scene";
+        let branchType: CampaignStepType = "scene";
         const branchTypeOptions = [
           { value: "scene", label: "Scene" },
           { value: "choice", label: "Decision" },
@@ -1740,7 +1806,7 @@
         ];
         card.appendChild(
           selectField("Create after this answer", branchType, branchTypeOptions, function (value) {
-            branchType = value;
+            branchType = value as CampaignStepType;
           }),
         );
         const createBranch = el("button", { type: "button" }, "Create next step");
@@ -3210,7 +3276,7 @@
         : isNeutralContact
           ? { type: "contact", relation: "neutral" }
           : { type: eventType, target: faction.id };
-      const reaction = {
+      const reaction: CampaignRecord = {
         id: responseId,
         when: when,
         title_key: storyKey(responseId + "_title"),
@@ -3599,7 +3665,9 @@
           className: "choice-wire",
         };
       });
-    const outputs = [{ field: "next", label: "Next", target: step.next }];
+    const outputs: { field: string; label: string; target: string; className?: string }[] = [
+      { field: "next", label: "Next", target: step.next },
+    ];
     if (step.unavailable_next)
       outputs.push({
         field: "unavailable_next",
@@ -3773,7 +3841,8 @@
       oldSelection = state.selected;
     const completedSteps = new Set(state.machine ? state.machine.state.completed : []);
     const focusedStep =
-      document.activeElement && document.activeElement.dataset && document.activeElement.dataset.stepId;
+      (document.activeElement as HTMLElement).dataset &&
+      (document.activeElement as HTMLElement).dataset.stepId;
     nodes.replaceChildren();
     let group = svg.querySelector("g");
     if (group) group.remove();
@@ -3974,7 +4043,7 @@
         card.appendChild(row);
       });
       card.addEventListener("click", function (event) {
-        if (event.target.closest(".pin")) return;
+        if ((event.target as Element).closest(".pin")) return;
         selectStep(step.id);
       });
       card.addEventListener("keydown", function (event) {
@@ -3995,7 +4064,7 @@
         head.setPointerCapture(event.pointerId);
       });
       card.addEventListener("pointerdown", function (event) {
-        const output = event.target.closest(".pin.out");
+        const output = (event.target as Element).closest<HTMLElement>(".pin.out");
         if (!output) return;
         event.preventDefault();
         event.stopPropagation();
@@ -4083,9 +4152,11 @@
     $(".graph-hint").textContent =
       "Drag outputs to inputs · keyboard: Enter on output, then Enter on destination · Escape cancels";
     markDirty();
-    const target = Array.from($("#nodes").querySelectorAll(".pin.in")).find(function (candidate) {
-      return candidate.dataset.in === destination;
-    });
+    const target = Array.from<HTMLElement>($("#nodes").querySelectorAll(".pin.in")).find(
+      function (candidate) {
+        return candidate.dataset.in === destination;
+      },
+    );
     if (target) target.focus({ preventScroll: true });
   }
   function drawWires() {
@@ -4143,7 +4214,7 @@
       });
     });
   }
-  function addStep(type, branch) {
+  function addStep(type: CampaignStepType, branch?: CampaignRecord) {
     if (state.isMenuGuides) {
       addMenuGuideStep(type);
       return;
@@ -4201,7 +4272,7 @@
       }
     }
     const menuAction = inGameUiTargets()[0] || "menu_campaign";
-    const step = {
+    const step: CampaignStep = {
       id: id,
       type: type,
       title_key: storyKey(id + "_title"),
@@ -4261,7 +4332,7 @@
     let position = defaultLayout(index);
     const origin = previous && state.definition.layout[previous.id];
     if (origin) position = { x: origin.x + 320, y: origin.y };
-    const step = { id: id, type: type, title_key: "menu.guide." + id + ".title" };
+    const step: CampaignStep = { id: id, type: type, title_key: "menu.guide." + id + ".title" };
     if (type === "end") step.body_key = "menu.guide." + id + ".body";
     else if (type === "scene") {
       step.body_key = "menu.guide." + id + ".body";
@@ -4296,28 +4367,30 @@
   function renderPalette() {
     const host = $("#palette");
     host.replaceChildren();
-    (state.isMenuGuides ? ["scene", "choice", "guide", "end"] : types).forEach(function (type) {
-      const button = el(
-        "button",
-        { type: "button" },
-        type === "scene"
-          ? "Scene"
-          : type === "choice"
-            ? "Decision"
-            : type === "objective"
-              ? "Objective"
-              : type === "guide"
-                ? "Guide"
-                : "Ending",
-      );
-      button.addEventListener("click", function () {
-        addStep(type);
-      });
-      host.appendChild(button);
-    });
+    (state.isMenuGuides ? (["scene", "choice", "guide", "end"] as CampaignStepType[]) : types).forEach(
+      function (type) {
+        const button = el(
+          "button",
+          { type: "button" },
+          type === "scene"
+            ? "Scene"
+            : type === "choice"
+              ? "Decision"
+              : type === "objective"
+                ? "Objective"
+                : type === "guide"
+                  ? "Guide"
+                  : "Ending",
+        );
+        button.addEventListener("click", function () {
+          addStep(type);
+        });
+        host.appendChild(button);
+      },
+    );
   }
 
-  function paintPreview(updateMachine) {
+  function paintPreview(updateMachine?: boolean) {
     if (!state.machine || state.validation.errors.length) return;
     clearPreviewRevealTimer();
     $("#previewFrame").dataset.device = $("#device").value;
@@ -4358,7 +4431,8 @@
     }
     const anchor = previewAnchor(model.step, state.facts);
     const previewPlatform =
-      (window.navigator && window.navigator.userAgentData && window.navigator.userAgentData.platform) ||
+      ((window.navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData &&
+        (window.navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData.platform) ||
       (window.navigator && window.navigator.platform) ||
       "";
     const zoomMode =
@@ -4557,10 +4631,10 @@
     renderFactControls(model);
   }
   function paintExchangePreview(model) {
-    document.querySelectorAll(".campaign-preview-emote").forEach(function (node) {
+    document.querySelectorAll<HTMLElement>(".campaign-preview-emote").forEach(function (node) {
       node.remove();
     });
-    document.querySelectorAll(".sample-map-marker.is-speaking").forEach(function (node) {
+    document.querySelectorAll<HTMLElement>(".sample-map-marker.is-speaking").forEach(function (node) {
       node.classList.remove("is-speaking");
     });
     const line = model.exchange;
@@ -4568,7 +4642,7 @@
     const speaker = state.definition.speakers && state.definition.speakers[line.speaker];
     const marker =
       speaker && speaker.faction
-        ? Array.from(document.querySelectorAll("#campaignPreviewMarkers .sample-faction")).find(
+        ? Array.from(document.querySelectorAll<HTMLElement>("#campaignPreviewMarkers .sample-faction")).find(
             function (item) {
               return item.dataset.factionId === speaker.faction;
             },
@@ -4636,7 +4710,7 @@
       (!spotlightPanel || spotlightPanel.getClientRects().length === 0)
     )
       return null;
-    let anchor =
+    let anchor: CampaignRecord =
       guide.kind === "ui"
         ? window.SOWCampaignView.resolveUiAnchor(target, spotlightPanel)
         : { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
@@ -4687,7 +4761,7 @@
       });
       return (
         (nameplateFaction &&
-          Array.from(frame.querySelectorAll(".sample-faction")).find(function (marker) {
+          Array.from<HTMLElement>(frame.querySelectorAll(".sample-faction")).find(function (marker) {
             return marker.dataset.factionId === nameplateFaction.id;
           })) ||
         null
@@ -4704,7 +4778,7 @@
       });
       return (
         (playerFaction &&
-          Array.from(frame.querySelectorAll(".sample-faction")).find(function (marker) {
+          Array.from<HTMLElement>(frame.querySelectorAll(".sample-faction")).find(function (marker) {
             return marker.dataset.factionId === playerFaction.id;
           })) ||
         null
@@ -4739,7 +4813,7 @@
     }
     return (
       (faction &&
-        Array.from(frame.querySelectorAll(".sample-faction")).find(function (marker) {
+        Array.from<HTMLElement>(frame.querySelectorAll(".sample-faction")).find(function (marker) {
           return marker.dataset.factionId === faction.id;
         })) ||
       null
@@ -4770,11 +4844,11 @@
       target === "player"
         ? $("#campaignPreviewMarkers .player-base")
         : target
-          ? Array.from(document.querySelectorAll("#campaignPreviewMarkers .sample-faction")).find(
-              function (item) {
-                return item.dataset.factionId === target;
-              },
-            )
+          ? Array.from(
+              document.querySelectorAll<HTMLElement>("#campaignPreviewMarkers .sample-faction"),
+            ).find(function (item) {
+              return item.dataset.factionId === target;
+            })
           : null;
     if (!marker) return;
     const layer = $("#campaignPreviewLayer"),
@@ -4788,7 +4862,7 @@
     $("#campaignPreviewMarkers .is-camera-focus")?.classList.remove("is-camera-focus");
     marker.classList.add("is-camera-focus");
   }
-  function renderPreview(forceStep) {
+  function renderPreview(forceStep?: string) {
     if (!state.definition) return;
     if (state.validation.errors.length) {
       $("#previewStatus").textContent = "Fix validation errors to preview this draft";
@@ -4900,11 +4974,13 @@
     facts.menu_guide_selected_offer_equipped = Boolean(
       selectedOffer && String(facts.selected_leader || "") === selectedOffer && owned.includes(selectedOffer),
     );
-    const storeNav = document.querySelector("#sow-menu [data-nav-screen='store']");
+    const storeNav = document.querySelector<HTMLButtonElement>("#sow-menu [data-nav-screen='store']");
     if (storeNav) storeNav.disabled = !facts.commerce_available;
-    const purchaseConfirm = document.querySelector("#sow-menu [data-command='confirm_purchase']");
+    const purchaseConfirm = document.querySelector<HTMLElement>(
+      "#sow-menu [data-command='confirm_purchase']",
+    );
     const purchaseClose = document.querySelector("#sow-menu [data-command='cancel_purchase']");
-    document.querySelectorAll("#sow-menu [data-nav-screen]").forEach(function (button) {
+    document.querySelectorAll<HTMLButtonElement>("#sow-menu [data-nav-screen]").forEach(function (button) {
       button.disabled =
         Boolean(facts.purchase_modal_phase) ||
         (button.dataset.navScreen === "store" && !facts.commerce_available);
@@ -4912,18 +4988,22 @@
     if (purchaseConfirm) purchaseConfirm.hidden = facts.purchase_modal_phase === "success";
     if (purchaseClose)
       purchaseClose.textContent = facts.purchase_modal_phase === "success" ? "CONTINUE" : "CANCEL";
-    document.querySelectorAll("#sow-menu [data-command='preview_leader']").forEach(function (button) {
-      const leaderId = String(button.dataset.leaderId || "");
-      button.disabled =
-        !(facts.available_leader_ids || []).map(String).includes(leaderId) && !available.includes(leaderId);
-      button.classList.toggle(
-        "is-locked",
-        !(facts.available_leader_ids || []).map(String).includes(leaderId),
-      );
-    });
-    document.querySelectorAll("#sow-menu [data-command='unlock_leader']").forEach(function (button) {
-      button.disabled = !available.includes(String(button.dataset.leaderId || ""));
-    });
+    document
+      .querySelectorAll<HTMLButtonElement>("#sow-menu [data-command='preview_leader']")
+      .forEach(function (button) {
+        const leaderId = String(button.dataset.leaderId || "");
+        button.disabled =
+          !(facts.available_leader_ids || []).map(String).includes(leaderId) && !available.includes(leaderId);
+        button.classList.toggle(
+          "is-locked",
+          !(facts.available_leader_ids || []).map(String).includes(leaderId),
+        );
+      });
+    document
+      .querySelectorAll<HTMLButtonElement>("#sow-menu [data-command='unlock_leader']")
+      .forEach(function (button) {
+        button.disabled = !available.includes(String(button.dataset.leaderId || ""));
+      });
   }
   function incrementMenuOutcome(outcome) {
     const counts = state.facts.menu_outcomes || (state.facts.menu_outcomes = {});
@@ -4931,9 +5011,9 @@
   }
   function handleMenuPreviewClick(event) {
     if (!state.isMenuGuides) return false;
-    const target = event.target.closest("button, [data-lobby-card]");
+    const target = (event.target as Element).closest<HTMLButtonElement>("button, [data-lobby-card]");
     if (!target || target.disabled) return true;
-    const nav = target.closest("[data-nav-screen]");
+    const nav = target.closest<HTMLElement>("[data-nav-screen]");
     if (nav) {
       const nextScreen = nav.dataset.navScreen === "battle" ? "home" : nav.dataset.navScreen;
       setPreviewMenuScreen(nextScreen);
@@ -5418,7 +5498,7 @@
     return true;
   }
 
-  function simulateObjective(amount, sample) {
+  function simulateObjective(amount?: number | null, sample?: CampaignRecord) {
     if (!state.machine) return;
     const step = state.machine.view().step,
       trigger = step.trigger;
@@ -5630,7 +5710,7 @@
     setPreviewMenuScreen("home");
     renderPreview(flowEntry() || state.definition.entry);
   }
-  function refresh(skipGraph) {
+  function refresh(skipGraph?: boolean) {
     if (!state.definition) return;
     normalizeStrings(state.definition);
     ensureLayout();
@@ -6200,7 +6280,9 @@
       setFactionPicker(!state.pickingFaction);
     });
     $("#campaignPreviewMarkers").addEventListener("click", function (event) {
-      const marker = state.pickingFaction && event.target.closest(".sample-faction.is-faction-pickable");
+      const marker =
+        state.pickingFaction &&
+        (event.target as Element).closest<HTMLElement>(".sample-faction.is-faction-pickable");
       if (!marker) return;
       event.preventDefault();
       event.stopPropagation();
@@ -6209,7 +6291,9 @@
     });
     $("#campaignPreviewMarkers").addEventListener("keydown", function (event) {
       if (event.key !== "Enter" && event.key !== " ") return;
-      const marker = state.pickingFaction && event.target.closest(".sample-faction.is-faction-pickable");
+      const marker =
+        state.pickingFaction &&
+        (event.target as Element).closest<HTMLElement>(".sample-faction.is-faction-pickable");
       if (!marker) return;
       event.preventDefault();
       event.stopPropagation();
@@ -6264,24 +6348,26 @@
           handleMenuPreviewClick(event);
           return;
         }
-        if (event.target.closest('[data-command="open_campaign"]')) setPreviewMenuScreen("campaign");
-        else if (event.target.closest("[data-preview-menu-back]")) setPreviewMenuScreen("home");
+        if ((event.target as Element).closest('[data-command="open_campaign"]'))
+          setPreviewMenuScreen("campaign");
+        else if ((event.target as Element).closest("[data-preview-menu-back]")) setPreviewMenuScreen("home");
         else return;
         paintPreview();
         return;
       }
-      const back = event.target.closest("[data-map-back]");
-      const group = event.target.closest("[data-map-group]");
-      const action = event.target.closest("[data-map-action]");
+      const back = (event.target as Element).closest("[data-map-back]");
+      const group = (event.target as Element).closest("[data-map-group]");
+      const action = (event.target as Element).closest("[data-map-action]");
       const hudRoot = $("#sow-hud");
       if (!hudRoot || !hudRoot.contains(event.target)) return;
       if (previewBuildingAction(event.target)) return;
       if (back) hudRoot.dataset.previewMapMenu = "";
-      else if (group) hudRoot.dataset.previewMapMenu = group.dataset.mapGroup;
+      else if (group) hudRoot.dataset.previewMapMenu = (group as HTMLElement).dataset.mapGroup;
       else if (action) hudRoot.dataset.previewMapMenu = "";
       else return;
       const transferPanel = $("#sow-hud-transfer");
-      if (transferPanel && action && action.dataset.mapAction === "transfer") transferPanel.hidden = false;
+      if (transferPanel && action && (action as HTMLElement).dataset.mapAction === "transfer")
+        transferPanel.hidden = false;
       const popup = hudRoot.querySelector(".sample-map-popup");
       if (popup) popup.hidden = !hudRoot.dataset.previewMapMenu;
       hudRoot.querySelectorAll("[data-preview-map-menu]").forEach(function (panel) {
@@ -6309,7 +6395,7 @@
       const reader = new FileReader();
       reader.onload = function () {
         try {
-          const next = JSON.parse(reader.result);
+          const next = JSON.parse(reader.result as string);
           if (next.episode_id !== episodeId) throw new Error("Episode ID does not match this editor tab.");
           if (state.isMenuGuides) {
             const report = window.SOWCampaign.validateMenuGuides(next);
@@ -6409,13 +6495,13 @@
     });
     document.addEventListener("pointerup", function (event) {
       if (!state.wire) return;
-      const target = document.elementFromPoint(event.clientX, event.clientY);
+      const target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
       const port = target && target.closest("[data-in]");
       const wire = state.wire;
       state.wire = null;
       if (wire.path && wire.path.isConnected) wire.path.remove();
       if (port) {
-        setDestination(wire, port.dataset.in);
+        setDestination(wire, (port as HTMLElement).dataset.in);
         markDirty();
       }
     });
@@ -6427,7 +6513,7 @@
       },
       { passive: false },
     );
-    document.querySelectorAll("[data-zoom]").forEach(function (button) {
+    document.querySelectorAll<HTMLElement>("[data-zoom]").forEach(function (button) {
       button.addEventListener("click", function () {
         if (button.dataset.zoom === "fit") fitGraph();
         else zoomAt(innerWidth / 2, innerHeight / 2, button.dataset.zoom === "in" ? 1.2 : 1 / 1.2);
@@ -6462,9 +6548,9 @@
   }
   function fitGraph() {
     const stage = $("#stage"),
-      nodes = Array.from($("#nodes").querySelectorAll(".node"));
+      nodes = Array.from<HTMLElement>($("#nodes").querySelectorAll(".node"));
     if (!nodes.length || !stage.clientWidth || !stage.clientHeight) return;
-    const bounds = nodes.reduce(
+    const bounds = nodes.reduce<{ left: number; top: number; right: number; bottom: number }>(
       function (box, node) {
         const x = node.offsetLeft,
           y = node.offsetTop;
@@ -6609,7 +6695,7 @@
         if (!response.ok) throw new Error("avatar list unavailable");
         return response.json();
       })
-      .then(function (avatars) {
+      .then(function (avatars: string[]) {
         if (
           !Array.isArray(avatars) ||
           avatars.some(function (avatar) {
@@ -6623,7 +6709,7 @@
   function fillEpisodes() {
     const select = $("#episodeSelect"),
       labels = Object.create(null);
-    Array.from(select.options).forEach(function (option) {
+    Array.from<HTMLOptionElement>(select.options).forEach(function (option) {
       labels[option.value] = option.textContent;
     });
     return fetch("/__episodes", { cache: "no-store" })

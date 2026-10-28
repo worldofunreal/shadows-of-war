@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 mod colors;
 
 pub use colors::{
-    bot_territory_color, campaign_relation_rgb, human_shader_territory_rgb, player_territory_rgb,
-    premium_color, team_territory_rgb,
+    best_available_nation_palette_color, campaign_relation_rgb, next_nation_palette_color,
+    player_territory_rgb, team_territory_rgb,
 };
 pub use sow_data::{Leader, NamedColor, PREMIUM_COLORS};
 

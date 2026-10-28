@@ -2,6 +2,8 @@
 (function () {
     "use strict";
 
+    type EventProps = Record<string, unknown>;
+
     const EVENTS = new Set([
         "landing_visit",
         "shell_loaded",
@@ -39,7 +41,7 @@
         "store_purchase_complete",
     ]);
     const STORE_ITEM_EVENTS = ["store_buy_tap", "store_checkout_open", "store_purchase_complete"];
-    const POKI_EVENTS = {
+    const POKI_EVENTS: Record<string, string[]> = {
         landing_visit: ["site", "landing", "visit"],
         shell_loaded: ["loading", "shell", "complete"],
         play_now_click: ["menu", "play_now", "interact"],
@@ -66,7 +68,7 @@
         tutorial_dialog_choice: ["tutorial", "dialog", "choice"],
         tutorial_exit_early: ["tutorial", "episode", "exit"],
     };
-    const LOAD_STAGES = new Set([
+    const LOAD_STAGES = new Set<unknown>([
         "relay_connect_start",
         "relay_connect_complete",
         "engine_init_complete",
@@ -75,11 +77,11 @@
         "ready_sent",
     ]);
 
-    function isId(value) {
+    function isId(value: unknown): value is string {
         return typeof value === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(value);
     }
 
-    function isStepId(value) {
+    function isStepId(value: unknown): value is string {
         return (
             typeof value === "string" &&
             /^[a-z][a-z0-9_-]{0,95}$/.test(value) &&
@@ -87,7 +89,15 @@
         );
     }
 
-    function exactKeys(value, keys) {
+    function isIndex(value: unknown): value is number {
+        return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < 512;
+    }
+
+    function isOneOf(value: unknown, options: readonly string[]): value is string {
+        return typeof value === "string" && options.includes(value);
+    }
+
+    function exactKeys(value: unknown, keys: string[]): boolean {
         if (!value || typeof value !== "object" || Array.isArray(value)) return false;
         const actual = Object.keys(value).sort();
         const expected = keys.slice().sort();
@@ -99,24 +109,17 @@
         );
     }
 
-    function safeProps(name, props) {
+    function safeProps(name: string, props: EventProps): EventProps | null {
         if (name === "tutorial_step") {
-            if (
-                exactKeys(props, ["step_index"]) &&
-                Number.isInteger(props.step_index) &&
-                props.step_index >= 0 &&
-                props.step_index < 512
-            ) {
+            if (exactKeys(props, ["step_index"]) && isIndex(props.step_index)) {
                 return { step_index: props.step_index };
             }
             if (
                 exactKeys(props, ["episode_id", "step_id", "step_index", "action"]) &&
                 isId(props.episode_id) &&
                 isStepId(props.step_id) &&
-                Number.isInteger(props.step_index) &&
-                props.step_index >= 0 &&
-                props.step_index < 512 &&
-                ["start", "complete"].includes(props.action)
+                isIndex(props.step_index) &&
+                isOneOf(props.action, ["start", "complete"])
             ) {
                 return {
                     episode_id: props.episode_id,
@@ -135,9 +138,7 @@
                 exactKeys(props, ["episode_id", "step_id", "step_index", "action"]) &&
                 isId(props.episode_id) &&
                 isStepId(props.step_id) &&
-                Number.isInteger(props.step_index) &&
-                props.step_index >= 0 &&
-                props.step_index < 512 &&
+                isIndex(props.step_index) &&
                 props.action === "fail"
             ) {
                 return {
@@ -159,9 +160,9 @@
         if (
             STORE_ITEM_EVENTS.includes(name) &&
             exactKeys(props, ["kind", "item_id", "currency"]) &&
-            ["gem_pack", "leader", "skin"].includes(props.kind) &&
+            isOneOf(props.kind, ["gem_pack", "leader", "skin"]) &&
             isId(props.item_id) &&
-            ["usd", "gems", "crowns"].includes(props.currency)
+            isOneOf(props.currency, ["usd", "gems", "crowns"])
         ) {
             return { kind: props.kind, item_id: props.item_id, currency: props.currency };
         }
@@ -171,14 +172,14 @@
         if (
             name === "boot_route_decision" &&
             exactKeys(props, ["route"]) &&
-            ["menu", "intro"].includes(props.route)
+            isOneOf(props.route, ["menu", "intro"])
         ) {
             return { route: props.route };
         }
         return null;
     }
 
-    function parseEvent(payload) {
+    function parseEvent(payload: unknown) {
         let event;
         try {
             event = typeof payload === "string" ? JSON.parse(payload) : payload;
@@ -204,8 +205,8 @@
         return { name: event.name, props: safeProps(event.name, props) };
     }
 
-    function pokiMeasure(event) {
-        let mapped = POKI_EVENTS[event.name];
+    function pokiMeasure(event: { name: string; props: EventProps | null }) {
+        let mapped: string[] | undefined = POKI_EVENTS[event.name];
         if (event.name === "tutorial_exit_early" && event.props && event.props.step_id) {
             mapped = ["tutorial", event.props.episode_id + "_" + event.props.step_id, "fail"];
         } else if (
@@ -218,23 +219,27 @@
                         : event.name === "tutorial_exit_early"
                           ? "exit"
                           : "complete";
-                mapped = ["tutorial", event.props.episode_id, action];
+                mapped = ["tutorial", String(event.props.episode_id), action];
             }
         } else if (event.name === "tutorial_step") {
             const props = event.props || {};
             const step =
                 props.step_id ||
                 (Number.isInteger(props.step_index) ? "step_" + props.step_index : "step_unknown");
-            mapped = ["tutorial", (props.episode_id || "legacy") + "_" + step, props.action || "start"];
+            mapped = [
+                "tutorial",
+                (props.episode_id || "legacy") + "_" + step,
+                String(props.action || "start"),
+            ];
         } else if (event.name === "load_stage" && event.props) {
-            const stage = event.props.stage;
+            const stage = String(event.props.stage);
             mapped = [
                 "loading",
                 stage.replace(/_(start|complete)$/, ""),
                 stage.endsWith("_start") ? "start" : "complete",
             ];
         } else if (event.name === "boot_route_decision" && event.props) {
-            mapped = ["boot", "route", event.props.route];
+            mapped = ["boot", "route", String(event.props.route)];
         }
         if (mapped && typeof window.SOW_pokiMeasure === "function") {
             window.SOW_pokiMeasure(mapped[0], mapped[1], mapped[2]);

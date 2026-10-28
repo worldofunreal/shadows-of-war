@@ -415,6 +415,9 @@ thread_local! {
     /// Last payload handed to JS. publish_state runs every frame; without this
     /// guard each frame allocates a fresh JSON string plus a JS-side copy.
     static LAST_PUBLISHED: RefCell<String> = RefCell::new(String::new());
+    /// Inputs behind the last menu payload. An idle menu (mouse moves, no state change)
+    /// skips the payload rebuild while these still match.
+    static LAST_MENU_INPUTS: RefCell<Option<MenuInputs>> = const { RefCell::new(None) };
     /// Cheap fingerprint for the small, hot in-match HUD payload. Heavy cold panels are
     /// represented by the snapshot tick only while a panel that needs them is open.
     static LAST_HUD_KEY: RefCell<Option<HudPublishKey>> = const { RefCell::new(None) };
@@ -434,6 +437,8 @@ thread_local! {
         RefCell<Option<(u64, u32, u16, u16, serde_json::Value)>> = const { RefCell::new(None) };
     /// Last hover card JSON handed to JS. The hover card is published every frame, so it dedupes here.
     static LAST_HOVER_CARD: RefCell<String> = RefCell::new(String::new());
+    /// Last tutorial pointer JSON handed to JS. The pointer follows the mouse, so it dedupes here.
+    static LAST_TUTORIAL_POINTER: RefCell<String> = RefCell::new(String::new());
     static LAST_WEB_INBOX_PAYLOAD:
         RefCell<Option<(u64, u16, serde_json::Value)>> = const { RefCell::new(None) };
 
@@ -488,7 +493,7 @@ struct HudPublishKey {
     tutorial_target_zoom_hundredths: i32,
     tutorial_marker_player_id: Option<u16>,
     tutorial_emote_token: Option<String>,
-    tutorial_pointer: Option<(u64, u64)>,
+    tutorial_target_hovered: bool,
     tutorial_camera_viewport: Option<(u32, u32, u32, u32)>,
     map_menu_view: Option<MapContextMenuView>,
     map_menu_session: u64,
@@ -1855,14 +1860,8 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             None
         },
         tutorial_emote_token: if tutorial_active { app.ui.nameplates.campaign_emote_ready_token().map(str::to_owned) } else { None },
-        tutorial_pointer: if tutorial_active {
-            Some((
-                app.input.last_mouse_x.to_bits(),
-                app.input.last_mouse_y.to_bits(),
-            ))
-        } else {
-            None
-        },
+        tutorial_target_hovered: tutorial_active
+            && tutorial_target_under_pointer(app, app.ui.tutorial_marker_player_id.unwrap_or(my_pid)),
         tutorial_camera_viewport: tutorial_active.then_some((
             app.input.camera_x.to_bits(),
             app.input.camera_y.to_bits(),
@@ -2577,6 +2576,36 @@ fn tutorial_guide_tiles(
     )
 }
 
+/// The mouse, or a single touch, drives the tutorial pointer. Other input does not.
+fn tutorial_pointer_active(app: &SowApp) -> bool {
+    match app.input.hover_pointer {
+        HoverPointer::Mouse => true,
+        HoverPointer::Touch => app.input.active_touches.len() == 1,
+        HoverPointer::None => false,
+    }
+}
+
+fn tutorial_target_under_pointer(app: &SowApp, marker_player_id: u16) -> bool {
+    tutorial_pointer_active(app)
+        && app.ui.nameplates.tutorial_target_contains(
+            marker_player_id,
+            app.input.last_mouse_x,
+            app.input.last_mouse_y,
+        )
+}
+
+/// Tutorial pointer in CSS pixels. It has its own channel, see publish_tutorial_pointer.
+fn tutorial_pointer_screen(app: &SowApp) -> Option<(f64, f64)> {
+    if !tutorial_pointer_active(app) {
+        return None;
+    }
+    let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
+    Some((
+        app.input.last_mouse_x / f64::from(sf),
+        app.input.last_mouse_y / f64::from(sf),
+    ))
+}
+
 fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
     let campaign_unlocks = app
         .sim
@@ -2630,32 +2659,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
     let zoom_in_target = TUTORIAL_MAX_ZOOM.clamp(zoom_floor, zoom_ceiling);
     let zoom_in_complete =
         app.input.camera_zoom.is_finite() && app.input.camera_zoom >= zoom_in_target;
-    let hover_pointer = match app.input.hover_pointer {
-        HoverPointer::Mouse => Some(serde_json::json!({
-            "x": app.input.last_mouse_x / f64::from(sf),
-            "y": app.input.last_mouse_y / f64::from(sf),
-        })),
-        HoverPointer::Touch if app.input.active_touches.len() == 1 => Some(serde_json::json!({
-            "x": app.input.last_mouse_x / f64::from(sf),
-            "y": app.input.last_mouse_y / f64::from(sf),
-        })),
-        _ => None,
-    };
-    let tutorial_target_hovered = match app.input.hover_pointer {
-        HoverPointer::Mouse => app.ui.nameplates.tutorial_target_contains(
-            marker_player_id,
-            app.input.last_mouse_x,
-            app.input.last_mouse_y,
-        ),
-        HoverPointer::Touch if app.input.active_touches.len() == 1 => {
-            app.ui.nameplates.tutorial_target_contains(
-                marker_player_id,
-                app.input.last_mouse_x,
-                app.input.last_mouse_y,
-            )
-        }
-        _ => false,
-    };
+    let tutorial_target_hovered = tutorial_target_under_pointer(app, marker_player_id);
     let camera_center = if app.input.camera_zoom > 0.0 {
         Some((
             (app.input.screen_w * 0.5 - app.input.camera_x) / app.input.camera_zoom,
@@ -2822,7 +2826,6 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "height": app.input.screen_h,
             "scale": sf,
         },
-        "pointer": hover_pointer,
         "facts": {
             "alliance_request_faction_ids": alliance_request_faction_ids,
             "hostile_faction_ids": hostile_faction_ids,
@@ -3736,7 +3739,6 @@ fn notice_name(notice: Option<crate::LobbyNotice>) -> Option<&'static str> {
         Some(crate::LobbyNotice::HostLeft) => Some("host_left"),
         Some(crate::LobbyNotice::Kicked) => Some("kicked"),
         Some(crate::LobbyNotice::Banned) => Some("banned"),
-        Some(crate::LobbyNotice::ConnectionLost) => Some("connection_lost"),
         None => None,
     }
 }
@@ -3825,8 +3827,39 @@ pub(crate) fn publish_tutorial_camera_anchor_frame(app: &SowApp) {
     }
 }
 
-/// The hover card has its own channel. The hovered tile follows the mouse, so folding it into the
-/// HUD payload rebuilt and re-parsed the whole HUD on every tile crossing.
+/// The hover card and the tutorial pointer each have their own channel. Both follow the mouse, so
+/// folding them into the HUD payload rebuilt and re-parsed the whole HUD on every move.
+fn publish_json_channel(
+    last: &'static std::thread::LocalKey<RefCell<String>>,
+    channel: &str,
+    value: &serde_json::Value,
+) {
+    let Ok(serialized) = serde_json::to_string(value) else {
+        return;
+    };
+    let unchanged = last.with(|last| last.borrow().as_str() == serialized.as_str());
+    if unchanged {
+        return;
+    }
+    last.with(|last| *last.borrow_mut() = serialized.clone());
+
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Ok(function) = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str(channel)) else {
+        return;
+    };
+    let Ok(update) = function.dyn_into::<js_sys::Function>() else {
+        return;
+    };
+    if let Err(error) = update.call1(window.as_ref(), &JsValue::from_str(&serialized)) {
+        web_sys::console::error_2(
+            &JsValue::from_str(&format!("[WEB MENU] {channel} failed")),
+            &error,
+        );
+    }
+}
+
 pub(crate) fn publish_hover_card(app: &SowApp) {
     let (hovered_tile, hovered_owner) = hovered_tile_owner(app);
     let my_pid = app.sim.my_player_id.unwrap_or(app.ui.app.hud_state.my_player_id);
@@ -3836,48 +3869,31 @@ pub(crate) fn publish_hover_card(app: &SowApp) {
         }
         _ => serde_json::Value::Null,
     };
-    let Ok(serialized) = serde_json::to_string(&hovered) else {
-        return;
-    };
-    let unchanged = LAST_HOVER_CARD.with(|last| last.borrow().as_str() == serialized.as_str());
-    if unchanged {
-        return;
-    }
-    LAST_HOVER_CARD.with(|last| *last.borrow_mut() = serialized.clone());
+    publish_json_channel(&LAST_HOVER_CARD, "SOW_hover_card_update", &hovered);
+}
 
-    let Some(window) = web_sys::window() else {
-        return;
+pub(crate) fn publish_tutorial_pointer(app: &SowApp) {
+    let pointer = if app.ui.tutorial_active && app.net.is_offline {
+        tutorial_pointer_screen(app)
+    } else {
+        None
     };
-    let Ok(value) = js_sys::Reflect::get(
-        window.as_ref(),
-        &JsValue::from_str("SOW_hover_card_update"),
-    ) else {
-        return;
+    let value = match pointer {
+        Some((x, y)) => serde_json::json!({ "x": x, "y": y }),
+        None => serde_json::Value::Null,
     };
-    let Ok(update) = value.dyn_into::<js_sys::Function>() else {
-        return;
-    };
-    if let Err(error) = update.call1(window.as_ref(), &JsValue::from_str(&serialized)) {
-        web_sys::console::error_2(
-            &JsValue::from_str("[WEB MENU] hover card update failed"),
-            &error,
-        );
-    }
+    publish_json_channel(&LAST_TUTORIAL_POINTER, "SOW_tutorial_pointer_update", &value);
 }
 
 /// DOM never receives transient textures, map bytes, or internal auth/session material.
 pub(crate) fn publish_state(app: &mut SowApp) {
     refresh_web_leaderboard_cache(app);
 
-    let state = &app.ui.app.main_menu_state;
-    let progress = &app.progress;
-    let selected_leader_for_loader = state.selected_leader;
-    // Whole percent: the loader bar shows no finer step, and a steady value lets the dedupe
-    // below skip the JS side while the loader creeps forward.
-    let loader_progress =
-        (app.ui.app.splash_state.progress.clamp(0.0, 1.0) * 100.0).round() / 100.0;
+    let selected_leader_for_loader = app.ui.app.main_menu_state.selected_leader;
+    let loader_progress = loader_progress_percent(&app.ui.app.splash_state);
 
     let payload = if app.ui.app.phase == crate::ClientPhase::Playing {
+        LAST_MENU_INPUTS.with(|last| *last.borrow_mut() = None);
         let include_leaderboard = if app.ui.show_leaderboard {
             let now = Instant::now();
             let due = app.ui.leaderboard_publish_pending
@@ -3919,15 +3935,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "loader_progress": loader_progress,
             "loader_done": app.ui.app.splash_state.done,
             "hud": hud_payload,
-            "settings": {
-                "mute_all": app.ui.app.settings_state.mute_all,
-                "music_volume": app.ui.app.settings_state.music_volume,
-                "reduced_motion": app.ui.app.settings_state.reduced_motion,
-                "free_zoom_out": app.ui.app.settings_state.free_zoom_out,
-                "show_fps_ping": app.ui.app.settings_state.show_fps_ping,
-                "show_dev_tools": app.ui.app.settings_state.show_dev_tools,
-                "show_dev_tools_available": cfg!(any(feature = "dev", debug_assertions)),
-            },
+            "settings": settings_payload(app),
         })
     } else {
         LAST_HUD_KEY.with(|last| *last.borrow_mut() = None);
@@ -3936,167 +3944,24 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         LAST_WEB_LEADERBOARD_PAYLOAD.with(|cache| *cache.borrow_mut() = None);
         LAST_WEB_HOVER_PAYLOAD.with(|cache| *cache.borrow_mut() = None);
         LAST_HOVER_CARD.with(|last| last.borrow_mut().clear());
+        LAST_TUTORIAL_POINTER.with(|last| last.borrow_mut().clear());
         LAST_WEB_INBOX_PAYLOAD.with(|cache| *cache.borrow_mut() = None);
         app.ui.leaderboard_top_three = [None; 3];
         app.ui.leaderboard_refresh_at = None;
         app.ui.leaderboard_publish_pending = false;
-        let rotation_period = sow_data::commerce::rotation_period(
-            (js_sys::Date::now().max(0.0) / 1000.0) as u64,
-        );
-        let store_catalog = sow_data::commerce::catalog_for_profile(
-            &progress.owned_leaders,
-            &progress.owned_skins,
-            progress.crowns,
-            progress.gems,
-            rotation_period,
-        );
-        let leaders: Vec<serde_json::Value> = sow_core::player::Leader::all()
-            .map(|leader| {
-                let slug = leader.id();
-                let offer = store_catalog
-                    .leaders
-                    .iter()
-                    .find(|offer| offer.id.as_str() == slug)
-                    .expect("leader catalog must contain every leader");
-                serde_json::json!({
-                    "id": leader_id(leader),
-                    "name": leader.name(),
-                    "civilization": leader.civilization(),
-                    "civilization_key": format!("heroes.leader_{slug}_civilization"),
-                    "perk_key": format!("site.leader_{slug}_description"),
-                    "region": leader.character().region,
-                    "slug": slug,
-                    "free_rotation": offer.free_rotation,
-                    "permanently_free": offer.permanently_free,
-                    "owned": offer.owned,
-                    "available": offer.available,
-                    "cost_crowns": offer.cost_crowns,
-                    "cost_gems": offer.cost_gems,
-                })
-            })
-            .collect();
-        let map_catalog: Vec<serde_json::Value> = app
-            .ui
-            .app
-            .asset_loader
-            .map_catalog
-            .as_ref()
-            .map(|entries| {
-                entries
-                    .iter()
-                    .map(|entry| {
-                        serde_json::json!({
-                            "key": &entry.key,
-                            "display_name": &entry.display_name,
-                            "width": entry.width,
-                            "height": entry.height,
-                            "default_roster": &entry.default_roster,
-                            "roster_presets": &entry.roster_presets,
-                        })
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
 
-        serde_json::json!({
-            "phase": phase_name(app.ui.app.phase),
-            "loader_cycle_id": app.ui.app.splash_state.cycle_id,
-            "loader_job": splash_job_name(&app.ui.app.splash_state.job),
-            "loader_leader": loader_leader_id(&app.ui.app.splash_state),
-            "loader_info_leader": loader_info_leader_slug(&app.ui.app.splash_state, selected_leader_for_loader),
-            "loader_show_hero_briefing": app.ui.app.splash_state.show_hero_briefing,
-            "loader_progress": loader_progress,
-            "loader_done": app.ui.app.splash_state.done,
-            "boot_campaign": app.boot_campaign_pending.clone(),
-            "connected": state.is_connected,
-            "connecting": state.is_connecting,
-            "waiting": state.is_waiting,
-            "match_preparing": app
-                .ui
-                .app
-                .hud_state
-                .sync_state
-                .as_ref()
-                .is_some_and(|sync| sync.is_starting),
-            "player_name": state.player_name,
-            "selected_leader": leader_id(state.selected_leader),
-            "selected_leader_name": state.selected_leader.name(),
-            "selected_civilization": state.selected_leader.civilization(),
-            "prefer_random_leader": state.prefer_random_leader,
-            "show_browser": matches!(
-                state.visible_route(),
-                crate::ui::main_menu::MainMenuRoute::Browser
-            ),
-            "show_create": matches!(
-                state.visible_route(),
-                crate::ui::main_menu::MainMenuRoute::Create
-            ),
-            "join_lobby_code": state.join_lobby_code,
-            "joined_lobby_id": state.joined_lobby_id,
-            "pending_lobby_id": state.pending_join_lobby_id,
-            "is_lobby_host": state.is_lobby_host,
-            "my_player_id": state.my_player_id,
-            "downloading_map": state.is_downloading_map,
-            "map_download_progress": state.map_download_progress,
-            "map_download_error": state.map_download_error.is_some(),
-            "lobbies": state.lobbies,
-            "error": state.error_message.as_ref().map(localized_text_payload),
-            "notice": notice_name(state.notice),
-            "level": progress.level,
-            "xp": progress.xp,
-            "crowns": progress.crowns,
-            "laurels": progress.laurels,
-            "gems": progress.gems,
-            "reward_receipts": progress.reward_receipts.values().collect::<Vec<_>>(),
-            "menu_return": app.menu_return,
-            "profile_ready": app.profile_last_applied_request > 0,
-            "menu_guides": progress.menu_guides,
-            "name_save_pending": app.pending_display_name.is_some(),
-            "quick_match_revision": app.quick_match_revision,
-            "menu_guide_save_pending": app.menu_guide_save_pending,
-            "achievements": progress.unlocked_achievements,
-            "campaign": campaign_payload(progress),
-            "selected_skin": progress.selected_skin,
-            "store_busy": state.store_busy,
-            "store": store_catalog,
-            "native_purchase_scheme": "sow://purchase",
-            "native_restore_scheme": "sow://restore",
-            "account_id": app.progress_account_id,
-            "profile_stats": {
-                "wins": progress.wins,
-                "matches_played": progress.matches_played,
-                "players_defeated": progress.players_defeated,
-                "empires_defeated": progress.empires_defeated,
-                "tribes_defeated": progress.tribes_defeated,
-                "kills": progress.kills,
-                "deaths": progress.deaths,
-                "assists": progress.assists,
-                "leader_xp": progress.leader_xp,
-            },
-            "leaders": leaders,
-            "map_catalog": map_catalog,
-            "custom_game_config": &*state.custom_game_config,
-            "bot_limits": {
-                "tribes": sow_core::game_config::GameConfig::max_tribe_bots(),
-                "nations": sow_core::game_config::GameConfig::max_nation_bots(),
-            },
-            "custom_game_is_private": state.custom_game_is_private,
-            "custom_game_is_sp": state.custom_game_is_sp,
-            "hud": serde_json::Value::Null,
-            "settings": {
-                "mute_all": app.ui.app.settings_state.mute_all,
-                "music_volume": app.ui.app.settings_state.music_volume,
-                "reduced_motion": app.ui.app.settings_state.reduced_motion,
-                "free_zoom_out": app.ui.app.settings_state.free_zoom_out,
-                "show_fps_ping": app.ui.app.settings_state.show_fps_ping,
-                "show_dev_tools": app.ui.app.settings_state.show_dev_tools,
-                "show_dev_tools_available": cfg!(any(feature = "dev", debug_assertions)),
-            },
-        })
+        let inputs = menu_inputs(app);
+        if LAST_MENU_INPUTS.with(|last| last.borrow().as_ref() == Some(&inputs)) {
+            return;
+        }
+        let payload = menu_payload(&inputs);
+        LAST_MENU_INPUTS.with(|last| *last.borrow_mut() = Some(inputs));
+        payload
     };
 
     let Ok(serialized) = serde_json::to_string(&payload) else {
         log::warn!("[WEB MENU] failed to serialize state");
+        LAST_MENU_INPUTS.with(|last| *last.borrow_mut() = None);
         return;
     };
 
@@ -4127,6 +3992,270 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             }
         }
     }
+}
+
+/// Whole percent: the loader bar shows no finer step, and a steady value lets the dedupe
+/// in `publish_state` skip the JS side while the loader creeps forward.
+fn loader_progress_percent(splash: &crate::ui::loading_screen::SplashState) -> f32 {
+    (splash.progress.clamp(0.0, 1.0) * 100.0).round() / 100.0
+}
+
+fn settings_payload(app: &SowApp) -> serde_json::Value {
+    let settings = &app.ui.app.settings_state;
+    serde_json::json!({
+        "mute_all": settings.mute_all,
+        "music_volume": settings.music_volume,
+        "reduced_motion": settings.reduced_motion,
+        "free_zoom_out": settings.free_zoom_out,
+        "show_fps_ping": settings.show_fps_ping,
+        "show_dev_tools": settings.show_dev_tools,
+        "show_dev_tools_available": cfg!(any(feature = "dev", debug_assertions)),
+    })
+}
+
+/// Every value the non-Playing menu payload reads, owned. `publish_state` compares it with the
+/// last published set and skips the rebuild when nothing changed. `menu_payload` takes only this
+/// struct, so no payload value can come from live state that `menu_inputs` does not capture.
+#[derive(PartialEq)]
+struct MenuInputs {
+    phase: crate::ClientPhase,
+    loader_cycle_id: u32,
+    loader_job: crate::ui::loading_screen::SplashJob,
+    loader_leader: Option<String>,
+    loader_info_leader: String,
+    loader_show_hero_briefing: bool,
+    loader_progress: f32,
+    loader_done: bool,
+    boot_campaign: Option<String>,
+    connected: bool,
+    connecting: bool,
+    waiting: bool,
+    update_available: bool,
+    match_preparing: bool,
+    player_name: String,
+    selected_leader: sow_core::player::Leader,
+    prefer_random_leader: bool,
+    show_browser: bool,
+    show_create: bool,
+    join_lobby_code: String,
+    joined_lobby_id: Option<u64>,
+    pending_lobby_id: Option<u64>,
+    is_lobby_host: bool,
+    my_player_id: Option<u16>,
+    downloading_map: bool,
+    map_download_progress: u8,
+    map_download_error: bool,
+    lobbies: Vec<sow_core::protocol::LobbyInfo>,
+    error: Option<serde_json::Value>,
+    notice: Option<crate::LobbyNotice>,
+    custom_game_config: Box<sow_core::game_config::GameConfig>,
+    custom_game_is_private: bool,
+    custom_game_is_sp: bool,
+    store_busy: bool,
+    progress: crate::player_progress::PlayerProgress,
+    rotation_period: u64,
+    account_id: Option<String>,
+    profile_ready: bool,
+    name_save_pending: bool,
+    quick_match_revision: u64,
+    menu_guide_save_pending: bool,
+    menu_return: Option<crate::app::MenuReturnContext>,
+    map_catalog: Option<Vec<sow_core::maps::MapCatalogEntry>>,
+    settings: serde_json::Value,
+}
+
+fn menu_inputs(app: &SowApp) -> MenuInputs {
+    let state = &app.ui.app.main_menu_state;
+    let splash = &app.ui.app.splash_state;
+    let selected_leader = state.selected_leader;
+    let visible_route = state.visible_route();
+    MenuInputs {
+        phase: app.ui.app.phase,
+        loader_cycle_id: splash.cycle_id,
+        loader_job: splash.job,
+        loader_leader: loader_leader_id(splash),
+        loader_info_leader: loader_info_leader_slug(splash, selected_leader),
+        loader_show_hero_briefing: splash.show_hero_briefing,
+        loader_progress: loader_progress_percent(splash),
+        loader_done: splash.done,
+        boot_campaign: app.boot_campaign_pending.clone(),
+        connected: state.is_connected,
+        connecting: state.is_connecting,
+        waiting: state.is_waiting,
+        update_available: app.ui.update_available,
+        match_preparing: app
+            .ui
+            .app
+            .hud_state
+            .sync_state
+            .as_ref()
+            .is_some_and(|sync| sync.is_starting),
+        player_name: state.player_name.clone(),
+        selected_leader,
+        prefer_random_leader: state.prefer_random_leader,
+        show_browser: matches!(visible_route, crate::ui::main_menu::MainMenuRoute::Browser),
+        show_create: matches!(visible_route, crate::ui::main_menu::MainMenuRoute::Create),
+        join_lobby_code: state.join_lobby_code.clone(),
+        joined_lobby_id: state.joined_lobby_id,
+        pending_lobby_id: state.pending_join_lobby_id,
+        is_lobby_host: state.is_lobby_host,
+        my_player_id: state.my_player_id,
+        downloading_map: state.is_downloading_map,
+        map_download_progress: state.map_download_progress,
+        map_download_error: state.map_download_error.is_some(),
+        lobbies: state.lobbies.clone(),
+        error: state.error_message.as_ref().map(localized_text_payload),
+        notice: state.notice,
+        custom_game_config: state.custom_game_config.clone(),
+        custom_game_is_private: state.custom_game_is_private,
+        custom_game_is_sp: state.custom_game_is_sp,
+        store_busy: state.store_busy,
+        progress: app.progress.clone(),
+        rotation_period: sow_data::commerce::rotation_period(
+            (js_sys::Date::now().max(0.0) / 1000.0) as u64,
+        ),
+        account_id: app.progress_account_id.clone(),
+        profile_ready: app.profile_last_applied_request > 0,
+        name_save_pending: app.pending_display_name.is_some(),
+        quick_match_revision: app.quick_match_revision,
+        menu_guide_save_pending: app.menu_guide_save_pending,
+        menu_return: app.menu_return.clone(),
+        map_catalog: app.ui.app.asset_loader.map_catalog.clone(),
+        settings: settings_payload(app),
+    }
+}
+
+fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
+    let progress = &inputs.progress;
+    let store_catalog = sow_data::commerce::catalog_for_profile(
+        &progress.owned_leaders,
+        &progress.owned_skins,
+        progress.crowns,
+        progress.gems,
+        inputs.rotation_period,
+    );
+    let leaders: Vec<serde_json::Value> = sow_core::player::Leader::all()
+        .map(|leader| {
+            let slug = leader.id();
+            let offer = store_catalog
+                .leaders
+                .iter()
+                .find(|offer| offer.id.as_str() == slug)
+                .expect("leader catalog must contain every leader");
+            serde_json::json!({
+                "id": leader_id(leader),
+                "name": leader.display_name(),
+                "civilization": leader.civilization(),
+                "civilization_key": format!("heroes.leader_{slug}_civilization"),
+                "perk_key": format!("site.leader_{slug}_description"),
+                "region": leader.character().region,
+                "slug": slug,
+                "art_slug": leader.art_slug(),
+                "free_rotation": offer.free_rotation,
+                "permanently_free": offer.permanently_free,
+                "owned": offer.owned,
+                "available": offer.available,
+                "cost_crowns": offer.cost_crowns,
+                "cost_gems": offer.cost_gems,
+            })
+        })
+        .collect();
+    let map_catalog: Vec<serde_json::Value> = inputs
+        .map_catalog
+        .as_ref()
+        .map(|entries| {
+            entries
+                .iter()
+                .map(|entry| {
+                    serde_json::json!({
+                        "key": &entry.key,
+                        "display_name": &entry.display_name,
+                        "width": entry.width,
+                        "height": entry.height,
+                        "default_roster": &entry.default_roster,
+                        "roster_presets": &entry.roster_presets,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    serde_json::json!({
+        "phase": phase_name(inputs.phase),
+        "loader_cycle_id": inputs.loader_cycle_id,
+        "loader_job": splash_job_name(&inputs.loader_job),
+        "loader_leader": inputs.loader_leader,
+        "loader_info_leader": inputs.loader_info_leader,
+        "loader_show_hero_briefing": inputs.loader_show_hero_briefing,
+        "loader_progress": inputs.loader_progress,
+        "loader_done": inputs.loader_done,
+        "boot_campaign": inputs.boot_campaign,
+        "connected": inputs.connected,
+        "connecting": inputs.connecting,
+        "update_available": inputs.update_available,
+        "waiting": inputs.waiting,
+        "match_preparing": inputs.match_preparing,
+        "player_name": inputs.player_name,
+        "selected_leader": leader_id(inputs.selected_leader),
+        "selected_leader_name": inputs.selected_leader.display_name(),
+        "selected_civilization": inputs.selected_leader.civilization(),
+        "prefer_random_leader": inputs.prefer_random_leader,
+        "show_browser": inputs.show_browser,
+        "show_create": inputs.show_create,
+        "join_lobby_code": inputs.join_lobby_code,
+        "joined_lobby_id": inputs.joined_lobby_id,
+        "pending_lobby_id": inputs.pending_lobby_id,
+        "is_lobby_host": inputs.is_lobby_host,
+        "my_player_id": inputs.my_player_id,
+        "downloading_map": inputs.downloading_map,
+        "map_download_progress": inputs.map_download_progress,
+        "map_download_error": inputs.map_download_error,
+        "lobbies": inputs.lobbies,
+        "error": inputs.error,
+        "notice": notice_name(inputs.notice),
+        "level": progress.level,
+        "xp": progress.xp,
+        "crowns": progress.crowns,
+        "laurels": progress.laurels,
+        "gems": progress.gems,
+        "reward_receipts": progress.reward_receipts.values().collect::<Vec<_>>(),
+        "menu_return": inputs.menu_return,
+        "profile_ready": inputs.profile_ready,
+        "menu_guides": progress.menu_guides,
+        "name_save_pending": inputs.name_save_pending,
+        "quick_match_revision": inputs.quick_match_revision,
+        "menu_guide_save_pending": inputs.menu_guide_save_pending,
+        "achievements": progress.unlocked_achievements,
+        "campaign": campaign_payload(progress),
+        "selected_skin": progress.selected_skin,
+        "store_busy": inputs.store_busy,
+        "store": store_catalog,
+        "native_purchase_scheme": "sow://purchase",
+        "native_restore_scheme": "sow://restore",
+        "account_id": inputs.account_id,
+        "profile_stats": {
+            "wins": progress.wins,
+            "matches_played": progress.matches_played,
+            "players_defeated": progress.players_defeated,
+            "empires_defeated": progress.empires_defeated,
+            "tribes_defeated": progress.tribes_defeated,
+            "kills": progress.kills,
+            "deaths": progress.deaths,
+            "assists": progress.assists,
+            "leader_xp": progress.leader_xp,
+        },
+        "leaders": leaders,
+        "map_catalog": map_catalog,
+        "custom_game_config": inputs.custom_game_config,
+        "bot_limits": {
+            "tribes": sow_core::game_config::GameConfig::max_tribe_bots(),
+            "nations": sow_core::game_config::GameConfig::max_nation_bots(),
+        },
+        "custom_game_is_private": inputs.custom_game_is_private,
+        "custom_game_is_sp": inputs.custom_game_is_sp,
+        "hud": serde_json::Value::Null,
+        "settings": inputs.settings,
+    })
 }
 
 #[cfg(test)]

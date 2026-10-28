@@ -1,5 +1,8 @@
 use bytemuck::{Pod, Zeroable};
 
+/// The map stores player owners in 12 bits, so valid IDs are 0 through 4095.
+pub const PLAYER_COLOR_SLOTS: usize = 4096;
+
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct MapGlobals {
@@ -56,7 +59,8 @@ pub struct MapGlobals {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct PlayerColors {
-    pub colors: [[f32; 4]; 256],
+    /// Four packed RGB colors per vector keep all 4096 IDs within a 16 KiB uniform.
+    pub colors: [[u32; 4]; PLAYER_COLOR_SLOTS / 4],
 }
 
 #[repr(C)]

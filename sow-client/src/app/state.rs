@@ -885,7 +885,7 @@ pub struct TaskState {
 
 /// The durable handoff consumed by main_menu.flow.ts. An empty receipt list
 /// never means a reward-bearing return has finished.
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct MenuReturnContext {
     pub account_id: Option<String>,
     pub cycle_id: u32,

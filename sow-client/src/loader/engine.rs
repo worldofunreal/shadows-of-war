@@ -4,6 +4,20 @@ use crate::EngineInitEvent;
 use crate::app::SowApp;
 use sow_core::protocol::SimCommand;
 
+fn enter_game_ready_to_release(
+    snapshot_ready: bool,
+    land_cache_ready: bool,
+    offline: bool,
+    connected: bool,
+    has_client: bool,
+    on_relay: bool,
+    turn_queue_empty: bool,
+) -> bool {
+    snapshot_ready
+        && land_cache_ready
+        && (offline || (connected && has_client && on_relay && turn_queue_empty))
+}
+
 #[cfg(target_arch = "wasm32")]
 async fn yield_to_browser() {
     use wasm_bindgen::{JsCast, JsValue, closure::Closure};
@@ -391,19 +405,33 @@ impl SowApp {
                     splash_show_loading_progress(&mut self.ui.app.splash_state, 0.80);
                 } else if step == 3 && self.sim.current_snapshot.is_some() {
                     self.net.load_telemetry.mark_snapshot_available();
-                    let ready_to_release = if self.net.is_offline {
-                        true
-                    } else {
-                        self.ui.app.main_menu_state.is_connected
-                            && self.net.client.is_some()
-                            && self.ws_on_relay()
-                                && self.sim.turn_queue.is_empty()
-                    };
+                    let snapshot_tick = self
+                        .sim
+                        .current_snapshot
+                        .as_ref()
+                        .map_or(0, |snapshot| snapshot.tick);
+                    let land_cache_ready = self.sim.engine.as_ref().is_some_and(|engine| {
+                        self.ui
+                            .nameplates
+                            .prepare_land_cache(&engine.state.map, snapshot_tick)
+                    });
+                    let ready_to_release = enter_game_ready_to_release(
+                        true,
+                        land_cache_ready,
+                        self.net.is_offline,
+                        self.ui.app.main_menu_state.is_connected,
+                        self.net.client.is_some(),
+                        self.ws_on_relay(),
+                        self.sim.turn_queue.is_empty(),
+                    );
 
                     if ready_to_release {
                         self.ui.app.splash_state.gpu_load_step = 4;
                         self.ui.app.splash_state.progress = 1.0;
                         self.ui.app.splash_state.done = true;
+                        crate::diag::start_startup_perf_window(
+                            self.ui.nameplates.take_land_cache_build_stats(),
+                        );
                         if self.ui.app.splash_state.target_phase.is_none() {
                             self.ui.app.splash_state.target_phase =
                                 Some(crate::ClientPhase::Playing);
@@ -422,7 +450,8 @@ impl SowApp {
                         }
                         if self.ui.app.splash_state.frames_drawn.is_multiple_of(120) {
                             log::warn!(
-                                "[LOADER] Waiting for relay connection or turn catch-up before releasing loader: is_connected={}, has_client={}, on_relay={}, queued_turns={}, my_lobby_id={:?}, my_player_id={:?}, phase={:?}",
+                                "[LOADER] Waiting for enter-game readiness before releasing loader: land_cache_ready={}, is_connected={}, has_client={}, on_relay={}, queued_turns={}, my_lobby_id={:?}, my_player_id={:?}, phase={:?}",
+                                land_cache_ready,
                                 self.ui.app.main_menu_state.is_connected,
                                 self.net.client.is_some(),
                                 self.ws_on_relay(),
@@ -440,6 +469,47 @@ impl SowApp {
             if let Some(target_phase) = self.ui.app.splash_state.target_phase.take() {
                 self.ui.app.phase = target_phase;
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::enter_game_ready_to_release;
+
+    #[test]
+    fn enter_game_release_waits_for_snapshot_and_nameplate_cache() {
+        assert!(!enter_game_ready_to_release(
+            false, true, true, false, false, false, false
+        ));
+        assert!(!enter_game_ready_to_release(
+            true, false, true, false, false, false, false
+        ));
+        assert!(enter_game_ready_to_release(
+            true, true, true, false, false, false, false
+        ));
+    }
+
+    #[test]
+    fn online_enter_game_release_keeps_all_existing_connection_gates() {
+        assert!(enter_game_ready_to_release(
+            true, true, false, true, true, true, true
+        ));
+        for (connected, has_client, on_relay, turn_queue_empty) in [
+            (false, true, true, true),
+            (true, false, true, true),
+            (true, true, false, true),
+            (true, true, true, false),
+        ] {
+            assert!(!enter_game_ready_to_release(
+                true,
+                true,
+                false,
+                connected,
+                has_client,
+                on_relay,
+                turn_queue_empty,
+            ));
         }
     }
 }
