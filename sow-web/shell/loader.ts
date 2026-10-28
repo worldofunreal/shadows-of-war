@@ -732,14 +732,18 @@
 
     function syncRankedMatchup(state: LoaderState) {
         if (!root) return;
-        const markup = state.loader_job === "EnterGame" ? state.ranked_matchup_html || "" : "";
         let panel = root.querySelector<HTMLElement>(".sow-ranked__loader");
+        const sameCycle = panel?.dataset.cycle === String(state.loader_cycle_id);
+        // Playing publishes a smaller HUD payload while the same loader finishes.
+        const markup = state.loader_job === "EnterGame"
+            ? state.ranked_matchup_html ?? (sameCycle ? panel?.dataset.markup || "" : "") : "";
         root.classList.toggle("has-ranked-matchup", !!markup);
         root.dataset.reducedMotion = String(!!state.settings?.reduced_motion);
         if (!markup) { panel?.remove(); return; }
         if (!panel) {
             panel = document.createElement("section");
             panel.className = "sow-ranked__loader";
+            panel.dataset.cycle = String(state.loader_cycle_id);
             root.appendChild(panel);
         }
         // Keep the same cards while progress updates; only a new encounter changes them.
