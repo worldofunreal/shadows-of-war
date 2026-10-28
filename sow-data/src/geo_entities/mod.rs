@@ -58,6 +58,8 @@ pub enum Ability {
     AttackStrength { against: Target, percent: u32 },
     /// Attacks against `against` conquer `percent` faster.
     ConquestSpeed { against: Target, percent: u32 },
+    /// Defending armies are harder to conquer for attackers of `against`.
+    DefenseStrength { against: Target, percent: u32 },
     /// `source` pays `percent` more of `resource`.
     ResourceBonus {
         source: Source,
@@ -191,6 +193,7 @@ impl Ability {
         match self {
             Ability::AttackStrength { percent, .. }
             | Ability::ConquestSpeed { percent, .. }
+            | Ability::DefenseStrength { percent, .. }
             | Ability::ResourceBonus { percent, .. }
             | Ability::TowerLoss { percent, .. }
             | Ability::CityCapture { percent, .. }
@@ -210,6 +213,10 @@ impl Ability {
                 percent: 0,
             },
             Ability::ConquestSpeed { against, .. } => Ability::ConquestSpeed {
+                against,
+                percent: 0,
+            },
+            Ability::DefenseStrength { against, .. } => Ability::DefenseStrength {
                 against,
                 percent: 0,
             },
@@ -239,7 +246,7 @@ impl Ability {
     /// The visual family of this ability: the colour its effect is shown in.
     pub fn cue(self) -> Cue {
         match self {
-            Ability::AttackStrength { .. } => Cue::Strength,
+            Ability::AttackStrength { .. } | Ability::DefenseStrength { .. } => Cue::Strength,
             Ability::ConquestSpeed { .. } => Cue::Conquest,
             Ability::ResourceBonus { .. } => Cue::Income,
             Ability::TowerLoss { .. } | Ability::TowerRange { .. } => Cue::Tower,

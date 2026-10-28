@@ -23,10 +23,11 @@ use crate::water_components::WaterComponents;
 /// The experiment that measures an ability. Every concrete situation has one,
 /// so a new situation cannot ship without a test that proves it changes the game.
 /// Targeted kinds get one experiment per target, shared by all their situations.
-fn measurement(ability: Ability) -> u8 {
+fn measurement(ability: Ability) -> u16 {
     match ability.situation() {
         Ability::AttackStrength { against, .. } => 100 + target_index(against),
         Ability::ConquestSpeed { against, .. } => 120 + target_index(against),
+        Ability::DefenseStrength { against, .. } => 300 + target_index(against),
         Ability::EnemyRetreatPenalty { against, .. } => 140 + target_index(against),
         Ability::ResourceBonus {
             source: Source::District(_),
@@ -127,11 +128,11 @@ fn measurement(ability: Ability) -> u8 {
 }
 
 /// Position of `target` in `Target::ALL`, so each target gets its own experiment.
-fn target_index(target: Target) -> u8 {
+fn target_index(target: Target) -> u16 {
     Target::ALL
         .iter()
         .position(|&listed| listed == target)
-        .expect("every target is listed") as u8
+        .expect("every target is listed") as u16
 }
 
 /// A hero whose ability cannot influence `hero`'s measurement.
@@ -512,6 +513,14 @@ fn tiles_against(attacker: Leader, target: Target) -> (u32, Marks) {
     (engine.state.player(1).unwrap().tile_count, marks)
 }
 
+/// Tiles kept by a nation attacking this defender, with the defender's marks.
+fn tiles_against_defense(defender: Leader, target: Target) -> (u32, Marks) {
+    let mut engine = arena(24, 4, Leader::of("caesar"), Some(defender));
+    shape_subject(&mut engine, 1, target);
+    let marks = attack(&mut engine, 2, 20);
+    (engine.state.player(1).unwrap().tile_count, marks)
+}
+
 /// Troops `retreater` gets back when it retreats at once from `defender`'s land, with
 /// the retreating player fitting `target`, and the marks the retreat shows.
 fn retreat_against(retreater: Leader, defender: Leader, target: Target) -> (f64, Marks) {
@@ -661,6 +670,11 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
                     > control.state.player(1).unwrap().tile_count
                     || attacker_troops_left(&strengthened) > attacker_troops_left(&control);
                 (changed, shown[1], control_shown[1])
+            }
+            Ability::DefenseStrength { against, .. } => {
+                let (tiles, shown) = tiles_against_defense(hero, against);
+                let (control_tiles, control_shown) = tiles_against_defense(plain, against);
+                (tiles < control_tiles, shown[2], control_shown[2])
             }
             Ability::ConquestSpeed { against, .. } => {
                 let (tiles, shown) = tiles_against(hero, against);

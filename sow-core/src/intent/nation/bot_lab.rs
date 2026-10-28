@@ -2645,15 +2645,15 @@ fn s16_checkpoint_decision_and_state_reference() {
     let checkpoints = s16_building_rules_trace(false);
     // Uses current building footprints and hero abilities; historical footprints are tested below.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x4e90_614c_b888_98d1),
-        (500, 0xc59c_9439_ae9b_eb82),
-        (750, 0x08c0_5d40_b799_c3d3),
-        (1000, 0x3842_8b3f_dfcd_dfe2),
-        (1250, 0x2550_6444_631e_f9a7),
-        (1500, 0xb432_c93f_dd80_67ab),
-        (1750, 0x62fe_e45b_188e_253f),
-        (2000, 0xec59_5645_deba_8f33),
-        (2102, 0xfec1_81a7_51f2_844a),
+        (250, 0xe426_3184_4d37_b938),
+        (500, 0xe6e9_93e1_decb_b4c8),
+        (750, 0x7fe6_06fe_0f80_1c65),
+        (1000, 0xc00e_4275_d245_f3a2),
+        (1250, 0x28f4_0948_854a_336e),
+        (1500, 0x7530_8b69_c312_b3a1),
+        (1750, 0xa3f7_5afa_5710_a24b),
+        (2000, 0xf6f5_a89e_946c_f50d),
+        (2102, 0xcc1c_bb7c_d6de_4b12),
     ];
     assert_eq!(
         checkpoints,
@@ -2671,13 +2671,12 @@ fn historical_s16_building_rules_keep_recorded_results() {
     let checkpoints = s16_building_rules_trace(true);
     // Historical building rules with the current hero catalog, including landing/coast abilities.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0xd6fa_cadc_3466_692d),
-        (500, 0x8b39_ac5d_f460_904e),
-        (750, 0x8998_a6f7_ce02_5a89),
-        (1000, 0xa4bf_1cb0_ec10_d6dd),
-        (1250, 0x8bb3_7367_299a_664b),
-        (1500, 0xec2f_9d26_ec90_ad0a),
-        (1725, 0x3def_ea8d_e3c5_e0ba),
+        (250, 0x6acf_551d_adab_213f),
+        (500, 0x182e_2daa_6b4c_e4cb),
+        (750, 0xd128_92c1_332c_81b8),
+        (1000, 0x60a8_fbcf_e84b_0758),
+        (1250, 0xfc1f_c04b_a273_47f5),
+        (1388, 0xd957_f7bb_a346_b873),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

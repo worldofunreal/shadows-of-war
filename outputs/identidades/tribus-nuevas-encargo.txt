@@ -1,6 +1,6 @@
 NUEVAS TRIBUS PARA ENCARGAR (80)
 Orden: las más conocidas primero. Formato: Líder — Tribu | archivo del retrato (assets/art/avatars/tribes/).
-Todas son FALTAN: ninguna tiene arte todavía.
+Todas requieren arte final; Lakota entra al juego con un placeholder temporal.
 
 AMÉRICAS (15)
 Cuauhtémoc — Mexica | mexica.webp
@@ -14,7 +14,7 @@ Lautaro — Mapuche | mapuche.webp
 Vaimaca Pirú — Charrúa | charrua.webp
 
 Cochise — Apache | apache.webp
-Red Cloud — Lakota | lakota.webp
+Lakota — Lakota | lakota.webp (placeholder temporal; falta arte final)
 Dragging Canoe — Cherokee | cherokee.webp
 Joseph Brant — Mohawk | mohawk.webp
 

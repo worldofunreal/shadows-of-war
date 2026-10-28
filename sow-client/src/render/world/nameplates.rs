@@ -545,8 +545,12 @@ impl NameplateSystem {
         &mut self,
         map: &sow_core::map::GameMap,
         tick: u64,
+        players: &[sow_core::protocol::PlayerSnapshot],
     ) -> bool {
-        if self.land_cache.is_ready_for(map) {
+        let cache_covers_current_players = self.land_cache_covers_players(players);
+        if self.land_cache.has_result_for(map)
+            && (self.land_cache.is_ready_for(map) || cache_covers_current_players)
+        {
             return true;
         }
         if self.land_cache_build_started_at.is_none() {
@@ -574,7 +578,7 @@ impl NameplateSystem {
                     wall.as_micros() as u64,
                     self.land_cache_build_max_step.as_micros() as u64,
                 ));
-                true
+                self.land_cache.is_ready_for(map) || self.land_cache_covers_players(players)
             }
             Ok(false) => false,
             Err(()) => {
@@ -584,6 +588,12 @@ impl NameplateSystem {
                 false
             }
         }
+    }
+
+    fn land_cache_covers_players(&self, players: &[sow_core::protocol::PlayerSnapshot]) -> bool {
+        players.iter().all(|player| {
+            !player.alive || player.tile_count == 0 || self.land_cache.has_landmass(player.id)
+        })
     }
 
     pub(crate) fn take_land_cache_build_stats(&mut self) -> Option<(u64, u64, u64)> {

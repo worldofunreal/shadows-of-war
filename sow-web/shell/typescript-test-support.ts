@@ -4,6 +4,7 @@ import * as nodeVm from "node:vm";
 import * as ts from "typescript";
 import campaignApi from "./sow-campaign.ts";
 import campaignViewApi from "./sow-campaign-view.ts";
+import * as tutorialGuidesApi from "./campaign/tutorial-guides.ts";
 
 const bundles = new Map();
 const contexts = new WeakMap();
@@ -245,6 +246,7 @@ function bundleTs(file: string): string {
 const testModules = new Map([
     [path.resolve(import.meta.dir, "sow-campaign.ts"), campaignApi],
     [path.resolve(import.meta.dir, "sow-campaign-view.ts"), campaignViewApi],
+    [path.resolve(import.meta.dir, "campaign/tutorial-guides.ts"), tutorialGuidesApi],
 ]);
 
 function loadTypeScriptModule(file: string) {

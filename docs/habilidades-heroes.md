@@ -102,3 +102,5 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Charles V | Diet of Worms | Attackers lose 15% fewer troops when attacking human players. | attacker_loss | 15% | `gameplay/icons/abilities/charles_v.webp` |
 | Wanli Emperor | Tribute Era | Smaller players' armies retreating from your land cost 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/wanli.webp` |
 | Jayaatu Khan | Yuan Treasury | Attackers lose 25% fewer troops when attacking richer players. | attacker_loss | 25% | `gameplay/icons/abilities/jayaatu_khan.webp` |
+| Sitting Bull | Unceded Territory | Nation armies need 25% more effort to conquer your territory. | defense_strength | 25% | `gameplay/icons/abilities/sitting_bull.webp` |
+| Pocahontas | Peace of Pocahontas | Foreign armies need 25% more effort to conquer your territory. | defense_strength | 25% | `gameplay/icons/abilities/pocahontas.webp` |

@@ -151,6 +151,13 @@ impl Leader {
         )
     }
 
+    /// `1 + percent/100` when defending against `target`, else `1`.
+    pub fn defense_strength_multiplier(self, target: Target) -> f64 {
+        self.ability_multiplier(
+            |a| matches!(a, Ability::DefenseStrength { against, .. } if against == target),
+        )
+    }
+
     /// `1 + percent/100` on conquest speed against `target`, else `1`.
     pub fn conquest_speed_multiplier(self, target: Target) -> f64 {
         self.ability_multiplier(
