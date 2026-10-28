@@ -48,6 +48,7 @@ pub struct MainMenuState {
     pub wait_timer_secs: f32,
     pub ranked_search_active: bool,
     pub ranked_search_elapsed_secs: u32,
+    pub ranked_matchup: Option<LobbyInfo>,
     pub server_address: String,
     pub lobbies: Vec<LobbyInfo>,
     pub player_name: String,
@@ -105,6 +106,7 @@ impl Default for MainMenuState {
             wait_timer_secs: 0.0,
             ranked_search_active: false,
             ranked_search_elapsed_secs: 0,
+            ranked_matchup: None,
             server_address: std::env::var("SOW_WS_URL")
                 .unwrap_or_else(|_| "wss://ws.shadowsofwar.io/ws/".into()),
             lobbies: Vec::new(),

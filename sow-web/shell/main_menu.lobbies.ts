@@ -1,3 +1,4 @@
+import { rankLabel, renderRankedDuel } from "./main_menu.ranked.ts";
 import type { CampaignDefinition } from "./campaign/types.ts";
 import {
     asset,
@@ -1045,9 +1046,33 @@ export function updateQueueRoster(lobby: MenuLobby | null) {
     }
 }
 
+export function updateRankedQueue() {
+    const panel = activeScreenPanel();
+    const state = menuUi.state;
+    if (!panel || !state) return;
+    const timer = panel.querySelector<HTMLElement>("[data-ranked-elapsed]");
+    if (timer) timer.textContent = SOW_t("lobbies.ranked_searching", { seconds: state.ranked_search_elapsed_secs || 0 });
+    const status = panel.querySelector<HTMLElement>("[data-ranked-sync]");
+    if (status) status.textContent = state.map_download_error ? SOW_t("lobbies.map_download_failed")
+        : state.downloading_map ? SOW_t("lobbies.sync", { progress: state.map_download_progress || 0 }) : SOW_t("menu.loading");
+    const retry = panel.querySelector<HTMLButtonElement>("[data-command=retry_map_download]");
+    if (retry) retry.hidden = !state.map_download_error;
+    const progress = panel.querySelector<HTMLProgressElement>("[data-ranked-download]");
+    if (progress) { progress.value = state.map_download_progress || 0; progress.hidden = !state.downloading_map; }
+    const label = panel.querySelector<HTMLElement>(".sow-ranked__player > span:last-child");
+    if (label) label.textContent = rankLabel(menuUi.rankedRating);
+}
+
 export function renderQueue() {
     const lobby = joinedLobby();
     const rankedSearch = !!menuUi.state!.ranked_search_active && !lobby;
+    if (rankedSearch || lobby?.kind === "Ranked1v1") {
+        return "<main class='sow-menu__main sow-menu__main--ranked' data-screen-panel='queue'>" +
+            renderRankedDuel(lobby) + "<footer class='sow-ranked__queue-footer'>" +
+            (lobby ? "<span data-ranked-sync role='status'></span><progress data-ranked-download max='100' aria-label='" + esc(SOW_t("menu.loading")) + "'></progress><button type='button' class='sow-menu__secondary' data-command='retry_map_download' hidden>" + esc(SOW_t("lobbies.map_download_retry")) + "</button>"
+            : "<span data-ranked-elapsed>" + esc(SOW_t("lobbies.ranked_searching", { seconds: menuUi.state!.ranked_search_elapsed_secs || 0 })) + "</span>") +
+            "<button type='button' class='sow-menu__secondary' data-command='leave_lobby'>" + esc(SOW_t("lobbies.cancel")) + "</button></footer></main>";
+    }
     const elapsed = menuUi.state!.ranked_search_elapsed_secs || 0;
     const title = lobby
         ? formatMapName(lobby).toUpperCase()

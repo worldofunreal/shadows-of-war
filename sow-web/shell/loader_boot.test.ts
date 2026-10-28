@@ -291,6 +291,23 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         get firstChild() {
             return this.children[0] || null;
         }
+        get classList() {
+            const names = () => new Set(String(this.className || "").split(/\s+/).filter(Boolean));
+            return {
+                add: value => { const set = names(); set.add(value); this.className = [...set].join(" "); },
+                remove: value => { const set = names(); set.delete(value); this.className = [...set].join(" "); },
+                toggle: (value, enabled) => { const set = names(); if (enabled) set.add(value); else set.delete(value); this.className = [...set].join(" "); },
+            };
+        }
+        querySelector(selector) {
+            const matches = child => selector.startsWith(".") && String(child.className || "").split(/\s+/).includes(selector.slice(1));
+            for (const child of this.children) {
+                if (matches(child)) return child;
+                const nested = child.querySelector?.(selector);
+                if (nested) return nested;
+            }
+            return null;
+        }
     }
 
     const root = new Element("div");
@@ -934,6 +951,19 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     [...timers.values()][0]();
     timers.clear();
     assert.equal(events.filter((event) => event === "sow:loader-ready").length, 1);
+    const rankedLoad = { ...state("EnterGame", "Boudica", 0.3), ranked_matchup_html: "<div>Me VS Rival</div>" };
+    window.SOW_syncWebLoader(rankedLoad);
+    const matchup = root.querySelector(".sow-ranked__loader");
+    assert.ok(matchup, "the existing loader carries the confirmed encounter");
+    assert.equal(matchup.innerHTML, rankedLoad.ranked_matchup_html);
+    window.SOW_syncWebLoader({ ...rankedLoad, loader_progress: 0.8 });
+    assert.equal(root.querySelector(".sow-ranked__loader"), matchup, "progress updates keep the same matchup node");
+    window.SOW_syncWebLoader({ ...rankedLoad, loader_done: true, loader_progress: 1 });
+    assert.equal(root.querySelector(".sow-ranked__loader"), null, "a ready game never waits for the matchup animation");
+    [...timers.values()][0]();
+    timers.clear();
+    window.SOW_syncWebLoader(state("ExitGame", "Boudica", 0.4));
+    assert.equal(root.querySelector(".sow-ranked__loader"), null, "the encounter does not leak into the return loader");
 });
 
 test("game exit resets Battle and replays the screen entrance after the loader", () => {

@@ -1,3 +1,4 @@
+import { animateRankResult, rankEmblem, rankName, rankPlacements, rankProgressMarkup, rankTier, rankedPointsBreakdownMarkup, renderRankedDuel } from "./main_menu.ranked.ts";
 import menuFlowApi from "./main_menu.flow.ts";
 import {
     MAIN_NAV_ITEMS,
@@ -46,6 +47,7 @@ import {
     syncCreateDraft,
     updateLobbyViews,
     updateQueueRoster,
+    updateRankedQueue,
 } from "./main_menu.lobbies.ts";
 import { sowScreenMotion } from "./main_menu.motion.ts";
 import {
@@ -125,6 +127,8 @@ let rewardAckTimes: Record<string, number> = Object.create(null);
 export let rewardAnimationToken = 0;
 let activeRewardStage: HTMLElement | null = null;
 let rankedResultDismissedKey: string | null = null;
+let rankedStageKey: string | null = null;
+let rankedStageCleanup: (() => void) | null = null;
 let rewardPresentationReady = false;
 const menuFlow = menuFlowApi.create();
 window.SOW_menu_flow = menuFlow;
@@ -1279,6 +1283,9 @@ export function animateProgressionTo(
 }
 
 function removeRewardStage() {
+    rankedStageCleanup?.();
+    rankedStageCleanup = null;
+    rankedStageKey = null;
     const layer = activeRewardStage;
     activeRewardStage = null;
     if (!layer) return;
@@ -1705,72 +1712,95 @@ function rankedResultKey(state: MenuState) {
     return [state.account_id || "", state.menu_return && state.menu_return.match_id].join(":");
 }
 
+function rankedResultTitle(result: RankedResult) {
+    if (!result.placements_complete) {
+        return SOW_t("ranked.placements", { played: Math.min(5, result.games_played) });
+    }
+    if (result.games_played === 5) return SOW_t("ranked.first_league");
+    const before = result.tier_before + (result.division_before ? " " + result.division_before : "");
+    const after = result.tier_after + (result.division_after ? " " + result.division_after : "");
+    if (before === after) return SOW_t("lobbies.ranked_result_title");
+    if (result.score_after > result.score_before) {
+        return result.tier_before !== result.tier_after
+            ? SOW_t("lobbies.rank_promoted")
+            : SOW_t("ranked.new_division");
+    }
+    return SOW_t("ranked.rank_changed");
+}
+
 function presentRankedResult(result: RankedResult) {
     const layer = document.createElement("section");
     layer.className = "sow-menu__reward-stage sow-menu__ranked-result-stage";
     layer.setAttribute("role", "dialog");
     layer.setAttribute("aria-modal", "true");
-    layer.setAttribute("aria-label", SOW_t("lobbies.ranked_result_title"));
+    layer.setAttribute("aria-labelledby", "sow-ranked-result-title");
     const card = document.createElement("div");
-    card.className = "sow-menu__ranked-result-card";
-    const before = result.tier_before + (result.division_before ? " " + result.division_before : "");
-    const after = result.tier_after + (result.division_after ? " " + result.division_after : "");
-    const moved = before !== after;
-    const movement = moved
-        ? result.score_after > result.score_before
-            ? SOW_t("lobbies.rank_promoted")
-            : SOW_t("lobbies.rank_demoted")
-        : SOW_t("lobbies.rank_updated");
-    const emblem = document.createElement("span");
-    emblem.className = "sow-menu__ranked-result-emblem";
-    emblem.setAttribute("aria-hidden", "true");
-    emblem.textContent = result.tier_after.slice(0, 1);
-    const kicker = document.createElement("span");
-    kicker.className = "sow-menu__ranked-result-kicker";
-    kicker.textContent = SOW_t("lobbies.ranked_1v1");
-    const title = document.createElement("h2");
-    title.textContent = movement;
-    const rank = document.createElement("strong");
-    rank.className = "sow-menu__ranked-result-rank";
-    rank.textContent = after;
-    const score = document.createElement("span");
-    score.className = "sow-menu__ranked-result-score";
-    score.textContent = SOW_t("lobbies.rank_score", { score: result.score_after });
-    const change = document.createElement("p");
-    change.className = "sow-menu__ranked-result-change";
-    change.textContent = (result.rating_delta > 0 ? "+" : "") + result.rating_delta + " MMR";
-    const previous = document.createElement("p");
-    previous.className = "sow-menu__ranked-result-previous";
-    previous.textContent = SOW_t("lobbies.rank_previous", { score: result.score_before });
-    const close = document.createElement("button");
-    close.type = "button";
-    close.className = "sow-menu__primary sow-menu__ranked-result-continue";
-    close.textContent = SOW_t("lobbies.rank_continue");
-    const dismiss = function (event: Event) {
+    const placed = result.placements_complete;
+    const first = placed && result.games_played === 5;
+    const changed = result.tier_before !== result.tier_after || result.division_before !== result.division_after;
+    const league = result.tier_before !== result.tier_after;
+    const promoted = placed && changed && result.score_after > result.score_before;
+    const title = rankedResultTitle(result);
+    card.className = "sow-menu__ranked-result-card" + ((first || (promoted && league)) ? " is-league-up" : "") +
+        (placed && changed && !promoted && !first ? " is-rank-down" : "") + (!placed ? " is-placement" : "");
+    card.dataset.tier = rankTier(placed ? result.tier_after : "unranked");
+    card.innerHTML = "<span class='sow-ranked__eyebrow'>" + esc(SOW_t("lobbies.ranked_1v1")) +
+        "</span><h2 id='sow-ranked-result-title'>" + esc(title) + "</h2><div class='sow-ranked__result-seal'>" +
+        "<div class='sow-ranked__old-emblem'>" + rankEmblem(first || !placed ? "unranked" : result.tier_before, first || !placed ? null : result.division_before) +
+        "</div><div data-rank-current-emblem>" + rankEmblem(placed ? result.tier_after : "unranked", placed ? result.division_after : null) +
+        "</div></div>" + (placed ? "<strong class='sow-menu__ranked-result-rank' data-rank-name>" + esc(rankName(result.tier_after, result.division_after)) +
+        "</strong><p class='sow-ranked__previous'>" + esc(SOW_t("lobbies.rank_previous", { score: result.score_before })) +
+        "</p><strong class='sow-ranked__points' data-rank-score>" + esc(SOW_t("lobbies.rank_score", { score: result.score_after })) +
+        "</strong><p class='sow-menu__ranked-result-change' data-direction='" + (result.score_after >= result.score_before ? "up" : "down") + "'>" +
+        esc(SOW_t("ranked.delta", { points: (result.score_after > result.score_before ? "+" : "") + (result.score_after - result.score_before) })) +
+        "</p>" + (result.points_breakdown ? rankedPointsBreakdownMarkup(result.points_breakdown) : "") +
+        rankProgressMarkup(result.score_after, result.ladder || menuUi.rankedLadder) : rankPlacements(result.games_played)) +
+        "<div class='sow-ranked__actions'><button type='button' class='sow-menu__primary' data-ranked-again>" + esc(SOW_t("ranked.play_again")) +
+        "</button><button type='button' class='sow-menu__secondary' data-ranked-continue>" + esc(SOW_t("lobbies.rank_continue")) + "</button></div>";
+    const again = card.querySelector<HTMLButtonElement>("[data-ranked-again]")!;
+    const close = card.querySelector<HTMLButtonElement>("[data-ranked-continue]")!;
+    let dismissed = false;
+    let motion: ReturnType<typeof animateRankResult> | null = null;
+    const dismiss = function (event: Event, play = false) {
         event.preventDefault();
         event.stopPropagation();
-        if (!menuUi.state) return;
+        if (dismissed || !menuUi.state) return;
+        dismissed = true;
+        again.disabled = close.disabled = true;
+        motion?.finish();
         rankedResultDismissedKey = rankedResultKey(menuUi.state);
         send("dismiss_ranked_result");
         removeRewardStage();
+        if (play) {
+            menuUi.profileOpen = menuUi.storeOpen = menuUi.heroesOpen = menuUi.campaignOpen = false;
+            send("quick_match");
+        }
     };
-    close.addEventListener("click", dismiss);
-    layer.addEventListener("keydown", function (event) {
+    again.addEventListener("click", event => dismiss(event, true));
+    close.addEventListener("click", event => dismiss(event));
+    layer.addEventListener("keydown", event => {
         if (event.key === "Escape") dismiss(event);
+        if (event.key === "Tab") {
+            event.preventDefault();
+            (document.activeElement === again ? close : again).focus({ preventScroll: true });
+        }
     });
-    card.append(emblem, kicker, title, rank, score, change, previous, close);
     layer.appendChild(card);
     layer._shell = root.querySelector<HTMLElement>(".sow-menu__shell");
     layer._shellWasInert = Boolean(layer._shell && layer._shell.inert);
     layer._restoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     root.appendChild(layer);
     activeRewardStage = layer;
+    rankedStageKey = menuUi.state ? rankedResultKey(menuUi.state) : null;
     if (layer._shell && "inert" in layer._shell) layer._shell.inert = true;
-    close.focus({ preventScroll: true });
+    motion = animateRankResult(card, result, reducedRewardMotion);
+    rankedStageCleanup = motion.cancel;
+    again.focus({ preventScroll: true });
 }
 
 function maybePresentRewards() {
     if (!menuUi.state) return;
+    if (rankedStageKey && (menuUi.state.phase !== "MainMenu" || rankedStageKey !== rankedResultKey(menuUi.state))) removeRewardStage();
     const pending = pendingRewardReceipts().filter(function (receipt) {
         return !rewardAnimationShown.has(receipt.id);
     });
@@ -1825,7 +1855,9 @@ function menuGuideFacts() {
 
 function updateDynamic() {
     syncHeroesRotationCountdown();
-    if (!menuUi.state || root.hidden) return;
+    if (!menuUi.state) return;
+    root.dataset.reducedMotion = String(reducedRewardMotion());
+    if (root.hidden) return;
     if (menuUi.storeOpen && typeof loadStoreCatalog === "function") loadStoreCatalog();
     ensureProgressionDisplay();
     if (reducedRewardMotion() && (rewardAnimationRunning || progressionAnimationTarget)) {
@@ -1890,6 +1922,7 @@ function updateDynamic() {
               ? SOW_t("lobbies.starting_in", { seconds: Math.ceil(lobby.timer_secs) })
               : SOW_t("lobbies.waiting_for_players");
     updateQueueRoster(lobby);
+    updateRankedQueue();
     const cardStatuses = panel.querySelectorAll<HTMLElement>("[data-lobby-status-for]");
     for (let i = 0; i < cardStatuses.length; i++) {
         const status = cardStatuses[i];
@@ -1902,6 +1935,15 @@ function updateDynamic() {
     }
     maybePresentRewards();
 }
+
+document.addEventListener("error", event => {
+    const image = event.target;
+    if (!(image instanceof HTMLImageElement)) return;
+    const emblem = image.closest(".sow-ranked__emblem");
+    if (!emblem) return;
+    image.hidden = true;
+    emblem.classList.add("is-missing");
+}, true);
 
 root.addEventListener("click", function (event) {
     if (menuUi.state && menuUi.state.phase === "MainMenu") syncMenuMusic(menuUi.state, true);
@@ -2058,6 +2100,18 @@ root.addEventListener("click", function (event) {
         } else {
             render();
         }
+        return;
+    }
+    if (command === "open_ranked_profile") {
+        menuUi.storeOpen = menuUi.heroesOpen = menuUi.campaignOpen = false;
+        openProfile(null);
+        return;
+    }
+    if (command === "retry_ranked_board") { loadRankedLeaderboard(true); return; }
+    if (command === "quick_match") {
+        target.setAttribute("disabled", "");
+        menuUi.profileOpen = menuUi.storeOpen = menuUi.heroesOpen = menuUi.campaignOpen = false;
+        send("quick_match");
         return;
     }
     if (command === "open_profile") {
@@ -2980,7 +3034,11 @@ function normalizeCompletedExitState(nextState: MenuState): MenuState {
 }
 
 function syncWebLoaderForState(nextState: MenuState) {
-    if (typeof window.SOW_syncWebLoader === "function") window.SOW_syncWebLoader(nextState);
+    if (typeof window.SOW_syncWebLoader === "function") window.SOW_syncWebLoader(
+        nextState.loader_job === "EnterGame" && nextState.ranked_matchup
+            ? Object.assign({}, nextState, { ranked_matchup_html: renderRankedDuel(nextState.ranked_matchup, true) })
+            : nextState,
+    );
 }
 
 function scheduleRewardPresentation(delay: number) {

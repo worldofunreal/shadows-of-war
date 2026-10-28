@@ -108,7 +108,19 @@ export interface MenuReturn {
     ranked_result_presented?: boolean;
 }
 
+export interface RankedStep {
+    score: number;
+    tier: string;
+    division: string | null;
+}
+
+export interface RankedLadder {
+    steps: RankedStep[];
+    max_score: number;
+}
+
 export interface RankedResult {
+    ladder?: RankedLadder | null;
     score_before: number;
     score_after: number;
     rating_delta: number;
@@ -118,6 +130,17 @@ export interface RankedResult {
     division_after: string | null;
     games_played: number;
     placements_complete: boolean;
+    points_breakdown?: RankedPointsBreakdown | null;
+}
+
+export interface RankedPointsBreakdown {
+    base: number;
+    opponent: number;
+    league: number;
+    streak: number;
+    protection: number;
+    limit: number;
+    protected_loss: boolean;
 }
 
 export interface MenuLeaderOffer {
@@ -202,6 +225,7 @@ export interface MenuState {
     connecting: boolean;
     update_available: boolean;
     waiting: boolean;
+    ranked_matchup?: MenuLobby | null;
     ranked_search_active?: boolean;
     ranked_search_elapsed_secs?: number;
     match_preparing: boolean;

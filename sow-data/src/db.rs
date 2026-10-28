@@ -1039,6 +1039,7 @@ impl PlayerDb {
             return Ok(None);
         };
         Ok(Some(crate::profile::RankedResultPresentation {
+            ladder: Some(crate::profile::ranked_ladder()),
             score_before,
             score_after,
             rating_delta: participant.rating_delta.unwrap_or_default(),
@@ -1048,6 +1049,7 @@ impl PlayerDb {
             division_after: participant.division_after.clone(),
             games_played: participant.games_played_after.unwrap_or_default(),
             placements_complete: participant.placements_complete_after.unwrap_or(false),
+            points_breakdown: participant.ranked_points_breakdown.clone(),
         }))
     }
 
@@ -1606,6 +1608,7 @@ impl PlayerDb {
             verified: record.verified,
             provisional: record.provisional,
             rating_delta: participant.rating_delta,
+            ranked_points_breakdown: participant.ranked_points_breakdown.clone(),
             ranked_bot_iq: record.ranked_bot_iq,
         })
     }
@@ -1643,6 +1646,8 @@ impl PlayerDb {
         if account.kind == AccountKind::Bot && account.profile.ranked_bot.is_none() {
             return Ok(None);
         }
+        let ranked_bot_iq = account.profile.ranked_bot.as_ref().map(|bot| bot.iq);
+        let ranked_bot = account.kind == AccountKind::Bot && ranked_bot_iq.is_some();
         let mut leader_stats = account.profile.leader_stats.clone();
         for (leader, xp) in &account.profile.leader_xp {
             leader_stats
@@ -1673,15 +1678,24 @@ impl PlayerDb {
                 .then_with(|| right.xp.cmp(&left.xp))
         });
         let recent_matches = self
-            .match_history_for_account(&account.id, 0, 10, None, None)?
+            .match_history_for_account(
+                &account.id,
+                0,
+                10,
+                ranked_bot.then_some("Ranked1v1"),
+                None,
+            )?
             .iter()
             .filter_map(|record| Self::public_match_summary(&account.id, record))
             .collect();
         let ratings = self.public_ratings(&account.id).await?.unwrap_or_default();
         Ok(Some(PublicProfileView {
+            ranked_ladder: Some(crate::profile::ranked_ladder()),
             account_id: account.id.clone(),
             handle: public_handle(&account.display_name, &account.id),
             display_name: account.display_name,
+            is_bot: ranked_bot,
+            ranked_bot_iq,
             level: account.profile.level,
             matches_played: account.profile.matches_played,
             wins: account.profile.verified_wins,
@@ -1792,19 +1806,28 @@ impl PlayerDb {
         queue: Option<&str>,
         mode: Option<&str>,
     ) -> Result<Option<Vec<PublicMatchSummary>>, Box<dyn std::error::Error + Send + Sync>> {
-        let Some(index) = self.public_index(account_id)? else {
-            return Ok(None);
+        let account = match self.public_index(account_id)? {
+            Some(index) => self.load_account(&index.account_id).await?,
+            None => match self.load_account(account_id).await {
+                Ok(account)
+                    if account.kind == AccountKind::Bot
+                        && account.profile.ranked_bot.is_some() => account,
+                _ => return Ok(None),
+            },
         };
-        let account = self.load_account(&index.account_id).await?;
-        if account.kind == AccountKind::Bot {
+        let ranked_bot = account.kind == AccountKind::Bot && account.profile.ranked_bot.is_some();
+        if account.kind == AccountKind::Bot && !ranked_bot {
             return Ok(None);
+        }
+        if ranked_bot && queue.is_some_and(|value| value != "Ranked1v1") {
+            return Ok(Some(Vec::new()));
         }
         Ok(Some(
             self.match_history_for_account(
                 &account.id,
                 offset,
                 limit.saturating_add(1),
-                queue,
+                if ranked_bot { Some("Ranked1v1") } else { queue },
                 mode,
             )?
             .iter()
@@ -1840,6 +1863,7 @@ impl PlayerDb {
                 rating_delta: participant.rating_delta,
                 rating_before: participant.rating_before,
                 rating_after: participant.rating_after,
+                ranked_points_breakdown: participant.ranked_points_breakdown.clone(),
             })
             .collect();
         Ok(Some(PublicMatchDetail {
@@ -5119,6 +5143,10 @@ impl PlayerDb {
                         {
                             return Err("invalid verified result: saved participant result conflicts".into());
                         }
+                        if record.verified {
+                            include.push(false);
+                            continue;
+                        }
                         apply_match_participation_to_account(
                             account,
                             participant.leader.as_deref(),
@@ -5131,6 +5159,9 @@ impl PlayerDb {
                             participant,
                             None,
                         );
+                        if record.queue == "Ranked1v1" {
+                            apply_ranked_bot_stats_to_account(account, participant, now);
+                        }
                         include.push(
                             apply_verified_participant_reward_to_account(
                                 account,
@@ -5477,6 +5508,7 @@ fn settle_ranked_ratings(
             Some(_) => 0.0,
             None => 0.5,
         };
+        let points_breakdown = crate::profile::ranked_points_breakdown(&before[i], &before[1 - i], outcome);
         crate::profile::apply_ranked_result(&mut ratings[i], &before[1 - i], outcome, now)?;
         let participant = record.participants.iter_mut().find(|p| p.account_id == player.account_id)
             .ok_or("ranked history participant missing")?;
@@ -5490,6 +5522,7 @@ fn settle_ranked_ratings(
         participant.division_after = ratings[i].division.clone();
         participant.games_played_after = Some(ratings[i].games_played);
         participant.placements_complete_after = Some(ratings[i].placements_complete);
+        participant.ranked_points_breakdown = Some(points_breakdown);
         let encoded = serde_json::to_vec(&ratings[i])?;
         table.insert(keys[i].as_str(), encoded.as_slice())?;
     }
@@ -5670,6 +5703,35 @@ fn apply_match_participation_to_account(
     );
     if let Some(receipt) = account.profile.reward_receipts.get_mut(match_id) {
         receipt.verification_status = Some(ReplayVerificationStatus::Pending);
+    }
+    account.updated_at = now;
+}
+
+fn apply_ranked_bot_stats_to_account(
+    account: &mut PlayerAccount,
+    participant: &crate::profile::VerifiedMatchParticipant,
+    now: u64,
+) {
+    if account.kind != AccountKind::Bot || account.profile.ranked_bot.is_none() {
+        return;
+    }
+    let leader = account.profile.record_match_stats_with_leader(
+        participant.won,
+        SessionDefeats {
+            players: participant.players_defeated,
+            empires: participant.empires_defeated,
+            tribes: participant.tribes_defeated,
+        },
+        participant.kills,
+        participant.deaths,
+        participant.assists,
+        participant.leader.as_deref(),
+    );
+    if participant.won {
+        account.profile.verified_wins = account.profile.verified_wins.saturating_add(1);
+        if let Some(stats) = account.profile.leader_stats.get_mut(&leader) {
+            stats.verified_wins = stats.verified_wins.saturating_add(1);
+        }
     }
     account.updated_at = now;
 }
@@ -6055,12 +6117,119 @@ mod tests {
         let bot_rating: crate::profile::SeasonRating =
             serde_json::from_slice(table.get(bot_key.as_str()).unwrap().unwrap().value()).unwrap();
         assert!(record.rating_eligible);
-        assert!(record.participants[0].rating_delta.unwrap() < 0);
+        assert_eq!(record.participants[0].rating_delta, Some(0));
         assert!(record.participants[1].rating_delta.unwrap() > 0);
+        for participant in &record.participants {
+            let breakdown = participant.ranked_points_breakdown.as_ref().unwrap();
+            assert_eq!(Some(breakdown.total()), participant.rating_delta);
+        }
         assert_eq!(human_rating.games_played, 1);
         assert_eq!(bot_rating.games_played, 1);
         assert!(human_rating.mu < 1000.0);
         assert!(bot_rating.mu > 1000.0);
+    }
+
+    #[tokio::test]
+    async fn ranked_bot_profile_stats_and_history_are_public_and_idempotent() {
+        use crate::profile::{
+            MatchStartRecord, ReplayVerificationStatus, VerifiedMatchParticipant,
+            VerifiedMatchResult,
+        };
+
+        let temp = tempfile::tempdir().unwrap();
+        let redb = std::sync::Arc::new(
+            crate::redb_store::init_database(temp.path().join("ranked-bot-profile.redb")).unwrap(),
+        );
+        let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(redb));
+        let mut human = test_account(AccountKind::Human);
+        human.id = "0123456789abcdef0123456789abcdef".into();
+        let mut bot = test_account(AccountKind::Bot);
+        bot.id = "fedcba9876543210fedcba9876543210".into();
+        bot.display_name = "Ranked Bot IQ 60".into();
+        bot.profile.ranked_bot = Some(super::RankedBotProfile {
+            iq: 60,
+            leader: "Caesar".into(),
+            paused: false,
+            reserved_match_id: Some("912345".into()),
+            manual_changes: Vec::new(),
+        });
+        db.insert_account_sync(human.clone()).unwrap();
+        db.insert_account_sync(bot.clone()).unwrap();
+
+        let start = MatchStartRecord {
+            match_id: "912345".into(),
+            player_ids: vec![human.id.clone(), bot.id.clone()],
+            metadata: serde_json::json!({
+                "kind": "Ranked1v1",
+                "started_at": 1,
+                "config": {"game_mode": "FFA", "map_name": "world", "ranked_bot_iq": 60},
+                "relay_players": [
+                    {"player_id": 1, "database_account_id": human.id, "is_internal": false, "leader": "Caesar", "team": null},
+                    {"player_id": 2, "database_account_id": bot.id, "is_internal": true, "leader": "Caesar", "team": null}
+                ]
+            }),
+            replay_status: ReplayVerificationStatus::Pending,
+        };
+        db.save_match_start_record(start.clone()).unwrap();
+        let result = VerifiedMatchResult {
+            match_id: start.match_id,
+            duration_seconds: 60,
+            winner_player_id: Some(2),
+            participants: vec![
+                VerifiedMatchParticipant {
+                    player_id: 1,
+                    account_id: human.id.clone(),
+                    leader: Some("Caesar".into()),
+                    ..Default::default()
+                },
+                VerifiedMatchParticipant {
+                    player_id: 2,
+                    account_id: bot.id.clone(),
+                    leader: Some("Caesar".into()),
+                    won: true,
+                    kills: 4,
+                    deaths: 1,
+                    assists: 2,
+                    players_defeated: 1,
+                    tribes_defeated: 3,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        db.apply_verified_match_result(&result, None).await.unwrap();
+        let profile = db.public_profile(&bot.id).await.unwrap().unwrap();
+        assert!(profile.is_bot);
+        assert_eq!(profile.ranked_bot_iq, Some(60));
+        assert_eq!(profile.matches_played, 1);
+        assert_eq!(profile.wins, 1);
+        assert_eq!(profile.kills, 4);
+        assert_eq!(profile.deaths, 1);
+        assert_eq!(profile.assists, 2);
+        assert_eq!(profile.tribes_defeated, 3);
+        assert_eq!(profile.recent_matches.len(), 1);
+        assert_eq!(profile.recent_matches[0].queue, "Ranked1v1");
+        assert_eq!(
+            db.public_match_history(&bot.id, 0, 20, None, None)
+                .await
+                .unwrap()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(db
+            .public_match_history(&bot.id, 0, 20, Some("Matchmaking"), None)
+            .await
+            .unwrap()
+            .unwrap()
+            .is_empty());
+
+        db.apply_verified_match_result(&result, None).await.unwrap();
+        let saved_bot = db.load_account(&bot.id).await.unwrap();
+        assert_eq!(saved_bot.profile.matches_played, 1);
+        assert_eq!(saved_bot.profile.verified_wins, 1);
+        assert_eq!(saved_bot.profile.kills, 4);
     }
 
     #[tokio::test]

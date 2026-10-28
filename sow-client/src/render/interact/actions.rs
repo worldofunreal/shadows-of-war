@@ -316,6 +316,7 @@ impl SowApp {
         self.join_matchmaking = matchmaking_join;
         self.ui.app.main_menu_state.ranked_search_active = matchmaking_join;
         self.ui.app.main_menu_state.ranked_search_elapsed_secs = 0;
+        self.ui.app.main_menu_state.ranked_matchup = None;
         if let Some(cfg) = config {
             self.ui.app.main_menu_state.custom_game_config = cfg;
         }

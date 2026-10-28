@@ -7,6 +7,7 @@ import {
     localizedText,
     menuIcon,
     menuUi,
+    renderQuickMatchButton,
     renderMainNavMarkup,
 } from "./main_menu.core.ts";
 import { renderPublicPanel } from "./main_menu.lobbies.ts";
@@ -65,9 +66,7 @@ export function renderCommandPanel() {
         renderPublicPanel("home") +
         "</div>" +
         "<div class='sow-menu__home-actions'>" +
-        "<button class='sow-menu__primary' type='button' data-command='quick_match'>" +
-        esc(SOW_t("menu.quick_match")) +
-        " <span>↗</span></button>" +
+        renderQuickMatchButton() +
         "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>" +
         esc(SOW_t("menu.campaign")) +
         " " +

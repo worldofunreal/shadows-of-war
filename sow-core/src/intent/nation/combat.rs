@@ -33,6 +33,20 @@ pub(super) fn ghost_retaliation_delay_ticks(seed: u64, ghost_id: u16, attack_id:
     rng.next_int(3, 13) as u64
 }
 
+pub(super) fn ranked_ghost_retaliation_delay_ticks(
+    seed: u64,
+    ghost_id: u16,
+    attack_id: u64,
+    iq: u32,
+) -> u64 {
+    let skill_gap = 180 - iq.clamp(60, 180);
+    let min_delay = 1 + u64::from(skill_gap * 2 / 120);
+    let max_delay = 3 + u64::from(skill_gap * 9 / 120);
+    let mut rng = ghost_attack_rng(seed, ghost_id, attack_id, GHOST_RETALIATION_DELAY_SALT);
+    let roll = rng.next_int(0, 100) as u64;
+    min_delay + roll * (max_delay - min_delay + 1) / 100
+}
+
 pub(super) fn ghost_retaliation_send_troops(
     seed: u64,
     ghost_id: u16,
@@ -149,17 +163,21 @@ impl SowEngine {
                 continue;
             }
 
+            let delay = if self.state.config.ranked_1v1 {
+                ranked_ghost_retaliation_delay_ticks(
+                    self.state.seed,
+                    ghost_id,
+                    attack.id,
+                    defender.iq,
+                )
+            } else {
+                ghost_retaliation_delay_ticks(self.state.seed, ghost_id, attack.id)
+            };
             let retaliation = GhostRetaliation {
                 attack_id: attack.id,
                 attacker_id: attack.owner_id,
                 incoming_troops: attack.troops,
-                ready_tick: attack
-                    .created_tick
-                    .saturating_add(ghost_retaliation_delay_ticks(
-                        self.state.seed,
-                        ghost_id,
-                        attack.id,
-                    )),
+                ready_tick: attack.created_tick.saturating_add(delay),
             };
             let chosen = if retaliation.is_ready_at(tick) {
                 &mut largest_ready

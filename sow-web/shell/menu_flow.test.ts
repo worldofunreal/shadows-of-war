@@ -338,6 +338,7 @@ function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = 
         displayedProgression: null,
         canonicalProgression: null,
         activeRewardStage: null,
+        rankedStageKey: null,
         root: { hidden: false, querySelector: () => null },
         menuOutcomeCounts: Object.create(null),
         menuOutcomeReady: Object.create(null),
