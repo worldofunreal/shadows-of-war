@@ -5,18 +5,13 @@ import { test } from "node:test";
 import { vm } from "./typescript-test-support.ts";
 const shell = __dirname;
 import { bundleTs, loadTypeScriptModule } from "./typescript-test-support.ts";
-void fs.readFileSync(path.join(shell, "main_menu.tutorial.ts"), "utf8");
 const tutorialBundle =
     '(function () { if (typeof window === "undefined") return; const providedView = window.SOWCampaignView;\n' +
     bundleTs(path.join(shell, "sow-campaign-view.ts")) +
     "\nif (providedView) Object.assign(window.SOWCampaignView, providedView); })();\n" +
     bundleTs(path.join(shell, "main_menu.tutorial.ts"));
-void fs.readFileSync(path.join(shell, "sow-campaign-view.ts"), "utf8");
-void bundleTs(path.join(shell, "sow-campaign-view.ts"));
-void fs.readFileSync(path.join(shell, "main_menu.tutorial.css"), "utf8");
 const hud = fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
 const hudCss = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
-void fs.readFileSync(path.join(shell, "sow-campaign.ts"), "utf8");
 const campaignEditor = fs.readFileSync(
     path.join(shell, "../../sow-tools/editors/campaign-editor/editor.ts"),
     "utf8",

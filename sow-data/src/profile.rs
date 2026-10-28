@@ -248,6 +248,22 @@ pub struct MatchParticipantRecord {
     #[serde(default)]
     pub laurels: u64,
     pub rating_delta: Option<i16>,
+    #[serde(default)]
+    pub rating_before: Option<u16>,
+    #[serde(default)]
+    pub rating_after: Option<u16>,
+    #[serde(default)]
+    pub tier_before: Option<String>,
+    #[serde(default)]
+    pub tier_after: Option<String>,
+    #[serde(default)]
+    pub division_before: Option<String>,
+    #[serde(default)]
+    pub division_after: Option<String>,
+    #[serde(default)]
+    pub games_played_after: Option<u32>,
+    #[serde(default)]
+    pub placements_complete_after: Option<bool>,
     /// Last committed replay turn included when this player voluntarily left.
     #[serde(default)]
     pub personal_closure_turn: Option<u64>,
@@ -270,7 +286,22 @@ pub struct MatchRecord {
     #[serde(default)]
     pub provisional: bool,
     pub rating_eligible: bool,
+    #[serde(default)]
+    pub ranked_bot_iq: Option<u32>,
     pub participants: Vec<MatchParticipantRecord>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct RankedResultPresentation {
+    pub score_before: u16,
+    pub score_after: u16,
+    pub rating_delta: i16,
+    pub tier_before: String,
+    pub tier_after: String,
+    pub division_before: Option<String>,
+    pub division_after: Option<String>,
+    pub games_played: u32,
+    pub placements_complete: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -559,6 +590,8 @@ pub struct PublicMatchSummary {
     #[serde(default)]
     pub provisional: bool,
     pub rating_delta: Option<i16>,
+    #[serde(default)]
+    pub ranked_bot_iq: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -576,6 +609,10 @@ pub struct PublicMatchParticipant {
     pub players_defeated: u32,
     pub verified: bool,
     pub rating_delta: Option<i16>,
+    #[serde(default)]
+    pub rating_before: Option<u16>,
+    #[serde(default)]
+    pub rating_after: Option<u16>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -592,6 +629,8 @@ pub struct PublicMatchDetail {
     #[serde(default)]
     pub provisional: bool,
     pub rating_eligible: bool,
+    #[serde(default)]
+    pub ranked_bot_iq: Option<u32>,
     pub participants: Vec<PublicMatchParticipant>,
 }
 
@@ -617,6 +656,8 @@ pub struct PublicProfileView {
     pub achievements: Vec<AchievementView>,
     pub leaders: Vec<PublicLeaderSummary>,
     pub recent_matches: Vec<PublicMatchSummary>,
+    #[serde(default)]
+    pub ratings: Vec<PublicRatingView>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -639,6 +680,8 @@ pub struct PublicLeaderboardEntry {
     pub rank: u32,
     pub account_id: String,
     pub handle: String,
+    #[serde(default)]
+    pub is_bot: bool,
     pub queue: String,
     pub mode: String,
     pub score: u16,
@@ -684,6 +727,67 @@ pub fn ladder_score(mu: f64, sigma: f64) -> u16 {
     (1500.0 + ordinal * 50.0).round().clamp(800.0, 4000.0) as u16
 }
 
+/// Update one ranked 1v1 rating using the original Glicko formula.
+/// The caller supplies both ratings as they stood before the match.
+pub fn ranked_glicko(rating: f64, deviation: f64, opponent: f64, opponent_deviation: f64, score: f64) -> (f64, f64) {
+    let q = 10_f64.ln() / 400.0;
+    let deviation = deviation.clamp(50.0, 350.0);
+    let opponent_deviation = opponent_deviation.clamp(50.0, 350.0);
+    let g = 1.0 / (1.0 + 3.0 * q * q * opponent_deviation * opponent_deviation / std::f64::consts::PI.powi(2)).sqrt();
+    let expected = 1.0 / (1.0 + 10_f64.powf(-g * (rating - opponent) / 400.0));
+    let precision = 1.0 / (deviation * deviation) + q * q * g * g * expected * (1.0 - expected);
+    let next = rating + q * g * (score - expected) / precision;
+    (next, (1.0 / precision).sqrt().clamp(50.0, 350.0))
+}
+
+/// Create the initial rating for a participant in the ranked 1v1 queue.
+pub fn initial_ranked_rating(account_id: String, initial_mmr: f64, now: u64) -> SeasonRating {
+    let score = initial_mmr.round().clamp(800.0, 4000.0) as u16;
+    let (tier, division) = tier_for_score(score);
+    SeasonRating {
+        schema_version: 2,
+        account_id,
+        season_id: CURRENT_SEASON_ID,
+        queue: "Ranked1v1".to_string(),
+        mode: "FFA".to_string(),
+        games_played: 0,
+        wins: 0,
+        mu: initial_mmr,
+        sigma: 350.0,
+        score,
+        tier: tier.to_string(),
+        division,
+        peak_score: score,
+        placements_complete: false,
+        updated_at: now,
+    }
+}
+
+/// Apply a verified result using the opponent's rating before this match.
+pub fn apply_ranked_result(rating: &mut SeasonRating, opponent: &SeasonRating, result: f64, now: u64) -> Result<(), &'static str> {
+    if rating.queue != "Ranked1v1" || opponent.queue != "Ranked1v1"
+        || rating.season_id != opponent.season_id || rating.account_id == opponent.account_id
+        || ![0.0, 0.5, 1.0].contains(&result)
+        || !rating.mu.is_finite() || !rating.sigma.is_finite()
+        || !opponent.mu.is_finite() || !opponent.sigma.is_finite()
+    {
+        return Err("invalid ranked result");
+    }
+    let (mu, sigma) = ranked_glicko(rating.mu, rating.sigma, opponent.mu, opponent.sigma, result);
+    rating.mu = mu;
+    rating.sigma = sigma;
+    rating.score = mu.round().clamp(800.0, 4000.0) as u16;
+    let (tier, division) = tier_for_score(rating.score);
+    rating.tier = tier.to_string();
+    rating.division = division;
+    rating.games_played = rating.games_played.saturating_add(1);
+    rating.wins = rating.wins.saturating_add(u32::from(result == 1.0));
+    rating.placements_complete = rating.games_played >= 5;
+    rating.peak_score = rating.peak_score.max(rating.score);
+    rating.updated_at = now;
+    Ok(())
+}
+
 pub fn tier_for_score(score: u16) -> (&'static str, Option<String>) {
     let tier = match score {
         0..=1199 => "Bronze",
@@ -718,6 +822,27 @@ mod tests {
         normalize_welcome_guide_progress, validate_menu_guide_progress,
     };
     use std::collections::BTreeSet;
+
+    #[test]
+    fn ranked_results_update_both_players_from_their_previous_ratings() {
+        let mut winner = super::initial_ranked_rating("winner".into(), 1000.0, 1);
+        let mut loser = super::initial_ranked_rating("loser".into(), 1000.0, 1);
+        let winner_before = winner.clone();
+        let loser_before = loser.clone();
+        super::apply_ranked_result(&mut winner, &loser_before, 1.0, 2).unwrap();
+        super::apply_ranked_result(&mut loser, &winner_before, 0.0, 2).unwrap();
+        assert!(winner.mu > 1000.0 && loser.mu < 1000.0);
+        assert_eq!(winner.wins, 1);
+        assert_eq!(loser.wins, 0);
+        assert!(!winner.placements_complete);
+        for _ in 0..4 {
+            super::apply_ranked_result(&mut winner, &loser_before, 0.5, 3).unwrap();
+        }
+        assert!(winner.placements_complete);
+        let before = winner.clone();
+        assert!(super::apply_ranked_result(&mut winner, &loser_before, 0.25, 4).is_err());
+        assert_eq!(winner, before);
+    }
 
     #[test]
     fn welcome_progress_retires_legacy_steps_and_preserves_terminal_states() {

@@ -62,6 +62,7 @@ impl SowApp {
             random_leader,
             host_config,
             password,
+            ranked_1v1: self.join_matchmaking,
         };
         self.make_auth_proof()
             .map(|auth| sow_core::protocol::ClientMessage::JoinWithAuth {
@@ -121,7 +122,13 @@ impl SowApp {
 
     pub(crate) fn send_leave_message(&mut self) {
         if let Some(client) = self.net.client.as_ref() {
-            let leave = sow_core::protocol::ClientMessage::Leave {};
+            let leave = if self.ui.app.main_menu_state.ranked_search_active
+                && self.sim.my_lobby_id.is_none()
+            {
+                sow_core::protocol::ClientMessage::CancelRankedSearch
+            } else {
+                sow_core::protocol::ClientMessage::Leave {}
+            };
             if let Ok(json) = bincode::serialize(&leave) {
                 client.send(json);
             }
@@ -150,6 +157,8 @@ impl SowApp {
 
     fn clear_lobby_exit_state(&mut self) {
         self.ui.app.main_menu_state.is_waiting = false;
+        self.ui.app.main_menu_state.ranked_search_active = false;
+        self.ui.app.main_menu_state.ranked_search_elapsed_secs = 0;
         clear_lobby_snapshot(&mut self.ui.app.main_menu_state);
         self.ui.app.main_menu_state.go_home();
         self.ui.app.main_menu_state.pending_join_lobby_id = None;

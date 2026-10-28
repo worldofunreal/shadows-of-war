@@ -10,7 +10,7 @@ pub use sow_data::MAX_MATCH_PARTICIPANTS;
 /// Persisted turn recordings; changing live messages must not change this.
 /// 6: buildings use kind-specific footprints.
 pub const GAMEPLAY_FORMAT_VERSION: u64 = 6;
-pub const LIVE_PROTOCOL_VERSION: u64 = 5;
+pub const LIVE_PROTOCOL_VERSION: u64 = 6;
 
 pub fn gameplay_build_identity(public_version: &str) -> String {
     format!(
@@ -214,6 +214,7 @@ pub enum ClientMessage {
     PrepareResult {
         through_turn: u64,
     },
+    CancelRankedSearch,
 }
 
 /// Fields of an authenticated join.
@@ -231,6 +232,8 @@ pub struct JoinPayload {
     pub host_config: Option<Box<crate::game_config::GameConfig>>,
     #[serde(default)]
     pub password: Option<String>,
+    #[serde(default)]
+    pub ranked_1v1: bool,
 }
 
 /// Proof that a join may bind to a canonical account ID.
@@ -285,6 +288,7 @@ pub enum ServerMessage {
         match_id: u64,
         terminal_turn: u64,
     },
+    RankedSearching { elapsed_secs: u32 },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -306,6 +310,8 @@ pub enum LobbyKind {
     Matchmaking,
     /// Player-created lobby — host decides when to start, shown in the Game Browser.
     Custom,
+    /// Private server-assigned ranked duel.
+    Ranked1v1,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -377,6 +383,7 @@ mod protocol_tests {
                 random_leader: false,
                 host_config: None,
                 password: None,
+                ranked_1v1: false,
             }),
             auth: AuthProof {
                 provider: String::new(),

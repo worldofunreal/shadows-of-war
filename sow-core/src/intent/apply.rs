@@ -314,6 +314,22 @@ impl SowEngine {
     }
 
     pub fn apply_stamped_intent(&mut self, stamped: &StampedIntent, intent_index: u32) {
+        if self.state.config.ranked_1v1 {
+            let target = match &stamped.intent {
+                GameplayIntent::ProposeAlliance { target_player }
+                | GameplayIntent::AcceptAlliance { target_player }
+                | GameplayIntent::SendResources { target_player, .. }
+                | GameplayIntent::RequestResources { target_player, .. }
+                | GameplayIntent::AcceptResourceRequest { target_player } => Some(*target_player),
+                _ => None,
+            };
+            if let Some(target) = target
+                && self.state.player(stamped.player_id).is_some_and(|p| p.is_human())
+                && self.state.player(target).is_some_and(|p| p.is_human())
+            {
+                return;
+            }
+        }
         match &stamped.intent {
             GameplayIntent::RecallFleet { fleet_id } => {
                 if !self.campaign_allows_action(crate::campaign::CampaignAction::TransportFleet) {
@@ -1099,6 +1115,42 @@ mod tests {
             assert_eq!(payer.troops_received, payer_troops_received);
             assert_eq!(requester.troops_received, requester_troops_received + if paid { 10.0 } else { 0.0 });
             assert!(engine.resource_requests_proposed.is_empty());
+        }
+    }
+
+    #[test]
+    fn ranked_duel_blocks_resource_requests_between_competitors() {
+        for ranked_1v1 in [false, true] {
+            let config = GameConfig { ranked_1v1, ..Default::default() };
+            let mut state = GameState::new(1, 4, 4, config.clone());
+            for id in 1..=2 {
+                state.register_player(Player::new_human(id, format!("P{id}"), [1.0; 3], &config));
+            }
+            let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+            engine.apply_stamped_intent(&StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::RequestResources { target_player: 2, gold: 20.0, troops: 0.0 },
+            }, 0);
+            assert_eq!(engine.resource_requests_proposed.len(), usize::from(!ranked_1v1));
+        }
+    }
+
+    #[test]
+    fn ranked_duel_blocks_direct_transfers_even_if_an_alliance_exists() {
+        for ranked_1v1 in [false, true] {
+            let config = GameConfig { ranked_1v1, ..Default::default() };
+            let mut state = GameState::new(1, 4, 4, config.clone());
+            for id in 1..=2 {
+                state.register_player(Player::new_human(id, format!("P{id}"), [1.0; 3], &config));
+            }
+            state.player_mut(1).unwrap().alliances.push(2);
+            let starting_gold = state.player(1).unwrap().gold;
+            let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+            engine.apply_stamped_intent(&StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::SendResources { target_player: 2, gold: 20.0, troops: 0.0 },
+            }, 0);
+            assert_eq!(engine.state.player(1).unwrap().gold, starting_gold - if ranked_1v1 { 0.0 } else { 20.0 });
         }
     }
 

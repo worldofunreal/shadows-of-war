@@ -5,23 +5,10 @@ import { test } from "node:test";
 import { vm } from "./typescript-test-support.ts";
 const shell = __dirname;
 import { bundleTs } from "./typescript-test-support.ts";
-void fs.readFileSync(path.join(shell, "main_menu.shell.ts"), "utf8");
-void fs.readFileSync(path.join(shell, "main_menu.tutorial.ts"), "utf8");
-void (
-    '(function () { if (typeof window === "undefined") return; const providedView = window.SOWCampaignView;\n' +
-    bundleTs(path.join(shell, "sow-campaign-view.ts")) +
-    "\nif (providedView) Object.assign(window.SOWCampaignView, providedView); })();\n" +
-    bundleTs(path.join(shell, "main_menu.tutorial.ts"))
-);
-void fs.readFileSync(path.join(shell, "sow-campaign-view.ts"), "utf8");
 const campaignViewBundle = bundleTs(path.join(shell, "sow-campaign-view.ts"));
-void fs.readFileSync(path.join(shell, "main_menu.tutorial.css"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-dist/src/main.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-dist/src/prod.rs"), "utf8");
 const hud = fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
 const hudCss = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
 const intentInput = fs.readFileSync(path.join(shell, "../../sow-client/src/input/intents.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/ui/hud/state.rs"), "utf8");
 const simUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/sim/update.rs"), "utf8");
 const simEventsSource = fs.readFileSync(path.join(shell, "../../sow-client/src/sim/events/mod.rs"), "utf8");
 const eliminationSource = fs.readFileSync(
@@ -29,14 +16,7 @@ const eliminationSource = fs.readFileSync(
     "utf8",
 );
 const snapshotFxSource = fs.readFileSync(path.join(shell, "../../sow-client/src/sim/snapshot_fx.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/ui/settings/mod.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/ui/app.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-core/src/intent/apply.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/app/state.rs"), "utf8");
 const mapClick = fs.readFileSync(path.join(shell, "../../sow-client/src/input/map_click.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/render/frame/mod.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-render/src/shaders/map.wgsl"), "utf8");
 
 test("gameplay chrome keeps dev tools and separate FPS/ping rows at the bottom of the top-right panel", () => {
     const statusRight = hud.slice(hud.indexOf("sow-hud__status-right"), hud.indexOf("</header>"));

@@ -286,9 +286,13 @@ pub enum GameEvent {
     },
     /// A hero ability changed what happened in a situation. The effect is shown
     /// at `tile`, or as a notice alone when the action has no place on the map.
+    /// `affected` names the other players the change hit, so each client shows
+    /// the cue only to the owner and to them.
     AbilityTriggered {
         owner_id: u16,
         tile: Option<(u32, u32)>,
+        #[serde(default)]
+        affected: Vec<u16>,
     },
 }
 
@@ -334,28 +338,69 @@ fn default_one() -> u64 {
 }
 
 impl GameState {
-    /// Shows a hero ability's visible effect. Only human owners get it: bots
-    /// fight constantly and the effect exists for the player who sees it. One
+    /// Shows a hero ability's visible effect. The mark belongs to the owner and
+    /// to the players the effect hit, so bots fighting each other show nothing,
+    /// while a bot hero that hits a human still announces to that human. One
     /// event per owner per tick (each owner has one hero, so one ability), so a
     /// long fight shows one mark, not one per tile.
-    pub(crate) fn announce_ability(&mut self, owner_id: u16, tile: Option<(u32, u32)>) {
-        if !self
+    pub(crate) fn announce_ability(
+        &mut self,
+        owner_id: u16,
+        affected: &[u16],
+        tile: Option<(u32, u32)>,
+    ) {
+        let owner_is_human = self
             .player(owner_id)
-            .is_some_and(|p| p.player_type == crate::player::PlayerType::Human)
-        {
+            .is_some_and(|p| p.player_type == crate::player::PlayerType::Human);
+        let affected_is_human = affected.iter().any(|&id| {
+            self.player(id)
+                .is_some_and(|p| p.player_type == crate::player::PlayerType::Human)
+        });
+        if !owner_is_human && !affected_is_human {
             return;
         }
-        let already_shown = self.events.iter().any(|event| {
+        let mut viewers = Vec::with_capacity(affected.len());
+        for &id in affected {
+            if id != 0 && id != owner_id && !viewers.contains(&id) {
+                viewers.push(id);
+            }
+        }
+        let already_shown = self.events.iter().position(|event| {
             matches!(event, GameEvent::AbilityTriggered { owner_id: o, .. } if *o == owner_id)
         });
-        if !already_shown {
-            self.events.push(GameEvent::AbilityTriggered { owner_id, tile });
+        if let Some(index) = already_shown {
+            if let GameEvent::AbilityTriggered {
+                affected: shown, ..
+            } = &mut self.events[index]
+            {
+                for id in viewers {
+                    if !shown.contains(&id) {
+                        shown.push(id);
+                    }
+                }
+            }
+        } else {
+            self.events.push(GameEvent::AbilityTriggered {
+                owner_id,
+                tile,
+                affected: viewers,
+            });
         }
     }
 
     /// Announces the ability of `owner_id`'s own hero, for effects that fired on its behalf.
     pub(crate) fn announce_leader_ability(&mut self, owner_id: u16, tile: Option<(u32, u32)>) {
-        self.announce_ability(owner_id, tile);
+        self.announce_ability(owner_id, &[], tile);
+    }
+
+    /// Announces the ability of `owner_id`'s hero to the other players it hit.
+    pub(crate) fn announce_leader_ability_to(
+        &mut self,
+        owner_id: u16,
+        affected: &[u16],
+        tile: Option<(u32, u32)>,
+    ) {
+        self.announce_ability(owner_id, affected, tile);
     }
 
     pub fn new(seed: u64, width: u32, height: u32, config: crate::game_config::GameConfig) -> Self {

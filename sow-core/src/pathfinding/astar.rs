@@ -935,31 +935,20 @@ mod tests {
     }
 
     #[test]
-    fn separate_water_bodies_have_no_route() {
-        let mut map = GameMap::new(64, 64);
-        set_water(&mut map, 5, 5);
-        set_water(&mut map, 58, 58);
-        let mut pathfinder = WaterAStar::new();
+    fn disconnected_and_diagonal_water_have_no_route() {
+        for ((sx, sy), (gx, gy)) in [((5, 5), (58, 58)), ((31, 31), (32, 32))] {
+            let mut map = GameMap::new(64, 64);
+            set_water(&mut map, sx, sy);
+            set_water(&mut map, gx, gy);
+            let mut pathfinder = WaterAStar::new();
 
-        assert!(
-            pathfinder
-                .find_path(&map, &[5 * map.width + 5], 58 * map.width + 58)
-                .is_none()
-        );
-    }
-
-    #[test]
-    fn diagonal_water_contact_is_not_a_navigable_connection() {
-        let mut map = GameMap::new(64, 64);
-        set_water(&mut map, 31, 31);
-        set_water(&mut map, 32, 32);
-        let mut pathfinder = WaterAStar::new();
-
-        assert!(
-            pathfinder
-                .find_path(&map, &[31 * map.width + 31], 32 * map.width + 32)
-                .is_none()
-        );
+            assert!(
+                pathfinder
+                    .find_path(&map, &[sy * map.width + sx], gy * map.width + gx)
+                    .is_none(),
+                "water at ({sx}, {sy}) cannot navigate to ({gx}, {gy})"
+            );
+        }
     }
 
     #[test]

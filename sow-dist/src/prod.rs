@@ -4159,4 +4159,5 @@ mod build_fingerprint_tests {
         let source = include_str!("prod.rs");
         assert!(source.contains("test \"$(sudo sha256sum {destination}"));
     }
+
 }

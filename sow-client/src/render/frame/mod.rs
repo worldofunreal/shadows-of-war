@@ -292,6 +292,7 @@ impl SowApp {
                     let mut player_colors =
                         [[0x0080_8080u32; 4]; crate::render::gpu::PLAYER_COLOR_SLOTS / 4];
                     let mut player_skin_styles = [[0.0f32; 4]; 256];
+                    let my_id = self.sim.my_player_id.unwrap_or(0);
                     if let Some(snap) = &self.sim.current_snapshot {
                         for p in &snap.players {
                             if (p.id as usize) < crate::render::gpu::PLAYER_COLOR_SLOTS {
@@ -299,6 +300,7 @@ impl SowApp {
                                     p.player_type,
                                     p.team,
                                     p.color,
+                                    p.is_campaign_faction,
                                 );
                                 let packed = rgb.iter().enumerate().fold(
                                     0u32,
@@ -317,6 +319,7 @@ impl SowApp {
                                     p.skin_style,
                                     p.leader,
                                     p.empowered_attack,
+                                    my_id != 0 && p.id == my_id,
                                 );
                             }
                         }
@@ -705,18 +708,23 @@ impl SowApp {
 
 /// Per-owner style row the map shader reads: `.x` skin, `.y` 1 while the owner's attack
 /// is "against the odds" (inverted conquest flash), `.z` 1 for a mountain-cost hero
-/// (amber mountain conquest flash). Derived from the same snapshot the combat uses.
+/// (amber mountain conquest flash). Hero tints are private: they stay zero for every
+/// owner except the local player, so an ability is never announced to the whole map.
+/// Derived from the same snapshot the combat uses.
 fn tile_effect_styles(
     skin_style: u8,
     leader: sow_core::player::Leader,
     empowered_attack: bool,
+    hero_effects_visible: bool,
 ) -> [f32; 4] {
+    let visible = u8::from(hero_effects_visible);
     [
         f32::from(skin_style),
-        f32::from(u8::from(empowered_attack)),
-        f32::from(u8::from(leader.has_attacker_loss(
-            sow_core::geo_entities::LossWhen::Mountain,
-        ))),
+        f32::from(u8::from(empowered_attack) * visible),
+        f32::from(
+            u8::from(leader.has_attacker_loss(sow_core::geo_entities::LossWhen::Mountain))
+                * visible,
+        ),
         0.0,
     ]
 }
@@ -729,14 +737,29 @@ mod hero_ability_tile_flags {
     #[wasm_bindgen_test::wasm_bindgen_test]
     fn tenamaxtli_outnumbered_attack_sets_the_inverted_flash_flag() {
         let tenamaxtli = Leader::of("tenamaxtli");
-        assert_eq!(tile_effect_styles(3, tenamaxtli, true), [3.0, 1.0, 0.0, 0.0]);
-        assert_eq!(tile_effect_styles(3, tenamaxtli, false), [3.0, 0.0, 0.0, 0.0]);
+        assert_eq!(tile_effect_styles(3, tenamaxtli, true, true), [3.0, 1.0, 0.0, 0.0]);
+        assert_eq!(tile_effect_styles(3, tenamaxtli, false, true), [3.0, 0.0, 0.0, 0.0]);
     }
 
     #[wasm_bindgen_test::wasm_bindgen_test]
     fn highland_hero_sets_no_mountain_flag() {
-        assert_eq!(tile_effect_styles(0, Leader::of("nemequene"), false), [0.0, 0.0, 0.0, 0.0]);
-        assert_eq!(tile_effect_styles(0, Leader::of("cleopatra"), true), [0.0, 1.0, 0.0, 0.0]);
+        assert_eq!(
+            tile_effect_styles(0, Leader::of("nemequene"), false, true),
+            [0.0, 0.0, 0.0, 0.0]
+        );
+        assert_eq!(
+            tile_effect_styles(0, Leader::of("cleopatra"), true, true),
+            [0.0, 1.0, 0.0, 0.0]
+        );
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn hero_ability_tints_stay_private_to_their_owner() {
+        let tenamaxtli = Leader::of("tenamaxtli");
+        assert_eq!(
+            tile_effect_styles(3, tenamaxtli, true, false),
+            [3.0, 0.0, 0.0, 0.0]
+        );
     }
 }
 

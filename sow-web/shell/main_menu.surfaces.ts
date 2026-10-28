@@ -14,6 +14,12 @@ import { localeOptions, render, renderSettingsPrivacySection } from "./main_menu
 import { isAndroidTwa } from "./main_menu.store.ts";
 
 export function renderCommandPanel() {
+    const ranked = menuUi.rankedRating;
+    const rankedLabel = ranked
+        ? ranked.placements_complete
+            ? ranked.tier + (ranked.division ? " " + ranked.division : "")
+            : SOW_t("profile.unranked")
+        : "—";
     return (
         "" +
         "<section class='sow-menu__command'>" +
@@ -21,9 +27,13 @@ export function renderCommandPanel() {
         renderPublicPanel("home") +
         "</div>" +
         "<div class='sow-menu__home-actions'>" +
-        "<button class='sow-menu__primary' type='button' data-command='quick_match'>" +
+        "<button class='sow-menu__primary sow-menu__quick-match' type='button' data-command='quick_match'><div><strong>" +
         esc(SOW_t("menu.quick_match")) +
-        " <span>↗</span></button>" +
+        "</strong><small>" +
+        esc(SOW_t("lobbies.ranked_1v1")) +
+        " · <b data-ranked-current>" +
+        esc(rankedLabel) +
+        "</b></small></div><span aria-hidden='true'>↗</span></button>" +
         "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>" +
         esc(SOW_t("menu.campaign")) +
         " " +

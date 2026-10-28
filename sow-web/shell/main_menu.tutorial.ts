@@ -1,6 +1,9 @@
 // Campaign tutorial controller; shared guide calculations live in campaign/tutorial-guides.ts.
 import { createMenuGuide } from "./main_menu.menu-guide.ts";
-import { createTutorialGuides, TUTORIAL_HOVER_RADIUS as HOVER_TARGET_RADIUS } from "./campaign/tutorial-guides.ts";
+import {
+    createTutorialGuides,
+    TUTORIAL_HOVER_RADIUS as HOVER_TARGET_RADIUS,
+} from "./campaign/tutorial-guides.ts";
 import type { TutorialAnchor } from "./campaign/tutorial-guides.ts";
 import type {
     CampaignDefinition,
@@ -94,7 +97,7 @@ interface TutorialRuntime {
     document.body.appendChild(cinematicPreviewRoot);
     let cinematicPreviewView: CampaignView | null = null;
     let cinematicPreviewGeneration = 0;
-    
+
     const runtime: TutorialRuntime = {
         generation: 0,
         episodeId: null,
@@ -263,12 +266,6 @@ interface TutorialRuntime {
             maxTouchPoints: nav.maxTouchPoints,
         });
     }
-
-
-
-
-
-
 
     function fetchJson(path: string): Promise<CampaignRecord> {
         return fetch(asset(path), { cache: "no-store", credentials: "same-origin" }).then(
@@ -631,8 +628,6 @@ interface TutorialRuntime {
         });
         return Object.assign({}, model, { step: step });
     }
-
-
 
     function update(hud: CampaignRecord | null) {
         if (

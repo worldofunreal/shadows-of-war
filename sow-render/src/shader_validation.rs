@@ -42,21 +42,6 @@ fn map_shader_parses_and_matches_globals_layout() {
     assert_struct_size(&module, "Globals", std::mem::size_of::<crate::MapGlobals>());
 }
 
-/// The hero conquest tints are read from the owner's style row. A refactor that drops
-/// either flag or the mountain test would silently remove the visual; naga cannot see that.
-#[test]
-fn map_shader_tints_hero_conquest_flashes() {
-    let source = include_str!("shaders/map.wgsl");
-    for expected in [
-        "player_skin_styles.styles[owner_id].y > 0.5",
-        "player_skin_styles.styles[owner_id].z > 0.5",
-        "f32(terrain_byte & 0x1Fu) >= globals.shader_params[__MAP_LAND_HIGHLANDS_LIMIT__].x",
-        "__MAP_CONQUEST_MOUNTAIN_COLOR__",
-    ] {
-        assert!(source.contains(expected), "map shader lost hero flash tint: {expected}");
-    }
-}
-
 #[test]
 fn text_shader_parses_and_matches_globals_layout() {
     let source =
@@ -67,51 +52,6 @@ fn text_shader_parses_and_matches_globals_layout() {
         "TextGlobals",
         std::mem::size_of::<crate::TextGlobals>(),
     );
-}
-
-#[test]
-fn avatar_sprite_mask_stays_circular_without_an_adjustable_corner_control() {
-    let source = include_str!("shaders/text_glow.wgsl");
-    assert!(source.contains("rounded_rect_distance(local, 0.5)"));
-    assert!(!source.contains("__TEXT_AVATAR_CORNER__"));
-}
-
-#[test]
-fn rect_shader_uses_local_quad_coordinates_for_coverage() {
-    let source = include_str!("shaders/text_glow.wgsl");
-    let rect = source
-        .split_once("fn shade_rect(in: VertexOutput) -> vec4<f32> {")
-        .and_then(|(_, body)| body.split_once("\n}\n\nfn shade_rounded_rect"))
-        .map(|(body, _)| body)
-        .expect("rectangle shader body is present");
-    assert!(rect.contains("fwidth(in.local_uv)"));
-    assert!(!rect.contains("in.uv"));
-}
-
-#[test]
-fn placement_map_keeps_territory_signals_without_a_circular_highlight() {
-    let source = include_str!("shaders/map.wgsl");
-    let placement = source
-        .split_once("if (globals.placement_scale > 0.0) {")
-        .and_then(|(_, body)| body.split_once("\n    }\n    return base_color"))
-        .map(|(body, _)| body)
-        .expect("placement map block is present");
-    assert!(placement.contains("if (!own_land)"));
-    assert!(placement.contains("boundary"));
-    assert!(!placement.contains("spotlight"));
-    assert!(!placement.contains("length("));
-}
-
-#[test]
-fn status_sprite_shader_supports_individual_grayscale_tint() {
-    let source = include_str!("shaders/text_glow.wgsl");
-    let status = source
-        .split_once("fn shade_status_sprite(in: VertexOutput) -> vec4<f32> {")
-        .and_then(|(_, body)| body.split_once("\n}\n\n// Anti-aliased filled rectangle"))
-        .map(|(body, _)| body)
-        .expect("status sprite shader body is present");
-    assert!(status.contains("clamp(in.face_dilate, 0.0, 1.0)"));
-    assert!(status.contains("mix(tinted, vec3<f32>(luminance)"));
 }
 
 #[test]

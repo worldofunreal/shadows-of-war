@@ -4,29 +4,16 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { vm } from "../../../sow-web/shell/typescript-test-support.ts";
 const shell = path.resolve(__dirname, "../../../sow-web/shell");
-import { bundleTs, loadTypeScriptModule } from "../../../sow-web/shell/typescript-test-support.ts";
-void fs.readFileSync(path.join(shell, "main_menu.tutorial.ts"), "utf8");
-void (
-  '(function () { if (typeof window === "undefined") return; const providedView = window.SOWCampaignView;\n' +
-  bundleTs(path.join(shell, "sow-campaign-view.ts")) +
-  "\nif (providedView) Object.assign(window.SOWCampaignView, providedView); })();\n" +
-  bundleTs(path.join(shell, "main_menu.tutorial.ts"))
-);
+import { loadTypeScriptModule } from "../../../sow-web/shell/typescript-test-support.ts";
 const campaignEngine = fs.readFileSync(path.join(shell, "campaign/rules.ts"), "utf8");
-void fs.readFileSync(path.join(shell, "sow-campaign-view.ts"), "utf8");
-void bundleTs(path.join(shell, "sow-campaign-view.ts"));
-void fs.readFileSync(path.join(shell, "main_menu.tutorial.css"), "utf8");
 const campaignEditor = fs.readFileSync(
   path.join(shell, "../../sow-tools/editors/campaign-editor/editor.ts"),
   "utf8",
 );
-void fs.readFileSync(path.join(shell, "sow-i18n.ts"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/server.mts"), "utf8");
 const campaignEditorHtml = fs.readFileSync(
   path.join(shell, "../../sow-tools/editors/campaign-editor/logic.html"),
   "utf8",
 );
-void fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/editor.css"), "utf8");
 // Page scripts are TypeScript now; strip the types the same way the editor server serves them before parsing.
 const transpileForVm = (source) =>
   new Bun.Transpiler({ loader: "ts", target: "browser" }).transformSync(source);
@@ -38,19 +25,15 @@ const atlasEntityPickerSource = fs.readFileSync(
   path.join(shell, "../../sow-tools/editors/campaign-editor/atlas-entity-picker.ts"),
   "utf8",
 );
-void fs.readFileSync(path.join(shell, "../../sow-tools/src/map_roster.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-web/site/fonts/fonts.css"), "utf8");
 const campaignMapEditorScript = fs.readFileSync(
   path.join(shell, "../../sow-tools/editors/campaign-editor/index.ts"),
   "utf8",
 );
-void fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/map-preview.ts"), "utf8");
 import campaignMapPreviewApi from "./map-preview.ts";
 const atlasPageScript = fs.readFileSync(
   path.join(shell, "../../sow-tools/editors/campaign-editor/atlas.ts"),
   "utf8",
 );
-void fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
 
 test("campaign validation rejects unsupported rules and duplicate event responses", () => {
   const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));

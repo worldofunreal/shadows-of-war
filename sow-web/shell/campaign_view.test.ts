@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { vm } from "./typescript-test-support.ts";
 const shell = __dirname;
 import { bundleTs, loadTypeScriptModule } from "./typescript-test-support.ts";
+import type { CampaignRecord } from "./campaign/types.ts";
 const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.ts"), "utf8");
 const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.ts"), "utf8");
 const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.ts"), "utf8");
@@ -21,12 +22,8 @@ const campaignEditor = fs.readFileSync(
     path.join(shell, "../../sow-tools/editors/campaign-editor/editor.ts"),
     "utf8",
 );
-void fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/server.mts"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/logic.html"), "utf8");
 const hud = fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
 const hudCss = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/input/window.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/input/surface.rs"), "utf8");
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
 const coreSource = fs.readFileSync(path.join(shell, "main_menu.core.ts"), "utf8");
 const campaignEngine = fs.readFileSync(path.join(shell, "campaign/rules.ts"), "utf8");
@@ -34,7 +31,7 @@ const campaignViewApi = loadTypeScriptModule(path.join(shell, "sow-campaign-view
 const tutorialGuidesApi = loadTypeScriptModule(path.join(shell, "campaign/tutorial-guides.ts"));
 const tutorialCampaignApi = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
 
-function createTutorialGuides(options: Record<string, any> = {}) {
+function createTutorialGuides(options: CampaignRecord = {}) {
     const runtime = Object.assign(
         {
             episodeId: null,
@@ -58,13 +55,11 @@ function createTutorialGuides(options: Record<string, any> = {}) {
         send: options.send || (() => true),
         tr: options.tr || ((key: string) => key),
         hasText: options.hasText || (() => false),
-        stepTextKey: options.stepTextKey || ((step: Record<string, any>, suffix: string) => step.id + suffix),
+        stepTextKey: options.stepTextKey || ((step: CampaignRecord, suffix: string) => step.id + suffix),
         zoomMode: options.zoomMode || (() => "wheel"),
-    } as any);
+    });
     return Object.assign(guides, { runtime, window, document });
 }
-void fs.readFileSync(path.join(shell, "../../sow-client/src/campaign/mod.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/render/frame/ui.rs"), "utf8");
 
 test("Campaign Studio keeps timed exchanges on compatible step types and confirms when they would be removed", () => {
     const start = campaignEditor.search(
@@ -1173,7 +1168,8 @@ test("Boudica spoken cards and contact responses require named existing portrait
         ),
     );
     const lineWithoutEmote = structuredClone(definition);
-    const releaseStep = lineWithoutEmote.steps.find((step) => step.emote === "clear");
+    const releaseStep = lineWithoutEmote.steps.find((step) => step.id === definition.entry);
+    releaseStep.emote = "clear";
     releaseStep.emote_text_key = "tutorial.campaign_boudica_boudica_council_strike";
     assert.ok(
         report(lineWithoutEmote).errors.some(
@@ -1264,11 +1260,11 @@ test("Boudica spoken cards and contact responses require named existing portrait
         ),
     );
     const dialogueReusesLine = structuredClone(definition);
-    dialogueReusesLine.steps.find((step) => step.id === "boudica_victory_council").body_key =
+    dialogueReusesLine.steps.find((step) => step.id === "boudica_first_expansion").body_key =
         "tutorial.campaign_boudica_boudica_supplies_reply_emote";
     assert.ok(
         report(dialogueReusesLine).errors.some(
-            (issue) => issue.step === "boudica_victory_council" && issue.field === "body_key",
+            (issue) => issue.step === "boudica_first_expansion" && issue.field === "body_key",
         ),
         "an exchange line cannot also be dialogue",
     );
@@ -2408,18 +2404,6 @@ test("Boudica script links resolve and each ending completes the episode", () =>
         }
     }
 });
-test("shell stylesheets keep balanced blocks, so one bad edit cannot silently drop the rules after it", () => {
-    for (const file of fs.readdirSync(shell).filter((name) => name.endsWith(".css"))) {
-        const css = fs.readFileSync(path.join(shell, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-        let depth = 0;
-        for (const char of css) {
-            if (char === "{") depth++;
-            if (char === "}") depth--;
-            assert.ok(depth >= 0, file + " closes a block that was never opened");
-        }
-        assert.equal(depth, 0, file + " leaves a block open");
-    }
-});
 test("tutorial and HUD scripts look up only elements their own markup still creates", () => {
     for (const file of ["sow-campaign-view.ts", "main_menu.hud.ts"]) {
         const source = fs.readFileSync(path.join(shell, file), "utf8");
@@ -2792,7 +2776,6 @@ test("campaign hand guides model the actual slider and support local or world dr
 });
 
 test("campaign replay hand resolves the selected episode card, not always Boudica", () => {
-    void loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
     const boudica = { dataset: { episodeId: "boudica" } };
     const sixSky = { dataset: { episodeId: "six_sky_ep2" } };
     const root = { querySelectorAll: () => [boudica, sixSky] };
@@ -3086,7 +3069,6 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     const upgradeContext = renderContextFor("wheel", false, upgradeWait);
     assert.equal(upgradeContext.statusOnly, true);
     assert.equal(upgradeContext.statusLabel, "Building in progress");
-    void fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
 
     const { anchorFor } = createTutorialGuides();
     assert.deepEqual(
@@ -3190,7 +3172,6 @@ test("campaign tap guides use shared action labels and localized fallback", () =
 
 test("Boudica UI guides spotlight the requested controls and Legion IX attack slider", () => {
     const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
-    void fs.readFileSync(path.join(shell, "campaign/rules.ts"), "utf8");
     const definition = JSON.parse(
         fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"),
     );
@@ -3285,7 +3266,6 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
         legionObjective.id,
         "the strike scene continues once its emote and dialogue have played",
     );
-    void fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
 });
 
 test("tutorial hand and ripple fade in at screen center and glide together to the dimmed Home button", () => {

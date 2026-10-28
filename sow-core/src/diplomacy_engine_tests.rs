@@ -118,6 +118,25 @@ mod alliance_lifecycle_tests {
     #[test]
     fn campaign_contact_choice_pays_atomically_and_updates_the_relationship() {
         let mut engine = campaign_contact_engine(250.0, true);
+        engine.campaign_faction_ids.insert(2, "venta_icenorum".into());
+        let authored_color = [0.25, 0.45, 0.65];
+        engine.state.player_mut(2).unwrap().color = authored_color;
+        let neutral = engine
+            .build_snapshot()
+            .players
+            .into_iter()
+            .find(|player| player.id == 2)
+            .unwrap();
+        assert_eq!(neutral.color, authored_color);
+        assert_eq!(
+            crate::player::player_territory_rgb(
+                neutral.player_type,
+                neutral.team,
+                neutral.color,
+                neutral.is_campaign_faction,
+            ),
+            authored_color
+        );
         engine.apply_stamped_intent(
             &StampedIntent {
                 player_id: 1,
@@ -139,13 +158,20 @@ mod alliance_lifecycle_tests {
             Some(&crate::protocol::CampaignRelation::Allied)
         );
         let snapshot = engine.build_snapshot();
+        let ally = snapshot
+            .players
+            .iter()
+            .find(|player| player.id == 2)
+            .unwrap();
+        assert!(ally.is_campaign_faction);
+        assert_eq!(ally.color, [0.2, 0.5, 1.0]);
         assert_eq!(
-            snapshot
-                .players
-                .iter()
-                .find(|player| player.id == 2)
-                .unwrap()
-                .color,
+            crate::player::player_territory_rgb(
+                ally.player_type,
+                ally.team,
+                ally.color,
+                ally.is_campaign_faction,
+            ),
             [0.2, 0.5, 1.0]
         );
     }

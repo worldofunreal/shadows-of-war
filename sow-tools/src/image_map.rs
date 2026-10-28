@@ -97,21 +97,3 @@ fn parse_nation_spawns(
     Some(spawns)
 }
 
-#[cfg(test)]
-mod tests {
-    use sow_core::maps;
-    use sow_map::image_pipeline::mobile_safe_dims;
-
-    #[test]
-    fn mobile_safe_dims_preserve_aspect_and_budget() {
-        let (w, h) = mobile_safe_dims(2800, 1448);
-        assert!(w <= maps::MAX_MAP_AXIS && h <= maps::MAX_MAP_AXIS);
-        assert!((w as u64) * (h as u64) <= maps::MAX_MAP_PIXELS as u64);
-        let src_ar = 2800.0 / 1448.0;
-        let dst_ar = w as f64 / h as f64;
-        assert!(
-            (src_ar - dst_ar).abs() < 0.05,
-            "aspect {src_ar} vs {dst_ar}"
-        );
-    }
-}

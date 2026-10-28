@@ -10,8 +10,6 @@ const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.ts"), "utf
 const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.ts"), "utf8");
 const loaderSource = fs.readFileSync(path.join(shell, "loader.ts"), "utf8");
 const loaderTemplate = fs.readFileSync(path.join(shell, "index.html.template"), "utf8");
-void fs.readFileSync(path.join(shell, "main_menu.layout.css"), "utf8");
-void fs.readFileSync(path.join(shell, "main_menu.tutorial.ts"), "utf8");
 const tutorialBundle =
     '(function () { if (typeof window === "undefined") return; const providedView = window.SOWCampaignView;\n' +
     bundleTs(path.join(shell, "sow-campaign-view.ts")) +
@@ -44,7 +42,6 @@ const netMessagesSource = fs.readFileSync(
     path.join(shell, "../../sow-client/src/net/update/messages.rs"),
     "utf8",
 );
-void fs.readFileSync(path.join(shell, "../../sow-client/src/app/state.rs"), "utf8");
 
 test("first-run tutorial keeps one boot loader and splash art until Rust signals completion", async () => {
     for (const id of ["loader-footer", "loader-ability", "loader-bar-wrap", "loader-bar-fill"]) {
@@ -197,7 +194,6 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         "starting a match cannot overwrite the account's saved leader choice",
     );
     const exitStart = sessionSource.indexOf("pub(crate) fn begin_exit_to_main_menu");
-    void sessionSource.indexOf("/// Enter the EnterGame splash", exitStart);
     const preferencesStart = accountSource.indexOf("pub(crate) fn apply_progress_preferences(");
     const preferencesEnd = accountSource.indexOf("pub(crate) fn apply_cloud_profile(", preferencesStart);
     assert.ok(preferencesStart >= 0 && preferencesEnd > preferencesStart);

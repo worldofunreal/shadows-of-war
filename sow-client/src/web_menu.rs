@@ -277,6 +277,7 @@ enum WebMenuCommand {
         #[serde(default)]
         destination: Option<String>,
     },
+    DismissRankedResult,
     RequestEndgameStats,
     ClearEndgameStats,
     ContinueObserving,
@@ -1293,6 +1294,19 @@ impl SowApp {
                         context.requested_screen = destination.filter(|value| value == "store");
                     }
                     self.save_menu_return_context();
+                }
+                WebMenuCommand::DismissRankedResult => {
+                    let dismissed = self.menu_return.as_mut().is_some_and(|context| {
+                        if context.ranked_result.is_some() {
+                            context.ranked_result_presented = true;
+                            true
+                        } else {
+                            false
+                        }
+                    });
+                    if dismissed {
+                        self.save_menu_return_context();
+                    }
                 }
                 WebMenuCommand::RequestEndgameStats => {
                     let tutorial_active = self.ui.tutorial_active && self.net.is_offline;
@@ -4030,6 +4044,8 @@ struct MenuInputs {
     connected: bool,
     connecting: bool,
     waiting: bool,
+    ranked_search_active: bool,
+    ranked_search_elapsed_secs: u32,
     update_available: bool,
     match_preparing: bool,
     player_name: String,
@@ -4082,6 +4098,8 @@ fn menu_inputs(app: &SowApp) -> MenuInputs {
         connected: state.is_connected,
         connecting: state.is_connecting,
         waiting: state.is_waiting,
+        ranked_search_active: state.ranked_search_active,
+        ranked_search_elapsed_secs: state.ranked_search_elapsed_secs,
         update_available: app.ui.update_available,
         match_preparing: app
             .ui
@@ -4194,6 +4212,8 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
         "connecting": inputs.connecting,
         "update_available": inputs.update_available,
         "waiting": inputs.waiting,
+        "ranked_search_active": inputs.ranked_search_active,
+        "ranked_search_elapsed_secs": inputs.ranked_search_elapsed_secs,
         "match_preparing": inputs.match_preparing,
         "player_name": inputs.player_name,
         "selected_leader": leader_id(inputs.selected_leader),

@@ -367,6 +367,12 @@ pub struct GameConfig {
     /// multiplayer; set only at the match initialization boundary.
     #[serde(default)]
     pub tutorial: bool,
+    /// Server-assigned ranked duel rules; ordinary matches retain their rules.
+    #[serde(default)]
+    pub ranked_1v1: bool,
+    /// Fixed IQ of the server-assigned ranked opponent, if the rival is a bot.
+    #[serde(default)]
+    pub ranked_bot_iq: Option<u32>,
 }
 
 impl GameConfig {
@@ -485,6 +491,8 @@ impl Default for GameConfig {
             campaign_support: None,
             campaign_player_color: None,
             tutorial: false,
+            ranked_1v1: false,
+            ranked_bot_iq: None,
         }
     }
 }

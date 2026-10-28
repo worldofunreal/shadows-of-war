@@ -72,6 +72,7 @@ impl SowApp {
                                 player.player_type,
                                 player.team,
                                 player.color,
+                                player.is_campaign_faction,
                             )
                         })
                         .unwrap_or([0.13, 0.83, 0.94]);
@@ -88,7 +89,12 @@ impl SowApp {
                             start_time: now_instant,
                         });
                 }
-                sow_core::game::GameEvent::AbilityTriggered { owner_id, tile, .. } => {
+                sow_core::game::GameEvent::AbilityTriggered { owner_id, tile, affected } => {
+                    let is_mine = my_id != 0 && owner_id == my_id;
+                    let is_affected = my_id != 0 && affected.contains(&my_id);
+                    if !is_mine && !is_affected {
+                        continue;
+                    }
                     let Some(owner) = snap.players.iter().find(|player| player.id == owner_id)
                     else {
                         continue;
@@ -98,6 +104,7 @@ impl SowApp {
                             owner.player_type,
                             owner.team,
                             owner.color,
+                            owner.is_campaign_faction,
                         );
                         if self.ui.transport_impacts.len() == crate::app::MAX_TRANSPORT_IMPACTS {
                             self.ui.transport_impacts.pop_front();
@@ -114,19 +121,17 @@ impl SowApp {
                                 start_time: now_instant,
                             });
                     }
-                    if owner_id == my_id {
-                        // The notice shows the hero's icon and its own ability name.
-                        let hero = sow_core::commerce::leader_id(owner.leader).to_string();
-                        self.ui.app.hud_state.push_notification_for_players(
-                            crate::ui::UiText::new("hud.ability_notice")
-                                .with("hero", hero.clone())
-                                .with("ability_key", format!("site.leader_{hero}_ability")),
-                            [Some(owner_id), None],
-                            3,
-                            Some(format!("ability:{owner_id}")),
-                            false,
-                        );
-                    }
+                    // The notice shows the hero's icon and its own ability name.
+                    let hero = sow_core::commerce::leader_id(owner.leader).to_string();
+                    self.ui.app.hud_state.push_notification_for_players(
+                        crate::ui::UiText::new("hud.ability_notice")
+                            .with("hero", hero.clone())
+                            .with("ability_key", format!("site.leader_{hero}_ability")),
+                        [Some(owner_id), None],
+                        3,
+                        Some(format!("ability:{owner_id}")),
+                        false,
+                    );
                 }
                 sow_core::game::GameEvent::PlayerEliminated {
                     player_id,
@@ -302,5 +307,58 @@ mod tests {
             false,
             true,
         ));
+    }
+}
+
+#[cfg(test)]
+mod hero_ability_visibility_tests {
+    use super::*;
+    use sow_core::engine::SowEngine;
+    use sow_core::game::{GameEvent, GamePhase, GameState};
+    use sow_core::game_config::GameConfig;
+    use sow_core::player::{Leader, Player};
+    use sow_core::water_components::WaterComponents;
+
+    fn app_and_snapshot() -> (SowApp, SimSnapshot) {
+        let config = GameConfig::default();
+        let mut state = GameState::new(7, 4, 4, config.clone());
+        state.phase = GamePhase::Playing;
+        for (id, leader) in [
+            (1, Leader::of("burebista")),
+            (2, Leader::of("caesar")),
+            (3, Leader::of("cleopatra")),
+        ] {
+            let mut player = Player::new_human(id, format!("P{id}"), [0.5; 3], &config);
+            player.has_spawned = true;
+            player.leader = leader;
+            state.register_player(player);
+        }
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        (SowApp::new(), engine.build_snapshot())
+    }
+
+    fn cues_for(my_id: u16) -> (usize, usize) {
+        let (mut app, snap) = app_and_snapshot();
+        app.process_tick_events(
+            vec![GameEvent::AbilityTriggered {
+                owner_id: 1,
+                tile: Some((1, 1)),
+                affected: vec![2],
+            }],
+            &snap,
+            my_id,
+        );
+        (
+            app.ui.transport_impacts.len(),
+            app.ui.app.hud_state.hud_notifications.len(),
+        )
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn hero_ability_cue_is_private_to_its_owner_and_affected_players() {
+        assert_eq!(cues_for(1), (1, 1), "the owner sees the ring and the notice");
+        assert_eq!(cues_for(2), (1, 1), "the player it hit sees the ring and the notice");
+        assert_eq!(cues_for(3), (0, 0), "an uninvolved player sees nothing");
+        assert_eq!(cues_for(0), (0, 0), "a spectator sees nothing");
     }
 }

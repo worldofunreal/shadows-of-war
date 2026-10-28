@@ -36,7 +36,6 @@ pub struct EmoteDefinition {
     pub menu_key: &'static str,
     pub bubble_key: &'static str,
     pub notice_key: &'static str,
-    #[serde(skip)]
     pub fallback: &'static str,
 }
 
@@ -286,7 +285,7 @@ mod tests {
         let current = crate::protocol::gameplay_build_identity("0.1.3");
         assert_eq!(
             current,
-            format!("0.1.3/turns-6/net-5/rules-{}", crate::SIMULATION_RULES_ID)
+            format!("0.1.3/turns-6/net-6/rules-{}", crate::SIMULATION_RULES_ID)
         );
         assert_ne!(current, "0.1.3");
         let mut engine = engine();

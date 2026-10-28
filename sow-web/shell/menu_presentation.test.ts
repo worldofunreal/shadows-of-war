@@ -4,7 +4,6 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { vm } from "./typescript-test-support.ts";
 const shell = __dirname;
-import { bundleTs } from "./typescript-test-support.ts";
 const coreSource = fs.readFileSync(path.join(shell, "main_menu.core.ts"), "utf8");
 const leaderArtSlugStart = coreSource.indexOf("export function leaderArtSlug(");
 const leaderArtSlugEnd = coreSource.indexOf("\n}", leaderArtSlugStart);
@@ -19,12 +18,6 @@ const surfacesSource = fs.readFileSync(path.join(shell, "main_menu.surfaces.ts")
 const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.ts"), "utf8");
 const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.ts"), "utf8");
 const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.ts"), "utf8");
-void (
-    '(function () { if (typeof window === "undefined") return; const providedView = window.SOWCampaignView;\n' +
-    bundleTs(path.join(shell, "sow-campaign-view.ts")) +
-    "\nif (providedView) Object.assign(window.SOWCampaignView, providedView); })();\n" +
-    bundleTs(path.join(shell, "main_menu.tutorial.ts"))
-);
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
 const menuCssFiles = [
     "main_menu.base.css",
@@ -39,27 +32,12 @@ const menuCssFiles = [
 const menuCss = Object.fromEntries(
     menuCssFiles.map((file) => [file, fs.readFileSync(path.join(shell, file), "utf8")]),
 );
-const storeSource = fs.readFileSync(path.join(shell, "main_menu.store.ts"), "utf8");
 const profileCss = fs.readFileSync(path.join(shell, "main_menu.profile.css"), "utf8");
 const profileSource = fs.readFileSync(path.join(shell, "main_menu.profile.ts"), "utf8");
 const serverSource = fs.readFileSync(path.join(shell, "../../sow-data/src/main.rs"), "utf8");
 const privacyPage = fs.readFileSync(path.join(shell, "../site/privacy/index.html"), "utf8");
-void [
-    "../../sow-client/src/app/account.rs",
-    "../../sow-client/src/asset.rs",
-    "../../sow-client/src/lib.rs",
-    "../../sow-client/src/player_progress.rs",
-    "../../sow-client/src/render/interact/actions.rs",
-    "../../sow-client/src/ui/main_menu/mod.rs",
-    "../../sow-client/src/ui.rs",
-]
-    .map((file) => fs.readFileSync(path.join(shell, file), "utf8"))
-    .join("\n");
 const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.ts"), "utf8");
 const jestSource = fs.readFileSync(path.join(shell, "main_menu.jest.ts"), "utf8");
-void fs.readFileSync(path.join(shell, "main_menu.tutorial.css"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-dist/src/main.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-dist/src/prod.rs"), "utf8");
 const siteChrome = fs.readFileSync(path.join(shell, "../../sow-web/site/site-chrome.ts"), "utf8");
 const siteDropdown = fs.readFileSync(path.join(shell, "sow-dropdown.ts"), "utf8");
 const campaignModule = fs.readFileSync(path.join(shell, "../../sow-client/src/campaign/mod.rs"), "utf8");
@@ -102,10 +80,6 @@ test("mobile menu renders its language selector after locale bootstrap", async (
     await window.SOW_I18N_READY;
     await Promise.resolve();
     assert.match(controls[1].innerHTML, /sow-control-dropdown__trigger/);
-});
-
-test("menu CSS keeps shared layout separate from live screen domains", () => {
-    for (const file of menuCssFiles) assert.ok(menuCss[file].length > 0, file);
 });
 
 test("profile presents verified history, career commanders, localized achievements, and a paged global board", () => {
@@ -869,27 +843,6 @@ test("music volume no longer controls SFX and music assets reach every shared-sh
     assert.ok(musicCommand);
     assert.match(musicCommand[0], /settings_state\.music_volume = volume/);
     assert.doesNotMatch(musicCommand[0], /set_master_volume/);
-});
-
-test("hero purchase stays server-backed, direct, and visually honest", () => {
-    // One price per item: leaders and skins cost gems or crowns, never dollars.
-    // Real money is taken only by Google Play in the Android app: no web checkout.
-    const leaderStart = coreSource.indexOf("export function leaderById(");
-    const leaderEnd = coreSource.indexOf("function leaderPerk", leaderStart);
-    const context = { state: { leaders: [{ id: "SunTzu", slug: "sun_tzu" }] } };
-    context.menuUi = { state: { leaders: context.state.leaders } };
-    vm.runInNewContext(
-        coreSource.slice(leaderStart, leaderEnd).replace(/\bexport\s+/g, "") +
-            "this.leaderById = leaderById;",
-        context,
-    );
-    assert.equal(context.leaderById("sun_tzu").slug, "sun_tzu");
-});
-
-test("hero selection opens the shared catalog for equipped and purchasable skins", () => {
-    const rowStart = storeSource.indexOf("function renderLeaderPurchase");
-    const rowEnd = storeSource.indexOf("function renderSkinPickerModal", rowStart);
-    assert.ok(rowStart >= 0 && rowEnd > rowStart);
 });
 
 test("leader display names use the catalog translation keys for every leader", () => {

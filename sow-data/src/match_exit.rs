@@ -955,14 +955,27 @@ pub(super) async fn handle_result(
     let mut changes = state.match_results.subscribe();
     let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
     let result = async {
-        state.db.registered_human_participant(&request.match_id, &account_id)?;
+        let start = state.db.registered_human_participant(&request.match_id, &account_id)?;
+        let ranked = start.metadata.get("kind").and_then(serde_json::Value::as_str)
+            == Some("Ranked1v1");
         loop {
             let account = state.db.account_with_events(&account_id, &[&request.match_id]).await?;
             if let Some(phase) = terminal(account.profile.reward_receipts.get(&request.match_id)) {
+                let ranked_result = if ranked {
+                    state.db.ranked_match_result(&account_id, &request.match_id)?
+                } else {
+                    None
+                };
+                if ranked && phase == MatchExitState::Confirmed && ranked_result.is_none() {
+                    // A participant can collect an early exit receipt while the duel is still
+                    // running. Ranked return waits for the verified result of both players.
+                } else {
                 return Ok::<_, Box<dyn std::error::Error + Send + Sync>>((StatusCode::OK, serde_json::json!({
                     "account_id":account.id, "match_id":request.match_id, "state":phase,
                     "display_name":account.display_name, "profile":account.profile,
+                    "ranked_result":ranked_result,
                 })));
+                }
             }
             if !request.closure_known {
                 if let Some(work) = state.db.match_work(&request.match_id)? {

@@ -306,6 +306,8 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
                 ip: "127.0.0.1".to_string(),
                 session_id: None,
                 is_internal_bot: true,
+                ranked_rating: None,
+                ranked_search_started_at: None,
             });
             g.ready_players.insert(player_id);
             log::debug!(

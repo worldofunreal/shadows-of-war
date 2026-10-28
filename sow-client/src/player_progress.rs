@@ -90,13 +90,10 @@ where
     D: serde::Deserializer<'de>,
 {
     let value = Option::<String>::deserialize(deserializer)?;
-    value
+    // Saved profiles can outlive heroes removed from the current catalog.
+    Ok(value
         .as_deref()
-        .map(|value| {
-            sow_data::commerce::leader_from_id(value)
-                .ok_or_else(|| serde::de::Error::custom("unknown leader"))
-        })
-        .transpose()
+        .and_then(sow_data::commerce::leader_from_id))
 }
 
 #[derive(Clone, Debug)]
@@ -111,6 +108,7 @@ pub enum DbEvent {
         progress: Option<PlayerProgress>,
         state: sow_data::profile::MatchExitState,
         closure_recorded: bool,
+        ranked_result: Option<sow_data::profile::RankedResultPresentation>,
     },
     MatchResultFailed {
         account_id: String,

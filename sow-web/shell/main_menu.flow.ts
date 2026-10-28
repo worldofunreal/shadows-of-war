@@ -66,6 +66,8 @@ function create() {
             phase = "waiting";
         } else if (presentation.running || (presentation.receipts || []).length) {
             phase = "rewards";
+        } else if (context && context.ranked_result && !context.ranked_result_presented) {
+            phase = "ranked";
         } else if (requestedScreen && !destinationDelivered) {
             phase = "destination";
         } else {
@@ -82,6 +84,9 @@ function create() {
         },
         canPresent: function () {
             return phase === "rewards";
+        },
+        canPresentRanked: function () {
+            return phase === "ranked";
         },
         takeDestination: function () {
             if (phase !== "destination" || destinationDelivered) return null;

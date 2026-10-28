@@ -64,6 +64,7 @@ async fn join_with_match_setup(
             random_leader: true,
             host_config: target.is_none().then(|| Box::new(config)),
             password: None,
+            ranked_1v1: false,
         }),
         auth: AuthProof {
             provider: "anonymous".into(),

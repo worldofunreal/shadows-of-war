@@ -16,8 +16,10 @@ pub fn player_territory_rgb(
     player_type: crate::player::PlayerType,
     team: Option<crate::protocol::Team>,
     color: [f32; 3],
+    is_campaign_faction: bool,
 ) -> [f32; 3] {
-    if player_type == PlayerType::Bot {
+    // Campaign factions use Bot AI but keep their authored/diplomatic colors.
+    if player_type == PlayerType::Bot && !is_campaign_faction {
         return [0.5; 3];
     }
     const TEAM_TINT: f32 = 0.08;
@@ -57,7 +59,7 @@ pub fn best_available_nation_palette_color(
                 && matches!(player.player_type, PlayerType::Human | PlayerType::Nation)
         })
         .map(|player| {
-            player_territory_rgb(player.player_type, player.team, player.color)
+            player_territory_rgb(player.player_type, player.team, player.color, false)
         })
         .map(oklab2)
         .collect();
@@ -71,6 +73,7 @@ pub fn best_available_nation_palette_color(
                 PlayerType::Nation,
                 team,
                 color.rgb,
+                false,
             ));
             let gap = existing
                 .iter()
@@ -138,6 +141,50 @@ pub fn campaign_relation_rgb(relation: crate::protocol::CampaignRelation) -> Opt
         crate::protocol::CampaignRelation::Neutral => None,
         crate::protocol::CampaignRelation::Allied => Some([0.2, 0.5, 1.0]),
         crate::protocol::CampaignRelation::Enemy => Some([1.0, 0.2, 0.2]),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{campaign_relation_rgb, player_territory_rgb, team_territory_rgb};
+    use crate::player::PlayerType;
+    use crate::protocol::{CampaignRelation, Team};
+
+    #[test]
+    fn non_campaign_bots_stay_gray_even_with_a_team() {
+        assert_eq!(
+            player_territory_rgb(PlayerType::Bot, Some(Team::Red), [0.8, 0.1, 0.3], false),
+            [0.5; 3]
+        );
+    }
+
+    #[test]
+    fn campaign_factions_keep_authored_and_relation_colors() {
+        let authored = [0.25, 0.45, 0.65];
+        for (relation, expected) in [
+            (CampaignRelation::Neutral, authored),
+            (CampaignRelation::Allied, [0.2, 0.5, 1.0]),
+            (CampaignRelation::Enemy, [1.0, 0.2, 0.2]),
+        ] {
+            let snapshot_color = campaign_relation_rgb(relation).unwrap_or(authored);
+            assert_eq!(snapshot_color, expected);
+            assert_eq!(
+                player_territory_rgb(PlayerType::Bot, None, snapshot_color, true),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn campaign_factions_keep_the_existing_team_tint() {
+        let color = [0.25, 0.45, 0.65];
+        let tint = team_territory_rgb(Team::Red);
+        let expected: [f32; 3] =
+            std::array::from_fn(|i| color[i] * 0.92 + tint[i] * 0.08);
+        assert_eq!(
+            player_territory_rgb(PlayerType::Bot, Some(Team::Red), color, true),
+            expected
+        );
     }
 }
 

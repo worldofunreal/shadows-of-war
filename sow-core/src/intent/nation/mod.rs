@@ -104,7 +104,12 @@ impl SowEngine {
                 continue;
             }
             let bot_id = p.id;
-            let profile = ai_profile_for(tier, self.state.config.bot_difficulty);
+            let ranked_ghost = self.state.config.ranked_1v1 && tier == profile::AiTier::Ghost;
+            let profile = if ranked_ghost {
+                profile::ranked_ghost_profile(p.iq)
+            } else {
+                ai_profile_for(tier, self.state.config.bot_difficulty)
+            };
 
             // Unified metronomic scheduler for Nations, Tribes, AND ghost
             // (is_ai_controlled) Humans. Tier is resolved once by
@@ -125,7 +130,9 @@ impl SowEngine {
             }
             let reacts_to_attack = p.iq >= 100 && is_under_attack;
 
-            let interval_base = if reacts_to_attack {
+            let interval_base = if ranked_ghost {
+                5 + u64::from(180 - p.iq.clamp(60, 180)) / 3
+            } else if reacts_to_attack {
                 if p.iq >= 130 {
                     5 // Top/smart: react in 0.5s - 1.0s (5 - 10 ticks)
                 } else {

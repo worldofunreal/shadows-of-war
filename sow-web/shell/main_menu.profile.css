@@ -286,6 +286,67 @@
   background: linear-gradient(110deg, rgba(22, 27, 35, 0.96), rgba(13, 17, 23, 0.92));
 }
 
+#sow-menu[data-screen="profile"] .sow-profile__ranked {
+  display: flex;
+  min-height: 96px;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1px solid rgba(217, 181, 110, 0.38);
+  background: linear-gradient(110deg, rgba(34, 31, 25, 0.95), rgba(13, 17, 23, 0.94));
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__ranked-emblem {
+  display: grid;
+  width: 56px;
+  flex: 0 0 auto;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 1px solid #d9b56e;
+  border-radius: 18px 18px 24px 24px;
+  background: radial-gradient(circle at 50% 25%, #6e5836, #17130d 72%);
+  color: #f3d58e;
+  font-family: var(--font-display, serif);
+  font-size: 28px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__ranked > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__ranked-kicker {
+  color: #d8bd85;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__ranked > div strong {
+  color: #fff4dc;
+  font-size: 17px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__ranked small {
+  color: var(--sow-muted);
+  font-size: 11px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__ranked > b {
+  display: grid;
+  margin-inline-start: auto;
+  color: #fff4dc;
+  font-size: 24px;
+  text-align: end;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__ranked > b small {
+  margin-top: 3px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
 #sow-menu[data-screen="profile"] .sow-profile__stats > div {
   display: flex;
   min-width: 0;

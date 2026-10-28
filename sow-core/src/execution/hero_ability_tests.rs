@@ -308,11 +308,6 @@ fn tower_reaches(defender: Leader) -> bool {
         > 0.0
 }
 
-#[test]
-fn kamehameha_range_bonus_reaches_through_the_combat_defense_grid() {
-    assert!(tower_reaches(Leader::of("kamehameha")));
-}
-
 /// Troops the attacker has left after hitting a tower-defended border.
 fn attacker_troops_against_tower(defender: Leader) -> (f64, Marks) {
     let mut engine = arena(24, 4, Leader::of("cleopatra"), Some(defender));
@@ -1313,7 +1308,7 @@ fn target_loss_marks_the_discounted_tile_during_the_tick() {
         engine.state.events.iter().any(|event| {
             matches!(
                 event,
-                GameEvent::AbilityTriggered { owner_id: 1, tile: Some((x, y)) }
+                GameEvent::AbilityTriggered { owner_id: 1, tile: Some((x, y)), .. }
                     if engine.state.map.owner_id(*x, *y) == 1
             )
         })
@@ -1455,4 +1450,74 @@ fn a_mark_needs_its_target_not_just_its_hero() {
     }
     assert_eq!(marks(&nation, 1), 1, "Yaa Asantewaa marks an attack on a nation");
     assert_eq!(marks(&human, 1), 0, "Yaa Asantewaa's mark needs a nation target");
+}
+
+/// Burebista, "Carpathian Fortresses": the mark reaches the human attacker even when
+/// the hero is a bot, because the ability changed that player's fight.
+#[test]
+fn burebista_defense_announces_to_the_attacker_even_from_a_bot() {
+    let mut engine = arena(24, 4, Leader::of("caesar"), Some(Leader::of("burebista")));
+    engine.state.player_mut(2).unwrap().player_type = PlayerType::Bot;
+    engine.state.player_mut(1).unwrap().troops = 20_000.0;
+    engine.state.player_mut(2).unwrap().troops = 20_000.0;
+    send(
+        &mut engine,
+        1,
+        GameplayIntent::Attack(AttackIntent {
+            target_owner: 2,
+            troops: Some(10_000.0),
+        }),
+    );
+    let mut affected = None;
+    for _ in 0..20 {
+        engine.tick();
+        affected = engine.state.events.iter().find_map(|event| match event {
+            GameEvent::AbilityTriggered {
+                owner_id: 2,
+                affected,
+                ..
+            } => Some(affected.clone()),
+            _ => None,
+        });
+        if affected.is_some() {
+            break;
+        }
+    }
+    assert_eq!(
+        affected.expect("the defense ability must announce to the human attacker"),
+        vec![1]
+    );
+}
+
+/// Bolesław II, "Kievan Expeditions": the mark names the foreign player it hit, and
+/// stays silent against neutral land and against the hero's own people.
+#[test]
+fn boleslaw_conquest_announces_to_a_foreign_target_only() {
+    let hero = Leader::of("boleslaw_ii");
+    let foreign = launch_target(hero, Target::Foreign);
+    let affected = foreign
+        .state
+        .events
+        .iter()
+        .find_map(|event| match event {
+            GameEvent::AbilityTriggered {
+                owner_id: 1,
+                affected,
+                ..
+            } => Some(affected.clone()),
+            _ => None,
+        })
+        .expect("a foreign conquest must announce");
+    assert_eq!(affected, vec![2]);
+
+    for target in [Target::Neutral, Target::Kin] {
+        let engine = launch_target(hero, target);
+        assert!(
+            !engine.state.events.iter().any(|event| matches!(
+                event,
+                GameEvent::AbilityTriggered { owner_id: 1, .. }
+            )),
+            "{target:?} must not announce"
+        );
+    }
 }

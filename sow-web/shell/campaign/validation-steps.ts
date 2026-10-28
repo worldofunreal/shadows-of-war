@@ -14,7 +14,6 @@ export function validateSteps(context: CampaignValidationContext) {
         factions,
         rosterFactions,
         speakers,
-        errors,
         warnings,
         issue,
         knownFields,

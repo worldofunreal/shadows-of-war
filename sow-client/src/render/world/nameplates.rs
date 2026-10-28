@@ -115,6 +115,7 @@ pub(crate) struct NameplateSystem {
     emote_tick: Option<u64>,
     emote_tick_at: Option<Instant>,
     emote_paused: bool,
+    tutorial_active: bool,
     emote_texts: [String; 4],
     prepared_emotes: [sow_render::text::PreparedText; 4],
     emote_text_style_key: Option<u32>,
@@ -219,6 +220,7 @@ struct AvatarEmote {
     age_bias: f32,
     release_at: Option<Instant>,
     suppress_bubble: bool,
+    tutorial_boudica: bool,
 }
 
 impl AvatarEmote {
@@ -257,18 +259,27 @@ impl AvatarEmote {
     }
 
     fn expressions(self, age: f32, now: Instant) -> (AvatarExpression, AvatarExpression, f32) {
-        let expression = self.event.kind.definition().expression;
+        let idle = if self.tutorial_boudica {
+            AvatarExpression::Angry
+        } else {
+            AvatarExpression::Calm
+        };
+        let expression = if self.tutorial_boudica {
+            AvatarExpression::Calm
+        } else {
+            self.event.kind.definition().expression
+        };
         if let Some(released) = self.release_at {
             return (
                 self.previous,
-                AvatarExpression::Calm,
+                idle,
                 smoothstep(now.duration_since(released).as_secs_f32() / 0.15),
             );
         }
         if !self.event.pinned && age >= EMOTE_DURATION_SECS - 0.15 {
             return (
                 expression,
-                AvatarExpression::Calm,
+                idle,
                 smoothstep((age - (EMOTE_DURATION_SECS - 0.15)) / 0.15),
             );
         }
@@ -715,6 +726,7 @@ impl NameplateSystem {
                 continue;
             }
             let old = self.emote_visuals.get(&player.id).copied();
+            let tutorial_boudica = is_tutorial_boudica(player, self.tutorial_active);
             if let Some(event) = player.active_emote {
                 if old.is_some_and(|old| {
                     old.event.event_id == event.event_id
@@ -736,7 +748,14 @@ impl NameplateSystem {
                             if blend < 0.5 { from } else { to },
                         )
                     })
-                    .unwrap_or((EmoteMotion::default(), AvatarExpression::Calm));
+                    .unwrap_or((
+                        EmoteMotion::default(),
+                        if tutorial_boudica {
+                            AvatarExpression::Angry
+                        } else {
+                            AvatarExpression::Calm
+                        },
+                    ));
                 self.emote_visuals.insert(
                     player.id,
                     AvatarEmote {
@@ -752,6 +771,7 @@ impl NameplateSystem {
                         },
                         release_at: None,
                         suppress_bubble: event.pinned && old.is_none() && raw_age > tick_secs * 2.0,
+                        tutorial_boudica,
                     },
                 );
             } else if let Some(mut old) = old {
@@ -881,6 +901,7 @@ pub(super) fn render_nameplates(
     my_id: u16,
     leaderboard_top_three: [Option<u16>; 3],
     tutorial_target_player: Option<u16>,
+    tutorial_active: bool,
     reduced_motion: bool,
 ) {
     let sf = if sf.is_finite() { sf.max(0.01) } else { 1.0 };
@@ -892,6 +913,7 @@ pub(super) fn render_nameplates(
         system.badge_animations.clear();
     }
     system.emote_paused = sim.paused;
+    system.tutorial_active = tutorial_active;
     system.observe_emotes(
         snapshot,
         (sim.config.tick_rate_ms / 1000.0).max(0.001),
@@ -1126,6 +1148,7 @@ pub(super) fn render_nameplates(
             sf,
             now,
             reduced_motion,
+            tutorial_active,
         );
         let tutorial_hit_bounds = (tutorial_target_player == Some(player.id)).then(|| {
             let [half_width, half_height] = layout_bounds.extents_about(center);
@@ -1293,9 +1316,22 @@ fn sample_nameplates(
         system.land_cache = NameplateLandCache::default();
         return;
     };
-    let new_player_needs_landmass = snapshot.players.iter().any(|player| {
-        player.alive && player.tile_count > 0 && !system.land_cache.has_landmass(player.id)
-    });
+    // Deployment spawns owners one by one; anchor each fresh spawn locally instead of forcing a
+    // full-map rebuild per spawn. Only owners the local flood cannot cover force the rebuild.
+    let mut new_player_needs_landmass = false;
+    for player in &snapshot.players {
+        if !player.alive || player.tile_count == 0 || system.land_cache.has_landmass(player.id) {
+            continue;
+        }
+        let anchored = system.land_cache.anchor_fresh_owner(
+            &engine.state.map,
+            player.id,
+            player.centroid_x.round() as u32,
+            player.centroid_y.round() as u32,
+            player.tile_count,
+        );
+        new_player_needs_landmass |= !anchored;
+    }
     let needs_rebuild = system
         .land_cache
         .needs_rebuild(&engine.state.map, snapshot.tick, new_player_needs_landmass);
@@ -1751,6 +1787,7 @@ mod emote_tests {
             age_bias: 0.0,
             release_at: None,
             suppress_bubble: false,
+            tutorial_boudica: false,
         };
         let active_motion = active.motion(0.18, now, true);
         assert_eq!(active_motion.offset, [0.0; 2]);
@@ -2069,6 +2106,7 @@ fn prepare_full_nameplate(
     sf: f32,
     now: Instant,
     reduced_motion: bool,
+    tutorial_active: bool,
 ) -> FullNameplate {
     let layout = layout.scaled_about(center, fit_scale);
     let font_scale = font_size_scale(dev.font_size_scale);
@@ -2084,8 +2122,9 @@ fn prepare_full_nameplate(
         fit_scale,
     );
     let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]).scaled(fit_scale);
-    let avatar = (layout.avatar_radius() > 0.0)
-        .then(|| prepare_avatar(text, player, campaign_avatar_slots, layout, sf));
+    let avatar = (layout.avatar_radius() > 0.0).then(|| {
+        prepare_avatar(text, player, campaign_avatar_slots, layout, sf, tutorial_active)
+    });
     let (badges, badge_count) = prepare_badges(layout, sf, badge_animations, now, reduced_motion);
     let name = dev.vfx_nameplate_names.then_some(TextPlan {
         position: {
@@ -2203,18 +2242,28 @@ fn resolve_avatar_content(
     }
 }
 
+fn is_tutorial_boudica(player: &PlayerSnapshot, tutorial_active: bool) -> bool {
+    tutorial_active
+        && (player.campaign_avatar.as_deref() == Some("boudica") || player.leader.id() == "boudica")
+}
+
 fn prepare_avatar(
     text: &TextRenderer,
     player: &PlayerSnapshot,
     campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     layout: NameplateLayout,
     sf: f32,
+    tutorial_active: bool,
 ) -> AvatarPlan {
     let content = resolve_avatar_content(
         text,
         sow_core::player::avatar_identity_ref(player),
         campaign_avatar_slots,
-        AvatarExpression::Calm,
+        if is_tutorial_boudica(player, tutorial_active) {
+            AvatarExpression::Angry
+        } else {
+            AvatarExpression::Calm
+        },
     );
     let center = [
         layout.avatar_center().0[0] * sf,
@@ -3214,6 +3263,7 @@ pub(crate) fn player_color(player: &PlayerSnapshot) -> [f32; 4] {
         player.player_type,
         player.team,
         player.color,
+        player.is_campaign_faction,
     );
     [rgb[0], rgb[1], rgb[2], 1.0]
 }

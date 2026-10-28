@@ -35,6 +35,9 @@ pub struct PlayerConnection {
     pub session_id: Option<u64>,
     /// Server-side internal bot filler: no socket and no relay ticket behind it.
     pub is_internal_bot: bool,
+    /// Ranked state needed to resume a search if an opponent leaves during preparation.
+    pub ranked_rating: Option<f64>,
+    pub ranked_search_started_at: Option<tokio::time::Instant>,
 }
 
 pub struct ServerLobby {
@@ -111,6 +114,109 @@ pub struct SpawnLobbyOpts {
     pub config_override: Option<GameConfig>,
     pub password: Option<String>,
     pub host_name: String,
+}
+
+/// Build the server-owned ranked configuration without consuming a public playlist.
+pub fn ranked_game_config(
+    catalog: &[sow_core::map_file::MapCatalogEntry],
+    rng: &mut impl rand::Rng,
+) -> Result<GameConfig, &'static str> {
+    const MAPS: [&str; 4] = ["oceania", "southeastasia", "northamerica", "world"];
+    let maps: Vec<_> = MAPS.iter().map(|key| catalog.iter().find(|entry| entry.key == *key))
+        .collect::<Option<Vec<_>>>().ok_or("ranked map pool is incomplete")?;
+    let map = maps[rng.gen_range(0..maps.len())];
+    let mut config = GameConfig {
+        ranked_1v1: true,
+        game_mode: "FFA".into(),
+        max_players: 2,
+        bot_count: map.num_land_tiles.div_ceil(600),
+        nation_count: 0,
+        map_name: map.key.clone(),
+        map_width: map.width,
+        map_height: map.height,
+        ..GameConfig::default()
+    };
+    normalize_map_roster(&mut config, Some(map));
+    config.clamp_bot_counts();
+    Ok(config)
+}
+
+pub struct RankedLobbyPlayer {
+    pub name: String,
+    pub clan_tag: String,
+    pub leader: sow_core::player::Leader,
+    pub skin_style: u8,
+    pub account_id: String,
+    pub tx: mpsc::Sender<Vec<u8>>,
+    pub ip: String,
+    pub session_id: Option<u64>,
+    pub is_bot: bool,
+    pub bot_iq: Option<u32>,
+    pub ranked_rating: Option<f64>,
+    pub ranked_search_started_at: Option<tokio::time::Instant>,
+}
+
+/// Construct the server-owned private ranked duel and move it straight to map loading.
+pub fn spawn_ranked_lobby(
+    games: &mut Vec<ServerLobby>,
+    id: u64,
+    participants: [RankedLobbyPlayer; 2],
+) -> Result<u64, &'static str> {
+    let mut rng = rand::thread_rng();
+    let config = ranked_game_config(crate::map_catalog::entries(), &mut rng)?;
+    let map_name = config.map_name.clone();
+    let mut lobby = ServerLobby {
+        id,
+        kind: LobbyKind::Ranked1v1,
+        is_private: true,
+        phase: LobbyPhase::Waiting,
+        countdown_secs: 0.0,
+        players: Vec::with_capacity(2),
+        ready_players: std::collections::HashSet::new(),
+        seed: 0,
+        config,
+        game_mode: "FFA".into(),
+        relay_port: None,
+        host_player_id: None,
+        password: None,
+        host_name: String::new(),
+        banned: std::collections::HashSet::new(),
+        bot_fill_target: None,
+        pending_bots: Vec::new(),
+    };
+    for (index, participant) in participants.into_iter().enumerate() {
+        if participant.is_bot {
+            let iq = participant.bot_iq.ok_or("ranked bot IQ missing")?;
+            if !(60..=180).contains(&iq) {
+                return Err("ranked bot IQ outside supported range");
+            }
+            lobby.config.ranked_bot_iq = Some(iq);
+        }
+        lobby.players.push(PlayerConnection {
+            name: participant.name,
+            clan_tag: participant.clan_tag,
+            player_id: index as u16 + 1,
+            tx: participant.tx,
+            download_progress: if participant.is_bot { 100 } else { 0 },
+            leader: participant.leader,
+            random_leader: false,
+            skin_style: participant.skin_style,
+            database_account_id: Some(participant.account_id),
+            team: None,
+            ip: participant.ip,
+            session_id: participant.session_id,
+            is_internal_bot: participant.is_bot,
+            ranked_rating: participant.ranked_rating,
+            ranked_search_started_at: participant.ranked_search_started_at,
+        });
+    }
+    start_match(&mut lobby);
+    if lobby.players.len() != 2 || !lobby.config.ranked_1v1 || lobby.config.nation_count != 0 {
+        return Err("ranked lobby configuration is invalid");
+    }
+    log::info!("[RANKED] created private 1v1 lobby {id} on {map_name}");
+    games.push(lobby);
+    Ok(id)
 }
 
 /// Only the settings exposed by the custom-lobby form cross this boundary.
@@ -324,11 +430,46 @@ fn primary_matchmaking_lobby_id(games: &[ServerLobby]) -> Option<u64> {
         .map(|g| g.id)
 }
 
+/// A ranked search uses a monotonic timestamp and a server-owned skill rating.
+#[derive(Clone, Debug)]
+pub struct RankedSearch {
+    pub account_id: String,
+    pub rating: f64,
+    pub entered_at: std::time::Instant,
+}
+
+/// Select the oldest search that has a compatible human opponent, then its
+/// closest opponent. Both search windows must permit the rating difference.
+pub fn ranked_human_pair(searches: &[RankedSearch], now: std::time::Instant) -> Option<(usize, usize)> {
+    let window = |search: &RankedSearch| {
+        let seconds = now.saturating_duration_since(search.entered_at).as_secs();
+        100.0 * (seconds + 1).min(3) as f64
+    };
+    let mut order: Vec<usize> = (0..searches.len()).collect();
+    order.sort_by_key(|&i| (searches[i].entered_at, i));
+    for &i in &order {
+        let a = &searches[i];
+        if !a.rating.is_finite() { continue; }
+        let candidate = order.iter().copied().filter(|&j| {
+            let b = &searches[j];
+            let difference = (a.rating - b.rating).abs();
+            i != j && a.account_id != b.account_id && b.rating.is_finite()
+                && difference <= window(a).min(window(b))
+        }).min_by(|&left, &right| {
+            (a.rating - searches[left].rating).abs().total_cmp(&(a.rating - searches[right].rating).abs())
+                .then_with(|| searches[left].entered_at.cmp(&searches[right].entered_at))
+                .then_with(|| left.cmp(&right))
+        });
+        if let Some(j) = candidate { return Some((i, j)); }
+    }
+    None
+}
+
 fn resolve_join_target(requested: Option<u64>, games: &[ServerLobby]) -> Option<u64> {
     if let Some(id) = requested {
         if games
             .iter()
-            .any(|g| g.id == id && g.joinable() && g.players.len() < g.config.max_players as usize)
+            .any(|g| g.id == id && g.kind != LobbyKind::Ranked1v1 && g.joinable() && g.players.len() < g.config.max_players as usize)
         {
             return Some(id);
         }
@@ -611,6 +752,8 @@ pub fn join_player(
         ip,
         session_id,
         is_internal_bot: false,
+        ranked_rating: None,
+        ranked_search_started_at: None,
     });
 
     if is_new_host {
@@ -1056,6 +1199,7 @@ pub fn build_lobby_broadcast(games: &[ServerLobby]) -> Vec<LobbyInfo> {
                 && match g.kind {
                     LobbyKind::Matchmaking => g.players.len() < g.config.max_players as usize,
                     LobbyKind::Custom => !g.is_private,
+                    LobbyKind::Ranked1v1 => false,
                 }
         })
         .map(lobby_to_info)
@@ -1066,6 +1210,52 @@ pub fn build_lobby_broadcast(games: &[ServerLobby]) -> Vec<LobbyInfo> {
 
 #[cfg(test)]
 mod name_tests {
+    #[test]
+    fn ranked_pair_uses_both_windows_and_oldest_compatible_search() {
+        use super::{ranked_human_pair, RankedSearch};
+        use std::time::{Duration, Instant};
+        let now = Instant::now();
+        let searches = vec![
+            RankedSearch { account_id: "a".into(), rating: 1000.0, entered_at: now - Duration::from_secs(2) },
+            RankedSearch { account_id: "b".into(), rating: 1150.0, entered_at: now },
+            RankedSearch { account_id: "c".into(), rating: 1090.0, entered_at: now },
+        ];
+        assert_eq!(ranked_human_pair(&searches, now), Some((0, 2)));
+        assert_eq!(ranked_human_pair(&searches[..2], now), None);
+        assert_eq!(ranked_human_pair(&searches[..2], now + Duration::from_secs(1)), Some((0, 1)));
+    }
+
+    #[test]
+    fn ranked_lobby_is_not_broadcast_or_joinable_by_id() {
+        let lobby = queue_lobby(42, LobbyKind::Ranked1v1, "FFA");
+        assert!(build_lobby_broadcast(std::slice::from_ref(&lobby)).is_empty());
+        assert_eq!(resolve_join_target(Some(42), &[lobby]), None);
+    }
+
+    #[test]
+    fn ranked_map_pool_keeps_four_private_duel_configs_separate_from_public_rotation() {
+        use super::ranked_game_config;
+        use rand::{SeedableRng, rngs::StdRng};
+        let expected = ["oceania", "southeastasia", "northamerica", "world"];
+        let maps_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/maps");
+        let catalog = crate::map_catalog::scan_maps_root(&maps_root);
+        let mut selected = HashSet::new();
+        for seed in 0..256 {
+            let mut rng = StdRng::seed_from_u64(seed);
+            let config = ranked_game_config(&catalog.entries, &mut rng).unwrap();
+            let map = catalog.entries
+                .iter()
+                .find(|entry| entry.key == config.map_name)
+                .unwrap();
+            assert!(expected.contains(&config.map_name.as_str()));
+            assert!(config.ranked_1v1);
+            assert_eq!(config.max_players, 2);
+            assert_eq!(config.nation_count, 0);
+            assert_eq!(config.bot_count, map.num_land_tiles.div_ceil(600));
+            selected.insert(config.map_name);
+        }
+        assert_eq!(selected, expected.into_iter().map(str::to_string).collect());
+    }
     use super::{
         JoinPlayerOpts, LobbyKind, LobbyPhase, PlayerConnection, ServerLobby, SpawnLobbyOpts,
         build_lobby_broadcast, ensure_queue_depth, join_player, kick_player, master_tick,
@@ -1589,6 +1779,8 @@ mod name_tests {
             ip: "127.0.0.1".to_string(),
             session_id: Some(player_id as u64),
             is_internal_bot: false,
+            ranked_rating: None,
+            ranked_search_started_at: None,
         }
     }
 

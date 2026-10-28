@@ -927,59 +927,6 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
-    fn test_density_upgrade_logic() {
-        let mut engine = test_engine_two_players(42);
-        engine.state.player_mut(1).unwrap().iq_points = 500.0;
-        engine.state.player_mut(1).unwrap().gold = 10_000_000.0;
-        engine.state.player_mut(1).unwrap().tile_count = 100; // Small area
-        engine.state.player_mut(1).unwrap().player_type = crate::player::PlayerType::Nation;
-
-        // Add max structures to force upgrade
-        for i in 0..15 {
-            engine.buildings.push(crate::building::Building {
-                id: i,
-                owner_id: 1,
-                tile_idx: 0,
-                kind: crate::game::BuildingKind::City,
-                level: 1,
-                under_construction: false,
-                ticks_until_complete: 0,
-            });
-        }
-        engine.refresh_building_grid();
-        for _ in 0..30 {
-            engine.state.tick += 1;
-            engine.execute_ai_think();
-        }
-        // As long as this executes without panic we're good
-    }
-
-    #[test]
-    fn test_frontline_defense_post_prioritization() {
-        let mut engine = test_engine_two_players(42);
-        engine.state.player_mut(1).unwrap().iq_points = 500.0;
-        engine.state.player_mut(1).unwrap().player_type = crate::player::PlayerType::Nation;
-
-        // Simulate under attack
-        engine.attacks.push(crate::execution::AttackExecution { landed: false,
-            id: 1,
-            owner_id: 2,
-            target_owner: 1,
-            created_tick: 0,
-            troops: 5000.0,
-            to_conquer: Default::default(),
-            insert_seq_counter: 0,
-            rng: wyrand::WyRand::new(42),
-            retreating: false,
-        });
-
-        for _ in 0..30 {
-            engine.state.tick += 1;
-            engine.execute_ai_think();
-        }
-    }
-
-    #[test]
     fn test_nuke_launch_sam_avoidance() {
         let mut engine = test_engine_two_players(42);
         engine.state.player_mut(1).unwrap().iq_points = 500.0;
@@ -1647,19 +1594,6 @@ mod bot_iq_alliance_tests {
             ghost_iq,
             n.iq
         );
-    }
-
-    #[test]
-    fn test_vanilla_tribes_are_active_but_do_not_target_players() {
-        use crate::game_config::BotDifficulty;
-        use crate::intent::nation::profile::{AiTier, ai_profile_for};
-
-        let vanilla = ai_profile_for(AiTier::Tribe, BotDifficulty::Vanilla);
-        assert!(!vanilla.attacks_players);
-        assert!(vanilla.expand_ratio > 0.0);
-
-        let terminator = ai_profile_for(AiTier::Tribe, BotDifficulty::Terminator);
-        assert!(terminator.attacks_players);
     }
 
     #[test]

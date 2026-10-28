@@ -4,35 +4,16 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { vm } from "./typescript-test-support.ts";
 const shell = __dirname;
-import { bundleTs, loadTypeScriptModule } from "./typescript-test-support.ts";
-void fs.readFileSync(path.join(shell, "main_menu.tutorial.ts"), "utf8");
-void (
-    '(function () { if (typeof window === "undefined") return; const providedView = window.SOWCampaignView;\n' +
-    bundleTs(path.join(shell, "sow-campaign-view.ts")) +
-    "\nif (providedView) Object.assign(window.SOWCampaignView, providedView); })();\n" +
-    bundleTs(path.join(shell, "main_menu.tutorial.ts"))
-);
+import { loadTypeScriptModule } from "./typescript-test-support.ts";
 const hud = fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
-void fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/ui/hud/state.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/sim/update.rs"), "utf8");
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/app/state.rs"), "utf8");
 const mapClick = fs.readFileSync(path.join(shell, "../../sow-client/src/input/map_click.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/render/frame/mod.rs"), "utf8");
 const mapShader = fs.readFileSync(path.join(shell, "../../sow-render/src/shaders/map.wgsl"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/editor.ts"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/logic.html"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-render/src/text/types.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "index.html.template"), "utf8");
 const windowInput = fs.readFileSync(path.join(shell, "../../sow-client/src/input/window.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/loader/match_start.rs"), "utf8");
-void fs.readFileSync(path.join(shell, "../../sow-client/src/render/interact/actions.rs"), "utf8");
 const cameraFrameUiSource = fs.readFileSync(
     path.join(shell, "../../sow-client/src/render/frame/ui.rs"),
     "utf8",
 );
-void fs.readFileSync(path.join(shell, "../../sow-client/src/render/world/overlays.rs"), "utf8");
 
 // Loads the command-ring helpers (ringSlots … ringActivate) with stubbed HUD dependencies.
 function loadRing(overrides = {}) {
@@ -381,7 +362,6 @@ test("only the confirmed center attack can break an alliance", () => {
     assert.match(allianceIntent, /State::Pending \| State::Active => None/);
 
     const attackStart = mapClick.indexOf("    fn attack_from_tile(");
-    void mapClick.indexOf("    pub(crate) fn launch_fleet_from_tile", attackStart);
     const confirmStart = webMenu.indexOf("WebMenuCommand::ConfirmBetrayal =>");
     const cancelStart = webMenu.indexOf("WebMenuCommand::CancelBetrayal =>", confirmStart);
     const confirm = webMenu.slice(confirmStart, cancelStart);
@@ -473,7 +453,6 @@ test("mobile hover is Rust-owned and the HUD only presents its state", () => {
     // The only pointer tracking in the HUD is the command ring's own slot selection.
     const pointerMoves = [...hud.matchAll(/addEventListener\(\s*"pointermove"/g)].map((match) => match.index);
     assert.equal(pointerMoves.length, 1);
-    void hud.indexOf("function bindRingInput()");
 });
 
 test("ring center closes at the root and goes back inside submenus", () => {
@@ -593,7 +572,6 @@ test("tutorial hand uses the map radial action's exact icon anchor", () => {
 });
 
 test("fixed emotes share catalog definitions and sync translated bubbles once per runtime", () => {
-    void fs.readFileSync(path.join(shell, "../../sow-core/src/emote.rs"), "utf8");
     const kinds = ["greet", "help", "threat", "celebrate"];
     const commands = [];
     const context = {

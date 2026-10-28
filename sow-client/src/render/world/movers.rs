@@ -342,6 +342,7 @@ impl MoverScene {
                 player.player_type,
                 player.team,
                 player.color,
+                player.is_campaign_faction,
             );
             self.player_colors.insert(player.id, rgb);
         }
@@ -460,7 +461,7 @@ impl MoverScene {
         ];
 
         let trail_start = self.trail_points.len() as u32;
-        let traveled = fleet.path_cursor.saturating_sub(1);
+        let traveled = fleet.path_cursor.min(fleet.path.len()).saturating_sub(1);
         if traveled > 0 {
             let start = traveled.saturating_sub(TRAIL_CAP - 1);
             for &tile in &fleet.path[start..=traveled] {

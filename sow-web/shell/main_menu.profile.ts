@@ -39,6 +39,21 @@ export interface ProfileData {
     achievements?: ProfileAchievement[];
     leaders: ProfileLeader[];
     recent_matches: ProfileMatch[];
+    ratings?: ProfileRating[];
+}
+
+export interface ProfileRating {
+    season_id: number;
+    season_name: string;
+    queue: string;
+    mode: string;
+    games_played: number;
+    wins: number;
+    placements_complete: boolean;
+    score: number;
+    tier: string;
+    division: string | null;
+    peak_score: number;
 }
 
 interface ProfileLeader {
@@ -72,6 +87,8 @@ export interface ProfileMatch {
     assists: number;
     verified: boolean;
     provisional: boolean;
+    rating_delta?: number | null;
+    ranked_bot_iq?: number | null;
 }
 
 interface ProfileMatchParticipant {
@@ -82,6 +99,10 @@ interface ProfileMatchParticipant {
     kills: number;
     deaths: number;
     assists: number;
+    is_bot: boolean;
+    rating_delta?: number | null;
+    rating_before?: number | null;
+    rating_after?: number | null;
 }
 
 export interface ProfileMatchDetail {
@@ -92,6 +113,7 @@ export interface ProfileMatchDetail {
     duration_seconds: number;
     verified: boolean;
     provisional: boolean;
+    ranked_bot_iq?: number | null;
     participants: ProfileMatchParticipant[];
 }
 
@@ -101,6 +123,18 @@ interface ProfileVictoryLeader {
     handle: string;
     level: number;
     matches_played: number;
+    wins: number;
+}
+
+interface ProfileRankedLeader {
+    rank: number;
+    account_id: string;
+    handle: string;
+    is_bot: boolean;
+    score: number;
+    tier: string;
+    division: string | null;
+    games_played: number;
     wins: number;
 }
 
@@ -131,6 +165,10 @@ let profileVictoryLeaderboardError = "";
 let profileVictoryLeaderboardRequest: Promise<void> | null = null;
 let profileVictoryLeaderboardCursor = 0;
 let profileVictoryLeaderboardHasMore = false;
+let profileRankedLeaderboard: ProfileRankedLeader[] | null = null;
+let profileRankedLeaderboardLoading = false;
+let profileRankedLeaderboardError = "";
+let profileRankedLeaderboardRequest: Promise<void> | null = null;
 
 export function profileApi(path: string) {
     const base = String(window.SOW_DATABASE_URL || "/api").replace(/\/$/, "");
@@ -187,6 +225,7 @@ function profileSeedFromState(id: string): ProfileData | null {
         preferred_leader: menuUi.state.selected_leader || null,
         leaders: [],
         recent_matches: [],
+        ratings: [],
     };
 }
 
@@ -232,6 +271,20 @@ function applyProfileSnapshot(id: string, data: ProfileData) {
     entry.historyLoaded = true;
     entry.historyHasMore = profileStat(data.matches_played) > recent.length;
     entry.historyError = "";
+    if (menuUi.profileOwnId === id) {
+        menuUi.rankedRating =
+            (data.ratings || []).find(function (rating) {
+                return rating.queue === "Ranked1v1" && rating.mode === "FFA";
+            }) || null;
+        const rankLabel = root.querySelector<HTMLElement>("[data-ranked-current]");
+        if (rankLabel) {
+            const rating = menuUi.rankedRating;
+            rankLabel.textContent =
+                rating && rating.placements_complete
+                    ? rating.tier + (rating.division ? " " + rating.division : "")
+                    : SOW_t("profile.unranked");
+        }
+    }
     if (menuUi.profileAccountId === id) activateProfileEntry(id);
 }
 
@@ -360,6 +413,31 @@ export function loadVictoryLeaderboard(append?: boolean) {
         });
 }
 
+export function loadRankedLeaderboard() {
+    if (profileRankedLeaderboardRequest || profileRankedLeaderboard !== null) return;
+    profileRankedLeaderboardLoading = true;
+    profileRankedLeaderboardError = "";
+    profileRankedLeaderboardRequest = fetch(
+        profileApi("/seasons/1/leaderboard?queue=Ranked1v1&mode=FFA&limit=100"),
+        { headers: { Accept: "application/json" } },
+    )
+        .then(function (response) {
+            if (!response.ok) throw new Error("ranked leaderboard failed");
+            return response.json();
+        })
+        .then(function (data: ProfilePage<ProfileRankedLeader>) {
+            profileRankedLeaderboard = Array.isArray(data.items) ? data.items : [];
+        })
+        .catch(function () {
+            profileRankedLeaderboardError = SOW_t("profile.leaderboard_unavailable");
+        })
+        .finally(function () {
+            profileRankedLeaderboardRequest = null;
+            profileRankedLeaderboardLoading = false;
+            if (menuUi.profileOpen) syncProfileDom();
+        });
+}
+
 export function invalidateProfileCache(id: string | null) {
     const entry = profileCacheEntry(id);
     if (!entry) return;
@@ -387,6 +465,7 @@ export function syncProfilePreload(nextState: MenuState) {
     }
     if (previousId && previousId !== nextId) invalidateProfileCache(previousId);
     menuUi.profileOwnId = nextId;
+    if (previousId !== nextId) menuUi.rankedRating = null;
     menuUi.profileLastPhase = nextState.phase;
     if (!nextId) return;
     const entry = cacheProfileSeed(nextId, profileSeedFromState(nextId));
@@ -538,6 +617,9 @@ function profileMatchRow(match: ProfileMatch) {
         esc(map) +
         " · " +
         esc(match.queue || SOW_t("profile.matchmaking_queue")) +
+        (match.rating_delta == null
+            ? ""
+            : " · " + (match.rating_delta > 0 ? "+" : "") + esc(match.rating_delta) + " MMR") +
         "</small></span>" +
         "<span class='sow-profile__match-kda'><strong>" +
         esc(leader ? leaderDisplayName(leader) : "—") +
@@ -678,6 +760,32 @@ function profileContentMarkup(data: ProfileData | null) {
     const complete = profileDataComplete();
     let content = "";
     if (data && menuUi.profileTab === "overview") {
+        const ranked = (data.ratings || []).find(function (rating) {
+            return rating.queue === "Ranked1v1" && rating.mode === "FFA";
+        });
+        const rankedPanel = ranked
+            ? "<section class='sow-profile__ranked' aria-label='" +
+              esc(SOW_t("profile.ranked_1v1")) +
+              "'><span class='sow-profile__ranked-emblem' aria-hidden='true'>" +
+              esc(ranked.tier.slice(0, 1)) +
+              "</span><div><span class='sow-profile__ranked-kicker'>" +
+              esc(SOW_t("profile.ranked_1v1")) +
+              "</span><strong>" +
+              esc(
+                  ranked.placements_complete
+                      ? ranked.tier + (ranked.division ? " " + ranked.division : "")
+                      : SOW_t("profile.unranked"),
+              ) +
+              "</strong><small>" +
+              esc(
+                  ranked.placements_complete
+                      ? SOW_t("profile.ranked_record", { wins: ranked.wins, games: ranked.games_played })
+                      : SOW_t("profile.ranked_placements", { played: ranked.games_played }),
+              ) +
+              "</small></div><b>" +
+              esc(ranked.score) +
+              "<small>MMR</small></b></section>"
+            : "";
         const recent = complete
             ? menuUi.profileHistory.slice(0, 10).map(profileMatchRow).join("") ||
               "<p class='sow-profile__empty'>" + esc(SOW_t("profile.no_completed_matches")) + "</p>"
@@ -685,7 +793,9 @@ function profileContentMarkup(data: ProfileData | null) {
               esc(profileSnapshotError() || SOW_t("profile.loading_profile")) +
               "</p>";
         content =
-            "<div class='sow-profile__overview'><div class='sow-profile__stats'>" +
+            "<div class='sow-profile__overview'>" +
+            rankedPanel +
+            "<div class='sow-profile__stats'>" +
             "<div><strong>" +
             esc(data.matches_played) +
             "</strong><span>" +
@@ -779,6 +889,29 @@ function profileContentMarkup(data: ProfileData | null) {
             profileAchievementsMarkup(data, complete) +
             "</section>";
     } else if (menuUi.profileTab === "victories") {
+        const rankedRows = profileRankedLeaderboard === null
+            ? "<p class='sow-profile__empty'>" +
+              esc(profileRankedLeaderboardError || SOW_t("profile.leaderboard_loading")) +
+              "</p>"
+            : profileRankedLeaderboard.map(function (entry) {
+                  return (
+                      "<article class='sow-profile__victory-row sow-profile__ranked-row'><b>#" +
+                      esc(entry.rank) +
+                      "</b><div><strong>" +
+                      esc(entry.handle || entry.account_id) +
+                      "</strong><span>" +
+                      (entry.is_bot ? "<i>" + esc(SOW_t("profile.bot")) + "</i> · " : "") +
+                      esc(entry.tier + (entry.division ? " " + entry.division : "")) +
+                      " · " +
+                      esc(entry.games_played) +
+                      " " +
+                      esc(SOW_t("profile.matches")) +
+                      "</span></div><strong>" +
+                      esc(entry.score) +
+                      " MMR</strong></article>"
+                  );
+              }).join("") ||
+              "<p class='sow-profile__empty'>" + esc(SOW_t("profile.no_ranked_leaders")) + "</p>";
         const victoryRows =
             profileVictoryLeaderboard === null
                 ? "<p class='sow-profile__empty'>" +
@@ -821,6 +954,11 @@ function profileContentMarkup(data: ProfileData | null) {
                   "</button>"
                 : "";
         content =
+            "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
+            esc(SOW_t("profile.ranked_leaderboard")) +
+            "</h2><span class='sow-profile__section-note'>Ranked 1v1</span></div><div class='sow-profile__victory-list'>" +
+            rankedRows +
+            "</div></section>" +
             "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
             esc(SOW_t("profile.leaderboards")) +
             "</h2><span class='sow-profile__section-note'>" +
@@ -993,6 +1131,9 @@ export function renderProfileDetail() {
         esc(formatMapName(detail)) +
         " · " +
         esc(detail.queue || SOW_t("profile.matchmaking_queue")) +
+        (detail.ranked_bot_iq == null
+            ? ""
+            : " · " + esc(SOW_t("profile.ranked_bot_iq", { iq: detail.ranked_bot_iq }))) +
         " · " +
         esc(profileMatchDate(detail.completed_at)) +
         " · " +
@@ -1018,6 +1159,12 @@ export function renderProfileDetail() {
                     "</strong><span>" +
                     esc(participant.leader ? leaderDisplayName(leaderById(participant.leader)) : "—") +
                     (stats ? " · " + esc(stats) : "") +
+                    (participant.rating_delta == null
+                        ? ""
+                        : " · " +
+                          (participant.rating_delta > 0 ? "+" : "") +
+                          esc(participant.rating_delta) +
+                          " MMR") +
                     "</span><b>" +
                     esc(status) +
                     "</b></div>"

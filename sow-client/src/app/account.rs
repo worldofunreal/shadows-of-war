@@ -657,6 +657,8 @@ impl SowApp {
                 state: sow_data::profile::MatchExitState,
                 #[serde(default)]
                 closure_recorded: bool,
+                #[serde(default)]
+                ranked_result: Option<sow_data::profile::RankedResultPresentation>,
             }
             let status = result.as_ref().ok().map(|response| response.status);
             if let Ok(response) = result {
@@ -673,6 +675,7 @@ impl SowApp {
                                 progress: account.profile,
                                 state: account.state,
                                 closure_recorded: account.closure_recorded,
+                                ranked_result: account.ranked_result,
                             });
                             return;
                         }
