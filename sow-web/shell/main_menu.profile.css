@@ -163,6 +163,19 @@
   letter-spacing: 0.04em;
 }
 
+#sow-menu[data-screen="profile"] .sow-profile__bot-meta {
+  margin: 8px 0 0;
+  color: var(--sow-gold-bright);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__bot-meta span {
+  color: var(--sow-cyan);
+}
+
 #sow-menu[data-screen="profile"] .sow-profile__preferred {
   display: flex;
   align-items: center;
@@ -499,6 +512,22 @@
   color: var(--sow-muted);
 }
 
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row {
+  width: 100%;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row:hover,
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row:focus-visible {
+  background: rgba(255, 221, 153, 0.05);
+  outline: 1px solid var(--sow-profile-gold-line);
+  outline-offset: -1px;
+}
+
 #sow-menu[data-screen="profile"] .sow-profile__section {
   min-width: 0;
   padding: 24px 0;
@@ -808,6 +837,23 @@
 #sow-menu[data-screen="profile"] .sow-profile__detail-players b {
   color: var(--sow-gold-bright);
   font-size: 11px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__player-profile {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__player-profile:hover,
+#sow-menu[data-screen="profile"] .sow-profile__player-profile:focus-visible {
+  color: var(--sow-gold-bright);
+  text-decoration: underline;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__state {
@@ -2416,4 +2462,31 @@
   #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
     width: min(calc(100% - 48px), 1440px);
   }
+}
+
+#sow-menu[data-screen="profile"] .sow-ranked__overview { padding: clamp(18px, 3vw, 28px); border: 1px solid #7b653d; border-radius: 12px; background: radial-gradient(ellipse at 0 0, #65513533, transparent 60%), linear-gradient(135deg, #1b2029, #0d111a); }
+.sow-ranked__hero { display: flex; gap: 28px; align-items: center; }
+.sow-ranked__summary { display: grid; flex: 1; min-width: 0; gap: 12px; }
+.sow-ranked__summary h2 { margin: 0; color: #fff0d2; font-family: var(--font-display, serif); font-size: clamp(24px, 3vw, 34px); }
+.sow-ranked__summary .sow-ranked__placements { justify-content: start; margin: 0; }
+.sow-ranked__leagues { list-style: none; display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); padding: 20px 0 0; margin: 24px 0 0; border-top: 1px solid #424650; gap: 8px; }
+.sow-ranked__leagues li { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 8px 2px; border: 1px solid transparent; border-radius: 8px; color: #aab4c5; }
+.sow-ranked__leagues .sow-ranked__emblem { width: min(100%, 72px); }
+.sow-ranked__leagues strong { font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.sow-ranked__leagues small { color: #bac4d2; font-variant-numeric: tabular-nums; font-size: 11px; }
+.sow-ranked__leagues .is-current { color: #ffe1a1; background: #b98c3422; border-color: #bca069; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row { grid-template-columns: 32px 48px minmax(0,1fr) auto; min-height: 76px; transition: background 140ms, border-color 140ms; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row .sow-ranked__emblem { width: 48px; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row .sow-ranked__emblem b { font-size: 8px; padding: 1px 4px; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row.is-self { border-color: #d2ad67; background: #c1973c18; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row > strong { display: grid; text-align: end; gap: 3px; font-variant-numeric: tabular-nums; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row > strong small { font-weight: 400; color: #bac3d3; font-size: 10px; }
+@media (max-width: 600px) {
+  .sow-ranked__hero { flex-direction: column; gap: 14px; text-align: center; }
+  .sow-ranked__hero > .sow-ranked__emblem { width: 132px; }
+  .sow-ranked__summary { width: 100%; }
+  .sow-ranked__summary .sow-ranked__placements { justify-content: center; }
+  .sow-ranked__leagues { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px 4px; }
+  #sow-menu[data-screen="profile"] .sow-profile__ranked-row { grid-template-columns: 26px 40px minmax(0,1fr) auto; gap: 8px; padding: 12px 8px; }
+  #sow-menu[data-screen="profile"] .sow-profile__ranked-row .sow-ranked__emblem { width: 40px; }
 }

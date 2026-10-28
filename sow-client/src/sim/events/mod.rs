@@ -319,7 +319,27 @@ mod hero_ability_visibility_tests {
     use sow_core::player::{Leader, Player};
     use sow_core::water_components::WaterComponents;
 
+    #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
+        export function setup_hero_ability_visibility_test() {
+            globalThis.Window = class { static [Symbol.hasInstance](value) { return value === globalThis; } };
+            globalThis.window = globalThis;
+            globalThis.devicePixelRatio = 1;
+            globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+            globalThis.matchMedia = () => ({ matches: false });
+            Object.assign(globalThis, {
+                SOW_MAPS_URL: 'https://test.invalid/maps',
+                SOW_ASSETS_URL: 'https://test.invalid/assets',
+                SOW_DATABASE_URL: 'https://test.invalid/api',
+                SOW_WS_URL: 'wss://test.invalid/ws/',
+            });
+        }
+    "#)]
+    extern "C" {
+        fn setup_hero_ability_visibility_test();
+    }
+
     fn app_and_snapshot() -> (SowApp, SimSnapshot) {
+        setup_hero_ability_visibility_test();
         let config = GameConfig::default();
         let mut state = GameState::new(7, 4, 4, config.clone());
         state.phase = GamePhase::Playing;

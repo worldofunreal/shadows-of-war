@@ -218,8 +218,9 @@ const ART_ICONS: [(&str, &str, &str, u32); 14] = [
     ),
 ];
 /// Folders published byte-for-byte: (assets/art/<dir>, published folder).
-const ART_FOLDERS: [(&str, &str); 6] = [
+const ART_FOLDERS: [(&str, &str); 7] = [
     ("brand", "shell/brand"),
+    ("ranked", "shell/ranked"),
     ("icons/abilities", "gameplay/icons/abilities"),
     ("loader", "shell/loader"),
     ("skins", "gameplay/skins"),
@@ -879,6 +880,7 @@ fn optimize_poki_thumbnail(src: &Path, dst: &Path) -> Result<()> {
 
 fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
     copy_dir(&src.join("shell/loader"), &dst.join("shell/loader"))?;
+    copy_dir(&src.join("shell/ranked"), &dst.join("shell/ranked"))?;
     fs::create_dir_all(dst.join("shell/leaders"))?;
     for entry in fs::read_dir(src.join("shell/leaders"))? {
         let entry = entry?;
@@ -1579,9 +1581,9 @@ fn validate_quoted_catalog_keys(
     label: &str,
     catalog: &serde_json::Value,
 ) -> Result<()> {
-    const DOMAINS: [&str; 10] = [
+    const DOMAINS: [&str; 11] = [
         "menu", "auth", "lobbies", "heroes", "profile", "store", "hud", "endgame", "tutorial",
-        "site",
+        "site", "ranked",
     ];
     for domain in DOMAINS {
         for quote in ['"', '\''] {
@@ -2535,6 +2537,8 @@ fn validate_web_node(
 
 fn web_key_is_intentionally_english(key: &str) -> bool {
     key.starts_with("menu.language_")
+        // League names are shared terms in several published languages.
+        || key.starts_with("ranked.tier_")
         // Hero names are proper names in every language.
         || (key.starts_with("heroes.leader_")
             && (key.ends_with("_name")
@@ -3240,7 +3244,18 @@ fn verify_gameplay_unit_art(dir: &Path, package: &str) -> Result<()> {
     Ok(())
 }
 
+fn verify_ranked_art(dir: &Path, package: &str) -> Result<()> {
+    for emblem in ["unranked", "bronze", "silver", "gold", "platinum", "diamond", "master", "grandmaster", "ranked"] {
+        let file = format!("assets/shell/ranked/{emblem}.svg");
+        if !dir.join(&file).is_file() {
+            bail!("{package} missing {file}");
+        }
+    }
+    Ok(())
+}
+
 fn verify_layout(dir: &Path) -> Result<()> {
+    verify_ranked_art(dir, "webroot")?;
     verify_exported_locales(dir)?;
     let (mut wn, mut jn) = (None, None);
     for e in fs::read_dir(dir)? {
@@ -3578,6 +3593,7 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
 }
 
 fn verify_poki_layout(dir: &Path) -> Result<()> {
+    verify_ranked_art(dir, "Poki bundle")?;
     verify_exported_locales(dir)?;
     for required in [
         "index.html",
@@ -4424,6 +4440,7 @@ fn package_poki(
 }
 
 fn verify_jest_layout(dir: &Path) -> Result<()> {
+    verify_ranked_art(dir, "Jest bundle")?;
     verify_exported_locales(dir)?;
     for required in [
         "index.html",

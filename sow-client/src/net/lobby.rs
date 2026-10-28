@@ -6,6 +6,7 @@ use std::collections::HashSet;
 
 pub(crate) fn clear_lobby_snapshot(state: &mut MainMenuState) {
     state.lobbies.clear();
+    state.ranked_matchup = None;
 }
 
 fn normalize_lobby_list(lobbies: &mut Vec<LobbyInfo>) {
@@ -18,6 +19,8 @@ pub(crate) fn seed_joined_lobby_entry(
     state: &mut MainMenuState,
     ack: &sow_core::protocol::ServerJoinAckMessage,
 ) {
+    state.ranked_matchup = (ack.lobby_info.kind == LobbyKind::Ranked1v1)
+        .then(|| ack.lobby_info.clone());
     normalize_lobby_list(&mut state.lobbies);
     if let Some(existing) = state.lobbies.iter_mut().find(|l| l.id == ack.lobby_id) {
         *existing = ack.lobby_info.clone();
@@ -146,8 +149,29 @@ mod tests {
     fn clear_snapshot_removes_the_lobby_that_could_be_carried_forward() {
         let mut state = MainMenuState::default();
         state.lobbies = vec![lobby(1, 4.0)];
+        state.ranked_matchup = Some(lobby(9, 0.0));
         clear_lobby_snapshot(&mut state);
         assert!(state.lobbies.is_empty());
+        assert!(state.ranked_matchup.is_none());
+    }
+
+    #[test]
+    fn ranked_encounter_survives_public_broadcast_until_explicitly_cleared() {
+        let mut state = MainMenuState::default();
+        let mut ranked = lobby(5, 0.0);
+        ranked.kind = LobbyKind::Ranked1v1;
+        let ack = sow_core::protocol::ServerJoinAckMessage {
+            lobby_id: 5, player_id: 1, map_name: "world".into(), is_private: true,
+            lobby_info: ranked,
+        };
+        super::seed_joined_lobby_entry(&mut state, &ack);
+        apply_lobbies_broadcast(&mut state, &broadcast(vec![lobby(6, 0.0)]));
+        assert_eq!(state.ranked_matchup.as_ref().unwrap().id, 5);
+        clear_lobby_snapshot(&mut state);
+        assert!(state.ranked_matchup.is_none());
+        let ordinary = sow_core::protocol::ServerJoinAckMessage { lobby_info: lobby(8, 0.0), ..ack };
+        super::seed_joined_lobby_entry(&mut state, &ordinary);
+        assert!(state.ranked_matchup.is_none());
     }
 
     #[test]

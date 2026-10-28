@@ -62,6 +62,7 @@ impl Language {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WebStrings {
+    pub ranked: WebDomain,
     pub menu: WebDomain,
     pub auth: WebDomain,
     pub lobbies: WebDomain,

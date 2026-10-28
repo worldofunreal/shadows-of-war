@@ -17,6 +17,90 @@ const campaignEditor = fs.readFileSync(
     "utf8",
 );
 
+function makeCampaignTutorialHarness({ campaign, definition, roster, initialStep, hud, width, height }) {
+    const root = {
+        dataset: {},
+        hidden: true,
+        isConnected: false,
+        clientWidth: width,
+        clientHeight: height,
+        contains: () => false,
+    };
+    const calls = [];
+    let machine = null,
+        rendered = null,
+        renderContext = null;
+    const window = {
+        addEventListener() {},
+        SOW_menu_command(raw) {
+            calls.push(JSON.parse(raw));
+        },
+        SOW_t: (key) => "Text for " + key,
+        SOW_hasText: () => true,
+        SOWCampaign: Object.assign({}, campaign, {
+            create(data, _entry, dataRoster, _clock, hooks) {
+                machine = campaign.create(data, initialStep, dataRoster || roster, () => 0, hooks);
+                return machine;
+            },
+        }),
+        SOWCampaignView: {
+            mount: () => ({
+                render(model, context) {
+                    rendered = model;
+                    renderContext = context;
+                },
+                destroy() {},
+            }),
+        },
+    };
+    const document = {
+        body: {
+            appendChild(node) {
+                node.isConnected = true;
+            },
+        },
+        documentElement: { dir: "ltr" },
+        hidden: false,
+        createElement: () => root,
+        getElementById: () => null,
+        addEventListener() {},
+    };
+    vm.runInNewContext(tutorialBundle, {
+        window,
+        document,
+        Node: Object,
+        performance: { now: () => 0 },
+        console,
+        fetch(url) {
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve(url.endsWith(".triggers.json") ? definition : roster),
+            });
+        },
+    });
+    const update = () => window.SOW_tutorial_state_update({ phase: "Playing", hud });
+    return {
+        calls,
+        get machine() {
+            return machine;
+        },
+        get rendered() {
+            return rendered;
+        },
+        get renderContext() {
+            return renderContext;
+        },
+        async start() {
+            window.SOW_startCampaignEpisode("boudica");
+            await new Promise(setImmediate);
+            update();
+            await new Promise(setImmediate);
+            update();
+        },
+        update,
+    };
+}
+
 test("endgame shows the five match stats with exact combat counts and compact totals on either result", () => {
     const formatterStart = hud.indexOf("    function formatEndgameExact(");
     const formatterEnd = hud.indexOf("\n    function buildingIcon(", formatterStart);
@@ -812,6 +896,127 @@ test("Campaign Studio avoids rebuilding the route graph on progress-only updates
     const paint = campaignEditor.slice(start, end);
     assert.match(paint, /if \(previousStep !== model\.step\.id\) renderGraph\(\)/);
     assert.equal((paint.match(/renderGraph\(\)/g) || []).length, 1);
+});
+
+test("Roman Outpost emotes keep its guided objective visible on desktop and mobile", async () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+
+    for (const [width, height] of [
+        [1366, 768],
+        [390, 844],
+    ]) {
+        const hud = {
+            tutorial: {
+                active: true,
+                episode_id: "boudica",
+                campaign_session_id: 9,
+                marker_player_id: 2,
+                target_nameplate: { x: 245, y: 315, offscreen: false },
+                facts: {
+                    contact_faction_ids: [],
+                    defeated_faction_ids: [],
+                    eliminated_faction_ids: [],
+                    pre_defeat_faction_ids: [],
+                    tiles_gained: 0,
+                },
+            },
+            players: [
+                { id: 1, is_me: true, is_alive: true, centroid_x: 10, centroid_y: 12 },
+                {
+                    id: 2,
+                    campaign_faction_id: "roman_outpost",
+                    is_alive: true,
+                    centroid_x: 15,
+                    centroid_y: 12,
+                },
+            ],
+            settings: {},
+            attack_ratio: 0.25,
+        };
+        const harness = makeCampaignTutorialHarness({
+            campaign,
+            definition,
+            roster,
+            initialStep: "boudica_attack_roman_outpost",
+            hud,
+            width,
+            height,
+        });
+        await harness.start();
+
+        assert.equal(harness.machine.view().waiting, true);
+        assert.equal(harness.rendered.step.id, "boudica_attack_roman_outpost");
+        assert.equal(harness.rendered.step.guide.target, "nameplate");
+        assert.deepEqual(
+            [harness.renderContext.anchor.x, harness.renderContext.anchor.y],
+            [245, 315],
+            `the Outpost hand stays anchored at ${width}x${height}`,
+        );
+        assert.ok(
+            harness.calls.some((call) => call.type === "tutorial_emote"),
+            "the emote exchange continues through the normal path",
+        );
+    }
+});
+
+test("first Expand focuses its hidden target once and keeps the 250-tile objective active", async () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    const hud = {
+        tutorial: {
+            active: true,
+            episode_id: "boudica",
+            campaign_session_id: 12,
+            expand: null,
+            expand_target: { x: 31.5, y: 42.5 },
+            facts: {
+                contact_faction_ids: [],
+                defeated_faction_ids: [],
+                eliminated_faction_ids: [],
+                pre_defeat_faction_ids: [],
+                tiles_gained: 0,
+            },
+        },
+        players: [{ id: 1, is_me: true, is_alive: true, centroid_x: 10, centroid_y: 12 }],
+        settings: {},
+    };
+    const harness = makeCampaignTutorialHarness({
+        campaign,
+        definition,
+        roster,
+        initialStep: "boudica_first_expansion",
+        hud,
+        width: 390,
+        height: 844,
+    });
+    await harness.start();
+
+    assert.equal(harness.machine.view().step.id, "boudica_first_expansion");
+    const focus = harness.calls.filter((call) => call.type === "focus_world");
+    assert.equal(focus.length, 1);
+    assert.deepEqual([focus[0].x, focus[0].y], [31.5, 42.5]);
+
+    hud.tutorial.expand = { x: 202, y: 412, tile_idx: 4242 };
+    harness.update();
+    assert.deepEqual(
+        [harness.renderContext.anchor.x, harness.renderContext.anchor.y],
+        [202, 412],
+        "the hand appears as soon as the target is visible",
+    );
+    assert.equal(
+        harness.calls.filter((call) => call.type === "focus_world").length,
+        1,
+        "camera focus is not resent after the guide appears",
+    );
+
+    hud.tutorial.facts.tiles_gained = 250;
+    harness.update();
+    assert.equal(harness.machine.view().step.id, "boudica_city_intro");
 });
 
 test("Trinovantes aid guides radial opening, Transfer, and the confirmed delivery separately", async () => {

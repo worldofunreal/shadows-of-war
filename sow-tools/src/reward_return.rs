@@ -1004,3 +1004,382 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         "real WASM voluntary exit and three-player GameOver with automatic survivor reward verified for matches {match_id} and {finish_match_id}; terminal_turn_to_match_finished_ms={natural_finish_ms} terminal_turn_to_all_rewards_ms={natural_rewards_ms}"
     ));
 }
+
+struct LiveRankedSession {
+    _queue_write: Writer,
+    _queue_read: Reader,
+    relay_write: Writer,
+    relay_read: Reader,
+    start: sow_core::protocol::ServerStartMessage,
+}
+
+async fn queue_ranked(url: &Url, account: &Value, version: &str) -> (Writer, Reader, tokio::time::Instant) {
+    let (socket, _) = tokio_tungstenite::connect_async(url.as_str())
+        .await
+        .unwrap_or_else(|error| fail(&format!("ranked queue connection failed: {error}")));
+    let (mut write, read) = socket.split();
+    let started_at = tokio::time::Instant::now();
+    ws_send(
+        &mut write,
+        &ClientMessage::JoinWithAuth {
+            join: Box::new(sow_core::protocol::JoinPayload {
+                name: account["display_name"].as_str().unwrap().into(),
+                target_lobby_id: None,
+                host_private: false,
+                build_version: sow_core::protocol::gameplay_build_identity(version),
+                clan_tag: String::new(),
+                leader: sow_core::player::Leader::of("caesar"),
+                random_leader: true,
+                host_config: None,
+                password: None,
+                ranked_1v1: true,
+            }),
+            auth: AuthProof {
+                provider: "anonymous".into(),
+                account_id: Some(account["account_id"].as_str().unwrap().into()),
+                token: account["auth_secret"].as_str().unwrap().into(),
+            },
+        },
+    )
+    .await;
+    (write, read, started_at)
+}
+
+async fn ranked_ack(read: &mut Reader) -> (sow_core::protocol::ServerJoinAckMessage, u32) {
+    let mut last_elapsed = 0;
+    loop {
+        match recv(read, 20).await {
+            ServerMessage::JoinAck(ack) => return (ack, last_elapsed),
+            ServerMessage::RankedSearching { elapsed_secs } => last_elapsed = elapsed_secs,
+            ServerMessage::JoinFailed(failure) => {
+                fail(&format!("ranked queue rejected test account: {}", failure.reason))
+            }
+            ServerMessage::LobbyClosed(closed) => {
+                fail(&format!("ranked queue closed before match: {}", closed.reason))
+            }
+            _ => {}
+        }
+    }
+}
+
+async fn cancel_ranked_attempt(write: &mut Writer) {
+    let message = bincode::serialize(&ClientMessage::CancelRankedSearch).unwrap();
+    let _ = write.send(Message::Binary(message)).await;
+}
+
+async fn start_ranked_session(
+    url: &Url,
+    mut queue_write: Writer,
+    mut queue_read: Reader,
+    ack: &sow_core::protocol::ServerJoinAckMessage,
+) -> LiveRankedSession {
+    ws_send(
+        &mut queue_write,
+        &ClientMessage::MapDownloadProgress {
+            lobby_id: ack.lobby_id,
+            player_id: ack.player_id,
+            progress: 100,
+        },
+    )
+    .await;
+    ws_send(
+        &mut queue_write,
+        &ClientMessage::LobbyReady {
+            lobby_id: ack.lobby_id,
+            player_id: ack.player_id,
+        },
+    )
+    .await;
+    let (start, ticket) = started(&mut queue_read).await;
+    assert!(start.config.ranked_1v1, "server did not start a ranked match");
+    assert_eq!(start.config.nation_count, 0, "ranked match enabled nations");
+    assert_eq!(start.config.max_players, 2, "ranked match is not 1v1");
+    assert_eq!(start.players.len(), 2, "ranked match must have two competitors");
+    let map = start.config.map_name.to_ascii_lowercase();
+    assert!(
+        ["oceania", "southeastasia", "northamerica", "world"].contains(&map.as_str()),
+        "ranked match used a map outside its private pool: {map}"
+    );
+    let direct = direct_relay_url(
+        url,
+        start.relay_host.as_deref().unwrap(),
+        start.relay_port.unwrap(),
+    )
+    .unwrap();
+    let (relay_write, relay_read, _) = ready_relay(
+        &direct,
+        ClientMessage::ReadyWithTicket {
+            lobby_id: ack.lobby_id,
+            player_id: ack.player_id,
+            ticket,
+        },
+    )
+    .await;
+    LiveRankedSession {
+        _queue_write: queue_write,
+        _queue_read: queue_read,
+        relay_write,
+        relay_read,
+        start,
+    }
+}
+
+async fn public_match_detail(http: &reqwest::Client, base: &Url, match_id: u64) -> Value {
+    http.get(format!(
+        "{}/matches/{match_id}",
+        base.as_str().trim_end_matches('/')
+    ))
+    .send()
+    .await
+    .unwrap()
+    .error_for_status()
+    .unwrap()
+    .json()
+    .await
+    .unwrap()
+}
+
+async fn current_ranked_mmr(http: &reqwest::Client, base: &Url, account: &Value) -> f64 {
+    let secret = std::env::var("SOW_DB_SECRET").unwrap_or_else(|_| {
+        fail("SOW_DB_SECRET is required to read private matchmaking ratings for ranked verification")
+    });
+    let rating: Value = http.post(format!(
+        "{}/internal/ranked-rating",
+        base.as_str().trim_end_matches('/')
+    )).bearer_auth(secret).json(&json!({"account_id": account["account_id"]}))
+        .send().await.unwrap().error_for_status().unwrap().json().await.unwrap();
+    rating["mu"].as_f64().unwrap_or_else(|| fail("private ranked MMR was missing from the internal rating response"))
+}
+
+fn assert_ranked_record(detail: &Value, match_id: u64, expect_bot: bool) {
+    assert_eq!(detail["match_id"], match_id.to_string());
+    assert_eq!(detail["queue"], "Ranked1v1");
+    assert_eq!(detail["mode"], "FFA");
+    assert_eq!(detail["verified"], true);
+    assert_eq!(detail["rating_eligible"], true);
+    let participants = detail["participants"].as_array().unwrap();
+    assert_eq!(participants.len(), 2);
+    assert_eq!(participants.iter().filter(|p| p["is_bot"] == true).count(), usize::from(expect_bot));
+    assert!(participants.iter().all(|participant| {
+        let Some(breakdown) = participant["ranked_points_breakdown"].as_object() else { return false; };
+        let total: Option<i64> = ["base", "opponent", "league", "streak", "protection", "limit"]
+            .iter().map(|key| breakdown[*key].as_i64()).sum();
+        participant["rating_before"].is_number()
+            && participant["rating_after"].is_number()
+            && participant["rating_delta"].is_number()
+            && total == participant["rating_delta"].as_i64()
+            && participant["verified"] == true
+    }), "both ranked ratings must be saved with the verified match");
+    if expect_bot {
+        assert!((60..=180).contains(&detail["ranked_bot_iq"].as_u64().unwrap_or_default()));
+    }
+}
+
+async fn require_ranked_receipt(http: &reqwest::Client, base: &Url, account: &Value, match_id: u64) -> Value {
+    let receipt = result(http, base, account, match_id).await;
+    assert_eq!(receipt["state"], "confirmed", "ranked result was not confirmed");
+    let ranked = receipt["ranked_result"].as_object().expect("ranked presentation was not saved");
+    assert!(ranked["score_before"].is_number());
+    assert!(ranked["score_after"].is_number());
+    assert!(ranked["games_played"].as_u64().unwrap_or_default() > 0);
+    let breakdown = ranked["points_breakdown"].as_object().expect("ranked point breakdown was not saved");
+    let total: i64 = ["base", "opponent", "league", "streak", "protection", "limit"]
+        .iter().map(|key| breakdown[*key].as_i64().expect("ranked point breakdown component was not an integer"))
+        .sum();
+    assert_eq!(total, ranked["rating_delta"].as_i64().unwrap(), "ranked point breakdown must equal the saved change");
+    receipt
+}
+
+pub(super) async fn verify_ranked(url: &Url, base: &Url, accounts_file: &std::path::Path) {
+    let http = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(25))
+        .build()
+        .unwrap();
+    let accounts: Vec<Value> = serde_json::from_slice(&std::fs::read(accounts_file).unwrap()).unwrap();
+    assert!(accounts.len() >= 5, "ranked acceptance requires the five persistent audit accounts");
+    let audit_accounts = &accounts[..5];
+    let version = std::fs::read_to_string(".version").unwrap();
+
+    // Audit identities accumulate MMR across runs; pick the closest live pair.
+    let (rating0, rating1, rating2, rating3, rating4) = tokio::join!(
+        current_ranked_mmr(&http, base, &audit_accounts[0]),
+        current_ranked_mmr(&http, base, &audit_accounts[1]),
+        current_ranked_mmr(&http, base, &audit_accounts[2]),
+        current_ranked_mmr(&http, base, &audit_accounts[3]),
+        current_ranked_mmr(&http, base, &audit_accounts[4]),
+    );
+    let ratings = [rating0, rating1, rating2, rating3, rating4];
+    let (first_index, second_index) = (0..audit_accounts.len()).flat_map(|first| {
+        (first + 1..audit_accounts.len()).map(move |second| (first, second))
+    }).min_by(|(a, b), (c, d)| {
+        (ratings[*a] - ratings[*b]).abs().total_cmp(&(ratings[*c] - ratings[*d]).abs())
+    }).unwrap();
+    let first = &audit_accounts[first_index];
+    let second = &audit_accounts[second_index];
+    assert!((ratings[first_index] - ratings[second_index]).abs() <= 300.0,
+        "audit accounts have no human pair within the ranked search window");
+    let first_name = first["display_name"].as_str().unwrap();
+    let second_name = second["display_name"].as_str().unwrap();
+    let (first_write, mut first_read, _) = queue_ranked(url, first, version.trim()).await;
+    let (second_write, mut second_read, _) = queue_ranked(url, second, version.trim()).await;
+    let ((first_ack, _), (second_ack, _)) = tokio::join!(
+        ranked_ack(&mut first_read),
+        ranked_ack(&mut second_read),
+    );
+    if first_ack.lobby_id != second_ack.lobby_id
+        || first_ack.lobby_info.kind != sow_core::protocol::LobbyKind::Ranked1v1
+        || second_ack.lobby_info.kind != sow_core::protocol::LobbyKind::Ranked1v1
+        || !first_ack.is_private
+        || !second_ack.is_private
+        || !first_ack.lobby_info.players.iter().any(|player| player.name == first_name)
+        || !first_ack.lobby_info.players.iter().any(|player| player.name == second_name)
+    {
+        let mut first_write = first_write;
+        let mut second_write = second_write;
+        cancel_ranked_attempt(&mut first_write).await;
+        cancel_ranked_attempt(&mut second_write).await;
+        fail("ranked acceptance did not pair only its two audit accounts; searches were cancelled");
+    }
+    let match_id = first_ack.lobby_id;
+    let (mut first_session, mut second_session) = tokio::join!(
+        start_ranked_session(url, first_write, first_read, &first_ack),
+        start_ranked_session(url, second_write, second_read, &second_ack),
+    );
+    assert_eq!(first_session.start.players.iter().filter(|p| !p.is_ai_controlled).count(), 2);
+    ws_send(
+        &mut first_session.relay_write,
+        &ClientMessage::Gameplay {
+            intent: sow_core::protocol::GameplayIntent::Resign,
+        },
+    )
+    .await;
+    voluntary_exit_recorded(
+        &mut first_session.relay_read,
+        first["account_id"].as_str().unwrap(),
+        match_id,
+    )
+    .await;
+    let _ = natural_finish(&mut second_session.relay_read, match_id).await;
+    let (first_receipt, second_receipt) = tokio::join!(
+        require_ranked_receipt(&http, base, first, match_id),
+        require_ranked_receipt(&http, base, second, match_id),
+    );
+    let human_record = public_match_detail(&http, base, match_id).await;
+    assert_ranked_record(&human_record, match_id, false);
+    assert_eq!(human_record["winner_account_id"], second["account_id"]);
+    let human_results = human_record["participants"].as_array().unwrap();
+    let first_result = human_results.iter().find(|p| p["account_id"] == first["account_id"]).unwrap();
+    let second_result = human_results.iter().find(|p| p["account_id"] == second["account_id"]).unwrap();
+    assert_eq!(first_result["won"], false);
+    assert_eq!(second_result["won"], true);
+    assert!(first_receipt["ranked_result"]["rating_delta"].as_i64().unwrap() <= 0);
+    assert!(second_receipt["ranked_result"]["rating_delta"].as_i64().unwrap() >= 0);
+    let repeated = require_ranked_receipt(&http, base, first, match_id).await;
+    assert_eq!(repeated["ranked_result"], first_receipt["ranked_result"]);
+    let _ = first_session.relay_write.close().await;
+    let _ = second_session.relay_write.close().await;
+    pass(&format!("live ranked human-human match {match_id} was verified and both rating changes were saved once"));
+    drop(first_session);
+    drop(second_session);
+
+    let (bot_rating0, bot_rating1, bot_rating2, bot_rating3, bot_rating4) = tokio::join!(
+        current_ranked_mmr(&http, base, &audit_accounts[0]),
+        current_ranked_mmr(&http, base, &audit_accounts[1]),
+        current_ranked_mmr(&http, base, &audit_accounts[2]),
+        current_ranked_mmr(&http, base, &audit_accounts[3]),
+        current_ranked_mmr(&http, base, &audit_accounts[4]),
+    );
+    let bot_ratings = [bot_rating0, bot_rating1, bot_rating2, bot_rating3, bot_rating4];
+    let bot_index = bot_ratings.iter().enumerate().min_by(|(a, _), (b, _)| bot_ratings[*a].total_cmp(&bot_ratings[*b]))
+        .map(|(index, _)| index).unwrap();
+    let bot_account = &audit_accounts[bot_index];
+    let bot_rating = bot_ratings[bot_index];
+    let (bot_queue_write, mut bot_queue_read, queued_at) = queue_ranked(url, bot_account, version.trim()).await;
+    let (bot_ack, reported_wait) = ranked_ack(&mut bot_queue_read).await;
+    let bot_candidate_count = bot_ack.lobby_info.players.iter()
+        .filter(|player| player.download_progress == 100)
+        .count();
+    if bot_candidate_count != 1 {
+        let mut bot_queue_write = bot_queue_write;
+        cancel_ranked_attempt(&mut bot_queue_write).await;
+        fail("ranked bot acceptance was paired with another person; search cancelled before map loading");
+    }
+    assert!(queued_at.elapsed() > std::time::Duration::from_secs(3));
+    assert!(reported_wait >= 3, "server did not report waiting through the three-second bot threshold");
+    assert_eq!(bot_ack.lobby_info.kind, sow_core::protocol::LobbyKind::Ranked1v1);
+    let bot_match_id = bot_ack.lobby_id;
+    let mut bot_session = start_ranked_session(url, bot_queue_write, bot_queue_read, &bot_ack).await;
+    assert_eq!(bot_session.start.players.iter().filter(|p| !p.is_ai_controlled).count(), 1);
+    assert_eq!(bot_session.start.players.iter().filter(|p| p.is_ai_controlled).count(), 1);
+    let expected_bot_iq = (60..=180).step_by(20).min_by_key(|iq| {
+        ((1000.0 + f64::from(*iq - 60) * 20.0) - bot_rating).abs() as u32
+    }).unwrap_or(60);
+    assert_eq!(bot_session.start.config.ranked_bot_iq, Some(expected_bot_iq),
+        "bot IQ did not match the audit player's current MMR");
+    ws_send(
+        &mut bot_session.relay_write,
+        &ClientMessage::Gameplay {
+            intent: sow_core::protocol::GameplayIntent::Resign,
+        },
+    )
+    .await;
+    voluntary_exit_recorded(
+        &mut bot_session.relay_read,
+        bot_account["account_id"].as_str().unwrap(),
+        bot_match_id,
+    )
+    .await;
+    let bot_receipt = require_ranked_receipt(&http, base, bot_account, bot_match_id).await;
+    let bot_record = public_match_detail(&http, base, bot_match_id).await;
+    assert_ranked_record(&bot_record, bot_match_id, true);
+    let participants = bot_record["participants"].as_array().unwrap();
+    let bot_result = participants.iter().find(|participant| participant["is_bot"] == true).unwrap();
+    assert_eq!(bot_record["winner_account_id"], bot_result["account_id"]);
+    let human_result = participants.iter().find(|participant| participant["account_id"] == bot_account["account_id"]).unwrap();
+    assert_eq!(human_result["won"], false);
+    assert!(bot_receipt["ranked_result"]["rating_delta"].as_i64().unwrap() <= 0);
+    let bot_id = bot_result["account_id"].as_str().unwrap();
+    let bot_profile: Value = http
+        .get(format!("{}/profiles/{bot_id}", base.as_str().trim_end_matches('/')))
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(bot_profile["is_bot"], true, "ranked bot profile was not public");
+    assert_eq!(
+        bot_profile["ranked_bot_iq"],
+        bot_record["ranked_bot_iq"],
+        "ranked bot profile did not preserve its configured IQ"
+    );
+    assert!(bot_profile["matches_played"].as_u64().unwrap_or_default() > 0);
+    assert!(bot_profile["wins"].as_u64().unwrap_or_default() > 0);
+    assert!(bot_profile["ratings"].as_array().unwrap().iter().any(|rating| {
+        rating["queue"] == "Ranked1v1" && rating["games_played"].as_u64().unwrap_or_default() > 0
+    }));
+    assert_eq!(
+        bot_profile["recent_matches"][0]["match_id"],
+        bot_match_id.to_string(),
+        "ranked bot profile does not show its latest duel"
+    );
+    let bot_history: Value = http
+        .get(format!(
+            "{}/profiles/{bot_id}/matches?queue=Ranked1v1&limit=1",
+            base.as_str().trim_end_matches('/')
+        ))
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(bot_history["items"][0]["match_id"], bot_match_id.to_string());
+    let _ = bot_session.relay_write.close().await;
+    pass(&format!("live ranked human-bot match {bot_match_id} waited over three seconds and saved both ratings, bot IQ, profile statistics, and history"));
+    drop(bot_session);
+}

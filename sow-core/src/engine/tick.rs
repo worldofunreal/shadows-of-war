@@ -95,6 +95,9 @@ impl SowEngine {
                     }
                 }
             }
+            if self.state.config.ranked_1v1 {
+                self.check_winner();
+            }
             return;
         }
 
@@ -351,7 +354,7 @@ impl SowEngine {
             .filter(|p| p.tile_count >= win_threshold)
             .max_by_key(|p| (p.tile_count, std::cmp::Reverse(p.id)))
             .map(|p| p.id);
-        let alive: Vec<_> = contenders.iter().filter(|p| p.alive && p.tile_count > 0).collect();
+        let alive: Vec<_> = contenders.iter().filter(|p| p.alive).collect();
         if let Some(id) = winner.or_else(|| (alive.len() == 1).then(|| alive[0].id)) {
             self.end_game(id, None);
         } else if alive.is_empty() {
@@ -810,6 +813,23 @@ mod tests {
         let mut engine = SowEngine::new(state, WaterComponents::default());
         engine.check_winner();
         assert_eq!(engine.state.winner, Some(1));
+        assert_eq!(engine.state.phase, GamePhase::GameOver);
+    }
+
+    #[test]
+    fn ranked_duel_awards_win_to_living_player_without_territory_after_forfeit() {
+        let config = GameConfig { ranked_1v1: true, ..Default::default() };
+        let mut state = GameState::new(42, 10, 10, config.clone());
+        state.total_land_tiles = 100;
+        for (id, alive) in [(1, false), (2, true)] {
+            let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &config);
+            player.alive = alive;
+            player.has_spawned = true;
+            state.register_player(player);
+        }
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.tick();
+        assert_eq!(engine.state.winner, Some(2));
         assert_eq!(engine.state.phase, GamePhase::GameOver);
     }
 

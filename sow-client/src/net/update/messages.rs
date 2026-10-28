@@ -104,6 +104,16 @@ impl SowApp {
                         }
                     }
                     ServerMessage::Start(start_msg) => {
+                        if !start_msg.config.ranked_1v1 {
+                            self.ui.app.main_menu_state.ranked_matchup = None;
+                        } else if let Some(matchup) = self.ui.app.main_menu_state.ranked_matchup.as_mut() {
+                            for player in &mut matchup.players {
+                                if let Some(confirmed) = start_msg.players.iter().find(|item| item.id == player.player_id) {
+                                    player.name = confirmed.name.clone();
+                                    player.leader = Some(confirmed.leader);
+                                }
+                            }
+                        }
                         crate::store_portals::track_product_event("match_loading_start");
                         log::info!(
                             "[CLIENT NET] Received ServerStartMessage! lobby_id={:?}, player_id={:?}, relay_port={:?}, relay_host={:?}",
@@ -308,6 +318,7 @@ impl SowApp {
                         self.ui.update_available = true;
                     }
                     ServerMessage::RankedSearching { elapsed_secs } => {
+                        self.ui.app.main_menu_state.ranked_matchup = None;
                         self.ui.app.main_menu_state.ranked_search_active = true;
                         self.ui.app.main_menu_state.ranked_search_elapsed_secs = elapsed_secs;
                     }
@@ -399,6 +410,7 @@ impl SowApp {
                         }
                     }
                     ServerMessage::JoinFailed(fail) => {
+                        self.ui.app.main_menu_state.ranked_matchup = None;
                         crate::store_portals::track_product_event("lobby_join_failed");
                         log::warn!("[JOIN] Failed: {}", fail.reason);
                         crate::store_portals::left_room();

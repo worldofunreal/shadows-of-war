@@ -6,6 +6,7 @@ mod bot_iq_alliance_tests {
     use crate::intent::nation::combat::nation_target_allowed;
     use crate::intent::nation::combat::{
         ghost_retaliation_delay_ticks, ghost_retaliation_send_troops,
+        ranked_ghost_retaliation_delay_ticks,
     };
     use crate::intent::nation::diplomacy::ghost_alliance_probability;
     use crate::intent::nation::profile::GhostRetaliation;
@@ -286,6 +287,19 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
+    fn ranked_ghost_retaliation_gets_faster_with_higher_iq() {
+        for seed in 0..256 {
+            let low = ranked_ghost_retaliation_delay_ticks(seed, 7, 91, 60);
+            let middle = ranked_ghost_retaliation_delay_ticks(seed, 7, 91, 120);
+            let high = ranked_ghost_retaliation_delay_ticks(seed, 7, 91, 180);
+            assert!((3..=12).contains(&low));
+            assert!((2..=7).contains(&middle));
+            assert!((1..=3).contains(&high));
+            assert!(low >= middle && middle >= high);
+        }
+    }
+
+    #[test]
     fn ghost_retaliation_chooses_the_strongest_due_hostile_attack() {
         let mut engine = test_engine_two_players(42);
         let ghost = engine.state.player_mut(1).unwrap();
@@ -319,6 +333,35 @@ mod bot_iq_alliance_tests {
         let retaliation = retaliation.unwrap();
         assert_eq!(retaliation.attacker_id, 3);
         assert_eq!(retaliation.incoming_troops, 500.0);
+    }
+
+    #[test]
+    fn ranked_ghost_retaliation_uses_the_spawned_iq() {
+        let mut engine = test_engine_two_players(42);
+        engine.state.config.ranked_1v1 = true;
+        let ghost = engine.state.player_mut(1).unwrap();
+        ghost.player_type = PlayerType::Human;
+        ghost.is_ai_controlled = true;
+        ghost.iq = 60;
+        engine.attacks.push(crate::execution::AttackExecution { landed: false,
+            id: 91,
+            owner_id: 2,
+            target_owner: 1,
+            created_tick: 100,
+            troops: 200.0,
+            to_conquer: Default::default(),
+            insert_seq_counter: 0,
+            rng: wyrand::WyRand::new(91),
+            retreating: false,
+        });
+        engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
+        engine.ai_attack_index[1].push(0);
+
+        let (retaliation, _) = engine.ghost_retaliation_for(1, 0);
+        assert_eq!(
+            retaliation.unwrap().ready_tick,
+            100 + ranked_ghost_retaliation_delay_ticks(42, 1, 91, 60)
+        );
     }
 
     #[test]

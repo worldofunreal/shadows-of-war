@@ -2272,6 +2272,17 @@ fn tutorial_visible_build_site_candidate(
         .find_map(|&(_, _, _, tile)| is_visible(tile).then_some(tile))
 }
 
+fn tutorial_tile_world(tile: Option<u32>, map_w: u32, map_h: u32) -> Option<[f32; 2]> {
+    let tile = tile?;
+    if map_w == 0 || tile >= map_w.checked_mul(map_h)? {
+        return None;
+    }
+    Some([
+        (tile % map_w) as f32 + 0.5,
+        (tile / map_w) as f32 + 0.5,
+    ])
+}
+
 fn tutorial_project_tile(
     tile: Option<u32>,
     map_w: u32,
@@ -2279,13 +2290,10 @@ fn tutorial_project_tile(
     input: &crate::app::InputState,
     sf: f32,
 ) -> Option<[f32; 2]> {
-    let tile = tile?;
-    if map_w == 0 || tile >= map_w.checked_mul(map_h)? {
-        return None;
-    }
+    let [x, y] = tutorial_tile_world(tile, map_w, map_h)?;
     Some(crate::render::world::overlays::world_to_screen(
-        (tile % map_w) as f32 + 0.5,
-        (tile / map_w) as f32 + 0.5,
+        x,
+        y,
         input,
         sf,
     ))
@@ -2700,6 +2708,9 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             .map(|[x, y]| serde_json::json!({ "x": x, "y": y, "tile_idx": tile }))
             .unwrap_or(serde_json::Value::Null)
     };
+    let expand_target = tutorial_tile_world(expand_tile, map_w, map_h)
+        .map(|[x, y]| serde_json::json!({ "x": x, "y": y }))
+        .unwrap_or(serde_json::Value::Null);
     let build_site_screen = tutorial_project_tile(build_site_tile, map_w, map_h, &app.input, sf)
         .and_then(|point| tutorial_screen_anchor(point, viewport_w, viewport_h))
         .map(|([x, y], offscreen)| serde_json::json!({"x":x,"y":y,"offscreen":offscreen}))
@@ -2807,6 +2818,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         "effective_unlocks": campaign_unlocks,
         "tick": snapshot.tick,
         "expand": guide_screen(expand_tile),
+        "expand_target": expand_target,
         "assault": guide_screen(assault_tile),
         "target_action": guide_screen(target_tile),
         "build_site": build_site_screen,
@@ -4046,6 +4058,7 @@ struct MenuInputs {
     waiting: bool,
     ranked_search_active: bool,
     ranked_search_elapsed_secs: u32,
+    ranked_matchup: Option<sow_core::protocol::LobbyInfo>,
     update_available: bool,
     match_preparing: bool,
     player_name: String,
@@ -4100,6 +4113,10 @@ fn menu_inputs(app: &SowApp) -> MenuInputs {
         waiting: state.is_waiting,
         ranked_search_active: state.ranked_search_active,
         ranked_search_elapsed_secs: state.ranked_search_elapsed_secs,
+        ranked_matchup: if (app.ui.app.phase == crate::ClientPhase::MainMenu && state.is_waiting)
+            || (app.ui.app.phase == crate::ClientPhase::Splash
+                && splash.job == crate::ui::loading_screen::SplashJob::EnterGame)
+        { state.ranked_matchup.clone() } else { None },
         update_available: app.ui.update_available,
         match_preparing: app
             .ui
@@ -4214,6 +4231,7 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
         "waiting": inputs.waiting,
         "ranked_search_active": inputs.ranked_search_active,
         "ranked_search_elapsed_secs": inputs.ranked_search_elapsed_secs,
+        "ranked_matchup": inputs.ranked_matchup,
         "match_preparing": inputs.match_preparing,
         "player_name": inputs.player_name,
         "selected_leader": leader_id(inputs.selected_leader),
@@ -4370,6 +4388,13 @@ mod tests {
             .unwrap(),
             [8.0, 2.0, 1.0, 1.0]
         );
+    }
+
+    #[test]
+    fn tutorial_tile_world_returns_the_tile_center_only_for_valid_tiles() {
+        assert_eq!(tutorial_tile_world(Some(23), 10, 5), Some([3.5, 2.5]));
+        assert_eq!(tutorial_tile_world(Some(50), 10, 5), None);
+        assert_eq!(tutorial_tile_world(Some(0), 0, 5), None);
     }
 
     #[test]

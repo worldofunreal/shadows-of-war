@@ -95,6 +95,47 @@ test("profile presents verified history, career commanders, localized achievemen
     );
 });
 
+test("all menu builds share the ranked Quick Match label and current league", () => {
+    const buttonStart = coreSource.indexOf("export function renderQuickMatchButton()");
+    const buttonEnd = coreSource.indexOf("\n}", buttonStart);
+    assert.ok(buttonStart >= 0 && buttonEnd > buttonStart);
+    const button = coreSource.slice(buttonStart, buttonEnd);
+    assert.match(button, /data-command='quick_match'/);
+    assert.match(button, /lobbies\.ranked_1v1/);
+    assert.match(button, /data-ranked-current/);
+    assert.match(button, /ranked\.tier/);
+    for (const source of [surfacesSource, pokiSource, jestSource]) {
+        const commandStart = source.indexOf("export function renderCommandPanel()");
+        const commandEnd = source.indexOf("\nexport function ", commandStart + 1);
+        assert.ok(commandStart >= 0 && commandEnd > commandStart);
+        assert.match(source.slice(commandStart, commandEnd), /renderQuickMatchButton\(\)/);
+    }
+});
+
+test("ranked result shows a first league after placements, never a first-match demotion", () => {
+    const start = shellSource.indexOf("function rankedResultTitle(");
+    const end = shellSource.indexOf("\n}", start);
+    assert.ok(start >= 0 && end > start);
+    const context = { SOW_t: (key) => key };
+    const title = vm.runInNewContext(
+        shellSource.slice(start, end + 2) + "; rankedResultTitle;",
+        context,
+    );
+    const result = {
+        score_before: 1000,
+        score_after: 838,
+        tier_before: "Bronze",
+        tier_after: "Bronze",
+        division_before: "II",
+        division_after: "IV",
+        placements_complete: false,
+        games_played: 1,
+    };
+    assert.equal(title(result), "ranked.placements");
+    assert.equal(title({ ...result, games_played: 5, placements_complete: true }), "ranked.first_league");
+    assert.equal(title({ ...result, games_played: 6, placements_complete: true }), "ranked.rank_changed");
+});
+
 test("profile banner always uses landscape leader art", () => {
     const start = coreSource.indexOf("export function profileHeroImage(");
     const end = coreSource.indexOf("export function avatarImage(", start);
@@ -1494,4 +1535,147 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
         /SOWCampaign\.create\(\s*data\.definition,\s*data\.definition\.entry,\s*data\.roster,?\s*\)/,
     );
     assert.doesNotMatch(watchFlow, /send\("start_campaign_episode"/);
+});
+
+function rankedPresentationHarness() {
+    const source = fs.readFileSync(path.join(shell, "main_menu.ranked.ts"), "utf8")
+        .replace(/^import[\s\S]*?;\n/gm, "").replace(/\bexport\s+/g, "");
+    const frames = new Map();
+    let frameId = 0;
+    const context = {
+        asset: value => "/assets/" + value,
+        avatarImage: value => "/avatars/" + (value || "random"),
+        esc: value => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/'/g, "&#39;"),
+        formatMapName: lobby => lobby.map_name,
+        lobbyThumb: lobby => "/maps/" + lobby.map_name,
+        menuUi: { state: { my_player_id: 1, player_name: "Me" }, rankedRating: null, rankedLadder: null },
+        SOW_t: (key, values = {}) => key + JSON.stringify(values),
+        requestAnimationFrame(callback) { const id = ++frameId; frames.set(id, callback); return id; },
+        cancelAnimationFrame(id) { frames.delete(id); },
+    };
+    const api = vm.runInNewContext(source + "\n({ rankProgress, rankLabel, rankOverview, renderRankedDuel, animateRankResult });", context);
+    return { api, context, frames, tick(time) {
+        const pending = [...frames.values()]; frames.clear(); pending.forEach(fn => fn(time));
+    } };
+}
+
+test("rank progress follows supplied boundaries, including jumps and the highest league", () => {
+    const { api } = rankedPresentationHarness();
+    const ladder = { steps: [
+        { score: 800, tier: "Bronze", division: "IV" },
+        { score: 900, tier: "Bronze", division: "III" },
+        { score: 1200, tier: "Silver", division: "IV" },
+        { score: 3200, tier: "Grandmaster", division: null },
+    ], max_score: 4000 };
+    assert.equal(api.rankProgress(899, ladder).remaining, 1);
+    assert.equal(api.rankProgress(900, ladder).fraction, 0);
+    assert.equal(api.rankProgress(1200, ladder).step.tier, "Silver");
+    assert.equal(api.rankProgress(4000, ladder).fraction, 1);
+    assert.equal(api.rankProgress(4000, ladder).next, null);
+    assert.equal(api.rankProgress(1000, null), null);
+    assert.match(api.rankLabel(null), /placements.*"played":0/);
+    assert.match(api.rankLabel({ games_played: 4, placements_complete: false }), /"played":4/);
+});
+
+test("ranked search exposes no fictional map or opponent, while confirmed duel escapes names", () => {
+    const { api } = rankedPresentationHarness();
+    const search = api.renderRankedDuel(null);
+    assert.doesNotMatch(search, /sow-ranked__map|\/maps\//);
+    assert.match(search, /sow-ranked__search-halo/);
+    const found = api.renderRankedDuel({ id: 7, map_name: "europe", players: [
+        { player_id: 1, name: "Me", leader: "Boudica", is_ready: true },
+        { player_id: 2, name: "<img src=x>", leader: "Caesar", is_ready: false },
+    ] }, true);
+    assert.match(found, /is-found/);
+    assert.match(found, /&lt;img/);
+    assert.doesNotMatch(found, /<img src=x>/);
+    assert.match(found, /\/maps\/europe/);
+});
+
+test("rank result animates real points once and can finish immediately or cancel", () => {
+    const { api, tick, frames } = rankedPresentationHarness();
+    const fields = new Map();
+    for (const key of ["[data-rank-score]", "[data-rank-name]", "[data-rank-current-emblem]", "[data-rank-target]", "[data-rank-remaining]"])
+        fields.set(key, { textContent: "", innerHTML: "" });
+    const fill = { style: {} };
+    const track = { querySelector: () => fill, setAttribute() {} };
+    fields.set("[role=progressbar]", track);
+    const classes = new Set();
+    const card = { isConnected: true, dataset: {}, offsetWidth: 1,
+        querySelector: key => fields.get(key), classList: { add: key => classes.add(key), remove: key => classes.delete(key) } };
+    const result = { score_before: 1190, score_after: 1230, tier_before: "Bronze", division_before: "I",
+        tier_after: "Silver", division_after: "IV", games_played: 6, placements_complete: true,
+        ladder: { steps: [{ score: 1100, tier: "Bronze", division: "I" }, { score: 1200, tier: "Silver", division: "IV" }], max_score: 1600 } };
+    const motion = api.animateRankResult(card, result, () => false);
+    assert.match(fields.get("[data-rank-score]").textContent, /1190/);
+    tick(0); tick(760);
+    assert.match(fields.get("[data-rank-name]").textContent, /silver/);
+    motion.finish();
+    assert.match(fields.get("[data-rank-score]").textContent, /1230/);
+    assert.equal(frames.size, 0);
+    assert.ok(classes.has("is-rank-revealed"));
+    const reduced = api.animateRankResult(card, { ...result, score_after: 1180, tier_after: "Bronze", division_after: "I" }, () => true);
+    assert.match(fields.get("[data-rank-score]").textContent, /1180/);
+    assert.equal(frames.size, 0);
+    reduced.cancel();
+    const interrupted = api.animateRankResult(card, result, () => false);
+    interrupted.cancel();
+    assert.equal(frames.size, 0);
+});
+
+test("ranked result acknowledges before replay, ignores duplicate presses, and traps keyboard focus", () => {
+    class Element {
+        children = [];
+        listeners = {};
+        dataset = {};
+        disabled = false;
+        isConnected = true;
+        innerHTML = "";
+        inert = false;
+        setAttribute() {}
+        addEventListener(key, fn) { this.listeners[key] = fn; }
+        appendChild(child) { this.children.push(child); }
+        querySelector(selector) {
+            if (!this.controls) this.controls = {};
+            return this.controls[selector] ||= new Element();
+        }
+        focus() { document.activeElement = this; }
+    }
+    const document = { createElement: () => new Element(), activeElement: new Element() };
+    const root = new Element();
+    const commands = [];
+    let finished = 0;
+    const context = {
+        document, root, HTMLElement: Element,
+        menuUi: { state: { account_id: "me", menu_return: { match_id: "42" } }, rankedLadder: null },
+        SOW_t: (key, values = {}) => key + JSON.stringify(values),
+        esc: value => String(value ?? ""), rankTier: value => value.toLowerCase(),
+        rankEmblem: () => "<span></span>", rankName: (tier, division) => tier + " " + division,
+        rankPlacements: count => "placements " + count, rankProgressMarkup: () => "",
+        animateRankResult: () => ({ finish() { finished++; }, cancel() {} }),
+        reducedRewardMotion: () => true, send: command => commands.push(command),
+        rankedResultDismissedKey: null, rankedStageKey: null, rankedStageCleanup: null, activeRewardStage: null,
+        removeRewardStage() { context.activeRewardStage = null; },
+    };
+    const start = shellSource.indexOf("function rankedResultKey(");
+    const end = shellSource.indexOf("function maybePresentRewards(", start);
+    vm.runInNewContext(shellSource.slice(start, end) + "; this.present = presentRankedResult;", context);
+    const result = { score_before: 1000, score_after: 838, tier_before: "Bronze", division_before: "II",
+        tier_after: "Bronze", division_after: "IV", games_played: 1, placements_complete: false };
+    context.present(result);
+    const layer = root.children.at(-1);
+    const card = layer.children[0];
+    assert.match(card.innerHTML, /ranked.placements/);
+    assert.doesNotMatch(card.innerHTML, /rank_demoted/);
+    const again = card.querySelector("[data-ranked-again]");
+    const close = card.querySelector("[data-ranked-continue]");
+    assert.equal(document.activeElement, again);
+    layer.listeners.keydown({ key: "Tab", preventDefault() {} });
+    assert.equal(document.activeElement, close);
+    const click = { preventDefault() {}, stopPropagation() {} };
+    again.listeners.click(click);
+    again.listeners.click(click);
+    assert.deepEqual(commands, ["dismiss_ranked_result", "quick_match"]);
+    assert.equal(finished, 1);
+    assert.ok(again.disabled && close.disabled);
 });

@@ -1783,6 +1783,8 @@ test("campaign view recovers portraits and renders compact objective guidance", 
         definition: { episode_id: "compact_test", speakers: {}, steps: [objective] },
         step: objective,
         line: objective,
+        waiting: true,
+        exchange: { presentation: "emote" },
         paused: false,
         done: false,
         choices: [],
@@ -1879,6 +1881,11 @@ test("campaign view recovers portraits and renders compact objective guidance", 
         root.querySelector(".sow-story__objective").hidden,
         false,
         "normal desktop restores the full panel",
+    );
+    assert.equal(
+        root.querySelector(".sow-story__gesture").hidden,
+        false,
+        "desktop keeps the hand visible on its target",
     );
     assert.equal(
         root.querySelector(".sow-story__gesture-metric").hidden,
@@ -2848,6 +2855,11 @@ test("tutorial camera anchors and paused build guides publish current map coordi
         guide,
         /guide_build_site_candidates[\s\S]*tutorial_visible_build_site_candidate\([\s\S]*tutorial_project_tile\([\s\S]*&app\.input[\s\S]*tutorial_screen_point_visible/,
     );
+    const payloadStart = webMenu.indexOf("fn tutorial_payload(");
+    const payloadEnd = webMenu.indexOf("\nfn ", payloadStart + 1);
+    const payload = webMenu.slice(payloadStart, payloadEnd);
+    assert.match(payload, /tutorial_tile_world\(expand_tile, map_w, map_h\)/);
+    assert.match(payload, /"expand_target": expand_target/);
     const uiSource = { matches: () => false, getClientRects: () => [{}] };
     const { anchorFor } = createTutorialGuides({
         window: {

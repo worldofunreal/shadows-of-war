@@ -264,6 +264,8 @@ pub struct MatchParticipantRecord {
     pub games_played_after: Option<u32>,
     #[serde(default)]
     pub placements_complete_after: Option<bool>,
+    #[serde(default)]
+    pub ranked_points_breakdown: Option<RankedPointsBreakdown>,
     /// Last committed replay turn included when this player voluntarily left.
     #[serde(default)]
     pub personal_closure_turn: Option<u64>,
@@ -302,6 +304,53 @@ pub struct RankedResultPresentation {
     pub division_after: Option<String>,
     pub games_played: u32,
     pub placements_complete: bool,
+    #[serde(default)]
+    pub ladder: Option<RankedLadder>,
+    #[serde(default)]
+    pub points_breakdown: Option<RankedPointsBreakdown>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct RankedPointsBreakdown {
+    pub base: i16,
+    pub opponent: i16,
+    pub league: i16,
+    pub streak: i16,
+    pub protection: i16,
+    pub limit: i16,
+    #[serde(default)]
+    pub protected_loss: bool,
+}
+
+impl RankedPointsBreakdown {
+    pub fn total(&self) -> i16 {
+        self.base + self.opponent + self.league + self.streak + self.protection + self.limit
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct RankedStep {
+    pub score: u16,
+    pub tier: String,
+    pub division: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct RankedLadder {
+    pub steps: Vec<RankedStep>,
+    pub max_score: u16,
+}
+
+/// Presentation boundaries come from the same owner that assigns every rank.
+pub fn ranked_ladder() -> RankedLadder {
+    let mut steps = Vec::<RankedStep>::new();
+    for score in (800..=4000).step_by(100) {
+        let (tier, division) = tier_for_score(score);
+        if steps.last().is_none_or(|last| last.tier != tier || last.division != division) {
+            steps.push(RankedStep { score, tier: tier.to_string(), division });
+        }
+    }
+    RankedLadder { steps, max_score: 4000 }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -523,6 +572,8 @@ pub struct SeasonRating {
     pub division: Option<String>,
     pub peak_score: u16,
     pub placements_complete: bool,
+    #[serde(default)]
+    pub win_streak: u32,
     pub updated_at: u64,
 }
 
@@ -591,6 +642,8 @@ pub struct PublicMatchSummary {
     pub provisional: bool,
     pub rating_delta: Option<i16>,
     #[serde(default)]
+    pub ranked_points_breakdown: Option<RankedPointsBreakdown>,
+    #[serde(default)]
     pub ranked_bot_iq: Option<u32>,
 }
 
@@ -613,6 +666,8 @@ pub struct PublicMatchParticipant {
     pub rating_before: Option<u16>,
     #[serde(default)]
     pub rating_after: Option<u16>,
+    #[serde(default)]
+    pub ranked_points_breakdown: Option<RankedPointsBreakdown>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -636,9 +691,15 @@ pub struct PublicMatchDetail {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PublicProfileView {
+    #[serde(default)]
+    pub ranked_ladder: Option<RankedLadder>,
     pub account_id: String,
     pub handle: String,
     pub display_name: String,
+    #[serde(default)]
+    pub is_bot: bool,
+    #[serde(default)]
+    pub ranked_bot_iq: Option<u32>,
     pub level: u32,
     pub matches_played: u32,
     pub wins: u32,
@@ -733,11 +794,94 @@ pub fn ranked_glicko(rating: f64, deviation: f64, opponent: f64, opponent_deviat
     let q = 10_f64.ln() / 400.0;
     let deviation = deviation.clamp(50.0, 350.0);
     let opponent_deviation = opponent_deviation.clamp(50.0, 350.0);
-    let g = 1.0 / (1.0 + 3.0 * q * q * opponent_deviation * opponent_deviation / std::f64::consts::PI.powi(2)).sqrt();
-    let expected = 1.0 / (1.0 + 10_f64.powf(-g * (rating - opponent) / 400.0));
+    let expected = ranked_expected_score(rating, opponent, opponent_deviation);
+    let g = ranked_glicko_g(opponent_deviation);
     let precision = 1.0 / (deviation * deviation) + q * q * g * g * expected * (1.0 - expected);
     let next = rating + q * g * (score - expected) / precision;
     (next, (1.0 / precision).sqrt().clamp(50.0, 350.0))
+}
+
+fn ranked_glicko_g(opponent_deviation: f64) -> f64 {
+    let q = 10_f64.ln() / 400.0;
+    let deviation = opponent_deviation.clamp(50.0, 350.0);
+    1.0 / (1.0 + 3.0 * q * q * deviation * deviation / std::f64::consts::PI.powi(2)).sqrt()
+}
+
+pub fn ranked_expected_score(rating: f64, opponent: f64, opponent_deviation: f64) -> f64 {
+    let g = ranked_glicko_g(opponent_deviation);
+    1.0 / (1.0 + 10_f64.powf(-g * (rating - opponent) / 400.0))
+}
+
+const RANKED_POINT_CURVE: [(u16, i16, i16); 8] = [
+    (800, 28, 0),
+    (1200, 26, 0),
+    (1600, 24, 0),
+    (2000, 22, 10),
+    (2400, 20, 16),
+    (2800, 18, 22),
+    (3200, 18, 26),
+    (4000, 16, 30),
+];
+
+fn ranked_point_base(score: u16, won: bool) -> i16 {
+    for pair in RANKED_POINT_CURVE.windows(2) {
+        let (start, win, loss) = pair[0];
+        let (end, next_win, next_loss) = pair[1];
+        if score <= end {
+            if !won && score < 2000 {
+                return 0;
+            }
+            let progress = f64::from(score.saturating_sub(start)) / f64::from(end - start);
+            let start_value = if won { win } else { loss };
+            let end_value = if won { next_win } else { next_loss };
+            return (f64::from(start_value) + f64::from(end_value - start_value) * progress).round() as i16;
+        }
+    }
+    if won { 16 } else { 30 }
+}
+
+pub fn ranked_points_breakdown(
+    rating: &SeasonRating,
+    opponent: &SeasonRating,
+    result: f64,
+) -> RankedPointsBreakdown {
+    if result == 0.5 {
+        return RankedPointsBreakdown::default();
+    }
+    if result == 0.0 && (!rating.placements_complete || rating.score < 2000) {
+        return RankedPointsBreakdown { protected_loss: true, ..Default::default() };
+    }
+
+    let won = result == 1.0;
+    let expected = ranked_expected_score(rating.mu, opponent.mu, opponent.sigma);
+    let opponent_adjustment = (16.0 * (0.5 - expected)).round() as i16;
+    let league_adjustment = if rating.score >= 2000 {
+        ((rating.mu - f64::from(rating.score)) / 100.0).round().clamp(-6.0, 6.0) as i16
+    } else {
+        0
+    };
+    let base = if won { ranked_point_base(rating.score, true) } else { -ranked_point_base(rating.score, false) };
+    let streak = if won { rating.win_streak.saturating_add(1).min(3) as i16 } else { 0 };
+    let raw = base + opponent_adjustment + league_adjustment + streak;
+    let mut breakdown = RankedPointsBreakdown {
+        base,
+        opponent: opponent_adjustment,
+        league: league_adjustment,
+        streak,
+        ..Default::default()
+    };
+    if won {
+        let bounded = raw.clamp(10, 40);
+        breakdown.limit = bounded - raw;
+        let actual = (i32::from(rating.score) + i32::from(bounded)).min(4000) - i32::from(rating.score);
+        breakdown.limit += actual as i16 - bounded;
+    } else {
+        let bounded = raw.clamp(-40, -2);
+        breakdown.limit = bounded - raw;
+        let actual = (i32::from(rating.score) + i32::from(bounded)).max(2000) - i32::from(rating.score);
+        breakdown.protection = actual as i16 - bounded;
+    }
+    breakdown
 }
 
 /// Create the initial rating for a participant in the ranked 1v1 queue.
@@ -759,6 +903,7 @@ pub fn initial_ranked_rating(account_id: String, initial_mmr: f64, now: u64) -> 
         division,
         peak_score: score,
         placements_complete: false,
+        win_streak: 0,
         updated_at: now,
     }
 }
@@ -773,15 +918,21 @@ pub fn apply_ranked_result(rating: &mut SeasonRating, opponent: &SeasonRating, r
     {
         return Err("invalid ranked result");
     }
+    let points = ranked_points_breakdown(rating, opponent, result);
     let (mu, sigma) = ranked_glicko(rating.mu, rating.sigma, opponent.mu, opponent.sigma, result);
     rating.mu = mu;
     rating.sigma = sigma;
-    rating.score = mu.round().clamp(800.0, 4000.0) as u16;
+    rating.score = (i32::from(rating.score) + i32::from(points.total())).clamp(800, 4000) as u16;
     let (tier, division) = tier_for_score(rating.score);
     rating.tier = tier.to_string();
     rating.division = division;
     rating.games_played = rating.games_played.saturating_add(1);
     rating.wins = rating.wins.saturating_add(u32::from(result == 1.0));
+    match result {
+        1.0 => rating.win_streak = rating.win_streak.saturating_add(1).min(3),
+        0.0 => rating.win_streak = 0,
+        _ => {}
+    }
     rating.placements_complete = rating.games_played >= 5;
     rating.peak_score = rating.peak_score.max(rating.score);
     rating.updated_at = now;
@@ -824,6 +975,18 @@ mod tests {
     use std::collections::BTreeSet;
 
     #[test]
+    fn presentation_ladder_matches_every_score_and_boundary() {
+        let ladder = super::ranked_ladder();
+        assert_eq!(ladder.steps.len(), 22);
+        for score in 800..=ladder.max_score {
+            let shown = ladder.steps.iter().rev().find(|step| step.score <= score).unwrap();
+            let (tier, division) = super::tier_for_score(score);
+            assert_eq!((&*shown.tier, &shown.division), (tier, &division));
+        }
+        assert_eq!(ladder.steps.last().unwrap().score, 3200);
+    }
+
+    #[test]
     fn ranked_results_update_both_players_from_their_previous_ratings() {
         let mut winner = super::initial_ranked_rating("winner".into(), 1000.0, 1);
         let mut loser = super::initial_ranked_rating("loser".into(), 1000.0, 1);
@@ -842,6 +1005,97 @@ mod tests {
         let before = winner.clone();
         assert!(super::apply_ranked_result(&mut winner, &loser_before, 0.25, 4).is_err());
         assert_eq!(winner, before);
+    }
+
+    fn ranked_rating(score: u16, mu: f64, games: u32, streak: u32) -> super::SeasonRating {
+        let mut rating = super::initial_ranked_rating(
+            format!("rating-{score}-{mu}-{games}-{streak}"),
+            mu,
+            1,
+        );
+        rating.score = score;
+        let (tier, division) = super::tier_for_score(score);
+        rating.tier = tier.into();
+        rating.division = division;
+        rating.games_played = games;
+        rating.placements_complete = games >= 5;
+        rating.win_streak = streak;
+        rating.sigma = 80.0;
+        rating
+    }
+
+    #[test]
+    fn ranked_point_gains_change_with_rival_and_streak() {
+        let player = ranked_rating(1400, 1400.0, 5, 1);
+        let stronger = ranked_rating(1550, 1550.0, 5, 0);
+        let weaker = ranked_rating(1250, 1250.0, 5, 0);
+        let favored = super::ranked_points_breakdown(&player, &stronger, 1.0);
+        let underdog = super::ranked_points_breakdown(&player, &weaker, 1.0);
+        assert_eq!((favored.base, favored.opponent, favored.streak, favored.total()), (25, 3, 2, 30));
+        assert_eq!((underdog.base, underdog.opponent, underdog.streak, underdog.total()), (25, -3, 2, 24));
+        let veteran_streak = ranked_rating(1400, 1400.0, 5, 8);
+        assert_eq!(super::ranked_points_breakdown(&veteran_streak, &stronger, 1.0).streak, 3);
+    }
+
+    #[test]
+    fn ranked_losses_are_protected_during_placements_and_through_gold() {
+        let player = ranked_rating(1000, 1000.0, 0, 3);
+        let opponent = ranked_rating(1000, 1000.0, 5, 0);
+        let placement_loss = super::ranked_points_breakdown(&player, &opponent, 0.0);
+        assert!(placement_loss.protected_loss);
+        assert_eq!(placement_loss.total(), 0);
+
+        let gold = ranked_rating(1999, 1999.0, 5, 0);
+        let gold_loss = super::ranked_points_breakdown(&gold, &opponent, 0.0);
+        assert!(gold_loss.protected_loss);
+        assert_eq!(gold_loss.total(), 0);
+    }
+
+    #[test]
+    fn ranked_platinum_losses_scale_by_rival_and_stop_at_the_protected_floor() {
+        let player = ranked_rating(2200, 2200.0, 5, 0);
+        let stronger = ranked_rating(2350, 2350.0, 5, 0);
+        let weaker = ranked_rating(2050, 2050.0, 5, 0);
+        let against_stronger = super::ranked_points_breakdown(&player, &stronger, 0.0);
+        let against_weaker = super::ranked_points_breakdown(&player, &weaker, 0.0);
+        assert_eq!(against_stronger.total(), -10);
+        assert_eq!(against_weaker.total(), -16);
+
+        let near_floor = ranked_rating(2003, 2003.0, 5, 0);
+        let floor_result = super::ranked_points_breakdown(&near_floor, &near_floor, 0.0);
+        assert_eq!(floor_result.total(), -3);
+        assert_eq!(i32::from(near_floor.score) + i32::from(floor_result.total()), 2000);
+        assert_eq!(floor_result.total(), floor_result.base + floor_result.opponent + floor_result.league + floor_result.streak + floor_result.protection + floor_result.limit);
+    }
+
+    #[test]
+    fn ranked_mmr_moves_separately_while_points_stay_protected_and_streaks_settle_once() {
+        let mut player = ranked_rating(1000, 1000.0, 0, 0);
+        let opponent = ranked_rating(1000, 1000.0, 5, 0);
+        super::apply_ranked_result(&mut player, &opponent, 0.0, 2).unwrap();
+        assert_eq!(player.score, 1000);
+        assert!(player.mu < 1000.0);
+        assert_eq!(player.win_streak, 0);
+
+        player.win_streak = 2;
+        let streak_before_draw = player.win_streak;
+        super::apply_ranked_result(&mut player, &opponent, 0.5, 3).unwrap();
+        assert_eq!(player.win_streak, streak_before_draw);
+        super::apply_ranked_result(&mut player, &opponent, 1.0, 4).unwrap();
+        assert_eq!(player.win_streak, 3);
+    }
+
+    #[test]
+    fn legacy_ranked_records_load_without_streak_or_point_breakdown() {
+        let rating: super::SeasonRating = serde_json::from_str(
+            r#"{"schema_version":2,"account_id":"legacy","season_id":1,"queue":"Ranked1v1","mode":"FFA","games_played":4,"wins":2,"mu":1000.0,"sigma":100.0,"score":1000,"tier":"Bronze","division":"II","peak_score":1000,"placements_complete":false,"updated_at":1}"#,
+        ).unwrap();
+        assert_eq!(rating.win_streak, 0);
+
+        let participant: super::MatchParticipantRecord = serde_json::from_str(
+            r#"{"account_id":"legacy","display_name":"Legacy","is_bot":false,"leader":null,"team":null,"placement":2,"won":false,"kills":0,"deaths":0,"assists":0,"players_defeated":0,"empires_defeated":0,"tribes_defeated":0,"xp":0,"leader_xp":0,"crowns":0,"laurels":0,"rating_delta":-4,"rating_before":1000,"rating_after":996}"#,
+        ).unwrap();
+        assert_eq!(participant.ranked_points_breakdown, None);
     }
 
     #[test]

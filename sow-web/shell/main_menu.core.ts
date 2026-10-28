@@ -1,4 +1,5 @@
-import type { LocalizedText, MenuLeader, MenuLobby, MenuMap, MenuState } from "./main_menu.state.ts";
+import { rankEmblem, rankLabel } from "./main_menu.ranked.ts";
+import type { LocalizedText, MenuLeader, MenuLobby, MenuMap, MenuState, RankedLadder } from "./main_menu.state.ts";
 import type {
     ProfileCacheEntry,
     ProfileData,
@@ -65,6 +66,7 @@ interface MenuUi {
     profileTab: string;
     profileData: ProfileData | null;
     rankedRating: ProfileRating | null;
+    rankedLadder: RankedLadder | null;
     profileHistory: ProfileMatch[];
     profileMatchDetail: ProfileMatchDetail | null;
     profileSnapshotLoading: boolean;
@@ -126,6 +128,7 @@ export const menuUi: MenuUi = {
     profileTab: "overview",
     profileData: null,
     rankedRating: null,
+    rankedLadder: null,
     profileHistory: [],
     profileMatchDetail: null,
     profileSnapshotLoading: false,
@@ -177,6 +180,21 @@ export function esc(value: unknown): string {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
+}
+
+export function renderQuickMatchButton(): string {
+    const ranked = menuUi.rankedRating;
+    const rankedLabel = rankLabel(ranked);
+    return (
+        "<button class='sow-menu__primary sow-menu__quick-match' type='button' data-command='quick_match'><div><strong>" +
+        "<img class='sow-ranked__mode-icon' src='" + esc(asset("shell/ranked/ranked.svg")) + "' alt=''>" + esc(SOW_t("menu.quick_match")) +
+        "</strong><small>" +
+        esc(SOW_t("lobbies.ranked_1v1")) +
+        " · <b data-ranked-current>" +
+        esc(rankedLabel) +
+        "</b></small></div><span data-ranked-emblem>" + rankEmblem(ranked?.placements_complete ? ranked.tier : "unranked", ranked?.placements_complete ? ranked.division : null) + "</span></button>" +
+        "<button class='sow-menu__ghost-button sow-ranked__my-rank' type='button' data-command='open_ranked_profile'>" + esc(SOW_t("ranked.my_rank")) + "</button>"
+    );
 }
 
 export function localizedText(value: LocalizedText | null | undefined): string {
@@ -745,8 +763,8 @@ export function renderKey(): string {
         my_player_id: state.my_player_id,
         private_game: state.custom_game_is_private,
         single_player: state.custom_game_is_sp,
-        downloading: state.downloading_map,
-        download_progress: state.map_download_progress,
+        downloading: state.ranked_matchup ? null : state.downloading_map,
+        download_progress: state.ranked_matchup ? null : state.map_download_progress,
         download_error: state.map_download_error,
         match_preparing: state.match_preparing,
         error: state.error,

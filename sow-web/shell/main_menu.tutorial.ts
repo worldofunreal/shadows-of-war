@@ -52,6 +52,7 @@ interface TutorialRuntime {
     mapUiStepRecorded: boolean;
     cameraTargetFactionId: string | null;
     cameraShotStepId: string | null;
+    expandFocusStepId: string | null;
     reactionHighlightPlayerId: number | null;
     stepRevealTimer: number | null;
     stepRevealStepId: string | null;
@@ -122,6 +123,7 @@ interface TutorialRuntime {
         mapUiStepRecorded: false,
         cameraTargetFactionId: null,
         cameraShotStepId: null,
+        expandFocusStepId: null,
         reactionHighlightPlayerId: null,
         stepRevealTimer: null,
         stepRevealStepId: null,
@@ -497,6 +499,7 @@ interface TutorialRuntime {
                 runtime.hoverEvents = 0;
                 runtime.cameraTargetFactionId = null;
                 runtime.cameraShotStepId = null;
+                runtime.expandFocusStepId = null;
                 runtime.hoveredEntityId = null;
                 runtime.hoverStepId = null;
                 runtime.hoverStepRecorded = false;
@@ -584,6 +587,7 @@ interface TutorialRuntime {
                 runtime.hoverEvents = 0;
                 runtime.cameraTargetFactionId = null;
                 runtime.cameraShotStepId = null;
+                runtime.expandFocusStepId = null;
                 const hovered = runtime.latestHud.hovered;
                 runtime.hoveredEntityId =
                     hovered && !hovered.is_me && Number.isInteger(Number(hovered.id))
@@ -627,6 +631,18 @@ interface TutorialRuntime {
             guide: { kind: "world", target: "confirm_building_placement", gesture: "tap" },
         });
         return Object.assign({}, model, { step: step });
+    }
+
+    function waitingForEmoteGuide(model: CampaignMachineView) {
+        return Boolean(
+            model &&
+                model.waiting &&
+                model.exchange &&
+                model.exchange.presentation !== "dialogue" &&
+                model.step &&
+                model.step.guide &&
+                !["scene", "choice", "end"].includes(model.step.type),
+        );
     }
 
     function update(hud: CampaignRecord | null) {
@@ -904,6 +920,32 @@ interface TutorialRuntime {
                 });
             }
         }
+        if (
+            machineView.step.id === "boudica_first_expansion" &&
+            machineView.step.guide &&
+            machineView.step.guide.target === "expand"
+        ) {
+            if (runtime.expandFocusStepId !== machineView.step.id) {
+                const visible = tutorial.expand;
+                const target = tutorial.expand_target;
+                if (
+                    visible &&
+                    Number.isFinite(Number(visible.x)) &&
+                    Number.isFinite(Number(visible.y))
+                ) {
+                    runtime.expandFocusStepId = machineView.step.id;
+                } else if (
+                    target &&
+                    Number.isFinite(Number(target.x)) &&
+                    Number.isFinite(Number(target.y)) &&
+                    send("focus_world", { x: Number(target.x), y: Number(target.y) })
+                ) {
+                    runtime.expandFocusStepId = machineView.step.id;
+                }
+            }
+        } else {
+            runtime.expandFocusStepId = null;
+        }
         syncTutorialPause(machineView);
         let markerId = null;
         const exchangeSpeaker =
@@ -923,7 +965,13 @@ interface TutorialRuntime {
         revealGuidedUiTarget(machineView.step);
         if (!runtime.modalOpen) {
             if (machineView.waiting) {
-                runtime.view!.render(null);
+                if (waitingForEmoteGuide(machineView)) {
+                    const displayView = placementGuideView(machineView, hud);
+                    runtime.view!.render(
+                        displayView,
+                        renderContext(displayView.step, hud, anchorFor(displayView.step, hud), displayView),
+                    );
+                } else runtime.view!.render(null);
                 if (machineView.exchange) syncCameraShot(machineView.step, hud);
                 if (runtime.stepRevealStepId !== machineView.step.id) clearStepRevealTimer();
                 if (runtime.stepRevealTimer === null && typeof window.setTimeout === "function") {
@@ -1198,7 +1246,7 @@ interface TutorialRuntime {
         if (!runtime.machine || !runtime.view || runtime.modalOpen) return;
         if (!runtime.latestHud) return;
         const model = runtime.machine.view();
-        if (model.waiting) runtime.view.render(null);
+        if (model.waiting && !waitingForEmoteGuide(model)) runtime.view.render(null);
         else {
             const displayView = placementGuideView(model, runtime.latestHud);
             runtime.view.render(
@@ -1355,6 +1403,7 @@ interface TutorialRuntime {
         runtime.cameraOnly = false;
         runtime.pausedAction = null;
         runtime.cameraTargetFactionId = null;
+        runtime.expandFocusStepId = null;
         runtime.hoverEvents = 0;
         runtime.hoveredEntityId = null;
         runtime.hoverStepId = null;

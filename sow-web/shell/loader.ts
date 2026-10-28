@@ -13,6 +13,8 @@
         promise: Promise<boolean>;
     };
     type LoaderState = {
+        ranked_matchup_html?: string;
+        settings?: { reduced_motion?: boolean };
         loader_job?: string;
         loader_leader?: unknown;
         loader_info_leader?: unknown;
@@ -677,6 +679,8 @@
             return;
         if (finishing) return;
         const closingRoot = root;
+        root.querySelector(".sow-ranked__loader")?.remove();
+        root.classList.remove("has-ranked-matchup");
         finishing = true;
         finishingLoaderCycleId = cycleId;
         cancelFinishTimers();
@@ -726,6 +730,22 @@
         }, 160);
     }
 
+    function syncRankedMatchup(state: LoaderState) {
+        if (!root) return;
+        const markup = state.loader_job === "EnterGame" ? state.ranked_matchup_html || "" : "";
+        let panel = root.querySelector<HTMLElement>(".sow-ranked__loader");
+        root.classList.toggle("has-ranked-matchup", !!markup);
+        root.dataset.reducedMotion = String(!!state.settings?.reduced_motion);
+        if (!markup) { panel?.remove(); return; }
+        if (!panel) {
+            panel = document.createElement("section");
+            panel.className = "sow-ranked__loader";
+            root.appendChild(panel);
+        }
+        // Keep the same cards while progress updates; only a new encounter changes them.
+        if (panel.dataset.markup !== markup) { panel.innerHTML = markup; panel.dataset.markup = markup; }
+    }
+
     function sync(state: LoaderState | null | undefined) {
         if (!state) return;
         const cycleId = loaderCycleId(state);
@@ -761,6 +781,7 @@
             loaderVisible = true;
             startProgress();
         }
+        syncRankedMatchup(state);
         const pendingArt = syncLoaderArt(state);
         setLoaderMapError(state);
         const progress = Number(state.loader_progress);

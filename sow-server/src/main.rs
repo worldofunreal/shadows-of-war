@@ -3357,11 +3357,15 @@ mod relay_worker_tests {
 
     #[test]
     fn parses_game_and_management_hosts() {
-        let worker =
-            parse_relay_worker("relay-a.example:mgmt.example:8083", 2).expect("valid worker");
-        assert_eq!(worker.id, 2);
-        assert_eq!(worker.host, "relay-a.example");
-        assert_eq!(worker.mgmt_url, "https://mgmt.example:8083");
+        for (input, id, port) in [
+            ("relay-a.example:mgmt.example:8080", 0, 8080),
+            ("relay-a.example:mgmt.example:8083", 2, 8083),
+        ] {
+            let worker = parse_relay_worker(input, id).expect("valid worker");
+            assert_eq!(worker.id, id);
+            assert_eq!(worker.host, "relay-a.example");
+            assert_eq!(worker.mgmt_url, format!("https://mgmt.example:{port}"));
+        }
     }
 
     #[test]

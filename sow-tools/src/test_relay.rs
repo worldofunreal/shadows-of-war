@@ -137,7 +137,7 @@ struct Args {
     url: Url,
 
     /// Authentication provider used by the join proof
-    #[arg(long, required_unless_present = "verify_rewards")]
+    #[arg(long, required_unless_present_any = ["verify_rewards", "verify_ranked"])]
     auth_provider: Option<String>,
 
     /// Account ID for providers that use an explicit account identity
@@ -145,11 +145,14 @@ struct Args {
     auth_account_id: Option<String>,
 
     /// Provider token or anonymous account secret
-    #[arg(long, required_unless_present = "verify_rewards")]
+    #[arg(long, required_unless_present_any = ["verify_rewards", "verify_ranked"])]
     auth_token: Option<String>,
     /// Run the real client return and two-player reward acceptance gate.
     #[arg(long)]
     verify_rewards: bool,
+    /// Verify live human-human and human-bot ranked matches and saved ratings.
+    #[arg(long, conflicts_with = "verify_rewards")]
+    verify_ranked: bool,
     #[arg(long)]
     database_url: Option<Url>,
     #[arg(long)]
@@ -166,6 +169,19 @@ struct Args {
 async fn main() {
     let args = Args::parse();
     let url = args.url;
+    if args.verify_ranked {
+        reward_return::verify_ranked(
+            &url,
+            args.database_url
+                .as_ref()
+                .expect("--database-url is required for ranked verification"),
+            args.audit_accounts_file
+                .as_deref()
+                .expect("--audit-accounts-file is required for ranked verification"),
+        )
+        .await;
+        return;
+    }
     if args.verify_rewards {
         reward_return::verify(
             &url,
