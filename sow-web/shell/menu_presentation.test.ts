@@ -1621,6 +1621,10 @@ test("rank result animates real points once and can finish immediately or cancel
     const interrupted = api.animateRankResult(card, result, () => false);
     interrupted.cancel();
     assert.equal(frames.size, 0);
+    fields.get("[data-rank-current-emblem]").innerHTML = "unranked";
+    api.animateRankResult(card, { ...result, games_played: 1, placements_complete: false }, () => false).finish();
+    assert.equal(fields.get("[data-rank-current-emblem]").innerHTML, "unranked", "placement progress cannot reveal an assigned league");
+    assert.equal(frames.size, 0);
 });
 
 test("ranked result acknowledges before replay, ignores duplicate presses, and traps keyboard focus", () => {

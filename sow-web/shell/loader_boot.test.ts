@@ -958,6 +958,8 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.equal(matchup.innerHTML, rankedLoad.ranked_matchup_html);
     window.SOW_syncWebLoader({ ...rankedLoad, loader_progress: 0.8 });
     assert.equal(root.querySelector(".sow-ranked__loader"), matchup, "progress updates keep the same matchup node");
+    window.SOW_syncWebLoader({ ...rankedLoad, ranked_matchup_html: undefined, phase: "Playing", loader_progress: 0.95 });
+    assert.equal(root.querySelector(".sow-ranked__loader"), matchup, "the smaller Playing payload retains the encounter until the loader completes");
     window.SOW_syncWebLoader({ ...rankedLoad, loader_done: true, loader_progress: 1 });
     assert.equal(root.querySelector(".sow-ranked__loader"), null, "a ready game never waits for the matchup animation");
     [...timers.values()][0]();

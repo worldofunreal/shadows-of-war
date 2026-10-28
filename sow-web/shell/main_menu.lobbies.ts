@@ -1,4 +1,4 @@
-import { rankLabel, renderRankedDuel } from "./main_menu.ranked.ts";
+import { rankEmblem, rankLabel, rankTier, renderRankedDuel } from "./main_menu.ranked.ts";
 import type { CampaignDefinition } from "./campaign/types.ts";
 import {
     asset,
@@ -1061,6 +1061,12 @@ export function updateRankedQueue() {
     if (progress) { progress.value = state.map_download_progress || 0; progress.hidden = !state.downloading_map; }
     const label = panel.querySelector<HTMLElement>(".sow-ranked__player > span:last-child");
     if (label) label.textContent = rankLabel(menuUi.rankedRating);
+    const badge = panel.querySelector<HTMLElement>(".sow-ranked__player .sow-ranked__emblem");
+    const rating = menuUi.rankedRating;
+    const tier = rating?.placements_complete ? rating.tier : "unranked";
+    const division = rating?.placements_complete ? rating.division : null;
+    if (badge && (badge.dataset.tier !== rankTier(tier) || (badge.querySelector("b")?.textContent || "") !== (division || "")))
+        badge.outerHTML = rankEmblem(tier, division);
 }
 
 export function renderQueue() {
