@@ -139,7 +139,7 @@ mod tests {
     #[test]
     fn matchmaking_modes_keep_full_tribe_pool_and_vary_nations() {
         let full_tribe_pool = GameConfig::max_tribe_bots();
-        assert_eq!(full_tribe_pool, 400, "matchmaking requires 400 tribes");
+        assert_eq!(full_tribe_pool, 401, "matchmaking requires 401 tribes");
         let map = map(702_702);
 
         for (seed, mode) in [(29, "FFA"), (31, "Teams")] {

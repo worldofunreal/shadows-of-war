@@ -1,6 +1,6 @@
 FALTAN (0)
 
-TENEMOS (213)
+TENEMOS (212)
 Hatshepsut — Ancient Egypt | hatshepsut.webp
 Amanirenas — Kingdom of Kush | amanirenas.webp
 Sundiata Keita — Mali Empire | sundiata_keita.webp
@@ -57,7 +57,6 @@ Crazy Horse — Lakota | crazy_horse.webp
 Nancy Ward — Cherokee Nation | nanyehi_nancy_ward.webp
 Red Cloud — Lakota | red_cloud.webp
 Molly Brant — Mohawk / Haudenosaunee | molly_brant.webp
-Sitting Bull — Hunkpapa Lakota | sitting_bull.webp
 Geronimo — Chiricahua Apache | geronimo.webp
 Sarah Winnemucca — Northern Paiute | sarah_winnemucca.webp
 Túpac Amaru II — Andean Rebellion / Peru | tupac_amaru_ii.webp

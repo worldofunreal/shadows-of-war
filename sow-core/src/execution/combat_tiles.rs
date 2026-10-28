@@ -155,6 +155,16 @@ pub(crate) fn attack_strength(state: &GameState, attacker: u16, target: u16, arm
     })
 }
 
+/// How much harder a defender's land is to conquer because of its hero ability.
+pub(crate) fn defense_strength(state: &GameState, attacker: u16, defender: u16, army: f64) -> f64 {
+    let Some(player) = state.player(defender) else {
+        return 1.0;
+    };
+    targeted_multiplier(state, defender, attacker, army, |target| {
+        player.leader.defense_strength_multiplier(target)
+    })
+}
+
 /// Hero target loss ability: tiles taken from land its target describes cost `attacker`'s
 /// army fewer troops. Judged like `attack_strength`, once per attack tick.
 fn target_attacker_loss(state: &GameState, attacker: u16, target: u16, army: f64) -> f64 {
@@ -344,7 +354,13 @@ impl SowEngine {
                     execution.target_owner,
                     execution.troops,
                 );
-            let effective_troops = execution.troops * troop_strength;
+            let defense_strength = defense_strength(
+                &self.state,
+                execution.owner_id,
+                execution.target_owner,
+                execution.troops,
+            );
+            let effective_troops = execution.troops * troop_strength / defense_strength;
             let target_loss = target_attacker_loss(
                 &self.state,
                 execution.owner_id,
@@ -459,6 +475,13 @@ impl SowEngine {
                         }
                         execution.to_conquer.push(target_tile);
                         break;
+                    }
+
+                    if defense_strength != 1.0 {
+                        self.state.announce_leader_ability(
+                            execution.target_owner,
+                            Some((target_tile.x, target_tile.y)),
+                        );
                     }
 
                     // Determine conquest cost for this specific tile (matching OpenFront's terrain & Tower coefficients)

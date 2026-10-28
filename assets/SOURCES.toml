@@ -10,7 +10,10 @@ source = "ai_generated"
 tool = "Gemini / Meta AI / Midjourney / OpenAI ImageGen (mixed, historical)"
 license = "CC-BY-SA-4.0"
 license_doc = "docs/legal/LICENSE-ASSETS"
-notes = "One avatar source per playable hero: heroes/<id>.webp is a 2x2 Happy, Calm, Fear, Angry sheet; Calm also supplies its static portrait. nations/ (nation bots), tribes/ (tribe bots and tutorial tribes), and campaign/ (tutorial figures that are not tribes) keep one portrait each. default.webp is the face of a player without a portrait and of any character whose own portrait is still missing. random.webp at this folder root is original dice-and-map art for the random leader option (AGPL-3.0-or-later)."
+placeholder_source = "Programmatic labeled placeholders created in-repo"
+placeholder_license = "AGPL-3.0-or-later"
+placeholder_files = ["heroes/sitting_bull.webp", "heroes/pocahontas.webp", "tribes/lakota.webp"]
+notes = "One avatar source per playable hero: heroes/<id>.webp is a 2x2 Happy, Calm, Fear, Angry sheet; Calm also supplies its static portrait. nations/ (nation bots), tribes/ (tribe bots and tutorial tribes), and campaign/ (tutorial figures that are not tribes) keep one portrait each. default.webp is the face of a player without a portrait and of any character whose own portrait is still missing. random.webp at this folder root is original dice-and-map art for the random leader option (AGPL-3.0-or-later). The listed labeled placeholders need owner replacement."
 
 [heroes]
 path = "assets/art/heroes/"
@@ -20,7 +23,10 @@ license = "CC-BY-SA-4.0"
 license_doc = "docs/legal/LICENSE-ASSETS"
 notes = "Optional web menu and loader scenes: <id>_desktop and <id>_mobile are published when present. A missing variant has no image fallback in its consumer."
 restored = ["alexander", "caesar", "cleopatra", "genghis_khan", "ragnar", "sun_tzu"]
-themed_placeholder = ["boudica", "leonidas", "napoleon", "richard_the_lionheart", "vercingetorix", "lady_six_sky"]
+themed_placeholder = ["boudica", "leonidas", "napoleon", "richard_the_lionheart", "vercingetorix", "lady_six_sky", "sitting_bull", "pocahontas"]
+placeholder_source = "Programmatic labeled placeholders created in-repo"
+placeholder_license = "AGPL-3.0-or-later"
+placeholder_files = ["sitting_bull_desktop.webp", "sitting_bull_mobile.webp", "pocahontas_desktop.webp", "pocahontas_mobile.webp"]
 
 [buildings]
 path = "assets/art/buildings/"
@@ -39,6 +45,9 @@ path = "assets/art/icons/"
 source = "user_supplied"
 license = "Project-owner supplied; cleared for distribution"
 notes = "All iconography: currency (gold, gem, crown, laurel), troops (HUD, menu nav and map), tutorial hand, surrender, mobile navigation, and the nameplate/map badges packed into assets/generated/badges-atlas.* (request/allied/traitor: AGPL-3.0-or-later; rank, you, disconnected, upgrade-sparkle, wilderness, death, radiation, construction, hammer: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art). Hero ability icons are in abilities/<hero-id>.webp and published byte-for-byte. laurel is a generated placeholder pending final art."
+placeholder_source = "Programmatic labeled placeholders created in-repo"
+placeholder_license = "AGPL-3.0-or-later"
+placeholder_files = ["abilities/sitting_bull.webp", "abilities/pocahontas.webp"]
 
 [store]
 path = "assets/art/store/"

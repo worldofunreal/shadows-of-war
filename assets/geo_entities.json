@@ -1005,16 +1005,16 @@
    "avatar": "molly_brant"
   },
   {
-   "id": "nation_sitting_bull",
-   "name": "Sitting Bull",
-   "entity": "Hunkpapa Lakota",
-   "role": "nation",
+   "id": "tribe_lakota",
+   "name": "Lakota",
+   "entity": "Lakota",
+   "role": "tribe",
    "region": "americas",
    "lat": 45.5756,
    "lon": -100.4672,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Sitting_Bull",
-   "avatar": "sitting_bull"
+   "wikipedia": "https://en.wikipedia.org/wiki/Lakota_people",
+   "avatar": "lakota"
   },
   {
    "id": "lozen",
@@ -9311,6 +9311,50 @@
     }
    },
    "territory_color": "#4a235a"
+  },
+  {
+   "id": "sitting_bull",
+   "name": "Sitting Bull",
+   "entity": "Hunkpapa Lakota",
+   "role": "nation",
+   "region": "americas",
+   "lat": 45.5756,
+   "lon": -100.4672,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Sitting_Bull",
+   "avatar": "sitting_bull",
+   "hero": {
+    "name": "Sitting Bull",
+    "art_slug": "sitting_bull",
+    "ability": {
+     "kind": "defense_strength",
+     "against": "nation",
+     "percent": 25
+    }
+   },
+   "territory_color": "#7b241c"
+  },
+  {
+   "id": "pocahontas",
+   "name": "Pocahontas",
+   "entity": "Powhatan Confederacy",
+   "role": "nation",
+   "region": "americas",
+   "lat": 37.4,
+   "lon": -76.8,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Pocahontas",
+   "avatar": "pocahontas",
+   "hero": {
+    "name": "Pocahontas",
+    "art_slug": "pocahontas",
+    "ability": {
+     "kind": "defense_strength",
+     "against": "foreign",
+     "percent": 25
+    }
+   },
+   "territory_color": "#286b63"
   }
  ]
 }

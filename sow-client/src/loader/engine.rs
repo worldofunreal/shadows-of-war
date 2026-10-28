@@ -405,16 +405,17 @@ impl SowApp {
                     splash_show_loading_progress(&mut self.ui.app.splash_state, 0.80);
                 } else if step == 3 && self.sim.current_snapshot.is_some() {
                     self.net.load_telemetry.mark_snapshot_available();
-                    let snapshot_tick = self
-                        .sim
-                        .current_snapshot
-                        .as_ref()
-                        .map_or(0, |snapshot| snapshot.tick);
-                    let land_cache_ready = self.sim.engine.as_ref().is_some_and(|engine| {
-                        self.ui
-                            .nameplates
-                            .prepare_land_cache(&engine.state.map, snapshot_tick)
-                    });
+                    let land_cache_ready = match (
+                        self.sim.engine.as_ref(),
+                        self.sim.current_snapshot.as_ref(),
+                    ) {
+                        (Some(engine), Some(snapshot)) => self.ui.nameplates.prepare_land_cache(
+                            &engine.state.map,
+                            snapshot.tick,
+                            &snapshot.players,
+                        ),
+                        _ => false,
+                    };
                     let ready_to_release = enter_game_ready_to_release(
                         true,
                         land_cache_ready,

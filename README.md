@@ -36,7 +36,7 @@ Shadows of War is a multiplayer strategy game about taking territory and turning
 
 | Europe | Asia | Leaders | Campaign |
 | --- | --- | --- | --- |
-| ![Europe map](assets/maps/europe/thumbnail.webp) | ![Asia map](assets/maps/asia/thumbnail.webp) | ![Julius Caesar](assets/art/heroes/caesar_desktop.webp) | ![Boudica](assets/art/heroes/boudica_desktop.webp) |
+| ![Europe map](https://shadowsofwar.io/maps/europe/thumbnail.webp) | ![Asia map](https://shadowsofwar.io/maps/asia/thumbnail.webp) | ![Julius Caesar](assets/art/heroes/caesar_desktop.webp) | ![Boudica](assets/art/heroes/boudica_desktop.webp) |
 
 ## Run locally
 

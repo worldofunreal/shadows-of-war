@@ -163,9 +163,8 @@ impl AssetLoader {
 
     /// The slot for a portrait drawn this frame. A full pool evicts the least recently drawn
     /// portrait; heroes and their slots are never evicted.
-    // ponytail: LRU over the slots after the hero blocks (112 with 98 heroes). More than 112
-    // portraits drawn in one frame fall back. Upgrade path: AVATAR_ROWS up to 23, then a smaller
-    // AVATAR_CELL.
+    // ponytail: fixed-capacity LRU after permanent hero blocks; further catalog growth lowers
+    // AVATAR_CELL while keeping both atlas sides within the 4096 px GPU limit.
     fn portrait_slot(&mut self, slug: &str) -> Option<usize> {
         if let Some(slot) = self.campaign_avatar_slots.get(slug).copied() {
             self.portrait_last_drawn[slot] = self.drawn_frame;

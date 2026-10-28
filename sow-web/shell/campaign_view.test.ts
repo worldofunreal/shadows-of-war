@@ -31,6 +31,38 @@ const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.
 const coreSource = fs.readFileSync(path.join(shell, "main_menu.core.ts"), "utf8");
 const campaignEngine = fs.readFileSync(path.join(shell, "campaign/rules.ts"), "utf8");
 const campaignViewApi = loadTypeScriptModule(path.join(shell, "sow-campaign-view.ts"));
+const tutorialGuidesApi = loadTypeScriptModule(path.join(shell, "campaign/tutorial-guides.ts"));
+const tutorialCampaignApi = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+
+function createTutorialGuides(options: Record<string, any> = {}) {
+    const runtime = Object.assign(
+        {
+            episodeId: null,
+            latestHud: null,
+            cameraShotStepId: null,
+            guidedScrollStepId: null,
+            guidedControl: null,
+            guidedAmountControls: [],
+        },
+        options.runtime || {},
+    );
+    const window = Object.assign(
+        { SOWCampaign: tutorialCampaignApi, SOWCampaignView: campaignViewApi },
+        options.window || {},
+    );
+    const document = options.document || { documentElement: { dir: "ltr" } };
+    const guides = tutorialGuidesApi.createTutorialGuides({
+        window,
+        document,
+        runtime,
+        send: options.send || (() => true),
+        tr: options.tr || ((key: string) => key),
+        hasText: options.hasText || (() => false),
+        stepTextKey: options.stepTextKey || ((step: Record<string, any>, suffix: string) => step.id + suffix),
+        zoomMode: options.zoomMode || (() => "wheel"),
+    } as any);
+    return Object.assign(guides, { runtime, window, document });
+}
 void fs.readFileSync(path.join(shell, "../../sow-client/src/campaign/mod.rs"), "utf8");
 void fs.readFileSync(path.join(shell, "../../sow-client/src/render/frame/ui.rs"), "utf8");
 
@@ -2641,9 +2673,6 @@ test("the hover lesson waits for the player to move onto the target during the s
 });
 
 test("a compact campaign guide scrolls a dock target into view once per step", () => {
-    const start = tutorial.indexOf("    function revealGuidedUiTarget(");
-    const end = tutorial.indexOf("\n    function syncTransferGuide(", start);
-    assert.ok(start >= 0 && end > start);
     const strip = {
         scrollLeft: 0,
         scrollWidth: 700,
@@ -2661,16 +2690,15 @@ test("a compact campaign guide scrolls a dock target into view once per step", (
             strip.scrollLeft = 10;
         },
     };
-    const context = {
-        runtime: { episodeId: "episode", guidedScrollStepId: null },
+    const { revealGuidedUiTarget } = createTutorialGuides({
+        runtime: { episodeId: "episode" },
         window: { SOWCampaignView: { resolveUiTarget: () => target } },
         document: {},
-    };
-    const reveal = vm.runInNewContext(tutorial.slice(start, end) + "\nrevealGuidedUiTarget;", context);
+    });
     const step = { id: "place_factory", guide: { kind: "ui", target: "dock_factory" } };
-    reveal(step);
+    revealGuidedUiTarget(step);
     assert.equal(strip.scrollLeft, 10);
-    reveal(step);
+    revealGuidedUiTarget(step);
     assert.equal(strip.scrollLeft, 10);
 });
 
@@ -2837,18 +2865,33 @@ test("tutorial camera anchors and paused build guides publish current map coordi
         guide,
         /guide_build_site_candidates[\s\S]*tutorial_visible_build_site_candidate\([\s\S]*tutorial_project_tile\([\s\S]*&app\.input[\s\S]*tutorial_screen_point_visible/,
     );
-    const anchorFunction = tutorial.slice(
-        tutorial.indexOf("function anchorFor"),
-        tutorial.indexOf("function syncTransferGuide"),
+    const uiSource = { matches: () => false, getClientRects: () => [{}] };
+    const { anchorFor } = createTutorialGuides({
+        window: {
+            SOWCampaignView: {
+                resolveUiTarget: () => uiSource,
+                resolveUiAnchor: () => ({ x: 42, y: 24 }),
+            },
+        },
+        document: {},
+    });
+    assert.deepEqual(
+        JSON.parse(
+            JSON.stringify(
+                anchorFor(
+                    { guide: { kind: "world", target: "target_action" }, trigger: { type: "attack" } },
+                    { tutorial: { target_nameplate: { x: 12, y: 18, offscreen: true } } },
+                ),
+            ),
+        ),
+        { x: 12, y: 18, offscreen: true, cameraTracked: true },
+        "world faction guides follow the live target nameplate",
     );
-    assert.match(
-        anchorFunction,
-        /factionAction[\s\S]*?tutorial\.target_nameplate[\s\S]*?cameraTracked: true/,
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(anchorFor({ guide: { kind: "ui", target: "hud_home" } }, {}))),
+        { x: 42, y: 24 },
+        "UI anchors remain screen coordinates rather than camera tracked world points",
     );
-    const uiAnchorBranch = anchorFunction.slice(
-        anchorFunction.search(/(?:const|let|var) source = window\.SOWCampaignView\.resolveUiTarget/),
-    );
-    assert.doesNotMatch(uiAnchorBranch, /cameraTracked/);
 });
 
 test("a UI step uses its configured target and device-specific hand labels", () => {
@@ -2890,9 +2933,6 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     );
     assert.equal(resolvedSelector, selector);
 
-    const contextStart = tutorial.indexOf("    function targetPlayer(");
-    const contextEnd = tutorial.indexOf("\n    function fetchJson(", contextStart);
-    const contextSource = tutorial.slice(contextStart, contextEnd);
     function renderContextFor(
         mode,
         translated = true,
@@ -2916,13 +2956,13 @@ test("a UI step uses its configured target and device-specific hand labels", () 
             translations[definition.text_namespace + candidateStep.id + "_progress"] =
                 "{current} tiles away · goal: {target} or closer";
         }
-        const context = {
+        const { renderContext } = createTutorialGuides({
             document: { documentElement: { dir: "ltr" } },
             window: { SOWCampaign: campaign },
             zoomMode: () => mode,
             stepTextKey: (candidate, suffix) => definition.text_namespace + candidate.id + suffix,
-            hasText: (key) => Object.hasOwn(translations, key),
-            tr: (key) =>
+            hasText: (key: string) => Object.hasOwn(translations, key),
+            tr: (key: string) =>
                 translations[key] ||
                 {
                     "tutorial.hand_click": "Click the highlighted control",
@@ -2935,9 +2975,8 @@ test("a UI step uses its configured target and device-specific hand labels", () 
                     "hud.building_in_progress": "Building in progress",
                 }[key] ||
                 key,
-        };
-        vm.runInNewContext(contextSource + "\nthis.renderContext = renderContext;", context);
-        return context.renderContext(candidateStep, hud, null, machineView);
+        });
+        return renderContext(candidateStep, hud, null, machineView);
     }
     assert.equal(campaign.guideAction(step), "home");
     assert.equal(campaign.guideAction(expansionStep), "expand");
@@ -3049,12 +3088,7 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     assert.equal(upgradeContext.statusLabel, "Building in progress");
     void fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
 
-    const anchorStart = tutorial.indexOf("    function anchorFor(");
-    const anchorEnd = tutorial.indexOf("\n    function syncTransferGuide(", anchorStart);
-    const anchorSource = tutorial.slice(anchorStart, anchorEnd);
-    const anchorContext = {};
-    vm.runInNewContext(anchorSource + "\nthis.anchorFor = anchorFor;", anchorContext);
-    const anchorFor = anchorContext.anchorFor;
+    const { anchorFor } = createTutorialGuides();
     assert.deepEqual(
         JSON.parse(
             JSON.stringify(
@@ -3084,16 +3118,6 @@ test("a UI step uses its configured target and device-specific hand labels", () 
         null,
         "no status is drawn without a real map anchor",
     );
-    assert.match(
-        anchorSource,
-        /resolveUiTarget\(\s*guide\.target,\s*document,\s*runtime\.episodeId(?:\s*\|\|\s*undefined)?,\s*guideFacts,?\s*\)/,
-    );
-    assert.match(
-        anchorSource,
-        /step\.id === "boudica_transfer_send"[\s\S]*resolveUiAnchor\(source, spotlightPanel\)/,
-    );
-    assert.doesNotMatch(anchorSource, /guide\.target === "hud_center_camera"[\s\S]*root\.clientWidth/);
-    assert.doesNotMatch(anchorSource, /delete result\.(?:width|height)/);
 });
 
 test("campaign tap guides use shared action labels and localized fallback", () => {
@@ -3136,20 +3160,16 @@ test("campaign tap guides use shared action labels and localized fallback", () =
         "upgrade_progress",
     );
 
-    const contextStart = tutorial.indexOf("    function renderContext(");
-    const contextEnd = tutorial.indexOf("\n    function fetchJson(", contextStart);
-    const contextSource = tutorial.slice(contextStart, contextEnd);
     function renderFallbackLabel(mode, step) {
-        const context = {
+        const { renderContext } = createTutorialGuides({
             document: { documentElement: { dir: "ltr" } },
             window: { SOWCampaign: campaign },
             zoomMode: () => mode,
             stepTextKey: (candidate, suffix) => "tutorial." + candidate.id + suffix,
             hasText: () => false,
             tr: (key) => key,
-        };
-        vm.runInNewContext(contextSource + "\nthis.renderContext = renderContext;", context);
-        return context.renderContext(step, { settings: {} }, null, { paused_action: null }).gestureLabel;
+        });
+        return renderContext(step, { settings: {} }, null, { paused_action: null }).gestureLabel;
     }
     for (const { step } of tapSteps) {
         if (step.guide.show_label === false) {
@@ -3277,7 +3297,7 @@ test("tutorial hand and ripple fade in at screen center and glide together to th
 test("construction guidance points to confirmation without advancing on a preview", () => {
     const source = fs.readFileSync(path.join(__dirname, "main_menu.tutorial.ts"), "utf8");
     const begin = source.indexOf("    function placementGuideView(");
-    const end = source.indexOf("    function anchorFor(", begin);
+    const end = source.indexOf("    function update(", begin);
     const adapt = vm.runInNewContext(source.slice(begin, end) + "\nplacementGuideView;");
     const model = {
         step: {

@@ -251,11 +251,11 @@ mod badge_atlas_tests {
 }
 
 // Four expressions per hero plus campaign portraits. Keep each texture side under 4096 px for
-// mobile GPUs: 23×22 cells of 176 px (4048×3872) hold 98×4 hero faces, two fixed cells and 112
-// portraits. 192 px cells top out at 21×21 = 441 slots under the cap, so 98 heroes need 176.
-pub const AVATAR_CELL: u32 = 176;
+// mobile GPUs: 23×24 cells of 170 px (3910×4080) fit the current catalog, two fixed cells and 106
+// campaign portraits. The catalog outgrew the old 23×23 layout, so use the existing resize path.
+pub const AVATAR_CELL: u32 = 170;
 pub const AVATAR_COLS: u32 = 23;
-pub const AVATAR_ROWS: u32 = 22;
+pub const AVATAR_ROWS: u32 = 24;
 pub const AVATAR_SLOT_COUNT: usize = (AVATAR_COLS * AVATAR_ROWS) as usize;
 
 pub const AVATAR_EXPRESSIONS: usize = 4;

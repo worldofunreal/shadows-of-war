@@ -304,7 +304,7 @@ impl MapIdentity {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RebuildPhase {
     PrepareOwners,
     Prepare,
@@ -359,6 +359,34 @@ impl PartialEq for ComponentIdBuffer {
 }
 
 impl Eq for ComponentIdBuffer {}
+
+#[derive(Default)]
+struct OwnerIdBuffer {
+    chunks: Vec<Box<[u16]>>,
+    len: usize,
+}
+
+impl OwnerIdBuffer {
+    fn capture_snapshot(&mut self, owner_states: &[u16]) {
+        self.len = owner_states.len();
+        for (chunk_index, values) in owner_states.chunks(COMPONENT_ID_CHUNK_TILES).enumerate() {
+            if chunk_index == self.chunks.len() {
+                self.chunks
+                    .push(vec![0; COMPONENT_ID_CHUNK_TILES].into_boxed_slice());
+            }
+            self.chunks[chunk_index][..values.len()].copy_from_slice(values);
+        }
+    }
+
+    fn get(&self, index: usize) -> u16 {
+        assert!(index < self.len);
+        self.chunks[index / COMPONENT_ID_CHUNK_TILES][index % COMPONENT_ID_CHUNK_TILES]
+            & sow_core::map::GameMap::PLAYER_ID_MASK
+    }
+    fn clear(&mut self) {
+        self.len = 0;
+    }
+}
 
 #[derive(Default)]
 struct OwnerLandmassBuffer {
@@ -469,6 +497,7 @@ struct RebuildWork {
 #[derive(Default)]
 pub struct NameplateLandCache {
     component_ids: ComponentIdBuffer,
+    owner_ids: OwnerIdBuffer,
     flood_stack: Vec<usize>,
     column_heights: Vec<u32>,
     column_components: Vec<u32>,
@@ -496,6 +525,12 @@ impl NameplateLandCache {
             self.rebuild_work.is_none()
                 && self.completed_map_identity == Some(identity)
                 && self.ownership_revision == map.ownership_revision()
+        })
+    }
+
+    pub fn has_result_for(&self, map: &sow_core::map::GameMap) -> bool {
+        MapIdentity::of(map).is_some_and(|identity| {
+            self.rebuild_work.is_none() && self.completed_map_identity == Some(identity)
         })
     }
 
@@ -541,7 +576,7 @@ impl NameplateLandCache {
             self.invalidate();
             return false;
         };
-        self.begin_rebuild(identity, map.ownership_revision(), tick);
+        self.begin_rebuild(identity, map.ownership_revision(), tick, map.owner_states());
         loop {
             match self.advance_rebuild(map, tick, None, None) {
                 Ok(true) => return true,
@@ -576,10 +611,12 @@ impl NameplateLandCache {
             return Ok(true);
         }
         let ownership_revision = map.ownership_revision();
-        if !self.rebuild_work.as_ref().is_some_and(|work| {
-            work.identity == identity && work.ownership_revision == ownership_revision
-        }) {
-            self.begin_rebuild(identity, ownership_revision, tick);
+        if !self
+            .rebuild_work
+            .as_ref()
+            .is_some_and(|work| work.identity == identity)
+        {
+            self.begin_rebuild(identity, ownership_revision, tick, map.owner_states());
         }
 
         let width = identity.width as usize;
@@ -591,8 +628,7 @@ impl NameplateLandCache {
             if operation_limit.is_some_and(|limit| operations >= limit) {
                 return Ok(false);
             }
-            if operations != 0
-                && operations.is_multiple_of(256)
+            if operations.is_multiple_of(256)
                 && budget.is_some_and(|budget| started_at.elapsed() >= budget)
             {
                 return Ok(false);
@@ -643,8 +679,7 @@ impl NameplateLandCache {
                             continue;
                         }
 
-                        let owner_id =
-                            map.owner_states()[seed] & sow_core::map::GameMap::PLAYER_ID_MASK;
+                        let owner_id = self.owner_ids.get(seed);
                         self.rebuild_work.as_mut().unwrap().seed_cursor += 1;
                         operations += 1;
                         if owner_id == 0
@@ -709,9 +744,7 @@ impl NameplateLandCache {
                             let neighbor = row + neighbor_x;
                             if self.component_ids.get(neighbor) != 0
                                 || !map.terrain[neighbor].is_land()
-                                || map.owner_states()[neighbor]
-                                    & sow_core::map::GameMap::PLAYER_ID_MASK
-                                    != component.owner_id
+                                || self.owner_ids.get(neighbor) != component.owner_id
                             {
                                 continue;
                             }
@@ -763,8 +796,7 @@ impl NameplateLandCache {
                         let x = work.row_cursor;
                         let index = row * width + x;
                         let component_id = self.component_ids.get(index);
-                        let owner_id =
-                            map.owner_states()[index] & sow_core::map::GameMap::PLAYER_ID_MASK;
+                        let owner_id = self.owner_ids.get(index);
                         let selected = component_id != 0
                             && self
                                 .largest_by_owner
@@ -907,8 +939,7 @@ impl NameplateLandCache {
                         operations += 1;
                         continue;
                     }
-                    let owner_id = map.owner_states()[row * width + run_cursor]
-                        & sow_core::map::GameMap::PLAYER_ID_MASK;
+                    let owner_id = self.owner_ids.get(row * width + run_cursor);
                     self.histogram_stack.clear();
                     self.rebuild_work.as_mut().unwrap().histogram_run = Some(HistogramRun {
                         component_id,
@@ -925,9 +956,18 @@ impl NameplateLandCache {
         }
     }
 
-    fn begin_rebuild(&mut self, identity: MapIdentity, ownership_revision: u64, tick: u64) {
+    fn begin_rebuild(
+        &mut self,
+        identity: MapIdentity,
+        ownership_revision: u64,
+        tick: u64,
+        owner_states: &[u16],
+    ) {
         self.completed_map_identity = None;
         self.component_ids.set_len(identity.tile_count);
+        // Turns mutate the map between frames. Take one atomic owner snapshot so turn activity
+        // cannot repeatedly restart a multi-frame cache build.
+        self.owner_ids.capture_snapshot(owner_states);
         self.flood_stack.clear();
         self.column_heights.clear();
         self.column_components.clear();
@@ -953,6 +993,7 @@ impl NameplateLandCache {
     fn invalidate(&mut self) {
         self.completed_map_identity = None;
         self.rebuild_work = None;
+        self.owner_ids.clear();
         self.largest_by_owner.clear();
     }
 }
@@ -1729,23 +1770,35 @@ mod tests {
     }
 
     #[test]
-    fn ownership_revision_change_restarts_incremental_rebuild() {
+    fn ownership_changes_during_rebuild_finish_the_snapshot_then_refresh() {
         let mut map = test_map(16, 12);
         for y in 2..7 {
             for x in 2..7 {
                 own_tile(&mut map, x, y, 1);
             }
         }
+        let captured_map = map.clone();
+        let captured_revision = map.ownership_revision();
+        let mut captured_expected = NameplateLandCache::default();
+        assert!(captured_expected.rebuild(&captured_map, 0));
+
         let mut cache = NameplateLandCache::default();
         assert!(
             !cache
                 .advance_rebuild(&map, 0, None, Some(1))
                 .expect("valid map")
         );
-        let old_revision = map.ownership_revision();
         map.set_owner_id(3, 3, 2);
-        assert_ne!(map.ownership_revision(), old_revision);
+        assert_ne!(map.ownership_revision(), captured_revision);
         assert!(!cache.is_ready_for(&map));
+
+        while !cache.has_result_for(&map) {
+            cache
+                .advance_rebuild(&map, 0, None, Some(256))
+                .expect("finish captured ownership snapshot");
+        }
+        assert_eq!(cache.ownership_revision, captured_revision);
+        assert_eq!(cache.component_ids, captured_expected.component_ids);
 
         rebuild_in_small_steps(&mut cache, &map);
         let mut expected = NameplateLandCache::default();
