@@ -182,13 +182,16 @@
       card.setAttribute("aria-pressed", String(active));
     });
     // Reveal selection inside the roster without scrolling the page or preview.
-    if (animate && !mobile.matches && !cards[index].hidden) {
+    if (animate && !cards[index].hidden) {
       const scroll = $("[data-roster-scroll]");
       const cardBounds = cards[index].getBoundingClientRect();
       const scrollBounds = scroll.getBoundingClientRect();
       if (cardBounds.top < scrollBounds.top) scroll.scrollTop += cardBounds.top - scrollBounds.top;
       else if (cardBounds.bottom > scrollBounds.bottom)
         scroll.scrollTop += cardBounds.bottom - scrollBounds.bottom;
+      if (cardBounds.left < scrollBounds.left) scroll.scrollLeft += cardBounds.left - scrollBounds.left;
+      else if (cardBounds.right > scrollBounds.right)
+        scroll.scrollLeft += cardBounds.right - scrollBounds.right;
     }
   }
 

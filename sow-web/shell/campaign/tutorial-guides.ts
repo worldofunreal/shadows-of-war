@@ -408,14 +408,42 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
                     typeof window.SOWCampaignView.resolveUiAnchor === "function"
                 ) {
                     const uiAnchor = window.SOWCampaignView.resolveUiAnchor(upgradeBtn, null);
-                    if (uiAnchor && Number.isFinite(Number(uiAnchor.x)) && Number.isFinite(Number(uiAnchor.y))) {
+                    if (
+                        uiAnchor &&
+                        Number.isFinite(Number(uiAnchor.x)) &&
+                        Number.isFinite(Number(uiAnchor.y))
+                    ) {
+                        result = uiAnchor;
+                    }
+                }
+            } else if (guide.target === "confirm_building_placement") {
+                const confirmBtn =
+                    typeof document.querySelector === "function"
+                        ? document.querySelector<HTMLElement>(
+                              '#sow-hud-placement-panel [data-placement-action="confirm"]',
+                          )
+                        : null;
+                if (
+                    confirmBtn &&
+                    typeof confirmBtn.getClientRects === "function" &&
+                    confirmBtn.getClientRects().length > 0 &&
+                    window.SOWCampaignView &&
+                    typeof window.SOWCampaignView.resolveUiAnchor === "function"
+                ) {
+                    const uiAnchor = window.SOWCampaignView.resolveUiAnchor(confirmBtn, null);
+                    if (
+                        uiAnchor &&
+                        Number.isFinite(Number(uiAnchor.x)) &&
+                        Number.isFinite(Number(uiAnchor.y))
+                    ) {
                         result = uiAnchor;
                     }
                 }
             }
             if (!result) {
                 const point = tutorial[guide.target];
-                if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) return null;
+                if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y)))
+                    return null;
                 result = { x: Number(point.x), y: Number(point.y) };
             }
         } else {

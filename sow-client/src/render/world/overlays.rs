@@ -108,7 +108,6 @@ pub(crate) fn render_overlays(
         sf,
         now,
     );
-    render_building_placement_controls(text, sim, ui, input, sf, placement_can_confirm);
 
     if !ui.tutorial_active {
         ui.tutorial_marker_player_id = None;
@@ -896,62 +895,6 @@ fn render_building_placement_preview(
             range as f32 * input.camera_zoom,
             [0.75, 0.85, 1.0, 0.32],
             (1.5 * sf).max(1.0),
-        );
-    }
-}
-
-/// Drag-hint arrows and the cancel/confirm pair, drawn last so they sit above the world.
-fn render_building_placement_controls(
-    text: &mut TextRenderer,
-    sim: &SimState,
-    ui: &UiState,
-    input: &InputState,
-    sf: f32,
-    can_confirm: bool,
-) {
-    use crate::input::placement::PlacementDirection;
-    let Some(placement) = ui.app.hud_state.building_placement.filter(|p| !p.pending) else {
-        return;
-    };
-    if sim.map_w == 0 || !input.camera_zoom.is_finite() || input.camera_zoom <= 0.0 {
-        return;
-    }
-    let controls = crate::input::placement::placement_controls(
-        placement.kind,
-        placement.tile_idx,
-        sim.map_w,
-        [input.camera_x, input.camera_y],
-        input.camera_zoom,
-        sf,
-    );
-    for (direction, center) in controls.arrows {
-        let sprite = match direction {
-            PlacementDirection::Up => NameplateStatusSprite::ArrowUp,
-            PlacementDirection::Right => NameplateStatusSprite::ArrowRight,
-            PlacementDirection::Down => NameplateStatusSprite::ArrowDown,
-            PlacementDirection::Left => NameplateStatusSprite::ArrowLeft,
-        };
-        text.push_status_sprite(sprite, center, controls.arrow, [1.0; 4]);
-    }
-    text.push_status_sprite(
-        NameplateStatusSprite::Cancel,
-        controls.cancel,
-        controls.button,
-        [1.0; 4],
-    );
-    if can_confirm {
-        text.push_status_sprite(
-            NameplateStatusSprite::Confirm,
-            controls.confirm,
-            controls.button,
-            [1.0; 4],
-        );
-    } else {
-        text.push_status_sprite_desaturated(
-            NameplateStatusSprite::Confirm,
-            controls.confirm,
-            controls.button,
-            [0.5, 0.5, 0.5, 0.75],
         );
     }
 }

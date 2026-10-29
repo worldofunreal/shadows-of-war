@@ -970,3 +970,137 @@ test("building details card renders in the HUD, patches live values in place, an
     assert.match(hud, /id="sow-hud-building-progress"/);
     assert.match(hud, /!isDeploying && !buildingInProgress && hasBuildingItems \? "flex" : "none"/);
 });
+
+test("building placement controls are in Web HUD: floating tactical card, nudge arrows, and confirm/cancel", () => {
+    // Rust canvas no longer renders placement button or arrow sprites
+    const overlaysPath = path.resolve(import.meta.dirname, "../../sow-client/src/render/world/overlays.rs");
+    const overlays = fs.readFileSync(overlaysPath, "utf-8");
+    assert.doesNotMatch(overlays, /render_building_placement_controls/);
+
+    // Rust web_menu defines and processes placement commands
+    const webMenuPath = path.resolve(import.meta.dirname, "../../sow-client/src/web_menu.rs");
+    const webMenu = fs.readFileSync(webMenuPath, "utf-8");
+    assert.match(webMenu, /ConfirmBuildingPlacement/);
+    assert.match(webMenu, /ClearPlacement/);
+    assert.match(webMenu, /NudgePlacement/);
+    assert.match(webMenu, /self\.confirm_building_placement\(\)/);
+    assert.match(webMenu, /self\.clear_placement\(\)/);
+    assert.match(webMenu, /self\.nudge_building_placement\(dir\)/);
+
+    // Web HUD markup and styles
+    assert.match(hud, /id="sow-hud-placement-panel"/);
+    assert.match(hud, /renderPlacementPanel/);
+    assert.match(hud, /data-placement-action="confirm"/);
+    assert.match(hud, /data-placement-action="cancel"/);
+    assert.match(hud, /data-placement-nudge="left"/);
+    assert.match(hud, /data-placement-nudge="up"/);
+    assert.match(hud, /data-placement-nudge="down"/);
+    assert.match(hud, /data-placement-nudge="right"/);
+
+    // Test renderPlacementPanel logic
+    const start = hud.indexOf("function positionPlacementPanel(");
+    const end = hud.indexOf("// Command ring: six fixed 60° slots", start);
+    assert.ok(start > 0 && end > start);
+
+    const classes = new Set<string>(["hidden"]);
+    const styleProps: Record<string, string> = {};
+    let innerHTML = "";
+    const panelNode = {
+        dataset: {} as Record<string, string>,
+        style: {
+            left: "",
+            top: "",
+            setProperty(k: string, v: string) {
+                styleProps[k] = v;
+            },
+        },
+        classList: {
+            add(...cls: string[]) {
+                cls.forEach((c) => classes.add(c));
+            },
+            remove(...cls: string[]) {
+                cls.forEach((c) => classes.delete(c));
+            },
+            contains(cls: string) {
+                return classes.has(cls);
+            },
+        },
+        replaceChildren() {
+            innerHTML = "";
+        },
+        get innerHTML() {
+            return innerHTML;
+        },
+        set innerHTML(val: string) {
+            innerHTML = val;
+        },
+        offsetWidth: 260,
+        offsetHeight: 104,
+    };
+
+    const dockRect = { top: 520, height: 72 };
+    const ctx = vm.createContext({
+        window: { SOW_LOCALE: "en", innerWidth: 800, innerHeight: 600 },
+        hudRefs: {
+            placementPanel: panelNode,
+            dock: {
+                hidden: false,
+                getBoundingClientRect() {
+                    return dockRect;
+                },
+            },
+        },
+        SOW_t: (k: string) => k,
+        escapeHudText: (v: unknown) => String(v ?? ""),
+        formatEndgameExact: (v: unknown) => String(Math.trunc(Number(v) || 0)),
+        buildingIcon: (k: string, lv: number) => `<img data-bld="${k}:${lv}">`,
+        hudIcon: (k: string) => `<i data-hud="${k}"></i>`,
+    });
+    vm.runInContext(hud.slice(start, end), ctx);
+
+    // Inactive placement hides panel
+    assert.equal(ctx.renderPlacementPanel(null), false);
+    assert.equal(panelNode.classList.contains("hidden"), true);
+
+    // Pending placement hides panel
+    assert.equal(ctx.renderPlacementPanel({ pending: true, can_confirm: true }), false);
+    assert.equal(panelNode.classList.contains("hidden"), true);
+
+    // Active placement reveals panel with controls
+    const placement = {
+        pending: false,
+        can_confirm: true,
+        kind: "City",
+        tile_idx: 42,
+        anchor_x: 350,
+        anchor_y: 200,
+        cost: 200,
+    };
+    assert.equal(ctx.renderPlacementPanel(placement), true);
+    assert.equal(panelNode.classList.contains("hidden"), false);
+    assert.match(panelNode.innerHTML, /data-placement-action="confirm"/);
+    assert.match(panelNode.innerHTML, /data-placement-action="cancel"/);
+    assert.match(panelNode.innerHTML, /data-placement-nudge="left"/);
+    assert.match(panelNode.innerHTML, /data-placement-nudge="right"/);
+    assert.match(panelNode.innerHTML, /data-placement-nudge="up"/);
+    assert.match(panelNode.innerHTML, /data-placement-nudge="down"/);
+    assert.match(panelNode.innerHTML, /200/);
+    assert.equal(panelNode.dataset.placement, "below");
+
+    // Invalid placement shows reason and disables confirm
+    const invalidPlacement = {
+        pending: false,
+        can_confirm: false,
+        kind: "City",
+        tile_idx: 42,
+        anchor_x: 350,
+        anchor_y: 450,
+        cost: 200,
+        reason: "hud.build_no_space",
+    };
+    assert.equal(ctx.renderPlacementPanel(invalidPlacement), true);
+    assert.match(panelNode.innerHTML, /is-disabled/);
+    assert.match(panelNode.innerHTML, /disabled/);
+    assert.match(panelNode.innerHTML, /hud\.build_no_space/);
+    assert.equal(panelNode.dataset.placement, "above", "flips above when near dock");
+});
