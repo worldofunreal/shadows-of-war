@@ -138,6 +138,7 @@ impl SowApp {
         let last_pinch_state: Option<(f64, f64, f64)> = None;
         let map_context_menu: Option<MapContextMenu> = None;
         let map_context_menu_session = 0;
+        let last_right_press: Option<web_time::Instant> = None;
 
         let has_snapped_camera_to_spawn = false;
 
@@ -222,6 +223,7 @@ impl SowApp {
                 last_pinch_state,
                 map_context_menu,
                 map_context_menu_session,
+                last_right_press,
                 building_drag_offset: None,
                 shift_pressed: false,
                 has_snapped_camera_to_spawn,

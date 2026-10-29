@@ -288,10 +288,13 @@ impl SowEngine {
         // team owns a map half (Team {Red, Blue} → Red left, Blue right) and
         // EVERY member spawns inside it — the zone is the cohesion, the
         // member floor is the separation. Ring/anchor path kept as fallback.
-        let spawn_point = team
-            .as_ref()
-            .map(|t| self.team_spawn_area(t))
-            .and_then(|area| self.find_spawn_in_area(&mut rng, area))
+        let spawn_point = self
+            .filler_spawn_point(&mut rng, team.as_ref(), is_ai_controlled)
+            .or_else(|| {
+                team.as_ref()
+                    .map(|t| self.team_spawn_area(t))
+                    .and_then(|area| self.find_spawn_in_area(&mut rng, area))
+            })
             .or_else(|| {
                 team.as_ref()
                     .and_then(|t| self.team_centroid(t))
@@ -624,6 +627,55 @@ impl SowEngine {
             return None;
         }
         Some(((sum.0 / sum.2) as u32, (sum.1 / sum.2) as u32))
+    }
+
+    /// Matchmaking fillers each draw a temperament from their own seeded RNG:
+    /// very near (2–8), near (8–16) or a bit far (16–36) from an anchor. The
+    /// anchor is the team centroid, else a placed human. Team spawns stay in the
+    /// team's half. Ranked 1v1 and non-ghost humans return `None` (no change).
+    pub(crate) fn filler_spawn_point(
+        &self,
+        rng: &mut wyrand::WyRand,
+        team: Option<&crate::protocol::Team>,
+        is_ai_controlled: bool,
+    ) -> Option<(u32, u32)> {
+        use crate::rng::NextIntExt;
+        if !is_ai_controlled || self.state.config.ranked_1v1 {
+            return None;
+        }
+        let anchor = team
+            .and_then(|t| self.team_centroid(t))
+            .or_else(|| self.placed_human_centroid(rng))?;
+        let (min_d, max_d) = match rng.next_int(0, 100) {
+            0..=34 => (2, 8),
+            35..=69 => (8, 16),
+            _ => (16, 36),
+        };
+        let (sx, sy) = self.find_valid_spawn_near(rng, anchor.0, anchor.1, min_d, max_d)?;
+        let inside_team_zone = team.is_none_or(|t| {
+            let (ax, ay, aw, ah) = self.team_spawn_area(t);
+            sx >= ax && sx < ax + aw && sy >= ay && sy < ay + ah
+        });
+        inside_team_zone.then_some((sx, sy))
+    }
+
+    /// Centroid of a random already-placed human's territory.
+    fn placed_human_centroid(&self, rng: &mut wyrand::WyRand) -> Option<(u32, u32)> {
+        use crate::rng::NextIntExt;
+        let placed: Vec<&crate::player::Player> = self
+            .state
+            .players
+            .iter()
+            .filter(|p| !p.is_ai_controlled && p.tile_count > 0)
+            .collect();
+        if placed.is_empty() {
+            return None;
+        }
+        let pick = placed[rng.next_int(0, placed.len() as i32) as usize];
+        Some((
+            (pick.sum_x / u64::from(pick.tile_count)) as u32,
+            (pick.sum_y / u64::from(pick.tile_count)) as u32,
+        ))
     }
 
     pub(crate) fn nearest_free_land(&self, tx: u32, ty: u32) -> Option<(u32, u32)> {

@@ -1,0 +1,45 @@
+{
+  "width": 390,
+  "height": 844,
+  "scrollWidth": 390,
+  "art": {
+    "x": 12,
+    "y": 75.078125,
+    "width": 366,
+    "height": 364,
+    "top": 75.078125,
+    "right": 378,
+    "bottom": 439.078125,
+    "left": 12
+  },
+  "stage": {
+    "x": 12,
+    "y": 75.078125,
+    "width": 366,
+    "height": 694.53125,
+    "top": 75.078125,
+    "right": 378,
+    "bottom": 769.609375,
+    "left": 12
+  },
+  "controls": {
+    "x": 12,
+    "y": 674.609375,
+    "width": 366,
+    "height": 95,
+    "top": 674.609375,
+    "right": 378,
+    "bottom": 769.609375,
+    "left": 12
+  },
+  "heroPlay": {
+    "x": 12,
+    "y": -2745,
+    "width": 366,
+    "height": 48,
+    "top": -2745,
+    "right": 378,
+    "bottom": -2697,
+    "left": 12
+  }
+}

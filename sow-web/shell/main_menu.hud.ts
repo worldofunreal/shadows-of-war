@@ -7,6 +7,7 @@ import type {
     HudLeaderboardTeam,
     HudMapFeedback,
     HudMapMenu,
+    HudMapMenuBuilding,
     HudMapMenuItem,
     HudNotification,
     HudStateEnvelope,
@@ -140,6 +141,7 @@ type HudRefs = {
     deployBtn: HTMLElement;
     deployTimer: HTMLElement;
     buildingsStrip: HTMLElement;
+    buildingProgress: HTMLElement;
     buildingButtons: HTMLButtonElement[];
     fleetStrip: HTMLElement;
     fleetTrade: HTMLElement;
@@ -937,6 +939,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             deployBtn: requiredHudElement("sow-hud-deploy-btn"),
             deployTimer: requiredHudElement("sow-hud-deploy-timer"),
             buildingsStrip: requiredHudElement("sow-hud-buildings-strip"),
+            buildingProgress: requiredHudElement("sow-hud-building-progress"),
             buildingButtons: Array.from(
                 root.querySelectorAll<HTMLButtonElement>("[data-command='select_building']"),
             ),
@@ -1261,6 +1264,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             tileCost(true) +
             "</button>" +
             "      </div>" +
+            '      <div class="sow-hud__building-progress" id="sow-hud-building-progress" style="display: none;"></div>' +
             '      <div class="sow-hud__fleet-strip" id="sow-hud-fleet-strip">' +
             '        <span class="sow-hud__building-btn sow-hud__fleet-status" data-fleet-kind="trade" role="img" aria-label="' +
             SOW_t("hud.map_action_fleet") +
@@ -1781,6 +1785,261 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         });
     }
 
+    function patchBuildingDetailsCard(
+        menu: HTMLElement,
+        building: HudMapMenuBuilding,
+        availableGold: number | undefined,
+    ): void {
+        if (building.under_construction || building.remaining_seconds != null) {
+            patchBuildingProgressBar(menu, building.remaining_seconds, building.progress);
+        }
+        const upgrade = building.upgrade;
+        if (!upgrade) return;
+        const costVal = Math.max(0, Math.ceil(Number(upgrade.cost) || 0));
+        const costText = formatHudMetric(costVal);
+        const timeText = Math.max(1, Math.ceil(Number(upgrade.seconds) || 0)) + "s";
+        const enabled = Boolean(upgrade.enabled);
+        const costEl = menu.querySelector<HTMLElement>("[data-building-cost]");
+        if (costEl && costEl.textContent !== costText) {
+            costEl.textContent = costText;
+        }
+        const timeEl = menu.querySelector<HTMLElement>("[data-building-time]");
+        if (timeEl && timeEl.textContent !== timeText) {
+            timeEl.textContent = timeText;
+        }
+        const button = menu.querySelector<HTMLButtonElement>(".sow-hud__building-upgrade-btn");
+        if (button) {
+            button.disabled = false;
+            button.classList.toggle("is-locked", !enabled);
+            button.setAttribute("aria-disabled", String(!enabled));
+            const baseLabel = SOW_t("hud.map_action_upgrade") + " Lv." + upgrade.next_level;
+            const reason = !enabled
+                ? mapActionReason({ disabled: true, cost: upgrade.cost }, availableGold)
+                : costText + "g · " + timeText;
+            const accessibleLabel = reason ? baseLabel + ". " + reason : baseLabel;
+            if (button.getAttribute("aria-label") !== accessibleLabel) {
+                button.setAttribute("aria-label", accessibleLabel);
+            }
+        }
+    }
+
+    function renderBuildingProgressBarMarkup(kind: string, level: number): string {
+        return (
+            '<div class="sow-hud__building-progress-row" role="status">' +
+            '<span class="sow-hud__building-card-thumb" aria-hidden="true">' +
+            buildingIcon(kind, Math.max(1, level), "sow-hud__building-card-art") +
+            "</span>" +
+            '<div class="sow-hud__building-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">' +
+            '<div class="sow-hud__building-progress-fill" data-building-progress-fill></div>' +
+            '<b class="sow-hud__building-progress-time" data-building-timer></b>' +
+            "</div>" +
+            "</div>"
+        );
+    }
+
+    function patchBuildingProgressBar(
+        container: ParentNode,
+        remainingSeconds: number | null | undefined,
+        progress: number | null | undefined,
+    ): void {
+        const timerEl = container.querySelector<HTMLElement>("[data-building-timer]");
+        const secsText = Math.max(1, Math.ceil(Number(remainingSeconds) || 0)) + "s";
+        if (timerEl && timerEl.textContent !== secsText) {
+            timerEl.textContent = secsText;
+        }
+        const fillEl = container.querySelector<HTMLElement>("[data-building-progress-fill]");
+        if (fillEl) {
+            const pct = Math.max(0, Math.min(100, (Number(progress) || 0) * 100));
+            const widthText = pct.toFixed(1) + "%";
+            if (fillEl.style.width !== widthText) {
+                fillEl.style.width = widthText;
+            }
+        }
+    }
+
+    function positionBuildingDetailsCard(menu: HTMLElement, mapMenu: HudMapMenu): void {
+        const bld = mapMenu.building;
+        const anchorX = Number.isFinite(Number(bld && bld.anchor_x))
+            ? Number(bld!.anchor_x)
+            : Number(mapMenu.x || 0);
+        const anchorY = Number.isFinite(Number(bld && bld.anchor_y))
+            ? Number(bld!.anchor_y)
+            : Number(mapMenu.y || 0);
+        const anchorRadius = Math.max(20, Number(bld && bld.anchor_radius) || 28);
+        const card = menu.querySelector<HTMLElement>(".sow-hud__building-card") || menu;
+        const width = card.offsetWidth || 232;
+        const height = card.offsetHeight || 114;
+        const halfW = width * 0.5;
+        const halfH = height * 0.5;
+        const vw = window.innerWidth || 800;
+        const vh = window.innerHeight || 600;
+        let bottomLimit = vh - 96;
+        if (
+            hudRefs &&
+            hudRefs.dock &&
+            !hudRefs.dock.hidden &&
+            typeof hudRefs.dock.getBoundingClientRect === "function"
+        ) {
+            const dockRect = hudRefs.dock.getBoundingClientRect();
+            if (dockRect && dockRect.height > 0 && dockRect.top > 0) {
+                bottomLimit = Math.min(bottomLimit, dockRect.top - 10);
+            }
+        }
+        const gap = 10;
+        const belowCenterY = anchorY + anchorRadius + gap + halfH;
+        const aboveCenterY = anchorY - anchorRadius - gap - halfH;
+        const placeBelow = belowCenterY + halfH <= bottomLimit || aboveCenterY - halfH < 12;
+        const rawCenterY = placeBelow ? belowCenterY : aboveCenterY;
+        const minX = halfW + 10;
+        const maxX = Math.max(minX, vw - halfW - 10);
+        const minY = halfH + 10;
+        const maxY = Math.max(minY, Math.min(vh - halfH - 10, bottomLimit - halfH));
+        const left = Math.min(Math.max(anchorX, minX), maxX);
+        const top = Math.min(Math.max(rawCenterY, minY), maxY);
+        menu.style.left = left.toFixed(1) + "px";
+        menu.style.top = top.toFixed(1) + "px";
+        menu.dataset.placement = placeBelow ? "below" : "above";
+        const caretLimit = Math.max(0, halfW - 18);
+        const caretOffsetX = Math.max(-caretLimit, Math.min(caretLimit, anchorX - left));
+        menu.style.setProperty("--caret-offset-x", caretOffsetX.toFixed(1) + "px");
+    }
+
+    function renderBuildingDetailsCard(menu: HTMLElement, mapMenu: HudMapMenu, hud: HudRingState): boolean {
+        const building = mapMenu.building;
+        if (!building || !building.kind) {
+            menu.classList.add("hidden");
+            menu.classList.remove("is-building-card", "has-tether");
+            if (menu.dataset.renderKey) menu.replaceChildren();
+            menu.dataset.renderKey = "";
+            delete menu.dataset.placement;
+            delete menu.dataset.level;
+            return false;
+        }
+        const kind = String(building.kind);
+        const level = Math.max(0, Math.floor(Number(building.level) || 0));
+        const maxLevel = Math.max(level, Math.floor(Number(building.max_level) || level));
+        const underConstruction = Boolean(building.under_construction) || building.remaining_seconds != null;
+        const chips = Array.isArray(building.chips) ? building.chips : [];
+        const upgrade = !underConstruction && building.upgrade ? building.upgrade : null;
+        const session = String(mapMenu.session) + ":" + String(mapMenu.tile_idx);
+        menu.dataset.session = String(mapMenu.session);
+        menu.dataset.tileIdx = String(mapMenu.tile_idx);
+        delete menu.dataset.level;
+        menu.classList.remove("hidden", "has-tether");
+        menu.classList.add("is-building-card");
+
+        const renderKey = [
+            window.SOW_LOCALE || "en",
+            "building_details",
+            session,
+            kind,
+            level,
+            maxLevel,
+            underConstruction ? "constructing" : upgrade ? "upgrade:" + upgrade.next_level : "max",
+            chips
+                .map(function (chip) {
+                    return chip.icon + "=" + chip.label;
+                })
+                .join("|"),
+        ].join(":");
+
+        if (menu.dataset.renderKey !== renderKey) {
+            const card = document.createElement("div");
+            card.dataset.buildingKind = kind.toLowerCase();
+            if (underConstruction) {
+                const targetLv = level > 0 ? level + 1 : 1;
+                card.className = "sow-hud__building-card is-constructing";
+                card.innerHTML =
+                    '<span class="sow-hud__building-card-caret" aria-hidden="true"></span>' +
+                    renderBuildingProgressBarMarkup(kind, targetLv);
+            } else {
+                const buildingTitle = SOW_t("hud.map_action_" + kind.toLowerCase());
+                const isMax = !upgrade && maxLevel > 0 && level >= maxLevel;
+                const levelBadgeHtml = upgrade
+                    ? "Lv." +
+                      level +
+                      ' <span class="sow-hud__building-card-level-arrow">→</span> <em>Lv.' +
+                      upgrade.next_level +
+                      "</em>"
+                    : "Lv." + Math.max(1, level) + (isMax ? " · MAX" : "");
+
+                const chipsHtml = chips.length
+                    ? '<div class="sow-hud__building-card-stats">' +
+                      chips
+                          .map(function (chip) {
+                              const label = chip.label
+                                  ? '<b class="sow-hud__building-stat-value">' +
+                                    escapeHudText(chip.label) +
+                                    "</b>"
+                                  : "";
+                              return (
+                                  '<span class="sow-hud__building-stat-pill' +
+                                  (upgrade ? " is-gain" : "") +
+                                  '" data-stat-icon="' +
+                                  escapeHudText(chip.icon) +
+                                  '">' +
+                                  statusIcon(chip.icon, "sow-hud__building-stat-icon") +
+                                  label +
+                                  "</span>"
+                              );
+                          })
+                          .join("") +
+                      "</div>"
+                    : "";
+
+                const footerHtml = upgrade
+                    ? '<button type="button" class="sow-hud__building-upgrade-btn" data-map-action="upgrade_structure">' +
+                      '<span class="sow-hud__building-upgrade-cta">' +
+                      statusIcon("arrow-up", "sow-hud__building-upgrade-arrow") +
+                      '<span class="sow-hud__building-upgrade-label">' +
+                      escapeHudText(SOW_t("hud.map_action_upgrade")) +
+                      " <em>Lv." +
+                      upgrade.next_level +
+                      "</em></span>" +
+                      "</span>" +
+                      '<span class="sow-hud__building-upgrade-meta">' +
+                      '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-cost">' +
+                      hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
+                      "<b data-building-cost></b>" +
+                      "</span>" +
+                      '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-time">' +
+                      statusIcon("clock", "sow-hud__building-upgrade-meta-icon") +
+                      "<b data-building-time></b>" +
+                      "</span>" +
+                      "</span>" +
+                      "</button>"
+                    : "";
+
+                card.className = "sow-hud__building-card";
+                card.innerHTML =
+                    '<span class="sow-hud__building-card-caret" aria-hidden="true"></span>' +
+                    '<div class="sow-hud__building-card-head">' +
+                    '<span class="sow-hud__building-card-thumb" aria-hidden="true">' +
+                    buildingIcon(kind, Math.max(1, level), "sow-hud__building-card-art") +
+                    "</span>" +
+                    '<div class="sow-hud__building-card-identity">' +
+                    '<strong class="sow-hud__building-card-title">' +
+                    escapeHudText(buildingTitle) +
+                    "</strong>" +
+                    '<span class="sow-hud__building-card-level' +
+                    (isMax ? " is-max" : upgrade ? " is-upgradable" : "") +
+                    '">' +
+                    levelBadgeHtml +
+                    "</span>" +
+                    "</div>" +
+                    "</div>" +
+                    chipsHtml +
+                    footerHtml;
+            }
+            menu.replaceChildren(card);
+            menu.dataset.renderKey = renderKey;
+        }
+
+        patchBuildingDetailsCard(menu, building, hud.gold);
+        positionBuildingDetailsCard(menu, mapMenu);
+        return true;
+    }
+
     // Command ring: six fixed 60° slots, clockwise from the top. An action keeps
     // its slot in every context, so the ring never changes shape; actions that do
     // not apply leave an empty notch. Submenus reuse the same six slots.
@@ -2149,7 +2408,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         menu: HTMLElement,
         slots: (RingSlot | null)[],
         availableGold: number | undefined,
+        targetAvatar: HudAvatarIdentity | null | undefined = undefined,
     ): void {
+        const image = menu.querySelector<HTMLImageElement>(".sow-hud__ring-portrait");
+        const emblem = menu.querySelector<HTMLElement>(".sow-hud__ring-emblem");
+        if (image && emblem) renderAvatarIdentity(image, emblem, targetAvatar);
         slots.forEach(function (slot, index) {
             if (!slot) return;
             const button = menu.querySelector<HTMLButtonElement>(
@@ -2260,6 +2523,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
 
     function ringActivate(menu: HTMLElement, target: "hub" | number | null): void {
+        console.info("[RING TRACE] activate target=" + String(target));
         if (target === "hub") {
             // The center is "back" inside a submenu and "center on the entity's home, then close" at the root.
             const back = menu.querySelector<HTMLButtonElement>("[data-map-back]");
@@ -2293,11 +2557,22 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         if (!hudRefs || !hudRefs.mapMenu) return false;
         const menu = hudRefs.mapMenu;
         const open = Boolean(mapMenu && mapMenu.open);
+        if (open && mapMenu && mapMenu.view === "building_details") {
+            ring.session = "";
+            mapMenuView = "root";
+            ring.hot = -1;
+            ring.press = null;
+            ringHoldCancel(null);
+            return renderBuildingDetailsCard(menu, mapMenu, hudState?.hud || {});
+        }
+        menu.classList.remove("is-building-card");
+        delete menu.dataset.placement;
         const showRadial = Boolean(open && mapMenu && mapMenu.view === "radial");
         menu.classList.toggle("hidden", !showRadial);
         if (!showRadial) {
             if (menu.dataset.renderKey) menu.replaceChildren();
             menu.dataset.renderKey = "";
+            delete menu.dataset.level;
             ring.session = "";
             mapMenuView = "root";
             ring.hot = -1;
@@ -2346,7 +2621,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             ring.hot = -1;
             if (hot >= 0 && slots[hot]) setRingHot(menu, hot);
         }
-        patchRing(menu, slots, hud.gold);
+        patchRing(menu, slots, hud.gold, mapMenu.target_avatar);
         positionRing(menu, mapMenu);
         return true;
     }
@@ -2399,6 +2674,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 const menu = openRingMenu();
                 const press = ring.press;
                 ring.press = null;
+                console.info(
+                    "[RING TRACE] pointerup button=" +
+                        event.button +
+                        " type=" +
+                        event.pointerType +
+                        " menu=" +
+                        Boolean(menu) +
+                        " fromOpen=" +
+                        (press ? press.fromOpen : "none"),
+                );
                 if (!menu || !press || press.id !== event.pointerId) {
                     if (menu) ringHoldCancel(menu);
                     return;
@@ -3237,6 +3522,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         };
     }
 
+    function avatarPortraitPath(
+        slug: string,
+        expression: HudAvatarIdentity["expression"] | null | undefined,
+    ): string {
+        const path =
+            expression && expression !== "calm" && ["happy", "fear", "angry"].includes(expression)
+                ? "expressions/" + slug + "_" + expression
+                : slug;
+        return "gameplay/avatars/" + path + ".webp";
+    }
+
     function renderAvatarIdentity(
         image: HTMLImageElement,
         emblem: HTMLElement,
@@ -3262,12 +3558,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             presentation.kind === "portrait" && /^[a-z][a-z0-9_]*$/.test(presentation.slug || "")
                 ? presentation.slug
                 : "null";
-        const expression = presentation.expression;
-        const path =
-            expression && ["happy", "calm", "fear", "angry"].includes(expression)
-                ? "expressions/" + slug + "_" + expression
-                : slug;
-        const src = asset("gameplay/avatars/" + path + ".webp");
+        const src = asset(avatarPortraitPath(slug, presentation.expression));
         image.hidden = false;
         if (image.getAttribute("src") !== src) image.src = src;
     }
@@ -4324,7 +4615,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             if (!playerPlateHidden) {
                 const plateLeader = leaderById(hud.player_leader || (hudState && hudState.selected_leader));
                 const plateSrc = asset(
-                    "gameplay/avatars/" + (plateLeader.art_slug || plateLeader.slug) + ".webp",
+                    avatarPortraitPath(
+                        plateLeader.art_slug || plateLeader.slug,
+                        hud.player_avatar_expression,
+                    ),
                 );
                 const platePlayerName = String(hud.player_name || "");
                 if (hudRefs!.plateAvatar && hudRefs!.plateAvatar.getAttribute("src") !== plateSrc) {
@@ -4415,10 +4709,37 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 button.setAttribute("aria-label", accessibleLabel);
                 if (button.title !== accessibleLabel) button.title = accessibleLabel;
             });
-            hasBuildingItems = hudRefs!.buildingButtons.some(function (button) {
-                return !button.hidden;
-            });
-            hudRefs!.buildingsStrip.style.display = !isDeploying && hasBuildingItems ? "flex" : "none";
+            const buildingInProgress =
+                hud.building_in_progress && hud.building_in_progress.kind ? hud.building_in_progress : null;
+            hasBuildingItems =
+                Boolean(buildingInProgress) ||
+                hudRefs!.buildingButtons.some(function (button) {
+                    return !button.hidden;
+                });
+            hudRefs!.buildingsStrip.style.display =
+                !isDeploying && !buildingInProgress && hasBuildingItems ? "flex" : "none";
+            if (hudRefs!.buildingProgress) {
+                if (!isDeploying && buildingInProgress) {
+                    const progressKind = String(buildingInProgress.kind);
+                    const progressLevel = Math.max(1, Math.floor(Number(buildingInProgress.level) || 1));
+                    const progressKey = progressKind + ":" + progressLevel;
+                    if (hudRefs!.buildingProgress.dataset.renderKey !== progressKey) {
+                        hudRefs!.buildingProgress.innerHTML = renderBuildingProgressBarMarkup(
+                            progressKind,
+                            progressLevel,
+                        );
+                        hudRefs!.buildingProgress.dataset.renderKey = progressKey;
+                    }
+                    patchBuildingProgressBar(
+                        hudRefs!.buildingProgress,
+                        buildingInProgress.remaining_seconds,
+                        buildingInProgress.progress,
+                    );
+                    hudRefs!.buildingProgress.style.display = "flex";
+                } else {
+                    hudRefs!.buildingProgress.style.display = "none";
+                }
+            }
         }
         if (hudRefs!.fleetStrip) {
             const fleetPanel = hud.fleet_panel || {};
@@ -4890,6 +5211,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                     if (mapButton.dataset.ringHold === "true" && !ring.holdConfirmed) return;
                     const action = mapButton.dataset.mapAction;
                     if (!action) return;
+                    console.info("[RING TRACE] map_menu_action " + action + " trusted=" + event.isTrusted);
                     send("map_menu_action", {
                         session: Number(mapMenu.dataset.session),
                         tile_idx: Number(mapMenu.dataset.tileIdx),

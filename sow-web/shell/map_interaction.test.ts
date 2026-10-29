@@ -456,7 +456,10 @@ test("mobile hover is Rust-owned and the HUD only presents its state", () => {
 });
 
 test("ring center recenters on the entity's home and closes at the root, goes back inside submenus", () => {
-    assert.match(hud, /if \(back\) back\.click\(\);\s*else \{\s*send\("center_radial_home"\);\s*send\("close_map_context_menu"\);\s*\}/);
+    assert.match(
+        hud,
+        /if \(back\) back\.click\(\);\s*else \{\s*send\("center_radial_home"\);\s*send\("close_map_context_menu"\);\s*\}/,
+    );
 });
 
 test("a press that only closes the radial is consumed on press and on release", () => {
@@ -756,7 +759,7 @@ test("ring resolves pointer direction, keeps live values in place, and gates the
         renderBody.indexOf("if (menu.dataset.renderKey !== renderKey)"),
     );
     assert.doesNotMatch(keyLine, /JSON\.stringify|reason_seconds|items/);
-    assert.match(renderBody, /patchRing\(menu, slots, hud\.gold\)/);
+    assert.match(renderBody, /patchRing\(menu, slots, hud\.gold, mapMenu\.target_avatar\)/);
 });
 
 test("build mode controls live in the world renderer, not the HTML HUD", () => {
@@ -789,4 +792,181 @@ test("build mode controls live in the world renderer, not the HTML HUD", () => {
         /let own_land = placement_own\(cell_hex\);[\s\S]*?let border_distance =[\s\S]*?let boundary = 1\.0 - smoothstep_safe/,
     );
     assert.doesNotMatch(placementShader, /spotlight|length\(/);
+});
+
+test("building details card renders in the HUD, patches live values in place, and flips above the dock", () => {
+    const start = hud.indexOf("    function patchBuildingDetailsCard(");
+    const end = hud.indexOf("    // Command ring: six fixed 60° slots", start);
+    assert.ok(start >= 0 && end > start);
+
+    const cardNode = {
+        className: "",
+        dataset: {} as Record<string, string>,
+        innerHTML: "",
+        offsetWidth: 232,
+        offsetHeight: 114,
+    };
+    const costNode = { textContent: "" };
+    const timeNode = { textContent: "" };
+    const timerNode = { textContent: "" };
+    const fillNode = { style: { width: "" } };
+    const buttonClasses = new Set<string>();
+    const buttonAttrs: Record<string, string> = {};
+    const upgradeButton = {
+        disabled: true,
+        classList: {
+            toggle(cls: string, force?: boolean) {
+                if (force) buttonClasses.add(cls);
+                else buttonClasses.delete(cls);
+            },
+            contains(cls: string) {
+                return buttonClasses.has(cls);
+            },
+        },
+        setAttribute(k: string, v: string) {
+            buttonAttrs[k] = v;
+        },
+        getAttribute(k: string) {
+            return buttonAttrs[k] ?? null;
+        },
+    };
+    const menuClasses = new Set<string>(["hidden"]);
+    const styleProps: Record<string, string> = {};
+    let replaceCount = 0;
+    const menu = {
+        dataset: {} as Record<string, string>,
+        style: {
+            left: "",
+            top: "",
+            setProperty(k: string, v: string) {
+                styleProps[k] = v;
+            },
+        },
+        classList: {
+            add(...cls: string[]) {
+                cls.forEach((c) => menuClasses.add(c));
+            },
+            remove(...cls: string[]) {
+                cls.forEach((c) => menuClasses.delete(c));
+            },
+            contains(cls: string) {
+                return menuClasses.has(cls);
+            },
+        },
+        replaceChildren() {
+            replaceCount += 1;
+        },
+        querySelector(sel: string) {
+            if (sel === "[data-building-cost]") return costNode;
+            if (sel === "[data-building-time]") return timeNode;
+            if (sel === "[data-building-timer]") return timerNode;
+            if (sel === "[data-building-progress-fill]") return fillNode;
+            if (sel === ".sow-hud__building-upgrade-btn") return upgradeButton;
+            if (sel === ".sow-hud__building-card") return cardNode;
+            return null;
+        },
+    };
+
+    const dockRect = { top: 520, height: 72 };
+    const ctx = vm.createContext({
+        window: { SOW_LOCALE: "en", innerWidth: 800, innerHeight: 600 },
+        document: {
+            createElement() {
+                return cardNode;
+            },
+        },
+        hudRefs: {
+            dock: {
+                hidden: false,
+                getBoundingClientRect() {
+                    return dockRect;
+                },
+            },
+        },
+        SOW_t: (k: string) => k,
+        escapeHudText: (v: unknown) => String(v ?? ""),
+        formatHudMetric: (v: number) => String(v),
+        buildingIcon: (k: string, lv: number) => `<img data-bld="${k}:${lv}">`,
+        statusIcon: (k: string) => `<i data-status="${k}"></i>`,
+        hudIcon: (k: string) => `<i data-hud="${k}"></i>`,
+        mapActionReason: () => "Not enough gold",
+    });
+    vm.runInContext(hud.slice(start, end), ctx);
+
+    const mapMenu = {
+        open: true,
+        view: "building_details",
+        session: 4,
+        tile_idx: 99,
+        x: 400,
+        y: 300,
+        building: {
+            kind: "Tower",
+            level: 1,
+            max_level: 5,
+            under_construction: false,
+            anchor_x: 400,
+            anchor_y: 260,
+            anchor_radius: 28,
+            remaining_seconds: null,
+            chips: [
+                { icon: "shield", label: "+5%" },
+                { icon: "range", label: "+2" },
+            ],
+            upgrade: {
+                next_level: 2,
+                cost: 83,
+                seconds: 6,
+                enabled: true,
+            },
+        },
+    };
+
+    assert.equal(ctx.renderBuildingDetailsCard(menu, mapMenu, { gold: 200 }), true);
+    assert.equal(replaceCount, 1);
+    assert.equal(menuClasses.has("is-building-card"), true);
+    assert.equal(menuClasses.has("hidden"), false);
+    assert.match(cardNode.innerHTML, /data-map-action="upgrade_structure"/);
+    assert.match(cardNode.innerHTML, /\+5%/);
+    assert.match(cardNode.innerHTML, /\+2/);
+    assert.equal(costNode.textContent, "83");
+    assert.equal(timeNode.textContent, "6s");
+    assert.equal(upgradeButton.disabled, false);
+    assert.equal(upgradeButton.classList.contains("is-locked"), false);
+    assert.equal(menu.dataset.placement, "below");
+
+    // Live gold/cost update patches in place without rebuilding the card DOM
+    mapMenu.building.upgrade.cost = 120;
+    mapMenu.building.upgrade.enabled = false;
+    mapMenu.building.anchor_y = 470;
+    assert.equal(ctx.renderBuildingDetailsCard(menu, mapMenu, { gold: 50 }), true);
+    assert.equal(replaceCount, 1, "card DOM is patched in place without replacing children");
+    assert.equal(costNode.textContent, "120");
+    assert.equal(upgradeButton.classList.contains("is-locked"), true);
+    assert.equal(upgradeButton.getAttribute("aria-disabled"), "true");
+    assert.equal(menu.dataset.placement, "above", "flips above when dock blocks below");
+
+    // Under construction / upgrading renders only the icon + progress bar with remaining time
+    mapMenu.building.under_construction = true;
+    mapMenu.building.remaining_seconds = 3.4;
+    (mapMenu.building as Record<string, unknown>).progress = 0.45;
+    assert.equal(ctx.renderBuildingDetailsCard(menu, mapMenu, { gold: 50 }), true);
+    assert.equal(replaceCount, 2, "switches to constructing bar markup");
+    assert.equal(cardNode.className, "sow-hud__building-card is-constructing");
+    assert.match(cardNode.innerHTML, /sow-hud__building-progress-row/);
+    assert.doesNotMatch(cardNode.innerHTML, /sow-hud__building-card-title|sow-hud__building-card-stats/);
+    assert.equal(timerNode.textContent, "4s");
+    assert.equal(fillNode.style.width, "45.0%");
+
+    // Progress ticks patch width and timer in place without rebuilding DOM
+    mapMenu.building.remaining_seconds = 1.2;
+    (mapMenu.building as Record<string, unknown>).progress = 0.8;
+    assert.equal(ctx.renderBuildingDetailsCard(menu, mapMenu, { gold: 50 }), true);
+    assert.equal(replaceCount, 2, "progress tick patches in place");
+    assert.equal(timerNode.textContent, "2s");
+    assert.equal(fillNode.style.width, "80.0%");
+
+    // Dock buildings strip swaps to #sow-hud-building-progress when building_in_progress is active
+    assert.match(hud, /id="sow-hud-building-progress"/);
+    assert.match(hud, /!isDeploying && !buildingInProgress && hasBuildingItems \? "flex" : "none"/);
 });

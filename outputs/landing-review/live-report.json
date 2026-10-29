@@ -1,0 +1,11 @@
+{
+  "url": "http://127.0.0.1:4173",
+  "leaders": 80,
+  "maps": 14,
+  "scene_images": 10,
+  "original_splashes": 160,
+  "languages": 15,
+  "images_checked": 267,
+  "css_matches_source": true,
+  "video_frames_match": true
+}

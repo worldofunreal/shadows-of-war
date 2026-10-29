@@ -1,0 +1,16 @@
+[
+  {
+    "viewport": "desktop",
+    "leaders_verified": 80,
+    "image_failure_fallback": true,
+    "maps_verified": 14,
+    "page_errors": []
+  },
+  {
+    "viewport": "mobile",
+    "leaders_verified": 80,
+    "image_failure_fallback": true,
+    "maps_verified": 14,
+    "page_errors": []
+  }
+]

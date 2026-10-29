@@ -262,7 +262,6 @@ impl SowApp {
         }
 
         let placement_can_confirm = self.building_placement_can_confirm();
-        let building_panel = self.building_panel_layout();
         if let Some(text) = &mut self.gfx.text_renderer {
             text.begin_frame();
             let dirty_avatar_slots = std::mem::take(&mut self.ui.app.asset_loader.gpu_avatar_dirty);
@@ -284,7 +283,6 @@ impl SowApp {
                     sf,
                     now,
                     placement_can_confirm,
-                    building_panel.as_ref(),
                 );
                 if let Some(started_at) = overlays_started_at {
                     crate::diag::record_startup_perf(

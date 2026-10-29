@@ -149,6 +149,7 @@ struct Paths {
     map_sources: PathBuf,
     dist_web: PathBuf,
     dist_cg: PathBuf,
+    #[allow(dead_code)]
     dist_poki: PathBuf,
     dist_jest: PathBuf,
     native_web: PathBuf,
@@ -426,6 +427,7 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
         Some(PORTRAIT_PX),
     )?;
     let hero_crop_dir = tempfile::tempdir().context("create temporary hero avatar crops")?;
+    let mut hero_fresh_crops = Vec::new();
     for leader in sow_core::player::Leader::all() {
         let base = leader.art_slug();
         let source = art.join("avatars/heroes").join(format!("{base}.webp"));
@@ -447,28 +449,49 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
             &format!("gameplay/avatars/spritesheets/{base}.webp"),
             None,
         )?;
-        let sheet = image::open(&source)
-            .with_context(|| format!("read hero sheet {}", source.display()))?
-            .to_rgba8();
-        for (expression, name) in sow_core::emote::AvatarExpression::ALL
-            .into_iter()
-            .zip(["happy", "calm", "fear", "angry"])
-        {
-            let crop = hero_expression_crop(&sheet, expression)?;
-            let crop_path = hero_crop_dir.path().join(format!("{base}_{name}.png"));
-            crop.save(&crop_path)
-                .with_context(|| format!("write {name} crop for hero {base}"))?;
-            publish(
-                &crop_path,
-                &format!("gameplay/avatars/expressions/{base}_{name}.webp"),
-                Some(PORTRAIT_PX),
-            )?;
-            if expression == sow_core::emote::AvatarExpression::Calm {
+        let expressions = [
+            (sow_core::emote::AvatarExpression::Happy, "happy"),
+            (sow_core::emote::AvatarExpression::Calm, "calm"),
+            (sow_core::emote::AvatarExpression::Fear, "fear"),
+            (sow_core::emote::AvatarExpression::Angry, "angry"),
+        ];
+        let source_mtime = fs::metadata(&source).and_then(|m| m.modified()).ok();
+        let all_fresh = source_mtime.is_some_and(|sm| {
+            expressions.iter().all(|(_, name)| {
+                let p = out.join(format!("gameplay/avatars/expressions/{base}_{name}.webp"));
+                fs::metadata(&p).and_then(|m| m.modified()).is_ok_and(|dm| dm >= sm)
+            }) && {
+                let calm_p = out.join(format!("gameplay/avatars/{base}.webp"));
+                fs::metadata(&calm_p).and_then(|m| m.modified()).is_ok_and(|dm| dm >= sm)
+            }
+        });
+
+        if all_fresh {
+            for (_, name) in expressions {
+                hero_fresh_crops.push(out.join(format!("gameplay/avatars/expressions/{base}_{name}.webp")));
+            }
+            hero_fresh_crops.push(out.join(format!("gameplay/avatars/{base}.webp")));
+        } else {
+            let sheet = image::open(&source)
+                .with_context(|| format!("read hero sheet {}", source.display()))?
+                .to_rgba8();
+            for (expression, name) in expressions {
+                let crop = hero_expression_crop(&sheet, expression)?;
+                let crop_path = hero_crop_dir.path().join(format!("{base}_{name}.png"));
+                crop.save(&crop_path)
+                    .with_context(|| format!("write {name} crop for hero {base}"))?;
                 publish(
                     &crop_path,
-                    &format!("gameplay/avatars/{base}.webp"),
+                    &format!("gameplay/avatars/expressions/{base}_{name}.webp"),
                     Some(PORTRAIT_PX),
                 )?;
+                if expression == sow_core::emote::AvatarExpression::Calm {
+                    publish(
+                        &crop_path,
+                        &format!("gameplay/avatars/{base}.webp"),
+                        Some(PORTRAIT_PX),
+                    )?;
+                }
             }
         }
     }
@@ -550,6 +573,8 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
             Some(SITE_STILL_PX),
         )?;
     }
+    drop(publish);
+    produced.extend(hero_fresh_crops);
     for file in fs::read_dir(&media)? {
         let file = file?.path();
         let name = file.file_name().unwrap_or_default().to_string_lossy();
@@ -2299,7 +2324,10 @@ fn landing_leader_showcase(english: &serde_json::Value) -> Result<String> {
     Ok(format!(
         r#"<div class="showcase-art is-loading" data-detail-art>
             <span class="art-unavailable" data-i18n="site.art_unavailable">{unavailable}</span>
-            <img class="showcase-portrait" data-detail-portrait src="/assets/gameplay/avatars/{art_slug}.webp" alt="" width="256" height="256">
+            <div class="showcase-loader" aria-hidden="true">
+              <svg class="showcase-loader-ring" viewBox="0 0 120 120" focusable="false"><defs><linearGradient id="showcase-loader-arc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="showcase-loader-head"/><stop offset=".45" class="showcase-loader-body"/><stop offset="1" class="showcase-loader-tail"/></linearGradient></defs><circle class="showcase-loader-orbit" cx="60" cy="60" r="58.5" pathLength="100"/><circle class="showcase-loader-track" cx="60" cy="60" r="54"/><circle class="showcase-loader-arc" cx="60" cy="60" r="54" pathLength="100"/></svg>
+              <img class="showcase-portrait" data-detail-portrait src="/assets/gameplay/avatars/{art_slug}.webp" alt="" width="256" height="256">
+            </div>
             <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/{art_slug}_mobile.webp" data-detail-image-mobile><img data-detail-image src="/assets/shell/leaders/{art_slug}_desktop.webp" alt="{name}" decoding="async" width="1600" height="900"></picture>
           </div>
           <div class="showcase-copy">
@@ -5025,6 +5053,26 @@ fn local_change_requires_wasm(
         .any(|path| local_file_requires_wasm(paths, path))
 }
 
+fn wasm_compile_needed(paths: &Paths) -> Result<bool> {
+    if !paths.wasm_input.is_file() {
+        return Ok(true);
+    }
+    let wasm_mtime = fs::metadata(&paths.wasm_input)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_nanos());
+    if wasm_mtime == 0 {
+        return Ok(true);
+    }
+    for stamp in local_source_snapshot(paths)? {
+        if local_file_requires_wasm(paths, &stamp.path) && stamp.modified_nanos > wasm_mtime {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn local_watch_process(paths: &Paths, pid: u32) -> bool {
     if pid == std::process::id() {
         return false;
@@ -5165,21 +5213,269 @@ fn start_local_server(port: u16, webroot: &str) -> Result<LocalPreviewServer> {
     Ok(LocalPreviewServer { child })
 }
 
+fn local_static_fingerprint(paths: &Paths) -> Result<String> {
+    let roots = [
+        paths.assets_shell.clone(),
+        paths.assets_gameplay.clone(),
+        paths.root.join("assets/campaign"),
+        paths.root.join("assets/guides"),
+        paths.site_media.clone(),
+        paths.assets_site.join("icons"),
+        paths.assets_maps.clone(),
+        paths.map_sources.clone(),
+        paths.root.join("sow-web/site/fonts"),
+    ];
+    let mut hash = Sha256::new();
+    for stamp in local_source_snapshot(paths)?
+        .into_iter()
+        .filter(|stamp| roots.iter().any(|root| stamp.path.starts_with(root)))
+    {
+        hash.update(stamp.path.to_string_lossy().as_bytes());
+        hash.update(stamp.len.to_le_bytes());
+        hash.update(stamp.modified_nanos.to_le_bytes());
+    }
+    Ok(format!("{:x}", hash.finalize()))
+}
+
+fn package_local_preview(
+    paths: &Paths,
+    out: &Path,
+    version: &str,
+    _compile: bool,
+) -> Result<()> {
+    let fingerprint = local_static_fingerprint(paths)?;
+    let fingerprint_file = out.join(".local-static-fingerprint");
+    let static_ready = fs::read_to_string(&fingerprint_file)
+        .is_ok_and(|cached| cached == fingerprint)
+        && out.join("maps/catalog.bin").is_file()
+        && out.join("fonts/fonts.css").is_file()
+        && out
+            .join("assets/shell/loader/sow-splash-desktop.webp")
+            .is_file()
+        && out.join("assets/gameplay/buildings/atlas.webp").is_file()
+        && out.join("assets/gameplay/buildings/atlas.json").is_file()
+        && GAMEPLAY_UNIT_ART
+            .iter()
+            .all(|file| out.join("assets/gameplay/units").join(file).is_file())
+        && out
+            .join("assets/gameplay/music/shadows-of-war.webm")
+            .is_file();
+
+    if !static_ready {
+        fs::create_dir_all(out)?;
+        let assets = out.join("assets");
+        copy_dir(&paths.assets_shell, &assets.join("shell"))?;
+        compress_web_leaders(&assets.join("shell/leaders"))?;
+        for name in [
+            "avatars",
+            "skins",
+            "currency",
+            "icons",
+            "store",
+            "buildings",
+            "units",
+            "music",
+        ] {
+            copy_dir(
+                &paths.assets_gameplay.join(name),
+                &assets.join("gameplay").join(name),
+            )?;
+        }
+        copy_dir(
+            &paths.root.join("assets/campaign"),
+            &assets.join("campaign"),
+        )?;
+        copy_dir(&paths.root.join("assets/guides"), &assets.join("guides"))?;
+        copy_dir(&paths.site_media, &assets.join("site/media"))?;
+        let maps = out.join("maps");
+        fs::create_dir_all(&maps)?;
+        if paths.assets_maps.is_dir() {
+            copy_dir(&paths.assets_maps, &maps)?;
+        }
+        refresh_map_thumbnails(&maps, &paths.map_sources)?;
+
+        let site = paths.root.join("sow-web/site");
+        if site.join("fonts").is_dir() {
+            copy_web_fonts(&site.join("fonts"), &out.join("fonts"))?;
+        }
+        for name in ["icon-192.png", "icon-512.png", "icon-512-maskable.png"] {
+            let icon = paths.assets_site.join("icons").join(name);
+            if icon.is_file() {
+                fs::copy(&icon, out.join(name))?;
+            }
+        }
+        for name in [
+            "8d227b8f9e6140d39e3381a1829e1db3.txt",
+            "manifest.webmanifest",
+        ] {
+            let src = site.join(name);
+            if src.is_file() {
+                fs::copy(&src, out.join(name))?;
+            }
+        }
+        if paths.root.join("sow-web/site/llms.txt").is_file() {
+            fs::copy(paths.root.join("sow-web/site/llms.txt"), out.join("llms.txt"))?;
+        }
+        fs::write(
+            out.join("robots.txt"),
+            "User-agent: *\nAllow: /\nDisallow: /internal/\nDisallow: /api/\nDisallow: /*.wasm$\nDisallow: /*.wasm.br$\n",
+        )?;
+        fs::write(out.join("sitemap.xml"), {
+            let today = today_iso();
+            let pages: [(&str, &str, &str, &str); 6] = [
+                ("", &today, "weekly", "1.0"),
+                ("play/", &today, "weekly", "0.9"),
+                ("support/", "2026-09-03", "monthly", "0.4"),
+                ("privacy/", "2026-09-03", "yearly", "0.3"),
+                ("terms/", "2026-09-03", "yearly", "0.3"),
+                ("cookies/", "2026-09-03", "yearly", "0.3"),
+            ];
+            let mut xml = String::from(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+            );
+            for (path, lastmod, freq, priority) in pages {
+                xml.push_str(&format!(
+                    "  <url>\n    <loc>https://shadowsofwar.io/{path}</loc>\n    <lastmod>{lastmod}</lastmod>\n    <changefreq>{freq}</changefreq>\n    <priority>{priority}</priority>\n  </url>\n"
+                ));
+            }
+            xml.push_str("</urlset>\n");
+            xml
+        })?;
+        fs::write(&fingerprint_file, &fingerprint)?;
+    }
+
+    require_file(&paths.wasm_input, "WASM client binary")?;
+    let wasm_hash = file_sha256(&paths.wasm_input)?;
+    let ts = &wasm_hash[..10];
+    let bindgen_name = format!("sow_client_{ts}");
+    let js_name = format!("{bindgen_name}.js");
+    let wasm_name = format!("{bindgen_name}_bg.wasm");
+
+    let wasm_ready = static_ready
+        && out.join(&wasm_name).is_file()
+        && out.join(&js_name).is_file()
+        && out.join("play/index.html").is_file();
+
+    if !wasm_ready {
+        for entry in fs::read_dir(out)? {
+            let entry = entry?;
+            if entry.file_type()?.is_file()
+                && entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("sow_client_")
+            {
+                fs::remove_file(entry.path())?;
+            }
+        }
+        run_bindgen(&paths.wasm_input, out, &bindgen_name)?;
+    }
+
+    // Clean up old main_menu bundles in play/ before building new index
+    if let Ok(entries) = fs::read_dir(out.join("play")) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with("main_menu_") && name.ends_with(".js") {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
+
+    copy_shell(paths, out, WebTarget::Local)?;
+    export_locales(out)?;
+    let maps_cache_bust = thumbnail_cache_bust(&out.join("maps"))?;
+    build_index(
+        paths,
+        out,
+        IndexBuild {
+            version,
+            js: &js_name,
+            wasm: &wasm_name,
+            ts,
+            maps_cache_bust: &maps_cache_bust,
+            target: WebTarget::Local,
+        },
+    )?;
+    write_sw(paths, out, ts)?;
+    write_manifest(paths, out, version, &js_name, &wasm_name, ts)?;
+
+    let site = paths.root.join("sow-web/site");
+    for path in [
+        "privacy",
+        "terms",
+        "cookies",
+        "support",
+        "auth",
+        ".well-known",
+    ] {
+        let src = site.join(path);
+        if src.is_dir() {
+            copy_dir(&src, &out.join(path))?;
+        }
+    }
+    for name in ["index.html", "styles.css"] {
+        let src = site.join(name);
+        if src.is_file() {
+            fs::copy(&src, out.join(name))?;
+        }
+    }
+    for (source, destination, format) in [
+        ("analytics.ts", "analytics.js", "iife"),
+        ("app.ts", "app.js", "iife"),
+        ("site-chrome.ts", "site-chrome.js", "iife"),
+        ("wou-auth.ts", "wou-auth.js", "esm"),
+        ("auth-callback.ts", "auth-callback.js", "esm"),
+    ] {
+        let src = site.join(source);
+        if src.is_file() {
+            fs::write(
+                out.join(destination),
+                compile_browser_ts(&src, format, &format!("website {source}"))?,
+            )?;
+        }
+    }
+    expand_public_site_header(paths, out)?;
+    for name in [
+        "styles.css",
+        "analytics.js",
+        "app.js",
+        "site-chrome.js",
+        "sow-i18n.js",
+        "sow-dropdown.js",
+        "sow-controls.css",
+        "wou-auth.js",
+    ] {
+        let p = out.join(name);
+        if p.is_file() {
+            let hash = file_sha256(&p)?;
+            let versioned = format!("{name}?v={}", &hash[..10]);
+            for relative in PUBLIC_SITE_PAGES {
+                let html = out.join(relative);
+                if html.is_file() {
+                    let prefix = if relative == "index.html" {
+                        "./"
+                    } else {
+                        "../"
+                    };
+                    let content = fs::read_to_string(&html)?;
+                    fs::write(
+                        &html,
+                        content.replace(&format!("{prefix}{name}"), &format!("{prefix}{versioned}")),
+                    )?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn build_local_preview(paths: &Paths, version: &str, compile: bool) -> Result<()> {
-    // Art can change while the preview runs: publish it again before packaging.
     stage_runtime_assets(&paths.root, &paths.runtime_assets)?;
     if compile {
         compile_wasm(paths, true)?;
     }
-    package_self(paths, &paths.dist_web, version, compile)?;
-    let maps_cache_bust = thumbnail_cache_bust(&paths.dist_web.join("maps"))?;
-    package_poki(
-        &paths.dist_web,
-        &paths.dist_poki,
-        paths,
-        version,
-        &maps_cache_bust,
-    )?;
+    package_local_preview(paths, &paths.dist_web, version, compile)?;
     Ok(())
 }
 
@@ -5379,10 +5675,11 @@ fn watch_local_preview(
             "==> Local source change detected; rebuilding{}...",
             if compile { " WASM" } else { " web files" }
         );
+        let start = std::time::Instant::now();
         if let Err(error) = build_local_preview(paths, version, compile) {
             eprintln!("⚠️ Local preview rebuild failed: {error:#}");
         } else {
-            println!("✅ Local preview rebuilt; refresh the browser.");
+            println!("✅ Local preview rebuilt in {:.2?}; refresh the browser.", start.elapsed());
         }
     }
 }
@@ -5402,10 +5699,16 @@ fn cmd_local(paths: &Paths) -> Result<()> {
         .to_str()
         .context("local webroot path is not UTF-8")?;
     let lock = acquire_local_watch_lock(paths, port_number)?;
-    println!("==> Building local web preview");
-    // Local preview must package the client from the current source tree. Reusing a stale
-    // wasm artifact makes UI/WASM work appear successful while the browser is running old code.
-    build_local_preview(paths, &version, true)?;
+    let compile = env::var("SOW_FORCE_COMPILE").is_ok_and(|v| v == "1") || wasm_compile_needed(paths)?;
+    if compile {
+        println!("==> Building local web preview (compiling WASM)...");
+    } else {
+        println!("⚡ Reusing existing WASM client ({})", paths.wasm_input.display());
+        println!("==> Packaging local web preview...");
+    }
+    let start = std::time::Instant::now();
+    build_local_preview(paths, &version, compile)?;
+    println!("✅ Local preview ready in {:.2?}", start.elapsed());
     watch_local_preview(paths, &version, port_number, webroot, lock)
 }
 

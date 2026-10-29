@@ -332,6 +332,39 @@ export interface HudMapMenuItem {
     reason_troops: number | null;
 }
 
+export interface HudBuildingChip {
+    icon: string;
+    label: string;
+}
+
+export interface HudBuildingUpgradeOffer {
+    next_level: number;
+    cost: number;
+    seconds: number;
+    enabled: boolean;
+}
+
+export interface HudMapMenuBuilding {
+    kind: string;
+    level: number;
+    max_level?: number;
+    under_construction?: boolean;
+    anchor_x?: number;
+    anchor_y?: number;
+    anchor_radius?: number;
+    remaining_seconds?: number | null;
+    progress?: number | null;
+    chips?: HudBuildingChip[];
+    upgrade?: HudBuildingUpgradeOffer | null;
+}
+
+export interface HudBuildingInProgress {
+    kind: string;
+    level: number;
+    remaining_seconds: number;
+    progress: number;
+}
+
 export interface HudMapMenu {
     open?: boolean;
     view?: "building_details" | "radial";
@@ -346,7 +379,7 @@ export interface HudMapMenu {
     relation?: string | null;
     target_name?: string | null;
     target_avatar?: HudAvatarIdentity | null;
-    building?: { kind: string; level: number } | null;
+    building?: HudMapMenuBuilding | null;
 }
 
 export interface HudNotification {
@@ -447,6 +480,7 @@ export interface MenuHudPayload {
     spawn_timer_secs: number | null;
     selected_building: string | null;
     building_placement: { pending: boolean; can_confirm: boolean } | null;
+    building_in_progress?: HudBuildingInProgress | null;
     selected_warship_build: boolean;
     selected_nuke: string | null;
     fleet_panel: {
@@ -489,6 +523,7 @@ export interface MenuHudPayload {
     winner_name: string;
     featured_skin: { id: string; name: string; asset_path: string; cost_gems: number } | null;
     player_leader: string | null;
+    player_avatar_expression?: HudAvatarIdentity["expression"] | null;
     player_name: string;
     player_endgame_stats?: {
         kills?: number;

@@ -3,6 +3,9 @@ use crate::input::map_click::{TOUCH_HOLD_MS, is_quick_tap};
 use crate::{ClientPhase, camera_zoom_upper_bound};
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, PointerKind, WindowEvent};
 
+/// A right press this soon after an accepted one is treated as the same click.
+const RIGHT_PRESS_LOCKOUT_MS: u128 = 300;
+
 impl SowApp {
     pub fn handle_window_event(
         &mut self,
@@ -443,6 +446,16 @@ impl SowApp {
             && self.ui.app.phase == ClientPhase::Playing
             && !self.ui.tutorial_camera_only
         {
+            let since_ms = self.input.last_right_press.map(|at| at.elapsed().as_millis());
+            let repeated = since_ms.is_some_and(|ms| ms < RIGHT_PRESS_LOCKOUT_MS);
+            log::info!(
+                "[RIGHT TRACE] press x={x:.0} y={y:.0} since_last_ms={since_ms:?} repeated={repeated} radial_open={}",
+                self.input.map_context_menu.is_some()
+            );
+            if repeated {
+                return;
+            }
+            self.input.last_right_press = Some(web_time::Instant::now());
             if self.ui.app.hud_state.building_placement.is_some()
                 || self.ui.app.hud_state.selected_nuke_kind.is_some()
                 || self.ui.app.hud_state.selected_warship_build
@@ -454,6 +467,11 @@ impl SowApp {
             } else {
                 self.close_map_context_menu();
             }
+        } else if right && !pressed {
+            log::info!(
+                "[RIGHT TRACE] release x={x:.0} y={y:.0} radial_open={}",
+                self.input.map_context_menu.is_some()
+            );
         }
     }
 

@@ -659,23 +659,6 @@ interface TutorialRuntime {
             return;
         if (!root.isConnected) document.body.appendChild(root);
         const tutorial = hud.tutorial;
-        const expressions = campaignBaseExpressions(runtime.definition!, tutorial.facts || {});
-        const currentView = runtime.machine.view();
-        const line = currentView.line || currentView.step;
-        const portraitExpression = line.portrait_expression || currentView.step.portrait_expression;
-        const portraitSpeaker = (runtime.definition!.speakers || {})[
-            line.speaker || currentView.step.speaker
-        ];
-        if (portraitExpression && portraitSpeaker)
-            expressions[portraitSpeaker.faction || "player"] = portraitExpression;
-        const expressionsKey = JSON.stringify([tutorial.campaign_session_id, expressions]);
-        if (runtime.lastAvatarExpressions !== expressionsKey) {
-            runtime.lastAvatarExpressions = expressionsKey;
-            send("set_campaign_avatar_expressions", {
-                expressions,
-                campaign_session_id: Number(tutorial.campaign_session_id),
-            });
-        }
         const currentStep = runtime.machine.view().step;
         const stepChanged = runtime.hoverStepId !== currentStep.id;
         if (stepChanged) {
@@ -960,6 +943,23 @@ interface TutorialRuntime {
             }
         } else {
             runtime.expandFocusStepId = null;
+        }
+        const expressions = campaignBaseExpressions(runtime.definition!, tutorial.facts || {});
+        const currentView = machineView;
+        const line = currentView.line || currentView.step;
+        const portraitExpression = line.portrait_expression || currentView.step.portrait_expression;
+        const portraitSpeaker = (runtime.definition!.speakers || {})[
+            line.speaker || currentView.step.speaker
+        ];
+        if (portraitExpression && portraitSpeaker)
+            expressions[portraitSpeaker.faction || "player"] = portraitExpression;
+        const expressionsKey = JSON.stringify([tutorial.campaign_session_id, expressions]);
+        if (runtime.lastAvatarExpressions !== expressionsKey) {
+            runtime.lastAvatarExpressions = expressionsKey;
+            send("set_campaign_avatar_expressions", {
+                expressions,
+                campaign_session_id: Number(tutorial.campaign_session_id),
+            });
         }
         syncTutorialPause(machineView);
         let markerId = null;

@@ -23,6 +23,19 @@ impl BuildingMetric {
         }
     }
 
+    pub(crate) const fn icon_name(&self) -> &'static str {
+        match self.icon {
+            Icon::Troops => "troops",
+            Icon::Boat => "boat",
+            Icon::Speed => "speed",
+            Icon::Gold => "gold",
+            Icon::Shield => "shield",
+            Icon::Range => "range",
+            Icon::Radiation => "radiation",
+            _ => "upgrade-sparkle",
+        }
+    }
+
     pub(crate) fn label(&self) -> String {
         self.value.map_or_else(String::new, |value| {
             format!(
@@ -183,9 +196,12 @@ pub(crate) struct BuildingPanel {
     pub upgrade: Option<UpgradeOffer>,
     /// Seconds left while the building is being built or upgraded.
     pub remaining_seconds: Option<f64>,
+    /// Completion progress `0.0..=1.0` while the building is being built or upgraded.
+    pub progress: Option<f32>,
 }
 
 /// Panel rows in physical px. Drawing and tapping read this one layout.
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct BuildingPanelLayout {
     pub chips_center: [f32; 2],
@@ -231,6 +247,7 @@ pub(crate) fn building_panel_layout(
     }
 }
 
+#[allow(dead_code)]
 impl BuildingPanelLayout {
     pub(crate) fn button_contains(&self, x: f32, y: f32) -> bool {
         (x - self.button_center[0]).abs() <= self.button_size[0] * 0.5
@@ -262,12 +279,19 @@ impl crate::app::SowApp {
         let current = building_metrics(building.kind, level, leader, config);
         let seconds = |ticks: u32| f64::from(ticks) * config.tick_rate_ms as f64 / 1000.0;
         if building.under_construction {
+            let progress = crate::render::world::overlays::construction_progress(
+                building.kind,
+                level,
+                building.level,
+                building.ticks_until_complete,
+            );
             return Some(BuildingPanel {
                 tile_idx: building.tile_idx,
                 kind: building.kind,
                 chips: current,
                 upgrade: None,
                 remaining_seconds: Some(seconds(building.ticks_until_complete)),
+                progress,
             });
         }
         let next_level = level.saturating_add(1);
@@ -281,6 +305,7 @@ impl crate::app::SowApp {
                 chips: current,
                 upgrade: None,
                 remaining_seconds: None,
+                progress: None,
             });
         }
         let next = building_metrics(building.kind, next_level, leader, config);
@@ -305,6 +330,7 @@ impl crate::app::SowApp {
                 enabled: cost.is_finite() && self.current_player_gold() >= cost,
             }),
             remaining_seconds: None,
+            progress: None,
         })
     }
 
@@ -324,9 +350,8 @@ impl crate::app::SowApp {
     }
 
     /// True when (x, y) lands on the open panel's upgrade button.
-    pub(crate) fn building_panel_button_at(&self, x: f32, y: f32) -> bool {
-        self.building_panel_layout()
-            .is_some_and(|(panel, layout)| panel.upgrade.is_some() && layout.button_contains(x, y))
+    pub(crate) fn building_panel_button_at(&self, _x: f32, _y: f32) -> bool {
+        false
     }
 }
 
