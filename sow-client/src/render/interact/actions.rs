@@ -1,5 +1,5 @@
 use crate::UiAction;
-use crate::app::SowApp;
+use crate::app::{MapContextMenuView, SowApp};
 use crate::spawn_sow_client_connect;
 
 impl SowApp {
@@ -114,14 +114,7 @@ impl SowApp {
                     {
                         let cx = player.centroid_x;
                         let cy = player.centroid_y;
-
-                        let world_cx = cx + 0.5;
-                        let world_cy = cy + 0.5;
-
-                        self.input.has_snapped_camera_to_spawn = true;
-                        self.input.camera_focus_target = Some((world_cx, world_cy));
-                        self.input.camera_focus_waiting_for_input_release = false;
-                        self.input.target_zoom = 10.0;
+                        self.center_camera_on(cx, cy);
                     }
                 }
                 UiAction::FocusTile(col, row) => {
@@ -301,6 +294,40 @@ impl SowApp {
                 }
             }
         }
+    }
+
+    /// Eases the camera onto a tile at the zoom the HUD's center buttons use.
+    fn center_camera_on(&mut self, tile_x: f32, tile_y: f32) {
+        self.input.has_snapped_camera_to_spawn = true;
+        self.input.camera_focus_target = Some((tile_x + 0.5, tile_y + 0.5));
+        self.input.camera_focus_waiting_for_input_release = false;
+        self.input.target_zoom = 10.0;
+    }
+
+    /// The radial's center: recenters on the home of the entity that owns the tile the
+    /// radial is open on. Land nobody owns recenters on that tile.
+    pub(crate) fn center_radial_home(&mut self) {
+        let Some(menu) = self
+            .input
+            .map_context_menu
+            .filter(|menu| menu.view == MapContextMenuView::Radial)
+        else {
+            return;
+        };
+        let Some(engine) = self.sim.engine.as_ref() else {
+            return;
+        };
+        let map = &engine.state.map;
+        let (col, row) = (menu.tile_idx % map.width, menu.tile_idx / map.width);
+        let owner = map.owner_id(col, row);
+        let (home_x, home_y) = engine
+            .state
+            .players
+            .iter()
+            .find(|player| player.id == owner)
+            .and_then(|player| player.home)
+            .unwrap_or((col, row));
+        self.center_camera_on(home_x as f32, home_y as f32);
     }
 
     pub(crate) fn request_join(

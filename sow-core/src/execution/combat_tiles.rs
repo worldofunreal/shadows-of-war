@@ -471,9 +471,9 @@ impl SowEngine {
                         continue; // Skip, edge was severed
                     }
 
-                    let target_has_one_tile = execution.target_owner != 0
-                        && self.state.player(execution.target_owner).is_some_and(|target| target.tile_count <= 1);
-                    if target_has_one_tile
+                    let target_reached_pre_defeat = execution.target_owner != 0
+                        && self.state.player(execution.target_owner).is_some_and(Self::pre_defeat_reached);
+                    if target_reached_pre_defeat
                         && Self::pre_defeat_watches(&pre_defeat_targets, pre_defeat_pending, execution.target_owner)
                     {
                         if pre_defeat_pending.is_none() {

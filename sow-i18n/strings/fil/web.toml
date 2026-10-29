@@ -899,6 +899,18 @@ match_message_4 = "Matatapos na ang iyong pakikipaglaban, at maaaring maghintay 
 match_message_5 = "Matatapos na ang inyong laban, at tiyak na bahagi ito ng plano."
 
 [site]
+landing_build_expand = "Magtayo. Lumawak."
+landing_betray = "Magtaksil."
+empire_starts = "Ang susunod mong imperyo"
+empire_here = "ay nagsisimula rito."
+browse_all = "Tingnan lahat"
+previous_leader = "Nakaraang pinuno"
+next_leader = "Susunod na pinuno"
+clear_search = "Burahin ang paghahanap"
+art_unavailable = "Hindi available ang larawan"
+pause_motion = "I-pause ang animation"
+resume_motion = "Ipagpatuloy ang animation"
+in_game = "Sa laro"
 title = "Shadows of War — Estratehiya ng Multiplayer"
 description = "Pumili ng isang makasaysayang lider, sakupin ang lupa, magtayo ng mga lungsod at daungan, at bumuo ng alyansa o magtaksil sa mga digmaang teritoryal na nagaganap nang real time."
 home = "Pangunahing pahina ng Shadows of War"

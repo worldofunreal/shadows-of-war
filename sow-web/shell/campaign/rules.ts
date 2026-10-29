@@ -527,9 +527,10 @@ export function factionReferenceIds(definition: CampaignDefinition): Set<string>
     if (!object(definition)) return refs;
     const settings = definition.settings || {};
     add(settings.campaign_support && settings.campaign_support.after_defeated);
-    Object.values(object(definition.speakers) ? definition.speakers : {}).forEach((speaker) =>
-        add(speaker && speaker.faction),
-    );
+    Object.values(object(definition.speakers) ? definition.speakers : {}).forEach((speaker) => {
+        add(speaker && speaker.faction);
+        add(speaker && speaker.base_expression && speaker.base_expression?.until?.target);
+    });
     (Array.isArray(definition.steps) ? definition.steps : []).forEach((step) => {
         if (!object(step)) return;
         if (object(step.trigger)) {
@@ -579,6 +580,9 @@ export function removeFactionReferences(
         adjusted.settings_cleared++;
     }
     Object.values(object(result.speakers) ? result.speakers : {}).forEach((speaker) => {
+        if (speaker && speaker.base_expression && removed.has(speaker.base_expression?.until?.target)) {
+            delete speaker.base_expression;
+        }
         if (!object(speaker) || !removed.has(speaker.faction)) return;
         const factionId = speaker.faction;
         delete speaker.faction;
@@ -671,4 +675,18 @@ export function removeFactionReferences(
         });
     }
     return { definition: result, adjusted };
+}
+
+// A speaker's authored mood ends on a confirmed, cumulative campaign fact.
+export function campaignBaseExpressions(
+    definition: CampaignDefinition,
+    facts: CampaignRecord,
+): Record<string, string> {
+    const expressions: Record<string, string> = {};
+    for (const speaker of Object.values(definition.speakers || {}) as CampaignRecord[]) {
+        const rule = speaker.base_expression;
+        if (!rule || (facts.alliance_faction_ids || []).includes(rule.until.target)) continue;
+        expressions[speaker.faction || "player"] = rule.expression;
+    }
+    return expressions;
 }

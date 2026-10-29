@@ -221,9 +221,6 @@
             .then(function () {
                 return sdk.init();
             })
-            .then(function () {
-                console.info("Poki SDK initialized");
-            })
             .catch(function (error) {
                 console.warn("Poki SDK init failed; continuing anonymously:", error);
             });

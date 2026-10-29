@@ -899,6 +899,18 @@ match_message_4 = "Votre bataille va se terminer. Les rapports peuvent attendre.
 match_message_5 = "Votre bataille va se terminer. Cela faisait certainement partie du plan."
 
 [site]
+landing_build_expand = "Bâtissez. Étendez-vous."
+landing_betray = "Trahissez."
+empire_starts = "Votre prochain empire"
+empire_here = "commence ici."
+browse_all = "Tout voir"
+previous_leader = "Chef précédent"
+next_leader = "Chef suivant"
+clear_search = "Effacer la recherche"
+art_unavailable = "Illustration indisponible"
+pause_motion = "Mettre en pause"
+resume_motion = "Reprendre l’animation"
+in_game = "Dans le jeu"
 title = "Shadows of War — Stratégie multijoueur"
 description = "Choisis un dirigeant historique, conquiers des terres, construis des villes et des ports, forme des alliances puis trahis-les dans des guerres territoriales en temps réel."
 home = "Accueil de Shadows of War"

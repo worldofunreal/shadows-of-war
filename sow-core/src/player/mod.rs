@@ -122,6 +122,9 @@ pub struct Player {
     pub color: [f32; 3],
     pub alive: bool,
     pub has_spawned: bool,
+    /// Tile this player last spawned on. The radial's center recenters the camera here.
+    #[serde(default)]
+    pub home: Option<(u32, u32)>,
     pub sum_x: u64,
     pub sum_y: u64,
     pub tile_count: u32,
@@ -207,6 +210,7 @@ impl Player {
             max_troops_cap: None,
             gold: config.starting_gold,
             has_spawned: false,
+            home: None,
             sum_x: 0,
             sum_y: 0,
             tile_count: 0,
@@ -272,6 +276,7 @@ impl Player {
             max_troops_cap: None,
             gold: starting_gold,
             has_spawned: false,
+            home: None,
             sum_x: 0,
             sum_y: 0,
             tile_count: 0,
@@ -329,6 +334,7 @@ impl Player {
             max_troops_cap: None,
             gold: config.starting_gold,
             has_spawned: false,
+            home: None,
             sum_x: 0,
             sum_y: 0,
             tile_count: 0,

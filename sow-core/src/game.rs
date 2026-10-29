@@ -488,6 +488,7 @@ impl GameState {
         }
         if let Some(p) = self.player_mut(pid) {
             p.has_spawned = true;
+            p.home = Some((cx, cy));
         }
     }
 

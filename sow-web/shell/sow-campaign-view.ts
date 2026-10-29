@@ -1,3 +1,4 @@
+import { campaignBaseExpressions } from "./campaign/rules.ts";
 /* Shared DOM presentation and tutorial target resolution. */
 import {
     resolveUiTarget,
@@ -996,7 +997,18 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         const copyTitle = showTitle ? t(line.title_key || step.title_key) : "",
             copyBody =
                 t(line.body_key || step.body_key) || (modal ? context.hintOverride || t(step.hint_key) : "");
+        const faction = character.faction || "player";
+        const actor = (context.players || []).find((player: CampaignRecord) =>
+            faction === "player" ? player.is_me : player.campaign_faction_id === faction,
+        );
+        const authoredExpression = line.portrait_expression || step.portrait_expression;
+        const expression =
+            actor && Object.hasOwn(actor, "avatar_expression")
+                ? actor.avatar_expression
+                : authoredExpression ||
+                  campaignBaseExpressions(model.definition, context.facts || {})[faction];
         const key = JSON.stringify([
+            expression,
             step.id,
             model.state && model.state.line,
             copyTitle,
@@ -1023,8 +1035,8 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             setText(body, copyBody);
             body.hidden = !copyBody;
             cinematicVideo.setAttribute("aria-label", copyTitle || speakerName || "Campaign cinematic");
-            const avatarPath = step.portrait_expression
-                ? "expressions/" + character.avatar + "_" + step.portrait_expression
+            const avatarPath = expression
+                ? "expressions/" + character.avatar + "_" + expression
                 : character.avatar;
             const avatar =
                 character.avatar && character.avatar !== "null"

@@ -657,6 +657,9 @@ impl SowEngine {
     /// Ticks a final capture may wait for its last line before it resolves without a reply (10 ticks per second).
     pub(crate) const PRE_DEFEAT_HOLD_TICKS: u64 = 600;
 
+    /// Share of its peak land (in percent) a watched faction may keep before its last-words exchange holds the next capture (65% lost).
+    pub(crate) const PRE_DEFEAT_REMAINING_PERCENT: u64 = 35;
+
     /// Whether this owner's final capture is part of an active pre-defeat watch.
     pub(crate) fn pre_defeat_watches(
         targets: &std::collections::HashSet<PlayerId>,
@@ -664,6 +667,13 @@ impl SowEngine {
         owner: PlayerId,
     ) -> bool {
         targets.contains(&owner) || pending == Some(owner)
+    }
+
+    /// Whether a watched faction has lost enough land to hold for its last-words exchange; the final tile always does.
+    pub(crate) fn pre_defeat_reached(player: &crate::player::Player) -> bool {
+        player.tile_count <= 1
+            || u64::from(player.tile_count) * 100
+                <= u64::from(player.max_tile_count) * Self::PRE_DEFEAT_REMAINING_PERCENT
     }
 
     /// Lets a waiting final capture resolve when its last line never finishes.

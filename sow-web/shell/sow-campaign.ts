@@ -35,6 +35,7 @@ const api: CampaignApi = {
     validate,
     validateMenuGuides,
     create,
+    campaignBaseExpressions: rules.campaignBaseExpressions,
 };
 
 if (typeof window !== "undefined") window.SOWCampaign = api;

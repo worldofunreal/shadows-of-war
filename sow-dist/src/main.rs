@@ -47,6 +47,35 @@ const POKI_FORBIDDEN_MARKERS: &[&str] = &[
     "monetization",
 ];
 
+// Share an authenticated transport across the deploy's checks and transfers.
+// OpenSSH owns socket creation and removes it after the idle connection expires.
+const SSH_REUSE_ARGS: [&str; 10] = [
+    "-o",
+    "ControlMaster=auto",
+    "-o",
+    "ControlPersist=600",
+    "-o",
+    "ControlPath=~/.ssh/sow-%C",
+    "-o",
+    "ServerAliveInterval=15",
+    "-o",
+    "ServerAliveCountMax=3",
+];
+
+fn command(cmd: &str) -> Command {
+    let mut command = Command::new(cmd);
+    match cmd {
+        "ssh" | "scp" => {
+            command.args(SSH_REUSE_ARGS);
+        }
+        "rsync" => {
+            command.args(["-e", &format!("ssh {}", SSH_REUSE_ARGS.join(" "))]);
+        }
+        _ => {}
+    }
+    command
+}
+
 fn run(cmd: &str, args: &[&str], cwd: Option<&Path>) -> Result<()> {
     println!(
         "+ {cmd} {}",
@@ -55,7 +84,7 @@ fn run(cmd: &str, args: &[&str], cwd: Option<&Path>) -> Result<()> {
             .collect::<Vec<_>>()
             .join(" ")
     );
-    let mut c = Command::new(cmd);
+    let mut c = command(cmd);
     c.args(args)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
@@ -69,7 +98,7 @@ fn run(cmd: &str, args: &[&str], cwd: Option<&Path>) -> Result<()> {
 }
 
 fn output(cmd: &str, args: &[&str]) -> Result<String> {
-    let o = Command::new(cmd).args(args).output()?;
+    let o = command(cmd).args(args).output()?;
     if !o.status.success() {
         bail!("{cmd} failed: {}", String::from_utf8_lossy(&o.stderr));
     }
@@ -246,7 +275,32 @@ const GENERATED_FILES: [(&str, &str); 3] = [
 const PORTRAIT_PX: u32 = 256;
 /// Landing shots (assets/site/media/<stem>.<png|jpg|webp>): until the owner drops a
 /// capture, each slot publishes current game art (dir, stem) so nothing stale shows.
-const SITE_STILLS: [(&str, (&str, &str)); 3] = [
+const SITE_STILLS: [(&str, (&str, &str)); 13] = [
+    ("game-expand", ("assets/maps/world", "thumbnail")),
+    ("game-build", ("assets/maps/world", "thumbnail")),
+    ("game-war", ("assets/maps/world", "thumbnail")),
+    (
+        "opening-desktop",
+        ("assets/art/loader", "sow-splash-desktop"),
+    ),
+    ("opening-mobile", ("assets/art/loader", "sow-splash-mobile")),
+    (
+        "closing-desktop",
+        ("assets/art/loader", "sow-splash-desktop"),
+    ),
+    ("closing-mobile", ("assets/art/loader", "sow-splash-mobile")),
+    (
+        "step-expand-mobile",
+        ("assets/art/heroes", "boudica_mobile"),
+    ),
+    (
+        "step-build-mobile",
+        ("assets/art/heroes", "cleopatra_mobile"),
+    ),
+    (
+        "step-war-mobile",
+        ("assets/art/heroes", "richard_the_lionheart_mobile"),
+    ),
     ("step-expand", ("assets/maps/world", "thumbnail")),
     (
         "step-build",
@@ -376,7 +430,10 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
         let base = leader.art_slug();
         let source = art.join("avatars/heroes").join(format!("{base}.webp"));
         if !source.is_file() {
-            bail!("hero art {base} needs one 2 x 2 sheet at {}", source.display());
+            bail!(
+                "hero art {base} needs one 2 x 2 sheet at {}",
+                source.display()
+            );
         }
         if let Some(first) = avatar_sources.insert(base.to_owned(), source.clone()) {
             bail!(
@@ -2223,10 +2280,13 @@ fn english_text(english: &serde_json::Value, key: &str) -> Result<String> {
 }
 
 fn landing_hero_media(media: &Path) -> String {
+    let still = r#"<picture class="hero-still"><source media="(max-width: 700px)" srcset="/assets/site/media/opening-mobile.webp"><img src="/assets/site/media/opening-desktop.webp" alt="" fetchpriority="high" decoding="async" width="1600" height="900"></picture>"#;
     if media.join("hero-loop.webm").is_file() {
-        r#"<video class="hero-video" loop muted playsinline preload="metadata" aria-hidden="true" poster="/assets/site/media/hero-loop.webp"><source src="/assets/site/media/hero-loop.webm" type="video/webm"><source src="/assets/site/media/hero-loop.mp4" type="video/mp4"></video>"#.to_string()
+        format!(
+            r#"{still}<video class="hero-video" hidden loop muted playsinline preload="none" aria-hidden="true" poster="/assets/site/media/opening-desktop.webp"><source src="/assets/site/media/hero-loop.webm" type="video/webm"><source src="/assets/site/media/hero-loop.mp4" type="video/mp4"></video>"#
+        )
     } else {
-        r#"<picture class="hero-still"><source media="(max-width: 700px)" srcset="/assets/shell/loader/sow-splash-mobile.webp"><img src="/assets/shell/loader/sow-splash-desktop.webp" alt="" fetchpriority="high" decoding="async"></picture>"#.to_string()
+        still.to_owned()
     }
 }
 
@@ -2237,19 +2297,25 @@ fn landing_leader_showcase(english: &serde_json::Value) -> Result<String> {
     let name = english_text(english, &format!("heroes.leader_{id}_name"))?;
     let historical = english_text(english, &format!("heroes.leader_{id}_historical"))?;
     Ok(format!(
-        r#"<picture class="showcase-art"><source media="(max-width: 700px)" srcset="/assets/shell/leaders/{art_slug}_mobile.webp" data-detail-image-mobile><img data-detail-image src="/assets/shell/leaders/{art_slug}_desktop.webp" alt="{name}" decoding="async"></picture>
+        r#"<div class="showcase-art is-loading" data-detail-art>
+            <span class="art-unavailable" data-i18n="site.art_unavailable">{unavailable}</span>
+            <img class="showcase-portrait" data-detail-portrait src="/assets/gameplay/avatars/{art_slug}.webp" alt="" width="256" height="256">
+            <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/{art_slug}_mobile.webp" data-detail-image-mobile><img data-detail-image src="/assets/shell/leaders/{art_slug}_desktop.webp" alt="{name}" decoding="async" width="1600" height="900"></picture>
+          </div>
           <div class="showcase-copy">
-            <p class="eyebrow" data-detail-civ data-i18n="heroes.leader_{id}_civilization">{civ}</p>
+            <div class="showcase-identity"><p class="eyebrow" data-detail-civ data-i18n="heroes.leader_{id}_civilization">{civ}</p>
             <h3 data-detail-name data-i18n="heroes.leader_{id}_name">{name}</h3>
-            <p class="showcase-historical" data-detail-historical data-i18n="heroes.leader_{id}_historical"{hidden}>{historical}</p>
-            <p class="showcase-label" data-i18n="site.command_trait">Command trait</p>
+            <p class="showcase-historical" data-detail-historical data-i18n="heroes.leader_{id}_historical"{hidden}>{historical}</p></div>
+            <div class="showcase-trait"><p class="showcase-label" data-i18n="site.command_trait">{trait_label}</p>
             <p class="showcase-ability" data-detail-ability data-i18n="site.leader_{id}_ability">{ability}</p>
-            <p class="showcase-description" data-detail-description data-i18n="site.leader_{id}_description">{description}</p>
+            <p class="showcase-description" data-detail-description data-i18n="site.leader_{id}_description">{description}</p></div>
           </div>"#,
         civ = english_text(english, &format!("heroes.leader_{id}_civilization"))?,
         hidden = if historical == name { " hidden" } else { "" },
+        trait_label = english_text(english, "site.command_trait")?,
         ability = english_text(english, &format!("site.leader_{id}_ability"))?,
         description = english_text(english, &format!("site.leader_{id}_description"))?,
+        unavailable = english_text(english, "site.art_unavailable")?,
     ))
 }
 
@@ -2277,24 +2343,31 @@ fn landing_maps(maps: &Path) -> Result<String> {
     let catalog = sow_core::map_file::parse_catalog(&fs::read(maps.join("catalog.bin"))?)
         .map_err(|error| anyhow::anyhow!("read map catalog: {error}"))?;
     let bust = thumbnail_cache_bust(maps)?;
-    let html: String = catalog
+    let entries: Vec<_> = catalog
         .entries
         .iter()
         .filter(|entry| {
-            entry.multiplayer_frequency > 0 && maps.join(&entry.key).join("thumbnail.webp").is_file()
-        })
-        .map(|entry| {
-            format!(
-                r#"<li class="map-card"><img src="/maps/{key}/thumbnail.webp?v={bust}" alt="{name}" width="512" height="288" loading="lazy" decoding="async"><span>{name}</span></li>
-"#,
-                key = html_text(&entry.key),
-                name = html_text(&entry.display_name),
-            )
+            entry.multiplayer_frequency > 0
+                && maps.join(&entry.key).join("thumbnail.webp").is_file()
         })
         .collect();
-    if html.is_empty() {
-        bail!("no map in rotation has a thumbnail for the landing page");
+    let first = entries
+        .first()
+        .context("no map in rotation has a thumbnail for the landing page")?;
+    let mut html = format!(
+        r#"<figure class="map-preview"><div class="map-preview-image" data-map-frame><span class="art-unavailable" data-i18n="site.art_unavailable">Artwork unavailable</span><img data-map-image src="/maps/{key}/thumbnail.webp?v={bust}" alt="{name}" width="1024" height="576" loading="lazy" decoding="async"></div><figcaption><span class="eyebrow" data-i18n="site.maps">Maps</span><h3 data-map-name aria-live="polite">{name}</h3></figcaption></figure><ul class="map-strip">"#,
+        key = html_text(&first.key),
+        name = html_text(&first.display_name)
+    );
+    for (index, entry) in entries.into_iter().enumerate() {
+        let key = html_text(&entry.key);
+        let name = html_text(&entry.display_name);
+        html += &format!(
+            r#"<li class="map-card"><button type="button" data-map-select data-map-name="{name}" data-map-image="/maps/{key}/thumbnail.webp?v={bust}" aria-pressed="{active}"><img src="/maps/{key}/thumbnail.webp?v={bust}" alt="" width="512" height="288" loading="lazy" decoding="async"><span>{name}</span></button></li>"#,
+            active = index == 0
+        );
     }
+    html.push_str("</ul>");
     Ok(html)
 }
 
@@ -3245,7 +3318,17 @@ fn verify_gameplay_unit_art(dir: &Path, package: &str) -> Result<()> {
 }
 
 fn verify_ranked_art(dir: &Path, package: &str) -> Result<()> {
-    for emblem in ["unranked", "bronze", "silver", "gold", "platinum", "diamond", "master", "grandmaster", "ranked"] {
+    for emblem in [
+        "unranked",
+        "bronze",
+        "silver",
+        "gold",
+        "platinum",
+        "diamond",
+        "master",
+        "grandmaster",
+        "ranked",
+    ] {
         let file = format!("assets/shell/ranked/{emblem}.svg");
         if !dir.join(&file).is_file() {
             bail!("{package} missing {file}");
@@ -3995,6 +4078,29 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
                     "  <url>\n    <loc>https://shadowsofwar.io/{path}</loc>\n    <lastmod>{lastmod}</lastmod>\n    <changefreq>{freq}</changefreq>\n    <priority>{priority}</priority>\n  </url>\n"
                 ));
         }
+        if out.join("leaders/index.html").is_file() {
+            xml.push_str(&format!(
+                "  <url>\n    <loc>https://shadowsofwar.io/leaders/</loc>\n    <lastmod>{today}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>\n"
+            ));
+        }
+        if out.join("es/leaders/index.html").is_file() {
+            xml.push_str(&format!(
+                "  <url>\n    <loc>https://shadowsofwar.io/es/leaders/</loc>\n    <lastmod>{today}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>\n"
+            ));
+        }
+        for leader in sow_core::player::Leader::all() {
+            let id = leader.id();
+            if out.join(format!("leaders/{id}/index.html")).is_file() {
+                xml.push_str(&format!(
+                    "  <url>\n    <loc>https://shadowsofwar.io/leaders/{id}/</loc>\n    <lastmod>{today}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.7</priority>\n  </url>\n"
+                ));
+            }
+            if out.join(format!("es/leaders/{id}/index.html")).is_file() {
+                xml.push_str(&format!(
+                    "  <url>\n    <loc>https://shadowsofwar.io/es/leaders/{id}/</loc>\n    <lastmod>{today}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.7</priority>\n  </url>\n"
+                ));
+            }
+        }
         xml.push_str("</urlset>\n");
         xml
     })?;
@@ -4148,43 +4254,50 @@ fn package_native_web(
         }
     }
 
-    for entry in fs::read_dir(out)? {
-        let entry = entry?;
-        if entry.file_type()?.is_file()
-            && entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with("sow_client_")
-        {
-            fs::remove_file(entry.path())?;
-        }
-    }
-
     let wasm_hash = file_sha256(wasm_input)?;
     let build_id = &wasm_hash[..10];
     let bindgen_name = format!("sow_client_{build_id}");
-    run_bindgen(wasm_input, out, &bindgen_name)?;
     let wasm_name = format!("{bindgen_name}_bg.wasm");
-    if release {
-        run_wasm_opt(&out.join(&wasm_name), &paths.wasm_cache, false)?;
-    }
+    let wasm_ready = static_ready
+        && out.join(&wasm_name).is_file()
+        && out.join(format!("{bindgen_name}.js")).is_file()
+        && out.join("play/index.html").is_file();
 
-    let maps_cache_bust = thumbnail_cache_bust(&out.join("maps"))?;
-    export_locales(out)?;
-    build_index(
-        paths,
-        out,
-        IndexBuild {
-            version,
-            js: &format!("{bindgen_name}.js"),
-            wasm: &wasm_name,
-            ts: build_id,
-            maps_cache_bust: &maps_cache_bust,
-            target: WebTarget::Native,
-        },
-    )?;
-    prepare_native_webroot(out)?;
-    fs::write(fingerprint_file, fingerprint)?;
+    if !wasm_ready {
+        for entry in fs::read_dir(out)? {
+            let entry = entry?;
+            if entry.file_type()?.is_file()
+                && entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("sow_client_")
+            {
+                fs::remove_file(entry.path())?;
+            }
+        }
+
+        run_bindgen(wasm_input, out, &bindgen_name)?;
+        if release {
+            run_wasm_opt(&out.join(&wasm_name), &paths.wasm_cache, false)?;
+        }
+
+        let maps_cache_bust = thumbnail_cache_bust(&out.join("maps"))?;
+        export_locales(out)?;
+        build_index(
+            paths,
+            out,
+            IndexBuild {
+                version,
+                js: &format!("{bindgen_name}.js"),
+                wasm: &wasm_name,
+                ts: build_id,
+                maps_cache_bust: &maps_cache_bust,
+                target: WebTarget::Native,
+            },
+        )?;
+        prepare_native_webroot(out)?;
+        fs::write(fingerprint_file, fingerprint)?;
+    }
     out.canonicalize()
         .context("resolve native development webroot")
 }
@@ -5131,110 +5244,112 @@ fn read_version(paths: &Paths) -> Result<String> {
     Ok(version)
 }
 
+fn resolve_electron_bin(native_root: &Path) -> Result<PathBuf> {
+    if let Some(custom) = env::var_os("SOW_ELECTRON") {
+        let p = PathBuf::from(custom);
+        if p.is_file() {
+            return Ok(p);
+        }
+    }
+    if let Ok(output) = Command::new("which").arg("electron").output() {
+        if output.status.success() {
+            let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path_str.is_empty() {
+                let p = PathBuf::from(path_str);
+                if p.is_file() {
+                    return Ok(p);
+                }
+            }
+        }
+    }
+    for candidate in &["/usr/bin/electron", "/usr/local/bin/electron"] {
+        let p = PathBuf::from(candidate);
+        if p.is_file() {
+            return Ok(p);
+        }
+    }
+    let local = native_root.join(if cfg!(windows) {
+        "node_modules/.bin/electron.cmd"
+    } else {
+        "node_modules/.bin/electron"
+    });
+    if local.is_file() {
+        return Ok(local);
+    }
+    bail!(
+        "Electron executable not found. Install electron system-wide or run 'npm install' inside sow-native"
+    )
+}
+
 fn ensure_native_dependencies(native_root: &Path) -> Result<()> {
     require_file(&native_root.join("package.json"), "native package.json")?;
-    require_file(
-        &native_root.join("package-lock.json"),
-        "native package-lock.json",
-    )?;
-    let cli = native_root.join(if cfg!(windows) {
-        "node_modules/.bin/tauri.cmd"
-    } else {
-        "node_modules/.bin/tauri"
-    });
-    if !cli.is_file() {
-        run("npm", &["ci", "--include=dev"], Some(native_root))?;
+    require_file(&native_root.join("main.js"), "native main.js")?;
+    if resolve_electron_bin(native_root).is_ok() {
+        return Ok(());
     }
-    require_file(&cli, "Tauri CLI")?;
+    println!("==> System electron not found; installing local electron dependency...");
+    run("npm", &["install", "--include=dev"], Some(native_root))?;
+    resolve_electron_bin(native_root)?;
     Ok(())
 }
 
-fn set_native_renderer_workaround(command: &mut Command) {
-    if cfg!(target_os = "linux")
-        && env::var_os("WEBKIT_DMABUF_RENDERER_FORCE_SHM").is_none()
-        && Path::new("/sys/module/nvidia").is_dir()
-    {
-        command.env("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1");
-    }
-}
-
-fn build_native(
-    paths: &Paths,
-    native_root: &Path,
-    version: &str,
-    webroot: &Path,
-    release: bool,
-) -> Result<()> {
-    let webroot = webroot
+fn launch_electron(native_root: &Path, webroot: &Path) -> Result<()> {
+    let electron_bin = resolve_electron_bin(native_root)?;
+    let main_js = native_root.join("main.js");
+    require_file(&main_js, "Electron main.js")?;
+    let webroot_str = webroot
         .to_str()
         .context("native webroot path is not UTF-8")?;
-    let config = serde_json::json!({
-        "version": version,
-        "build": { "frontendDist": webroot },
-    })
-    .to_string();
-    let mut args = vec!["run", "tauri", "--"];
-    if release {
-        args.extend_from_slice(&["build", "--no-bundle", "--no-sign"]);
-    } else {
-        args.push("dev");
-    }
-    args.extend_from_slice(&["--config", config.as_str()]);
-    println!("+ npm {}", args.join(" "));
-    let mut command = Command::new("npm");
-    command
-        .args(&args)
-        .current_dir(native_root)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
-    set_native_renderer_workaround(&mut command);
-    let status = command
-        .status()
-        .context("run Tauri native client (npm is required)")?;
-    if !status.success() {
-        bail!(
-            "Tauri native {} failed",
-            if release { "build" } else { "dev" }
-        );
-    }
-    if release {
-        launch_native(paths)?;
-    }
-    Ok(())
-}
 
-fn launch_native(paths: &Paths) -> Result<()> {
-    let name = if cfg!(windows) {
-        "sow-native.exe"
-    } else {
-        "sow-native"
-    };
-    let executable = paths.target_dir.join("release").join(name);
-    require_file(&executable, "native executable")?;
-    println!("✅ Native game ready: {}", executable.display());
-    let mut command = Command::new(&executable);
-    command.current_dir(&paths.root);
-    set_native_renderer_workaround(&mut command);
-    let mut child = command
-        .spawn()
-        .with_context(|| format!("open native game {}", executable.display()))?;
-    child.wait().context("wait for native game")?;
+    println!(
+        "==> Opening desktop game via Electron ({})",
+        electron_bin.display()
+    );
+    let mut command = Command::new(&electron_bin);
+    command.arg(&main_js).arg(webroot_str);
+    command.current_dir(native_root);
+    command.env("ELECTRON_FORCE_IS_PACKAGED", "0");
+    command.env("ELECTRON_IS_DEV", "1");
+    command.env("SOW_WEBROOT", webroot_str);
+    command.stdout(Stdio::inherit());
+    command.stderr(Stdio::inherit());
+
+    let status = command.status().context("run Electron desktop client")?;
+    if !status.success() {
+        bail!("Electron client exited with status: {status}");
+    }
     Ok(())
 }
 
 fn cmd_native(paths: &Paths) -> Result<()> {
     let version = read_version(paths)?;
-    let release = env::var("SOW_NATIVE_RELEASE").is_ok_and(|value| value == "1");
-    let profile = if release { "wasm-release" } else { "wasm-dev" };
-    println!(
-        "==> Building native {} WASM client",
-        if release { "release" } else { "fast" }
-    );
-    let wasm = compile_wasm_profile(paths, profile, false)?;
-    let webroot = package_native_web(paths, &version, &wasm, release)?;
     let native_root = paths.root.join("sow-native");
     ensure_native_dependencies(&native_root)?;
-    build_native(paths, &native_root, &version, &webroot, release)
+
+    let webroot = if env::var("SOW_PROD_WEB").is_ok_and(|v| v == "1") {
+        let prod_play = paths.dist_web.join("play/index.html");
+        if !prod_play.is_file() {
+            bail!(
+                "production webroot is not built yet (dist/web/play/index.html missing); run ./sow p first"
+            );
+        }
+        println!(
+            "==> Using existing production webroot: {}",
+            paths.dist_web.display()
+        );
+        paths.dist_web.canonicalize().context("resolve dist/web")?
+    } else {
+        let release = env::var("SOW_NATIVE_RELEASE").is_ok_and(|value| value == "1");
+        let profile = if release { "wasm-release" } else { "wasm-dev" };
+        println!(
+            "==> Building native {} WASM client",
+            if release { "release" } else { "fast" }
+        );
+        let wasm = compile_wasm_profile(paths, profile, false)?;
+        package_native_web(paths, &version, &wasm, release)?
+    };
+
+    launch_electron(&native_root, &webroot)
 }
 
 fn watch_local_preview(
@@ -5515,6 +5630,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn ssh_transport_reuses_one_connection_for_checks_and_transfers() {
+        let script = "printf '%s' '$literal; remote command'";
+        for program in ["ssh", "scp"] {
+            let mut transport = command(program);
+            transport.args(["configured-host", script]);
+            let arguments = transport.get_args().collect::<Vec<_>>();
+            assert_eq!(&arguments[..SSH_REUSE_ARGS.len()], SSH_REUSE_ARGS);
+            assert_eq!(
+                &arguments[SSH_REUSE_ARGS.len()..],
+                ["configured-host", script]
+            );
+        }
+        let mut transfer = command("rsync");
+        transfer.args([
+            "-azc",
+            "source with spaces/",
+            "configured-host:destination/",
+        ]);
+        let arguments = transfer.get_args().collect::<Vec<_>>();
+        assert_eq!(arguments[0], "-e");
+        assert_eq!(
+            arguments[1],
+            format!("ssh {}", SSH_REUSE_ARGS.join(" ")).as_str()
+        );
+        assert_eq!(
+            &arguments[2..],
+            [
+                "-azc",
+                "source with spaces/",
+                "configured-host:destination/"
+            ]
+        );
+        assert_eq!(command("bun").get_args().count(), 0);
+    }
+
+    #[test]
     fn test_build_index_hero_sheet_crops_happy_calm_fear_and_angry() -> Result<()> {
         let colors = [
             [240, 10, 10, 255],
@@ -5772,7 +5923,7 @@ mod tests {
                 "Required site source file missing: {required}"
             );
         }
-        assert!(!site.join("leaders/index.html").exists());
+        assert!(site.join("leaders/index.html").exists());
         assert!(!site.join("how-to-play/index.html").exists());
         for required in [
             "index.html.template",
@@ -5939,7 +6090,9 @@ mod tests {
                     assert!(bundle.contains("window.SOW_onStateUpdate"));
                     assert!(html.contains("sow-hud__dock"));
                     assert!(html.contains("../analytics.js?v=test"));
-                    assert!(html.contains("name=\"sow-media-artwork\" content=\"../icon-192.png\""));
+                    assert!(
+                        html.contains("name=\"sow-media-artwork\" content=\"../icon-192.png\"")
+                    );
                 }
             }
             assert_eq!(html.contains("window.SOW_BUILDING_ART ="), !external);
@@ -5965,7 +6118,10 @@ mod tests {
                 assert!(!html.contains("__SOW_SERVICE_WORKER_SLOT__"));
                 assert!(!html.contains("register('/sw.js'"));
                 for forbidden in POKI_FORBIDDEN_MARKERS {
-                    assert!(!html.contains(forbidden), "{target:?} shell contains {forbidden}");
+                    assert!(
+                        !html.contains(forbidden),
+                        "{target:?} shell contains {forbidden}"
+                    );
                 }
                 if target == WebTarget::Jest {
                     assert!(html.contains("jest_login"));
@@ -6268,7 +6424,7 @@ mod tests {
             "Nginx missing 301 redirect to canonical root"
         );
         assert!(
-            conf.contains("location ~ ^/(leaders|how-to-play)/?$")
+            conf.contains("location ~ ^/how-to-play/?$")
                 && conf.contains("return 301 https://shadowsofwar.io/;"),
             "Nginx must permanently redirect retired pages to the landing"
         );

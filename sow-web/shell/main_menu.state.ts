@@ -280,6 +280,7 @@ export interface MenuState {
 export interface HudAvatarIdentity {
     kind: "portrait" | "wilderness" | "fallback";
     slug?: string;
+    expression?: "happy" | "calm" | "fear" | "angry";
 }
 
 export interface HudLeaderboardPlayer {
@@ -295,6 +296,8 @@ export interface HudLeaderboardPlayer {
     is_me: boolean;
     leader: string;
     avatar: string | null;
+    avatar_expression?: "happy" | "calm" | "fear" | "angry" | null;
+    manual_emote_active?: boolean;
     team: string | null;
     active_emote: { kind: string; pinned: boolean; scripted: boolean; message?: string } | null;
     disconnected: boolean;
@@ -309,6 +312,13 @@ export interface HudLeaderboardPlayer {
     towers?: number;
     farms?: number;
     campaign_faction_id?: string;
+}
+
+export interface HudLeaderboardTeam {
+    team: "Red" | "Blue";
+    tile_count: number;
+    territory_pct: number;
+    members: number;
 }
 
 export interface HudMapMenuItem {
@@ -489,6 +499,7 @@ export interface MenuHudPayload {
     };
     players?: HudLeaderboardPlayer[];
     leaderboard?: HudLeaderboardPlayer[];
+    team_leaderboard?: HudLeaderboardTeam[];
     inbox?: HudInboxRequest[];
     transfer?: {
         target_id: number;

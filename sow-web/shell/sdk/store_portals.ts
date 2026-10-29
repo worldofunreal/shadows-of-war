@@ -148,9 +148,7 @@
                 }
             } catch (e) {
                 console.warn("store_portals: error reading existing pending invite", e);
-            }
-            console.log("store_portals: queueing pending invite", lobbyId);
-            window.SOW_PENDING_INVITE_LOBBY_ID = lobbyId;
+            }            window.SOW_PENDING_INVITE_LOBBY_ID = lobbyId;
         }
     }
 
@@ -164,9 +162,7 @@
         }
         game.addJoinRoomListener(function (inviteParams) {
             const lobbyId = parseInviteLobbyId(inviteParams);
-            if (lobbyId !== null) {
-                console.log("CrazyGames join room listener: lobby", lobbyId);
-                queueInviteLobbyId(lobbyId);
+            if (lobbyId !== null) {                queueInviteLobbyId(lobbyId);
             }
         });
     }
@@ -281,7 +277,6 @@
         clearAndroidAuthParam(params, "sow_playgames_rendezvous");
         window.SOW_PLATFORM_IDENTITY = null;
         emitAuthStateChange();
-        console.info("Play Games silent authentication unavailable; continuing anonymously");
     }
 
     function postAndroidBridgeMessage(message) {
@@ -630,9 +625,7 @@
                 sessionStorage.removeItem("sow_playgames_identity");
             } catch {}
             window.SOW_PLATFORM_IDENTITY = null;
-            clearAndroidAuthParam(params, "sow_playgames_mode");
-            console.info("Play Games anonymous mode enabled");
-            return;
+            clearAndroidAuthParam(params, "sow_playgames_mode");            return;
         }
 
         if (saved) {
@@ -657,9 +650,7 @@
             return;
         }
 
-        window.SOW_PLATFORM_IDENTITY = null;
-        console.info("Play Games unavailable; continuing with anonymous identity");
-    };
+        window.SOW_PLATFORM_IDENTITY = null;    };
 
     let androidAuthResumeBusy = false;
     async function resumeAndroidAuth() {
@@ -690,19 +681,9 @@
                     } catch {}
                     androidStorage("");
                     emitAuthStateChange();
-                    console.info(
-                        pending.indexOf("auto:") === 0
-                            ? "Play Games silent authentication complete"
-                            : "Play Games interactive authentication complete",
-                    );
                 } else {
                     if (pending.indexOf("auto:") === 0) androidStorage(ANDROID_ANONYMOUS_MODE);
                     emitAuthStateChange();
-                    console.info(
-                        pending.indexOf("auto:") === 0
-                            ? "Play Games silent authentication unavailable; continuing anonymously"
-                            : "Play Games sign-in cancelled or unavailable; continuing anonymously",
-                    );
                 }
             } else if (pending === "signout") {
                 androidPending(null);
@@ -844,14 +825,10 @@
         }
     };
 
-    window.SOW_portalClearHostPrivatePending = function () {
-        console.log("store_portals: clearing host private pending");
-        window.SOW_HOST_PRIVATE_PENDING = false;
+    window.SOW_portalClearHostPrivatePending = function () {        window.SOW_HOST_PRIVATE_PENDING = false;
     };
 
-    window.SOW_portalClearPendingInvite = function () {
-        console.log("store_portals: clearing pending invite");
-        window.SOW_PENDING_INVITE_LOBBY_ID = null;
+    window.SOW_portalClearPendingInvite = function () {        window.SOW_PENDING_INVITE_LOBBY_ID = null;
     };
 
     function loadPortalProgressFromSdk() {
@@ -1115,9 +1092,7 @@
                 const identity = await crazyGamesIdentityFromUser(user);
                 if (identity) {
                     window.SOW_PLATFORM_IDENTITY = identity;
-                    emitAuthStateChange();
-                    console.log("Auth prompt successful login:", user.username);
-                }
+                    emitAuthStateChange();                }
             } catch (e) {
                 console.warn("Auth prompt failed or cancelled:", e);
             }
@@ -1166,9 +1141,7 @@
                 window.location.pathname +
                 (params.toString() ? "?" + params.toString() : "") +
                 window.location.hash;
-            window.history.replaceState({}, document.title, clean);
-            console.log("WOU login captured for:", account.display_name || account.account_id || account.id);
-        } catch (e) {
+            window.history.replaceState({}, document.title, clean);        } catch (e) {
             console.warn("WOU login capture failed:", e);
         }
     }
@@ -1249,14 +1222,10 @@
             return;
         }
         const coldInvite = parseInviteLobbyId(game.inviteParams);
-        if (coldInvite !== null) {
-            console.log("CrazyGames cold-start invite lobby:", coldInvite);
-            queueInviteLobbyId(coldInvite);
+        if (coldInvite !== null) {            queueInviteLobbyId(coldInvite);
             return;
         }
-        if (game.isInstantMultiplayer) {
-            console.log("CrazyGames instant multiplayer: host private lobby");
-            window.SOW_HOST_PRIVATE_PENDING = true;
+        if (game.isInstantMultiplayer) {            window.SOW_HOST_PRIVATE_PENDING = true;
         }
     };
 
@@ -1271,8 +1240,6 @@
         try {
             await window.CrazyGames.SDK.init();
             refreshPortalFlags();
-            const env = window.CrazyGames.SDK.environment;
-            console.log("CrazyGames SDK init OK (env=" + env + ")");
 
             if (crazyGamesSdkReady() && window.CrazyGames.SDK.user) {
                 try {
@@ -1281,18 +1248,14 @@
                         const identity = await crazyGamesIdentityFromUser(user);
                         if (identity) {
                             window.SOW_PLATFORM_IDENTITY = identity;
-                            emitAuthStateChange();
-                            console.log("CrazyGames user:", user.username);
-                        }
+                            emitAuthStateChange();                        }
                     }
                     if (window.CrazyGames.SDK.user.addAuthListener) {
                         window.CrazyGames.SDK.user.addAuthListener(async function (u) {
                             const identity = await crazyGamesIdentityFromUser(u);
                             if (identity) {
                                 window.SOW_PLATFORM_IDENTITY = identity;
-                                emitAuthStateChange();
-                                console.log("CrazyGames user changed via AuthListener:", u.username);
-                            }
+                                emitAuthStateChange();                            }
                         });
                     }
                 } catch (e) {
@@ -1302,9 +1265,7 @@
 
             if (crazyGamesSdkReady() && window.CrazyGames.SDK.ad && window.CrazyGames.SDK.ad.hasAdblock) {
                 try {
-                    window.SOW_hasAdblock = await window.CrazyGames.SDK.ad.hasAdblock();
-                    console.log("CrazyGames adblock check:", window.SOW_hasAdblock);
-                } catch (e) {
+                    window.SOW_hasAdblock = await window.CrazyGames.SDK.ad.hasAdblock();                } catch (e) {
                     console.warn("CrazyGames hasAdblock failed:", e);
                 }
             }
@@ -1328,7 +1289,6 @@
     };
 
     window.SOW_portalGameplayStart = function (isRetry) {
-        console.log("SOW gameplayStart called" + (isRetry ? " (retry)" : ""));
         if (isSiteEmbed() || window.SOW_adPlaying) {
             return;
         }
@@ -1341,7 +1301,6 @@
         }
         if (!crazyGamesSdkReady()) {
             if (!isRetry) {
-                console.log("CrazyGames SDK not ready for gameplayStart yet, scheduling retry...");
                 requestAnimationFrame(function () {
                     window.SOW_portalGameplayStart(true);
                 });
@@ -1353,10 +1312,8 @@
         const game = crazyGameApi();
         if (game) {
             if (game.gameplayStart) {
-                console.log("Calling CrazyGames gameplayStart");
                 game.gameplayStart();
             } else if (game.play) {
-                console.log("Calling CrazyGames play");
                 game.play();
             }
         }

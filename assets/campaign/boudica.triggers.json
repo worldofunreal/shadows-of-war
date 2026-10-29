@@ -29,10 +29,20 @@
           "speaker": "stonea",
           "emote": "greet",
           "emote_text_key": "tutorial.campaign_boudica_stonea_stand_with_you_emote"
-        },
+        }
+      ]
+    },
+    {
+      "id": "alliance_stonea",
+      "when": {
+        "type": "alliance",
+        "target": "stonea"
+      },
+      "presentation": "exchange",
+      "exchange": [
         {
           "speaker": "boudica",
-          "emote": "threat",
+          "emote": "celebrate",
           "emote_text_key": "tutorial.campaign_boudica_boudica_stonea_reply_emote"
         }
       ]
@@ -219,7 +229,14 @@
   "speakers": {
     "boudica": {
       "name": "Boudica",
-      "avatar": "boudica"
+      "avatar": "boudica",
+      "base_expression": {
+        "expression": "angry",
+        "until": {
+          "type": "alliance",
+          "target": "stonea"
+        }
+      }
     },
     "snettisham": {
       "name_key": "tutorial.campaign_boudica_speaker_elder",
@@ -276,7 +293,6 @@
       "portrait_expression": "angry",
       "emote": "threat",
       "emote_text_key": "tutorial.campaign_boudica_boudica_council_strike",
-      "emote_pinned": true,
       "presentation": "cinematic",
       "video_src": "/assets/campaign/boudica/intro.720p.555d0500.webm",
       "attack_ratio_on_enter": 0.25,

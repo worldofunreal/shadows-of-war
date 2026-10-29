@@ -8,7 +8,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use serde::Deserialize;
 use wasm_bindgen::JsCast;
@@ -284,6 +284,7 @@ enum WebMenuCommand {
     ZoomIn,
     ZoomOut,
     CenterCamera,
+    CenterRadialHome,
     ExpressEmote {
         session: u64,
         tile_idx: u32,
@@ -302,6 +303,10 @@ enum WebMenuCommand {
         campaign_session_id: Option<u32>,
         #[serde(default)]
         message: Option<String>,
+    },
+    SetCampaignAvatarExpressions {
+        expressions: HashMap<String, sow_core::emote::AvatarExpression>,
+        campaign_session_id: u32,
     },
     SetCampaignPreDefeatTargets {
         faction_ids: Vec<String>,
@@ -468,6 +473,7 @@ struct HudPublishKey {
     settings_show_dev_tools: bool,
     leaderboard_open: bool,
     leaderboard_publish_revision: u64,
+    avatar_revision: u64,
     tutorial_active: bool,
     campaign_session_id: u32,
     campaign_unlock_revision: u64,
@@ -792,18 +798,31 @@ impl SowApp {
                         log::warn!("[CAMPAIGN] halt target is missing: {faction_id}");
                     }
                 }
-                WebMenuCommand::AcceptCampaignAlliance { faction_id, campaign_session_id } => {
-                    if !self.ui.tutorial_active || !self.net.is_offline || campaign_session_id != self.ui.campaign_session_id {
+                WebMenuCommand::AcceptCampaignAlliance {
+                    faction_id,
+                    campaign_session_id,
+                } => {
+                    if !self.ui.tutorial_active
+                        || !self.net.is_offline
+                        || campaign_session_id != self.ui.campaign_session_id
+                    {
                         continue;
                     }
-                    let Some(human) = self.sim.my_player_id else { continue; };
+                    let Some(human) = self.sim.my_player_id else {
+                        continue;
+                    };
                     let actor = self.sim.engine.as_ref().and_then(|engine| {
                         let actor = engine.campaign_player_id(&faction_id)?;
                         (engine.state.config.tutorial && engine.has_alliance_proposal(human, actor))
                             .then_some(actor)
                     });
                     if let Some(actor) = actor {
-                        self.apply_paused_tutorial_intent_as(actor, sow_core::protocol::GameplayIntent::AcceptAlliance { target_player: human });
+                        self.apply_paused_tutorial_intent_as(
+                            actor,
+                            sow_core::protocol::GameplayIntent::AcceptAlliance {
+                                target_player: human,
+                            },
+                        );
                     }
                 }
                 WebMenuCommand::ActivateCampaignAssault {
@@ -1074,11 +1093,7 @@ impl SowApp {
                 WebMenuCommand::SetMute { value } => {
                     self.ui.app.settings_state.mute_all = value;
                     self.ui.app.settings_state.persist_local();
-                    sow_audio::set_master_volume(if value {
-                        0.0
-                    } else {
-                        1.0
-                    });
+                    sow_audio::set_master_volume(if value { 0.0 } else { 1.0 });
                 }
                 WebMenuCommand::SetMusicVolume { value } => {
                     let volume = value.clamp(0.0, 1.0);
@@ -1341,6 +1356,7 @@ impl SowApp {
                 WebMenuCommand::CenterCamera => {
                     self.process_ui_actions(Some(UiAction::CenterCamera));
                 }
+                WebMenuCommand::CenterRadialHome => self.center_radial_home(),
                 WebMenuCommand::ToggleDevSidebar => {
                     #[cfg(any(feature = "dev", debug_assertions))]
                     {
@@ -1474,16 +1490,59 @@ impl SowApp {
                     self.ui.app.settings_state.show_fps_ping = value;
                     self.ui.app.settings_state.persist_local();
                 }
-                WebMenuCommand::TutorialEmote { kind, pinned, faction_id, token, campaign_session_id, message } => {
+                WebMenuCommand::SetCampaignAvatarExpressions {
+                    expressions,
+                    campaign_session_id,
+                } => {
+                    if !self.ui.tutorial_active
+                        || !self.net.is_offline
+                        || self.ui.campaign_session_id == 0
+                        || self.ui.campaign_session_id != campaign_session_id
+                        || expressions.len() > 16
+                    {
+                        continue;
+                    }
+                    let Some(engine) = self.sim.engine.as_ref() else {
+                        continue;
+                    };
+                    let resolved = expressions
+                        .into_iter()
+                        .filter_map(|(faction, expression)| {
+                            let id = if faction == "player" {
+                                self.sim.my_player_id
+                            } else {
+                                engine.campaign_player_id(&faction)
+                            };
+                            id.map(|id| (id, expression))
+                        })
+                        .collect();
+                    self.ui.nameplates.set_campaign_base_expressions(resolved);
+                }
+                WebMenuCommand::TutorialEmote {
+                    kind,
+                    pinned,
+                    faction_id,
+                    token,
+                    campaign_session_id,
+                    message,
+                } => {
                     let has_scripted_line = token.is_some() || message.is_some();
-                    if kind.is_none() && message.is_none() && let Some(token) = token.as_deref() {
-                        if !self.net.is_offline { continue; }
-                        if let Some((player_id, event_id)) = self.ui.nameplates.clear_campaign_emote_token(token)
+                    if kind.is_none()
+                        && message.is_none()
+                        && let Some(token) = token.as_deref()
+                    {
+                        if !self.net.is_offline {
+                            continue;
+                        }
+                        if let Some((player_id, event_id)) =
+                            self.ui.nameplates.clear_campaign_emote_token(token)
                             && let Some(engine) = self.sim.engine.as_mut()
                         {
                             let tick = engine.state.tick;
                             if let Some(player) = engine.state.player_mut(player_id)
-                                && player.active_emote.is_some_and(|event| event.scripted && event.event_id == event_id)
+                                && player.active_emote.is_some_and(|event| {
+                                    event.scripted && event.event_id == event_id
+                                })
                             {
                                 sow_core::emote::express(player, None, false, true, tick);
                                 self.sim.current_snapshot = Some(engine.build_snapshot());
@@ -1491,12 +1550,17 @@ impl SowApp {
                         }
                         continue;
                     }
-                    if !self.ui.tutorial_active || !self.net.is_offline
-                        || (has_scripted_line && (self.ui.campaign_session_id == 0 || campaign_session_id != Some(self.ui.campaign_session_id)))
+                    if !self.ui.tutorial_active
+                        || !self.net.is_offline
+                        || (has_scripted_line
+                            && (self.ui.campaign_session_id == 0
+                                || campaign_session_id != Some(self.ui.campaign_session_id)))
                         || token.as_ref().is_some_and(|value| value.len() > 192)
                         || message.as_ref().is_some_and(|value| {
                             let trimmed = value.trim();
-                            trimmed.is_empty() || trimmed.chars().count() > 160 || trimmed.chars().any(char::is_control)
+                            trimmed.is_empty()
+                                || trimmed.chars().count() > 160
+                                || trimmed.chars().any(char::is_control)
                         })
                         || (message.is_some() && token.is_none())
                         || (token.is_some() && kind.is_some() && message.is_none())
@@ -1509,15 +1573,31 @@ impl SowApp {
                             self.ui.nameplates.clear_campaign_emote(None, player_id);
                         }
                         let intent = match kind {
-                            Some(kind) => sow_core::protocol::GameplayIntent::ExpressEmote { kind, pinned },
+                            Some(kind) => {
+                                sow_core::protocol::GameplayIntent::ExpressEmote { kind, pinned }
+                            }
                             None => sow_core::protocol::GameplayIntent::ClearEmote,
                         };
                         self.send_intent(intent);
                         continue;
                     }
-                    let Some(engine) = self.sim.engine.as_mut().filter(|engine| engine.state.config.tutorial) else { continue; };
-                    let player_id = faction_id.as_deref().and_then(|id| engine.campaign_player_id(id))
-                        .or_else(|| faction_id.is_none().then_some(self.sim.my_player_id).flatten());
+                    let Some(engine) = self
+                        .sim
+                        .engine
+                        .as_mut()
+                        .filter(|engine| engine.state.config.tutorial)
+                    else {
+                        continue;
+                    };
+                    let player_id = faction_id
+                        .as_deref()
+                        .and_then(|id| engine.campaign_player_id(id))
+                        .or_else(|| {
+                            faction_id
+                                .is_none()
+                                .then_some(self.sim.my_player_id)
+                                .flatten()
+                        });
                     let Some(player_id) = player_id else {
                         log::warn!("[CAMPAIGN] emote speaker is missing: {faction_id:?}");
                         continue;
@@ -1529,22 +1609,52 @@ impl SowApp {
                         continue;
                     }
                     let tick = engine.state.tick;
-                    let Some(player) = engine.state.player_mut(player_id).filter(|player| player.alive) else { continue; };
+                    let tick_rate_ms = engine.state.config.tick_rate_ms;
+                    let Some(player) = engine
+                        .state
+                        .player_mut(player_id)
+                        .filter(|player| player.alive)
+                    else {
+                        continue;
+                    };
+                    if kind.is_some()
+                        && self
+                            .ui
+                            .nameplates
+                            .manual_emote_active(player, tick, tick_rate_ms)
+                    {
+                        continue;
+                    }
                     sow_core::emote::express(player, kind, pinned, true, tick);
-                    if let (Some(token), Some(message), Some(event)) = (token.as_ref(), message, player.active_emote) {
-                        if !self.ui.nameplates.set_campaign_emote(player_id, event.event_id, token.clone(), message) {
+                    if let (Some(token), Some(message), Some(event)) =
+                        (token.as_ref(), message, player.active_emote)
+                    {
+                        if !self.ui.nameplates.set_campaign_emote(
+                            player_id,
+                            event.event_id,
+                            token.clone(),
+                            message,
+                        ) {
                             log::warn!("[CAMPAIGN] invalid authored emote line rejected");
                             continue;
                         }
                     } else {
-                        self.ui.nameplates.clear_campaign_emote(token.as_deref(), player_id);
+                        self.ui
+                            .nameplates
+                            .clear_campaign_emote(token.as_deref(), player_id);
                     }
                     // Story commands publish immediately, including while the simulation is paused.
                     self.sim.current_snapshot = Some(engine.build_snapshot());
                 }
-                WebMenuCommand::SetCampaignPreDefeatTargets { faction_ids, campaign_session_id } => {
-                    if !self.ui.tutorial_active || !self.net.is_offline || self.ui.campaign_session_id == 0
-                        || campaign_session_id != self.ui.campaign_session_id || faction_ids.len() > 16
+                WebMenuCommand::SetCampaignPreDefeatTargets {
+                    faction_ids,
+                    campaign_session_id,
+                } => {
+                    if !self.ui.tutorial_active
+                        || !self.net.is_offline
+                        || self.ui.campaign_session_id == 0
+                        || campaign_session_id != self.ui.campaign_session_id
+                        || faction_ids.len() > 16
                     {
                         continue;
                     }
@@ -1552,22 +1662,46 @@ impl SowApp {
                     if faction_ids.iter().any(|id| !unique.insert(id.as_str())) {
                         continue;
                     }
-                    let Some(engine) = self.sim.engine.as_mut().filter(|engine| engine.state.config.tutorial) else { continue; };
-                    if faction_ids.iter().any(|id| engine.campaign_player_id(id).is_none()) {
+                    let Some(engine) = self
+                        .sim
+                        .engine
+                        .as_mut()
+                        .filter(|engine| engine.state.config.tutorial)
+                    else {
+                        continue;
+                    };
+                    if faction_ids
+                        .iter()
+                        .any(|id| engine.campaign_player_id(id).is_none())
+                    {
                         log::warn!("[CAMPAIGN] pre-defeat watch references an unknown faction");
                         continue;
                     }
                     engine.set_campaign_pre_defeat_targets(&faction_ids);
                 }
-                WebMenuCommand::ContinueCampaignPreDefeat { faction_id, campaign_session_id } => {
-                    if !self.ui.tutorial_active || !self.net.is_offline || self.ui.campaign_session_id == 0
+                WebMenuCommand::ContinueCampaignPreDefeat {
+                    faction_id,
+                    campaign_session_id,
+                } => {
+                    if !self.ui.tutorial_active
+                        || !self.net.is_offline
+                        || self.ui.campaign_session_id == 0
                         || campaign_session_id != self.ui.campaign_session_id
                     {
                         continue;
                     }
-                    let Some(engine) = self.sim.engine.as_mut().filter(|engine| engine.state.config.tutorial) else { continue; };
+                    let Some(engine) = self
+                        .sim
+                        .engine
+                        .as_mut()
+                        .filter(|engine| engine.state.config.tutorial)
+                    else {
+                        continue;
+                    };
                     if !engine.continue_campaign_pre_defeat(&faction_id) {
-                        log::warn!("[CAMPAIGN] ignored pre-defeat continuation without a matching held faction");
+                        log::warn!(
+                            "[CAMPAIGN] ignored pre-defeat continuation without a matching held faction"
+                        );
                     }
                 }
                 WebMenuCommand::ExpressEmote {
@@ -1627,9 +1761,9 @@ impl SowApp {
                     if !on_map(x, y) {
                         continue;
                     }
-                    if let Some(shot) = shot.filter(|shot| {
-                        on_map(shot.from_x, shot.from_y) && shot.seconds.is_finite()
-                    }) {
+                    if let Some(shot) = shot
+                        .filter(|shot| on_map(shot.from_x, shot.from_y) && shot.seconds.is_finite())
+                    {
                         let screen = (self.input.screen_w, self.input.screen_h);
                         let map = (self.sim.map_w, self.sim.map_h);
                         let (from, to) = ((shot.from_x, shot.from_y), (x, y));
@@ -1657,7 +1791,11 @@ impl SowApp {
                             ),
                             CameraShotKind::Link => (to, zoom),
                         };
-                        self.start_camera_shot(vec![key], shot.seconds.clamp(1.0, 5.0), shot.machinima);
+                        self.start_camera_shot(
+                            vec![key],
+                            shot.seconds.clamp(1.0, 5.0),
+                            shot.machinima,
+                        );
                     } else {
                         let tutorial_focus = self.ui.tutorial_active && self.net.is_offline;
                         self.input.has_snapped_camera_to_spawn = true;
@@ -1824,6 +1962,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         settings_show_dev_tools: app.ui.app.settings_state.show_dev_tools,
         leaderboard_open: app.ui.show_leaderboard,
         leaderboard_publish_revision: app.ui.leaderboard_publish_revision,
+        avatar_revision: app.ui.nameplates.avatar_revision,
         inbox_open: hud.show_alliance_inbox,
         transfer_target: hud.show_ask_panel,
         betrayal_open: hud.show_betrayal_warning.is_some(),
@@ -1873,9 +2012,19 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         } else {
             None
         },
-        tutorial_emote_token: if tutorial_active { app.ui.nameplates.campaign_emote_ready_token().map(str::to_owned) } else { None },
+        tutorial_emote_token: if tutorial_active {
+            app.ui
+                .nameplates
+                .campaign_emote_ready_token()
+                .map(str::to_owned)
+        } else {
+            None
+        },
         tutorial_target_hovered: tutorial_active
-            && tutorial_target_under_pointer(app, app.ui.tutorial_marker_player_id.unwrap_or(my_pid)),
+            && tutorial_target_under_pointer(
+                app,
+                app.ui.tutorial_marker_player_id.unwrap_or(my_pid),
+            ),
         tutorial_camera_viewport: tutorial_active.then_some((
             app.input.camera_x.to_bits(),
             app.input.camera_y.to_bits(),
@@ -2277,10 +2426,7 @@ fn tutorial_tile_world(tile: Option<u32>, map_w: u32, map_h: u32) -> Option<[f32
     if map_w == 0 || tile >= map_w.checked_mul(map_h)? {
         return None;
     }
-    Some([
-        (tile % map_w) as f32 + 0.5,
-        (tile / map_w) as f32 + 0.5,
-    ])
+    Some([(tile % map_w) as f32 + 0.5, (tile / map_w) as f32 + 0.5])
 }
 
 fn tutorial_project_tile(
@@ -2292,10 +2438,7 @@ fn tutorial_project_tile(
 ) -> Option<[f32; 2]> {
     let [x, y] = tutorial_tile_world(tile, map_w, map_h)?;
     Some(crate::render::world::overlays::world_to_screen(
-        x,
-        y,
-        input,
-        sf,
+        x, y, input, sf,
     ))
 }
 
@@ -2803,14 +2946,32 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             )
         })
         .collect::<std::collections::BTreeMap<_, _>>();
-    let alliance_request_faction_ids: Vec<String> = app.sim.engine.as_ref().map(|engine| {
-        engine.alliances_proposed.iter().filter(|proposal| proposal.proposer == my_pid)
-            .filter_map(|proposal| engine.campaign_faction_ids.get(&proposal.target).cloned()).collect()
-    }).unwrap_or_default();
-    let hostile_faction_ids: Vec<String> = app.sim.engine.as_ref().map(|engine| {
-        engine.campaign_relations.iter().filter(|(_, relation)| **relation == sow_core::protocol::CampaignRelation::Enemy)
-            .filter_map(|(id, _)| engine.campaign_faction_ids.get(id).cloned()).collect()
-    }).unwrap_or_default();
+    let alliance_request_faction_ids: Vec<String> = app
+        .sim
+        .engine
+        .as_ref()
+        .map(|engine| {
+            engine
+                .alliances_proposed
+                .iter()
+                .filter(|proposal| proposal.proposer == my_pid)
+                .filter_map(|proposal| engine.campaign_faction_ids.get(&proposal.target).cloned())
+                .collect()
+        })
+        .unwrap_or_default();
+    let hostile_faction_ids: Vec<String> = app
+        .sim
+        .engine
+        .as_ref()
+        .map(|engine| {
+            engine
+                .campaign_relations
+                .iter()
+                .filter(|(_, relation)| **relation == sow_core::protocol::CampaignRelation::Enemy)
+                .filter_map(|(id, _)| engine.campaign_faction_ids.get(id).cloned())
+                .collect()
+        })
+        .unwrap_or_default();
     serde_json::json!({
         "active": true,
         "episode_id": app.ui.tutorial_campaign.episode_id(),
@@ -3010,6 +3171,39 @@ fn build_leaderboard(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) ->
         }
     }
     serde_json::Value::Array(payload)
+}
+
+fn build_team_leaderboard(snapshot: &sow_core::protocol::SimSnapshot) -> serde_json::Value {
+    let mut teams: BTreeMap<sow_core::protocol::Team, (u32, u32)> = BTreeMap::new();
+    for player in &snapshot.players {
+        let Some(team) = player.team else {
+            continue;
+        };
+        let totals = teams.entry(team).or_default();
+        totals.1 = totals.1.saturating_add(1);
+        if player.alive && player.tile_count > 0 {
+            totals.0 = totals.0.saturating_add(player.tile_count);
+        }
+    }
+
+    let mut teams: Vec<_> = teams.into_iter().collect();
+    teams.sort_unstable_by(|(team_a, (tiles_a, _)), (team_b, (tiles_b, _))| {
+        tiles_b.cmp(tiles_a).then_with(|| team_a.cmp(team_b))
+    });
+
+    serde_json::Value::Array(
+        teams
+            .into_iter()
+            .map(|(team, (tile_count, members))| {
+                serde_json::json!({
+                    "team": team,
+                    "tile_count": tile_count,
+                    "territory_pct": (tile_count as f32 / snapshot.total_land_tiles.max(1) as f32).clamp(0.0, 1.0),
+                    "members": members,
+                })
+            })
+            .collect(),
+    )
 }
 
 fn build_hover_payload(
@@ -3482,9 +3676,8 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     // The store is only shown after a match. Keep its catalog out of the hot HUD path,
     // and use the browser clock because SystemTime::now() panics on wasm32.
     let featured_skin = if match_over {
-        let rotation_period = sow_data::commerce::rotation_period(
-            (js_sys::Date::now().max(0.0) / 1000.0) as u64,
-        );
+        let rotation_period =
+            sow_data::commerce::rotation_period((js_sys::Date::now().max(0.0) / 1000.0) as u64);
         sow_data::commerce::catalog_for_profile(
             &app.progress.owned_leaders,
             &app.progress.owned_skins,
@@ -3559,10 +3752,17 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 notification.players,
             )
                 .into_iter()
-                .map(|avatar| {
+                .enumerate()
+                .map(|(index, avatar)| {
                     avatar.map(|avatar| {
-                        serde_json::to_value(avatar)
-                            .unwrap_or_else(|_| serde_json::json!({ "kind": "fallback" }))
+                        let mut identity = serde_json::to_value(avatar)
+                            .unwrap_or_else(|_| serde_json::json!({ "kind": "fallback" }));
+                        if let Some(expression) = notification.players[index]
+                            .and_then(|id| players.iter().find(|player| player.id == id))
+                            .and_then(|player| player_avatar_expression(player, app)) {
+                            identity["expression"] = serde_json::json!(expression);
+                        }
+                        identity
                     })
                 })
                 .collect();
@@ -3661,7 +3861,16 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     } else {
         app.ui.manual_endgame_stats
     };
-    if let Some([kills, assists, max_territory, gold_received, troops_received]) = endgame_stats {
+    if let Some(
+        [
+            kills,
+            assists,
+            max_territory,
+            gold_received,
+            troops_received,
+        ],
+    ) = endgame_stats
+    {
         payload["player_endgame_stats"] = serde_json::json!({
             "kills": kills,
             "assists": assists,
@@ -3677,16 +3886,88 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     if let Some(snapshot) = snapshot {
         if app.ui.show_leaderboard && include_leaderboard {
             payload["leaderboard"] = cached_leaderboard_payload(snapshot, my_pid);
+            payload["team_leaderboard"] = if matches!(
+                app.sim.config.game_mode.as_str(),
+                "Teams" | "HumansVsNations"
+            ) {
+                build_team_leaderboard(snapshot)
+            } else {
+                serde_json::json!([])
+            };
         }
         if hud.show_alliance_inbox {
             payload["inbox"] = cached_inbox_payload(snapshot, my_pid);
         }
     }
     append_player_dialog_payloads(&mut payload, snapshot, hud);
+    if let Some(snapshot) = snapshot {
+        for (field, id_field) in [
+            ("players", "id"),
+            ("leaderboard", "id"),
+            ("operations", "player_id"),
+            ("inbox", "requester_id"),
+        ] {
+            if let Some(rows) = payload[field].as_array_mut() {
+                for row in rows {
+                    if let Some(player) = row[id_field]
+                        .as_u64()
+                        .and_then(|id| snapshot.players.iter().find(|p| u64::from(p.id) == id))
+                    {
+                        decorate_player_avatar(row, player, app);
+                    }
+                }
+            }
+        }
+        for (field, id_field) in [
+            ("hovered", "id"),
+            ("map_menu", "target_player_id"),
+            ("transfer", "target_id"),
+        ] {
+            if let Some(player) = payload[field][id_field]
+                .as_u64()
+                .and_then(|id| snapshot.players.iter().find(|p| u64::from(p.id) == id))
+            {
+                decorate_player_avatar(&mut payload[field], player, app);
+            }
+        }
+    }
     if let Some(sync) = &hud.sync_state {
         payload["sync"] = serde_json::to_value(sync).unwrap_or(serde_json::Value::Null);
     }
     payload
+}
+
+fn player_avatar_expression(
+    player: &sow_core::protocol::PlayerSnapshot,
+    app: &SowApp,
+) -> Option<sow_core::emote::AvatarExpression> {
+    let slug = player
+        .campaign_avatar
+        .as_deref()
+        .unwrap_or(player.leader.id());
+    (sow_data::commerce::leader_from_id(slug).is_some()
+        && (player.campaign_avatar.is_some()
+            || player.player_type == sow_core::player::PlayerType::Human))
+        .then(|| app.ui.nameplates.avatar_presentation(player.id).0)
+}
+
+/// Presentation only: never write expression state into player identity or replay snapshots.
+fn decorate_player_avatar(
+    value: &mut serde_json::Value,
+    player: &sow_core::protocol::PlayerSnapshot,
+    app: &SowApp,
+) {
+    let (_, manual) = app.ui.nameplates.avatar_presentation(player.id);
+    let expression = player_avatar_expression(player, app);
+    value["avatar_expression"] = serde_json::json!(expression);
+    value["manual_emote_active"] = serde_json::json!(manual);
+    for field in ["avatar", "target_avatar"] {
+        if let Some(identity) = value[field].as_object_mut() {
+            if let Some(expression) = expression {
+                identity.insert("expression".into(), serde_json::json!(expression));
+            }
+        }
+    }
 }
 
 fn append_player_dialog_payloads(
@@ -3757,7 +4038,11 @@ fn loader_info_leader_slug(
     splash: &crate::ui::loading_screen::SplashState,
     selected_leader: sow_core::player::Leader,
 ) -> String {
-    splash.loader_leader.unwrap_or(selected_leader).id().to_string()
+    splash
+        .loader_leader
+        .unwrap_or(selected_leader)
+        .id()
+        .to_string()
 }
 
 fn notice_name(notice: Option<crate::LobbyNotice>) -> Option<&'static str> {
@@ -3888,13 +4173,24 @@ fn publish_json_channel(
 
 pub(crate) fn publish_hover_card(app: &SowApp) {
     let (hovered_tile, hovered_owner) = hovered_tile_owner(app);
-    let my_pid = app.sim.my_player_id.unwrap_or(app.ui.app.hud_state.my_player_id);
-    let hovered = match app.sim.current_snapshot.as_ref() {
+    let my_pid = app
+        .sim
+        .my_player_id
+        .unwrap_or(app.ui.app.hud_state.my_player_id);
+    let mut hovered = match app.sim.current_snapshot.as_ref() {
         Some(snapshot) if hovered_owner != 0 => {
             cached_hover_payload(snapshot, hovered_tile, hovered_owner, my_pid)
         }
         _ => serde_json::Value::Null,
     };
+    if let Some(player) = app.sim.current_snapshot.as_ref().and_then(|snapshot| {
+        snapshot
+            .players
+            .iter()
+            .find(|player| player.id == hovered_owner)
+    }) {
+        decorate_player_avatar(&mut hovered, player, app);
+    }
     publish_json_channel(&LAST_HOVER_CARD, "SOW_hover_card_update", &hovered);
 }
 
@@ -3908,7 +4204,11 @@ pub(crate) fn publish_tutorial_pointer(app: &SowApp) {
         Some((x, y)) => serde_json::json!({ "x": x, "y": y }),
         None => serde_json::Value::Null,
     };
-    publish_json_channel(&LAST_TUTORIAL_POINTER, "SOW_tutorial_pointer_update", &value);
+    publish_json_channel(
+        &LAST_TUTORIAL_POINTER,
+        "SOW_tutorial_pointer_update",
+        &value,
+    );
 }
 
 /// DOM never receives transient textures, map bytes, or internal auth/session material.
@@ -3923,6 +4223,11 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         let include_leaderboard = if app.ui.show_leaderboard {
             let now = Instant::now();
             let due = app.ui.leaderboard_publish_pending
+                || LAST_HUD_KEY.with(|key| {
+                    key.borrow()
+                        .as_ref()
+                        .is_none_or(|key| key.avatar_revision != app.ui.nameplates.avatar_revision)
+                })
                 || app.ui.leaderboard_refresh_at.map_or(true, |last| {
                     now.duration_since(last) >= Duration::from_millis(250)
                 });
@@ -4116,7 +4421,11 @@ fn menu_inputs(app: &SowApp) -> MenuInputs {
         ranked_matchup: if (app.ui.app.phase == crate::ClientPhase::MainMenu && state.is_waiting)
             || (app.ui.app.phase == crate::ClientPhase::Splash
                 && splash.job == crate::ui::loading_screen::SplashJob::EnterGame)
-        { state.ranked_matchup.clone() } else { None },
+        {
+            state.ranked_matchup.clone()
+        } else {
+            None
+        },
         update_available: app.ui.update_available,
         match_preparing: app
             .ui
@@ -4308,7 +4617,10 @@ mod tests {
     fn loader_art_random_keeps_the_real_leader_and_campaign_reset() {
         let mut splash = crate::ui::loading_screen::SplashState::default();
         assert_eq!(loader_leader_id(&splash), None);
-        assert_eq!(loader_info_leader_slug(&splash, Leader::of("caesar")), "caesar");
+        assert_eq!(
+            loader_info_leader_slug(&splash, Leader::of("caesar")),
+            "caesar"
+        );
         splash.transition_anim(
             crate::ui::loading_screen::SplashJob::EnterGame,
             Leader::of("caesar"),
@@ -4317,7 +4629,10 @@ mod tests {
 
         splash.use_random_art = true;
         assert_eq!(loader_leader_id(&splash).as_deref(), Some("random"));
-        assert_eq!(loader_info_leader_slug(&splash, Leader::of("boudica")), "caesar");
+        assert_eq!(
+            loader_info_leader_slug(&splash, Leader::of("boudica")),
+            "caesar"
+        );
         assert_eq!(splash.loader_leader, Some(Leader::of("caesar")));
 
         splash.transition_anim(
@@ -4325,7 +4640,10 @@ mod tests {
             Leader::of("boudica"),
         );
         assert_eq!(loader_leader_id(&splash).as_deref(), Some("Boudica"));
-        assert_eq!(loader_info_leader_slug(&splash, Leader::of("caesar")), "boudica");
+        assert_eq!(
+            loader_info_leader_slug(&splash, Leader::of("caesar")),
+            "boudica"
+        );
         assert_eq!(splash.loader_leader, Some(Leader::of("boudica")));
     }
 
@@ -5018,6 +5336,49 @@ mod tests {
         assert_eq!(rows[99]["rank"], serde_json::json!(100));
         assert_eq!(rows[100]["id"], serde_json::json!(149));
         assert_eq!(rows[100]["rank"], serde_json::json!(150));
+    }
+
+    #[test]
+    fn team_leaderboard_sums_members_outside_the_individual_limit_and_sorts_by_land() {
+        use sow_core::protocol::Team;
+
+        let mut players: Vec<PlayerSnapshot> = (0..150)
+            .map(|id| test_player(id, 150 - id as u32, 0.0))
+            .collect();
+        for (id, team, tiles) in [
+            (120, Team::Red, 6),
+            (121, Team::Red, 4),
+            (122, Team::Blue, 3),
+            (123, Team::Blue, 2),
+        ] {
+            players[id].team = Some(team);
+            players[id].tile_count = tiles;
+        }
+        let mut snapshot = test_snapshot(players);
+        snapshot.total_land_tiles = 100;
+
+        let teams = build_team_leaderboard(&snapshot);
+        let serde_json::Value::Array(teams) = teams else {
+            panic!("team leaderboard must be an array");
+        };
+        assert_eq!(teams.len(), 2);
+        assert_eq!(teams[0]["team"], "Red");
+        assert_eq!(teams[0]["tile_count"], 10);
+        assert_eq!(teams[0]["territory_pct"], 0.1);
+        assert_eq!(teams[0]["members"], 2);
+        assert_eq!(teams[1]["team"], "Blue");
+        assert_eq!(teams[1]["tile_count"], 5);
+        assert_eq!(teams[1]["territory_pct"], 0.05);
+
+        let serde_json::Value::Array(players) = build_leaderboard(&snapshot, 0) else {
+            panic!("player leaderboard must be an array");
+        };
+        assert!(players.iter().all(|player| {
+            !matches!(
+                player.get("id").and_then(serde_json::Value::as_u64),
+                Some(120..=123)
+            )
+        }));
     }
 
     #[test]

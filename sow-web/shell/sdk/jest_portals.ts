@@ -236,7 +236,6 @@
                 return sdk.init();
             })
             .then(function () {
-                console.info("Jest SDK initialized");
                 if (sdk.lifecycle) {
                     try {
                         if (typeof sdk.lifecycle.onHide === "function") sdk.lifecycle.onHide(muteGameAudio);

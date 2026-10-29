@@ -512,7 +512,8 @@
 .sow-ranked__queue-footer { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 16px; min-height: 48px; color: #cbd2df; font-size: 13px; }
 .sow-ranked__queue-footer button { min-height: 44px; min-width: 128px; }
 .sow-ranked__queue-footer progress { width: 140px; accent-color: #d6b675; }
-.sow-menu__main--ranked.sow-screen-panel--entering { animation-duration: 220ms; }
+.sow-menu__main--ranked.sow-screen-panel--entering,
+[data-screen-panel="profile"].sow-screen-panel--entering { --sow-screen-enter-offset: 12px; animation-duration: 220ms; }
 #web-loader .sow-ranked__loader { position: absolute; z-index: 3; inset: 6% max(24px, 7vw) 24%; display: grid; align-content: center; margin: auto; max-width: 880px; }
 #web-loader.has-ranked-matchup .splash-picture { opacity: .12; }
 #web-loader.has-ranked-matchup #loader-ability { visibility: hidden; }

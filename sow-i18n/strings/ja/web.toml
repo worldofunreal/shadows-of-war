@@ -899,6 +899,18 @@ match_message_4 = "あなたの戦いは終わる。 書類は待つことがで
 match_message_5 = "あなたの戦いは終わります。これは間違いなく計画の一部でした。"
 
 [site]
+landing_build_expand = "築け。広げろ。"
+landing_betray = "裏切れ。"
+empire_starts = "次なる帝国は"
+empire_here = "ここから始まる。"
+browse_all = "すべて見る"
+previous_leader = "前の指導者"
+next_leader = "次の指導者"
+clear_search = "検索をクリア"
+art_unavailable = "アートを表示できません"
+pause_motion = "アニメーションを一時停止"
+resume_motion = "アニメーションを再開"
+in_game = "ゲーム内"
 title = "Shadows of War — マルチプレイヤー戦略"
 description = "歴史上のリーダーを選び、土地を奪い、都市や港を建て、リアルタイムの領土戦争で同盟や裏切りを繰り広げる。"
 home = "Shadows of War ホーム"

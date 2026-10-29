@@ -332,7 +332,8 @@ impl SowEngine {
         }
 
         let win_threshold = (self.state.total_land_tiles as f32
-            * self.state.config.map_control_win_percentage) as u32;
+            * self.state.config.map_control_win_percentage)
+            .ceil() as u32;
 
         if self.state.config.ranked_1v1 {
             self.check_ranked_duel_winner(win_threshold);
@@ -793,6 +794,61 @@ mod tests {
                     engine.state.winning_team,
                     (mode != "FFA").then_some(Team::Red)
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn territory_victory_requires_at_least_75_percent_across_match_modes() {
+        assert_eq!(GameConfig::default().map_control_win_percentage, 0.75);
+
+        for (mode, ranked_1v1) in [
+            ("FFA", false),
+            ("Teams", false),
+            ("HumansVsNations", false),
+            ("FFA", true),
+        ] {
+            for (leading_tiles, expected_winner) in [(74, None), (75, Some(1))] {
+                let config = GameConfig {
+                    game_mode: mode.into(),
+                    ranked_1v1,
+                    map_control_win_percentage: 0.75,
+                    ..Default::default()
+                };
+                let mut state = GameState::new(42, 10, 10, config.clone());
+                state.total_land_tiles = 99;
+
+                if mode == "Teams" || mode == "HumansVsNations" {
+                    for (id, team, tiles) in [
+                        (1, Team::Red, 40),
+                        (3, Team::Red, leading_tiles - 40),
+                        (2, Team::Blue, 99 - leading_tiles),
+                    ] {
+                        let mut player =
+                            Player::new_human(id, format!("P{id}"), [1.0; 3], &config);
+                        player.team = Some(team);
+                        player.tile_count = tiles;
+                        player.alive = true;
+                        player.has_spawned = true;
+                        state.register_player(player);
+                    }
+                } else {
+                    for (id, tiles) in [(1, leading_tiles), (2, 99 - leading_tiles)] {
+                        let mut player =
+                            Player::new_human(id, format!("P{id}"), [1.0; 3], &config);
+                        player.tile_count = tiles;
+                        player.alive = true;
+                        player.has_spawned = true;
+                        state.register_player(player);
+                    }
+                }
+
+                let mut engine = SowEngine::new(state, WaterComponents::default());
+                engine.check_winner();
+                assert_eq!(engine.state.winner, expected_winner, "mode={mode}, ranked={ranked_1v1}, land={leading_tiles}");
+                if mode == "Teams" || mode == "HumansVsNations" {
+                    assert_eq!(engine.state.winning_team, expected_winner.map(|_| Team::Red));
+                }
             }
         }
     }

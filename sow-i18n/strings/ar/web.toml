@@ -899,6 +899,18 @@ match_message_4 = "ستنتهي معركتك، الأوراق يمكن أن تن
 match_message_5 = "معركتك ستنتهي، هذا بالتأكيد جزء من الخطة"
 
 [site]
+landing_build_expand = "ابنِ. توسّع."
+landing_betray = "اخدع."
+empire_starts = "إمبراطوريتك القادمة"
+empire_here = "تبدأ هنا."
+browse_all = "عرض الجميع"
+previous_leader = "القائد السابق"
+next_leader = "القائد التالي"
+clear_search = "مسح البحث"
+art_unavailable = "الصورة غير متاحة"
+pause_motion = "إيقاف الحركة مؤقتًا"
+resume_motion = "استئناف الحركة"
+in_game = "داخل اللعبة"
 title = "Shadows of War — استراتيجية متعددة اللاعبين"
 description = "اختر قائدًا تاريخيًا، واستولِ على الأراضي، وابنِ المدن والموانئ، وتحالف مع الآخرين أو اغدر بحلفائك في حروب السيطرة على الأراضي في الوقت الفعلي."
 home = "الصفحة الرئيسية للعبة Shadows of War"

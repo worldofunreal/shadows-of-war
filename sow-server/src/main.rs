@@ -889,13 +889,16 @@ async fn fetch_ranked_rating(
     db_url: &str,
     secret: &str,
     account_id: &str,
-) -> Result<f64, String> {
+) -> Result<(f64, u16), String> {
     let payload = ranked_db_post(client, db_url, secret, "internal/ranked-rating", serde_json::json!({
         "account_id": account_id
     })).await?;
     let rating = payload.get("mu").and_then(serde_json::Value::as_f64)
         .ok_or("ranked rating value missing")?;
-    if rating.is_finite() { Ok(rating) } else { Err("ranked rating value is invalid".into()) }
+    let score = payload.get("score").and_then(serde_json::Value::as_u64)
+        .and_then(|score| u16::try_from(score).ok())
+        .ok_or("ranked score value missing")?;
+    if rating.is_finite() { Ok((rating, score)) } else { Err("ranked rating value is invalid".into()) }
 }
 
 async fn reserve_ranked_bot(
@@ -1233,6 +1236,7 @@ enum ServerEvent {
         password: Option<String>,
         ip: String,
         session_id: u64,
+        league_score: Option<u16>,
     },
 
     Leave {
@@ -1737,7 +1741,7 @@ async fn main() {
                     let mut games = games_clone.lock().await;
                     let mut nid = next_id_clone.lock().await;
                     match event {
-                        ServerEvent::Join { client_tx, name, clan_tag, leader, random_leader, skin_style, target_lobby_id, host_private, build_version, database_account_id, host_config, password, ip, session_id } => {
+                        ServerEvent::Join { client_tx, name, clan_tag, leader, random_leader, skin_style, target_lobby_id, host_private, build_version, database_account_id, host_config, password, ip, session_id, league_score } => {
                             log::info!("Player {} (clan: {}, ip: {}, session_id: {}) joining with version: {}", name, clan_tag, ip, session_id, build_version);
                             let target_is_retired_matchmaking = if let Some(id) = target_lobby_id {
                                 retired_matchmaking_ids_for_joins.lock().await.contains(&id)
@@ -1759,6 +1763,7 @@ async fn main() {
                                 password,
                                 ip,
                                 session_id: Some(session_id),
+                                league_score,
                                 }) {
                                 Ok((lobby_id, player_id, map_name, is_private)) => {
                                     if let Some(lobby) = games.iter().find(|g| g.id == lobby_id) {
@@ -2118,7 +2123,7 @@ async fn main() {
                                                     };
                                                     let db_client = reqwest::Client::new();
                                                     let rating = match fetch_ranked_rating(&db_client, &db_url_conn, &db_secret_conn, &account_id).await {
-                                                        Ok(rating) => rating,
+                                                        Ok((rating, _)) => rating,
                                                         Err(error) => {
                                                             log::error!("[RANKED] rating lookup failed for {account_id}: {error}");
                                                             send_ranked_failure(&direct_tx, "RANKED_QUEUE_UNAVAILABLE");
@@ -2145,6 +2150,16 @@ async fn main() {
                                                     continue;
                                                 }
 
+                                                let league_score = match &database_account_id {
+                                                    Some(account_id) => match fetch_ranked_rating(&reqwest::Client::new(), &db_url_conn, &db_secret_conn, account_id).await {
+                                                        Ok((_, score)) => Some(score),
+                                                        Err(error) => {
+                                                            log::error!("[LEAGUE] rating lookup failed for {account_id}: {error}");
+                                                            None
+                                                        }
+                                                    },
+                                                    None => None,
+                                                };
                                                 let _ = ev_tx.send(ServerEvent::Join {
                                                     name: payload.name,
                                                     clan_tag: payload.clan_tag,
@@ -2160,6 +2175,7 @@ async fn main() {
                                                     password: payload.password,
                                                     ip: ip_str.clone(),
                                                     session_id,
+                                                    league_score,
                                                 }).await;
                                             }
                                             sow_core::protocol::ClientMessage::Gameplay { .. } => {
@@ -3175,6 +3191,7 @@ mod relay_worker_tests {
             is_internal_bot: false,
             ranked_rating: Some(1000.0),
             ranked_search_started_at: Some(search_started_at),
+            league_score: None,
         }
     }
 

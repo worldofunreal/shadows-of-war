@@ -114,7 +114,8 @@ html[dir="rtl"] #sow-hud-dev-layer {
 }
 
 #sow-hud button:focus-visible,
-#sow-hud input:focus-visible {
+#sow-hud input:focus-visible,
+#sow-hud [role="button"]:focus-visible {
   outline: 2px solid var(--sow-gold-bright);
   outline-offset: 2px;
 }
@@ -252,7 +253,9 @@ html[dir="rtl"] #sow-hud-dev-layer {
   box-shadow:
     var(--sow-surface-shadow),
     0 8px 24px rgb(0 0 0 / 32%);
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
 }
 
 .sow-hud__nameplate:not([hidden]) {

@@ -38,6 +38,9 @@ pub struct PlayerConnection {
     /// Ranked state needed to resume a search if an opponent leaves during preparation.
     pub ranked_rating: Option<f64>,
     pub ranked_search_started_at: Option<tokio::time::Instant>,
+    /// Ranked score (`SeasonRating.score`) read at matchmaking join. Sets the
+    /// Anon share of the lobby's ghosts. `None` when unrated or unavailable.
+    pub league_score: Option<u16>,
 }
 
 pub struct ServerLobby {
@@ -208,6 +211,7 @@ pub fn spawn_ranked_lobby(
             is_internal_bot: participant.is_bot,
             ranked_rating: participant.ranked_rating,
             ranked_search_started_at: participant.ranked_search_started_at,
+            league_score: None,
         });
     }
     start_match(&mut lobby);
@@ -514,6 +518,7 @@ pub struct JoinPlayerOpts {
     pub password: Option<String>,
     pub ip: String,
     pub session_id: Option<u64>,
+    pub league_score: Option<u16>,
 }
 
 pub fn join_player(
@@ -531,6 +536,7 @@ pub fn join_player(
     let host_private = opts.host_private;
     let database_account_id = opts.database_account_id;
     let host_config = opts.host_config;
+    let league_score = opts.league_score;
     if host_config.as_ref().is_some_and(|config| {
         !matches!(
             config.game_mode.as_str(),
@@ -754,6 +760,7 @@ pub fn join_player(
         is_internal_bot: false,
         ranked_rating: None,
         ranked_search_started_at: None,
+        league_score,
     });
 
     if is_new_host {
@@ -1312,6 +1319,7 @@ mod name_tests {
             password: None,
             ip: "127.0.0.1".to_string(),
             session_id: Some(1),
+            league_score: None,
         }
     }
 
@@ -1753,6 +1761,7 @@ mod name_tests {
                 password: Some("wrong".to_string()),
                 ip: "127.0.0.1".to_string(),
                 session_id: Some(1),
+                league_score: None,
             },
         );
 
@@ -1781,6 +1790,7 @@ mod name_tests {
             is_internal_bot: false,
             ranked_rating: None,
             ranked_search_started_at: None,
+            league_score: None,
         }
     }
 

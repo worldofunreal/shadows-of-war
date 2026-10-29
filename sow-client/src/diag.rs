@@ -83,6 +83,9 @@ thread_local! {
 }
 
 pub(crate) fn start_startup_perf_window(cache_build: Option<(u64, u64, u64)>) {
+    if !enabled() {
+        return;
+    }
     STARTUP_PERF.with(|window| {
         let mut window = window.borrow_mut();
         *window = StartupPerfWindow::default();

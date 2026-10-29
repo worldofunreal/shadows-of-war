@@ -12,10 +12,10 @@ USAGE:
   ./sow [COMMAND] [OPTIONS]
 
 COMMANDS:
-  (no args)            Fast-build and open the native Tauri/WASM game
+  (no args)            Fast-build and open the native Electron/WASM game
   m, map                Serve the campaign editor locally on port 8777
   l, local              Build WASM + webroot and serve it locally on port 4173
-  native                Fast-build and open the native Tauri/WASM game
+  native                Fast-build and open the native Electron/WASM game
    p, prod              Run production build & deploy (WASM + FreeBSD + Azure, no Android)
    a, android           Build the Android AAB and publish it to Google Play alpha
    jest                 Build the self-contained Jest bundle + dist/jest.zip (no deploy)
@@ -26,7 +26,7 @@ EXAMPLES:
   ./sow m              # Serve the campaign editor (JSON changes need no Rust rebuild)
   ./sow l              # Build and serve the local web client (Ctrl-C to stop)
   ./sow native         # Build and open the native desktop client
-  SOW_NATIVE_RELEASE=1 ./sow  # Compare with optimized WASM in Tauri, without an installer
+  SOW_NATIVE_RELEASE=1 ./sow  # Compare with optimized WASM in Electron, without an installer
    ./sow p              # Production build and deploy to IONOS & Azure
    ./sow p -v           # Production deploy with public version bump
    ./sow jest           # Jest bundle + upload zip (upload via console/MCP, never auto)

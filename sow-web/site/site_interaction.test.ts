@@ -134,13 +134,14 @@ test("landing alpha badges link to the iOS and Android tests in every locale", (
   assert.match(narrowStyles, /\.hero-alpha-copy b\s*\{\s*font-size: 12px;\s*\}/);
 });
 
-test("retired marketing pages stay deleted and absent from navigation", () => {
+test("landing navigation retains the leader compendium and omits retired how-to-play pages", () => {
   const siteRoot = path.join(shell, "../../sow-web/site");
-  assert.equal(fs.existsSync(path.join(siteRoot, "leaders/index.html")), false);
+  assert.equal(fs.existsSync(path.join(siteRoot, "leaders/index.html")), true);
   assert.equal(fs.existsSync(path.join(siteRoot, "how-to-play/index.html")), false);
   const mobileMenu = siteHeader.match(/<nav\s+class="mobile-menu"[\s\S]*?<\/nav>/)?.[0] ?? "";
   for (const [href, key] of [
     ["/", "nav_home"],
+    ["/leaders/", "leaders"],
     ["/support/", "support"],
     ["/privacy/", "privacy"],
     ["/terms/", "terms"],
@@ -167,12 +168,12 @@ test("retired marketing pages stay deleted and absent from navigation", () => {
   assert.match(mobileActionsCss, /border-bottom: 1px solid var\(--line\);/);
   assert.doesNotMatch(mobileActionsCss, /padding-top|border-top/);
   for (const html of siteFooterPages) {
-    assert.doesNotMatch(html, /href=["']\/(?:leaders|how-to-play)\//);
+    assert.doesNotMatch(html, /href=["']\/how-to-play\//);
   }
   for (const html of [landingHtml, ...siteFooterPages]) {
     const footer = html.match(/<div class="footer-links">([\s\S]*?)<\/div>/)?.[1] ?? "";
     assert.ok(footer);
-    assert.doesNotMatch(footer, /site\.nav_leaders|href=["']\/#leaders["']/);
+    assert.doesNotMatch(footer, /href=["']\/how-to-play\//);
   }
 });
 
@@ -217,74 +218,358 @@ test("AGPL attribution stays visible while legal links live in settings", () => 
   }
 });
 
-test("landing background video follows hero visibility and motion settings", () => {
-  let observeHero;
-  let onVisibilityChange;
-  let onMotionChange;
-  let plays = 0;
-  let pauses = 0;
-  const hero = {};
-  const video = {
-    closest: () => hero,
-    play() {
-      plays += 1;
-      return Promise.resolve();
-    },
-    pause() {
-      pauses += 1;
-    },
-  };
-  const motion = {
-    matches: false,
-    addEventListener: (_event, callback) => {
-      onMotionChange = callback;
-    },
-  };
-  class IntersectionObserverMock {
-    constructor(callback) {
-      observeHero = callback;
-    }
-    observe(target) {
-      assert.equal(target, hero);
-    }
+// Run the actual landing controller against catalog-backed elements. No browser
+// or game process is needed to cover selection, search and dialog ownership.
+function landingExplorer({ video = false } = {}) {
+  const catalog = JSON.parse(fs.readFileSync(path.join(__dirname, "../../assets/geo_entities.json"), "utf8"));
+  const catalogs = Object.fromEntries(
+    ["en", "es"].map((locale) => [
+      locale,
+      Bun.TOML.parse(
+        fs.readFileSync(path.join(__dirname, `../../sow-i18n/strings/${locale}/web.toml`), "utf8"),
+      ),
+    ]),
+  );
+  let locale = "en";
+  const doc: any = { activeElement: null, visibilityState: "visible" };
+  function element(dataset = {}) {
+    const handlers = new Map();
+    const attributes = new Map();
+    const classes = new Set();
+    const node: any = {
+      dataset,
+      hidden: false,
+      textContent: "",
+      value: "",
+      children: [],
+      scrollTop: 0,
+      complete: false,
+      naturalWidth: 0,
+      currentSrc: "",
+      bounds: { top: 0, bottom: 0 },
+      getBoundingClientRect() {
+        return node.bounds;
+      },
+      classList: {
+        add: (...names) => names.forEach((name) => classes.add(name)),
+        remove: (...names) => names.forEach((name) => classes.delete(name)),
+        contains: (name) => classes.has(name),
+        toggle: (name, active) => (active ? classes.add(name) : classes.delete(name)),
+      },
+      addEventListener(name, fn) {
+        if (!handlers.has(name)) handlers.set(name, []);
+        handlers.get(name).push(fn);
+      },
+      emit(name, event = {}) {
+        for (const fn of handlers.get(name) || []) fn({ currentTarget: node, preventDefault() {}, ...event });
+      },
+      setAttribute(name, value) {
+        attributes.set(name, String(value));
+      },
+      getAttribute(name) {
+        return attributes.get(name) ?? null;
+      },
+      focus() {
+        doc.activeElement = node;
+      },
+      append(child) {
+        if (child.parent) child.parent.children = child.parent.children.filter((item) => item !== child);
+        node.children.push(child);
+        child.parent = node;
+      },
+      showModal() {
+        node.open = true;
+      },
+      close() {
+        node.open = false;
+        node.emit("close");
+      },
+      animate() {},
+    };
+    return node;
   }
-  const window = {
-    IntersectionObserver: IntersectionObserverMock,
-    matchMedia: () => motion,
-    addEventListener() {},
+  const t = (key, values = {}) => {
+    let result = key.split(".").reduce((value, part) => value?.[part], catalogs[locale]) || `[${key}]`;
+    for (const [name, value] of Object.entries(values))
+      result = result.replaceAll(`{${name}}`, String(value));
+    return result;
   };
-  const document = {
-    visibilityState: "visible",
-    querySelector: (selector) => (selector === ".hero-video" ? video : null),
-    querySelectorAll: () => [],
-    addEventListener: (_event, callback) => {
-      onVisibilityChange = callback;
-    },
-  };
-
-  vm.runInNewContext(siteApp, {
-    window,
-    document,
-    IntersectionObserver: IntersectionObserverMock,
-    location: { hostname: "localhost" },
-    sessionStorage: { getItem: () => null, setItem() {} },
+  const entities = catalog.entities.filter((entity) => entity.hero);
+  const cards = entities.map((entity) =>
+    element({
+      leaderId: entity.id,
+      artSlug: entity.hero.art_slug || entity.id,
+      name: t(`heroes.leader_${entity.id}_name`),
+      civ: t(`heroes.leader_${entity.id}_civilization`),
+      historical: t(`heroes.leader_${entity.id}_historical`),
+      ability: t(`site.leader_${entity.id}_ability`),
+      description: t(`site.leader_${entity.id}_description`),
+    }),
+  );
+  cards[0].classList.add("is-active");
+  const nodes = new Map();
+  for (const name of [
+    "motion-toggle",
+    "motion-label",
+    "detail-image",
+    "detail-image-mobile",
+    "detail-portrait",
+    "detail-art",
+    "detail-name",
+    "detail-civ",
+    "detail-historical",
+    "detail-ability",
+    "detail-description",
+    "leader-search",
+    "leader-browser",
+    "leader-browser-home",
+    "leader-picker",
+    "leader-browse",
+    "roster-count",
+    "roster-empty",
+    "roster-scroll",
+    "leader-position",
+    "picker-close",
+    "leader-prev",
+    "leader-next",
+    "clear-search",
+    "leader-total",
+    "leaders-grid",
+    "map-image",
+    "map-name",
+    "map-frame",
+  ])
+    nodes.set(`[data-${name}]`, element());
+  const node = (name) => nodes.get(`[data-${name}]`);
+  node("leader-browser-home").append(node("leader-browser"));
+  const maps = ["World", "Europe"].map((name, index) => {
+    const card = element({ mapName: name, mapImage: `/maps/${name.toLowerCase()}/thumbnail.webp?v=1` });
+    card.setAttribute("aria-pressed", String(index === 0));
+    return card;
   });
-  assert.equal(pauses, 1, "starts paused until the hero is observed");
+  node("map-image").setAttribute("src", maps[0].dataset.mapImage);
+  const media = new Map();
+  function mediaQuery(query) {
+    if (!media.has(query)) {
+      const value = element();
+      value.matches = false;
+      media.set(query, value);
+    }
+    return media.get(query);
+  }
+  const win: any = element();
+  win.scrollY = 620;
+  win.matchMedia = mediaQuery;
+  win.SOW_t = t;
+  win.scrollTo = ({ top }) => {
+    win.scrollY = top;
+  };
+  let visibilityCallback;
+  if (video) {
+    const player = element();
+    player.playCount = 0;
+    player.pauseCount = 0;
+    player.play = () => {
+      player.playCount++;
+      return Promise.resolve();
+    };
+    player.pause = () => {
+      player.pauseCount++;
+    };
+    player.closest = () => element();
+    nodes.set(".hero-video", player);
+    win.IntersectionObserver = class {
+      constructor(callback) {
+        visibilityCallback = callback;
+      }
+      observe() {}
+    };
+  }
+  Object.assign(doc, {
+    documentElement: element(),
+    querySelector: (selector) => nodes.get(selector) || null,
+    querySelectorAll: (selector) =>
+      selector === ".roster-card[data-leader-id]"
+        ? cards
+        : selector === "[data-map-select]"
+          ? maps
+          : selector === "[data-leader-total]"
+            ? [node("leader-total")]
+            : [],
+    addEventListener: win.addEventListener,
+  });
+  vm.runInNewContext(siteApp, {
+    window: win,
+    document: doc,
+    getComputedStyle: () => ({ gridTemplateColumns: "90px 90px 90px" }),
+  });
+  return {
+    cards,
+    entities,
+    maps,
+    nodes,
+    node,
+    win,
+    doc,
+    t,
+    click: (name) => node(name).emit("click"),
+    search: (value) => {
+      node("leader-search").value = value;
+      node("leader-search").emit("input");
+    },
+    setLocale: (value) => {
+      locale = value;
+      win.emit("sow:locale-change");
+    },
+    setMedia: (query, matches) => {
+      const value = mediaQuery(query);
+      value.matches = matches;
+      value.emit("change");
+    },
+    setVisible: (visible) => visibilityCallback([{ isIntersecting: visible }]),
+  };
+}
 
-  observeHero([{ isIntersecting: true }]);
-  assert.equal(plays, 1);
-  document.visibilityState = "hidden";
-  onVisibilityChange();
-  assert.equal(pauses, 2);
-  document.visibilityState = "visible";
-  onVisibilityChange();
-  assert.equal(plays, 2);
-  motion.matches = true;
-  onMotionChange();
-  assert.equal(pauses, 3);
-  motion.matches = false;
-  onMotionChange();
-  assert.equal(plays, 3);
-  observeHero([{ isIntersecting: false }]);
-  assert.equal(pauses, 4);
+test("landing explorer selects all 80 catalog leaders and keeps failed or late art matched", () => {
+  const app = landingExplorer();
+  assert.equal(app.cards.length, 80);
+  assert.equal(app.node("leader-total").textContent, "80");
+  for (const [index, card] of app.cards.entries()) {
+    card.emit("click");
+    assert.equal(app.node("detail-name").textContent, card.dataset.name);
+    assert.equal(app.node("detail-ability").textContent, card.dataset.ability);
+    assert.equal(app.node("detail-description").textContent, card.dataset.description);
+    assert.equal(app.node("detail-image").src, `/assets/shell/leaders/${card.dataset.artSlug}_desktop.webp`);
+    assert.equal(
+      app.node("detail-image-mobile").srcset,
+      `/assets/shell/leaders/${card.dataset.artSlug}_mobile.webp`,
+    );
+    assert.equal(app.node("detail-portrait").src, `/assets/gameplay/avatars/${card.dataset.artSlug}.webp`);
+    assert.equal(card.getAttribute("aria-pressed"), "true");
+    assert.equal(app.cards.filter((item) => item.classList.contains("is-active")).length, 1);
+    assert.ok(app.node("leader-position").textContent.endsWith(`${index + 1} / 80`));
+  }
+  app.cards[0].emit("click");
+  app.cards[79].emit("click");
+  const image = app.node("detail-image");
+  image.currentSrc = `/assets/shell/leaders/${app.cards[0].dataset.artSlug}_desktop.webp`;
+  image.complete = true;
+  image.naturalWidth = 1600;
+  app.cards[1].emit("click");
+  app.cards[79].emit("click");
+  image.emit("load");
+  assert.ok(
+    app.node("detail-art").classList.contains("is-loading"),
+    "old art must not be revealed under the new name",
+  );
+  image.currentSrc = image.src;
+  image.emit("error");
+  assert.ok(app.node("detail-art").classList.contains("is-unavailable"));
+  assert.equal(app.node("detail-portrait").hidden, false);
+  image.emit("load");
+  assert.equal(app.node("detail-art").classList.contains("is-unavailable"), false);
+  app.click("leader-next");
+  assert.equal(app.cards[0].getAttribute("aria-pressed"), "true");
+  app.cards[79].bounds = { top: 800, bottom: 920 };
+  app.node("roster-scroll").bounds = { top: 100, bottom: 500 };
+  app.click("leader-prev");
+  assert.equal(app.cards[79].getAttribute("aria-pressed"), "true");
+  assert.equal(app.node("roster-scroll").scrollTop, 420);
+  assert.equal(app.win.scrollY, 620, "revealing the selection must not move the preview");
+});
+
+test("landing explorer searches localized names and civilizations, preserves selection and clears empty results", () => {
+  const app = landingExplorer();
+  const selected = app.cards.findIndex((card) => card.dataset.leaderId === "bolivar");
+  app.cards[selected].emit("click");
+  app.setLocale("es");
+  assert.equal(app.node("detail-name").textContent, app.t("heroes.leader_bolivar_name"));
+  assert.equal(app.cards[selected].getAttribute("aria-pressed"), "true");
+  app.search("simon");
+  assert.equal(app.cards[selected].hidden, false, "search ignores accent marks");
+  const civilization = app.t("heroes.leader_bolivar_civilization");
+  app.search(civilization);
+  assert.equal(app.cards[selected].hidden, false);
+  app.search("a civilization that does not exist");
+  assert.equal(app.cards.filter((card) => !card.hidden).length, 0);
+  assert.equal(app.node("roster-empty").hidden, false);
+  app.click("clear-search");
+  assert.equal(app.node("leader-search").value, "");
+  assert.equal(app.cards.filter((card) => !card.hidden).length, 80);
+  assert.equal(app.node("roster-empty").hidden, true);
+  assert.equal(app.node("detail-name").textContent, app.t("heroes.leader_bolivar_name"));
+  app.cards[0].focus();
+  app.node("leaders-grid").emit("keydown", { key: "End" });
+  assert.equal(app.doc.activeElement, app.cards[79]);
+  app.doc.documentElement.dir = "rtl";
+  app.cards[10].focus();
+  app.node("leaders-grid").emit("keydown", { key: "ArrowRight" });
+  assert.equal(app.doc.activeElement, app.cards[9]);
+});
+
+test("landing explorer moves one roster into the mobile picker and restores the selected preview and page position", () => {
+  const app = landingExplorer();
+  const browser = app.node("leader-browser");
+  const picker = app.node("leader-picker");
+  app.node("leader-browse").focus();
+  app.click("leader-browse");
+  assert.equal(picker.open, true);
+  assert.equal(browser.parent, picker);
+  assert.equal(app.doc.activeElement, app.node("leader-search"));
+  app.cards[79].emit("click");
+  assert.equal(picker.open, false);
+  assert.equal(browser.parent, app.node("leader-browser-home"));
+  assert.equal(app.cards[79].getAttribute("aria-pressed"), "true");
+  assert.equal(app.win.scrollY, 620);
+  assert.equal(app.doc.activeElement, app.node("leader-browse"));
+  app.click("leader-browse");
+  app.click("picker-close");
+  assert.equal(app.cards[79].getAttribute("aria-pressed"), "true", "cancel preserves selection");
+  app.click("leader-browse");
+  picker.close(); // Native Escape follows the same close event.
+  assert.equal(browser.parent, app.node("leader-browser-home"));
+  app.click("leader-browse");
+  app.setMedia("(max-width: 960px)", false);
+  assert.equal(picker.open, false, "resizing to desktop restores the inline roster");
+});
+
+test("landing explorer switches map previews and pauses optional video for visibility and reduced motion", () => {
+  const app = landingExplorer({ video: true });
+  app.maps[1].emit("click");
+  assert.equal(app.node("map-image").src, app.maps[1].dataset.mapImage);
+  assert.equal(app.node("map-name").textContent, "Europe");
+  assert.equal(app.maps[0].getAttribute("aria-pressed"), "false");
+  assert.equal(app.maps[1].getAttribute("aria-pressed"), "true");
+  app.node("map-image").currentSrc = app.node("map-image").src;
+  app.node("map-image").emit("error");
+  assert.ok(app.node("map-frame").classList.contains("is-unavailable"));
+  const player = app.nodes.get(".hero-video");
+  assert.equal(player.playCount, 0);
+  app.setVisible(true);
+  assert.equal(player.playCount, 1);
+  app.doc.visibilityState = "hidden";
+  app.win.emit("visibilitychange");
+  assert.equal(player.hidden, true);
+  const hiddenPlays = player.playCount;
+  app.setVisible(true);
+  assert.equal(player.playCount, hiddenPlays);
+  app.doc.visibilityState = "visible";
+  app.win.emit("visibilitychange");
+  assert.equal(player.playCount, hiddenPlays + 1);
+  app.click("motion-toggle");
+  assert.equal(app.node("motion-toggle").getAttribute("aria-pressed"), "true");
+  const plays = player.playCount;
+  app.setVisible(false);
+  app.setVisible(true);
+  assert.equal(player.playCount, plays, "manual pause survives leaving and reentering the opening");
+  app.click("motion-toggle");
+  assert.ok(player.playCount > plays);
+  app.setMedia("(prefers-reduced-motion: reduce)", true);
+  assert.equal(app.node("motion-toggle").disabled, true);
+  const reducedPlays = player.playCount;
+  app.setVisible(true);
+  assert.equal(player.playCount, reducedPlays);
+  player.emit("error");
+  assert.equal(player.hidden, true);
+  assert.equal(app.node("motion-toggle").hidden, true);
 });

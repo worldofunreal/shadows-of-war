@@ -455,8 +455,8 @@ test("mobile hover is Rust-owned and the HUD only presents its state", () => {
     assert.equal(pointerMoves.length, 1);
 });
 
-test("ring center closes at the root and goes back inside submenus", () => {
-    assert.match(hud, /if \(back\) back\.click\(\);\s*else send\("close_map_context_menu"\);/);
+test("ring center recenters on the entity's home and closes at the root, goes back inside submenus", () => {
+    assert.match(hud, /if \(back\) back\.click\(\);\s*else \{\s*send\("center_radial_home"\);\s*send\("close_map_context_menu"\);\s*\}/);
 });
 
 test("a press that only closes the radial is consumed on press and on release", () => {
@@ -482,6 +482,34 @@ test("campaign players use the active leader name in both map and leaderboard", 
     );
     assert.match(leaderboard, /const displayName = player\.name \|\| SOW_t\("hud\.player_name"\)/);
     assert.doesNotMatch(leaderboard, /campaignActive|leaderById/);
+});
+
+test("leaderboard rows feature character avatars as nameplates and equal-sized icon action buttons", () => {
+    const leaderboard = hud.slice(
+        hud.indexOf("function updateLeaderboard"),
+        hud.indexOf("function createNotificationCard"),
+    );
+    assert.match(leaderboard, /sow-hud__player-avatar-wrap/);
+    assert.match(leaderboard, /sow-hud__player-avatar/);
+    assert.match(leaderboard, /sow-hud__row-action--gps/);
+    assert.match(leaderboard, /sow-hud__row-action--trade/);
+    assert.match(leaderboard, /leaderboardGpsIcon\(\)/);
+    assert.match(leaderboard, /leaderboardTradeIcon\(\)/);
+    assert.doesNotMatch(leaderboard, /textContent = SOW_t\("hud\.gift"\)/);
+});
+
+test("team territory summaries render before the individual leaderboard rows", () => {
+    const leaderboard = hud.slice(
+        hud.indexOf("function updateLeaderboard"),
+        hud.indexOf("function createNotificationCard"),
+    );
+    const teamRows = leaderboard.indexOf("teams.forEach(function (team, idx)");
+    const playerRows = leaderboard.indexOf("(players || []).forEach(function (player, idx)");
+
+    assert.ok(teamRows >= 0 && playerRows > teamRows);
+    assert.match(leaderboard, /lobbies\.red_team/);
+    assert.match(leaderboard, /lobbies\.blue_team/);
+    assert.match(leaderboard, /team\.territory_pct/);
 });
 
 test("terms dialog smoothly focuses the requesting entity without changing zoom", () => {

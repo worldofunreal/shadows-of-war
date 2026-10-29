@@ -1143,6 +1143,9 @@ test("Boudica spoken cards and contact responses require named existing portrait
             (issue) => issue.step === definition.entry && issue.field === "portrait_expression",
         ),
     );
+    const badMood = structuredClone(definition);
+    badMood.speakers.boudica.base_expression.until.target = "missing_tribe";
+    assert.ok(report(badMood).errors.some((issue) => issue.field === "speakers.boudica.base_expression"));
     const titleWithoutKey = structuredClone(definition);
     const titleStep = titleWithoutKey.steps.find((step) => step.id === definition.entry);
     titleStep.show_title = true;

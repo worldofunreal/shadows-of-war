@@ -2827,6 +2827,7 @@
       const isFirstContact = reaction.when.type === "first_contact";
       const isPreDefeat = reaction.when.type === "pre_defeat";
       const isSupport = reaction.when.type === "support";
+      const isAlliance = reaction.when.type === "alliance";
       card.appendChild(
         el(
           "strong",
@@ -2837,7 +2838,9 @@
               ? "First Iceni contact · "
               : isContact
                 ? "Contact · "
-                : "First support · ") + reaction.id,
+                : isAlliance
+                  ? "Alliance confirmed · "
+                  : "First support · ") + reaction.id,
         ),
       );
       if (isContact) {
@@ -2923,6 +2926,13 @@
               markDirty();
             },
           ),
+        );
+      } else if (isAlliance) {
+        card.appendChild(
+          selectField("Alliance confirmed with", reaction.when.target, factionOptions(), function (value) {
+            reaction.when.target = value;
+            markDirty();
+          }),
         );
       } else if (isSupport) {
         card.appendChild(
@@ -3316,6 +3326,15 @@
     addFirstContact.addEventListener("click", function () {
       addReaction("first_contact");
     });
+    const addAllianceReaction = el("button", { type: "button" }, "Add alliance response");
+    addAllianceReaction.disabled = !state.roster.factions.some(function (faction) {
+      return !(state.definition.reactions || []).some(function (reaction) {
+        return reaction.when.type === "alliance" && reaction.when.target === faction.id;
+      });
+    });
+    addAllianceReaction.addEventListener("click", function () {
+      addReaction("alliance");
+    });
     const addSupportReaction = el("button", { type: "button" }, "Add support response");
     addSupportReaction.disabled =
       !state.definition.steps.some(function (step) {
@@ -3434,6 +3453,7 @@
       addContactReaction,
       addNeutralNegotiation,
       addFirstContact,
+      addAllianceReaction,
       addSupportReaction,
       addCampaignProvocation,
       addPreDefeatExchange,
@@ -3499,6 +3519,44 @@
           renderSettings();
         }),
       );
+      if (state.roster.factions.length) {
+        card.appendChild(
+          selectField(
+            "Background expression",
+            speaker.base_expression?.expression || "",
+            [{ value: "", label: "Automatic" }].concat(
+              ["happy", "calm", "fear", "angry"].map(function (value) {
+                return { value, label: value };
+              }),
+            ),
+            function (value) {
+              if (!value) delete speaker.base_expression;
+              else
+                speaker.base_expression = {
+                  expression: value,
+                  until: speaker.base_expression?.until || {
+                    type: "alliance",
+                    target: state.roster.factions[0].id,
+                  },
+                };
+              markDirty();
+              renderSettings();
+            },
+          ),
+        );
+        if (speaker.base_expression)
+          card.appendChild(
+            selectField(
+              "Return to automatic after alliance with",
+              speaker.base_expression.until.target,
+              factionOptions(),
+              function (value) {
+                speaker.base_expression.until.target = value;
+                markDirty();
+              },
+            ),
+          );
+      }
       if (speaker.faction) {
         const boundFaction =
           speaker.faction &&
@@ -4517,6 +4575,7 @@
     try {
       state.renderer.render(model.waiting ? null : model, {
         hideObjective: state.isMenuGuides,
+        facts: state.facts,
         anchor: anchor,
         reducedMotion: $("#reducedMotion").checked,
         direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr",
@@ -5370,13 +5429,17 @@
           ? "Simulate final capture before defeat"
           : isContact
             ? "Simulate first contact"
-            : "Simulate first support";
+            : type === "alliance"
+              ? "Simulate confirmed alliance"
+              : "Simulate first support";
       const button = el("button", { type: "button" }, buttonLabel + " · " + factionName(target));
       button.disabled = isContact
         ? !target || (state.facts.contact_faction_ids || []).includes(target)
         : type === "pre_defeat"
           ? (state.facts.pre_defeat_faction_ids || []).includes(reaction.when.target)
-          : Boolean((state.facts.support_deliveries_by_faction_id || {})[reaction.when.target]);
+          : type === "alliance"
+            ? (state.facts.alliance_faction_ids || []).includes(target)
+            : Boolean((state.facts.support_deliveries_by_faction_id || {})[reaction.when.target]);
       button.addEventListener("click", function () {
         if (reaction.during && state.machine) state.machine.jump(reaction.during, state.facts, state.ui);
         if (isContact)
@@ -5386,6 +5449,10 @@
         else if (type === "pre_defeat")
           state.facts.pre_defeat_faction_ids = Array.from(
             new Set((state.facts.pre_defeat_faction_ids || []).concat(reaction.when.target)),
+          );
+        else if (type === "alliance")
+          state.facts.alliance_faction_ids = Array.from(
+            new Set((state.facts.alliance_faction_ids || []).concat(target)),
           );
         else {
           state.facts.support_deliveries_by_faction_id = state.facts.support_deliveries_by_faction_id || {};

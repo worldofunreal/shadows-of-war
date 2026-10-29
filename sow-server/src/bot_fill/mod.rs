@@ -38,9 +38,10 @@
 //!     REGRESSION.
 //!
 //! Identities come exclusively from the persistent bot-account pool seeded
-//! at boot (`BotPool`) — real `database_account_id`s, stats accumulation,
-//! display names reused from `names::BOT_NAMES`. If the pool is
-//! unavailable, nothing is injected (no anonymous fallback names).
+//! at boot (`BotPool`) — real `database_account_id`s and stats accumulation.
+//! A random share may use lobby-only `Anon####` display names; the pool's
+//! stored names and accounts are never changed. If the pool is unavailable,
+//! nothing is injected.
 //! ══════════════════════════════════════════════════════════════════════
 
 pub mod names;
@@ -75,6 +76,38 @@ pub struct BotPool {
 }
 
 static BOT_POOL: OnceLock<BotPool> = OnceLock::new();
+
+const ANON_NAME_COUNT: usize = 10_000;
+
+/// Share of a lobby's ghosts shown as `Anon####`, by the ranked league of the
+/// humans in it. Basic leagues are mostly Anon; higher leagues have almost none.
+/// No rated human (`None`) counts as Bronze.
+fn anon_band(league_score: Option<u16>) -> (f32, f32) {
+    let (tier, _) = sow_data::profile::tier_for_score(league_score.unwrap_or(0));
+    match tier {
+        "Bronze" => (0.50, 0.70),
+        "Silver" => (0.20, 0.35),
+        "Gold" => (0.05, 0.10),
+        _ => (0.0, 0.0),
+    }
+}
+
+fn roll_anon_count(ghost_count: usize, band: (f32, f32), rng: &mut impl Rng) -> usize {
+    ((ghost_count as f32 * rng.gen_range(band.0..=band.1)).round() as usize).min(ANON_NAME_COUNT)
+}
+
+fn assign_anon_names(identities: &mut [BotPoolEntry], count: usize, rng: &mut impl Rng) {
+    let mut used = std::collections::HashSet::with_capacity(count);
+    for identity in identities.iter_mut().take(count) {
+        loop {
+            let name = format!("Anon{:04}", rng.gen_range(0..ANON_NAME_COUNT));
+            if used.insert(name.clone()) {
+                identity.display_name = name;
+                break;
+            }
+        }
+    }
+}
 
 impl BotPool {
     pub fn new(entries: Vec<BotPoolEntry>) -> Self {
@@ -203,6 +236,23 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
                     Vec::new()
                 }
             };
+            let mut identities = identities;
+            let rated: Vec<u32> = g
+                .players
+                .iter()
+                .filter(|p| !p.is_internal_bot)
+                .filter_map(|p| p.league_score.map(u32::from))
+                .collect();
+            let league_score =
+                (!rated.is_empty()).then(|| (rated.iter().sum::<u32>() / rated.len() as u32) as u16);
+            let (league_tier, _) = sow_data::profile::tier_for_score(league_score.unwrap_or(0));
+            let anon_count = roll_anon_count(
+                target.saturating_sub(external_players),
+                anon_band(league_score),
+                &mut rng,
+            )
+            .min(identities.len());
+            assign_anon_names(&mut identities, anon_count, &mut rng);
             // Each ghost picks its own moment, uniform over [0, countdown].
             // Independent draws → clusters and silences emerge naturally; no
             // mean exists for a watcher to tap a tempo to.
@@ -215,11 +265,13 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
                 .collect();
             pending.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal));
             log::info!(
-                "[BOT_FILL] Lobby {}: target {} of {} ({:.0}%), {} ghosts each on their own clock",
+                "[BOT_FILL] Lobby {}: target {} of {} ({:.0}%), league {}, {} Anons, {} ghosts each on their own clock",
                 g.id,
                 target,
                 max,
                 pct * 100.0,
+                league_tier,
+                anon_count,
                 pending.len()
             );
             g.bot_fill_target = Some(target);
@@ -308,6 +360,7 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
                 is_internal_bot: true,
                 ranked_rating: None,
                 ranked_search_started_at: None,
+                league_score: None,
             });
             g.ready_players.insert(player_id);
             log::debug!(
@@ -327,5 +380,67 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
         if pushed {
             crate::lobby::sync_host_lobby_to_members(g);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BotPoolEntry, anon_band, assign_anon_names, roll_anon_count};
+    use rand::{SeedableRng, rngs::StdRng};
+    use std::collections::HashSet;
+
+    #[test]
+    fn anon_share_follows_the_league_band() {
+        let mut rng = StdRng::seed_from_u64(7);
+        for _ in 0..100 {
+            let bronze = roll_anon_count(100, anon_band(None), &mut rng);
+            assert!((50..=70).contains(&bronze));
+            let silver = roll_anon_count(100, anon_band(Some(1300)), &mut rng);
+            assert!((20..=35).contains(&silver));
+            let gold = roll_anon_count(100, anon_band(Some(1700)), &mut rng);
+            assert!((5..=10).contains(&gold));
+            assert_eq!(roll_anon_count(100, anon_band(Some(2000)), &mut rng), 0);
+        }
+        assert_eq!(roll_anon_count(0, anon_band(None), &mut rng), 0);
+    }
+
+    #[test]
+    fn anon_names_are_unique_per_lobby_and_keep_pool_accounts() {
+        let mut rng = StdRng::seed_from_u64(11);
+        let mut identities: Vec<_> = (0..30)
+            .map(|i| BotPoolEntry {
+                account_id: format!("account-{i}"),
+                display_name: format!("PoolName{i}"),
+            })
+            .collect();
+        let account_ids: Vec<_> = identities
+            .iter()
+            .map(|entry| entry.account_id.clone())
+            .collect();
+
+        assign_anon_names(&mut identities, 12, &mut rng);
+
+        let anon_names: Vec<_> = identities
+            .iter()
+            .filter(|entry| entry.display_name.starts_with("Anon"))
+            .map(|entry| entry.display_name.as_str())
+            .collect();
+        assert_eq!(anon_names.len(), 12);
+        assert_eq!(anon_names.iter().collect::<HashSet<_>>().len(), 12);
+        assert!(anon_names.iter().all(|name| {
+            name.len() == 8 && name[4..].bytes().all(|byte| byte.is_ascii_digit())
+        }));
+        assert_eq!(
+            identities
+                .iter()
+                .map(|entry| entry.account_id.clone())
+                .collect::<Vec<_>>(),
+            account_ids
+        );
+        assert!(
+            identities[12..]
+                .iter()
+                .all(|entry| entry.display_name.starts_with("PoolName"))
+        );
     }
 }

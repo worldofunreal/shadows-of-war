@@ -79,7 +79,7 @@ impl SowClient {
         let open_tx_close = std::rc::Rc::clone(&open_tx);
         let onclose_callback = Closure::<dyn FnMut()>::new(move || {
             closed_flag.store(true, Ordering::Release);
-            log::warn!("[DIAG WS CLOSE] WebSocket closed event fired");
+            log::info!("[DIAG WS CLOSE] WebSocket closed event fired");
             wake_event_loop();
             if let Some(tx) = open_tx_close.borrow_mut().take() {
                 let _ = tx.send(Err("WebSocket closed".to_string()));

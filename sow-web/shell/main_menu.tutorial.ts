@@ -1,3 +1,4 @@
+import { campaignBaseExpressions } from "./campaign/rules.ts";
 // Campaign tutorial controller; shared guide calculations live in campaign/tutorial-guides.ts.
 import { createMenuGuide } from "./main_menu.menu-guide.ts";
 import {
@@ -78,6 +79,7 @@ interface TutorialRuntime {
     lastPreDefeatTargets: string | null;
     campaignSessionId: number;
     emoteSerial: number;
+    lastAvatarExpressions?: string;
     markerId: number | null | undefined;
     modalOpen: boolean | undefined;
     cameraReactionTarget: string | null | undefined;
@@ -636,12 +638,12 @@ interface TutorialRuntime {
     function waitingForEmoteGuide(model: CampaignMachineView) {
         return Boolean(
             model &&
-                model.waiting &&
-                model.exchange &&
-                model.exchange.presentation !== "dialogue" &&
-                model.step &&
-                model.step.guide &&
-                !["scene", "choice", "end"].includes(model.step.type),
+            model.waiting &&
+            model.exchange &&
+            model.exchange.presentation !== "dialogue" &&
+            model.step &&
+            model.step.guide &&
+            !["scene", "choice", "end"].includes(model.step.type),
         );
     }
 
@@ -657,6 +659,23 @@ interface TutorialRuntime {
             return;
         if (!root.isConnected) document.body.appendChild(root);
         const tutorial = hud.tutorial;
+        const expressions = campaignBaseExpressions(runtime.definition!, tutorial.facts || {});
+        const currentView = runtime.machine.view();
+        const line = currentView.line || currentView.step;
+        const portraitExpression = line.portrait_expression || currentView.step.portrait_expression;
+        const portraitSpeaker = (runtime.definition!.speakers || {})[
+            line.speaker || currentView.step.speaker
+        ];
+        if (portraitExpression && portraitSpeaker)
+            expressions[portraitSpeaker.faction || "player"] = portraitExpression;
+        const expressionsKey = JSON.stringify([tutorial.campaign_session_id, expressions]);
+        if (runtime.lastAvatarExpressions !== expressionsKey) {
+            runtime.lastAvatarExpressions = expressionsKey;
+            send("set_campaign_avatar_expressions", {
+                expressions,
+                campaign_session_id: Number(tutorial.campaign_session_id),
+            });
+        }
         const currentStep = runtime.machine.view().step;
         const stepChanged = runtime.hoverStepId !== currentStep.id;
         if (stepChanged) {
@@ -928,11 +947,7 @@ interface TutorialRuntime {
             if (runtime.expandFocusStepId !== machineView.step.id) {
                 const visible = tutorial.expand;
                 const target = tutorial.expand_target;
-                if (
-                    visible &&
-                    Number.isFinite(Number(visible.x)) &&
-                    Number.isFinite(Number(visible.y))
-                ) {
+                if (visible && Number.isFinite(Number(visible.x)) && Number.isFinite(Number(visible.y))) {
                     runtime.expandFocusStepId = machineView.step.id;
                 } else if (
                     target &&
@@ -1054,7 +1069,7 @@ interface TutorialRuntime {
         const speaker = runtime.definition && runtime.definition.speakers[line.speaker];
         const faction = (speaker && speaker.faction) || "player";
         const player = hud && campaignPlayer(hud, faction);
-        if (!player || !onMap(player)) return "unavailable";
+        if (!player || !onMap(player) || player.manual_emote_active) return "unavailable";
         const step = runtime.machine && runtime.machine.view().step;
         if (step && step.camera && runtime.cameraShotStepId !== step.id) return false;
         if (tutorial!.facts && tutorial!.facts.machinima_active) return false;

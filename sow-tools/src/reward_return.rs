@@ -1139,15 +1139,47 @@ async fn public_match_detail(http: &reqwest::Client, base: &Url, match_id: u64) 
     .unwrap()
 }
 
-async fn current_ranked_mmr(http: &reqwest::Client, base: &Url, account: &Value) -> f64 {
+fn curl_config_value(value: &str) -> String {
+    format!(
+        "\"{}\"",
+        value
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r")
+    )
+}
+
+async fn current_ranked_mmr(account: &Value) -> f64 {
     let secret = std::env::var("SOW_DB_SECRET").unwrap_or_else(|_| {
         fail("SOW_DB_SECRET is required to read private matchmaking ratings for ranked verification")
     });
-    let rating: Value = http.post(format!(
-        "{}/internal/ranked-rating",
-        base.as_str().trim_end_matches('/')
-    )).bearer_auth(secret).json(&json!({"account_id": account["account_id"]}))
-        .send().await.unwrap().error_for_status().unwrap().json().await.unwrap();
+    let host = std::env::var("SOW_CONTROL_HOST").unwrap_or_else(|_| "ionos".into());
+    let account_id = account["account_id"].as_str().unwrap();
+    let body = serde_json::to_string(&json!({"account_id": account_id})).unwrap();
+    let config = format!(
+        "header = {}\nheader = \"Content-Type: application/json\"\ndata = {}\n",
+        curl_config_value(&format!("Authorization: Bearer {secret}")),
+        curl_config_value(&body),
+    );
+    let output = tokio::task::spawn_blocking(move || {
+        let mut child = Command::new("ssh")
+            .args([
+                "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+                "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3",
+                &host,
+                "curl --silent --show-error --fail --connect-timeout 10 --max-time 15 --config - http://127.0.0.1:25585/internal/ranked-rating",
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(config.as_bytes()).unwrap();
+        child.wait_with_output().unwrap()
+    }).await.unwrap();
+    assert!(output.status.success(), "private ranked MMR query failed over SSH: {}", String::from_utf8_lossy(&output.stderr));
+    let rating: Value = serde_json::from_slice(&output.stdout).unwrap();
     rating["mu"].as_f64().unwrap_or_else(|| fail("private ranked MMR was missing from the internal rating response"))
 }
 
@@ -1202,11 +1234,11 @@ pub(super) async fn verify_ranked(url: &Url, base: &Url, accounts_file: &std::pa
 
     // Audit identities accumulate MMR across runs; pick the closest live pair.
     let (rating0, rating1, rating2, rating3, rating4) = tokio::join!(
-        current_ranked_mmr(&http, base, &audit_accounts[0]),
-        current_ranked_mmr(&http, base, &audit_accounts[1]),
-        current_ranked_mmr(&http, base, &audit_accounts[2]),
-        current_ranked_mmr(&http, base, &audit_accounts[3]),
-        current_ranked_mmr(&http, base, &audit_accounts[4]),
+        current_ranked_mmr(&audit_accounts[0]),
+        current_ranked_mmr(&audit_accounts[1]),
+        current_ranked_mmr(&audit_accounts[2]),
+        current_ranked_mmr(&audit_accounts[3]),
+        current_ranked_mmr(&audit_accounts[4]),
     );
     let ratings = [rating0, rating1, rating2, rating3, rating4];
     let (first_index, second_index) = (0..audit_accounts.len()).flat_map(|first| {
@@ -1283,11 +1315,11 @@ pub(super) async fn verify_ranked(url: &Url, base: &Url, accounts_file: &std::pa
     drop(second_session);
 
     let (bot_rating0, bot_rating1, bot_rating2, bot_rating3, bot_rating4) = tokio::join!(
-        current_ranked_mmr(&http, base, &audit_accounts[0]),
-        current_ranked_mmr(&http, base, &audit_accounts[1]),
-        current_ranked_mmr(&http, base, &audit_accounts[2]),
-        current_ranked_mmr(&http, base, &audit_accounts[3]),
-        current_ranked_mmr(&http, base, &audit_accounts[4]),
+        current_ranked_mmr(&audit_accounts[0]),
+        current_ranked_mmr(&audit_accounts[1]),
+        current_ranked_mmr(&audit_accounts[2]),
+        current_ranked_mmr(&audit_accounts[3]),
+        current_ranked_mmr(&audit_accounts[4]),
     );
     let bot_ratings = [bot_rating0, bot_rating1, bot_rating2, bot_rating3, bot_rating4];
     let bot_index = bot_ratings.iter().enumerate().min_by(|(a, _), (b, _)| bot_ratings[*a].total_cmp(&bot_ratings[*b]))

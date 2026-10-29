@@ -61,15 +61,22 @@ Las escenas son independientes de la hoja y se publican si el archivo existe. Si
 
 Hoy, los íconos, las unidades y los edificios que no tienen arte propio usan una imagen provisional; están marcados en `assets/SOURCES.toml`.
 
-## Tomas del landing (`assets/site/media/`)
+## Arte y tomas del landing (`assets/site/media/`)
 
-Graba en 16:9 y pon el archivo con este nombre, en cualquier formato (mp4, mov, webm o mkv para video; png, jpg o webp para imagen). `./sow p` lo convierte y lo publica.
+Las escenas propias del landing viven aquí; el selector sigue usando los splashes originales de `heroes/`. `./sow l` y `./sow p` convierten y publican estos archivos con el mismo flujo del resto del arte. Los nombres permitidos se registran en `SITE_STILLS` y `SITE_VIDEOS` de `sow-dist`.
 
-| Archivo | Qué grabar |
+| Archivo | Uso |
 |---|---|
-| `hero-loop` | Video de fondo de la portada, de 10 a 15 s: el mapa del mundo a media partida, alejado y sin menús abiertos. Se reproduce sin sonido y en bucle. |
-| `gameplay` | Video de la partida, de 30 a 45 s: arranque, expansión, construcción, una alianza rota y el mapa final. La sección aparece solo cuando existe. |
-| `step-expand`, `step-build`, `step-war` | Imágenes de los tres pasos: territorio creciendo, ciudad, puerto y torre de cerca, y una frontera en guerra. Mientras no estén, se usa arte del juego. |
+| `opening-desktop`, `opening-mobile` | Portada: Boudica y Lady Six Sky, con composiciones separadas para el texto en escritorio y móvil. |
+| `step-expand`, `step-expand-mobile` | Expansión: ejército y estandartes avanzando por el valle. |
+| `step-build`, `step-build-mobile` | Economía: puerto egipcio y barcos de comercio. |
+| `step-war`, `step-war-mobile` | Combate: asalto a una frontera fortificada. |
+| `closing-desktop`, `closing-mobile` | Panorama final y llamada a jugar. |
+| `game-expand`, `game-build`, `game-war` | Capturas reales de partidas junto a las ilustraciones; no son imágenes generadas. |
+| `hero-loop` | Video opcional de portada: bucle de 12 s, sin sonido. Se pausa fuera de pantalla y respeta la preferencia de reducir movimiento. Mientras no exista, se muestra la portada fija correspondiente al dispositivo. |
+| `gameplay` | Video opcional de una partida, de 30 a 45 s. La sección aparece solo cuando existe. |
+
+Los prompts exactos, sus referencias originales en orden y el encargo de animación viven en [el manifiesto de arte del landing](../site/landing-art.json). Los originales de las imágenes son WebP, PNG o JPG; los videos admiten MP4, MOV, WebM o MKV. El publicador produce WebP para las imágenes, WebM y MP4 para los videos.
 
 ## Agregar un héroe jugable
 

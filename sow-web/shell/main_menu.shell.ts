@@ -1,4 +1,13 @@
-import { animateRankResult, rankEmblem, rankName, rankPlacements, rankProgressMarkup, rankTier, rankedPointsBreakdownMarkup, renderRankedDuel } from "./main_menu.ranked.ts";
+import {
+    animateRankResult,
+    rankEmblem,
+    rankName,
+    rankPlacements,
+    rankProgressMarkup,
+    rankTier,
+    rankedPointsBreakdownMarkup,
+    renderRankedDuel,
+} from "./main_menu.ranked.ts";
 import menuFlowApi from "./main_menu.flow.ts";
 import {
     MAIN_NAV_ITEMS,
@@ -132,7 +141,6 @@ let rankedStageCleanup: (() => void) | null = null;
 let rewardPresentationReady = false;
 const menuFlow = menuFlowApi.create();
 window.SOW_menu_flow = menuFlow;
-let lastMenuFlowPhase: string | null = null;
 interface ProgressionValues {
     xp: number;
     level: number;
@@ -1603,7 +1611,6 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
         ids.forEach(function (id) {
             rewardAnimationShown.add(id);
         });
-        console.info("[menu-flow] rewards and levels presented", ids, "cycle", menuUi.state.loader_cycle_id);
         acknowledgeShownReceipts(accountId);
         maybePresentRewards();
     }
@@ -1737,26 +1744,57 @@ function presentRankedResult(result: RankedResult) {
     const card = document.createElement("div");
     const placed = result.placements_complete;
     const first = placed && result.games_played === 5;
-    const changed = result.tier_before !== result.tier_after || result.division_before !== result.division_after;
+    const changed =
+        result.tier_before !== result.tier_after || result.division_before !== result.division_after;
     const league = result.tier_before !== result.tier_after;
     const promoted = placed && changed && result.score_after > result.score_before;
     const title = rankedResultTitle(result);
-    card.className = "sow-menu__ranked-result-card" + ((first || (promoted && league)) ? " is-league-up" : "") +
-        (placed && changed && !promoted && !first ? " is-rank-down" : "") + (!placed ? " is-placement" : "");
+    card.className =
+        "sow-menu__ranked-result-card" +
+        (first || (promoted && league) ? " is-league-up" : "") +
+        (placed && changed && !promoted && !first ? " is-rank-down" : "") +
+        (!placed ? " is-placement" : "");
     card.dataset.tier = rankTier(placed ? result.tier_after : "unranked");
-    card.innerHTML = "<span class='sow-ranked__eyebrow'>" + esc(SOW_t("lobbies.ranked_1v1")) +
-        "</span><h2 id='sow-ranked-result-title'>" + esc(title) + "</h2><div class='sow-ranked__result-seal'>" +
-        "<div class='sow-ranked__old-emblem'>" + rankEmblem(first || !placed ? "unranked" : result.tier_before, first || !placed ? null : result.division_before) +
-        "</div><div data-rank-current-emblem>" + rankEmblem(placed ? result.tier_after : "unranked", placed ? result.division_after : null) +
-        "</div></div>" + (placed ? "<strong class='sow-menu__ranked-result-rank' data-rank-name>" + esc(rankName(result.tier_after, result.division_after)) +
-        "</strong><p class='sow-ranked__previous'>" + esc(SOW_t("lobbies.rank_previous", { score: result.score_before })) +
-        "</p><strong class='sow-ranked__points' data-rank-score>" + esc(SOW_t("lobbies.rank_score", { score: result.score_after })) +
-        "</strong><p class='sow-menu__ranked-result-change' data-direction='" + (result.score_after >= result.score_before ? "up" : "down") + "'>" +
-        esc(SOW_t("ranked.delta", { points: (result.score_after > result.score_before ? "+" : "") + (result.score_after - result.score_before) })) +
-        "</p>" + (result.points_breakdown ? rankedPointsBreakdownMarkup(result.points_breakdown) : "") +
-        rankProgressMarkup(result.score_after, result.ladder || menuUi.rankedLadder) : rankPlacements(result.games_played)) +
-        "<div class='sow-ranked__actions'><button type='button' class='sow-menu__primary' data-ranked-again>" + esc(SOW_t("ranked.play_again")) +
-        "</button><button type='button' class='sow-menu__secondary' data-ranked-continue>" + esc(SOW_t("lobbies.rank_continue")) + "</button></div>";
+    card.innerHTML =
+        "<span class='sow-ranked__eyebrow'>" +
+        esc(SOW_t("lobbies.ranked_1v1")) +
+        "</span><h2 id='sow-ranked-result-title'>" +
+        esc(title) +
+        "</h2><div class='sow-ranked__result-seal'>" +
+        "<div class='sow-ranked__old-emblem'>" +
+        rankEmblem(
+            first || !placed ? "unranked" : result.tier_before,
+            first || !placed ? null : result.division_before,
+        ) +
+        "</div><div data-rank-current-emblem>" +
+        rankEmblem(placed ? result.tier_after : "unranked", placed ? result.division_after : null) +
+        "</div></div>" +
+        (placed
+            ? "<strong class='sow-menu__ranked-result-rank' data-rank-name>" +
+              esc(rankName(result.tier_after, result.division_after)) +
+              "</strong><p class='sow-ranked__previous'>" +
+              esc(SOW_t("lobbies.rank_previous", { score: result.score_before })) +
+              "</p><strong class='sow-ranked__points' data-rank-score>" +
+              esc(SOW_t("lobbies.rank_score", { score: result.score_after })) +
+              "</strong><p class='sow-menu__ranked-result-change' data-direction='" +
+              (result.score_after >= result.score_before ? "up" : "down") +
+              "'>" +
+              esc(
+                  SOW_t("ranked.delta", {
+                      points:
+                          (result.score_after > result.score_before ? "+" : "") +
+                          (result.score_after - result.score_before),
+                  }),
+              ) +
+              "</p>" +
+              (result.points_breakdown ? rankedPointsBreakdownMarkup(result.points_breakdown) : "") +
+              rankProgressMarkup(result.score_after, result.ladder || menuUi.rankedLadder)
+            : rankPlacements(result.games_played)) +
+        "<div class='sow-ranked__actions'><button type='button' class='sow-menu__primary' data-ranked-again>" +
+        esc(SOW_t("ranked.play_again")) +
+        "</button><button type='button' class='sow-menu__secondary' data-ranked-continue>" +
+        esc(SOW_t("lobbies.rank_continue")) +
+        "</button></div>";
     const again = card.querySelector<HTMLButtonElement>("[data-ranked-again]")!;
     const close = card.querySelector<HTMLButtonElement>("[data-ranked-continue]")!;
     let dismissed = false;
@@ -1776,9 +1814,9 @@ function presentRankedResult(result: RankedResult) {
             send("quick_match");
         }
     };
-    again.addEventListener("click", event => dismiss(event, true));
-    close.addEventListener("click", event => dismiss(event));
-    layer.addEventListener("keydown", event => {
+    again.addEventListener("click", (event) => dismiss(event, true));
+    close.addEventListener("click", (event) => dismiss(event));
+    layer.addEventListener("keydown", (event) => {
         if (event.key === "Escape") dismiss(event);
         if (event.key === "Tab") {
             event.preventDefault();
@@ -1800,7 +1838,11 @@ function presentRankedResult(result: RankedResult) {
 
 function maybePresentRewards() {
     if (!menuUi.state) return;
-    if (rankedStageKey && (menuUi.state.phase !== "MainMenu" || rankedStageKey !== rankedResultKey(menuUi.state))) removeRewardStage();
+    if (
+        rankedStageKey &&
+        (menuUi.state.phase !== "MainMenu" || rankedStageKey !== rankedResultKey(menuUi.state))
+    )
+        removeRewardStage();
     const pending = pendingRewardReceipts().filter(function (receipt) {
         return !rewardAnimationShown.has(receipt.id);
     });
@@ -1811,17 +1853,6 @@ function maybePresentRewards() {
         receipts: pending,
         screen: currentScreen(),
     });
-    if (lastMenuFlowPhase !== menuFlow.phase()) {
-        lastMenuFlowPhase = menuFlow.phase();
-        console.info(
-            "[menu-flow]",
-            lastMenuFlowPhase,
-            "cycle",
-            menuUi.state.loader_cycle_id,
-            "match",
-            menuUi.state.menu_return && menuUi.state.menu_return.match_id,
-        );
-    }
     const guide = window.SOW_menu_guide;
     if (guide) guide.update(menuUi.state, menuGuideFacts());
     if (menuFlow.canPresent() && !rewardAnimationRunning && pending.length) {
@@ -1911,8 +1942,11 @@ function updateDynamic() {
     if (freeZoomInput && document.activeElement !== freeZoomInput)
         freeZoomInput.checked = Boolean(settings.free_zoom_out);
     const musicValBadge = root.querySelector<HTMLElement>("[data-val-for='music_vol']");
-    if (musicValBadge && musicInput)
-        musicValBadge.textContent = Math.round(Number(musicInput.value) * 100) + "%";
+    if (musicValBadge && musicInput) {
+        const pct = Math.round(Number(musicInput.value) * 100);
+        musicValBadge.textContent = pct + "%";
+        musicInput.style.setProperty("--sow-music-fill", pct + "%");
+    }
     const timer = panel.querySelector<HTMLElement>("[data-live-countdown]");
     const lobby = joinedLobby();
     if (timer && lobby)
@@ -1936,14 +1970,18 @@ function updateDynamic() {
     maybePresentRewards();
 }
 
-document.addEventListener("error", event => {
-    const image = event.target;
-    if (!(image instanceof HTMLImageElement)) return;
-    const emblem = image.closest(".sow-ranked__emblem");
-    if (!emblem) return;
-    image.hidden = true;
-    emblem.classList.add("is-missing");
-}, true);
+document.addEventListener(
+    "error",
+    (event) => {
+        const image = event.target;
+        if (!(image instanceof HTMLImageElement)) return;
+        const emblem = image.closest(".sow-ranked__emblem");
+        if (!emblem) return;
+        image.hidden = true;
+        emblem.classList.add("is-missing");
+    },
+    true,
+);
 
 root.addEventListener("click", function (event) {
     if (menuUi.state && menuUi.state.phase === "MainMenu") syncMenuMusic(menuUi.state, true);
@@ -2107,7 +2145,10 @@ root.addEventListener("click", function (event) {
         openProfile(null);
         return;
     }
-    if (command === "retry_ranked_board") { loadRankedLeaderboard(true); return; }
+    if (command === "retry_ranked_board") {
+        loadRankedLeaderboard(true);
+        return;
+    }
     if (command === "quick_match") {
         target.setAttribute("disabled", "");
         menuUi.profileOpen = menuUi.storeOpen = menuUi.heroesOpen = menuUi.campaignOpen = false;
@@ -2981,8 +3022,10 @@ root.addEventListener("input", function (event) {
         if (valBadge) valBadge.textContent = input.value;
     }
     if (input.dataset.setting === "music_volume") {
+        const pct = Math.round(Number(input.value) * 100);
+        input.style.setProperty("--sow-music-fill", pct + "%");
         const musicValBadge = root.querySelector<HTMLElement>("[data-val-for='music_vol']");
-        if (musicValBadge) musicValBadge.textContent = Math.round(Number(input.value) * 100) + "%";
+        if (musicValBadge) musicValBadge.textContent = pct + "%";
         if (menuUi.state && menuUi.state.phase === "MainMenu")
             syncMenuMusic(menuUi.state, true, Number(input.value));
     }
@@ -3034,11 +3077,14 @@ function normalizeCompletedExitState(nextState: MenuState): MenuState {
 }
 
 function syncWebLoaderForState(nextState: MenuState) {
-    if (typeof window.SOW_syncWebLoader === "function") window.SOW_syncWebLoader(
-        nextState.loader_job === "EnterGame" && nextState.ranked_matchup
-            ? Object.assign({}, nextState, { ranked_matchup_html: renderRankedDuel(nextState.ranked_matchup, true) })
-            : nextState,
-    );
+    if (typeof window.SOW_syncWebLoader === "function")
+        window.SOW_syncWebLoader(
+            nextState.loader_job === "EnterGame" && nextState.ranked_matchup
+                ? Object.assign({}, nextState, {
+                      ranked_matchup_html: renderRankedDuel(nextState.ranked_matchup, true),
+                  })
+                : nextState,
+        );
 }
 
 function scheduleRewardPresentation(delay: number) {

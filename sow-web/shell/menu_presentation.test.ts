@@ -1625,6 +1625,29 @@ test("rank result animates real points once and can finish immediately or cancel
     api.animateRankResult(card, { ...result, games_played: 1, placements_complete: false }, () => false).finish();
     assert.equal(fields.get("[data-rank-current-emblem]").innerHTML, "unranked", "placement progress cannot reveal an assigned league");
     assert.equal(frames.size, 0);
+    for (const played of [2, 3, 4]) {
+        api.animateRankResult(card, { ...result, games_played: played, placements_complete: false }, () => false).finish();
+        assert.equal(fields.get("[data-rank-current-emblem]").innerHTML, "unranked");
+    }
+    const cases = [
+        { ...result, games_played: 5 },
+        { ...result, score_before: 1230, score_after: 1180, tier_before: "Silver", division_before: "IV", tier_after: "Bronze", division_after: "I" },
+        { ...result, score_before: 1230, score_after: 1230, tier_before: "Silver", division_before: "IV" },
+        { ...result, score_before: 800, score_after: 1500, division_before: "IV", division_after: "I",
+            ladder: { steps: [
+                { score: 800, tier: "Bronze", division: "IV" }, { score: 900, tier: "Bronze", division: "III" },
+                { score: 1200, tier: "Silver", division: "IV" }, { score: 1300, tier: "Silver", division: "III" },
+                { score: 1400, tier: "Silver", division: "II" }, { score: 1500, tier: "Silver", division: "I" },
+            ], max_score: 1600 } },
+    ];
+    for (const scenario of cases) {
+        api.animateRankResult(card, scenario, () => false);
+        tick(0); tick(760); tick(1160);
+        assert.match(fields.get("[data-rank-score]").textContent, new RegExp(String(scenario.score_after)));
+        assert.equal(card.dataset.tier, scenario.tier_after.toLowerCase());
+        assert.match(fields.get("[data-rank-name]").textContent, new RegExp(scenario.division_after));
+        assert.equal(frames.size, 0);
+    }
 });
 
 test("ranked result acknowledges before replay, ignores duplicate presses, and traps keyboard focus", () => {

@@ -101,7 +101,7 @@ notes = "Written only by sow-tools: buildings-atlas, badges-atlas and units-atla
 [site_media]
 path = "assets/site/media/"
 source = "original_and_ai_generated"
-notes = "Landing shots with fixed names (hero-loop and gameplay videos; step-expand, step-build and step-war images) plus the store badges. ./sow p converts captures and uses current game art for empty image slots. Not loaded by the game."
+notes = "Landing artwork in desktop/mobile pairs, original gameplay captures and optional hero-loop/gameplay videos, plus store badges. Exact generation prompts and references live in assets/site/landing-art.json. sow-dist publishes the registered media; these files are not loaded by the game."
 
 [site_icons]
 path = "assets/site/icons/"
