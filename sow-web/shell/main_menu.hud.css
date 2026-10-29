@@ -14,6 +14,7 @@
   --sow-gold-bright: var(--sow-accent-bright);
   --sow-coin: #f5d898;
   --sow-panel: linear-gradient(145deg, rgb(25 37 44 / 96%), rgb(10 16 21 / 97%) 72%);
+  --sow-panel-wash: linear-gradient(180deg, rgb(240 169 43 / 8%) 0%, rgb(15 21 25 / 0%) 46%);
   --sow-line: rgb(211 223 219 / 14%);
   --sow-muted: #9da9ad;
   --sow-surface-shadow: 0 14px 36px rgb(0 0 0 / 38%), inset 0 1px rgb(255 255 255 / 5%);
@@ -474,7 +475,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
   top: max(12px, var(--sow-sat));
   left: 50%;
   transform: translateX(-50%);
-  background: var(--sow-panel);
+  background: var(--sow-panel-wash), var(--sow-panel);
   border: 1px solid var(--sow-line);
   border-top-color: color-mix(in srgb, var(--sow-gold) 60%, transparent);
   border-radius: 6px 6px 14px 4px;
@@ -2353,7 +2354,7 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   border: 1px solid var(--sow-line);
   border-top-color: color-mix(in srgb, var(--sow-gold) 55%, transparent);
   border-radius: 6px;
-  background: var(--sow-panel);
+  background: var(--sow-panel-wash), var(--sow-panel);
   box-shadow: var(--sow-surface-shadow);
   text-align: center;
   pointer-events: none;
@@ -2489,7 +2490,7 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-top-color: color-mix(in srgb, var(--sow-gold) 68%, transparent);
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(240, 169, 43, 0.08) 0%, rgba(15, 21, 25, 0) 46%), var(--sow-panel);
+  background: var(--sow-panel-wash), var(--sow-panel);
   box-shadow:
     0 14px 30px rgba(0, 0, 0, 0.62),
     0 0 0 1px rgba(0, 0, 0, 0.55),
@@ -2578,7 +2579,6 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   font-weight: 800;
   letter-spacing: 0.01em;
   line-height: 1.15;
-  text-shadow: var(--sow-title-shadow);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2665,7 +2665,6 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 .sow-hud__building-stat-value {
   font-weight: 800;
   letter-spacing: 0.01em;
-  text-shadow: var(--sow-number-outline);
 }
 
 .sow-hud__building-upgrade-btn {
@@ -2676,13 +2675,11 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   width: 100%;
   min-height: 40px;
   padding: 5px 7px 5px 10px;
-  border: 1px solid rgba(255, 214, 122, 0.68);
-  border-radius: 9px;
-  background: linear-gradient(180deg, #ffcb57 0%, #e59618 100%);
-  box-shadow:
-    0 4px 12px rgba(0, 0, 0, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
-  color: #1c1204;
+  border: 1px solid var(--sow-button-primary-border);
+  border-radius: var(--sow-button-radius);
+  background: var(--sow-button-primary-bg);
+  box-shadow: var(--sow-button-primary-shadow);
+  color: var(--sow-button-primary-text);
   cursor: pointer;
   transition:
     transform 120ms ease,
@@ -2801,7 +2798,7 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-top-color: color-mix(in srgb, var(--sow-gold) 68%, transparent);
   border-radius: 5px 5px 11px 4px;
-  background: linear-gradient(180deg, rgba(240, 169, 43, 0.08) 0%, rgba(15, 21, 25, 0) 46%), var(--sow-panel);
+  background: var(--sow-panel-wash), var(--sow-panel);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
@@ -2936,6 +2933,248 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 
   .sow-hud__building-progress-time {
     font-size: 12px;
+  }
+}
+
+/* ==========================================================================
+   Building Placement Panel
+   ========================================================================== */
+
+.sow-hud__placement-panel {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 250px;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: color-mix(in srgb, var(--sow-gold) 68%, transparent);
+  border-radius: 12px;
+  background: var(--sow-panel-wash), var(--sow-panel);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.62),
+    0 0 0 1px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(10px);
+  color: #f8f3e8;
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 55;
+  animation: sow-building-card-in 160ms cubic-bezier(0.2, 1.15, 0.35, 1) both;
+}
+
+.sow-hud__placement-panel.hidden {
+  display: none !important;
+}
+
+.sow-hud__placement-panel-caret {
+  position: absolute;
+  left: calc(50% + var(--caret-offset-x, 0px));
+  width: 10px;
+  height: 10px;
+  background: rgb(18, 25, 30);
+  pointer-events: none;
+}
+
+.sow-hud__placement-panel[data-placement="below"] .sow-hud__placement-panel-caret {
+  top: -6px;
+  border-top: 1px solid color-mix(in srgb, var(--sow-gold) 68%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--sow-gold) 68%, transparent);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.sow-hud__placement-panel[data-placement="above"] .sow-hud__placement-panel-caret {
+  bottom: -6px;
+  border-right: 1px solid rgba(255, 255, 255, 0.16);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.sow-hud__placement-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+}
+
+.sow-hud__placement-panel-thumb {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sow-hud__placement-panel-art {
+  width: 34px;
+  height: 34px;
+  image-rendering: pixelated;
+}
+
+.sow-hud__placement-panel-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sow-hud__placement-panel-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.02em;
+}
+
+.sow-hud__placement-panel-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sow-gold);
+}
+
+.sow-hud__placement-panel-reason {
+  font-size: 11px;
+  font-weight: 600;
+  color: #f87171;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sow-hud__placement-panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.sow-hud__placement-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 12px;
+  height: 34px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
+  user-select: none;
+}
+
+.sow-hud__placement-action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.sow-hud__placement-action-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.sow-hud__placement-action-btn.is-cancel {
+  background: rgba(220, 38, 38, 0.18);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  flex: 0 0 auto;
+}
+
+.sow-hud__placement-action-btn.is-cancel:hover {
+  background: rgba(220, 38, 38, 0.32);
+  border-color: rgba(239, 68, 68, 0.65);
+  color: #fff;
+}
+
+.sow-hud__placement-action-btn.is-confirm {
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.35) 0%, rgba(21, 128, 61, 0.45) 100%);
+  border-color: rgba(74, 222, 128, 0.55);
+  color: #86efac;
+  flex: 1 1 auto;
+}
+
+.sow-hud__placement-action-btn.is-confirm:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.5) 0%, rgba(21, 128, 61, 0.6) 100%);
+  border-color: rgba(74, 222, 128, 0.85);
+  color: #fff;
+}
+
+.sow-hud__placement-action-btn.is-confirm:disabled,
+.sow-hud__placement-action-btn.is-confirm.is-disabled {
+  background: rgba(100, 116, 139, 0.15);
+  border-color: rgba(148, 163, 184, 0.2);
+  color: rgba(255, 255, 255, 0.35);
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.sow-hud__placement-btn-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.sow-hud__placement-nudge-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px;
+  background: rgba(0, 0, 0, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.sow-hud__placement-nudge-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #cbd5e1;
+  font-size: 10px;
+  cursor: pointer;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+  user-select: none;
+}
+
+.sow-hud__placement-nudge-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.sow-hud__placement-nudge-btn:active {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+
+@media (max-width: 720px) {
+  .sow-hud__placement-panel {
+    min-width: 236px;
+    padding: 8px 10px;
+    gap: 6px;
   }
 }
 

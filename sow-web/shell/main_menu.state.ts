@@ -358,6 +358,17 @@ export interface HudMapMenuBuilding {
     upgrade?: HudBuildingUpgradeOffer | null;
 }
 
+export interface HudBuildingPlacement {
+    pending: boolean;
+    can_confirm: boolean;
+    kind?: string;
+    tile_idx?: number;
+    anchor_x?: number;
+    anchor_y?: number;
+    cost?: number;
+    reason?: string | null;
+}
+
 export interface HudBuildingInProgress {
     kind: string;
     level: number;
@@ -479,7 +490,7 @@ export interface MenuHudPayload {
     operations: HudCombatOperation[];
     spawn_timer_secs: number | null;
     selected_building: string | null;
-    building_placement: { pending: boolean; can_confirm: boolean } | null;
+    building_placement: HudBuildingPlacement | null;
     building_in_progress?: HudBuildingInProgress | null;
     selected_warship_build: boolean;
     selected_nuke: string | null;

@@ -194,6 +194,11 @@ enum WebMenuCommand {
     SelectBuilding {
         kind: sow_core::game::BuildingKind,
     },
+    ConfirmBuildingPlacement,
+    ClearPlacement,
+    NudgePlacement {
+        direction: String,
+    },
     SelectWarship,
     SelectNuke,
     ToggleInbox,
@@ -1136,6 +1141,28 @@ impl SowApp {
                 WebMenuCommand::SelectBuilding { kind } => {
                     if !self.ui.tutorial_camera_only {
                         self.select_building_kind(kind);
+                    }
+                }
+                WebMenuCommand::ConfirmBuildingPlacement => {
+                    if !self.ui.tutorial_camera_only {
+                        self.confirm_building_placement();
+                    }
+                }
+                WebMenuCommand::ClearPlacement => {
+                    if !self.ui.tutorial_camera_only {
+                        self.clear_placement();
+                    }
+                }
+                WebMenuCommand::NudgePlacement { direction } => {
+                    if !self.ui.tutorial_camera_only {
+                        let dir = match direction.as_str() {
+                            "up" => crate::input::placement::PlacementDirection::Up,
+                            "right" => crate::input::placement::PlacementDirection::Right,
+                            "down" => crate::input::placement::PlacementDirection::Down,
+                            "left" => crate::input::placement::PlacementDirection::Left,
+                            _ => return,
+                        };
+                        self.nudge_building_placement(dir);
                     }
                 }
                 WebMenuCommand::SelectWarship => {
@@ -3598,11 +3625,32 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         return serde_json::Value::Null;
     }
 
+    let screen_scale = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
     let placement_can_confirm = app.building_placement_can_confirm();
+    let placement_reason = if !placement_can_confirm {
+        app.building_placement_reason().map(|r| r.key)
+    } else {
+        None
+    };
     let placement_payload = app.ui.app.hud_state.building_placement.map(|placement| {
+        let controls = crate::input::placement::placement_controls(
+            placement.kind,
+            placement.tile_idx,
+            app.sim.map_w,
+            [app.input.camera_x, app.input.camera_y],
+            app.input.camera_zoom,
+            screen_scale,
+        );
+        let cost = app.ui.app.hud_state.building_costs[placement.kind as usize];
         serde_json::json!({
             "pending": placement.pending,
             "can_confirm": placement_can_confirm,
+            "kind": placement.kind.as_str(),
+            "tile_idx": placement.tile_idx,
+            "anchor_x": controls.center[0] / screen_scale,
+            "anchor_y": controls.center[1] / screen_scale,
+            "cost": cost,
+            "reason": placement_reason,
         })
     });
     let tutorial_pid = app
@@ -3617,7 +3665,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     let tutorial_players = tutorial_state
         .as_object_mut()
         .and_then(|tutorial| tutorial.remove("players"));
-    let screen_scale = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
     let map_menu =
         app.input
             .map_context_menu

@@ -1,5 +1,6 @@
 import type {
     HudAvatarIdentity,
+    HudBuildingPlacement,
     HudCombatOperation,
     HudDevTools,
     HudInboxRequest,
@@ -191,6 +192,7 @@ type HudRefs = {
     endgameStoreAction: HTMLElement;
     endgameObserve: HTMLButtonElement;
     mapMenu: HTMLElement;
+    placementPanel: HTMLElement;
     operations: HTMLElement;
     operationRows: HTMLElement;
     combatOperationRows: Record<string, CombatOperationRow>;
@@ -993,6 +995,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             endgameStoreAction: requiredHudElement("sow-hud-endgame-store-action"),
             endgameObserve: requiredHudButton("sow-hud-endgame-observe"),
             mapMenu: requiredHudElement("sow-hud-map-menu"),
+            placementPanel: requiredHudElement("sow-hud-placement-panel"),
             operations: requiredHudElement("sow-hud-operations"),
             operationRows: requiredHudElement("sow-hud-operations-list"),
             combatOperationRows: Object.create(null),
@@ -1450,6 +1453,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "</div>" +
             '<div class="sow-hud__map-menu hidden" id="sow-hud-map-menu" role="menu" aria-label="' +
             SOW_t("hud.map_actions") +
+            '"></div>' +
+            '<div class="sow-hud__placement-panel hidden" id="sow-hud-placement-panel" role="region" aria-label="' +
+            SOW_t("hud.build") +
             '"></div>';
 
         if (hudDevLayer) {
@@ -2037,6 +2043,132 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
         patchBuildingDetailsCard(menu, building, hud.gold);
         positionBuildingDetailsCard(menu, mapMenu);
+        return true;
+    }
+
+    function positionPlacementPanel(panel: HTMLElement, placement: HudBuildingPlacement): void {
+        const anchorX = Number.isFinite(Number(placement.anchor_x))
+            ? Number(placement.anchor_x)
+            : (window.innerWidth || 800) * 0.5;
+        const anchorY = Number.isFinite(Number(placement.anchor_y))
+            ? Number(placement.anchor_y)
+            : (window.innerHeight || 600) * 0.5;
+        const anchorRadius = 32;
+        const width = panel.offsetWidth || 260;
+        const height = panel.offsetHeight || 104;
+        const halfW = width * 0.5;
+        const halfH = height * 0.5;
+        const vw = window.innerWidth || 800;
+        const vh = window.innerHeight || 600;
+        let bottomLimit = vh - 96;
+        if (
+            hudRefs &&
+            hudRefs.dock &&
+            !hudRefs.dock.hidden &&
+            typeof hudRefs.dock.getBoundingClientRect === "function"
+        ) {
+            const dockRect = hudRefs.dock.getBoundingClientRect();
+            if (dockRect && dockRect.height > 0 && dockRect.top > 0) {
+                bottomLimit = Math.min(bottomLimit, dockRect.top - 10);
+            }
+        }
+        const gap = 12;
+        const belowCenterY = anchorY + anchorRadius + gap + halfH;
+        const aboveCenterY = anchorY - anchorRadius - gap - halfH;
+        const placeBelow = belowCenterY + halfH <= bottomLimit || aboveCenterY - halfH < 64;
+        const rawCenterY = placeBelow ? belowCenterY : aboveCenterY;
+        const minX = halfW + 10;
+        const maxX = Math.max(minX, vw - halfW - 10);
+        const minY = halfH + 10;
+        const maxY = Math.max(minY, Math.min(vh - halfH - 10, bottomLimit - halfH));
+        const left = Math.min(Math.max(anchorX, minX), maxX);
+        const top = Math.min(Math.max(rawCenterY, minY), maxY);
+        panel.style.left = left.toFixed(1) + "px";
+        panel.style.top = top.toFixed(1) + "px";
+        panel.dataset.placement = placeBelow ? "below" : "above";
+        const caretLimit = Math.max(0, halfW - 18);
+        const caretOffsetX = Math.max(-caretLimit, Math.min(caretLimit, anchorX - left));
+        panel.style.setProperty("--caret-offset-x", caretOffsetX.toFixed(1) + "px");
+    }
+
+    function renderPlacementPanel(placement: HudBuildingPlacement | null | undefined): boolean {
+        const panel = hudRefs && hudRefs.placementPanel;
+        if (!panel) return false;
+        if (!placement || placement.pending) {
+            panel.classList.add("hidden");
+            if (panel.dataset.renderKey) panel.replaceChildren();
+            panel.dataset.renderKey = "";
+            delete panel.dataset.placement;
+            return false;
+        }
+
+        const kind = String(placement.kind || "City");
+        const tileIdx = placement.tile_idx != null ? String(placement.tile_idx) : "0";
+        const canConfirm = Boolean(placement.can_confirm);
+        const cost = Number(placement.cost || 0);
+        const reasonKey = placement.reason || "";
+        const locale = window.SOW_LOCALE || "en";
+        const renderKey = [locale, kind, tileIdx, canConfirm ? "1" : "0", String(cost), reasonKey].join(":");
+
+        panel.classList.remove("hidden");
+
+        if (panel.dataset.renderKey !== renderKey) {
+            const buildingTitle = SOW_t("hud.map_action_" + kind.toLowerCase());
+            const reason = reasonKey ? SOW_t(reasonKey) : null;
+            const cancelLabel = SOW_t("common.cancel");
+            const buildLabel = SOW_t("hud.build");
+
+            panel.innerHTML =
+                '<span class="sow-hud__placement-panel-caret" aria-hidden="true"></span>' +
+                '<div class="sow-hud__placement-panel-head">' +
+                '<span class="sow-hud__placement-panel-thumb" aria-hidden="true">' +
+                buildingIcon(kind, 1, "sow-hud__placement-panel-art") +
+                "</span>" +
+                '<div class="sow-hud__placement-panel-identity">' +
+                '<strong class="sow-hud__placement-panel-title">' +
+                escapeHudText(buildingTitle) +
+                "</strong>" +
+                (reason
+                    ? '<span class="sow-hud__placement-panel-reason">' + escapeHudText(reason) + "</span>"
+                    : '<span class="sow-hud__placement-panel-cost">' +
+                      hudIcon("gold", "sow-hud__inline-icon") +
+                      " <b>" +
+                      formatEndgameExact(cost) +
+                      "</b></span>") +
+                "</div>" +
+                "</div>" +
+                '<div class="sow-hud__placement-panel-controls">' +
+                '<button type="button" class="sow-hud__placement-action-btn is-cancel" data-placement-action="cancel" aria-label="' +
+                escapeHudText(cancelLabel) +
+                '">' +
+                '<span class="sow-hud__placement-btn-icon" aria-hidden="true">✕</span>' +
+                "<span>" +
+                escapeHudText(cancelLabel) +
+                "</span>" +
+                "</button>" +
+                '<div class="sow-hud__placement-nudge-cluster" role="group" aria-label="Nudge building">' +
+                '<button type="button" class="sow-hud__placement-nudge-btn" data-placement-nudge="left" aria-label="Nudge left">◀</button>' +
+                '<button type="button" class="sow-hud__placement-nudge-btn" data-placement-nudge="up" aria-label="Nudge up">▲</button>' +
+                '<button type="button" class="sow-hud__placement-nudge-btn" data-placement-nudge="down" aria-label="Nudge down">▼</button>' +
+                '<button type="button" class="sow-hud__placement-nudge-btn" data-placement-nudge="right" aria-label="Nudge right">▶</button>' +
+                "</div>" +
+                '<button type="button" class="sow-hud__placement-action-btn is-confirm' +
+                (canConfirm ? "" : " is-disabled") +
+                '" data-placement-action="confirm"' +
+                (canConfirm ? "" : " disabled") +
+                ' aria-label="' +
+                escapeHudText(buildLabel) +
+                '">' +
+                '<span class="sow-hud__placement-btn-icon" aria-hidden="true">✓</span>' +
+                "<span>" +
+                escapeHudText(buildLabel) +
+                "</span>" +
+                "</button>" +
+                "</div>";
+            panel.dataset.renderKey = renderKey;
+        }
+
+        positionPlacementPanel(panel, placement);
         return true;
     }
 
@@ -3556,7 +3688,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
         const slug =
             presentation.kind === "portrait" && /^[a-z][a-z0-9_]*$/.test(presentation.slug || "")
-                ? presentation.slug
+                ? presentation.slug || "null"
                 : "null";
         const src = asset(avatarPortraitPath(slug, presentation.expression));
         image.hidden = false;
@@ -5082,6 +5214,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             }
         }
         const mapMenuOpen = renderMapMenu(hud.map_menu);
+        renderPlacementPanel(hud.building_placement);
         const panelStates: Record<string, boolean> = {
             toggle_leaderboard: leaderboardOpen,
             toggle_inbox: inboxOpen,
@@ -5180,6 +5313,24 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 event.stopPropagation();
                 // The pressed state comes from the game, so the button always flips what the game shows.
                 send("set_emote_pinned", { pinned: pinButton.getAttribute("aria-pressed") !== "true" });
+                return;
+            }
+            const placementBtn = target.closest<HTMLButtonElement>(
+                "[data-placement-action], [data-placement-nudge]",
+            );
+            if (placementBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (placementBtn.disabled) return;
+                const action = placementBtn.dataset.placementAction;
+                const nudge = placementBtn.dataset.placementNudge;
+                if (action === "confirm") {
+                    send("confirm_building_placement");
+                } else if (action === "cancel") {
+                    send("clear_placement");
+                } else if (nudge) {
+                    send("nudge_placement", { direction: nudge });
+                }
                 return;
             }
             const mapButton = target.closest<HTMLButtonElement>("[data-map-action]");
@@ -5504,6 +5655,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                     }
                     return;
                 }
+            }
+            if (
+                event.key === "Escape" &&
+                hudRefs &&
+                hudRefs.placementPanel &&
+                !hudRefs.placementPanel.classList.contains("hidden")
+            ) {
+                event.preventDefault();
+                event.stopPropagation();
+                send("clear_placement");
+                return;
             }
             if (
                 event.key === "Escape" &&

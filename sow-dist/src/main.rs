@@ -2328,7 +2328,7 @@ fn landing_leader_showcase(english: &serde_json::Value) -> Result<String> {
               <svg class="showcase-loader-ring" viewBox="0 0 120 120" focusable="false"><defs><linearGradient id="showcase-loader-arc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="showcase-loader-head"/><stop offset=".45" class="showcase-loader-body"/><stop offset="1" class="showcase-loader-tail"/></linearGradient></defs><circle class="showcase-loader-orbit" cx="60" cy="60" r="58.5" pathLength="100"/><circle class="showcase-loader-track" cx="60" cy="60" r="54"/><circle class="showcase-loader-arc" cx="60" cy="60" r="54" pathLength="100"/></svg>
               <img class="showcase-portrait" data-detail-portrait src="/assets/gameplay/avatars/{art_slug}.webp" alt="" width="256" height="256">
             </div>
-            <picture><source media="(max-width: 700px)" srcset="/assets/shell/leaders/{art_slug}_mobile.webp" data-detail-image-mobile><img data-detail-image src="/assets/shell/leaders/{art_slug}_desktop.webp" alt="{name}" decoding="async" width="1600" height="900"></picture>
+            <picture><source media="(max-width: 960px)" srcset="/assets/shell/leaders/{art_slug}_mobile.webp" data-detail-image-mobile><img data-detail-image src="/assets/shell/leaders/{art_slug}_desktop.webp" alt="{name}" decoding="async" width="1600" height="900"></picture>
           </div>
           <div class="showcase-copy">
             <div class="showcase-identity"><p class="eyebrow" data-detail-civ data-i18n="heroes.leader_{id}_civilization">{civ}</p>

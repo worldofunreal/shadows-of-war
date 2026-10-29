@@ -200,16 +200,18 @@ html[data-locale-script="cjk"] .sow-control-dropdown__option {
   inset-inline-end: max(1rem, env(safe-area-inset-right));
   bottom: max(1rem, env(safe-area-inset-bottom));
   width: min(32rem, calc(100vw - 2rem));
-  padding: 1.125rem;
-  border: 1px solid var(--sow-button-dark-border);
-  border-top: 2px solid var(--sow-control-accent);
-  border-radius: var(--sow-button-radius);
-  background: var(--sow-control-panel);
+  padding: 1.25rem 1.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(16, 20, 28, 0.94) 0%, rgba(10, 13, 18, 0.98) 100%);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
   box-shadow:
-    0 16px 40px rgb(0 0 0 / 48%),
-    inset 0 1px rgb(255 255 255 / 5%);
+    0 20px 48px rgb(0 0 0 / 64%),
+    inset 0 1px rgb(255 255 255 / 8%);
   color: var(--sow-button-dark-text);
-  font: 400 0.875rem/1.5 var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
+  font: 400 0.875rem/1.55 var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
 }
 
 .sow-analytics-consent:not(.sow-analytics-consent--game) {
@@ -220,39 +222,80 @@ html[data-locale-script="cjk"] .sow-control-dropdown__option {
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas: "title actions" "copy actions" "policy actions";
   align-items: center;
-  gap: 0.25rem 2rem;
-  padding: 1rem;
-  padding-left: max(1.25rem, env(safe-area-inset-left), calc((100vw - 70rem) / 2));
-  padding-right: max(1.25rem, env(safe-area-inset-right), calc((100vw - 70rem) / 2));
+  gap: 0.35rem 2.5rem;
+  padding: 1.125rem 1.25rem;
+  padding-bottom: max(1.125rem, calc(1.125rem + env(safe-area-inset-bottom)));
+  padding-left: max(1.5rem, env(safe-area-inset-left), calc((100vw - 72rem) / 2));
+  padding-right: max(1.5rem, env(safe-area-inset-right), calc((100vw - 72rem) / 2));
   border: 0;
-  border-top: 2px solid var(--sow-control-accent);
+  border-top: 1px solid rgba(245, 158, 11, 0.35);
   border-radius: 0;
-  box-shadow: 0 -12px 36px rgb(0 0 0 / 28%);
+  background: linear-gradient(180deg, rgba(14, 18, 26, 0.94) 0%, rgba(9, 12, 17, 0.98) 100%);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow:
+    0 -12px 36px rgb(0 0 0 / 40%),
+    inset 0 1px rgb(255 255 255 / 6%);
 }
 
 .sow-analytics-consent[hidden] {
   display: none;
 }
 .sow-analytics-consent__title {
-  margin: 0 0 0.375rem;
+  margin: 0 0 0.35rem;
   font-size: 1.0625rem;
-  font-weight: 900;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #f8f7f4;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.sow-analytics-consent__title::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sow-accent, #f59e0b);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.7);
+  flex-shrink: 0;
 }
 .sow-analytics-consent__copy {
-  margin: 0 0 0.625rem;
-  color: var(--sow-control-muted);
+  margin: 0 0 0.45rem;
+  max-width: 62ch;
+  color: rgba(235, 231, 220, 0.8);
+  font-size: 0.875rem;
+  line-height: 1.55;
 }
 .sow-analytics-consent__policy {
-  display: inline-block;
-  margin-bottom: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.25rem;
   color: var(--sow-control-accent-bright);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+  opacity: 0.92;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+.sow-analytics-consent__policy::after {
+  content: "→";
+  font-size: 0.9em;
+  transition: transform 0.15s ease;
+}
+.sow-analytics-consent__policy:hover {
+  color: #ffffff;
+  opacity: 1;
+}
+.sow-analytics-consent__policy:hover::after {
+  transform: translateX(3px);
 }
 .sow-analytics-consent__actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.625rem;
+  gap: 0.75rem;
 }
 .sow-analytics-consent:not(.sow-analytics-consent--game) > .sow-analytics-consent__title {
   grid-area: title;
@@ -269,27 +312,54 @@ html[data-locale-script="cjk"] .sow-control-dropdown__option {
 }
 .sow-analytics-consent:not(.sow-analytics-consent--game) > .sow-analytics-consent__actions {
   grid-area: actions;
-  grid-template-columns: repeat(2, minmax(8rem, 1fr));
+  grid-template-columns: repeat(2, minmax(8.5rem, 1fr));
 }
 .sow-analytics-consent__button {
-  min-height: 44px;
-  padding: 0.5625rem 0.75rem;
+  min-height: 42px;
+  padding: 0.625rem 1.125rem;
   border: 1px solid var(--sow-button-dark-border);
-  border-radius: var(--sow-button-radius);
+  border-radius: 8px;
   cursor: pointer;
-  font: 800 0.75rem/1.25 var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
-  letter-spacing: var(--sow-button-tracking);
+  font: 700 0.8125rem/1.25 var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.sow-analytics-consent__button:hover {
+  transform: translateY(-1px);
+}
+.sow-analytics-consent__button:active {
+  transform: translateY(1px);
 }
 .sow-analytics-consent__button--accept {
-  border-color: var(--sow-button-primary-border);
-  background: var(--sow-button-primary-bg);
-  box-shadow: var(--sow-button-primary-shadow);
-  color: var(--sow-button-primary-text);
+  border-color: rgba(255, 218, 128, 0.65);
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  box-shadow:
+    0 2px 10px rgba(245, 158, 11, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  color: #101318;
+}
+.sow-analytics-consent__button--accept:hover {
+  background: linear-gradient(180deg, #fbbf24 0%, #e08307 100%);
+  box-shadow:
+    0 4px 16px rgba(245, 158, 11, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 .sow-analytics-consent__button--reject {
-  background: var(--sow-button-dark-bg);
-  color: var(--sow-button-dark-text);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: rgba(245, 241, 232, 0.9);
+}
+.sow-analytics-consent__button--reject:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .sow-analytics-consent__button:focus-visible,
 .sow-analytics-consent__policy:focus-visible,
@@ -323,14 +393,32 @@ html[dir="rtl"] .sow-analytics-consent--game {
   .sow-analytics-consent:not(.sow-analytics-consent--game) {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "title" "copy" "policy" "actions";
-    gap: 0.375rem;
-    padding: 0.875rem;
-    padding-bottom: calc(0.875rem + env(safe-area-inset-bottom));
+    gap: 0.5rem;
+    padding: 1.125rem 1rem;
+    padding-bottom: max(1.125rem, calc(1.125rem + env(safe-area-inset-bottom)));
     padding-left: max(1rem, env(safe-area-inset-left));
     padding-right: max(1rem, env(safe-area-inset-right));
   }
+  .sow-analytics-consent:not(.sow-analytics-consent--game) .sow-analytics-consent__title {
+    font-size: 1rem;
+    margin-bottom: 0.2rem;
+  }
+  .sow-analytics-consent:not(.sow-analytics-consent--game) .sow-analytics-consent__copy {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    margin-bottom: 0.25rem;
+  }
+  .sow-analytics-consent:not(.sow-analytics-consent--game) .sow-analytics-consent__policy {
+    margin-bottom: 0.625rem;
+  }
   .sow-analytics-consent:not(.sow-analytics-consent--game) > .sow-analytics-consent__actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+  }
+  .sow-analytics-consent__button {
+    min-height: 42px;
+    padding: 0.5625rem 0.75rem;
+    font-size: 0.75rem;
   }
 }
 
