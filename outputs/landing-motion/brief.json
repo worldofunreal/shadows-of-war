@@ -1,0 +1,21 @@
+{
+  "duration_seconds": 12,
+  "fps": 24,
+  "audio": false,
+  "prompt": "Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Create a seamless 12-second silent cinematic loop from the supplied opening still. Use the opening image as both the first-frame and last-frame constraint: the end composition must exactly match the start. Keep Boudica and Lady Six Sky completely recognizable: do not change faces, eyes, anatomy, costumes, heraldry or weapons. 0–2 seconds: establish the original composition with barely perceptible atmospheric movement. 2–8 seconds: a slow camera advance of at most 3 percent; cloth banners sway gently and distant smoke drifts. 8–12 seconds: smoothly return the camera to its initial framing and complete a full periodic wind cycle. Environmental motion must be subtle, cyclic and physically plausible. Keep the protected heading area quiet and clear. No cuts, fast movement, new characters, changing expressions, talking, fighting, flicker, morphing, text, interface or watermark. Deliver 24 fps, no audio, and preserve the input aspect ratio. Produce desktop and mobile as separate shots, never crop one into the other.",
+  "variants": [
+    {
+      "variant": "desktop",
+      "source": "assets/site/media/opening-desktop.webp",
+      "start_frame": "outputs/landing-motion/desktop-start.webp",
+      "end_frame": "outputs/landing-motion/desktop-end.webp"
+    },
+    {
+      "variant": "mobile",
+      "source": "assets/site/media/opening-mobile.webp",
+      "start_frame": "outputs/landing-motion/mobile-start.webp",
+      "end_frame": "outputs/landing-motion/mobile-end.webp"
+    }
+  ],
+  "delivery": "Optional hero-loop video; the landing uses responsive still artwork until a clip is supplied."
+}

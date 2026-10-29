@@ -117,7 +117,7 @@ impl SowEngine {
                 used.insert(character.id.as_str());
                 spawned += 1;
             }
-            log::info!(
+            log::debug!(
                 "spawn_ai: {spawned}/{count} {role:?} bots on '{}'",
                 self.state.config.map_name
             );
@@ -265,7 +265,7 @@ impl SowEngine {
                     player.iq = iq;
                 }
                 self.state.spawn_player(player, sx, sy);
-                log::info!("spawn_human: scripted at ({},{})", sx, sy);
+                log::debug!("spawn_human: scripted at ({},{})", sx, sy);
                 return;
             }
             log::warn!("spawn_human: no land near scripted spawn ({},{})", tx, ty);
@@ -494,7 +494,7 @@ impl SowEngine {
                 }
             }
             placed += 1;
-            log::info!(
+            log::debug!(
                 "spawn_scripted: [{}] '{}' team={:?} at ({},{})",
                 bot_id,
                 s.name,

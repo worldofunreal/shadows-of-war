@@ -1,0 +1,139 @@
+{
+  "tool": "Built-in image generation",
+  "style": "Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark.",
+  "images": [
+    {
+      "output": "opening-desktop.webp",
+      "prompt": "Use case: stylized-concept. Asset: final desktop website opening artwork, landscape 16:9, ideally 2048x1152. Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Reference 1 is the canonical two-hero splash; references 2 and 3 lock Boudica and Lady Six Sky identities. Create a new cinematic composition, not a crop. Boudica and Lady Six Sky stand back to back on a stone overlook occupying the RIGHT 48 percent, faces clear, full heads and weapons inside the frame. Below, armies and faction banners traverse a golden valley; distant Roman arches meet Maya stepped temples as in the existing game splash, atmospheric smoke and warm late-afternoon sunlight. LEFT 45 percent is quiet shadowed landscape and dark teal sky with no faces or busy silhouettes, reserved for large cream/gold heading and button added later in HTML. Rich emerald, crimson, amber and charcoal, layered depth, dramatic yet optimistic. Keep a clean horizon; no text.",
+      "references": [
+        "references/loader/sow-splash-desktop.webp",
+        "references/heroes/boudica_mobile.webp",
+        "references/heroes/lady_six_sky_desktop.webp"
+      ],
+      "already_saved": true
+    },
+    {
+      "output": "opening-mobile.webp",
+      "prompt": "Use case: stylized-concept. Asset: original final Shadows of War landing artwork. Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Mobile opening composition, portrait 9:16, ideally 1152x2048. New portrait framing: Boudica and Lady Six Sky stand back to back in the UPPER 58 percent, both heads, faces, headdresses, spear tips intact within safe margins. Golden valley, distant Roman arches and Maya stepped temples, faction banners and afternoon smoke. LOWER 42 percent is deep shadowed quiet landscape reserved for heading and play button added later in HTML. Strong readable silhouettes, crimson and emerald, warm sun. Not a crop of a wide image.",
+      "references": [
+        "references/loader/sow-splash-desktop.webp",
+        "references/heroes/boudica_mobile.webp",
+        "references/heroes/lady_six_sky_desktop.webp"
+      ],
+      "already_saved": true
+    },
+    {
+      "output": "step-expand.webp",
+      "prompt": "Use case: stylized-concept. Asset: original final Shadows of War landing artwork. Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Desktop expansion chapter, landscape 16:9. Boudica seen three-quarter from behind at far LEFT, recognizable red hair, blue painted arm, crimson cloak, planted spear. Her army and crimson banners advance along a sweeping valley road towards a distant unwalled settlement. Golden grass, misty blue hills, sunrise catching spearheads; maplike geography visible yet fully cinematic. Keep main action in left and middle; RIGHT 25 percent quiet distant valley, with all faces and spear points clear. No oversized close-up head. Story: a small territory becoming an empire.",
+      "references": [
+        "references/heroes/boudica_desktop.webp",
+        "references/loader/sow-splash-desktop.webp"
+      ],
+      "already_saved": true
+    },
+    {
+      "output": "step-expand-mobile.webp",
+      "prompt": "Use case: stylized-concept. Asset: original final Shadows of War landing artwork. Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Mobile expansion chapter, portrait 4:5, ideally 1280x1600. Recompose vertically: Boudica at lower left, red hair, blue arm paint, crimson cloak and spear fully inside safe margins; a winding procession of her army's banners recedes UP the valley towards a settlement, blue hills and golden sunrise. Keep upper right distant landscape quiet. Readable at phone size, no crop of landscape, no cut faces or weapons.",
+      "references": [
+        "references/heroes/boudica_mobile.webp",
+        "references/loader/sow-splash-desktop.webp"
+      ],
+      "already_saved": true
+    },
+    {
+      "output": "step-build.webp",
+      "prompt": "Use case: stylized-concept. Asset: original final Shadows of War landing artwork. Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Desktop economy chapter, landscape 16:9. A thriving ancient Egyptian harbor at golden afternoon: turquoise Nile water curves through sandstone docks, white-sailed wooden trade boats deliver grain and amphorae, workers and palms, workshops and a city beyond. Cleopatra stands on the RIGHT quarter surveying the harbor, identity and blue/gold costume exactly from reference, smaller full figure rather than oversized portrait. Main dock activity center/right; LEFT quarter is quiet sunlit water and atmospheric architecture. Visual story: ports fund an empire; no battle, no flames.",
+      "references": [
+        "references/heroes/cleopatra_desktop.webp",
+        "references/loader/sow-splash-desktop.webp"
+      ],
+      "already_saved": true
+    },
+    {
+      "output": "step-build-mobile.webp",
+      "prompt": "Use case: stylized-concept. Asset: original final Shadows of War landing artwork. Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Mobile economy chapter, portrait 4:5, ideally 1280x1600. A separately composed thriving Egyptian harbor: Cleopatra in lower right wearing exact reference blue and gold costume, identity preserved; a white-sailed wooden trading boat dominates middle left; curved sandstone docks, grain, amphorae, workers, palms lead upward to a sunlit city. Turquoise water, amber sandstone. Keep Cleopatra face, headdress and ship sail intact with generous margins. No battles, flames, letters or numbers.",
+      "references": [
+        "references/heroes/cleopatra_mobile.webp",
+        "references/heroes/cleopatra_desktop.webp",
+        "references/loader/sow-splash-desktop.webp"
+      ],
+      "already_saved": true
+    },
+    {
+      "output": "step-war.webp",
+      "prompt": "Use case: stylized-concept. Asset: original final Shadows of War landing artwork. Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Desktop frontier chapter, landscape 16:9. Cinematic breached medieval stone gate, splintered wood, distant smoke and sunlit dust. Richard the Lionheart on LEFT third, recognizable blond hair, crown, scar, red cloak, lion heraldry and chainmail from reference; his disciplined soldiers press toward gate on RIGHT. Crimson versus deep teal banners create clear competing borders. No gore. Expressive stylized sculpted character rendering, match supplied game heroes instead of photoreal live action. Keep rightmost fifth distant quiet smoke for breathing room; all faces/weapons safe.",
+      "references": [
+        "references/heroes/richard_the_lionheart_desktop.webp",
+        "references/heroes/boudica_desktop.webp"
+      ],
+      "already_saved": true
+    },
+    {
+      "output": "step-war-mobile.webp",
+      "prompt": "Use case: stylized-concept. Asset: original final Shadows of War landing artwork. Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Mobile frontier chapter, portrait 4:5, ideally 1280x1600. Recompose a breached medieval gate vertically: Richard the Lionheart, exact blond crown/scar/red cloak/chainmail reference identity, in lower left three-quarter view holding sword down with both hands; his soldiers and crimson lion banners charge through a gate in upper right. Sunbeams through smoke, dust, stone rubble, deep teal enemy banner. No gore. Hero face, crown, sword and gate inside safe margins; energetic readable phone composition.",
+      "references": [
+        "references/heroes/richard_the_lionheart_mobile.webp",
+        "references/heroes/boudica_mobile.webp"
+      ],
+      "already_saved": true
+    },
+    {
+      "output": "closing-desktop.webp",
+      "prompt": "Use case: stylized-concept. Asset: original final Shadows of War landing artwork. Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Desktop closing panorama, landscape 16:9. View from a high stone overlook at blue-hour sunset across an immense golden river valley, distant fortified city and Maya temples, trade boats and scattered campfires. Boudica stands on FAR LEFT edge, Lady Six Sky on FAR RIGHT edge, both smaller full figures looking over the world; preserve their reference identities/costumes, keep all heads and weapons safely inside frame. CENTRAL 50 percent is quiet dark valley and deep teal sky reserved for large centered cream/gold headline and button added in HTML. Warm light on horizon, subtle crimson and green banners frame the view. Hopeful sense of possibility after battle.",
+      "references": [
+        "references/loader/sow-splash-desktop.webp",
+        "references/heroes/boudica_desktop.webp",
+        "references/heroes/lady_six_sky_desktop.webp"
+      ],
+      "already_saved": true
+    },
+    {
+      "output": "closing-mobile.webp",
+      "prompt": "Use case: stylized-concept. Asset: original final Shadows of War landing artwork. Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Mobile closing scene, portrait 9:16, ideally 1152x2048. New vertical composition of immense golden river valley at blue-hour sunset. Boudica and Lady Six Sky, identities/costumes as references, are smaller full figures at the bottom left and bottom right, looking into valley with intact heads and weapons. Warm city lights, winding river, remote Maya temples and fortress on horizon. CENTRAL and UPPER 55 percent quiet dark teal sky/atmospheric valley, reserved for a centered heading and button added later in HTML. No crop of wide artwork, no letters, no logo.",
+      "references": [
+        "references/loader/sow-splash-desktop.webp",
+        "references/heroes/boudica_mobile.webp",
+        "references/heroes/lady_six_sky_mobile.webp"
+      ],
+      "already_saved": true
+    }
+  ],
+  "video": {
+    "duration_seconds": 12,
+    "fps": 24,
+    "audio": false,
+    "prompt": "Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Create a seamless 12-second silent cinematic loop from the supplied opening still. Use the opening image as both the first-frame and last-frame constraint: the end composition must exactly match the start. Keep Boudica and Lady Six Sky completely recognizable: do not change faces, eyes, anatomy, costumes, heraldry or weapons. 0–2 seconds: establish the original composition with barely perceptible atmospheric movement. 2–8 seconds: a slow camera advance of at most 3 percent; cloth banners sway gently and distant smoke drifts. 8–12 seconds: smoothly return the camera to its initial framing and complete a full periodic wind cycle. Environmental motion must be subtle, cyclic and physically plausible. Keep the protected heading area quiet and clear. No cuts, fast movement, new characters, changing expressions, talking, fighting, flicker, morphing, text, interface or watermark. Deliver 24 fps, no audio, and preserve the input aspect ratio. Produce desktop and mobile as separate shots, never crop one into the other.",
+    "variants": [
+      {
+        "variant": "desktop",
+        "source": "assets/site/media/opening-desktop.webp",
+        "start_frame": "outputs/landing-motion/desktop-start.webp",
+        "end_frame": "outputs/landing-motion/desktop-end.webp"
+      },
+      {
+        "variant": "mobile",
+        "source": "assets/site/media/opening-mobile.webp",
+        "start_frame": "outputs/landing-motion/mobile-start.webp",
+        "end_frame": "outputs/landing-motion/mobile-end.webp"
+      }
+    ],
+    "delivery": "Optional hero-loop video; the landing uses responsive still artwork until a clip is supplied."
+  },
+  "gameplay_proof": [
+    {
+      "source": "assets/site/media/game-expand.webp",
+      "kind": "original gameplay capture",
+      "original_name": "session-expansion.webp"
+    },
+    {
+      "source": "assets/site/media/game-build.webp",
+      "kind": "original gameplay capture",
+      "original_name": "session-world.webp"
+    },
+    {
+      "source": "assets/site/media/game-war.webp",
+      "kind": "original gameplay capture",
+      "original_name": "session-battle.webp"
+    }
+  ]
+}

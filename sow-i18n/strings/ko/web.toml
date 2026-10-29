@@ -899,6 +899,18 @@ match_message_4 = "당신의 전투는 끝낼 것입니다. 서류 작업은 기
 match_message_5 = "당신의 전투가 끝났습니다. 이것은 확실히 계획의 일부였습니다."
 
 [site]
+landing_build_expand = "건설하라. 확장하라."
+landing_betray = "배신하라."
+empire_starts = "당신의 다음 제국은"
+empire_here = "여기서 시작됩니다."
+browse_all = "모두 보기"
+previous_leader = "이전 지도자"
+next_leader = "다음 지도자"
+clear_search = "검색 지우기"
+art_unavailable = "아트워크를 불러올 수 없습니다"
+pause_motion = "애니메이션 일시 정지"
+resume_motion = "애니메이션 재개"
+in_game = "게임 내"
 title = "Shadows of War — 멀티플레이어 전략"
 description = "역사 속 리더를 선택해 땅을 차지하고 도시와 항구를 건설하며, 실시간 영토 전쟁에서 동맹과 배신을 결정하세요."
 home = "Shadows of War 홈"

@@ -268,19 +268,10 @@ pub fn take_pending_invite_lobby() -> Option<u64> {
         let res = take_window_u64("SOW_PENDING_INVITE_LOBBY_ID");
         match res {
             Some(id) => {
-                let _ = web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(&format!(
-                    "store_portals: take_pending_invite_lobby -> {}",
-                    id
-                )));
                 call_window_hook("SOW_portalClearPendingInvite");
                 Some(id)
             }
-            None => {
-                let _ = web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(
-                    "store_portals: take_pending_invite_lobby -> None",
-                ));
-                None
-            }
+            None => None,
         }
     }
 }
@@ -289,10 +280,6 @@ pub fn take_host_private_pending() -> bool {
     #[cfg(target_arch = "wasm32")]
     {
         let pending = take_window_bool("SOW_HOST_PRIVATE_PENDING");
-        let _ = web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(&format!(
-            "store_portals: take_host_private_pending -> {}",
-            pending
-        )));
         if pending {
             call_window_hook("SOW_portalClearHostPrivatePending");
         }
@@ -304,10 +291,6 @@ pub fn poll_pending_invite_lobby() -> Option<u64> {
     #[cfg(target_arch = "wasm32")]
     {
         let id = take_window_u64("SOW_PENDING_INVITE_LOBBY_ID")?;
-        let _ = web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(&format!(
-            "store_portals: poll_pending_invite_lobby -> {}",
-            id
-        )));
         call_window_hook("SOW_portalClearPendingInvite");
         Some(id)
     }

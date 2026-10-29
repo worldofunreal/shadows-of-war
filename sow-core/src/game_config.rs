@@ -423,7 +423,7 @@ impl Default for GameConfig {
             map_width: 1000,
             map_height: 800,
             random_spawn: false,
-            map_control_win_percentage: 0.60,
+            map_control_win_percentage: 0.75,
 
             // Core Simulation Pacing
             tick_rate_ms: 100.0, // Server clock ticks every 100ms (10 ticks per second)

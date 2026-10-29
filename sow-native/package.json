@@ -2,10 +2,11 @@
   "name": "sow-native",
   "private": true,
   "version": "0.1.0",
+  "main": "main.js",
   "scripts": {
-    "tauri": "tauri"
+    "start": "electron ."
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.11.4"
+    "electron": "^34.0.0"
   }
 }

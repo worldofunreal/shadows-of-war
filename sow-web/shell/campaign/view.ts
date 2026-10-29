@@ -17,6 +17,15 @@ export function resolveUiTarget(
             ) || null
         );
     }
+    if (key === "hud_center_camera" && typeof root.querySelectorAll === "function") {
+        const matches = root.querySelectorAll<HTMLElement>(selector);
+        if (matches.length > 1) {
+            return (
+                Array.from(matches).find((node) => node.classList.contains("sow-hud__icon-btn")) ||
+                matches[matches.length - 1]
+            );
+        }
+    }
     return typeof root.querySelector === "function" ? root.querySelector<HTMLElement>(selector) : null;
 }
 

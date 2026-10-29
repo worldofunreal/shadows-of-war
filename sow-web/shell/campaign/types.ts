@@ -97,6 +97,7 @@ export interface CampaignViewApi {
 }
 
 export interface CampaignApi {
+    campaignBaseExpressions(definition: CampaignDefinition, facts: CampaignRecord): Record<string, string>;
     TYPES: readonly CampaignStepType[];
     TEAMS: readonly string[];
     METRICS: Record<string, string>;

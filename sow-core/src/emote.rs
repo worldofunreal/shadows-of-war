@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub const EMOTE_DURATION_SECS: f32 = 3.0;
 
 /// Order matches the four cells of every hero sheet, read left-to-right.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[repr(usize)]
 pub enum AvatarExpression {

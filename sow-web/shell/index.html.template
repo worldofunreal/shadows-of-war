@@ -94,7 +94,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            object-position: center;
+            object-position: right center;
             pointer-events: none;
         }
 
@@ -286,6 +286,10 @@
 
         /* Fallback sizes before JS layout(); JS sets data-layout + inline font-size. */
         @media (max-width: 599px) and (orientation: portrait) {
+            #web-loader .splash-bg {
+                object-position: center top;
+            }
+
             #web-loader .loader-footer {
                 width: min(88vw, 480px);
                 bottom: max(6vh, 24px);

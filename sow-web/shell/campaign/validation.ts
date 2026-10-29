@@ -400,7 +400,12 @@ export function validate(
     if (!object(speakers)) issue(null, "speakers", "Invalid character dictionary.");
     else
         Object.entries(speakers).forEach(([key, speaker]) => {
-            knownFields(speaker, ["name", "name_key", "avatar", "faction"], null, "speakers." + key);
+            knownFields(
+                speaker,
+                ["name", "name_key", "avatar", "faction", "base_expression"],
+                null,
+                "speakers." + key,
+            );
             if (
                 !id(key) ||
                 !object(speaker) ||
@@ -426,6 +431,30 @@ export function validate(
                     !rosterFactions.has(speaker.faction)
                 )
                     issue(null, "speakers." + key + ".faction", "Choose an existing roster faction.");
+                if (speaker.base_expression != null) {
+                    const rule = speaker.base_expression;
+                    knownFields(rule, ["expression", "until"], null, "speakers." + key + ".base_expression");
+                    knownFields(
+                        rule && rule.until,
+                        ["type", "target"],
+                        null,
+                        "speakers." + key + ".base_expression.until",
+                    );
+                    if (
+                        !object(rule) ||
+                        !["happy", "calm", "fear", "angry"].includes(rule.expression) ||
+                        !object(rule.until) ||
+                        rule.until.type !== "alliance" ||
+                        typeof rule.until.target !== "string" ||
+                        (roster && !rosterFactions.has(rule.until.target) && !allowMissingFactionReferences)
+                    ) {
+                        issue(
+                            null,
+                            "speakers." + key + ".base_expression",
+                            "Choose an expression and an existing alliance target.",
+                        );
+                    }
+                }
                 text(null, "speakers", speaker.name_key, false);
             }
         });

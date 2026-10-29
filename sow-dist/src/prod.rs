@@ -859,13 +859,14 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "sow-web/shell/loader_boot.test.ts",
             "sow-web/shell/menu_presentation.test.ts",
             "sow-web/shell/campaign_view.test.ts",
+            "sow-web/shell/campaign_runtime.test.ts",
             "sow-web/shell/gameplay_ui.test.ts",
             "sow-web/shell/gameplay_interaction.test.ts",
         ],
         Some(&paths.root),
     )
     .context("shell UI regression tests failed")?;
-    for filter in ["test_build_index_", "test_nginx_conf_"] {
+    for filter in ["test_build_index_", "test_nginx_conf_", "ssh_transport_"] {
         run(
             "cargo",
             &["test", "--locked", "-p", "sow-dist", "--bin", "sow", filter],
@@ -901,6 +902,10 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
         ),
         ("hero_ability", "hero ability client tests failed"),
         ("status_badge", "nameplate status badge tests failed"),
+        (
+            "emote_tests",
+            "player avatar expression and emote tests failed",
+        ),
         ("troop_transfer", "troop transfer nameplate tests failed"),
         (
             "death_avatar",
@@ -3569,11 +3574,21 @@ fn stage_release(config: &Config, release: &Release) -> Result<()> {
     run("ssh", &[&config.control_host, &prepare], None)?;
     let source = format!("{}/", release.dir.display());
     let destination = format!("{}:{}/", config.control_host, stage);
-    run(
-        "rsync",
-        &["-azc", "--delete", &source, &destination],
-        Some(&release.dir),
-    )
+    // The control host link resets now and then mid-copy; this copy only fills staging, so retry it.
+    let mut attempt = 1;
+    loop {
+        match run(
+            "rsync",
+            &["-azc", "--delete", &source, &destination],
+            Some(&release.dir),
+        ) {
+            Err(error) if attempt < 3 => {
+                println!("  staging copy failed (attempt {attempt}/3): {error:#}; retrying");
+                attempt += 1;
+            }
+            result => return result,
+        }
+    }
 }
 
 fn activate_control_host(
@@ -4159,5 +4174,4 @@ mod build_fingerprint_tests {
         let source = include_str!("prod.rs");
         assert!(source.contains("test \"$(sudo sha256sum {destination}"));
     }
-
 }

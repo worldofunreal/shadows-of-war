@@ -396,6 +396,23 @@ export function create(
                             instanceId: reaction.id + "@" + target,
                         }));
                     }
+                    if (type === "alliance") {
+                        return gameplayActive &&
+                            (facts.alliance_faction_ids || []).includes(reaction.when.target) &&
+                            (!reaction.after || state.completed.includes(reaction.after))
+                            ? [
+                                  {
+                                      reaction,
+                                      index,
+                                      target: reaction.when.target,
+                                      isContact: false,
+                                      isFirstContact: false,
+                                      priority: 1,
+                                      instanceId: reaction.id,
+                                  },
+                              ]
+                            : [];
+                    }
                     if (type === "pre_defeat") {
                         const ready =
                             gameplayActive &&

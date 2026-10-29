@@ -41,8 +41,8 @@ test("gameplay chrome keeps dev tools and separate FPS/ping rows at the bottom o
     );
     assert.match(
         statusRight,
-        /class="sow-hud__diagnostics"[\s\S]*sow-hud-dev-btn[\s\S]*sow-hud-fps[\s\S]*sow-hud-ping/,
-        "FPS and ping remain separate rows in the shared toolbar panel",
+        /sow-hud-dev-btn[\s\S]*class="sow-hud__diagnostics"[\s\S]*sow-hud-fps[\s\S]*sow-hud-ping/,
+        "FPS and ping remain separate rows in the diagnostics panel",
     );
     const desktopRules = [...hudCss.matchAll(/@media \(min-width: 721px\) \{([^}]*)\}/g)];
     assert.ok(desktopRules.some(([, rules]) => rules.includes("sow-hud__notifications")));
@@ -994,4 +994,12 @@ test("hero ability notices show that hero's ability icon in the seal", () => {
     assert.doesNotMatch(notificationIcon("hud.elimination", { victim: "Tribe" }), /<img/);
     assert.ok(fs.existsSync(path.join(shell, "../../assets/art/icons/abilities/lady_six_sky.webp")));
     assert.ok(hudCss.includes(".sow-hud__notification-ability"));
+});
+
+test("player nameplate in HUD acts as an alternate home button targeting center_camera", () => {
+    assert.match(
+        hud,
+        /<div class="sow-hud__nameplate" id="sow-hud-nameplate" [^>]*data-command="center_camera"[^>]*role="button"[^>]*tabindex="0"/,
+    );
+    assert.match(hudCss, /\.sow-hud__nameplate\s*\{[^}]*pointer-events:\s*auto;[^}]*cursor:\s*pointer;/);
 });

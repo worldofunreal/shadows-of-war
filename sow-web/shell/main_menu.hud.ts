@@ -4,6 +4,7 @@ import type {
     HudDevTools,
     HudInboxRequest,
     HudLeaderboardPlayer,
+    HudLeaderboardTeam,
     HudMapFeedback,
     HudMapMenu,
     HudMapMenuItem,
@@ -60,9 +61,14 @@ type InboxRequestParts = PlayerIdentityParts & {
 type LeaderboardRow = {
     card: HTMLElement;
     rank: HTMLElement;
+    avatarWrap: HTMLElement;
+    avatarImg: HTMLImageElement;
+    avatarBadge: HTMLElement;
     name: HTMLElement;
     territory: HTMLElement;
     troops: HTMLElement;
+    gpsBtn: HTMLButtonElement;
+    transferBtn: HTMLButtonElement;
     key: string;
 };
 type CombatOperationRow = {
@@ -261,6 +267,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     let leaderboardRenderKey = "";
     let pendingCounterAttacks: Record<string, number> = Object.create(null);
     let lastLeaderboardPlayers: HudLeaderboardPlayer[] = [];
+    let lastLeaderboardTeams: HudLeaderboardTeam[] = [];
     let notificationCursor = 0;
     let notificationTimer: number | null = null;
     let activeNotifications: ActiveHudNotification[] = [];
@@ -434,6 +441,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const HUD_GLYPHS: Record<string, string> = {
         plus: '<path d="M12 4v16M4 12h16"/>',
         minus: '<path d="M4 12h16"/>',
+        close: '<path d="M18 6 6 18M6 6l12 12"/>',
         inbox: '<path d="M4 4h16v16H4zM4 13h4l2 3h4l2-3h4M4 7l8 6 8-6"/>',
         emote: '<path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.7 8.7 0 0 1-3.5-.7L4 20l1.4-3.6A7 7 0 0 1 4 12c0-4.1 3.6-7.5 8-7.5s8 3.1 8 7Z"/><path d="M9 11h.01M15 11h.01M9 14.5s1 1.5 3 1.5 3-1.5 3-1.5"/>',
         rankings: '<path d="M3 20h18M5 20v-6h4v6M10 20V4h4v16M15 20v-10h4v10"/>',
@@ -998,46 +1006,51 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         if (!hudRoot || hudInitialized) return;
         hudInitialized = true;
         emoteTextKey = "";
+        const initialMusicVol =
+            hudState && hudState.settings && hudState.settings.music_volume != null
+                ? Number(hudState.settings.music_volume)
+                : 0.8;
+        const initialMusicPct = Math.round(Math.max(0, Math.min(1, initialMusicVol)) * 100);
         hudRoot.innerHTML =
             "" +
             '<header class="sow-hud__topbar">' +
             '  <div class="sow-hud__status-right">' +
-            '    <button class="sow-hud__icon-pill sow-hud__exit-pill" type="button" data-command="prompt_surrender" aria-label="' +
+            '    <button class="sow-hud__icon-btn sow-hud__exit-pill" type="button" data-command="prompt_surrender" aria-label="' +
             SOW_t("hud.leave_match") +
             '" title="' +
             SOW_t("hud.leave_match") +
             '">' +
             hudIcon("leave", "sow-hud__action-icon") +
             "</button>" +
-            '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_settings" aria-label="' +
+            '    <button class="sow-hud__icon-btn" type="button" data-command="toggle_settings" aria-label="' +
             SOW_t("menu.settings") +
             '" title="' +
             SOW_t("menu.settings") +
             '">' +
             hudIcon("settings", "sow-hud__action-icon") +
             "</button>" +
-            '    <button class="sow-hud__icon-pill sow-hud__inbox-pill" type="button" data-command="toggle_inbox" aria-label="' +
+            '    <button class="sow-hud__icon-btn sow-hud__inbox-pill" type="button" data-command="toggle_inbox" aria-label="' +
             SOW_t("hud.inbox") +
             '" title="' +
             SOW_t("hud.inbox") +
             '">' +
             hudIcon("inbox") +
             '<span class="sow-hud__inbox-badge" id="sow-hud-inbox-count" hidden>0</span></button>' +
-            '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_leaderboard" aria-label="' +
+            '    <button class="sow-hud__icon-btn" type="button" data-command="toggle_leaderboard" aria-label="' +
             SOW_t("hud.rankings") +
             '" title="' +
             SOW_t("hud.rankings") +
             '">' +
             hudIcon("rankings", "sow-hud__action-icon") +
             "</button>" +
-            '    <div class="sow-hud__diagnostics">' +
-            '      <button class="sow-hud__icon-pill hidden" type="button" data-command="toggle_dev_sidebar" id="sow-hud-dev-btn" aria-label="' +
+            '    <button class="sow-hud__icon-btn hidden" type="button" data-command="toggle_dev_sidebar" id="sow-hud-dev-btn" aria-label="' +
             SOW_t("hud.dev_tools") +
             '" title="' +
             SOW_t("hud.dev_tools") +
             '">' +
             hudIcon("tools", "sow-hud__action-icon") +
             "</button>" +
+            '    <div class="sow-hud__diagnostics" id="sow-hud-diagnostics">' +
             '      <span class="sow-hud__fps" id="sow-hud-fps">' +
             SOW_t("hud.fps", { fps: "--" }) +
             "</span>" +
@@ -1045,7 +1058,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "    </div>" +
             "  </div>" +
             "</header>" +
-            '<div class="sow-hud__nameplate" id="sow-hud-nameplate" hidden>' +
+            '<div class="sow-hud__nameplate" id="sow-hud-nameplate" data-command="center_camera" role="button" tabindex="0" aria-label="' +
+            SOW_t("hud.center_camera") +
+            '" hidden>' +
             '  <img class="sow-hud__nameplate-avatar" id="sow-hud-nameplate-avatar" alt="" draggable="false">' +
             '  <div class="sow-hud__nameplate-copy"><strong id="sow-hud-nameplate-name"></strong>' +
             '  <div class="sow-hud__nameplate-bar"><i id="sow-hud-nameplate-fill"></i><span class="sow-hud__nameplate-readout"><span id="sow-hud-nameplate-troops"></span>' +
@@ -1155,29 +1170,50 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "  </div>" +
             "</aside>" +
             '<aside class="sow-hud__panel sow-hud__settings sow-hud__sheet hidden" id="sow-hud-settings">' +
-            '  <div class="sow-hud__sheet-header"><h3 class="sow-hud__sheet-title">' +
+            '  <div class="sow-hud__sheet-header">' +
+            '    <div class="sow-hud__sheet-title-group">' +
+            '      <span class="sow-hud__sheet-title-badge" aria-hidden="true">' +
+            hudIcon("settings", "sow-hud__sheet-title-icon") +
+            "      </span>" +
+            '      <h3 class="sow-hud__sheet-title">' +
             SOW_t("menu.settings") +
-            '</h3><button class="sow-hud__close-btn sow-hud__sheet-btn" type="button" data-command="toggle_settings" aria-label="' +
+            "      </h3>" +
+            "    </div>" +
+            '    <button class="sow-hud__close-btn sow-hud__sheet-btn" type="button" data-command="toggle_settings" aria-label="' +
             SOW_t("hud.close_settings") +
-            '">✕</button></div>' +
-            '  <div class="sow-hud__sheet-body">' +
-            '    <label class="sow-hud__setting-row"><span>' +
+            '">' +
+            hudIcon("close", "sow-hud__close-icon") +
+            "</button>" +
+            "  </div>" +
+            '  <div class="sow-hud__sheet-body sow-hud__settings-body">' +
+            '    <label class="sow-hud__setting-row sow-hud__setting-card"><span>' +
             SOW_t("hud.sound") +
             '</span><input class="sow-hud__switch" type="checkbox" data-hud-setting="mute_all"></label>' +
-            '    <label class="sow-hud__setting-row sow-hud__setting-row--slider"><span>' +
+            '    <div class="sow-hud__setting-row sow-hud__setting-card sow-hud__setting-card--slider">' +
+            '      <div class="sow-hud__setting-slider-header"><span>' +
             SOW_t("hud.music") +
-            '</span><input type="range" min="0" max="1" step="0.05" data-hud-setting="music_volume"></label>' +
-            '    <label class="sow-hud__setting-row"><span>' +
+            '</span><span class="sow-hud__setting-value" id="sow-hud-music-value">' +
+            initialMusicPct +
+            "%</span></div>" +
+            '      <input type="range" min="0" max="1" step="0.01" value="' +
+            initialMusicVol +
+            '" data-hud-setting="music_volume" style="--sow-music-fill: ' +
+            initialMusicPct +
+            '%;" aria-label="' +
+            SOW_t("hud.music") +
+            '">' +
+            "    </div>" +
+            '    <label class="sow-hud__setting-row sow-hud__setting-card"><span>' +
             SOW_t("hud.reduced_motion") +
             '</span><input class="sow-hud__switch" type="checkbox" data-hud-setting="reduced_motion"></label>' +
-            '    <label class="sow-hud__setting-row"><span>' +
+            '    <label class="sow-hud__setting-row sow-hud__setting-card"><span>' +
             SOW_t("hud.free_zoom_out") +
             '</span><input class="sow-hud__switch" type="checkbox" data-hud-setting="free_zoom_out"></label>' +
-            '    <label class="sow-hud__setting-row"><span>' +
+            '    <label class="sow-hud__setting-row sow-hud__setting-card"><span>' +
             SOW_t("hud.show_fps_ping") +
             '</span><input class="sow-hud__switch" type="checkbox" data-hud-setting="show_fps_ping"></label>' +
             (hudState && hudState.settings && hudState.settings.show_dev_tools_available
-                ? '    <label class="sow-hud__setting-row"><span>' +
+                ? '    <label class="sow-hud__setting-row sow-hud__setting-card"><span>' +
                   SOW_t("hud.show_dev_tools") +
                   '</span><input class="sow-hud__switch" type="checkbox" data-hud-setting="show_dev_tools"></label>'
                 : "") +
@@ -1544,6 +1580,19 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 { passive: true },
             );
         });
+        hudRoot.addEventListener("input", function (event) {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const input = target.closest<HTMLInputElement>('[data-hud-setting="music_volume"]');
+            if (input) {
+                const pct = Math.round(Math.max(0, Math.min(1, Number(input.value))) * 100);
+                input.style.setProperty("--sow-music-fill", pct + "%");
+                const musicValue = hudRefs?.settings?.querySelector<HTMLElement>("#sow-hud-music-value");
+                if (musicValue) {
+                    musicValue.textContent = pct + "%";
+                }
+            }
+        });
         hudRoot.addEventListener("change", function (event) {
             const target = event.target;
             if (!(target instanceof Element)) return;
@@ -1551,7 +1600,15 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             if (!(input instanceof HTMLInputElement)) return;
             const setting = input.dataset.hudSetting;
             if (setting === "mute_all") send("set_mute", { value: !input.checked });
-            if (setting === "music_volume") send("set_music_volume", { value: Number(input.value) });
+            if (setting === "music_volume") {
+                const pct = Math.round(Math.max(0, Math.min(1, Number(input.value))) * 100);
+                input.style.setProperty("--sow-music-fill", pct + "%");
+                const musicValue = hudRefs?.settings?.querySelector<HTMLElement>("#sow-hud-music-value");
+                if (musicValue) {
+                    musicValue.textContent = pct + "%";
+                }
+                send("set_music_volume", { value: Number(input.value) });
+            }
             if (setting === "reduced_motion") send("set_reduced_motion", { value: input.checked });
             if (setting === "free_zoom_out") send("set_free_zoom_out", { value: input.checked });
             if (setting === "show_fps_ping") send("set_show_fps_ping", { value: input.checked });
@@ -2204,10 +2261,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
     function ringActivate(menu: HTMLElement, target: "hub" | number | null): void {
         if (target === "hub") {
-            // The center is "back" inside a submenu and "close" at the root.
+            // The center is "back" inside a submenu and "center on the entity's home, then close" at the root.
             const back = menu.querySelector<HTMLButtonElement>("[data-map-back]");
             if (back) back.click();
-            else send("close_map_context_menu");
+            else {
+                send("center_radial_home");
+                send("close_map_context_menu");
+            }
             return;
         }
         if (typeof target !== "number") return;
@@ -2232,18 +2292,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     function renderMapMenu(mapMenu: HudMapMenu | null | undefined): boolean {
         if (!hudRefs || !hudRefs.mapMenu) return false;
         const menu = hudRefs.mapMenu;
-        const wasVisible = !menu.classList.contains("hidden");
         const open = Boolean(mapMenu && mapMenu.open);
         const showRadial = Boolean(open && mapMenu && mapMenu.view === "radial");
         menu.classList.toggle("hidden", !showRadial);
         if (!showRadial) {
-            if (wasVisible)
-                console.info("[MAP MENU TRACE] HUD hid radial", {
-                    phase: hudState && hudState.phase,
-                    open: Boolean(mapMenu && mapMenu.open),
-                    view: mapMenu && mapMenu.view,
-                    session: mapMenu && mapMenu.session,
-                });
             if (menu.dataset.renderKey) menu.replaceChildren();
             menu.dataset.renderKey = "";
             ring.session = "";
@@ -2912,15 +2964,53 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         });
     }
 
-    function updateLeaderboard(players: HudLeaderboardPlayer[]): void {
+    // Canonical trade/transfer icon for leaderboard actions.
+    // Prepared so it can be swapped for a custom SVG template or asset directly in one place.
+    const LEADERBOARD_TRADE_CUSTOM_SVG: string | null = null;
+
+    function leaderboardTradeIcon(cls?: string): string {
+        if (LEADERBOARD_TRADE_CUSTOM_SVG) {
+            return LEADERBOARD_TRADE_CUSTOM_SVG;
+        }
+        return hudIcon("transfer", cls || "sow-hud__btn-icon");
+    }
+
+    function leaderboardGpsIcon(cls?: string): string {
+        return hudIcon("camera", cls || "sow-hud__btn-icon");
+    }
+
+    function leaderboardPlayerAvatar(player: HudLeaderboardPlayer): HudAvatarIdentity {
+        if (player.avatar && typeof player.avatar === "string") {
+            return {
+                kind: "portrait",
+                slug: player.avatar,
+                expression: player.avatar_expression || undefined,
+            };
+        }
+        const leader = leaderById(player.leader);
+        const slug = (leader && (leader.art_slug || leader.slug)) || "null";
+        return { kind: "portrait", slug: slug, expression: player.avatar_expression || undefined };
+    }
+
+    function updateLeaderboard(players: HudLeaderboardPlayer[], teams: HudLeaderboardTeam[]): void {
         if (!hudRefs || !hudRefs.rows) return;
         if (Array.isArray(players)) {
             lastLeaderboardPlayers = players;
         } else {
             players = lastLeaderboardPlayers;
         }
+        if (Array.isArray(teams)) {
+            lastLeaderboardTeams = teams;
+        } else {
+            teams = lastLeaderboardTeams;
+        }
         if (!Array.isArray(players)) return;
-        const renderKey = players
+        const teamRenderKey = teams
+            .map(function (team, idx) {
+                return [idx, team.team, team.tile_count, team.territory_pct, team.members].join("|");
+            })
+            .join("\u001e");
+        const playerRenderKey = players
             .map(function (player, idx) {
                 return [
                     idx,
@@ -2932,12 +3022,34 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                     player.territory_pct,
                     player.is_alive,
                     player.is_me,
+                    player.leader,
+                    player.avatar,
+                    player.avatar_expression,
                 ].join("|");
             })
             .join("\u001e");
+        const renderKey = teamRenderKey + "\u001d" + playerRenderKey;
         if (renderKey === leaderboardRenderKey) return;
         const nextRows = Object.create(null);
         const fragment = document.createDocumentFragment();
+        teams.forEach(function (team, idx) {
+            const card = document.createElement("div");
+            const rank = document.createElement("span");
+            const name = document.createElement("b");
+            const territory = document.createElement("span");
+
+            card.className = "sow-hud__player-card sow-hud__team-summary";
+            rank.className = "sow-hud__player-rank";
+            name.className = "sow-hud__player-name";
+            territory.className = "sow-hud__player-land";
+            rank.textContent = "#" + (idx + 1);
+            name.textContent = SOW_t(team.team === "Red" ? "lobbies.red_team" : "lobbies.blue_team", {
+                count: team.members,
+            });
+            territory.textContent = Math.round((team.territory_pct || 0) * 100) + "%";
+            card.append(rank, name, territory);
+            fragment.appendChild(card);
+        });
         (players || []).forEach(function (player, idx) {
             const key = String(player.id);
             let row = leaderboardRows[key];
@@ -2945,32 +3057,85 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 const card = document.createElement("div");
                 const left = document.createElement("div");
                 const rank = document.createElement("span");
+                const avatarWrap = document.createElement("span");
+                const avatarImg = document.createElement("img");
+                const avatarBadge = document.createElement("span");
+                const nameWrap = document.createElement("div");
                 const name = document.createElement("b");
-                const right = document.createElement("div");
+                const meta = document.createElement("div");
+                const stats = document.createElement("div");
                 const territory = document.createElement("span");
                 const troops = document.createElement("span");
+                const actions = document.createElement("div");
+                const gps = document.createElement("button");
                 const transfer = document.createElement("button");
+
                 card.className = "sow-hud__player-card";
                 card.dataset.command = "focus_player";
                 card.dataset.playerId = String(player.id);
+
                 left.className = "sow-hud__player-identity";
-                right.className = "sow-hud__player-stats";
-                transfer.type = "button";
-                transfer.className = "sow-hud__row-action";
-                transfer.dataset.command = "open_transfer";
-                transfer.dataset.playerId = String(player.id);
-                transfer.textContent = SOW_t("hud.gift");
                 rank.className = "sow-hud__player-rank";
+
+                avatarWrap.className = "sow-hud__player-avatar-wrap";
+                avatarImg.className = "sow-hud__player-avatar";
+                avatarImg.alt = "";
+                avatarImg.draggable = false;
+                bindAvatarFallback(avatarImg);
+
+                avatarBadge.className = "sow-hud__player-avatar-badge";
+                avatarBadge.hidden = true;
+                avatarWrap.append(avatarImg, avatarBadge);
+
+                nameWrap.className = "sow-hud__player-name-wrap";
+                name.className = "sow-hud__player-name";
+                nameWrap.appendChild(name);
+
+                left.append(rank, avatarWrap, nameWrap);
+
+                meta.className = "sow-hud__player-meta";
+                stats.className = "sow-hud__player-stats";
                 territory.className = "sow-hud__player-land";
                 troops.className = "sow-hud__player-troops";
-                left.appendChild(rank);
-                left.appendChild(name);
-                right.appendChild(territory);
-                right.appendChild(troops);
-                right.appendChild(transfer);
-                card.appendChild(left);
-                card.appendChild(right);
-                row = { card: card, rank: rank, name: name, territory: territory, troops: troops, key: "" };
+                stats.append(territory, troops);
+
+                actions.className = "sow-hud__player-actions";
+
+                gps.type = "button";
+                gps.className = "sow-hud__row-action sow-hud__row-action--icon sow-hud__row-action--gps";
+                gps.dataset.command = "focus_player";
+                gps.dataset.playerId = String(player.id);
+                gps.setAttribute("aria-label", SOW_t("hud.center_camera") || "Locate");
+                gps.title = SOW_t("hud.center_camera") || "Locate";
+                gps.innerHTML = leaderboardGpsIcon();
+
+                transfer.type = "button";
+                transfer.className =
+                    "sow-hud__row-action sow-hud__row-action--icon sow-hud__row-action--trade";
+                transfer.dataset.command = "open_transfer";
+                transfer.dataset.playerId = String(player.id);
+                transfer.setAttribute("aria-label", SOW_t("hud.map_action_transfer") || "Trade");
+                transfer.title = SOW_t("hud.map_action_transfer") || "Trade";
+                transfer.innerHTML = leaderboardTradeIcon();
+
+                actions.append(gps, transfer);
+                meta.append(stats, actions);
+
+                card.append(left, meta);
+
+                row = {
+                    card: card,
+                    rank: rank,
+                    avatarWrap: avatarWrap,
+                    avatarImg: avatarImg,
+                    avatarBadge: avatarBadge,
+                    name: name,
+                    territory: territory,
+                    troops: troops,
+                    gpsBtn: gps,
+                    transferBtn: transfer,
+                    key: "",
+                };
             }
 
             const displayName = player.name || SOW_t("hud.player_name");
@@ -2980,16 +3145,26 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 displayName,
                 player.troops,
                 player.tile_count,
+                player.territory_pct,
                 player.is_alive,
                 player.is_me,
+                player.leader,
+                player.avatar,
+                player.avatar_expression,
             ].join("|");
             if (row.key !== rowKey) {
                 row.key = rowKey;
                 row.card.classList.toggle("is-me", !!player.is_me);
                 row.card.classList.toggle("is-dead", !player.is_alive);
                 const displayRank = Number.isFinite(Number(player.rank)) ? Number(player.rank) : idx + 1;
+                row.card.classList.toggle("is-top-1", displayRank === 1);
+                row.card.classList.toggle("is-top-2", displayRank === 2);
+                row.card.classList.toggle("is-top-3", displayRank === 3);
                 row.rank.textContent = "#" + displayRank;
                 row.name.textContent = displayName;
+
+                renderAvatarIdentity(row.avatarImg, row.avatarBadge, leaderboardPlayerAvatar(player));
+
                 row.territory.textContent = Math.round((player.territory_pct || 0) * 100) + "%";
                 row.troops.innerHTML =
                     escapeHudText(
@@ -2999,6 +3174,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                     ) +
                     " " +
                     hudIcon("troops", "sow-hud__inline-icon");
+
+                row.gpsBtn.dataset.playerId = String(player.id);
+                row.transferBtn.dataset.playerId = String(player.id);
+                row.transferBtn.disabled = !player.is_alive || !!player.is_me;
+                row.gpsBtn.disabled = !player.is_alive;
             }
             fragment.appendChild(row.card);
             nextRows[key] = row;
@@ -3082,7 +3262,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             presentation.kind === "portrait" && /^[a-z][a-z0-9_]*$/.test(presentation.slug || "")
                 ? presentation.slug
                 : "null";
-        const src = asset("gameplay/avatars/" + slug + ".webp");
+        const expression = presentation.expression;
+        const path =
+            expression && ["happy", "calm", "fear", "angry"].includes(expression)
+                ? "expressions/" + slug + "_" + expression
+                : slug;
+        const src = asset("gameplay/avatars/" + path + ".webp");
         image.hidden = false;
         if (image.getAttribute("src") !== src) image.src = src;
     }
@@ -4023,16 +4208,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
             hudRoot.dataset.overlayOpen = "false";
             hudRoot.dataset.notificationsVisible = "false";
-            if (hudRefs && hudRefs.mapMenu && !hudRefs.mapMenu.classList.contains("hidden")) {
-                console.info("[MAP MENU TRACE] HUD hidden", {
-                    phase: hudState && hudState.phase,
-                    mapOpen: Boolean(hudState && hudState.hud && hudState.hud.map_menu),
-                });
-                hudRefs.mapMenu.classList.add("hidden");
-            }
+            if (hudRefs && hudRefs.mapMenu) hudRefs.mapMenu.classList.add("hidden");
             leaderboardRows = Object.create(null);
             leaderboardRenderKey = "";
             lastLeaderboardPlayers = [];
+            lastLeaderboardTeams = [];
             if (hudRefs) {
                 hudRefs.inboxRequests = Object.create(null);
                 hudRefs.inboxRequestKeys = [];
@@ -4067,12 +4247,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         );
         const devTools = hud.dev_tools;
         const showDevTools = settings.show_dev_tools_available && settings.show_dev_tools;
-        const diagnosticsVisible = settings.show_fps_ping === true || showDevTools || devSidebarOpen;
+        const diagnosticsVisible = settings.show_fps_ping === true;
         if (hudRefs!.diagnostics) hudRefs!.diagnostics.hidden = !diagnosticsVisible;
         if (hudRefs!.devBtn) {
             hudRefs!.devBtn.classList.toggle("hidden", !showDevTools);
         }
-        if (hudDevLayer) hudDevLayer.hidden = !diagnosticsVisible;
+        if (hudDevLayer) hudDevLayer.hidden = !showDevTools && !devSidebarOpen;
         if (devTools.schema && hudRefs!.devSidebar) renderDevControls(devTools);
         const devConfig = devTools.config || {};
         if (hudRefs!.devSidebar) {
@@ -4394,8 +4574,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                     '[data-hud-setting="show_dev_tools"]',
                 );
                 if (muteInput && document.activeElement !== muteInput) muteInput.checked = !settings.mute_all;
-                if (musicInput && document.activeElement !== musicInput)
-                    musicInput.value = String(settings.music_volume == null ? 0.8 : settings.music_volume);
+                if (musicInput && document.activeElement !== musicInput) {
+                    const musicVol = settings.music_volume == null ? 0.8 : settings.music_volume;
+                    musicInput.value = String(musicVol);
+                    const pct = Math.round(Math.max(0, Math.min(1, Number(musicVol))) * 100);
+                    musicInput.style.setProperty("--sow-music-fill", pct + "%");
+                    const musicVal = hudRefs!.settings.querySelector<HTMLElement>("#sow-hud-music-value");
+                    if (musicVal) musicVal.textContent = pct + "%";
+                }
                 if (motionInput && document.activeElement !== motionInput)
                     motionInput.checked = Boolean(settings.reduced_motion);
                 if (freeZoomInput && document.activeElement !== freeZoomInput)
@@ -4486,7 +4672,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             hudRefs!.leaderboard.classList.toggle("hidden", !leaderboardOpen);
         }
         if (leaderboardOpen) {
-            updateLeaderboard(Array.isArray(hud.leaderboard) ? hud.leaderboard : lastLeaderboardPlayers);
+            updateLeaderboard(
+                Array.isArray(hud.leaderboard) ? hud.leaderboard : lastLeaderboardPlayers,
+                Array.isArray(hud.team_leaderboard) ? hud.team_leaderboard : lastLeaderboardTeams,
+            );
         }
 
         // Surrender Modal
@@ -4954,6 +5143,19 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
     if (hudRoot)
         hudRoot.addEventListener("keydown", function (event) {
+            if (
+                (event.key === "Enter" || event.key === " ") &&
+                event.target instanceof HTMLElement &&
+                event.target.tagName !== "INPUT" &&
+                event.target.tagName !== "TEXTAREA"
+            ) {
+                const roleButton = event.target.closest<HTMLElement>('[role="button"][data-command]');
+                if (roleButton && roleButton.tagName !== "BUTTON") {
+                    event.preventDefault();
+                    roleButton.click();
+                    return;
+                }
+            }
             if (hudRefs && hudRefs.betrayal && !hudRefs.betrayal.classList.contains("hidden")) {
                 if (event.key === "Escape") {
                     event.preventDefault();

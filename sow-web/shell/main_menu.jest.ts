@@ -132,9 +132,11 @@ export function renderSettings() {
         esc(SOW_t("menu.music_volume")) +
         "</span><b data-val-for='music_vol'>" +
         volPct +
-        "%</b></div><input type='range' name='music_volume' min='0' max='1' step='0.05' value='" +
+        "%</b></div><input type='range' name='music_volume' min='0' max='1' step='0.01' value='" +
         esc(vol) +
-        "' data-setting='music_volume'></label>" +
+        "' style='--sow-music-fill: " +
+        volPct +
+        "%;' data-setting='music_volume'></label>" +
         "<div class='sow-hud__setting-row sow-menu__settings-dropdown-row'><span>" +
         esc(SOW_t("menu.motion_animation")) +
         "</span>" +

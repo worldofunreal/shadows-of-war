@@ -254,7 +254,7 @@ impl SowEngine {
 
             if owner_here != fleet.owner_id
                 && Self::pre_defeat_watches(&pre_defeat_targets, pre_defeat_pending, owner_here)
-                && self.state.player(owner_here).is_some_and(|target| target.tile_count <= 1)
+                && self.state.player(owner_here).is_some_and(Self::pre_defeat_reached)
             {
                 if pre_defeat_pending.is_none() {
                     pre_defeat_pending = Some(owner_here);

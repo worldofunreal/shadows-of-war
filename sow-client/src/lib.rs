@@ -322,8 +322,13 @@ pub fn run_game(event_loop: winit::event_loop::EventLoop) {
 pub fn wasm_main() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
     diag::init_from_url();
-    console_log::init_with_level(log::Level::Info).expect("error initializing logger");
-    log::info!("SOW ENGINE WASM STARTING...");
+    // Production console: warnings and errors only. `?diag=1` restores info-level tracing.
+    let level = if diag::enabled() {
+        log::Level::Info
+    } else {
+        log::Level::Warn
+    };
+    console_log::init_with_level(level).expect("error initializing logger");
     crate::web_canvas::install_viewport_listeners();
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();

@@ -899,6 +899,18 @@ match_message_4 = "Cuộc chiến sẽ kết thúc, giấy tờ có thể đợi
 match_message_5 = "Trận chiến của anh sẽ kết thúc."
 
 [site]
+landing_build_expand = "Xây dựng. Mở rộng."
+landing_betray = "Phản bội."
+empire_starts = "Đế chế tiếp theo của bạn"
+empire_here = "bắt đầu từ đây."
+browse_all = "Xem tất cả"
+previous_leader = "Lãnh đạo trước"
+next_leader = "Lãnh đạo tiếp theo"
+clear_search = "Xóa tìm kiếm"
+art_unavailable = "Không thể tải hình minh họa"
+pause_motion = "Tạm dừng chuyển động"
+resume_motion = "Tiếp tục chuyển động"
+in_game = "Trong trò chơi"
 title = "Shadows of War — Chiến thuật nhiều người chơi"
 description = "Chọn một thủ lĩnh lịch sử, chiếm đất, xây thành phố và cảng, lập liên minh hoặc phản bội trong các cuộc chiến giành lãnh thổ theo thời gian thực."
 home = "Shadows of War — trang chủ"

@@ -160,61 +160,67 @@
     <!-- SOW_SITE_HEADER -->
 
     <main>
-      <section class="hero" id="top">
+      <section class="hero">
         <div class="hero-media" aria-hidden="true"><!-- SOW_SITE_HERO_MEDIA --></div>
+        <button class="motion-toggle" type="button" data-motion-toggle hidden aria-pressed="false">
+          <span data-motion-label>Pause motion</span>
+        </button>
         <div class="container">
-          <h1>
-            <span data-i18n="site.hero_command">Command</span> <em data-i18n="site.hero_map">the map.</em>
-          </h1>
-          <p class="hero-lede" data-i18n="site.hero_lede">
-            Pick a historical leader. Take land, build cities, factories, ports and towers, and fight for the
-            map. New leaders keep joining the roster.
-          </p>
-          <div class="hero-actions">
-            <a class="button button-orange" href="/play/"><span data-i18n="site.play">Play</span></a>
-            <a class="hero-link" href="#game" data-i18n="site.how_matches_work">How matches work</a>
-          </div>
-          <div class="hero-alpha" role="group" aria-labelledby="hero-alpha-label">
-            <p class="hero-alpha-label" id="hero-alpha-label" data-i18n="site.mobile_alpha_testing">
-              Mobile alpha testing
+          <div class="hero-copy">
+            <h1>
+              <span data-i18n="site.hero_command">Command</span> <em data-i18n="site.hero_map">the map.</em>
+            </h1>
+            <p class="hero-lede" data-i18n="site.hero_lede">
+              Pick a historical leader. Take land, build cities, factories, ports and towers, and fight for
+              the map. New leaders keep joining the roster.
             </p>
-            <div class="hero-alpha-links">
-              <a
-                class="hero-alpha-badge hero-alpha-badge--testflight"
-                href="https://testflight.apple.com/join/Y8fu4zch"
-                target="_blank"
-                rel="noopener"
-              >
-                <img
-                  class="hero-alpha-icon hero-alpha-icon--testflight"
-                  src="/assets/site/media/testflight-badge.svg"
-                  width="30"
-                  height="30"
-                  alt=""
-                  aria-hidden="true"
-                />
-                <span class="hero-alpha-copy"
-                  ><small data-i18n="site.testflight_badge_action">Join on</small><b>TestFlight</b></span
+            <div class="hero-actions">
+              <a class="button button-orange" href="/play/"><span data-i18n="site.play">Play</span></a>
+              <a class="hero-link" href="#game" data-i18n="site.how_matches_work">How matches work</a>
+            </div>
+            <div class="hero-alpha" role="group" aria-labelledby="hero-alpha-label">
+              <p class="hero-alpha-label" id="hero-alpha-label" data-i18n="site.mobile_alpha_testing">
+                Mobile alpha testing
+              </p>
+              <div class="hero-alpha-links">
+                <a
+                  class="hero-alpha-badge hero-alpha-badge--testflight"
+                  href="https://testflight.apple.com/join/Y8fu4zch"
+                  target="_blank"
+                  rel="noopener"
                 >
-              </a>
-              <a
-                class="hero-alpha-badge"
-                href="https://play.google.com/apps/testing/com.shadowsofwar"
-                target="_blank"
-                rel="noopener"
-              >
-                <img
-                  class="hero-alpha-icon hero-alpha-icon--google-play"
-                  src="/assets/site/media/google-play-badge.svg"
-                  width="30"
-                  height="30"
-                  alt=""
-                  aria-hidden="true"
-                />
-                <span class="hero-alpha-copy"
-                  ><small data-i18n="site.google_play_badge_action">Get it on</small><b>Google Play</b></span
+                  <img
+                    class="hero-alpha-icon hero-alpha-icon--testflight"
+                    src="/assets/site/media/testflight-badge.svg"
+                    width="30"
+                    height="30"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span class="hero-alpha-copy"
+                    ><small data-i18n="site.testflight_badge_action">Join on</small><b>TestFlight</b></span
+                  >
+                </a>
+                <a
+                  class="hero-alpha-badge"
+                  href="https://play.google.com/apps/testing/com.shadowsofwar"
+                  target="_blank"
+                  rel="noopener"
                 >
-              </a>
+                  <img
+                    class="hero-alpha-icon hero-alpha-icon--google-play"
+                    src="/assets/site/media/google-play-badge.svg"
+                    width="30"
+                    height="30"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span class="hero-alpha-copy"
+                    ><small data-i18n="site.google_play_badge_action">Get it on</small
+                    ><b>Google Play</b></span
+                  >
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -225,7 +231,8 @@
           <header class="section-head">
             <p class="eyebrow" data-i18n="site.how_matches_work">How matches work</p>
             <h2>
-              <span data-i18n="site.build_expand">Build, expand,</span> <em data-i18n="site.fight">fight.</em>
+              <span data-i18n="site.landing_build_expand">Build. Expand.</span>
+              <em data-i18n="site.landing_betray">Betray.</em>
             </h2>
             <p data-i18n="site.game_summary">
               Start small, turn territory into an economy, and decide when cooperation ends. Any alliance can
@@ -234,21 +241,87 @@
           </header>
           <ol class="step-list">
             <li class="step">
-              <img src="/assets/site/media/step-expand.webp" alt="" loading="lazy" decoding="async" />
-              <h3 data-i18n="site.build_momentum">Take land</h3>
-              <p data-i18n="site.build_momentum_body">Every tile you hold pays gold and troops.</p>
+              <picture class="chapter-art"
+                ><source media="(max-width: 700px)" srcset="/assets/site/media/step-expand-mobile.webp" />
+                <img
+                  src="/assets/site/media/step-expand.webp"
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  width="1600"
+                  height="900"
+              /></picture>
+              <div class="chapter-copy">
+                <h3 data-i18n="site.build_momentum">Take land</h3>
+                <p data-i18n="site.build_momentum_body">Every tile you hold pays gold and troops.</p>
+                <figure class="chapter-proof">
+                  <img
+                    src="/assets/site/media/game-expand.webp"
+                    width="1280"
+                    height="720"
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <figcaption data-i18n="site.in_game">In game</figcaption>
+                </figure>
+              </div>
             </li>
             <li class="step">
-              <img src="/assets/site/media/step-build.webp" alt="" loading="lazy" decoding="async" />
-              <h3 data-i18n="site.step_build">Build districts</h3>
-              <p data-i18n="site.step_build_body">
-                Cities, factories, ports and towers turn land into troops and gold.
-              </p>
+              <picture class="chapter-art"
+                ><source media="(max-width: 700px)" srcset="/assets/site/media/step-build-mobile.webp" />
+                <img
+                  src="/assets/site/media/step-build.webp"
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  width="1600"
+                  height="900"
+              /></picture>
+              <div class="chapter-copy">
+                <h3 data-i18n="site.step_build">Build districts</h3>
+                <p data-i18n="site.step_build_body">
+                  Cities, factories, ports and towers turn land into troops and gold.
+                </p>
+                <figure class="chapter-proof">
+                  <img
+                    src="/assets/site/media/game-build.webp"
+                    width="1280"
+                    height="720"
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <figcaption data-i18n="site.in_game">In game</figcaption>
+                </figure>
+              </div>
             </li>
             <li class="step">
-              <img src="/assets/site/media/step-war.webp" alt="" loading="lazy" decoding="async" />
-              <h3 data-i18n="site.break_frontier">Break the frontier</h3>
-              <p data-i18n="site.break_frontier_body">Attack, ally, betray. Hold the map to win.</p>
+              <picture class="chapter-art"
+                ><source media="(max-width: 700px)" srcset="/assets/site/media/step-war-mobile.webp" />
+                <img
+                  src="/assets/site/media/step-war.webp"
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  width="1600"
+                  height="900"
+              /></picture>
+              <div class="chapter-copy">
+                <h3 data-i18n="site.break_frontier">Break the frontier</h3>
+                <p data-i18n="site.break_frontier_body">Attack, ally, betray. Hold the map to win.</p>
+                <figure class="chapter-proof">
+                  <img
+                    src="/assets/site/media/game-war.webp"
+                    width="1280"
+                    height="720"
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <figcaption data-i18n="site.in_game">In game</figcaption>
+                </figure>
+              </div>
             </li>
           </ol>
         </div>
@@ -264,13 +337,97 @@
               pressure.
             </p>
           </header>
-          <div class="showcase" data-leader-detail aria-live="polite">
-            <!-- SOW_SITE_LEADER_SHOWCASE -->
-          </div>
-          <div class="roster" data-leaders-grid>
-            <!-- SOW_SITE_LEADERS -->
+          <div class="leader-layout">
+            <div class="leader-stage">
+              <div class="showcase" data-leader-detail>
+                <!-- SOW_SITE_LEADER_SHOWCASE -->
+              </div>
+              <div class="leader-controls">
+                <button
+                  class="leader-arrow"
+                  type="button"
+                  data-leader-prev
+                  aria-label="Previous leader"
+                  data-i18n="site.previous_leader"
+                  data-i18n-attr="aria-label"
+                >
+                  <span aria-hidden="true">&#8592;</span>
+                </button>
+                <span
+                  class="leader-position"
+                  data-leader-position
+                  aria-live="polite"
+                  aria-atomic="true"
+                ></span>
+                <button
+                  class="leader-browse"
+                  type="button"
+                  data-leader-browse
+                  aria-haspopup="dialog"
+                  aria-controls="leader-picker"
+                >
+                  <span data-i18n="site.browse_all">Browse all</span> <span data-leader-total></span>
+                </button>
+                <button
+                  class="leader-arrow"
+                  type="button"
+                  data-leader-next
+                  aria-label="Next leader"
+                  data-i18n="site.next_leader"
+                  data-i18n-attr="aria-label"
+                >
+                  <span aria-hidden="true">&#8594;</span>
+                </button>
+              </div>
+            </div>
+            <div class="leader-browser-home" data-leader-browser-home>
+              <div class="leader-browser" data-leader-browser>
+                <div class="leader-browser-heading">
+                  <h3 id="leader-picker-title" data-i18n="heroes.leader_list">Leader list</h3>
+                  <span data-roster-count aria-live="polite" aria-atomic="true"></span
+                  ><button
+                    class="picker-close"
+                    type="button"
+                    data-picker-close
+                    aria-label="Close"
+                    data-i18n="menu.close"
+                    data-i18n-attr="aria-label"
+                  >
+                    <span aria-hidden="true">&#215;</span>
+                  </button>
+                </div>
+                <label class="leader-search"
+                  ><span data-i18n="heroes.search_leaders">Search leaders</span
+                  ><input
+                    type="search"
+                    data-leader-search
+                    placeholder="Search leader or civilization"
+                    data-i18n="heroes.search_leader_civilization"
+                    data-i18n-attr="placeholder"
+                    autocomplete="off"
+                    aria-controls="landing-roster"
+                /></label>
+                <div class="roster-scroll" data-roster-scroll>
+                  <div class="roster" id="landing-roster" data-leaders-grid>
+                    <!-- SOW_SITE_LEADERS -->
+                  </div>
+                  <div class="roster-empty" data-roster-empty hidden>
+                    <p data-i18n="heroes.no_leaders">No leaders found.</p>
+                    <button class="hero-link" type="button" data-clear-search data-i18n="site.clear_search">
+                      Clear search
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
+        <dialog
+          class="leader-picker"
+          id="leader-picker"
+          aria-labelledby="leader-picker-title"
+          data-leader-picker
+        ></dialog>
       </section>
 
       <section class="landing-section maps" id="maps">
@@ -285,13 +442,35 @@
               Matchmaking rotates through the world and regional maps, from Europe to the Pacific.
             </p>
           </header>
+          <div class="map-explorer" data-map-explorer>
+            <!-- SOW_SITE_MAPS -->
+          </div>
         </div>
-        <ul class="map-strip">
-          <!-- SOW_SITE_MAPS -->
-        </ul>
       </section>
 
       <!-- SOW_SITE_TRAILER -->
+
+      <section class="landing-section closing" id="play">
+        <picture class="closing-art" aria-hidden="true"
+          ><source media="(max-width: 700px)" srcset="/assets/site/media/closing-mobile.webp" />
+          <img
+            src="/assets/site/media/closing-desktop.webp"
+            alt=""
+            loading="lazy"
+            decoding="async"
+            width="1600"
+            height="900"
+        /></picture>
+        <div class="container">
+          <p class="eyebrow" data-i18n="site.are_you_ready">Are you ready?</p>
+          <h2>
+            <span data-i18n="site.empire_starts">Your next empire</span>
+            <em data-i18n="site.empire_here">starts here.</em>
+          </h2>
+          <p data-i18n="site.play_now_body">Join a lobby, ally, betray, and take the map.</p>
+          <a class="button button-orange" href="/play/"><span data-i18n="site.open_game">Open game</span></a>
+        </div>
+      </section>
 
       <section class="landing-section faq" id="faq">
         <div class="container">
@@ -333,15 +512,6 @@
               </p>
             </details>
           </div>
-        </div>
-      </section>
-
-      <section class="landing-section closing" id="play">
-        <div class="container">
-          <p class="eyebrow" data-i18n="site.are_you_ready">Are you ready?</p>
-          <h2><span data-i18n="site.play_now_title">Play</span> <em data-i18n="site.now">now!</em></h2>
-          <p data-i18n="site.play_now_body">Join a lobby, ally, betray, and take the map.</p>
-          <a class="button button-orange" href="/play/"><span data-i18n="site.open_game">Open game</span></a>
         </div>
       </section>
     </main>

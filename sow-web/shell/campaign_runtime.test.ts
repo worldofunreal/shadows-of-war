@@ -193,7 +193,7 @@ test("the game adapter emits one localized speaker cue and waits for the native 
     const end = tutorial.indexOf("    function continueScene(", start);
     const commands = [];
     let acceptCommands = false;
-    const player = { id: 2, is_alive: true, centroid_x: 5, centroid_y: 6 };
+    const player = { id: 2, is_alive: true, centroid_x: 5, centroid_y: 6, manual_emote_active: false };
     const runtime = {
         definition: { speakers: { tribe: { faction: "trinovantes" } } },
         latestHud: {
@@ -260,6 +260,18 @@ test("the game adapter emits one localized speaker cue and waits for the native 
     assert.equal(commands.filter((command) => command.type === "tutorial_emote").length, 1);
     context.clear(line, "cue1");
     assert.equal(commands.at(-1).kind, null);
+    player.manual_emote_active = true;
+    const count = commands.length;
+    assert.equal(
+        context.play(line, "cue2"),
+        "unavailable",
+        "a manual emote takes priority over a new authored line",
+    );
+    assert.equal(
+        commands.length,
+        count,
+        "the skipped line emits no command and cannot replace the manual emote",
+    );
     player.is_alive = false;
     assert.equal(context.play(line, "cue2"), "unavailable");
 });
@@ -298,7 +310,7 @@ test("episode loading validates the resolved emote text before starting campaign
 });
 
 test("authored campaign emotes stay offline while multiplayer emotes keep their network path", () => {
-    const campaignStart = webMenu.indexOf("WebMenuCommand::TutorialEmote { kind, pinned");
+    const campaignStart = webMenu.search(/WebMenuCommand::TutorialEmote\s*\{\s*kind,\s*pinned/);
     const campaignEnd = webMenu.indexOf("WebMenuCommand::SetCampaignPreDefeatTargets", campaignStart);
     const multiplayerStart = webMenu.indexOf("WebMenuCommand::ExpressEmote {", campaignEnd);
     const multiplayerEnd = webMenu.indexOf("WebMenuCommand::ClearEmote", multiplayerStart);
@@ -306,16 +318,16 @@ test("authored campaign emotes stay offline while multiplayer emotes keep their 
     assert.ok(multiplayerStart > campaignEnd && multiplayerEnd > multiplayerStart);
     const campaignHandler = webMenu.slice(campaignStart, campaignEnd);
     const multiplayerHandler = webMenu.slice(multiplayerStart, multiplayerEnd);
-    assert.match(campaignHandler, /!self\.ui\.tutorial_active \|\| !self\.net\.is_offline/);
+    assert.match(campaignHandler, /!self\.ui\.tutorial_active\s*\|\|\s*!self\.net\.is_offline/);
     assert.match(multiplayerHandler, /GameplayIntent::ExpressEmote/);
     assert.match(multiplayerHandler, /self\.send_intent/);
 
-    const renderStart = nameplates.indexOf("let prepared = system.campaign_emote");
+    const renderStart = nameplates.search(/let prepared = system\s*\.campaign_emote/);
     const renderEnd = nameplates.indexOf("let needed = prepared", renderStart);
     const bubbleSelection = nameplates.slice(renderStart, renderEnd);
     assert.match(
         bubbleSelection,
-        /cue\.player_id == player\.id && cue\.event_id == emote\.event\.event_id && emote\.event\.scripted/,
+        /cue\.player_id == player\.id\s*&& cue\.event_id == emote\.event\.event_id\s*&& emote\.event\.scripted/,
     );
     assert.match(
         bubbleSelection,
@@ -2131,11 +2143,7 @@ test("Snettisham refuse goes straight to its reply while accept waits for the Sn
         "the step waits while its exchange plays",
     );
     playOut(greetingMachine, { contact_faction_ids: ["stonea"] }, 3300);
-    assert.deepEqual(
-        spoken,
-        ["stonea:greet", "boudica:threat"],
-        "Boudica answers after the bubble and pause",
-    );
+    assert.deepEqual(spoken, ["stonea:greet"], "Boudica's celebration waits for a confirmed alliance");
     playOut(greetingMachine, { contact_faction_ids: ["stonea"] }, 3300);
     const after = greetingMachine.update({ contact_faction_ids: ["stonea"] }, {});
     assert.equal(after.exchange, undefined, "the exchange ends after the last line");
@@ -2958,4 +2966,39 @@ test("every Boudica entity objective films its target and speaks an emote", () =
         [],
         "each entity objective has a camera move and an emote on the objective, its contact reaction or the encounter that follows",
     );
+});
+
+test("Boudica's opening mood ends only at the confirmed Stonea alliance, which celebrates once", () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const rules = campaign;
+    const definition = JSON.parse(
+        fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"),
+    );
+    const roster = JSON.parse(
+        fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.json"), "utf8"),
+    );
+    assert.deepEqual(rules.campaignBaseExpressions(definition, {}), { player: "angry" });
+    assert.deepEqual(
+        rules.campaignBaseExpressions(definition, { alliance_request_faction_ids: ["stonea"] }),
+        { player: "angry" },
+    );
+    assert.deepEqual(rules.campaignBaseExpressions(definition, { alliance_faction_ids: ["stonea"] }), {});
+    let now = 0;
+    const spoken = [];
+    const machine = campaign.create(definition, "boudica_first_contact", roster, () => now, {
+        onExchangeLine: (line) => {
+            spoken.push(line.emote);
+            return true;
+        },
+    });
+    assert.equal(machine.update({}, {}).reaction, undefined);
+    const facts = { alliance_faction_ids: ["stonea"] };
+    assert.equal(machine.update(facts, {}).reaction, "alliance_stonea");
+    assert.equal(spoken[0], "celebrate");
+    now = 3100;
+    machine.update(facts, {});
+    now = 3400;
+    machine.update(facts, {});
+    assert.equal(machine.update(facts, {}).reaction, undefined);
+    assert.equal(spoken.length, 1);
 });

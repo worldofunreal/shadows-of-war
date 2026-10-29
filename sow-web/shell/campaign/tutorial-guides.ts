@@ -144,6 +144,8 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
     ) {
         const context: TutorialRenderContext = {
             anchor: anchor,
+            players: (hud && hud.players) || [],
+            facts: (hud && hud.tutorial && hud.tutorial.facts) || {},
             reducedMotion: Boolean(hud && hud.settings && hud.settings.reduced_motion),
             direction: document.documentElement.dir,
         };

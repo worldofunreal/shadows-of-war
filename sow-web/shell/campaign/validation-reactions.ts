@@ -66,8 +66,12 @@ export function validateReactions(context: CampaignValidationContext) {
         const when = reaction.when,
             type = object(when) && when.type,
             target = object(when) && when.target;
-        if (!["contact", "first_contact", "support", "pre_defeat"].includes(type))
-            issue(null, "reactions.when", "Choose a supported contact, support, or pre-defeat event.");
+        if (!["contact", "first_contact", "support", "pre_defeat", "alliance"].includes(type))
+            issue(
+                null,
+                "reactions.when",
+                "Choose a supported contact, alliance, support, or pre-defeat event.",
+            );
         if (type === "contact") {
             const hasTarget = typeof target === "string";
             const hasRelation = typeof when.relation === "string";
@@ -79,7 +83,7 @@ export function validateReactions(context: CampaignValidationContext) {
                 issue(null, "reactions.when", "Choose one faction or all initially neutral factions.");
         }
         if (
-            type === "support" &&
+            ["support", "alliance"].includes(type) &&
             (typeof target !== "string" ||
                 (roster && !rosterFactions.has(target) && !allowMissingFactionReferences))
         )
