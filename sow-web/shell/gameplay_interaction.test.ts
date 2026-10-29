@@ -1003,3 +1003,42 @@ test("player nameplate in HUD acts as an alternate home button targeting center_
     );
     assert.match(hudCss, /\.sow-hud__nameplate\s*\{[^}]*pointer-events:\s*auto;[^}]*cursor:\s*pointer;/);
 });
+
+test("radial portraits follow live expressions without replacing buttons or canceling a hold", () => {
+    const part = (start, end) => hud.slice(hud.indexOf(start), hud.indexOf(end, hud.indexOf(start)));
+    const image = {
+        src: "",
+        hidden: false,
+        getAttribute() {
+            return this.src;
+        },
+        removeAttribute() {
+            this.src = "";
+        },
+    };
+    const emblem = { hidden: false, textContent: "", innerHTML: "" };
+    const held = { index: 2 };
+    const context = {
+        ring: { hot: 2, hold: held, slots: [] },
+        asset: (path) => path,
+        avatarIdentityKeys: new WeakMap(),
+        renderRingReadout() {},
+        menu: { querySelector: (selector) => (selector === ".sow-hud__ring-portrait" ? image : emblem) },
+    };
+    vm.runInNewContext(
+        part("    function bindAvatarFallback(", "    function clearNotificationCard(") +
+            part("    function patchRing(", "    function positionRing(") +
+            "this.patch = patchRing;",
+        context,
+    );
+    for (const [expression, expected] of [
+        ["angry", "expressions/boudica_angry"],
+        ["happy", "expressions/boudica_happy"],
+        ["calm", "boudica"],
+    ]) {
+        context.patch(context.menu, [], 0, { kind: "portrait", slug: "boudica", expression });
+        assert.equal(image.src, "gameplay/avatars/" + expected + ".webp");
+        assert.equal(context.ring.hot, 2);
+        assert.equal(context.ring.hold, held);
+    }
+});

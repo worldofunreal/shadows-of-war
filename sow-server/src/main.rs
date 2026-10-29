@@ -596,13 +596,16 @@ async fn init_ranked_bot_pool() -> Result<(), String> {
     if leaders.is_empty() {
         return Err("ranked bot leader catalog is empty".into());
     }
+    let name_pool = bot_fill::names::BOT_NAMES.as_slice();
     let bots: Vec<_> = (60..=180).step_by(20).flat_map(|iq| {
         let leaders = &leaders;
         (0..8).map(move |index| {
             let leader = leaders[(iq as usize / 20 + index) % leaders.len()];
+            // Catalog nickname per slot: 7 IQ steps × 8 slots = 56 unique names.
+            let display_name = name_pool[(iq as usize / 20 - 3) * 8 + index];
             serde_json::json!({
                 "external_id": format!("ranked-iq-{iq}-{index:02}"),
-                "display_name": format!("Ranked {iq}-{:02}", index + 1),
+                "display_name": display_name,
                 "leader": leader.name(),
                 "iq": iq,
             })
@@ -901,6 +904,16 @@ async fn fetch_ranked_rating(
     if rating.is_finite() { Ok((rating, score)) } else { Err("ranked rating value is invalid".into()) }
 }
 
+/// Matchmaking league score for a joining human. Short timeout so a slow
+/// database never holds up a join.
+async fn fetch_league_score(db_url: &str, secret: &str, account_id: &str) -> Result<u16, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(2))
+        .build()
+        .map_err(|error| error.to_string())?;
+    fetch_ranked_rating(&client, db_url, secret, account_id).await.map(|(_, score)| score)
+}
+
 async fn reserve_ranked_bot(
     client: &reqwest::Client,
     db_url: &str,
@@ -990,6 +1003,14 @@ fn take_ranked_pair(pending: &mut Vec<RankedQueueEntry>, now: tokio::time::Insta
     let low = first.min(second);
     let second_player = pending.remove(high).player;
     let first_player = pending.remove(low).player;
+    log::info!(
+        "[RANKED_PAIR] {} vs {} gap={:.0} wait={}s/{}s",
+        first_player.account_id,
+        second_player.account_id,
+        (first_player.rating - second_player.rating).abs(),
+        now.saturating_duration_since(first_player.search_started_at).as_secs(),
+        now.saturating_duration_since(second_player.search_started_at).as_secs(),
+    );
     Some([first_player, second_player])
 }
 
@@ -1127,12 +1148,17 @@ async fn run_ranked_queue(
                     continue;
                 }
                 let Some(expired_index) = pending.iter().enumerate()
-                    .filter(|(_, entry)| now.saturating_duration_since(entry.player.search_started_at) > Duration::from_secs(3)
+                    .filter(|(_, entry)| now.saturating_duration_since(entry.player.search_started_at) > Duration::from_secs(5)
                         && !entry.player.client_tx.is_closed()
                         && entry.last_bot_attempt.is_none_or(|attempt| now.saturating_duration_since(attempt) >= Duration::from_secs(5)))
                     .min_by_key(|(_, entry)| entry.player.search_started_at).map(|(index, _)| index) else { continue; };
                 pending[expired_index].last_bot_attempt = Some(now);
                 let account_id = pending[expired_index].player.account_id.clone();
+                log::info!(
+                    "[RANKED_BOT] account={} waited={}s, no human pair; reserving bot",
+                    account_id,
+                    now.saturating_duration_since(pending[expired_index].player.search_started_at).as_secs(),
+                );
                 let mut candidates = match ranked_candidates(&db_client, &db_url, &db_secret).await {
                     Ok(candidates) => candidates,
                     Err(error) => {
@@ -1168,9 +1194,11 @@ async fn run_ranked_queue(
                     }).unwrap_or(60);
                     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
                     let leader = sow_core::player::Leader::default().name();
+                    let name_pool = bot_fill::names::BOT_NAMES.as_slice();
+                    let display_name = name_pool[(stamp % name_pool.len() as u128) as usize];
                     let created = ranked_db_post(&db_client, &db_url, &db_secret, "internal/ranked-bot", serde_json::json!({
                         "action": "create", "external_id": format!("dynamic-{}-{stamp}", player.account_id),
-                        "display_name": format!("Ranked {iq}"), "leader": leader, "iq": iq,
+                        "display_name": display_name, "leader": leader, "iq": iq,
                         "actor": "matchmaking"
                     })).await;
                     if let Ok(payload) = created {
@@ -2150,15 +2178,17 @@ async fn main() {
                                                     continue;
                                                 }
 
-                                                let league_score = match &database_account_id {
-                                                    Some(account_id) => match fetch_ranked_rating(&reqwest::Client::new(), &db_url_conn, &db_secret_conn, account_id).await {
-                                                        Ok((_, score)) => Some(score),
+                                                // League only feeds matchmaking fillers; custom and private lobbies skip the lookup.
+                                                let matchmaking_join = payload.host_config.is_none() && !payload.host_private;
+                                                let league_score = match (&database_account_id, matchmaking_join) {
+                                                    (Some(account_id), true) => match fetch_league_score(&db_url_conn, &db_secret_conn, account_id).await {
+                                                        Ok(score) => Some(score),
                                                         Err(error) => {
                                                             log::error!("[LEAGUE] rating lookup failed for {account_id}: {error}");
                                                             None
                                                         }
                                                     },
-                                                    None => None,
+                                                    _ => None,
                                                 };
                                                 let _ = ev_tx.send(ServerEvent::Join {
                                                     name: payload.name,

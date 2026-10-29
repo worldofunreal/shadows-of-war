@@ -413,7 +413,7 @@ impl SowApp {
     }
 
     pub(crate) fn open_map_context_menu(&mut self, x: f64, y: f64) {
-        if self.ui.tutorial_camera_only || self.ui.observing {
+        if self.ui.tutorial_camera_only {
             return;
         }
         if self.ui.app.phase != crate::ClientPhase::Playing {
@@ -545,6 +545,9 @@ impl SowApp {
     }
 
     fn show_map_menu_unavailable(&mut self, tile_idx: u32) {
+        if self.ui.observing {
+            return;
+        }
         if self
             .map_target(tile_idx)
             .is_some_and(|target| target.owner == 0)
@@ -590,6 +593,9 @@ impl SowApp {
     }
 
     pub(crate) fn map_menu_actions(&mut self, tile_idx: u32) -> Vec<MapMenuAction> {
+        if self.ui.observing {
+            return Vec::new();
+        }
         let Some(target) = self.map_target(tile_idx) else {
             return Vec::new();
         };

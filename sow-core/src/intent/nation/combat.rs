@@ -937,7 +937,14 @@ impl SowEngine {
         }
 
         if context.has_land_move && !context.force_naval {
-            let odds = if context.has_hostile_neighbors { 10 } else { 5 };
+            // Ranked 1v1 only: boats are a real option (1 in 3 on neutral land, 1 in 5 vs a rival).
+            // Other modes keep the old odds so nation and tribe balance does not move.
+            let odds = match (self.state.config.ranked_1v1, context.has_hostile_neighbors) {
+                (true, false) => 3,
+                (true, true) => 5,
+                (false, false) => 5,
+                (false, true) => 10,
+            };
             let mut rng = WyRand::new(
                 self.state.seed
                     ^ u64::from(bot_id).wrapping_mul(0x9E37_79B9_7F4A_7C15)

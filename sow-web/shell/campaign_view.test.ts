@@ -2317,7 +2317,38 @@ test("player nameplate keeps the active leader portrait and shows the nickname r
     assert.ok(plateStart >= 0 && plateEnd > plateStart);
     const plateUpdate = hud.slice(plateStart, plateEnd);
     assert.match(plateUpdate, /plateLeader = leaderById\(hud\.player_leader/);
-    assert.match(plateUpdate, /gameplay\/avatars\/"\s*\+\s*\(plateLeader\.art_slug \|\| plateLeader\.slug\)/);
+    const pathStart = hud.indexOf("    function avatarPortraitPath(");
+    const pathEnd = hud.indexOf("    function renderAvatarIdentity(", pathStart);
+    const image = {
+        src: "",
+        getAttribute() {
+            return this.src;
+        },
+    };
+    const context = {
+        hud: {
+            is_spectating: false,
+            player_leader: "boudica",
+            player_name: "Queen",
+            player_avatar_expression: "angry",
+        },
+        hudRefs: { nameplate: { hidden: false }, plateAvatar: image, plateName: { textContent: "" } },
+        hudState: {},
+        leaderById: (id) => ({ art_slug: id, slug: id }),
+        asset: (path) => path,
+    };
+    const updatePlate = vm.runInNewContext(
+        hud.slice(pathStart, pathEnd) + "\n(function () {" + plateUpdate + "\n}}})",
+        context,
+    );
+    updatePlate();
+    assert.equal(image.src, "gameplay/avatars/expressions/boudica_angry.webp");
+    context.hud.player_avatar_expression = "happy";
+    updatePlate();
+    assert.equal(image.src, "gameplay/avatars/expressions/boudica_happy.webp");
+    context.hud.player_avatar_expression = "calm";
+    updatePlate();
+    assert.equal(image.src, "gameplay/avatars/boudica.webp");
     assert.match(plateUpdate, /platePlayerName = String\(hud\.player_name/);
     assert.match(plateUpdate, /plateName\.textContent = platePlayerName/);
     assert.doesNotMatch(plateUpdate, /plateName\.textContent = plateLeader\.name/);

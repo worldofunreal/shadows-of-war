@@ -10,12 +10,20 @@
   const mobile = window.matchMedia("(max-width: 960px)");
   const motionButton = $("[data-motion-toggle]");
   const heroVideo = $(".hero-video");
+  const stepVideos = $$("[data-step-video]");
   let motionPaused = false;
   let heroVisible = false;
   let videoFailed = false;
   function syncMotion() {
     const paused = motionPaused || prefersReducedMotion.matches;
     document.documentElement.classList.toggle("landing-motion-paused", paused);
+    stepVideos.forEach((video) => {
+      if (paused || document.visibilityState === "hidden" || video.dataset.inView === "false" || video.dataset.failed) {
+        video.pause();
+      } else {
+        video.play()?.catch(() => {});
+      }
+    });
     if (!heroVideo) return;
     if (paused || document.visibilityState === "hidden" || !heroVisible || videoFailed) {
       heroVideo.pause();

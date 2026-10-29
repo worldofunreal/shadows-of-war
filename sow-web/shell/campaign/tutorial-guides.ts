@@ -393,9 +393,31 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
         }
         let result;
         if (guide.kind === "world") {
-            const point = tutorial[guide.target];
-            if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) return null;
-            result = { x: Number(point.x), y: Number(point.y) };
+            if (guide.target === "upgrade_structure") {
+                const upgradeBtn =
+                    typeof document.querySelector === "function"
+                        ? document.querySelector<HTMLElement>(
+                              '#sow-hud-map-menu.is-building-card [data-map-action="upgrade_structure"]',
+                          )
+                        : null;
+                if (
+                    upgradeBtn &&
+                    typeof upgradeBtn.getClientRects === "function" &&
+                    upgradeBtn.getClientRects().length > 0 &&
+                    window.SOWCampaignView &&
+                    typeof window.SOWCampaignView.resolveUiAnchor === "function"
+                ) {
+                    const uiAnchor = window.SOWCampaignView.resolveUiAnchor(upgradeBtn, null);
+                    if (uiAnchor && Number.isFinite(Number(uiAnchor.x)) && Number.isFinite(Number(uiAnchor.y))) {
+                        result = uiAnchor;
+                    }
+                }
+            }
+            if (!result) {
+                const point = tutorial[guide.target];
+                if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) return null;
+                result = { x: Number(point.x), y: Number(point.y) };
+            }
         } else {
             if (guide.target === "map_transfer" && step.marker && !targetMapMenuOpen(step, hud)) {
                 const playerPoint = tutorial.player;

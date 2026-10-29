@@ -92,19 +92,30 @@ fn anon_band(league_score: Option<u16>) -> (f32, f32) {
     }
 }
 
-fn roll_anon_count(ghost_count: usize, band: (f32, f32), rng: &mut impl Rng) -> usize {
-    ((ghost_count as f32 * rng.gen_range(band.0..=band.1)).round() as usize).min(ANON_NAME_COUNT)
+/// Average ranked score of the humans in the lobby right now. `None` until a
+/// rated human is present.
+fn live_league_score(players: &[PlayerConnection]) -> Option<u16> {
+    let rated: Vec<u32> = players
+        .iter()
+        .filter(|p| !p.is_internal_bot)
+        .filter_map(|p| p.league_score.map(u32::from))
+        .collect();
+    (!rated.is_empty()).then(|| (rated.iter().sum::<u32>() / rated.len() as u32) as u16)
 }
 
-fn assign_anon_names(identities: &mut [BotPoolEntry], count: usize, rng: &mut impl Rng) {
-    let mut used = std::collections::HashSet::with_capacity(count);
-    for identity in identities.iter_mut().take(count) {
-        loop {
-            let name = format!("Anon{:04}", rng.gen_range(0..ANON_NAME_COUNT));
-            if used.insert(name.clone()) {
-                identity.display_name = name;
-                break;
-            }
+/// Per-ghost draw: each ghost takes its own share from the band, then flips
+/// against that share. Independent per ghost, so no lobby-wide count is fixed.
+fn anon_chance(league_score: Option<u16>, rng: &mut impl Rng) -> bool {
+    let (min, max) = anon_band(league_score);
+    rng.r#gen::<f32>() < rng.gen_range(min..=max)
+}
+
+/// A `Anon####` name the lobby does not already show.
+fn fresh_anon_name(taken: &dyn Fn(&str) -> bool, rng: &mut impl Rng) -> String {
+    loop {
+        let name = format!("Anon{:04}", rng.gen_range(0..ANON_NAME_COUNT));
+        if !taken(&name) {
+            return name;
         }
     }
 }
@@ -236,23 +247,6 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
                     Vec::new()
                 }
             };
-            let mut identities = identities;
-            let rated: Vec<u32> = g
-                .players
-                .iter()
-                .filter(|p| !p.is_internal_bot)
-                .filter_map(|p| p.league_score.map(u32::from))
-                .collect();
-            let league_score =
-                (!rated.is_empty()).then(|| (rated.iter().sum::<u32>() / rated.len() as u32) as u16);
-            let (league_tier, _) = sow_data::profile::tier_for_score(league_score.unwrap_or(0));
-            let anon_count = roll_anon_count(
-                target.saturating_sub(external_players),
-                anon_band(league_score),
-                &mut rng,
-            )
-            .min(identities.len());
-            assign_anon_names(&mut identities, anon_count, &mut rng);
             // Each ghost picks its own moment, uniform over [0, countdown].
             // Independent draws → clusters and silences emerge naturally; no
             // mean exists for a watcher to tap a tempo to.
@@ -265,13 +259,11 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
                 .collect();
             pending.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal));
             log::info!(
-                "[BOT_FILL] Lobby {}: target {} of {} ({:.0}%), league {}, {} Anons, {} ghosts each on their own clock",
+                "[BOT_FILL] Lobby {}: target {} of {} ({:.0}%), {} ghosts each on their own clock",
                 g.id,
                 target,
                 max,
                 pct * 100.0,
-                league_tier,
-                anon_count,
                 pending.len()
             );
             g.bot_fill_target = Some(target);
@@ -306,6 +298,13 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
             .into_iter()
             .map(|(account_id, display_name, _)| (account_id, display_name))
         {
+            // League is read at this ghost's entry, so humans already in the
+            // lobby decide its Anon share, not the lobby's state at first sighting.
+            let name = if anon_chance(live_league_score(&g.players), &mut rng) {
+                fresh_anon_name(&|candidate| g.players.iter().any(|p| p.name == candidate), &mut rng)
+            } else {
+                display_name
+            };
             let leader = Leader::nth(rng.gen_range(0..Leader::count()))
                 .expect("index drawn below the hero count");
             let player_id = g
@@ -345,7 +344,7 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
             };
 
             g.players.push(PlayerConnection {
-                name: display_name,
+                name,
                 clan_tag: String::new(),
                 player_id,
                 tx: dummy_tx,
@@ -385,62 +384,31 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{BotPoolEntry, anon_band, assign_anon_names, roll_anon_count};
+    use super::{anon_band, anon_chance, fresh_anon_name};
     use rand::{SeedableRng, rngs::StdRng};
     use std::collections::HashSet;
 
     #[test]
-    fn anon_share_follows_the_league_band() {
-        let mut rng = StdRng::seed_from_u64(7);
-        for _ in 0..100 {
-            let bronze = roll_anon_count(100, anon_band(None), &mut rng);
-            assert!((50..=70).contains(&bronze));
-            let silver = roll_anon_count(100, anon_band(Some(1300)), &mut rng);
-            assert!((20..=35).contains(&silver));
-            let gold = roll_anon_count(100, anon_band(Some(1700)), &mut rng);
-            assert!((5..=10).contains(&gold));
-            assert_eq!(roll_anon_count(100, anon_band(Some(2000)), &mut rng), 0);
-        }
-        assert_eq!(roll_anon_count(0, anon_band(None), &mut rng), 0);
+    fn anon_chance_follows_the_league_band() {
+        let draws = |league: Option<u16>| {
+            let mut rng = StdRng::seed_from_u64(7);
+            (0..10_000).filter(|_| anon_chance(league, &mut rng)).count() as f32 / 10_000.0
+        };
+        assert!((0.55..=0.65).contains(&draws(None)));
+        assert!((0.25..=0.30).contains(&draws(Some(1300))));
+        assert!((0.06..=0.09).contains(&draws(Some(1700))));
+        assert_eq!(draws(Some(2000)), 0.0);
+        assert_eq!(anon_band(Some(2000)), (0.0, 0.0));
     }
 
     #[test]
-    fn anon_names_are_unique_per_lobby_and_keep_pool_accounts() {
+    fn fresh_anon_names_avoid_names_already_in_the_lobby() {
         let mut rng = StdRng::seed_from_u64(11);
-        let mut identities: Vec<_> = (0..30)
-            .map(|i| BotPoolEntry {
-                account_id: format!("account-{i}"),
-                display_name: format!("PoolName{i}"),
-            })
-            .collect();
-        let account_ids: Vec<_> = identities
-            .iter()
-            .map(|entry| entry.account_id.clone())
-            .collect();
-
-        assign_anon_names(&mut identities, 12, &mut rng);
-
-        let anon_names: Vec<_> = identities
-            .iter()
-            .filter(|entry| entry.display_name.starts_with("Anon"))
-            .map(|entry| entry.display_name.as_str())
-            .collect();
-        assert_eq!(anon_names.len(), 12);
-        assert_eq!(anon_names.iter().collect::<HashSet<_>>().len(), 12);
-        assert!(anon_names.iter().all(|name| {
-            name.len() == 8 && name[4..].bytes().all(|byte| byte.is_ascii_digit())
-        }));
-        assert_eq!(
-            identities
-                .iter()
-                .map(|entry| entry.account_id.clone())
-                .collect::<Vec<_>>(),
-            account_ids
-        );
-        assert!(
-            identities[12..]
-                .iter()
-                .all(|entry| entry.display_name.starts_with("PoolName"))
-        );
+        let taken: HashSet<String> = (0..50).map(|i| format!("Anon{i:04}")).collect();
+        for _ in 0..200 {
+            let name = fresh_anon_name(&|candidate| taken.contains(candidate), &mut rng);
+            assert!(!taken.contains(&name));
+            assert!(name.len() == 8 && name[4..].bytes().all(|byte| byte.is_ascii_digit()));
+        }
     }
 }

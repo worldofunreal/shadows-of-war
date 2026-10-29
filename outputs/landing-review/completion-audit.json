@@ -1,0 +1,25 @@
+{
+  "status": "complete",
+  "local_url": "http://127.0.0.1:4173/",
+  "artwork_images": 10,
+  "viewports_verified": [
+    "desktop",
+    "mobile",
+    "narrow",
+    "tablet",
+    "landscape",
+    "zoom-200"
+  ],
+  "desktop_leaders_verified": 80,
+  "mobile_leaders_verified": 80,
+  "desktop_maps_verified": 14,
+  "mobile_maps_verified": 14,
+  "fallback_verified": true,
+  "catalog_languages_verified": 15,
+  "site_tests_passed": 11,
+  "styles_sha256": "4a4fa45114448ee07dea1ff64939fa8065c7fed6ab869098b8a19e692fffa2d4",
+  "controller_sha256": "cf318be536bb307c7177a4496370c05c2c368c6d1994f67b6b922ab9aafa53a3",
+  "live_bytes_match_browser_tests": true,
+  "video_brief_seconds": 12,
+  "matching_video_frames": true
+}

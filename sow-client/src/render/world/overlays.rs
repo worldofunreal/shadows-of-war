@@ -56,10 +56,6 @@ pub(crate) fn render_overlays(
     sf: f32,
     now: Instant,
     placement_can_confirm: bool,
-    building_panel: Option<&(
-        crate::ui::building_panel::BuildingPanel,
-        crate::ui::building_panel::BuildingPanelLayout,
-    )>,
 ) {
     let Some(snapshot) = sim.current_snapshot.as_ref() else {
         return;
@@ -113,9 +109,6 @@ pub(crate) fn render_overlays(
         now,
     );
     render_building_placement_controls(text, sim, ui, input, sf, placement_can_confirm);
-    if let Some((panel, layout)) = building_panel {
-        render_building_panel(text, panel, layout, &dev, sf);
-    }
 
     if !ui.tutorial_active {
         ui.tutorial_marker_player_id = None;
@@ -165,6 +158,7 @@ enum BuildingDetail {
 #[derive(Clone, Debug, PartialEq)]
 struct BuildingVisualStatus {
     progress: f32,
+    #[allow(dead_code)]
     label: Option<String>,
     color: [f32; 4],
 }
@@ -242,7 +236,7 @@ fn format_construction_time(ticks: u32, tick_rate_ms: f32) -> String {
     }
 }
 
-fn construction_progress(
+pub(crate) fn construction_progress(
     kind: BuildingKind,
     active_level: u8,
     target_level: u8,
@@ -455,12 +449,6 @@ fn render_buildings(
                 dev.font_char_spacing.max(0.1),
                 crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]),
             );
-        }
-
-        if let Some(status) = &building.status
-            && let Some(label) = &status.label
-        {
-            render_building_preview_badge(text, [center[0] * sf, center[1] * sf], label, dev, sf);
         }
     }
     ui.building_upgrade_flashes = building_upgrade_flashes;
@@ -1033,39 +1021,9 @@ fn icon_label_spacing(has_icon: bool, label: &str, font_size: f32) -> (f32, f32)
     }
 }
 
-/// Full width `push_icon_label` draws for this icon and label.
-fn icon_label_width(
-    text: &mut TextRenderer,
-    has_icon: bool,
-    label: &str,
-    font_size: f32,
-    char_spacing: f32,
-) -> f32 {
-    let (icon_px, gap) = icon_label_spacing(has_icon, label, font_size);
-    let width = if label.is_empty() {
-        0.0
-    } else {
-        text.measure_string(label, font_size, char_spacing).width
-    };
-    icon_px + gap + width
-}
-
-/// Width of each `push_icon_label_row` item: icon, text and pill padding.
-fn icon_label_row_widths(
-    text: &mut TextRenderer,
-    items: &[(NameplateStatusSprite, String)],
-    font_size: f32,
-    spacing: f32,
-    padding: f32,
-) -> Vec<f32> {
-    items
-        .iter()
-        .map(|(_, label)| icon_label_width(text, true, label, font_size, spacing) + 2.0 * padding)
-        .collect()
-}
-
 /// Letter size at which a row (`widths` measured at `font_size`, plus `gaps`) fits `max_width`.
 // ponytail: letters stop at 40% of their size; a longer row needs a wider button.
+#[cfg(test)]
 fn fitted_row_font(font_size: f32, widths: f32, gaps: f32, max_width: f32) -> f32 {
     let room = (max_width - gaps).max(0.0);
     if widths <= room || widths <= 0.0 {
@@ -1073,159 +1031,6 @@ fn fitted_row_font(font_size: f32, widths: f32, gaps: f32, max_width: f32) -> f3
     } else {
         font_size * (room / widths).max(0.4)
     }
-}
-
-/// Lays `items` out side by side, centered on `center` with `gap` between them.
-#[allow(clippy::too_many_arguments)]
-fn push_icon_label_row(
-    text: &mut TextRenderer,
-    items: &[(NameplateStatusSprite, String)],
-    center: [f32; 2],
-    font_size: f32,
-    gap: f32,
-    pill: Option<(f32, f32, [f32; 4], [f32; 4])>,
-    dev: &DevConfig,
-    sf: f32,
-) {
-    let spacing = dev.font_char_spacing.max(0.1);
-    let style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]);
-    let outline = crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]);
-    let padding = pill.map_or(0.0, |(padding, ..)| padding);
-    let widths = icon_label_row_widths(text, items, font_size, spacing, padding);
-    let total = widths.iter().sum::<f32>() + gap * items.len().saturating_sub(1) as f32;
-    let mut left = center[0] - total * 0.5;
-    for ((icon, label), width) in items.iter().zip(widths) {
-        let item_center = [left + width * 0.5, center[1]];
-        if let Some((_, height, fill, edge)) = pill {
-            text.push_rounded_rect(item_center, [width, height], 0.5, fill, edge, 1.5 * sf);
-        }
-        push_icon_label(
-            text,
-            Some(*icon),
-            label,
-            [item_center[0], item_center[1] + font_size * 0.3],
-            font_size,
-            style,
-            spacing,
-            outline,
-        );
-        left += width + gap;
-    }
-}
-
-/// What the next level adds, and the one-tap upgrade button, under your tapped
-/// building. While it builds, the row shows the seconds left instead.
-fn render_building_panel(
-    text: &mut TextRenderer,
-    panel: &crate::ui::building_panel::BuildingPanel,
-    layout: &crate::ui::building_panel::BuildingPanelLayout,
-    dev: &DevConfig,
-    sf: f32,
-) {
-    let scale = dev.font_size_scale.max(0.1);
-    let mut chips: Vec<(NameplateStatusSprite, String)> = panel
-        .remaining_seconds
-        .map(|seconds| {
-            (
-                NameplateStatusSprite::Clock,
-                crate::utils::format_number(seconds.ceil().max(0.0)),
-            )
-        })
-        .into_iter()
-        .collect();
-    chips.extend(
-        panel
-            .chips
-            .iter()
-            .map(|metric| (metric.icon, metric.label())),
-    );
-    if !chips.is_empty() {
-        push_icon_label_row(
-            text,
-            &chips,
-            layout.chips_center,
-            15.0 * sf * scale,
-            6.0 * sf,
-            Some((
-                8.0 * sf,
-                layout.chip_height,
-                [0.13, 0.09, 0.05, 0.9],
-                [0.86, 0.66, 0.28, 1.0],
-            )),
-            dev,
-            sf,
-        );
-    }
-    let Some(offer) = panel.upgrade else {
-        return;
-    };
-    let (fill, edge) = if offer.enabled {
-        ([0.98, 0.74, 0.22, 1.0], [0.36, 0.2, 0.05, 1.0])
-    } else {
-        ([0.52, 0.5, 0.47, 1.0], [0.2, 0.19, 0.18, 1.0])
-    };
-    text.push_rounded_rect(
-        layout.button_center,
-        layout.button_size,
-        0.3,
-        fill,
-        edge,
-        3.0 * sf,
-    );
-    let items = [
-        (NameplateStatusSprite::ArrowUp, offer.next_level.to_string()),
-        (
-            NameplateStatusSprite::Gold,
-            crate::utils::format_number(offer.cost),
-        ),
-        (
-            NameplateStatusSprite::Clock,
-            crate::utils::format_number(offer.seconds.ceil()),
-        ),
-    ];
-    // The tap area is the button, so the letters shrink to fit inside it.
-    let font_size = 18.0 * sf * scale;
-    let gap = 14.0 * sf;
-    let spacing = dev.font_char_spacing.max(0.1);
-    let widths = icon_label_row_widths(text, &items, font_size, spacing, 0.0);
-    let fitted = fitted_row_font(
-        font_size,
-        widths.iter().sum(),
-        gap * (items.len() - 1) as f32,
-        layout.button_size[0] - 24.0 * sf,
-    );
-    push_icon_label_row(
-        text,
-        &items,
-        layout.button_center,
-        fitted,
-        gap,
-        None,
-        dev,
-        sf,
-    );
-}
-
-fn render_building_preview_badge(
-    text: &mut TextRenderer,
-    center: [f32; 2],
-    label: &str,
-    dev: &DevConfig,
-    sf: f32,
-) {
-    let font_size = 14.0 * dev.font_size_scale.max(0.1) * sf;
-    let measure = text.measure_string(label, font_size, dev.font_char_spacing.max(0.1));
-    let top = center[1] - measure.height - 8.0 * sf;
-    push_icon_label(
-        text,
-        Some(NameplateStatusSprite::Construction),
-        label,
-        [center[0], top + measure.height * 0.5 + font_size * 0.3],
-        font_size,
-        crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]),
-        dev.font_char_spacing.max(0.1),
-        crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]),
-    );
 }
 
 fn cached_buildings<'a>(

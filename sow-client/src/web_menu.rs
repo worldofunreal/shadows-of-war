@@ -505,6 +505,7 @@ struct HudPublishKey {
     map_menu_view: Option<MapContextMenuView>,
     map_menu_session: u64,
     map_menu_tile: u32,
+    map_menu_camera: Option<(i32, i32, i32)>,
 }
 
 #[derive(Clone, Copy)]
@@ -929,6 +930,9 @@ impl SowApp {
                     tile_idx,
                     action,
                 } => {
+                    log::info!(
+                        "[MAP MENU TRACE] command session={session} tile={tile_idx} action={action:?}"
+                    );
                     if !self.ui.tutorial_camera_only {
                         self.handle_map_menu_action(session, tile_idx, action);
                     }
@@ -1568,19 +1572,6 @@ impl SowApp {
                     {
                         continue;
                     }
-                    if faction_id.is_none() && token.is_none() && message.is_none() {
-                        if let Some(player_id) = self.sim.my_player_id {
-                            self.ui.nameplates.clear_campaign_emote(None, player_id);
-                        }
-                        let intent = match kind {
-                            Some(kind) => {
-                                sow_core::protocol::GameplayIntent::ExpressEmote { kind, pinned }
-                            }
-                            None => sow_core::protocol::GameplayIntent::ClearEmote,
-                        };
-                        self.send_intent(intent);
-                        continue;
-                    }
                     let Some(engine) = self
                         .sim
                         .engine
@@ -1617,6 +1608,10 @@ impl SowApp {
                     else {
                         continue;
                     };
+                    // A story cleanup can release only a story emote, never the player's manual expression.
+                    if kind.is_none() && !player.active_emote.is_some_and(|event| event.scripted) {
+                        continue;
+                    }
                     if kind.is_some()
                         && self
                             .ui
@@ -1909,6 +1904,15 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         .as_ref()
         .map(|snapshot| snapshot.tick)
         .unwrap_or(0);
+    let my_pid = app.sim.my_player_id.unwrap_or(hud.my_player_id);
+    let me = my_player_summary(app, snapshot_tick, my_pid);
+    let snapshot = app.sim.current_snapshot.as_ref();
+    let has_active_construction = snapshot.is_some_and(|snapshot| {
+        snapshot
+            .buildings
+            .iter()
+            .any(|building| building.owner_id == my_pid && building.under_construction)
+    });
     let cold_open = app.ui.show_leaderboard
         || hud.building_placement.is_some()
         || hud.show_alliance_inbox
@@ -1916,10 +1920,8 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         || hud.show_betrayal_warning.is_some()
         || hud.sync_state.is_some()
         || tutorial_active
-        || map_menu.is_some();
-    let my_pid = app.sim.my_player_id.unwrap_or(hud.my_player_id);
-    let me = my_player_summary(app, snapshot_tick, my_pid);
-    let snapshot = app.sim.current_snapshot.as_ref();
+        || map_menu.is_some()
+        || has_active_construction;
     let combat_operations_tick = snapshot.map_or(0, |snapshot| {
         combat_operations_snapshot_tick(snapshot, my_pid, app.sim.engine.as_ref())
     });
@@ -2039,6 +2041,15 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         map_menu_view: map_menu.map(|menu| menu.view),
         map_menu_session: map_menu.map(|menu| menu.session).unwrap_or(0),
         map_menu_tile: map_menu.map(|menu| menu.tile_idx).unwrap_or(u32::MAX),
+        map_menu_camera: map_menu
+            .filter(|menu| menu.view == MapContextMenuView::BuildingDetails)
+            .map(|_| {
+                (
+                    app.input.camera_x.round() as i32,
+                    app.input.camera_y.round() as i32,
+                    (app.input.camera_zoom * 100.0).round() as i32,
+                )
+            }),
     }
 }
 
@@ -3346,12 +3357,65 @@ fn build_inbox(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) -> serde
     serde_json::Value::Array(requests)
 }
 
-fn building_detail_payload(building: &sow_core::protocol::BuildingSnapshot) -> serde_json::Value {
-    // The panel itself is drawn in the world; the shell only needs the kind
-    // for the radial icon and the tutorial's building_selected fact.
+fn building_detail_payload(
+    app: &SowApp,
+    building: &sow_core::protocol::BuildingSnapshot,
+    screen_scale: f32,
+) -> serde_json::Value {
+    let map_w = app.sim.map_w.max(1);
+    let footprint = sow_core::building::BuildingFootprint::at(
+        building.kind,
+        building.tile_idx % map_w,
+        building.tile_idx / map_w,
+    );
+    let zoom = app.input.camera_zoom;
+    let anchor_x = (app.input.camera_x
+        + (footprint.left as f32 + footprint.width as f32 * 0.5) * zoom)
+        / screen_scale;
+    let anchor_y = (app.input.camera_y
+        + (footprint.top as f32 + footprint.height as f32 * 0.5) * zoom)
+        / screen_scale;
+    let anchor_radius = (footprint.height as f32 * 0.5 * zoom / screen_scale).max(24.0);
+    let panel = app
+        .building_panel()
+        .filter(|panel| panel.tile_idx == building.tile_idx);
+    let chips = panel
+        .as_ref()
+        .map(|panel| {
+            panel
+                .chips
+                .iter()
+                .map(|metric| {
+                    serde_json::json!({
+                        "icon": metric.icon_name(),
+                        "label": metric.label(),
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let upgrade = panel.as_ref().and_then(|panel| panel.upgrade).map(|offer| {
+        serde_json::json!({
+            "next_level": offer.next_level,
+            "cost": offer.cost,
+            "seconds": offer.seconds,
+            "enabled": offer.enabled,
+        })
+    });
+    let remaining_seconds = panel.as_ref().and_then(|panel| panel.remaining_seconds);
+    let progress = panel.as_ref().and_then(|panel| panel.progress);
     serde_json::json!({
         "kind": building.kind.as_str(),
         "level": building.active_level(),
+        "max_level": building.kind.max_level(),
+        "under_construction": building.under_construction,
+        "anchor_x": anchor_x,
+        "anchor_y": anchor_y,
+        "anchor_radius": anchor_radius,
+        "remaining_seconds": remaining_seconds,
+        "progress": progress,
+        "chips": chips,
+        "upgrade": upgrade,
     })
 }
 
@@ -3613,7 +3677,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                             .iter()
                             .find(|building| building.tile_idx == menu.tile_idx)
                     })
-                    .map(building_detail_payload);
+                    .map(|building| building_detail_payload(app, building, screen_scale));
                 serde_json::json!({
                     "open": true,
                     "view": match menu.view {
@@ -3789,6 +3853,32 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "age_ms": feedback.spawned_at.elapsed().as_millis().min(u64::MAX as u128) as u64,
         })
     });
+    let tick_rate_ms = app.sim.config.tick_rate_ms;
+    let building_in_progress = snapshot.and_then(|snapshot| {
+        snapshot
+            .buildings
+            .iter()
+            .find(|building| building.owner_id == my_pid && building.under_construction)
+            .map(|building| {
+                let active_level = building.active_level();
+                let remaining_seconds =
+                    (f64::from(building.ticks_until_complete) * f64::from(tick_rate_ms) / 1000.0)
+                        .max(0.0);
+                let progress = crate::render::world::overlays::construction_progress(
+                    building.kind,
+                    active_level,
+                    building.level,
+                    building.ticks_until_complete,
+                )
+                .unwrap_or(0.0);
+                serde_json::json!({
+                    "kind": building.kind.as_str(),
+                    "level": building.level.max(1),
+                    "remaining_seconds": remaining_seconds,
+                    "progress": progress,
+                })
+            })
+    });
     let mut payload = serde_json::json!({
         "camera_zoom_state": {
             "current": app.input.camera_zoom,
@@ -3805,6 +3895,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "spawn_timer_secs": hud.spawn_timer_secs,
         "selected_building": selected_building,
         "building_placement": placement_payload,
+        "building_in_progress": building_in_progress,
         "selected_warship_build": hud.selected_warship_build,
         "selected_nuke": selected_nuke,
         "fleet_panel": {
@@ -3851,6 +3942,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "cost_gems": skin.cost_gems,
         })).unwrap_or(serde_json::Value::Null),
         "player_leader": me.map(|player| leader_id(player.leader)),
+        "player_avatar_expression": snapshot
+            .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == my_pid))
+            .and_then(|player| player_avatar_expression(player, app)),
         "player_name": snapshot
             .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == my_pid))
             .map(|player| player.name.as_str())

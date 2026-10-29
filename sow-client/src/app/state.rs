@@ -267,6 +267,8 @@ pub struct InputState {
     pub last_pinch_state: Option<(f64, f64, f64)>,
     pub map_context_menu: Option<MapContextMenu>,
     pub map_context_menu_session: u64,
+    /// Time of the last accepted right press; a repeat inside the lockout is ignored.
+    pub last_right_press: Option<web_time::Instant>,
     pub building_drag_offset: Option<(f32, f32)>,
     pub shift_pressed: bool,
     pub has_snapped_camera_to_spawn: bool,

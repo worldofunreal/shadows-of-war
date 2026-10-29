@@ -443,7 +443,8 @@ pub struct RankedSearch {
 }
 
 /// Select the oldest search that has a compatible human opponent, then its
-/// closest opponent. Both search windows must permit the rating difference.
+/// closest opponent. The longer-waiting search's window decides, so a newcomer
+/// can join a player who already earned a wider rating window.
 pub fn ranked_human_pair(searches: &[RankedSearch], now: std::time::Instant) -> Option<(usize, usize)> {
     let window = |search: &RankedSearch| {
         let seconds = now.saturating_duration_since(search.entered_at).as_secs();
@@ -458,7 +459,7 @@ pub fn ranked_human_pair(searches: &[RankedSearch], now: std::time::Instant) -> 
             let b = &searches[j];
             let difference = (a.rating - b.rating).abs();
             i != j && a.account_id != b.account_id && b.rating.is_finite()
-                && difference <= window(a).min(window(b))
+                && difference <= window(a).max(window(b))
         }).min_by(|&left, &right| {
             (a.rating - searches[left].rating).abs().total_cmp(&(a.rating - searches[right].rating).abs())
                 .then_with(|| searches[left].entered_at.cmp(&searches[right].entered_at))
@@ -1218,7 +1219,7 @@ pub fn build_lobby_broadcast(games: &[ServerLobby]) -> Vec<LobbyInfo> {
 #[cfg(test)]
 mod name_tests {
     #[test]
-    fn ranked_pair_uses_both_windows_and_oldest_compatible_search() {
+    fn ranked_pair_uses_the_longer_wait_window_and_oldest_compatible_search() {
         use super::{ranked_human_pair, RankedSearch};
         use std::time::{Duration, Instant};
         let now = Instant::now();
@@ -1228,8 +1229,15 @@ mod name_tests {
             RankedSearch { account_id: "c".into(), rating: 1090.0, entered_at: now },
         ];
         assert_eq!(ranked_human_pair(&searches, now), Some((0, 2)));
-        assert_eq!(ranked_human_pair(&searches[..2], now), None);
-        assert_eq!(ranked_human_pair(&searches[..2], now + Duration::from_secs(1)), Some((0, 1)));
+        // A waited 2 s (window 300); B is a newcomer at gap 150 and pairs now.
+        assert_eq!(ranked_human_pair(&searches[..2], now), Some((0, 1)));
+        // Two fresh searches (window 100 each) at gap 150 do not pair.
+        let fresh = vec![
+            RankedSearch { account_id: "x".into(), rating: 1000.0, entered_at: now },
+            RankedSearch { account_id: "y".into(), rating: 1150.0, entered_at: now },
+        ];
+        assert_eq!(ranked_human_pair(&fresh, now), None);
+        assert_eq!(ranked_human_pair(&fresh, now + Duration::from_secs(2)), Some((0, 1)));
     }
 
     #[test]
