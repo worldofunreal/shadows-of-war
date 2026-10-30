@@ -99,10 +99,42 @@
   const search = $("[data-leader-search]");
   const browser = $("[data-leader-browser]");
   const browserHome = $("[data-leader-browser-home]");
+  const showcase = $("[data-leader-detail]");
   const picker = $("[data-leader-picker]");
   const browse = $("[data-leader-browse]");
   let pickerScrollY = 0;
   let pickerReturnFocus = null;
+
+  function getCardImg(card) {
+    return card?.querySelector ? card.querySelector("img") : card?.children?.find?.((c) => c.tagName === "IMG") || null;
+  }
+
+  function setCardAvatar(card, cardIndex, expression) {
+    const img = getCardImg(card);
+    if (!img) return;
+    const slug = leaders[cardIndex]?.artSlug || card?.dataset?.artSlug;
+    if (!slug) return;
+    img.src =
+      expression === "calm"
+        ? `/assets/gameplay/avatars/${slug}.webp`
+        : `/assets/gameplay/avatars/expressions/${slug}_${expression}.webp`;
+  }
+
+  function isMobileViewport() {
+    return Boolean(mobile?.matches || (typeof window !== "undefined" && window.innerWidth <= 960));
+  }
+
+  function syncBrowserLocation() {
+    if (isMobileViewport()) {
+      if (showcase && browser && browser.parentElement !== showcase) {
+        showcase.append(browser);
+      }
+    } else {
+      if (browserHome && browser && browser.parentElement !== browserHome) {
+        browserHome.append(browser);
+      }
+    }
+  }
   const normalize = (text) => String(text).normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase();
 
   function showText(element, leader, field) {
@@ -130,15 +162,55 @@
     if ($("[data-roster-count]")) $("[data-roster-count]").textContent = `${shown} / ${leaders.length}`;
     if ($("[data-roster-empty]")) $("[data-roster-empty]").hidden = shown !== 0;
   }
+  let lastDirection = 1;
+  let enterTimer: any = null;
+
+  function safeClearTimeout(id: any) {
+    if (typeof clearTimeout === "function") clearTimeout(id);
+  }
+  function safeSetTimeout(fn: () => void, ms: number) {
+    if (typeof setTimeout === "function") return setTimeout(fn, ms);
+    fn();
+    return null;
+  }
+
+  function clearAnimationClasses() {
+    art?.classList.remove(
+      "is-animating-exit-next",
+      "is-animating-exit-prev",
+      "is-animating-enter-next",
+      "is-animating-enter-prev",
+    );
+    showcase?.classList.remove("is-transitioning", "is-copy-entering");
+  }
+
+  function triggerEnterAnimation() {
+    safeClearTimeout(enterTimer);
+    if (!prefersReducedMotion.matches) {
+      const enterClass = lastDirection === 1 ? "is-animating-enter-next" : "is-animating-enter-prev";
+      art?.classList.add(enterClass);
+      showcase?.classList.add("is-copy-entering");
+      enterTimer = safeSetTimeout(() => {
+        art?.classList.remove(enterClass);
+        showcase?.classList.remove("is-copy-entering");
+      }, 380);
+    }
+  }
+
   const isCurrentArtwork = () =>
     ["desktop", "mobile"].some((variant) =>
       image.currentSrc.endsWith(`/assets/shell/leaders/${activeArtSlug}_${variant}.webp`),
     );
   image?.addEventListener("load", () => {
-    if (isCurrentArtwork()) art.classList.remove("is-loading", "is-unavailable");
+    if (isCurrentArtwork()) {
+      art.classList.remove("is-loading", "is-unavailable", "is-animating-exit-next", "is-animating-exit-prev");
+      showcase?.classList.remove("is-transitioning");
+      triggerEnterAnimation();
+    }
   });
   image?.addEventListener("error", () => {
     if (!isCurrentArtwork()) return;
+    clearAnimationClasses();
     art.classList.remove("is-loading");
     art.classList.add("is-unavailable");
   });
@@ -146,15 +218,24 @@
     portrait.hidden = true;
   });
 
-  function updateLeader(index, animate = false) {
+  function updateLeader(index, animate = false, explicitDirection = 0) {
     const leader = leaders[index];
     if (!leader) return;
+    const direction = explicitDirection !== 0 ? explicitDirection : index >= activeLeaderIndex ? 1 : -1;
+    lastDirection = direction;
     activeLeaderIndex = index;
     const name = showText($("[data-detail-name]"), leader, "name");
     if (image) {
       image.alt = name;
       if (activeArtSlug !== leader.artSlug) {
         activeArtSlug = leader.artSlug;
+        safeClearTimeout(enterTimer);
+        art.classList.remove("is-animating-enter-next", "is-animating-enter-prev");
+        if (animate && !prefersReducedMotion.matches) {
+          const exitClass = direction === 1 ? "is-animating-exit-next" : "is-animating-exit-prev";
+          art.classList.add(exitClass);
+          showcase?.classList.add("is-transitioning");
+        }
         art.classList.add("is-loading");
         art.classList.remove("is-unavailable");
         portrait.hidden = false;
@@ -162,10 +243,13 @@
         // Change the responsive source first, so the browser never requests
         // the desktop art for an intermediate leader on a phone.
         if (mobileImage) mobileImage.srcset = `/assets/shell/leaders/${leader.artSlug}_mobile.webp`;
-        image.src = `/assets/shell/leaders/${leader.artSlug}_desktop.webp`;
-        if (image.complete && image.naturalWidth && isCurrentArtwork()) art.classList.remove("is-loading");
-        if (animate && !prefersReducedMotion.matches) {
-          art.animate?.([{ opacity: 0.65 }, { opacity: 1 }], { duration: 220, easing: "ease-out" });
+        image.src = isMobileViewport()
+          ? `/assets/shell/leaders/${leader.artSlug}_mobile.webp`
+          : `/assets/shell/leaders/${leader.artSlug}_desktop.webp`;
+        if (image.complete && image.naturalWidth && isCurrentArtwork()) {
+          art.classList.remove("is-loading", "is-animating-exit-next", "is-animating-exit-prev");
+          showcase?.classList.remove("is-transitioning");
+          if (animate) triggerEnterAnimation();
         }
       }
     }
@@ -180,6 +264,7 @@
       const active = cardIndex === index;
       card.classList.toggle("is-active", active);
       card.setAttribute("aria-pressed", String(active));
+      setCardAvatar(card, cardIndex, active ? "angry" : "calm");
     });
     // Reveal selection inside the roster without scrolling the page or preview.
     if (animate && !cards[index].hidden) {
@@ -196,7 +281,11 @@
   }
 
   function restoreBrowser() {
-    browserHome?.append(browser);
+    if (mobile.matches) {
+      showcase?.append(browser);
+    } else {
+      browserHome?.append(browser);
+    }
     document.documentElement.classList.remove("leader-picker-open");
     browse?.setAttribute("aria-expanded", "false");
     pickerReturnFocus?.focus({ preventScroll: true });
@@ -216,19 +305,57 @@
   $("[data-picker-close]")?.addEventListener("click", () => picker.close());
   mobile.addEventListener?.("change", () => {
     if (!mobile.matches && picker?.open) picker.close();
+    syncBrowserLocation();
+    if (image && leaders[activeLeaderIndex]) {
+      const mobileActive = isMobileViewport();
+      image.src = mobileActive
+        ? `/assets/shell/leaders/${leaders[activeLeaderIndex].artSlug}_mobile.webp`
+        : `/assets/shell/leaders/${leaders[activeLeaderIndex].artSlug}_desktop.webp`;
+      if (mobileImage) {
+        mobileImage.srcset = `/assets/shell/leaders/${leaders[activeLeaderIndex].artSlug}_mobile.webp`;
+      }
+    }
   });
-  cards.forEach((card, index) =>
+  cards.forEach((card, index) => {
     card.addEventListener("click", () => {
       updateLeader(index, true);
       if (picker?.open) picker.close();
-    }),
-  );
+    });
+    card.addEventListener("mouseenter", () => {
+      setCardAvatar(card, index, "happy");
+    });
+    card.addEventListener("mouseleave", () => {
+      setCardAvatar(card, index, index === activeLeaderIndex ? "angry" : "calm");
+    });
+    card.addEventListener("focus", () => {
+      if (index !== activeLeaderIndex) setCardAvatar(card, index, "happy");
+    });
+    card.addEventListener("blur", () => {
+      setCardAvatar(card, index, index === activeLeaderIndex ? "angry" : "calm");
+    });
+  });
+  cards.forEach((card, cardIndex) => {
+    setCardAvatar(card, cardIndex, cardIndex === activeLeaderIndex ? "angry" : "calm");
+  });
+  syncBrowserLocation();
+  if (isMobileViewport() && image && leaders[activeLeaderIndex]) {
+    image.src = `/assets/shell/leaders/${leaders[activeLeaderIndex].artSlug}_mobile.webp`;
+    if (mobileImage) {
+      mobileImage.srcset = `/assets/shell/leaders/${leaders[activeLeaderIndex].artSlug}_mobile.webp`;
+    }
+  }
   $("[data-leader-prev]")?.addEventListener("click", () =>
-    updateLeader((activeLeaderIndex - 1 + leaders.length) % leaders.length, true),
+    updateLeader((activeLeaderIndex - 1 + leaders.length) % leaders.length, true, -1),
   );
   $("[data-leader-next]")?.addEventListener("click", () =>
-    updateLeader((activeLeaderIndex + 1) % leaders.length, true),
+    updateLeader((activeLeaderIndex + 1) % leaders.length, true, 1),
   );
+  $$(".leader-arrow").forEach((btn) => {
+    btn.addEventListener("pointerdown", () => btn.classList.add("is-pressed"));
+    btn.addEventListener("pointerup", () => btn.classList.remove("is-pressed"));
+    btn.addEventListener("pointerleave", () => btn.classList.remove("is-pressed"));
+    btn.addEventListener("pointercancel", () => btn.classList.remove("is-pressed"));
+  });
   search?.addEventListener("input", () => {
     filterLeaders();
     if ($("[data-roster-scroll]")) $("[data-roster-scroll]").scrollTop = 0;

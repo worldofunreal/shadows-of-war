@@ -14,6 +14,10 @@ const leaderArtSlug = vm.runInNewContext(
         "\nleaderArtSlug;",
 );
 const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.ts"), "utf8");
+const settingsSource = fs.readFileSync(path.join(shell, "main_menu.settings.ts"), "utf8");
+const hudSource = fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
+const dropdownSource = fs.readFileSync(path.join(shell, "sow-dropdown.ts"), "utf8");
+const hudCss = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
 const surfacesSource = fs.readFileSync(path.join(shell, "main_menu.surfaces.ts"), "utf8");
 const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.ts"), "utf8");
 const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.ts"), "utf8");
@@ -75,7 +79,7 @@ test("mobile menu renders its language selector after locale bootstrap", async (
         addEventListener() {},
     };
     const context = { document, window };
-    vm.runInNewContext(siteDropdown, context);
+    vm.runInNewContext(siteDropdown.slice(siteDropdown.indexOf("(function () {")), context);
     vm.runInNewContext(siteChrome, context);
     await window.SOW_I18N_READY;
     await Promise.resolve();
@@ -117,10 +121,7 @@ test("ranked result shows a first league after placements, never a first-match d
     const end = shellSource.indexOf("\n}", start);
     assert.ok(start >= 0 && end > start);
     const context = { SOW_t: (key) => key };
-    const title = vm.runInNewContext(
-        shellSource.slice(start, end + 2) + "; rankedResultTitle;",
-        context,
-    );
+    const title = vm.runInNewContext(shellSource.slice(start, end + 2) + "; rankedResultTitle;", context);
     const result = {
         score_before: 1000,
         score_after: 838,
@@ -429,7 +430,7 @@ test("settings panel keeps only useful controls and real account state", () => {
         assert.match(body, /data-command='toggle_settings'/);
         assert.match(body, /menu\.music_volume/);
         assert.match(body, /menu\.motion_animation/);
-        assert.match(body, /menu\.language/);
+        assert.match(body, /renderLocaleSettingRow\(\)/);
         assert.match(body, /renderSettingsPrivacySection/);
         assert.match(body, /account-value/);
         assert.match(body, /settings-account/);
@@ -442,6 +443,56 @@ test("settings panel keeps only useful controls and real account state", () => {
         renderSettingsBody(jestSource, "function renderMenuAttribution"),
         /renderSettingsPrivacySection/,
     );
+    assert.match(
+        renderSettingsBody(jestSource, "function renderMenuAttribution"),
+        /renderLocaleSettingRow\(\)/,
+    );
+    assert.match(settingsSource, /SOW_t\("menu\.language"\)/);
+    assert.match(settingsSource, /key: dropdownKey/);
+    assert.match(settingsSource, /SOW_renderDropdown\([\s\S]*?options: localeOptions\(\)/);
+    assert.match(settingsSource, /setting: "locale"/);
+});
+
+test("language dropdowns keep their width and placement inside the viewport", () => {
+    const start = dropdownSource.indexOf("export function resetDropdownPosition(");
+    const end = dropdownSource.indexOf("export function syncDropdownScope(", start);
+    assert.ok(start >= 0 && end > start);
+    const context = vm.createContext({
+        document: { documentElement: { clientWidth: 390, clientHeight: 844, dir: "rtl" } },
+        window: { innerWidth: 390, innerHeight: 844 },
+    });
+    vm.runInContext(
+        dropdownSource.slice(start, end).replace(/\bexport\s+/g, "") +
+            "this.positionDropdown = positionDropdown; this.resetDropdownPosition = resetDropdownPosition;",
+        context,
+    );
+    const menu = { style: {}, scrollHeight: 548 };
+    context.positionDropdown(
+        { getBoundingClientRect: () => ({ left: 330, right: 380, top: 800, bottom: 840, width: 50 }) },
+        menu,
+    );
+    assert.equal(menu.style.position, "fixed");
+    assert.equal(menu.style.left, "330px");
+    assert.equal(menu.style.top, "554px");
+    assert.equal(menu.style.width, "50px");
+    assert.equal(menu.style.minWidth, "50px");
+    assert.equal(menu.style.maxHeight, "240px");
+    context.resetDropdownPosition(menu);
+    assert.equal(menu.style.minWidth, "");
+    assert.equal(menu.style.position, "");
+    assert.equal(menu.style.left, "");
+});
+
+test("custom game map dropdown stays viewport-positioned and keeps its own scroll", () => {
+    const createCss = menuCss["main_menu.create.css"];
+    const mapPanelRule = createCss.match(
+        /#sow-menu\[data-screen="create"\] \.sow-create__map-panel\s*\{([^}]*)\}/,
+    );
+    assert.ok(mapPanelRule);
+    assert.match(mapPanelRule[1], /backdrop-filter:\s*none;/);
+    assert.match(lobbiesSource, /key:\s*"create-map"/);
+    assert.match(dropdownSource, /menu\.style\.position\s*=\s*"fixed"/);
+    assert.match(createCss, /\.sow-create__scroll\s*\{[^}]*overflow-y:\s*auto;/s);
 });
 
 test("profile stays full-width and account erasure requires settings confirmation and server success", () => {
@@ -1234,7 +1285,7 @@ test("skill icons stay beside full hero details and out of compact avatar cards"
     );
     assert.doesNotMatch(full, /leaderHistoricalName\(/);
     const modalStart = heroesSource.indexOf("function renderHeroInfoModal");
-    const modalEnd = heroesSource.indexOf("function resetDropdownPosition", modalStart);
+    const modalEnd = heroesSource.indexOf("export function syncDropdowns", modalStart);
     assert.match(
         heroesSource.slice(modalStart, modalEnd),
         /renderHeroBriefing\(activeLeader, "modal", "sow-hero-info-selected"\)/,
@@ -1538,35 +1589,60 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
 });
 
 function rankedPresentationHarness() {
-    const source = fs.readFileSync(path.join(shell, "main_menu.ranked.ts"), "utf8")
-        .replace(/^import[\s\S]*?;\n/gm, "").replace(/\bexport\s+/g, "");
+    const source = fs
+        .readFileSync(path.join(shell, "main_menu.ranked.ts"), "utf8")
+        .replace(/^import[\s\S]*?;\n/gm, "")
+        .replace(/\bexport\s+/g, "");
     const frames = new Map();
     let frameId = 0;
     const context = {
-        asset: value => "/assets/" + value,
-        avatarImage: value => "/avatars/" + (value || "random"),
-        esc: value => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/'/g, "&#39;"),
-        formatMapName: lobby => lobby.map_name,
-        lobbyThumb: lobby => "/maps/" + lobby.map_name,
+        asset: (value) => "/assets/" + value,
+        avatarImage: (value) => "/avatars/" + (value || "random"),
+        esc: (value) =>
+            String(value ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/'/g, "&#39;"),
+        formatMapName: (lobby) => lobby.map_name,
+        lobbyThumb: (lobby) => "/maps/" + lobby.map_name,
         menuUi: { state: { my_player_id: 1, player_name: "Me" }, rankedRating: null, rankedLadder: null },
         SOW_t: (key, values = {}) => key + JSON.stringify(values),
-        requestAnimationFrame(callback) { const id = ++frameId; frames.set(id, callback); return id; },
-        cancelAnimationFrame(id) { frames.delete(id); },
+        requestAnimationFrame(callback) {
+            const id = ++frameId;
+            frames.set(id, callback);
+            return id;
+        },
+        cancelAnimationFrame(id) {
+            frames.delete(id);
+        },
     };
-    const api = vm.runInNewContext(source + "\n({ rankProgress, rankLabel, rankOverview, renderRankedDuel, animateRankResult });", context);
-    return { api, context, frames, tick(time) {
-        const pending = [...frames.values()]; frames.clear(); pending.forEach(fn => fn(time));
-    } };
+    const api = vm.runInNewContext(
+        source + "\n({ rankProgress, rankLabel, rankOverview, renderRankedDuel, animateRankResult });",
+        context,
+    );
+    return {
+        api,
+        context,
+        frames,
+        tick(time) {
+            const pending = [...frames.values()];
+            frames.clear();
+            pending.forEach((fn) => fn(time));
+        },
+    };
 }
 
 test("rank progress follows supplied boundaries, including jumps and the highest league", () => {
     const { api } = rankedPresentationHarness();
-    const ladder = { steps: [
-        { score: 800, tier: "Bronze", division: "IV" },
-        { score: 900, tier: "Bronze", division: "III" },
-        { score: 1200, tier: "Silver", division: "IV" },
-        { score: 3200, tier: "Grandmaster", division: null },
-    ], max_score: 4000 };
+    const ladder = {
+        steps: [
+            { score: 800, tier: "Bronze", division: "IV" },
+            { score: 900, tier: "Bronze", division: "III" },
+            { score: 1200, tier: "Silver", division: "IV" },
+            { score: 3200, tier: "Grandmaster", division: null },
+        ],
+        max_score: 4000,
+    };
     assert.equal(api.rankProgress(899, ladder).remaining, 1);
     assert.equal(api.rankProgress(900, ladder).fraction, 0);
     assert.equal(api.rankProgress(1200, ladder).step.tier, "Silver");
@@ -1582,10 +1658,17 @@ test("ranked search exposes no fictional map or opponent, while confirmed duel e
     const search = api.renderRankedDuel(null);
     assert.doesNotMatch(search, /sow-ranked__map|\/maps\//);
     assert.match(search, /sow-ranked__search-halo/);
-    const found = api.renderRankedDuel({ id: 7, map_name: "europe", players: [
-        { player_id: 1, name: "Me", leader: "Boudica", is_ready: true },
-        { player_id: 2, name: "<img src=x>", leader: "Caesar", is_ready: false },
-    ] }, true);
+    const found = api.renderRankedDuel(
+        {
+            id: 7,
+            map_name: "europe",
+            players: [
+                { player_id: 1, name: "Me", leader: "Boudica", is_ready: true },
+                { player_id: 2, name: "<img src=x>", leader: "Caesar", is_ready: false },
+            ],
+        },
+        true,
+    );
     assert.match(found, /is-found/);
     assert.match(found, /&lt;img/);
     assert.doesNotMatch(found, /<img src=x>/);
@@ -1595,26 +1678,56 @@ test("ranked search exposes no fictional map or opponent, while confirmed duel e
 test("rank result animates real points once and can finish immediately or cancel", () => {
     const { api, tick, frames } = rankedPresentationHarness();
     const fields = new Map();
-    for (const key of ["[data-rank-score]", "[data-rank-name]", "[data-rank-current-emblem]", "[data-rank-target]", "[data-rank-remaining]"])
+    for (const key of [
+        "[data-rank-score]",
+        "[data-rank-name]",
+        "[data-rank-current-emblem]",
+        "[data-rank-target]",
+        "[data-rank-remaining]",
+    ])
         fields.set(key, { textContent: "", innerHTML: "" });
     const fill = { style: {} };
     const track = { querySelector: () => fill, setAttribute() {} };
     fields.set("[role=progressbar]", track);
     const classes = new Set();
-    const card = { isConnected: true, dataset: {}, offsetWidth: 1,
-        querySelector: key => fields.get(key), classList: { add: key => classes.add(key), remove: key => classes.delete(key) } };
-    const result = { score_before: 1190, score_after: 1230, tier_before: "Bronze", division_before: "I",
-        tier_after: "Silver", division_after: "IV", games_played: 6, placements_complete: true,
-        ladder: { steps: [{ score: 1100, tier: "Bronze", division: "I" }, { score: 1200, tier: "Silver", division: "IV" }], max_score: 1600 } };
+    const card = {
+        isConnected: true,
+        dataset: {},
+        offsetWidth: 1,
+        querySelector: (key) => fields.get(key),
+        classList: { add: (key) => classes.add(key), remove: (key) => classes.delete(key) },
+    };
+    const result = {
+        score_before: 1190,
+        score_after: 1230,
+        tier_before: "Bronze",
+        division_before: "I",
+        tier_after: "Silver",
+        division_after: "IV",
+        games_played: 6,
+        placements_complete: true,
+        ladder: {
+            steps: [
+                { score: 1100, tier: "Bronze", division: "I" },
+                { score: 1200, tier: "Silver", division: "IV" },
+            ],
+            max_score: 1600,
+        },
+    };
     const motion = api.animateRankResult(card, result, () => false);
     assert.match(fields.get("[data-rank-score]").textContent, /1190/);
-    tick(0); tick(760);
+    tick(0);
+    tick(760);
     assert.match(fields.get("[data-rank-name]").textContent, /silver/);
     motion.finish();
     assert.match(fields.get("[data-rank-score]").textContent, /1230/);
     assert.equal(frames.size, 0);
     assert.ok(classes.has("is-rank-revealed"));
-    const reduced = api.animateRankResult(card, { ...result, score_after: 1180, tier_after: "Bronze", division_after: "I" }, () => true);
+    const reduced = api.animateRankResult(
+        card,
+        { ...result, score_after: 1180, tier_after: "Bronze", division_after: "I" },
+        () => true,
+    );
     assert.match(fields.get("[data-rank-score]").textContent, /1180/);
     assert.equal(frames.size, 0);
     reduced.cancel();
@@ -1622,27 +1735,53 @@ test("rank result animates real points once and can finish immediately or cancel
     interrupted.cancel();
     assert.equal(frames.size, 0);
     fields.get("[data-rank-current-emblem]").innerHTML = "unranked";
-    api.animateRankResult(card, { ...result, games_played: 1, placements_complete: false }, () => false).finish();
-    assert.equal(fields.get("[data-rank-current-emblem]").innerHTML, "unranked", "placement progress cannot reveal an assigned league");
+    api.animateRankResult(
+        card,
+        { ...result, games_played: 1, placements_complete: false },
+        () => false,
+    ).finish();
+    assert.equal(
+        fields.get("[data-rank-current-emblem]").innerHTML,
+        "unranked",
+        "placement progress cannot reveal an assigned league",
+    );
     assert.equal(frames.size, 0);
-    for (const played of [2, 3, 4]) {
-        api.animateRankResult(card, { ...result, games_played: played, placements_complete: false }, () => false).finish();
-        assert.equal(fields.get("[data-rank-current-emblem]").innerHTML, "unranked");
-    }
     const cases = [
         { ...result, games_played: 5 },
-        { ...result, score_before: 1230, score_after: 1180, tier_before: "Silver", division_before: "IV", tier_after: "Bronze", division_after: "I" },
+        {
+            ...result,
+            score_before: 1230,
+            score_after: 1180,
+            tier_before: "Silver",
+            division_before: "IV",
+            tier_after: "Bronze",
+            division_after: "I",
+        },
         { ...result, score_before: 1230, score_after: 1230, tier_before: "Silver", division_before: "IV" },
-        { ...result, score_before: 800, score_after: 1500, division_before: "IV", division_after: "I",
-            ladder: { steps: [
-                { score: 800, tier: "Bronze", division: "IV" }, { score: 900, tier: "Bronze", division: "III" },
-                { score: 1200, tier: "Silver", division: "IV" }, { score: 1300, tier: "Silver", division: "III" },
-                { score: 1400, tier: "Silver", division: "II" }, { score: 1500, tier: "Silver", division: "I" },
-            ], max_score: 1600 } },
+        {
+            ...result,
+            score_before: 800,
+            score_after: 1500,
+            division_before: "IV",
+            division_after: "I",
+            ladder: {
+                steps: [
+                    { score: 800, tier: "Bronze", division: "IV" },
+                    { score: 900, tier: "Bronze", division: "III" },
+                    { score: 1200, tier: "Silver", division: "IV" },
+                    { score: 1300, tier: "Silver", division: "III" },
+                    { score: 1400, tier: "Silver", division: "II" },
+                    { score: 1500, tier: "Silver", division: "I" },
+                ],
+                max_score: 1600,
+            },
+        },
     ];
     for (const scenario of cases) {
         api.animateRankResult(card, scenario, () => false);
-        tick(0); tick(760); tick(1160);
+        tick(0);
+        tick(760);
+        tick(1160);
         assert.match(fields.get("[data-rank-score]").textContent, new RegExp(String(scenario.score_after)));
         assert.equal(card.dataset.tier, scenario.tier_after.toLowerCase());
         assert.match(fields.get("[data-rank-name]").textContent, new RegExp(scenario.division_after));
@@ -1660,35 +1799,65 @@ test("ranked result acknowledges before replay, ignores duplicate presses, and t
         innerHTML = "";
         inert = false;
         setAttribute() {}
-        addEventListener(key, fn) { this.listeners[key] = fn; }
-        appendChild(child) { this.children.push(child); }
+        addEventListener(key, fn) {
+            this.listeners[key] = fn;
+        }
+        appendChild(child) {
+            this.children.push(child);
+        }
         querySelector(selector) {
             if (!this.controls) this.controls = {};
-            return this.controls[selector] ||= new Element();
+            return (this.controls[selector] ||= new Element());
         }
-        focus() { document.activeElement = this; }
+        focus() {
+            document.activeElement = this;
+        }
     }
     const document = { createElement: () => new Element(), activeElement: new Element() };
     const root = new Element();
     const commands = [];
     let finished = 0;
     const context = {
-        document, root, HTMLElement: Element,
+        document,
+        root,
+        HTMLElement: Element,
         menuUi: { state: { account_id: "me", menu_return: { match_id: "42" } }, rankedLadder: null },
         SOW_t: (key, values = {}) => key + JSON.stringify(values),
-        esc: value => String(value ?? ""), rankTier: value => value.toLowerCase(),
-        rankEmblem: () => "<span></span>", rankName: (tier, division) => tier + " " + division,
-        rankPlacements: count => "placements " + count, rankProgressMarkup: () => "",
-        animateRankResult: () => ({ finish() { finished++; }, cancel() {} }),
-        reducedRewardMotion: () => true, send: command => commands.push(command),
-        rankedResultDismissedKey: null, rankedStageKey: null, rankedStageCleanup: null, activeRewardStage: null,
-        removeRewardStage() { context.activeRewardStage = null; },
+        esc: (value) => String(value ?? ""),
+        rankTier: (value) => value.toLowerCase(),
+        rankEmblem: () => "<span></span>",
+        rankName: (tier, division) => tier + " " + division,
+        rankPlacements: (count) => "placements " + count,
+        rankProgressMarkup: () => "",
+        animateRankResult: () => ({
+            finish() {
+                finished++;
+            },
+            cancel() {},
+        }),
+        reducedRewardMotion: () => true,
+        send: (command) => commands.push(command),
+        rankedResultDismissedKey: null,
+        rankedStageKey: null,
+        rankedStageCleanup: null,
+        activeRewardStage: null,
+        removeRewardStage() {
+            context.activeRewardStage = null;
+        },
     };
     const start = shellSource.indexOf("function rankedResultKey(");
     const end = shellSource.indexOf("function maybePresentRewards(", start);
     vm.runInNewContext(shellSource.slice(start, end) + "; this.present = presentRankedResult;", context);
-    const result = { score_before: 1000, score_after: 838, tier_before: "Bronze", division_before: "II",
-        tier_after: "Bronze", division_after: "IV", games_played: 1, placements_complete: false };
+    const result = {
+        score_before: 1000,
+        score_after: 838,
+        tier_before: "Bronze",
+        division_before: "II",
+        tier_after: "Bronze",
+        division_after: "IV",
+        games_played: 1,
+        placements_complete: false,
+    };
     context.present(result);
     const layer = root.children.at(-1);
     const card = layer.children[0];

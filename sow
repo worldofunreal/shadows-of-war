@@ -198,6 +198,9 @@ case "${CMD}" in
     exit 0
     ;;
   m|map)
+    if [[ -f "${ROOT}/sow-dist/.env" ]]; then
+      set -a; source "${ROOT}/sow-dist/.env"; set +a
+    fi
     shift || true
     exec bun "${ROOT}/sow-tools/editors/campaign-editor/server.mts" "$@"
     ;;

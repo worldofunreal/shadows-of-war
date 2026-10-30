@@ -511,6 +511,8 @@ struct HudPublishKey {
     map_menu_session: u64,
     map_menu_tile: u32,
     map_menu_camera: Option<(i32, i32, i32)>,
+    building_progress_camera: Option<(i32, i32, i32)>,
+    building_celebration_count: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -1940,6 +1942,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .iter()
             .any(|building| building.owner_id == my_pid && building.under_construction)
     });
+    let has_active_celebrations = !app.ui.building_celebrations.is_empty();
     let cold_open = app.ui.show_leaderboard
         || hud.building_placement.is_some()
         || hud.show_alliance_inbox
@@ -1948,7 +1951,8 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         || hud.sync_state.is_some()
         || tutorial_active
         || map_menu.is_some()
-        || has_active_construction;
+        || has_active_construction
+        || has_active_celebrations;
     let combat_operations_tick = snapshot.map_or(0, |snapshot| {
         combat_operations_snapshot_tick(snapshot, my_pid, app.sim.engine.as_ref())
     });
@@ -2077,6 +2081,14 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
                     (app.input.camera_zoom * 100.0).round() as i32,
                 )
             }),
+        building_progress_camera: (has_active_construction || has_active_celebrations).then(|| {
+            (
+                app.input.camera_x.round() as i32,
+                app.input.camera_y.round() as i32,
+                (app.input.camera_zoom * 100.0).round() as i32,
+            )
+        }),
+        building_celebration_count: app.ui.building_celebrations.len(),
     }
 }
 
@@ -3642,6 +3654,12 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             screen_scale,
         );
         let cost = app.ui.app.hud_state.building_costs[placement.kind as usize];
+        let arrows = serde_json::json!({
+            "up": [controls.arrows[0].1[0] / screen_scale, controls.arrows[0].1[1] / screen_scale],
+            "right": [controls.arrows[1].1[0] / screen_scale, controls.arrows[1].1[1] / screen_scale],
+            "down": [controls.arrows[2].1[0] / screen_scale, controls.arrows[2].1[1] / screen_scale],
+            "left": [controls.arrows[3].1[0] / screen_scale, controls.arrows[3].1[1] / screen_scale],
+        });
         serde_json::json!({
             "pending": placement.pending,
             "can_confirm": placement_can_confirm,
@@ -3649,6 +3667,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "tile_idx": placement.tile_idx,
             "anchor_x": controls.center[0] / screen_scale,
             "anchor_y": controls.center[1] / screen_scale,
+            "arrows": arrows,
             "cost": cost,
             "reason": placement_reason,
         })
@@ -3868,10 +3887,14 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                     avatar.map(|avatar| {
                         let mut identity = serde_json::to_value(avatar)
                             .unwrap_or_else(|_| serde_json::json!({ "kind": "fallback" }));
-                        if let Some(expression) = notification.players[index]
+                        if let Some(player) = notification.players[index]
                             .and_then(|id| players.iter().find(|player| player.id == id))
-                            .and_then(|player| player_avatar_expression(player, app)) {
+                            && let Some(expression) = player_avatar_expression(player, app)
+                        {
                             identity["expression"] = serde_json::json!(expression);
+                            identity["transition"] = avatar_transition_value(
+                                app.ui.nameplates.avatar_presentation(player.id).transition,
+                            );
                         }
                         identity
                     })
@@ -3901,6 +3924,102 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         })
     });
     let tick_rate_ms = app.sim.config.tick_rate_ms;
+    let viewport_w = app.input.screen_w / screen_scale;
+    let viewport_h = app.input.screen_h / screen_scale;
+    let buildings_in_progress: Vec<serde_json::Value> = snapshot
+        .map(|snapshot| {
+            snapshot
+                .buildings
+                .iter()
+                .filter(|b| b.owner_id == my_pid && b.under_construction)
+                .map(|building| {
+                    let active_level = building.active_level();
+                    let remaining_seconds =
+                        (f64::from(building.ticks_until_complete) * f64::from(tick_rate_ms) / 1000.0)
+                            .max(0.0);
+                    let progress = crate::render::world::overlays::construction_progress(
+                        building.kind,
+                        active_level,
+                        building.level,
+                        building.ticks_until_complete,
+                    )
+                    .unwrap_or(0.0);
+                    let map_w = app.sim.map_w.max(1);
+                    let building_x = (building.tile_idx % map_w) as f32 + 0.5;
+                    let building_y = (building.tile_idx / map_w) as f32 + 0.5;
+                    let [screen_x, screen_y] =
+                        crate::render::world::overlays::building_screen_anchor_bottom(
+                            building_x,
+                            building_y,
+                            building.kind,
+                            building.level,
+                            &app.input,
+                            screen_scale,
+                        );
+                    let visible = screen_x >= -120.0
+                        && screen_x <= viewport_w + 120.0
+                        && screen_y >= -60.0
+                        && screen_y <= viewport_h + 100.0;
+                    serde_json::json!({
+                        "tile_idx": building.tile_idx,
+                        "kind": building.kind.as_str(),
+                        "level": building.level.max(1),
+                        "active_level": active_level,
+                        "remaining_seconds": remaining_seconds,
+                        "progress": progress,
+                        "screen_x": screen_x,
+                        "screen_y": screen_y,
+                        "visible": visible,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let building_celebrations: Vec<serde_json::Value> = snapshot
+        .map(|_| {
+            let now = web_time::Instant::now();
+            app.ui
+                .building_celebrations
+                .iter()
+                .filter_map(|(&tile_idx, &(kind, level, started))| {
+                    let elapsed = now.duration_since(started).as_millis() as u64;
+                    if elapsed >= 1600 {
+                        return None;
+                    }
+                    let map_w = app.sim.map_w;
+                    if map_w == 0 {
+                        return None;
+                    }
+                    let bx = (tile_idx % map_w) as f32 + 0.5;
+                    let by = (tile_idx / map_w) as f32 + 0.5;
+                    let [screen_x, screen_y] =
+                        crate::render::world::overlays::building_screen_anchor_bottom(
+                            bx,
+                            by,
+                            kind,
+                            level,
+                            &app.input,
+                            screen_scale,
+                        );
+                    let visible = screen_x >= -120.0
+                        && screen_x <= viewport_w + 120.0
+                        && screen_y >= -60.0
+                        && screen_y <= viewport_h + 100.0;
+                    Some(serde_json::json!({
+                        "tile_idx": tile_idx,
+                        "kind": kind.as_str(),
+                        "level": level,
+                        "screen_x": screen_x,
+                        "screen_y": screen_y,
+                        "age_ms": elapsed,
+                        "visible": visible,
+                    }))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
     let building_in_progress = snapshot.and_then(|snapshot| {
         snapshot
             .buildings
@@ -3943,6 +4062,8 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "selected_building": selected_building,
         "building_placement": placement_payload,
         "building_in_progress": building_in_progress,
+        "buildings_in_progress": buildings_in_progress,
+        "building_celebrations": building_celebrations,
         "selected_warship_build": hud.selected_warship_build,
         "selected_nuke": selected_nuke,
         "fleet_panel": {
@@ -3992,6 +4113,11 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "player_avatar_expression": snapshot
             .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == my_pid))
             .and_then(|player| player_avatar_expression(player, app)),
+        "player_avatar_transition": snapshot
+            .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == my_pid))
+            .filter(|player| player_avatar_expression(player, app).is_some())
+            .map(|player| avatar_transition_value(app.ui.nameplates.avatar_presentation(player.id).transition))
+            .unwrap_or(serde_json::Value::Null),
         "player_name": snapshot
             .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == my_pid))
             .map(|player| player.name.as_str())
@@ -4063,6 +4189,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             ("hovered", "id"),
             ("map_menu", "target_player_id"),
             ("transfer", "target_id"),
+            ("betrayal", "ally_id"),
         ] {
             if let Some(player) = payload[field][id_field]
                 .as_u64()
@@ -4089,7 +4216,23 @@ fn player_avatar_expression(
     (sow_data::commerce::leader_from_id(slug).is_some()
         && (player.campaign_avatar.is_some()
             || player.player_type == sow_core::player::PlayerType::Human))
-        .then(|| app.ui.nameplates.avatar_presentation(player.id).0)
+        .then(|| app.ui.nameplates.avatar_presentation(player.id).expression)
+}
+
+fn avatar_transition_value(
+    transition: Option<crate::render::world::nameplates::AvatarTransitionPresentation>,
+) -> serde_json::Value {
+    transition.map_or(serde_json::Value::Null, |transition| {
+        serde_json::json!({
+            "id": transition.id,
+            "from": transition.from,
+            "to": transition.to,
+            "stage": match transition.stage {
+                crate::render::world::nameplates::AvatarTransitionStage::Exit => "exit",
+                crate::render::world::nameplates::AvatarTransitionStage::Enter => "enter",
+            },
+        })
+    })
 }
 
 /// Presentation only: never write expression state into player identity or replay snapshots.
@@ -4098,14 +4241,23 @@ fn decorate_player_avatar(
     player: &sow_core::protocol::PlayerSnapshot,
     app: &SowApp,
 ) {
-    let (_, manual) = app.ui.nameplates.avatar_presentation(player.id);
+    let presentation = app.ui.nameplates.avatar_presentation(player.id);
     let expression = player_avatar_expression(player, app);
     value["avatar_expression"] = serde_json::json!(expression);
-    value["manual_emote_active"] = serde_json::json!(manual);
-    for field in ["avatar", "target_avatar"] {
+    value["avatar_transition"] = if expression.is_some() {
+        avatar_transition_value(presentation.transition)
+    } else {
+        serde_json::Value::Null
+    };
+    value["manual_emote_active"] = serde_json::json!(presentation.manual_emote_active);
+    for field in ["avatar", "target_avatar", "ally_avatar"] {
         if let Some(identity) = value[field].as_object_mut() {
             if let Some(expression) = expression {
                 identity.insert("expression".into(), serde_json::json!(expression));
+                identity.insert(
+                    "transition".into(),
+                    avatar_transition_value(presentation.transition),
+                );
             }
         }
     }

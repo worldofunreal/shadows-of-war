@@ -567,7 +567,7 @@
     node.appendChild(el("h3", {}, title));
     return node;
   }
-  function renderExchangeLines(host, lines, ownerId, label) {
+  function renderExchangeLines(host, lines, ownerId, label, emotesOnly = false) {
     lines.forEach(function (line, index) {
       const card = el("div", { class: "form-card" });
       const presentation = line.presentation || "emote";
@@ -583,10 +583,12 @@
         selectField(
           "Presentation",
           presentation,
-          [
-            { value: "emote", label: "Short emote bubble" },
-            { value: "dialogue", label: "Dialogue modal" },
-          ],
+          emotesOnly
+            ? [{ value: "emote", label: "Short emote bubble" }]
+            : [
+                { value: "emote", label: "Short emote bubble" },
+                { value: "dialogue", label: "Dialogue modal" },
+              ],
           function (value) {
             if (value === "dialogue") {
               line.presentation = "dialogue";
@@ -2828,22 +2830,57 @@
       const isPreDefeat = reaction.when.type === "pre_defeat";
       const isSupport = reaction.when.type === "support";
       const isAlliance = reaction.when.type === "alliance";
+      const isTimer = reaction.when.type === "timer";
       card.appendChild(
         el(
           "strong",
           {},
-          (isPreDefeat
-            ? "Before defeat · "
-            : isFirstContact
-              ? "First Iceni contact · "
-              : isContact
-                ? "Contact · "
-                : isAlliance
-                  ? "Alliance confirmed · "
-                  : "First support · ") + reaction.id,
+          (isTimer
+            ? "Timed emote · "
+            : isPreDefeat
+              ? "Before defeat · "
+              : isFirstContact
+                ? "First Iceni contact · "
+                : isContact
+                  ? "Contact · "
+                  : isAlliance
+                    ? "Alliance confirmed · "
+                    : "First support · ") + reaction.id,
         ),
       );
-      if (isContact) {
+      if (isTimer) {
+        card.appendChild(
+          inputField(
+            "After (ms)",
+            reaction.when.after_ms,
+            function (value) {
+              const milliseconds = Number(value);
+              if (Number.isSafeInteger(milliseconds) && milliseconds > 0 && milliseconds <= 600000)
+                reaction.when.after_ms = milliseconds;
+              markDirty();
+            },
+            { type: "number", min: 1, max: 600000, step: 100 },
+          ),
+        );
+        card.appendChild(
+          selectField(
+            "During active objective",
+            reaction.during || "",
+            [{ value: "", label: "Choose an objective" }].concat(
+              state.definition.steps
+                .filter(function (step) {
+                  return ["objective", "guide"].includes(step.type);
+                })
+                .map(stepOption),
+            ),
+            function (value) {
+              if (value) reaction.during = value;
+              else delete reaction.during;
+              markDirty();
+            },
+          ),
+        );
+      } else if (isContact) {
         const contactTargetOptions = [
           { value: "any_neutral", label: "Any initially neutral faction" },
         ].concat(factionOptions());
@@ -3091,59 +3128,61 @@
         }
       }
       const responsePresentation = reaction.presentation === "exchange" ? "exchange" : "dialogue";
-      const presentationOptions = [
-        { value: "dialogue", label: reaction.exchange ? "Dialogue, then exchange" : "Dialogue modal" },
-      ];
-      if (!reaction.choices && !reaction.outcome && reaction.gold_cost == null)
+      const presentationOptions = isTimer
+        ? [{ value: "exchange", label: "Automatic emote exchange" }]
+        : [{ value: "dialogue", label: reaction.exchange ? "Dialogue, then exchange" : "Dialogue modal" }];
+      if (!isTimer && !reaction.choices && !reaction.outcome && reaction.gold_cost == null)
         presentationOptions.push({ value: "exchange", label: "Automatic exchange" });
-      card.appendChild(
-        selectField("Response", responsePresentation, presentationOptions, function (value) {
-          if (value === "exchange") {
-            const actor =
-              reaction.speaker ||
-              Object.keys(state.definition.speakers || {}).find(function (speakerId) {
-                return state.definition.speakers[speakerId].faction === reaction.when.target;
-              }) ||
-              Object.keys(state.definition.speakers || {}).find(function (speakerId) {
-                return !state.definition.speakers[speakerId].faction;
-              });
-            if (!reaction.exchange || !reaction.exchange.length) {
-              reaction.exchange = reaction.body_key
-                ? [
-                    {
-                      speaker: actor,
-                      presentation: "dialogue",
-                      title_key: reaction.title_key,
-                      show_title: reaction.show_title,
-                      body_key: reaction.body_key,
-                      delay_ms: 0,
-                    },
-                  ]
-                : [
-                    {
-                      speaker: actor,
-                      presentation: "emote",
-                      emote: "threat",
-                      emote_text_key: storyKey(reaction.id + "_line_1_emote"),
-                      delay_ms: window.SOWCampaign.EXCHANGE_DEFAULT_REPLY_DELAY_MS,
-                    },
-                  ];
+      if (!isTimer) {
+        card.appendChild(
+          selectField("Response", responsePresentation, presentationOptions, function (value) {
+            if (value === "exchange") {
+              const actor =
+                reaction.speaker ||
+                Object.keys(state.definition.speakers || {}).find(function (speakerId) {
+                  return state.definition.speakers[speakerId].faction === reaction.when.target;
+                }) ||
+                Object.keys(state.definition.speakers || {}).find(function (speakerId) {
+                  return !state.definition.speakers[speakerId].faction;
+                });
+              if (!reaction.exchange || !reaction.exchange.length) {
+                reaction.exchange = reaction.body_key
+                  ? [
+                      {
+                        speaker: actor,
+                        presentation: "dialogue",
+                        title_key: reaction.title_key,
+                        show_title: reaction.show_title,
+                        body_key: reaction.body_key,
+                        delay_ms: 0,
+                      },
+                    ]
+                  : [
+                      {
+                        speaker: actor,
+                        presentation: "emote",
+                        emote: "threat",
+                        emote_text_key: storyKey(reaction.id + "_line_1_emote"),
+                        delay_ms: window.SOWCampaign.EXCHANGE_DEFAULT_REPLY_DELAY_MS,
+                      },
+                    ];
+              }
+              ["title_key", "body_key", "show_title", "speaker_role_key", "emote", "emote_text_key"].forEach(
+                function (key) {
+                  delete reaction[key];
+                },
+              );
+              reaction.presentation = "exchange";
+            } else {
+              reaction.presentation = "dialogue";
+              reaction.body_key = reaction.body_key || storyKey(reaction.id + "_body");
             }
-            ["title_key", "body_key", "show_title", "speaker_role_key", "emote", "emote_text_key"].forEach(
-              function (key) {
-                delete reaction[key];
-              },
-            );
-            reaction.presentation = "exchange";
-          } else {
-            reaction.presentation = "dialogue";
-            reaction.body_key = reaction.body_key || storyKey(reaction.id + "_body");
-          }
-          markDirty();
-          renderSettings();
-        }),
-      );
-      if (reaction.presentation !== "exchange") {
+            markDirty();
+            renderSettings();
+          }),
+        );
+      }
+      if (!isTimer && reaction.presentation !== "exchange") {
         card.appendChild(
           selectField("Speaker", reaction.speaker || "", speakerOptions(), function (value) {
             if (value) reaction.speaker = value;
@@ -3168,7 +3207,7 @@
         catalogTextField(card, "Dialogue", reaction.body_key, 4);
       }
       if (reaction.exchange) {
-        renderExchangeLines(card, reaction.exchange, reaction.id, "Exchange line");
+        renderExchangeLines(card, reaction.exchange, reaction.id, "Exchange line", isTimer);
         if (reaction.exchange.length < 16) {
           const addExchangeLine = el("button", { type: "button" }, "Add exchange line");
           addExchangeLine.addEventListener("click", function () {
@@ -3439,6 +3478,34 @@
       markDirty();
       renderSettings();
     }
+    function addTimedReaction() {
+      const gate = state.definition.steps.find(function (step) {
+        return ["objective", "guide"].includes(step.type);
+      });
+      const speakers = Object.keys(state.definition.speakers || {});
+      const speaker = speakers.find(function (id) {
+        return id === "boudica";
+      }) || speakers[0];
+      if (!gate || !speaker) return;
+      const responseId = uniqueId("campaign_timer", state.definition.reactions || []);
+      state.definition.reactions = (state.definition.reactions || []).concat({
+        id: responseId,
+        when: { type: "timer", after_ms: 5000 },
+        during: gate.id,
+        presentation: "exchange",
+        exchange: [
+          {
+            speaker: speaker,
+            presentation: "emote",
+            emote: "threat",
+            emote_text_key: storyKey(responseId + "_line_1_emote"),
+            delay_ms: 0,
+          },
+        ],
+      });
+      markDirty();
+      renderSettings();
+    }
     const addCampaignProvocation = el("button", { type: "button" }, "Add next active-objective provocation");
     addCampaignProvocation.disabled = encounterGates("contact").length === 0;
     addCampaignProvocation.addEventListener("click", function () {
@@ -3449,6 +3516,12 @@
     addPreDefeatExchange.addEventListener("click", function () {
       addEncounterReaction("pre_defeat");
     });
+    const addTimedResponse = el("button", { type: "button" }, "Add timed emote response");
+    addTimedResponse.disabled =
+      !state.definition.steps.some(function (step) {
+        return ["objective", "guide"].includes(step.type);
+      }) || !Object.keys(state.definition.speakers || {}).length;
+    addTimedResponse.addEventListener("click", addTimedReaction);
     reactions.append(
       addContactReaction,
       addNeutralNegotiation,
@@ -3457,6 +3530,7 @@
       addSupportReaction,
       addCampaignProvocation,
       addPreDefeatExchange,
+      addTimedResponse,
     );
     host.appendChild(reactions);
     host.appendChild(
@@ -3531,7 +3605,8 @@
             ),
             function (value) {
               if (!value) delete speaker.base_expression;
-              else
+              else {
+                const afterExpression = speaker.base_expression?.after_expression;
                 speaker.base_expression = {
                   expression: value,
                   until: speaker.base_expression?.until || {
@@ -3539,15 +3614,35 @@
                     target: state.roster.factions[0].id,
                   },
                 };
+                if (afterExpression) speaker.base_expression.after_expression = afterExpression;
+              }
               markDirty();
               renderSettings();
             },
           ),
         );
-        if (speaker.base_expression)
+        if (speaker.base_expression) {
           card.appendChild(
             selectField(
-              "Return to automatic after alliance with",
+              "After alliance",
+              speaker.base_expression.after_expression || "",
+              [{ value: "", label: "Automatic" }].concat(
+                ["happy", "calm", "fear", "angry"].map(function (value) {
+                  return { value, label: value };
+                }),
+              ),
+              function (value) {
+                if (value) speaker.base_expression.after_expression = value;
+                else delete speaker.base_expression.after_expression;
+                markDirty();
+              },
+            ),
+          );
+          card.appendChild(
+            selectField(
+              speaker.base_expression.after_expression
+                ? "Change expression after alliance with"
+                : "Return to automatic after alliance with",
               speaker.base_expression.until.target,
               factionOptions(),
               function (value) {
@@ -3556,6 +3651,7 @@
               },
             ),
           );
+        }
       }
       if (speaker.faction) {
         const boundFaction =
@@ -5409,6 +5505,7 @@
     }
     (state.definition.reactions || []).forEach(function (reaction) {
       const type = reaction.when.type;
+      if (type === "timer") return;
       const isContact = type === "contact" || type === "first_contact";
       let target =
         reaction.when.target ||

@@ -205,8 +205,14 @@ impl SowApp {
             return;
         }
         self.ui.app.asset_loader.catalog_in_flight = true;
+        // Seconds-resolution cache buster: a catalog re-fetched after the owner
+        // publishes a map must not come back from the browser or CDN cache.
+        let cache_bust = web_time::SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_secs())
+            .unwrap_or(0);
         let url = format!(
-            "{}/catalog.bin",
+            "{}/catalog.bin?v={cache_bust}",
             self.asset_config.maps_base.trim_end_matches('/')
         );
         let tx = self.tasks.map_tx.clone();

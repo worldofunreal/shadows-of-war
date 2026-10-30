@@ -290,6 +290,7 @@ impl SowApp {
                 ),
                 building_levels_seen: std::collections::HashMap::new(),
                 building_upgrade_flashes: std::collections::HashMap::new(),
+                building_celebrations: std::collections::HashMap::new(),
                 last_resource_notice_tick: None,
                 border_flashes: Vec::new(),
                 alliance_celebrations: std::collections::VecDeque::with_capacity(

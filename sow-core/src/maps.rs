@@ -14,10 +14,32 @@ pub const SERVER_MAPS_ROOT: &str = "assets/maps";
 /// Repo path for the canonical map library. The client embeds `world/` from this same tree.
 pub const BUNDLED_MAPS_ROOT: &str = "assets/maps";
 
-/// Mobile-safe upper bound (1000×1000 baseline).
-pub const MAX_MAP_PIXELS: u32 = 1_000_000;
-/// Max width or height when targeting [`MAX_MAP_PIXELS`].
-pub const MAX_MAP_AXIS: u32 = 1_000;
+/// Largest map the game accepts: `huge` in the map editor.
+pub const MAX_MAP_AXIS: u32 = 2_600;
+/// Largest total tile count (`MAX_MAP_AXIS` squared).
+pub const MAX_MAP_PIXELS: u32 = MAX_MAP_AXIS * MAX_MAP_AXIS;
+
+/// Default import budget when no size is requested (mobile-safe 1000×1000 baseline).
+pub const MOBILE_SAFE_MAX_PIXELS: u32 = 1_000_000;
+pub const MOBILE_SAFE_MAX_AXIS: u32 = 1_000;
+
+/// Map editor size presets: longest side in tiles. The crop keeps its proportions.
+pub const MAP_SIZE_PRESETS: [(&str, u32); 4] = [
+    ("small", 800),
+    ("regular", 1_200),
+    ("big", 1_600),
+    ("huge", MAX_MAP_AXIS),
+];
+
+/// Tiles for a `width`×`height` source crop at a named preset, or `None` for an unknown preset.
+pub fn map_size_for_preset(preset: &str, width: u32, height: u32) -> Option<(u32, u32)> {
+    let (_, longest) = MAP_SIZE_PRESETS.iter().find(|(name, _)| *name == preset)?;
+    let scale = *longest as f64 / width.max(height).max(1) as f64;
+    Some((
+        align_map_dim((width as f64 * scale).round() as u32),
+        align_map_dim((height as f64 * scale).round() as u32),
+    ))
+}
 
 /// Round dimensions down to multiples of 4 (OSM rasterizer convention).
 #[inline]
@@ -224,16 +246,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn us_bbox_scale_clamps_under_one_million_pixels() {
+    fn us_bbox_scale_clamps_under_pixel_budget() {
         let max = max_scale_for_bbox(-125.0, 24.0, -66.0, 50.0);
         let (w, h) = map_dims_for_bbox(-125.0, 24.0, -66.0, 50.0, max);
         assert!(map_within_pixel_budget(w, h));
-        assert!(max < 40.0);
+        assert!(max < 80.0);
     }
 
     #[test]
     fn clamp_map_dimensions_shrinks_oversized() {
-        let (w, h) = clamp_map_dimensions(2400, 1800);
+        let (w, h) = clamp_map_dimensions(3000, 3000);
         assert!(map_within_pixel_budget(w, h));
+    }
+
+    #[test]
+    fn presets_keep_proportions_and_stay_within_limits() {
+        let (w, h) = map_size_for_preset("huge", 161, 161).unwrap();
+        assert_eq!((w, h), (MAX_MAP_AXIS, MAX_MAP_AXIS));
+        let (w, h) = map_size_for_preset("small", 400, 200).unwrap();
+        assert_eq!((w, h), (800, 400));
+        assert!(map_size_for_preset("giant", 100, 100).is_none());
     }
 }

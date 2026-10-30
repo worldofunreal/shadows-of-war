@@ -1,18 +1,21 @@
-use sow_core::map_file::{self, MapCatalog, MapCatalogEntry, MapRosterMeta};
+use sow_core::map_file::{self, MapCatalog, MapCatalogEntry, MapHeader, MapRosterMeta};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::RwLock;
 
-static CATALOG: OnceLock<Vec<MapCatalogEntry>> = OnceLock::new();
-static CATALOG_BYTES: OnceLock<Vec<u8>> = OnceLock::new();
+// ponytail: each reload leaks one catalog (a few KB); reloads are rare admin actions,
+// so every caller keeps its `&'static` slice. Upgrade to `Arc` snapshots if reloads get frequent.
+static CATALOG: RwLock<Option<(&'static [MapCatalogEntry], &'static [u8])>> = RwLock::new(None);
 
 fn slug(name: &str) -> String {
     sow_core::maps::map_key(name)
 }
 
-pub fn scan_maps_root(root: &Path) -> MapCatalog {
+/// Header and rotation weight for every readable map folder under `root`.
+fn scan_items(root: &Path) -> Vec<(String, MapHeader, u32)> {
     let mut items = Vec::new();
     let Ok(read_dir) = std::fs::read_dir(root) else {
-        return MapCatalog { entries: vec![] };
+        return items;
     };
     for entry in read_dir.flatten() {
         if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
@@ -38,6 +41,29 @@ pub fn scan_maps_root(root: &Path) -> MapCatalog {
         let frequency = read_frequency(&map_dir);
         items.push((slug(&key), header, frequency));
     }
+    items
+}
+
+pub fn scan_maps_root(root: &Path) -> MapCatalog {
+    map_file::catalog_from_headers(scan_items(root))
+}
+
+/// Built-in maps first, then uploaded maps from `SOW_MAPS_UPLOAD_ROOT`. An uploaded
+/// key that already exists in the built-in library is skipped, never overwritten.
+fn scan_all(maps_root: &Path) -> MapCatalog {
+    let mut roots = vec![maps_root.to_path_buf()];
+    roots.extend(upload_root());
+    let mut seen = HashSet::new();
+    let mut items = Vec::new();
+    for root in roots {
+        for (key, header, frequency) in scan_items(&root) {
+            if seen.insert(key.clone()) {
+                items.push((key, header, frequency));
+            } else {
+                log::warn!("Skipping {key} from {}: key already in catalog", root.display());
+            }
+        }
+    }
     map_file::catalog_from_headers(items)
 }
 
@@ -51,34 +77,60 @@ fn read_frequency(map_dir: &Path) -> u32 {
 }
 
 pub fn init(maps_root: &Path) {
-    let catalog = scan_maps_root(maps_root);
+    if let Err(e) = publish(maps_root) {
+        log::error!("Map catalog: {e}");
+    }
+}
+
+/// Re-scan the map roots and publish the new catalog without a restart.
+/// Returns the number of maps now listed.
+pub fn reload() -> Result<usize, String> {
+    publish(&maps_root())
+}
+
+fn publish(maps_root: &Path) -> Result<usize, String> {
+    let catalog = scan_all(maps_root);
     let bytes = map_file::encode_catalog(&catalog);
+    let count = catalog.entries.len();
+    let entries: &'static [MapCatalogEntry] = Box::leak(catalog.entries.into_boxed_slice());
+    let bytes_static: &'static [u8] = Box::leak(bytes.clone().into_boxed_slice());
+    if let Ok(mut slot) = CATALOG.write() {
+        *slot = Some((entries, bytes_static));
+    }
     let catalog_path = std::env::var("SOW_MAPS_CATALOG_PATH")
         .map(PathBuf::from)
         .unwrap_or_else(|_| maps_root.join("catalog.bin"));
-    if let Err(e) = std::fs::write(&catalog_path, &bytes) {
-        log::error!("Failed to write {}: {}", catalog_path.display(), e);
-    } else {
-        log::info!(
-            "Map catalog: {} entries → {}",
-            catalog.entries.len(),
-            catalog_path.display()
-        );
-    }
-    let _ = CATALOG.set(catalog.entries);
-    let _ = CATALOG_BYTES.set(bytes);
+    std::fs::write(&catalog_path, &bytes)
+        .map_err(|e| format!("failed to write {}: {e}", catalog_path.display()))?;
+    log::info!("Map catalog: {count} entries → {}", catalog_path.display());
+    Ok(count)
 }
 
 pub fn entries() -> &'static [MapCatalogEntry] {
-    CATALOG.get().map(|v| v.as_slice()).unwrap_or(&[])
+    CATALOG
+        .read()
+        .ok()
+        .and_then(|slot| *slot)
+        .map(|(entries, _)| entries)
+        .unwrap_or(&[])
 }
 
 pub fn catalog_bytes() -> &'static [u8] {
-    CATALOG_BYTES.get().map(|v| v.as_slice()).unwrap_or(&[])
+    CATALOG
+        .read()
+        .ok()
+        .and_then(|slot| *slot)
+        .map(|(_, bytes)| bytes)
+        .unwrap_or(&[])
 }
 
 pub fn lookup(name: &str) -> Option<MapCatalogEntry> {
     sow_core::maps::catalog_lookup(entries(), name).cloned()
+}
+
+/// Folder where uploaded maps live, from `SOW_MAPS_UPLOAD_ROOT`. Outside the release, so deploys keep it.
+pub fn upload_root() -> Option<PathBuf> {
+    std::env::var_os("SOW_MAPS_UPLOAD_ROOT").map(PathBuf::from)
 }
 
 pub fn maps_root() -> PathBuf {

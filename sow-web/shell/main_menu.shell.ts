@@ -689,20 +689,6 @@ function renderTopbar() {
     );
 }
 
-export function localeOptions() {
-    const codes =
-        typeof window.SOW_getSupportedLocales === "function" ? window.SOW_getSupportedLocales() : [];
-    return codes.map(function (code) {
-        return {
-            value: code,
-            label:
-                typeof window.SOW_getLocaleLabel === "function"
-                    ? window.SOW_getLocaleLabel(code)
-                    : SOW_t("menu.language_" + String(code).replace(/-/g, "_")),
-        };
-    });
-}
-
 function syncDisconnectNotice(nextState: MenuState) {
     if (nextState.connected) {
         if (disconnectNoticeTimer !== null) window.clearTimeout(disconnectNoticeTimer);

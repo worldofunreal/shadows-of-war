@@ -57,6 +57,7 @@ interface TutorialRuntime {
     reactionHighlightPlayerId: number | null;
     stepRevealTimer: number | null;
     stepRevealStepId: string | null;
+    stepRevealDeadlineMs: number | null;
     stepRevealToken: number;
     completionSent: boolean;
     analyticsStepId: string | null;
@@ -83,6 +84,8 @@ interface TutorialRuntime {
     markerId: number | null | undefined;
     modalOpen: boolean | undefined;
     cameraReactionTarget: string | null | undefined;
+    dialogueResourceKey: string | null;
+    dialogueGoldSnapshot: number | null;
 }
 
 (function () {
@@ -129,6 +132,7 @@ interface TutorialRuntime {
         reactionHighlightPlayerId: null,
         stepRevealTimer: null,
         stepRevealStepId: null,
+        stepRevealDeadlineMs: null,
         stepRevealToken: 0,
         completionSent: false,
         analyticsStepId: null,
@@ -154,6 +158,8 @@ interface TutorialRuntime {
         markerId: undefined as number | null | undefined,
         modalOpen: undefined as boolean | undefined,
         cameraReactionTarget: null,
+        dialogueResourceKey: null as string | null,
+        dialogueGoldSnapshot: null as number | null,
     };
 
     const {
@@ -186,6 +192,43 @@ interface TutorialRuntime {
             window.clearTimeout(runtime.stepRevealTimer);
         runtime.stepRevealTimer = null;
         runtime.stepRevealStepId = null;
+        runtime.stepRevealDeadlineMs = null;
+    }
+
+    function scheduleCampaignWake(stepId: string, delayMs: number) {
+        if (runtime.stepRevealStepId !== stepId) clearStepRevealTimer();
+        if (typeof window.setTimeout !== "function") return;
+        const now = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+        const deadlineMs = now + Math.max(1, delayMs);
+        if (runtime.stepRevealTimer !== null) {
+            if (runtime.stepRevealDeadlineMs !== null && runtime.stepRevealDeadlineMs <= deadlineMs) return;
+            clearStepRevealTimer();
+        }
+        const waitingMachine = runtime.machine,
+            waitingToken = ++runtime.stepRevealToken;
+        runtime.stepRevealStepId = stepId;
+        const timerId = window.setTimeout(
+            function () {
+                if (
+                    runtime.stepRevealToken !== waitingToken ||
+                    runtime.stepRevealTimer !== timerId
+                )
+                    return;
+                runtime.stepRevealTimer = null;
+                runtime.stepRevealStepId = null;
+                runtime.stepRevealDeadlineMs = null;
+                if (
+                    runtime.machine === waitingMachine &&
+                    runtime.latestHud &&
+                    !runtime.modalOpen &&
+                    waitingMachine!.view().step.id === stepId
+                )
+                    update(runtime.latestHud);
+            },
+            Math.max(1, deadlineMs - now),
+        );
+        runtime.stepRevealTimer = timerId;
+        runtime.stepRevealDeadlineMs = deadlineMs;
     }
 
     function asset(path: string) {
@@ -458,6 +501,13 @@ interface TutorialRuntime {
             roster: function () {
                 return runtime.roster;
             },
+            reducedMotion: function () {
+                return Boolean(
+                    runtime.latestHud &&
+                        runtime.latestHud.settings &&
+                        runtime.latestHud.settings.reduced_motion,
+                );
+            },
             onContinue: continueScene,
             onChoice: choose,
             onFocus: focusMarker,
@@ -480,6 +530,8 @@ interface TutorialRuntime {
         menuGuide.pause();
         runtime.priorChoices = Object.create(null);
         runtime.lastUnlockCommand = null;
+        runtime.dialogueResourceKey = null;
+        runtime.dialogueGoldSnapshot = null;
         const generation = ++runtime.generation;
         runtime.starting = episodeId;
         runtime.failedEpisode = null;
@@ -859,14 +911,38 @@ interface TutorialRuntime {
             }
         }
         if (machineView.choices && machineView.choices.length) {
-            const gold = availableGold(hud);
-            machineView.choices = machineView.choices.map(function (choice: CampaignRecord) {
-                if (Number(choice.gold_cost || 0) <= 0) return choice;
-                return Object.assign({}, choice, {
-                    gold_available: Math.max(0, gold),
-                    gold_insufficient: Number(choice.gold_cost || 0) > gold,
-                });
+            const hasResourceCosts = machineView.choices.some(function (choice: CampaignRecord) {
+                return Number(choice.gold_cost || 0) > 0;
             });
+            if (hasResourceCosts) {
+                const choiceKey = machineView.reactionData
+                    ? "reaction:" +
+                      machineView.reactionData.id +
+                      ":" +
+                      String(machineView.reactionTarget || "")
+                    : "step:" + String(machineView.step && machineView.step.id);
+                if (
+                    runtime.dialogueResourceKey !== choiceKey ||
+                    runtime.dialogueGoldSnapshot === null
+                ) {
+                    runtime.dialogueResourceKey = choiceKey;
+                    runtime.dialogueGoldSnapshot = Math.floor(Math.max(0, availableGold(hud)));
+                }
+                const gold = runtime.dialogueGoldSnapshot;
+                machineView.choices = machineView.choices.map(function (choice: CampaignRecord) {
+                    if (Number(choice.gold_cost || 0) <= 0) return choice;
+                    return Object.assign({}, choice, {
+                        gold_available: gold,
+                        gold_insufficient: Number(choice.gold_cost || 0) > gold,
+                    });
+                });
+            } else {
+                runtime.dialogueResourceKey = null;
+                runtime.dialogueGoldSnapshot = null;
+            }
+        } else {
+            runtime.dialogueResourceKey = null;
+            runtime.dialogueGoldSnapshot = null;
         }
         runtime.priorChoices = Object.assign(Object.create(null), runtime.machine.state.choices);
         if (machineView.step.id !== runtime.lastActionStepId) {
@@ -988,33 +1064,12 @@ interface TutorialRuntime {
                     );
                 } else runtime.view!.render(null);
                 if (machineView.exchange) syncCameraShot(machineView.step, hud);
-                if (runtime.stepRevealStepId !== machineView.step.id) clearStepRevealTimer();
-                if (runtime.stepRevealTimer === null && typeof window.setTimeout === "function") {
-                    const waitingMachine = runtime.machine,
-                        waitingStepId = machineView.step.id;
-                    runtime.stepRevealStepId = waitingStepId;
-                    const waitingToken = ++runtime.stepRevealToken;
-                    const timerId = window.setTimeout(
-                        function () {
-                            if (
-                                runtime.stepRevealToken !== waitingToken ||
-                                runtime.stepRevealTimer !== timerId
-                            )
-                                return;
-                            runtime.stepRevealTimer = null;
-                            runtime.stepRevealStepId = null;
-                            if (
-                                runtime.machine === waitingMachine &&
-                                runtime.latestHud &&
-                                !runtime.modalOpen &&
-                                waitingMachine.view().step.id === waitingStepId
-                            )
-                                update(runtime.latestHud);
-                        },
-                        Math.max(1, machineView.wait_remaining_ms),
-                    );
-                    runtime.stepRevealTimer = timerId;
-                }
+                scheduleCampaignWake(
+                    machineView.step.id,
+                    Number.isFinite(machineView.timer_remaining_ms)
+                        ? Math.min(machineView.wait_remaining_ms, machineView.timer_remaining_ms)
+                        : machineView.wait_remaining_ms,
+                );
             } else {
                 clearStepRevealTimer();
                 const displayView = placementGuideView(machineView, hud);
@@ -1024,6 +1079,11 @@ interface TutorialRuntime {
                 );
                 syncCameraShot(machineView.step, hud);
             }
+            if (
+                !machineView.waiting &&
+                Number.isFinite(machineView.timer_remaining_ms)
+            )
+                scheduleCampaignWake(machineView.step.id, machineView.timer_remaining_ms);
         }
         if (machineView.done && !runtime.completionSent) {
             runtime.completionSent = true;
@@ -1071,8 +1131,9 @@ interface TutorialRuntime {
         const player = hud && campaignPlayer(hud, faction);
         if (!player || !onMap(player) || player.manual_emote_active) return "unavailable";
         const step = runtime.machine && runtime.machine.view().step;
-        if (step && step.camera && runtime.cameraShotStepId !== step.id) return false;
-        if (tutorial!.facts && tutorial!.facts.machinima_active) return false;
+        // Waiting on the camera or a cinematic counts against the emote's ack timeout, so it never stalls the story.
+        if (step && step.camera && runtime.cameraShotStepId !== step.id) return "pending";
+        if (tutorial!.facts && tutorial!.facts.machinima_active) return "pending";
         if (tutorial!.emote_token === nativeToken) return true;
         if (runtime.exchangeFocusToken !== token) {
             runtime.exchangeFocusToken = token;
@@ -1093,7 +1154,7 @@ interface TutorialRuntime {
             nameplate.offscreen ||
             (tutorial!.facts && tutorial!.facts.machinima_active)
         )
-            return false;
+            return "pending";
         runtime.exchangeCue = {
             token: token,
             nativeToken: nativeToken,
@@ -1144,6 +1205,8 @@ interface TutorialRuntime {
 
     function choose(choiceId: string) {
         if (!runtime.machine) return;
+        runtime.dialogueResourceKey = null;
+        runtime.dialogueGoldSnapshot = null;
         const model = runtime.machine.view();
         const step = model.step;
         const isDialogChoice = Boolean(model.reactionData || (step && step.type === "choice"));

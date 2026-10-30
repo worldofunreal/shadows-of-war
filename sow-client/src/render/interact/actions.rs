@@ -38,6 +38,8 @@ impl SowApp {
                         .open_route(crate::ui::main_menu::MainMenuRoute::Create);
                     self.ui.app.main_menu_state.custom_game_is_sp = false;
                     self.ui.app.main_menu_state.error_message = None;
+                    // Maps published since the last fetch must appear in the custom-game list.
+                    self.ui.app.asset_loader.map_catalog = None;
                 }
                 UiAction::OpenJoinBrowser => {
                     self.ui

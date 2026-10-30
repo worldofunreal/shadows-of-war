@@ -44,12 +44,15 @@ export function validateReactions(context: CampaignValidationContext) {
                 "emote",
                 "emote_text_key",
                 "exchange",
+                "pause_game",
                 ...REACTION_DIALOGUE_FIELDS,
             ],
             null,
             "reactions",
         );
         checkEmote(null, reaction, "reactions.");
+        if (own(reaction, "pause_game") && typeof reaction.pause_game !== "boolean")
+            issue(null, "reactions.pause_game", "Pause game must be true or false.");
         if (own(reaction, "exchange")) checkExchange(null, reaction.exchange, "reactions.exchange");
         if (reaction.presentation != null && !["dialogue", "exchange"].includes(reaction.presentation))
             issue(null, "reactions.presentation", "Choose a dialogue or automatic emote exchange.");
@@ -62,15 +65,20 @@ export function validateReactions(context: CampaignValidationContext) {
         if (!id(reaction.id) || byId.has(reaction.id) || reactionIds.has(reaction.id))
             issue(null, "reactions.id", "Response IDs must be unique and distinct from story steps.");
         reactionIds.add(reaction.id);
-        knownFields(reaction.when, ["type", "target", "targets", "relation"], null, "reactions.when");
+        knownFields(
+            reaction.when,
+            ["type", "target", "targets", "relation", "after_ms"],
+            null,
+            "reactions.when",
+        );
         const when = reaction.when,
             type = object(when) && when.type,
             target = object(when) && when.target;
-        if (!["contact", "first_contact", "support", "pre_defeat", "alliance"].includes(type))
+        if (!["contact", "first_contact", "support", "pre_defeat", "alliance", "timer"].includes(type))
             issue(
                 null,
                 "reactions.when",
-                "Choose a supported contact, alliance, support, or pre-defeat event.",
+                "Choose a supported contact, first-contact, alliance, support, pre-defeat, or timer event.",
             );
         if (type === "contact") {
             const hasTarget = typeof target === "string";
@@ -131,19 +139,24 @@ export function validateReactions(context: CampaignValidationContext) {
         }
         if (reaction.during != null) {
             const gate = byId.get(reaction.during);
-            const gateTargets =
-                gate &&
-                gate.trigger &&
-                (Array.isArray(gate.trigger.targets) ? gate.trigger.targets : [gate.trigger.target]);
-            if (
-                !["contact", "pre_defeat"].includes(type) ||
-                !gate ||
-                !["objective", "guide"].includes(gate.type) ||
-                !gate.trigger ||
-                gate.trigger.type !== "defeated" ||
-                !gateTargets.includes(target)
-            ) {
-                issue(null, "reactions.during", "Choose the active defeat objective for this faction.");
+            if (type === "timer") {
+                if (!gate || !["objective", "guide"].includes(gate.type))
+                    issue(null, "reactions.during", "Choose the active objective for this timed response.");
+            } else {
+                const gateTargets =
+                    gate &&
+                    gate.trigger &&
+                    (Array.isArray(gate.trigger.targets) ? gate.trigger.targets : [gate.trigger.target]);
+                if (
+                    !["contact", "pre_defeat"].includes(type) ||
+                    !gate ||
+                    !["objective", "guide"].includes(gate.type) ||
+                    !gate.trigger ||
+                    gate.trigger.type !== "defeated" ||
+                    !gateTargets.includes(target)
+                ) {
+                    issue(null, "reactions.during", "Choose the active defeat objective for this faction.");
+                }
             }
             if (reaction.after != null)
                 issue(
@@ -160,6 +173,30 @@ export function validateReactions(context: CampaignValidationContext) {
             );
         if (type === "pre_defeat" && reaction.after != null)
             issue(null, "reactions.after", "A pre-defeat exchange belongs to an active objective.");
+        if (type === "timer") {
+            if (
+                !Number.isSafeInteger(when.after_ms) ||
+                when.after_ms <= 0 ||
+                when.after_ms > 600000
+            )
+                issue(null, "reactions.when.after_ms", "Set a whole-number timer from 1 to 600000 ms.");
+            if (target != null || when.targets != null || when.relation != null)
+                issue(null, "reactions.when", "A timed response only uses its timer and active objective.");
+            if (reaction.during == null)
+                issue(null, "reactions.during", "A timed response must belong to an active objective.");
+            if (reaction.after != null)
+                issue(null, "reactions.after", "A timed response belongs to an active objective.");
+            if (
+                reaction.presentation !== "exchange" ||
+                !Array.isArray(reaction.exchange) ||
+                reaction.exchange.some((line) => line && line.presentation === "dialogue")
+            )
+                issue(null, "reactions.presentation", "Timed responses use emote exchanges, not dialogue.");
+            if (own(reaction, "pause_game"))
+                issue(null, "reactions.pause_game", "Timed responses keep the active objective's pause state.");
+            if (reaction.outcome != null || reaction.choices != null || reaction.gold_cost != null)
+                issue(null, "reactions", "Timed emotes cannot change diplomacy.");
+        }
         if (type === "support") {
             const gate = byId.get(reaction.after);
             if (!gate || !["objective", "guide"].includes(gate.type))

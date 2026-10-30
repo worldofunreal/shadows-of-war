@@ -1,5 +1,5 @@
 import { campaignBaseExpressions } from "./campaign/rules.ts";
-/* Shared DOM presentation and tutorial target resolution. */
+import { setAvatarPortrait, type AvatarExpressionTransition } from "./avatar-presentation.ts";
 import {
     resolveUiTarget,
     resolveUiAnchor,
@@ -278,43 +278,57 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             },
         );
     }
-    function showPortrait(source: string, speakerKey: string, stepId: string, episodeId: string) {
+    function showPortrait(
+        source: string,
+        speakerKey: string,
+        stepId: string,
+        episodeId: string,
+        transition: AvatarExpressionTransition | null = null,
+        reducedSource: string = source,
+    ) {
         const requestId = ++portraitRequestId;
-        const fallback = doc.createElement("img");
-        fallback.src = fallbackPortrait;
-        fallback.alt = "";
-        fallback.draggable = false;
-        image = fallback;
-        portrait.replaceChildren(image, portraitLine);
+        if (image.parentElement !== portrait) {
+            image.src = fallbackPortrait;
+            portrait.replaceChildren(image, portraitLine);
+        }
+        image.alt = "";
+        image.draggable = false;
         portrait.hidden = false;
         root.classList.add("has-portrait");
+        const reducedMotion = reducedMotionActive();
         if (!source) {
             reportPortraitFailure("missing-avatar-source", speakerKey, stepId, episodeId, "missing-source");
+            setAvatarPortrait(image, fallbackPortrait, null, reducedMotion);
             return;
         }
-        const load = portraitImage(source, speakerKey, stepId, episodeId);
+        if (transition && transition.stage === "exit" && !reducedMotion) {
+            setAvatarPortrait(image, source, transition, reducedMotion, reducedSource);
+            return;
+        }
+        const loadSource = reducedMotion && transition ? reducedSource : source;
+        const load = portraitImage(loadSource, speakerKey, stepId, episodeId);
         load.then((candidate) => {
-            if (!candidate) reportPortraitFailure(source, speakerKey, stepId, episodeId, "fallback");
-            if (destroyed || requestId !== portraitRequestId || root.hidden || !candidate) return;
-            image = candidate;
-            image.alt = "";
-            image.addEventListener(
-                "error",
-                () => {
-                    if (portraitCache.get(source) === load) portraitCache.delete(source);
-                    if (destroyed || requestId !== portraitRequestId || image !== candidate) return;
-                    reportPortraitFailure(source, speakerKey, stepId, episodeId, "after-load");
-                    const failedImage = doc.createElement("img");
-                    failedImage.src = fallbackPortrait;
-                    failedImage.alt = "";
-                    failedImage.draggable = false;
-                    image = failedImage;
-                    portrait.replaceChildren(image, portraitLine);
-                },
-                { once: true },
+            if (!candidate) reportPortraitFailure(loadSource, speakerKey, stepId, episodeId, "fallback");
+            if (destroyed || requestId !== portraitRequestId || root.hidden) return;
+            image.onerror = () => {
+                if (portraitCache.get(loadSource) === load) portraitCache.delete(loadSource);
+                if (destroyed || requestId !== portraitRequestId) return;
+                reportPortraitFailure(loadSource, speakerKey, stepId, episodeId, "after-load");
+                setAvatarPortrait(image, fallbackPortrait, null, reducedMotionActive());
+            };
+            setAvatarPortrait(
+                image,
+                candidate ? candidate.src : fallbackPortrait,
+                candidate ? transition : null,
+                reducedMotion,
+                reducedSource,
             );
-            portrait.replaceChildren(image, portraitLine);
         });
+    }
+
+    function reducedMotionActive(): boolean {
+        if (typeof options.reducedMotion === "function") return Boolean(options.reducedMotion());
+        return Boolean(host.matchMedia && host.matchMedia("(prefers-reduced-motion: reduce)").matches);
     }
     function clearNudge() {
         if (nudgeTimer) {
@@ -1015,6 +1029,8 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             copyBody,
             speakerName,
             character.avatar,
+            actor && actor.avatar_transition,
+            reducedMotionActive(),
             step.presentation,
             step.video_src,
             model.choices.map((c: CampaignRecord) => [
@@ -1035,19 +1051,29 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             setText(body, copyBody);
             body.hidden = !copyBody;
             cinematicVideo.setAttribute("aria-label", copyTitle || speakerName || "Campaign cinematic");
-            const avatarPath = expression
-                ? "expressions/" + character.avatar + "_" + expression
-                : character.avatar;
-            const avatar =
-                character.avatar && character.avatar !== "null"
+            const portraitSource = (pose: string | null | undefined) => {
+                const avatarPath =
+                    pose && pose !== "calm"
+                        ? "expressions/" + character.avatar + "_" + pose
+                        : character.avatar;
+                return character.avatar && character.avatar !== "null"
                     ? options.asset("gameplay/avatars/" + avatarPath + ".webp")
                     : "";
+            };
+            const avatar = portraitSource(expression);
+            const transition =
+                actor && actor.avatar_transition
+                    ? (actor.avatar_transition as AvatarExpressionTransition)
+                    : null;
+            const reducedSource = portraitSource(transition ? transition.to : expression);
             if (modal && speakerName)
                 showPortrait(
                     avatar,
                     speakerKey || model.reactionTarget || "unknown",
                     step.id,
                     model.definition.episode_id,
+                    transition,
+                    reducedSource,
                 );
             else {
                 portrait.hidden = true;

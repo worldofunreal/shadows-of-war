@@ -862,6 +862,7 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "sow-web/shell/campaign_runtime.test.ts",
             "sow-web/shell/gameplay_ui.test.ts",
             "sow-web/shell/gameplay_interaction.test.ts",
+            "sow-web/shell/avatar_presentation.test.ts",
         ],
         Some(&paths.root),
     )
@@ -3658,6 +3659,8 @@ fn activate_control_host(
     let relay_mgmt_resolve_ip = env_or("SOW_RELAY_MGMT_RESOLVE_IP", "20.230.49.9");
     let maps_root = env_or("SOW_MAPS_ROOT", "/srv/sow/current/maps");
     let maps_catalog_path = env_or("SOW_MAPS_CATALOG_PATH", "/var/db/sow/server/catalog.bin");
+    // Uploaded maps live outside the immutable release so a deploy never deletes them.
+    let maps_upload_root = env_or("SOW_MAPS_UPLOAD_ROOT", "/var/db/sow/server/maps-uploaded");
     let wou_id_url = env_or("WOU_ID_URL", "https://id.worldofunreal.com");
     let wou_id_resolve_ip = env_or("WOU_ID_RESOLVE_IP", "104.21.87.220");
     let play_games_app_id = env::var("SOW_PLAY_GAMES_APP_ID")?;
@@ -3676,11 +3679,21 @@ fn activate_control_host(
         env::var("SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID")?;
     let play_games_leader_path_id = env::var("SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID")?;
     let play_games_leaderboard_id = env::var("SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID")?;
+    let maps_reload_token_file = if runtime_env {
+        let token = env::var("SOW_MAPS_RELOAD_TOKEN")?;
+        let path = format!("/tmp/sow-maps-reload-token-{}", std::process::id());
+        stage_secret(&config.control_host, &token, &path)?;
+        Some(path)
+    } else {
+        None
+    };
     let env_update_base = if runtime_env {
         format!(
-            "mkdir -p /tmp/sow-env-update; for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do t=$(mktemp /tmp/sow.env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v -E '^(SOW_MAPS_ROOT|SOW_MAPS_CATALOG_PATH|SOW_DB_SECRET|SOW_RELAY_CONTROL_SECRET|SOW_RELAY_HOST|SOW_RELAY_WORKERS|SOW_RELAY_WORKER_COUNT|SOW_RELAY_MGMT_URL|SOW_RELAY_MGMT_SCHEME|SOW_RELAY_MGMT_RESOLVE_IP|WOU_ID_URL|WOU_ID_RESOLVE_IP|SOW_PLAY_GAMES_APP_ID|SOW_PLAY_GAMES_WEB_CLIENT_ID|SOW_PLAY_GAMES_MATCH_EVENT_ID|SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID|SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID|SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID|SOW_PLAY_GAMES_WEB_CLIENT_SECRET)=|^[0-9a-fA-F]{{64}}$' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s\\n' SOW_MAPS_ROOT={maps_root} SOW_MAPS_CATALOG_PATH={maps_catalog_path} SOW_RELAY_HOST={relay_host} SOW_RELAY_WORKERS={relay_workers} SOW_RELAY_WORKER_COUNT={relay_worker_count} SOW_RELAY_MGMT_URL={relay_mgmt_url} SOW_RELAY_MGMT_SCHEME={relay_mgmt_scheme} SOW_RELAY_MGMT_RESOLVE_IP={relay_mgmt_resolve_ip} WOU_ID_URL={wou_id_url} WOU_ID_RESOLVE_IP={wou_id_resolve_ip} SOW_PLAY_GAMES_APP_ID={play_games_app_id} SOW_PLAY_GAMES_WEB_CLIENT_ID={play_games_client_id} SOW_PLAY_GAMES_MATCH_EVENT_ID={play_games_match_event_id} SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID={play_games_achievement_id} SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID={play_games_battle_hardened_id} SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID={play_games_victory_march_id} SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID={play_games_laurel_hoard_id} SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID={play_games_first_command_id} SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID={play_games_commander_victorious_id} SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID={play_games_veteran_commander_id} SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID={play_games_banner_collector_id} SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID={play_games_leader_path_id} SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID={play_games_leaderboard_id} | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_DB_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {db_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_RELAY_CONTROL_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {control_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_PLAY_GAMES_WEB_CLIENT_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {play_games_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done; rm -rf /tmp/sow-env-update",
+            "mkdir -p /tmp/sow-env-update; for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do t=$(mktemp /tmp/sow.env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v -E '^(SOW_MAPS_ROOT|SOW_MAPS_CATALOG_PATH|SOW_MAPS_UPLOAD_ROOT|SOW_MAPS_RELOAD_TOKEN|SOW_DB_SECRET|SOW_RELAY_CONTROL_SECRET|SOW_RELAY_HOST|SOW_RELAY_WORKERS|SOW_RELAY_WORKER_COUNT|SOW_RELAY_MGMT_URL|SOW_RELAY_MGMT_SCHEME|SOW_RELAY_MGMT_RESOLVE_IP|WOU_ID_URL|WOU_ID_RESOLVE_IP|SOW_PLAY_GAMES_APP_ID|SOW_PLAY_GAMES_WEB_CLIENT_ID|SOW_PLAY_GAMES_MATCH_EVENT_ID|SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID|SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID|SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID|SOW_PLAY_GAMES_WEB_CLIENT_SECRET)=|^[0-9a-fA-F]{{64}}$' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s\\n' SOW_MAPS_ROOT={maps_root} SOW_MAPS_CATALOG_PATH={maps_catalog_path} SOW_MAPS_UPLOAD_ROOT={maps_upload_root} SOW_RELAY_HOST={relay_host} SOW_RELAY_WORKERS={relay_workers} SOW_RELAY_WORKER_COUNT={relay_worker_count} SOW_RELAY_MGMT_URL={relay_mgmt_url} SOW_RELAY_MGMT_SCHEME={relay_mgmt_scheme} SOW_RELAY_MGMT_RESOLVE_IP={relay_mgmt_resolve_ip} WOU_ID_URL={wou_id_url} WOU_ID_RESOLVE_IP={wou_id_resolve_ip} SOW_PLAY_GAMES_APP_ID={play_games_app_id} SOW_PLAY_GAMES_WEB_CLIENT_ID={play_games_client_id} SOW_PLAY_GAMES_MATCH_EVENT_ID={play_games_match_event_id} SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID={play_games_achievement_id} SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID={play_games_battle_hardened_id} SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID={play_games_victory_march_id} SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID={play_games_laurel_hoard_id} SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID={play_games_first_command_id} SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID={play_games_commander_victorious_id} SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID={play_games_veteran_commander_id} SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID={play_games_banner_collector_id} SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID={play_games_leader_path_id} SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID={play_games_leaderboard_id} | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_DB_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {db_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_RELAY_CONTROL_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {control_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_PLAY_GAMES_WEB_CLIENT_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {play_games_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_MAPS_RELOAD_TOKEN=' | sudo tee -a \"$t\" >/dev/null; sudo cat {maps_reload_token} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done; rm -rf /tmp/sow-env-update",
             maps_root = shell_quote(&maps_root),
             maps_catalog_path = shell_quote(&maps_catalog_path),
+            maps_upload_root = shell_quote(&maps_upload_root),
+            maps_reload_token = shell_quote(maps_reload_token_file.as_deref().unwrap()),
             relay_host = shell_quote(&relay_host),
             relay_workers = shell_quote(&relay_workers),
             relay_worker_count = shell_quote(&relay_worker_count),
@@ -3765,6 +3778,7 @@ done"#
         revenuecat_webhook_file.as_deref(),
         play_games_web_client_secret_file.as_deref(),
         wou_identity_secret_file.as_deref(),
+        maps_reload_token_file.as_deref(),
     ]
     .into_iter()
     .flatten()

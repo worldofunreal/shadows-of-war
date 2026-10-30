@@ -463,13 +463,6 @@
 .sow-story.is-chapter .sow-story__dialog {
   z-index: 2;
 }
-.sow-story.is-chapter .sow-story__dialog::after {
-  content: "";
-  position: absolute;
-  inset: 8px;
-  border: 1px solid color-mix(in srgb, var(--story-accent) 9%, transparent);
-  pointer-events: none;
-}
 .sow-story.is-cinematic {
   z-index: 1000;
 }
@@ -1653,28 +1646,6 @@
     }
     .sow-story.is-chapter .sow-story__conversation {
       padding-block: 20px;
-    }
-    .sow-story.is-chapter.has-portrait .sow-story__dialog {
-      grid-template-columns: clamp(128px, 18cqw, 176px) minmax(0, 1fr);
-    }
-    .sow-story.is-chapter.has-portrait .sow-story__portrait {
-      grid-row: 1;
-      align-self: center;
-      height: auto;
-      min-height: 0;
-      place-items: center;
-    }
-    .sow-story.is-chapter .sow-story__portrait img {
-      position: relative;
-      inset: auto;
-      display: block;
-      width: auto;
-      height: auto;
-      max-width: 100%;
-      max-height: min(34svh, 260px);
-      margin-inline: auto;
-      object-fit: contain;
-      object-position: center;
     }
     #sow-story[data-compact="true"].is-chapter .sow-story__dialog {
       max-height: min(calc(100% - var(--story-safe-top) - var(--story-safe-bottom)), 58svh);

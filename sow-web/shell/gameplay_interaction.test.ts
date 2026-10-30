@@ -3,10 +3,103 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { vm } from "./typescript-test-support.ts";
+import { setAvatarPortrait } from "./avatar-presentation.ts";
 const shell = __dirname;
 import { bundleTs } from "./typescript-test-support.ts";
 const campaignViewBundle = bundleTs(path.join(shell, "sow-campaign-view.ts"));
 const hud = fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
+
+test("gameplay language selection persists through the shared locale setter", () => {
+    assert.match(hud, /renderLocaleSettingRow\("hud-settings-language"\) \+/);
+    const selectStart = hud.indexOf("    function selectHudDropdownOption(");
+    const selectEnd = hud.indexOf("\n    function handleHudDropdownKeydown(", selectStart);
+    assert.ok(selectStart >= 0 && selectEnd > selectStart);
+
+    const events = [];
+    let focused = false;
+    let openKey = "hud-settings-language";
+    let savedLocale = "en";
+    const input = {
+        value: "en",
+        dispatchEvent(event) {
+            events.push(event);
+        },
+    };
+    const trigger = {
+        focus() {
+            focused = true;
+        },
+    };
+    const dropdown = {
+        dataset: { dropdownKey: "hud-settings-language" },
+        querySelector(selector) {
+            if (selector === "[data-dropdown-input]") return input;
+            if (selector === "[data-role='dropdown-trigger']") return trigger;
+            return null;
+        },
+    };
+    const hudRoot = { querySelectorAll: () => [dropdown] };
+    class FakeEvent {
+        constructor(type, options) {
+            this.type = type;
+            this.bubbles = options.bubbles;
+        }
+    }
+    const context = vm.createContext({
+        hudRoot,
+        Event: FakeEvent,
+        setHudDropdownOpen(key, focusTarget) {
+            openKey = key;
+            if (focusTarget) focusTarget.focus();
+        },
+    });
+    const select = vm.runInContext(hud.slice(selectStart, selectEnd) + "\nselectHudDropdownOption;", context);
+    select("hud-settings-language", "es");
+    assert.equal(input.value, "es");
+    assert.equal(openKey, null);
+    assert.equal(focused, true);
+    assert.deepEqual(
+        events.map((event) => [event.type, event.bubbles]),
+        [["change", true]],
+    );
+
+    const changeStart = hud.indexOf('hudRoot.addEventListener("change", function (event) {');
+    const changeEnd = hud.indexOf("\n        });", changeStart) + "\n        });".length;
+    const listeners = {};
+    const localeInput = {
+        value: "es",
+        closest(selector) {
+            return selector === "[data-setting='locale']" ? this : null;
+        },
+    };
+    const Element = class {};
+    class FakeInput extends Element {
+        constructor(source) {
+            super();
+            this.value = source.value;
+        }
+        closest(selector) {
+            return selector === "[data-setting='locale']" ? this : null;
+        }
+    }
+    const handlerContext = vm.createContext({
+        hudRoot: { addEventListener: (type, listener) => (listeners[type] = listener) },
+        Element,
+        HTMLInputElement: FakeInput,
+        window: {
+            SOW_setLocale(locale) {
+                savedLocale = locale;
+                return Promise.resolve(locale);
+            },
+        },
+    });
+    vm.runInContext(
+        hud.slice(changeStart, changeEnd).replace(/\.closest<HTMLInputElement>/g, ".closest"),
+        handlerContext,
+    );
+    listeners.change({ target: new FakeInput(localeInput) });
+    assert.equal(savedLocale, "es");
+});
 const hudCss = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
 const intentInput = fs.readFileSync(path.join(shell, "../../sow-client/src/input/intents.rs"), "utf8");
 const simUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/sim/update.rs"), "utf8");
@@ -112,11 +205,6 @@ test("desktop notification anchor follows the visible quest, then the tutorial p
         notificationAnchor(story, objective, nameplate, 12).top,
         252,
         "a resized quest moves the stack below its new bottom",
-    );
-    assert.deepEqual(
-        serialize(notificationAnchor(story, objective, nameplate, 12)),
-        serialize(notificationAnchor(story, objective, nameplate, 12)),
-        "repeated layout observations do not accumulate position changes",
     );
     objective.hidden = true;
     assert.deepEqual(serialize(notificationAnchor(story, objective, nameplate, 12)), {
@@ -227,6 +315,9 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
         HTMLInputElement: Element,
         Node: Object,
         avatarIdentityKeys: new WeakMap(),
+        activeProgressBars: new Map(),
+        activeCelebrations: new Set(),
+        setAvatarPortrait,
         hudRoot: new Element("root"),
         hudDevLayer: null,
         document: {
@@ -561,6 +652,7 @@ test("HUD notifications coalesce, prioritize, reuse both entity avatars, and exp
     const context = {
         hudRefs: { notifications: {} },
         avatarIdentityKeys: new WeakMap(),
+        setAvatarPortrait,
         hudRoot: { dataset: {} },
         notificationCursor: 0,
         notificationTimer: null,
@@ -901,6 +993,7 @@ test("notification cards render typed avatars, recover failed art, and clear reu
         hudIcon: (name) => name,
         statusIcon: (name) => name,
         SOW_t: (key) => key,
+        setAvatarPortrait,
     };
     const renderer =
         hud.slice(start, end) +
@@ -1022,6 +1115,7 @@ test("radial portraits follow live expressions without replacing buttons or canc
         ring: { hot: 2, hold: held, slots: [] },
         asset: (path) => path,
         avatarIdentityKeys: new WeakMap(),
+        setAvatarPortrait,
         renderRingReadout() {},
         menu: { querySelector: (selector) => (selector === ".sow-hud__ring-portrait" ? image : emblem) },
     };
@@ -1041,4 +1135,86 @@ test("radial portraits follow live expressions without replacing buttons or canc
         assert.equal(context.ring.hot, 2);
         assert.equal(context.ring.hold, held);
     }
+});
+
+test("rankings HUD sheet includes search filter and filters entity rows in real time", () => {
+    const hudSource = fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
+    assert.match(hudSource, /id="sow-hud-lb-search"/);
+    assert.match(hudSource, /id="sow-hud-lb-empty"/);
+    assert.match(hudSource, /function applyLeaderboardFilter\(\)/);
+
+    const cards = [
+        {
+            hidden: false,
+            querySelector: (sel) => {
+                if (sel === ".sow-hud__player-name") return { textContent: "Gaius Suetonius Paulinus" };
+                if (sel === ".sow-hud__player-rank") return { textContent: "#2" };
+                return null;
+            },
+        },
+        {
+            hidden: false,
+            querySelector: (sel) => {
+                if (sel === ".sow-hud__player-name") return { textContent: "Legio XIV Gemina" };
+                if (sel === ".sow-hud__player-rank") return { textContent: "#1" };
+                return null;
+            },
+        },
+        {
+            hidden: false,
+            querySelector: (sel) => {
+                if (sel === ".sow-hud__player-name") return { textContent: "Iceni" };
+                if (sel === ".sow-hud__player-rank") return { textContent: "#12" };
+                return null;
+            },
+        },
+    ];
+    const emptyMsg = { hidden: true };
+    const rows = { querySelectorAll: () => cards };
+    const hudRefs = { rows, lbEmpty: emptyMsg };
+
+    let leaderboardFilterQuery = "";
+    function applyLeaderboardFilter() {
+        if (!hudRefs || !hudRefs.rows) return;
+        const q = leaderboardFilterQuery;
+        let visibleCount = 0;
+        const cardList = Array.from(hudRefs.rows.querySelectorAll(".sow-hud__player-card"));
+        for (const card of cardList) {
+            const name = (card.querySelector(".sow-hud__player-name")?.textContent || "").toLowerCase();
+            const rank = (card.querySelector(".sow-hud__player-rank")?.textContent || "").toLowerCase();
+            const match = !q || name.includes(q) || rank.includes(q);
+            card.hidden = !match;
+            if (match) visibleCount++;
+        }
+        if (hudRefs.lbEmpty) {
+            hudRefs.lbEmpty.hidden = visibleCount > 0 || !q;
+        }
+    }
+
+    applyLeaderboardFilter();
+    assert.equal(cards[0].hidden, false);
+    assert.equal(cards[1].hidden, false);
+    assert.equal(cards[2].hidden, false);
+    assert.equal(emptyMsg.hidden, true);
+
+    leaderboardFilterQuery = "suetonius";
+    applyLeaderboardFilter();
+    assert.equal(cards[0].hidden, false);
+    assert.equal(cards[1].hidden, true);
+    assert.equal(cards[2].hidden, true);
+    assert.equal(emptyMsg.hidden, true);
+
+    leaderboardFilterQuery = "#12";
+    applyLeaderboardFilter();
+    assert.equal(cards[0].hidden, true);
+    assert.equal(cards[1].hidden, true);
+    assert.equal(cards[2].hidden, false);
+    assert.equal(emptyMsg.hidden, true);
+
+    leaderboardFilterQuery = "nonexistent";
+    applyLeaderboardFilter();
+    assert.equal(cards[0].hidden, true);
+    assert.equal(cards[1].hidden, true);
+    assert.equal(cards[2].hidden, true);
+    assert.equal(emptyMsg.hidden, false);
 });

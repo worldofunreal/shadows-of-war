@@ -905,6 +905,69 @@ html[dir="rtl"] .hero-link:hover::after {
 .showcase-art picture {
   position: absolute;
   inset: 0;
+  transition: opacity 0.22s cubic-bezier(0.2, 0.8, 0.3, 1),
+              transform 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+.showcase-copy {
+  transition: opacity 0.2s ease-out, transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+/* Exit transitions */
+.showcase-art.is-animating-exit-next picture {
+  opacity: 0;
+  transform: scale(0.96) translateX(-24px);
+}
+.showcase-art.is-animating-exit-prev picture {
+  opacity: 0;
+  transform: scale(0.96) translateX(24px);
+}
+.showcase.is-transitioning .showcase-copy {
+  opacity: 0.3;
+  transform: translateY(6px);
+}
+
+/* Enter animations (GPU accelerated) */
+@keyframes hero-enter-next {
+  0% {
+    opacity: 0;
+    transform: scale(1.04) translateX(28px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+}
+@keyframes hero-enter-prev {
+  0% {
+    opacity: 0;
+    transform: scale(1.04) translateX(-28px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+}
+@keyframes hero-copy-enter {
+  0% {
+    opacity: 0.3;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.showcase-art.is-animating-enter-next picture {
+  animation: hero-enter-next 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.showcase-art.is-animating-enter-prev picture {
+  animation: hero-enter-prev 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.showcase.is-copy-entering .showcase-copy {
+  animation: hero-copy-enter 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 .showcase-art picture,
 .showcase-art picture img {
@@ -1106,7 +1169,6 @@ html[dir="rtl"] .hero-link:hover::after {
   border-top: 1px solid var(--line);
   padding-top: 16px;
 }
-.leader-arrow,
 .leader-browse,
 .picker-close {
   min-height: 48px;
@@ -1119,12 +1181,61 @@ html[dir="rtl"] .hero-link:hover::after {
 }
 .leader-arrow {
   flex: none;
-  font-size: 24px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
+  min-width: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(28, 35, 48, 0.9) 0%, rgba(14, 18, 26, 0.96) 100%);
+  border: 1.5px solid rgba(243, 177, 43, 0.5);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  color: #f3b12b;
+  cursor: pointer;
+  transition: transform 0.16s cubic-bezier(0.2, 0.8, 0.4, 1),
+              border-color 0.2s ease,
+              box-shadow 0.2s ease,
+              background 0.2s ease,
+              color 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.leader-arrow-icon {
+  width: 22px;
+  height: 22px;
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.4, 1);
 }
 html[dir="rtl"] .leader-arrow {
   transform: scaleX(-1);
 }
-.leader-arrow:hover,
+.leader-arrow:hover {
+  border-color: #ffd36a;
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(38, 47, 66, 0.95) 0%, rgba(20, 26, 38, 0.98) 100%);
+  box-shadow: 0 0 18px rgba(243, 177, 43, 0.55), 0 4px 20px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transform: scale(1.06);
+}
+.leader-arrow--prev:hover .leader-arrow-icon {
+  transform: translateX(-3px);
+}
+.leader-arrow--next:hover .leader-arrow-icon {
+  transform: translateX(3px);
+}
+.leader-arrow:active,
+.leader-arrow.is-pressed {
+  transform: scale(0.92);
+  border-color: #f3b12b;
+  box-shadow: 0 0 28px rgba(243, 177, 43, 0.8), inset 0 0 12px rgba(243, 177, 43, 0.4);
+  background: linear-gradient(135deg, rgba(55, 42, 18, 0.95) 0%, rgba(24, 18, 8, 0.98) 100%);
+}
+.leader-arrow:focus-visible {
+  outline: 2px solid #f3b12b;
+  outline-offset: 3px;
+}
 .leader-browse:hover,
 .picker-close:hover {
   border-color: var(--orange);
@@ -1703,39 +1814,60 @@ html[dir="rtl"] .leader-arrow {
 
 @media (max-width: 960px) {
   .leaders {
-    padding-top: clamp(24px, 5vw, 48px);
-    padding-bottom: clamp(32px, 6vw, 64px);
+    position: relative;
+    width: 100%;
+    min-height: 100svh;
+    padding: 0;
+    overflow: hidden;
+    background: #090c11;
+    border-block: 0;
   }
-  .leader-layout {
-    grid-template-columns: minmax(0, 1fr);
-    max-width: 620px;
-    margin-inline: auto;
-    gap: 16px;
+  .leaders .container {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    padding-inline: 0;
+    margin: 0;
   }
   .leaders .section-head {
-    margin-bottom: 20px;
-  }
-  .leaders .section-head h2 {
-    font-size: clamp(32px, 7vw, 44px);
-  }
-  .leaders .section-head > p:last-child {
     display: none;
+  }
+  .leader-layout {
+    position: relative;
+    width: 100%;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    grid-template-columns: 1fr;
+    max-width: 100%;
+    margin-inline: 0;
+    gap: 0;
   }
   .leader-stage {
     position: relative;
+    width: 100%;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
   }
-  /* The showcase becomes an integrated portrait card with text overlay */
+  /* The showcase is the self-contained hero card taking full viewport on mobile */
   .showcase {
     position: relative;
-    overflow: hidden;
-    border-radius: 12px;
-    aspect-ratio: 4 / 5;
-    min-height: 380px;
-    max-height: 52svh;
-    border: 1px solid var(--line-strong);
-    box-shadow: 0 16px 44px rgb(0 0 0 / 60%);
-    background: var(--surface);
+    width: 100%;
+    min-height: 100svh;
+    max-height: none;
+    border-radius: 0;
+    border: 0;
+    aspect-ratio: auto;
+    background: #090c11;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
     gap: 0;
+    overflow: hidden;
+    box-shadow: none;
   }
   .showcase-art {
     position: absolute;
@@ -1744,6 +1876,7 @@ html[dir="rtl"] .leader-arrow {
     height: 100%;
     aspect-ratio: auto;
     border-radius: 0;
+    z-index: 1;
   }
   .showcase-art picture,
   .showcase-art picture img {
@@ -1752,34 +1885,40 @@ html[dir="rtl"] .leader-arrow {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: center 18%;
+    object-position: center top;
   }
   .showcase-copy {
-    position: absolute;
-    inset-inline: 0;
-    bottom: 0;
+    position: relative;
+    inset-inline: auto;
+    bottom: auto;
     z-index: 2;
-    padding: 56px 18px 18px;
+    padding: 44px 16px 8px;
     background: linear-gradient(
       180deg,
       transparent 0%,
-      rgb(10 13 18 / 65%) 35%,
-      rgb(10 13 18 / 95%) 85%
+      rgba(9, 12, 17, 0.45) 18%,
+      rgba(9, 12, 17, 0.94) 65%,
+      #090c11 100%
     );
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     pointer-events: none;
+    margin: 0;
   }
   .showcase-identity .eyebrow {
     font-size: 11px;
-    margin-bottom: 2px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
     color: var(--orange-soft);
+    margin: 0 0 2px;
   }
   .showcase-copy h3 {
-    font-size: clamp(24px, 6.5vw, 32px);
+    font-size: clamp(24px, 6.5vw, 30px);
     margin: 0;
-    text-shadow: 0 2px 12px rgb(0 0 0 / 80%);
+    font-weight: 900;
+    text-shadow: 0 2px 12px rgb(0 0 0 / 85%);
   }
   .showcase-historical {
     display: none;
@@ -1787,30 +1926,38 @@ html[dir="rtl"] .leader-arrow {
   .showcase-trait {
     border-inline-start: 0;
     border-top: 1px solid rgb(255 221 153 / 16%);
-    padding: 8px 0 0;
+    padding: 6px 0 0;
+    margin-top: 2px;
   }
   .showcase-label {
-    margin: 0 0 3px;
+    margin: 0 0 2px;
     font-size: 10px;
+    font-weight: 800;
     letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
   }
   .showcase-ability {
-    font-size: 16px;
-    line-height: 1.25;
+    font-size: 15px;
+    font-weight: 800;
     color: var(--orange-soft);
+    line-height: 1.25;
+    margin: 0;
   }
   .showcase-description {
-    font-size: 13px;
-    line-height: 1.45;
-    margin-top: 4px;
-    color: rgb(245 241 232 / 85%);
+    font-size: 12.5px;
+    line-height: 1.4;
+    margin: 2px 0 0;
+    color: rgb(245 241 232 / 88%);
   }
-  /* Floating prev/next navigation arrows over the top corners of the showcase */
+  /* Centered navigation arrows flanking the hero art viewport */
   .leader-controls {
     position: absolute;
-    inset-inline: 12px;
-    top: 12px;
-    z-index: 3;
+    left: 8px;
+    right: 8px;
+    top: 38%;
+    transform: translateY(-50%);
+    z-index: 10;
     margin: 0;
     padding: 0;
     border: 0;
@@ -1821,18 +1968,20 @@ html[dir="rtl"] .leader-arrow {
   }
   .leader-arrow {
     pointer-events: auto;
-    width: 40px;
-    height: 40px;
-    min-height: 40px;
-    min-width: 40px;
-    border-radius: 50%;
-    background: rgb(10 13 18 / 75%);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgb(255 255 255 / 20%);
-    font-size: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 52px;
+    height: 52px;
+    min-height: 52px;
+    min-width: 52px;
+    border-radius: 14px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    background: linear-gradient(135deg, rgba(22, 28, 40, 0.88) 0%, rgba(10, 14, 22, 0.95) 100%);
+    border: 1.5px solid rgba(243, 177, 43, 0.55);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+  .leader-arrow .leader-arrow-icon {
+    width: 26px;
+    height: 26px;
   }
   .leader-position {
     display: none;
@@ -1841,64 +1990,123 @@ html[dir="rtl"] .leader-arrow {
     display: none;
   }
 
-  /* Bottom leader browser: Search on top + horizontal scroll avatar strip */
-  .leader-browser-home {
-    display: block;
-    margin-top: 0;
+  /* Leader browser integrated directly inside the showcase card */
+  .leader-browser-home:empty {
+    display: none;
   }
   .leader-browser {
+    position: relative;
+    z-index: 3;
     height: auto;
     max-height: none;
+    background: rgba(9, 12, 17, 0.92);
+    border: 0;
+    box-shadow: none;
+    padding: 0 16px max(14px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
     min-height: 0;
-    padding: 12px 14px 14px;
-    border-radius: 12px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-top: 2px solid var(--orange);
   }
   .leader-browser-heading {
-    margin-bottom: 8px;
+    display: none;
   }
-  .leader-browser-heading h3 {
-    font-size: 13px;
+  .leader-search {
+    display: block;
+    margin: 0;
+    position: relative;
+    width: 100%;
+  }
+  .leader-search span {
+    display: none;
   }
   .leader-search input {
-    min-height: 40px;
-    padding: 8px 12px;
+    width: 100%;
+    height: 38px;
+    min-height: 38px;
+    background-color: rgba(18, 24, 38, 0.85);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.45)' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 12px center;
+    padding-left: 38px;
+    padding-right: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #ffffff;
+    font-family: inherit;
     font-size: 13px;
+    outline: none;
+  }
+  .leader-search input::placeholder {
+    color: rgba(255, 255, 255, 0.42);
+  }
+  .leader-search input:focus {
+    border-color: var(--orange-soft);
+    background-color: rgba(22, 30, 48, 0.95);
   }
   .roster-scroll {
+    width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
     scroll-snap-type: x proximity;
     overscroll-behavior-x: contain;
-    margin-top: 10px;
-    padding: 4px 2px 8px;
-    scrollbar-width: thin;
-    scrollbar-color: var(--line-strong) transparent;
+    margin-top: 0;
+    padding: 2px 0 6px;
+    scrollbar-width: none;
+  }
+  .roster-scroll::-webkit-scrollbar {
+    display: none;
   }
   .roster {
     display: flex;
-    gap: 10px;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 12px;
     width: max-content;
+    align-items: flex-start;
   }
   .roster-card {
-    flex: 0 0 74px;
-    width: 74px;
-    padding: 4px 2px;
-    scroll-snap-align: start;
+    flex: 0 0 60px;
+    width: 60px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    border: 0;
+    background: none;
+    cursor: pointer;
   }
   .roster-card img {
-    width: 54px;
-    height: 54px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    object-fit: cover;
+    background: rgba(255, 255, 255, 0.06);
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .roster-card.is-active img {
+    border-color: var(--orange);
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.55);
+    transform: scale(1.06);
   }
   .roster-card span {
-    font-size: 10.5px;
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.15;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 70px;
+    max-width: 60px;
+    text-align: center;
+    color: rgba(235, 231, 220, 0.7);
     display: block;
+  }
+  .roster-card.is-active span {
+    color: var(--orange-soft);
+    font-weight: 700;
   }
   .leader-picker .roster {
     grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));

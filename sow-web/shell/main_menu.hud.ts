@@ -1,6 +1,11 @@
+import { setAvatarPortrait } from "./avatar-presentation.ts";
+import { renderLocaleSettingRow } from "./main_menu.settings.ts";
+import { syncDropdownScope } from "./sow-dropdown.ts";
 import type {
     HudAvatarIdentity,
     HudBuildingPlacement,
+    HudBuildingProgressItem,
+    HudBuildingCelebrationItem,
     HudCombatOperation,
     HudDevTools,
     HudInboxRequest,
@@ -142,7 +147,8 @@ type HudRefs = {
     deployBtn: HTMLElement;
     deployTimer: HTMLElement;
     buildingsStrip: HTMLElement;
-    buildingProgress: HTMLElement;
+    worldProgressOverlay: HTMLElement;
+    worldCelebrationsOverlay: HTMLElement;
     buildingButtons: HTMLButtonElement[];
     fleetStrip: HTMLElement;
     fleetTrade: HTMLElement;
@@ -151,6 +157,8 @@ type HudRefs = {
     panelButtons: HTMLButtonElement[];
     leaderboard: HTMLElement;
     rows: HTMLElement;
+    lbSearch: HTMLInputElement;
+    lbEmpty: HTMLElement;
     inbox: HTMLElement;
     inboxRows: HTMLElement;
     inboxClose: HTMLElement;
@@ -192,7 +200,9 @@ type HudRefs = {
     endgameStoreAction: HTMLElement;
     endgameObserve: HTMLButtonElement;
     mapMenu: HTMLElement;
+    placementOverlay: HTMLElement;
     placementPanel: HTMLElement;
+    placementArrows: Record<"up" | "right" | "down" | "left", HTMLButtonElement>;
     operations: HTMLElement;
     operationRows: HTMLElement;
     combatOperationRows: Record<string, CombatOperationRow>;
@@ -264,11 +274,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     let devControlIndex: Record<string, HTMLElement> = Object.create(null);
     let devStepTimer = 0;
     let devResetTimer = 0;
+    let hudDropdownOpenKey: string | null = null;
 
     let hudInitialized = false;
     let hudRefs: ReturnType<typeof createHudRefs> | null = null;
     let leaderboardRows: Record<string, LeaderboardRow> = Object.create(null);
     let leaderboardRenderKey = "";
+    let leaderboardFilterQuery = "";
     let pendingCounterAttacks: Record<string, number> = Object.create(null);
     let lastLeaderboardPlayers: HudLeaderboardPlayer[] = [];
     let lastLeaderboardTeams: HudLeaderboardTeam[] = [];
@@ -374,6 +386,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     function setHudPanel(panel: HudPanel) {
         const previous = activeHudPanel;
         const next = previous === panel ? null : panel;
+        if (next !== "settings" && hudDropdownOpenKey) {
+            hudDropdownOpenKey = null;
+            if (hudRefs && hudRoot) syncDropdownScope(hudRoot, null);
+        }
         if (previous === "leaderboard" && next !== previous) send("toggle_leaderboard");
         if (previous === "inbox" && next !== previous) send("toggle_inbox");
         activeHudPanel = next;
@@ -383,6 +399,95 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         }
         if (next === "leaderboard") send("toggle_leaderboard");
         if (next === "inbox") send("toggle_inbox");
+    }
+
+    function setHudDropdownOpen(key: string | null, focusTarget?: HTMLElement | null) {
+        hudDropdownOpenKey = key;
+        if (hudRoot) syncDropdownScope(hudRoot, key);
+        if (focusTarget) focusTarget.focus({ preventScroll: true });
+    }
+
+    function selectHudDropdownOption(key: string, value: string) {
+        if (!hudRoot) return;
+        const dropdowns = hudRoot.querySelectorAll<HTMLElement>("[data-control-dropdown]");
+        let dropdown: HTMLElement | null = null;
+        for (let i = 0; i < dropdowns.length; i++) {
+            if (dropdowns[i].dataset.dropdownKey === key) {
+                dropdown = dropdowns[i];
+                break;
+            }
+        }
+        if (!dropdown) return;
+        const input = dropdown.querySelector<HTMLInputElement>("[data-dropdown-input]");
+        if (!input) return;
+        input.value = value;
+        const trigger = dropdown.querySelector<HTMLElement>("[data-role='dropdown-trigger']");
+        setHudDropdownOpen(null, trigger);
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    function handleHudDropdownKeydown(event: KeyboardEvent): boolean {
+        const target = event.target;
+        if (!(target instanceof HTMLElement) || !hudRoot || !hudRoot.contains(target)) return false;
+        const trigger = target.closest<HTMLButtonElement>("[data-role='dropdown-trigger']");
+        const option = target.closest<HTMLButtonElement>("[data-command='select_dropdown']");
+        if (trigger) {
+            if (["ArrowDown", "ArrowUp", "Enter", " "].indexOf(event.key) < 0) return false;
+            const key = trigger.dataset.dropdownKey;
+            if (!key) return false;
+            event.preventDefault();
+            setHudDropdownOpen(key);
+            const dropdown = trigger.closest<HTMLElement>("[data-control-dropdown]");
+            const options = dropdown
+                ? Array.from(dropdown.querySelectorAll<HTMLButtonElement>("[data-command='select_dropdown']"))
+                : [];
+            const selected = options.find((entry) => entry.getAttribute("aria-selected") === "true");
+            const next = event.key === "ArrowUp" ? options[options.length - 1] : selected || options[0];
+            if (next) next.focus({ preventScroll: true });
+            return true;
+        }
+        if (option) {
+            const dropdown = option.closest<HTMLElement>("[data-control-dropdown]");
+            const options = dropdown
+                ? Array.from(dropdown.querySelectorAll<HTMLButtonElement>("[data-command='select_dropdown']"))
+                : [];
+            const index = options.indexOf(option);
+            if (event.key === "Escape") {
+                event.preventDefault();
+                const trigger = dropdown?.querySelector<HTMLElement>("[data-role='dropdown-trigger']");
+                setHudDropdownOpen(null, trigger);
+                return true;
+            }
+            if (event.key === "Tab") {
+                setHudDropdownOpen(null);
+                return false;
+            }
+            let nextIndex = index;
+            if (event.key === "ArrowDown") nextIndex = Math.min(options.length - 1, index + 1);
+            else if (event.key === "ArrowUp") nextIndex = Math.max(0, index - 1);
+            else if (event.key === "Home") nextIndex = 0;
+            else if (event.key === "End") nextIndex = options.length - 1;
+            if (nextIndex !== index) {
+                event.preventDefault();
+                options[nextIndex]?.focus({ preventScroll: true });
+                return true;
+            }
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                option.click();
+                return true;
+            }
+        } else if (event.key === "Escape" && hudDropdownOpenKey) {
+            event.preventDefault();
+            const trigger = hudRoot.querySelector<HTMLElement>(
+                "[data-control-dropdown][data-dropdown-key='" +
+                    hudDropdownOpenKey +
+                    "'] [data-role='dropdown-trigger']",
+            );
+            setHudDropdownOpen(null, trigger);
+            return true;
+        }
+        return false;
     }
 
     function asset(path: string): string {
@@ -449,6 +554,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         inbox: '<path d="M4 4h16v16H4zM4 13h4l2 3h4l2-3h4M4 7l8 6 8-6"/>',
         emote: '<path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.7 8.7 0 0 1-3.5-.7L4 20l1.4-3.6A7 7 0 0 1 4 12c0-4.1 3.6-7.5 8-7.5s8 3.1 8 7Z"/><path d="M9 11h.01M15 11h.01M9 14.5s1 1.5 3 1.5 3-1.5 3-1.5"/>',
         rankings: '<path d="M3 20h18M5 20v-6h4v6M10 20V4h4v16M15 20v-10h4v10"/>',
+        search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
         settings:
             '<path d="m10 3-.6 2.2a7.6 7.6 0 0 0-1.7 1L5.5 5.4 3.8 8.3l1.8 1.5a7.9 7.9 0 0 0 0 2.1l-1.8 1.5 1.7 2.9 2.2-.8a7.6 7.6 0 0 0 1.7 1L10 19h4l.6-2.2a7.6 7.6 0 0 0 1.7-1l2.2.8 1.7-2.9-1.8-1.5a7.9 7.9 0 0 0 0-2.1l1.8-1.5-1.7-2.9-2.2.8a7.6 7.6 0 0 0-1.7-1L14 3h-4Z"/><circle cx="12" cy="11" r="3"/>',
         leave: '<path d="M13 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6M10 16l4-4-4-4M14 12H3"/>',
@@ -941,7 +1047,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             deployBtn: requiredHudElement("sow-hud-deploy-btn"),
             deployTimer: requiredHudElement("sow-hud-deploy-timer"),
             buildingsStrip: requiredHudElement("sow-hud-buildings-strip"),
-            buildingProgress: requiredHudElement("sow-hud-building-progress"),
+            worldProgressOverlay: requiredHudElement("sow-hud-world-progress-overlay"),
+            worldCelebrationsOverlay: requiredHudElement("sow-hud-world-celebrations-overlay"),
             buildingButtons: Array.from(
                 root.querySelectorAll<HTMLButtonElement>("[data-command='select_building']"),
             ),
@@ -954,6 +1061,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             ),
             leaderboard: requiredHudElement("sow-hud-leaderboard"),
             rows: requiredHudElement("sow-hud-lb-rows"),
+            lbSearch: requiredHudInput("sow-hud-lb-search"),
+            lbEmpty: requiredHudElement("sow-hud-lb-empty"),
             inbox: requiredHudElement("sow-hud-inbox"),
             inboxRows: requiredHudElement("sow-hud-inbox-rows"),
             inboxClose: requiredHudElement("sow-hud-inbox-close"),
@@ -995,7 +1104,23 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             endgameStoreAction: requiredHudElement("sow-hud-endgame-store-action"),
             endgameObserve: requiredHudButton("sow-hud-endgame-observe"),
             mapMenu: requiredHudElement("sow-hud-map-menu"),
+            placementOverlay: requiredHudElement("sow-hud-placement-overlay"),
             placementPanel: requiredHudElement("sow-hud-placement-panel"),
+            placementArrows: {
+                up: requiredHudButtonQuery(root, "#sow-hud-placement-overlay [data-placement-nudge='up']"),
+                right: requiredHudButtonQuery(
+                    root,
+                    "#sow-hud-placement-overlay [data-placement-nudge='right']",
+                ),
+                down: requiredHudButtonQuery(
+                    root,
+                    "#sow-hud-placement-overlay [data-placement-nudge='down']",
+                ),
+                left: requiredHudButtonQuery(
+                    root,
+                    "#sow-hud-placement-overlay [data-placement-nudge='left']",
+                ),
+            },
             operations: requiredHudElement("sow-hud-operations"),
             operationRows: requiredHudElement("sow-hud-operations-list"),
             combatOperationRows: Object.create(null),
@@ -1223,6 +1348,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                   SOW_t("hud.show_dev_tools") +
                   '</span><input class="sow-hud__switch" type="checkbox" data-hud-setting="show_dev_tools"></label>'
                 : "") +
+            renderLocaleSettingRow("hud-settings-language") +
             "  </div>" +
             "</aside>" +
             '<div class="sow-hud__dock-stack" id="sow-hud-dock-stack">' +
@@ -1267,7 +1393,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             tileCost(true) +
             "</button>" +
             "      </div>" +
-            '      <div class="sow-hud__building-progress" id="sow-hud-building-progress" style="display: none;"></div>' +
             '      <div class="sow-hud__fleet-strip" id="sow-hud-fleet-strip">' +
             '        <span class="sow-hud__building-btn sow-hud__fleet-status" data-fleet-kind="trade" role="img" aria-label="' +
             SOW_t("hud.map_action_fleet") +
@@ -1305,17 +1430,30 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "</aside>" +
             "</div>" +
             '<aside class="sow-hud__panel sow-hud__leaderboard sow-hud__sheet hidden" id="sow-hud-leaderboard">' +
-            '  <div class="sow-hud__sheet-header">' +
+            '  <div class="sow-hud__sheet-header sow-hud__leaderboard-header">' +
             '    <h3 class="sow-hud__sheet-title">' +
             hudIcon("rankings", "sow-hud__inline-icon") +
             " " +
             SOW_t("hud.rankings_title") +
             "</h3>" +
+            '    <div class="sow-hud__leaderboard-search-wrap">' +
+            '      <span class="sow-hud__leaderboard-search-icon" aria-hidden="true">' +
+            hudIcon("search", "sow-hud__inline-icon") +
+            "</span>" +
+            '      <input class="sow-hud__leaderboard-search" id="sow-hud-lb-search" type="search" placeholder="' +
+            SOW_t("hud.search_rankings") +
+            '" aria-label="' +
+            SOW_t("hud.search_rankings") +
+            '" autocomplete="off" spellcheck="false" />' +
+            "    </div>" +
             '    <button class="sow-hud__close-btn sow-hud__sheet-btn" type="button" data-command="toggle_leaderboard" aria-label="' +
             SOW_t("hud.close_rankings") +
             '">✕</button>' +
             "  </div>" +
             '  <div class="sow-hud__sheet-body sow-hud__leaderboard-rows" id="sow-hud-lb-rows"></div>' +
+            '  <p class="sow-hud__leaderboard-empty" id="sow-hud-lb-empty" hidden>' +
+            SOW_t("hud.no_rankings_found") +
+            "</p>" +
             "</aside>" +
             '<aside class="sow-hud__inbox sow-hud__sheet hidden" id="sow-hud-inbox" role="dialog" aria-modal="false" aria-labelledby="sow-hud-inbox-title">' +
             '  <div class="sow-hud__sheet-header sow-hud__inbox-header"><span class="sow-hud__transfer-icon" aria-hidden="true">' +
@@ -1454,9 +1592,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '<div class="sow-hud__map-menu hidden" id="sow-hud-map-menu" role="menu" aria-label="' +
             SOW_t("hud.map_actions") +
             '"></div>' +
-            '<div class="sow-hud__placement-panel hidden" id="sow-hud-placement-panel" role="region" aria-label="' +
-            SOW_t("hud.build") +
-            '"></div>';
+            '<div class="sow-hud__placement-overlay hidden" id="sow-hud-placement-overlay">' +
+            '  <button type="button" class="sow-hud__placement-arrow-btn is-up" data-placement-nudge="up" aria-label="Nudge up">▲</button>' +
+            '  <button type="button" class="sow-hud__placement-arrow-btn is-right" data-placement-nudge="right" aria-label="Nudge right">▶</button>' +
+            '  <button type="button" class="sow-hud__placement-arrow-btn is-down" data-placement-nudge="down" aria-label="Nudge down">▼</button>' +
+            '  <button type="button" class="sow-hud__placement-arrow-btn is-left" data-placement-nudge="left" aria-label="Nudge left">◀</button>' +
+            '  <div class="sow-hud__placement-panel" id="sow-hud-placement-panel" role="region" aria-label="' +
+            SOW_t("hud.build_placement") +
+            '"></div>' +
+            "</div>" +
+            '<div class="sow-hud__world-progress-overlay" id="sow-hud-world-progress-overlay" aria-hidden="true"></div>' +
+            '<div class="sow-hud__world-celebrations-overlay" id="sow-hud-world-celebrations-overlay" aria-hidden="true"></div>';
 
         if (hudDevLayer) {
             hudDevLayer.appendChild(requiredHudQuery(hudRoot, "#sow-hud-dev-sidebar"));
@@ -1593,6 +1739,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         hudRoot.addEventListener("input", function (event) {
             const target = event.target;
             if (!(target instanceof Element)) return;
+            const searchInput = target.closest<HTMLInputElement>("#sow-hud-lb-search");
+            if (searchInput) {
+                leaderboardFilterQuery = searchInput.value.trim().toLowerCase();
+                applyLeaderboardFilter();
+                return;
+            }
             const input = target.closest<HTMLInputElement>('[data-hud-setting="music_volume"]');
             if (input) {
                 const pct = Math.round(Math.max(0, Math.min(1, Number(input.value))) * 100);
@@ -1603,9 +1755,23 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 }
             }
         });
+        hudRoot.addEventListener("search", function (event) {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const searchInput = target.closest<HTMLInputElement>("#sow-hud-lb-search");
+            if (searchInput) {
+                leaderboardFilterQuery = searchInput.value.trim().toLowerCase();
+                applyLeaderboardFilter();
+            }
+        });
         hudRoot.addEventListener("change", function (event) {
             const target = event.target;
             if (!(target instanceof Element)) return;
+            const localeInput = target.closest<HTMLInputElement>("[data-setting='locale']");
+            if (localeInput) {
+                if (typeof window.SOW_setLocale === "function") void window.SOW_setLocale(localeInput.value);
+                return;
+            }
             const input = target.closest("[data-hud-setting]");
             if (!(input instanceof HTMLInputElement)) return;
             const setting = input.dataset.hudSetting;
@@ -2046,20 +2212,34 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         return true;
     }
 
-    function positionPlacementPanel(panel: HTMLElement, placement: HudBuildingPlacement): void {
-        const anchorX = Number.isFinite(Number(placement.anchor_x))
-            ? Number(placement.anchor_x)
-            : (window.innerWidth || 800) * 0.5;
-        const anchorY = Number.isFinite(Number(placement.anchor_y))
-            ? Number(placement.anchor_y)
-            : (window.innerHeight || 600) * 0.5;
-        const anchorRadius = 32;
-        const width = panel.offsetWidth || 260;
-        const height = panel.offsetHeight || 104;
-        const halfW = width * 0.5;
-        const halfH = height * 0.5;
+    function positionPlacementOverlay(overlay: HTMLElement, placement: HudBuildingPlacement): void {
         const vw = window.innerWidth || 800;
         const vh = window.innerHeight || 600;
+        const anchorX = Number.isFinite(Number(placement.anchor_x)) ? Number(placement.anchor_x) : vw * 0.5;
+        const anchorY = Number.isFinite(Number(placement.anchor_y)) ? Number(placement.anchor_y) : vh * 0.5;
+
+        // Position 4 arrows around the building footprint
+        const arrows = placement.arrows;
+        const refs = hudRefs && hudRefs.placementArrows;
+        if (arrows && refs) {
+            refs.up.style.left = arrows.up[0].toFixed(1) + "px";
+            refs.up.style.top = arrows.up[1].toFixed(1) + "px";
+            refs.right.style.left = arrows.right[0].toFixed(1) + "px";
+            refs.right.style.top = arrows.right[1].toFixed(1) + "px";
+            refs.down.style.left = arrows.down[0].toFixed(1) + "px";
+            refs.down.style.top = arrows.down[1].toFixed(1) + "px";
+            refs.left.style.left = arrows.left[0].toFixed(1) + "px";
+            refs.left.style.top = arrows.left[1].toFixed(1) + "px";
+        }
+
+        // Position the action card directly below the down arrow
+        const panel = hudRefs && hudRefs.placementPanel;
+        if (!panel) return;
+        const width = panel.offsetWidth || 230;
+        const height = panel.offsetHeight || 96;
+        const halfW = width * 0.5;
+        const halfH = height * 0.5;
+
         let bottomLimit = vh - 96;
         if (
             hudRefs &&
@@ -2072,9 +2252,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 bottomLimit = Math.min(bottomLimit, dockRect.top - 10);
             }
         }
-        const gap = 12;
-        const belowCenterY = anchorY + anchorRadius + gap + halfH;
-        const aboveCenterY = anchorY - anchorRadius - gap - halfH;
+
+        const downArrowY = arrows ? arrows.down[1] : anchorY + 48;
+        const upArrowY = arrows ? arrows.up[1] : anchorY - 48;
+        const gap = 14;
+        const belowCenterY = downArrowY + gap + halfH;
+        const aboveCenterY = upArrowY - gap - halfH;
         const placeBelow = belowCenterY + halfH <= bottomLimit || aboveCenterY - halfH < 64;
         const rawCenterY = placeBelow ? belowCenterY : aboveCenterY;
         const minX = halfW + 10;
@@ -2086,16 +2269,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         panel.style.left = left.toFixed(1) + "px";
         panel.style.top = top.toFixed(1) + "px";
         panel.dataset.placement = placeBelow ? "below" : "above";
-        const caretLimit = Math.max(0, halfW - 18);
-        const caretOffsetX = Math.max(-caretLimit, Math.min(caretLimit, anchorX - left));
-        panel.style.setProperty("--caret-offset-x", caretOffsetX.toFixed(1) + "px");
     }
 
     function renderPlacementPanel(placement: HudBuildingPlacement | null | undefined): boolean {
+        const overlay = hudRefs && hudRefs.placementOverlay;
         const panel = hudRefs && hudRefs.placementPanel;
-        if (!panel) return false;
+        if (!overlay || !panel) return false;
         if (!placement || placement.pending) {
-            panel.classList.add("hidden");
+            overlay.classList.add("hidden");
             if (panel.dataset.renderKey) panel.replaceChildren();
             panel.dataset.renderKey = "";
             delete panel.dataset.placement;
@@ -2110,16 +2291,15 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const locale = window.SOW_LOCALE || "en";
         const renderKey = [locale, kind, tileIdx, canConfirm ? "1" : "0", String(cost), reasonKey].join(":");
 
-        panel.classList.remove("hidden");
+        overlay.classList.remove("hidden");
 
         if (panel.dataset.renderKey !== renderKey) {
             const buildingTitle = SOW_t("hud.map_action_" + kind.toLowerCase());
             const reason = reasonKey ? SOW_t(reasonKey) : null;
-            const cancelLabel = SOW_t("common.cancel");
-            const buildLabel = SOW_t("hud.build");
+            const cancelLabel = SOW_t("lobbies.cancel");
+            const buildLabel = SOW_t("hud.build_confirm");
 
             panel.innerHTML =
-                '<span class="sow-hud__placement-panel-caret" aria-hidden="true"></span>' +
                 '<div class="sow-hud__placement-panel-head">' +
                 '<span class="sow-hud__placement-panel-thumb" aria-hidden="true">' +
                 buildingIcon(kind, 1, "sow-hud__placement-panel-art") +
@@ -2146,12 +2326,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 escapeHudText(cancelLabel) +
                 "</span>" +
                 "</button>" +
-                '<div class="sow-hud__placement-nudge-cluster" role="group" aria-label="Nudge building">' +
-                '<button type="button" class="sow-hud__placement-nudge-btn" data-placement-nudge="left" aria-label="Nudge left">◀</button>' +
-                '<button type="button" class="sow-hud__placement-nudge-btn" data-placement-nudge="up" aria-label="Nudge up">▲</button>' +
-                '<button type="button" class="sow-hud__placement-nudge-btn" data-placement-nudge="down" aria-label="Nudge down">▼</button>' +
-                '<button type="button" class="sow-hud__placement-nudge-btn" data-placement-nudge="right" aria-label="Nudge right">▶</button>' +
-                "</div>" +
                 '<button type="button" class="sow-hud__placement-action-btn is-confirm' +
                 (canConfirm ? "" : " is-disabled") +
                 '" data-placement-action="confirm"' +
@@ -2168,8 +2342,118 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             panel.dataset.renderKey = renderKey;
         }
 
-        positionPlacementPanel(panel, placement);
+        positionPlacementOverlay(overlay, placement);
         return true;
+    }
+
+    const activeProgressBars: Map<number, HTMLElement> = new Map();
+    const activeCelebrations: Set<string> = new Set();
+
+    function renderWorldBuildingProgress(items: HudBuildingProgressItem[] | null | undefined): void {
+        const overlay = hudRefs && hudRefs.worldProgressOverlay;
+        if (!overlay) return;
+
+        if (!items || items.length === 0) {
+            if (activeProgressBars.size > 0) {
+                overlay.replaceChildren();
+                activeProgressBars.clear();
+            }
+            return;
+        }
+
+        const currentTiles = new Set<number>();
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            currentTiles.add(item.tile_idx);
+            let bar = activeProgressBars.get(item.tile_idx);
+            if (!bar) {
+                bar = document.createElement("div");
+                bar.className = "sow-hud__world-building-bar";
+                bar.dataset.tile = String(item.tile_idx);
+                bar.innerHTML =
+                    '<span class="sow-hud__world-building-thumb" aria-hidden="true">' +
+                    buildingIcon(item.kind, Math.max(1, item.level), "sow-hud__world-building-art") +
+                    "</span>" +
+                    '<div class="sow-hud__world-building-track" role="progressbar">' +
+                    '<div class="sow-hud__world-building-fill" data-building-progress-fill></div>' +
+                    '<b class="sow-hud__world-building-time" data-building-timer></b>' +
+                    "</div>";
+                overlay.appendChild(bar);
+                activeProgressBars.set(item.tile_idx, bar);
+            }
+
+            bar.style.display = item.visible === false ? "none" : "flex";
+            bar.style.left = item.screen_x.toFixed(1) + "px";
+            bar.style.top = item.screen_y.toFixed(1) + "px";
+
+            patchBuildingProgressBar(bar, item.remaining_seconds, item.progress);
+        }
+
+        for (const [tile, el] of activeProgressBars.entries()) {
+            if (!currentTiles.has(tile)) {
+                el.remove();
+                activeProgressBars.delete(tile);
+            }
+        }
+    }
+
+    function renderWorldBuildingCelebrations(items: HudBuildingCelebrationItem[] | null | undefined): void {
+        const overlay = hudRefs && hudRefs.worldCelebrationsOverlay;
+        if (!overlay || !items || items.length === 0) return;
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const celebrationKey = item.tile_idx + ":" + item.level;
+            if (activeCelebrations.has(celebrationKey) || item.visible === false) {
+                continue;
+            }
+            activeCelebrations.add(celebrationKey);
+
+            const container = document.createElement("div");
+            container.className = "sow-hud__world-celebration";
+            container.style.left = item.screen_x.toFixed(1) + "px";
+            container.style.top = item.screen_y.toFixed(1) + "px";
+
+            let sparklesHtml = "";
+            const offsets = [
+                [-30, -32, 0],
+                [30, -30, 40],
+                [-18, -48, 80],
+                [18, -46, 60],
+                [-38, -14, 100],
+                [38, -16, 90],
+            ];
+            for (let j = 0; j < offsets.length; j++) {
+                const [dx, dy, delay] = offsets[j];
+                sparklesHtml +=
+                    '<span class="sow-hud__celebration-sparkle" style="--dx:' +
+                    dx +
+                    "px;--dy:" +
+                    dy +
+                    "px;--delay:" +
+                    delay +
+                    'ms;"></span>';
+            }
+
+            container.innerHTML =
+                '<span class="sow-hud__celebration-ring"></span>' +
+                sparklesHtml +
+                '<div class="sow-hud__celebration-badge">' +
+                '<span class="sow-hud__celebration-badge-thumb" aria-hidden="true">' +
+                buildingIcon(item.kind, Math.max(1, item.level), "sow-hud__celebration-badge-art") +
+                "</span>" +
+                '<b class="sow-hud__celebration-badge-text">LV ' +
+                item.level +
+                "</b>" +
+                "</div>";
+
+            overlay.appendChild(container);
+
+            setTimeout(function () {
+                container.remove();
+                activeCelebrations.delete(celebrationKey);
+            }, 1200);
+        }
     }
 
     // Command ring: six fixed 60° slots, clockwise from the top. An action keeps
@@ -3402,11 +3686,34 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 kind: "portrait",
                 slug: player.avatar,
                 expression: player.avatar_expression || undefined,
+                transition: player.avatar_transition,
             };
         }
         const leader = leaderById(player.leader);
         const slug = (leader && (leader.art_slug || leader.slug)) || "null";
-        return { kind: "portrait", slug: slug, expression: player.avatar_expression || undefined };
+        return {
+            kind: "portrait",
+            slug: slug,
+            expression: player.avatar_expression || undefined,
+            transition: player.avatar_transition,
+        };
+    }
+
+    function applyLeaderboardFilter(): void {
+        if (!hudRefs || !hudRefs.rows) return;
+        const q = leaderboardFilterQuery;
+        let visibleCount = 0;
+        const cards = Array.from(hudRefs.rows.querySelectorAll<HTMLElement>(".sow-hud__player-card"));
+        for (const card of cards) {
+            const name = (card.querySelector(".sow-hud__player-name")?.textContent || "").toLowerCase();
+            const rank = (card.querySelector(".sow-hud__player-rank")?.textContent || "").toLowerCase();
+            const match = !q || name.includes(q) || rank.includes(q);
+            card.hidden = !match;
+            if (match) visibleCount++;
+        }
+        if (hudRefs.lbEmpty) {
+            hudRefs.lbEmpty.hidden = visibleCount > 0 || !q;
+        }
     }
 
     function updateLeaderboard(players: HudLeaderboardPlayer[], teams: HudLeaderboardTeam[]): void {
@@ -3442,6 +3749,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                     player.leader,
                     player.avatar,
                     player.avatar_expression,
+                    JSON.stringify(player.avatar_transition),
                 ].join("|");
             })
             .join("\u001e");
@@ -3568,6 +3876,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 player.leader,
                 player.avatar,
                 player.avatar_expression,
+                JSON.stringify(player.avatar_transition),
             ].join("|");
             if (row.key !== rowKey) {
                 row.key = rowKey;
@@ -3603,6 +3912,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         hudRefs.rows.replaceChildren(fragment);
         leaderboardRows = nextRows;
         leaderboardRenderKey = renderKey;
+        applyLeaderboardFilter();
     }
 
     function createNotificationCard(container: HTMLElement, contextual: boolean): HudNotificationCard {
@@ -3670,17 +3980,25 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         emblem: HTMLElement,
         presentation: HudAvatarIdentity | null | undefined,
     ): void {
-        const identityKey = presentation ? JSON.stringify(presentation) : "";
+        const reducedMotion = Boolean(
+            typeof document !== "undefined" &&
+            typeof document.getElementById === "function" &&
+            document.getElementById("sow-hud")?.classList.contains("is-reduced-motion"),
+        );
+        const identityKey = (presentation ? JSON.stringify(presentation) : "") + ":" + reducedMotion;
         if (avatarIdentityKeys.get(image) === identityKey) return;
         avatarIdentityKeys.set(image, identityKey);
-        image.hidden = true;
-        if (image.removeAttribute) image.removeAttribute("src");
-        else image.src = "";
         emblem.hidden = true;
         emblem.textContent = "";
-        if (!presentation) return;
+        if (!presentation) {
+            image.hidden = true;
+            setAvatarPortrait(image, "", null, true);
+            return;
+        }
 
         if (presentation.kind === "wilderness") {
+            image.hidden = true;
+            setAvatarPortrait(image, "", null, true);
             emblem.innerHTML = statusIcon("wilderness", "sow-hud__avatar-badge");
             emblem.hidden = false;
             return;
@@ -3691,8 +4009,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 ? presentation.slug || "null"
                 : "null";
         const src = asset(avatarPortraitPath(slug, presentation.expression));
+        const reducedSource = asset(
+            avatarPortraitPath(
+                slug,
+                presentation.transition ? presentation.transition.to : presentation.expression,
+            ),
+        );
+        setAvatarPortrait(image, src, presentation.transition, reducedMotion, reducedSource);
         image.hidden = false;
-        if (image.getAttribute("src") !== src) image.src = src;
     }
 
     function clearNotificationCard(parts: HudNotificationCard): void {
@@ -3705,6 +4029,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             avatar.wrapper.className = "sow-hud__notification-avatar";
             avatar.image.hidden = true;
             avatarIdentityKeys.delete(avatar.image);
+            setAvatarPortrait(avatar.image, "", null, true);
             if (avatar.image.removeAttribute) avatar.image.removeAttribute("src");
             else avatar.image.src = "";
             avatar.emblem.hidden = true;
@@ -4753,9 +5078,21 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                     ),
                 );
                 const platePlayerName = String(hud.player_name || "");
-                if (hudRefs!.plateAvatar && hudRefs!.plateAvatar.getAttribute("src") !== plateSrc) {
-                    hudRefs!.plateAvatar.src = plateSrc;
-                }
+                if (hudRefs!.plateAvatar)
+                    setAvatarPortrait(
+                        hudRefs!.plateAvatar,
+                        plateSrc,
+                        hud.player_avatar_transition,
+                        Boolean(hudState.settings && hudState.settings.reduced_motion),
+                        asset(
+                            avatarPortraitPath(
+                                plateLeader.art_slug || plateLeader.slug,
+                                hud.player_avatar_transition
+                                    ? hud.player_avatar_transition.to
+                                    : hud.player_avatar_expression,
+                            ),
+                        ),
+                    );
                 if (hudRefs!.plateName && hudRefs!.plateName.textContent !== platePlayerName) {
                     hudRefs!.plateName.textContent = platePlayerName;
                 }
@@ -4841,37 +5178,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 button.setAttribute("aria-label", accessibleLabel);
                 if (button.title !== accessibleLabel) button.title = accessibleLabel;
             });
-            const buildingInProgress =
-                hud.building_in_progress && hud.building_in_progress.kind ? hud.building_in_progress : null;
-            hasBuildingItems =
-                Boolean(buildingInProgress) ||
-                hudRefs!.buildingButtons.some(function (button) {
-                    return !button.hidden;
-                });
-            hudRefs!.buildingsStrip.style.display =
-                !isDeploying && !buildingInProgress && hasBuildingItems ? "flex" : "none";
-            if (hudRefs!.buildingProgress) {
-                if (!isDeploying && buildingInProgress) {
-                    const progressKind = String(buildingInProgress.kind);
-                    const progressLevel = Math.max(1, Math.floor(Number(buildingInProgress.level) || 1));
-                    const progressKey = progressKind + ":" + progressLevel;
-                    if (hudRefs!.buildingProgress.dataset.renderKey !== progressKey) {
-                        hudRefs!.buildingProgress.innerHTML = renderBuildingProgressBarMarkup(
-                            progressKind,
-                            progressLevel,
-                        );
-                        hudRefs!.buildingProgress.dataset.renderKey = progressKey;
-                    }
-                    patchBuildingProgressBar(
-                        hudRefs!.buildingProgress,
-                        buildingInProgress.remaining_seconds,
-                        buildingInProgress.progress,
-                    );
-                    hudRefs!.buildingProgress.style.display = "flex";
-                } else {
-                    hudRefs!.buildingProgress.style.display = "none";
-                }
-            }
+            hasBuildingItems = hudRefs!.buildingButtons.some(function (button) {
+                return !button.hidden;
+            });
+            hudRefs!.buildingsStrip.style.display = !isDeploying && hasBuildingItems ? "flex" : "none";
         }
         if (hudRefs!.fleetStrip) {
             const fleetPanel = hud.fleet_panel || {};
@@ -5125,6 +5435,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             hudRefs!.leaderboard.classList.toggle("hidden", !leaderboardOpen);
         }
         if (leaderboardOpen) {
+            if (hudRefs!.lbSearch && hudRefs!.lbSearch.value !== leaderboardFilterQuery) {
+                hudRefs!.lbSearch.value = leaderboardFilterQuery;
+            }
             updateLeaderboard(
                 Array.isArray(hud.leaderboard) ? hud.leaderboard : lastLeaderboardPlayers,
                 Array.isArray(hud.team_leaderboard) ? hud.team_leaderboard : lastLeaderboardTeams,
@@ -5215,6 +5528,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         }
         const mapMenuOpen = renderMapMenu(hud.map_menu);
         renderPlacementPanel(hud.building_placement);
+        renderWorldBuildingProgress(hud.buildings_in_progress);
+        renderWorldBuildingCelebrations(hud.building_celebrations);
         const panelStates: Record<string, boolean> = {
             toggle_leaderboard: leaderboardOpen,
             toggle_inbox: inboxOpen,
@@ -5290,6 +5605,29 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         });
         ["pointerup", "pointercancel", "blur"].forEach(function (type) {
             window.addEventListener(type, stopZoomHold, { passive: true });
+        });
+        hudRoot.addEventListener(
+            "pointerdown",
+            function (event) {
+                const target = event.target;
+                if (
+                    hudDropdownOpenKey &&
+                    target instanceof Element &&
+                    !target.closest("[data-control-dropdown]")
+                )
+                    setHudDropdownOpen(null);
+            },
+            true,
+        );
+        hudRoot.addEventListener(
+            "scroll",
+            function () {
+                if (hudDropdownOpenKey) syncDropdownScope(hudRoot, hudDropdownOpenKey);
+            },
+            true,
+        );
+        window.addEventListener("resize", function () {
+            if (hudDropdownOpenKey) syncDropdownScope(hudRoot, hudDropdownOpenKey);
         });
         function handleHudClick(event: MouseEvent): void {
             const target = event.target;
@@ -5368,6 +5706,22 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                         tile_idx: Number(mapMenu.dataset.tileIdx),
                         action,
                     });
+                }
+                return;
+            }
+            const dropdownButton = target.closest<HTMLButtonElement>(
+                '[data-command="toggle_dropdown"], [data-command="select_dropdown"]',
+            );
+            if (dropdownButton && hudRoot && hudRoot.contains(dropdownButton)) {
+                event.preventDefault();
+                event.stopPropagation();
+                const key = dropdownButton.dataset.dropdownKey;
+                if (!key) return;
+                if (dropdownButton.dataset.command === "toggle_dropdown") {
+                    setHudDropdownOpen(hudDropdownOpenKey === key ? null : key);
+                } else {
+                    const value = dropdownButton.dataset.dropdownOptionValue;
+                    if (value != null) selectHudDropdownOption(key, value);
                 }
                 return;
             }
@@ -5616,6 +5970,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
     if (hudRoot)
         hudRoot.addEventListener("keydown", function (event) {
+            if (handleHudDropdownKeydown(event)) return;
             if (
                 (event.key === "Enter" || event.key === " ") &&
                 event.target instanceof HTMLElement &&
@@ -5659,8 +6014,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             if (
                 event.key === "Escape" &&
                 hudRefs &&
-                hudRefs.placementPanel &&
-                !hudRefs.placementPanel.classList.contains("hidden")
+                hudRefs.placementOverlay &&
+                !hudRefs.placementOverlay.classList.contains("hidden")
             ) {
                 event.preventDefault();
                 event.stopPropagation();
@@ -5676,6 +6031,21 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 event.preventDefault();
                 event.stopPropagation();
                 send("close_transfer");
+                return;
+            }
+            if (event.key === "Escape" && activeHudPanel === "leaderboard") {
+                if (document.activeElement === hudRefs?.lbSearch && hudRefs?.lbSearch.value) {
+                    hudRefs.lbSearch.value = "";
+                    leaderboardFilterQuery = "";
+                    applyLeaderboardFilter();
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                setHudPanel(null);
+                renderHud();
                 return;
             }
             if (event.key === "Escape" && activeHudPanel === "inbox") {
@@ -5754,8 +6124,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const betrayalFocus =
             hudRefs && hudRefs.betrayal && hudRefs.betrayal.contains(active) ? active!.id : null;
         const betrayalReturnFocus = hudRefs && hudRefs.betrayalReturnFocus;
+        const languageFocus =
+            active instanceof HTMLElement &&
+            Boolean(
+                hudRefs?.settings?.contains(active) &&
+                active.closest("[data-dropdown-key='hud-settings-language']"),
+            );
+        hudDropdownOpenKey = null;
         hudInitialized = false;
         hudRefs = null;
+        activeProgressBars.clear();
+        activeCelebrations.clear();
         if (hudRoot) hudRoot.replaceChildren();
         if (hudDevLayer && hudDevLayer.parentNode) {
             const freshDevLayer = hudDevLayer.cloneNode(false) as HTMLElement;
@@ -5777,6 +6156,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         if (betrayalFocus && refreshedRefs) {
             refreshedRefs.betrayalReturnFocus = betrayalReturnFocus;
             restoreHudFocus(document.getElementById(betrayalFocus));
+        }
+        if (languageFocus && refreshedRefs) {
+            refreshedRefs.settings
+                .querySelector<HTMLElement>(
+                    "[data-dropdown-key='hud-settings-language'] [data-role='dropdown-trigger']",
+                )
+                ?.focus({ preventScroll: true });
         }
     });
 

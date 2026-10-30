@@ -21,6 +21,16 @@ const maxBodyBytes = 1024 * 1024;
 const saving = new Set();
 let entityCatalogSaving = false;
 let mapRosterSaving = false;
+let mapGenerating = false;
+let mapUploading = false;
+const mapSourcesDir = path.join(root, "assets/map_sources");
+const worldMapPng = path.join(mapSourcesDir, "giantworldmap.png");
+// Upload target from the owner's environment, e.g. SOW_MAPS_UPLOAD_TARGET=ionos:/var/db/sow/maps-uploaded
+const uploadTarget = parseUploadTarget(process.env.SOW_MAPS_UPLOAD_TARGET || "");
+const uploadToken = process.env.SOW_MAPS_RELOAD_TOKEN || "";
+const mapReloadUrl = process.env.SOW_MAPS_RELOAD_URL || "http://127.0.0.1:25566/admin/api/reload-maps";
+// Size presets are defined once in sow-core/src/maps.rs (MAP_SIZE_PRESETS).
+const mapSizes = ["small", "regular", "big", "huge"];
 const episodeFile = /^[a-z][a-z0-9_]{0,63}(?:\.triggers)?\.json$/;
 const entityId = /^[a-z][a-z0-9_]{0,95}$/;
 const avatarId = /^[a-z][a-z0-9_]*$/;
@@ -126,6 +136,8 @@ async function listAvatarIds() {
 function staticFile(pathname) {
   if (pathname === "/tools/campaign-editor/atlas") return path.join(editorDir, "atlas.html");
   if (pathname === "/tools/campaign-editor/map-rosters") return path.join(editorDir, "map-rosters.html");
+  if (pathname === "/tools/campaign-editor/map-generator") return path.join(editorDir, "map-generator.html");
+  if (pathname === "/tools/campaign-editor/map-manager") return path.join(editorDir, "map-manager.html");
   if (pathname === "/" || pathname === "/tools/campaign-editor" || pathname === "/tools/campaign-editor/") {
     return path.join(editorDir, "index.html");
   }
@@ -166,11 +178,49 @@ async function readBody(req, limit = maxBodyBytes) {
   return Buffer.concat(chunks);
 }
 
+function parseUploadTarget(value) {
+  const index = value.indexOf(":");
+  if (index <= 0 || index === value.length - 1) return null;
+  return { host: value.slice(0, index), dir: value.slice(index + 1).replace(/\/+$/, "") };
+}
+
+function isCropRect(crop) {
+  return (
+    Array.isArray(crop) &&
+    crop.length === 4 &&
+    crop.every(Number.isInteger) &&
+    crop[0] >= 0 &&
+    crop[1] >= 0 &&
+    crop[2] > 0 &&
+    crop[3] > 0
+  );
+}
+
+// Asks the game server to re-scan its map folders (built-in + uploaded) and publish the new catalog.
+function reloadServerMaps() {
+  return runCommand("ssh", [uploadTarget.host, `curl -fsS -X POST -H @- ${mapReloadUrl}`], `Authorization: Bearer ${uploadToken}\n`);
+}
+
+function runCommand(command, args, stdin) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { cwd: root, stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
+    child.on("error", (error) => resolve({ code: 1, stdout, stderr: error.message }));
+    child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
+    if (stdin !== undefined) child.stdin.end(stdin);
+  });
+}
+
 function saveMapRosters(mapId, body) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.env.CARGO || "cargo",
-      ["run", "--quiet", "-p", "sow-tools", "--", "save-map-rosters", "--map", mapId, "--maps-root", mapsDir],
+      ["run", "--quiet", "-p", "sow-tools", "--bin", "sow-tools", "--", "save-map-rosters", "--map", mapId, "--maps-root", mapsDir],
       {
         cwd: root,
         stdio: ["pipe", "ignore", "pipe"],
@@ -695,8 +745,163 @@ async function handle(req, res) {
     reply(res, 200, JSON.stringify(episodes), "application/json; charset=utf-8");
     return;
   }
-  if (req.method !== "GET" && req.method !== "HEAD") {
+  const mapLibraryPost =
+    req.method === "POST" &&
+    (url.pathname === "/__map-generate" || url.pathname === "/__map-upload" || url.pathname === "/__map-delete");
+  if (req.method !== "GET" && req.method !== "HEAD" && !mapLibraryPost) {
     reply(res, 405, "method not allowed");
+    return;
+  }
+
+  if (url.pathname === "/__map-generate" && req.method === "POST") {
+    const mapId = url.searchParams.get("map") || "";
+    if (!mapId || !/^[a-z][a-z0-9_]{0,63}$/.test(mapId)) {
+      reply(res, 400, "Invalid map key.");
+      return;
+    }
+    if (mapGenerating) {
+      reply(res, 409, "A map generation is already running.");
+      return;
+    }
+    mapGenerating = true;
+    try {
+      let request;
+      try {
+        request = JSON.parse((await readBody(req, 64 * 1024)).toString("utf8"));
+      } catch (error) {
+        reply(res, 400, error.message || "Invalid request body.");
+        return;
+      }
+      const { crop, size, frequency } = request;
+      if (!isCropRect(crop)) {
+        reply(res, 400, "Select an area on the map first.");
+        return;
+      }
+      if (!mapSizes.includes(size)) {
+        reply(res, 400, "Pick a size: small, regular, big or huge.");
+        return;
+      }
+      if (!Number.isInteger(frequency) || frequency < 0 || frequency > 1000) {
+        reply(res, 400, "Rotation weight must be a whole number from 0 to 1000.");
+        return;
+      }
+      const mapDir = path.join(mapsDir, mapId);
+      if (existsSync(path.join(mapDir, "map.bin")) && request.force !== true) {
+        reply(res, 409, `assets/maps/${mapId} already exists. Confirm to replace it.`);
+        return;
+      }
+      const output = await runCommand(process.env.CARGO || "cargo", [
+        "run", "--quiet", "-p", "sow-tools", "--bin", "sow-tools", "--", "import-map-source",
+        "--input", mapSourcesDir,
+        "--image", worldMapPng,
+        "--name", mapId,
+        "--maps-root", mapsDir,
+        "--crop", crop.join(","),
+        "--size", size,
+        "--frequency", String(frequency),
+      ]);
+      if (output.code !== 0) {
+        reply(res, 500, output.stderr.trim() || "Could not generate the map.");
+        return;
+      }
+      console.log(`  generated assets/maps/${mapId}`);
+      reply(res, 200, JSON.stringify({ saved: `assets/maps/${mapId}`, message: output.stdout.trim() }), "application/json; charset=utf-8");
+    } finally {
+      mapGenerating = false;
+    }
+    return;
+  }
+
+  if (url.pathname === "/__map-upload" && req.method === "POST") {
+    const mapId = url.searchParams.get("map") || "";
+    if (!mapId || !/^[a-z][a-z0-9_]{0,63}$/.test(mapId)) {
+      reply(res, 400, "Invalid map key.");
+      return;
+    }
+    if (!uploadTarget || !uploadToken) {
+      reply(res, 503, "Set SOW_MAPS_UPLOAD_TARGET and SOW_MAPS_RELOAD_TOKEN to upload maps.");
+      return;
+    }
+    if (mapUploading) {
+      reply(res, 409, "A map upload is already running.");
+      return;
+    }
+    mapUploading = true;
+    try {
+      const mapDir = path.join(mapsDir, mapId);
+      const required = ["map.bin.br", "thumbnail.webp", "info.toml"];
+      for (const name of required) {
+        if (!existsSync(path.join(mapDir, name))) {
+          reply(res, 404, `assets/maps/${mapId}/${name} is missing. Generate the map first.`);
+          return;
+        }
+      }
+      // The upload folder belongs to the game server user, so the copy runs as root on the server.
+      const copied = await runCommand("rsync", ["-a", "--mkpath", "--rsync-path=sudo rsync", `${mapDir}/`, `${uploadTarget.host}:${uploadTarget.dir}/${mapId}/`]);
+      if (copied.code !== 0) {
+        reply(res, 502, copied.stderr.trim() || "Upload failed.");
+        return;
+      }
+      const reloaded = await reloadServerMaps();
+      if (reloaded.code !== 0) {
+        reply(res, 502, `Uploaded, but the server did not reload its map list: ${reloaded.stderr.trim()}`);
+        return;
+      }
+      console.log(`  uploaded assets/maps/${mapId} to ${uploadTarget.host}`);
+      reply(res, 200, JSON.stringify({ uploaded: mapId, server: reloaded.stdout.trim() }), "application/json; charset=utf-8");
+    } finally {
+      mapUploading = false;
+    }
+    return;
+  }
+
+  if (url.pathname === "/__map-library" && req.method === "GET") {
+    if (!uploadTarget) {
+      reply(res, 503, "Set SOW_MAPS_UPLOAD_TARGET to manage the server's maps.");
+      return;
+    }
+    const listed = await runCommand("ssh", [uploadTarget.host, `ls -1 ${uploadTarget.dir}`]);
+    if (listed.code !== 0) {
+      reply(res, 502, listed.stderr.trim() || "Could not read the server's map folder.");
+      return;
+    }
+    const maps = listed.stdout.split("\n").filter((name) => mapId.test(name));
+    reply(res, 200, JSON.stringify({ maps }), "application/json; charset=utf-8");
+    return;
+  }
+
+  if (url.pathname === "/__map-delete" && req.method === "POST") {
+    const mapKey = url.searchParams.get("map") || "";
+    if (!mapKey || !mapId.test(mapKey)) {
+      reply(res, 400, "Invalid map key.");
+      return;
+    }
+    if (!uploadTarget || !uploadToken) {
+      reply(res, 503, "Set SOW_MAPS_UPLOAD_TARGET and SOW_MAPS_RELOAD_TOKEN to manage the server's maps.");
+      return;
+    }
+    if (mapUploading) {
+      reply(res, 409, "Another server map change is already running.");
+      return;
+    }
+    mapUploading = true;
+    try {
+      // The folder belongs to the game server user, so the removal runs as root on the server.
+      const removed = await runCommand("ssh", [uploadTarget.host, `sudo rm -rf -- ${uploadTarget.dir}/${mapKey}`]);
+      if (removed.code !== 0) {
+        reply(res, 502, removed.stderr.trim() || "Could not delete the map on the server.");
+        return;
+      }
+      const reloaded = await reloadServerMaps();
+      if (reloaded.code !== 0) {
+        reply(res, 502, `Deleted, but the server did not reload its map list: ${reloaded.stderr.trim()}`);
+        return;
+      }
+      console.log(`  deleted ${mapKey} from ${uploadTarget.host}`);
+      reply(res, 200, JSON.stringify({ deleted: mapKey, server: reloaded.stdout.trim() }), "application/json; charset=utf-8");
+    } finally {
+      mapUploading = false;
+    }
     return;
   }
 
@@ -804,6 +1009,8 @@ server.listen(port, "127.0.0.1", () => {
   console.log(`Campaign editor: http://127.0.0.1:${port}/tools/campaign-editor/`);
   console.log(`Entity Atlas: http://127.0.0.1:${port}/tools/campaign-editor/atlas`);
   console.log(`Map Rosters: http://127.0.0.1:${port}/tools/campaign-editor/map-rosters`);
+  console.log(`Map Generator: http://127.0.0.1:${port}/tools/campaign-editor/map-generator`);
+  console.log(`Custom Maps: http://127.0.0.1:${port}/tools/campaign-editor/map-manager`);
   console.log("  Saving in the editor updates assets/campaign directly; refresh the local game to use them.");
   console.log("  Ctrl-C to stop.");
 });

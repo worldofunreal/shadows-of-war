@@ -171,15 +171,22 @@ impl SowApp {
             }
         }
         let pointer_gesture_active = self.input.is_pointer_gesture_active();
-        if pointer_gesture_active && !self.input.camera_focus_waiting_for_input_release {
+        let is_building_drag = self.input.building_drag_offset.is_some();
+        if pointer_gesture_active
+            && !self.input.camera_focus_waiting_for_input_release
+            && !is_building_drag
+        {
             self.input.camera_focus_target = None;
             self.input.tutorial_camera_focus = false;
         }
-        if !pointer_gesture_active && let Some((world_x, world_y)) = self.input.camera_focus_target
+        if (!pointer_gesture_active || is_building_drag)
+            && let Some((world_x, world_y)) = self.input.camera_focus_target
         {
             self.input.camera_focus_waiting_for_input_release = false;
             let rate = if self.input.tutorial_camera_focus {
                 2.0
+            } else if self.ui.app.hud_state.building_placement.is_some() {
+                5.5
             } else {
                 12.0
             };

@@ -410,14 +410,16 @@
               </div>
               <div class="leader-controls">
                 <button
-                  class="leader-arrow"
+                  class="leader-arrow leader-arrow--prev"
                   type="button"
                   data-leader-prev
                   aria-label="Previous leader"
                   data-i18n="site.previous_leader"
                   data-i18n-attr="aria-label"
                 >
-                  <span aria-hidden="true">&#8592;</span>
+                  <svg class="leader-arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="15 19 8 12 15 5"></polyline>
+                  </svg>
                 </button>
                 <span
                   class="leader-position"
@@ -435,14 +437,16 @@
                   <span data-i18n="site.browse_all">Browse all</span> <span data-leader-total></span>
                 </button>
                 <button
-                  class="leader-arrow"
+                  class="leader-arrow leader-arrow--next"
                   type="button"
                   data-leader-next
                   aria-label="Next leader"
                   data-i18n="site.next_leader"
                   data-i18n-attr="aria-label"
                 >
-                  <span aria-hidden="true">&#8594;</span>
+                  <svg class="leader-arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="9 5 16 12 9 19"></polyline>
+                  </svg>
                 </button>
               </div>
             </div>
