@@ -59,7 +59,7 @@ pub struct MapGlobals {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct PlayerColors {
-    /// Four packed RGB colors per vector keep all 4096 IDs within a 16 KiB uniform.
+    /// Four packed RGB-plus-mode entries per vector keep all 4096 IDs within a 16 KiB uniform.
     pub colors: [[u32; 4]; PLAYER_COLOR_SLOTS / 4],
 }
 

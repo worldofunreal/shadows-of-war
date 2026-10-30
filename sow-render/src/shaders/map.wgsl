@@ -166,16 +166,24 @@ fn ocean_shore_edge(cell_hex: vec2<i32>, local_pos: vec2<f32>) -> f32 {
     return 1.0 - smoothstep_safe(max(width - softness, 0.0), max(width, 0.001), nearest_edge);
 }
 
-fn owner_albedo(owner_id: u32) -> vec3<f32> {
+fn owner_packed_color(owner_id: u32) -> u32 {
     if owner_id < 4096u {
-        let packed = player_colors.colors[owner_id / 4u][owner_id % 4u];
-        return vec3<f32>(
-            f32(packed & 0xFFu),
-            f32((packed >> 8u) & 0xFFu),
-            f32((packed >> 16u) & 0xFFu)
-        ) / 255.0;
+        return player_colors.colors[owner_id / 4u][owner_id % 4u];
     }
-    return vec3<f32>(0.5, 0.5, 0.5); // Fallback if out of bounds
+    let fallback_mode = u32(clamp(round(globals.blend_mode), 0.0, 3.0));
+    return 0x00808080u | (fallback_mode << 24u);
+}
+
+fn packed_owner_albedo(packed: u32) -> vec3<f32> {
+    return vec3<f32>(
+        f32(packed & 0xFFu),
+        f32((packed >> 8u) & 0xFFu),
+        f32((packed >> 16u) & 0xFFu)
+    ) / 255.0;
+}
+
+fn owner_albedo(owner_id: u32) -> vec3<f32> {
+    return packed_owner_albedo(owner_packed_color(owner_id));
 }
 
 fn smoothstep_safe(edge0: f32, edge1: f32, x: f32) -> f32 {
@@ -427,14 +435,15 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
         }
     }
     if owner_id > 0u && is_land {
-        let albedo = owner_albedo(owner_id);
+        let packed_owner = owner_packed_color(owner_id);
+        let albedo = packed_owner_albedo(packed_owner);
         let territory_albedo = albedo;
         
         let opacity = globals.territory_opacity;
 
         // Territory overlay — supports different blend modes
         var blended_color = base_color;
-        let mode = i32(round(globals.blend_mode));
+        let mode = i32((packed_owner >> 24u) & 0xFFu);
         if (mode == 1) {
             // Multiply
             blended_color = base_color * territory_albedo;

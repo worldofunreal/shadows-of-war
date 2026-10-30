@@ -1,0 +1,17 @@
+{
+  "release": "0.1.4-46acb37e7ac5",
+  "live_assets_match_release": {
+    "styles.css": "2d773c39663506be2f1d6b3afbf72c4b81c2799e39955d573d220e5ae85ea009",
+    "site-chrome.js": "a1c111bf1df1fa9e63bcf06506ff5afb8b314eefcda775f5628d522e793512f3",
+    "sow-i18n.js": "3e92aeb37e68dd934f043d52adbd0561ea5e15451242c072d91bcd917ba11168"
+  },
+  "landing_to_profile": "passed",
+  "localized_game_and_faq_schema": [
+    "WebPage",
+    "WebSite",
+    "Organization",
+    "VideoGame",
+    "FAQPage"
+  ],
+  "llms_current": true
+}

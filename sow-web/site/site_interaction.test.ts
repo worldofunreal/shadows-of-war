@@ -621,3 +621,93 @@ test("landing explorer switches map previews and pauses optional video for visib
   assert.equal(player.hidden, true);
   assert.equal(app.node("motion-toggle").hidden, true);
 });
+
+test("public publisher delivers localized linked profiles and rejects incomplete output", async () => {
+  const { publish } = await import("./generate.ts");
+  const { mkdtemp, mkdir, writeFile, readFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const temp = await mkdtemp(path.join(tmpdir(), "sow-public-site-"));
+  const source = path.join(temp, "source"), out = path.join(temp, "out");
+  const put = async (name, value) => {
+    await mkdir(path.dirname(name), { recursive: true });
+    await writeFile(name, value);
+  };
+  try {
+    const template = '<html lang="en"><head><!-- SOW_SITE_LOCALE --><title data-i18n="site.title">Home</title><meta name="description" content=""><link rel="canonical" href="https://shadowsofwar.io/"></head><body><!-- SOW_SITE_HEADER --><!-- PAGE_HEADING --><!-- LEADER_CONTENT --><footer><a href="/leaders/">Leaders</a></footer></body></html>';
+    const languages = [{ code: "en", name: "English" }, { code: "es", name: "Español" }];
+    const catalogs = {};
+    for (const code of ["en", "es"]) {
+      const site = Object.fromEntries(["title", "description", "leaders", "leaders_summary", "nav_home", "main_navigation", "select_language", "command_trait", "historical_name", "civilization", "region", "historical_reference", "all_leaders", "choose_leader", "play_now", "suggest_language", "leader_caesar_ability", "leader_caesar_description", ...["support", "privacy", "cookies", "terms"].flatMap(p => [p+"_title",p+"_description"])].map(key => [key, `${code}: ${key}`]));
+      catalogs[code] = { site, heroes: { leader_caesar_name: code === "en" ? "Julius Caesar" : "Julio César", leader_caesar_civilization: code === "en" ? "Roman Republic" : "República romana", leader_caesar_historical: "Gaius Julius Caesar", europe: code === "en" ? "Europe" : "Europa" } };
+      await put(path.join(out, "locales", code), JSON.stringify({strings:catalogs[code]}));
+    }
+    await put(path.join(out,"locales/index.json"),JSON.stringify({version:1,languages}));
+    for(const name of ["styles.css","app.js","site-chrome.js","analytics.js","sow-i18n.js","sow-dropdown.js","sow-controls.css","wou-auth.js"]) await put(path.join(out,name), "/* fixture */");
+    await put(path.join(out,"play/index.html"),"game");
+    await put(path.join(source,"llms.txt"),"Game facts");
+    for(const page of ["", "support", "privacy", "cookies", "terms", "leaders"]) await put(path.join(source,page,"index.html"),template.replace("<!-- PAGE_HEADING -->", '<h1 data-i18n="site.title">Home</h1>').replace("<!-- LEADER_CONTENT -->", page==="leaders" ? "<!-- LEADER_CONTENT -->" : ""));
+    await put(path.join(source,"leader.html"),template.replace("<!-- PAGE_HEADING -->", ""));
+    await put(path.join(source,"site-header.html"),'<header class="site-nav"><a href="/leaders/">Leaders</a><div data-locale-select></div></header>');
+    const resetLanding = () => put(path.join(out,"index.html"),template.replace("<!-- PAGE_HEADING -->", '<h1 data-i18n="site.title">Home</h1>').replace("<!-- LEADER_CONTENT -->", ""));
+    await resetLanding();
+    for (const asset of ["assets/shell/leaders/caesar_desktop.webp", "assets/shell/leaders/caesar_mobile.webp", "assets/gameplay/avatars/caesar.webp"]) await put(path.join(out,asset),"fixture image");
+    const leaders = [{id:"caesar",artSlug:"caesar",region:"europe",wikipedia:"https://en.wikipedia.org/wiki/Julius_Caesar"}];
+    await publish(out,{leaders,pages:["index.html","support/index.html","privacy/index.html","cookies/index.html","terms/index.html"]},source);
+    const profile = await readFile(path.join(out,"es/leaders/caesar/index.html"),"utf8");
+    assert.match(profile, /<h1>Julio César<\/h1>/);
+    assert.match(profile, /República romana/);
+    assert.match(profile, /href="\/es\/leaders\/"/);
+    assert.match(profile, /hreflang="en" href="https:\/\/shadowsofwar.io\/leaders\/caesar\/"/);
+    assert.match(profile, /rel="canonical" href="https:\/\/shadowsofwar.io\/es\/leaders\/caesar\/"/);
+    assert.match(profile, /href="\/play\/"/);
+    assert.match(profile, /"inLanguage":"es"/);
+    assert.doesNotMatch(profile, /<!-- (SOW_SITE|LEADER)_/);
+    const sitemap = await readFile(path.join(out,"sitemap.xml"),"utf8");
+    assert.equal((sitemap.match(/<url>/g)||[]).length,15);
+    const effect = catalogs.es.site.leader_caesar_description;
+    await resetLanding();
+    delete catalogs.es.site.leader_caesar_description;
+    await put(path.join(out,"locales/es"),JSON.stringify({strings:catalogs.es}));
+    await assert.rejects(publish(out,{leaders,pages:["index.html","support/index.html","privacy/index.html","cookies/index.html","terms/index.html"]},source), /Missing public translation es: site.leader_caesar_description/);
+    catalogs.es.site.leader_caesar_description = effect;
+    await put(path.join(out,"locales/es"),JSON.stringify({strings:catalogs.es}));
+    await resetLanding();
+    await rm(path.join(out,"assets/shell/leaders/caesar_mobile.webp"));
+    await assert.rejects(publish(out,{leaders,pages:["index.html","support/index.html","privacy/index.html","cookies/index.html","terms/index.html"]},source), /Broken public reference \/assets\/shell\/leaders\/caesar_mobile.webp/);
+    await resetLanding();
+    await put(path.join(source,"site-header.html"),'<div>Missing header</div>');
+    await assert.rejects(publish(out,{leaders,pages:["index.html","support/index.html","privacy/index.html","cookies/index.html","terms/index.html"]},source), /must contain one header.site-nav/);
+  } finally { await rm(temp,{recursive:true,force:true}); }
+});
+
+test("Escape closes the language menu before mobile navigation and restores visible focus", () => {
+  const listeners = new Map();
+  const classes = new Set();
+  let focused;
+  const summary = { focus() { focused = summary; } };
+  const language = { open: true, querySelector: () => summary, contains: () => false };
+  const menu = {
+    classList: { toggle(key, on) { if (on) classes.add(key); else classes.delete(key); }, contains: key => classes.has(key) },
+    setAttribute() {}, querySelectorAll: () => [], contains: () => false,
+  };
+  const toggle = { addEventListener() {}, setAttribute() {}, contains: () => false, focus() { focused = toggle; } };
+  const document = {
+    documentElement: { dataset: { sitePage: "leaders/" } },
+    querySelectorAll: selector => selector === ".site-language" ? [language] : [],
+    querySelector: selector => selector === "#mobile-menu" ? menu : selector === "[data-menu-toggle]" ? toggle : null,
+    addEventListener(type, listener) { const list = listeners.get(type) || []; list.push(listener); listeners.set(type, list); },
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,"site-chrome.ts"),"utf8"), { document, window: { location: { pathname: "/leaders/" } } });
+  classes.add("is-open");
+  const escape = () => {
+    const event = { key: "Escape", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    listeners.get("keydown").forEach(handler => handler(event));
+  };
+  escape();
+  assert.equal(language.open, false);
+  assert.equal(classes.has("is-open"), true);
+  assert.equal(focused, summary);
+  escape();
+  assert.equal(classes.has("is-open"), false);
+  assert.equal(focused, toggle);
+});

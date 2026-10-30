@@ -16,6 +16,7 @@ type Exchange = {
     token: string | null;
     until: number | null;
     ackStartedAt: number | null;
+    loopHadVisibleLine?: boolean;
     remainingGap?: number;
 };
 type ActiveReaction = { reaction: CampaignRecord; target: string; instanceId: string };
@@ -37,6 +38,7 @@ const {
     WAIT_MS,
     EXCHANGE_LINE_MS,
     EXCHANGE_GAP_MS,
+    EXCHANGE_SEQUENCE_GAP_MS,
     EXCHANGE_EMOTE_ACK_TIMEOUT_MS,
     METRICS,
     emptyCampaignUnlocks,
@@ -346,6 +348,59 @@ export function create(
             )
             .map((reaction: CampaignRecord) => reaction.when.target);
     }
+    function loopShouldStop() {
+        if (activeReaction?.reaction.loop !== true) return false;
+        const step = byId.get(state.id)!;
+        const result = ["objective", "guide"].includes(step.type) && step.trigger ? progress() : null;
+        if (!result || result.current >= result.target || targetUnavailable(step, result)) return true;
+        if (
+            step.guide?.kind === "world" &&
+            step.guide.target === "target_action" &&
+            step.trigger?.type === "defeated" &&
+            step.trigger.target
+        ) {
+            const target = step.trigger.target;
+            return (
+                Number((facts.attacks_by_faction_id || {})[target] || 0) >
+                Number((baseline.attacks_by_faction_id || {})[target] || 0)
+            );
+        }
+        return false;
+    }
+    function timerOccurrence(reaction: CampaignRecord) {
+        if (reactionTimerStartedAtMs === null) return null;
+        const afterMs = reaction.when.after_ms;
+        const repeatMs = reaction.when.repeat_ms;
+        if (!Number.isSafeInteger(afterMs) || afterMs <= 0) return null;
+        if (repeatMs != null && (!Number.isSafeInteger(repeatMs) || repeatMs <= 0)) return null;
+        const firstDueAt = reactionTimerStartedAtMs + afterMs;
+        if (repeatMs == null)
+            return {
+                dueAt: firstDueAt,
+                instanceId: reaction.id,
+                ready: currentTimeMs >= firstDueAt,
+                nextDueAt: firstDueAt,
+                repeats: false,
+            };
+        if (currentTimeMs < firstDueAt)
+            return {
+                dueAt: firstDueAt,
+                instanceId: reaction.id + "@timer:0",
+                ready: false,
+                nextDueAt: firstDueAt,
+                repeats: true,
+            };
+        const occurrence = Math.floor((currentTimeMs - firstDueAt) / repeatMs);
+        const dueAt = firstDueAt + occurrence * repeatMs;
+        const ready = currentTimeMs - dueAt <= EXCHANGE_GAP_MS;
+        return {
+            dueAt,
+            instanceId: reaction.id + "@timer:" + occurrence,
+            ready,
+            nextDueAt: dueAt + repeatMs,
+            repeats: true,
+        };
+    }
     function nextReaction() {
         const contactFactionIds = facts.contact_faction_ids || [];
         const gameplayActive = !["scene", "choice", "end"].includes(byId.get(state.id)!.type);
@@ -442,19 +497,15 @@ export function create(
                     if (type === "timer") {
                         const step = byId.get(state.id)!;
                         const result =
-                            ["objective", "guide"].includes(step.type) && step.trigger
-                                ? progress()
-                                : null;
-                        const afterMs = reaction.when.after_ms;
+                            ["objective", "guide"].includes(step.type) && step.trigger ? progress() : null;
+                        const timer = timerOccurrence(reaction);
                         const ready =
                             gameplayActive &&
                             duringActive &&
                             result &&
                             result.current < result.target &&
-                            reactionTimerStartedAtMs !== null &&
-                            Number.isSafeInteger(afterMs) &&
-                            afterMs > 0 &&
-                            currentTimeMs - reactionTimerStartedAtMs >= afterMs;
+                            timer &&
+                            timer.ready;
                         return ready
                             ? [
                                   {
@@ -464,7 +515,8 @@ export function create(
                                       isContact: false,
                                       isFirstContact: false,
                                       priority: 2,
-                                      instanceId: reaction.id,
+                                      instanceId: timer.instanceId,
+                                      dueAt: timer.dueAt,
                                   },
                               ]
                             : [];
@@ -497,6 +549,7 @@ export function create(
                 .sort(
                     (a: CampaignRecord, b: CampaignRecord) =>
                         a.priority - b.priority ||
+                        (Number.isFinite(a.dueAt) && Number.isFinite(b.dueAt) ? b.dueAt - a.dueAt : 0) ||
                         Number((a.receipt && a.receipt.first_tick) || 0) -
                             Number((b.receipt && b.receipt.first_tick) || 0) ||
                         a.index - b.index,
@@ -514,14 +567,17 @@ export function create(
                 (reaction: CampaignRecord) =>
                     reaction.when.type === "timer" &&
                     reaction.during === state.id &&
-                    !state.reactionsShown.includes(reaction.id) &&
-                    Number.isSafeInteger(reaction.when.after_ms) &&
-                    reaction.when.after_ms > 0,
+                    !(reaction.when.repeat_ms == null && state.reactionsShown.includes(reaction.id)),
             )
-            .map(
-                (reaction: CampaignRecord) =>
-                    reactionTimerStartedAtMs! + reaction.when.after_ms - currentTimeMs,
-            );
+            .map((reaction: CampaignRecord) => {
+                const timer = timerOccurrence(reaction);
+                if (!timer) return null;
+                if (state.reactionsShown.includes(timer.instanceId))
+                    return timer.repeats ? timer.nextDueAt - currentTimeMs : null;
+                if (!timer.ready) return timer.nextDueAt - currentTimeMs;
+                return 1;
+            })
+            .filter((delay: number | null): delay is number => Number.isFinite(delay));
         return remaining.length ? Math.max(1, Math.min(...remaining)) : null;
     }
     function view() {
@@ -679,6 +735,7 @@ export function create(
             token: null,
             until: null,
             ackStartedAt: null,
+            loopHadVisibleLine: false,
         };
         prepareExchangeLine();
     }
@@ -722,6 +779,7 @@ export function create(
             }
             const shown = result !== false;
             if (!shown) return false;
+            current.loopHadVisibleLine = true;
             current.phase = "speaking";
             current.until = readClock() + EXCHANGE_LINE_MS;
             return false;
@@ -730,12 +788,18 @@ export function create(
         if (currentTimeMs < current.until!) return false;
         if (current.phase === "speaking") {
             clearExchangeLine();
+            if (loopShouldStop()) {
+                endExchange();
+                return true;
+            }
             current.phase = "gap";
-            current.until =
-                currentTimeMs +
-                (Number.isInteger(current.lines[current.index].delay_ms)
-                    ? current.lines[current.index].delay_ms
-                    : EXCHANGE_GAP_MS);
+            const delay =
+                activeReaction?.reaction.loop === true
+                    ? EXCHANGE_SEQUENCE_GAP_MS
+                    : Number.isInteger(current.lines[current.index].delay_ms)
+                      ? current.lines[current.index].delay_ms
+                      : EXCHANGE_GAP_MS;
+            current.until = currentTimeMs + delay;
             return false;
         }
         return nextExchangeLine();
@@ -744,15 +808,31 @@ export function create(
         const current = exchange!;
         current.index++;
         if (current.index < current.lines.length) prepareExchangeLine();
-        else endExchange();
+        else if (
+            activeReaction?.reaction.loop === true &&
+            current.loopHadVisibleLine &&
+            !loopShouldStop()
+        ) {
+            current.index = 0;
+            current.loopHadVisibleLine = false;
+            prepareExchangeLine();
+        } else endExchange();
         return true;
     }
     function endExchange() {
         const finished = exchange!;
         exchange = null;
         waitUntilMs = null;
-        if (finished.reactionInstance !== null) completeReaction();
-        else reactionTimerStartedAtMs = (currentTimeMs = readClock());
+        if (finished.reactionInstance !== null) {
+            const completedReaction = activeReaction?.reaction;
+            completeReaction();
+            if (
+                completedReaction &&
+                ["contact", "first_contact"].includes(completedReaction.when.type) &&
+                completedReaction.during === state.id
+            )
+                reactionTimerStartedAtMs = currentTimeMs = readClock();
+        } else reactionTimerStartedAtMs = currentTimeMs = readClock();
     }
     function dispose() {
         clearExchange();
@@ -762,6 +842,11 @@ export function create(
         const active = activeReaction!;
         const reaction = active.reaction;
         const target = active.target;
+        if (reaction.when.type === "timer" && reaction.when.repeat_ms != null) {
+            const prefix = reaction.id + "@timer:";
+            for (let index = state.reactionsShown.length - 1; index >= 0; index--)
+                if (state.reactionsShown[index].startsWith(prefix)) state.reactionsShown.splice(index, 1);
+        }
         if (!state.reactionsShown.includes(active.instanceId)) state.reactionsShown.push(active.instanceId);
         if (
             ["contact", "first_contact"].includes(reaction.when.type) &&
@@ -878,6 +963,14 @@ export function create(
                 continue;
             }
             if (exchange) {
+                if (
+                    activeReaction?.reaction.loop === true &&
+                    exchange.phase !== "speaking" &&
+                    loopShouldStop()
+                ) {
+                    endExchange();
+                    continue;
+                }
                 if (!updateExchange()) return view();
                 continue;
             }

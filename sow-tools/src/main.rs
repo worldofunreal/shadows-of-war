@@ -214,6 +214,39 @@ struct ImportMapSourceArgs {
     /// Rotation weight; 0 keeps the map out of the public rotation
     #[arg(long)]
     frequency: Option<u32>,
+
+    /// Inland water bodies smaller than this many tiles become land
+    #[arg(long)]
+    min_lake_tiles: Option<usize>,
+
+    /// Land masses smaller than this many source pixels become water
+    #[arg(long)]
+    min_island_pixels: Option<usize>,
+
+    /// Trace smooth coasts when the source is enlarged
+    #[arg(long)]
+    smooth_coasts: bool,
+
+    /// With smooth coasts: 0.5 follows the source; higher widens rivers and lakes
+    #[arg(long, value_parser = parse_water_level)]
+    water_level: Option<f32>,
+
+    /// Open a tile where two water tiles touch only at a corner
+    #[arg(long)]
+    connect_diagonals: bool,
+
+    /// Live preview: skip map.bin.br (and remove a stale one)
+    #[arg(long)]
+    draft: bool,
+}
+
+fn parse_water_level(value: &str) -> Result<f32, String> {
+    let level = value.parse::<f32>().map_err(|e| e.to_string())?;
+    if (0.05..=0.95).contains(&level) {
+        Ok(level)
+    } else {
+        Err("expected a number from 0.05 to 0.95".to_string())
+    }
 }
 
 fn parse_crop(value: &str) -> Result<[u32; 4], String> {
@@ -246,6 +279,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 crop: import.crop,
                 size: import.size,
                 frequency: import.frequency,
+                water: {
+                    let defaults = sow_map::image_pipeline::WaterSettings::default();
+                    sow_map::image_pipeline::WaterSettings {
+                        min_lake_tiles: import.min_lake_tiles.unwrap_or(defaults.min_lake_tiles),
+                        min_island_pixels: import
+                            .min_island_pixels
+                            .unwrap_or(defaults.min_island_pixels),
+                        smooth_coasts: import.smooth_coasts,
+                        water_level: import.water_level.unwrap_or(defaults.water_level),
+                        connect_diagonals: import.connect_diagonals,
+                    }
+                },
+                draft: import.draft,
             })
         }
         Some(Commands::RefreshCatalog(args)) => map_source_import::refresh_catalog(&args.maps_root)

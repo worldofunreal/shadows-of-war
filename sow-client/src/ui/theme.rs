@@ -16,6 +16,7 @@ pub mod dev_config {
         pub conquest_duration: f32,
         pub territory_opacity: f32,
         pub blend_mode: f32,
+        pub tribe_blend_mode: f32,
         pub vfx_conquer: bool,
         pub vfx_border_breathe: bool,
         pub vfx_dialog_border: bool,
@@ -61,6 +62,7 @@ pub mod dev_config {
                 conquest_duration: 1.5,
                 territory_opacity: 0.5,
                 blend_mode: 1.0,
+                tribe_blend_mode: 3.0,
                 vfx_conquer: true,
                 vfx_border_breathe: true,
                 vfx_dialog_border: true,
@@ -123,6 +125,7 @@ pub mod dev_config {
                 "conquest_duration" => [self.conquest_duration, 0.0, 0.0, 0.0],
                 "territory_opacity" => [self.territory_opacity, 0.0, 0.0, 0.0],
                 "blend_mode" => [self.blend_mode, 0.0, 0.0, 0.0],
+                "tribe_blend_mode" => [self.tribe_blend_mode, 0.0, 0.0, 0.0],
                 "font_size_scale" => [self.font_size_scale, 0.0, 0.0, 0.0],
                 "font_face_dilate" => [self.font_face_dilate, 0.0, 0.0, 0.0],
                 "font_outline_thickness" => [self.font_outline_thickness, 0.0, 0.0, 0.0],
@@ -166,6 +169,7 @@ pub mod dev_config {
                 "conquest_duration" => self.conquest_duration = value[0],
                 "territory_opacity" => self.territory_opacity = value[0],
                 "blend_mode" => self.blend_mode = value[0],
+                "tribe_blend_mode" => self.tribe_blend_mode = value[0],
                 "font_size_scale" => self.font_size_scale = value[0],
                 "font_face_dilate" => self.font_face_dilate = value[0],
                 "font_outline_thickness" => self.font_outline_thickness = value[0],
@@ -256,5 +260,22 @@ pub mod dev_config {
             }
             fingerprint
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dev_config::DevConfig;
+
+    #[test]
+    fn territory_blend_defaults_keep_global_multiply_and_tribe_albedo() {
+        let mut config = DevConfig::default();
+        assert_eq!(config.value("territory_opacity")[0], 0.5);
+        assert_eq!(config.value("blend_mode")[0], 1.0);
+        assert_eq!(config.value("tribe_blend_mode")[0], 3.0);
+
+        assert!(config.assign("tribe_blend_mode", [1.0, 0.0, 0.0, 0.0]));
+        assert_eq!(config.value("blend_mode")[0], 1.0);
+        assert_eq!(config.value("tribe_blend_mode")[0], 1.0);
     }
 }

@@ -4,6 +4,27 @@ use blade_graphics as gpu;
 
 mod ui;
 
+fn territory_blend_mode(
+    player_type: sow_core::player::PlayerType,
+    is_campaign_faction: bool,
+    global_mode: f32,
+    tribe_mode: f32,
+) -> f32 {
+    if player_type == sow_core::player::PlayerType::Bot && !is_campaign_faction {
+        tribe_mode
+    } else {
+        global_mode
+    }
+}
+
+fn pack_player_territory_color(rgb: [f32; 3], blend_mode: f32) -> u32 {
+    // RGB uses the low 24 bits; the free high byte stores this owner's blend mode.
+    let packed_rgb = rgb.iter().enumerate().fold(0u32, |packed, (i, channel)| {
+        packed | ((((*channel).clamp(0.0, 1.0) * 255.0).round() as u32) << (i * 8))
+    });
+    packed_rgb | ((blend_mode.round().clamp(0.0, 3.0) as u32) << 24)
+}
+
 impl SowApp {
     pub fn render_frame(&mut self, _event_loop: &dyn winit::event_loop::ActiveEventLoop) {
         #[cfg(target_arch = "wasm32")]
@@ -209,6 +230,7 @@ impl SowApp {
                     let shore_darkness = dev.shore_darkness;
                     let territory_opacity = dev.territory_opacity;
                     let blend_mode = dev.blend_mode;
+                    let tribe_blend_mode = dev.tribe_blend_mode;
                     let conquest_duration = dev.conquest_duration;
                     let current_time = web_time::Instant::now();
                     let preview_duration = self.ui.dev_vfx_preview.duration(&dev);
@@ -289,8 +311,9 @@ impl SowApp {
                         snap.dirty_tiles.clear();
                     }
 
+                    let default_player_color = pack_player_territory_color([0.5; 3], blend_mode);
                     let mut player_colors =
-                        [[0x0080_8080u32; 4]; crate::render::gpu::PLAYER_COLOR_SLOTS / 4];
+                        [[default_player_color; 4]; crate::render::gpu::PLAYER_COLOR_SLOTS / 4];
                     let mut player_skin_styles = [[0.0f32; 4]; 256];
                     let my_id = self.sim.my_player_id.unwrap_or(0);
                     if let Some(snap) = &self.sim.current_snapshot {
@@ -302,15 +325,13 @@ impl SowApp {
                                     p.color,
                                     p.is_campaign_faction,
                                 );
-                                let packed = rgb.iter().enumerate().fold(
-                                    0u32,
-                                    |packed, (i, channel)| {
-                                        packed
-                                            | ((((*channel).clamp(0.0, 1.0) * 255.0).round()
-                                                as u32)
-                                                << (i * 8))
-                                    },
+                                let owner_blend_mode = territory_blend_mode(
+                                    p.player_type,
+                                    p.is_campaign_faction,
+                                    blend_mode,
+                                    tribe_blend_mode,
                                 );
+                                let packed = pack_player_territory_color(rgb, owner_blend_mode);
                                 let id = p.id as usize;
                                 player_colors[id / 4][id % 4] = packed;
                             }
@@ -763,3 +784,33 @@ mod hero_ability_tile_flags {
     }
 }
 
+#[cfg(test)]
+mod territory_blend_mode_tests {
+    use super::{pack_player_territory_color, territory_blend_mode};
+    use sow_core::player::PlayerType;
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn only_normal_bots_use_the_tribe_blend_mode() {
+        assert_eq!(
+            territory_blend_mode(PlayerType::Bot, false, 1.0, 3.0),
+            3.0
+        );
+        for (player_type, is_campaign_faction) in [
+            (PlayerType::Bot, true),
+            (PlayerType::Human, false),
+            (PlayerType::Nation, false),
+        ] {
+            assert_eq!(
+                territory_blend_mode(player_type, is_campaign_faction, 1.0, 3.0),
+                1.0
+            );
+        }
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn packed_player_color_keeps_rgb_and_stores_mode_in_the_free_byte() {
+        let packed = pack_player_territory_color([1.0, 0.5, 0.0], 3.0);
+        assert_eq!(packed & 0x00FF_FFFF, 0x0000_80FF);
+        assert_eq!(packed >> 24, 3);
+    }
+}

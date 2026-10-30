@@ -59,8 +59,8 @@ const TROOP_TRANSFER_GLYPH_DELAY: f32 = 0.035;
 const AVATAR_TRANSITION_EXIT_SECS: f32 = 0.15;
 const AVATAR_TRANSITION_ENTER_SECS: f32 = 0.5;
 const AVATAR_TRANSITION_CELEBRATE_SECS: f32 = 0.65;
-const CRITICAL_FORCE_ENTER_RATIO: f64 = 0.05;
-const CRITICAL_FORCE_EXIT_RATIO: f64 = 0.10;
+const INCOMING_FORCE_LOSS_ENTER_RATIO: f64 = 0.50;
+const INCOMING_FORCE_LOSS_EXIT_RATIO: f64 = 0.35;
 
 #[derive(Clone, Debug)]
 pub(crate) struct NameplateVisualState {
@@ -121,7 +121,8 @@ pub(crate) struct NameplateSystem {
     campaign_base_expressions: HashMap<u16, AvatarExpression>,
     campaign_base_expressions_dirty: bool,
     avatar_base_tick: Option<u64>,
-    low_force_players: HashSet<u16>,
+    incoming_force_at_start: HashMap<u16, f64>,
+    fear_under_attack_players: HashSet<u16>,
     avatar_bases: HashMap<u16, AvatarExpression>,
     avatar_transitions: HashMap<u16, AvatarTransition>,
     next_avatar_transition_id: u64,
@@ -276,18 +277,6 @@ fn avatar_transition_emote(expression: AvatarExpression) -> EmoteKind {
         AvatarExpression::Fear => EmoteKind::Help,
         AvatarExpression::Angry => EmoteKind::Threat,
         AvatarExpression::Calm => EmoteKind::Greet,
-    }
-}
-
-fn critical_force(troops: f64, capacity: f64, was_critical: bool) -> bool {
-    if !troops.is_finite() || !capacity.is_finite() || capacity <= 0.0 {
-        return false;
-    }
-    let ratio = troops.max(0.0) / capacity;
-    if was_critical {
-        ratio < CRITICAL_FORCE_EXIT_RATIO
-    } else {
-        ratio <= CRITICAL_FORCE_ENTER_RATIO
     }
 }
 
@@ -714,23 +703,55 @@ impl NameplateSystem {
         if self.avatar_base_tick == Some(snapshot.tick) && !self.campaign_base_expressions_dirty {
             return;
         }
-        let combatants: HashSet<_> = snapshot
-            .attacks
-            .iter()
-            .filter(|attack| {
-                attack.owner_id != 0
-                    && attack.target_owner != 0
-                    && attack.owner_id != attack.target_owner
-                    && attack.troops > 0.0
-                    && !attack.retreating
-            })
-            .flat_map(|attack| [attack.owner_id, attack.target_owner])
-            .collect();
-        let mut low_force_players = HashSet::new();
+        let mut combatants = HashSet::new();
+        let mut incoming_attack_targets = HashSet::new();
+        let mut committed_troops = HashMap::<u16, f64>::new();
+        for attack in &snapshot.attacks {
+            if attack.owner_id != 0 && attack.troops.is_finite() && attack.troops > 0.0 {
+                *committed_troops.entry(attack.owner_id).or_default() += attack.troops;
+            }
+            if attack.owner_id != 0
+                && attack.target_owner != 0
+                && attack.owner_id != attack.target_owner
+                && attack.troops.is_finite()
+                && attack.troops > 0.0
+                && !attack.retreating
+            {
+                combatants.insert(attack.owner_id);
+                combatants.insert(attack.target_owner);
+                incoming_attack_targets.insert(attack.target_owner);
+            }
+        }
+        let mut incoming_force_at_start = HashMap::new();
+        let mut fear_under_attack_players = HashSet::new();
         for player in snapshot.players.iter().filter(|player| player.alive) {
-            let was_critical = self.low_force_players.contains(&player.id);
-            if critical_force(player.troops, player.max_troops, was_critical) {
-                low_force_players.insert(player.id);
+            if !incoming_attack_targets.contains(&player.id) {
+                continue;
+            }
+            // La fuerza enviada sigue siendo tuya; no debe parecer una baja al contraatacarte.
+            let reserve = if player.troops.is_finite() {
+                player.troops.max(0.0)
+            } else {
+                0.0
+            };
+            let current_force = reserve + committed_troops.get(&player.id).copied().unwrap_or(0.0);
+            let start_force = self
+                .incoming_force_at_start
+                .get(&player.id)
+                .copied()
+                .unwrap_or(current_force);
+            incoming_force_at_start.insert(player.id, start_force);
+            if !start_force.is_finite() || start_force <= 0.0 || !current_force.is_finite() {
+                continue;
+            }
+            let loss_ratio = ((start_force - current_force).max(0.0)) / start_force;
+            let threshold = if self.fear_under_attack_players.contains(&player.id) {
+                INCOMING_FORCE_LOSS_EXIT_RATIO
+            } else {
+                INCOMING_FORCE_LOSS_ENTER_RATIO
+            };
+            if loss_ratio >= threshold {
+                fear_under_attack_players.insert(player.id);
             }
         }
 
@@ -740,10 +761,10 @@ impl NameplateSystem {
                 .campaign_base_expressions
                 .get(&player.id)
                 .copied()
-                .unwrap_or(if combatants.contains(&player.id) {
-                    AvatarExpression::Angry
-                } else if low_force_players.contains(&player.id) {
+                .unwrap_or(if fear_under_attack_players.contains(&player.id) {
                     AvatarExpression::Fear
+                } else if combatants.contains(&player.id) {
+                    AvatarExpression::Angry
                 } else {
                     AvatarExpression::Calm
                 });
@@ -755,7 +776,8 @@ impl NameplateSystem {
             avatar_bases.insert(player.id, expression);
         }
         self.avatar_bases = avatar_bases;
-        self.low_force_players = low_force_players;
+        self.incoming_force_at_start = incoming_force_at_start;
+        self.fear_under_attack_players = fear_under_attack_players;
         self.avatar_base_tick = Some(snapshot.tick);
         self.campaign_base_expressions_dirty = false;
     }
@@ -2068,20 +2090,11 @@ mod emote_tests {
     }
 
     #[wasm_bindgen_test]
-    fn critical_reserves_use_fear_unless_combat_overrides_then_recover_to_calm() {
-        assert!(critical_force(5.0, 100.0, false));
-        assert!(!critical_force(5.01, 100.0, false));
-        assert!(critical_force(9.99, 100.0, true));
-        assert!(!critical_force(10.0, 100.0, true));
-        assert!(!critical_force(1.0, 0.0, false));
-        assert!(!critical_force(f64::NAN, 100.0, false));
-        assert!(!critical_force(1.0, f64::INFINITY, false));
-
+    fn fear_requires_severe_force_loss_from_an_incoming_attack() {
         let now = Instant::now();
         let mut system = NameplateSystem::default();
         let mut snap = snapshot(None);
         snap.players[0].troops = 4.0;
-        snap.players[0].max_troops = 100.0;
         let mut opponent = snap.players[0].clone();
         opponent.id = 2;
         opponent.troops = 100.0;
@@ -2089,26 +2102,53 @@ mod emote_tests {
         snap.attacks.push(sow_core::protocol::AttackSnapshot {
             id: 1,
             owner_id: 1,
-            target_owner: 2,
-            troops: 10.0,
+            target_owner: 0,
+            troops: 96.0,
             retreating: false,
             front_cx: 0.0,
             front_cy: 0.0,
         });
         snap.tick += 1;
         system.observe_avatar_bases(&snap, now + Duration::from_millis(100), false);
+        assert_eq!(system.avatar_bases[&1], AvatarExpression::Calm);
+        assert_eq!(system.avatar_bases[&2], AvatarExpression::Calm);
+
+        snap.tick += 1;
+        snap.attacks[0].target_owner = 2;
+        snap.attacks.push(sow_core::protocol::AttackSnapshot {
+            id: 2,
+            owner_id: 2,
+            target_owner: 1,
+            troops: 10.0,
+            retreating: false,
+            front_cx: 0.0,
+            front_cy: 0.0,
+        });
+        system.observe_avatar_bases(&snap, now + Duration::from_millis(200), false);
+        // Sending 96% of the reserves still leaves the same total force: no Fear on counterattack.
         assert_eq!(system.avatar_bases[&1], AvatarExpression::Angry);
         assert_eq!(system.avatar_bases[&2], AvatarExpression::Angry);
 
-        snap.attacks.clear();
-        snap.tick += 1;
-        system.observe_avatar_bases(&snap, now + Duration::from_millis(200), false);
-        assert_eq!(system.avatar_bases[&1], AvatarExpression::Fear);
-        assert_eq!(system.avatar_bases[&2], AvatarExpression::Calm);
-
-        snap.players[0].troops = 10.0;
+        snap.attacks[0].troops = 45.0;
         snap.tick += 1;
         system.observe_avatar_bases(&snap, now + Duration::from_millis(300), false);
+        assert_eq!(system.avatar_bases[&1], AvatarExpression::Fear);
+        assert_eq!(system.avatar_bases[&2], AvatarExpression::Angry);
+
+        snap.attacks[0].troops = 61.0;
+        snap.tick += 1;
+        system.observe_avatar_bases(&snap, now + Duration::from_millis(400), false);
+        assert_eq!(system.avatar_bases[&1], AvatarExpression::Fear);
+
+        snap.attacks[0].troops = 62.0;
+        snap.tick += 1;
+        system.observe_avatar_bases(&snap, now + Duration::from_millis(500), false);
+        assert_eq!(system.avatar_bases[&1], AvatarExpression::Angry);
+
+        snap.players[0].troops = 4.0;
+        snap.attacks.clear();
+        snap.tick += 1;
+        system.observe_avatar_bases(&snap, now + Duration::from_millis(600), false);
         assert_eq!(system.avatar_bases[&1], AvatarExpression::Calm);
     }
 

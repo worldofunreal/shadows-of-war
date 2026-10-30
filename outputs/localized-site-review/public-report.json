@@ -1,0 +1,6461 @@
+{
+  "urls": 1291,
+  "languages": 15,
+  "errors": [],
+  "results": [
+    {
+      "url": "https://shadowsofwar.io/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/support/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/privacy/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/cookies/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/terms/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/caesar/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/cleopatra/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/ragnar/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/sun_tzu/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/alexander/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/genghis_khan/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/vercingetorix/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/boudica/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/leonidas/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/napoleon/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/anacaona/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/lozen/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/hongi_hika/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/makeda/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/empress_gi/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/ashoka/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/hannibal/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/bolivar/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/saladin/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/suleiman/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/musa_i/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/shaka/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/nzinga/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/kamehameha/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/gajah_mada/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/solomon/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/sayyid_said/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/constantine/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/vlad_iii/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/semiramis/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/tomyris/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/gorgo/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/artigas/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/tlacaelel/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/cosijoeza/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/tomochichi/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/eight_deer/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/nemequene/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/thanadelthur/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/artemisia_i/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/lobengula/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/shah_jahan/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/xerxes_i/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/justinian_i/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/totila/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/chilperic_i/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/lothair_i/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/charles_v/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/wanli/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/sitting_bull/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/pocahontas/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/burebista/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "en"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/support/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/privacy/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/cookies/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/terms/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/caesar/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/cleopatra/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/ragnar/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/sun_tzu/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/alexander/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/genghis_khan/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/vercingetorix/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/boudica/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/leonidas/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/napoleon/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/anacaona/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/lozen/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/hongi_hika/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/makeda/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/empress_gi/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/ashoka/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/hannibal/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/bolivar/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/saladin/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/suleiman/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/musa_i/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/shaka/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/nzinga/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/kamehameha/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/gajah_mada/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/solomon/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/sayyid_said/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/constantine/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/vlad_iii/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/semiramis/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/tomyris/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/gorgo/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/artigas/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/tlacaelel/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/cosijoeza/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/tomochichi/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/eight_deer/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/nemequene/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/thanadelthur/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/artemisia_i/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/lobengula/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/shah_jahan/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/xerxes_i/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/justinian_i/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/totila/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/chilperic_i/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/lothair_i/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/charles_v/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/wanli/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/sitting_bull/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/pocahontas/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/burebista/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/es/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "es"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/support/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/privacy/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/cookies/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/terms/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/caesar/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/cleopatra/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/ragnar/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/sun_tzu/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/alexander/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/genghis_khan/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/vercingetorix/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/boudica/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/leonidas/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/napoleon/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/anacaona/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/lozen/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/hongi_hika/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/makeda/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/empress_gi/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/ashoka/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/hannibal/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/bolivar/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/saladin/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/suleiman/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/musa_i/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/shaka/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/nzinga/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/kamehameha/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/gajah_mada/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/solomon/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/sayyid_said/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/constantine/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/vlad_iii/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/semiramis/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/tomyris/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/gorgo/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/artigas/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/tlacaelel/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/cosijoeza/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/tomochichi/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/eight_deer/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/nemequene/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/thanadelthur/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/artemisia_i/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/lobengula/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/shah_jahan/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/xerxes_i/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/justinian_i/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/totila/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/chilperic_i/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/lothair_i/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/charles_v/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/wanli/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/sitting_bull/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/pocahontas/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/burebista/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/fr/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "fr"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/support/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/privacy/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/cookies/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/terms/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/caesar/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/cleopatra/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/ragnar/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/sun_tzu/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/alexander/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/genghis_khan/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/vercingetorix/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/boudica/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/leonidas/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/napoleon/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/anacaona/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/lozen/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/hongi_hika/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/makeda/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/empress_gi/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/ashoka/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/hannibal/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/bolivar/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/saladin/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/suleiman/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/musa_i/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/shaka/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/nzinga/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/kamehameha/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/gajah_mada/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/solomon/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/sayyid_said/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/constantine/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/vlad_iii/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/semiramis/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/tomyris/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/gorgo/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/artigas/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/tlacaelel/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/cosijoeza/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/tomochichi/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/eight_deer/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/nemequene/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/thanadelthur/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/artemisia_i/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/lobengula/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/shah_jahan/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/xerxes_i/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/justinian_i/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/totila/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/chilperic_i/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/lothair_i/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/charles_v/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/wanli/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/sitting_bull/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/pocahontas/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/burebista/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/de/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "de"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/support/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/privacy/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/cookies/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/terms/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/caesar/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/cleopatra/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/ragnar/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/sun_tzu/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/alexander/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/genghis_khan/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/vercingetorix/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/boudica/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/leonidas/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/napoleon/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/anacaona/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/lozen/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/hongi_hika/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/makeda/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/empress_gi/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/ashoka/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/hannibal/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/bolivar/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/saladin/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/suleiman/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/musa_i/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/shaka/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/nzinga/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/kamehameha/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/gajah_mada/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/solomon/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/sayyid_said/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/constantine/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/vlad_iii/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/semiramis/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/tomyris/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/gorgo/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/artigas/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/tlacaelel/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/cosijoeza/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/tomochichi/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/eight_deer/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/nemequene/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/thanadelthur/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/artemisia_i/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/lobengula/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/shah_jahan/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/xerxes_i/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/justinian_i/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/totila/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/chilperic_i/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/lothair_i/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/charles_v/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/wanli/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/sitting_bull/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/pocahontas/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/burebista/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/it/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "it"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/support/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/privacy/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/cookies/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/terms/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/caesar/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/cleopatra/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/ragnar/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/sun_tzu/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/alexander/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/genghis_khan/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/vercingetorix/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/boudica/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/leonidas/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/napoleon/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/anacaona/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/lozen/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/hongi_hika/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/makeda/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/empress_gi/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/ashoka/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/hannibal/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/bolivar/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/saladin/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/suleiman/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/musa_i/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/shaka/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/nzinga/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/kamehameha/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/gajah_mada/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/solomon/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/sayyid_said/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/constantine/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/vlad_iii/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/semiramis/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/tomyris/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/gorgo/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/artigas/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/tlacaelel/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/cosijoeza/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/tomochichi/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/eight_deer/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/nemequene/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/thanadelthur/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/artemisia_i/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/lobengula/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/shah_jahan/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/xerxes_i/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/justinian_i/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/totila/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/chilperic_i/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/lothair_i/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/charles_v/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/wanli/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/sitting_bull/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/pocahontas/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/burebista/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/tr/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "tr"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/support/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/privacy/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/cookies/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/terms/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/caesar/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/cleopatra/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/ragnar/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/sun_tzu/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/alexander/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/genghis_khan/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/vercingetorix/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/boudica/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/leonidas/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/napoleon/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/anacaona/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/lozen/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/hongi_hika/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/makeda/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/empress_gi/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/ashoka/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/hannibal/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/bolivar/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/saladin/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/suleiman/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/musa_i/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/shaka/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/nzinga/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/kamehameha/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/gajah_mada/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/solomon/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/sayyid_said/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/constantine/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/vlad_iii/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/semiramis/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/tomyris/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/gorgo/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/artigas/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/tlacaelel/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/cosijoeza/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/tomochichi/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/eight_deer/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/nemequene/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/thanadelthur/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/artemisia_i/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/lobengula/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/shah_jahan/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/xerxes_i/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/justinian_i/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/totila/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/chilperic_i/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/lothair_i/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/charles_v/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/wanli/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/sitting_bull/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/pocahontas/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/burebista/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/zh-cn/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "zh-CN"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/support/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/privacy/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/cookies/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/terms/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/caesar/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/cleopatra/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/ragnar/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/sun_tzu/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/alexander/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/genghis_khan/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/vercingetorix/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/boudica/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/leonidas/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/napoleon/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/anacaona/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/lozen/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/hongi_hika/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/makeda/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/empress_gi/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/ashoka/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/hannibal/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/bolivar/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/saladin/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/suleiman/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/musa_i/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/shaka/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/nzinga/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/kamehameha/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/gajah_mada/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/solomon/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/sayyid_said/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/constantine/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/vlad_iii/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/semiramis/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/tomyris/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/gorgo/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/artigas/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/tlacaelel/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/cosijoeza/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/tomochichi/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/eight_deer/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/nemequene/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/thanadelthur/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/artemisia_i/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/lobengula/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/shah_jahan/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/xerxes_i/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/justinian_i/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/totila/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/chilperic_i/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/lothair_i/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/charles_v/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/wanli/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/sitting_bull/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/pocahontas/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/burebista/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ja/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "ja"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/support/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/privacy/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/cookies/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/terms/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/caesar/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/cleopatra/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/ragnar/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/sun_tzu/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/alexander/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/genghis_khan/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/vercingetorix/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/boudica/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/leonidas/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/napoleon/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/anacaona/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/lozen/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/hongi_hika/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/makeda/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/empress_gi/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/ashoka/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/hannibal/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/bolivar/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/saladin/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/suleiman/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/musa_i/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/shaka/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/nzinga/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/kamehameha/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/gajah_mada/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/solomon/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/sayyid_said/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/constantine/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/vlad_iii/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/semiramis/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/tomyris/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/gorgo/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/artigas/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/tlacaelel/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/cosijoeza/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/tomochichi/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/eight_deer/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/nemequene/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/thanadelthur/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/artemisia_i/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/lobengula/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/shah_jahan/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/xerxes_i/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/justinian_i/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/totila/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/chilperic_i/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/lothair_i/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/charles_v/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/wanli/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/sitting_bull/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/pocahontas/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/burebista/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ko/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "ko"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/support/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/privacy/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/cookies/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/terms/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/caesar/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/cleopatra/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/ragnar/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/sun_tzu/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/alexander/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/genghis_khan/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/vercingetorix/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/boudica/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/leonidas/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/napoleon/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/anacaona/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/lozen/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/hongi_hika/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/makeda/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/empress_gi/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/ashoka/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/hannibal/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/bolivar/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/saladin/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/suleiman/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/musa_i/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/shaka/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/nzinga/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/kamehameha/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/gajah_mada/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/solomon/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/sayyid_said/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/constantine/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/vlad_iii/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/semiramis/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/tomyris/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/gorgo/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/artigas/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/tlacaelel/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/cosijoeza/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/tomochichi/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/eight_deer/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/nemequene/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/thanadelthur/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/artemisia_i/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/lobengula/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/shah_jahan/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/xerxes_i/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/justinian_i/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/totila/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/chilperic_i/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/lothair_i/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/charles_v/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/wanli/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/sitting_bull/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/pocahontas/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/burebista/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ar/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "ar"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/support/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/privacy/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/cookies/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/terms/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/caesar/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/cleopatra/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/ragnar/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/sun_tzu/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/alexander/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/genghis_khan/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/vercingetorix/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/boudica/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/leonidas/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/napoleon/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/anacaona/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/lozen/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/hongi_hika/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/makeda/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/empress_gi/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/ashoka/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/hannibal/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/bolivar/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/saladin/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/suleiman/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/musa_i/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/shaka/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/nzinga/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/kamehameha/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/gajah_mada/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/solomon/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/sayyid_said/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/constantine/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/vlad_iii/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/semiramis/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/tomyris/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/gorgo/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/artigas/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/tlacaelel/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/cosijoeza/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/tomochichi/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/eight_deer/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/nemequene/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/thanadelthur/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/artemisia_i/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/lobengula/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/shah_jahan/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/xerxes_i/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/justinian_i/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/totila/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/chilperic_i/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/lothair_i/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/charles_v/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/wanli/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/sitting_bull/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/pocahontas/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/burebista/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/ru/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "ru"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/support/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/privacy/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/cookies/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/terms/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/caesar/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/cleopatra/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/ragnar/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/sun_tzu/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/alexander/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/genghis_khan/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/vercingetorix/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/boudica/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/leonidas/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/napoleon/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/anacaona/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/lozen/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/hongi_hika/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/makeda/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/empress_gi/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/ashoka/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/hannibal/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/bolivar/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/saladin/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/suleiman/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/musa_i/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/shaka/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/nzinga/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/kamehameha/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/gajah_mada/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/solomon/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/sayyid_said/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/constantine/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/vlad_iii/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/semiramis/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/tomyris/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/gorgo/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/artigas/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/tlacaelel/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/cosijoeza/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/tomochichi/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/eight_deer/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/nemequene/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/thanadelthur/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/artemisia_i/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/lobengula/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/shah_jahan/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/xerxes_i/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/justinian_i/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/totila/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/chilperic_i/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/lothair_i/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/charles_v/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/wanli/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/sitting_bull/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/pocahontas/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/burebista/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/vi/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "vi"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/support/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/privacy/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/cookies/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/terms/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/caesar/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/cleopatra/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/ragnar/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/sun_tzu/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/alexander/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/genghis_khan/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/vercingetorix/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/boudica/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/leonidas/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/napoleon/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/anacaona/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/lozen/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/hongi_hika/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/makeda/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/empress_gi/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/ashoka/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/hannibal/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/bolivar/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/saladin/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/suleiman/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/musa_i/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/shaka/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/nzinga/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/kamehameha/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/gajah_mada/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/solomon/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/sayyid_said/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/constantine/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/vlad_iii/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/semiramis/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/tomyris/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/gorgo/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/artigas/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/tlacaelel/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/cosijoeza/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/tomochichi/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/eight_deer/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/nemequene/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/thanadelthur/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/artemisia_i/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/lobengula/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/shah_jahan/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/xerxes_i/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/justinian_i/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/totila/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/chilperic_i/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/lothair_i/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/charles_v/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/wanli/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/sitting_bull/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/pocahontas/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/burebista/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/id/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "id"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/support/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/privacy/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/cookies/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/terms/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/caesar/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/cleopatra/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/ragnar/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/sun_tzu/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/alexander/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/genghis_khan/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/vercingetorix/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/boudica/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/leonidas/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/napoleon/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/anacaona/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/lozen/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/hongi_hika/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/makeda/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/empress_gi/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/ashoka/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/hannibal/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/bolivar/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/saladin/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/suleiman/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/musa_i/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/shaka/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/nzinga/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/kamehameha/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/gajah_mada/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/solomon/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/sayyid_said/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/constantine/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/vlad_iii/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/semiramis/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/tomyris/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/gorgo/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/artigas/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/tlacaelel/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/cosijoeza/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/tomochichi/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/eight_deer/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/nemequene/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/thanadelthur/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/artemisia_i/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/lobengula/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/shah_jahan/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/xerxes_i/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/justinian_i/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/totila/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/chilperic_i/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/lothair_i/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/charles_v/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/wanli/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/sitting_bull/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/pocahontas/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/burebista/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/fil/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "fil"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/support/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/privacy/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/cookies/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/terms/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/caesar/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/cleopatra/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/ragnar/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/sun_tzu/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/alexander/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/genghis_khan/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/richard_the_lionheart/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/vercingetorix/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/boudica/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/lady_six_sky/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/leonidas/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/napoleon/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/amina_de_zazzau/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/yaa_asantewaa/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/anacaona/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/lozen/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/tipu_sultan/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/william_the_conqueror/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/hongi_hika/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/salote_tupou_iii/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/makeda/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/rani_durgavati/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/empress_gi/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/ashoka/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/hannibal/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/bolivar/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/joan_of_arc/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/catherine_the_great/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/isabella_of_castile/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/cyrus_the_great/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/saladin/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/suleiman/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/tomoe_gozen/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/trieu_thi_trinh/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/musa_i/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/shaka/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/nzinga/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/kamehameha/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/gajah_mada/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/solomon/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/sayyid_said/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/lapu_lapu/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/constantine/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/vlad_iii/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/mary_of_burgundy/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/semiramis/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/shima_kalingga/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/tomyris/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/gorgo/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/artigas/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/bernardo_ohiggins/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/nezahualcoyotl/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/tlacaelel/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/tenamaxtli/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/cosijoeza/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/mangas_coloradas/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/tomochichi/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/eight_deer/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/nemequene/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/thanadelthur/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/artemisia_i/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/shajar_al_durr/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/ramesses_ii/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/qin_liangyu/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/lobengula/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/shah_jahan/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/xerxes_i/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/marcus_aurelius/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/justinian_i/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/totila/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/chilperic_i/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/lothair_i/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/frederick_barbarossa/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/charles_v/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/wanli/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/jayaatu_khan/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/sitting_bull/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/pocahontas/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/burebista/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/pt-br/leaders/boleslaw_ii/",
+      "status": 200,
+      "language": "pt-BR"
+    },
+    {
+      "url": "https://shadowsofwar.io/play/",
+      "status": 200
+    }
+  ]
+}

@@ -1367,7 +1367,7 @@ test("Boudica spoken cards and contact responses require named existing portrait
     }
     campaignExchange.reactions.push({
         id: "colonia_timer_taunt",
-        when: { type: "timer", after_ms: 5000 },
+        when: { type: "timer", after_ms: 5000, repeat_ms: 9000 },
         during: coloniaGate,
         presentation: "exchange",
         exchange: [
@@ -1381,13 +1381,41 @@ test("Boudica spoken cards and contact responses require named existing portrait
     assert.deepEqual(
         report(campaignExchange).errors,
         [],
-        "contact, pre-defeat and active-objective timer exchanges validate through the shared schema",
+        "contact, pre-defeat and repeating active-objective timer exchanges validate through the shared schema",
     );
     const invalidTimer = structuredClone(campaignExchange);
     invalidTimer.reactions.find((reaction) => reaction.id === "colonia_timer_taunt").when.after_ms = 0;
     assert.ok(
         report(invalidTimer).errors.some((issue) => issue.field === "reactions.when.after_ms"),
         "timers reject non-positive durations",
+    );
+    const invalidRepeat = structuredClone(campaignExchange);
+    invalidRepeat.reactions.find((reaction) => reaction.id === "colonia_timer_taunt").when.repeat_ms = 0;
+    assert.ok(
+        report(invalidRepeat).errors.some((issue) => issue.field === "reactions.when.repeat_ms"),
+        "repeating timers reject non-positive intervals",
+    );
+    const loopWithRepeat = structuredClone(campaignExchange);
+    loopWithRepeat.reactions.find(
+        (reaction) => reaction.id === "roman_colonia_veterans_tease_1",
+    ).when.repeat_ms = 9000;
+    assert.ok(
+        report(loopWithRepeat).errors.some((issue) => issue.field === "reactions.when.repeat_ms"),
+        "looping sequences cannot also schedule repeating timer events",
+    );
+    const loopWithLineDelay = structuredClone(campaignExchange);
+    loopWithLineDelay.reactions.find(
+        (reaction) => reaction.id === "roman_colonia_veterans_tease_1",
+    ).exchange[0].delay_ms = 0;
+    assert.ok(
+        report(loopWithLineDelay).errors.some((issue) => issue.field === "reactions.exchange.delay_ms"),
+        "looping sequences use the shared gap instead of per-line delays",
+    );
+    const repeatOnContact = structuredClone(campaignExchange);
+    repeatOnContact.reactions.find((reaction) => reaction.id === "colonia_provocation").when.repeat_ms = 3000;
+    assert.ok(
+        report(repeatOnContact).errors.some((issue) => issue.field === "reactions.when.repeat_ms"),
+        "only timer responses can repeat",
     );
     const timerWithoutGate = structuredClone(campaignExchange);
     delete timerWithoutGate.reactions.find((reaction) => reaction.id === "colonia_timer_taunt").during;
@@ -1403,8 +1431,9 @@ test("Boudica spoken cards and contact responses require named existing portrait
         "a scene cannot be used as an active timer objective",
     );
     const timerWithDialogue = structuredClone(campaignExchange);
-    timerWithDialogue.reactions.find((reaction) => reaction.id === "colonia_timer_taunt").exchange[0]
-        .presentation = "dialogue";
+    timerWithDialogue.reactions.find(
+        (reaction) => reaction.id === "colonia_timer_taunt",
+    ).exchange[0].presentation = "dialogue";
     assert.ok(
         report(timerWithDialogue).errors.some((issue) => issue.field === "reactions.presentation"),
         "timer responses cannot open a dialogue modal",

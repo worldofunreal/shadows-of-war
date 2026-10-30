@@ -1,178 +1,94 @@
 (() => {
   const root = document.documentElement;
-  const localeControls = [...document.querySelectorAll("[data-locale-select]")];
-  let openLocaleKey = null;
-
-  const translate = (key, values) => (typeof window.SOW_t === "function" ? window.SOW_t(key, values) : key);
-
-  const translationValues = (element) => {
-    if (!element.dataset.i18nValues) return undefined;
-    try {
-      const keys = JSON.parse(element.dataset.i18nValues);
-      if (!keys || typeof keys !== "object") return undefined;
-      return Object.fromEntries(Object.entries(keys).map(([name, key]) => [name, translate(key)]));
-    } catch {
-      return undefined;
-    }
-  };
-
-  const localeOptions = (codes) =>
-    codes.map((code) => ({
-      value: code,
-      label:
-        typeof window.SOW_getLocaleLabel === "function"
-          ? window.SOW_getLocaleLabel(code)
-          : translate(`menu.language_${String(code).replace(/-/g, "_")}`),
-    }));
-
-  function syncLocaleDropdown(dropdown, open) {
-    const trigger = dropdown.querySelector('[data-role="dropdown-trigger"]');
-    const menu = dropdown.querySelector('[role="listbox"]');
-    if (!trigger || !menu) return;
-    trigger.setAttribute("aria-expanded", String(open));
-    menu.hidden = !open;
-    const input = dropdown.querySelector("[data-dropdown-input]");
-    const value = input ? input.value : "";
-    const label = dropdown.querySelector("[data-dropdown-label]");
-    dropdown.querySelectorAll('[role="option"]').forEach((option) => {
-      const selected = option.dataset.dropdownOptionValue === value;
-      option.setAttribute("aria-selected", String(selected));
-      if (selected && label) label.textContent = option.textContent;
-    });
-  }
-
-  function syncLocaleDropdowns(focusTarget) {
-    localeControls.forEach((control) => {
-      const dropdown = control.querySelector("[data-control-dropdown]");
-      if (dropdown) syncLocaleDropdown(dropdown, dropdown.dataset.dropdownKey === openLocaleKey);
-    });
-    if (focusTarget) focusTarget.focus();
-  }
-
-  function renderLocaleControls(locale, codes) {
-    if (typeof window.SOW_renderDropdown !== "function") return;
-    openLocaleKey = null;
-    localeControls.forEach((control, index) => {
-      const key = `site-locale-${index}`;
-      control.className = "site-locale";
-      control.innerHTML = window.SOW_renderDropdown({
-        key,
-        name: "locale",
-        label: translate("site.select_language"),
-        value: locale,
-        className: "site-locale-dropdown",
-        options: localeOptions(codes),
-      });
-      const dropdown = control.querySelector("[data-control-dropdown]");
-      const trigger = dropdown && dropdown.querySelector('[data-role="dropdown-trigger"]');
-      const menu = dropdown && dropdown.querySelector('[role="listbox"]');
-      if (trigger) trigger.setAttribute("aria-label", translate("site.select_language"));
-      if (menu) menu.setAttribute("aria-label", translate("site.select_language"));
-    });
-    syncLocaleDropdowns();
-  }
-
-  function applyLocale() {
-    if (typeof window.SOW_getLocale !== "function" || typeof window.SOW_t !== "function") return;
-    const locale = window.SOW_getLocale();
-    root.lang = typeof window.SOW_getLocaleTag === "function" ? window.SOW_getLocaleTag(locale) : locale;
-    document.querySelectorAll("[data-i18n]").forEach((element) => {
-      const key = element.dataset.i18n;
-      const value = translate(key, translationValues(element));
-      const attribute = element.dataset.i18nAttr;
-      if (attribute) element.setAttribute(attribute, value);
-      else element.textContent = value;
-      if (element.dataset.i18nPlaceholder) {
-        element.setAttribute("placeholder", translate(element.dataset.i18nPlaceholder));
-      }
-    });
-    const codes =
-      typeof window.SOW_getSupportedLocales === "function" ? window.SOW_getSupportedLocales() : [];
-    renderLocaleControls(locale, codes);
-  }
-
-  function closeLocaleDropdown(focusTarget) {
-    openLocaleKey = null;
-    syncLocaleDropdowns(focusTarget);
-  }
-
+  const translate = (key) => (typeof window.SOW_t === "function" ? window.SOW_t(key) : key);
+  const languageMenus = [...document.querySelectorAll(".site-language")];
   document.addEventListener("click", (event) => {
-    const option = event.target.closest('[data-locale-select] [data-command="select_dropdown"]');
-    if (option) {
-      const value = option.dataset.dropdownOptionValue;
-      closeLocaleDropdown();
-      if (typeof window.SOW_setLocale === "function") window.SOW_setLocale(value).catch(() => {});
-      return;
-    }
-    const trigger = event.target.closest('[data-locale-select] [data-role="dropdown-trigger"]');
-    if (trigger) {
-      const key = trigger.dataset.dropdownKey;
-      openLocaleKey = openLocaleKey === key ? null : key;
-      syncLocaleDropdowns();
+    const link = event.target.closest("[data-site-language]");
+    if (link) {
+      try {
+        localStorage.setItem("sow_ui_locale", link.dataset.siteLanguage.toLowerCase());
+      } catch {}
+      // Keep a section anchor when switching the landing's language.
+      if (!root.dataset.sitePage && window.location.hash) link.hash = window.location.hash;
     }
   });
-
   document.addEventListener("pointerdown", (event) => {
-    if (openLocaleKey && !event.target.closest("[data-locale-select]")) closeLocaleDropdown();
+    languageMenus.forEach((menu) => {
+      if (!menu.contains(event.target)) menu.open = false;
+    });
   });
-
   document.addEventListener("keydown", (event) => {
-    const trigger = event.target.closest('[data-locale-select] [data-role="dropdown-trigger"]');
-    const option = event.target.closest('[data-locale-select] [data-command="select_dropdown"]');
-    if (trigger && ["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
-      event.preventDefault();
-      openLocaleKey = trigger.dataset.dropdownKey;
-      syncLocaleDropdowns();
-      const options = trigger.parentElement.querySelectorAll('[data-command="select_dropdown"]');
-      if (options.length) options[event.key === "ArrowUp" ? options.length - 1 : 0].focus();
-      return;
-    }
-    if (option) {
-      const options = [
-        ...option.closest("[data-control-dropdown]").querySelectorAll('[data-command="select_dropdown"]'),
-      ];
-      const index = options.indexOf(option);
-      const next =
-        event.key === "ArrowDown"
-          ? Math.min(options.length - 1, index + 1)
-          : event.key === "ArrowUp"
-            ? Math.max(0, index - 1)
-            : event.key === "Home"
-              ? 0
-              : event.key === "End"
-                ? options.length - 1
-                : index;
-      if (next !== index) {
+    if (event.key !== "Escape") return;
+    languageMenus.forEach((menu) => {
+      if (menu.open) {
         event.preventDefault();
-        options[next].focus();
-      } else if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        option.click();
+        menu.open = false;
+        menu.querySelector("summary").focus();
       }
-      return;
-    }
-    if (event.key === "Escape" && openLocaleKey) {
-      const triggerToRestore = document.querySelector(
-        `[data-locale-select] [data-dropdown-key="${CSS.escape(openLocaleKey)}"] [data-role="dropdown-trigger"]`,
-      );
-      event.preventDefault();
-      closeLocaleDropdown(triggerToRestore);
-    }
+    });
   });
-
-  window.addEventListener("sow:locale-change", applyLocale);
-  if (window.SOW_I18N_READY && typeof window.SOW_I18N_READY.then === "function") {
-    window.SOW_I18N_READY.then(applyLocale)
-      .catch((error) => {
-        console.error("[SOW site] translations unavailable; showing English", error);
-        root.lang = "en";
-        root.dir = "ltr";
-      })
-      .finally(() => {
-        delete root.dataset.sowLocalePending;
-      });
+  // Suggest a language only on the default entry. Its URL and rendered text stay English.
+  if (window.location.pathname === "/") {
+    let saved = "";
+    try {
+      saved = localStorage.getItem("sow_ui_locale") || "";
+    } catch {}
+    const links = [...document.querySelectorAll(".site-language a[data-site-language]")];
+    const aliases = { zh: "zh-cn", pt: "pt-br", tl: "fil" };
+    const match = (value) => {
+      const code = String(value || "")
+        .toLowerCase()
+        .replace(/_/g, "-");
+      return (
+        links.find((link) => link.dataset.siteLanguage.toLowerCase() === code) ||
+        links.find(
+          (link) =>
+            link.dataset.siteLanguage.toLowerCase() ===
+            (aliases[code] || aliases[code.split("-")[0]] || code.split("-")[0]),
+        )
+      );
+    };
+    const suggested = [saved, ...(navigator.languages || [navigator.language])].map(match).find(Boolean);
+    if (suggested && suggested.dataset.siteLanguage !== "en") {
+      const link = document.createElement("a");
+      link.className = "language-suggestion";
+      link.href = suggested.href;
+      link.dataset.siteLanguage = suggested.dataset.siteLanguage;
+      link.textContent = root.dataset.languageSuggestion.replace("{language}", suggested.textContent) + " →";
+      link.lang = suggested.lang;
+      document.querySelector(".hero-actions")?.append(link);
+    }
   }
-
+  const search = document.querySelector("[data-compendium-search]");
+  if (search) {
+    const cards = [...document.querySelectorAll("[data-compendium-card]")];
+    const fold = (value) => value.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase();
+    const filter = () => {
+      const query = fold(search.value.trim());
+      let count = 0;
+      cards.forEach((card) => {
+        card.hidden = !fold(card.dataset.search).includes(query);
+        if (!card.hidden) count++;
+      });
+      document.querySelector("[data-compendium-count]").textContent = `${count} / ${cards.length}`;
+      document.querySelector("[data-compendium-empty]").hidden = count !== 0;
+    };
+    search.form.addEventListener("submit", (event) => event.preventDefault());
+    search.addEventListener("input", filter);
+    document.querySelector("[data-compendium-reset]").addEventListener("click", () => {
+      search.value = "";
+      filter();
+      search.focus();
+    });
+    filter();
+  }
+  if (window.SOW_I18N_READY) {
+    window.SOW_I18N_READY.catch((error) =>
+      console.error("[SOW site] interactive translations unavailable", error),
+    ).finally(() => {
+      delete root.dataset.sowLocalePending;
+    });
+  }
   const menu = document.querySelector("#mobile-menu");
   const menuToggle = document.querySelector("[data-menu-toggle]");
   if (!menu || !menuToggle) return;
@@ -200,6 +116,9 @@
       closeMenu();
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && menu.classList.contains("is-open")) closeMenu();
+    if (!event.defaultPrevented && event.key === "Escape" && menu.classList.contains("is-open")) {
+      closeMenu();
+      menuToggle.focus();
+    }
   });
 })();

@@ -260,10 +260,7 @@ test("Boudica guides alliance requests to surviving tribes before Suetonius", ()
         assert.equal(request.marker.target, item.faction);
         assert.equal(request.guide.target, "map_alliance");
         assert.equal(request.unavailable_next, item.next);
-        assert.equal(
-            request.next,
-            sequence[index + 1]?.target || "boudica_final_battle_intro",
-        );
+        assert.equal(request.next, sequence[index + 1]?.target || "boudica_final_battle_intro");
     }
 
     let now = 0;
@@ -274,12 +271,7 @@ test("Boudica guides alliance requests to surviving tribes before Suetonius", ()
         alliance_request_faction_ids: [],
     };
     const ui = {};
-    const machine = campaign.create(
-        definition,
-        sequence[0].target,
-        roster,
-        () => now,
-    );
+    const machine = campaign.create(definition, sequence[0].target, roster, () => now);
     const until = (id) => {
         for (let n = 0; n < 300; n++, now += 100) {
             const view = machine.update(facts, ui);
@@ -301,19 +293,13 @@ test("Boudica guides alliance requests to surviving tribes before Suetonius", ()
 
     const missing = campaign.create(definition, sequence[0].target, roster, () => now);
     assert.equal(
-        missing.update(
-            { eliminated_faction_ids: ["dobunni_1", "corieltauvi_1"] },
-            {},
-        ).step.id,
+        missing.update({ eliminated_faction_ids: ["dobunni_1", "corieltauvi_1"] }, {}).step.id,
         sequence[2].target,
         "eliminated tribes are skipped in the same campaign update",
     );
     const noneRemain = campaign.create(definition, sequence[0].target, roster, () => now);
     assert.equal(
-        noneRemain.update(
-            { eliminated_faction_ids: sequence.map((item) => item.faction) },
-            {},
-        ).step.id,
+        noneRemain.update({ eliminated_faction_ids: sequence.map((item) => item.faction) }, {}).step.id,
         "boudica_final_battle_intro",
         "the final battle starts when every target is gone",
     );
@@ -2603,8 +2589,10 @@ test("active-objective exchanges wait for new contact, honor the reply pause, an
     definition.reactions = definition.reactions.filter(
         (reaction) =>
             !(
-                ["contact", "pre_defeat"].includes(reaction.when.type) &&
-                romanTargets.includes(reaction.when.target)
+                (["contact", "pre_defeat"].includes(reaction.when.type) &&
+                    romanTargets.includes(reaction.when.target)) ||
+                (reaction.when.type === "timer" &&
+                    romanTargets.includes(reaction.exchange?.[0]?.speaker))
             ),
     );
     definition.speakers.colonia_veterans = { faction: "colonia_veterans" };
@@ -3082,8 +3070,10 @@ test("the three Roman encounters speak once on their active objective and releas
     definition.reactions = definition.reactions.filter(
         (reaction) =>
             !(
-                ["contact", "pre_defeat"].includes(reaction.when.type) &&
-                romanTargets.includes(reaction.when.target)
+                (["contact", "pre_defeat"].includes(reaction.when.type) &&
+                    romanTargets.includes(reaction.when.target)) ||
+                (reaction.when.type === "timer" &&
+                    romanTargets.includes(reaction.exchange?.[0]?.speaker))
             ),
     );
     const textKeys = new Map();
@@ -3286,34 +3276,47 @@ test("Boudica answers the Roman Outpost on the defeat transition", () => {
     ]);
 });
 
-test("Roman Outpost timer taunts wait for its opening emote and queue without overlapping", () => {
+test("Roman Outpost taunts leave a three-second gap and loop without overlapping", () => {
     const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
     const campaignDir = path.join(shell, "../../assets/campaign");
     const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
     const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
     const opening = "tutorial.campaign_boudica_roman_outpost_provoke_emote";
-    const timerReactions = definition.reactions.filter((reaction) => reaction.when.type === "timer");
-    assert.deepEqual(timerReactions.map((reaction) => reaction.when.after_ms), [5000, 10000, 15000]);
+    const timerReactions = definition.reactions.filter(
+        (reaction) => reaction.when.type === "timer" && reaction.during === "boudica_attack_roman_outpost",
+    );
+    assert.equal(timerReactions.length, 1);
+    assert.equal(timerReactions[0].when.after_ms, 3000);
+    assert.equal(timerReactions[0].when.repeat_ms, undefined);
+    assert.equal(timerReactions[0].loop, true);
     assert.deepEqual(
-        timerReactions.map((reaction) => reaction.exchange[0].emote_text_key),
-        [
-            "tutorial.campaign_boudica_roman_outpost_tease_1",
-            "tutorial.campaign_boudica_roman_outpost_tease_2",
-            "tutorial.campaign_boudica_roman_outpost_tease_3",
-        ],
+        timerReactions[0].exchange.map((line) => line.delay_ms),
+        [undefined, undefined, undefined],
+    );
+    const teaseKeys = [
+        "tutorial.campaign_boudica_roman_outpost_tease_1",
+        "tutorial.campaign_boudica_roman_outpost_tease_2",
+        "tutorial.campaign_boudica_roman_outpost_tease_3",
+    ];
+    assert.deepEqual(
+        timerReactions[0].exchange.map((line) => line.emote_text_key),
+        teaseKeys,
     );
     const english = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
     for (const [index, text] of [
-        "Still here. Click to attack.",
-        "Come on. I'm waiting.",
-        "Kill me already. What are you waiting for?",
+        "Come on. Attack me!",
+        "Come get a piece of me!",
+        "Kill me already. I want to go home.",
     ].entries()) {
         assert.ok(english.includes(`campaign_boudica_roman_outpost_tease_${index + 1} = "${text}"`));
     }
     for (const locale of fs
         .readdirSync(path.join(shell, "../../sow-i18n/strings"), { withFileTypes: true })
         .filter((entry) => entry.isDirectory() && entry.name !== "en")) {
-        const catalog = fs.readFileSync(path.join(shell, "../../sow-i18n/strings", locale.name, "web.toml"), "utf8");
+        const catalog = fs.readFileSync(
+            path.join(shell, "../../sow-i18n/strings", locale.name, "web.toml"),
+            "utf8",
+        );
         assert.doesNotMatch(catalog, /campaign_boudica_roman_outpost_tease_[123]/);
     }
 
@@ -3321,24 +3324,18 @@ test("Roman Outpost timer taunts wait for its opening emote and queue without ov
         activeBubble = null;
     const spoken = [],
         cleared = [];
-    const machine = campaign.create(
-        definition,
-        "boudica_attack_roman_outpost",
-        roster,
-        () => now,
-        {
-            onExchangeLine: (line) => {
-                assert.equal(activeBubble, null, "the previous bubble clears before the next one starts");
-                activeBubble = line.emote_text_key;
-                spoken.push(line.emote_text_key);
-                return true;
-            },
-            onExchangeClear: (line) => {
-                cleared.push(line.emote_text_key);
-                activeBubble = null;
-            },
+    const machine = campaign.create(definition, "boudica_attack_roman_outpost", roster, () => now, {
+        onExchangeLine: (line) => {
+            assert.equal(activeBubble, null, "the previous bubble clears before the next one starts");
+            activeBubble = line.emote_text_key;
+            spoken.push(line.emote_text_key);
+            return true;
         },
-    );
+        onExchangeClear: (line) => {
+            cleared.push(line.emote_text_key);
+            activeBubble = null;
+        },
+    });
     const facts = { attacks_by_faction_id: {} };
     const update = (time) => {
         now = time;
@@ -3346,34 +3343,392 @@ test("Roman Outpost timer taunts wait for its opening emote and queue without ov
     };
     assert.equal(update(0).exchange.emote_text_key, opening);
     assert.equal(machine.view().paused, true);
-    update(3000);
-    assert.equal(update(3249).exchange_phase, "gap");
-    assert.equal(update(3250).exchange, undefined);
-    assert.equal(machine.view().timer_remaining_ms, 5000);
-    assert.equal(update(8249).exchange, undefined, "the timer waits a full five seconds after the opening exchange");
-    assert.equal(machine.view().timer_remaining_ms, 1);
-    let view = update(8250);
-    assert.equal(view.exchange.emote_text_key, timerReactions[0].exchange[0].emote_text_key);
-    assert.equal(view.paused, true, "timer emotes preserve the active objective's pause state");
-    assert.equal(update(11250).exchange_phase, "gap");
-    assert.equal(update(11500).exchange, undefined);
-    assert.equal(machine.view().timer_remaining_ms, 1750);
-    assert.equal(update(13249).exchange, undefined);
-    view = update(13250);
-    assert.equal(view.exchange.emote_text_key, timerReactions[1].exchange[0].emote_text_key);
-    update(16500);
-    update(16750);
-    assert.equal(update(18249).exchange, undefined);
-    view = update(18250);
-    assert.equal(view.exchange.emote_text_key, timerReactions[2].exchange[0].emote_text_key);
-    update(21500);
-    update(21750);
-    assert.deepEqual(spoken, [opening, ...timerReactions.map((reaction) => reaction.exchange[0].emote_text_key)]);
-    assert.equal(activeBubble, null);
+    assert.equal(update(3000).exchange_phase, "gap");
+    assert.equal(
+        update(3000).timer_remaining_ms,
+        3000,
+        "the first tease waits three seconds after the opening emote ends",
+    );
+    assert.equal(update(5999).timer_remaining_ms, 1);
+    const expected = [
+        teaseKeys[0],
+        teaseKeys[1],
+        teaseKeys[2],
+        teaseKeys[0],
+        teaseKeys[1],
+        teaseKeys[2],
+        teaseKeys[0],
+    ];
+    let view = update(6000);
+    for (let index = 0; index < expected.length; index++) {
+        assert.equal(view.exchange.emote_text_key, expected[index]);
+        assert.equal(view.paused, true, "timer emotes preserve the active objective's pause state");
+        if (index + 1 < expected.length) {
+            const nextStart = 12000 + index * 6000;
+            const gap = update(nextStart - 3000);
+            assert.equal(gap.exchange_phase, "gap");
+            assert.equal(gap.wait_remaining_ms, 3000, "the bubble clears for three seconds");
+            assert.equal(update(nextStart - 1).wait_remaining_ms, 1);
+            view = update(nextStart);
+        }
+    }
+    assert.deepEqual(spoken, [opening, ...expected]);
+    assert.equal(activeBubble, teaseKeys[0]);
     assert.ok(cleared.includes(opening));
 });
 
-test("Roman Outpost attack cancels pending timer taunts but lets a visible one finish", () => {
+test("every Roman target-action objective has a unique three-line taunt cycle", () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    const targets = [
+        ["colonia_veterans", "boudica_outpost_colonia_veterans"],
+        ["tax_collectors", "boudica_outpost_tax_collectors"],
+        ["roman_supply_depot", "boudica_outpost_roman_supply_depot"],
+        ["camulodunum", "boudica_camulodunum"],
+        ["legio_ix_hispana", "boudica_ninth_legion"],
+        ["londinium", "boudica_londinium"],
+        ["verulamium", "boudica_verulamium"],
+    ];
+    const stepsById = new Map(definition.steps.map((step) => [step.id, step]));
+    const targetActionOrder = [];
+    let currentId = "boudica_outpost_colonia_veterans";
+    while (currentId && stepsById.has(currentId)) {
+        const step = stepsById.get(currentId);
+        if (step.guide?.target === "target_action" && targets.some(([, stepId]) => stepId === step.id))
+            targetActionOrder.push(step.id);
+        currentId = step.next;
+    }
+    assert.deepEqual(
+        targetActionOrder,
+        targets.map(([, stepId]) => stepId),
+        "all seven authored Roman attack guides are included in campaign order",
+    );
+    for (const [target, gate] of targets) {
+        const step = stepsById.get(gate);
+        assert.equal(step.trigger.type, "defeated");
+        assert.equal(step.trigger.target, target);
+        assert.equal(step.guide.target, "target_action");
+    }
+
+    const english = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
+    const englishKeys = new Set(
+        english
+            .split(/\r?\n/)
+            .map((line) => line.match(/^([a-z0-9_]+) = "/)?.[1])
+            .filter(Boolean),
+    );
+    assert.deepEqual(
+        campaign.validate(definition, roster, {
+            hasText: (key) => englishKeys.has(key.split(".").at(-1)),
+        }).errors,
+        [],
+        "the complete Boudica campaign validates against its English text catalog",
+    );
+    const textValues = [];
+    const textKeys = [];
+    for (const [target, gate] of targets) {
+        const reactions = definition.reactions.filter(
+            (reaction) => reaction.during === gate && reaction.when.type === "timer",
+        );
+        assert.equal(reactions.length, 1, target + " uses one reusable sequence response");
+        assert.equal(reactions[0].when.after_ms, 3000);
+        assert.equal(reactions[0].when.repeat_ms, undefined);
+        assert.equal(reactions[0].loop, true, target + " cycles through the sequence");
+        assert.equal(reactions[0].exchange.length, 3);
+        assert.deepEqual(
+            reactions[0].exchange.map((line) => line.speaker),
+            [target, target, target],
+            target + " speaks its own taunts",
+        );
+        assert.ok(reactions[0].exchange.every((line) => line.delay_ms === undefined));
+        const keys = reactions[0].exchange.map((line) => line.emote_text_key);
+        assert.deepEqual(
+            keys,
+            [1, 2, 3].map((index) => `tutorial.campaign_boudica_${target}_tease_${index}`),
+        );
+        for (const key of keys) {
+            const tomlKey = key.slice("tutorial.".length);
+            const match = english.match(new RegExp(`^${tomlKey} = \"([^\\\"]*)\"$`, "m"));
+            assert.ok(match, `${tomlKey} exists in the English catalog`);
+            textKeys.push(tomlKey);
+            textValues.push(match[1]);
+        }
+    }
+    assert.equal(new Set(textKeys).size, 21, "all Roman taunts have their own text key");
+    assert.equal(new Set(textValues).size, 21, "all Roman taunts have unique copy");
+    for (const locale of fs
+        .readdirSync(path.join(shell, "../../sow-i18n/strings"), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() && entry.name !== "en")) {
+        const catalog = fs.readFileSync(
+            path.join(shell, "../../sow-i18n/strings", locale.name, "web.toml"),
+            "utf8",
+        );
+        for (const key of textKeys) assert.doesNotMatch(catalog, new RegExp(`^${key} =`, "m"));
+    }
+});
+
+test("a contact opener finishes before its looping taunt sequence begins", () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const definition = {
+        entry: "attack",
+        speakers: { roman: { faction: "roman" } },
+        steps: [
+            {
+                id: "attack",
+                type: "objective",
+                trigger: { type: "defeated", target: "roman", scope: "total" },
+                guide: { kind: "world", target: "target_action" },
+                next: "done",
+            },
+            { id: "done", type: "end" },
+        ],
+        reactions: [
+            {
+                id: "opening",
+                when: { type: "contact", target: "roman" },
+                during: "attack",
+                presentation: "exchange",
+                exchange: [
+                    {
+                        speaker: "roman",
+                        emote: "threat",
+                        emote_text_key: "tutorial.opening",
+                        delay_ms: 0,
+                    },
+                ],
+            },
+            {
+                id: "tease_1",
+                when: { type: "timer", after_ms: 3000 },
+                during: "attack",
+                presentation: "exchange",
+                loop: true,
+                exchange: [
+                    {
+                        speaker: "roman",
+                        emote: "threat",
+                        emote_text_key: "tutorial.tease_1",
+                    },
+                    {
+                        speaker: "roman",
+                        emote: "threat",
+                        emote_text_key: "tutorial.tease_2",
+                    },
+                ],
+            },
+        ],
+    };
+    let now = 0;
+    const spoken = [];
+    const machine = campaign.create(definition, "attack", undefined, () => now, {
+        onExchangeLine: (line) => (spoken.push(line.emote_text_key), true),
+    });
+    let facts = { contact_faction_ids: [], defeated_faction_ids: [] };
+    assert.equal(machine.update(facts, {}).timer_remaining_ms, 3000);
+
+    now = 2000;
+    facts = { ...facts, contact_faction_ids: ["roman"] };
+    assert.equal(machine.update(facts, {}).exchange.emote_text_key, "tutorial.opening");
+    now = 5000;
+    machine.update(facts, {});
+    machine.update(facts, {});
+    assert.equal(machine.view().timer_remaining_ms, 3000, "the timer restarts after the contact exchange");
+
+    now = 7999;
+    assert.equal(machine.update(facts, {}).exchange, undefined);
+    now = 8000;
+    const tease = machine.update(facts, {});
+    assert.equal(tease.exchange.emote_text_key, "tutorial.tease_1");
+    assert.equal(tease.step.id, "attack");
+    assert.equal(tease.step.guide.target, "target_action");
+    assert.equal(tease.waiting, true, "the target-action guide stays available during its emote");
+    assert.deepEqual(spoken, ["tutorial.opening", "tutorial.tease_1"]);
+    now = 11000;
+    const gap = machine.update(facts, {});
+    assert.equal(gap.exchange_phase, "gap");
+    assert.equal(gap.wait_remaining_ms, 3000);
+    now = 12000;
+    assert.equal(machine.update(facts, {}).wait_remaining_ms, 2000);
+    machine.setPaused(true);
+    now = 20000;
+    machine.setPaused(false);
+    now = 21999;
+    assert.equal(machine.update(facts, {}).wait_remaining_ms, 1, "pausing preserves the remaining gap");
+    now = 22000;
+    assert.equal(machine.update(facts, {}).exchange.emote_text_key, "tutorial.tease_2");
+});
+
+test("a Roman city taunt cycles through all three lines and stops after defeat", () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    const gate = "boudica_camulodunum";
+    const lineKeys = [
+        "tutorial.campaign_boudica_camulodunum_tease_1",
+        "tutorial.campaign_boudica_camulodunum_tease_2",
+        "tutorial.campaign_boudica_camulodunum_tease_3",
+    ];
+    let now = 0,
+        facts = { defeated_faction_ids: [] },
+        active = null;
+    const spoken = [];
+    const machine = campaign.create(definition, gate, roster, () => now, {
+        onExchangeLine: (line) => {
+            assert.equal(active, null, "the previous emote clears before another starts");
+            active = line.emote_text_key;
+            spoken.push(active);
+            return true;
+        },
+        onExchangeClear: () => {
+            active = null;
+        },
+    });
+    let view = machine.update(facts, {});
+    assert.equal(view.exchange.emote_text_key, "tutorial.campaign_boudica_camulodunum_warning_emote");
+    for (let guard = 0; view.exchange && guard < 20; guard++) {
+        now += view.wait_remaining_ms || 1;
+        view = machine.update(facts, {});
+    }
+    assert.equal(view.exchange, undefined, "the opening exchange ends before the taunt cycle");
+    const cycleStart = now;
+    assert.equal(view.timer_remaining_ms, 3000);
+
+    now = cycleStart + 3000;
+    view = machine.update(facts, {});
+    assert.equal(view.exchange.emote_text_key, lineKeys[0]);
+    assert.equal(view.step.id, gate);
+    assert.equal(view.step.guide.target, "target_action");
+    for (let index = 1; index < 4; index++) {
+        const nextStart = cycleStart + 3000 + index * 6000;
+        now = nextStart - 3000;
+        const gap = machine.update(facts, {});
+        assert.equal(gap.exchange_phase, "gap");
+        assert.equal(gap.wait_remaining_ms, 3000);
+        now = nextStart;
+        view = machine.update(facts, {});
+        assert.equal(view.exchange.emote_text_key, lineKeys[index % lineKeys.length]);
+        assert.equal(view.step.id, gate);
+        assert.equal(view.step.guide.target, "target_action");
+    }
+    assert.deepEqual(spoken.slice(-4), [lineKeys[0], lineKeys[1], lineKeys[2], lineKeys[0]]);
+
+    facts = { defeated_faction_ids: ["camulodunum"] };
+    now = cycleStart + 22000;
+    view = machine.update(facts, {});
+    assert.equal(view.exchange.emote_text_key, lineKeys[0], "a visible emote finishes after defeat");
+    now = cycleStart + 24000;
+    view = machine.update(facts, {});
+    assert.equal(view.step.id, "boudica_ninth_legion_set_attack_ratio");
+    assert.equal(view.exchange, undefined, "no taunts carry over after the city is defeated");
+});
+
+test("required neutral allies hint at alliance with one emote", () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    const allies = [
+        ["dobunni", "dobunni_1", "boudica_alliance_dobunni_target"],
+        ["corieltauvi", "corieltauvi_1", "boudica_alliance_corieltauvi_target"],
+        ["catuvellauni", "catuvellauni", "boudica_alliance_catuvellauni_target"],
+    ];
+    for (const [speaker, faction, gate] of allies) {
+        const reaction = definition.reactions.find((entry) => entry.id === `alliance_hint_${speaker}`);
+        assert.ok(reaction, `${speaker} has an alliance hint`);
+        assert.equal(reaction.during, gate);
+        assert.equal(reaction.when.type, "timer");
+        assert.equal(reaction.when.after_ms, 500);
+        assert.equal(reaction.when.repeat_ms, undefined, "alliance hints are one-shot");
+        assert.equal(reaction.pause_game, undefined, "the hint inherits the alliance guide's pause state");
+        assert.deepEqual(definition.speakers[speaker], { faction });
+
+        let now = 0;
+        const machine = campaign.create(definition, gate, roster, () => now, {
+            onExchangeLine: () => true,
+        });
+        assert.equal(machine.update({}, {}).paused, true, "the alliance guide keeps its normal pause");
+        now = 500;
+        const hint = machine.update({}, {});
+        assert.equal(hint.exchange.speaker, speaker);
+        assert.equal(hint.exchange.emote, "greet");
+        assert.equal(hint.paused, true, "the hint preserves the alliance guide's existing pause");
+        assert.equal(hint.step.id, gate, "the current alliance guide stays active");
+        assert.equal(hint.step.guide.target, "player");
+        now = 3500;
+        machine.update({}, {});
+        const finished = machine.update({}, {});
+        assert.equal(finished.exchange, undefined, "the one-shot hint does not repeat");
+        assert.equal(finished.step.id, gate, "the alliance guide remains active after the emote");
+    }
+
+    const greeting = definition.steps.find((step) => step.id === "boudica_trinovantes_greeting");
+    assert.equal(greeting.exchange[0].speaker, "trinovantes");
+    const english = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
+    const hintKeys = [
+        "campaign_boudica_boudica_trinovantes_greeting_emote",
+        "campaign_boudica_dobunni_alliance_hint_emote",
+        "campaign_boudica_corieltauvi_alliance_hint_emote",
+        "campaign_boudica_catuvellauni_alliance_hint_emote",
+    ];
+    const hintValues = hintKeys.map((key) => {
+        const match = english.match(new RegExp(`^${key} = \"([^\\\"]*)\"$`, "m"));
+        assert.ok(match, `${key} exists in the English catalog`);
+        return match[1];
+    });
+    assert.equal(new Set(hintValues).size, hintKeys.length, "each required ally has a unique invitation");
+    assert.match(
+        english,
+        /^campaign_boudica_boudica_trinovantes_greeting_emote = "Rome took our homes\. Stand with us\?"$/m,
+    );
+    for (const locale of fs
+        .readdirSync(path.join(shell, "../../sow-i18n/strings"), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() && entry.name !== "en")) {
+        const catalog = fs.readFileSync(
+            path.join(shell, "../../sow-i18n/strings", locale.name, "web.toml"),
+            "utf8",
+        );
+        for (const key of hintKeys)
+            assert.doesNotMatch(catalog, new RegExp(`^${key} =`, "m"), `${key} stays English-only`);
+    }
+});
+
+test("late sequence updates preserve the gap instead of firing emotes in a burst", () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    let now = 0;
+    const spoken = [];
+    const machine = campaign.create(definition, "boudica_attack_roman_outpost", roster, () => now, {
+        onExchangeLine: (line) => (spoken.push(line.emote_text_key), true),
+    });
+    const update = (time) => {
+        now = time;
+        return machine.update({ attacks_by_faction_id: {} }, {});
+    };
+    update(0);
+    update(3000);
+    update(3000);
+    assert.equal(update(6000).exchange.emote_text_key, "tutorial.campaign_boudica_roman_outpost_tease_1");
+    const late = update(10000);
+    assert.equal(late.exchange_phase, "gap");
+    assert.equal(late.wait_remaining_ms, 3000, "late updates start a fresh quiet interval");
+    assert.deepEqual(spoken, [
+        "tutorial.campaign_boudica_roman_outpost_provoke_emote",
+        "tutorial.campaign_boudica_roman_outpost_tease_1",
+    ]);
+    assert.equal(update(12999).wait_remaining_ms, 1);
+    assert.equal(
+        update(13000).exchange.emote_text_key,
+        "tutorial.campaign_boudica_roman_outpost_tease_2",
+        "the next emote waits until the full interval elapses",
+    );
+});
+
+test("Roman Outpost attack cancels pending taunts but lets a visible one finish", () => {
     const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
     const campaignDir = path.join(shell, "../../assets/campaign");
     const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
@@ -3381,19 +3736,13 @@ test("Roman Outpost attack cancels pending timer taunts but lets a visible one f
     let now = 0;
     const spoken = [],
         cleared = [];
-    const machine = campaign.create(
-        definition,
-        "boudica_attack_roman_outpost",
-        roster,
-        () => now,
-        {
-            onExchangeLine: (line) => {
-                spoken.push(line.emote_text_key);
-                return true;
-            },
-            onExchangeClear: (line) => cleared.push(line.emote_text_key),
+    const machine = campaign.create(definition, "boudica_attack_roman_outpost", roster, () => now, {
+        onExchangeLine: (line) => {
+            spoken.push(line.emote_text_key);
+            return true;
         },
-    );
+        onExchangeClear: (line) => cleared.push(line.emote_text_key),
+    });
     let facts = { attacks_by_faction_id: {} };
     const update = (time) => {
         now = time;
@@ -3401,19 +3750,43 @@ test("Roman Outpost attack cancels pending timer taunts but lets a visible one f
     };
     update(0);
     update(3000);
-    update(3250);
-    const taunt = update(8250);
+    update(3000);
+    const taunt = update(6000);
     assert.equal(taunt.exchange.emote_text_key, "tutorial.campaign_boudica_roman_outpost_tease_1");
     facts = { attacks_by_faction_id: { roman_outpost: 1 } };
-    assert.equal(update(8300).exchange.emote_text_key, taunt.exchange.emote_text_key);
-    update(11250);
+    assert.equal(update(6200).exchange.emote_text_key, taunt.exchange.emote_text_key);
+    update(9000);
     assert.ok(cleared.includes(taunt.exchange.emote_text_key), "the visible bubble ends normally");
-    assert.equal(update(11500).step.id, "boudica_first_victory");
+    assert.equal(update(9000).step.id, "boudica_first_victory");
     assert.equal(update(30000).step.id, "boudica_first_victory");
     assert.deepEqual(spoken, [
         "tutorial.campaign_boudica_roman_outpost_provoke_emote",
         "tutorial.campaign_boudica_roman_outpost_tease_1",
     ]);
+});
+
+test("Roman Outpost attack ends the loop immediately during its quiet gap", () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    let now = 0,
+        facts = { attacks_by_faction_id: {} };
+    const machine = campaign.create(definition, "boudica_attack_roman_outpost", roster, () => now, {
+        onExchangeLine: () => true,
+    });
+    const update = (time) => {
+        now = time;
+        return machine.update(facts, {});
+    };
+    update(0);
+    update(3000);
+    update(3000);
+    assert.equal(update(6000).exchange.emote_text_key, "tutorial.campaign_boudica_roman_outpost_tease_1");
+    assert.equal(update(9000).exchange_phase, "gap");
+    facts = { attacks_by_faction_id: { roman_outpost: 1 } };
+    assert.equal(update(10000).step.id, "boudica_first_victory");
+    assert.equal(machine.view().exchange, undefined);
 });
 
 test("campaign tutorial wakes an active paused objective when its timer response is due", async () => {
@@ -3441,9 +3814,7 @@ test("campaign tutorial wakes an active paused objective when its timer response
                 when: { type: "timer", after_ms: 5000 },
                 during: "attack",
                 presentation: "exchange",
-                exchange: [
-                    { speaker: "roman", emote: "threat", emote_text_key: "tutorial.timer_taunt" },
-                ],
+                exchange: [{ speaker: "roman", emote: "threat", emote_text_key: "tutorial.timer_taunt" }],
             },
         ],
     };
@@ -3458,7 +3829,11 @@ test("campaign tutorial wakes an active paused objective when its timer response
         timerId = 0,
         activeRun;
     const document = {
-        body: { appendChild(node) { node.isConnected = true; } },
+        body: {
+            appendChild(node) {
+                node.isConnected = true;
+            },
+        },
         documentElement: { dir: "ltr" },
         hidden: false,
         getElementById: () => null,
@@ -3510,19 +3885,30 @@ test("campaign tutorial wakes an active paused objective when its timer response
     await new Promise(setImmediate);
     window.SOW_tutorial_state_update({
         phase: "Playing",
-        hud: { players: [], settings: {}, tutorial: { active: true, episode_id: "timer_wake_test", facts: {} } },
+        hud: {
+            players: [],
+            settings: {},
+            tutorial: { active: true, episode_id: "timer_wake_test", facts: {} },
+        },
     });
     await new Promise(setImmediate);
     const scheduled = timers.find((timer) => !timer.cancelled && timer.delay === 5000);
     assert.ok(
         scheduled,
         "the paused objective schedules its next timed response: " +
-            JSON.stringify({ delays: timers.map((timer) => timer.delay), view: activeRun && activeRun.view() }),
+            JSON.stringify({
+                delays: timers.map((timer) => timer.delay),
+                view: activeRun && activeRun.view(),
+            }),
     );
     assert.equal(activeRun.view().paused, true);
     now = 5000;
     scheduled.callback();
-    assert.equal(activeRun.view().reaction, "timer_taunt", "the timer fires without another HUD state update");
+    assert.equal(
+        activeRun.view().reaction,
+        "timer_taunt",
+        "the timer fires without another HUD state update",
+    );
 });
 
 test("Boudica camera lessons leave every gesture to the player", () => {
@@ -3659,8 +4045,12 @@ test("Boudica and Stonea exchange friendship emotes after Home without pausing",
         { player: "angry" },
     );
     assert.deepEqual(rules.campaignBaseExpressions(definition, { alliance_faction_ids: ["stonea"] }), {
-        player: "calm",
+        player: "angry",
     });
+    assert.deepEqual(
+        rules.campaignBaseExpressions(definition, { defeated_faction_ids: ["roman_outpost"] }),
+        {},
+    );
     let now = 0;
     const spoken = [];
     const machine = campaign.create(definition, "boudica_camera_home", roster, () => now, {

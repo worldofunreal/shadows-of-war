@@ -270,6 +270,7 @@ campaign_chronicles = "キャンペーン\nクロニクル"
 campaign_unavailable = "キャンペーンはご利用いただけません。"
 
 [heroes]
+oceania = "オセアニア"
 leader_caesar_name = "ユリウス・カエサル"
 leader_caesar_historical = "ガイウス・ユリウス・カエサル"
 leader_cleopatra_name = "クレオパトラ7世"
@@ -901,6 +902,14 @@ match_message_4 = "あなたの戦いは終わる。 書類は待つことがで
 match_message_5 = "あなたの戦いは終わります。これは間違いなく計画の一部でした。"
 
 [site]
+view_profile = "指導者の詳細を見る"
+all_leaders = "すべての指導者"
+historical_name = "歴史上の名前"
+civilization = "文明"
+region = "地域"
+historical_reference = "歴史資料"
+suggest_language = "{language}で読む"
+
 landing_build_expand = "築け。広げろ。"
 landing_betray = "裏切れ。"
 empire_starts = "次なる帝国は"

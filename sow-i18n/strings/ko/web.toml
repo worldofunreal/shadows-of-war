@@ -270,6 +270,7 @@ campaign_chronicles = "학회소개\n주요 특징"
 campaign_unavailable = "캠페인 사용 불가."
 
 [heroes]
+oceania = "오세아니아"
 leader_caesar_name = "율리우스 카이사르"
 leader_caesar_historical = "가이우스 율리우스 카이사르"
 leader_cleopatra_name = "클레오파트라 7세"
@@ -901,6 +902,14 @@ match_message_4 = "당신의 전투는 끝낼 것입니다. 서류 작업은 기
 match_message_5 = "당신의 전투가 끝났습니다. 이것은 확실히 계획의 일부였습니다."
 
 [site]
+view_profile = "지도자 정보 보기"
+all_leaders = "모든 지도자"
+historical_name = "역사적 이름"
+civilization = "문명"
+region = "지역"
+historical_reference = "역사 자료"
+suggest_language = "{language}로 읽기"
+
 landing_build_expand = "건설하라. 확장하라."
 landing_betray = "배신하라."
 empire_starts = "당신의 다음 제국은"

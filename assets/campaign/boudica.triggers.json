@@ -51,7 +51,7 @@
       "id": "roman_outpost_tease_1",
       "when": {
         "type": "timer",
-        "after_ms": 5000
+        "after_ms": 3000
       },
       "during": "boudica_attack_roman_outpost",
       "presentation": "exchange",
@@ -60,40 +60,19 @@
           "speaker": "roman_outpost",
           "emote": "threat",
           "emote_text_key": "tutorial.campaign_boudica_roman_outpost_tease_1"
-        }
-      ]
-    },
-    {
-      "id": "roman_outpost_tease_2",
-      "when": {
-        "type": "timer",
-        "after_ms": 10000
-      },
-      "during": "boudica_attack_roman_outpost",
-      "presentation": "exchange",
-      "exchange": [
+        },
         {
           "speaker": "roman_outpost",
           "emote": "threat",
           "emote_text_key": "tutorial.campaign_boudica_roman_outpost_tease_2"
-        }
-      ]
-    },
-    {
-      "id": "roman_outpost_tease_3",
-      "when": {
-        "type": "timer",
-        "after_ms": 15000
-      },
-      "during": "boudica_attack_roman_outpost",
-      "presentation": "exchange",
-      "exchange": [
+        },
         {
           "speaker": "roman_outpost",
           "emote": "threat",
           "emote_text_key": "tutorial.campaign_boudica_roman_outpost_tease_3"
         }
-      ]
+      ],
+      "loop": true
     },
     {
       "id": "contact_snettisham",
@@ -276,6 +255,246 @@
           "emote_text_key": "tutorial.campaign_boudica_roman_supply_depot_last_words_emote"
         }
       ]
+    },
+    {
+      "id": "roman_colonia_veterans_tease_1",
+      "when": {
+        "type": "timer",
+        "after_ms": 3000
+      },
+      "during": "boudica_outpost_colonia_veterans",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "colonia_veterans",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_colonia_veterans_tease_1"
+        },
+        {
+          "speaker": "colonia_veterans",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_colonia_veterans_tease_2"
+        },
+        {
+          "speaker": "colonia_veterans",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_colonia_veterans_tease_3"
+        }
+      ],
+      "loop": true
+    },
+    {
+      "id": "roman_tax_collectors_tease_1",
+      "when": {
+        "type": "timer",
+        "after_ms": 3000
+      },
+      "during": "boudica_outpost_tax_collectors",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "tax_collectors",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_tax_collectors_tease_1"
+        },
+        {
+          "speaker": "tax_collectors",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_tax_collectors_tease_2"
+        },
+        {
+          "speaker": "tax_collectors",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_tax_collectors_tease_3"
+        }
+      ],
+      "loop": true
+    },
+    {
+      "id": "roman_roman_supply_depot_tease_1",
+      "when": {
+        "type": "timer",
+        "after_ms": 3000
+      },
+      "during": "boudica_outpost_roman_supply_depot",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "roman_supply_depot",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_roman_supply_depot_tease_1"
+        },
+        {
+          "speaker": "roman_supply_depot",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_roman_supply_depot_tease_2"
+        },
+        {
+          "speaker": "roman_supply_depot",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_roman_supply_depot_tease_3"
+        }
+      ],
+      "loop": true
+    },
+    {
+      "id": "roman_camulodunum_tease_1",
+      "when": {
+        "type": "timer",
+        "after_ms": 3000
+      },
+      "during": "boudica_camulodunum",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "camulodunum",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_camulodunum_tease_1"
+        },
+        {
+          "speaker": "camulodunum",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_camulodunum_tease_2"
+        },
+        {
+          "speaker": "camulodunum",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_camulodunum_tease_3"
+        }
+      ],
+      "loop": true
+    },
+    {
+      "id": "roman_legio_ix_hispana_tease_1",
+      "when": {
+        "type": "timer",
+        "after_ms": 3000
+      },
+      "during": "boudica_ninth_legion",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "legio_ix_hispana",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_legio_ix_hispana_tease_1"
+        },
+        {
+          "speaker": "legio_ix_hispana",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_legio_ix_hispana_tease_2"
+        },
+        {
+          "speaker": "legio_ix_hispana",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_legio_ix_hispana_tease_3"
+        }
+      ],
+      "loop": true
+    },
+    {
+      "id": "roman_londinium_tease_1",
+      "when": {
+        "type": "timer",
+        "after_ms": 3000
+      },
+      "during": "boudica_londinium",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "londinium",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_londinium_tease_1"
+        },
+        {
+          "speaker": "londinium",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_londinium_tease_2"
+        },
+        {
+          "speaker": "londinium",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_londinium_tease_3"
+        }
+      ],
+      "loop": true
+    },
+    {
+      "id": "roman_verulamium_tease_1",
+      "when": {
+        "type": "timer",
+        "after_ms": 3000
+      },
+      "during": "boudica_verulamium",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "verulamium",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_verulamium_tease_1"
+        },
+        {
+          "speaker": "verulamium",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_verulamium_tease_2"
+        },
+        {
+          "speaker": "verulamium",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_verulamium_tease_3"
+        }
+      ],
+      "loop": true
+    },
+    {
+      "id": "alliance_hint_dobunni",
+      "when": {
+        "type": "timer",
+        "after_ms": 500
+      },
+      "during": "boudica_alliance_dobunni_target",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "dobunni",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_boudica_dobunni_alliance_hint_emote",
+          "delay_ms": 0
+        }
+      ]
+    },
+    {
+      "id": "alliance_hint_corieltauvi",
+      "when": {
+        "type": "timer",
+        "after_ms": 500
+      },
+      "during": "boudica_alliance_corieltauvi_target",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "corieltauvi",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_boudica_corieltauvi_alliance_hint_emote",
+          "delay_ms": 0
+        }
+      ]
+    },
+    {
+      "id": "alliance_hint_catuvellauni",
+      "when": {
+        "type": "timer",
+        "after_ms": 500
+      },
+      "during": "boudica_alliance_catuvellauni_target",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "catuvellauni",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_boudica_catuvellauni_alliance_hint_emote",
+          "delay_ms": 0
+        }
+      ]
     }
   ],
   "speakers": {
@@ -284,10 +503,9 @@
       "avatar": "boudica",
       "base_expression": {
         "expression": "angry",
-        "after_expression": "calm",
         "until": {
-          "type": "alliance",
-          "target": "stonea"
+          "type": "defeated",
+          "target": "roman_outpost"
         }
       }
     },
@@ -333,6 +551,15 @@
     },
     "suetonius_paulinus": {
       "faction": "suetonius_paulinus"
+    },
+    "dobunni": {
+      "faction": "dobunni_1"
+    },
+    "corieltauvi": {
+      "faction": "corieltauvi_1"
+    },
+    "catuvellauni": {
+      "faction": "catuvellauni"
     }
   },
   "steps": [
@@ -382,7 +609,8 @@
         {
           "speaker": "roman_outpost",
           "emote": "threat",
-          "emote_text_key": "tutorial.campaign_boudica_roman_outpost_provoke_emote"
+          "emote_text_key": "tutorial.campaign_boudica_roman_outpost_provoke_emote",
+          "delay_ms": 0
         }
       ],
       "body_key": "tutorial.campaign_boudica_attack_roman_outpost_body"

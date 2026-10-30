@@ -140,7 +140,7 @@
   }
 
   function isLandingPage() {
-    return window.location.pathname === "/" || window.location.pathname === "/index.html";
+    return document.documentElement.dataset.sitePage === "" || window.location.pathname === "/" || window.location.pathname === "/index.html";
   }
 
   function ensureSession() {
@@ -353,7 +353,7 @@
     body.className = "sow-analytics-consent__copy";
     const policyLink = document.createElement("a");
     policyLink.className = "sow-analytics-consent__policy";
-    policyLink.href = "/cookies/";
+    policyLink.href = `${document.documentElement.dataset.sitePrefix || "/"}cookies/`;
     const actions = document.createElement("div");
     actions.className = "sow-analytics-consent__actions";
     const accept = document.createElement("button");
@@ -417,10 +417,12 @@
   window.addEventListener("pagehide", () => {
     void flush(true);
   });
-  window.addEventListener("sow:locale-change", () => {
+  const refreshLocale = () => {
     if (panel && panel._refreshCopy) panel._refreshCopy();
     addManageControl();
-  });
+  };
+  window.addEventListener("sow:locale-change", refreshLocale);
+  window.SOW_I18N_READY?.then(refreshLocale).catch((error) => console.error("[SOW analytics] translations unavailable", error));
 
   consent = readChoice();
   if (consent === "accepted") {

@@ -7,8 +7,32 @@ use image::RgbaImage;
 use sow_core::maps;
 use std::collections::VecDeque;
 
-const MIN_ISLAND_SIZE: usize = 30;
-const MIN_LAKE_SIZE: usize = 16;
+/// Per-map water controls. `Default` reproduces the canonical recipes in assets/maps/SOURCES.toml.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WaterSettings {
+    /// Inland water bodies smaller than this many map tiles become land.
+    pub min_lake_tiles: usize,
+    /// Land masses smaller than this many source pixels become water.
+    pub min_island_pixels: usize,
+    /// When the source is enlarged, trace smooth coasts instead of square steps.
+    pub smooth_coasts: bool,
+    /// With smooth coasts: 0.5 follows the source; higher widens rivers, lakes and bays.
+    pub water_level: f32,
+    /// Open a tile where two water tiles touch only at a corner, so rivers stay navigable.
+    pub connect_diagonals: bool,
+}
+
+impl Default for WaterSettings {
+    fn default() -> Self {
+        Self {
+            min_lake_tiles: 16,
+            min_island_pixels: 30,
+            smooth_coasts: false,
+            water_level: 0.5,
+            connect_diagonals: false,
+        }
+    }
+}
 
 const LAND_BIT: u8 = 0b1000_0000;
 const SHORE_BIT: u8 = 0b0100_0000;
@@ -59,6 +83,15 @@ pub fn generate_from_rgba(
     img: &RgbaImage,
     target_dims: Option<(u32, u32)>,
 ) -> Result<ImagePipelineResult, String> {
+    generate_with_water(img, target_dims, &WaterSettings::default())
+}
+
+/// `generate_from_rgba` with per-map water controls (map generator path).
+pub fn generate_with_water(
+    img: &RgbaImage,
+    target_dims: Option<(u32, u32)>,
+    water: &WaterSettings,
+) -> Result<ImagePipelineResult, String> {
     let src_w = img.width() as usize;
     let src_h = img.height() as usize;
     if src_w == 0 || src_h == 0 {
@@ -70,7 +103,7 @@ pub fn generate_from_rgba(
     let mut full = Terrain::new(src_w, src_h);
     classify_rgba_into(img, &mut full);
 
-    remove_small_islands(&mut full);
+    remove_small_islands(&mut full, water.min_island_pixels);
 
     let (dst_w, dst_h) = match target_dims {
         Some((w, h)) => {
@@ -86,8 +119,16 @@ pub fn generate_from_rgba(
         dst_w as u64 * dst_h as u64
     );
 
-    let mut small = downscale(&full, dst_w as usize, dst_h as usize);
-    remove_small_lakes(&mut small);
+    let enlarging = dst_w as usize > src_w || dst_h as usize > src_h;
+    let mut small = if water.smooth_coasts && enlarging {
+        upscale_smooth(&full, dst_w as usize, dst_h as usize, water.water_level)
+    } else {
+        downscale(&full, dst_w as usize, dst_h as usize)
+    };
+    if water.connect_diagonals {
+        connect_diagonal_water(&mut small);
+    }
+    remove_small_lakes(&mut small, water.min_lake_tiles);
     mark_ocean(&mut small);
     let shoreline_waters = process_shore(&mut small);
     process_dist_to_land(&mut small, &shoreline_waters);
@@ -130,20 +171,14 @@ pub fn mobile_safe_dims(src_w: u32, src_h: u32) -> (u32, u32) {
 }
 
 fn neighbors(x: usize, y: usize, w: usize, h: usize) -> impl Iterator<Item = (usize, usize)> {
-    let mut out = Vec::with_capacity(4);
-    if x > 0 {
-        out.push((x - 1, y));
-    }
-    if x + 1 < w {
-        out.push((x + 1, y));
-    }
-    if y > 0 {
-        out.push((x, y - 1));
-    }
-    if y + 1 < h {
-        out.push((x, y + 1));
-    }
-    out.into_iter()
+    [
+        (x > 0).then(|| (x - 1, y)),
+        (x + 1 < w).then_some((x + 1, y)),
+        (y > 0).then(|| (x, y - 1)),
+        (y + 1 < h).then_some((x, y + 1)),
+    ]
+    .into_iter()
+    .flatten()
 }
 
 fn flood_region(t: &Terrain, start: usize, want_land: bool, visited: &mut [bool]) -> Vec<usize> {
@@ -169,7 +204,7 @@ fn flood_region(t: &Terrain, start: usize, want_land: bool, visited: &mut [bool]
     region
 }
 
-fn remove_small_islands(t: &mut Terrain) {
+fn remove_small_islands(t: &mut Terrain, min_size: usize) {
     let mut visited = vec![false; t.is_land.len()];
     let mut removed = 0usize;
     for start in 0..t.is_land.len() {
@@ -177,7 +212,7 @@ fn remove_small_islands(t: &mut Terrain) {
             continue;
         }
         let region = flood_region(t, start, true, &mut visited);
-        if region.len() < MIN_ISLAND_SIZE {
+        if region.len() < min_size {
             removed += 1;
             for &i in &region {
                 t.is_land[i] = false;
@@ -185,7 +220,7 @@ fn remove_small_islands(t: &mut Terrain) {
             }
         }
     }
-    log::info!("Removed {removed} islands smaller than {MIN_ISLAND_SIZE} tiles");
+    log::info!("Removed {removed} islands smaller than {min_size} tiles");
 }
 
 fn downscale(src: &Terrain, dst_w: usize, dst_h: usize) -> Terrain {
@@ -225,7 +260,75 @@ fn downscale(src: &Terrain, dst_w: usize, dst_h: usize) -> Terrain {
     dst
 }
 
-fn remove_small_lakes(t: &mut Terrain) {
+/// Bilinear land coverage per tile, cut at `water_level`: smooth coasts when the source is enlarged.
+fn upscale_smooth(src: &Terrain, dst_w: usize, dst_h: usize, water_level: f32) -> Terrain {
+    let mut dst = Terrain::new(dst_w, dst_h);
+    let fx = src.width as f32 / dst_w as f32;
+    let fy = src.height as f32 / dst_h as f32;
+    let max_x = src.width as f32 - 1.0;
+    let max_y = src.height as f32 - 1.0;
+    for ty in 0..dst_h {
+        let sy = ((ty as f32 + 0.5) * fy - 0.5).clamp(0.0, max_y);
+        let y0 = sy.floor() as usize;
+        let y1 = (y0 + 1).min(src.height - 1);
+        let wy = sy - y0 as f32;
+        for tx in 0..dst_w {
+            let sx = ((tx as f32 + 0.5) * fx - 0.5).clamp(0.0, max_x);
+            let x0 = sx.floor() as usize;
+            let x1 = (x0 + 1).min(src.width - 1);
+            let wx = sx - x0 as f32;
+            let corners = [
+                (y0 * src.width + x0, (1.0 - wx) * (1.0 - wy)),
+                (y0 * src.width + x1, wx * (1.0 - wy)),
+                (y1 * src.width + x0, (1.0 - wx) * wy),
+                (y1 * src.width + x1, wx * wy),
+            ];
+            let mut land = 0.0f32;
+            let mut mag_sum = 0.0f32;
+            for (si, weight) in corners {
+                if src.is_land[si] {
+                    land += weight;
+                    mag_sum += weight * src.magnitude[si];
+                }
+            }
+            if land > water_level {
+                let di = ty * dst_w + tx;
+                dst.is_land[di] = true;
+                dst.magnitude[di] = mag_sum / land;
+            }
+        }
+    }
+    dst
+}
+
+/// Where two water tiles meet only at a corner, flood one of the land tiles between them.
+fn connect_diagonal_water(t: &mut Terrain) {
+    let mut opened = 0usize;
+    for y in 0..t.height.saturating_sub(1) {
+        for x in 0..t.width.saturating_sub(1) {
+            let a = t.idx(x, y);
+            let b = a + 1;
+            let c = a + t.width;
+            let d = c + 1;
+            let land = &t.is_land;
+            let open = if !land[a] && !land[d] && land[b] && land[c] {
+                Some(b)
+            } else if !land[b] && !land[c] && land[a] && land[d] {
+                Some(a)
+            } else {
+                None
+            };
+            if let Some(i) = open {
+                t.is_land[i] = false;
+                t.magnitude[i] = 0.0;
+                opened += 1;
+            }
+        }
+    }
+    log::info!("Opened {opened} diagonal water links");
+}
+
+fn remove_small_lakes(t: &mut Terrain, min_size: usize) {
     let mut visited = vec![false; t.is_land.len()];
     let mut removed = 0usize;
     for start in 0..t.is_land.len() {
@@ -233,7 +336,7 @@ fn remove_small_lakes(t: &mut Terrain) {
             continue;
         }
         let region = flood_region(t, start, false, &mut visited);
-        if region.len() >= MIN_LAKE_SIZE {
+        if region.len() >= min_size {
             continue;
         }
         removed += 1;
@@ -242,7 +345,7 @@ fn remove_small_lakes(t: &mut Terrain) {
             t.magnitude[i] = 0.0;
         }
     }
-    log::info!("Removed {removed} inland water bodies smaller than {MIN_LAKE_SIZE} tiles");
+    log::info!("Removed {removed} inland water bodies smaller than {min_size} tiles");
 }
 
 fn mark_ocean(t: &mut Terrain) {
@@ -384,6 +487,33 @@ mod tests {
         let result = downscale(&source, 1, 1);
 
         assert!(!result.is_land[0], "water must win a mixed source block");
+    }
+
+    #[test]
+    fn diagonal_water_gets_a_cardinal_link() {
+        let mut t = Terrain::new(2, 2);
+        t.is_land = vec![false, true, true, false];
+
+        connect_diagonal_water(&mut t);
+
+        assert!(!t.is_land[1], "the corner between two water tiles must open");
+        assert!(t.is_land[2]);
+    }
+
+    #[test]
+    fn higher_water_level_floods_more_tiles_when_enlarging() {
+        let img = encoded_coast(8, 8);
+        let water_tiles = |level: f32| {
+            let water = WaterSettings {
+                smooth_coasts: true,
+                water_level: level,
+                min_lake_tiles: 0,
+                ..WaterSettings::default()
+            };
+            let result = generate_with_water(&img, Some((32, 32)), &water).expect("pipeline");
+            result.map_data.iter().filter(|b| **b & LAND_BIT == 0).count()
+        };
+        assert!(water_tiles(0.8) > water_tiles(0.2));
     }
 
     #[test]

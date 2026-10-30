@@ -44,6 +44,7 @@ export function validateReactions(context: CampaignValidationContext) {
                 "emote",
                 "emote_text_key",
                 "exchange",
+                "loop",
                 "pause_game",
                 ...REACTION_DIALOGUE_FIELDS,
             ],
@@ -53,6 +54,8 @@ export function validateReactions(context: CampaignValidationContext) {
         checkEmote(null, reaction, "reactions.");
         if (own(reaction, "pause_game") && typeof reaction.pause_game !== "boolean")
             issue(null, "reactions.pause_game", "Pause game must be true or false.");
+        if (own(reaction, "loop") && typeof reaction.loop !== "boolean")
+            issue(null, "reactions.loop", "Loop must be true or false.");
         if (own(reaction, "exchange")) checkExchange(null, reaction.exchange, "reactions.exchange");
         if (reaction.presentation != null && !["dialogue", "exchange"].includes(reaction.presentation))
             issue(null, "reactions.presentation", "Choose a dialogue or automatic emote exchange.");
@@ -67,7 +70,7 @@ export function validateReactions(context: CampaignValidationContext) {
         reactionIds.add(reaction.id);
         knownFields(
             reaction.when,
-            ["type", "target", "targets", "relation", "after_ms"],
+            ["type", "target", "targets", "relation", "after_ms", "repeat_ms"],
             null,
             "reactions.when",
         );
@@ -174,12 +177,17 @@ export function validateReactions(context: CampaignValidationContext) {
         if (type === "pre_defeat" && reaction.after != null)
             issue(null, "reactions.after", "A pre-defeat exchange belongs to an active objective.");
         if (type === "timer") {
-            if (
-                !Number.isSafeInteger(when.after_ms) ||
-                when.after_ms <= 0 ||
-                when.after_ms > 600000
-            )
+            if (!Number.isSafeInteger(when.after_ms) || when.after_ms <= 0 || when.after_ms > 600000)
                 issue(null, "reactions.when.after_ms", "Set a whole-number timer from 1 to 600000 ms.");
+            if (
+                own(when, "repeat_ms") &&
+                (!Number.isSafeInteger(when.repeat_ms) || when.repeat_ms <= 0 || when.repeat_ms > 600000)
+            )
+                issue(
+                    null,
+                    "reactions.when.repeat_ms",
+                    "Set a whole-number repeat interval from 1 to 600000 ms.",
+                );
             if (target != null || when.targets != null || when.relation != null)
                 issue(null, "reactions.when", "A timed response only uses its timer and active objective.");
             if (reaction.during == null)
@@ -192,11 +200,35 @@ export function validateReactions(context: CampaignValidationContext) {
                 reaction.exchange.some((line) => line && line.presentation === "dialogue")
             )
                 issue(null, "reactions.presentation", "Timed responses use emote exchanges, not dialogue.");
+            if (reaction.loop === true && own(when, "repeat_ms"))
+                issue(
+                    null,
+                    "reactions.when.repeat_ms",
+                    "Looping exchanges use their shared sequence timing.",
+                );
+            if (
+                reaction.loop === true &&
+                Array.isArray(reaction.exchange) &&
+                reaction.exchange.some((line) => object(line) && own(line, "delay_ms"))
+            )
+                issue(
+                    null,
+                    "reactions.exchange.delay_ms",
+                    "Looping exchanges use their shared sequence timing.",
+                );
             if (own(reaction, "pause_game"))
-                issue(null, "reactions.pause_game", "Timed responses keep the active objective's pause state.");
+                issue(
+                    null,
+                    "reactions.pause_game",
+                    "Timed responses keep the active objective's pause state.",
+                );
             if (reaction.outcome != null || reaction.choices != null || reaction.gold_cost != null)
                 issue(null, "reactions", "Timed emotes cannot change diplomacy.");
         }
+        if (type !== "timer" && own(when, "repeat_ms"))
+            issue(null, "reactions.when.repeat_ms", "Only timed responses can repeat.");
+        if (type !== "timer" && own(reaction, "loop"))
+            issue(null, "reactions.loop", "Only timed emote exchanges can loop.");
         if (type === "support") {
             const gate = byId.get(reaction.after);
             if (!gate || !["objective", "guide"].includes(gate.type))

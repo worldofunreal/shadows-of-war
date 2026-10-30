@@ -1,8 +1,7 @@
 use sow_data::PREMIUM_COLORS;
 use super::{Player, PlayerType};
 
-/// Red/Blue tint used to keep teams recognizable while preserving each
-/// player's own territory color.
+/// Shared Red/Blue territory color for multiplayer teams.
 #[inline]
 pub fn team_territory_rgb(team: crate::protocol::Team) -> [f32; 3] {
     match team {
@@ -22,10 +21,16 @@ pub fn player_territory_rgb(
     if player_type == PlayerType::Bot && !is_campaign_faction {
         return [0.5; 3];
     }
-    const TEAM_TINT: f32 = 0.08;
     let color = team.map_or(color, |team| {
         let team_color = team_territory_rgb(team);
-        std::array::from_fn(|i| color[i] * (1.0 - TEAM_TINT) + team_color[i] * TEAM_TINT)
+        if is_campaign_faction {
+            const CAMPAIGN_TEAM_TINT: f32 = 0.08;
+            std::array::from_fn(|i| {
+                color[i] * (1.0 - CAMPAIGN_TEAM_TINT) + team_color[i] * CAMPAIGN_TEAM_TINT
+            })
+        } else {
+            team_color
+        }
     });
     if player_type == crate::player::PlayerType::Nation {
         muted_nation_rgb(color)
@@ -57,6 +62,7 @@ pub fn best_available_nation_palette_color(
         .filter(|player| {
             player.alive
                 && matches!(player.player_type, PlayerType::Human | PlayerType::Nation)
+                && team.map_or(true, |team| player.team != Some(team))
         })
         .map(|player| {
             player_territory_rgb(player.player_type, player.team, player.color, false)

@@ -2202,60 +2202,23 @@ const PUBLIC_SITE_PAGES: [&str; 5] = [
 ];
 
 fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
-    let header = fs::read_to_string(paths.root.join("sow-web/site/site-header.html"))?
-        .trim()
-        .to_string();
-    let marker = "<!-- SOW_SITE_HEADER -->";
-    let locale_marker = "<!-- SOW_SITE_LOCALE -->";
-    let locale_codes = serde_json::to_string(
-        &sow_i18n::Language::published_registry()
-            .map(|(_, code, _)| code)
-            .collect::<Vec<_>>(),
-    )?;
-    let mut locale_versions = asset_versions(paths, &out.join("locales"))?;
-    locale_versions
-        .as_object_mut()
-        .context("invalid asset-version map")?
-        .retain(|key, _| key.starts_with("/locales/"));
-    let locale_versions = serde_json::to_string(&locale_versions)?;
-    for relative in PUBLIC_SITE_PAGES {
-        let path = out.join(relative);
-        let source = fs::read_to_string(&path)
-            .with_context(|| format!("read public page {}", path.display()))?;
-        let source = if relative == "index.html" {
-            expand_landing(&source, out)?
-        } else {
-            source
-        };
-        if source.matches(marker).count() != 1 {
-            bail!(
-                "public page {} must contain one site header marker",
-                path.display()
-            );
-        }
-        let head_end = source.find("</head>").context("public page has no head")?;
-        if source.matches(locale_marker).count() != 1
-            || source.find(locale_marker).is_none_or(|at| at > head_end)
-        {
-            bail!("public page {relative} must select its locale in the head");
-        }
-        let prefix = if relative == "index.html" {
-            "./"
-        } else {
-            "../"
-        };
-        let locale_bootstrap = format!(
-            "<script data-cfasync=\"false\">window.SOW_LOCALE_BEFORE_PAINT = true; window.SOW_LOCALE_CATALOG_VERSION = {}; window.SOW_LOCALE_CODES = {locale_codes}; window.SOW_ASSET_TS = {locale_versions};</script>\n  <script data-cfasync=\"false\" src=\"{prefix}sow-i18n.js\"></script>",
-            sow_i18n::WEB_CATALOG_VERSION,
-        );
-        fs::write(
-            &path,
-            source
-                .replace(marker, &header)
-                .replace(locale_marker, &locale_bootstrap),
-        )?;
-    }
-    Ok(())
+    // The landing's generated sections and every localized page share one publisher.
+    let landing = expand_landing(&fs::read_to_string(out.join("index.html"))?, out)?;
+    fs::write(out.join("index.html"), landing)?;
+    let leaders = sow_core::player::Leader::all().map(|leader| {
+        serde_json::json!({
+            "id": leader.id(), "artSlug": leader.art_slug(),
+            "region": leader.character().region,
+            "wikipedia": leader.character().wikipedia,
+        })
+    }).collect::<Vec<_>>();
+    let mut metadata = tempfile::NamedTempFile::new()?;
+    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES }))?;
+    run("bun", &[
+        "run", paths.root.join("sow-web/site/generate.ts").to_str().context("site generator path")?,
+        out.to_str().context("site output path")?,
+        metadata.path().to_str().context("site metadata path")?,
+    ], Some(&paths.root))
 }
 
 /// Landing sections built from data at publish time: the hero roster from the
@@ -2337,10 +2300,12 @@ fn landing_leader_showcase(english: &serde_json::Value) -> Result<String> {
             <div class="showcase-trait"><p class="showcase-label" data-i18n="site.command_trait">{trait_label}</p>
             <p class="showcase-ability" data-detail-ability data-i18n="site.leader_{id}_ability">{ability}</p>
             <p class="showcase-description" data-detail-description data-i18n="site.leader_{id}_description">{description}</p></div>
+            <a class="leader-profile-link" data-detail-profile href="/leaders/{id}/" data-i18n="site.view_profile">{profile_label}</a>
           </div>"#,
         civ = english_text(english, &format!("heroes.leader_{id}_civilization"))?,
         hidden = if historical == name { " hidden" } else { "" },
         trait_label = english_text(english, "site.command_trait")?,
+        profile_label = english_text(english, "site.view_profile")?,
         ability = english_text(english, &format!("site.leader_{id}_ability"))?,
         description = english_text(english, &format!("site.leader_{id}_description"))?,
         unavailable = english_text(english, "site.art_unavailable")?,
@@ -2664,6 +2629,7 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
                 | "heroes.asia"
                 | "heroes.leader_leonidas_civilization"
                 | "heroes.europe"
+                | "heroes.oceania"
                 | "hud.ability_notice"
                 | "hud.fps"
                 | "hud.fps_ping"
@@ -3455,6 +3421,18 @@ fn verify_layout(dir: &Path) -> Result<()> {
             bail!("public page {relative} is missing its early locale bootstrap");
         }
     }
+    for (_, code, _) in sow_i18n::Language::published_registry() {
+        let prefix = if code == "en" { String::new() } else { format!("{}/", locale_folder(code)) };
+        for page in PUBLIC_SITE_PAGES.iter().map(|page| page.to_string())
+            .chain(std::iter::once("leaders/index.html".to_string()))
+            .chain(sow_core::player::Leader::all().map(|leader| format!("leaders/{}/index.html", leader.id()))) {
+            let path = dir.join(format!("{prefix}{page}"));
+            let html = fs::read_to_string(&path).with_context(|| format!("missing public page {}", path.display()))?;
+            if html.contains("<!-- SOW_SITE_") || !html.contains(&format!("lang=\"{code}\"")) {
+                bail!("incomplete localized page {}", path.display());
+            }
+        }
+    }
     let play_html = fs::read_to_string(dir.join("play/index.html"))?;
     // Self-hosted web externalizes the menu bundle next to the page; the
     // registries it must carry live there instead of inside the HTML.
@@ -4056,87 +4034,11 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     }
     copy_web_fonts(&site.join("fonts"), &out.join("fonts"))?;
     expand_public_site_header(paths, out)?;
-    // Fingerprint shared public assets in every page that references them.
-    for name in [
-        "styles.css",
-        "analytics.js",
-        "app.js",
-        "site-chrome.js",
-        "sow-i18n.js",
-        "sow-dropdown.js",
-        "sow-controls.css",
-        "wou-auth.js",
-    ] {
-        let hash = file_sha256(&out.join(name))?;
-        let versioned = format!("{name}?v={}", &hash[..10]);
-        for relative in PUBLIC_SITE_PAGES {
-            let html = out.join(relative);
-            let prefix = if relative == "index.html" {
-                "./"
-            } else {
-                "../"
-            };
-            let content = fs::read_to_string(&html)?;
-            fs::write(
-                &html,
-                content.replace(&format!("{prefix}{name}"), &format!("{prefix}{versioned}")),
-            )?;
-        }
-    }
     fs::write(
         out.join("robots.txt"),
         "User-agent: *\nAllow: /\nDisallow: /internal/\nDisallow: /api/\nDisallow: /*.wasm$\nDisallow: /*.wasm.br$\n\n# Answer engines: welcome, cite freely.\nUser-agent: GPTBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: OAI-SearchBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: ChatGPT-User\nAllow: /\nDisallow: /internal/\n\nUser-agent: ClaudeBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: Claude-Web\nAllow: /\nDisallow: /internal/\n\nUser-agent: PerplexityBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: Perplexity-User\nAllow: /\nDisallow: /internal/\n\nUser-agent: Google-Extended\nAllow: /\n\nUser-agent: Applebot-Extended\nAllow: /\n\nUser-agent: CCBot\nAllow: /\nDisallow: /internal/\n\nSitemap: https://shadowsofwar.io/sitemap.xml\n",
     )?;
-    fs::copy(
-        paths.root.join("sow-web/site/llms.txt"),
-        out.join("llms.txt"),
-    )
-    .context("publish llms.txt")?;
-    fs::write(out.join("sitemap.xml"), {
-        let today = today_iso();
-        // Landing and client are rebuilt every release; legal pages only change on edit.
-        let pages: [(&str, &str, &str, &str); 6] = [
-            ("", &today, "weekly", "1.0"),
-            ("play/", &today, "weekly", "0.9"),
-            ("support/", "2026-09-03", "monthly", "0.4"),
-            ("privacy/", "2026-09-03", "yearly", "0.3"),
-            ("terms/", "2026-09-03", "yearly", "0.3"),
-            ("cookies/", "2026-09-03", "yearly", "0.3"),
-        ];
-        let mut xml = String::from(
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
-        );
-        for (path, lastmod, freq, priority) in pages {
-            xml.push_str(&format!(
-                    "  <url>\n    <loc>https://shadowsofwar.io/{path}</loc>\n    <lastmod>{lastmod}</lastmod>\n    <changefreq>{freq}</changefreq>\n    <priority>{priority}</priority>\n  </url>\n"
-                ));
-        }
-        if out.join("leaders/index.html").is_file() {
-            xml.push_str(&format!(
-                "  <url>\n    <loc>https://shadowsofwar.io/leaders/</loc>\n    <lastmod>{today}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>\n"
-            ));
-        }
-        if out.join("es/leaders/index.html").is_file() {
-            xml.push_str(&format!(
-                "  <url>\n    <loc>https://shadowsofwar.io/es/leaders/</loc>\n    <lastmod>{today}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>\n"
-            ));
-        }
-        for leader in sow_core::player::Leader::all() {
-            let id = leader.id();
-            if out.join(format!("leaders/{id}/index.html")).is_file() {
-                xml.push_str(&format!(
-                    "  <url>\n    <loc>https://shadowsofwar.io/leaders/{id}/</loc>\n    <lastmod>{today}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.7</priority>\n  </url>\n"
-                ));
-            }
-            if out.join(format!("es/leaders/{id}/index.html")).is_file() {
-                xml.push_str(&format!(
-                    "  <url>\n    <loc>https://shadowsofwar.io/es/leaders/{id}/</loc>\n    <lastmod>{today}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.7</priority>\n  </url>\n"
-                ));
-            }
-        }
-        xml.push_str("</urlset>\n");
-        xml
-    })?;
+
     println!("✅ Website staged at webroot root");
 
     prune_qs(out)?;
@@ -4145,26 +4047,6 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     Ok(())
 }
 
-/// UTC build date (YYYY-MM-DD) for sitemap lastmod.
-fn today_iso() -> String {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0) as i64;
-    let days = secs.div_euclid(86_400);
-    // Civil-from-days (Howard Hinnant).
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if m <= 2 { y + 1 } else { y };
-    format!("{y:04}-{m:02}-{d:02}")
-}
 
 fn prepare_native_webroot(out: &Path) -> Result<()> {
     let index = out.join("play/index.html");
@@ -5316,34 +5198,11 @@ fn package_local_preview(
                 fs::copy(&src, out.join(name))?;
             }
         }
-        if paths.root.join("sow-web/site/llms.txt").is_file() {
-            fs::copy(paths.root.join("sow-web/site/llms.txt"), out.join("llms.txt"))?;
-        }
         fs::write(
             out.join("robots.txt"),
             "User-agent: *\nAllow: /\nDisallow: /internal/\nDisallow: /api/\nDisallow: /*.wasm$\nDisallow: /*.wasm.br$\n",
         )?;
-        fs::write(out.join("sitemap.xml"), {
-            let today = today_iso();
-            let pages: [(&str, &str, &str, &str); 6] = [
-                ("", &today, "weekly", "1.0"),
-                ("play/", &today, "weekly", "0.9"),
-                ("support/", "2026-09-03", "monthly", "0.4"),
-                ("privacy/", "2026-09-03", "yearly", "0.3"),
-                ("terms/", "2026-09-03", "yearly", "0.3"),
-                ("cookies/", "2026-09-03", "yearly", "0.3"),
-            ];
-            let mut xml = String::from(
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
-            );
-            for (path, lastmod, freq, priority) in pages {
-                xml.push_str(&format!(
-                    "  <url>\n    <loc>https://shadowsofwar.io/{path}</loc>\n    <lastmod>{lastmod}</lastmod>\n    <changefreq>{freq}</changefreq>\n    <priority>{priority}</priority>\n  </url>\n"
-                ));
-            }
-            xml.push_str("</urlset>\n");
-            xml
-        })?;
+
         fs::write(&fingerprint_file, &fingerprint)?;
     }
 
@@ -5438,37 +5297,6 @@ fn package_local_preview(
         }
     }
     expand_public_site_header(paths, out)?;
-    for name in [
-        "styles.css",
-        "analytics.js",
-        "app.js",
-        "site-chrome.js",
-        "sow-i18n.js",
-        "sow-dropdown.js",
-        "sow-controls.css",
-        "wou-auth.js",
-    ] {
-        let p = out.join(name);
-        if p.is_file() {
-            let hash = file_sha256(&p)?;
-            let versioned = format!("{name}?v={}", &hash[..10]);
-            for relative in PUBLIC_SITE_PAGES {
-                let html = out.join(relative);
-                if html.is_file() {
-                    let prefix = if relative == "index.html" {
-                        "./"
-                    } else {
-                        "../"
-                    };
-                    let content = fs::read_to_string(&html)?;
-                    fs::write(
-                        &html,
-                        content.replace(&format!("{prefix}{name}"), &format!("{prefix}{versioned}")),
-                    )?;
-                }
-            }
-        }
-    }
 
     Ok(())
 }

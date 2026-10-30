@@ -1,0 +1,177 @@
+{
+  "status": "complete",
+  "objective": "/home/bizkit/.codex/attachments/78e66242-222a-46ed-a98f-3701ddd49a22/pasted-text-1.txt",
+  "release": "0.1.4-46acb37e7ac5",
+  "previous_goal_turn": "progress",
+  "requirements": [
+    {
+      "id": "1.1",
+      "requirement": "English URLs and 14 lowercase language prefixes; neutral /play/",
+      "status": "proved",
+      "evidence": [
+        "public-report.json",
+        "generated-report.json"
+      ]
+    },
+    {
+      "id": "1.2",
+      "requirement": "English entry with saved/browser suggestion and unknown-language fallback; no automatic redirect",
+      "status": "proved",
+      "evidence": [
+        "browser-report.json",
+        "completion-behavior-report.json",
+        "sow-web/site/site-chrome.ts"
+      ]
+    },
+    {
+      "id": "1.3",
+      "requirement": "Explicit URL language wins; locale switch preserves equivalent profile; auxiliary pages localized",
+      "status": "proved",
+      "evidence": [
+        "public-report.json",
+        "completion-behavior-report.json",
+        "sow-web/shell/sow-i18n.test.ts"
+      ]
+    },
+    {
+      "id": "2.1",
+      "requirement": "Desktop header and mobile menu reach the localized catalog",
+      "status": "proved",
+      "evidence": [
+        "completion-behavior-report.json"
+      ]
+    },
+    {
+      "id": "2.2",
+      "requirement": "Landing selection exposes matching profile link, all-leaders entry and persists across language navigation",
+      "status": "proved",
+      "evidence": [
+        "completion-behavior-report.json",
+        "sow-web/site/app.ts"
+      ]
+    },
+    {
+      "id": "2.3",
+      "requirement": "Name/civilization search, empty reset, portraits and real profile links",
+      "status": "proved",
+      "evidence": [
+        "browser-report.json",
+        "public-report.json"
+      ]
+    },
+    {
+      "id": "2.4",
+      "requirement": "Each profile matches canonical name, historical name, civilization, region, trait, effect, artwork and available reference",
+      "status": "proved",
+      "evidence": [
+        "profile-data-report.json"
+      ]
+    },
+    {
+      "id": "2.5",
+      "requirement": "Generic historical filler replaced by canonical facts; reference labels and return links; Play links remain neutral",
+      "status": "proved",
+      "evidence": [
+        "sow-web/site/generate.ts",
+        "profile-data-report.json",
+        "public-report.json"
+      ]
+    },
+    {
+      "id": "3.1",
+      "requirement": "Existing publisher owns one page list, canonical leader data and published language registry",
+      "status": "proved",
+      "evidence": [
+        "sow-dist/src/main.rs",
+        "sow-web/site/generate.ts"
+      ]
+    },
+    {
+      "id": "3.2",
+      "requirement": "Copied individual pages absorbed into shared templates; no parallel router or added framework",
+      "status": "proved",
+      "evidence": [
+        "sow-web/site/leader.html",
+        "sow-web/site/leaders/index.html"
+      ]
+    },
+    {
+      "id": "3.3",
+      "requirement": "Complete localized initial HTML readable without JavaScript, root asset paths, preserved explicit preferences and 404 handling",
+      "status": "proved",
+      "evidence": [
+        "browser-report.json",
+        "generated-report.json",
+        "completion-behavior-report.json"
+      ]
+    },
+    {
+      "id": "4.1",
+      "requirement": "Per-page canonical, translated title/description and coherent structured information; reciprocal alternates with English default",
+      "status": "proved",
+      "evidence": [
+        "public-report.json",
+        "release-report.json"
+      ]
+    },
+    {
+      "id": "4.2",
+      "requirement": "Sitemap contains published routes and no invented build-time modification dates",
+      "status": "proved",
+      "evidence": [
+        "public-report.json",
+        "sow-web/site/generate.ts"
+      ]
+    },
+    {
+      "id": "4.3",
+      "requirement": "Package rejects missing pages, translation, header, image or other local resource; checks rendered output",
+      "status": "proved",
+      "evidence": [
+        "sow-web/site/site_interaction.test.ts",
+        "sow-web/site/generate.ts",
+        "dist/logs/production-20261029-231314.log"
+      ]
+    },
+    {
+      "id": "5.1",
+      "requirement": "Official local workflow serves localized landing/catalog/profile and /play/ using same generator and watcher",
+      "status": "proved",
+      "evidence": [
+        "completion-behavior-report.json",
+        "sow-dist/src/main.rs"
+      ]
+    },
+    {
+      "id": "5.2",
+      "requirement": "Desktop, mobile, narrow, tablet, landscape, enlarged view; keyboard focus and nested Escape behavior",
+      "status": "proved",
+      "evidence": [
+        "browser-report.json",
+        "completion-behavior-report.json",
+        "accessibility-report.json",
+        "sow-web/site/site_interaction.test.ts"
+      ]
+    },
+    {
+      "id": "5.3",
+      "requirement": "Game and callback remain available; same origin and identity ownership preserved; real WASM sessions/rewards verified",
+      "status": "proved",
+      "evidence": [
+        "completion-behavior-report.json",
+        "dist/logs/production-20261029-231314.log"
+      ]
+    },
+    {
+      "id": "5.4",
+      "requirement": "Official production pipeline completed health/public verification; live assets and every public page checked",
+      "status": "proved",
+      "evidence": [
+        "dist/logs/production-20261029-231314.log",
+        "release-report.json",
+        "public-report.json"
+      ]
+    }
+  ],
+  "remaining_requirements": []
+}

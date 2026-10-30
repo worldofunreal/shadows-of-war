@@ -288,6 +288,13 @@ pub static PARAMS: &[ParamDef] = &[
         1.0,
         BLEND_OPTIONS
     ),
+    selection!(
+        "tribe_blend_mode",
+        "Tribe blend",
+        "Territories",
+        3.0,
+        BLEND_OPTIONS
+    ),
     legacy_number!(
         "font_size_scale",
         "Text size",
@@ -3212,6 +3219,22 @@ mod tests {
             let slot = shader_slot(id).expect("mover size setting exists");
             assert_eq!(defaults[slot][0], expected, "{id}");
         }
+    }
+
+    #[test]
+    fn tribe_blend_reuses_territory_modes_with_albedo_default() {
+        let territory = definition("blend_mode").unwrap();
+        let tribes = definition("tribe_blend_mode").unwrap();
+        assert_eq!(territory.options.len(), tribes.options.len());
+        assert!(
+            territory
+                .options
+                .iter()
+                .zip(tribes.options)
+                .all(|(a, b)| a.value == b.value && a.label == b.label)
+        );
+        assert_eq!(territory.default[0], 1.0);
+        assert_eq!(tribes.default[0], 3.0);
     }
 
     #[test]

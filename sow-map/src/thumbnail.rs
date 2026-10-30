@@ -170,7 +170,34 @@ fn render_source_image_impl(source: &DynamicImage) -> Result<RgbaImage, String> 
             magnitude[idx] = (px[2].clamp(140, 200) - 140) / 2;
         }
     }
+    Ok(render_categorical(width, height, &land, &magnitude))
+}
 
+/// Render generated map bytes with the same palette as `render_source_image`,
+/// so a thumbnail shows the water the map really has. Sampled to at most
+/// twice the thumbnail width, which is all the 16:9 thumbnail can show.
+pub fn render_terrain_image(width: u32, height: u32, terrain: &[u8]) -> RgbaImage {
+    let scale = (f64::from(THUMBNAIL_WIDTH * 2) / f64::from(width.max(height).max(1))).min(1.0);
+    let out_w = ((f64::from(width) * scale).round() as u32).max(1);
+    let out_h = ((f64::from(height) * scale).round() as u32).max(1);
+    let count = (out_w * out_h) as usize;
+    let mut land = Vec::with_capacity(count);
+    let mut magnitude = Vec::with_capacity(count);
+    for y in 0..out_h {
+        let sy = ((f64::from(y) / scale) as u32).min(height.saturating_sub(1));
+        for x in 0..out_w {
+            let sx = ((f64::from(x) / scale) as u32).min(width.saturating_sub(1));
+            let byte = terrain.get((sy * width + sx) as usize).copied().unwrap_or(0);
+            let is_land = byte & 0x80 != 0;
+            land.push(is_land);
+            magnitude.push(if is_land { byte & 0x1f } else { 0 });
+        }
+    }
+    render_categorical(out_w, out_h, &land, &magnitude)
+}
+
+fn render_categorical(width: u32, height: u32, land: &[bool], magnitude: &[u8]) -> RgbaImage {
+    let count = land.len();
     // The source encodes only land/elevation. A bounded BFS adds the same
     // shallow-water band used by the accepted visual proof without inventing
     // a second map palette or changing map.bin.
@@ -237,7 +264,7 @@ fn render_source_image_impl(source: &DynamicImage) -> Result<RgbaImage, String> 
             out.put_pixel(x, y, image::Rgba(color));
         }
     }
-    Ok(out)
+    out
 }
 
 fn sample_source_frame(source: &RgbaImage, frame: SourceFrame) -> RgbaImage {

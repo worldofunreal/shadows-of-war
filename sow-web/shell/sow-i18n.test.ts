@@ -83,83 +83,30 @@ function loadRuntime(storedLocale, catalogs, settings) {
     return { window, document, storage, errors, requests, localeEvents, context };
 }
 
-test("public site resolves its language before revealing translated text", async () => {
-    let finishSpanish;
-    const spanishDownload = new Promise((resolve) => {
-        finishSpanish = resolve;
+test("public page URL wins over saved and browser language without changing the preference", async () => {
+    const runtime = loadRuntime("en", { en: catalog("en", "Settings"), es: catalog("es", "Configuración") }, {
+        window: { SOW_SITE_LOCALE: "es", SOW_LOCALE_BEFORE_PAINT: true, location: { pathname: "/es/" } },
+        navigator: { languages: ["en-US"] },
     });
-    const runtime = loadRuntime(
-        "",
-        {
-            en: catalog("en", "Settings"),
-            es: catalog("es", "Configuración"),
-        },
-        {
-            window: { SOW_LOCALE_BEFORE_PAINT: true, SOW_LOCALE_CODES: ["en", "es"] },
-            navigator: { languages: ["es-MX", "en-US"] },
-            beforeResponse: (code) => (code === "es" ? spanishDownload : undefined),
-        },
-    );
-    const text = { dataset: { i18n: "menu.settings" }, textContent: "Settings" };
-    runtime.document.querySelectorAll = (selector) => (selector === "[data-i18n]" ? [text] : []);
     vm.runInNewContext(siteChromeSource, runtime.context);
-
     assert.equal(runtime.document.documentElement.lang, "es");
-    assert.equal(runtime.document.documentElement.dataset.sowLocalePending, "true");
-    await new Promise(setImmediate);
-    assert.deepEqual(runtime.requests, ["en", "es"]);
-    assert.equal(text.textContent, "Settings");
-    assert.equal(runtime.document.documentElement.dataset.sowLocalePending, "true");
-
-    finishSpanish();
-    await runtime.window.SOW_I18N_READY;
-    await new Promise(setImmediate);
     assert.equal(runtime.document.documentElement.dataset.sowLocalePending, undefined);
-    assert.equal(runtime.storage.get("sow_ui_locale"), "es");
+    await runtime.window.SOW_I18N_READY;
+    assert.equal(runtime.window.SOW_getLocale(), "es");
+    assert.equal(runtime.window.SOW_t("menu.settings"), "Configuración");
+    assert.equal(runtime.storage.get("sow_ui_locale"), "en");
 });
 
-test("public site reveals English when translations fail or time out", async () => {
-    for (const failure of ["es", "en", "timeout"]) {
-        const catalogs = { en: catalog("en", "Settings"), es: catalog("es", "Configuración") };
-        delete catalogs[failure];
-        const timeouts = [];
-        const context =
-            failure === "timeout"
-                ? {
-                      setTimeout: (callback) => {
-                          timeouts.push(callback);
-                          return callback;
-                      },
-                      clearTimeout() {},
-                      fetch: (url, options) =>
-                          new Promise((resolve, reject) => {
-                              options.signal.addEventListener("abort", () =>
-                                  reject(new Error("download timed out")),
-                              );
-                          }),
-                  }
-                : {};
-        const runtime = loadRuntime("", catalogs, {
-            window: { SOW_LOCALE_BEFORE_PAINT: true, SOW_LOCALE_CODES: ["en", "es"] },
-            navigator: { languages: ["es-MX", "en-US"] },
-            context,
-        });
-        const text = { dataset: { i18n: "menu.settings" }, textContent: "Settings" };
-        runtime.document.querySelectorAll = (selector) => (selector === "[data-i18n]" ? [text] : []);
-        vm.runInNewContext(siteChromeSource, runtime.context);
-        if (failure === "timeout") {
-            await new Promise(setImmediate);
-            assert.equal(timeouts.length, 2);
-            timeouts.forEach((callback) => callback());
-        }
-        if (failure === "es") await runtime.window.SOW_I18N_READY;
-        else await assert.rejects(runtime.window.SOW_I18N_READY);
-        await new Promise(setImmediate);
-        assert.equal(runtime.document.documentElement.lang, "en", failure);
-        assert.equal(runtime.document.documentElement.dataset.sowLocalePending, undefined, failure);
-        assert.equal(text.textContent, "Settings", failure);
-        assert.ok(runtime.errors.length > 0, failure);
-    }
+test("failed interactive catalog preserves the published page's language and stored preference", async () => {
+    const runtime = loadRuntime("en", { en: catalog("en", "Settings") }, {
+        window: { SOW_SITE_LOCALE: "es", SOW_LOCALE_BEFORE_PAINT: true, location: { pathname: "/es/" } },
+    });
+    vm.runInNewContext(siteChromeSource, runtime.context);
+    await assert.rejects(runtime.window.SOW_I18N_READY);
+    await new Promise(setImmediate);
+    assert.equal(runtime.document.documentElement.lang, "es");
+    assert.equal(runtime.document.documentElement.dataset.sowLocalePending, undefined);
+    assert.equal(runtime.storage.get("sow_ui_locale"), "en");
 });
 
 test("i18n runtime falls back, caches, persists, and updates direction", async () => {

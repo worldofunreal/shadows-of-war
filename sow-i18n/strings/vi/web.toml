@@ -270,6 +270,7 @@ campaign_chronicles = "CHIẾN DỊCH\nBIÊN NIÊN"
 campaign_unavailable = "Không có chiến dịch."
 
 [heroes]
+oceania = "Châu Đại Dương"
 leader_caesar_name = "Julius Caesar"
 leader_caesar_historical = "Gaius Julius Caesar"
 leader_cleopatra_name = "Cleopatra VII"
@@ -901,6 +902,14 @@ match_message_4 = "Cuộc chiến sẽ kết thúc, giấy tờ có thể đợi
 match_message_5 = "Trận chiến của anh sẽ kết thúc."
 
 [site]
+view_profile = "Xem hồ sơ lãnh đạo"
+all_leaders = "Tất cả lãnh đạo"
+historical_name = "Tên lịch sử"
+civilization = "Nền văn minh"
+region = "Khu vực"
+historical_reference = "Tài liệu lịch sử"
+suggest_language = "Đọc bằng {language}"
+
 landing_build_expand = "Xây dựng. Mở rộng."
 landing_betray = "Phản bội."
 empire_starts = "Đế chế tiếp theo của bạn"

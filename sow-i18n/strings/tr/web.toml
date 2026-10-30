@@ -270,6 +270,7 @@ campaign_chronicles = "SEFER\nGÜNLÜKLERİ"
 campaign_unavailable = "Sefer kullanılamıyor."
 
 [heroes]
+oceania = "Okyanusya"
 leader_caesar_name = "Jül Sezar"
 leader_caesar_historical = "Gaius Julius Caesar"
 leader_cleopatra_name = "Kleopatra VII"
@@ -901,6 +902,14 @@ match_message_4 = "Savaşın sona erecek. Evrak işleri bekleyebilir."
 match_message_5 = "Savaşın sona erecek. Bu kesinlikle planın bir parçasıydı."
 
 [site]
+view_profile = "Lider profilini gör"
+all_leaders = "Tüm liderler"
+historical_name = "Tarihî adı"
+civilization = "Medeniyet"
+region = "Bölge"
+historical_reference = "Tarihî kaynak"
+suggest_language = "{language} dilinde oku"
+
 landing_build_expand = "İnşa et. Genişle."
 landing_betray = "İhanet et."
 empire_starts = "Bir sonraki imparatorluğun"

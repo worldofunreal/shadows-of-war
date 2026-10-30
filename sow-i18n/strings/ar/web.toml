@@ -270,6 +270,7 @@ campaign_chronicles = "حملة\nالسجلات"
 campaign_unavailable = "الحملة غير متاحة."
 
 [heroes]
+oceania = "أوقيانوسيا"
 leader_caesar_name = "يوليوس قيصر"
 leader_caesar_historical = "غايوس يوليوس قيصر"
 leader_cleopatra_name = "كليوباترا السابعة"
@@ -901,6 +902,14 @@ match_message_4 = "ستنتهي معركتك، الأوراق يمكن أن تن
 match_message_5 = "معركتك ستنتهي، هذا بالتأكيد جزء من الخطة"
 
 [site]
+view_profile = "عرض ملف القائد"
+all_leaders = "جميع القادة"
+historical_name = "الاسم التاريخي"
+civilization = "الحضارة"
+region = "المنطقة"
+historical_reference = "مرجع تاريخي"
+suggest_language = "اقرأ باللغة {language}"
+
 landing_build_expand = "ابنِ. توسّع."
 landing_betray = "اخدع."
 empire_starts = "إمبراطوريتك القادمة"
