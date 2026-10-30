@@ -1021,6 +1021,15 @@ impl SowApp {
         ) && let Some(placement) = self.ui.app.hud_state.building_placement.as_mut()
         {
             placement.tile_idx = tile;
+            let footprint = sow_core::building::BuildingFootprint::at(
+                placement.kind,
+                tile % engine.state.map.width,
+                tile / engine.state.map.width,
+            );
+            let cx = footprint.left as f32 + footprint.width as f32 * 0.5;
+            let cy = footprint.top as f32 + footprint.height as f32 * 0.5;
+            self.input.camera_focus_target = Some((cx, cy));
+            self.input.camera_focus_waiting_for_input_release = false;
         }
     }
 
@@ -1076,6 +1085,15 @@ impl SowApp {
             && let Some(placement) = self.ui.app.hud_state.building_placement.as_mut()
         {
             placement.tile_idx = tile;
+            let footprint = sow_core::building::BuildingFootprint::at(
+                placement.kind,
+                tile % map.width,
+                tile / map.width,
+            );
+            let cx = footprint.left as f32 + footprint.width as f32 * 0.5;
+            let cy = footprint.top as f32 + footprint.height as f32 * 0.5;
+            self.input.camera_focus_target = Some((cx, cy));
+            self.input.camera_focus_waiting_for_input_release = false;
         }
     }
 
@@ -1803,16 +1821,17 @@ impl SowApp {
         self.input.target_zoom =
             self.input
                 .target_zoom
-                .max(12.0 * sf)
+                .max(14.0 * sf)
                 .min(crate::camera_zoom_upper_bound(
                     self.input.screen_w,
                     self.input.screen_h,
                 ));
-        self.input.camera_focus_target = Some((
-            (tile % self.sim.map_w) as f32,
-            (tile / self.sim.map_w) as f32,
-        ));
-        self.input.camera_focus_waiting_for_input_release = true;
+        let map_w = self.sim.map_w.max(1);
+        let footprint = sow_core::building::BuildingFootprint::at(kind, tile % map_w, tile / map_w);
+        let cx = footprint.left as f32 + footprint.width as f32 * 0.5;
+        let cy = footprint.top as f32 + footprint.height as f32 * 0.5;
+        self.input.camera_focus_target = Some((cx, cy));
+        self.input.camera_focus_waiting_for_input_release = false;
     }
 
     pub(crate) fn select_warship_build_mode(&mut self) {

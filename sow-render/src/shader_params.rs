@@ -275,7 +275,7 @@ pub static PARAMS: &[ParamDef] = &[
         "territory_opacity",
         "Territory opacity",
         "Territories",
-        1.0,
+        0.5,
         0.0,
         1.0,
         0.01,
@@ -285,7 +285,7 @@ pub static PARAMS: &[ParamDef] = &[
         "blend_mode",
         "Territory blend",
         "Territories",
-        0.0,
+        1.0,
         BLEND_OPTIONS
     ),
     legacy_number!(

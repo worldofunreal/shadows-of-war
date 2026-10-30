@@ -303,6 +303,7 @@
 
 #sow-menu[data-screen="create"] .sow-create__map-panel {
   isolation: isolate;
+  backdrop-filter: none;
 }
 
 #sow-menu[data-screen="create"] .sow-create__map-panel .sow-control-dropdown__menu {

@@ -43,8 +43,8 @@
     {
       "id": "thetford",
       "name": "Thetford",
-      "x": 716,
-      "y": 118,
+      "x": 717,
+      "y": 123,
       "starting_troops": 500,
       "relation": "neutral",
       "can_request_alliance": true,

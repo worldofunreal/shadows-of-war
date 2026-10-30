@@ -58,6 +58,11 @@ export function create(
     // Each run owns its definition; editor changes cannot mutate an active game.
     definition = copy(definition);
     const byId = new Map<string, CampaignStep>(definition.steps.map((step) => [step.id, step]));
+    const allianceOfferFactionIds = new Set(
+        ((roster && roster.factions) || [])
+            .filter((faction) => faction.can_request_alliance === true)
+            .map((faction) => faction.id),
+    );
     const campaignEntry = entry || definition.entry;
     const state: RuntimeState = {
         id: "",
@@ -89,6 +94,7 @@ export function create(
         externallyPaused = false;
     let currentTimeMs = readClock(),
         waitUntilMs: number | null = null,
+        reactionTimerStartedAtMs: number | null = null,
         exchange: Exchange | null = null,
         exchangeSerial = 0;
     function enter(key: string) {
@@ -102,6 +108,7 @@ export function create(
         uiBaseline = { ...ui };
         currentTimeMs = readClock();
         waitUntilMs = byId.get(key)!.wait_before === true ? currentTimeMs + WAIT_MS : null;
+        reactionTimerStartedAtMs = byId.get(key)!.exchange ? null : currentTimeMs;
         if (byId.get(key)!.exchange) beginExchange(byId.get(key)!.exchange, null);
     }
     function matches(when: CampaignRecord) {
@@ -432,6 +439,36 @@ export function create(
                               ]
                             : [];
                     }
+                    if (type === "timer") {
+                        const step = byId.get(state.id)!;
+                        const result =
+                            ["objective", "guide"].includes(step.type) && step.trigger
+                                ? progress()
+                                : null;
+                        const afterMs = reaction.when.after_ms;
+                        const ready =
+                            gameplayActive &&
+                            duringActive &&
+                            result &&
+                            result.current < result.target &&
+                            reactionTimerStartedAtMs !== null &&
+                            Number.isSafeInteger(afterMs) &&
+                            afterMs > 0 &&
+                            currentTimeMs - reactionTimerStartedAtMs >= afterMs;
+                        return ready
+                            ? [
+                                  {
+                                      reaction,
+                                      index,
+                                      target: "",
+                                      isContact: false,
+                                      isFirstContact: false,
+                                      priority: 2,
+                                      instanceId: reaction.id,
+                                  },
+                              ]
+                            : [];
+                    }
                     const receipt =
                         type === "support" &&
                         facts.support_deliveries_by_faction_id &&
@@ -466,6 +503,27 @@ export function create(
                 )[0] || null
         );
     }
+    function nextTimerDelayMs() {
+        if (state.done || exchange || activeReaction || reactionTimerStartedAtMs === null) return null;
+        const step = byId.get(state.id)!;
+        if (!step.trigger || !["objective", "guide"].includes(step.type)) return null;
+        const result = progress();
+        if (result.current >= result.target) return null;
+        const remaining = (definition.reactions || [])
+            .filter(
+                (reaction: CampaignRecord) =>
+                    reaction.when.type === "timer" &&
+                    reaction.during === state.id &&
+                    !state.reactionsShown.includes(reaction.id) &&
+                    Number.isSafeInteger(reaction.when.after_ms) &&
+                    reaction.when.after_ms > 0,
+            )
+            .map(
+                (reaction: CampaignRecord) =>
+                    reactionTimerStartedAtMs! + reaction.when.after_ms - currentTimeMs,
+            );
+        return remaining.length ? Math.max(1, Math.min(...remaining)) : null;
+    }
     function view() {
         currentTimeMs = readClock();
         const step = byId.get(state.id)!;
@@ -483,13 +541,22 @@ export function create(
                           presentation: "dialogue",
                       }
                     : null;
-            const stepPauses = ["scene", "choice", "end"].includes(step!.type) || step!.pause_game === true;
+            const stepPauses =
+                step!.pause_game !== false &&
+                (["scene", "choice", "end"].includes(step!.type) || step!.pause_game === true);
+            const reactionPause =
+                exchange.reactionInstance !== null ? activeReaction?.reaction.pause_game : undefined;
             return {
                 definition,
                 step: modalLine || step,
                 line: modalLine || step,
                 progress: progress(),
-                paused: exchange.phase === "dialogue" || stepPauses,
+                paused:
+                    reactionPause === false
+                        ? false
+                        : reactionPause === true ||
+                          (exchange.phase === "dialogue" && step!.pause_game !== false) ||
+                          stepPauses,
                 paused_action: null,
                 done: false,
                 choices: [],
@@ -535,7 +602,7 @@ export function create(
                 step: response,
                 line: response,
                 progress: progress(),
-                paused: true,
+                paused: reaction.pause_game !== false,
                 paused_action: null,
                 done: false,
                 choices: reaction.choices || [],
@@ -555,7 +622,7 @@ export function create(
             step!.paused_action === "expand_once_then_resume" &&
             Number(facts.wilderness_orders_accepted || 0) > Number(baseline.wilderness_orders_accepted || 0);
         const paused =
-            ["scene", "choice", "end"].includes(step!.type) ||
+            (step!.pause_game !== false && ["scene", "choice", "end"].includes(step!.type)) ||
             (step!.pause_game === true && !expansionStarted);
         return {
             definition,
@@ -570,6 +637,7 @@ export function create(
             unlocks: copy(state.unlocks),
             waiting: waitRemainingMs > 0,
             wait_remaining_ms: waitRemainingMs,
+            timer_remaining_ms: nextTimerDelayMs(),
             pre_defeat_targets: activePreDefeatTargets(),
         };
     }
@@ -684,6 +752,7 @@ export function create(
         exchange = null;
         waitUntilMs = null;
         if (finished.reactionInstance !== null) completeReaction();
+        else reactionTimerStartedAtMs = (currentTimeMs = readClock());
     }
     function dispose() {
         clearExchange();
@@ -790,10 +859,19 @@ export function create(
                 (availableStep!.marker && availableStep!.marker.target) ||
                 (availableStep!.trigger &&
                     (availableStep!.trigger.target || availableStep!.trigger.recipient));
+            const allianceAlreadyHandled =
+                availableStep!.trigger &&
+                availableStep!.trigger.type === "ui" &&
+                availableStep!.trigger.action === "map_menu_open" &&
+                typeof partner === "string" &&
+                allianceOfferFactionIds.has(partner) &&
+                ((facts.alliance_faction_ids || []).includes(partner) ||
+                    (facts.alliance_request_faction_ids || []).includes(partner));
             if (
                 availableStep!.unavailable_next &&
                 ((facts.eliminated_faction_ids || []).includes(partner) ||
-                    (facts.hostile_faction_ids || []).includes(partner))
+                    (facts.hostile_faction_ids || []).includes(partner) ||
+                    allianceAlreadyHandled)
             ) {
                 activeReaction = null;
                 enter(availableStep!.unavailable_next);

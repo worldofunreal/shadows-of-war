@@ -662,7 +662,6 @@ struct RankedQueueEntry {
 enum RankedQueueMessage {
     Search(RankedQueuePlayer),
     Cancel { account_id: String, session_id: u64 },
-    ReleaseBot { account_id: String, match_id: u64 },
 }
 
 async fn ranked_db_post(
@@ -707,7 +706,6 @@ fn consume_ranked_queue_message(pending: &mut Vec<RankedQueueEntry>, message: Ra
         RankedQueueMessage::Cancel { account_id, session_id } => {
             pending.retain(|entry| !(entry.player.account_id == account_id && entry.player.session_id == session_id));
         }
-        RankedQueueMessage::ReleaseBot { .. } => {}
     }
 }
 
@@ -808,10 +806,6 @@ async fn accept_ranked_queue_message(
     db_secret: &str,
 ) {
     match &message {
-        RankedQueueMessage::ReleaseBot { account_id, match_id } => {
-            release_ranked_bot(db_client, db_url, db_secret, account_id, *match_id).await;
-            return;
-        }
         RankedQueueMessage::Cancel { account_id, session_id } => {
             cancel_ranked_search(games, pending, account_id, *session_id, db_client, db_url, db_secret).await;
             return;
@@ -1989,15 +1983,21 @@ async fn main() {
             .route("/profile", axum::routing::get(identity::handle_profile))
             .route("/admin/api/status", axum::routing::get(admin_status))
             .route("/admin/api/analytics", axum::routing::get(admin_analytics))
+            .route(
+                "/admin/api/reload-maps",
+                axum::routing::post(admin_reload_maps),
+            )
             .route("/admin/analytics", axum::routing::get(admin_analytics_page))
             .route("/admin/analytics.js", axum::routing::get(admin_analytics_script))
             .with_state(state);
 
+        // Built-in maps first, then uploaded maps (a file missing from the release is looked up there).
+        let upload_root = map_catalog::upload_root().unwrap_or_else(|| root.clone());
+        let maps_files = tower_http::services::ServeDir::new(root)
+            .precompressed_br()
+            .fallback(tower_http::services::ServeDir::new(upload_root).precompressed_br());
         let app = catalog_route
-            .nest_service(
-                "/maps",
-                tower_http::services::ServeDir::new(root).precompressed_br(),
-            )
+            .nest_service("/maps", maps_files)
             .layer(tower_http::cors::CorsLayer::permissive());
         let http_addr =
             std::env::var("SOW_MAPS_HTTP_LISTEN").unwrap_or_else(|_| "127.0.0.1:25566".to_string());
@@ -3047,6 +3047,28 @@ async fn admin_status(
         "valkey": valkey_info,
         "database": db_stats,
     })))
+}
+
+/// Re-reads the map folders after the editor uploads one. Needs its own token
+/// (`SOW_MAPS_RELOAD_TOKEN`); with no token configured the route always refuses.
+async fn admin_reload_maps(headers: axum::http::HeaderMap) -> axum::response::Response {
+    let token = std::env::var("SOW_MAPS_RELOAD_TOKEN").unwrap_or_default();
+    if !admin_request_authorized(&headers, &token) {
+        log::warn!("[ADMIN] unauthorized /admin/api/reload-maps request");
+        return axum::response::IntoResponse::into_response((
+            axum::http::StatusCode::UNAUTHORIZED,
+            axum::response::Json(serde_json::json!({"error": "Unauthorized"})),
+        ));
+    }
+    match map_catalog::reload() {
+        Ok(count) => axum::response::IntoResponse::into_response(axum::response::Json(
+            serde_json::json!({"entries": count}),
+        )),
+        Err(error) => axum::response::IntoResponse::into_response((
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            axum::response::Json(serde_json::json!({"error": error})),
+        )),
+    }
 }
 
 fn admin_request_authorized(headers: &axum::http::HeaderMap, secret: &str) -> bool {

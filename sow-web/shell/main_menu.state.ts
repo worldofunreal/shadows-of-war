@@ -281,6 +281,14 @@ export interface HudAvatarIdentity {
     kind: "portrait" | "wilderness" | "fallback";
     slug?: string;
     expression?: "happy" | "calm" | "fear" | "angry";
+    transition?: HudAvatarTransition | null;
+}
+
+export interface HudAvatarTransition {
+    id: number;
+    from: "happy" | "calm" | "fear" | "angry";
+    to: "happy" | "calm" | "fear" | "angry";
+    stage: "exit" | "enter";
 }
 
 export interface HudLeaderboardPlayer {
@@ -297,6 +305,7 @@ export interface HudLeaderboardPlayer {
     leader: string;
     avatar: string | null;
     avatar_expression?: "happy" | "calm" | "fear" | "angry" | null;
+    avatar_transition?: HudAvatarTransition | null;
     manual_emote_active?: boolean;
     team: string | null;
     active_emote: { kind: string; pinned: boolean; scripted: boolean; message?: string } | null;
@@ -365,6 +374,12 @@ export interface HudBuildingPlacement {
     tile_idx?: number;
     anchor_x?: number;
     anchor_y?: number;
+    arrows?: {
+        up: [number, number];
+        right: [number, number];
+        down: [number, number];
+        left: [number, number];
+    };
     cost?: number;
     reason?: string | null;
 }
@@ -374,6 +389,28 @@ export interface HudBuildingInProgress {
     level: number;
     remaining_seconds: number;
     progress: number;
+}
+
+export interface HudBuildingProgressItem {
+    tile_idx: number;
+    kind: string;
+    level: number;
+    active_level?: number;
+    remaining_seconds: number;
+    progress: number;
+    screen_x: number;
+    screen_y: number;
+    visible?: boolean;
+}
+
+export interface HudBuildingCelebrationItem {
+    tile_idx: number;
+    kind: string;
+    level: number;
+    screen_x: number;
+    screen_y: number;
+    age_ms: number;
+    visible?: boolean;
 }
 
 export interface HudMapMenu {
@@ -492,6 +529,8 @@ export interface MenuHudPayload {
     selected_building: string | null;
     building_placement: HudBuildingPlacement | null;
     building_in_progress?: HudBuildingInProgress | null;
+    buildings_in_progress?: HudBuildingProgressItem[];
+    building_celebrations?: HudBuildingCelebrationItem[];
     selected_warship_build: boolean;
     selected_nuke: string | null;
     fleet_panel: {
@@ -535,6 +574,7 @@ export interface MenuHudPayload {
     featured_skin: { id: string; name: string; asset_path: string; cost_gems: number } | null;
     player_leader: string | null;
     player_avatar_expression?: HudAvatarIdentity["expression"] | null;
+    player_avatar_transition?: HudAvatarTransition | null;
     player_name: string;
     player_endgame_stats?: {
         kills?: number;

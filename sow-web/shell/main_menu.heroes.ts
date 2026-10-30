@@ -15,6 +15,7 @@ import {
     root,
 } from "./main_menu.core.ts";
 import { activeScreenPanel } from "./main_menu.shell.ts";
+import { syncDropdownScope } from "./sow-dropdown.ts";
 import type { MenuLeader } from "./main_menu.state.ts";
 import { renderLeaderPurchase } from "./main_menu.surfaces.ts";
 
@@ -381,49 +382,6 @@ export function renderHeroInfoModal() {
     );
 }
 
-function resetDropdownPosition(menu: HTMLElement) {
-    menu.style.position = "";
-    menu.style.insetInlineEnd = "";
-    menu.style.left = "";
-    menu.style.right = "";
-    menu.style.top = "";
-    menu.style.width = "";
-    menu.style.maxHeight = "";
-}
-
-function positionDropdown(trigger: Element, menu: HTMLElement) {
-    const rect = trigger.getBoundingClientRect();
-    const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
-    const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
-    const edge = 8;
-    const gap = 6;
-    const maxHeight = Math.min(240, Math.max(40, viewportHeight - edge * 2));
-    const maxWidth = Math.max(0, Math.min(viewportWidth - edge * 2, rect.width));
-    const width = maxWidth;
-    const rtl = document.documentElement && document.documentElement.dir === "rtl";
-    let left = rtl ? rect.right - width : rect.left;
-    left = Math.max(edge, Math.min(left, viewportWidth - width - edge));
-
-    menu.style.position = "fixed";
-    menu.style.insetInlineEnd = "auto";
-    menu.style.left = left + "px";
-    menu.style.right = "auto";
-    menu.style.width = width + "px";
-
-    const desiredHeight = Math.min(menu.scrollHeight, maxHeight);
-    const below = viewportHeight - rect.bottom - gap - edge;
-    const above = rect.top - gap - edge;
-    const opensBelow = below >= desiredHeight || below >= above;
-    const available = opensBelow ? below : above;
-    const menuMaxHeight = Math.max(40, Math.min(maxHeight, available));
-    menu.style.maxHeight = menuMaxHeight + "px";
-
-    const height = Math.min(menu.scrollHeight, menuMaxHeight);
-    let top = opensBelow ? rect.bottom + gap : rect.top - gap - height;
-    top = Math.max(edge, Math.min(top, viewportHeight - height - edge));
-    menu.style.top = top + "px";
-}
-
 export function syncDropdowns(focusTarget?: HTMLElement | null) {
     const scopes = [];
     const panel = activeScreenPanel();
@@ -432,30 +390,7 @@ export function syncDropdowns(focusTarget?: HTMLElement | null) {
         scopes.push(overlay);
     });
     if (!scopes.length) scopes.push(root);
-    for (let s = 0; s < scopes.length; s++) {
-        const dropdowns = scopes[s].querySelectorAll<HTMLElement>("[data-control-dropdown]");
-        for (let i = 0; i < dropdowns.length; i++) {
-            const dropdown = dropdowns[i];
-            const key = dropdown.dataset.dropdownKey;
-            const open = menuUi.dropdownOpenKey === key;
-            const trigger = dropdown.querySelector("[data-role='dropdown-trigger']");
-            const menu = dropdown.querySelector<HTMLElement>("[role='listbox']");
-            if (!trigger || !menu) continue;
-            trigger.setAttribute("aria-expanded", open ? "true" : "false");
-            menu.hidden = !open;
-            if (open) positionDropdown(trigger, menu);
-            else resetDropdownPosition(menu);
-            const input = dropdown.querySelector<HTMLInputElement>("[data-dropdown-value]");
-            const value = input ? input.value : "";
-            const label = dropdown.querySelector("[data-dropdown-label]");
-            const options = dropdown.querySelectorAll<HTMLElement>("[role='option']");
-            for (let j = 0; j < options.length; j++) {
-                const selected = options[j].dataset.dropdownOptionValue === value;
-                options[j].setAttribute("aria-selected", selected ? "true" : "false");
-                if (label && selected) label.textContent = options[j].textContent;
-            }
-        }
-    }
+    for (let s = 0; s < scopes.length; s++) syncDropdownScope(scopes[s], menuUi.dropdownOpenKey);
     if (focusTarget) focusTarget.focus();
 }
 

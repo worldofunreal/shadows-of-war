@@ -13,8 +13,8 @@
   --sow-gold: var(--sow-accent);
   --sow-gold-bright: var(--sow-accent-bright);
   --sow-coin: #f5d898;
-  --sow-panel: linear-gradient(145deg, rgb(25 37 44 / 96%), rgb(10 16 21 / 97%) 72%);
-  --sow-panel-wash: linear-gradient(180deg, rgb(240 169 43 / 8%) 0%, rgb(15 21 25 / 0%) 46%);
+  --sow-panel: var(--sow-tactical-panel);
+  --sow-panel-wash: var(--sow-tactical-panel-wash);
   --sow-line: rgb(211 223 219 / 14%);
   --sow-muted: #9da9ad;
   --sow-surface-shadow: 0 14px 36px rgb(0 0 0 / 38%), inset 0 1px rgb(255 255 255 / 5%);
@@ -1169,6 +1169,9 @@ html[dir="rtl"] #sow-hud-dev-layer {
     border-bottom: 1px solid var(--sow-line);
     border-radius: 14px;
   }
+  .sow-hud__leaderboard.sow-hud__sheet {
+    width: min(540px, calc(100vw - var(--sow-sheet-end) - 16px));
+  }
 }
 
 @media (orientation: landscape) and (max-height: 520px) {
@@ -1181,6 +1184,9 @@ html[dir="rtl"] #sow-hud-dev-layer {
     padding-inline-end: env(safe-area-inset-right, 0px);
     border-inline-end: 0;
     border-radius: 18px 0 0 0;
+  }
+  .sow-hud__leaderboard.sow-hud__sheet {
+    width: min(58vw, 520px);
   }
 }
 
@@ -1334,6 +1340,87 @@ html[dir="rtl"] .sow-hud__switch:checked::after {
   flex: 1 1 100%;
 }
 
+/* Rankings header & search */
+.sow-hud__leaderboard-header {
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+}
+.sow-hud__leaderboard-header .sow-hud__sheet-title {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sow-hud__leaderboard-search-wrap {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.sow-hud__leaderboard-search-icon {
+  position: absolute;
+  inset-inline-start: 10px;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--sow-muted);
+  pointer-events: none;
+  opacity: 0.75;
+}
+.sow-hud__leaderboard-search-icon .sow-hud__inline-icon,
+.sow-hud__leaderboard-search-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.sow-hud__leaderboard-search {
+  width: 100%;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 10px 0 30px;
+  border-radius: 8px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  background: rgb(0 0 0 / 35%);
+  color: #fff;
+  font: 500 13px/1 var(--sow-ui-font, sans-serif);
+  outline: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+html[dir="rtl"] .sow-hud__leaderboard-search {
+  padding: 0 30px 0 10px;
+}
+.sow-hud__leaderboard-search::placeholder {
+  color: var(--sow-muted);
+  opacity: 0.7;
+}
+.sow-hud__leaderboard-search:hover {
+  border-color: rgb(255 255 255 / 20%);
+}
+.sow-hud__leaderboard-search:focus {
+  border-color: color-mix(in srgb, var(--sow-gold) 65%, transparent);
+  background: rgb(0 0 0 / 50%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sow-gold) 35%, transparent);
+}
+.sow-hud__leaderboard-header .sow-hud__sheet-btn {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  font-size: 18px;
+  border-radius: 10px;
+}
+.sow-hud__leaderboard-empty {
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--sow-muted);
+  font: 500 14px/1.4 var(--sow-ui-font, sans-serif);
+  margin: 0;
+}
+
 /* Rankings rows */
 .sow-hud__leaderboard-rows {
   display: flex;
@@ -1347,47 +1434,90 @@ html[dir="rtl"] .sow-hud__switch:checked::after {
   gap: 10px;
   width: 100%;
   min-width: 0;
-  min-height: 60px;
+  min-height: 54px;
   overflow: hidden;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid rgb(255 255 255 / 8%);
   border-radius: 12px;
   background: rgb(255 255 255 / 3%);
-  font-size: 16px;
+  font-size: 15px;
   cursor: pointer;
 }
 .sow-hud__player-card:hover {
   background: rgb(255 255 255 / 5%);
   border-color: color-mix(in srgb, var(--sow-gold) 38%, transparent);
 }
-.sow-hud__player-identity,
-.sow-hud__player-stats {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-}
 .sow-hud__player-identity {
-  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
-}
-.sow-hud__player-stats {
-  flex: 0 0 auto;
-  font-weight: 700;
-}
-.sow-hud__player-identity b {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .sow-hud__player-rank {
   color: var(--sow-muted);
-  font: 700 14px/1 var(--sow-ui-font);
+  font: 700 13px/1 var(--sow-ui-font);
   font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  min-width: 26px;
+}
+.sow-hud__player-avatar-wrap {
+  position: relative;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgb(0 0 0 / 40%);
+  border: 1px solid rgb(255 255 255 / 12%);
+  display: grid;
+  place-items: center;
+}
+.sow-hud__player-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.sow-hud__player-avatar-badge {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.sow-hud__player-name-wrap {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.sow-hud__player-name,
+.sow-hud__player-identity b {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sow-text, #fff);
+}
+.sow-hud__player-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.sow-hud__player-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  font-weight: 700;
 }
 .sow-hud__player-land,
 .sow-hud__player-troops {
-  font-size: 14px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1396,6 +1526,26 @@ html[dir="rtl"] .sow-hud__switch:checked::after {
 }
 .sow-hud__player-troops {
   color: #c0d4be;
+}
+.sow-hud__player-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.sow-hud__player-actions .sow-hud__row-action--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  border-radius: 6px;
+}
+.sow-hud__player-actions .sow-hud__btn-icon {
+  width: 14px;
+  height: 14px;
 }
 .sow-hud__player-card.is-me {
   border-color: color-mix(in srgb, var(--sow-gold) 40%, transparent);
@@ -2487,15 +2637,12 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   min-width: 214px;
   max-width: min(296px, calc(100vw - 24px));
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: color-mix(in srgb, var(--sow-gold) 68%, transparent);
-  border-radius: 12px;
+  border-radius: var(--sow-tactical-surface-radius);
   background: var(--sow-panel-wash), var(--sow-panel);
-  box-shadow:
-    0 14px 30px rgba(0, 0, 0, 0.62),
-    0 0 0 1px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.09);
-  backdrop-filter: blur(10px);
+  box-shadow: var(--sow-tactical-card-shadow);
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
   color: #f8f3e8;
   pointer-events: auto;
   user-select: none;
@@ -2937,8 +3084,61 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 }
 
 /* ==========================================================================
-   Building Placement Panel
+   Building Placement Overlay & Panel
    ========================================================================== */
+
+.sow-hud__placement-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 55;
+}
+
+.sow-hud__placement-overlay.hidden {
+  display: none !important;
+}
+
+.sow-hud__placement-arrow-btn {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-top-color: color-mix(in srgb, var(--sow-gold) 65%, transparent);
+  background: var(--sow-panel-wash), var(--sow-panel);
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  color: #f8f3e8;
+  font-size: 13px;
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  transition:
+    transform 100ms ease,
+    background-color 100ms ease,
+    border-color 100ms ease,
+    color 100ms ease;
+}
+
+.sow-hud__placement-arrow-btn:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+  background: rgba(255, 255, 255, 0.15), var(--sow-panel);
+  border-color: rgba(255, 215, 0, 0.6);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.35);
+}
+
+.sow-hud__placement-arrow-btn:active {
+  transform: translate(-50%, -50%) scale(0.95);
+}
 
 .sow-hud__placement-panel {
   position: absolute;
@@ -2946,51 +3146,20 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-width: 250px;
-  max-width: min(320px, calc(100vw - 24px));
+  min-width: 220px;
+  max-width: min(280px, calc(100vw - 24px));
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: color-mix(in srgb, var(--sow-gold) 68%, transparent);
-  border-radius: 12px;
+  border-radius: var(--sow-tactical-surface-radius);
   background: var(--sow-panel-wash), var(--sow-panel);
-  box-shadow:
-    0 14px 30px rgba(0, 0, 0, 0.62),
-    0 0 0 1px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.09);
-  backdrop-filter: blur(10px);
+  box-shadow: var(--sow-tactical-card-shadow);
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
   color: #f8f3e8;
   pointer-events: auto;
   user-select: none;
   -webkit-user-select: none;
-  z-index: 55;
   animation: sow-building-card-in 160ms cubic-bezier(0.2, 1.15, 0.35, 1) both;
-}
-
-.sow-hud__placement-panel.hidden {
-  display: none !important;
-}
-
-.sow-hud__placement-panel-caret {
-  position: absolute;
-  left: calc(50% + var(--caret-offset-x, 0px));
-  width: 10px;
-  height: 10px;
-  background: rgb(18, 25, 30);
-  pointer-events: none;
-}
-
-.sow-hud__placement-panel[data-placement="below"] .sow-hud__placement-panel-caret {
-  top: -6px;
-  border-top: 1px solid color-mix(in srgb, var(--sow-gold) 68%, transparent);
-  border-left: 1px solid color-mix(in srgb, var(--sow-gold) 68%, transparent);
-  transform: translateX(-50%) rotate(45deg);
-}
-
-.sow-hud__placement-panel[data-placement="above"] .sow-hud__placement-panel-caret {
-  bottom: -6px;
-  border-right: 1px solid rgba(255, 255, 255, 0.16);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
-  transform: translateX(-50%) rotate(45deg);
 }
 
 .sow-hud__placement-panel-head {
@@ -3064,12 +3233,13 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 }
 
 .sow-hud__placement-action-btn {
+  flex: 1 1 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 6px 12px;
-  height: 34px;
+  gap: 6px;
+  padding: 7px 12px;
+  height: 36px;
   border-radius: 8px;
   font-size: 12px;
   font-weight: 700;
@@ -3094,7 +3264,6 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   background: rgba(220, 38, 38, 0.18);
   border-color: rgba(239, 68, 68, 0.4);
   color: #fca5a5;
-  flex: 0 0 auto;
 }
 
 .sow-hud__placement-action-btn.is-cancel:hover {
@@ -3107,7 +3276,6 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   background: linear-gradient(180deg, rgba(34, 197, 94, 0.35) 0%, rgba(21, 128, 61, 0.45) 100%);
   border-color: rgba(74, 222, 128, 0.55);
   color: #86efac;
-  flex: 1 1 auto;
 }
 
 .sow-hud__placement-action-btn.is-confirm:hover:not(:disabled) {
@@ -3130,52 +3298,264 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   line-height: 1;
 }
 
-.sow-hud__placement-nudge-cluster {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px;
-  background: rgba(0, 0, 0, 0.38);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-}
-
-.sow-hud__placement-nudge-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #cbd5e1;
-  font-size: 10px;
-  cursor: pointer;
-  transition:
-    background-color 100ms ease,
-    color 100ms ease;
-  user-select: none;
-}
-
-.sow-hud__placement-nudge-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.22);
-}
-
-.sow-hud__placement-nudge-btn:active {
-  background: rgba(255, 255, 255, 0.24);
-  color: #fff;
-}
-
 @media (max-width: 720px) {
   .sow-hud__placement-panel {
-    min-width: 236px;
+    min-width: 210px;
     padding: 8px 10px;
     gap: 6px;
   }
+}
+
+/* ==========================================================================
+   World Building Progress Overlay & Floating Bars
+   ========================================================================== */
+
+.sow-hud__world-progress-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 45;
+}
+
+.sow-hud__world-building-bar {
+  position: absolute;
+  transform: translate(-50%, 0);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  min-width: 110px;
+  max-width: 140px;
+  height: 28px;
+  box-sizing: border-box;
+  background: rgba(14, 20, 25, 0.92);
+  border: 1px solid rgba(218, 165, 32, 0.55);
+  border-top-color: rgba(255, 215, 0, 0.75);
+  border-radius: 6px;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.65),
+    0 0 8px rgba(218, 165, 32, 0.25);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  will-change: transform, left, top;
+}
+
+.sow-hud__world-building-thumb {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.sow-hud__world-building-art {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.sow-hud__world-building-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 18px;
+  padding: 0 6px;
+  overflow: hidden;
+  border: 1px solid rgba(240, 169, 43, 0.35);
+  border-radius: 4px;
+  background: rgba(8, 12, 15, 0.88);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.sow-hud__world-building-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0%;
+  background: linear-gradient(90deg, #d88310 0%, #f5ab29 55%, #ffe082 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 0 8px rgba(240, 169, 43, 0.4);
+  transition: width 120ms linear;
+}
+
+.sow-hud__world-building-fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.35) 50%, transparent 100%);
+  animation: sow-shimmer 1.8s infinite linear;
+}
+
+@keyframes sow-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.sow-hud__world-building-time {
+  position: relative;
+  z-index: 1;
+  color: #fff8e6;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.95),
+    0 0 5px rgba(0, 0, 0, 0.8);
+}
+
+/* ==========================================================================
+   World Building Celebration Overlay (AAA VFX)
+   ========================================================================== */
+
+.sow-hud__world-celebrations-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 50;
+}
+
+.sow-hud__world-celebration {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+
+.sow-hud__celebration-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 70px;
+  height: 70px;
+  margin-top: -35px;
+  margin-left: -35px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 215, 0, 0.9);
+  box-shadow:
+    0 0 16px rgba(255, 215, 0, 0.8),
+    inset 0 0 12px rgba(255, 215, 0, 0.5);
+  animation: sow-celebration-ring 900ms cubic-bezier(0.1, 0.7, 0.2, 1) forwards;
+}
+
+@keyframes sow-celebration-ring {
+  0% {
+    transform: scale(0.2);
+    opacity: 1;
+  }
+  60% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.sow-hud__celebration-sparkle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: #fff5cc;
+  box-shadow:
+    0 0 8px #ffcf5c,
+    0 0 14px #ffa726;
+  animation: sow-celebration-sparkle 850ms cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+  animation-delay: var(--delay, 0ms);
+}
+
+@keyframes sow-celebration-sparkle {
+  0% {
+    transform: translate(0, 0) scale(1.4) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(0.2) rotate(180deg);
+    opacity: 0;
+  }
+}
+
+.sow-hud__celebration-badge {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: rgba(14, 20, 25, 0.95);
+  border: 1px solid #ffd700;
+  border-radius: 12px;
+  box-shadow:
+    0 0 14px rgba(255, 215, 0, 0.6),
+    0 4px 10px rgba(0, 0, 0, 0.8);
+  animation: sow-celebration-badge 1100ms cubic-bezier(0.2, 0.85, 0.35, 1.2) forwards;
+  white-space: nowrap;
+}
+
+@keyframes sow-celebration-badge {
+  0% {
+    transform: translate(-50%, -10px) scale(0.5);
+    opacity: 0;
+  }
+  25% {
+    transform: translate(-50%, -24px) scale(1.1);
+    opacity: 1;
+  }
+  65% {
+    transform: translate(-50%, -28px) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -38px) scale(0.9);
+    opacity: 0;
+  }
+}
+
+.sow-hud__celebration-badge-thumb {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+
+.sow-hud__celebration-badge-art {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.sow-hud__celebration-badge-text {
+  color: #ffd700;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 @keyframes sow-ring-slot-in {

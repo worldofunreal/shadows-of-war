@@ -121,8 +121,8 @@ fn classify_rgba_into(img: &RgbaImage, terrain: &mut Terrain) {
 pub fn mobile_safe_dims(src_w: u32, src_h: u32) -> (u32, u32) {
     let w = src_w.max(1) as f64;
     let h = src_h.max(1) as f64;
-    let pixel_factor = (maps::MAX_MAP_PIXELS as f64 / (w * h)).sqrt();
-    let axis_factor = (maps::MAX_MAP_AXIS as f64 / w).min(maps::MAX_MAP_AXIS as f64 / h);
+    let pixel_factor = (maps::MOBILE_SAFE_MAX_PIXELS as f64 / (w * h)).sqrt();
+    let axis_factor = (maps::MOBILE_SAFE_MAX_AXIS as f64 / w).min(maps::MOBILE_SAFE_MAX_AXIS as f64 / h);
     let factor = pixel_factor.min(axis_factor).min(1.0);
     let dst_w = maps::align_map_dim((w * factor).floor() as u32);
     let dst_h = maps::align_map_dim((h * factor).floor() as u32);
@@ -414,8 +414,8 @@ mod tests {
     #[test]
     fn mobile_safe_dims_preserve_aspect_and_budget() {
         let (w, h) = mobile_safe_dims(2800, 1448);
-        assert!(w <= maps::MAX_MAP_AXIS && h <= maps::MAX_MAP_AXIS);
-        assert!((w as u64) * (h as u64) <= maps::MAX_MAP_PIXELS as u64);
+        assert!(w <= maps::MOBILE_SAFE_MAX_AXIS && h <= maps::MOBILE_SAFE_MAX_AXIS);
+        assert!((w as u64) * (h as u64) <= maps::MOBILE_SAFE_MAX_PIXELS as u64);
         let src_ar = 2800.0 / 1448.0;
         let dst_ar = w as f64 / h as f64;
         assert!((src_ar - dst_ar).abs() < 0.05);

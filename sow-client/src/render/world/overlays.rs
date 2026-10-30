@@ -318,10 +318,16 @@ fn render_buildings(
             && active_level > previous
         {
             ui.building_upgrade_flashes.insert(building.tile_idx, now);
+            if building.owner_id == my_id {
+                ui.building_celebrations
+                    .insert(building.tile_idx, (building.kind, active_level, now));
+            }
         }
     }
     ui.building_upgrade_flashes
         .retain(|_, started| now.duration_since(*started) < Duration::from_millis(300));
+    ui.building_celebrations
+        .retain(|_, (_, _, started)| now.duration_since(*started) < Duration::from_millis(1600));
     let building_upgrade_flashes = std::mem::take(&mut ui.building_upgrade_flashes);
     let reduced_motion = ui.app.settings_state.reduced_motion;
     let buildings = cached_buildings(ui, snapshot, sim.map_w, lod, my_id, sim.config.tick_rate_ms);
@@ -352,26 +358,6 @@ fn render_buildings(
             continue;
         }
         let marker_extent = marker_size[0].max(marker_size[1]);
-
-        if let Some(status) = &building.status {
-            let center_px = [center[0] * sf, center[1] * sf];
-            let radius = marker_extent * sf * 0.58;
-            text.push_ring(
-                center_px,
-                radius,
-                [0.0, 0.0, 0.0, 0.65],
-                (2.0 * sf).max(1.0),
-            );
-            if status.progress > 0.0 {
-                text.push_arc(
-                    center_px,
-                    radius,
-                    status.progress,
-                    status.color,
-                    (2.5 * sf).max(1.0),
-                );
-            }
-        }
 
         let alpha = if building.under_construction {
             0.5
@@ -597,6 +583,22 @@ fn building_sprite_size(marker_size: [f32; 2], sf: f32, level: u8) -> [f32; 2] {
         .copied()
         .unwrap_or(1.5);
     marker_size.map(|size| size * sf * scale)
+}
+
+pub(crate) fn building_screen_anchor_bottom(
+    bx: f32,
+    by: f32,
+    kind: BuildingKind,
+    level: u8,
+    input: &InputState,
+    sf: f32,
+) -> [f32; 2] {
+    let center = world_to_screen(bx, by, input, sf);
+    let zoom_scaled = input.camera_zoom * sf;
+    let marker_size = building_footprint_marker_size(kind, zoom_scaled, BUILDING_MIN_MARKER_SIZE);
+    let building_size = building_sprite_size(marker_size, sf, level.max(1));
+    let bottom_y = center[1] + (building_size[1] * 0.5) / sf + 6.0;
+    [center[0], bottom_y]
 }
 
 fn render_building_selection_focus(

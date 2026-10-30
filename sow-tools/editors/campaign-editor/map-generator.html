@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SOW — Map Generator</title>
+    <link rel="stylesheet" href="/fonts/fonts.css" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b1114;
+        --panel: #111a1d;
+        --line: #2d3b3c;
+        --text: #e8eeea;
+        --muted: #98a7a5;
+        --accent: #e9bb64;
+        --warn: #ff7770;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          13px/1.45 var(--sow-ui-font, system-ui),
+          Segoe UI,
+          Roboto,
+          sans-serif;
+      }
+      body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        overflow: hidden;
+      }
+      main {
+        overflow: auto;
+        padding: 12px;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        cursor: crosshair;
+        border: 1px solid var(--line);
+        touch-action: none;
+      }
+      aside {
+        border-left: 1px solid var(--line);
+        background: var(--panel);
+        padding: 14px;
+        overflow: auto;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 15px;
+      }
+      label {
+        display: block;
+        margin: 10px 0 4px;
+        color: var(--muted);
+      }
+      input,
+      select {
+        width: 100%;
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--bg);
+        color: var(--text);
+        font: inherit;
+      }
+      button {
+        margin-top: 14px;
+        width: 100%;
+        padding: 8px;
+        border: 1px solid var(--accent);
+        border-radius: 4px;
+        background: transparent;
+        color: var(--accent);
+        font: inherit;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      .hint {
+        color: var(--muted);
+        margin-top: 8px;
+      }
+      .status {
+        margin-top: 14px;
+        min-height: 2.8em;
+        white-space: pre-wrap;
+      }
+      .status.error {
+        color: var(--warn);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <canvas id="map" aria-label="World map reference. Drag to select the area to generate."></canvas>
+    </main>
+    <aside>
+      <h1>Generate map</h1>
+      <div class="hint">Drag on the world map to choose the area.</div>
+      <div id="crop-label" class="hint">No area selected.</div>
+      <label for="name">Map name (lowercase, letters, digits, _)</label>
+      <input id="name" placeholder="for example: north_coast" autocomplete="off" />
+      <label for="size">Size (longest side in tiles)</label>
+      <select id="size">
+        <option value="small">Small (800)</option>
+        <option value="regular">Regular (1,200)</option>
+        <option value="big">Big (1,600)</option>
+        <option value="huge" selected>Huge (2,600, max)</option>
+      </select>
+      <label for="frequency">Rotation weight (0 = out of rotation)</label>
+      <input id="frequency" type="number" min="0" max="1000" value="1" />
+      <button id="generate" disabled>Generate locally</button>
+      <button id="upload" disabled>Upload to server</button>
+      <div id="status" class="status" role="status"></div>
+    </aside>
+    <script src="map-generator.ts"></script>
+  </body>
+</html>

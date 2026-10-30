@@ -794,7 +794,9 @@ test("campaign studio authors ordered Roman exchanges and previews the active sp
   const start = campaignEditor.indexOf("function encounterGates(");
   const end = campaignEditor.indexOf("const addCampaignProvocation", start);
   assert.ok(start >= 0 && end > start, "Campaign Studio uses its encounter authoring controls");
-  const author = vm.runInNewContext(campaignEditor.slice(start, end) + "\naddEncounterReaction;", {
+  const author = vm.runInNewContext(
+    campaignEditor.slice(start, end) + "\n({ addEncounterReaction, addTimedReaction });",
+    {
     state,
     window: { SOWCampaign: { EXCHANGE_DEFAULT_REPLY_DELAY_MS: 700 } },
     storyKey: (id) => "tutorial." + id,
@@ -809,9 +811,11 @@ test("campaign studio authors ordered Roman exchanges and previews the active sp
       dirty++;
     },
     renderSettings() {},
-  });
-  for (let i = 0; i < targets.length; i++) author("contact");
-  for (let i = 0; i < targets.length; i++) author("pre_defeat");
+    },
+  );
+  for (let i = 0; i < targets.length; i++) author.addEncounterReaction("contact");
+  for (let i = 0; i < targets.length; i++) author.addEncounterReaction("pre_defeat");
+  author.addTimedReaction();
 
   const contacts = state.definition.reactions.filter((reaction) => reaction.when.type === "contact");
   const finalWords = state.definition.reactions.filter((reaction) => reaction.when.type === "pre_defeat");
@@ -836,7 +840,13 @@ test("campaign studio authors ordered Roman exchanges and previews the active sp
     assert.equal(reaction.during, "gate_" + reaction.when.target);
     assert.equal(reaction.exchange.length, 1, "last words do not add an automatic Boudica reply");
   }
-  assert.equal(dirty, 6);
+  const timer = state.definition.reactions.find((reaction) => reaction.when.type === "timer");
+  assert.equal(timer.when.after_ms, 5000);
+  assert.equal(timer.during, "gate_colonia_veterans");
+  assert.equal(timer.presentation, "exchange");
+  assert.equal(timer.exchange[0].speaker, "boudica");
+  assert.equal(timer.exchange[0].presentation, "emote");
+  assert.equal(dirty, 7);
   assert.match(campaignEditor, /Short emote bubble[\s\S]*Dialogue modal[\s\S]*Pause after line \(ms\)/);
   assert.match(
     campaignEditor,
@@ -846,6 +856,9 @@ test("campaign studio authors ordered Roman exchanges and previews the active sp
     campaignEditor,
     /addPreDefeatExchange\.addEventListener\("click",\s*function\s*\(\)\s*\{\s*addEncounterReaction\("pre_defeat"\);\s*\}\)/,
   );
+  assert.match(campaignEditor, /Add timed emote response/);
+  assert.match(campaignEditor, /After \(ms\)[\s\S]*During active objective/);
+  assert.match(campaignEditor, /renderExchangeLines\(card, reaction\.exchange, reaction\.id, "Exchange line", isTimer\)/);
   assert.match(campaignEditor, /window\.SOWCampaignView\.mount/);
 
   const marker = {

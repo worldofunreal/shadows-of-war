@@ -6,7 +6,7 @@ use crate::render::motion::{
     EmoteMotion, emote_motion, smoothstep, spring_overshoot, troop_transfer_motion,
 };
 use crate::theme::dev_config::DevConfig;
-use sow_core::emote::{ActiveEmote, AvatarExpression, EMOTE_DURATION_SECS, EMOTES};
+use sow_core::emote::{ActiveEmote, AvatarExpression, EMOTE_DURATION_SECS, EMOTES, EmoteKind};
 use sow_core::player::{Leader, PlayerType};
 use sow_core::protocol::{PlayerSnapshot, SimSnapshot};
 use sow_render::nameplate::{
@@ -56,6 +56,11 @@ const STATUS_BADGE_EXIT_FADE_START: f32 = 0.34;
 const NAMEPLATE_RENDER_BADGE_CAPACITY: usize = NAMEPLATE_MAX_BADGES + STATUS_BADGE_COUNT;
 const TROOP_TRANSFER_TEXT_DELAY: f32 = 0.08;
 const TROOP_TRANSFER_GLYPH_DELAY: f32 = 0.035;
+const AVATAR_TRANSITION_EXIT_SECS: f32 = 0.15;
+const AVATAR_TRANSITION_ENTER_SECS: f32 = 0.5;
+const AVATAR_TRANSITION_CELEBRATE_SECS: f32 = 0.65;
+const CRITICAL_FORCE_ENTER_RATIO: f64 = 0.05;
+const CRITICAL_FORCE_EXIT_RATIO: f64 = 0.10;
 
 #[derive(Clone, Debug)]
 pub(crate) struct NameplateVisualState {
@@ -114,8 +119,13 @@ pub(crate) struct NameplateSystem {
     badge_animations: HashMap<u16, PlayerStatusBadgeAnimations>,
     emote_tick: Option<u64>,
     campaign_base_expressions: HashMap<u16, AvatarExpression>,
+    campaign_base_expressions_dirty: bool,
+    avatar_base_tick: Option<u64>,
+    low_force_players: HashSet<u16>,
     avatar_bases: HashMap<u16, AvatarExpression>,
-    avatar_presentations: HashMap<u16, (AvatarExpression, bool)>,
+    avatar_transitions: HashMap<u16, AvatarTransition>,
+    next_avatar_transition_id: u64,
+    avatar_presentations: HashMap<u16, AvatarPresentation>,
     pub(crate) avatar_revision: u64,
     emote_texts: [String; 4],
     prepared_emotes: [sow_render::text::PreparedText; 4],
@@ -194,7 +204,91 @@ pub(crate) struct AvatarPlan {
     radius: f32,
     content: AvatarContent,
     scale: [f32; 2],
+    alpha: f32,
     blend: Option<([f32; 4], f32)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AvatarTransitionStage {
+    Exit,
+    Enter,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct AvatarTransitionPresentation {
+    pub id: u64,
+    pub from: AvatarExpression,
+    pub to: AvatarExpression,
+    pub stage: AvatarTransitionStage,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct AvatarPresentation {
+    pub expression: AvatarExpression,
+    pub manual_emote_active: bool,
+    pub transition: Option<AvatarTransitionPresentation>,
+}
+
+#[derive(Clone, Copy)]
+struct AvatarTransition {
+    id: u64,
+    from: AvatarExpression,
+    to: AvatarExpression,
+    stage: AvatarTransitionStage,
+    stage_started_at: Instant,
+}
+
+impl AvatarTransition {
+    fn duration(self) -> Duration {
+        Duration::from_secs_f32(match self.stage {
+            AvatarTransitionStage::Exit => AVATAR_TRANSITION_EXIT_SECS,
+            AvatarTransitionStage::Enter => avatar_transition_enter_secs(self.to),
+        })
+    }
+
+    fn progress(self, now: Instant) -> f32 {
+        (now.saturating_duration_since(self.stage_started_at).as_secs_f32()
+            / self.duration().as_secs_f32().max(0.001))
+        .clamp(0.0, 1.0)
+    }
+
+    fn presentation(self) -> AvatarTransitionPresentation {
+        AvatarTransitionPresentation {
+            id: self.id,
+            from: self.from,
+            to: self.to,
+            stage: self.stage,
+        }
+    }
+}
+
+fn avatar_transition_enter_secs(expression: AvatarExpression) -> f32 {
+    if expression == AvatarExpression::Happy {
+        AVATAR_TRANSITION_CELEBRATE_SECS
+    } else {
+        AVATAR_TRANSITION_ENTER_SECS
+    }
+}
+
+fn avatar_transition_emote(expression: AvatarExpression) -> EmoteKind {
+    match expression {
+        AvatarExpression::Happy => EmoteKind::Celebrate,
+        AvatarExpression::Fear => EmoteKind::Help,
+        AvatarExpression::Angry => EmoteKind::Threat,
+        AvatarExpression::Calm => EmoteKind::Greet,
+    }
+}
+
+fn critical_force(troops: f64, capacity: f64, was_critical: bool) -> bool {
+    if !troops.is_finite() || !capacity.is_finite() || capacity <= 0.0 {
+        return false;
+    }
+    let ratio = troops.max(0.0) / capacity;
+    if was_critical {
+        ratio < CRITICAL_FORCE_EXIT_RATIO
+    } else {
+        ratio <= CRITICAL_FORCE_ENTER_RATIO
+    }
 }
 
 impl AvatarPlan {
@@ -207,7 +301,7 @@ impl AvatarPlan {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum AvatarContent {
     Sprite([f32; 4]),
     None,
@@ -611,7 +705,15 @@ impl NameplateSystem {
         self.last_land_cache_build.take()
     }
 
-    fn observe_avatar_bases(&mut self, snapshot: &SimSnapshot) {
+    fn observe_avatar_bases(
+        &mut self,
+        snapshot: &SimSnapshot,
+        now: Instant,
+        reduced_motion: bool,
+    ) {
+        if self.avatar_base_tick == Some(snapshot.tick) && !self.campaign_base_expressions_dirty {
+            return;
+        }
         let combatants: HashSet<_> = snapshot
             .attacks
             .iter()
@@ -624,30 +726,132 @@ impl NameplateSystem {
             })
             .flat_map(|attack| [attack.owner_id, attack.target_owner])
             .collect();
-        self.avatar_bases = snapshot
-            .players
-            .iter()
-            .map(|player| {
-                (
-                    player.id,
-                    self.campaign_base_expressions
-                        .get(&player.id)
-                        .copied()
-                        .unwrap_or(if combatants.contains(&player.id) {
-                            AvatarExpression::Angry
-                        } else {
-                            AvatarExpression::Calm
-                        }),
-                )
-            })
-            .collect();
+        let mut low_force_players = HashSet::new();
+        for player in snapshot.players.iter().filter(|player| player.alive) {
+            let was_critical = self.low_force_players.contains(&player.id);
+            if critical_force(player.troops, player.max_troops, was_critical) {
+                low_force_players.insert(player.id);
+            }
+        }
+
+        let mut avatar_bases = HashMap::with_capacity(snapshot.players.len());
+        for player in &snapshot.players {
+            let expression = self
+                .campaign_base_expressions
+                .get(&player.id)
+                .copied()
+                .unwrap_or(if combatants.contains(&player.id) {
+                    AvatarExpression::Angry
+                } else if low_force_players.contains(&player.id) {
+                    AvatarExpression::Fear
+                } else {
+                    AvatarExpression::Calm
+                });
+            if let Some(previous) = self.avatar_bases.get(&player.id).copied()
+                && previous != expression
+            {
+                self.request_avatar_transition(player.id, previous, expression, now, reduced_motion);
+            }
+            avatar_bases.insert(player.id, expression);
+        }
+        self.avatar_bases = avatar_bases;
+        self.low_force_players = low_force_players;
+        self.avatar_base_tick = Some(snapshot.tick);
+        self.campaign_base_expressions_dirty = false;
     }
 
     pub(crate) fn set_campaign_base_expressions(
         &mut self,
         expressions: HashMap<u16, AvatarExpression>,
     ) {
-        self.campaign_base_expressions = expressions;
+        if self.campaign_base_expressions != expressions {
+            self.campaign_base_expressions = expressions;
+            self.campaign_base_expressions_dirty = true;
+        }
+    }
+
+    fn request_avatar_transition(
+        &mut self,
+        player_id: u16,
+        from: AvatarExpression,
+        to: AvatarExpression,
+        now: Instant,
+        reduced_motion: bool,
+    ) {
+        if reduced_motion || from == to {
+            self.avatar_transitions.remove(&player_id);
+            return;
+        }
+        if self.avatar_transitions.contains_key(&player_id) {
+            let cancel = {
+                let transition = self.avatar_transitions.get_mut(&player_id).unwrap();
+                match transition.stage {
+                    AvatarTransitionStage::Exit if to == transition.from => true,
+                    AvatarTransitionStage::Exit => {
+                        transition.to = to;
+                        false
+                    }
+                    AvatarTransitionStage::Enter if to != transition.to => {
+                        let from = transition.to;
+                        *transition = AvatarTransition {
+                            id: self.next_avatar_transition_id,
+                            from,
+                            to,
+                            stage: AvatarTransitionStage::Exit,
+                            stage_started_at: now,
+                        };
+                        self.next_avatar_transition_id = self.next_avatar_transition_id.wrapping_add(1);
+                        false
+                    }
+                    AvatarTransitionStage::Enter => false,
+                }
+            };
+            if cancel {
+                self.avatar_transitions.remove(&player_id);
+            }
+            return;
+        }
+        self.avatar_transitions.insert(
+            player_id,
+            AvatarTransition {
+                id: self.next_avatar_transition_id,
+                from,
+                to,
+                stage: AvatarTransitionStage::Exit,
+                stage_started_at: now,
+            },
+        );
+        self.next_avatar_transition_id = self.next_avatar_transition_id.wrapping_add(1);
+    }
+
+    fn advance_avatar_transitions(&mut self, snapshot: &SimSnapshot, now: Instant, reduced_motion: bool) {
+        if reduced_motion {
+            self.avatar_transitions.clear();
+            return;
+        }
+        let alive: HashSet<_> = snapshot
+            .players
+            .iter()
+            .filter(|player| player.alive)
+            .map(|player| player.id)
+            .collect();
+        self.avatar_transitions.retain(|player_id, transition| {
+            if !alive.contains(player_id) {
+                return false;
+            }
+            if now.saturating_duration_since(transition.stage_started_at) < transition.duration() {
+                return true;
+            }
+            match transition.stage {
+                AvatarTransitionStage::Exit => {
+                    transition.stage = AvatarTransitionStage::Enter;
+                    transition.stage_started_at =
+                        transition.stage_started_at + Duration::from_secs_f32(AVATAR_TRANSITION_EXIT_SECS);
+                    now.saturating_duration_since(transition.stage_started_at) < transition.duration()
+                }
+                AvatarTransitionStage::Enter => false,
+            }
+        });
     }
 
     pub(crate) fn manual_emote_active(
@@ -667,17 +871,21 @@ impl NameplateSystem {
             .get(&player.id)
             .is_some_and(|visual| visual.event.event_id == event.event_id)
         {
-            self.avatar_presentation(player.id).1
+            self.avatar_presentation(player.id).manual_emote_active
         } else {
             true
         }
     }
 
-    pub(crate) fn avatar_presentation(&self, player_id: u16) -> (AvatarExpression, bool) {
+    pub(crate) fn avatar_presentation(&self, player_id: u16) -> AvatarPresentation {
         self.avatar_presentations
             .get(&player_id)
             .copied()
-            .unwrap_or((AvatarExpression::Calm, false))
+            .unwrap_or(AvatarPresentation {
+                expression: AvatarExpression::Calm,
+                manual_emote_active: false,
+                transition: None,
+            })
     }
 
     pub(crate) fn set_campaign_emote(
@@ -872,20 +1080,36 @@ impl NameplateSystem {
                     .get(&player.id)
                     .copied()
                     .unwrap_or(AvatarExpression::Calm);
-                let (expression, manual) =
-                    self.emote_visuals
-                        .get(&player.id)
-                        .map_or((idle, false), |visual| {
-                            let age = visual.age(now);
-                            let (from, to, mix) = visual.expressions(age, now, idle);
-                            (
-                                if mix < 0.5 { from } else { to },
-                                !visual.event.scripted
-                                    && visual.release_at.is_none()
-                                    && (visual.event.pinned || age < EMOTE_DURATION_SECS),
-                            )
-                        });
-                (player.id, (expression, manual))
+                let emote = self.emote_visuals.get(&player.id).copied();
+                let (expression, manual) = emote.map_or((idle, false), |visual| {
+                    let age = visual.age(now);
+                    let (from, to, mix) = visual.expressions(age, now, idle);
+                    (
+                        if mix < 0.5 { from } else { to },
+                        !visual.event.scripted
+                            && visual.release_at.is_none()
+                            && (visual.event.pinned || age < EMOTE_DURATION_SECS),
+                    )
+                });
+                let transition = if emote.is_none() {
+                    self.avatar_transitions.get(&player.id).map(|transition| {
+                        transition.presentation()
+                    })
+                } else {
+                    None
+                };
+                let expression = transition.map_or(expression, |transition| match transition.stage {
+                    AvatarTransitionStage::Exit => transition.from,
+                    AvatarTransitionStage::Enter => transition.to,
+                });
+                (
+                    player.id,
+                    AvatarPresentation {
+                        expression,
+                        manual_emote_active: manual,
+                        transition,
+                    },
+                )
             })
             .collect();
         if self.avatar_presentations != presentations {
@@ -1016,9 +1240,10 @@ pub(super) fn render_nameplates(
         system.badge_animations.clear();
     }
     if !tutorial_active {
-        system.campaign_base_expressions.clear();
+        system.set_campaign_base_expressions(HashMap::new());
     }
-    system.observe_avatar_bases(snapshot);
+    system.observe_avatar_bases(snapshot, now, reduced_motion);
+    system.advance_avatar_transitions(snapshot, now, reduced_motion);
     system.observe_emotes(
         snapshot,
         (sim.config.tick_rate_ms / 1000.0).max(0.001),
@@ -1349,6 +1574,17 @@ pub(super) fn render_nameplates(
                             decoration_budget -= 1;
                         }
                     }
+                } else if let Some(avatar) = &mut full.avatar
+                    && let Some(transition) = system.avatar_transitions.get(&player.id).copied()
+                {
+                    apply_base_avatar_transition(
+                        text,
+                        avatar,
+                        player,
+                        campaign_avatar_slots,
+                        transition,
+                        now,
+                    );
                 }
                 paint_prepared_nameplate(text, state, full);
             }
@@ -1776,36 +2012,38 @@ mod emote_tests {
             front_cx: 0.0,
             front_cy: 0.0,
         });
-        system.observe_avatar_bases(&snap);
+        system.observe_avatar_bases(&snap, now, false);
         assert_eq!(system.avatar_bases[&1], AvatarExpression::Calm);
         snap.attacks[0].target_owner = 2;
-        system.observe_avatar_bases(&snap);
+        snap.tick += 1;
+        system.observe_avatar_bases(&snap, now + Duration::from_millis(100), false);
         assert_eq!(system.avatar_bases[&1], AvatarExpression::Angry);
         assert_eq!(system.avatar_bases[&2], AvatarExpression::Angry);
         snap.attacks[0].retreating = true;
-        system.observe_avatar_bases(&snap);
+        snap.tick += 1;
+        system.observe_avatar_bases(&snap, now + Duration::from_millis(200), false);
         assert_eq!(system.avatar_bases[&2], AvatarExpression::Calm);
         system.set_campaign_base_expressions(HashMap::from([(1, AvatarExpression::Angry)]));
-        system.observe_avatar_bases(&snap);
+        system.observe_avatar_bases(&snap, now + Duration::from_millis(300), false);
         assert_eq!(system.avatar_bases[&1], AvatarExpression::Angry);
         assert_eq!(system.avatar_bases[&2], AvatarExpression::Calm);
+        system.avatar_transitions.clear();
         snap.players[0].active_emote = Some(ActiveEmote {
             kind: EmoteKind::Celebrate,
             ..event(1, false)
         });
         system.observe_emotes(&snap, 0.1, now, false);
         system.observe_emotes(&snap, 0.1, now + Duration::from_millis(300), false);
-        assert_eq!(
-            system.avatar_presentation(1),
-            (AvatarExpression::Happy, true)
-        );
+        let presentation = system.avatar_presentation(1);
+        assert_eq!(presentation.expression, AvatarExpression::Happy);
+        assert!(presentation.manual_emote_active);
         system.set_campaign_base_expressions(HashMap::new());
-        system.observe_avatar_bases(&snap);
+        system.observe_avatar_bases(&snap, now + Duration::from_millis(3200), false);
+        system.avatar_transitions.clear();
         system.observe_emotes(&snap, 0.1, now + Duration::from_millis(3300), false);
-        assert_eq!(
-            system.avatar_presentation(1),
-            (AvatarExpression::Calm, false)
-        );
+        let presentation = system.avatar_presentation(1);
+        assert_eq!(presentation.expression, AvatarExpression::Calm);
+        assert!(!presentation.manual_emote_active);
         // A newly emitted manual line starts fresh even after seconds on a paused tick.
         snap.players[0].active_emote = Some(ActiveEmote {
             kind: EmoteKind::Help,
@@ -1813,23 +2051,107 @@ mod emote_tests {
         });
         system.observe_emotes(&snap, 0.1, now + Duration::from_millis(3400), false);
         system.observe_emotes(&snap, 0.1, now + Duration::from_millis(3700), false);
-        assert_eq!(
-            system.avatar_presentation(1),
-            (AvatarExpression::Fear, true)
-        );
+        let presentation = system.avatar_presentation(1);
+        assert_eq!(presentation.expression, AvatarExpression::Fear);
+        assert!(presentation.manual_emote_active);
         snap.tick += 1;
         system.observe_emotes(&snap, 0.1, now + Duration::from_millis(4500), false);
-        assert_eq!(
-            system.avatar_presentation(1),
-            (AvatarExpression::Fear, true)
-        );
+        let presentation = system.avatar_presentation(1);
+        assert_eq!(presentation.expression, AvatarExpression::Fear);
+        assert!(presentation.manual_emote_active);
         system.observe_emotes(&snap, 0.1, now + Duration::from_millis(6700), false);
-        assert_eq!(
-            system.avatar_presentation(1),
-            (AvatarExpression::Calm, false)
-        );
+        let presentation = system.avatar_presentation(1);
+        assert_eq!(presentation.expression, AvatarExpression::Calm);
+        assert!(!presentation.manual_emote_active);
         system.reset();
         assert!(system.campaign_base_expressions.is_empty());
+    }
+
+    #[wasm_bindgen_test]
+    fn critical_reserves_use_fear_unless_combat_overrides_then_recover_to_calm() {
+        assert!(critical_force(5.0, 100.0, false));
+        assert!(!critical_force(5.01, 100.0, false));
+        assert!(critical_force(9.99, 100.0, true));
+        assert!(!critical_force(10.0, 100.0, true));
+        assert!(!critical_force(1.0, 0.0, false));
+        assert!(!critical_force(f64::NAN, 100.0, false));
+        assert!(!critical_force(1.0, f64::INFINITY, false));
+
+        let now = Instant::now();
+        let mut system = NameplateSystem::default();
+        let mut snap = snapshot(None);
+        snap.players[0].troops = 4.0;
+        snap.players[0].max_troops = 100.0;
+        let mut opponent = snap.players[0].clone();
+        opponent.id = 2;
+        opponent.troops = 100.0;
+        snap.players.push(opponent);
+        snap.attacks.push(sow_core::protocol::AttackSnapshot {
+            id: 1,
+            owner_id: 1,
+            target_owner: 2,
+            troops: 10.0,
+            retreating: false,
+            front_cx: 0.0,
+            front_cy: 0.0,
+        });
+        snap.tick += 1;
+        system.observe_avatar_bases(&snap, now + Duration::from_millis(100), false);
+        assert_eq!(system.avatar_bases[&1], AvatarExpression::Angry);
+        assert_eq!(system.avatar_bases[&2], AvatarExpression::Angry);
+
+        snap.attacks.clear();
+        snap.tick += 1;
+        system.observe_avatar_bases(&snap, now + Duration::from_millis(200), false);
+        assert_eq!(system.avatar_bases[&1], AvatarExpression::Fear);
+        assert_eq!(system.avatar_bases[&2], AvatarExpression::Calm);
+
+        snap.players[0].troops = 10.0;
+        snap.tick += 1;
+        system.observe_avatar_bases(&snap, now + Duration::from_millis(300), false);
+        assert_eq!(system.avatar_bases[&1], AvatarExpression::Calm);
+    }
+
+    #[wasm_bindgen_test]
+    fn avatar_base_transition_stages_exit_then_latest_entry_without_queueing() {
+        let now = Instant::now();
+        let mut system = NameplateSystem::default();
+        system.request_avatar_transition(1, AvatarExpression::Calm, AvatarExpression::Angry, now, false);
+        let first_id = system.avatar_transitions[&1].id;
+        system.request_avatar_transition(
+            1,
+            AvatarExpression::Calm,
+            AvatarExpression::Fear,
+            now + Duration::from_millis(50),
+            false,
+        );
+        let exit = system.avatar_transitions[&1];
+        assert_eq!(exit.id, first_id);
+        assert_eq!(exit.from, AvatarExpression::Calm);
+        assert_eq!(exit.to, AvatarExpression::Fear);
+        assert_eq!(exit.stage, AvatarTransitionStage::Exit);
+
+        let snap = snapshot(None);
+        system.advance_avatar_transitions(&snap, now + Duration::from_millis(151), false);
+        let enter = system.avatar_transitions[&1];
+        assert_eq!(enter.stage, AvatarTransitionStage::Enter);
+        assert_eq!(enter.to, AvatarExpression::Fear);
+
+        system.request_avatar_transition(
+            1,
+            AvatarExpression::Fear,
+            AvatarExpression::Calm,
+            now + Duration::from_millis(200),
+            false,
+        );
+        let replacement = system.avatar_transitions[&1];
+        assert_eq!(replacement.stage, AvatarTransitionStage::Exit);
+        assert_eq!(replacement.from, AvatarExpression::Fear);
+        assert_eq!(replacement.to, AvatarExpression::Calm);
+        assert_ne!(replacement.id, first_id);
+
+        system.advance_avatar_transitions(&snap, now + Duration::from_millis(400), true);
+        assert!(system.avatar_transitions.is_empty());
     }
 
     fn bubble_layout_at(center: [f32; 2], screen: [f32; 2], size: [f32; 2]) -> EmoteBubbleLayout {
@@ -2519,6 +2841,7 @@ fn avatar_plan(center: [f32; 2], radius: f32, content: AvatarContent) -> AvatarP
         radius,
         content,
         scale: [1.0; 2],
+        alpha: 1.0,
         blend: None,
     }
 }
@@ -2530,6 +2853,45 @@ fn apply_emote_avatar_motion(mut avatar: AvatarPlan, motion: EmoteMotion) -> Ava
     }
     avatar.scale = motion.scale;
     avatar
+}
+
+fn apply_base_avatar_transition(
+    text: &TextRenderer,
+    avatar: &mut AvatarPlan,
+    player: &PlayerSnapshot,
+    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
+    transition: AvatarTransition,
+    now: Instant,
+) {
+    let progress = transition.progress(now);
+    let identity = sow_core::player::avatar_identity_ref(player);
+    let from_content = resolve_avatar_content(text, identity, campaign_avatar_slots, transition.from);
+    let to_content = resolve_avatar_content(text, identity, campaign_avatar_slots, transition.to);
+    if from_content == to_content {
+        avatar.content = to_content;
+        return;
+    }
+    match transition.stage {
+        AvatarTransitionStage::Exit => {
+            avatar.content = from_content;
+            let scale = 1.0 - 0.18 * progress;
+            avatar.scale = [scale; 2];
+            avatar.center[1] += avatar.radius * 2.0 * 0.08 * progress;
+            avatar.alpha = 1.0 - smoothstep(progress);
+        }
+        AvatarTransitionStage::Enter => {
+            avatar.content = to_content;
+            let duration = transition.duration().as_secs_f32();
+            let motion = emote_motion(
+                avatar_transition_emote(transition.to),
+                progress * duration,
+                false,
+                true,
+            );
+            *avatar = apply_emote_avatar_motion(*avatar, motion);
+            avatar.alpha = smoothstep(progress);
+        }
+    }
 }
 
 fn prepare_badges(
@@ -3141,6 +3503,7 @@ mod status_badge_tests {
 }
 
 pub(crate) fn paint_prepared_avatar(text: &mut TextRenderer, avatar: AvatarPlan, alpha: f32) {
+    let alpha = alpha * avatar.alpha;
     let tint = [1.0, 1.0, 1.0, alpha];
     match avatar.content {
         AvatarContent::Sprite(uv) => {

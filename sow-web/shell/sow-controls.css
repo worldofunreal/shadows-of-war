@@ -21,6 +21,13 @@
   --sow-control-accent-bright: #ffd36a;
   --sow-control-muted: rgba(235, 231, 220, 0.62);
   --sow-control-panel: rgba(12, 15, 20, 0.98);
+  --sow-tactical-panel: linear-gradient(145deg, rgb(25 37 44 / 96%), rgb(10 16 21 / 97%) 72%);
+  --sow-tactical-panel-wash: linear-gradient(180deg, rgb(240 169 43 / 8%) 0%, rgb(15 21 25 / 0%) 46%);
+  --sow-tactical-surface-border: rgb(255 255 255 / 12%);
+  --sow-tactical-card-shadow:
+    0 14px 30px rgb(0 0 0 / 62%), 0 0 0 1px rgb(0 0 0 / 55%), inset 0 1px 0 rgb(255 255 255 / 9%);
+  --sow-tactical-surface-radius: 12px;
+  --sow-tactical-surface-blur: 10px;
 }
 
 html,
@@ -278,7 +285,9 @@ html[data-locale-script="cjk"] .sow-control-dropdown__option {
   font-weight: 600;
   text-decoration: none;
   opacity: 0.92;
-  transition: color 0.15s ease, opacity 0.15s ease;
+  transition:
+    color 0.15s ease,
+    opacity 0.15s ease;
 }
 .sow-analytics-consent__policy::after {
   content: "→";
@@ -323,7 +332,12 @@ html[data-locale-script="cjk"] .sow-control-dropdown__option {
   font: 700 0.8125rem/1.25 var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 .sow-analytics-consent__button:hover {
   transform: translateY(-1px);

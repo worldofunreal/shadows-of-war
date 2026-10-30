@@ -10,6 +10,14 @@ pub struct ImportArgs {
     pub input: PathBuf,
     pub name: Option<String>,
     pub maps_root: PathBuf,
+    /// PNG to import instead of `<input>/image.png`.
+    pub image: Option<PathBuf>,
+    /// Crop rectangle `x, y, w, h` in source pixels.
+    pub crop: Option<[u32; 4]>,
+    /// Size preset (`small`, `regular`, `big`, `huge`); defaults to the mobile-safe size.
+    pub size: Option<String>,
+    /// Rotation weight; overrides `multiplayer_frequency` from info.json.
+    pub frequency: Option<u32>,
 }
 
 pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -27,10 +35,21 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
     // Display name from the source info.json ("Africa", "Europe", ...); fall back to slug.
     let display_name = read_info_json_name(&input).unwrap_or_else(|| slug.clone());
 
-    let mut map_file = if input.join("image.png").exists() {
-        import_from_png(&input, &display_name)?
+    let png_path = args
+        .image
+        .clone()
+        .unwrap_or_else(|| input.join("image.png"));
+    let (mut map_file, thumbnail_source) = if png_path.exists() {
+        let (map_file, source) = import_from_png(
+            &png_path,
+            &input,
+            &display_name,
+            args.crop,
+            args.size.as_deref(),
+        )?;
+        (map_file, Some(source))
     } else {
-        import_from_bin(&input)?
+        (import_from_bin(&input)?, None)
     };
 
     fs::create_dir_all(&args.maps_root)?;
@@ -54,15 +73,18 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
     fs::write(out_dir.join("map.bin.br"), brotli_out)?;
 
     let thumb_path = out_dir.join("thumbnail.webp");
-    if let Ok(img) = image::open(input.join("image.png")) {
-        sow_map::write_wide_thumbnail(&img, &thumb_path).map_err(|e| format!("thumbnail: {e}"))?;
-    } else {
-        write_placeholder_thumbnail(&map_file, &thumb_path)?;
+    match thumbnail_source {
+        Some(img) => {
+            sow_map::write_wide_thumbnail(&img, &thumb_path).map_err(|e| format!("thumbnail: {e}"))?
+        }
+        None => write_placeholder_thumbnail(&map_file, &thumb_path)?,
     }
 
     // Persist the source `multiplayer_frequency` as info.toml so the server's
     // catalog scan can build weighted playlists (0 = out of rotation).
-    let frequency = read_info_json_frequency(&input);
+    let frequency = args
+        .frequency
+        .unwrap_or_else(|| read_info_json_frequency(&input));
     fs::write(
         out_dir.join("info.toml"),
         format!("# Written by sow-tools import-map-source\nfrequency = {frequency}\n"),
@@ -106,19 +128,69 @@ fn read_info_json_name(dir: &Path) -> Option<String> {
         .map(str::to_string)
 }
 
-fn import_from_png(dir: &Path, display_name: &str) -> Result<MapFile, Box<dyn std::error::Error>> {
-    let png_path = dir.join("image.png");
-    let original = image::open(&png_path)?;
-    let (src_w, src_h) = (original.width(), original.height());
+/// Import a PNG (optionally cropped and resized). Returns the map and the
+/// source image the thumbnail is drawn from.
+fn import_from_png(
+    png_path: &Path,
+    info_dir: &Path,
+    display_name: &str,
+    crop: Option<[u32; 4]>,
+    size: Option<&str>,
+) -> Result<(MapFile, image::DynamicImage), Box<dyn std::error::Error>> {
+    let original = image::open(png_path)?;
+    let cropped = match crop {
+        Some([x, y, w, h]) => {
+            let inside = w > 0
+                && h > 0
+                && x.checked_add(w).is_some_and(|right| right <= original.width())
+                && y.checked_add(h).is_some_and(|bottom| bottom <= original.height());
+            if !inside {
+                return Err(format!(
+                    "crop {x},{y},{w},{h} is outside the {}x{} source image",
+                    original.width(),
+                    original.height()
+                )
+                .into());
+            }
+            original.crop_imm(x, y, w, h)
+        }
+        None => original,
+    };
+    let (src_w, src_h) = (cropped.width(), cropped.height());
     // Keep the full categorical source intact until the image pipeline's
-    // water-aware downscale. The target uses the same mobile-safe dimensions
-    // as the canonical image-map path, including the axis cap.
-    let (target_w, target_h) = sow_map::image_pipeline::mobile_safe_dims(src_w, src_h);
-    let rgba = original.to_rgba8();
+    // water-aware downscale. Without a size preset, use the same
+    // mobile-safe dimensions as the canonical image-map path.
+    let (target_w, target_h) = match size {
+        Some(preset) => sow_core::maps::map_size_for_preset(preset, src_w, src_h).ok_or_else(|| {
+            format!("unknown size '{preset}' (use small, regular, big or huge)")
+        })?,
+        None => sow_map::image_pipeline::mobile_safe_dims(src_w, src_h),
+    };
+    if target_w < 4
+        || target_h < 4
+        || target_w > sow_core::maps::MAX_MAP_AXIS
+        || target_h > sow_core::maps::MAX_MAP_AXIS
+        || !sow_core::maps::map_within_pixel_budget(target_w, target_h)
+    {
+        return Err(format!(
+            "size {target_w}x{target_h} is outside the map limits (4 to {} per side, {} tiles total)",
+            sow_core::maps::MAX_MAP_AXIS,
+            sow_core::maps::MAX_MAP_PIXELS
+        )
+        .into());
+    }
+    let rgba = cropped.to_rgba8();
     let result = sow_map::image_pipeline::generate_from_rgba(&rgba, Some((target_w, target_h)))
         .map_err(|e| format!("image pipeline: {e}"))?;
+    // Same categorical render as the canonical thumbnails (world, asia...), so water matches the lobby blue.
+    let thumbnail = sow_map::render_source_image(&cropped).map_err(|e| format!("thumbnail: {e}"))?;
 
-    let mut spawns = load_info_json_spawns(dir)?;
+    // info.json spawns are in full-image pixels, so a crop has no matching spawns.
+    let mut spawns = if crop.is_some() {
+        Vec::new()
+    } else {
+        load_info_json_spawns(info_dir)?
+    };
     // Spawn coordinates come from the native-resolution info.json — scale them
     // down with the image so they stay on land after clamping.
     if src_w != target_w || src_h != target_h {
@@ -130,7 +202,7 @@ fn import_from_png(dir: &Path, display_name: &str) -> Result<MapFile, Box<dyn st
         }
     }
 
-    Ok(MapFile {
+    let map_file = MapFile {
         display_name: display_name.to_string(),
         width: result.width,
         height: result.height,
@@ -140,7 +212,8 @@ fn import_from_png(dir: &Path, display_name: &str) -> Result<MapFile, Box<dyn st
         default_roster: None,
         rosters: Vec::new(),
         terrain: result.map_data,
-    })
+    };
+    Ok((map_file, image::DynamicImage::ImageRgba8(thumbnail)))
 }
 
 fn load_info_json_spawns(dir: &Path) -> Result<Vec<MapSpawn>, Box<dyn std::error::Error>> {

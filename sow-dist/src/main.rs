@@ -2353,8 +2353,13 @@ fn landing_leaders(english: &serde_json::Value) -> Result<String> {
         let id = leader.id();
         let art_slug = leader.art_slug();
         let active = leader == sow_core::player::Leader::default();
+        let avatar_src = if active {
+            format!("/assets/gameplay/avatars/expressions/{art_slug}_angry.webp")
+        } else {
+            format!("/assets/gameplay/avatars/{art_slug}.webp")
+        };
         html += &format!(
-            r#"<button class="roster-card{class}" type="button" aria-pressed="{active}" data-leader-id="{id}" data-art-slug="{art_slug}" data-name="{name}" data-civ="{civ}" data-historical="{historical}" data-ability="{ability}" data-description="{description}"><img src="/assets/gameplay/avatars/{art_slug}.webp" alt="" width="128" height="128" loading="lazy" decoding="async"><span data-i18n="heroes.leader_{id}_name">{name}</span></button>
+            r#"<button class="roster-card{class}" type="button" aria-pressed="{active}" data-leader-id="{id}" data-art-slug="{art_slug}" data-name="{name}" data-civ="{civ}" data-historical="{historical}" data-ability="{ability}" data-description="{description}"><img src="{avatar_src}" alt="" width="128" height="128" loading="lazy" decoding="async"><span data-i18n="heroes.leader_{id}_name">{name}</span></button>
 "#,
             class = if active { " is-active" } else { "" },
             name = english_text(english, &format!("heroes.leader_{id}_name"))?,
@@ -5265,7 +5270,6 @@ fn package_local_preview(
         fs::create_dir_all(out)?;
         let assets = out.join("assets");
         copy_dir(&paths.assets_shell, &assets.join("shell"))?;
-        compress_web_leaders(&assets.join("shell/leaders"))?;
         for name in [
             "avatars",
             "skins",
@@ -5292,7 +5296,6 @@ fn package_local_preview(
         if paths.assets_maps.is_dir() {
             copy_dir(&paths.assets_maps, &maps)?;
         }
-        refresh_map_thumbnails(&maps, &paths.map_sources)?;
 
         let site = paths.root.join("sow-web/site");
         if site.join("fonts").is_dir() {

@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { vm } from "./typescript-test-support.ts";
+import { setAvatarPortrait } from "./avatar-presentation.ts";
 const shell = __dirname;
 import { bundleTs, loadTypeScriptModule } from "./typescript-test-support.ts";
 const tutorialBundle =
@@ -389,6 +390,8 @@ function makePlayerDialogsHarness() {
         document: doc,
         hudRoot: new Element("root"),
         hudDevLayer: null,
+        activeProgressBars: new Map(),
+        activeCelebrations: new Set(),
         leaderboardOpen: false,
         inboxOpen: false,
         settingsOpen: false,
@@ -403,6 +406,7 @@ function makePlayerDialogsHarness() {
         },
         asset: (name) => "/assets/" + name,
         SOW_t: (key) => context.window.SOW_LOCALE + ":" + key,
+        setAvatarPortrait,
     });
     const part = (start, end) => {
         const begin = hud.indexOf(start),
@@ -557,6 +561,9 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
         HTMLInputElement: Element,
         Node: Object,
         avatarIdentityKeys: new WeakMap(),
+        activeProgressBars: new Map(),
+        activeCelebrations: new Set(),
+        setAvatarPortrait,
         document: doc,
         hudRefs: makeRefs(),
         hudRoot: new Element("root"),
@@ -835,6 +842,7 @@ test("map feedback reuses one compact card, clamps to the viewport, and releases
         hudIcon: (name) => name,
         statusIcon: (name) => name,
         SOW_t: (key) => key,
+        setAvatarPortrait,
         window: {
             innerWidth: 375,
             innerHeight: 667,
@@ -962,6 +970,58 @@ test("Roman Outpost emotes keep its guided objective visible on desktop and mobi
     }
 });
 
+test("Boudica's Iceni meeting guides point to Snettisham, then Thetford", async () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+
+    for (const [index, [stepId, factionId]] of [
+        ["boudica_second_contact", "snettisham"],
+        ["boudica_third_contact", "thetford"],
+    ].entries()) {
+        const anchor = { x: 210 + index * 80, y: 300 + index * 60 };
+        const hud = {
+            tutorial: {
+                active: true,
+                episode_id: "boudica",
+                campaign_session_id: 22,
+                target_nameplate: { ...anchor, offscreen: false },
+                facts: {
+                    contact_faction_ids: [],
+                    defeated_faction_ids: [],
+                    eliminated_faction_ids: [],
+                    pre_defeat_faction_ids: [],
+                    tiles_gained: 0,
+                },
+            },
+            players: [
+                { id: 1, is_me: true, is_alive: true, centroid_x: 10, centroid_y: 12 },
+                { id: 2, campaign_faction_id: factionId, is_alive: true, centroid_x: 15, centroid_y: 12 },
+            ],
+            settings: {},
+        };
+        const harness = makeCampaignTutorialHarness({
+            campaign,
+            definition,
+            roster,
+            initialStep: stepId,
+            hud,
+            width: 390,
+            height: 844,
+        });
+        await harness.start();
+
+        assert.equal(harness.rendered.step.id, stepId);
+        assert.equal(harness.rendered.step.guide.target, "nameplate");
+        assert.deepEqual(
+            [harness.renderContext.anchor.x, harness.renderContext.anchor.y],
+            [anchor.x, anchor.y],
+            `${factionId}'s hand points to that tribe's live nameplate`,
+        );
+    }
+});
+
 test("first Expand focuses its hidden target once and keeps the 250-tile objective active", async () => {
     const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
     const campaignDir = path.join(shell, "../../assets/campaign");
@@ -1016,7 +1076,7 @@ test("first Expand focuses its hidden target once and keeps the 250-tile objecti
 
     hud.tutorial.facts.tiles_gained = 250;
     harness.update();
-    assert.equal(harness.machine.view().step.id, "boudica_city_intro");
+    assert.equal(harness.machine.view().step.id, "boudica_first_contact");
 });
 
 test("Trinovantes aid guides radial opening, Transfer, and the confirmed delivery separately", async () => {

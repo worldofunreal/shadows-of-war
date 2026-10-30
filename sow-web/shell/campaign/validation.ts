@@ -433,7 +433,12 @@ export function validate(
                     issue(null, "speakers." + key + ".faction", "Choose an existing roster faction.");
                 if (speaker.base_expression != null) {
                     const rule = speaker.base_expression;
-                    knownFields(rule, ["expression", "until"], null, "speakers." + key + ".base_expression");
+                    knownFields(
+                        rule,
+                        ["expression", "after_expression", "until"],
+                        null,
+                        "speakers." + key + ".base_expression",
+                    );
                     knownFields(
                         rule && rule.until,
                         ["type", "target"],
@@ -443,6 +448,8 @@ export function validate(
                     if (
                         !object(rule) ||
                         !["happy", "calm", "fear", "angry"].includes(rule.expression) ||
+                        (rule.after_expression != null &&
+                            !["happy", "calm", "fear", "angry"].includes(rule.after_expression)) ||
                         !object(rule.until) ||
                         rule.until.type !== "alliance" ||
                         typeof rule.until.target !== "string" ||
@@ -451,7 +458,7 @@ export function validate(
                         issue(
                             null,
                             "speakers." + key + ".base_expression",
-                            "Choose an expression and an existing alliance target.",
+                            "Choose valid expressions and an existing alliance target.",
                         );
                     }
                 }

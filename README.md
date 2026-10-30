@@ -18,7 +18,7 @@
 <p align="center">
   <a href="https://github.com/worldofunreal/shadows-of-war/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue" alt="AGPL-3.0-only license" /></a>
   <img src="https://img.shields.io/badge/client-Rust%20%2B%20WASM-orange" alt="Rust and WebAssembly client" />
-  <img src="https://img.shields.io/badge/interface-JavaScript-f7df1e" alt="JavaScript interface" />
+  <img src="https://img.shields.io/badge/interface-TypeScript-3178c6" alt="TypeScript interface" />
   <img src="https://img.shields.io/badge/rendering-Blade%20GPU-111827" alt="Blade GPU rendering" />
 </p>
 
@@ -26,13 +26,9 @@
 
 ![World map](assets/maps/world/thumbnail.webp)
 
-Shadows of War is a multiplayer strategy game about taking territory and turning it into power.
-
-- Expand across the world map.
-- Build cities, factories, ports and an economy that supports your wars.
-- Choose a historic leader and play around their strengths.
-- Forge alliances, betray rivals and fight for control of the map.
-- Join online matches or play local battles against bots.
+Shadows of War is a real-time strategy game about taking territory. Choose a historic leader, build
+cities, factories and ports, and make or break alliances in multiplayer. Play the Boudica campaign
+or fight bots in solo matches.
 
 | Europe | Asia | Leaders | Campaign |
 | --- | --- | --- | --- |
@@ -41,19 +37,18 @@ Shadows of War is a multiplayer strategy game about taking territory and turning
 ## Run locally
 
 ```bash
-./sow          # build and open the native Tauri/WASM game
+./sow          # build and open the native Electron/WASM game
 ./sow l        # local browser preview at 127.0.0.1:4173
 ```
 
-## Links
+[Contributing](CONTRIBUTING.md)
 
-- [Play Shadows of War](https://shadowsofwar.io/play/)
-- [Website](https://shadowsofwar.io/)
-- [Contributing](CONTRIBUTING.md)
-- [License](LICENSE)
+## Credits & licenses
 
-## License & derivatives
+Modified from OpenFrontIO. Source revision date: `2026-10-29`.
+© OpenFront and Contributors. This is not an official OpenFront project.
 
-**Modified from OpenFrontIO.** The in-game source link identifies the exact revision.
-
-Game code is licensed under [AGPL-3.0-only](LICENSE), including OpenFront's additional terms. The main menu links to the exact source revision for AGPL section 13. OpenFront-derived maps use CC BY-SA 4.0; their attribution, source, and changes are in the [map notice](assets/maps/NOTICE), served alongside map files. Other asset and client dependency notices are in [LICENSE-ASSETS](docs/legal/LICENSE-ASSETS) and [NOTICE](docs/legal/NOTICE).
+Game code is licensed under [AGPL-3.0-only](LICENSE), with OpenFront's additional terms. The in-game
+Source link identifies the exact revision. OpenFront-derived maps use CC BY-SA 4.0; see the
+[map source and credits](assets/maps/NOTICE). Other [asset licenses](docs/legal/LICENSE-ASSETS)
+and [third-party notices](docs/legal/NOTICE).

@@ -640,6 +640,8 @@ pub struct UiState {
     pub(crate) building_placement_cache: crate::input::placement::BuildingPlacementCache,
     pub building_levels_seen: std::collections::HashMap<u32, u8>,
     pub building_upgrade_flashes: std::collections::HashMap<u32, web_time::Instant>,
+    pub building_celebrations:
+        std::collections::HashMap<u32, (sow_core::game::BuildingKind, u8, web_time::Instant)>,
     pub last_resource_notice_tick: Option<u64>,
     pub border_flashes: Vec<BorderFlashInstance>,
     pub alliance_celebrations: std::collections::VecDeque<AllianceCelebration>,

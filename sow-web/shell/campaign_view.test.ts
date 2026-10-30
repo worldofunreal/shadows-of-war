@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { vm } from "./typescript-test-support.ts";
+import { setAvatarPortrait } from "./avatar-presentation.ts";
 const shell = __dirname;
 import { bundleTs, loadTypeScriptModule } from "./typescript-test-support.ts";
 import type { CampaignRecord } from "./campaign/types.ts";
@@ -213,21 +214,16 @@ test("camera practice stays paused through desktop and touch routes", () => {
                 guide: { kind: "ui", target: "hud_center_camera", gesture: "tap" },
                 pause_game: true,
                 camera_only: true,
-                next: "boudica_city_intro",
-            },
-            {
-                id: "boudica_city_intro",
-                type: "scene",
-                title_key: "tutorial.city",
-                body_key: "tutorial.city_body",
-                wait_before: true,
                 next: "boudica_choose_city",
             },
             {
                 id: "boudica_choose_city",
-                type: "scene",
+                type: "guide",
                 title_key: "tutorial.choose_city",
-                body_key: "tutorial.choose_city_body",
+                body_key: "tutorial.city_body",
+                trigger: { type: "ui", action: "dock_city", scope: "step" },
+                guide: { kind: "ui", target: "dock_city", gesture: "tap" },
+                pause_game: true,
                 next: "boudica_end",
             },
             { id: "boudica_end", type: "end", title_key: "tutorial.end" },
@@ -394,16 +390,10 @@ test("camera practice stays paused through desktop and touch routes", () => {
     assert.equal(desktop.advance(null, "boudica_found_suetonius"), true);
     assert.equal(desktop.view().step.id, "boudica_camera_home");
     assert.equal(desktop.update(inspected, {}, 5).step.id, "boudica_camera_home");
-    assert.equal(desktop.update(inspected, { hud_center_camera: 1 }, 6).step.id, "boudica_city_intro");
-    assert.equal(desktop.view().waiting, true);
+    assert.equal(desktop.update(inspected, { hud_center_camera: 1 }, 6).step.id, "boudica_choose_city");
+    assert.equal(desktop.view().waiting, false);
     assert.equal(desktop.view().paused, true);
-    assert.equal(desktop.advance(null, "boudica_city_intro"), false);
-    desktopClock = 1099;
-    assert.equal(desktop.view().waiting, true, "dialogue stays hidden through 1099ms");
-    desktopClock = 1100;
-    assert.equal(desktop.view().waiting, false, "dialogue reveals at exactly 1100ms");
-    assert.equal(desktop.advance(null, "boudica_city_intro"), true);
-    assert.equal(desktop.view().step.id, "boudica_choose_city");
+    assert.equal(desktop.view().step.body_key, "tutorial.city_body");
     let revealClock = 0;
     const timedReturn = campaign.create(
         definition,
@@ -412,13 +402,8 @@ test("camera practice stays paused through desktop and touch routes", () => {
         () => revealClock,
     );
     timedReturn.update({}, {});
-    assert.equal(timedReturn.update({}, { hud_center_camera: 1 }).waiting, true);
-    revealClock = 1099;
-    assert.equal(timedReturn.update({}, { hud_center_camera: 1 }).waiting, true);
-    revealClock = 1100;
-    assert.equal(timedReturn.update({}, { hud_center_camera: 1 }).waiting, false);
-    assert.equal(timedReturn.advance(null, "boudica_city_intro"), true);
-    assert.equal(timedReturn.view().step.id, "boudica_choose_city");
+    assert.equal(timedReturn.update({}, { hud_center_camera: 1 }).step.id, "boudica_choose_city");
+    assert.equal(timedReturn.view().waiting, false);
     assert.equal(timedReturn.view().paused, true);
 
     const touch = campaign.create(definition, "boudica_camera_drag", { factions: [] });
@@ -1102,15 +1087,17 @@ test("Boudica spoken cards and contact responses require named existing portrait
     assert.deepEqual(report(definition).errors, []);
 
     const inheritedSpeaker = structuredClone(definition);
-    const inheritedScene = inheritedSpeaker.steps.find((step) => step.id === "boudica_camera_intro");
+    const inheritedScene = inheritedSpeaker.steps.find(
+        (step) => step.id === "boudica_rise_of_the_iceni_intro",
+    );
     inheritedScene.lines = [{ title_key: inheritedScene.title_key, body_key: inheritedScene.body_key }];
     assert.deepEqual(report(inheritedSpeaker).errors, [], "conversation lines inherit the scene speaker");
 
     const missingSpeaker = structuredClone(definition);
-    delete missingSpeaker.steps.find((step) => step.id === "boudica_camera_intro").speaker;
+    delete missingSpeaker.steps.find((step) => step.id === "boudica_rise_of_the_iceni_intro").speaker;
     assert.ok(
         report(missingSpeaker).errors.some(
-            (issue) => issue.step === "boudica_camera_intro" && issue.field === "speaker",
+            (issue) => issue.step === "boudica_rise_of_the_iceni_intro" && issue.field === "speaker",
         ),
     );
 
@@ -1378,10 +1365,55 @@ test("Boudica spoken cards and contact responses require named existing portrait
             },
         );
     }
+    campaignExchange.reactions.push({
+        id: "colonia_timer_taunt",
+        when: { type: "timer", after_ms: 5000 },
+        during: coloniaGate,
+        presentation: "exchange",
+        exchange: [
+            {
+                speaker: "colonia_veterans",
+                emote: "threat",
+                emote_text_key: "tutorial.campaign_boudica_roman_outpost_tease_1",
+            },
+        ],
+    });
     assert.deepEqual(
         report(campaignExchange).errors,
         [],
-        "contact and pre-defeat exchanges validate through the shared campaign schema",
+        "contact, pre-defeat and active-objective timer exchanges validate through the shared schema",
+    );
+    const invalidTimer = structuredClone(campaignExchange);
+    invalidTimer.reactions.find((reaction) => reaction.id === "colonia_timer_taunt").when.after_ms = 0;
+    assert.ok(
+        report(invalidTimer).errors.some((issue) => issue.field === "reactions.when.after_ms"),
+        "timers reject non-positive durations",
+    );
+    const timerWithoutGate = structuredClone(campaignExchange);
+    delete timerWithoutGate.reactions.find((reaction) => reaction.id === "colonia_timer_taunt").during;
+    assert.ok(
+        report(timerWithoutGate).errors.some((issue) => issue.field === "reactions.during"),
+        "timers must belong to an active objective",
+    );
+    const timerWithInvalidGate = structuredClone(campaignExchange);
+    timerWithInvalidGate.reactions.find((reaction) => reaction.id === "colonia_timer_taunt").during =
+        "boudica_rise_of_the_iceni_intro";
+    assert.ok(
+        report(timerWithInvalidGate).errors.some((issue) => issue.field === "reactions.during"),
+        "a scene cannot be used as an active timer objective",
+    );
+    const timerWithDialogue = structuredClone(campaignExchange);
+    timerWithDialogue.reactions.find((reaction) => reaction.id === "colonia_timer_taunt").exchange[0]
+        .presentation = "dialogue";
+    assert.ok(
+        report(timerWithDialogue).errors.some((issue) => issue.field === "reactions.presentation"),
+        "timer responses cannot open a dialogue modal",
+    );
+    const timerChangesPause = structuredClone(campaignExchange);
+    timerChangesPause.reactions.find((reaction) => reaction.id === "colonia_timer_taunt").pause_game = false;
+    assert.ok(
+        report(timerChangesPause).errors.some((issue) => issue.field === "reactions.pause_game"),
+        "timed emotes keep the active objective's pause state",
     );
     const unknownEmoteFaction = structuredClone(campaignExchange);
     unknownEmoteFaction.speakers.colonia_veterans.faction = "missing_faction";
@@ -1666,13 +1698,12 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     const settle = () => new Promise((resolve) => setImmediate(resolve));
 
     paint("first_scene", "first");
+    const portrait = root.querySelector(".sow-story__portrait");
+    const stablePortrait = portrait.children[0];
     candidate("first").dispatch("load");
     await settle();
-    assert.equal(
-        root.querySelector(".sow-story__portrait").children[0],
-        candidate("first"),
-        "a successful preloaded portrait is reused",
-    );
+    assert.equal(portrait.children[0], stablePortrait, "the portrait node stays mounted for staged motion");
+    assert.equal(stablePortrait.src, candidate("first").src, "the loaded portrait source is reused");
 
     paint("retry_scene", "retry");
     const retry = candidate("retry");
@@ -1680,18 +1711,14 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     assert.match(retry.src, /sow_portrait_retry=1/);
     retry.dispatch("load");
     await settle();
-    assert.equal(
-        root.querySelector(".sow-story__portrait").children[0],
-        retry,
-        "the one retry restores the correct portrait",
-    );
+    assert.equal(portrait.children[0], stablePortrait);
+    assert.equal(stablePortrait.src, retry.src, "the one retry restores the correct portrait");
 
     paint("failed_scene", "recover");
     const failed = candidate("recover");
     failed.dispatch("error");
     failed.dispatch("error");
     await settle();
-    const portrait = root.querySelector(".sow-story__portrait");
     assert.match(portrait.children[0].src, /^data:image\/svg\+xml/);
     assert.equal(portrait.hidden, false);
     assert.doesNotMatch(campaignView, /sow-story__speaker/, "dialogues show the portrait, not a name label");
@@ -1706,7 +1733,8 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     const recovered = candidate("recover");
     recovered.dispatch("load");
     await settle();
-    assert.equal(portrait.children[0], recovered, "a later successful load replaces the generic fallback");
+    assert.equal(portrait.children[0], stablePortrait);
+    assert.equal(stablePortrait.src, recovered.src, "a later successful load replaces the generic fallback");
 
     paint("late_scene", "late");
     const late = candidate("late");
@@ -1715,13 +1743,15 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     paint("current_scene", "first");
     await settle();
     const current = candidate("first");
-    assert.equal(portrait.children[0], current);
+    assert.equal(portrait.children[0], stablePortrait);
+    assert.equal(stablePortrait.src, current.src);
     late.dispatch("error");
     assert.equal(
         portrait.children[0],
-        current,
+        stablePortrait,
         "a late error from the previous speaker does not replace the current portrait",
     );
+    assert.equal(stablePortrait.src, current.src);
     assert.equal(
         root.querySelector(".sow-story__title").hidden,
         false,
@@ -2336,6 +2366,7 @@ test("player nameplate keeps the active leader portrait and shows the nickname r
         hudState: {},
         leaderById: (id) => ({ art_slug: id, slug: id }),
         asset: (path) => path,
+        setAvatarPortrait,
     };
     const updatePlate = vm.runInNewContext(
         hud.slice(pathStart, pathEnd) + "\n(function () {" + plateUpdate + "\n}}})",
@@ -3164,7 +3195,17 @@ test("campaign tap guides use shared action labels and localized fallback", () =
     const categories = new Set(tapSteps.map(({ step }) => campaign.guideAction(step)));
     assert.deepEqual(
         [...categories].sort(),
-        ["attack", "build", "expand", "home", "select", "send", "upgrade", "upgrade_progress"].sort(),
+        [
+            "attack",
+            "build",
+            "contact",
+            "expand",
+            "home",
+            "select",
+            "send",
+            "upgrade",
+            "upgrade_progress",
+        ].sort(),
     );
     assert.equal(
         campaign.guideAction({
@@ -3226,6 +3267,9 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
         "boudica_transfer_send",
         "boudica_choose_city",
         "boudica_alliance_request",
+        "boudica_alliance_catuvellauni_request",
+        "boudica_alliance_corieltauvi_request",
+        "boudica_alliance_dobunni_request",
     ];
     // The upgrade button is drawn by the game, so its hand points at a world spot.
     const upgradeGuide = definition.steps.find((step) => step.id === "boudica_structure_upgrade").guide;
@@ -3249,7 +3293,11 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     assert.deepEqual(ratioOverrides, [{ id: definition.entry, ratio: 0.25 }]);
     assert.equal(entry.attack_ratio_on_enter, 0.25);
     assert.equal(intro.next, "boudica_select_city_upgrade");
-    assert.equal(definition.steps.find((step) => step.id === "boudica_city_upgrade_wait").next, ratioStepId);
+    assert.equal(
+        definition.steps.find((step) => step.id === "boudica_city_upgrade_wait").next,
+        "boudica_trinovantes_assault",
+    );
+    assert.equal(definition.steps.find((step) => step.id === "boudica_camulodunum").next, ratioStepId);
     assert.equal(
         intro.attack_ratio_on_enter,
         undefined,
@@ -3272,22 +3320,30 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     assert.equal(ratioMachine.update({ attack_ratio: 1 }, {}).step.id, strikeDialog.id);
     assert.equal(
         strikeDialog.exchange[0].delay_ms,
-        campaign.WAIT_MS,
-        "the strike emote waits the same reveal beat",
+        300,
+        "the dialogue follows the Legion emote after its configured gap",
     );
     assert.equal(
         ratioMachine.view().waiting,
         true,
-        "the strike dialogue stays hidden during the reveal wait",
+        "the exchange stays active while the Legion emote is shown",
     );
-    assert.equal(ratioMachine.view().paused, true, "the game remains paused during the reveal wait");
-    ratioClock = campaign.WAIT_MS - 1;
-    assert.equal(ratioMachine.view().waiting, true);
-    ratioClock = campaign.WAIT_MS;
+    assert.equal(ratioMachine.view().exchange_phase, "speaking");
+    assert.equal(ratioMachine.view().paused, true, "the game remains paused during the strike scene");
+    ratioClock = 2999;
+    assert.equal(ratioMachine.view().exchange_phase, "speaking");
+    ratioClock = 3000;
+    ratioMachine.update({ attack_ratio: 1 }, {});
+    assert.equal(ratioMachine.view().exchange_phase, "gap");
+    ratioClock = 3299;
+    ratioMachine.update({ attack_ratio: 1 }, {});
+    assert.equal(ratioMachine.view().waiting, true, "the configured 300ms gap keeps dialogue hidden");
+    ratioClock = 3300;
+    ratioMachine.update({ attack_ratio: 1 }, {});
     assert.equal(
-        ratioMachine.view().exchange.speaker,
-        "legio_ix_hispana",
-        "the Legion's emote appears after the shared 1.1-second wait",
+        ratioMachine.view().exchange_phase,
+        "dialogue",
+        "Boudica's dialogue appears when the emote and configured gap finish",
     );
     for (let t = 0; t < 60000; t += 100) {
         ratioClock += 100;

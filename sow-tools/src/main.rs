@@ -198,6 +198,38 @@ struct ImportMapSourceArgs {
     /// Maps root directory (also set via SOW_MAPS_ROOT env var in exporter)
     #[arg(long, default_value = "assets/maps")]
     maps_root: PathBuf,
+
+    /// PNG to import instead of <input>/image.png
+    #[arg(long)]
+    image: Option<PathBuf>,
+
+    /// Crop rectangle in source pixels: x,y,w,h
+    #[arg(long, value_parser = parse_crop, allow_hyphen_values = true)]
+    crop: Option<[u32; 4]>,
+
+    /// Size preset: small, regular, big or huge (longest side in tiles)
+    #[arg(long, value_parser = parse_size)]
+    size: Option<String>,
+
+    /// Rotation weight; 0 keeps the map out of the public rotation
+    #[arg(long)]
+    frequency: Option<u32>,
+}
+
+fn parse_crop(value: &str) -> Result<[u32; 4], String> {
+    let parts = value
+        .split(',')
+        .map(|part| part.trim().parse::<u32>().map_err(|e| e.to_string()))
+        .collect::<Result<Vec<u32>, String>>()?;
+    <[u32; 4]>::try_from(parts).map_err(|_| "expected x,y,w,h".to_string())
+}
+
+fn parse_size(value: &str) -> Result<String, String> {
+    if sow_core::maps::MAP_SIZE_PRESETS.iter().any(|(name, _)| *name == value) {
+        Ok(value.to_string())
+    } else {
+        Err("expected small, regular, big or huge".to_string())
+    }
 }
 
 #[tokio::main]
@@ -210,6 +242,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 input: import.input,
                 name: import.name,
                 maps_root: import.maps_root,
+                image: import.image,
+                crop: import.crop,
+                size: import.size,
+                frequency: import.frequency,
             })
         }
         Some(Commands::RefreshCatalog(args)) => map_source_import::refresh_catalog(&args.maps_root)

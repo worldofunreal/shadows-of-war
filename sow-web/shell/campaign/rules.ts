@@ -685,8 +685,10 @@ export function campaignBaseExpressions(
     const expressions: Record<string, string> = {};
     for (const speaker of Object.values(definition.speakers || {}) as CampaignRecord[]) {
         const rule = speaker.base_expression;
-        if (!rule || (facts.alliance_faction_ids || []).includes(rule.until.target)) continue;
-        expressions[speaker.faction || "player"] = rule.expression;
+        if (!rule) continue;
+        const allied = (facts.alliance_faction_ids || []).includes(rule.until.target);
+        const expression = allied ? rule.after_expression : rule.expression;
+        if (expression) expressions[speaker.faction || "player"] = expression;
     }
     return expressions;
 }

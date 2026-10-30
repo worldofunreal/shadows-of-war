@@ -295,8 +295,8 @@ function landingExplorer({ video = false } = {}) {
     return result;
   };
   const entities = catalog.entities.filter((entity) => entity.hero);
-  const cards = entities.map((entity) =>
-    element({
+  const cards = entities.map((entity, index) => {
+    const card = element({
       leaderId: entity.id,
       artSlug: entity.hero.art_slug || entity.id,
       name: t(`heroes.leader_${entity.id}_name`),
@@ -304,8 +304,16 @@ function landingExplorer({ video = false } = {}) {
       historical: t(`heroes.leader_${entity.id}_historical`),
       ability: t(`site.leader_${entity.id}_ability`),
       description: t(`site.leader_${entity.id}_description`),
-    }),
-  );
+    });
+    const img = element();
+    img.tagName = "IMG";
+    img.src = index === 0
+      ? `/assets/gameplay/avatars/expressions/${entity.hero.art_slug || entity.id}_angry.webp`
+      : `/assets/gameplay/avatars/${entity.hero.art_slug || entity.id}.webp`;
+    card.append(img);
+    card.querySelector = (sel: string) => (sel === "img" ? img : null);
+    return card;
+  });
   cards[0].classList.add("is-active");
   const nodes = new Map();
   for (const name of [
@@ -320,6 +328,7 @@ function landingExplorer({ video = false } = {}) {
     "detail-historical",
     "detail-ability",
     "detail-description",
+    "leader-detail",
     "leader-search",
     "leader-browser",
     "leader-browser-home",
@@ -531,6 +540,45 @@ test("landing explorer moves one roster into the mobile picker and restores the 
   app.click("leader-browse");
   app.setMedia("(max-width: 960px)", false);
   assert.equal(picker.open, false, "resizing to desktop restores the inline roster");
+});
+
+test("landing explorer switches avatar expressions on hover and selection for desktop and mobile", () => {
+  const app = landingExplorer();
+  const firstCard = app.cards[0];
+  const secondCard = app.cards[1];
+  const firstImg = firstCard.querySelector("img");
+  const secondImg = secondCard.querySelector("img");
+  const firstSlug = firstCard.dataset.artSlug;
+  const secondSlug = secondCard.dataset.artSlug;
+
+  // Initial load: selected card is angry, unselected is calm
+  assert.equal(firstImg.src, `/assets/gameplay/avatars/expressions/${firstSlug}_angry.webp`);
+  assert.equal(secondImg.src, `/assets/gameplay/avatars/${secondSlug}.webp`);
+
+  // Hover unselected: becomes happy
+  secondCard.emit("mouseenter");
+  assert.equal(secondImg.src, `/assets/gameplay/avatars/expressions/${secondSlug}_happy.webp`);
+
+  // Leave unselected: returns to calm
+  secondCard.emit("mouseleave");
+  assert.equal(secondImg.src, `/assets/gameplay/avatars/${secondSlug}.webp`);
+
+  // Hover selected: becomes happy
+  firstCard.emit("mouseenter");
+  assert.equal(firstImg.src, `/assets/gameplay/avatars/expressions/${firstSlug}_happy.webp`);
+
+  // Leave selected: restores to angry
+  firstCard.emit("mouseleave");
+  assert.equal(firstImg.src, `/assets/gameplay/avatars/expressions/${firstSlug}_angry.webp`);
+
+  // Select second card: second becomes angry, first becomes calm
+  secondCard.emit("click");
+  assert.equal(secondImg.src, `/assets/gameplay/avatars/expressions/${secondSlug}_angry.webp`);
+  assert.equal(firstImg.src, `/assets/gameplay/avatars/${firstSlug}.webp`);
+
+  // On mobile media query: detail-image selects mobile portrait art
+  app.setMedia("(max-width: 960px)", true);
+  assert.equal(app.node("detail-image").src, `/assets/shell/leaders/${secondSlug}_mobile.webp`);
 });
 
 test("landing explorer switches map previews and pauses optional video for visibility and reduced motion", () => {

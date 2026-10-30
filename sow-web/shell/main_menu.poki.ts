@@ -11,7 +11,8 @@ import {
     renderMainNavMarkup,
 } from "./main_menu.core.ts";
 import { renderPublicPanel } from "./main_menu.lobbies.ts";
-import { localeOptions, renderSettingsPrivacySection } from "./main_menu.shell.ts";
+import { renderSettingsPrivacySection } from "./main_menu.shell.ts";
+import { renderLocaleSettingRow } from "./main_menu.settings.ts";
 
 export {
     abandonExternalPurchaseAttempt,
@@ -154,19 +155,7 @@ export function renderSettings() {
             ],
         }) +
         "</div>" +
-        "<div class='sow-hud__setting-row sow-menu__settings-dropdown-row'><span>" +
-        esc(SOW_t("menu.language")) +
-        "</span>" +
-        SOW_renderDropdown({
-            key: "settings-language",
-            className: "sow-menu__settings-dropdown",
-            label: SOW_t("menu.language"),
-            name: "locale",
-            setting: "locale",
-            value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en",
-            options: localeOptions(),
-        }) +
-        "</div>" +
+        renderLocaleSettingRow() +
         "</div></section>" +
         renderSettingsPrivacySection(
             "<button class='sow-menu__settings-link' type='button' data-command='poki_privacy'>" +

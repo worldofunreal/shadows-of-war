@@ -966,9 +966,21 @@ test("building details card renders in the HUD, patches live values in place, an
     assert.equal(timerNode.textContent, "2s");
     assert.equal(fillNode.style.width, "80.0%");
 
-    // Dock buildings strip swaps to #sow-hud-building-progress when building_in_progress is active
-    assert.match(hud, /id="sow-hud-building-progress"/);
-    assert.match(hud, /!isDeploying && !buildingInProgress && hasBuildingItems \? "flex" : "none"/);
+    // Dock buildings strip remains always visible without being hijacked by building progress
+    assert.doesNotMatch(hud, /id="sow-hud-building-progress"/);
+    assert.match(hud, /!isDeploying && hasBuildingItems \? "flex" : "none"/);
+
+    // World overlays exist for floating progress and celebrations
+    assert.match(hud, /id="sow-hud-world-progress-overlay"/);
+    assert.match(hud, /id="sow-hud-world-celebrations-overlay"/);
+    assert.match(hud, /function renderWorldBuildingProgress\(/);
+    assert.match(hud, /function renderWorldBuildingCelebrations\(/);
+
+    // Rust canvas no longer renders spinning ring/arc for building status
+    const overlaysPath = path.resolve(import.meta.dirname, "../../sow-client/src/render/world/overlays.rs");
+    const overlays = fs.readFileSync(overlaysPath, "utf-8");
+    assert.doesNotMatch(overlays, /text\.push_ring\(\s*center_px,\s*radius/);
+    assert.doesNotMatch(overlays, /text\.push_arc/);
 });
 
 test("building placement controls are in Web HUD: floating tactical card, nudge arrows, and confirm/cancel", () => {
@@ -998,31 +1010,50 @@ test("building placement controls are in Web HUD: floating tactical card, nudge 
     assert.match(hud, /data-placement-nudge="right"/);
 
     // Test renderPlacementPanel logic
-    const start = hud.indexOf("function positionPlacementPanel(");
+    const start = hud.indexOf("function positionPlacementOverlay(");
     const end = hud.indexOf("// Command ring: six fixed 60° slots", start);
     assert.ok(start > 0 && end > start);
 
-    const classes = new Set<string>(["hidden"]);
-    const styleProps: Record<string, string> = {};
+    const overlayClasses = new Set<string>(["hidden"]);
+    const overlayNode = {
+        dataset: {} as Record<string, string>,
+        classList: {
+            add(...cls: string[]) {
+                cls.forEach((c) => overlayClasses.add(c));
+            },
+            remove(...cls: string[]) {
+                cls.forEach((c) => overlayClasses.delete(c));
+            },
+            contains(cls: string) {
+                return overlayClasses.has(cls);
+            },
+        },
+    };
+
+    const makeArrowNode = () => ({
+        style: { left: "", top: "" },
+    });
+    const arrowNodes = {
+        up: makeArrowNode(),
+        right: makeArrowNode(),
+        down: makeArrowNode(),
+        left: makeArrowNode(),
+    };
+
+    const panelClasses = new Set<string>();
     let innerHTML = "";
     const panelNode = {
         dataset: {} as Record<string, string>,
-        style: {
-            left: "",
-            top: "",
-            setProperty(k: string, v: string) {
-                styleProps[k] = v;
-            },
-        },
+        style: { left: "", top: "" },
         classList: {
             add(...cls: string[]) {
-                cls.forEach((c) => classes.add(c));
+                cls.forEach((c) => panelClasses.add(c));
             },
             remove(...cls: string[]) {
-                cls.forEach((c) => classes.delete(c));
+                cls.forEach((c) => panelClasses.delete(c));
             },
             contains(cls: string) {
-                return classes.has(cls);
+                return panelClasses.has(cls);
             },
         },
         replaceChildren() {
@@ -1034,15 +1065,17 @@ test("building placement controls are in Web HUD: floating tactical card, nudge 
         set innerHTML(val: string) {
             innerHTML = val;
         },
-        offsetWidth: 260,
-        offsetHeight: 104,
+        offsetWidth: 230,
+        offsetHeight: 96,
     };
 
     const dockRect = { top: 520, height: 72 };
     const ctx = vm.createContext({
         window: { SOW_LOCALE: "en", innerWidth: 800, innerHeight: 600 },
         hudRefs: {
+            placementOverlay: overlayNode,
             placementPanel: panelNode,
+            placementArrows: arrowNodes,
             dock: {
                 hidden: false,
                 getBoundingClientRect() {
@@ -1058,15 +1091,15 @@ test("building placement controls are in Web HUD: floating tactical card, nudge 
     });
     vm.runInContext(hud.slice(start, end), ctx);
 
-    // Inactive placement hides panel
+    // Inactive placement hides overlay
     assert.equal(ctx.renderPlacementPanel(null), false);
-    assert.equal(panelNode.classList.contains("hidden"), true);
+    assert.equal(overlayNode.classList.contains("hidden"), true);
 
-    // Pending placement hides panel
+    // Pending placement hides overlay
     assert.equal(ctx.renderPlacementPanel({ pending: true, can_confirm: true }), false);
-    assert.equal(panelNode.classList.contains("hidden"), true);
+    assert.equal(overlayNode.classList.contains("hidden"), true);
 
-    // Active placement reveals panel with controls
+    // Active placement reveals overlay, positions 4 outer arrows, and formats spacious action buttons
     const placement = {
         pending: false,
         can_confirm: true,
@@ -1074,16 +1107,22 @@ test("building placement controls are in Web HUD: floating tactical card, nudge 
         tile_idx: 42,
         anchor_x: 350,
         anchor_y: 200,
+        arrows: {
+            up: [350, 150] as [number, number],
+            right: [400, 200] as [number, number],
+            down: [350, 250] as [number, number],
+            left: [300, 200] as [number, number],
+        },
         cost: 200,
     };
     assert.equal(ctx.renderPlacementPanel(placement), true);
-    assert.equal(panelNode.classList.contains("hidden"), false);
+    assert.equal(overlayNode.classList.contains("hidden"), false);
     assert.match(panelNode.innerHTML, /data-placement-action="confirm"/);
     assert.match(panelNode.innerHTML, /data-placement-action="cancel"/);
-    assert.match(panelNode.innerHTML, /data-placement-nudge="left"/);
-    assert.match(panelNode.innerHTML, /data-placement-nudge="right"/);
-    assert.match(panelNode.innerHTML, /data-placement-nudge="up"/);
-    assert.match(panelNode.innerHTML, /data-placement-nudge="down"/);
+    assert.doesNotMatch(panelNode.innerHTML, /data-placement-nudge/);
+    assert.equal(arrowNodes.up.style.left, "350.0px");
+    assert.equal(arrowNodes.up.style.top, "150.0px");
+    assert.equal(arrowNodes.down.style.top, "250.0px");
     assert.match(panelNode.innerHTML, /200/);
     assert.equal(panelNode.dataset.placement, "below");
 
@@ -1095,6 +1134,12 @@ test("building placement controls are in Web HUD: floating tactical card, nudge 
         tile_idx: 42,
         anchor_x: 350,
         anchor_y: 450,
+        arrows: {
+            up: [350, 400] as [number, number],
+            right: [400, 450] as [number, number],
+            down: [350, 500] as [number, number],
+            left: [300, 450] as [number, number],
+        },
         cost: 200,
         reason: "hud.build_no_space",
     };
