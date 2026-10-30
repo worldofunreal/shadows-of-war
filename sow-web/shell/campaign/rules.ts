@@ -25,6 +25,8 @@ export const WAIT_MS = 1100;
 // Match EMOTE_DURATION_SECS in sow-core. Clear the previous bubble before another text is installed.
 export const EXCHANGE_LINE_MS = 3000;
 export const EXCHANGE_GAP_MS = 250;
+// Looping emote sequences keep a calibrated quiet beat without changing ordinary exchanges.
+export const EXCHANGE_SEQUENCE_GAP_MS = 3000;
 export const EXCHANGE_EMOTE_ACK_TIMEOUT_MS = 2500;
 export const EXCHANGE_DEFAULT_REPLY_DELAY_MS = 700;
 export const EXCHANGE_MAX_DELAY_MS = 10000;
@@ -686,8 +688,9 @@ export function campaignBaseExpressions(
     for (const speaker of Object.values(definition.speakers || {}) as CampaignRecord[]) {
         const rule = speaker.base_expression;
         if (!rule) continue;
-        const allied = (facts.alliance_faction_ids || []).includes(rule.until.target);
-        const expression = allied ? rule.after_expression : rule.expression;
+        const fact = rule.until.type === "defeated" ? facts.defeated_faction_ids : facts.alliance_faction_ids;
+        const reached = (fact || []).includes(rule.until.target);
+        const expression = reached ? rule.after_expression : rule.expression;
         if (expression) expressions[speaker.faction || "player"] = expression;
     }
     return expressions;

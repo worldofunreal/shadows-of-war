@@ -78,6 +78,7 @@ declare global {
         SOW_menu_music_cinematic: (active: boolean) => void;
         SOW_LOCALE: string;
         SOW_LOCALE_DEFAULT: string;
+        SOW_SITE_LOCALE?: string;
         SOW_LOCALE_CATALOG_VERSION: number;
         SOW_LOCALE_CODES: string[];
         SOW_LOCALE_BASE: string;

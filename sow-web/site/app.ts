@@ -91,6 +91,11 @@
     0,
     cards.findIndex((card) => card.classList.contains("is-active")),
   );
+  try {
+    const saved = window.sessionStorage.getItem("sow_site_selected_leader");
+    const index = leaders.findIndex((leader) => leader.id === saved);
+    if (index >= 0) activeLeaderIndex = index;
+  } catch {}
   let activeArtSlug = "";
   const image = $("[data-detail-image]");
   const mobileImage = $("[data-detail-image-mobile]");
@@ -109,15 +114,42 @@
     return card?.querySelector ? card.querySelector("img") : card?.children?.find?.((c) => c.tagName === "IMG") || null;
   }
 
+  const cardAvatarAnims = new WeakMap<any, any>();
+
   function setCardAvatar(card, cardIndex, expression) {
     const img = getCardImg(card);
     if (!img) return;
     const slug = leaders[cardIndex]?.artSlug || card?.dataset?.artSlug;
     if (!slug) return;
-    img.src =
+    const newSrc =
       expression === "calm"
         ? `/assets/gameplay/avatars/${slug}.webp`
         : `/assets/gameplay/avatars/expressions/${slug}_${expression}.webp`;
+
+    const prevSrc = img.getAttribute("src") || img.src || "";
+    if (prevSrc === newSrc || (prevSrc && prevSrc.endsWith(newSrc))) return;
+
+    img.src = newSrc;
+
+    if (prefersReducedMotion?.matches || typeof img.animate !== "function") return;
+
+    const running = cardAvatarAnims.get(img);
+    if (running && typeof running.cancel === "function") {
+      try { running.cancel(); } catch {}
+    }
+
+    const anim = img.animate(
+      [
+        { opacity: 0.35, transform: "scale(0.86) translateY(2px)" },
+        { opacity: 1, transform: "scale(1) translateY(0)" },
+      ],
+      {
+        duration: expression === "happy" ? 340 : 250,
+        easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+        fill: "both",
+      },
+    );
+    if (anim) cardAvatarAnims.set(img, anim);
   }
 
   function isMobileViewport() {
@@ -224,6 +256,9 @@
     const direction = explicitDirection !== 0 ? explicitDirection : index >= activeLeaderIndex ? 1 : -1;
     lastDirection = direction;
     activeLeaderIndex = index;
+    try { window.sessionStorage.setItem("sow_site_selected_leader", leader.id); } catch {}
+    const profile = $("[data-detail-profile]");
+    if (profile) profile.href = `${document.documentElement.dataset.sitePrefix || "/"}leaders/${leader.id}/`;
     const name = showText($("[data-detail-name]"), leader, "name");
     if (image) {
       image.alt = name;
@@ -240,6 +275,21 @@
         art.classList.remove("is-unavailable");
         portrait.hidden = false;
         portrait.src = `/assets/gameplay/avatars/${leader.artSlug}.webp`;
+        if (animate && !prefersReducedMotion?.matches && typeof portrait?.animate === "function") {
+          try {
+            portrait.animate(
+              [
+                { opacity: 0.35, transform: "scale(0.86) translateY(2px)" },
+                { opacity: 1, transform: "scale(1) translateY(0)" },
+              ],
+              {
+                duration: 260,
+                easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+                fill: "both",
+              },
+            );
+          } catch {}
+        }
         // Change the responsive source first, so the browser never requests
         // the desktop art for an intermediate leader on a phone.
         if (mobileImage) mobileImage.srcset = `/assets/shell/leaders/${leader.artSlug}_mobile.webp`;

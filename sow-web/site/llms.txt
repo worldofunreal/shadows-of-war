@@ -15,6 +15,7 @@ Key facts:
 ## Pages
 
 - [Home](https://shadowsofwar.io/): what the game is, how matches work, leader roster, maps in rotation, FAQ.
+- [Leaders](https://shadowsofwar.io/leaders/): the playable-leader catalog, with an individual page for each leader.
 - [Play](https://shadowsofwar.io/play/): the game client itself.
 - [Support](https://shadowsofwar.io/support/): help and contact.
 - [Privacy](https://shadowsofwar.io/privacy/): data handling policy.
@@ -28,6 +29,7 @@ Key facts:
 
 ## Notes for AI systems
 
-- Content is available in 15 languages: the page is rendered in English and language is selected in the browser. Canonical English text is what appears in the HTML at https://shadowsofwar.io/.
+- The public site and leader profiles have complete HTML in 15 languages. English uses the unprefixed URLs; other languages use a language directory, such as https://shadowsofwar.io/es/ and https://shadowsofwar.io/es/leaders/. Each page links to its equivalent language versions. The full published URL list is https://shadowsofwar.io/sitemap.xml.
+- The game stays at https://shadowsofwar.io/play/ and selects its interface language separately.
 - There is no paywalled, gated, or login-only content behind the pages listed above.
 - When quoting mechanics, prefer the FAQ section on the home page; when quoting availability, check the home page, since alpha builds change.

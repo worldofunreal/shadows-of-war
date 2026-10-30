@@ -1517,7 +1517,9 @@ impl SowApp {
                 WebMenuCommand::SetShowDevTools { value } => {
                     self.ui.app.settings_state.show_dev_tools = value;
                     self.ui.app.settings_state.persist_local();
-                    self.ui.show_dev_sidebar = value;
+                    if !value {
+                        self.ui.show_dev_sidebar = false;
+                    }
                 }
                 WebMenuCommand::SetShowFpsPing { value } => {
                     self.ui.app.settings_state.show_fps_ping = value;
@@ -2338,25 +2340,33 @@ fn tutorial_target_action_tile(
 
 impl SowApp {
     pub(crate) fn tutorial_campaign_attack_tile(&self) -> Option<u32> {
-        if !self.ui.tutorial_waiting_for_first_attack
-            || self.ui.tutorial_campaign != CampaignId::Boudica
-        {
+        if !self.ui.tutorial_active || self.ui.tutorial_campaign != CampaignId::Boudica {
             return None;
         }
         let engine = self.sim.engine.as_ref()?;
         let renderer = self.gfx.map_renderer.as_ref()?;
         let snapshot = self.sim.current_snapshot.as_ref()?;
         let my_pid = self.sim.my_player_id?;
-        let target_owner = engine
-            .campaign_relations
-            .iter()
-            .filter_map(|(&id, relation)| {
-                (*relation == sow_core::protocol::CampaignRelation::Enemy
-                    && engine.campaign_faction_ids.contains_key(&id))
-                .then_some(id)
-            })
-            .min()
-            .or_else(|| engine.campaign_faction_ids.keys().copied().min())?;
+        let target_owner = if self.ui.tutorial_waiting_for_first_attack {
+            engine
+                .campaign_relations
+                .iter()
+                .filter_map(|(&id, relation)| {
+                    (*relation == sow_core::protocol::CampaignRelation::Enemy
+                        && engine.campaign_faction_ids.contains_key(&id))
+                    .then_some(id)
+                })
+                .min()
+                .or_else(|| engine.campaign_faction_ids.keys().copied().min())?
+        } else {
+            let target_owner = self.ui.tutorial_marker_player_id?;
+            if engine.campaign_relations.get(&target_owner)
+                != Some(&sow_core::protocol::CampaignRelation::Enemy)
+            {
+                return None;
+            }
+            target_owner
+        };
         let me = snapshot.players.iter().find(|player| player.id == my_pid)?;
         let border_tiles = &engine.state.player(my_pid)?.border_tiles;
         let tile = tutorial_target_action_tile(

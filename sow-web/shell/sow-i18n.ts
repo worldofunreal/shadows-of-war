@@ -79,6 +79,8 @@
     }
 
     function preferredLocale() {
+        const pageLocale = supportedLocale(window.SOW_SITE_LOCALE);
+        if (pageLocale) return pageLocale;
         let stored = "";
         try {
             stored = String(window.localStorage.getItem(STORAGE_KEY) || "");
@@ -320,7 +322,7 @@
             document.documentElement.dataset.locale = localeTag(locale);
             document.documentElement.dataset.localeScript = localeScript(locale);
         }
-        saveLocale(locale);
+        if (!window.SOW_SITE_LOCALE || notify) saveLocale(locale);
         if (notify) announce(locale);
         return strings;
     }
@@ -367,7 +369,7 @@
         document.documentElement.dir = localeDirection(initialLocale);
         // The shared selector runs in the head. Site chrome reveals the page
         // only after applying its translations, so English cannot flash first.
-        if (!hasConfiguredCodes || catalogVersion < 1 || initialLocale !== defaultLocale) {
+        if (!window.SOW_SITE_LOCALE && (!hasConfiguredCodes || catalogVersion < 1 || initialLocale !== defaultLocale)) {
             document.documentElement.dataset.sowLocalePending = "true";
         }
     }
@@ -380,6 +382,7 @@
                     ? Promise.resolve(null)
                     : load(initialLocale).catch(function (error) {
                           report("locale." + initialLocale, error);
+                          if (window.SOW_SITE_LOCALE) throw error;
                           return null;
                       });
             return Promise.all([english, selected]);

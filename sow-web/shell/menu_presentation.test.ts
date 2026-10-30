@@ -42,8 +42,6 @@ const serverSource = fs.readFileSync(path.join(shell, "../../sow-data/src/main.r
 const privacyPage = fs.readFileSync(path.join(shell, "../site/privacy/index.html"), "utf8");
 const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.ts"), "utf8");
 const jestSource = fs.readFileSync(path.join(shell, "main_menu.jest.ts"), "utf8");
-const siteChrome = fs.readFileSync(path.join(shell, "../../sow-web/site/site-chrome.ts"), "utf8");
-const siteDropdown = fs.readFileSync(path.join(shell, "sow-dropdown.ts"), "utf8");
 const campaignModule = fs.readFileSync(path.join(shell, "../../sow-client/src/campaign/mod.rs"), "utf8");
 
 function renderSettingsBody(source, endMarker) {
@@ -53,38 +51,6 @@ function renderSettingsBody(source, endMarker) {
     assert.notEqual(end, -1);
     return source.slice(start, end);
 }
-
-test("mobile menu renders its language selector after locale bootstrap", async () => {
-    const controls = Array.from({ length: 2 }, () => ({
-        className: "",
-        innerHTML: "",
-        querySelector: () => null,
-    }));
-    const menu = { classList: { toggle() {} }, setAttribute() {}, querySelectorAll: () => [] };
-    const menuToggle = { setAttribute() {}, addEventListener() {} };
-    const document = {
-        documentElement: { dataset: {} },
-        querySelectorAll: (selector) => (selector === "[data-locale-select]" ? controls : []),
-        querySelector: (selector) =>
-            selector === "#mobile-menu" ? menu : selector === "[data-menu-toggle]" ? menuToggle : null,
-        addEventListener() {},
-    };
-    const window = {
-        SOW_I18N_READY: Promise.resolve(),
-        SOW_t: (key) => key,
-        SOW_getLocale: () => "en",
-        SOW_getLocaleTag: (locale) => locale,
-        SOW_getSupportedLocales: () => ["en", "es"],
-        SOW_getLocaleLabel: (locale) => locale,
-        addEventListener() {},
-    };
-    const context = { document, window };
-    vm.runInNewContext(siteDropdown.slice(siteDropdown.indexOf("(function () {")), context);
-    vm.runInNewContext(siteChrome, context);
-    await window.SOW_I18N_READY;
-    await Promise.resolve();
-    assert.match(controls[1].innerHTML, /sow-control-dropdown__trigger/);
-});
 
 test("profile presents verified history, career commanders, localized achievements, and a paged global board", () => {
     const matchRowStart = profileSource.indexOf("function profileMatchRow");

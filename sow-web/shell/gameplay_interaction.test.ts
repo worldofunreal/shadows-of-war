@@ -1218,3 +1218,103 @@ test("rankings HUD sheet includes search filter and filters entity rows in real 
     assert.equal(cards[2].hidden, true);
     assert.equal(emptyMsg.hidden, false);
 });
+
+test("dev tools button is initially hidden by markup and CSS, and toggling it in settings does not open the dev panel automatically", () => {
+    const hudSource = fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
+    const hudCss = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
+
+    assert.match(
+        hudSource,
+        /<button class="sow-hud__icon-btn hidden" type="button" data-command="toggle_dev_sidebar" id="sow-hud-dev-btn" hidden/,
+    );
+    assert.match(hudCss, /\.sow-hud__icon-btn\.hidden/);
+    assert.match(hudCss, /\.sow-hud__icon-btn\[hidden\]/);
+
+    const start = hudSource.indexOf('if (setting === "show_dev_tools")');
+    const settingsHandler = hudSource.slice(
+        start,
+        hudSource.indexOf('send("set_show_dev_tools"', start),
+    );
+    assert.doesNotMatch(settingsHandler, /setHudPanel\(null\)/);
+});
+
+test("HUD corner rails use stylized icons matching the bell, trophy, gear and tactical reticle designs", () => {
+    const hudSource = fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
+
+    // Inbox: stylized bell SVG with fill="currentColor" for dynamic styling (no baked gradient/shadow background)
+    assert.match(
+        hudSource,
+        /inbox:\s*'<svg class="sow-hud__action-icon" viewBox="0 0 36 39" fill="currentColor"/,
+    );
+    assert.doesNotMatch(hudSource, /id="sow-notif-shadow"/);
+    assert.doesNotMatch(hudSource, /id="sow-notif-grad"/);
+
+    // Rankings: stylized podium SVG with fill="currentColor" for dynamic styling (no baked gradient/shadow background)
+    assert.match(
+        hudSource,
+        /rankings:\s*'<svg class="sow-hud__action-icon" viewBox="0 0 48 41" fill="currentColor"/,
+    );
+    assert.doesNotMatch(hudSource, /id="sow-rankings-shadow"/);
+    assert.doesNotMatch(hudSource, /id="sow-rank-grad-0"/);
+
+    // Settings & options: stylized interlocking gears SVG with fill="currentColor"
+    assert.match(
+        hudSource,
+        /settings:\s*'<svg class="sow-hud__action-icon" viewBox="70 135 860 775" fill="currentColor"/,
+    );
+    assert.match(
+        hudSource,
+        /options:\s*'<svg class="sow-hud__action-icon" viewBox="70 135 860 775" fill="currentColor"/,
+    );
+
+    // CSS: hover bright cyan and active/pressed bright orange on HUD icon buttons
+    const hudCss = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
+    assert.match(hudCss, /\.sow-hud__icon-btn:hover[\s\S]*?#00e5ff/);
+    assert.match(
+        hudCss,
+        /\.sow-hud__icon-btn\.active,[\s\S]*?\.sow-hud__icon-btn\[aria-expanded="true"\][\s\S]*?#ff9800/,
+    );
+    assert.match(hudCss, /\.sow-hud__icon-btn\[data-command="toggle_settings"\]:hover[\s\S]*?#00e5ff/);
+    assert.match(hudCss, /\.sow-hud__icon-btn\[data-command="toggle_inbox"\]:hover[\s\S]*?#00e5ff/);
+    assert.match(hudCss, /\.sow-hud__icon-btn\[data-command="toggle_leaderboard"\]:hover[\s\S]*?#00e5ff/);
+
+    // Camera: tactical scope reticle
+    assert.match(hudSource, /camera:\s*'<circle cx="12" cy="12" r="7"/);
+
+    // Dev tools: angled stylized wrench
+    assert.match(hudSource, /tools:\s*'<path d="M15 5a4\.5 4\.5 0 0 0-6 6\.2L3\.5 16\.7/);
+
+    // Zoom in (plus) & zoom out (minus): Tabler outline SVGs with stroke="currentColor"
+    assert.match(
+        hudSource,
+        /plus:\s*'<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"/,
+    );
+    assert.match(
+        hudSource,
+        /minus:\s*'<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"/,
+    );
+    assert.match(
+        hudSource,
+        /zoom_in:\s*'<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"/,
+    );
+    assert.match(
+        hudSource,
+        /zoom_out:\s*'<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"/,
+    );
+
+    // Home: Tabler filled home-2 SVG with fill="currentColor"
+    assert.match(
+        hudSource,
+        /home:\s*'<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="currentColor"/,
+    );
+
+    // Right rail center camera button uses the home icon
+    assert.match(
+        hudSource,
+        /data-command="center_camera"[^>]*>'\s*\+\s*hudIcon\("home", "sow-hud__action-icon"\)/,
+    );
+
+    // Right rail active & holding states use #ff9800
+    assert.match(hudCss, /\.sow-hud__icon-btn:active[\s\S]*?#ff9800/);
+    assert.match(hudCss, /\.sow-hud__icon-btn\.is-holding[\s\S]*?#ff9800/);
+});

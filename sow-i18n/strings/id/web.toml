@@ -270,6 +270,7 @@ campaign_chronicles = "KAMPANYE\nKRONIK"
 campaign_unavailable = "Kampanye tidak tersedia."
 
 [heroes]
+oceania = "Oseania"
 leader_caesar_name = "Julius Caesar"
 leader_caesar_historical = "Gaius Julius Caesar"
 leader_cleopatra_name = "Cleopatra VII"
@@ -901,6 +902,14 @@ match_message_4 = "Pertarunganmu akan berakhir. / Dokumen bisa menunggu."
 match_message_5 = "Pertarunganmu akan berakhir, ini pasti bagian dari rencana."
 
 [site]
+view_profile = "Lihat profil pemimpin"
+all_leaders = "Semua pemimpin"
+historical_name = "Nama historis"
+civilization = "Peradaban"
+region = "Wilayah"
+historical_reference = "Referensi sejarah"
+suggest_language = "Baca dalam {language}"
+
 landing_build_expand = "Bangun. Perluas."
 landing_betray = "Berkhianat."
 empire_starts = "Kekaisaranmu berikutnya"

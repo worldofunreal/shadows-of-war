@@ -451,14 +451,14 @@ export function validate(
                         (rule.after_expression != null &&
                             !["happy", "calm", "fear", "angry"].includes(rule.after_expression)) ||
                         !object(rule.until) ||
-                        rule.until.type !== "alliance" ||
+                        !["alliance", "defeated"].includes(rule.until.type) ||
                         typeof rule.until.target !== "string" ||
                         (roster && !rosterFactions.has(rule.until.target) && !allowMissingFactionReferences)
                     ) {
                         issue(
                             null,
                             "speakers." + key + ".base_expression",
-                            "Choose valid expressions and an existing alliance target.",
+                            "Choose valid expressions and an existing campaign target.",
                         );
                     }
                 }

@@ -270,6 +270,7 @@ campaign_chronicles = "КЕМПАЙГН\nХРОНИКЛЫ"
 campaign_unavailable = "Кампания недоступна."
 
 [heroes]
+oceania = "Океания"
 leader_caesar_name = "Юлий Цезарь"
 leader_caesar_historical = "Гай Юлий Цезарь"
 leader_cleopatra_name = "Клеопатра VII"
@@ -901,6 +902,14 @@ match_message_4 = "Твоя битва закончится, документы 
 match_message_5 = "Твоя битва закончится, это определенно было частью плана."
 
 [site]
+view_profile = "Открыть профиль лидера"
+all_leaders = "Все лидеры"
+historical_name = "Историческое имя"
+civilization = "Цивилизация"
+region = "Регион"
+historical_reference = "Исторический источник"
+suggest_language = "Читать на языке {language}"
+
 landing_build_expand = "Строй. Расширяй."
 landing_betray = "Предавай."
 empire_starts = "Твоя новая империя"

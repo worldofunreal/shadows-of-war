@@ -858,7 +858,12 @@ test("campaign studio authors ordered Roman exchanges and previews the active sp
   );
   assert.match(campaignEditor, /Add timed emote response/);
   assert.match(campaignEditor, /After \(ms\)[\s\S]*During active objective/);
-  assert.match(campaignEditor, /renderExchangeLines\(card, reaction\.exchange, reaction\.id, "Exchange line", isTimer\)/);
+  assert.match(campaignEditor, /Loop this emote sequence/);
+  assert.match(campaignEditor, /Uses the shared campaign emote timing/);
+  assert.match(
+    campaignEditor,
+    /renderExchangeLines\(\s*card,\s*reaction\.exchange,\s*reaction\.id,\s*"Exchange line",\s*isTimer,\s*reaction\.loop !== true,?\s*\)/,
+  );
   assert.match(campaignEditor, /window\.SOWCampaignView\.mount/);
 
   const marker = {

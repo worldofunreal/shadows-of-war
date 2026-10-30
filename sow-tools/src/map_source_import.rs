@@ -18,6 +18,10 @@ pub struct ImportArgs {
     pub size: Option<String>,
     /// Rotation weight; overrides `multiplayer_frequency` from info.json.
     pub frequency: Option<u32>,
+    /// Lakes, islands, coasts and rivers for this map.
+    pub water: sow_map::image_pipeline::WaterSettings,
+    /// Live preview: skip the slow `map.bin.br` and remove a stale one, so it cannot be uploaded.
+    pub draft: bool,
 }
 
 pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -46,6 +50,7 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
             &display_name,
             args.crop,
             args.size.as_deref(),
+            &args.water,
         )?;
         (map_file, Some(source))
     } else {
@@ -65,12 +70,19 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
     let encoded = map_file::encode(&map_file);
     fs::write(out_dir.join("map.bin"), &encoded)?;
 
-    let mut brotli_out = Vec::new();
-    let mut writer = brotli::CompressorWriter::new(&mut brotli_out, 4096, 11, 22);
-    writer.write_all(&encoded)?;
-    writer.flush()?;
-    drop(writer);
-    fs::write(out_dir.join("map.bin.br"), brotli_out)?;
+    let br_path = out_dir.join("map.bin.br");
+    if args.draft {
+        if br_path.exists() {
+            fs::remove_file(&br_path)?;
+        }
+    } else {
+        let mut brotli_out = Vec::new();
+        let mut writer = brotli::CompressorWriter::new(&mut brotli_out, 4096, 11, 22);
+        writer.write_all(&encoded)?;
+        writer.flush()?;
+        drop(writer);
+        fs::write(&br_path, brotli_out)?;
+    }
 
     let thumb_path = out_dir.join("thumbnail.webp");
     match thumbnail_source {
@@ -81,14 +93,28 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Persist the source `multiplayer_frequency` as info.toml so the server's
-    // catalog scan can build weighted playlists (0 = out of rotation).
+    // catalog scan can build weighted playlists (0 = out of rotation). The recipe
+    // lines let the map generator reopen this map with the same settings.
     let frequency = args
         .frequency
         .unwrap_or_else(|| read_info_json_frequency(&input));
-    fs::write(
-        out_dir.join("info.toml"),
-        format!("# Written by sow-tools import-map-source\nfrequency = {frequency}\n"),
-    )?;
+    let mut info = format!("# Written by sow-tools import-map-source\nfrequency = {frequency}\n");
+    if let Some([x, y, w, h]) = args.crop {
+        info.push_str(&format!("crop = [{x}, {y}, {w}, {h}]\n"));
+    }
+    if let Some(size) = &args.size {
+        info.push_str(&format!("size = \"{size}\"\n"));
+    }
+    let water = &args.water;
+    info.push_str(&format!(
+        "min_lake_tiles = {}\nmin_island_pixels = {}\nsmooth_coasts = {}\nwater_level = {}\nconnect_diagonals = {}\n",
+        water.min_lake_tiles,
+        water.min_island_pixels,
+        water.smooth_coasts,
+        water.water_level,
+        water.connect_diagonals
+    ));
+    fs::write(out_dir.join("info.toml"), info)?;
 
     refresh_catalog(&args.maps_root)?;
 
@@ -136,6 +162,7 @@ fn import_from_png(
     display_name: &str,
     crop: Option<[u32; 4]>,
     size: Option<&str>,
+    water: &sow_map::image_pipeline::WaterSettings,
 ) -> Result<(MapFile, image::DynamicImage), Box<dyn std::error::Error>> {
     let original = image::open(png_path)?;
     let cropped = match crop {
@@ -180,10 +207,12 @@ fn import_from_png(
         .into());
     }
     let rgba = cropped.to_rgba8();
-    let result = sow_map::image_pipeline::generate_from_rgba(&rgba, Some((target_w, target_h)))
-        .map_err(|e| format!("image pipeline: {e}"))?;
-    // Same categorical render as the canonical thumbnails (world, asia...), so water matches the lobby blue.
-    let thumbnail = sow_map::render_source_image(&cropped).map_err(|e| format!("thumbnail: {e}"))?;
+    let result =
+        sow_map::image_pipeline::generate_with_water(&rgba, Some((target_w, target_h)), water)
+            .map_err(|e| format!("image pipeline: {e}"))?;
+    // Same palette as the canonical thumbnails (world, asia...), drawn from the generated
+    // map so lakes, rivers and coasts in the thumbnail are the ones the game plays.
+    let thumbnail = sow_map::render_terrain_image(result.width, result.height, &result.map_data);
 
     // info.json spawns are in full-image pixels, so a crop has no matching spawns.
     let mut spawns = if crop.is_some() {

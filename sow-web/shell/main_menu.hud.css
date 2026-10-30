@@ -179,21 +179,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
 
 .sow-hud__status-right {
   display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 4px;
-  border: 1px solid var(--sow-line);
-  border-top-color: color-mix(in srgb, var(--sow-gold) 42%, transparent);
-  border-radius: 7px 7px 14px 4px;
-  background: var(--sow-panel);
-  box-shadow: var(--sow-surface-shadow);
-  pointer-events: auto;
-}
-
-.sow-hud__status-right {
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
+  pointer-events: auto;
 }
 
 .sow-hud__icon-pill {
@@ -424,6 +413,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
 }
 
 .sow-hud__icon-pill.hidden,
+.sow-hud__icon-btn.hidden,
+.sow-hud__icon-btn[hidden],
+#sow-hud-dev-btn.hidden,
+#sow-hud-dev-btn[hidden],
 .sow-hud__dev-sidebar.hidden,
 .sow-hud__settings.hidden {
   display: none !important;
@@ -639,7 +632,12 @@ html[dir="rtl"] #sow-hud-dev-layer {
     transform 0.15s ease,
     border-color 0.15s ease,
     background 0.15s ease,
-    color 0.15s ease;
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.sow-hud__icon-btn.hidden,
+.sow-hud__icon-btn[hidden] {
+  display: none !important;
 }
 
 .sow-hud__icon-btn .sow-hud__action-icon {
@@ -647,29 +645,61 @@ html[dir="rtl"] #sow-hud-dev-layer {
   height: 30px;
 }
 
-.sow-hud__icon-btn:hover {
-  border-color: color-mix(in srgb, var(--sow-gold) 52%, transparent);
-  transform: translateX(-2px);
-  background: color-mix(in srgb, var(--sow-gold) 9%, transparent);
-  color: var(--sow-gold-bright);
+.sow-hud__icon-btn:hover,
+.sow-hud__icon-btn[data-command="prompt_surrender"]:hover,
+.sow-hud__icon-btn[data-command="toggle_settings"]:hover,
+.sow-hud__icon-btn[data-command="toggle_inbox"]:hover,
+.sow-hud__icon-btn[data-command="toggle_leaderboard"]:hover,
+.sow-hud__icon-btn[data-command="toggle_dev_sidebar"]:hover,
+.sow-hud__icon-btn[data-command="zoom_in"]:hover,
+.sow-hud__icon-btn[data-command="zoom_out"]:hover,
+.sow-hud__icon-btn[data-command="center_camera"]:hover {
+  border-color: #00e5ff;
+  color: #00e5ff;
+  background: color-mix(in srgb, #00e5ff 14%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, #00e5ff 32%, transparent);
 }
 
-.sow-hud__icon-btn:active {
+.sow-hud__icon-btn:active,
+.sow-hud__icon-btn.active,
+.sow-hud__icon-btn[aria-expanded="true"],
+.sow-hud__icon-btn.is-holding,
+.sow-hud__icon-btn[data-command="prompt_surrender"]:active,
+.sow-hud__icon-btn[data-command="toggle_settings"]:active,
+.sow-hud__icon-btn[data-command="toggle_settings"].active,
+.sow-hud__icon-btn[data-command="toggle_settings"][aria-expanded="true"],
+.sow-hud__icon-btn[data-command="toggle_inbox"]:active,
+.sow-hud__icon-btn[data-command="toggle_inbox"].active,
+.sow-hud__icon-btn[data-command="toggle_inbox"][aria-expanded="true"],
+.sow-hud__icon-btn[data-command="toggle_leaderboard"]:active,
+.sow-hud__icon-btn[data-command="toggle_leaderboard"].active,
+.sow-hud__icon-btn[data-command="toggle_leaderboard"][aria-expanded="true"],
+.sow-hud__icon-btn[data-command="toggle_dev_sidebar"]:active,
+.sow-hud__icon-btn[data-command="toggle_dev_sidebar"].active,
+.sow-hud__icon-btn[data-command="toggle_dev_sidebar"][aria-expanded="true"],
+.sow-hud__icon-btn[data-command="zoom_in"]:active,
+.sow-hud__icon-btn[data-command="zoom_in"].is-holding,
+.sow-hud__icon-btn[data-command="zoom_out"]:active,
+.sow-hud__icon-btn[data-command="zoom_out"].is-holding,
+.sow-hud__icon-btn[data-command="center_camera"]:active {
+  border-color: #ff9800;
+  color: #ff9800;
+  background: color-mix(in srgb, #ff9800 18%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, #ff9800 36%, transparent);
   transform: scale(0.96);
 }
-.sow-hud__icon-btn.is-holding {
-  border-color: var(--sow-gold-bright);
-  background: color-mix(in srgb, var(--sow-gold) 20%, transparent);
-  color: var(--sow-gold-bright);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--sow-gold) 20%, transparent),
-    0 0 18px color-mix(in srgb, var(--sow-gold) 32%, transparent);
+
+.sow-hud__icon-btn.active:hover,
+.sow-hud__icon-btn[aria-expanded="true"]:hover,
+.sow-hud__icon-btn.is-holding:hover {
+  border-color: #ffa726;
+  color: #ffa726;
+  background: color-mix(in srgb, #ff9800 24%, transparent);
+  box-shadow: 0 0 16px color-mix(in srgb, #ff9800 45%, transparent);
 }
+
 .sow-hud__icon-btn.is-zoom-limited {
-  border-color: var(--sow-line);
-  background: var(--sow-panel);
-  color: #dedfd9;
-  box-shadow: var(--sow-surface-shadow);
+  opacity: 0.45;
 }
 
 /* Bottom Action Dock */
@@ -1200,6 +1230,19 @@ html[dir="rtl"] #sow-hud-dev-layer {
   margin: 0;
   padding: 4px 8px 4px 16px;
   border-bottom: 1px solid var(--sow-line);
+}
+.sow-hud__sheet-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.sow-hud__sheet-title-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+  color: var(--sow-gold);
 }
 .sow-hud__sheet-title {
   flex: 1;
@@ -4578,7 +4621,7 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   }
   .sow-hud__status-right {
     gap: 6px;
-    padding: 3px;
+    padding: 0;
   }
   .sow-hud__icon-pill {
     width: 40px;
@@ -4903,9 +4946,8 @@ html[dir="rtl"] .sow-hud__dev-play::before {
     inset-inline: max(8px, var(--sow-sal)) var(--sow-hud-right-edge);
   }
   #sow-hud[data-compact="true"] .sow-hud__status-right {
-    flex-direction: row;
     gap: 6px;
-    padding: 3px;
+    padding: 0;
   }
   #sow-hud[data-compact="true"] .sow-hud__icon-pill {
     width: 44px;
@@ -5108,9 +5150,8 @@ html[dir="rtl"] .sow-hud__dev-play::before {
     inset-inline: max(8px, var(--sow-sal)) var(--sow-hud-right-edge);
   }
   #sow-hud[data-compact="true"] .sow-hud__status-right {
-    flex-direction: row;
     gap: 6px;
-    padding: 3px;
+    padding: 0;
   }
   #sow-hud[data-compact="true"] .sow-hud__hover-card {
     top: max(5px, var(--sow-sat));

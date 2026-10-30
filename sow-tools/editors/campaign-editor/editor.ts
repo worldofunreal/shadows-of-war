@@ -567,7 +567,7 @@
     node.appendChild(el("h3", {}, title));
     return node;
   }
-  function renderExchangeLines(host, lines, ownerId, label, emotesOnly = false) {
+  function renderExchangeLines(host, lines, ownerId, label, emotesOnly = false, showDelay = true) {
     lines.forEach(function (line, index) {
       const card = el("div", { class: "form-card" });
       const presentation = line.presentation || "emote";
@@ -661,19 +661,20 @@
         );
         catalogTextField(card, "Bubble text", line.emote_text_key, 2);
       }
-      card.appendChild(
-        inputField(
-          "Pause after line (ms)",
-          delay,
-          function (value) {
-            const milliseconds = Number(value);
-            if (Number.isInteger(milliseconds) && milliseconds >= 0 && milliseconds <= 10000)
-              line.delay_ms = milliseconds;
-            markDirty();
-          },
-          { type: "number", min: 0, max: 10000, step: 50 },
-        ),
-      );
+      if (showDelay)
+        card.appendChild(
+          inputField(
+            "Pause after line (ms)",
+            delay,
+            function (value) {
+              const milliseconds = Number(value);
+              if (Number.isInteger(milliseconds) && milliseconds >= 0 && milliseconds <= 10000)
+                line.delay_ms = milliseconds;
+              markDirty();
+            },
+            { type: "number", min: 0, max: 10000, step: 50 },
+          ),
+        );
       card.appendChild(reorderControls(lines, index, label.toLowerCase()));
       if (lines.length > 1) {
         const remove = el("button", { type: "button" }, "Remove line");
@@ -2836,7 +2837,9 @@
           "strong",
           {},
           (isTimer
-            ? "Timed emote · "
+            ? reaction.loop === true
+              ? "Looping emote sequence · "
+              : "Timed emote · "
             : isPreDefeat
               ? "Before defeat · "
               : isFirstContact
@@ -2849,6 +2852,21 @@
         ),
       );
       if (isTimer) {
+        card.appendChild(
+          checkboxField("Loop this emote sequence", reaction.loop === true, function (enabled) {
+            if (enabled) {
+              reaction.loop = true;
+              delete reaction.when.repeat_ms;
+              (reaction.exchange || []).forEach(function (line) {
+                delete line.delay_ms;
+              });
+            } else delete reaction.loop;
+            markDirty();
+            renderSettings();
+          }),
+        );
+        if (reaction.loop === true)
+          card.appendChild(el("p", { class: "form-hint" }, "Uses the shared campaign emote timing."));
         card.appendChild(
           inputField(
             "After (ms)",
@@ -3207,7 +3225,14 @@
         catalogTextField(card, "Dialogue", reaction.body_key, 4);
       }
       if (reaction.exchange) {
-        renderExchangeLines(card, reaction.exchange, reaction.id, "Exchange line", isTimer);
+        renderExchangeLines(
+          card,
+          reaction.exchange,
+          reaction.id,
+          "Exchange line",
+          isTimer,
+          reaction.loop !== true,
+        );
         if (reaction.exchange.length < 16) {
           const addExchangeLine = el("button", { type: "button" }, "Add exchange line");
           addExchangeLine.addEventListener("click", function () {
@@ -3218,13 +3243,16 @@
               Object.keys(state.definition.speakers || {}).find(function (speakerId) {
                 return !state.definition.speakers[speakerId].faction;
               });
-            reaction.exchange.push({
+            const line = {
               speaker: targetSpeaker,
               presentation: "emote",
               emote: "threat",
               emote_text_key: storyKey(reaction.id + "_line_" + (reaction.exchange.length + 1) + "_emote"),
-              delay_ms: window.SOWCampaign.EXCHANGE_DEFAULT_REPLY_DELAY_MS,
-            });
+              ...(reaction.loop !== true
+                ? { delay_ms: window.SOWCampaign.EXCHANGE_DEFAULT_REPLY_DELAY_MS }
+                : {}),
+            };
+            reaction.exchange.push(line);
             markDirty();
             renderSettings();
           });

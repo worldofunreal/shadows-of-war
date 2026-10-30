@@ -1,0 +1,31 @@
+[
+  {
+    "viewport": "desktop",
+    "selection_survives_locale_navigation": true,
+    "explicit_preference_saved": true,
+    "header_to_catalog": true,
+    "errors": []
+  },
+  {
+    "viewport": "mobile",
+    "selection_survives_locale_navigation": true,
+    "explicit_preference_saved": true,
+    "header_to_catalog": true,
+    "errors": []
+  },
+  {
+    "viewport": "zoom200",
+    "selection_survives_locale_navigation": true,
+    "explicit_preference_saved": true,
+    "header_to_catalog": true,
+    "errors": []
+  },
+  {
+    "unknown_browser_language_falls_back_to_english": true,
+    "explicit_spanish_url_respected": true,
+    "game_and_auth_callback_routes": true
+  },
+  {
+    "public_unknown_routes_404": true
+  }
+]

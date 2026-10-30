@@ -1,0 +1,53 @@
+[
+  {
+    "viewport": "desktop",
+    "search": "passed",
+    "profile_navigation": "passed",
+    "locale_switch": "passed",
+    "rtl": "passed",
+    "page_errors": []
+  },
+  {
+    "viewport": "mobile",
+    "search": "passed",
+    "profile_navigation": "passed",
+    "locale_switch": "passed",
+    "rtl": "passed",
+    "page_errors": []
+  },
+  {
+    "viewport": "narrow",
+    "search": "passed",
+    "profile_navigation": "passed",
+    "locale_switch": "passed",
+    "rtl": "passed",
+    "page_errors": []
+  },
+  {
+    "viewport": "tablet",
+    "search": "passed",
+    "profile_navigation": "passed",
+    "locale_switch": "passed",
+    "rtl": "passed",
+    "page_errors": []
+  },
+  {
+    "viewport": "landscape",
+    "search": "passed",
+    "profile_navigation": "passed",
+    "locale_switch": "passed",
+    "rtl": "passed",
+    "page_errors": []
+  },
+  {
+    "viewport": "zoom200",
+    "search": "passed",
+    "profile_navigation": "passed",
+    "locale_switch": "passed",
+    "rtl": "passed",
+    "page_errors": []
+  },
+  {
+    "javascript_disabled": "passed"
+  }
+]

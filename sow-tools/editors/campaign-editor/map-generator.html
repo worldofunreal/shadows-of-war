@@ -37,8 +37,60 @@
         overflow: hidden;
       }
       main {
-        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
         padding: 12px;
+        gap: 8px;
+      }
+      .tabs {
+        display: flex;
+        gap: 6px;
+      }
+      .tabs button {
+        margin: 0;
+        width: auto;
+        padding: 5px 12px;
+        border-color: var(--line);
+        color: var(--muted);
+      }
+      .tabs button[aria-selected="true"] {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .view {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+      .view[hidden] {
+        display: none;
+      }
+      #game {
+        width: 100%;
+        height: 100%;
+        border: 1px solid var(--line);
+        background: #000;
+      }
+      fieldset {
+        margin: 16px 0 0;
+        padding: 4px 10px 10px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+      }
+      legend {
+        color: var(--accent);
+        padding: 0 4px;
+      }
+      .check {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        color: var(--text);
+      }
+      .check input {
+        width: auto;
       }
       canvas {
         display: block;
@@ -104,7 +156,16 @@
   </head>
   <body>
     <main>
-      <canvas id="map" aria-label="World map reference. Drag to select the area to generate."></canvas>
+      <div class="tabs" role="tablist">
+        <button id="tab-world" role="tab" aria-selected="true">World map</button>
+        <button id="tab-game" role="tab" aria-selected="false" disabled>In-game view</button>
+      </div>
+      <div id="view-world" class="view">
+        <canvas id="map" aria-label="World map reference. Drag to select the area to generate."></canvas>
+      </div>
+      <div id="view-game" class="view" hidden>
+        <iframe id="game" title="The generated map in the game"></iframe>
+      </div>
     </main>
     <aside>
       <h1>Generate map</h1>
@@ -121,6 +182,19 @@
       </select>
       <label for="frequency">Rotation weight (0 = out of rotation)</label>
       <input id="frequency" type="number" min="0" max="1000" value="1" />
+      <fieldset id="water">
+        <legend>Water</legend>
+        <div class="hint">After the first generate, every change regenerates the map and reloads the in-game view.</div>
+        <label class="check"><input id="smooth-coasts" type="checkbox" checked /> Smooth coasts (no square steps)</label>
+        <label for="water-level">Water level: <span id="water-level-value"></span></label>
+        <input id="water-level" type="range" min="0.3" max="0.7" step="0.02" value="0.5" />
+        <div class="hint">Higher widens rivers, lakes and bays. Needs smooth coasts.</div>
+        <label class="check"><input id="connect-diagonals" type="checkbox" checked /> Keep rivers connected (boats can pass)</label>
+        <label for="min-lake">Smallest lake kept (tiles)</label>
+        <input id="min-lake" type="number" min="0" max="1000000" step="50" value="400" />
+        <label for="min-island">Smallest island kept (world map pixels)</label>
+        <input id="min-island" type="number" min="0" max="1000000" step="5" value="30" />
+      </fieldset>
       <button id="generate" disabled>Generate locally</button>
       <button id="upload" disabled>Upload to server</button>
       <div id="status" class="status" role="status"></div>

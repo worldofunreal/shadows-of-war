@@ -270,6 +270,7 @@ campaign_chronicles = "CHRONIQUES DE\nCAMPAGNE"
 campaign_unavailable = "Campagne indisponible."
 
 [heroes]
+oceania = "Océanie"
 leader_caesar_name = "Jules César"
 leader_caesar_historical = "Caius Jules César"
 leader_cleopatra_name = "Cléopâtre VII"
@@ -901,6 +902,14 @@ match_message_4 = "Votre bataille va se terminer. Les rapports peuvent attendre.
 match_message_5 = "Votre bataille va se terminer. Cela faisait certainement partie du plan."
 
 [site]
+view_profile = "Voir la fiche du dirigeant"
+all_leaders = "Tous les dirigeants"
+historical_name = "Nom historique"
+civilization = "Civilisation"
+region = "Région"
+historical_reference = "Référence historique"
+suggest_language = "Lire en {language}"
+
 landing_build_expand = "Bâtissez. Étendez-vous."
 landing_betray = "Trahissez."
 empire_starts = "Votre prochain empire"

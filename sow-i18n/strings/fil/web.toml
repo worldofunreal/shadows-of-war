@@ -270,6 +270,7 @@ campaign_chronicles = "CAMPAGN\nMGA KARUNUNGAN"
 campaign_unavailable = "Walang kampanya."
 
 [heroes]
+oceania = "Oceania"
 leader_caesar_name = "Julius Caesar"
 leader_caesar_historical = "Gaius Julius Caesar"
 leader_cleopatra_name = "Cleopatra VII"
@@ -901,6 +902,14 @@ match_message_4 = "Matatapos na ang iyong pakikipaglaban, at maaaring maghintay 
 match_message_5 = "Matatapos na ang inyong laban, at tiyak na bahagi ito ng plano."
 
 [site]
+view_profile = "Tingnan ang profile ng lider"
+all_leaders = "Lahat ng lider"
+historical_name = "Makasaysayang pangalan"
+civilization = "Sibilisasyon"
+region = "Rehiyon"
+historical_reference = "Sangguniang pangkasaysayan"
+suggest_language = "Basahin sa {language}"
+
 landing_build_expand = "Magtayo. Lumawak."
 landing_betray = "Magtaksil."
 empire_starts = "Ang susunod mong imperyo"

@@ -15,7 +15,8 @@ const mapsDir = path.join(root, "assets/maps");
 const avatarArtDir = path.join(root, "assets/art/avatars");
 const avatarFolders = ["heroes", "nations", "tribes", "campaign"];
 const entityCatalogFile = path.join(root, "assets/geo_entities.json");
-const distLocaleDir = path.join(root, "dist/web/locales");
+const distWebDir = path.join(root, "dist/web");
+const distLocaleDir = path.join(distWebDir, "locales");
 const campaignFile = path.join(root, "sow-web/shell/sow-campaign.ts");
 const maxBodyBytes = 1024 * 1024;
 const saving = new Set();
@@ -102,6 +103,8 @@ function contentType(file) {
       ".ttc": "font/collection",
       ".woff2": "font/woff2",
       ".svg": "image/svg+xml",
+      ".wasm": "application/wasm",
+      ".webmanifest": "application/manifest+json",
     }[path.extname(file)] || "application/octet-stream"
   );
 }
@@ -182,6 +185,23 @@ function parseUploadTarget(value) {
   const index = value.indexOf(":");
   if (index <= 0 || index === value.length - 1) return null;
   return { host: value.slice(0, index), dir: value.slice(index + 1).replace(/\/+$/, "") };
+}
+
+// Water controls for one map; ranges match the sow-tools import-map-source flags.
+function waterArgs(water) {
+  if (!water || typeof water !== "object") return null;
+  const { min_lake_tiles, min_island_pixels, smooth_coasts, water_level, connect_diagonals } = water;
+  const count = (value) => Number.isInteger(value) && value >= 0 && value <= 1_000_000;
+  if (!count(min_lake_tiles) || !count(min_island_pixels)) return null;
+  if (typeof smooth_coasts !== "boolean" || typeof connect_diagonals !== "boolean") return null;
+  if (typeof water_level !== "number" || !(water_level >= 0.05 && water_level <= 0.95)) return null;
+  return [
+    "--min-lake-tiles", String(min_lake_tiles),
+    "--min-island-pixels", String(min_island_pixels),
+    "--water-level", String(water_level),
+    ...(smooth_coasts ? ["--smooth-coasts"] : []),
+    ...(connect_diagonals ? ["--connect-diagonals"] : []),
+  ];
 }
 
 function isCropRect(crop) {
@@ -773,6 +793,7 @@ async function handle(req, res) {
         return;
       }
       const { crop, size, frequency } = request;
+      const water = waterArgs(request.water);
       if (!isCropRect(crop)) {
         reply(res, 400, "Select an area on the map first.");
         return;
@@ -783,6 +804,10 @@ async function handle(req, res) {
       }
       if (!Number.isInteger(frequency) || frequency < 0 || frequency > 1000) {
         reply(res, 400, "Rotation weight must be a whole number from 0 to 1000.");
+        return;
+      }
+      if (!water) {
+        reply(res, 400, "Water settings are invalid: sizes are whole numbers and water level is 0.05 to 0.95.");
         return;
       }
       const mapDir = path.join(mapsDir, mapId);
@@ -799,6 +824,8 @@ async function handle(req, res) {
         "--crop", crop.join(","),
         "--size", size,
         "--frequency", String(frequency),
+        ...water,
+        ...(request.draft === true ? ["--draft"] : []),
       ]);
       if (output.code !== 0) {
         reply(res, 500, output.stderr.trim() || "Could not generate the map.");
@@ -832,7 +859,7 @@ async function handle(req, res) {
       const required = ["map.bin.br", "thumbnail.webp", "info.toml"];
       for (const name of required) {
         if (!existsSync(path.join(mapDir, name))) {
-          reply(res, 404, `assets/maps/${mapId}/${name} is missing. Generate the map first.`);
+          reply(res, 404, `assets/maps/${mapId}/${name} is missing. Press Generate locally first.`);
           return;
         }
       }
@@ -860,7 +887,8 @@ async function handle(req, res) {
       reply(res, 503, "Set SOW_MAPS_UPLOAD_TARGET to manage the server's maps.");
       return;
     }
-    const listed = await runCommand("ssh", [uploadTarget.host, `ls -1 ${uploadTarget.dir}`]);
+    // The upload folder belongs to root, so the listing runs as root on the server too.
+    const listed = await runCommand("ssh", [uploadTarget.host, `sudo ls -1 ${uploadTarget.dir}`]);
     if (listed.code !== 0) {
       reply(res, 502, listed.stderr.trim() || "Could not read the server's map folder.");
       return;
@@ -997,7 +1025,93 @@ async function handle(req, res) {
   }
 }
 
+// Game preview: the local web build (./sow l) on the next port, reading maps live from assets/maps,
+// so the map generator shows a generated map exactly as the game draws it.
+const previewScript = `<script>(function () {
+  var map = new URLSearchParams(location.search).get("sow_preview_map");
+  if (!map) return;
+  try {
+    var progress = JSON.parse(localStorage.getItem("sow_player_progress") || "null") || {
+      xp: 0, level: 1, wins: 0, matches_played: 0, players_defeated: 0, empires_defeated: 0, tribes_defeated: 0
+    };
+    progress.intro_completed = true;
+    localStorage.setItem("sow_player_progress", JSON.stringify(progress));
+    localStorage.removeItem("sow_map_br_v1:" + map);
+  } catch (error) {
+    console.warn("map preview: storage", error);
+  }
+  var shellUpdate = null;
+  var started = false;
+  function previewUpdate(state) {
+    if (shellUpdate) shellUpdate(state);
+    if (started || typeof window.SOW_menu_command !== "function") return;
+    var parsed = typeof state === "string" ? JSON.parse(state) : state;
+    if (!parsed || parsed.phase !== "MainMenu" || !parsed.custom_game_config) return;
+    started = true;
+    var config = Object.assign({}, parsed.custom_game_config, { map_name: map, bot_count: 0, nation_count: 0 });
+    window.SOW_menu_command(JSON.stringify({ type: "start_single_player", config: config }));
+  }
+  Object.defineProperty(window, "SOW_onStateUpdate", {
+    configurable: true,
+    get: function () { return previewUpdate; },
+    set: function (fn) { shellUpdate = fn; },
+  });
+})();</script>`;
+
+function previewFile(pathname) {
+  // Live drafts have no map.bin.br; the client also accepts the uncompressed map.bin.
+  if (pathname.startsWith("/maps/")) {
+    return safeFile(mapsDir, pathname.slice("/maps/".length).replace(/\/map\.bin\.br$/, "/map.bin"));
+  }
+  const relative = pathname.endsWith("/") ? pathname.slice(1) + "index.html" : pathname.slice(1);
+  return safeFile(distWebDir, relative);
+}
+
+async function handlePreview(req, res) {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    reply(res, 405, "method not allowed");
+    return;
+  }
+  if (!existsSync(path.join(distWebDir, "play/index.html"))) {
+    reply(res, 503, "The local game build is missing. Run ./sow l once, then reload.");
+    return;
+  }
+  const url = new URL(req.url, "http://127.0.0.1");
+  let file;
+  try {
+    file = previewFile(url.pathname);
+  } catch {
+    reply(res, 400, "bad path");
+    return;
+  }
+  const stat = file ? await fs.stat(file).catch(() => null) : null;
+  if (!file || !stat?.isFile()) {
+    reply(res, 404, "not found");
+    return;
+  }
+  let body = await fs.readFile(file);
+  if (file === path.join(distWebDir, "play/index.html")) {
+    const html = body.toString("utf8");
+    const head = html.indexOf("<head>");
+    if (head < 0) {
+      reply(res, 500, "play/index.html has no <head>");
+      return;
+    }
+    body = Buffer.from(html.slice(0, head + 6) + previewScript + html.slice(head + 6));
+  }
+  res.writeHead(200, { "Content-Type": contentType(file), "Cache-Control": "no-store" });
+  res.end(req.method === "HEAD" ? undefined : body);
+}
+
 const port = portFromArgs();
+const previewPort = port + 1;
+const preview = http.createServer((req, res) => {
+  handlePreview(req, res).catch((error) => {
+    console.error(error);
+    if (!res.headersSent) reply(res, 500, "game preview error");
+  });
+});
+preview.listen(previewPort, "127.0.0.1");
 const server = http.createServer((req, res) => {
   handle(req, res).catch((error) => {
     console.error(error);
@@ -1011,6 +1125,7 @@ server.listen(port, "127.0.0.1", () => {
   console.log(`Map Rosters: http://127.0.0.1:${port}/tools/campaign-editor/map-rosters`);
   console.log(`Map Generator: http://127.0.0.1:${port}/tools/campaign-editor/map-generator`);
   console.log(`Custom Maps: http://127.0.0.1:${port}/tools/campaign-editor/map-manager`);
+  console.log(`  Game preview for the map generator: http://127.0.0.1:${previewPort}/play/`);
   console.log("  Saving in the editor updates assets/campaign directly; refresh the local game to use them.");
   console.log("  Ctrl-C to stop.");
 });

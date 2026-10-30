@@ -270,6 +270,7 @@ campaign_chronicles = "喀麦隆\n争 辩"
 campaign_unavailable = "竞选没有结果。"
 
 [heroes]
+oceania = "大洋洲"
 leader_caesar_name = "尤利乌斯·凯撒"
 leader_caesar_historical = "盖乌斯·尤利乌斯·凯撒"
 leader_cleopatra_name = "克娄巴特拉七世"
@@ -901,6 +902,14 @@ match_message_4 = "你的战斗会结束的,文件可以等"
 match_message_5 = "你的战斗会结束的 这绝对是计划的一部分"
 
 [site]
+view_profile = "查看领袖档案"
+all_leaders = "所有领袖"
+historical_name = "历史姓名"
+civilization = "文明"
+region = "地区"
+historical_reference = "历史资料"
+suggest_language = "以{language}阅读"
+
 landing_build_expand = "建设。扩张。"
 landing_betray = "背叛。"
 empire_starts = "你的下一个帝国"
