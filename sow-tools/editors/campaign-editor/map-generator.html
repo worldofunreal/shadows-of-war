@@ -34,6 +34,7 @@
       body {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 320px;
+        grid-template-rows: minmax(0, 1fr);
         overflow: hidden;
       }
       main {
@@ -44,11 +45,24 @@
         padding: 12px;
         gap: 8px;
       }
-      .tabs {
+      .toolbar,
+      .tabs,
+      .map-tools {
         display: flex;
+        align-items: center;
         gap: 6px;
       }
-      .tabs button {
+      .toolbar {
+        justify-content: space-between;
+      }
+      .map-tools[hidden] {
+        display: none;
+      }
+      #cursor {
+        margin-right: 6px;
+        color: var(--muted);
+      }
+      .toolbar button {
         margin: 0;
         width: auto;
         padding: 5px 12px;
@@ -92,13 +106,22 @@
       .check input {
         width: auto;
       }
+      #view-world {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--line);
+      }
       canvas {
+        position: absolute;
+        inset: 0;
         display: block;
         width: 100%;
-        height: auto;
+        height: 100%;
         cursor: crosshair;
-        border: 1px solid var(--line);
         touch-action: none;
+      }
+      canvas.panning {
+        cursor: grabbing;
       }
       aside {
         border-left: 1px solid var(--line);
@@ -156,12 +179,20 @@
   </head>
   <body>
     <main>
-      <div class="tabs" role="tablist">
-        <button id="tab-world" role="tab" aria-selected="true">World map</button>
-        <button id="tab-game" role="tab" aria-selected="false" disabled>In-game view</button>
+      <div class="toolbar">
+        <div class="tabs" role="tablist">
+          <button id="tab-world" role="tab" aria-selected="true">World map</button>
+          <button id="tab-game" role="tab" aria-selected="false" disabled>In-game view</button>
+        </div>
+        <div id="map-tools" class="map-tools">
+          <span id="cursor"></span>
+          <button id="zoom-out" aria-label="Zoom out">−</button>
+          <button id="zoom-in" aria-label="Zoom in">+</button>
+          <button id="fit">Fit</button>
+        </div>
       </div>
       <div id="view-world" class="view">
-        <canvas id="map" aria-label="World map reference. Drag to select the area to generate."></canvas>
+        <canvas id="map" aria-label="World map reference. Drag with the left button to select the area, drag with the right button to move, use the wheel to zoom."></canvas>
       </div>
       <div id="view-game" class="view" hidden>
         <iframe id="game" title="The generated map in the game"></iframe>
@@ -169,7 +200,7 @@
     </main>
     <aside>
       <h1>Generate map</h1>
-      <div class="hint">Drag on the world map to choose the area.</div>
+      <div class="hint">Left drag: choose the area. Right drag: move the map. Wheel: zoom.</div>
       <div id="crop-label" class="hint">No area selected.</div>
       <label for="name">Map name (lowercase, letters, digits, _)</label>
       <input id="name" placeholder="for example: north_coast" autocomplete="off" />
@@ -199,6 +230,7 @@
       <button id="upload" disabled>Upload to server</button>
       <div id="status" class="status" role="status"></div>
     </aside>
+    <script src="map-preview.ts"></script>
     <script src="map-generator.ts"></script>
   </body>
 </html>
