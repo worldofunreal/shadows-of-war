@@ -143,13 +143,8 @@
     applyView(view);
     clampView();
   }
-  // Keep the map from drifting fully off-screen (centered when it fits within the view).
   function clampView() {
-    const w = MAPW * scale,
-      h = MAPH * scale,
-      m = 60;
-    ox = w <= viewWidth ? (viewWidth - w) / 2 : Math.min(m, Math.max(viewWidth - w - m, ox));
-    oy = h <= viewHeight ? (viewHeight - h) / 2 : Math.min(m, Math.max(viewHeight - h - m, oy));
+    applyView(SOWCampaignMapPreview.clampMapView(viewState(), MAPW, MAPH, viewWidth, viewHeight, 60));
   }
   // Zoom toward a screen point, keeping the world point under it fixed.
   function zoomAt(sx: number, sy: number, factor: number) {

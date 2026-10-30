@@ -385,6 +385,30 @@ const mapPreview = (function (host: typeof globalThis) {
     };
   }
 
+  // Keep the map from drifting fully off-screen (centered when it fits within the view).
+  function clampMapView(
+    view: MapTransform,
+    mapWidth: number,
+    mapHeight: number,
+    viewWidth: number,
+    viewHeight: number,
+    margin: number,
+  ): MapTransform {
+    const width = mapWidth * view.scale,
+      height = mapHeight * view.scale;
+    return {
+      scale: view.scale,
+      x:
+        width <= viewWidth
+          ? (viewWidth - width) / 2
+          : Math.min(margin, Math.max(viewWidth - width - margin, view.x)),
+      y:
+        height <= viewHeight
+          ? (viewHeight - height) / 2
+          : Math.min(margin, Math.max(viewHeight - height - margin, view.y)),
+    };
+  }
+
   function geoToTile(
     lat: number,
     lon: number,
@@ -501,6 +525,7 @@ const mapPreview = (function (host: typeof globalThis) {
     screenToMap: screenToMap,
     panMapView: panMapView,
     zoomMapView: zoomMapView,
+    clampMapView: clampMapView,
     geoToTile: geoToTile,
     tileToGeo: tileToGeo,
     isLand: isLand,

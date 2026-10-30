@@ -1180,6 +1180,14 @@ test("campaign map preview shares canvas sizing and anchored viewport math", () 
     y: zoomed.y - 8,
   });
   assert.deepEqual(campaignMapPreviewApi.mapToScreen(before, fit), anchor);
+  assert.deepEqual(
+    campaignMapPreviewApi.clampMapView({ scale: 2, x: 5000, y: -5000 }, 1000, 500, 720, 400, 60),
+    { scale: 2, x: 60, y: -660 },
+  );
+  assert.deepEqual(
+    campaignMapPreviewApi.clampMapView({ scale: 0.1, x: 5000, y: 5000 }, 1000, 500, 720, 400, 60),
+    { scale: 0.1, x: 310, y: 175 },
+  );
 });
 
 test("Map Rosters reads binary presets and leaves unmatched map anchors intact", () => {
