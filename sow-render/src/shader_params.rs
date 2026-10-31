@@ -356,7 +356,12 @@ pub static PARAMS: &[ParamDef] = &[
         "×"
     ),
     legacy_bool!("vfx_conquer", "Conquest effect", "Conquest", true),
-    legacy_bool!("vfx_border_breathe", "Border breathing", "Borders", true),
+    legacy_bool!(
+        "vfx_border_breathe",
+        "Ability border pulse",
+        "Borders",
+        true
+    ),
     legacy_bool!(
         "vfx_dialog_border",
         "Terms dialog border",
@@ -369,7 +374,12 @@ pub static PARAMS: &[ParamDef] = &[
         "Borders",
         true
     ),
-    legacy_bool!("vfx_heartbeat", "Territory pulse", "Territories", true),
+    legacy_bool!(
+        "vfx_heartbeat",
+        "Ability territory pulse",
+        "Territories",
+        true
+    ),
     legacy_bool!("fog_of_war", "Visibility shading", "Fog of war", false),
     legacy_bool!("vfx_ambient_grade", "Warm color cycle", "Lighting", true),
     legacy_bool!(
@@ -1121,7 +1131,7 @@ pub static PARAMS: &[ParamDef] = &[
     ),
     number!(
         "border.breathe.rate",
-        "Border breathing speed",
+        "Ability border pulse speed",
         "Borders",
         3.0,
         0.0,
@@ -1132,9 +1142,9 @@ pub static PARAMS: &[ParamDef] = &[
     ),
     number!(
         "border.breathe.amount",
-        "Border breathing width",
+        "Ability border pulse width",
         "Borders",
-        0.05,
+        0.15,
         0.0,
         0.5,
         0.005,
@@ -1347,9 +1357,9 @@ pub static PARAMS: &[ParamDef] = &[
     ),
     number!(
         "territory.heartbeat.base",
-        "Territory pulse base",
+        "Ability territory pulse base",
         "Territories",
-        0.97,
+        0.88,
         0.0,
         2.0,
         0.01,
@@ -1358,9 +1368,9 @@ pub static PARAMS: &[ParamDef] = &[
     ),
     number!(
         "territory.heartbeat.amount",
-        "Territory pulse amount",
+        "Ability territory pulse strength",
         "Territories",
-        0.03,
+        0.16,
         0.0,
         1.0,
         0.005,
@@ -1369,7 +1379,7 @@ pub static PARAMS: &[ParamDef] = &[
     ),
     number!(
         "territory.heartbeat.rate",
-        "Territory pulse speed",
+        "Ability territory pulse speed",
         "Territories",
         1.8,
         0.0,
@@ -1380,7 +1390,7 @@ pub static PARAMS: &[ParamDef] = &[
     ),
     number!(
         "territory.heartbeat.phase",
-        "Player pulse phase",
+        "Ability pulse phase by player",
         "Territories",
         2.3,
         0.0,
@@ -3235,6 +3245,22 @@ mod tests {
         );
         assert_eq!(territory.default[0], 1.0);
         assert_eq!(tribes.default[0], 3.0);
+    }
+
+    #[test]
+    fn hero_pulses_use_visible_localized_defaults() {
+        assert_eq!(
+            definition("territory.heartbeat.base").unwrap().default[0],
+            0.88
+        );
+        assert_eq!(
+            definition("territory.heartbeat.amount").unwrap().default[0],
+            0.16
+        );
+        assert_eq!(
+            definition("border.breathe.amount").unwrap().default[0],
+            0.15
+        );
     }
 
     #[test]

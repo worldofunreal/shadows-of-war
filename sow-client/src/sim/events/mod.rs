@@ -1,6 +1,10 @@
 mod combat;
 mod elimination;
 
+fn ability_is_visible_to_player(owner_id: u16, affected: &[u16], my_id: u16) -> bool {
+    my_id != 0 && (owner_id == my_id || affected.contains(&my_id))
+}
+
 use crate::app::SowApp;
 use sow_core::protocol::SimSnapshot;
 
@@ -89,10 +93,12 @@ impl SowApp {
                             start_time: now_instant,
                         });
                 }
-                sow_core::game::GameEvent::AbilityTriggered { owner_id, tile, affected } => {
-                    let is_mine = my_id != 0 && owner_id == my_id;
-                    let is_affected = my_id != 0 && affected.contains(&my_id);
-                    if !is_mine && !is_affected {
+                sow_core::game::GameEvent::AbilityTriggered {
+                    owner_id,
+                    tile,
+                    affected,
+                } => {
+                    if !ability_is_visible_to_player(owner_id, &affected, my_id) {
                         continue;
                     }
                     let Some(owner) = snap.players.iter().find(|player| player.id == owner_id)
@@ -100,6 +106,9 @@ impl SowApp {
                         continue;
                     };
                     if let Some((x, y)) = tile {
+                        if let Some(renderer) = self.gfx.map_renderer.as_mut() {
+                            renderer.flash_ability_tile(x, y);
+                        }
                         let color = sow_core::player::player_territory_rgb(
                             owner.player_type,
                             owner.team,
@@ -312,6 +321,7 @@ mod tests {
 
 #[cfg(test)]
 mod hero_ability_visibility_tests {
+    use super::ability_is_visible_to_player;
     use super::*;
     use sow_core::engine::SowEngine;
     use sow_core::game::{GameEvent, GamePhase, GameState};
@@ -376,9 +386,41 @@ mod hero_ability_visibility_tests {
 
     #[wasm_bindgen_test::wasm_bindgen_test]
     fn hero_ability_cue_is_private_to_its_owner_and_affected_players() {
-        assert_eq!(cues_for(1), (1, 1), "the owner sees the ring and the notice");
-        assert_eq!(cues_for(2), (1, 1), "the player it hit sees the ring and the notice");
+        assert_eq!(
+            cues_for(1),
+            (1, 1),
+            "the owner sees the ring and the notice"
+        );
+        assert_eq!(
+            cues_for(2),
+            (1, 1),
+            "the player it hit sees the ring and the notice"
+        );
         assert_eq!(cues_for(3), (0, 0), "an uninvolved player sees nothing");
         assert_eq!(cues_for(0), (0, 0), "a spectator sees nothing");
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn tileless_hero_ability_keeps_its_notice_without_a_map_pulse() {
+        let (mut app, snap) = app_and_snapshot();
+        app.process_tick_events(
+            vec![GameEvent::AbilityTriggered {
+                owner_id: 1,
+                tile: None,
+                affected: vec![2],
+            }],
+            &snap,
+            2,
+        );
+        assert!(app.ui.transport_impacts.is_empty());
+        assert_eq!(app.ui.app.hud_state.hud_notifications.len(), 1);
+    }
+
+    #[test]
+    fn map_skill_pulses_are_limited_to_ability_participants() {
+        assert!(ability_is_visible_to_player(1, &[2], 1));
+        assert!(ability_is_visible_to_player(1, &[2], 2));
+        assert!(!ability_is_visible_to_player(1, &[2], 3));
+        assert!(!ability_is_visible_to_player(1, &[2], 0));
     }
 }

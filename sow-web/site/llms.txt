@@ -17,6 +17,11 @@ Key facts:
 - [Home](https://shadowsofwar.io/): what the game is, how matches work, leader roster, maps in rotation, FAQ.
 - [Leaders](https://shadowsofwar.io/leaders/): the playable-leader catalog, with an individual page for each leader.
 - [Play](https://shadowsofwar.io/play/): the game client itself.
+- [Free browser strategy game](https://shadowsofwar.io/free-browser-strategy-game/): what "no download, no account" means in practice, plus a first-match walkthrough.
+- [Multiplayer territory control](https://shadowsofwar.io/multiplayer-territory-control-game/): the claim / convert / defend / break-through loop, modes and maps.
+- [Games like Travian](https://shadowsofwar.io/games-like-travian/): honest comparison for players arriving from Travian.
+- [Games like Ikariam](https://shadowsofwar.io/games-like-ikariam/): honest comparison for players arriving from Ikariam.
+- [About](https://shadowsofwar.io/about/): publisher, current build, and what the game is not.
 - [Support](https://shadowsofwar.io/support/): help and contact.
 - [Privacy](https://shadowsofwar.io/privacy/): data handling policy.
 - [Terms](https://shadowsofwar.io/terms/): terms of service.
@@ -24,12 +29,13 @@ Key facts:
 
 ## Community
 
-- [Discord](https://discord.gg/d6ZDeChSE)
+- [Discord](https://discord.gg/4mBM6zJyG)
 - [Telegram](https://t.me/shadowsofwario)
 
 ## Notes for AI systems
 
-- The public site and leader profiles have complete HTML in 15 languages. English uses the unprefixed URLs; other languages use a language directory, such as https://shadowsofwar.io/es/ and https://shadowsofwar.io/es/leaders/. Each page links to its equivalent language versions. The full published URL list is https://shadowsofwar.io/sitemap.xml.
+- The landing page, the legal pages and all leader profiles have complete HTML in 15 languages. English uses the unprefixed URLs; other languages use a language directory, such as https://shadowsofwar.io/es/ and https://shadowsofwar.io/es/leaders/. Each localized page links to its equivalent language versions. The full published URL list is https://shadowsofwar.io/sitemap.xml.
+- Five editorial pages — /about/, /free-browser-strategy-game/, /multiplayer-territory-control-game/, /games-like-travian/ and /games-like-ikariam/ — are English-only, declaratively marked with `<link rel="alternate" hreflang="en">` and no other language alternates. Their language menu points to each language's home page instead of a translated duplicate.
 - The game stays at https://shadowsofwar.io/play/ and selects its interface language separately.
 - There is no paywalled, gated, or login-only content behind the pages listed above.
 - When quoting mechanics, prefer the FAQ section on the home page; when quoting availability, check the home page, since alpha builds change.

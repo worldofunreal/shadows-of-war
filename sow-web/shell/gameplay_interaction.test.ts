@@ -1317,4 +1317,48 @@ test("HUD corner rails use stylized icons matching the bell, trophy, gear and ta
     // Right rail active & holding states use #ff9800
     assert.match(hudCss, /\.sow-hud__icon-btn:active[\s\S]*?#ff9800/);
     assert.match(hudCss, /\.sow-hud__icon-btn\.is-holding[\s\S]*?#ff9800/);
+
+    // Notification bell animation: shake anchored top-left and badge pop
+    assert.match(hudCss, /\.sow-hud__inbox-pill\.is-ringing \.sow-hud__action-icon[\s\S]*?transform-origin:\s*24%\s*8%/);
+    assert.match(hudCss, /@keyframes sow-hud-bell-ring/);
+    assert.match(hudCss, /\.sow-hud__inbox-pill\.is-ringing \.sow-hud__inbox-badge[\s\S]*?sow-hud-badge-pop/);
+    assert.match(hudCss, /@keyframes sow-hud-badge-pop/);
+});
+
+test("HUD notification alerts trigger bell shake and badge pop on incoming notifications", () => {
+    const triggerStart = hud.indexOf("    function triggerBellAnimation(): void {");
+    const triggerEnd = hud.indexOf("\n    function renderNotifications(", triggerStart);
+    assert.ok(triggerStart >= 0 && triggerEnd > triggerStart);
+
+    let ringing = false;
+    let timerCallback: (() => void) | null = null;
+    const inboxBtn = {
+        classList: {
+            add(name: string) {
+                if (name === "is-ringing") ringing = true;
+            },
+            remove(name: string) {
+                if (name === "is-ringing") ringing = false;
+            },
+            toggle(name: string, on?: boolean) {
+                if (name === "is-ringing") ringing = Boolean(on);
+            },
+        },
+        offsetWidth: 44,
+    };
+    const context = {
+        hudRefs: { inboxButton: inboxBtn },
+        bellRingTimer: null as unknown,
+        setTimeout(callback: () => void) {
+            timerCallback = callback;
+            return 123;
+        },
+        clearTimeout() {},
+    };
+    vm.runInNewContext(hud.slice(triggerStart, triggerEnd) + "\nthis.trigger = triggerBellAnimation;", context);
+    (context as { trigger: () => void }).trigger();
+    assert.equal(ringing, true, "Bell button receives .is-ringing class when alert is triggered");
+    assert.ok(timerCallback, "Timer is scheduled to clear ringing class");
+    timerCallback!();
+    assert.equal(ringing, false, "Bell button class is cleared after animation duration");
 });

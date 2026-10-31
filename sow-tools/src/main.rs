@@ -183,6 +183,14 @@ pub struct GenerateArgs {
     /// Overwrite existing map.bin without prompting
     #[arg(long, default_value_t = false)]
     pub force: bool,
+
+    /// Rotation weight written to info.toml; 0 keeps the map out of the public rotation
+    #[arg(long, default_value_t = 1)]
+    pub frequency: u32,
+
+    /// Size preset (small, regular, big or huge: longest side in tiles); overrides --scale
+    #[arg(long, value_parser = parse_size)]
+    pub size: Option<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -340,6 +348,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 args.scale,
                 args.single_player_config,
                 args.force,
+                args.frequency,
+                args.size.as_deref(),
             )
             .await
         }
@@ -359,6 +369,8 @@ async fn run_generate(
     scale: f64,
     single_player_config: bool,
     force: bool,
+    frequency: u32,
+    size: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
     let parts: Vec<&str> = bbox.split(',').collect();
     if parts.len() != 4 {
@@ -369,6 +381,22 @@ async fn run_generate(
     let min_lat: f64 = parts[1].parse()?;
     let max_lon: f64 = parts[2].parse()?;
     let max_lat: f64 = parts[3].parse()?;
+
+    // A preset fixes the longest side in tiles; the box keeps its own proportions.
+    let scale = match size {
+        Some(preset) => {
+            let lon_span = max_lon - min_lon;
+            let lat_span = max_lat - min_lat;
+            let (preset_width, _) = sow_core::maps::map_size_for_preset(
+                preset,
+                (lon_span * 1e6).round() as u32,
+                (lat_span * 1e6).round() as u32,
+            )
+            .ok_or("unknown size preset")?;
+            f64::from(preset_width) / lon_span
+        }
+        None => scale,
+    };
 
     let max_scale = sow_core::maps::max_scale_for_bbox(min_lon, min_lat, max_lon, max_lat);
     let scale = if scale > max_scale {
@@ -455,6 +483,14 @@ async fn run_generate(
         single_player_config,
         force,
     })?;
+
+    // Same info.toml the image import writes, so the server's catalog reads this rotation weight.
+    let maps_root = exporter::maps_root();
+    std::fs::write(
+        maps_root.join(name).join("info.toml"),
+        format!("# Written by sow-tools --bbox\nfrequency = {frequency}\n"),
+    )?;
+    map_source_import::refresh_catalog(&maps_root)?;
 
     println!("Generation complete! Saved to assets/maps/{name}");
     println!(

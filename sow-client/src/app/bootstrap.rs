@@ -296,6 +296,7 @@ impl SowApp {
                 alliance_celebrations: std::collections::VecDeque::with_capacity(
                     crate::app::MAX_ALLIANCE_CELEBRATIONS,
                 ),
+                local_betrayal_owners: std::collections::BTreeSet::new(),
                 border_flash_intensities: std::collections::HashMap::new(),
                 last_player_attack_flash_time: std::collections::HashMap::new(),
                 viewport_alert: None,

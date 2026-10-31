@@ -132,7 +132,7 @@ function renderSettingsLinks() {
         renderSettingsLink("https://shadowsofwar.io/terms/", "menu.terms") +
         renderSettingsLink("https://shadowsofwar.io/cookies/", "menu.cookies") +
         cookieSettings +
-        renderSettingsLink("https://discord.gg/d6ZDeChSE", "menu.discord") +
+        renderSettingsLink("https://discord.gg/4mBM6zJyG", "menu.discord") +
         renderSettingsLink("https://t.me/shadowsofwario", "menu.telegram") +
         renderSettingsLink(sourceUrl, "menu.source_code", "sow-menu__source-link") +
         renderSettingsLink(licenseUrl, "menu.license", "sow-menu__license-link") +

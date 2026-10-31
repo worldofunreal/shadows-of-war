@@ -20,6 +20,8 @@
     connectDiagonalsInput = $<HTMLInputElement>("connect-diagonals"),
     minLakeInput = $<HTMLInputElement>("min-lake"),
     minIslandInput = $<HTMLInputElement>("min-island"),
+    sourceInput = $<HTMLSelectElement>("source"),
+    waterFields = $("water"),
     worldTab = $<HTMLButtonElement>("tab-world"),
     gameTab = $<HTMLButtonElement>("tab-game"),
     worldView = $("view-world"),
@@ -43,6 +45,7 @@
   let viewHeight = 0;
   let dpr = 1;
   let generatedName = "";
+  let generatedDraft = false;
   let generating = false;
   let regeneratePending = false;
   let regenerateTimer = 0;
@@ -214,6 +217,7 @@
   function requestBody(force: boolean, draft: boolean) {
     return JSON.stringify({
       draft,
+      source: sourceInput.value,
       crop: crop || [],
       size: sizeInput.value,
       frequency: Number(frequencyInput.value),
@@ -231,6 +235,11 @@
   function showWaterLevel() {
     waterLevelValue.textContent = Number(waterLevelInput.value).toFixed(2);
     waterLevelInput.disabled = !smoothCoastsInput.checked;
+  }
+
+  // Water settings shape only the map image; OpenStreetMap coastlines come as they are.
+  function showSource() {
+    waterFields.hidden = sourceInput.value === "osm";
   }
 
   async function post(path: string, body: string) {
@@ -251,7 +260,9 @@
   async function generate(name: string, force: boolean, draft: boolean): Promise<boolean> {
     generating = true;
     generateButton.disabled = true;
-    setStatus(draft ? "Updating the in-game view…" : "Generating…");
+    if (draft) setStatus("Updating the in-game view…");
+    else if (sourceInput.value === "osm") setStatus("Downloading OpenStreetMap data for this area. This can take several minutes…");
+    else setStatus("Generating…");
     try {
       let response = await post(`/__map-generate?map=${encodeURIComponent(name)}`, requestBody(force, draft));
       if (response.status === 409 && !force && confirm(`${await response.text()}\nReplace it?`)) {
@@ -264,6 +275,7 @@
       }
       const { message } = JSON.parse(text);
       generatedName = name;
+      generatedDraft = draft;
       uploadButton.disabled = false;
       setStatus(`Saved assets/maps/${name} on this computer${draft ? " (draft)" : ""}.\n${message}`);
       reloadGameView(name);
@@ -282,7 +294,8 @@
   }
 
   function scheduleRegenerate() {
-    if (!generatedName || !crop) return;
+    // OpenStreetMap downloads take minutes, so they only change on Generate.
+    if (!generatedName || !crop || sourceInput.value === "osm") return;
     clearTimeout(regenerateTimer);
     regenerateTimer = window.setTimeout(() => {
       if (generating) regeneratePending = true;
@@ -304,11 +317,14 @@
   }
   waterLevelInput.addEventListener("input", showWaterLevel);
   showWaterLevel();
+  sourceInput.addEventListener("change", showSource);
+  showSource();
 
   uploadButton.addEventListener("click", async () => {
     if (!generatedName || generating) return;
     uploadButton.disabled = true;
-    if (!(await generate(generatedName, true, false))) {
+    // Only a live draft needs its final compression before upload; Generate already finished the map.
+    if (generatedDraft && !(await generate(generatedName, true, false))) {
       uploadButton.disabled = false;
       return;
     }

@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://shadowsofwar.io/play/"><strong>▶ Play now</strong></a>
   · <a href="https://shadowsofwar.io/">Website</a>
-  · <a href="https://discord.gg/d6ZDeChSE">Discord</a>
+  · <a href="https://discord.gg/4mBM6zJyG">Discord</a>
 </p>
 
 <p align="center">

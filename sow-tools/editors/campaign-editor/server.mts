@@ -216,6 +216,20 @@ function isCropRect(crop) {
   );
 }
 
+// Crop rectangle (source pixels) to WGS84 [min_lon, min_lat, max_lon, max_lat], using the frame the atlas uses.
+async function cropBoundingBox(crop) {
+  const manifest = JSON.parse(await fs.readFile(path.join(mapSourcesDir, "thumbnail_frames.json"), "utf8"));
+  const {
+    map_grid_frame: [frameX, frameY, frameWidth, frameHeight],
+    longitude: [west, east],
+    latitude: [north, south],
+  } = manifest.sources["giantworldmap.png"];
+  const lon = (x) => west + ((x - frameX) / frameWidth) * (east - west);
+  const lat = (y) => north - ((y - frameY) / frameHeight) * (north - south);
+  const [x, y, width, height] = crop;
+  return [lon(x), lat(y + height), lon(x + width), lat(y)];
+}
+
 // Asks the game server to re-scan its map folders (built-in + uploaded) and publish the new catalog.
 function reloadServerMaps() {
   return runCommand("ssh", [uploadTarget.host, `curl -fsS -X POST -H @- ${mapReloadUrl}`], `Authorization: Bearer ${uploadToken}\n`);
@@ -793,6 +807,7 @@ async function handle(req, res) {
         return;
       }
       const { crop, size, frequency } = request;
+      const source = request.source ?? "image";
       const water = waterArgs(request.water);
       if (!isCropRect(crop)) {
         reply(res, 400, "Select an area on the map first.");
@@ -810,22 +825,45 @@ async function handle(req, res) {
         reply(res, 400, "Water settings are invalid: sizes are whole numbers and water level is 0.05 to 0.95.");
         return;
       }
+      if (source !== "image" && source !== "osm") {
+        reply(res, 400, "Pick a map source: image or osm.");
+        return;
+      }
       const mapDir = path.join(mapsDir, mapId);
       if (existsSync(path.join(mapDir, "map.bin")) && request.force !== true) {
         reply(res, 409, `assets/maps/${mapId} already exists. Confirm to replace it.`);
         return;
       }
+      let args;
+      if (source === "osm") {
+        const bbox = await cropBoundingBox(crop);
+        if (bbox[2] > 180) {
+          reply(res, 400, "This area crosses the 180° line. Pick an area that stays west of it.");
+          return;
+        }
+        args = [
+          "--bbox", bbox.map((value) => value.toFixed(6)).join(","),
+          "--name", mapId,
+          "--size", size,
+          "--frequency", String(frequency),
+          ...(request.force === true ? ["--force"] : []),
+        ];
+      } else {
+        args = [
+          "import-map-source",
+          "--input", mapSourcesDir,
+          "--image", worldMapPng,
+          "--name", mapId,
+          "--maps-root", mapsDir,
+          "--crop", crop.join(","),
+          "--size", size,
+          "--frequency", String(frequency),
+          ...water,
+          ...(request.draft === true ? ["--draft"] : []),
+        ];
+      }
       const output = await runCommand(process.env.CARGO || "cargo", [
-        "run", "--quiet", "-p", "sow-tools", "--bin", "sow-tools", "--", "import-map-source",
-        "--input", mapSourcesDir,
-        "--image", worldMapPng,
-        "--name", mapId,
-        "--maps-root", mapsDir,
-        "--crop", crop.join(","),
-        "--size", size,
-        "--frequency", String(frequency),
-        ...water,
-        ...(request.draft === true ? ["--draft"] : []),
+        "run", "--quiet", "-p", "sow-tools", "--bin", "sow-tools", "--", ...args,
       ]);
       if (output.code !== 0) {
         reply(res, 500, output.stderr.trim() || "Could not generate the map.");

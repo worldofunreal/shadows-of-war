@@ -55,104 +55,109 @@ fn dilate_barriers(barriers: &mut [bool], width: u32, height: u32) {
     }
 }
 
-fn flood_fill_land(
-    grid: &mut [MapTile],
+// Sample distance from a coast to the land or sea beside it: past its barrier (radius 5 plus 1 tile of dilation).
+const COAST_SIDE_OFFSET: f32 = 8.0;
+
+fn neighbors4(idx: usize, w: usize, h: usize) -> impl Iterator<Item = usize> {
+    let x = idx % w;
+    let y = idx / w;
+    [
+        (x > 0).then(|| idx - 1),
+        (x + 1 < w).then(|| idx + 1),
+        (y > 0).then(|| idx - w),
+        (y + 1 < h).then(|| idx + w),
+    ]
+    .into_iter()
+    .flatten()
+}
+
+// OSM coastlines run with land on their left. Each region between barriers takes the side
+// that its coast samples vote for; barrier tiles take the side of the nearest region.
+fn classify_land_by_coast_side(
+    segments: &[Vec<(f32, f32)>],
+    barriers: &[bool],
     width: u32,
     height: u32,
-    seed_x: i32,
-    seed_y: i32,
-    barriers: &[bool],
-) {
-    let w = width as i32;
-    let h = height as i32;
-    if seed_x < 0 || seed_y < 0 || seed_x >= w || seed_y >= h {
-        return;
-    }
-    let start = (seed_y * w + seed_x) as usize;
-    if barriers.get(start).copied().unwrap_or(false) || is_exterior_ocean(grid[start]) {
-        return;
-    }
-
-    let mut visited = vec![false; grid.len()];
-    let mut stack = vec![start];
-    visited[start] = true;
-
-    while let Some(cur) = stack.pop() {
-        if is_exterior_ocean(grid[cur]) {
-            continue;
-        }
-        grid[cur] = MapTile::from_byte(LAND_PLAINS);
-        let cx = (cur as i32) % w;
-        let cy = (cur as i32) / w;
-        for (dx, dy) in [(0, 1), (1, 0), (0, -1), (-1, 0)] {
-            let nx = cx + dx;
-            let ny = cy + dy;
-            if nx < 0 || ny < 0 || nx >= w || ny >= h {
-                continue;
-            }
-            let ni = (ny * w + nx) as usize;
-            if visited[ni]
-                || barriers.get(ni).copied().unwrap_or(false)
-                || is_exterior_ocean(grid[ni])
-            {
-                continue;
-            }
-            visited[ni] = true;
-            stack.push(ni);
-        }
-    }
-}
-
-fn is_exterior_ocean(tile: MapTile) -> bool {
-    tile.as_byte() & OCEAN_WATER != 0
-}
-
-fn flood_ocean_from_edges(grid: &mut [MapTile], width: u32, height: u32, barriers: &[bool]) {
+) -> Vec<bool> {
     let w = width as usize;
     let h = height as usize;
-    let mut visited = vec![false; grid.len()];
+    let mut region = vec![u32::MAX; w * h];
+    let mut region_count = 0u32;
     let mut stack = Vec::new();
-
-    for x in 0..w {
-        for &y in &[0, h - 1] {
-            let idx = y * w + x;
-            if !grid[idx].is_land() && !barriers[idx] {
-                visited[idx] = true;
-                stack.push(idx);
-            }
-        }
-    }
-    for y in 0..h {
-        for &x in &[0, w - 1] {
-            let idx = y * w + x;
-            if !grid[idx].is_land() && !visited[idx] && !barriers[idx] {
-                visited[idx] = true;
-                stack.push(idx);
-            }
-        }
-    }
-
-    while let Some(cur) = stack.pop() {
-        if grid[cur].is_land() {
+    for start in 0..w * h {
+        if barriers[start] || region[start] != u32::MAX {
             continue;
         }
-        grid[cur] = MapTile::from_byte(OCEAN_WATER);
-        let cx = (cur % w) as i32;
-        let cy = (cur / w) as i32;
-        for (dx, dy) in [(0, 1), (1, 0), (0, -1), (-1, 0)] {
-            let nx = cx + dx;
-            let ny = cy + dy;
-            if nx < 0 || ny < 0 || nx >= w as i32 || ny >= h as i32 {
+        region[start] = region_count;
+        stack.push(start);
+        while let Some(cur) = stack.pop() {
+            for next in neighbors4(cur, w, h) {
+                if !barriers[next] && region[next] == u32::MAX {
+                    region[next] = region_count;
+                    stack.push(next);
+                }
+            }
+        }
+        region_count += 1;
+    }
+
+    // (land votes, sea votes) per region.
+    let mut votes = vec![(0u32, 0u32); region_count as usize];
+    for line in segments {
+        for pair in line.windows(2) {
+            let (ax, ay) = pair[0];
+            let (bx, by) = pair[1];
+            let (dx, dy) = (bx - ax, by - ay);
+            let length = dx.hypot(dy);
+            if length < f32::EPSILON {
                 continue;
             }
-            let ni = ny as usize * w + nx as usize;
-            if visited[ni] || barriers[ni] || grid[ni].is_land() {
-                continue;
+            // Left of travel, in image space where y points down.
+            let (left_x, left_y) = (dy / length, -dx / length);
+            let (mid_x, mid_y) = ((ax + bx) * 0.5, (ay + by) * 0.5);
+            for (sign, is_land_side) in [(1.0f32, true), (-1.0, false)] {
+                let px = (mid_x + left_x * COAST_SIDE_OFFSET * sign).round() as i32;
+                let py = (mid_y + left_y * COAST_SIDE_OFFSET * sign).round() as i32;
+                if px < 0 || py < 0 || px >= width as i32 || py >= height as i32 {
+                    continue;
+                }
+                let idx = py as usize * w + px as usize;
+                if barriers[idx] {
+                    continue;
+                }
+                let (land, sea) = &mut votes[region[idx] as usize];
+                if is_land_side {
+                    *land += 1;
+                } else {
+                    *sea += 1;
+                }
             }
-            visited[ni] = true;
-            stack.push(ni);
         }
     }
+    let region_is_land: Vec<bool> = votes.iter().map(|(land, sea)| land > sea).collect();
+
+    let mut land = vec![false; w * h];
+    let mut known = barriers.iter().map(|&barrier| !barrier).collect::<Vec<bool>>();
+    let mut queue = Vec::new();
+    for idx in 0..w * h {
+        if known[idx] {
+            land[idx] = region_is_land[region[idx] as usize];
+            queue.push(idx);
+        }
+    }
+    let mut head = 0;
+    while head < queue.len() {
+        let cur = queue[head];
+        head += 1;
+        for next in neighbors4(cur, w, h) {
+            if !known[next] {
+                known[next] = true;
+                land[next] = land[cur];
+                queue.push(next);
+            }
+        }
+    }
+    land
 }
 
 fn tags_way_is_coastline(tags: Option<&Value>) -> bool {
