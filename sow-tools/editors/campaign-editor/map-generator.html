@@ -204,6 +204,11 @@
       <div id="crop-label" class="hint">No area selected.</div>
       <label for="name">Map name (lowercase, letters, digits, _)</label>
       <input id="name" placeholder="for example: north_coast" autocomplete="off" />
+      <label for="source">Map source</label>
+      <select id="source">
+        <option value="image" selected>Map image (fast, works offline)</option>
+        <option value="osm">OpenStreetMap (detailed coastlines and rivers, slow)</option>
+      </select>
       <label for="size">Size (longest side in tiles)</label>
       <select id="size">
         <option value="small">Small (800)</option>

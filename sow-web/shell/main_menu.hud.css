@@ -410,6 +410,70 @@ html[dir="rtl"] #sow-hud-dev-layer {
   background: #b86461;
   color: #fff;
   font: 700 9px/1 monospace;
+  transform-origin: center center;
+}
+
+.sow-hud__inbox-pill.is-ringing .sow-hud__action-icon {
+  transform-origin: 24% 8%;
+  animation: sow-hud-bell-ring 0.8s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.sow-hud__inbox-pill.is-ringing .sow-hud__inbox-badge {
+  animation: sow-hud-badge-pop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes sow-hud-bell-ring {
+  0% {
+    transform: rotate(0deg) translate(0, 0);
+  }
+  15% {
+    transform: rotate(14deg) translate(1px, -0.5px);
+  }
+  30% {
+    transform: rotate(-12deg) translate(-1px, 0.5px);
+  }
+  45% {
+    transform: rotate(8deg) translate(0.5px, -0.2px);
+  }
+  60% {
+    transform: rotate(-5deg) translate(-0.5px, 0.2px);
+  }
+  75% {
+    transform: rotate(2deg) translate(0.2px, 0);
+  }
+  90% {
+    transform: rotate(-1deg) translate(0, 0);
+  }
+  100% {
+    transform: rotate(0deg) translate(0, 0);
+  }
+}
+
+@keyframes sow-hud-badge-pop {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(255, 152, 0, 0);
+  }
+  20% {
+    transform: scale(1.42);
+    box-shadow: 0 0 8px rgba(255, 152, 0, 0.7);
+  }
+  40% {
+    transform: scale(0.9);
+    box-shadow: 0 0 4px rgba(255, 152, 0, 0.4);
+  }
+  60% {
+    transform: scale(1.18);
+    box-shadow: 0 0 6px rgba(255, 152, 0, 0.5);
+  }
+  80% {
+    transform: scale(0.98);
+    box-shadow: 0 0 2px rgba(255, 152, 0, 0.2);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(255, 152, 0, 0);
+  }
 }
 
 .sow-hud__icon-pill.hidden,
@@ -643,6 +707,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__icon-btn .sow-hud__action-icon {
   width: 30px;
   height: 30px;
+  transition: transform 0.15s ease;
 }
 
 .sow-hud__icon-btn:hover,
@@ -656,8 +721,12 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__icon-btn[data-command="center_camera"]:hover {
   border-color: #00e5ff;
   color: #00e5ff;
-  background: color-mix(in srgb, #00e5ff 14%, transparent);
+  background: var(--sow-panel);
   box-shadow: 0 0 12px color-mix(in srgb, #00e5ff 32%, transparent);
+}
+
+.sow-hud__icon-btn:hover .sow-hud__action-icon {
+  transform: scale(1.08);
 }
 
 .sow-hud__icon-btn:active,
@@ -684,9 +753,14 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__icon-btn[data-command="center_camera"]:active {
   border-color: #ff9800;
   color: #ff9800;
-  background: color-mix(in srgb, #ff9800 18%, transparent);
+  background: var(--sow-panel);
   box-shadow: 0 0 14px color-mix(in srgb, #ff9800 36%, transparent);
   transform: scale(0.96);
+}
+
+.sow-hud__icon-btn:active .sow-hud__action-icon,
+.sow-hud__icon-btn.is-holding .sow-hud__action-icon {
+  transform: scale(0.94);
 }
 
 .sow-hud__icon-btn.active:hover,
@@ -694,8 +768,14 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__icon-btn.is-holding:hover {
   border-color: #ffa726;
   color: #ffa726;
-  background: color-mix(in srgb, #ff9800 24%, transparent);
+  background: var(--sow-panel);
   box-shadow: 0 0 16px color-mix(in srgb, #ff9800 45%, transparent);
+}
+
+.sow-hud__icon-btn.active:hover .sow-hud__action-icon,
+.sow-hud__icon-btn[aria-expanded="true"]:hover .sow-hud__action-icon,
+.sow-hud__icon-btn.is-holding:hover .sow-hud__action-icon {
+  transform: scale(1.04);
 }
 
 .sow-hud__icon-btn.is-zoom-limited {

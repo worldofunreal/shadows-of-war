@@ -274,6 +274,7 @@ impl SowApp {
                         .as_ref()
                         .map(|s| s.dirty_tiles.as_slice())
                         .unwrap_or(&[]);
+                    let my_id = self.sim.my_player_id.unwrap_or(0);
                     thread_local! {
                         static LAST_FOG_OF_WAR_TOGGLE: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
                     }
@@ -298,6 +299,7 @@ impl SowApp {
                         &render_ctx.context,
                         dirty,
                         conquest_duration,
+                        my_id,
                         &self.sim.fog_visible,
                         force_fog_upload,
                     );
@@ -315,7 +317,6 @@ impl SowApp {
                     let mut player_colors =
                         [[default_player_color; 4]; crate::render::gpu::PLAYER_COLOR_SLOTS / 4];
                     let mut player_skin_styles = [[0.0f32; 4]; 256];
-                    let my_id = self.sim.my_player_id.unwrap_or(0);
                     if let Some(snap) = &self.sim.current_snapshot {
                         for p in &snap.players {
                             if (p.id as usize) < crate::render::gpu::PLAYER_COLOR_SLOTS {
@@ -413,10 +414,16 @@ impl SowApp {
                         dialog_border = [preview_player_id as f32, preview_time, 0.0, 0.0];
                     }
 
-                    // Traitor border: every player with an active traitor flag, up to four.
+                    // Traitor borders are limited to breakups involving the local player.
                     let mut betrayal_owners = [0.0f32; 4];
                     if let Some(snapshot) = snapshot {
-                        for (slot, traitor) in snapshot.players.iter().filter(|p| p.traitor).take(4).enumerate() {
+                        for (slot, traitor) in snapshot
+                            .players
+                            .iter()
+                            .filter(|p| p.traitor && self.ui.local_betrayal_owners.contains(&p.id))
+                            .take(4)
+                            .enumerate()
+                        {
                             betrayal_owners[slot] = traitor.id as f32;
                         }
                     }

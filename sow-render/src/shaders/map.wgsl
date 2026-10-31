@@ -327,7 +327,8 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
     let owner_packed = textureLoad(owner_texture, pixel_coords, 0).x;
     let owner_id = owner_packed & 0xFFFFu;
     let flash_byte = (owner_packed >> 16u) & 0xFFu;
-    var flash_val = f32(flash_byte) / 255.0;
+    let ability_flash = (flash_byte & 0x80u) != 0u;
+    var flash_val = f32(flash_byte & 0x7Fu) / 127.0;
     if globals.preview_effect == 2.0 && owner_id == u32(globals.my_player_id) {
         flash_val = max(flash_val, 1.0 - globals.preview_phase);
     }
@@ -470,10 +471,10 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
             base_color *= globals.shader_params[__MAP_LOCAL_FILL__].x;
         }
 
-        // ── Territory Heartbeat Pulse (living empire breathe) ──
-        if (globals.effect_heartbeat > 0.0) {
+        // ── Skill-only pulse on the ability's marked tile ──
+        if (globals.effect_heartbeat > 0.0 && ability_flash && flash_val > 0.0) {
             let heartbeat = globals.shader_params[__MAP_HEARTBEAT_BASE__].x + globals.shader_params[__MAP_HEARTBEAT_AMOUNT__].x * sin(globals.time * globals.shader_params[__MAP_HEARTBEAT_RATE__].x + f32(owner_id) * globals.shader_params[__MAP_HEARTBEAT_PHASE__].x);
-            base_color = base_color * heartbeat;
+            base_color = base_color * mix(1.0, heartbeat, flash_val);
         }
 
         // ── Dialog Terms Interior Shimmer (requesting entity glows softly) ──
@@ -519,10 +520,10 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
     let shore_thickness = globals.shore_thickness;
     let shore_darkness = globals.shore_darkness;
 
-    // Border breathe: subtle thickness pulse per owner
-    if globals.effect_breathe > 0.0 && owner_id > 0u {
+    // Skill-only border pulse on the ability's marked tile.
+    if globals.effect_breathe > 0.0 && ability_flash && flash_val > 0.0 && owner_id > 0u {
         let breathe = (sin(globals.time * globals.shader_params[__MAP_BORDER_BREATHE_RATE__].x + f32(owner_id)) + 1.0) * 0.5;
-        thickness += breathe * globals.shader_params[__MAP_BORDER_BREATHE_AMOUNT__].x * globals.effect_breathe;
+        thickness += breathe * globals.shader_params[__MAP_BORDER_BREATHE_AMOUNT__].x * globals.effect_breathe * flash_val;
     }
     // Shockwave border explosion
     if flash_val > 0.0 && globals.effect_shockwave > 0.0 {

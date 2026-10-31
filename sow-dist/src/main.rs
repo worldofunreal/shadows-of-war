@@ -2000,7 +2000,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     if poki || jest {
         for forbidden in [
             "https://id.worldofunreal.com",
-            "https://discord.gg/d6ZDeChSE",
+            "https://discord.gg/4mBM6zJyG",
             "https://t.me/shadowsofwario",
             "https://github.com/worldofunreal/shadows-of-war",
             "https://worldofunreal.com/wouid.svg",
@@ -2193,12 +2193,28 @@ fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
     Ok(())
 }
 
-const PUBLIC_SITE_PAGES: [&str; 5] = [
+const PUBLIC_SITE_PAGES: [&str; 10] = [
     "index.html",
     "support/index.html",
     "privacy/index.html",
     "cookies/index.html",
     "terms/index.html",
+    "free-browser-strategy-game/index.html",
+    "games-like-travian/index.html",
+    "games-like-ikariam/index.html",
+    "multiplayer-territory-control-game/index.html",
+    "about/index.html",
+];
+
+/// Long-tail landing pages that ship in English only. They answer English
+/// search intent, so they publish unprefixed and stay out of the localized
+/// matrix instead of duplicating English copy under every language prefix.
+const ENGLISH_ONLY_PAGES: [&str; 5] = [
+    "free-browser-strategy-game/index.html",
+    "games-like-travian/index.html",
+    "games-like-ikariam/index.html",
+    "multiplayer-territory-control-game/index.html",
+    "about/index.html",
 ];
 
 fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
@@ -2213,7 +2229,7 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
         })
     }).collect::<Vec<_>>();
     let mut metadata = tempfile::NamedTempFile::new()?;
-    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES }))?;
+    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES }))?;
     run("bun", &[
         "run", paths.root.join("sow-web/site/generate.ts").to_str().context("site generator path")?,
         out.to_str().context("site output path")?,
@@ -3426,6 +3442,9 @@ fn verify_layout(dir: &Path) -> Result<()> {
         for page in PUBLIC_SITE_PAGES.iter().map(|page| page.to_string())
             .chain(std::iter::once("leaders/index.html".to_string()))
             .chain(sow_core::player::Leader::all().map(|leader| format!("leaders/{}/index.html", leader.id()))) {
+            if code != "en" && ENGLISH_ONLY_PAGES.contains(&page.as_str()) {
+                continue;
+            }
             let path = dir.join(format!("{prefix}{page}"));
             let html = fs::read_to_string(&path).with_context(|| format!("missing public page {}", path.display()))?;
             if html.contains("<!-- SOW_SITE_") || !html.contains(&format!("lang=\"{code}\"")) {
@@ -4017,6 +4036,11 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         "terms",
         "cookies",
         "support",
+        "about",
+        "free-browser-strategy-game",
+        "games-like-travian",
+        "games-like-ikariam",
+        "multiplayer-territory-control-game",
         "auth",
         ".well-known",
     ] {
@@ -5267,6 +5291,11 @@ fn package_local_preview(
         "terms",
         "cookies",
         "support",
+        "about",
+        "free-browser-strategy-game",
+        "games-like-travian",
+        "games-like-ikariam",
+        "multiplayer-territory-control-game",
         "auth",
         ".well-known",
     ] {

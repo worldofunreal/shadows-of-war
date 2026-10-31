@@ -28,7 +28,7 @@ pub struct MapRenderer {
     pub terrain: Vec<u8>,
     pub owners: Vec<u16>,
     pub conquest_flash: Vec<u8>,
-    /// Tiles with non-zero flash, for sparse decay (avoids scanning all tiles).
+    /// Tiles with active flash intensity, for sparse decay (avoids scanning all tiles).
     flash_active: Vec<u32>,
     pub vision_fade: Vec<u8>,
     fade_active: Vec<u32>,
@@ -42,6 +42,9 @@ pub struct MapRenderer {
     pub decay_accumulator: f32,
     pub fade_decay_accumulator: f32,
 }
+
+const FLASH_ABILITY_BIT: u8 = 0x80;
+const FLASH_INTENSITY_MASK: u8 = !FLASH_ABILITY_BIT;
 
 impl MapRenderer {
     pub fn new(
@@ -335,6 +338,7 @@ impl MapRenderer {
         context: &gpu::Context,
         dirty_tiles: &[sow_core::protocol::DirtyTile],
         conquest_duration: f32,
+        my_player_id: u16,
         visible: &sow_core::bitset::DenseBitSet,
         force_full_upload: bool,
     ) {
@@ -347,9 +351,9 @@ impl MapRenderer {
 
         // Scale decay based on elapsed time so it completes in exactly `conquest_duration` seconds on all frame rates.
         let decay_rate = if conquest_duration > 0.0 {
-            255.0 / conquest_duration
+            f32::from(FLASH_INTENSITY_MASK) / conquest_duration
         } else {
-            85.0
+            f32::from(FLASH_INTENSITY_MASK) / 3.0
         };
         self.decay_accumulator += dt * decay_rate;
         let decay_amount = self.decay_accumulator.floor() as u32;
@@ -404,8 +408,13 @@ impl MapRenderer {
             }
             let old_owner = self.owners[i];
             if old_owner != dt.new_owner {
-                if dt.new_owner > 0 {
-                    start_conquest_flash(&mut self.conquest_flash, &mut self.flash_active, dt.index);
+                if conquest_involves_player(old_owner, dt.new_owner, my_player_id) {
+                    start_tile_flash(
+                        &mut self.conquest_flash,
+                        &mut self.flash_active,
+                        dt.index,
+                        false,
+                    );
                 }
                 self.owners[i] = dt.new_owner;
             }
@@ -482,8 +491,8 @@ impl MapRenderer {
                 if i >= total {
                     return false;
                 }
-                let f = self.conquest_flash[i].saturating_sub(decay_amount.min(255) as u8);
-                self.conquest_flash[i] = f;
+                self.conquest_flash[i] = decay_tile_flash(self.conquest_flash[i], decay_amount);
+                let intensity = self.conquest_flash[i] & FLASH_INTENSITY_MASK;
                 let fade = self.vision_fade[i];
                 pack(
                     slice,
@@ -496,7 +505,7 @@ impl MapRenderer {
                 let y = tile_idx / width;
                 self.dirty_chunks[(y / chunk_h) as usize] = true;
                 decay_dirty = true;
-                f > 0
+                intensity > 0
             });
         }
 
@@ -626,6 +635,15 @@ impl MapRenderer {
         }
     }
 
+    /// Starts the existing per-tile flash channel for a locally visible hero ability.
+    pub fn flash_ability_tile(&mut self, x: u32, y: u32) {
+        if x >= self.width || y >= self.height {
+            return;
+        }
+        let tile = y * self.width + x;
+        start_tile_flash(&mut self.conquest_flash, &mut self.flash_active, tile, true);
+    }
+
     pub fn draw(
         &self,
         encoder: &mut gpu::CommandEncoder,
@@ -672,28 +690,60 @@ impl MapRenderer {
     }
 }
 
-/// Starts a conquest flash on `tile`. A tile that is already flashing keeps its single
-/// `flash_active` entry, so each frame's decay is subtracted once, not once per capture.
-fn start_conquest_flash(conquest_flash: &mut [u8], flash_active: &mut Vec<u32>, tile: u32) {
+fn conquest_involves_player(old_owner: u16, new_owner: u16, my_player_id: u16) -> bool {
+    my_player_id != 0 && (old_owner == my_player_id || new_owner == my_player_id)
+}
+
+/// Starts one flash per tile; the high bit marks skill flashes for localized shader pulses.
+fn start_tile_flash(flashes: &mut [u8], flash_active: &mut Vec<u32>, tile: u32, ability: bool) {
     let i = tile as usize;
-    if conquest_flash[i] == 0 {
+    if (flashes[i] & FLASH_INTENSITY_MASK) == 0 {
         flash_active.push(tile);
     }
-    conquest_flash[i] = 255;
+    flashes[i] = FLASH_INTENSITY_MASK | if ability { FLASH_ABILITY_BIT } else { 0 };
+}
+
+fn decay_tile_flash(flash: u8, amount: u32) -> u8 {
+    (flash & FLASH_ABILITY_BIT)
+        | (flash & FLASH_INTENSITY_MASK)
+            .saturating_sub(amount.min(u32::from(FLASH_INTENSITY_MASK)) as u8)
 }
 
 #[cfg(test)]
 mod conquest_flash_tests {
-    use super::start_conquest_flash;
+    use super::{FLASH_ABILITY_BIT, conquest_involves_player, decay_tile_flash, start_tile_flash};
 
     #[test]
     fn recapturing_a_flashing_tile_keeps_one_decay_entry() {
         let mut flash = vec![0u8; 4];
         let mut active = Vec::new();
-        start_conquest_flash(&mut flash, &mut active, 2);
-        flash[2] = 100;
-        start_conquest_flash(&mut flash, &mut active, 2);
+        start_tile_flash(&mut flash, &mut active, 2, false);
+        flash[2] = 50;
+        start_tile_flash(&mut flash, &mut active, 2, false);
         assert_eq!(active, vec![2]);
-        assert_eq!(flash[2], 255);
+        assert_eq!(flash[2], 127);
+    }
+
+    #[test]
+    fn ability_flash_uses_the_same_tile_entry_with_a_skill_marker() {
+        let mut flash = vec![0u8; 4];
+        let mut active = Vec::new();
+        start_tile_flash(&mut flash, &mut active, 2, true);
+        assert_eq!(active, vec![2]);
+        assert_eq!(flash[2], 127 | FLASH_ABILITY_BIT);
+    }
+
+    #[test]
+    fn flash_decay_preserves_the_ability_marker() {
+        assert_eq!(decay_tile_flash(255, 64), 128 | 63);
+        assert_eq!(decay_tile_flash(128 | 1, 2), 128);
+    }
+
+    #[test]
+    fn conquest_flash_is_limited_to_the_local_player() {
+        assert!(conquest_involves_player(1, 2, 1));
+        assert!(conquest_involves_player(2, 1, 1));
+        assert!(!conquest_involves_player(2, 3, 1));
+        assert!(!conquest_involves_player(0, 2, 0));
     }
 }

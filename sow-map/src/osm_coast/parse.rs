@@ -88,29 +88,19 @@ pub fn build_landmass_from_coastlines(
         coastlines.segments.len()
     );
 
-    let mut grid = vec![MapTile::from_byte(PURE_WATER); size];
     let mut barriers = vec![false; size];
     for line in &coastlines.segments {
         rasterize_polyline_barrier(&mut barriers, width, height, line, 5.0);
     }
     dilate_barriers(&mut barriers, width, height);
 
-    flood_ocean_from_edges(&mut grid, width, height, &barriers);
-
-    if !coastlines.segments.is_empty() {
-        let seed_x = ((min_lon + max_lon) * 0.5 - min_lon) * scale;
-        let seed_y = (max_lat - (min_lat + max_lat) * 0.5) * scale;
-        flood_fill_land(
-            &mut grid,
-            width,
-            height,
-            seed_x.round() as i32,
-            seed_y.round() as i32,
-            &barriers,
-        );
-    } else {
+    if coastlines.segments.is_empty() {
         eprintln!("Warning: no coastline data; map will be all ocean");
     }
+    let mut grid: Vec<MapTile> = classify_land_by_coast_side(&coastlines.segments, &barriers, width, height)
+        .into_iter()
+        .map(|is_land| MapTile::from_byte(if is_land { LAND_PLAINS } else { OCEAN_WATER }))
+        .collect();
 
     let land_count = grid.iter().filter(|t| t.is_land()).count();
     let water_count = grid.len() - land_count;

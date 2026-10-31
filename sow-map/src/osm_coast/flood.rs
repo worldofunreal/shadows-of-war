@@ -105,41 +105,50 @@ mod tests {
     }
 
     #[test]
-    fn coastline_encloses_land_and_exterior_stays_water() {
+    fn coast_loop_with_land_on_its_left_encloses_land() {
         let width = 40u32;
         let height = 40u32;
-        let size = (width * height) as usize;
-        let mut grid = vec![MapTile::from_byte(PURE_WATER); size];
-        let mut barriers = vec![false; size];
+        let mut barriers = vec![false; (width * height) as usize];
 
+        // Walked so that the square's inside is on the left, as OSM coastlines are.
         let coast = vec![
-            (10.0, 10.0),
             (30.0, 10.0),
-            (30.0, 30.0),
-            (10.0, 30.0),
             (10.0, 10.0),
+            (10.0, 30.0),
+            (30.0, 30.0),
+            (30.0, 10.0),
         ];
         rasterize_polyline_barrier(&mut barriers, width, height, &coast, 5.0);
         dilate_barriers(&mut barriers, width, height);
 
-        flood_ocean_from_edges(&mut grid, width, height, &barriers);
-        flood_fill_land(&mut grid, width, height, 20, 20, &barriers);
-        apply_ocean_and_shoreline(&mut grid, width, height);
+        let land = classify_land_by_coast_side(&[coast], &barriers, width, height);
 
-        assert!(grid[(20 * width + 20) as usize].is_land());
-        assert!(!grid[0].is_land());
-        assert!(!grid[(39 * width + 39) as usize].is_land());
+        assert!(land[(20 * width + 20) as usize]);
+        assert!(!land[0]);
+        assert!(!land[(39 * width + 39) as usize]);
     }
 
     #[test]
-    fn seed_fill_without_barriers_cannot_create_inland() {
-        let width = 20u32;
-        let height = 20u32;
-        let mut grid = vec![MapTile::from_byte(PURE_WATER); (width * height) as usize];
-        let barriers = vec![false; grid.len()];
-        flood_ocean_from_edges(&mut grid, width, height, &barriers);
-        flood_fill_land(&mut grid, width, height, 10, 10, &barriers);
-        assert!(!grid[(10 * width + 10) as usize].is_land());
-        assert!(grid.iter().all(|t| is_exterior_ocean(*t)));
+    fn coast_crossing_the_box_puts_land_on_its_left() {
+        let width = 40u32;
+        let height = 40u32;
+        let mut barriers = vec![false; (width * height) as usize];
+
+        // Travelling east with land on the left puts the land north of the coast.
+        let coast = vec![(0.0, 20.0), (39.0, 20.0)];
+        rasterize_polyline_barrier(&mut barriers, width, height, &coast, 5.0);
+        dilate_barriers(&mut barriers, width, height);
+
+        let land = classify_land_by_coast_side(&[coast], &barriers, width, height);
+
+        assert!(land[(5 * width + 20) as usize]);
+        assert!(!land[(35 * width + 20) as usize]);
+    }
+
+    #[test]
+    fn no_coastline_means_no_land_from_coast_votes() {
+        let barriers = vec![false; 400];
+        let land = classify_land_by_coast_side(&[], &barriers, 20, 20);
+        assert!(land.iter().all(|&is_land| !is_land));
     }
 }

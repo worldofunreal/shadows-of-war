@@ -288,25 +288,35 @@ fn water_query(min_lat: f64, min_lon: f64, max_lat: f64, max_lon: f64) -> String
     .replace('\n', " ")
 }
 
+/// Overpass answers 502/503/504 while its workers are busy; both mirrors get a few
+/// rounds with a growing pause before the tile is counted as failed.
+const OVERPASS_ROUND_PAUSES_SECS: [u64; 2] = [15, 30];
+
 async fn run_overpass(client: &Client, query: &str) -> Result<Value, Box<dyn Error>> {
     let mut last_err = String::new();
-    for server in OVERPASS_SERVERS {
-        let res = client
-            .post(server)
-            .header("User-Agent", OSM_USER_AGENT)
-            .form(&[("data", query)])
-            .send()
-            .await;
+    for round in 0..=OVERPASS_ROUND_PAUSES_SECS.len() {
+        if round > 0 {
+            // The generator runs one tile at a time as a CLI, so a blocking pause is fine here.
+            std::thread::sleep(std::time::Duration::from_secs(OVERPASS_ROUND_PAUSES_SECS[round - 1]));
+        }
+        for server in OVERPASS_SERVERS {
+            let res = client
+                .post(server)
+                .header("User-Agent", OSM_USER_AGENT)
+                .form(&[("data", query)])
+                .send()
+                .await;
 
-        match res {
-            Ok(resp) if resp.status().is_success() => {
-                return Ok(resp.json().await?);
-            }
-            Ok(resp) => {
-                last_err = format!("{server} HTTP {}", resp.status());
-            }
-            Err(e) => {
-                last_err = format!("{server}: {e}");
+            match res {
+                Ok(resp) if resp.status().is_success() => {
+                    return Ok(resp.json().await?);
+                }
+                Ok(resp) => {
+                    last_err = format!("{server} HTTP {}", resp.status());
+                }
+                Err(e) => {
+                    last_err = format!("{server}: {e}");
+                }
             }
         }
     }

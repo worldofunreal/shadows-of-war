@@ -645,6 +645,8 @@ pub struct UiState {
     pub last_resource_notice_tick: Option<u64>,
     pub border_flashes: Vec<BorderFlashInstance>,
     pub alliance_celebrations: std::collections::VecDeque<AllianceCelebration>,
+    /// Active betrayal borders that involve the local player.
+    pub local_betrayal_owners: std::collections::BTreeSet<u16>,
     pub border_flash_intensities: std::collections::HashMap<u16, f32>,
     pub last_player_attack_flash_time: std::collections::HashMap<u16, web_time::Instant>,
     /// Screen vignette alert state.

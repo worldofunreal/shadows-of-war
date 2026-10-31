@@ -286,6 +286,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     let lastLeaderboardTeams: HudLeaderboardTeam[] = [];
     let notificationCursor = 0;
     let notificationTimer: number | null = null;
+    let bellRingTimer: number | null = null;
+    let lastInboxCount = -1;
     let activeNotifications: ActiveHudNotification[] = [];
     let notificationCards: HudNotificationCard[] = [];
     let notificationLayoutFrame = 0;
@@ -4613,6 +4615,53 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         }
     }
 
+    function triggerBellAnimation(): void {
+        if (!hudRefs || !hudRefs.inboxButton) return;
+        const btn = hudRefs.inboxButton;
+        if (btn.classList) {
+            if (typeof btn.classList.remove === "function") {
+                btn.classList.remove("is-ringing");
+            } else if (typeof btn.classList.toggle === "function") {
+                btn.classList.toggle("is-ringing", false);
+            }
+        }
+        if (typeof (btn as HTMLElement).offsetWidth === "number") {
+            void (btn as HTMLElement).offsetWidth;
+        }
+        if (btn.classList) {
+            if (typeof btn.classList.add === "function") {
+                btn.classList.add("is-ringing");
+            } else if (typeof btn.classList.toggle === "function") {
+                btn.classList.toggle("is-ringing", true);
+            }
+        }
+        if (typeof bellRingTimer !== "undefined" && bellRingTimer) {
+            if (typeof clearTimeout === "function") clearTimeout(bellRingTimer);
+            bellRingTimer = null;
+        }
+        if (typeof setTimeout === "function") {
+            const timer = setTimeout(function () {
+                if (hudRefs && hudRefs.inboxButton && hudRefs.inboxButton.classList) {
+                    const activeBtn = hudRefs.inboxButton;
+                    if (typeof activeBtn.classList.remove === "function") {
+                        activeBtn.classList.remove("is-ringing");
+                    } else if (typeof activeBtn.classList.toggle === "function") {
+                        activeBtn.classList.toggle("is-ringing", false);
+                    }
+                }
+                if (typeof bellRingTimer !== "undefined") {
+                    bellRingTimer = null;
+                }
+            }, 850) as unknown as number;
+            if (typeof bellRingTimer !== "undefined") {
+                bellRingTimer = timer;
+            }
+        }
+    }
+    if (typeof window !== "undefined") {
+        window.SOW_triggerBellAlert = triggerBellAnimation;
+    }
+
     function renderNotifications(
         entries: HudNotification[],
         forceRefresh: boolean,
@@ -4636,12 +4685,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             activeNotifications.length = limit;
             changed = true;
         }
+        let hadNewNotification = false;
         entries.forEach(function (entry) {
             const id = Number(entry && entry.id);
             if (!Number.isSafeInteger(id) || id <= notificationCursor) return;
             notificationCursor = id;
             const age = Math.max(0, Number(entry.age_ms) || 0);
             if (age >= 3600) return;
+            hadNewNotification = true;
             const createdAt = Date.now();
             const item = {
                 entry: entry,
@@ -4715,6 +4766,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 changed = true;
             }
         });
+        if (hadNewNotification && typeof triggerBellAnimation === "function") {
+            triggerBellAnimation();
+        }
         hudRoot!.dataset.notificationsVisible = String(activeNotifications.length > 0);
         if (!changed) return;
         activeNotifications.sort(function (a, b) {
@@ -5033,6 +5087,20 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             if (hudRefs && hudRefs.rows) hudRefs.rows.replaceChildren();
             if (notificationTimer) window.clearTimeout(notificationTimer);
             notificationTimer = null;
+            if (typeof bellRingTimer !== "undefined" && bellRingTimer) {
+                if (typeof clearTimeout === "function") clearTimeout(bellRingTimer);
+                bellRingTimer = null;
+            }
+            if (typeof lastInboxCount !== "undefined") {
+                lastInboxCount = -1;
+            }
+            if (hudRefs && hudRefs.inboxButton && hudRefs.inboxButton.classList) {
+                if (typeof hudRefs.inboxButton.classList.remove === "function") {
+                    hudRefs.inboxButton.classList.remove("is-ringing");
+                } else if (typeof hudRefs.inboxButton.classList.toggle === "function") {
+                    hudRefs.inboxButton.classList.toggle("is-ringing", false);
+                }
+            }
             activeNotifications = [];
             renderCombatOperations([]);
             pendingCounterAttacks = Object.create(null);
@@ -5186,8 +5254,20 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             if (hasPing && ping !== null) hudRefs!.ping.textContent = Math.floor(ping) + "ms";
         }
         if (hudRefs!.inboxCount) {
-            hudRefs!.inboxCount.textContent = String(hud.inbox_count || 0);
-            hudRefs!.inboxCount.hidden = !hud.inbox_count;
+            const currentInboxCount = Number(hud.inbox_count || 0);
+            hudRefs!.inboxCount.textContent = String(currentInboxCount);
+            hudRefs!.inboxCount.hidden = !currentInboxCount;
+            if (
+                typeof lastInboxCount !== "undefined" &&
+                lastInboxCount >= 0 &&
+                currentInboxCount > lastInboxCount &&
+                typeof triggerBellAnimation === "function"
+            ) {
+                triggerBellAnimation();
+            }
+            if (typeof lastInboxCount !== "undefined") {
+                lastInboxCount = currentInboxCount;
+            }
         }
 
         // Hover Card
@@ -5424,6 +5504,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             const inboxWasHidden = hudRefs!.inbox.classList.contains("hidden");
             hudRefs!.inbox.classList.toggle("hidden", !inboxOpen);
             if (inboxOpen) {
+                if (hudRefs!.inboxButton && hudRefs!.inboxButton.classList) {
+                    if (typeof hudRefs!.inboxButton.classList.remove === "function") {
+                        hudRefs!.inboxButton.classList.remove("is-ringing");
+                    } else if (typeof hudRefs!.inboxButton.classList.toggle === "function") {
+                        hudRefs!.inboxButton.classList.toggle("is-ringing", false);
+                    }
+                }
+                if (typeof bellRingTimer !== "undefined" && bellRingTimer) {
+                    if (typeof clearTimeout === "function") clearTimeout(bellRingTimer);
+                    bellRingTimer = null;
+                }
                 renderInbox(hud.inbox || []);
                 if (inboxWasHidden && hudRefs!.inboxClose) hudRefs!.inboxClose.focus();
             } else if (

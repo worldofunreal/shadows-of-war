@@ -8,9 +8,16 @@ impl SowApp {
         let mut under_attack_sound_triggered = false;
         let now = web_time::Instant::now();
         if let Some(mut existing) = self.sim.current_snapshot.take() {
-            for [a, b] in new_mutual_alliances(&existing.players, &snap.players) {
+            for [a, b] in new_mutual_alliances(&existing.players, &snap.players, my_id) {
                 self.ui.trigger_alliance_celebration(a, b, now);
             }
+            self.ui
+                .local_betrayal_owners
+                .extend(newly_local_betrayal_owners(
+                    &existing.players,
+                    &snap.players,
+                    my_id,
+                ));
             let old_attack_troops: HashMap<u64, f64> = existing
                 .attacks
                 .iter()
@@ -320,6 +327,19 @@ impl SowApp {
                 snap.dirty_tiles = existing.dirty_tiles;
             }
         }
+        retain_active_local_betrayal_owners(
+            &mut self.ui.local_betrayal_owners,
+            &snap.players,
+            my_id,
+        );
+        if my_id != 0
+            && snap
+                .players
+                .iter()
+                .any(|player| player.id == my_id && player.traitor)
+        {
+            self.ui.local_betrayal_owners.insert(my_id);
+        }
     }
 
     pub(crate) fn process_nuke_alerts(&mut self, snap: &SimSnapshot) {
@@ -378,7 +398,11 @@ impl SowApp {
 fn new_mutual_alliances(
     old: &[sow_core::protocol::PlayerSnapshot],
     new: &[sow_core::protocol::PlayerSnapshot],
+    my_id: u16,
 ) -> Vec<[u16; 2]> {
+    if my_id == 0 {
+        return Vec::new();
+    }
     let old_by_id: HashMap<u16, &sow_core::protocol::PlayerSnapshot> =
         old.iter().map(|player| (player.id, player)).collect();
     let new_by_id: HashMap<u16, &sow_core::protocol::PlayerSnapshot> =
@@ -391,6 +415,7 @@ fn new_mutual_alliances(
         for &other_id in &player.alliances {
             if other_id == 0
                 || player.id >= other_id
+                || (player.id != my_id && other_id != my_id)
                 || !new_by_id
                     .get(&other_id)
                     .is_some_and(|other| other.alliances.contains(&player.id))
@@ -413,9 +438,59 @@ fn new_mutual_alliances(
     pairs
 }
 
+fn newly_local_betrayal_owners(
+    old: &[sow_core::protocol::PlayerSnapshot],
+    new: &[sow_core::protocol::PlayerSnapshot],
+    my_id: u16,
+) -> Vec<u16> {
+    if my_id == 0 {
+        return Vec::new();
+    }
+    let Some(old_me) = old.iter().find(|player| player.id == my_id) else {
+        return Vec::new();
+    };
+    let Some(new_me) = new.iter().find(|player| player.id == my_id) else {
+        return Vec::new();
+    };
+    let mut owners = Vec::new();
+    if new_me.traitor {
+        owners.push(my_id);
+    }
+    owners.extend(
+        old_me
+            .alliances
+            .iter()
+            .filter(|ally_id| !new_me.alliances.contains(*ally_id))
+            .filter(|ally_id| {
+                new.iter()
+                    .any(|player| player.id == **ally_id && player.traitor)
+            })
+            .copied(),
+    );
+    owners
+}
+
+fn retain_active_local_betrayal_owners(
+    owners: &mut std::collections::BTreeSet<u16>,
+    players: &[sow_core::protocol::PlayerSnapshot],
+    my_id: u16,
+) {
+    if my_id == 0 {
+        owners.clear();
+        return;
+    }
+    owners.retain(|owner_id| {
+        players
+            .iter()
+            .any(|player| player.id == *owner_id && player.traitor)
+    });
+}
+
 #[cfg(test)]
 mod nuke_alert_tests {
-    use super::new_mutual_alliances;
+    use super::{
+        new_mutual_alliances, newly_local_betrayal_owners, retain_active_local_betrayal_owners,
+    };
     use sow_core::player::{Leader, PlayerType};
     use sow_core::protocol::PlayerSnapshot;
 
@@ -463,14 +538,16 @@ mod nuke_alert_tests {
     fn detects_only_new_mutual_alliances() {
         let old = vec![player(1, &[]), player(2, &[]), player(3, &[])];
         let new = vec![player(1, &[2]), player(2, &[1]), player(3, &[])];
-        assert_eq!(new_mutual_alliances(&old, &new), vec![[1, 2]]);
+        assert_eq!(new_mutual_alliances(&old, &new, 1), vec![[1, 2]]);
+        assert!(new_mutual_alliances(&old, &new, 3).is_empty());
+        assert!(new_mutual_alliances(&old, &new, 0).is_empty());
     }
 
     #[test]
     fn ignores_requests_unilateral_alliances_and_existing_alliances() {
         let old = vec![player(1, &[2]), player(2, &[1]), player(3, &[])];
         let new = vec![player(1, &[2, 3]), player(2, &[1]), player(3, &[])];
-        assert!(new_mutual_alliances(&old, &new).is_empty());
+        assert!(new_mutual_alliances(&old, &new, 1).is_empty());
     }
 
     #[test]
@@ -480,7 +557,7 @@ mod nuke_alert_tests {
         one.alliance_requests.push(2);
         let mut two = player(2, &[]);
         two.alliance_requests.push(1);
-        assert!(new_mutual_alliances(&old, &[one, two]).is_empty());
+        assert!(new_mutual_alliances(&old, &[one, two], 1).is_empty());
 
         let mut old_one = player(1, &[2]);
         old_one.alliance_timers.insert(2, 300);
@@ -490,7 +567,46 @@ mod nuke_alert_tests {
         new_one.alliance_timers.insert(2, 600);
         let mut new_two = player(2, &[1]);
         new_two.alliance_timers.insert(1, 600);
-        assert!(new_mutual_alliances(&[old_one, old_two], &[new_one, new_two]).is_empty());
+        assert!(new_mutual_alliances(&[old_one, old_two], &[new_one, new_two], 1).is_empty());
+    }
+
+    #[test]
+    fn betrayal_borders_only_track_a_broken_local_alliance() {
+        let old = vec![
+            player(1, &[2]),
+            player(2, &[1]),
+            player(3, &[4]),
+            player(4, &[3]),
+        ];
+        let local = player(1, &[]);
+        let mut betrayer = player(2, &[]);
+        betrayer.traitor = true;
+        let mut unrelated_betrayer = player(4, &[]);
+        unrelated_betrayer.traitor = true;
+        let new = vec![local, betrayer, player(3, &[]), unrelated_betrayer];
+        assert_eq!(newly_local_betrayal_owners(&old, &new, 1), vec![2]);
+        assert!(newly_local_betrayal_owners(&old, &new, 3).is_empty());
+        assert!(newly_local_betrayal_owners(&old, &new, 0).is_empty());
+    }
+
+    #[test]
+    fn local_breaker_is_kept_as_a_local_betrayal_owner() {
+        let old = vec![player(1, &[2]), player(2, &[1])];
+        let mut breaker = player(1, &[]);
+        breaker.traitor = true;
+        let new = vec![breaker, player(2, &[])];
+        assert_eq!(newly_local_betrayal_owners(&old, &new, 1), vec![1]);
+    }
+
+    #[test]
+    fn local_betrayal_border_ends_when_traitor_status_expires() {
+        let mut owners = std::collections::BTreeSet::from([2, 4]);
+        let mut active = player(2, &[]);
+        active.traitor = true;
+        retain_active_local_betrayal_owners(&mut owners, &[active, player(4, &[])], 1);
+        assert_eq!(owners, std::collections::BTreeSet::from([2]));
+        retain_active_local_betrayal_owners(&mut owners, &[], 0);
+        assert!(owners.is_empty());
     }
 }
 

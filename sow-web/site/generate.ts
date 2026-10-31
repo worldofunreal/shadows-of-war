@@ -16,7 +16,7 @@ type Leader = { id: string; artSlug: string; region: string; wikipedia: string |
 
 export async function publish(
   out: string,
-  input: { leaders: Leader[]; pages: string[] },
+  input: { leaders: Leader[]; pages: string[]; englishOnly?: string[] },
   source = import.meta.dir,
 ) {
   const { leaders } = input;
@@ -25,9 +25,13 @@ export async function publish(
     return page.slice(0, -"index.html".length);
   });
   const registry = JSON.parse(await read(join(out, "locales/index.json")));
+  const biographies = JSON.parse(await read(join(source, "leader-bios.json"))).leaders;
   await writeFile(join(out, "llms.txt"), await read(join(source, "llms.txt")));
   const languages: { code: string; name: string }[] = registry.languages;
   const routes = [...bases, "leaders/", ...leaders.map((h) => `leaders/${h.id}/`)];
+  // Long-tail pages that answer English search intent ship unprefixed only; other
+  // languages link to their home page instead of a translated duplicate.
+  const englishOnly = new Set((input.englishOnly ?? []).map((page) => page.slice(0, -"index.html".length)));
   if (!leaders.length || new Set(leaders.map((h) => h.id)).size !== leaders.length)
     throw Error("Invalid public leader catalog");
   const prefix = (code: string) => (code === "en" ? "" : `${code.toLowerCase()}/`);
@@ -104,6 +108,19 @@ export async function publish(
       value = value.replace(/\{(\w+)\}/g, (m: string, k: string) => (k in values ? String(values[k]) : m));
       return value as string;
     };
+    for (const h of leaders) {
+      const bio = biographies[code]?.[h.id];
+      const historyLength =
+        (bio?.intro ?? []).join("").length +
+        (bio?.sections ?? []).flatMap((section: any) => section.paragraphs ?? []).join("").length;
+      if (
+        historyLength < (bio?.shortArticle ? 700 : 1200) ||
+        (!bio?.sections?.length && !bio?.shortArticle) ||
+        !bio?.url?.startsWith("https://") ||
+        !bio?.lang
+      )
+        throw Error(`Missing public biography ${code}: ${h.id}`);
+    }
     const text = (h: Leader, key: string) =>
       t(`${key === "ability" || key === "description" ? "site" : "heroes"}.leader_${h.id}_${key}`);
     const fields = (h: Leader) => ({
@@ -114,6 +131,7 @@ export async function publish(
       effect: text(h, "description"),
     });
     for (const route of routes) {
+      if (code !== "en" && englishOnly.has(route)) continue;
       const leader = leaders.find((h) => route === `leaders/${h.id}/`);
       let html: string, title: string, description: string;
       const image = leader
@@ -121,13 +139,35 @@ export async function publish(
         : "/assets/shell/loader/sow-splash-desktop.webp";
       if (leader) {
         const f = fields(leader);
+        const bio = biographies[code][leader.id];
+        const sourceNote = bio.sources?.length
+          ? `<p class="leader-history-source"><strong>${escape(t("site.historical_reference"))}</strong> ${bio.sources.map((source: { title: string; url: string }) => `<a href="${escape(source.url)}" rel="noopener noreferrer" target="_blank">${escape(source.title)}</a>`).join(" · ")}</p>`
+          : (() => {
+              const attributionParts = t("site.wikipedia_excerpt").split("{article}");
+              if (attributionParts.length !== 2) throw Error(`Invalid Wikipedia attribution translation ${code}`);
+              return `<p class="leader-history-source">${escape(attributionParts[0])}<a href="${escape(bio.url)}" rel="noopener noreferrer" target="_blank">${escape(bio.title)}</a>${escape(attributionParts[1])} <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener noreferrer" target="_blank">CC BY-SA 4.0</a>.</p>`;
+            })();
         title = `${f.name} — ${f.civilization} | Shadows of War`;
-        description = `${f.name} · ${f.civilization}. ${f.ability}: ${f.effect}`;
-        const panel = (label: string, value: string) => `<dt>${escape(label)}</dt><dd>${escape(value)}</dd>`;
-        const content = `<div class="container"><nav class="guide-breadcrumbs" aria-label="${escape(t("site.main_navigation"))}"><a href="/">${escape(t("site.nav_home"))}</a> / <a href="/leaders/">${escape(t("site.leaders"))}</a> / ${escape(f.name)}</nav></div>
-<article class="container leader-profile"><header class="leader-profile-header"><p class="eyebrow">${escape(f.civilization)}</p><h1>${escape(f.name)}</h1><p class="leader-subtitle">${escape(f.historical)}</p></header>
-<div class="leader-profile-grid"><div class="leader-profile-media"><picture class="leader-portrait-frame"><source media="(max-width: 700px)" srcset="/assets/shell/leaders/${leader.artSlug}_mobile.webp"><img src="${image}" alt="${escape(f.name)}" width="1600" height="900" fetchpriority="high"></picture><a class="button button-orange button-full" href="/play/">${escape(t("site.play_now"))}</a></div>
-<div class="leader-profile-content"><section class="leader-card-panel"><h2>${escape(t("site.command_trait"))}</h2><div class="ability-block"><h3 class="ability-tag">${escape(f.ability)}</h3><p class="ability-effect">${escape(f.effect)}</p></div></section><section class="leader-card-panel"><dl class="leader-dossier">${panel(t("site.historical_name"), f.historical)}${panel(t("site.civilization"), f.civilization)}${panel(t("site.region"), t(`heroes.${leader.region}`))}</dl>${leader.wikipedia ? `<p><a href="${escape(leader.wikipedia)}" rel="noopener noreferrer" target="_blank">${escape(t("site.historical_reference"))} ↗</a></p>` : ""}</section><p><a href="/leaders/">← ${escape(t("site.all_leaders"))}</a></p><p><a href="/#leaders">${escape(t("site.choose_leader"))}</a></p></div></div></article>`;
+        description = `${f.historical}. ${bio.intro[0]}`.slice(0, 160).trim();
+        const articleParagraphs = (paragraphs: string[]) =>
+          paragraphs.map((paragraph) => `<p>${escape(paragraph)}</p>`).join("");
+        const chapters = bio.sections
+          .map(
+            (section: { title: string; paragraphs: string[] }, index: number) =>
+              `<section class="leader-history-chapter" id="leader-history-${index + 1}" lang="${escape(bio.lang)}" dir="auto"><h2>${escape(section.title)}</h2>${articleParagraphs(section.paragraphs)}</section>`,
+          )
+          .join("");
+        const contents = [
+          `<li><a href="#historical-context">${escape(t("site.historical_context"))}</a></li>`,
+          ...bio.sections.map(
+            (section: { title: string }, index: number) =>
+              `<li><a href="#leader-history-${index + 1}">${escape(section.title)}</a></li>`,
+          ),
+        ].join("");
+        const content = `<article class="leader-encyclopedia"><div class="container"><nav class="guide-breadcrumbs" aria-label="${escape(t("site.main_navigation"))}"><a href="/">${escape(t("site.nav_home"))}</a><span aria-hidden="true">/</span><a href="/leaders/">${escape(t("site.leaders"))}</a><span aria-hidden="true">/</span><span aria-current="page">${escape(f.name)}</span></nav></div>
+<header class="container leader-cover"><picture class="leader-cover-art"><source media="(max-width: 700px)" srcset="/assets/shell/leaders/${leader.artSlug}_mobile.webp"><img src="${image}" alt="${escape(f.name)}" width="1600" height="900" fetchpriority="high"></picture><div class="leader-cover-shade" aria-hidden="true"></div><div class="leader-cover-copy"><p class="leader-cover-meta">${escape(f.civilization)} <span aria-hidden="true">·</span> ${escape(t(`heroes.${leader.region}`))}</p><h1>${escape(f.name)}</h1><p class="leader-cover-historical">${escape(f.historical)}</p><a class="button button-orange" href="/play/">${escape(t("site.play_now"))}</a></div></header>
+<div class="container leader-reading-layout"><nav class="leader-toc" aria-label="${escape(t("site.page_contents"))}"><p>${escape(t("site.page_contents"))}</p><ol>${contents}</ol></nav><div class="leader-history"><section class="leader-history-intro" id="historical-context" lang="${escape(bio.lang)}" dir="auto"><h2>${escape(t("site.historical_context"))}</h2>${articleParagraphs(bio.intro)}</section>${chapters}${sourceNote}</div>
+<aside class="leader-sidebar"><section class="leader-trait"><p class="eyebrow">${escape(t("site.command_trait"))}</p><h2>${escape(f.ability)}</h2><p>${escape(f.effect)}</p></section><a class="leader-sidebar-link" href="/leaders/">← ${escape(t("site.all_leaders"))}</a><a class="leader-sidebar-link" href="/#leaders">${escape(t("site.choose_leader"))}</a></aside></div></article>`;
         html = leaderTemplate
           .replace("<!-- PAGE_TITLE -->", escape(title))
           .replace("<!-- LEADER_CONTENT -->", content)
@@ -144,6 +184,16 @@ export async function publish(
         html = indexTemplate
           .replace("<!-- LEADER_CONTENT -->", cards)
           .replace("<!-- LEADER_FOOTER -->", footer);
+      } else if (englishOnly.has(route)) {
+        // English-only pages carry their own copy; the template is the source of
+        // truth so no catalog entry has to exist in fifteen languages.
+        const source = templates.get(route)!;
+        const text = (html: string | undefined) =>
+          (html ?? "").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+        title = text(source.match(/<title>([\s\S]*?)<\/title>/)?.[1]);
+        description = text(source.match(/<meta\s+name="description"\s+content="([\s\S]*?)"\s*\/>/)?.[1]);
+        if (!title || !description) throw Error(`English-only page ${route} needs a title and description`);
+        html = source;
       } else {
         const key = route ? route.slice(0, -1) : "";
         title = t(key ? `site.${key}_title` : "site.title");
@@ -151,15 +201,16 @@ export async function publish(
         html = templates.get(route)!;
       }
       const url = origin + path(code, route);
+      const pageLanguages = englishOnly.has(route) ? languages.filter((l) => l.code === "en") : languages;
       const alternates =
-        languages
+        pageLanguages
           .map(
             (l) =>
               `<link rel="alternate" hreflang="${l.code === "fil" ? "tl" : l.code}" href="${origin + path(l.code, route)}">`,
           )
           .join("\n") + `\n<link rel="alternate" hreflang="x-default" href="${origin + path("en", route)}">`;
       const worldIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="site-language-icon icon icon-tabler icons-tabler-outline icon-tabler-world" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/><path d="M3.6 9h16.8"/><path d="M3.6 15h16.8"/><path d="M11.5 3a17 17 0 0 0 0 18"/><path d="M12.5 3a17 17 0 0 1 0 18"/></svg>`;
-      const switches = `<details class="site-language"><summary>${worldIcon}<span>${escape(language.name)}</span></summary><nav aria-label="${escape(t("site.select_language"))}">${languages.map((l) => `<a href="${path(l.code, route)}" hreflang="${l.code}" lang="${l.code}" data-site-language="${l.code}" ${l.code === code ? 'aria-current="page"' : ""}>${escape(l.name)}</a>`).join("")}</nav></details>`;
+      const switches = `<details class="site-language"><summary>${worldIcon}<span>${escape(language.name)}</span></summary><nav aria-label="${escape(t("site.select_language"))}">${languages.map((l) => `<a href="${path(l.code, englishOnly.has(route) ? "" : route)}" hreflang="${l.code}" lang="${l.code}" data-site-language="${l.code}" ${l.code === code ? 'aria-current="page"' : ""}>${escape(l.name)}</a>`).join("")}</nav></details>`;
       const bootstrap = `<script data-cfasync="false">window.SOW_SITE_LOCALE = ${json(code)}; window.SOW_LOCALE_BEFORE_PAINT = true; window.SOW_LOCALE_CATALOG_VERSION = ${registry.version}; window.SOW_LOCALE_CODES = ${json(languages.map((l) => l.code))}; window.SOW_ASSET_TS = ${json(localeVersions)};</script><script data-cfasync="false" src="/sow-i18n.js?v=${fingerprints.get("/sow-i18n.js")}"></script>`;
       for (const marker of ["<!-- SOW_SITE_HEADER -->", "<!-- SOW_SITE_LOCALE -->"]) {
         if (html.split(marker).length !== 2) throw Error(`Public page ${url} must contain one ${marker}`);
@@ -205,6 +256,7 @@ export async function publish(
         schemas[0].about = {
           "@type": "Person",
           name: fields(leader).historical,
+          description: biographies[code][leader.id].intro[0],
           ...(leader.wikipedia ? { sameAs: leader.wikipedia } : {}),
         };
       if (route === "leaders/")
@@ -411,7 +463,8 @@ export async function publish(
     }
   }
   for (const pathname of localLinks) {
-    if (pathname.startsWith("/api/")) continue;
+    // Generated after this pass, so it cannot be on disk yet.
+    if (pathname.startsWith("/api/") || pathname === "/sitemap.xml") continue;
     const file = join(out, pathname);
     try {
       const info = await stat(file);
@@ -421,7 +474,11 @@ export async function publish(
     }
   }
   const urls = languages
-    .flatMap((l) => routes.map((route) => origin + path(l.code, route)))
+    .flatMap((l) =>
+      routes
+        .filter((route) => l.code === "en" || !englishOnly.has(route))
+        .map((route) => origin + path(l.code, route)),
+    )
     .concat(origin + "/play/");
   await writeFile(
     join(out, "sitemap.xml"),

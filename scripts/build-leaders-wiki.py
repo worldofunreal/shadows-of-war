@@ -261,7 +261,7 @@ def render_leader_page(
         <a href="{root_rel}support/">Support</a>
         <a href="{root_rel}privacy/">Privacy</a>
         <a href="{root_rel}terms/">Terms</a>
-        <a href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener">Discord</a>
+        <a href="https://discord.gg/4mBM6zJyG" target="_blank" rel="noopener">Discord</a>
         <a href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener">GitHub</a>
       </div>
     </div>
@@ -403,7 +403,7 @@ def render_compendium_index(
         <a href="{root_rel}support/">Support</a>
         <a href="{root_rel}privacy/">Privacy</a>
         <a href="{root_rel}terms/">Terms</a>
-        <a href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener">Discord</a>
+        <a href="https://discord.gg/4mBM6zJyG" target="_blank" rel="noopener">Discord</a>
         <a href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener">GitHub</a>
       </div>
     </div>
