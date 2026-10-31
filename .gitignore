@@ -28,6 +28,8 @@ node_modules/
 dump.rdb
 *debug*.txt
 eslint_out.txt
+*.bak_*
+/outputs/
 
 # Server map library (large binaries): assets/maps/
 assets/maps/*
@@ -38,7 +40,6 @@ assets/maps/*
 wasm-pack*.*
 .cursor/
 # The following were local checkouts in old dev setup — now dependencies
-.idea/
 scripts/__pycache__/
 scripts/git-filter-repo
 dist/
