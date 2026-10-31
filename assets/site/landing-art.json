@@ -107,14 +107,14 @@
       {
         "variant": "desktop",
         "source": "assets/site/media/opening-desktop.webp",
-        "start_frame": "outputs/landing-motion/desktop-start.webp",
-        "end_frame": "outputs/landing-motion/desktop-end.webp"
+        "start_frame": "assets/site/media/opening-desktop.webp",
+        "end_frame": "assets/site/media/opening-desktop.webp"
       },
       {
         "variant": "mobile",
         "source": "assets/site/media/opening-mobile.webp",
-        "start_frame": "outputs/landing-motion/mobile-start.webp",
-        "end_frame": "outputs/landing-motion/mobile-end.webp"
+        "start_frame": "assets/site/media/opening-mobile.webp",
+        "end_frame": "assets/site/media/opening-mobile.webp"
       }
     ],
     "delivery": "Optional hero-loop video; the landing uses responsive still artwork until a clip is supplied."
