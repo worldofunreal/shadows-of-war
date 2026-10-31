@@ -140,7 +140,11 @@
   }
 
   function isLandingPage() {
-    return document.documentElement.dataset.sitePage === "" || window.location.pathname === "/" || window.location.pathname === "/index.html";
+    return (
+      document.documentElement.dataset.sitePage === "" ||
+      window.location.pathname === "/" ||
+      window.location.pathname === "/index.html"
+    );
   }
 
   function ensureSession() {
@@ -387,21 +391,6 @@
     track("landing_visit");
   }
 
-  function addManageControl() {
-    const footer = document.querySelector(".footer-links");
-    if (!footer) return;
-    let button = footer.querySelector("[data-sow-cookie-settings]");
-    if (!button) {
-      button = document.createElement("button");
-      button.type = "button";
-      button.dataset.sowCookieSettings = "";
-      button.className = "sow-cookie-settings-link";
-      button.addEventListener("click", openSettings);
-      footer.append(button);
-    }
-    button.textContent = text("site.analytics_manage", "Cookie settings");
-  }
-
   window.SOW_analyticsTrack = track;
   window.SOW_analyticsManage = openSettings;
   document.addEventListener("click", (event) => {
@@ -419,10 +408,11 @@
   });
   const refreshLocale = () => {
     if (panel && panel._refreshCopy) panel._refreshCopy();
-    addManageControl();
   };
   window.addEventListener("sow:locale-change", refreshLocale);
-  window.SOW_I18N_READY?.then(refreshLocale).catch((error) => console.error("[SOW analytics] translations unavailable", error));
+  window.SOW_I18N_READY?.then(refreshLocale).catch((error) =>
+    console.error("[SOW analytics] translations unavailable", error),
+  );
 
   consent = readChoice();
   if (consent === "accepted") {
@@ -440,7 +430,6 @@
   }
 
   const start = () => {
-    addManageControl();
     if (consent === null) {
       if (!isGameShell) openSettings();
       return;

@@ -52,6 +52,15 @@ struct AppState {
     replay_verification_client: reqwest::Client,
     match_artifact_lock: tokio::sync::Mutex<()>,
     match_results: tokio::sync::broadcast::Sender<String>,
+    leader_rate_limits: std::sync::Mutex<HashMap<String, LeaderRateLimitState>>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct LeaderRateLimitState {
+    request_timestamps: Vec<Instant>,
+    block_expires_at: Option<Instant>,
+    tier2_offenses: Vec<Instant>,
+    suspension_expires_at: Option<Instant>,
 }
 
 const PLAYGAMES_HANDOFF_TTL: Duration = Duration::from_secs(60);
@@ -1736,6 +1745,7 @@ async fn main() {
         replay_verification_client,
         match_artifact_lock: tokio::sync::Mutex::new(()),
         match_results: tokio::sync::broadcast::channel(256).0,
+        leader_rate_limits: std::sync::Mutex::new(HashMap::new()),
     });
 
     tokio::spawn(match_exit::worker(
@@ -2737,6 +2747,9 @@ async fn handle_leader_selection(
         Ok(account_id) => account_id,
         Err(response) => return response.into_response(),
     };
+    if let Err((status, message)) = state.check_leader_rate_limit(&account_id) {
+        return (status, Json(ErrorResponse { error: message })).into_response();
+    }
     match state
         .db
         .update_leader_selection(
@@ -3248,6 +3261,91 @@ async fn handle_playgames_consume(
 }
 
 impl AppState {
+    fn check_leader_rate_limit(&self, account_id: &str) -> Result<(), (StatusCode, String)> {
+        Self::eval_leader_rate_limit(
+            &mut self.leader_rate_limits.lock().unwrap(),
+            account_id,
+            Instant::now(),
+        )
+    }
+
+    fn eval_leader_rate_limit(
+        limits: &mut HashMap<String, LeaderRateLimitState>,
+        account_id: &str,
+        now: Instant,
+    ) -> Result<(), (StatusCode, String)> {
+        if limits.len() > 5000 {
+            limits.retain(|_, v| {
+                v.block_expires_at.is_some_and(|t| t > now)
+                    || v.suspension_expires_at.is_some_and(|t| t > now)
+                    || !v.tier2_offenses.is_empty()
+                    || !v.request_timestamps.is_empty()
+            });
+        }
+        let entry = limits.entry(account_id.to_string()).or_default();
+
+        if let Some(suspended_until) = entry.suspension_expires_at {
+            if now < suspended_until {
+                let remaining_secs = (suspended_until - now).as_secs().max(1);
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    format!("Account temporarily suspended for repeated abuse; try again in {remaining_secs}s"),
+                ));
+            } else {
+                entry.suspension_expires_at = None;
+            }
+        }
+
+        entry.request_timestamps.retain(|t| now.duration_since(*t) <= Duration::from_secs(300));
+        entry.tier2_offenses.retain(|t| now.duration_since(*t) <= Duration::from_secs(3 * 86400));
+        entry.request_timestamps.push(now);
+
+        let reqs_last_5m = entry.request_timestamps.len();
+        if reqs_last_5m > 60 {
+            entry.tier2_offenses.push(now);
+            entry.request_timestamps.clear();
+            if entry.tier2_offenses.len() >= 3 {
+                entry.suspension_expires_at = Some(now + Duration::from_secs(3 * 86400));
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    "Account suspended for 3 days due to repeated rate limit violations".to_string(),
+                ));
+            }
+            entry.block_expires_at = Some(now + Duration::from_secs(300));
+            return Err((
+                StatusCode::TOO_MANY_REQUESTS,
+                "Too many hero selection requests (>60/5m); locked for 5 minutes".to_string(),
+            ));
+        }
+
+        if let Some(blocked_until) = entry.block_expires_at {
+            if now < blocked_until {
+                let remaining_secs = (blocked_until - now).as_secs().max(1);
+                return Err((
+                    StatusCode::TOO_MANY_REQUESTS,
+                    format!("Too many hero selection requests; try again in {remaining_secs}s"),
+                ));
+            } else {
+                entry.block_expires_at = None;
+            }
+        }
+
+        let reqs_last_1m = entry
+            .request_timestamps
+            .iter()
+            .filter(|t| now.duration_since(**t) <= Duration::from_secs(60))
+            .count();
+        if reqs_last_1m > 20 {
+            entry.block_expires_at = Some(now + Duration::from_secs(5));
+            return Err((
+                StatusCode::TOO_MANY_REQUESTS,
+                "Rate limit exceeded (max 20/min); cooling down for 5 seconds".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
     async fn sync_playgames_progress(
         &self,
         account_id: &str,
@@ -3965,4 +4063,80 @@ async fn handle_internal_stats(
         }
     }))
     .into_response()
+}
+
+#[cfg(test)]
+mod leader_rate_limit_tests {
+    use super::*;
+
+    #[test]
+    fn allows_up_to_20_requests_per_minute() {
+        let mut limits = HashMap::new();
+        let base = Instant::now();
+        for i in 0..20 {
+            let t = base + Duration::from_millis(i * 100);
+            assert!(AppState::eval_leader_rate_limit(&mut limits, "acc_1", t).is_ok());
+        }
+        let res = AppState::eval_leader_rate_limit(&mut limits, "acc_1", base + Duration::from_secs(2));
+        assert_eq!(res.unwrap_err().0, StatusCode::TOO_MANY_REQUESTS);
+
+        let res2 = AppState::eval_leader_rate_limit(&mut limits, "acc_1", base + Duration::from_secs(4));
+        assert_eq!(res2.unwrap_err().0, StatusCode::TOO_MANY_REQUESTS);
+
+        let res3 = AppState::eval_leader_rate_limit(&mut limits, "acc_1", base + Duration::from_secs(65));
+        assert!(res3.is_ok());
+    }
+
+    #[test]
+    fn blocks_for_5_minutes_on_tier2_offense() {
+        let mut limits = HashMap::new();
+        let base = Instant::now();
+        for i in 0..60 {
+            let t = base + Duration::from_secs(i * 3);
+            let _ = AppState::eval_leader_rate_limit(&mut limits, "acc_2", t);
+        }
+        let t_61 = base + Duration::from_secs(181);
+        let res = AppState::eval_leader_rate_limit(&mut limits, "acc_2", t_61);
+        let err = res.unwrap_err();
+        assert_eq!(err.0, StatusCode::TOO_MANY_REQUESTS);
+        assert!(err.1.contains("locked for 5 minutes"));
+
+        let res_during = AppState::eval_leader_rate_limit(&mut limits, "acc_2", t_61 + Duration::from_secs(100));
+        assert_eq!(res_during.unwrap_err().0, StatusCode::TOO_MANY_REQUESTS);
+
+        let res_after = AppState::eval_leader_rate_limit(&mut limits, "acc_2", t_61 + Duration::from_secs(305));
+        assert!(res_after.is_ok());
+    }
+
+    #[test]
+    fn suspends_for_3_days_on_third_tier2_offense() {
+        let mut limits = HashMap::new();
+        let base = Instant::now();
+
+        for i in 0..61 {
+            let t = base + Duration::from_millis(i * 10);
+            let _ = AppState::eval_leader_rate_limit(&mut limits, "acc_3", t);
+        }
+        assert_eq!(limits.get("acc_3").unwrap().tier2_offenses.len(), 1);
+
+        let t_hour1 = base + Duration::from_secs(3600);
+        for i in 0..61 {
+            let t = t_hour1 + Duration::from_millis(i * 10);
+            let _ = AppState::eval_leader_rate_limit(&mut limits, "acc_3", t);
+        }
+        assert_eq!(limits.get("acc_3").unwrap().tier2_offenses.len(), 2);
+
+        let t_hour2 = base + Duration::from_secs(7200);
+        for i in 0..60 {
+            let t = t_hour2 + Duration::from_millis(i * 10);
+            let _ = AppState::eval_leader_rate_limit(&mut limits, "acc_3", t);
+        }
+        let res_tier3 = AppState::eval_leader_rate_limit(&mut limits, "acc_3", t_hour2 + Duration::from_millis(610));
+        let err = res_tier3.unwrap_err();
+        assert_eq!(err.0, StatusCode::FORBIDDEN);
+        assert!(err.1.contains("suspended for 3 days"));
+
+        let res_suspended = AppState::eval_leader_rate_limit(&mut limits, "acc_3", t_hour2 + Duration::from_secs(86400));
+        assert_eq!(res_suspended.unwrap_err().0, StatusCode::FORBIDDEN);
+    }
 }

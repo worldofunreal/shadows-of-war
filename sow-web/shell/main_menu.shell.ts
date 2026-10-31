@@ -32,6 +32,7 @@ import {
     stageLeaderSelection,
 } from "./main_menu.core.ts";
 import {
+    isHeroSelectionQueueLocked,
     refreshHeroesRoster,
     renderHeroInfoModal,
     renderHeroes,
@@ -1969,6 +1970,40 @@ document.addEventListener(
     true,
 );
 
+let leaderDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingDebouncedSelection: { preferRandom: boolean; leaderId: string | null } | null = null;
+
+export function flushLeaderPersist() {
+    if (leaderDebounceTimer) {
+        clearTimeout(leaderDebounceTimer);
+        leaderDebounceTimer = null;
+    }
+    if (pendingDebouncedSelection) {
+        const selection = pendingDebouncedSelection;
+        pendingDebouncedSelection = null;
+        if (selection.preferRandom) {
+            send("set_random_leader");
+        } else if (selection.leaderId) {
+            send("set_leader", { leader_id: selection.leaderId });
+        }
+    }
+}
+
+export function scheduleLeaderPersist(preferRandom: boolean, leaderId: string | null) {
+    if (leaderDebounceTimer) {
+        clearTimeout(leaderDebounceTimer);
+        leaderDebounceTimer = null;
+    }
+    pendingDebouncedSelection = { preferRandom, leaderId };
+    leaderDebounceTimer = setTimeout(function () {
+        flushLeaderPersist();
+    }, 1000);
+}
+
+window.addEventListener("pagehide", function () {
+    flushLeaderPersist();
+});
+
 root.addEventListener("click", function (event) {
     if (menuUi.state && menuUi.state.phase === "MainMenu") syncMenuMusic(menuUi.state, true);
     const clickedElement = event.target instanceof Element ? event.target : null;
@@ -2074,6 +2109,9 @@ root.addEventListener("click", function (event) {
         menuUi.campaignOpen = false;
         menuUi.passwordLobbyId = null;
         menuUi.passwordDraft = "";
+        if (navScreen !== "heroes") {
+            flushLeaderPersist();
+        }
         menuUi.tempSelectedLeader = null;
         menuUi.tempSelectedRandom = false;
         if (navScreen === "heroes") {
@@ -2136,6 +2174,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "quick_match") {
+        flushLeaderPersist();
         target.setAttribute("disabled", "");
         menuUi.profileOpen = menuUi.storeOpen = menuUi.heroesOpen = menuUi.campaignOpen = false;
         send("quick_match");
@@ -2399,21 +2438,32 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "preview_leader") {
-        menuUi.tempSelectedLeader = target.dataset.leaderId || null;
+        const leaderId = target.dataset.leaderId || null;
+        if (!isHeroSelectionQueueLocked()) {
+            const leader = leaderById(leaderId);
+            if (leaderId && leader.available !== false) {
+                stageLeaderSelection(false, leaderId);
+                scheduleLeaderPersist(false, leaderId);
+            }
+        }
+        menuUi.tempSelectedLeader = leaderId;
         menuUi.tempSelectedRandom = false;
         if (!updateHeroesPreview()) render();
         maybePresentRewards();
         return;
     }
     if (command === "preview_random_leader") {
+        if (!isHeroSelectionQueueLocked()) {
+            stageLeaderSelection(true, null);
+            scheduleLeaderPersist(true, null);
+        }
         menuUi.tempSelectedLeader = null;
         menuUi.tempSelectedRandom = true;
         if (!updateHeroesPreview()) render();
         return;
     }
     if (command === "confirm_random_leader") {
-        stageLeaderSelection(true, null);
-        send("set_random_leader");
+        flushLeaderPersist();
         menuUi.heroesOpen = false;
         menuUi.heroesSearchQuery = "";
         menuUi.heroesRegionFilter = "all";
@@ -2423,18 +2473,13 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "confirm_leader") {
-        const leaderId = target.dataset.leaderId || menuUi.tempSelectedLeader;
-        const leader = leaderById(leaderId);
-        if (leaderId && leader.available !== false) {
-            stageLeaderSelection(false, leaderId);
-            send("set_leader", { leader_id: leaderId });
-            menuUi.heroesOpen = false;
-            menuUi.heroesSearchQuery = "";
-            menuUi.heroesRegionFilter = "all";
-            menuUi.tempSelectedLeader = null;
-            menuUi.tempSelectedRandom = false;
-            render();
-        }
+        flushLeaderPersist();
+        menuUi.heroesOpen = false;
+        menuUi.heroesSearchQuery = "";
+        menuUi.heroesRegionFilter = "all";
+        menuUi.tempSelectedLeader = null;
+        menuUi.tempSelectedRandom = false;
+        render();
         return;
     }
     /* POKI_SHARED_STORE_UNLOCK_BEGIN */
@@ -3125,6 +3170,7 @@ window.addEventListener("sow:loader-cycle-ready", function (event) {
 document.addEventListener("visibilitychange", function () {
     syncHeroesRotationCountdown();
     if (document.visibilityState !== "visible") {
+        flushLeaderPersist();
         if (window.SOW_menu_guide) window.SOW_menu_guide.pause();
         if (menuUi.state && (rewardAnimationRunning || progressionAnimationTarget)) {
             cancelRewardAnimation();

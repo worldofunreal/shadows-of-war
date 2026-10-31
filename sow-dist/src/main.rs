@@ -313,11 +313,13 @@ const SITE_STILLS: [(&str, (&str, &str)); 13] = [
 /// mp4 and a poster. Optional: the page shows a still while a slot is empty.
 const SITE_VIDEOS: [&str; 2] = ["hero-loop", "gameplay"];
 const SITE_VIDEO_SOURCES: [&str; 4] = ["mp4", "mov", "webm", "mkv"];
-const SITE_BADGES: [&str; 4] = [
+const SITE_BADGES: [&str; 6] = [
     "testflight-badge.svg",
     "google-play-badge.svg",
     "discord.svg",
     "telegram.svg",
+    "github.svg",
+    "worldofunreal.svg",
 ];
 const SITE_SOURCE_ONLY_MEDIA: [&str; 8] = [
     "session-battle.webp",

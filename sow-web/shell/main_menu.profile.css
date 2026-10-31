@@ -1657,7 +1657,8 @@
 }
 
 .sow-heroes__featured.is-locked picture img,
-.sow-heroes__card.is-locked .sow-heroes__card-art {
+.sow-heroes__card.is-locked .sow-heroes__card-art,
+.sow-heroes__card.is-queue-locked:not(.is-selected) .sow-heroes__card-art {
   filter: grayscale(1);
   opacity: 0.52;
 }
@@ -2055,6 +2056,60 @@
 
 .sow-heroes__card.is-locked {
   border-color: rgba(255, 255, 255, 0.1);
+}
+
+.sow-heroes__card.is-queue-locked:not(.is-selected) {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.sow-heroes__card.is-queue-locked:not(.is-selected) strong {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.sow-heroes__card.is-queue-locked:not(.is-selected) small {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.sow-heroes__card-lock {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: rgba(10, 13, 18, 0.7);
+  color: rgba(243, 177, 43, 0.85);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.sow-heroes__card-lock svg {
+  width: 14px;
+  height: 14px;
+}
+
+.sow-heroes__queue-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: rgba(243, 177, 43, 0.12);
+  border: 1px solid rgba(243, 177, 43, 0.35);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sow-heroes__queue-notice .sow-heroes__card-lock {
+  position: static;
+  background: transparent;
+  color: var(--sow-gold-bright, #f3b12b);
 }
 
 .sow-heroes__card-art {

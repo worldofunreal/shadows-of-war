@@ -28,11 +28,30 @@ function makeCampaignTutorialHarness({ campaign, definition, roster, initialStep
         contains: () => false,
     };
     const calls = [];
+    const timers = [];
+    let now = 0,
+        nextTimerId = 0;
     let machine = null,
         rendered = null,
         renderContext = null;
     const window = {
         addEventListener() {},
+        setTimeout(callback, delay) {
+            const timer = {
+                id: ++nextTimerId,
+                callback,
+                delay,
+                due: now + delay,
+                cancelled: false,
+                fired: false,
+            };
+            timers.push(timer);
+            return timer.id;
+        },
+        clearTimeout(id) {
+            const timer = timers.find((item) => item.id === id);
+            if (timer) timer.cancelled = true;
+        },
         SOW_menu_command(raw) {
             calls.push(JSON.parse(raw));
         },
@@ -70,7 +89,7 @@ function makeCampaignTutorialHarness({ campaign, definition, roster, initialStep
         window,
         document,
         Node: Object,
-        performance: { now: () => 0 },
+        performance: { now: () => now },
         console,
         fetch(url) {
             return Promise.resolve({
@@ -80,8 +99,18 @@ function makeCampaignTutorialHarness({ campaign, definition, roster, initialStep
         },
     });
     const update = () => window.SOW_tutorial_state_update({ phase: "Playing", hud });
+    function advanceTimers(milliseconds) {
+        now += milliseconds;
+        while (true) {
+            const timer = timers.find((item) => !item.cancelled && !item.fired && item.due <= now);
+            if (!timer) return;
+            timer.fired = true;
+            timer.callback();
+        }
+    }
     return {
         calls,
+        timers,
         get machine() {
             return machine;
         },
@@ -99,6 +128,7 @@ function makeCampaignTutorialHarness({ campaign, definition, roster, initialStep
             update();
         },
         update,
+        advanceTimers,
     };
 }
 
@@ -1022,7 +1052,7 @@ test("Boudica's Iceni meeting guides point to Snettisham, then Thetford", async 
     }
 });
 
-test("first Expand focuses its hidden target once and keeps the 250-tile objective active", async () => {
+test("first Expand waits before camera focus while its hand and objective update immediately", async () => {
     const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
     const campaignDir = path.join(shell, "../../assets/campaign");
     const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
@@ -1032,6 +1062,7 @@ test("first Expand focuses its hidden target once and keeps the 250-tile objecti
             active: true,
             episode_id: "boudica",
             campaign_session_id: 12,
+            player: { x: 40, y: 60 },
             expand: null,
             expand_target: { x: 31.5, y: 42.5 },
             facts: {
@@ -1042,7 +1073,16 @@ test("first Expand focuses its hidden target once and keeps the 250-tile objecti
                 tiles_gained: 0,
             },
         },
-        players: [{ id: 1, is_me: true, is_alive: true, centroid_x: 10, centroid_y: 12 }],
+        players: [
+            { id: 1, is_me: true, is_alive: true, centroid_x: 10, centroid_y: 12 },
+            {
+                id: 2,
+                campaign_faction_id: "stonea",
+                is_alive: true,
+                centroid_x: 24,
+                centroid_y: 39,
+            },
+        ],
         settings: {},
     };
     const harness = makeCampaignTutorialHarness({
@@ -1057,6 +1097,17 @@ test("first Expand focuses its hidden target once and keeps the 250-tile objecti
     await harness.start();
 
     assert.equal(harness.machine.view().step.id, "boudica_first_expansion");
+    assert.equal(harness.calls.filter((call) => call.type === "focus_world").length, 0);
+    assert.ok(harness.timers.some((timer) => timer.delay === 3250));
+    assert.deepEqual(
+        [harness.renderContext.anchor.x, harness.renderContext.anchor.y],
+        [40, 60],
+        "the hand remains visible on the current map while the camera waits",
+    );
+
+    harness.advanceTimers(3249);
+    assert.equal(harness.calls.filter((call) => call.type === "focus_world").length, 0);
+    harness.advanceTimers(1);
     const focus = harness.calls.filter((call) => call.type === "focus_world");
     assert.equal(focus.length, 1);
     assert.deepEqual([focus[0].x, focus[0].y], [31.5, 42.5]);
@@ -1085,6 +1136,136 @@ test("first Expand focuses its hidden target once and keeps the 250-tile objecti
         [244, 390],
         "the hand moves to Stonea as soon as the 250-tile objective completes",
     );
+    assert.equal(harness.calls.filter((call) => call.type === "focus_world").length, 1);
+    harness.advanceTimers(3249);
+    assert.equal(harness.calls.filter((call) => call.type === "focus_world").length, 1);
+    harness.advanceTimers(1);
+    const contactFocus = harness.calls.filter((call) => call.type === "focus_world");
+    assert.equal(contactFocus.length, 2, "a new objective gets its own camera delay");
+    assert.deepEqual([contactFocus[1].x, contactFocus[1].y], [24.5, 39.5]);
+});
+
+test("a visible Expand target cancels its pending camera move", async () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    const hud = {
+        tutorial: {
+            active: true,
+            episode_id: "boudica",
+            campaign_session_id: 12,
+            expand: null,
+            expand_target: { x: 31.5, y: 42.5 },
+            facts: {
+                contact_faction_ids: [],
+                defeated_faction_ids: [],
+                eliminated_faction_ids: [],
+                pre_defeat_faction_ids: [],
+                tiles_gained: 0,
+            },
+        },
+        players: [
+            { id: 1, is_me: true, is_alive: true, centroid_x: 10, centroid_y: 12 },
+            {
+                id: 2,
+                campaign_faction_id: "stonea",
+                is_alive: true,
+                centroid_x: 24,
+                centroid_y: 39,
+            },
+        ],
+        settings: {},
+    };
+    const harness = makeCampaignTutorialHarness({
+        campaign,
+        definition,
+        roster,
+        initialStep: "boudica_first_expansion",
+        hud,
+        width: 390,
+        height: 844,
+    });
+    await harness.start();
+
+    hud.tutorial.expand = { x: 202, y: 412, tile_idx: 4242 };
+    harness.update();
+    assert.deepEqual([harness.renderContext.anchor.x, harness.renderContext.anchor.y], [202, 412]);
+    harness.advanceTimers(3250);
+    assert.equal(
+        harness.calls.filter((call) => call.type === "focus_world").length,
+        0,
+        "camera focus is canceled when the suggested tiles become visible",
+    );
+    hud.tutorial.target_nameplate = { x: 244, y: 390, offscreen: false };
+    hud.tutorial.facts.tiles_gained = 250;
+    harness.update();
+    assert.equal(harness.machine.view().step.id, "boudica_first_contact");
+    assert.deepEqual([harness.renderContext.anchor.x, harness.renderContext.anchor.y], [244, 390]);
+    harness.advanceTimers(3249);
+    assert.equal(harness.calls.filter((call) => call.type === "focus_world").length, 0);
+    harness.advanceTimers(1);
+    const focus = harness.calls.filter((call) => call.type === "focus_world");
+    assert.equal(focus.length, 1, "only the new objective's destination is focused");
+    assert.deepEqual([focus[0].x, focus[0].y], [24.5, 39.5]);
+});
+
+test("tutorial emotes play before a delayed scene camera shot", async () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    const hud = {
+        tutorial: {
+            active: true,
+            episode_id: "boudica",
+            campaign_session_id: 12,
+            facts: {
+                contact_faction_ids: [],
+                defeated_faction_ids: [],
+                eliminated_faction_ids: [],
+                pre_defeat_faction_ids: [],
+                tiles_gained: 0,
+            },
+        },
+        players: [
+            { id: 1, is_me: true, is_alive: true, centroid_x: 10, centroid_y: 12 },
+            {
+                id: 2,
+                campaign_faction_id: "suetonius_paulinus",
+                is_alive: true,
+                centroid_x: 30,
+                centroid_y: 12,
+            },
+        ],
+        settings: {},
+    };
+    const harness = makeCampaignTutorialHarness({
+        campaign,
+        definition,
+        roster,
+        initialStep: "boudica_found_suetonius",
+        hud,
+        width: 390,
+        height: 844,
+    });
+    await harness.start();
+
+    const emoteIndex = harness.calls.findIndex((call) => call.type === "tutorial_emote");
+    assert.ok(emoteIndex >= 0, "the scene emote is not waiting on the camera");
+    assert.equal(
+        harness.calls.some((call) => call.type === "focus_world"),
+        false,
+    );
+    harness.advanceTimers(3249);
+    assert.equal(
+        harness.calls.some((call) => call.type === "focus_world"),
+        false,
+    );
+    harness.advanceTimers(1);
+
+    const focusIndex = harness.calls.findIndex((call) => call.type === "focus_world");
+    assert.ok(focusIndex > emoteIndex, "the camera starts only after the emote is shown");
 });
 
 test("Trinovantes aid guides radial opening, Transfer, and the confirmed delivery separately", async () => {

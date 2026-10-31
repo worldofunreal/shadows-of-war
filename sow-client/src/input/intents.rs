@@ -21,11 +21,14 @@ fn is_emote_intent(intent: &GameplayIntent) -> bool {
 fn is_waiting_for_campaign_attack(
     waiting: bool,
     campaign: crate::campaign::CampaignId,
+    target_owner: Option<u16>,
     intent: &sow_core::protocol::GameplayIntent,
 ) -> bool {
     waiting
         && campaign == crate::campaign::CampaignId::Boudica
-        && matches!(intent, sow_core::protocol::GameplayIntent::Attack(_))
+        && target_owner.is_some_and(|target_owner| {
+            matches!(intent, sow_core::protocol::GameplayIntent::Attack(attack) if attack.target_owner == target_owner)
+        })
 }
 
 fn paused_tutorial_intent_allowed(
@@ -121,6 +124,7 @@ impl SowApp {
             if !is_waiting_for_campaign_attack(
                 self.ui.tutorial_waiting_for_first_attack,
                 self.ui.tutorial_campaign,
+                self.tutorial_campaign_attack_owner(),
                 &intent,
             ) {
                 return false;
@@ -290,7 +294,7 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[test]
-    fn first_boudica_attack_unpauses_without_a_fixed_faction_id() {
+    fn only_the_first_boudica_campaign_target_unpauses_the_tutorial() {
         let attack = GameplayIntent::Attack(AttackIntent {
             target_owner: 2,
             troops: Some(100.0),
@@ -298,21 +302,37 @@ mod tests {
         assert!(is_waiting_for_campaign_attack(
             true,
             CampaignId::Boudica,
+            Some(2),
             &attack
         ));
         assert!(!is_waiting_for_campaign_attack(
             true,
             CampaignId::SixSkyEp1,
+            Some(2),
             &attack
         ));
         assert!(!is_waiting_for_campaign_attack(
             false,
             CampaignId::Boudica,
+            Some(2),
             &attack
         ));
         assert!(!is_waiting_for_campaign_attack(
             true,
             CampaignId::Boudica,
+            Some(3),
+            &attack
+        ));
+        assert!(!is_waiting_for_campaign_attack(
+            true,
+            CampaignId::Boudica,
+            None,
+            &attack
+        ));
+        assert!(!is_waiting_for_campaign_attack(
+            true,
+            CampaignId::Boudica,
+            Some(2),
             &GameplayIntent::Resign
         ));
     }

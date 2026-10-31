@@ -589,6 +589,7 @@
     {
       "id": "boudica_attack_roman_outpost",
       "type": "objective",
+      "pause_game": true,
       "title_key": "tutorial.campaign_boudica_boudica_first_victory_title",
       "hint_key": "tutorial.campaign_boudica_boudica_first_victory_hint",
       "speaker": "boudica",

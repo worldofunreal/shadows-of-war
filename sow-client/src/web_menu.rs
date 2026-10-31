@@ -751,7 +751,7 @@ impl SowApp {
                     paused_action,
                 } => {
                     if self.ui.tutorial_active && self.net.is_offline {
-                        self.sim.paused = paused;
+                        self.sim.paused = paused || self.ui.tutorial_waiting_for_first_attack;
                         self.ui.tutorial_camera_only = paused && camera_only;
                         self.ui.tutorial_paused_action = if paused && !camera_only {
                             paused_action
@@ -2339,6 +2339,18 @@ fn tutorial_target_action_tile(
 }
 
 impl SowApp {
+    pub(crate) fn tutorial_campaign_attack_owner(&self) -> Option<u16> {
+        if !self.ui.tutorial_active || self.ui.tutorial_campaign != CampaignId::Boudica {
+            return None;
+        }
+        self.sim
+            .engine
+            .as_ref()?
+            .campaign_faction_ids
+            .iter()
+            .find_map(|(&id, faction)| (faction == "roman_outpost").then_some(id))
+    }
+
     pub(crate) fn tutorial_campaign_attack_tile(&self) -> Option<u32> {
         if !self.ui.tutorial_active || self.ui.tutorial_campaign != CampaignId::Boudica {
             return None;
@@ -2348,16 +2360,10 @@ impl SowApp {
         let snapshot = self.sim.current_snapshot.as_ref()?;
         let my_pid = self.sim.my_player_id?;
         let target_owner = if self.ui.tutorial_waiting_for_first_attack {
-            engine
-                .campaign_relations
-                .iter()
-                .filter_map(|(&id, relation)| {
-                    (*relation == sow_core::protocol::CampaignRelation::Enemy
-                        && engine.campaign_faction_ids.contains_key(&id))
-                    .then_some(id)
-                })
-                .min()
-                .or_else(|| engine.campaign_faction_ids.keys().copied().min())?
+            let target_owner = self.tutorial_campaign_attack_owner()?;
+            (engine.campaign_relations.get(&target_owner)
+                == Some(&sow_core::protocol::CampaignRelation::Enemy))
+            .then_some(target_owner)?
         } else {
             let target_owner = self.ui.tutorial_marker_player_id?;
             if engine.campaign_relations.get(&target_owner)
