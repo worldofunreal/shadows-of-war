@@ -108,6 +108,16 @@ pub(crate) fn render_overlays(
         sf,
         now,
     );
+    super::nameplates::render_emote_bubbles(
+        text,
+        snapshot,
+        &mut ui.nameplates,
+        input,
+        sf,
+        now,
+        my_id,
+        ui.app.settings_state.reduced_motion,
+    );
 
     if !ui.tutorial_active {
         ui.tutorial_marker_player_id = None;

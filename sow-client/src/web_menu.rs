@@ -2793,8 +2793,13 @@ fn tutorial_guide_tiles(
         },
     );
     let observation = &mut app.sim.tutorial_observation;
+    let expand = if target_owner != my_pid {
+        observation.guide_target_action.or(observation.guide_expand)
+    } else {
+        observation.guide_expand
+    };
     (
-        observation.guide_expand,
+        expand,
         observation.guide_assault,
         observation.guide_target_action,
         build_site,
@@ -2907,8 +2912,10 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         camera_target_distance.is_some_and(|distance| distance <= camera_target_radius);
     let guide_screen = |tile: Option<u32>| {
         tutorial_project_tile(tile, map_w, map_h, &app.input, sf)
-            .filter(|point| tutorial_screen_point_visible(*point, viewport_w, viewport_h))
-            .map(|[x, y]| serde_json::json!({ "x": x, "y": y, "tile_idx": tile }))
+            .and_then(|point| tutorial_screen_anchor(point, viewport_w, viewport_h))
+            .map(|([x, y], offscreen)| {
+                serde_json::json!({ "x": x, "y": y, "tile_idx": tile, "offscreen": offscreen })
+            })
             .unwrap_or(serde_json::Value::Null)
     };
     let expand_target = tutorial_tile_world(expand_tile, map_w, map_h)
@@ -5121,6 +5128,22 @@ mod tests {
                 &[me.clone(), ally],
             ),
             Some(12)
+        );
+    }
+
+    #[test]
+    fn tutorial_goal_stays_at_the_nearest_viewport_edge_when_offscreen() {
+        assert_eq!(
+            tutorial_screen_anchor([-20.0, 50.0], 100.0, 100.0),
+            Some(([32.0, 50.0], true)),
+        );
+        assert_eq!(
+            tutorial_screen_anchor([50.0, 120.0], 100.0, 100.0),
+            Some(([50.0, 68.0], true)),
+        );
+        assert_eq!(
+            tutorial_screen_anchor([50.0, 50.0], 100.0, 100.0),
+            Some(([50.0, 50.0], false)),
         );
     }
 

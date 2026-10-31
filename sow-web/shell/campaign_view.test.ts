@@ -1869,6 +1869,26 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     assert.equal(root.querySelector(".sow-story__gesture-label").hidden, false);
     assert.equal(root.querySelector(".sow-story__gesture-metric").hidden, false);
     assert.equal(root.querySelector(".sow-story__zoom-target").textContent, "120 / 250");
+    const gesture = root.querySelector(".sow-story__gesture");
+    const guideMoves = [];
+    gesture.animate = (frames, options) => {
+        const animation = { frames, options, onfinish: null, cancel() {} };
+        guideMoves.push(animation);
+        return animation;
+    };
+    const nextObjective = { ...objective, id: "contact_stonea" };
+    renderer.render(
+        { ...objectiveModel, step: nextObjective, line: nextObjective },
+        { anchor: { x: 280, y: 390 }, gestureLabel: "Meet Stonea" },
+    );
+    assert.equal(guideMoves[0].options.duration, 250, "the same hand glides to the next objective");
+    const reducedObjective = { ...objective, id: "reduced_motion_step" };
+    renderer.render(
+        { ...objectiveModel, step: reducedObjective, line: reducedObjective },
+        { anchor: { x: 300, y: 410 }, gestureLabel: "Move", reducedMotion: true },
+    );
+    assert.equal(guideMoves.length, 1, "reduced motion moves the hand directly");
+    renderer.render(objectiveModel, { anchor: { x: 220, y: 360 }, gestureLabel: "Expand the frontier" });
 
     const compactContext = {
         anchor: { x: 380, y: 820 },
@@ -1951,9 +1971,32 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     );
     assert.equal(
         root.querySelector(".sow-story__gesture-metric").hidden,
-        true,
-        "desktop avoids duplicating the panel counter",
+        false,
+        "desktop shows the same counter beside the hand",
     );
+    assert.equal(root.querySelector(".sow-story__zoom-target").textContent, "121 / 250");
+    const waiting = {
+        id: "await_alliance",
+        type: "objective",
+        title_key: "await_title",
+        trigger: { type: "territory", value: 250 },
+        marker: { target: "stonea" },
+    };
+    renderer.render(
+        { ...objectiveModel, step: waiting, line: waiting, progress: { current: 121, target: 250 } },
+        {
+            anchor: { x: 800, y: 300 },
+            statusOnly: true,
+            statusLabel: "Await Their Answer",
+            reducedMotion: true,
+        },
+    );
+    assert.equal(root.querySelector(".sow-story__gesture").hidden, false);
+    assert.equal(root.querySelector(".sow-story__gesture").classList.contains("is-status"), true);
+    assert.equal(root.querySelector(".sow-story__gesture-copy").textContent, "Await Their Answer");
+    assert.equal(root.querySelector(".sow-story__gesture-metric").hidden, false);
+    assert.doesNotMatch(storyCss, /\.sow-story__gesture\.is-status \.sow-story__hand/);
+    renderer.render(objectiveModel, compactContext);
     resizeStory(390, 844);
     assert.equal(root.querySelector(".sow-story__objective").hidden, true);
     assert.equal(
@@ -2092,6 +2135,29 @@ test("campaign view recovers portraits and renders compact objective guidance", 
         "Click and hold",
         "mouse users get the familiar hold instruction",
     );
+    const liveCameraDrag = { ...cameraDrag, camera_only: false };
+    renderer.render(
+        { ...cameraZoomModel, step: liveCameraDrag, line: liveCameraDrag },
+        {
+            anchor: { x: 190, y: 400 },
+            zoomMode: "wheel",
+            gestureLabel: "Move",
+            gestureHint: "Click and hold",
+        },
+    );
+    assert.equal(root.querySelector(".sow-story__gesture-copy").textContent, "Move");
+    assert.equal(root.querySelector(".sow-story__gesture-hint").hidden, false);
+    assert.equal(root.querySelector(".sow-story__gesture-hint").textContent, "Click and hold");
+    renderer.render(
+        { ...cameraZoomModel, step: liveCameraDrag, line: liveCameraDrag },
+        {
+            anchor: { x: 190, y: 400 },
+            zoomMode: "pinch",
+            gestureLabel: "Move",
+            gestureHint: "Hold and move",
+        },
+    );
+    assert.equal(root.querySelector(".sow-story__gesture-hint").textContent, "Hold and move");
     renderer.render(
         { ...cameraZoomModel, step: cameraDrag, line: cameraDrag },
         { anchor: { x: 190, y: 400 }, zoomMode: "trackpad" },
@@ -2202,9 +2268,10 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     );
     assert.equal(
         root.querySelector(".sow-story__gesture-metric").hidden,
-        true,
-        "desktop keeps its existing quest-card progress instead of duplicating it",
+        false,
+        "desktop keeps the objective count beside the continuous hand",
     );
+    assert.equal(root.querySelector(".sow-story__zoom-target").textContent, "121 / 250");
 
     const mapSurface = { closest: () => null };
     const pausedObjective = { ...objectiveModel, paused: true };
@@ -2981,6 +3048,64 @@ test("tutorial camera anchors and paused build guides publish current map coordi
         { x: 42, y: 24 },
         "UI anchors remain screen coordinates rather than camera tracked world points",
     );
+    const missingControlGuides = createTutorialGuides({
+        window: { SOWCampaignView: { resolveUiTarget: () => null } },
+        document: {},
+    });
+    const waitingAlliance = {
+        id: "alliance_wait",
+        type: "objective",
+        title_key: "await_answer",
+        trigger: { type: "alliance", target: "trinovantes" },
+        marker: { target: "trinovantes" },
+    };
+    const targetAnchor = { x: 790, y: 310, offscreen: true };
+    const stoneaContact = {
+        id: "boudica_first_contact",
+        type: "objective",
+        trigger: { type: "contact", target: "stonea" },
+        marker: { target: "stonea" },
+        guide: { kind: "world", target: "nameplate", gesture: "tap" },
+    };
+    assert.deepEqual(
+        JSON.parse(
+            JSON.stringify(
+                missingControlGuides.anchorFor(stoneaContact, {
+                    tutorial: { player: { x: 50, y: 50 }, target_nameplate: targetAnchor },
+                }),
+            ),
+        ),
+        { x: 790, y: 310, offscreen: true, cameraTracked: true },
+        "after the 250-tile goal, Stonea's nameplate becomes the next hand target",
+    );
+    assert.deepEqual(
+        JSON.parse(
+            JSON.stringify(
+                missingControlGuides.anchorFor(waitingAlliance, {
+                    tutorial: { player: { x: 50, y: 50 }, target_nameplate: targetAnchor },
+                }),
+            ),
+        ),
+        { x: 790, y: 310, offscreen: true, cameraTracked: true },
+        "wait objectives follow their marked character even without an action guide",
+    );
+    assert.deepEqual(
+        JSON.parse(
+            JSON.stringify(
+                missingControlGuides.anchorFor(
+                    {
+                        id: "request_alliance",
+                        type: "guide",
+                        marker: { target: "trinovantes" },
+                        guide: { kind: "ui", target: "map_alliance", gesture: "tap" },
+                    },
+                    { tutorial: { player: { x: 50, y: 50 }, target_nameplate: targetAnchor } },
+                ),
+            ),
+        ),
+        { x: 790, y: 310, offscreen: true, cameraTracked: true },
+        "a closed radial menu keeps the hand at the faction edge anchor",
+    );
 });
 
 test("a UI step uses its configured target and device-specific hand labels", () => {
@@ -3041,6 +3166,30 @@ test("a UI step uses its configured target and device-specific hand labels", () 
                   [expansionKey + "_continue_action"]: "Keep expanding",
               }
             : {};
+        if (translated && candidateStep.guide) {
+            const baseKey = definition.text_namespace + candidateStep.id;
+            const gesture = candidateStep.guide.gesture;
+            if (gesture === "zoom_in" || gesture === "zoom_out") {
+                const action = gesture === "zoom_in" ? "Zoom in" : "Zoom out";
+                const hint =
+                    mode === "wheel"
+                        ? gesture === "zoom_in"
+                            ? "Mouse wheel up"
+                            : "Mouse wheel down"
+                        : gesture === "zoom_in"
+                          ? "Pinch out"
+                          : "Pinch in";
+                translations[baseKey + "_" + mode + "_label"] = action;
+                translations[baseKey + "_" + mode + "_hint"] = hint;
+            } else if (gesture === "drag" || gesture === "hover") {
+                translations[baseKey + "_" + (mode === "pinch" ? "mobile" : "desktop") + "_hint"] =
+                    gesture === "drag"
+                        ? mode === "pinch"
+                            ? "Hold and move"
+                            : "Click and hold"
+                        : "Hold over Suetonius";
+            }
+        }
         if (translated && candidateStep.trigger && candidateStep.trigger.type === "camera_target") {
             translations[definition.text_namespace + candidateStep.id + "_progress"] =
                 "{current} tiles away · goal: {target} or closer";
@@ -3134,6 +3283,52 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     assert.equal(cameraDragContext.guideMetric, undefined, "camera-only drag omits numeric distance metrics");
     const untranslatedCameraDrag = renderContextFor("wheel", false, cameraDragGuide, {}, cameraHud);
     assert.equal(untranslatedCameraDrag.guideMetric, undefined);
+    const liveZoomOut = {
+        id: "boudica_zoom_out",
+        trigger: { type: "zoom_out_complete", value: 0.95 },
+        guide: { kind: "world", target: "player", gesture: "zoom_out" },
+    };
+    const liveZoomOutContext = renderContextFor("wheel", true, liveZoomOut);
+    assert.equal(liveZoomOutContext.gestureLabel, "Zoom out");
+    assert.equal(liveZoomOutContext.gestureHint, "Mouse wheel down");
+    const liveZoomInContext = renderContextFor("pinch", true, {
+        ...liveZoomOut,
+        id: "boudica_zoom_in",
+        guide: { ...liveZoomOut.guide, gesture: "zoom_in" },
+    });
+    assert.equal(liveZoomInContext.gestureLabel, "Zoom in");
+    assert.equal(liveZoomInContext.gestureHint, "Pinch out");
+    const liveDragContext = renderContextFor(
+        "wheel",
+        true,
+        { ...cameraDragGuide, camera_only: false },
+        {},
+        cameraHud,
+    );
+    assert.equal(liveDragContext.gestureHint, "Click and hold");
+    assert.equal(liveDragContext.hintOverride, "Click and hold");
+    const liveMobileDragContext = renderContextFor(
+        "pinch",
+        true,
+        { ...cameraDragGuide, camera_only: false },
+        {},
+        cameraHud,
+    );
+    assert.equal(liveMobileDragContext.gestureHint, "Hold and move");
+    const webStrings = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
+    for (const [key, value] of [
+        ["campaign_boudica_boudica_camera_drag_title", "Move"],
+        ["campaign_boudica_boudica_camera_drag_desktop_hint", "Click and hold"],
+        ["campaign_boudica_boudica_camera_drag_mobile_hint", "Hold and move"],
+        ["campaign_boudica_boudica_camera_hover_title", "Hover"],
+        ["campaign_boudica_boudica_camera_hover_desktop_hint", "Hold over Suetonius"],
+        ["campaign_boudica_boudica_zoom_out_wheel_label", "Zoom out"],
+        ["campaign_boudica_boudica_zoom_out_wheel_hint", "Mouse wheel down"],
+        ["campaign_boudica_boudica_zoom_in_pinch_label", "Zoom in"],
+        ["campaign_boudica_boudica_zoom_in_pinch_hint", "Pinch out"],
+    ]) {
+        assert.ok(webStrings.includes(`${key} = "${value}"`), `${key} uses concise input copy`);
+    }
     const passiveConstruction = {
         id: "city_wait",
         type: "objective",
@@ -3336,7 +3531,7 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     assert.equal(strikeDialog.type, "scene");
     assert.equal(strikeDialog.speaker, "boudica");
     assert.equal(strikeDialog.next, legionObjective.id);
-    assert.equal(ratioStep.pause_game, true);
+    assert.equal(ratioStep.pause_game, true, "the world pauses while the player learns the attack slider");
     assert.equal(ratioStep.trigger.type, "ui");
     assert.equal(ratioStep.trigger.action, "attack_ratio");
     assert.equal(ratioStep.trigger.value, 1);
@@ -3344,6 +3539,7 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     assert.equal(ratioStep.attack_ratio_on_enter, undefined, "the player must set 100% manually");
     let ratioClock = 0;
     const ratioMachine = campaign.create(definition, ratioStepId, undefined, () => ratioClock);
+    assert.equal(ratioMachine.view().paused, true, "the battlefield stays still while adjusting the slider");
     for (const value of [0.25, 0.5, 0.99])
         assert.equal(ratioMachine.update({ attack_ratio: value }, {}).step.id, ratioStepId);
     assert.equal(ratioMachine.update({ attack_ratio: 1 }, {}).step.id, strikeDialog.id);
@@ -3358,7 +3554,7 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
         "the exchange stays active while the Legion emote is shown",
     );
     assert.equal(ratioMachine.view().exchange_phase, "speaking");
-    assert.equal(ratioMachine.view().paused, true, "the game remains paused during the strike scene");
+    assert.equal(ratioMachine.view().paused, false, "the lead emote leaves play active");
     ratioClock = 2999;
     assert.equal(ratioMachine.view().exchange_phase, "speaking");
     ratioClock = 3000;
@@ -3374,6 +3570,7 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
         "dialogue",
         "Boudica's dialogue appears when the emote and configured gap finish",
     );
+    assert.equal(ratioMachine.view().paused, true, "the modal pauses while the dialogue is read");
     for (let t = 0; t < 60000; t += 100) {
         ratioClock += 100;
         ratioMachine.update({ attack_ratio: 1 }, {});
@@ -3382,7 +3579,7 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     assert.equal(ratioMachine.view().paused, true, "the game remains paused after the dialogue is revealed");
     for (let t = 0; t < 60000; t += 100) {
         const current = ratioMachine.view();
-        if (current.step.id !== strikeDialog.id && !current.exchange) break;
+        if (current.state.id === legionObjective.id) break;
         if (current.exchange_phase === "dialogue")
             assert.equal(
                 ratioMachine.advance(null, current.step.id),
@@ -3393,7 +3590,7 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
         ratioMachine.update({ attack_ratio: 1 }, {});
     }
     assert.equal(
-        ratioMachine.view().step.id,
+        ratioMachine.view().state.id,
         legionObjective.id,
         "the strike scene continues once its emote and dialogue have played",
     );

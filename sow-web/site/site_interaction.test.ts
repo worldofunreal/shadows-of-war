@@ -13,9 +13,17 @@ const siteHeader = fs.readFileSync(path.join(shell, "../../sow-web/site/site-hea
 const gameControlsCss = fs.readFileSync(path.join(shell, "sow-controls.css"), "utf8");
 const siteApp = fs.readFileSync(path.join(shell, "../../sow-web/site/app.ts"), "utf8");
 const siteCss = fs.readFileSync(path.join(shell, "../../sow-web/site/styles.css"), "utf8");
-const siteFooterPages = ["support", "privacy", "terms", "cookies"].map((page) =>
-  fs.readFileSync(path.join(shell, `../../sow-web/site/${page}/index.html`), "utf8"),
-);
+const siteFooterPages = [
+  "about",
+  "cookies",
+  "free-browser-strategy-game",
+  "games-like-ikariam",
+  "games-like-travian",
+  "multiplayer-territory-control-game",
+  "privacy",
+  "support",
+  "terms",
+].map((page) => fs.readFileSync(path.join(shell, `../../sow-web/site/${page}/index.html`), "utf8"));
 const siteRedirectConfig = fs.readFileSync(
   path.join(shell, "../../sow-dist/deploy/freebsd/conf.d/shadowsofwar.io.conf"),
   "utf8",
@@ -43,6 +51,13 @@ test("public landing builds heroes, maps and videos from game data at publish ti
   );
   assert.match(updates, /href="https:\/\/discord\.gg\//);
   assert.match(updates, /href="https:\/\/t\.me\//);
+  for (const icon of ["discord", "telegram"]) {
+    assert.match(updates, new RegExp(`/assets/site/media/${icon}\\.svg`));
+    assert.match(updates, new RegExp(`aria-label="${icon === "discord" ? "Discord" : "Telegram"}"`));
+  }
+  const footer = landingHtml.match(/<footer class="site-footer">([\s\S]*?)<\/footer>/)?.[1] ?? "";
+  assert.equal((footer.match(/https:\/\/discord\.gg\/4mBM6zJyG/g) ?? []).length, 1);
+  assert.equal((footer.match(/https:\/\/t\.me\/shadowsofwario/g) ?? []).length, 1);
   assert.doesNotMatch(updates, /disabled|type="email"/);
 });
 
@@ -151,7 +166,7 @@ test("landing navigation retains the leader compendium and omits retired how-to-
   }
   assert.match(
     mobileMenu,
-    /<div class="mobile-menu-actions">\s*<div\s+class="site-locale"\s+data-locale-select[\s\S]*?<\/div>\s*<\/div>\s*<a href="\/" data-i18n="site\.nav_home">Home<\/a>/,
+    /class="mobile-menu-actions"[\s\S]*?class="site-locale"[\s\S]*?class="mobile-social-links"/,
   );
   const navInnerCss = siteCss.match(/\.nav-inner\s*\{([^}]+)\}/)?.[1] ?? "";
   assert.doesNotMatch(navInnerCss, /\b(?:border|border-radius|background|box-shadow|backdrop-filter)\s*:/);
@@ -174,6 +189,40 @@ test("landing navigation retains the leader compendium and omits retired how-to-
     const footer = html.match(/<div class="footer-links">([\s\S]*?)<\/div>/)?.[1] ?? "";
     assert.ok(footer);
     assert.doesNotMatch(footer, /href=["']\/how-to-play\//);
+  }
+});
+
+test("Discord and Telegram use labeled SVG links in every site header and footer", () => {
+  const pairs = [
+    ["discord", "Discord", "https://discord.gg/4mBM6zJyG"],
+    ["telegram", "Telegram", "https://t.me/shadowsofwario"],
+  ];
+  for (const [key, label, href] of pairs) {
+    const icon = `/assets/site/media/${key}.svg`;
+    const headerLinks = [...siteHeader.matchAll(/<a\b[^>]*class="social-icon-link[^>]*>[\s\S]*?<\/a>/g)].map(
+      ([markup]) => markup,
+    );
+    assert.ok(
+      headerLinks.some((markup) => markup.includes(`href="${href}"`) && markup.includes(`src="${icon}"`)),
+    );
+    assert.ok(
+      headerLinks.some(
+        (markup) =>
+          markup.includes(`data-i18n="site.${key}"`) &&
+          markup.includes('data-i18n-attr="aria-label"') &&
+          markup.includes(`aria-label="${label}"`),
+      ),
+    );
+    assert.ok(fs.existsSync(path.join(shell, `../../assets/site/media/${key}.svg`)));
+    for (const html of [landingHtml, ...siteFooterPages]) {
+      const footer = html.match(/<footer class="site-footer">([\s\S]*?)<\/footer>/)?.[1] ?? "";
+      assert.ok(
+        footer.includes(`href="${href}"`) &&
+          footer.includes(`aria-label="${label}"`) &&
+          footer.includes(`src="${icon}"`),
+      );
+      assert.equal(footer.split(`href="${href}"`).length - 1, 1);
+    }
   }
 });
 
@@ -718,7 +767,6 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         ]),
       ),
     };
-    await put(path.join(source, "leader-bios.json"), JSON.stringify(biographies));
     for (const page of ["", "support", "privacy", "cookies", "terms", "leaders"])
       await put(
         path.join(source, page, "index.html"),
@@ -757,6 +805,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
       out,
       {
         leaders,
+        biographies,
         pages: [
           "index.html",
           "support/index.html",
@@ -785,16 +834,63 @@ test("public publisher delivers localized linked profiles and rejects incomplete
     const sourcedProfile = await readFile(path.join(out, "leaders/caesar/index.html"), "utf8");
     assert.match(sourcedProfile, /en: historical_reference.*Historical source/s);
     assert.doesNotMatch(sourcedProfile, /CC BY-SA 4\.0/);
+    const sagaBiographies = structuredClone(biographies);
+    for (const code of ["en", "es"]) {
+      sagaBiographies.leaders[code].caesar = {
+        lang: code,
+        url: "https://example.com/caesar",
+        highlight: `${code} original highlight.`,
+        highlightLabel: code === "es" ? "En pocas palabras" : "In brief",
+        evidenceLabel: code === "es" ? "Lo que sabemos" : "Evidence and limits",
+        chapterSourcesLabel: code === "es" ? "Fuentes" : "Sources",
+        sourceNote: "Chapter sources are linked below.",
+        isSaga: true,
+        intro: [],
+        sections: Array.from({ length: 5 }, (_, index) => ({
+          title: `${code} chapter ${index + 1}`,
+          paragraphs: [historyParagraph, historyParagraph],
+          evidence: `${code} evidence note.`,
+          sources: [{ title: "Historical source", url: "https://example.com/caesar" }],
+        })),
+      };
+    }
+    await resetLanding();
+    await publish(
+      out,
+      {
+        leaders,
+        biographies: sagaBiographies,
+        pages: [
+          "index.html",
+          "support/index.html",
+          "privacy/index.html",
+          "cookies/index.html",
+          "terms/index.html",
+        ],
+      },
+      source,
+    );
+    for (const [pathname, language, highlight] of [
+      ["leaders/caesar/index.html", "en", "In brief"],
+      ["es/leaders/caesar/index.html", "es", "En pocas palabras"],
+    ]) {
+      const sagaPage = await readFile(path.join(out, pathname), "utf8");
+      assert.match(sagaPage, new RegExp(`<html lang="${language}"`));
+      assert.match(sagaPage, new RegExp(`<p class="eyebrow">${highlight}<\\/p>`));
+      assert.match(sagaPage, new RegExp(`id="leader-history-5" lang="${language}"`));
+      assert.match(sagaPage, /class="leader-history-evidence"/);
+      assert.match(sagaPage, /class="leader-chapter-citations"/);
+    }
     const sitemap = await readFile(path.join(out, "sitemap.xml"), "utf8");
     assert.equal((sitemap.match(/<url>/g) || []).length, 15);
     delete biographies.leaders.es.caesar;
-    await put(path.join(source, "leader-bios.json"), JSON.stringify(biographies));
     await resetLanding();
     await assert.rejects(
       publish(
         out,
         {
           leaders,
+          biographies,
           pages: [
             "index.html",
             "support/index.html",
@@ -817,7 +913,6 @@ test("public publisher delivers localized linked profiles and rejects incomplete
       lang: "es",
       url: "https://es.wikipedia.org/wiki/Julius_Caesar",
     };
-    await put(path.join(source, "leader-bios.json"), JSON.stringify(biographies));
     const effect = catalogs.es.site.leader_caesar_description;
     await resetLanding();
     delete catalogs.es.site.leader_caesar_description;
@@ -827,6 +922,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         out,
         {
           leaders,
+          biographies,
           pages: [
             "index.html",
             "support/index.html",
@@ -848,6 +944,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         out,
         {
           leaders,
+          biographies,
           pages: [
             "index.html",
             "support/index.html",
@@ -867,6 +964,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         out,
         {
           leaders,
+          biographies,
           pages: [
             "index.html",
             "support/index.html",

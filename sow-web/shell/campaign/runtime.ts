@@ -12,13 +12,16 @@ type Exchange = {
     lines: CampaignRecord[];
     index: number;
     reactionInstance: string | null;
+    ownerStepId: string;
     phase: "prepare" | "speaking" | "gap" | "dialogue";
     token: string | null;
     until: number | null;
     ackStartedAt: number | null;
     loopHadVisibleLine?: boolean;
     remainingGap?: number;
+    stopAfterLine?: boolean;
 };
+type QueuedExchange = Pick<Exchange, "lines" | "reactionInstance" | "ownerStepId">;
 type ActiveReaction = { reaction: CampaignRecord; target: string; instanceId: string };
 type RuntimeState = {
     id: string;
@@ -98,10 +101,47 @@ export function create(
         waitUntilMs: number | null = null,
         reactionTimerStartedAtMs: number | null = null,
         exchange: Exchange | null = null,
+        exchangeQueue: QueuedExchange[] = [],
         exchangeSerial = 0;
+    function backgroundExchangeScene(step: CampaignStep) {
+        return (
+            step.type === "scene" &&
+            Array.isArray(step.exchange) &&
+            !step.title_key &&
+            !step.body_key &&
+            !step.lines &&
+            !step.video_src &&
+            !["dialogue", "chapter", "celebration", "cinematic"].includes(step.presentation || "") &&
+            !step.exchange.some((line: CampaignRecord) => line.presentation === "dialogue")
+        );
+    }
+    function exchangeOnlyScene(step: CampaignStep) {
+        return (
+            step.type === "scene" &&
+            Array.isArray(step.exchange) &&
+            !step.title_key &&
+            !step.body_key &&
+            !step.lines &&
+            !step.video_src &&
+            !["dialogue", "chapter", "celebration", "cinematic"].includes(step.presentation || "")
+        );
+    }
     function enter(key: string) {
         if (!byId.has(key)) throw new Error("Unknown campaign destination: " + key);
-        clearExchange();
+        const currentStep = byId.get(state.id);
+        if (currentStep && backgroundExchangeScene(currentStep)) {
+            // Emote-only handoff scenes carry their lines while the next objective becomes active.
+        } else if (exchange && exchange.phase !== "dialogue") {
+            if (
+                activeReaction?.reaction.loop === true &&
+                activeReaction.reaction.during === exchange.ownerStepId &&
+                exchange.ownerStepId !== key
+            ) {
+                exchangeQueue = [];
+                if (exchange.phase === "speaking") exchange.stopAfterLine = true;
+                else endExchange();
+            }
+        } else clearExchange();
         state.id = key;
         state.line = 0;
         state.done = false;
@@ -110,7 +150,7 @@ export function create(
         uiBaseline = { ...ui };
         currentTimeMs = readClock();
         waitUntilMs = byId.get(key)!.wait_before === true ? currentTimeMs + WAIT_MS : null;
-        reactionTimerStartedAtMs = byId.get(key)!.exchange ? null : currentTimeMs;
+        reactionTimerStartedAtMs = currentTimeMs;
         if (byId.get(key)!.exchange) beginExchange(byId.get(key)!.exchange, null);
     }
     function matches(when: CampaignRecord) {
@@ -350,6 +390,7 @@ export function create(
     }
     function loopShouldStop() {
         if (activeReaction?.reaction.loop !== true) return false;
+        if (activeReaction.reaction.during && activeReaction.reaction.during !== state.id) return true;
         const step = byId.get(state.id)!;
         const result = ["objective", "guide"].includes(step.type) && step.trigger ? progress() : null;
         if (!result || result.current >= result.target || targetUnavailable(step, result)) return true;
@@ -557,7 +598,13 @@ export function create(
         );
     }
     function nextTimerDelayMs() {
-        if (state.done || exchange || activeReaction || reactionTimerStartedAtMs === null) return null;
+        if (
+            state.done ||
+            (exchange && exchange.phase === "dialogue") ||
+            activeReaction ||
+            reactionTimerStartedAtMs === null
+        )
+            return null;
         const step = byId.get(state.id)!;
         if (!step.trigger || !["objective", "guide"].includes(step.type)) return null;
         const result = progress();
@@ -580,11 +627,27 @@ export function create(
             .filter((delay: number | null): delay is number => Number.isFinite(delay));
         return remaining.length ? Math.max(1, Math.min(...remaining)) : null;
     }
+    function pausesForStep(step: CampaignStep) {
+        if (step.pause_game === true || step.type === "choice" || step.type === "end") return true;
+        if (step.type !== "scene") return false;
+        if (
+            ["dialogue", "chapter", "celebration", "cinematic"].includes(step.presentation || "") ||
+            Boolean(step.video_src)
+        )
+            return true;
+        return Boolean(step.title_key || step.body_key || step.lines);
+    }
     function view() {
         currentTimeMs = readClock();
         const step = byId.get(state.id)!;
         if (exchange) {
             const exchangeLine = exchange.lines[exchange.index];
+            const paused =
+                exchange.phase === "dialogue" ||
+                (exchange.reactionInstance !== null &&
+                typeof activeReaction?.reaction.pause_game === "boolean"
+                    ? activeReaction.reaction.pause_game
+                    : pausesForStep(step!));
             const modalLine: CampaignStep | null =
                 exchange.phase === "dialogue"
                     ? {
@@ -597,23 +660,14 @@ export function create(
                           presentation: "dialogue",
                       }
                     : null;
-            const stepPauses =
-                step!.pause_game !== false &&
-                (["scene", "choice", "end"].includes(step!.type) || step!.pause_game === true);
-            const reactionPause =
-                exchange.reactionInstance !== null ? activeReaction?.reaction.pause_game : undefined;
             return {
                 definition,
                 step: modalLine || step,
                 line: modalLine || step,
                 progress: progress(),
-                paused:
-                    reactionPause === false
-                        ? false
-                        : reactionPause === true ||
-                          (exchange.phase === "dialogue" && step!.pause_game !== false) ||
-                          stepPauses,
-                paused_action: null,
+                paused,
+                paused_action:
+                    paused && exchange.phase !== "dialogue" ? step!.paused_action || null : null,
                 done: false,
                 choices: [],
                 state,
@@ -658,7 +712,7 @@ export function create(
                 step: response,
                 line: response,
                 progress: progress(),
-                paused: reaction.pause_game !== false,
+                paused: true,
                 paused_action: null,
                 done: false,
                 choices: reaction.choices || [],
@@ -677,9 +731,7 @@ export function create(
         const expansionStarted =
             step!.paused_action === "expand_once_then_resume" &&
             Number(facts.wilderness_orders_accepted || 0) > Number(baseline.wilderness_orders_accepted || 0);
-        const paused =
-            (step!.pause_game !== false && ["scene", "choice", "end"].includes(step!.type)) ||
-            (step!.pause_game === true && !expansionStarted);
+        const paused = pausesForStep(step!) && !expansionStarted;
         return {
             definition,
             step,
@@ -726,11 +778,28 @@ export function create(
         exchange = null;
     }
     function beginExchange(lines: CampaignRecord[], reactionInstance: string | null) {
+        const next: QueuedExchange = { lines, reactionInstance, ownerStepId: state.id };
+        if (exchange && exchange.phase !== "dialogue") {
+            exchangeQueue.push(next);
+            return;
+        }
         clearExchange();
         exchange = {
-            lines,
+            ...next,
             index: 0,
-            reactionInstance,
+            phase: "prepare",
+            token: null,
+            until: null,
+            ackStartedAt: null,
+            loopHadVisibleLine: false,
+        };
+        prepareExchangeLine();
+    }
+    function startQueuedExchange() {
+        if (exchange || !exchangeQueue.length) return;
+        exchange = {
+            ...exchangeQueue.shift()!,
+            index: 0,
             phase: "prepare",
             token: null,
             until: null,
@@ -788,7 +857,7 @@ export function create(
         if (currentTimeMs < current.until!) return false;
         if (current.phase === "speaking") {
             clearExchangeLine();
-            if (loopShouldStop()) {
+            if (current.stopAfterLine || loopShouldStop()) {
                 endExchange();
                 return true;
             }
@@ -806,6 +875,10 @@ export function create(
     }
     function nextExchangeLine() {
         const current = exchange!;
+        if (current.stopAfterLine) {
+            endExchange();
+            return true;
+        }
         current.index++;
         if (current.index < current.lines.length) prepareExchangeLine();
         else if (
@@ -822,20 +895,14 @@ export function create(
     function endExchange() {
         const finished = exchange!;
         exchange = null;
-        waitUntilMs = null;
-        if (finished.reactionInstance !== null) {
-            const completedReaction = activeReaction?.reaction;
-            completeReaction();
-            if (
-                completedReaction &&
-                ["contact", "first_contact"].includes(completedReaction.when.type) &&
-                completedReaction.during === state.id
-            )
-                reactionTimerStartedAtMs = currentTimeMs = readClock();
-        } else reactionTimerStartedAtMs = currentTimeMs = readClock();
+        if (finished.ownerStepId === state.id) waitUntilMs = null;
+        reactionTimerStartedAtMs = currentTimeMs = readClock();
+        if (finished.reactionInstance !== null) completeReaction();
+        startQueuedExchange();
     }
     function dispose() {
         clearExchange();
+        exchangeQueue = [];
         externallyPaused = true;
     }
     function completeReaction() {
@@ -861,7 +928,7 @@ export function create(
     }
     function advance(choiceId?: string | null, expectedStepId?: string, allowUnavailable = false) {
         if (state.done || externallyPaused) return false;
-        if (exchange) {
+        if (exchange && exchange.phase === "dialogue") {
             if (exchange.phase !== "dialogue" || expectedStepId !== "exchange-" + exchange.token)
                 return false;
             const delay = Number.isInteger(exchange.lines[exchange.index].delay_ms)
@@ -877,7 +944,7 @@ export function create(
             else endExchange();
             return true;
         }
-        if (activeReaction) {
+        if (activeReaction && (!exchange || exchange.phase === "dialogue")) {
             const reaction = activeReaction.reaction;
             if (expectedStepId !== "reaction-" + activeReaction.instanceId) return false;
             if (reaction.choices && reaction.choices.length) {
@@ -971,14 +1038,15 @@ export function create(
                     endExchange();
                     continue;
                 }
-                if (!updateExchange()) return view();
-                continue;
+                const advancedExchange = updateExchange();
+                if (exchange && exchange.phase === "dialogue") return view();
+                if (advancedExchange) continue;
             }
             const step = byId.get(state.id)!;
             const objectiveStep = ["objective", "guide"].includes(step!.type);
             const result = objectiveStep ? progress() : null;
             const unavailable = objectiveStep && targetUnavailable(step, result!);
-            if (!activeReaction) {
+            if (!activeReaction && !exchange) {
                 const next = nextReaction();
                 if (next) {
                     if (next.isFirstContact) state.firstContactTarget = next.target;
@@ -993,9 +1061,9 @@ export function create(
                     }
                 }
             }
-            if (activeReaction) return view();
-            // A scene that only plays an exchange has nothing to read, so it continues once the exchange ends.
-            if (step!.type === "scene" && step!.exchange) {
+            if (activeReaction && (!exchange || exchange.phase === "dialogue")) return view();
+            // Exchange-only scenes move the hand immediately for emotes and after Continue for dialogue.
+            if (exchangeOnlyScene(step!) && (!exchange || backgroundExchangeScene(step!))) {
                 if (!advance(null, step!.id)) break;
                 continue;
             }

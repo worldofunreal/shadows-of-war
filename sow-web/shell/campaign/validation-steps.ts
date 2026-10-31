@@ -406,6 +406,61 @@ export function validateSteps(context: CampaignValidationContext) {
             (typeof step.camera_only !== "boolean" || (step.camera_only && step.pause_game !== true))
         )
             issue(step, "camera_only", "Camera-only input requires a paused objective.");
+        const nextStep = typeof step.next === "string" ? byId.get(step.next) : undefined;
+        if (
+            step.trigger?.type === "territory" &&
+            step.guide?.kind === "world" &&
+            step.guide.target === "expand" &&
+            nextStep?.trigger?.type === "contact" &&
+            nextStep.trigger.target &&
+            step.marker?.target !== nextStep.trigger.target
+        )
+            issue(step, "marker", "Point expansion toward the faction contacted next.");
+        if (definition.episode_id === "boudica" && ["objective", "guide"].includes(step.type)) {
+            const triggerType = step.trigger && step.trigger.type;
+            const constructionAction =
+                (triggerType === "ui" && step.trigger.action === "dock_city") ||
+                ["city", "factory", "tower"].includes(triggerType);
+            const upgradeAction = ["building_selected", "structure_upgrade"].includes(triggerType);
+            const cameraLesson =
+                ["zoom_out_complete", "camera_target", "hover", "zoom_in_complete"].includes(triggerType) ||
+                (triggerType === "ui" && step.trigger.action === "hud_center_camera");
+            const nextTrigger = nextStep?.trigger;
+            const allianceLesson =
+                triggerType === "alliance_request" ||
+                (triggerType === "ui" &&
+                    step.trigger.action === "map_menu_open" &&
+                    nextTrigger?.type === "alliance_request");
+            const transferLesson =
+                triggerType === "resource_transfer" ||
+                (triggerType === "ui" && step.trigger.action === "map_transfer") ||
+                (triggerType === "ui" &&
+                    step.trigger.action === "map_menu_open" &&
+                    nextTrigger?.type === "ui" &&
+                    nextTrigger.action === "map_transfer");
+            const attackRatioLesson = triggerType === "ui" && step.trigger.action === "attack_ratio";
+            const guidedLesson = cameraLesson || allianceLesson || transferLesson || attackRatioLesson;
+            const mayPause = constructionAction || upgradeAction || guidedLesson;
+            if (step.pause_game === true && !mayPause)
+                issue(step, "pause_game", "Boudica pauses only while a guided action needs the player's attention.");
+            if ((constructionAction || upgradeAction || guidedLesson) && step.pause_game !== true)
+                issue(step, "pause_game", "Guided Boudica actions must pause the game until the action is complete.");
+            if (cameraLesson && step.camera_only !== true)
+                issue(step, "camera_only", "Boudica camera lessons must allow camera input while the game is paused.");
+            if (step.camera_only === true && !cameraLesson)
+                issue(step, "camera_only", "Boudica allows camera-only input only during camera lessons.");
+            const hasTarget = Boolean(
+                step.guide ||
+                    step.marker ||
+                    (step.trigger &&
+                        (step.trigger.target || step.trigger.recipient ||
+                            (Array.isArray(step.trigger.targets) && step.trigger.targets.length))),
+            );
+            if (!hasTarget)
+                issue(step, "marker", "Every Boudica objective needs a guide or a visible target.");
+            if (!step.title_key && !step.hint_key && !step.body_key)
+                issue(step, "hint_key", "Every Boudica objective needs a short visible instruction.");
+        }
         if (own(step, "paused_action")) {
             const triggerType = step.trigger && step.trigger.type;
             let compatible = false;

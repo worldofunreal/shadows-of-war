@@ -24,6 +24,7 @@ image = { workspace = true }
 url = "2"
 wasm-bindgen-cli-support = { workspace = true }
 tempfile = { workspace = true }
+toml = { workspace = true }
 sow-i18n = { workspace = true }
 sow-core = { workspace = true }
 sow-map = { workspace = true, features = ["generator"] }

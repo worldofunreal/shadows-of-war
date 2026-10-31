@@ -1341,27 +1341,51 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "</button>" +
             "</aside>" +
             '<aside class="sow-hud__sheet sow-hud__dev-sidebar hidden" id="sow-hud-dev-sidebar">' +
-            '  <div class="sow-hud__sheet-header"><b class="sow-hud__sheet-title">' +
+            '  <div class="sow-hud__sheet-header sow-hud__dev-header">' +
+            '    <div class="sow-hud__sheet-title-group">' +
+            '      <span class="sow-hud__sheet-title-badge" aria-hidden="true">' +
+            hudIcon("tools", "sow-hud__sheet-title-icon") +
+            "      </span>" +
+            '      <h3 class="sow-hud__sheet-title">' +
             SOW_t("hud.dev_tools") +
-            "</b>" +
-            '    <button type="button" class="sow-hud__sheet-btn" data-command="dev_menu" aria-label="More" aria-expanded="false">⋯</button>' +
-            '    <button type="button" class="sow-hud__sheet-btn" data-command="toggle_dev_sidebar" aria-label="' +
+            "      </h3>" +
+            "    </div>" +
+            '    <button type="button" class="sow-hud__sheet-btn sow-hud__dev-more-btn" data-command="dev_menu" aria-label="More" aria-expanded="false">⋯</button>' +
+            '    <button class="sow-hud__close-btn sow-hud__sheet-btn" type="button" data-command="toggle_dev_sidebar" aria-label="' +
             SOW_t("hud.close_developer_tools") +
-            '">✕</button>' +
+            '">' +
+            hudIcon("close", "sow-hud__close-icon") +
+            "    </button>" +
             '    <div class="sow-hud__dev-menu" id="sow-hud-dev-menu" hidden>' +
             '      <button type="button" data-command="dev_vfx_all" data-on="1">All effects on</button>' +
             '      <button type="button" data-command="dev_vfx_all" data-on="0">All effects off</button>' +
             '      <button type="button" data-command="dev_reset_all" id="sow-hud-dev-reset-all">Reset all</button>' +
             "    </div>" +
             "  </div>" +
-            '  <nav class="sow-hud__dev-tabs" id="sow-hud-dev-tabs" aria-label="Groups"></nav>' +
+            '  <div class="sow-hud__dev-category-bar">' +
+            '    <label class="sow-hud__dev-category-label" for="sow-hud-dev-category-select">' +
+            '      <span class="sow-hud__dev-category-title">' +
+            (SOW_t("hud.category") || "Category") +
+            "</span>" +
+            '      <i class="sow-hud__dev-category-dot" id="sow-hud-dev-category-dot" hidden></i>' +
+            "    </label>" +
+            '    <div class="sow-hud__dev-category-field">' +
+            '      <select class="sow-hud__dev-category-select" id="sow-hud-dev-category-select" data-dev-category-select aria-label="' +
+            (SOW_t("hud.category") || "Category") +
+            '"></select>' +
+            '      <svg class="sow-hud__dev-category-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>' +
+            "    </div>" +
+            "  </div>" +
             '  <div class="sow-hud__dev-transport" id="sow-hud-dev-transport" hidden>' +
             '    <input type="range" min="0" max="1" step="0.01" data-dev-preview="phase" aria-label="Preview position">' +
             '    <label class="sow-hud__dev-chip"><input type="checkbox" data-dev-preview="paused"><span>Pause</span></label>' +
             '    <label class="sow-hud__dev-chip"><input type="checkbox" data-dev-preview="repeat"><span>Loop</span></label>' +
             "  </div>" +
-            '  <div class="sow-hud__sheet-body sow-hud__dev-body">' +
+            '  <div class="sow-hud__dev-search-bar">' +
+            hudIcon("search", "sow-hud__dev-search-icon") +
             '    <input class="sow-hud__dev-search" type="search" data-dev-search placeholder="Search" aria-label="Find shader setting">' +
+            "  </div>" +
+            '  <div class="sow-hud__sheet-body sow-hud__dev-body">' +
             '    <div class="sow-hud__dev-perf" id="sow-hud-dev-perf" role="group" aria-label="Frame cost switches" hidden></div>' +
             '    <div class="sow-hud__dev-controls" id="sow-hud-dev-controls"></div>' +
             "  </div>" +
@@ -1776,6 +1800,24 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             if (!(input instanceof HTMLInputElement)) return;
             sendDevControl(input);
         });
+        hudDevLayer!.addEventListener("change", function (event) {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            if (target.matches("[data-dev-category-select]")) {
+                const select = target as HTMLSelectElement;
+                devTab = select.value;
+                try {
+                    window.localStorage.setItem("sow_dev_tab", devTab);
+                } catch {
+                    /* storage unavailable */
+                }
+                const devSearch = hudRefs!.devSidebar!.querySelector<HTMLInputElement>("[data-dev-search]");
+                if (devSearch) devSearch.value = "";
+                renderDevControls((hudState && hudState.hud && hudState.hud.dev_tools) || {});
+                const devBody = hudRefs!.devSidebar.querySelector<HTMLElement>(".sow-hud__dev-body");
+                if (devBody) devBody.scrollTop = 0;
+            }
+        });
         hudDevLayer!.addEventListener("pointerdown", function (event) {
             const target = event.target;
             if (!(target instanceof Element)) return;
@@ -1793,6 +1835,29 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             };
             repeat();
         });
+
+        const handleDevWheel = function (event: WheelEvent) {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const sidebar = target.closest<HTMLElement>("#sow-hud-dev-sidebar");
+            if (!sidebar) return;
+            event.stopPropagation();
+            const body = sidebar.querySelector<HTMLElement>(".sow-hud__dev-body");
+            if (!body) return;
+            const deltaY =
+                event.deltaMode === 1
+                    ? event.deltaY * 24
+                    : event.deltaMode === 2
+                      ? event.deltaY * body.clientHeight
+                      : event.deltaY;
+            body.scrollTop += deltaY;
+            event.preventDefault();
+        };
+
+        if (hudDevLayer) {
+            hudDevLayer.addEventListener("wheel", handleDevWheel, { passive: false });
+        }
+
         ["pointerup", "pointercancel"].forEach(function (type) {
             window.addEventListener(
                 type,
@@ -1802,6 +1867,34 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 { passive: true },
             );
         });
+
+        hudRoot.addEventListener(
+            "wheel",
+            function (event: WheelEvent) {
+                const target = event.target;
+                if (!(target instanceof Element)) return;
+                if (target.closest("#sow-hud-dev-sidebar")) {
+                    handleDevWheel(event);
+                    return;
+                }
+                const sheet = target.closest<HTMLElement>(".sow-hud__sheet");
+                if (sheet) {
+                    event.stopPropagation();
+                    const body = sheet.querySelector<HTMLElement>(".sow-hud__sheet-body");
+                    if (body) {
+                        const deltaY =
+                            event.deltaMode === 1
+                                ? event.deltaY * 24
+                                : event.deltaMode === 2
+                                  ? event.deltaY * body.clientHeight
+                                  : event.deltaY;
+                        body.scrollTop += deltaY;
+                        event.preventDefault();
+                    }
+                }
+            },
+            { passive: false },
+        );
         hudRoot.addEventListener("input", function (event) {
             const target = event.target;
             if (!(target instanceof Element)) return;
@@ -3217,7 +3310,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
 
     const DEV_RESET_ICON =
-        '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/></svg>';
+        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/></svg>';
 
     function devDecimals(step: number): number {
         const text = String(step);
@@ -3490,16 +3583,18 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             (bySection[def.section] || (bySection[def.section] = [])).push(def);
         });
         devControlIndex = Object.create(null);
-        let tabs = "";
+        let options = "";
         let html = "";
         devTools.groups.forEach(function (group) {
             const groupName = escapeHudText(group.name);
-            tabs +=
-                '<button type="button" role="tab" data-command="dev_tab" data-dev-tab="' +
+            options +=
+                '<option value="' +
+                groupName +
+                '" data-dev-tab="' +
                 groupName +
                 '">' +
                 groupName +
-                "<i></i></button>";
+                "</option>";
             group.sections.forEach(function (section, index) {
                 const defs = bySection[section.name];
                 if (!defs) return;
@@ -3530,11 +3625,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             });
         });
         if (Array.isArray(devTools.perf) && devTools.perf.length) {
-            tabs +=
-                '<button type="button" role="tab" data-command="dev_tab" data-dev-tab="Perf">Perf<i></i></button>';
+            options +=
+                '<option value="Perf" data-dev-tab="Perf">Perf</option>';
         }
-        const tabRoot = sidebar.querySelector<HTMLElement>("#sow-hud-dev-tabs");
-        if (tabRoot) tabRoot.innerHTML = tabs;
+        const select = sidebar.querySelector<HTMLSelectElement>("#sow-hud-dev-category-select");
+        if (select) select.innerHTML = options;
         host.innerHTML = html;
         host.querySelectorAll<HTMLElement>("[data-dev-control]").forEach(function (control) {
             const id = control.dataset.devControl;
@@ -3613,19 +3708,21 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                     );
                 });
         }
-        const tabs = Array.from(sidebar.querySelectorAll<HTMLElement>("[data-dev-tab]"));
+        const categorySelect = sidebar.querySelector<HTMLSelectElement>("#sow-hud-dev-category-select");
+        const options = categorySelect ? Array.from(categorySelect.options) : [];
         if (
-            !tabs.some(function (tab) {
-                return tab.dataset.devTab === devTab;
+            options.length &&
+            !options.some(function (opt) {
+                return opt.value === devTab;
             })
         ) {
-            devTab = tabs[0]?.dataset.devTab || "";
+            devTab = options[0]?.value || "";
             try {
                 const saved = window.localStorage.getItem("sow_dev_tab");
                 if (
                     saved &&
-                    tabs.some(function (tab) {
-                        return tab.dataset.devTab === saved;
+                    options.some(function (opt) {
+                        return opt.value === saved;
                     })
                 )
                     devTab = saved;
@@ -3633,15 +3730,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 /* storage unavailable */
             }
         }
+        if (categorySelect && categorySelect.value !== devTab) {
+            categorySelect.value = devTab;
+        }
         const search = sidebar.querySelector<HTMLInputElement>("[data-dev-search]");
         const query = search ? search.value.trim().toLowerCase() : "";
         const perfTab = devTab === "Perf" && query === "";
         if (perfHost) perfHost.hidden = !perfTab;
-        tabs.forEach(function (tab) {
-            const selected = query === "" && tab.dataset.devTab === devTab;
-            tab.classList.toggle("is-active", selected);
-            tab.setAttribute("aria-selected", selected ? "true" : "false");
-        });
         const config = completeDevTools.config || {};
         const dirtyBySection: Record<string, number> = Object.create(null);
         completeDevTools.schema.forEach(function (def) {
@@ -3693,10 +3788,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         dirtyByGroup.Perf = perf.some(function (item) {
             return item.state !== "on";
         });
-        tabs.forEach(function (tab) {
-            const tabName = tab.dataset.devTab;
-            if (tabName) tab.dataset.dirty = dirtyByGroup[tabName] ? "true" : "false";
+        options.forEach(function (option) {
+            const tabName = option.value;
+            const isDirty = Boolean(dirtyByGroup[tabName]);
+            option.dataset.dirty = isDirty ? "true" : "false";
+            option.textContent = tabName + (isDirty ? " •" : "");
         });
+        const currentDirty = Boolean(dirtyByGroup[devTab]);
+        const dot = sidebar.querySelector<HTMLElement>("#sow-hud-dev-category-dot");
+        if (dot) dot.hidden = !currentDirty;
+        const field = sidebar.querySelector<HTMLElement>(".sow-hud__dev-category-field");
+        if (field) field.dataset.dirty = currentDirty ? "true" : "false";
         const preview = completeDevTools.preview || {
             target: null,
             phase: 0,

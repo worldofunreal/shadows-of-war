@@ -1074,9 +1074,17 @@ test("first Expand focuses its hidden target once and keeps the 250-tile objecti
         "camera focus is not resent after the guide appears",
     );
 
+    hud.tutorial.target_nameplate = { x: 244, y: 390, offscreen: false };
     hud.tutorial.facts.tiles_gained = 250;
     harness.update();
     assert.equal(harness.machine.view().step.id, "boudica_first_contact");
+    assert.equal(harness.machine.view().paused, false, "Stonea contact does not pause the game");
+    assert.equal(harness.rendered.step.id, "boudica_first_contact");
+    assert.deepEqual(
+        [harness.renderContext.anchor.x, harness.renderContext.anchor.y],
+        [244, 390],
+        "the hand moves to Stonea as soon as the 250-tile objective completes",
+    );
 });
 
 test("Trinovantes aid guides radial opening, Transfer, and the confirmed delivery separately", async () => {
@@ -1182,6 +1190,7 @@ test("Trinovantes aid guides radial opening, Transfer, and the confirmed deliver
     update();
     await new Promise(setImmediate);
     assert.equal(rendered.step.id, "boudica_transfer_target");
+    assert.equal(rendered.paused, true, "resource-transfer training pauses the world");
     assert.deepEqual([context.anchor.x, context.anchor.y], [110, 210]);
 
     hud.map_menu = { open: true, view: "radial", target_player_id: 3 };
@@ -1199,7 +1208,7 @@ test("Trinovantes aid guides radial opening, Transfer, and the confirmed deliver
     hud.map_menu = { open: true, view: "radial", target_player_id: 2 };
     update();
     assert.equal(rendered.step.id, "boudica_transfer_choose");
-    assert.equal(rendered.paused, true);
+    assert.equal(rendered.paused, true, "opening the alliance radial keeps the world paused");
     assert.deepEqual([context.anchor.x, context.anchor.y], [320, 420]);
     update();
     listeners.click({ type: "click", target: transferButton });
@@ -1232,14 +1241,20 @@ test("Trinovantes aid guides radial opening, Transfer, and the confirmed deliver
     update();
     assert.equal(rendered.step.id, "boudica_transfer_send");
     assert.equal(rendered.step.guide.target, "transfer_send");
+    assert.equal(rendered.paused, true, "the game stays paused until aid is sent");
     assert.equal(rendered.paused_action, "send_resources_stay_paused");
     hud.tutorial.facts.resource_transfers_by_recipient_faction_id = { stonea: { total: 1 } };
     update();
     assert.equal(rendered.step.id, "boudica_transfer_send");
     hud.tutorial.facts.resource_transfers_by_recipient_faction_id.trinovantes = { total: 1 };
     update();
-    assert.equal(machine.view().step.id, "boudica_share_sent");
-    assert.equal(rendered, null, "the scene hides the guide while its emote exchange plays");
+    assert.equal(
+        machine.view().step.id,
+        "boudica_ninth_legion_intro",
+        "the emote handoff advances immediately to the next scene",
+    );
+    assert.equal(machine.view().paused, false, "the emote handoff leaves the game running");
+    assert.equal(rendered, null, "the upcoming camera dialogue scene owns the presentation");
 
     machine.jump("boudica_transfer_target");
     hud.tutorial.facts = {};

@@ -3,7 +3,7 @@ use crate::text::msdf::{FontAtlas, MsdfChar};
 use crate::text::texture::FontAtlasTexture;
 use crate::text::types::{
     AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC, KIND_BUILDING_SPRITE,
-    KIND_CROSS, KIND_DISC, KIND_GLYPH, KIND_ICON, KIND_RECT, KIND_RING, KIND_ROUNDED_RECT,
+    KIND_CROSS, KIND_DISC, KIND_GLYPH, KIND_HORN, KIND_ICON, KIND_RECT, KIND_RING, KIND_ROUNDED_RECT,
     KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite, OutlineStyle,
     TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
 };
@@ -945,6 +945,38 @@ impl TextRenderer {
         });
     }
 
+    /// Push an anti-aliased curved horn (tail for speech bubbles).
+    /// `center` and `size` define the bounding quad in physical pixels.
+    /// If `size[1] < 0.0`, the horn points upwards (toward the top).
+    /// `sweep` controls the horizontal bend of the spine (-1.0 to 1.0, negative curves left, positive curves right).
+    /// `taper` controls the tapering exponent (e.g. 1.0 = linear, 1.25 = comic flare).
+    pub fn push_horn(
+        &mut self,
+        center: [f32; 2],
+        size: [f32; 2],
+        sweep: f32,
+        taper: f32,
+        color: [f32; 4],
+        outline_color: [f32; 4],
+        outline_thickness: f32,
+    ) {
+        let points_up = size[1] < 0.0;
+        let size = [size[0].max(0.0), size[1].abs()];
+        self.push_inst(TextInstanceGpu {
+            screen_pos: [center[0] - size[0] * 0.5, center[1] - size[1] * 0.5],
+            size,
+            uv_rect: [0.0, 0.0, 1.0, 1.0],
+            content_rect: [sweep.clamp(-1.0, 1.0), taper.clamp(0.5, 3.0), 0.75, 0.03],
+            color,
+            outline_color,
+            face_dilate: if points_up { 1.0 } else { 0.0 },
+            outline_thickness: outline_thickness.max(0.0),
+            underlay_offset_y: 0.0,
+            underlay_softness: 0.0,
+            kind: KIND_HORN,
+        });
+    }
+
     /// Push a circularly masked image sprite from the avatar atlas. `center`/`size` are physical
     /// pixels; `uv_rect` comes from [`avatar_uv`](Self::avatar_uv); `tint` multiplies the texels.
     pub fn push_sprite(
@@ -1566,6 +1598,15 @@ mod tests {
         assert_eq!(clamp_arc_progress(0.35), 0.35);
         assert_eq!(clamp_arc_progress(2.0), 1.0);
         assert_eq!(clamp_arc_progress(f32::NAN), 0.0);
+    }
+
+    #[test]
+    fn horn_instance_clamps_sweep_and_taper() {
+        let sweep: f32 = 1.5;
+        let taper: f32 = 4.0;
+        let content_rect = [sweep.clamp(-1.0, 1.0), taper.clamp(0.5, 3.0), 0.75, 0.03];
+        assert_eq!(content_rect[0], 1.0);
+        assert_eq!(content_rect[1], 3.0);
     }
 
     #[test]

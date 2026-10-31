@@ -136,6 +136,34 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
         return text;
     }
 
+    function targetNameplate(tutorial: CampaignRecord): TutorialAnchor | null {
+        const target = tutorial.target_nameplate;
+        return target && Number.isFinite(Number(target.x)) && Number.isFinite(Number(target.y))
+            ? {
+                  x: Number(target.x),
+                  y: Number(target.y),
+                  offscreen: Boolean(target.offscreen),
+                  cameraTracked: true,
+              }
+            : null;
+    }
+
+    function playerAnchor(tutorial: CampaignRecord): TutorialAnchor | null {
+        const player = tutorial.player;
+        return player && Number.isFinite(Number(player.x)) && Number.isFinite(Number(player.y))
+            ? { x: Number(player.x), y: Number(player.y), cameraTracked: true }
+            : null;
+    }
+
+    function fallbackAnchor(step: CampaignStep, tutorial: CampaignRecord): TutorialAnchor | null {
+        const target = step.marker?.target || step.trigger?.target || step.trigger?.recipient;
+        if (target && target !== "player") {
+            const targetAnchor = targetNameplate(tutorial);
+            if (targetAnchor) return targetAnchor;
+        }
+        return playerAnchor(tutorial) || targetNameplate(tutorial);
+    }
+
     function renderContext(
         step: CampaignStep,
         hud: CampaignRecord | null,
@@ -242,18 +270,22 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
             }
             if (hintKey && tr(hintKey) !== hintKey) {
                 context.hintOverride = tr(hintKey);
-                if (step.guide.gesture === "hover") context.gestureHint = context.hintOverride;
+                if (["drag", "hover"].includes(step.guide.gesture))
+                    context.gestureHint = context.hintOverride;
             }
         }
         if (step && step.type === "objective") {
             const guideAction = step.guide ? window.SOWCampaign.guideAction(step) : "";
-            if (!step.guide || guideAction === "upgrade_progress") {
+            if (
+                !step.guide ||
+                guideAction === "upgrade_progress" ||
+                step.trigger?.type === "structure_level"
+            ) {
                 context.statusOnly = true;
                 context.statusLabel =
-                    context.gestureLabel ||
-                    (step.trigger && step.trigger.type === "structure_level"
+                    step.trigger?.type === "structure_level"
                         ? tr("hud.building_in_progress")
-                        : tr(step.hint_key || step.body_key));
+                        : context.gestureLabel || tr(step.hint_key || step.body_key || step.title_key);
             }
         }
         return context;
@@ -269,6 +301,11 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
         const triggerType = step.trigger && step.trigger.type;
         if (!step.guide) {
             if (step.type !== "objective") return null;
+            const markerTarget = step.marker?.target || step.trigger?.target || step.trigger?.recipient;
+            if (markerTarget && markerTarget !== "player") {
+                const targetAnchor = targetNameplate(tutorial);
+                if (targetAnchor) return targetAnchor;
+            }
             if (triggerType === "structure_level") {
                 const buildingNames: Record<string, string> = { city_level: "City", port_level: "Port" };
                 const passiveKind = step.trigger.kind || buildingNames[String(triggerType)];
@@ -282,12 +319,7 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
                     return { x: Number(passiveBuilding.x), y: Number(passiveBuilding.y) };
                 }
             }
-            const passivePlayer = tutorial.player;
-            return passivePlayer &&
-                Number.isFinite(Number(passivePlayer.x)) &&
-                Number.isFinite(Number(passivePlayer.y))
-                ? { x: Number(passivePlayer.x), y: Number(passivePlayer.y), cameraTracked: true }
-                : null;
+            return fallbackAnchor(step, tutorial);
         }
         const guide = step.guide;
         const factionAction =
@@ -297,20 +329,7 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
             factionAction &&
             ["target_action", "nameplate", "player"].includes(guide.target)
         ) {
-            const factionNameplate = tutorial.target_nameplate;
-            if (
-                factionNameplate &&
-                Number.isFinite(Number(factionNameplate.x)) &&
-                Number.isFinite(Number(factionNameplate.y))
-            ) {
-                return {
-                    x: Number(factionNameplate.x),
-                    y: Number(factionNameplate.y),
-                    offscreen: Boolean(factionNameplate.offscreen),
-                    cameraTracked: true,
-                };
-            }
-            return null;
+            return targetNameplate(tutorial) || fallbackAnchor(step, tutorial);
         }
 
         if (guide.kind === "world" && guide.target === "upgrade_building") {
@@ -331,7 +350,7 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
                     Number.isFinite(Number(upgradeWaitPlayer.x)) &&
                     Number.isFinite(Number(upgradeWaitPlayer.y))
                     ? { x: Number(upgradeWaitPlayer.x), y: Number(upgradeWaitPlayer.y), cameraTracked: true }
-                    : null;
+                    : fallbackAnchor(step, tutorial);
             }
             return { x: Number(buildingAnchor.x), y: Number(buildingAnchor.y) };
         }
@@ -443,17 +462,12 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
             if (!result) {
                 const point = tutorial[guide.target];
                 if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y)))
-                    return null;
+                    return fallbackAnchor(step, tutorial);
                 result = { x: Number(point.x), y: Number(point.y) };
             }
         } else {
             if (guide.target === "map_transfer" && step.marker && !targetMapMenuOpen(step, hud)) {
-                const playerPoint = tutorial.player;
-                return playerPoint &&
-                    Number.isFinite(Number(playerPoint.x)) &&
-                    Number.isFinite(Number(playerPoint.y))
-                    ? { x: Number(playerPoint.x), y: Number(playerPoint.y) }
-                    : null;
+                return fallbackAnchor(step, tutorial);
             }
             const source = window.SOWCampaignView.resolveUiTarget(
                 guide.target,
@@ -461,7 +475,8 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
                 runtime.episodeId || undefined,
                 guideFacts,
             );
-            if (!source || source.matches(":disabled") || source.getClientRects().length === 0) return null;
+            if (!source || source.matches(":disabled") || source.getClientRects().length === 0)
+                return fallbackAnchor(step, tutorial);
             const spotlightPanel =
                 step.id === "boudica_transfer_send" && source.closest
                     ? (source.closest("#sow-hud-transfer") as HTMLElement | null)
@@ -470,7 +485,7 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
                 step.id === "boudica_transfer_send" &&
                 (!spotlightPanel || spotlightPanel.getClientRects().length === 0)
             )
-                return null;
+                return fallbackAnchor(step, tutorial);
             result = window.SOWCampaignView.resolveUiAnchor(source, spotlightPanel);
             if (
                 guide.target === "attack_ratio" &&
@@ -489,7 +504,7 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
                     Number(slider.value),
                     ratioTarget,
                 );
-                if (!result) return null;
+                if (!result) return fallbackAnchor(step, tutorial);
             }
         }
         if (guide.gesture === "drag" && guide.to) {
@@ -499,21 +514,23 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
                     !worldDestination ||
                     !Number.isFinite(Number(worldDestination.x)) ||
                     !Number.isFinite(Number(worldDestination.y))
-                )
-                    return null;
-                result.toX = Number(worldDestination.x);
-                result.toY = Number(worldDestination.y);
+                ) {
+                    // Keep the hand on the active objective when its optional drag path is missing.
+                } else {
+                    result.toX = Number(worldDestination.x);
+                    result.toY = Number(worldDestination.y);
+                }
             } else {
                 const destination = window.SOWCampaignView.resolveUiTarget(
                     guide.to,
                     document,
                     runtime.episodeId || undefined,
                 );
-                if (!destination || destination.matches(":disabled") || !destination.getClientRects().length)
-                    return null;
-                const targetAnchor = window.SOWCampaignView.resolveUiAnchor(destination);
-                result.toX = targetAnchor.x;
-                result.toY = targetAnchor.y;
+                if (destination && !destination.matches(":disabled") && destination.getClientRects().length) {
+                    const targetAnchor = window.SOWCampaignView.resolveUiAnchor(destination);
+                    result.toX = targetAnchor.x;
+                    result.toY = targetAnchor.y;
+                }
             }
         }
         return result;
