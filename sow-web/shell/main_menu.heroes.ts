@@ -1,5 +1,6 @@
 import {
     asset,
+    currentLeaderSelection,
     currentScreen,
     esc,
     leaderArtUrl,
@@ -26,6 +27,26 @@ const HEROES_ROTATION_COUNTDOWN_SECS = 4 * 24 * 60 * 60;
 
 function isWeeklyFreeRotation(leader: MenuLeader | null) {
     return !!leader && leader.available === true && leader.free_rotation === true && leader.owned === false;
+}
+
+export function isHeroSelectionQueueLocked(): boolean {
+    if (!menuUi.state) return false;
+    return !!(
+        menuUi.state.waiting ||
+        menuUi.state.ranked_search_active ||
+        menuUi.state.joined_lobby_id != null ||
+        menuUi.state.pending_lobby_id != null
+    );
+}
+
+export function heroLockBadgeSvg(): string {
+    return (
+        "<span class='sow-heroes__card-lock' aria-hidden='true'>" +
+        "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>" +
+        "<rect x='3' y='11' width='18' height='11' rx='2' ry='2'></rect>" +
+        "<path d='M7 11V7a5 5 0 0 1 10 0v4'></path>" +
+        "</svg></span>"
+    );
 }
 
 function heroesStatusLabel(leader: MenuLeader) {
@@ -131,16 +152,19 @@ function heroesFeaturedArt(slug: string) {
 function renderHeroesCard(leader: MenuLeader, activeId: string) {
     const selected = leader.id === activeId;
     const locked = leader.available === false;
+    const queueLocked = typeof isHeroSelectionQueueLocked === "function" && isHeroSelectionQueueLocked();
     const avatarUrl = asset("gameplay/avatars/" + leaderArtSlug(leader) + ".webp");
     return (
         "<button class='sow-heroes__card" +
         (selected ? " is-selected" : "") +
         (locked ? " is-locked" : "") +
+        (queueLocked ? " is-queue-locked" : "") +
         "' type='button' data-command='preview_leader' data-leader-id='" +
         esc(leader.id) +
         "' aria-pressed='" +
         selected +
         "'>" +
+        (queueLocked && typeof heroLockBadgeSvg === "function" ? heroLockBadgeSvg() : "") +
         "<span class='sow-heroes__card-art' style=\"background-image:url('" +
         esc(avatarUrl) +
         "')\"></span>" +
@@ -175,13 +199,16 @@ function renderRandomLeaderCard(selected: boolean) {
         !menuUi.heroesSearchQuery.trim() ||
         randomLeaderName().toLowerCase().indexOf(menuUi.heroesSearchQuery.trim().toLowerCase()) !== -1;
     if (!matchesSearch || menuUi.heroesRegionFilter !== "all") return "";
+    const queueLocked = typeof isHeroSelectionQueueLocked === "function" && isHeroSelectionQueueLocked();
     const avatarUrl = asset("gameplay/avatars/random.webp");
     return (
         "<button class='sow-heroes__card" +
         (selected ? " is-selected" : "") +
+        (queueLocked ? " is-queue-locked" : "") +
         "' type='button' data-command='preview_random_leader' aria-pressed='" +
         selected +
         "'>" +
+        (queueLocked && typeof heroLockBadgeSvg === "function" ? heroLockBadgeSvg() : "") +
         "<span class='sow-heroes__card-art' style=\"background-image:url('" +
         esc(avatarUrl) +
         "')\"></span>" +
@@ -245,11 +272,15 @@ function renderHeroesRegionDropdown() {
 function renderHeroesRoster(activeId: string, randomSelected: boolean) {
     const leaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
     const filtered = heroesRoster(leaders);
+    const queueLocked = typeof isHeroSelectionQueueLocked === "function" && isHeroSelectionQueueLocked();
+    const equippedSelection = typeof currentLeaderSelection === "function" ? currentLeaderSelection() : { selected_leader: null, prefer_random_leader: false };
+    const activeEquippedId = equippedSelection.selected_leader;
+    const activeEquippedRandom = !!equippedSelection.prefer_random_leader;
     const cards =
-        renderRandomLeaderCard(randomSelected) +
+        renderRandomLeaderCard(queueLocked ? activeEquippedRandom : randomSelected) +
         filtered
             .map(function (leader) {
-                return renderHeroesCard(leader, activeId);
+                return renderHeroesCard(leader, queueLocked ? activeEquippedId || "" : activeId);
             })
             .join("");
     return (
@@ -289,9 +320,6 @@ export function updateHeroesPreview() {
     const image = picture && picture.querySelector("img");
     const briefing = featured.querySelector("[data-hero-briefing]");
     const status = featured.querySelector<HTMLElement>("[data-hero-status]");
-    const confirm = featured.querySelector<HTMLButtonElement>(
-        "[data-command='confirm_leader'], [data-command='confirm_random_leader']",
-    );
     const locked = activeLeader.available === false;
     featured.classList.toggle("is-locked", locked);
     // prepareLeaderArt() warms the loader splash art (loader.js), not this
@@ -320,25 +348,27 @@ export function updateHeroesPreview() {
     updateHeroesRotationCountdown();
     const purchase = featured.querySelector("[data-hero-purchase]");
     if (purchase) purchase.innerHTML = randomSelected ? "" : renderLeaderPurchase(activeLeader);
-    if (confirm) {
-        confirm.disabled = locked;
-        confirm.setAttribute("aria-disabled", locked ? "true" : "false");
-        confirm.setAttribute("data-command", randomSelected ? "confirm_random_leader" : "confirm_leader");
-        confirm.dataset.leaderId = randomSelected ? "" : activeLeader.id;
-        confirm.firstChild!.nodeValue =
-            SOW_t(randomSelected ? "heroes.confirm_random_leader" : "heroes.confirm_leader", { name: "" }) +
-            " ";
-    }
+    const queueNotice = featured.querySelector<HTMLElement>("[data-hero-queue-notice]");
+    if (queueNotice) queueNotice.hidden = !isHeroSelectionQueueLocked();
+    const isQueueLocked = isHeroSelectionQueueLocked();
+    const equippedSelection = currentLeaderSelection();
+    const activeEquippedId = equippedSelection.selected_leader;
     const cards = panel.querySelectorAll<HTMLElement>("[data-command='preview_leader']");
     for (let i = 0; i < cards.length; i++) {
-        const selected = cards[i].dataset.leaderId === activeLeader.id;
+        const cardLeaderId = cards[i].dataset.leaderId;
+        const selected = isQueueLocked
+            ? cardLeaderId === activeEquippedId
+            : cardLeaderId === activeLeader.id;
         cards[i].classList.toggle("is-selected", selected);
         cards[i].setAttribute("aria-pressed", selected ? "true" : "false");
     }
     const randomCard = panel.querySelector("[data-command='preview_random_leader']");
     if (randomCard) {
-        randomCard.classList.toggle("is-selected", randomSelected);
-        randomCard.setAttribute("aria-pressed", randomSelected ? "true" : "false");
+        const selected = isQueueLocked
+            ? !!equippedSelection.prefer_random_leader
+            : randomSelected;
+        randomCard.classList.toggle("is-selected", selected);
+        randomCard.setAttribute("aria-pressed", selected ? "true" : "false");
     }
     const info = featured.querySelector<HTMLElement>("[data-command='open_hero_info']");
     if (info) {
@@ -474,15 +504,15 @@ export function renderHeroes() {
         renderHeroBriefing(activeRandom ? "random" : activeLeader, "selection", "sow-heroes-selected") +
         "</div><div class='sow-heroes__actions'><div data-hero-purchase>" +
         (activeRandom ? "" : renderLeaderPurchase(activeLeader)) +
-        "</div><button class='sow-menu__primary sow-heroes__confirm' type='button' data-command='" +
-        (activeRandom ? "confirm_random_leader" : "confirm_leader") +
-        "' data-leader-id='" +
-        (activeRandom ? "" : esc(activeLeader.id)) +
-        "'" +
-        (locked ? " disabled aria-disabled='true'" : "") +
+        "</div>" +
+        "<p class='sow-heroes__queue-notice' data-hero-queue-notice" +
+        (!isHeroSelectionQueueLocked() ? " hidden" : "") +
         ">" +
-        esc(SOW_t(activeRandom ? "heroes.confirm_random_leader" : "heroes.confirm_leader", { name: "" })) +
-        " <span>✓</span></button></div></div></section>" +
+        heroLockBadgeSvg() +
+        " <span>" +
+        esc(SOW_t("heroes.locked")) +
+        "</span></p>" +
+        "</div></div></section>" +
         "<section class='sow-heroes__roster' aria-label='" +
         esc(SOW_t("heroes.leader_list")) +
         "'><div class='sow-heroes__section-head'><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>" +

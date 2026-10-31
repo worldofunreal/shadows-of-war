@@ -51,13 +51,19 @@ test("public landing builds heroes, maps and videos from game data at publish ti
   );
   assert.match(updates, /href="https:\/\/discord\.gg\//);
   assert.match(updates, /href="https:\/\/t\.me\//);
-  for (const icon of ["discord", "telegram"]) {
+  assert.match(updates, /href="https:\/\/github\.com\/worldofunreal\/shadows-of-war"/);
+  for (const [icon, label] of [
+    ["discord", "Discord"],
+    ["telegram", "Telegram"],
+    ["github", "GitHub"],
+  ]) {
     assert.match(updates, new RegExp(`/assets/site/media/${icon}\\.svg`));
-    assert.match(updates, new RegExp(`aria-label="${icon === "discord" ? "Discord" : "Telegram"}"`));
+    assert.match(updates, new RegExp(`aria-label="${label}"`));
   }
   const footer = landingHtml.match(/<footer class="site-footer">([\s\S]*?)<\/footer>/)?.[1] ?? "";
   assert.equal((footer.match(/https:\/\/discord\.gg\/4mBM6zJyG/g) ?? []).length, 1);
   assert.equal((footer.match(/https:\/\/t\.me\/shadowsofwario/g) ?? []).length, 1);
+  assert.equal((footer.match(/https:\/\/github\.com\/worldofunreal\/shadows-of-war/g) ?? []).length, 1);
   assert.doesNotMatch(updates, /disabled|type="email"/);
 });
 
@@ -192,10 +198,11 @@ test("landing navigation retains the leader compendium and omits retired how-to-
   }
 });
 
-test("Discord and Telegram use labeled SVG links in every site header and footer", () => {
+test("Discord, Telegram, and GitHub use labeled SVG links in every site header and footer", () => {
   const pairs = [
     ["discord", "Discord", "https://discord.gg/4mBM6zJyG"],
     ["telegram", "Telegram", "https://t.me/shadowsofwario"],
+    ["github", "GitHub", "https://github.com/worldofunreal/shadows-of-war"],
   ];
   for (const [key, label, href] of pairs) {
     const icon = `/assets/site/media/${key}.svg`;

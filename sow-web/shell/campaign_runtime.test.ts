@@ -766,8 +766,7 @@ test("Boudica moves the city lesson after Suetonius without changing other campa
     );
     assert.equal(definition.steps.find((step) => step.id === "boudica_choose_city").body_key, undefined);
     const en = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
-    const cityPromptText =
-        en.match(/campaign_boudica_boudica_city_intro_body = "([^"]*)"/)?.[1] || "";
+    const cityPromptText = en.match(/campaign_boudica_boudica_city_intro_body = "([^"]*)"/)?.[1] || "";
     assert.equal(
         cityPromptText,
         "At last, we have land of our own. Give our people a home: build a new village.",
@@ -1045,6 +1044,7 @@ test("Boudica pauses the world for guided actions and the discovery scene", () =
             "boudica_alliance_dobunni_target",
             "boudica_alliance_request",
             "boudica_alliance_target",
+            "boudica_attack_roman_outpost",
             "boudica_camera_drag",
             "boudica_camera_home",
             "boudica_camera_hover",
@@ -1072,7 +1072,11 @@ test("Boudica pauses the world for guided actions and the discovery scene", () =
         assert.equal(step(id).pause_game, true, `${id} keeps the game paused`);
         assert.equal(step(id).camera_only, true, `${id} permits only camera input`);
     }
-    assert.equal(step("boudica_found_suetonius").pause_game, true, "the discovery scene stays paused until Home");
+    assert.equal(
+        step("boudica_found_suetonius").pause_game,
+        true,
+        "the discovery scene stays paused until Home",
+    );
     assert.equal(step("boudica_first_expansion").marker.target, "stonea");
     const unguidedFrontier = structuredClone(definition);
     delete unguidedFrontier.steps.find((candidate) => candidate.id === "boudica_first_expansion").marker;
@@ -1150,9 +1154,7 @@ test("Boudica pauses the world for guided actions and the discovery scene", () =
     assert.ok(
         campaign
             .validate(invalidCameraPause, roster)
-            .errors.some(
-                (issue) => issue.step === "boudica_zoom_out" && issue.field === "camera_only",
-            ),
+            .errors.some((issue) => issue.step === "boudica_zoom_out" && issue.field === "camera_only"),
         "campaign validation preserves camera input while the camera lesson is paused",
     );
     const missingFinalTarget = structuredClone(definition);
@@ -1177,7 +1179,11 @@ test("Boudica pauses the world for guided actions and the discovery scene", () =
     assert.equal(metStonea.step.type, "scene");
 
     for (const id of ["boudica_transfer_target", "boudica_transfer_choose", "boudica_transfer_send"])
-        assert.equal(step(id).pause_game, true, `${id} keeps the world steady while learning resource transfer`);
+        assert.equal(
+            step(id).pause_game,
+            true,
+            `${id} keeps the world steady while learning resource transfer`,
+        );
     assert.equal(step("boudica_transfer_send").paused_action, "send_resources_stay_paused");
     const transfer = campaign.create(definition, "boudica_transfer_send", roster);
     assert.equal(
@@ -1246,7 +1252,7 @@ test("Boudica pauses the world for guided actions and the discovery scene", () =
     assert.equal(upgrading.step.id, "boudica_city_upgrade_wait");
     assert.equal(upgrading.paused, false, "the upgrade's construction wait runs after upgrade acceptance");
     assert.equal(step("boudica_city_upgrade_wait").pause_game, undefined);
-    assert.equal(step("boudica_attack_roman_outpost").pause_game, undefined);
+    assert.equal(step("boudica_attack_roman_outpost").pause_game, true);
     assert.equal(step("boudica_first_expansion").pause_game, undefined);
     assert.equal(step("boudica_first_contact").pause_game, undefined);
     assert.equal(step("boudica_alliance_wait").pause_game, undefined);
@@ -1685,6 +1691,8 @@ test("campaign negotiation uses the canonical HUD gold balance, not player-list 
     async function chooseAtBalance(balance) {
         const commands = [],
             root = { hidden: true, isConnected: false };
+        const timers = [];
+        let timerId = 0;
         let viewOptions, rendered;
         const document = {
             body: {
@@ -1717,6 +1725,15 @@ test("campaign negotiation uses the canonical HUD gold balance, not player-list 
         let advanced;
         const window = {
             addEventListener() {},
+            setTimeout(callback, delay) {
+                const timer = { id: ++timerId, callback, delay, cancelled: false };
+                timers.push(timer);
+                return timer.id;
+            },
+            clearTimeout(id) {
+                const timer = timers.find((item) => item.id === id);
+                if (timer) timer.cancelled = true;
+            },
             SOW_menu_command(message) {
                 commands.push(JSON.parse(message));
             },
@@ -1725,7 +1742,7 @@ test("campaign negotiation uses the canonical HUD gold balance, not player-list 
                 UI_TARGETS: {},
                 zoomInputMode: () => "wheel",
                 create: () => ({
-                    state: { choices: {} },
+                    state: { id: "terms", choices: {} },
                     update: () => model,
                     view: () => model,
                     advance(choiceId) {
@@ -1785,6 +1802,13 @@ test("campaign negotiation uses the canonical HUD gold balance, not player-list 
         });
         await new Promise(setImmediate);
         const displayed = rendered.choices[0];
+        assert.equal(
+            commands.some((command) => command.type === "focus_world"),
+            false,
+        );
+        const cameraTimer = timers.find((timer) => !timer.cancelled && timer.delay === 3250);
+        assert.ok(cameraTimer, "the reaction focus uses the shared camera delay");
+        cameraTimer.callback();
         viewOptions.onChoice("pay");
         return { commands, displayed, advanced };
     }
@@ -2538,7 +2562,11 @@ test("Snettisham refuse goes straight to its reply while accept waits for the Sn
     assert.equal(refuse.advance("refuse", "reaction-contact_snettisham@snettisham", true), true);
     const refused = refuse.update(contact, {});
     assert.equal(refused.step.id, "boudica_third_contact");
-    assert.equal(refused.exchange.speaker, "snettisham", "the reply plays while the next objective is active");
+    assert.equal(
+        refused.exchange.speaker,
+        "snettisham",
+        "the reply plays while the next objective is active",
+    );
 
     const accept = campaign.create(definition, "boudica_build_city", roster, () => now);
     accept.update(beforeBuild, {});
@@ -2564,7 +2592,11 @@ test("Snettisham refuse goes straight to its reply while accept waits for the Sn
     }
     const accepted = accept.update({ ...contact, faction_structure_levels: { snettisham: { city: 1 } } }, {});
     assert.equal(accepted.step.id, "boudica_third_contact");
-    assert.equal(accepted.exchange.speaker, "snettisham", "the acceptance emote does not hold the next objective");
+    assert.equal(
+        accepted.exchange.speaker,
+        "snettisham",
+        "the acceptance emote does not hold the next objective",
+    );
 });
 
 test("Boudica queues both Iceni contacts after the build order without pausing construction", () => {
@@ -2653,7 +2685,11 @@ test("an emote-only scene activates the next objective while its lines play", ()
     playOut(3300);
     const after = machine.update(contact, {});
     assert.equal(after.exchange, undefined);
-    assert.equal(after.step.id, "boudica_third_contact", "the active objective stays in place after the emotes");
+    assert.equal(
+        after.step.id,
+        "boudica_third_contact",
+        "the active objective stays in place after the emotes",
+    );
     assert.deepEqual(spoken, ["snettisham", "boudica"]);
 });
 
@@ -2669,8 +2705,7 @@ test("active-objective exchanges wait for new contact, honor the reply pause, an
             !(
                 (["contact", "pre_defeat"].includes(reaction.when.type) &&
                     romanTargets.includes(reaction.when.target)) ||
-                (reaction.when.type === "timer" &&
-                    romanTargets.includes(reaction.exchange?.[0]?.speaker))
+                (reaction.when.type === "timer" && romanTargets.includes(reaction.exchange?.[0]?.speaker))
             ),
     );
     definition.speakers.colonia_veterans = { faction: "colonia_veterans" };
@@ -3122,7 +3157,11 @@ test("a scripted emote that never receives a native render acknowledgement is sk
         "dialogue",
         "an unacknowledged emote never opens a pausing modal",
     );
-    assert.equal(fallback.step.id, "live", "the unacknowledged emote is skipped without blocking the next objective");
+    assert.equal(
+        fallback.step.id,
+        "live",
+        "the unacknowledged emote is skipped without blocking the next objective",
+    );
 });
 
 test("the three Roman encounters speak once on their active objective and release that defeat after the last word", () => {
@@ -3156,8 +3195,7 @@ test("the three Roman encounters speak once on their active objective and releas
             !(
                 (["contact", "pre_defeat"].includes(reaction.when.type) &&
                     romanTargets.includes(reaction.when.target)) ||
-                (reaction.when.type === "timer" &&
-                    romanTargets.includes(reaction.exchange?.[0]?.speaker))
+                (reaction.when.type === "timer" && romanTargets.includes(reaction.exchange?.[0]?.speaker))
             ),
     );
     const textKeys = new Map();
@@ -3307,10 +3345,7 @@ test("Stonea contact opens the zoom briefing and defers friendship emotes until 
         ["stonea", "boudica", "boudica"],
     );
     assert.equal(friendship.exchange[2].presentation, "dialogue");
-    assert.equal(
-        friendship.exchange[2].body_key,
-        "tutorial.campaign_boudica_boudica_city_intro_body",
-    );
+    assert.equal(friendship.exchange[2].body_key, "tutorial.campaign_boudica_boudica_city_intro_body");
 
     const spoken = [];
     const machine = campaign.create(definition, "boudica_first_contact", roster, undefined, {
@@ -3431,7 +3466,7 @@ test("Roman Outpost taunts leave a three-second gap and loop without overlapping
         return machine.update(facts, {});
     };
     assert.equal(update(0).exchange.emote_text_key, opening);
-    assert.equal(machine.view().paused, false, "the opening emote does not pause the attack objective");
+    assert.equal(machine.view().paused, true, "the world stays paused until the Outpost is attacked");
     assert.equal(update(3000).exchange_phase, "gap");
     assert.equal(
         update(3000).timer_remaining_ms,
@@ -3797,7 +3832,11 @@ test("required neutral allies hint at alliance with one emote", () => {
         const machine = campaign.create(definition, gate, roster, () => now, {
             onExchangeLine: () => true,
         });
-        assert.equal(machine.update({}, {}).paused, true, "the alliance guide pauses while the player learns the action");
+        assert.equal(
+            machine.update({}, {}).paused,
+            true,
+            "the alliance guide pauses while the player learns the action",
+        );
         now = 500;
         const hint = machine.update({}, {});
         assert.equal(hint.exchange.speaker, speaker);
@@ -4207,17 +4246,17 @@ test("Boudica and Stonea exchange emotes, then show the paused City prompt after
     assert.equal(view.paused, true, "the camera lesson stays paused until Home is pressed");
 
     view = machine.update(facts, { hud_center_camera: 1 });
-    assert.equal(view.step.id, "boudica_choose_city", "the guided City objective is ready behind the exchange");
+    assert.equal(
+        view.step.id,
+        "boudica_choose_city",
+        "the guided City objective is ready behind the exchange",
+    );
     assert.equal(view.reaction, "alliance_stonea");
     assert.equal(view.exchange.speaker, "stonea");
     assert.equal(view.paused, false, "the game resumes during the friendship exchange");
     assert.deepEqual(spoken, [["stonea", "greet"]]);
 
-    for (
-        now = 100;
-        now < 10000 && view.exchange.presentation !== "dialogue";
-        now += 100
-    )
+    for (now = 100; now < 10000 && view.exchange.presentation !== "dialogue"; now += 100)
         view = machine.update(facts, { hud_center_camera: 1 });
     assert.deepEqual(spoken, [
         ["stonea", "greet"],

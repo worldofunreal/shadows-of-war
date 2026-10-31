@@ -439,7 +439,12 @@ export function validateSteps(context: CampaignValidationContext) {
                     nextTrigger?.type === "ui" &&
                     nextTrigger.action === "map_transfer");
             const attackRatioLesson = triggerType === "ui" && step.trigger.action === "attack_ratio";
-            const guidedLesson = cameraLesson || allianceLesson || transferLesson || attackRatioLesson;
+            const attackLesson =
+                triggerType === "attack" &&
+                step.guide?.kind === "world" &&
+                step.guide.target === "nameplate";
+            const guidedLesson =
+                cameraLesson || allianceLesson || transferLesson || attackRatioLesson || attackLesson;
             const mayPause = constructionAction || upgradeAction || guidedLesson;
             if (step.pause_game === true && !mayPause)
                 issue(step, "pause_game", "Boudica pauses only while a guided action needs the player's attention.");

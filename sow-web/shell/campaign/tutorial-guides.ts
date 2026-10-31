@@ -44,7 +44,12 @@ interface TutorialGuideDependencies {
     window: Window;
     document: Document;
     runtime: TutorialGuideState;
-    send(type: string, fields?: CampaignRecord): boolean;
+    scheduleCameraMove(
+        key: string,
+        stepId: string,
+        fields: CampaignRecord,
+        isCurrent?: () => boolean,
+    ): boolean;
     tr(key: string): string;
     hasText(key: string): boolean;
     stepTextKey(step: CampaignStep, suffix: string): string;
@@ -52,7 +57,8 @@ interface TutorialGuideDependencies {
 }
 
 export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
-    const { window, document, runtime, send, tr, hasText, stepTextKey, zoomMode } = dependencies;
+    const { window, document, runtime, scheduleCameraMove, tr, hasText, stepTextKey, zoomMode } =
+        dependencies;
     const HOVER_TARGET_RADIUS = TUTORIAL_HOVER_RADIUS;
 
     function targetPlayer(step: CampaignRecord | null, hud: CampaignRecord | null | undefined) {
@@ -638,17 +644,24 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
         let from = campaignPlayer(hud, camera.from || "player");
         if (!onMap(from)) from = to;
         if (
-            send("focus_world", {
-                x: Number(to.centroid_x) + 0.5,
-                y: Number(to.centroid_y) + 0.5,
-                shot: {
-                    kind: camera.shot,
-                    from_x: Number(from.centroid_x) + 0.5,
-                    from_y: Number(from.centroid_y) + 0.5,
-                    seconds: Number.isFinite(camera.seconds) ? camera.seconds : 3,
-                    ...(camera.machinima === true ? { machinima: true } : {}),
+            scheduleCameraMove(
+                "shot:" + step.id,
+                step.id,
+                {
+                    x: Number(to.centroid_x) + 0.5,
+                    y: Number(to.centroid_y) + 0.5,
+                    shot: {
+                        kind: camera.shot,
+                        from_x: Number(from.centroid_x) + 0.5,
+                        from_y: Number(from.centroid_y) + 0.5,
+                        seconds: Number.isFinite(camera.seconds) ? camera.seconds : 3,
+                        ...(camera.machinima === true ? { machinima: true } : {}),
+                    },
                 },
-            })
+                function () {
+                    return onMap(campaignPlayer(runtime.latestHud, camera.to));
+                },
+            )
         ) {
             runtime.cameraShotStepId = step.id;
         }

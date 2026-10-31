@@ -89,7 +89,7 @@ function renderSettingsLink(
     url: string | null | undefined,
     key: string,
     className?: string,
-    socialIcon?: "discord" | "telegram",
+    socialIcon?: "discord" | "telegram" | "github",
 ) {
     if (!url) return "";
     const content =
@@ -155,7 +155,12 @@ function renderSettingsLinks() {
             "sow-menu__settings-link--social",
             "telegram",
         ) +
-        renderSettingsLink(sourceUrl, "menu.source_code", "sow-menu__source-link") +
+        renderSettingsLink(
+            sourceUrl,
+            "menu.source_code",
+            "sow-menu__source-link sow-menu__settings-link--social",
+            "github",
+        ) +
         renderSettingsLink(licenseUrl, "menu.license", "sow-menu__license-link") +
         androidOssLicenses
     );

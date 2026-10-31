@@ -259,31 +259,48 @@ test("confirmed leader choice stays current until the published state catches up
     assert.equal(context.currentLeaderSelection().selected_leader, "SunTzu");
 });
 
-test("leader confirmation and reopening use the staged choice, not the previous snapshot", () => {
+test("leader selection is instant, debounced, queue-locked, and reopening uses the staged choice", () => {
+    const previewConcreteStart = shellSource.indexOf('if (command === "preview_leader")');
+    const previewRandomStart = shellSource.indexOf('if (command === "preview_random_leader")');
     const randomStart = shellSource.indexOf('if (command === "confirm_random_leader")');
     const concreteStart = shellSource.indexOf('if (command === "confirm_leader")', randomStart);
     const concreteEnd = shellSource.indexOf("/* POKI_SHARED_STORE_UNLOCK_BEGIN */", concreteStart);
     const pickerStart = shellSource.indexOf('if (command === "open_leader_picker")');
     const navStart = shellSource.indexOf('if (command === "main_nav")');
     const navEnd = shellSource.indexOf('if (command === "open_leader_picker")', navStart);
+    assert.ok(previewConcreteStart >= 0 && previewRandomStart > previewConcreteStart);
     assert.ok(randomStart >= 0 && concreteStart > randomStart && concreteEnd > concreteStart);
     assert.ok(pickerStart >= 0 && navStart >= 0 && navEnd > navStart);
 
-    const randomConfirm = shellSource.slice(randomStart, concreteStart);
-    const concreteConfirm = shellSource.slice(concreteStart, concreteEnd);
+    const previewConcrete = shellSource.slice(previewConcreteStart, previewRandomStart);
+    const previewRandom = shellSource.slice(previewRandomStart, randomStart);
     const pickerOpen = shellSource.slice(
         pickerStart,
         shellSource.indexOf('if (command === "toggle_dropdown")', pickerStart),
     );
     const heroesNavigation = shellSource.slice(navStart, navEnd);
-    assert.match(randomConfirm, /stageLeaderSelection\(true, null\);\s*send\("set_random_leader"\)/);
-    assert.doesNotMatch(randomConfirm, /leader_id/, "Random must not carry a previous concrete leader ID");
+
     assert.match(
-        concreteConfirm,
-        /stageLeaderSelection\(false, leaderId\);\s*send\("set_leader", \{ leader_id: leaderId \}\)/,
+        previewConcrete,
+        /!isHeroSelectionQueueLocked\(\)/,
+        "Concrete selection must respect queue lock",
     );
-    assert.match(randomConfirm, /menuUi\.tempSelectedLeader = null;\s*menuUi\.tempSelectedRandom = false;/);
-    assert.match(concreteConfirm, /menuUi\.tempSelectedLeader = null;\s*menuUi\.tempSelectedRandom = false;/);
+    assert.match(
+        previewConcrete,
+        /stageLeaderSelection\(false, leaderId\);\s*scheduleLeaderPersist\(false, leaderId\);/,
+    );
+
+    assert.match(
+        previewRandom,
+        /!isHeroSelectionQueueLocked\(\)/,
+        "Random selection must respect queue lock",
+    );
+    assert.match(
+        previewRandom,
+        /stageLeaderSelection\(true, null\);\s*scheduleLeaderPersist\(true, null\);/,
+    );
+    assert.doesNotMatch(previewRandom, /leader_id/, "Random must not carry a previous concrete leader ID");
+
     assert.match(pickerOpen, /currentLeaderSelection\(\)/);
     assert.match(
         heroesNavigation,
@@ -435,6 +452,7 @@ test("settings social links include SVGs and preserve web and Android link behav
     for (const [url, key, icon] of [
         ["https://discord.gg/4mBM6zJyG", "menu.discord", "discord"],
         ["https://t.me/shadowsofwario", "menu.telegram", "telegram"],
+        ["https://github.com/worldofunreal/shadows-of-war/tree/test", "menu.source_code", "github"],
     ]) {
         const socialClass = "sow-menu__settings-link--social";
         const image = `<img class='sow-menu__settings-social-icon' src='/assets/site/media/${icon}.svg' alt='' aria-hidden='true'>`;
@@ -448,6 +466,10 @@ test("settings social links include SVGs and preserve web and Android link behav
         assert.ok(androidLink.includes(`${image}${key}`));
         android = false;
     }
+    assert.match(
+        surfacesSource,
+        /renderSettingsLink\(\s*sourceUrl,\s*"menu\.source_code",[\s\S]*?"github"\s*,?\s*\)/,
+    );
 });
 
 test("language dropdowns keep their width and placement inside the viewport", () => {
@@ -1296,6 +1318,23 @@ test("skill icons stay beside full hero details and out of compact avatar cards"
         /menuUi\.state!\.prefer_random_leader \? "random" : leaderById\(menuUi\.state!\.selected_leader\)/,
     );
     assert.match(home, /renderHeroBriefing\(leader, "home", "sow-home-selected"\)/);
+});
+
+test("hero cards show lock badge and queue notice during matchmaking and omit confirm button", () => {
+    const fullStart = heroesSource.indexOf("export function renderHeroes()");
+    const full = heroesSource.slice(fullStart);
+    assert.doesNotMatch(full, /class='[^']*sow-heroes__confirm/);
+    assert.match(full, /data-hero-queue-notice/);
+
+    const cardStart = heroesSource.indexOf("function renderHeroesCard");
+    const cardEnd = heroesSource.indexOf("function randomLeaderName", cardStart);
+    const card = heroesSource.slice(cardStart, cardEnd);
+    assert.match(card, /isHeroSelectionQueueLocked\(\)/);
+    assert.match(card, /is-queue-locked/);
+    assert.match(card, /heroLockBadgeSvg\(\)/);
+
+    assert.match(profileCss, /\.sow-heroes__card-lock\s*\{/);
+    assert.match(profileCss, /\.sow-heroes__card\.is-queue-locked:not\(\.is-selected\)/);
 });
 
 test("hero selection stacks the skill below identity and the home briefing stays behind controls and hides in portrait", () => {

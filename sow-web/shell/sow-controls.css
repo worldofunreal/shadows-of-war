@@ -376,20 +376,9 @@ html[data-locale-script="cjk"] .sow-control-dropdown__option {
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .sow-analytics-consent__button:focus-visible,
-.sow-analytics-consent__policy:focus-visible,
-.sow-cookie-settings-link:focus-visible {
+.sow-analytics-consent__policy:focus-visible {
   outline: 2px solid var(--sow-control-accent-bright);
   outline-offset: 3px;
-}
-.sow-cookie-settings-link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--sow-control-accent-bright);
-  cursor: pointer;
-  font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 .sow-analytics-consent--game {
   inset-inline-start: 50%;

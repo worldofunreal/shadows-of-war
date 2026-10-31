@@ -53,7 +53,14 @@ function createTutorialGuides(options: CampaignRecord = {}) {
         window,
         document,
         runtime,
-        send: options.send || (() => true),
+        scheduleCameraMove: (
+            _key: string,
+            _stepId: string,
+            fields: CampaignRecord,
+            isCurrent?: () => boolean,
+        ) =>
+            Boolean(isCurrent ? isCurrent() : true) &&
+            Boolean((options.send || (() => true))("focus_world", fields)),
         tr: options.tr || ((key: string) => key),
         hasText: options.hasText || (() => false),
         stepTextKey: options.stepTextKey || ((step: CampaignRecord, suffix: string) => step.id + suffix),
@@ -2591,6 +2598,19 @@ test("tutorial and HUD scripts look up only elements their own markup still crea
 test("a marked campaign decision smoothly focuses its player target once on entry", async () => {
     const commands = [],
         root = { hidden: true, isConnected: false };
+    const timers = [];
+    let timerId = 0;
+    const timerApi = {
+        setTimeout(callback, delay) {
+            const timer = { id: ++timerId, callback, delay, cancelled: false };
+            timers.push(timer);
+            return timer.id;
+        },
+        clearTimeout(id) {
+            const timer = timers.find((item) => item.id === id);
+            if (timer) timer.cancelled = true;
+        },
+    };
     const model = {
         step: { id: "final_choice", type: "choice", marker: { target: "player" } },
         paused: true,
@@ -2613,6 +2633,7 @@ test("a marked campaign decision smoothly focuses its player target once on entr
     };
     const window = {
         addEventListener() {},
+        ...timerApi,
         SOW_menu_command(message) {
             commands.push(JSON.parse(message));
         },
@@ -2621,7 +2642,7 @@ test("a marked campaign decision smoothly focuses its player target once on entr
             UI_TARGETS: {},
             zoomInputMode: () => "wheel",
             create: () => ({
-                state: { choices: {} },
+                state: { id: "final_choice", choices: {} },
                 update: () => model,
                 view: () => model,
                 advance: () => true,
@@ -2655,6 +2676,13 @@ test("a marked campaign decision smoothly focuses its player target once on entr
     update();
     await new Promise(setImmediate);
     update();
+    assert.equal(
+        commands.some((command) => command.type === "focus_world"),
+        false,
+    );
+    const focusTimer = timers.find((timer) => !timer.cancelled && timer.delay === 3250);
+    assert.ok(focusTimer, "the marker focus waits for the shared camera delay");
+    focusTimer.callback();
     const focuses = commands.filter((command) => command.type === "focus_world");
     assert.equal(focuses.length, 1, JSON.stringify(commands));
     assert.deepEqual([focuses[0].x, focuses[0].y], [12.5, 34.5]);
@@ -2663,6 +2691,19 @@ test("a marked campaign decision smoothly focuses its player target once on entr
 test("a narrated scene films its camera shot once, from the speaker to its subject", async () => {
     const commands = [],
         root = { hidden: true, isConnected: false };
+    const timers = [];
+    let timerId = 0;
+    const timerApi = {
+        setTimeout(callback, delay) {
+            const timer = { id: ++timerId, callback, delay, cancelled: false };
+            timers.push(timer);
+            return timer.id;
+        },
+        clearTimeout(id) {
+            const timer = timers.find((item) => item.id === id);
+            if (timer) timer.cancelled = true;
+        },
+    };
     const model = {
         step: { id: "march", type: "scene", camera: { shot: "link", from: "player", to: "rome" } },
         paused: true,
@@ -2682,6 +2723,7 @@ test("a narrated scene films its camera shot once, from the speaker to its subje
     };
     const window = {
         addEventListener() {},
+        ...timerApi,
         SOW_menu_command(message) {
             commands.push(JSON.parse(message));
         },
@@ -2690,7 +2732,7 @@ test("a narrated scene films its camera shot once, from the speaker to its subje
             UI_TARGETS: {},
             zoomInputMode: () => "wheel",
             create: () => ({
-                state: { choices: {} },
+                state: { id: "march", choices: {} },
                 update: () => model,
                 view: () => model,
                 advance: () => true,
@@ -2732,6 +2774,13 @@ test("a narrated scene films its camera shot once, from the speaker to its subje
     update();
     await new Promise(setImmediate);
     update();
+    assert.equal(
+        commands.some((command) => command.type === "focus_world"),
+        false,
+    );
+    const shotTimer = timers.find((timer) => !timer.cancelled && timer.delay === 3250);
+    assert.ok(shotTimer, "the authored shot uses the shared camera delay");
+    shotTimer.callback();
     const shots = commands.filter((command) => command.type === "focus_world");
     assert.equal(shots.length, 1, JSON.stringify(commands));
     assert.deepEqual(shots[0], {
@@ -2846,6 +2895,7 @@ test("a compact campaign guide scrolls a dock target into view once per step", (
         runtime: { episodeId: "episode" },
         window: { SOWCampaignView: { resolveUiTarget: () => target } },
         document: {},
+        scheduleCameraMove: () => true,
     });
     const step = { id: "place_factory", guide: { kind: "ui", target: "dock_factory" } };
     revealGuidedUiTarget(step);
@@ -3030,6 +3080,7 @@ test("tutorial camera anchors and paused build guides publish current map coordi
             },
         },
         document: {},
+        scheduleCameraMove: () => true,
     });
     assert.deepEqual(
         JSON.parse(
@@ -3051,6 +3102,7 @@ test("tutorial camera anchors and paused build guides publish current map coordi
     const missingControlGuides = createTutorialGuides({
         window: { SOWCampaignView: { resolveUiTarget: () => null } },
         document: {},
+        scheduleCameraMove: () => true,
     });
     const waitingAlliance = {
         id: "alliance_wait",
@@ -3197,6 +3249,7 @@ test("a UI step uses its configured target and device-specific hand labels", () 
         const { renderContext } = createTutorialGuides({
             document: { documentElement: { dir: "ltr" } },
             window: { SOWCampaign: campaign },
+            scheduleCameraMove: () => true,
             zoomMode: () => mode,
             stepTextKey: (candidate, suffix) => definition.text_namespace + candidate.id + suffix,
             hasText: (key: string) => Object.hasOwn(translations, key),
@@ -3457,6 +3510,7 @@ test("campaign tap guides use shared action labels and localized fallback", () =
         const { renderContext } = createTutorialGuides({
             document: { documentElement: { dir: "ltr" } },
             window: { SOWCampaign: campaign },
+            scheduleCameraMove: () => true,
             zoomMode: () => mode,
             stepTextKey: (candidate, suffix) => "tutorial." + candidate.id + suffix,
             hasText: () => false,

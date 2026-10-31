@@ -236,6 +236,9 @@ impl SowApp {
     }
 
     pub(crate) fn try_attack_at(&mut self, x: f64, y: f64) -> bool {
+        if self.ui.tutorial_waiting_for_first_attack {
+            return self.try_tutorial_campaign_nameplate_attack(x, y);
+        }
         if self.ui.tutorial_camera_only
             || self.ui.observing
             || self.ui.app.phase != crate::ClientPhase::Playing
@@ -275,6 +278,10 @@ impl SowApp {
     }
 
     pub(crate) fn handle_map_click(&mut self, x: f64, y: f64) {
+        if self.ui.tutorial_waiting_for_first_attack {
+            self.try_tutorial_campaign_nameplate_attack(x, y);
+            return;
+        }
         if self.ui.tutorial_camera_only {
             return;
         }
@@ -413,7 +420,7 @@ impl SowApp {
     }
 
     pub(crate) fn open_map_context_menu(&mut self, x: f64, y: f64) {
-        if self.ui.tutorial_camera_only {
+        if self.ui.tutorial_camera_only || self.ui.tutorial_waiting_for_first_attack {
             return;
         }
         if self.ui.app.phase != crate::ClientPhase::Playing {
@@ -803,7 +810,7 @@ impl SowApp {
         tile_idx: u32,
         action: MapMenuAction,
     ) {
-        if self.ui.tutorial_camera_only {
+        if self.ui.tutorial_camera_only || self.ui.tutorial_waiting_for_first_attack {
             return;
         }
         let Some(menu) = self.input.map_context_menu else {
