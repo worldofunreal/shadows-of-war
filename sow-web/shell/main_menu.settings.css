@@ -94,6 +94,12 @@
   color: var(--sow-accent-bright);
   transform: translateY(-1px);
 }
+.sow-menu__settings-social-icon {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin-inline-end: 8px;
+}
 
 .sow-menu__settings-account {
   display: flex;

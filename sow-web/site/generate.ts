@@ -16,7 +16,7 @@ type Leader = { id: string; artSlug: string; region: string; wikipedia: string |
 
 export async function publish(
   out: string,
-  input: { leaders: Leader[]; pages: string[]; englishOnly?: string[] },
+  input: { leaders: Leader[]; pages: string[]; englishOnly?: string[]; biographies: { leaders: Record<string, Record<string, any>> } },
   source = import.meta.dir,
 ) {
   const { leaders } = input;
@@ -25,7 +25,7 @@ export async function publish(
     return page.slice(0, -"index.html".length);
   });
   const registry = JSON.parse(await read(join(out, "locales/index.json")));
-  const biographies = JSON.parse(await read(join(source, "leader-bios.json"))).leaders;
+  const biographies = input.biographies.leaders;
   await writeFile(join(out, "llms.txt"), await read(join(source, "llms.txt")));
   const languages: { code: string; name: string }[] = registry.languages;
   const routes = [...bases, "leaders/", ...leaders.map((h) => `leaders/${h.id}/`)];
@@ -111,6 +111,7 @@ export async function publish(
     for (const h of leaders) {
       const bio = biographies[code]?.[h.id];
       const historyLength =
+        (bio?.highlight ?? "").length +
         (bio?.intro ?? []).join("").length +
         (bio?.sections ?? []).flatMap((section: any) => section.paragraphs ?? []).join("").length;
       if (
@@ -140,7 +141,9 @@ export async function publish(
       if (leader) {
         const f = fields(leader);
         const bio = biographies[code][leader.id];
-        const sourceNote = bio.sources?.length
+        const sourceNote = bio.isSaga
+          ? `<p class="leader-history-source">${escape(bio.sourceNote)}</p>`
+          : bio.sources?.length
           ? `<p class="leader-history-source"><strong>${escape(t("site.historical_reference"))}</strong> ${bio.sources.map((source: { title: string; url: string }) => `<a href="${escape(source.url)}" rel="noopener noreferrer" target="_blank">${escape(source.title)}</a>`).join(" · ")}</p>`
           : (() => {
               const attributionParts = t("site.wikipedia_excerpt").split("{article}");
@@ -148,25 +151,28 @@ export async function publish(
               return `<p class="leader-history-source">${escape(attributionParts[0])}<a href="${escape(bio.url)}" rel="noopener noreferrer" target="_blank">${escape(bio.title)}</a>${escape(attributionParts[1])} <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener noreferrer" target="_blank">CC BY-SA 4.0</a>.</p>`;
             })();
         title = `${f.name} — ${f.civilization} | Shadows of War`;
-        description = `${f.historical}. ${bio.intro[0]}`.slice(0, 160).trim();
+        description = `${f.historical}. ${bio.highlight ?? bio.intro[0]}`.slice(0, 160).trim();
         const articleParagraphs = (paragraphs: string[]) =>
           paragraphs.map((paragraph) => `<p>${escape(paragraph)}</p>`).join("");
         const chapters = bio.sections
           .map(
             (section: { title: string; paragraphs: string[] }, index: number) =>
-              `<section class="leader-history-chapter" id="leader-history-${index + 1}" lang="${escape(bio.lang)}" dir="auto"><h2>${escape(section.title)}</h2>${articleParagraphs(section.paragraphs)}</section>`,
+              `<section class="leader-history-chapter" id="leader-history-${index + 1}" lang="${escape(bio.lang)}" dir="auto"><h2>${escape(section.title)}</h2>${articleParagraphs(section.paragraphs)}${section.evidence ? `<p class="leader-history-evidence"><strong>${escape(bio.evidenceLabel)}</strong> ${escape(section.evidence)}</p>` : ""}${section.sources?.length ? `<p class="leader-chapter-citations"><strong>${escape(bio.chapterSourcesLabel)}</strong> ${section.sources.map((source: { title: string; url: string }) => `<a href="${escape(source.url)}" rel="noopener noreferrer" target="_blank">${escape(source.title)}</a>`).join(" · ")}</p>` : ""}</section>`,
           )
           .join("");
         const contents = [
-          `<li><a href="#historical-context">${escape(t("site.historical_context"))}</a></li>`,
+          `<li><a href="#historical-context">${escape(bio.isSaga ? bio.highlightLabel : t("site.historical_context"))}</a></li>`,
           ...bio.sections.map(
             (section: { title: string }, index: number) =>
               `<li><a href="#leader-history-${index + 1}">${escape(section.title)}</a></li>`,
           ),
         ].join("");
+        const introduction = bio.isSaga
+          ? `<section class="leader-history-intro leader-history-highlight" id="historical-context" lang="${escape(bio.lang)}"><p class="eyebrow">${escape(bio.highlightLabel)}</p><p>${escape(bio.highlight)}</p></section>`
+          : `<section class="leader-history-intro" id="historical-context" lang="${escape(bio.lang)}" dir="auto"><h2>${escape(t("site.historical_context"))}</h2>${articleParagraphs(bio.intro)}</section>`;
         const content = `<article class="leader-encyclopedia"><div class="container"><nav class="guide-breadcrumbs" aria-label="${escape(t("site.main_navigation"))}"><a href="/">${escape(t("site.nav_home"))}</a><span aria-hidden="true">/</span><a href="/leaders/">${escape(t("site.leaders"))}</a><span aria-hidden="true">/</span><span aria-current="page">${escape(f.name)}</span></nav></div>
 <header class="container leader-cover"><picture class="leader-cover-art"><source media="(max-width: 700px)" srcset="/assets/shell/leaders/${leader.artSlug}_mobile.webp"><img src="${image}" alt="${escape(f.name)}" width="1600" height="900" fetchpriority="high"></picture><div class="leader-cover-shade" aria-hidden="true"></div><div class="leader-cover-copy"><p class="leader-cover-meta">${escape(f.civilization)} <span aria-hidden="true">·</span> ${escape(t(`heroes.${leader.region}`))}</p><h1>${escape(f.name)}</h1><p class="leader-cover-historical">${escape(f.historical)}</p><a class="button button-orange" href="/play/">${escape(t("site.play_now"))}</a></div></header>
-<div class="container leader-reading-layout"><nav class="leader-toc" aria-label="${escape(t("site.page_contents"))}"><p>${escape(t("site.page_contents"))}</p><ol>${contents}</ol></nav><div class="leader-history"><section class="leader-history-intro" id="historical-context" lang="${escape(bio.lang)}" dir="auto"><h2>${escape(t("site.historical_context"))}</h2>${articleParagraphs(bio.intro)}</section>${chapters}${sourceNote}</div>
+<div class="container leader-reading-layout"><nav class="leader-toc" aria-label="${escape(t("site.page_contents"))}"><p>${escape(t("site.page_contents"))}</p><ol>${contents}</ol></nav><div class="leader-history">${introduction}${chapters}${sourceNote}</div>
 <aside class="leader-sidebar"><section class="leader-trait"><p class="eyebrow">${escape(t("site.command_trait"))}</p><h2>${escape(f.ability)}</h2><p>${escape(f.effect)}</p></section><a class="leader-sidebar-link" href="/leaders/">← ${escape(t("site.all_leaders"))}</a><a class="leader-sidebar-link" href="/#leaders">${escape(t("site.choose_leader"))}</a></aside></div></article>`;
         html = leaderTemplate
           .replace("<!-- PAGE_TITLE -->", escape(title))
@@ -491,5 +497,6 @@ export async function publish(
 if (import.meta.main) {
   const [out, metadata] = process.argv.slice(2);
   if (!out || !metadata) throw Error("Site publisher requires output and catalog paths");
-  await publish(out, JSON.parse(await read(metadata)));
+  const input = JSON.parse(await read(metadata));
+  await publish(out, input, import.meta.dir);
 }

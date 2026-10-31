@@ -984,7 +984,6 @@
   font-size: 21px;
 }
 .sow-story__gesture.is-status .sow-story__ripple,
-.sow-story__gesture.is-status .sow-story__hand,
 .sow-story__gesture.is-status .sow-story__zoom,
 .sow-story__gesture.is-status .sow-story__pan-keys {
   display: none !important;

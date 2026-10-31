@@ -1362,3 +1362,42 @@ test("HUD notification alerts trigger bell shake and badge pop on incoming notif
     timerCallback!();
     assert.equal(ringing, false, "Bell button class is cleared after animation duration");
 });
+
+test("dev tools overhaul features compact density, tactical header, and responsive layout rules", () => {
+    const css = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
+
+    // Markup checks
+    assert.match(hud, /<aside class="sow-hud__sheet sow-hud__dev-sidebar hidden" id="sow-hud-dev-sidebar">/);
+    assert.match(hud, /class="sow-hud__sheet-title-group"/);
+    assert.match(hud, /class="sow-hud__dev-category-bar"/);
+    assert.match(hud, /<select class="sow-hud__dev-category-select" id="sow-hud-dev-category-select" data-dev-category-select/);
+    assert.match(hud, /class="sow-hud__dev-search-bar"/);
+    assert.match(hud, /<input class="sow-hud__dev-search" type="search" data-dev-search/);
+
+    // CSS compact density & responsive rules
+    assert.match(css, /\.sow-hud__dev-category-bar\s*\{/);
+    assert.match(css, /\.sow-hud__dev-category-select\s*\{/);
+    assert.match(css, /\.sow-hud__dev-sidebar\.sow-hud__sheet\s*\{\s*width:\s*310px;/);
+    assert.match(css, /\.sow-hud__dev-sidebar\.sow-hud__sheet\s*\{\s*width:\s*min\(44vw,\s*290px\);/);
+    assert.match(css, /height:\s*50dvh;\s*border-radius:\s*14px 14px 0 0;/);
+    assert.match(css, /\.sow-hud__dev-slide\s*\{[^}]*grid-template-columns:\s*18px\s*minmax\(0,\s*1fr\)\s*18px;/);
+    assert.match(css, /\.sow-hud__dev-sidebar input\[type="range"\]\s*\{[^}]*height:\s*16px;/);
+    assert.match(css, /\.sow-hud__dev-sidebar \.sow-hud__switch\s*\{[^}]*width:\s*32px;\s*height:\s*18px;/);
+});
+
+test("dev tools sidebar scrolls via mouse wheel accessibility and blocks canvas zoom", () => {
+    const storePortalsSrc = fs.readFileSync(path.join(shell, "sdk", "store_portals.ts"), "utf8");
+
+    // store_portals exempts HUD and dev layer from preventDefault
+    assert.match(
+        storePortalsSrc,
+        /#sow-menu,\s*#sow-hud,\s*#sow-hud-dev-layer,\s*\.sow-hud__sheet/,
+        "wheel events on HUD and dev sidebar are permitted",
+    );
+
+    // main_menu.hud.ts attaches wheel listener that updates dev-body scrollTop and stops map zoom
+    assert.match(hud, /const handleDevWheel = function \(event: WheelEvent\) \{/);
+    assert.match(hud, /sidebar\.querySelector<HTMLElement>\("\.sow-hud__dev-body"\)/);
+    assert.match(hud, /body\.scrollTop \+= deltaY;/);
+    assert.match(hud, /event\.stopPropagation\(\);/);
+});

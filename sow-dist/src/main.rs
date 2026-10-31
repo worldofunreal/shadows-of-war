@@ -313,7 +313,12 @@ const SITE_STILLS: [(&str, (&str, &str)); 13] = [
 /// mp4 and a poster. Optional: the page shows a still while a slot is empty.
 const SITE_VIDEOS: [&str; 2] = ["hero-loop", "gameplay"];
 const SITE_VIDEO_SOURCES: [&str; 4] = ["mp4", "mov", "webm", "mkv"];
-const SITE_BADGES: [&str; 2] = ["testflight-badge.svg", "google-play-badge.svg"];
+const SITE_BADGES: [&str; 4] = [
+    "testflight-badge.svg",
+    "google-play-badge.svg",
+    "discord.svg",
+    "telegram.svg",
+];
 const SITE_SOURCE_ONLY_MEDIA: [&str; 8] = [
     "session-battle.webp",
     "session-conflict.webp",
@@ -2228,13 +2233,155 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
             "wikipedia": leader.character().wikipedia,
         })
     }).collect::<Vec<_>>();
+    let biographies = public_leader_biographies(&paths.root)?;
     let mut metadata = tempfile::NamedTempFile::new()?;
-    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES }))?;
+    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies }))?;
     run("bun", &[
         "run", paths.root.join("sow-web/site/generate.ts").to_str().context("site generator path")?,
         out.to_str().context("site output path")?,
         metadata.path().to_str().context("site metadata path")?,
     ], Some(&paths.root))
+}
+
+fn public_leader_biographies(root: &Path) -> Result<serde_json::Value> {
+    let site = root.join("sow-web/site");
+    let catalog: toml::Value = fs::read_to_string(site.join("leader-bio-sources.toml"))?
+        .parse()
+        .context("parse deduplicated leader biography catalog")?;
+    let articles = catalog.get("articles").and_then(toml::Value::as_table)
+        .context("leader biography catalog has no articles")?;
+    let references = catalog.get("leaders").and_then(toml::Value::as_table)
+        .context("leader biography catalog has no locale references")?;
+    let expected_leaders = sow_core::player::Leader::all().map(|leader| leader.id()).collect::<std::collections::HashSet<_>>();
+    let mut used_articles = std::collections::HashSet::new();
+    let mut distinct_articles = std::collections::HashSet::new();
+    let mut biographies = serde_json::Map::new();
+
+    for (_, code, _) in sow_i18n::Language::published_registry() {
+        let locale_refs = references.get(code).and_then(toml::Value::as_table)
+            .with_context(|| format!("leader biography locale {code} is missing"))?;
+        if locale_refs.len() != expected_leaders.len() {
+            bail!("leader biography locale {code} has {} references for {} leaders", locale_refs.len(), expected_leaders.len());
+        }
+        let mut locale = serde_json::Map::new();
+        for leader in sow_core::player::Leader::all() {
+            let id = leader.id();
+            let article_id = locale_refs.get(id).and_then(toml::Value::as_str)
+                .with_context(|| format!("leader biography reference missing: {code}/{id}"))?;
+            let article = articles.get(article_id).with_context(|| format!("leader biography article missing: {article_id}"))?;
+            if article.get("lang").and_then(toml::Value::as_str).is_none_or(str::is_empty) {
+                bail!("leader biography article {article_id} has no source language for {code}/{id}");
+            }
+            if article.get("url").and_then(toml::Value::as_str).is_none_or(|url| !url.starts_with("https://")) {
+                bail!("leader biography article {article_id} needs an HTTPS source");
+            }
+            let value = serde_json::to_value(article)?;
+            let has_sections = value.get("sections").and_then(serde_json::Value::as_array).is_some_and(|sections| !sections.is_empty());
+            let short_article = value.get("shortArticle").and_then(serde_json::Value::as_bool) == Some(true);
+            if !value.get("intro").is_some_and(serde_json::Value::is_array) || (!has_sections && !short_article) {
+                bail!("leader biography article {article_id} is incomplete");
+            }
+            used_articles.insert(article_id.to_owned());
+            locale.insert(id.to_owned(), value);
+        }
+        biographies.insert(code.to_owned(), serde_json::Value::Object(locale));
+    }
+    if references.len() != sow_i18n::Language::published_registry().count() {
+        bail!("leader biography catalog contains locale references that are not published");
+    }
+    if used_articles.len() != articles.len() {
+        bail!("leader biography catalog contains {} unreferenced article records", articles.len() - used_articles.len());
+    }
+    for (id, article) in articles {
+        let fingerprint = serde_json::to_string(article)?;
+        if !distinct_articles.insert(fingerprint) {
+            bail!("leader biography article {id} duplicates another stored article");
+        }
+    }
+
+    let sagas: toml::Value = fs::read_to_string(site.join("leader-sagas.toml"))?
+        .parse()
+        .context("parse original leader sagas")?;
+    let source_records = sagas.get("sources").and_then(toml::Value::as_table)
+        .context("leader sagas have no sources")?;
+    let saga_records = sagas.get("sagas").and_then(toml::Value::as_table)
+        .context("leader sagas have no entries")?;
+    for (code, leaders) in saga_records {
+        let leaders = leaders.as_table().with_context(|| format!("invalid saga locale {code}"))?;
+        let locale = biographies.get_mut(code).and_then(serde_json::Value::as_object_mut)
+            .with_context(|| format!("saga locale is not published: {code}"))?;
+        for (leader_id, saga) in leaders {
+            if !expected_leaders.contains(leader_id.as_str()) {
+                bail!("saga references unknown leader {leader_id}");
+            }
+            let highlight = saga.get("highlight").and_then(toml::Value::as_str)
+                .with_context(|| format!("saga {code}/{leader_id} has no highlight"))?;
+            let chapters = saga.get("chapters").and_then(toml::Value::as_array)
+                .with_context(|| format!("saga {code}/{leader_id} has no chapters"))?;
+            let highlight_words = highlight.split_whitespace().count();
+            if !(70..=140).contains(&highlight_words) || chapters.len() != 5 {
+                bail!("saga {code}/{leader_id} needs a 70–140 word highlight and exactly five chapters (found {highlight_words} words and {})", chapters.len());
+            }
+            let chapter_words = chapters.iter().map(|chapter| chapter.get("text").and_then(toml::Value::as_str).map_or(0, |text| text.split_whitespace().count())).sum::<usize>();
+            if !(1000..=2200).contains(&chapter_words) {
+                bail!("saga {code}/{leader_id} must contain 1,000–2,200 chapter words (found {chapter_words})");
+            }
+            let mut all_sources = std::collections::BTreeMap::new();
+            let mut sections = Vec::new();
+            for (index, chapter) in chapters.iter().enumerate() {
+                let refs = chapter.get("sources").and_then(toml::Value::as_array)
+                    .with_context(|| format!("saga {code}/{leader_id}, chapter {} has no sources", index + 1))?;
+                if refs.is_empty() {
+                    bail!("saga {code}/{leader_id}, chapter {} must cite at least one source", index + 1);
+                }
+                let mut chapter_sources = Vec::new();
+                for reference in refs {
+                    let source_id = reference.as_str().context("saga source reference must be a string")?;
+                    let source = source_records.get(source_id).with_context(|| format!("unknown saga source {source_id}"))?;
+                    if source.get("url").and_then(toml::Value::as_str).is_none_or(|url| !url.starts_with("https://")) {
+                        bail!("saga source {source_id} needs an HTTPS URL");
+                    }
+                    if source.get("title").and_then(toml::Value::as_str).is_none_or(str::is_empty) {
+                        bail!("saga source {source_id} needs a title");
+                    }
+                    let source_json = serde_json::to_value(source)?;
+                    all_sources.insert(source_id.to_owned(), source_json.clone());
+                    chapter_sources.push(source_json);
+                }
+                let title = chapter.get("title").and_then(toml::Value::as_str).context("saga chapter title missing")?;
+                let text = chapter.get("text").and_then(toml::Value::as_str).context("saga chapter text missing")?;
+                let evidence = chapter.get("evidence").and_then(toml::Value::as_str).context("saga chapter evidence note missing")?;
+                let paragraphs = text.split("\n\n").map(str::trim).filter(|paragraph| !paragraph.is_empty()).collect::<Vec<_>>();
+                if paragraphs.len() < 2 || evidence.trim().is_empty() || title.trim().is_empty() {
+                    bail!("saga {code}/{leader_id}, chapter {} needs multiple paragraphs and an evidence note", index + 1);
+                }
+                sections.push(serde_json::json!({ "title": title, "paragraphs": paragraphs, "evidence": evidence, "sources": chapter_sources }));
+            }
+            for key in ["evidence_label", "chapter_sources_label", "source_note"] {
+                if saga.get(key).and_then(toml::Value::as_str).is_none_or(str::is_empty) {
+                    bail!("saga {code}/{leader_id} needs {key}");
+                }
+            }
+            let mut bio = serde_json::json!({
+                "title": saga.get("title").and_then(toml::Value::as_str).unwrap_or(leader_id),
+                "lang": code,
+                "url": "https://www.britannica.com/biography/Julius-Caesar-Roman-ruler",
+                "highlight": highlight,
+                "highlightLabel": saga.get("highlight_label").and_then(toml::Value::as_str).unwrap_or(if code == "es" { "En pocas palabras" } else { "In brief" }),
+                "evidenceLabel": saga.get("evidence_label").and_then(toml::Value::as_str),
+                "chapterSourcesLabel": saga.get("chapter_sources_label").and_then(toml::Value::as_str),
+                "sourceNote": saga.get("source_note").and_then(toml::Value::as_str),
+                "isSaga": true,
+                "intro": [],
+                "sections": sections,
+                "sources": all_sources.into_values().collect::<Vec<_>>(),
+            });
+            // Let the ordinary profile template retain the current localized title.
+            bio["title"] = serde_json::Value::String(saga.get("title").and_then(toml::Value::as_str).unwrap_or(leader_id).to_owned());
+            locale.insert(leader_id.to_owned(), bio);
+        }
+    }
+    Ok(serde_json::json!({ "leaders": biographies }))
 }
 
 /// Landing sections built from data at publish time: the hero roster from the
@@ -4147,7 +4294,10 @@ fn package_native_web(
             .all(|file| out.join("assets/gameplay/units").join(file).is_file())
         && out
             .join("assets/gameplay/music/shadows-of-war.webm")
-            .is_file();
+            .is_file()
+        && SITE_BADGES
+            .iter()
+            .all(|name| out.join("assets/site/media").join(name).is_file());
 
     if !static_ready {
         if out.exists() {
@@ -5130,7 +5280,7 @@ fn local_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.assets_gameplay.clone(),
         paths.root.join("assets/campaign"),
         paths.root.join("assets/guides"),
-        paths.site_media.clone(),
+        paths.assets_site.join("media"),
         paths.assets_site.join("icons"),
         paths.assets_maps.clone(),
         paths.map_sources.clone(),
@@ -5170,7 +5320,10 @@ fn package_local_preview(
             .all(|file| out.join("assets/gameplay/units").join(file).is_file())
         && out
             .join("assets/gameplay/music/shadows-of-war.webm")
-            .is_file();
+            .is_file()
+        && SITE_BADGES
+            .iter()
+            .all(|name| out.join("assets/site/media").join(name).is_file());
 
     if !static_ready {
         fs::create_dir_all(out)?;

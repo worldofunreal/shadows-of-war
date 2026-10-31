@@ -419,6 +419,37 @@ test("settings panel keeps only useful controls and real account state", () => {
     assert.match(settingsSource, /setting: "locale"/);
 });
 
+test("settings social links include SVGs and preserve web and Android link behavior", () => {
+    const start = surfacesSource.indexOf("function renderSettingsLink(");
+    const end = surfacesSource.indexOf("\n}\n\nfunction renderSettingsLinks", start) + 2;
+    assert.ok(start >= 0 && end > start);
+    let android = false;
+    const renderSettingsLink = vm.runInNewContext(
+        surfacesSource.slice(start, end) + "\nrenderSettingsLink;",
+        {
+            esc: (value) => String(value),
+            isAndroidTwa: () => android,
+            SOW_t: (key) => key,
+        },
+    );
+    for (const [url, key, icon] of [
+        ["https://discord.gg/4mBM6zJyG", "menu.discord", "discord"],
+        ["https://t.me/shadowsofwario", "menu.telegram", "telegram"],
+    ]) {
+        const socialClass = "sow-menu__settings-link--social";
+        const image = `<img class='sow-menu__settings-social-icon' src='/assets/site/media/${icon}.svg' alt='' aria-hidden='true'>`;
+        const webLink = renderSettingsLink(url, key, socialClass, icon);
+        assert.ok(webLink.includes(`href='${url}' target='_blank' rel='noopener noreferrer'`));
+        assert.ok(webLink.includes(`${image}${key}`));
+
+        android = true;
+        const androidLink = renderSettingsLink(url, key, socialClass, icon);
+        assert.ok(androidLink.includes(`data-command='open_android_external_link' data-url='${url}'`));
+        assert.ok(androidLink.includes(`${image}${key}`));
+        android = false;
+    }
+});
+
 test("language dropdowns keep their width and placement inside the viewport", () => {
     const start = dropdownSource.indexOf("export function resetDropdownPosition(");
     const end = dropdownSource.indexOf("export function syncDropdownScope(", start);

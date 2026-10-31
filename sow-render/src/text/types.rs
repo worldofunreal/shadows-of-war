@@ -117,6 +117,7 @@ pub const KIND_RECT: f32 = 5.0;
 pub const KIND_TRIANGLE: f32 = 6.0;
 pub const KIND_CROSS: f32 = 7.0;
 pub const KIND_ARC: f32 = 8.0;
+pub const KIND_HORN: f32 = 9.0;
 pub const KIND_ROUNDED_RECT: f32 = 10.0;
 pub const KIND_BUILDING_SPRITE: f32 = 11.0;
 pub const KIND_STATUS_SPRITE: f32 = 12.0;

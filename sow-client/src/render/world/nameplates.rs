@@ -1614,13 +1614,27 @@ pub(super) fn render_nameplates(
             NameplatePresentation::Hidden => {}
         }
     }
-    // Decorations are a second pass so glyph pressure cannot hide another player's base plate.
+    system.tutorial_target_hit_bounds = tutorial_target_hit_bounds;
+}
+
+pub(super) fn render_emote_bubbles(
+    text: &mut TextRenderer,
+    snapshot: &SimSnapshot,
+    system: &mut NameplateSystem,
+    input: &InputState,
+    sf: f32,
+    now: Instant,
+    my_id: u16,
+    reduced_motion: bool,
+) {
     let campaign_speaker = system.campaign_emote.as_ref().map(|cue| cue.player_id);
-    for plan in frame_plans
+    for plan in system
+        .frame_plans
         .iter()
         .filter(|plan| Some(snapshot.players[plan.player_index].id) == campaign_speaker)
         .chain(
-            frame_plans
+            system
+                .frame_plans
                 .iter()
                 .filter(|plan| Some(snapshot.players[plan.player_index].id) != campaign_speaker),
         )
@@ -1673,7 +1687,6 @@ pub(super) fn render_nameplates(
             cue.visible = true;
         }
     }
-    system.tutorial_target_hit_bounds = tutorial_target_hit_bounds;
 }
 
 fn sample_nameplates(
@@ -2227,6 +2240,17 @@ mod emote_tests {
         assert!((tail_base_y - body_edge_y).abs() < 0.001);
         assert!(layout.outer_tail_size[0] > 24.0);
         assert!(layout.outer_tail_size[1].abs() > 20.0);
+        let inner_signed = layout.inner_tail_size[1];
+        assert_eq!(inner_signed.signum(), signed_height.signum());
+        let inner_tip = layout.inner_tail_center[1] + inner_signed * 0.5;
+        let inner_base = inner_tip - inner_signed;
+        if signed_height > 0.0 {
+            assert!(inner_base < body_edge_y);
+            assert!(inner_tip < tip[1]);
+        } else {
+            assert!(inner_base > body_edge_y);
+            assert!(inner_tip > tip[1]);
+        }
     }
 
     fn assert_bubble_quadrant(
@@ -3625,7 +3649,7 @@ fn place_emote_bubble(
     tail_width: f32,
     tail_length: f32,
     inner_tail_width: f32,
-    inner_tail_length: f32,
+    _inner_tail_length: f32,
     screen: [f32; 2],
     safe: [f32; 4],
     sf: f32,
@@ -3643,7 +3667,7 @@ fn place_emote_bubble(
             tail_width,
             tail_length,
             inner_tail_width,
-            inner_tail_length,
+            _inner_tail_length,
             screen,
             safe,
             sf,
@@ -3668,7 +3692,7 @@ fn emote_bubble_candidate(
     tail_width: f32,
     tail_length: f32,
     inner_tail_width: f32,
-    inner_tail_length: f32,
+    _inner_tail_length: f32,
     screen: [f32; 2],
     safe: [f32; 4],
     sf: f32,
@@ -3749,8 +3773,16 @@ fn emote_bubble_candidate(
     }
 
     let outer_signed_height = -y_sign * tail_gap;
-    let inner_height = inner_tail_length.min(tail_gap * 0.82);
-    let inner_signed_height = -y_sign * inner_height;
+    let body_edge_y = center[1] - y_sign * half_height;
+    let overlap = (1.6 * sf).min(tail_gap * 0.35);
+    let tip_inset = (1.8 * sf).min(tail_gap * 0.25);
+    let inner_base_y = body_edge_y + y_sign * overlap;
+    let inner_tip_y = tip[1] + y_sign * tip_inset;
+    let inner_signed_height = inner_tip_y - inner_base_y;
+    let inner_tail_center = [tip[0], (inner_base_y + inner_tip_y) * 0.5];
+    let inner_w = (tail_width - 2.6 * sf)
+        .min(inner_tail_width)
+        .max(tail_width * 0.65);
     let layout = EmoteBubbleLayout {
         center,
         size,
@@ -3758,8 +3790,8 @@ fn emote_bubble_candidate(
         text_bounds: [0.0; 4],
         outer_tail_center: [tip[0], tip[1] - outer_signed_height * 0.5],
         outer_tail_size: [tail_width, outer_signed_height],
-        inner_tail_center: [tip[0], tip[1] - inner_signed_height * 0.5],
-        inner_tail_size: [inner_tail_width.min(tail_width * 0.82), inner_signed_height],
+        inner_tail_center,
+        inner_tail_size: [inner_w, inner_signed_height],
     };
     Some((layout, exact))
 }
@@ -3769,7 +3801,7 @@ fn paint_emote_bubble(
     prepared: &sow_render::text::PreparedText,
     avatar: AvatarPlan,
     motion: EmoteMotion,
-    accent: [f32; 4],
+    _accent: [f32; 4],
     input: &InputState,
     insets: [f32; 4],
     sf: f32,
@@ -3821,18 +3853,19 @@ fn paint_emote_bubble(
         [0.0; 4],
         0.0,
     );
+    let border_color = [0.15, 0.18, 0.22, 0.35 * alpha];
     text.push_rounded_rect(
         layout.center,
         layout.size,
         0.2,
         [0.97, 0.95, 0.90, alpha],
-        [accent[0], accent[1], accent[2], 0.9 * alpha],
+        border_color,
         1.2 * sf,
     );
     text.push_triangle(
         layout.outer_tail_center,
         layout.outer_tail_size,
-        [accent[0], accent[1], accent[2], alpha],
+        border_color,
     );
     text.push_triangle(
         layout.inner_tail_center,

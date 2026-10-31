@@ -39,9 +39,15 @@ export function compactGuideMetric(step: CampaignStep, progress: CampaignRecord)
     const trigger = (step && step.trigger) || {};
     if (
         !step ||
-        !step.guide ||
-        step.guide.show_label === false ||
+        (step.guide && step.guide.show_label === false) ||
         !progress ||
+        !(
+            step.guide ||
+            step.marker ||
+            trigger.target ||
+            trigger.recipient ||
+            (Array.isArray(trigger.targets) && trigger.targets.length > 0)
+        ) ||
         (trigger.type === "territory" && trigger.scope === "total" && trigger.comparison === "lte")
     )
         return null;
@@ -66,7 +72,7 @@ export function compactStatusLabel(
         const progress = translate("hud.building_in_progress");
         if (progress) return progress;
     }
-    return translate(step.hint_key || step.body_key);
+    return translate(step.hint_key || step.body_key || step.title_key);
 }
 export function mount(root: HTMLElement, options: CampaignViewOptions): CampaignView {
     const doc = root.ownerDocument;
@@ -83,6 +89,8 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
     let renderedWidth = 0,
         renderedHeight = 0;
     let guideWasVisible = false,
+        guidePositionStepId: string | null = null,
+        guideMoveAnimation: Animation | null = null,
         cameraTracking = false,
         guideX: number | null = null,
         guideY: number | null = null,
@@ -152,6 +160,39 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         guideTarget = find(".sow-story__zoom-target");
     function guideTransform(x: number, y: number) {
         return "translate3d(" + x + "px, " + y + "px, 0)";
+    }
+    function moveGuideTo(x: number, y: number, stepId: string, reducedMotion: boolean) {
+        const changedStep = guideWasVisible && guidePositionStepId !== null && guidePositionStepId !== stepId;
+        const changedPosition = x !== guideX || y !== guideY;
+        if (!changedStep && !changedPosition) return;
+        if (guideMoveAnimation) {
+            guideMoveAnimation.cancel();
+            guideMoveAnimation = null;
+        }
+        const fromX = guideX,
+            fromY = guideY;
+        gesture.style.transform = guideTransform(x, y);
+        if (
+            changedStep &&
+            !reducedMotion &&
+            fromX !== null &&
+            fromY !== null &&
+            typeof gesture.animate === "function"
+        ) {
+            const animation = gesture.animate(
+                [{ transform: guideTransform(fromX, fromY) }, { transform: guideTransform(x, y) }],
+                { duration: 250, easing: "cubic-bezier(.2,.8,.2,1)" },
+            );
+            guideMoveAnimation = animation;
+            animation.onfinish = () => {
+                if (guideMoveAnimation !== animation) return;
+                guideMoveAnimation = null;
+                animation.cancel();
+            };
+        }
+        guideX = x;
+        guideY = y;
+        guidePositionStepId = stepId;
     }
     function clearHomeGuideAnimation() {
         if (homeGuideAnimation) homeGuideAnimation.cancel();
@@ -931,7 +972,10 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         root.hidden = !model || model.done;
         if (!model || root.hidden) {
             portraitRequestId++;
+            if (guideMoveAnimation) guideMoveAnimation.cancel();
+            guideMoveAnimation = null;
             guideWasVisible = false;
+            guidePositionStepId = null;
             cameraTracking = false;
             compactStatusVisible = false;
             clearHomeGuideAnimation();
@@ -1229,7 +1273,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         const anchor = context.anchor;
         const statusOnly = context.statusOnly === true;
         const statusVisible =
-            compactViewport &&
             !modal &&
             step.type === "objective" &&
             (statusOnly || !step.guide) &&
@@ -1269,26 +1312,26 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             ? Boolean(cameraCueHint)
             : !compactStatusVisible &&
               showGestureText &&
-              (gestureType === "hover" || zoomGuide) &&
+              (["drag", "hover"].includes(gestureType) || zoomGuide) &&
               Boolean(context.gestureHint || context.hintOverride);
         gestureHint.hidden = !showGestureHint;
         if (showGestureHint)
             setText(gestureHint, cameraCue ? cameraCueHint : context.gestureHint || context.hintOverride);
         const guideVisible = Boolean(
             !modal &&
-            !statusOnly &&
             step.guide &&
             anchor &&
             Number.isFinite(anchor.x) &&
             Number.isFinite(anchor.y),
         );
         const statusDrawable = Boolean(compactStatusVisible && statusLabel);
-        const guideMetric = context.guideMetric;
+        const guideMetric =
+            context.guideMetric ||
+            ((guideVisible || statusDrawable) ? compactGuideMetric(step, progress) : null);
         renderGuideMetric(
             cameraCue
                 ? null
-                : guideMetric ||
-                      (compactViewport && guideVisible ? compactGuideMetric(step, progress) : null),
+                : guideMetric,
             reducedMotion,
             step.id,
         );
@@ -1330,9 +1373,8 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             gesture.classList.toggle("is-following", follow);
             if (homeMotionPending) {
                 gesture.style.transform = guideTransform(originX, originY);
-            } else if (!follow || anchor.x !== guideX || anchor.y !== guideY) {
-                gesture.style.transform = guideTransform(anchor.x, anchor.y);
-            }
+            } else moveGuideTo(anchor.x, anchor.y, step.id, reducedMotion);
+            guidePositionStepId = step.id;
             guideX = anchor.x;
             guideY = anchor.y;
             guideWasVisible = true;
@@ -1357,7 +1399,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
                     };
                 }
             }
-            if (labeledGesture) positionGuideLabel(anchor, false);
+            if (labeledGesture) positionGuideLabel(anchor, statusDrawable);
             const direction = root.dir === "rtl" ? -1 : 1;
             const localDragX = anchor.width ? Math.min(64, anchor.width * 0.35) * direction : 0;
             const guideDx = homeGuide
@@ -1390,21 +1432,23 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             delete gesture.dataset.zoomMode;
             delete gesture.dataset.guideTarget;
             delete gesture.dataset.guidePath;
-            if (!guideWasVisible || !wasHidden || anchor.x !== guideX || anchor.y !== guideY)
-                gesture.style.transform = guideTransform(anchor.x, anchor.y);
-            guideX = anchor.x;
-            guideY = anchor.y;
+            moveGuideTo(anchor.x, anchor.y, step.id, reducedMotion);
             guideWasVisible = true;
             positionGuideLabel(anchor, true);
         } else {
+            if (guideMoveAnimation) guideMoveAnimation.cancel();
+            guideMoveAnimation = null;
             gesture.classList.remove("is-following");
             gesture.classList.remove("is-camera-following", "is-status");
             cameraTracking = false;
             guideWasVisible = false;
+            guidePositionStepId = null;
         }
     }
     function updateCameraAnchor(x: number, y: number) {
         if (!cameraTracking || root.hidden || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+        if (guideMoveAnimation) guideMoveAnimation.cancel();
+        guideMoveAnimation = null;
         if (x !== guideX || y !== guideY) gesture.style.transform = guideTransform(x, y);
         guideX = x;
         guideY = y;

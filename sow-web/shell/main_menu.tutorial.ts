@@ -76,7 +76,6 @@ interface TutorialRuntime {
     guidedControl: HTMLElement | null;
     guidedAmountControls: HTMLElement[];
     exchangeCue: TutorialExchangeCue | null;
-    exchangeFocusToken: string | number | null;
     lastPreDefeatTargets: string | null;
     campaignSessionId: number;
     emoteSerial: number;
@@ -151,7 +150,6 @@ interface TutorialRuntime {
         guidedControl: null,
         guidedAmountControls: [],
         exchangeCue: null,
-        exchangeFocusToken: null,
         lastPreDefeatTargets: null,
         campaignSessionId: 0,
         emoteSerial: 0,
@@ -694,8 +692,7 @@ interface TutorialRuntime {
             model.exchange &&
             model.exchange.presentation !== "dialogue" &&
             model.step &&
-            model.step.guide &&
-            !["scene", "choice", "end"].includes(model.step.type),
+            ["objective", "guide"].includes(model.step.type),
         );
     }
 
@@ -977,17 +974,9 @@ interface TutorialRuntime {
             send("continue_observing");
         }
         const targetStep = machineView.step;
-        const targetFactionId = machineView.exchange
-            ? null
-            : targetStep.type === "choice" && targetStep.marker
-              ? markerTargetFor(targetStep)
-              : targetStep.guide &&
-                  targetStep.guide.kind === "world" &&
-                  ["target_action", "nameplate", "player"].includes(targetStep.guide.target) &&
-                  targetStep.trigger &&
-                  ["attack", "contact", "alliance", "defeated", "fleet"].includes(targetStep.trigger.type)
-                ? markerTargetFor(targetStep)
-                : null;
+        const freeExploration =
+            targetStep.trigger && ["camera_target", "hover"].includes(targetStep.trigger.type);
+        const targetFactionId = freeExploration ? null : markerTargetFor(targetStep);
         if (targetFactionId !== runtime.cameraTargetFactionId) {
             runtime.cameraTargetFactionId = targetFactionId;
             const focusPlayer = campaignPlayer(hud, targetFactionId);
@@ -1006,7 +995,12 @@ interface TutorialRuntime {
             if (runtime.expandFocusStepId !== machineView.step.id) {
                 const visible = tutorial.expand;
                 const target = tutorial.expand_target;
-                if (visible && Number.isFinite(Number(visible.x)) && Number.isFinite(Number(visible.y))) {
+                if (
+                    visible &&
+                    !visible.offscreen &&
+                    Number.isFinite(Number(visible.x)) &&
+                    Number.isFinite(Number(visible.y))
+                ) {
                     runtime.expandFocusStepId = machineView.step.id;
                 } else if (
                     target &&
@@ -1041,7 +1035,7 @@ interface TutorialRuntime {
         let markerId = null;
         const exchangeSpeaker =
             machineView.exchange && runtime.definition!.speakers[machineView.exchange.speaker];
-        const markerTarget = exchangeSpeaker
+        const markerTarget = machineView.exchange_phase === "dialogue" && exchangeSpeaker
             ? exchangeSpeaker.faction || "player"
             : markerTargetFor(machineView.step);
         if (markerTarget) {
@@ -1135,26 +1129,7 @@ interface TutorialRuntime {
         if (step && step.camera && runtime.cameraShotStepId !== step.id) return "pending";
         if (tutorial!.facts && tutorial!.facts.machinima_active) return "pending";
         if (tutorial!.emote_token === nativeToken) return true;
-        if (runtime.exchangeFocusToken !== token) {
-            runtime.exchangeFocusToken = token;
-            send("set_tutorial_marker", { player_id: Number(player.id) });
-            runtime.markerId = Number(player.id);
-            const anchor = cameraTargetAnchor({ marker: { target: faction } }, hud);
-            if (!anchor || anchor.offscreen)
-                send("focus_world", {
-                    x: Number(player.centroid_x) + 0.5,
-                    y: Number(player.centroid_y) + 0.5,
-                });
-        }
         if (runtime.exchangeCue && runtime.exchangeCue.token === token) return "pending";
-        const nameplate = tutorial!.target_nameplate;
-        if (
-            Number(tutorial!.marker_player_id) !== Number(player.id) ||
-            !nameplate ||
-            nameplate.offscreen ||
-            (tutorial!.facts && tutorial!.facts.machinima_active)
-        )
-            return "pending";
         runtime.exchangeCue = {
             token: token,
             nativeToken: nativeToken,
@@ -1464,7 +1439,6 @@ interface TutorialRuntime {
         runtime.definition = null;
         runtime.machine = null;
         runtime.exchangeCue = null;
-        runtime.exchangeFocusToken = null;
         runtime.lastPreDefeatTargets = null;
         runtime.campaignSessionId = 0;
         runtime.active = false;

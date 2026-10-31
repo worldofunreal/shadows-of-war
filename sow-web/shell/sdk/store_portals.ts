@@ -1427,9 +1427,13 @@
     window.addEventListener(
         "wheel",
         function (e) {
-            // The menu owns its internal scrolling (Store, Profile, Browser, etc.).
+            // The menu and HUD own their internal scrolling (Store, Profile, Dev Tools, Rankings, etc.).
             // Only suppress wheel scrolling while the fullscreen game surface is active.
-            if (e.target && e.target.closest && e.target.closest("#sow-menu")) {
+            if (
+                e.target &&
+                e.target.closest &&
+                e.target.closest("#sow-menu, #sow-hud, #sow-hud-dev-layer, .sow-hud__sheet")
+            ) {
                 return;
             }
             e.preventDefault();

@@ -32,8 +32,8 @@
         "target": "stonea"
       },
       "after": "boudica_camera_home",
-      "pause_game": false,
       "presentation": "exchange",
+      "pause_game": false,
       "exchange": [
         {
           "speaker": "stonea",
@@ -44,6 +44,14 @@
           "speaker": "boudica",
           "emote": "celebrate",
           "emote_text_key": "tutorial.campaign_boudica_boudica_stonea_reply_emote"
+        },
+        {
+          "speaker": "boudica",
+          "presentation": "dialogue",
+          "title_key": "tutorial.campaign_boudica_boudica_city_intro_title",
+          "show_title": true,
+          "body_key": "tutorial.campaign_boudica_boudica_city_intro_body",
+          "delay_ms": 0
         }
       ]
     },
@@ -598,7 +606,6 @@
         "target": "nameplate",
         "gesture": "tap"
       },
-      "pause_game": true,
       "next": "boudica_first_victory",
       "camera": {
         "shot": "approach",
@@ -650,13 +657,14 @@
         "value": 250,
         "scope": "step"
       },
+      "marker": {
+        "target": "stonea"
+      },
       "guide": {
         "kind": "world",
         "target": "expand",
         "gesture": "tap"
       },
-      "pause_game": true,
-      "paused_action": "expand_once_then_resume",
       "next": "boudica_first_contact"
     },
     {
@@ -665,8 +673,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_zoom_out_title",
       "hint_key": "tutorial.campaign_boudica_boudica_zoom_out_hint",
       "speaker": "stonea",
-      "pause_game": true,
-      "camera_only": true,
       "trigger": {
         "type": "zoom_out_complete",
         "value": 0.95,
@@ -680,6 +686,8 @@
         "target": "player",
         "gesture": "zoom_out"
       },
+      "pause_game": true,
+      "camera_only": true,
       "next": "boudica_camera_drag"
     },
     {
@@ -688,8 +696,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_camera_drag_title",
       "hint_key": "tutorial.campaign_boudica_boudica_camera_drag_hint",
       "speaker": "stonea",
-      "pause_game": true,
-      "camera_only": true,
       "trigger": {
         "type": "camera_target",
         "target": "suetonius_paulinus",
@@ -705,6 +711,8 @@
         "target": "player",
         "gesture": "drag"
       },
+      "pause_game": true,
+      "camera_only": true,
       "next": "boudica_camera_hover"
     },
     {
@@ -713,10 +721,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_camera_hover_title",
       "hint_key": "tutorial.campaign_boudica_boudica_camera_hover_desktop_hint",
       "speaker": "suetonius_paulinus",
-      "pause_game": true,
-      "camera_only": true,
-      "emote": "threat",
-      "emote_text_key": "tutorial.campaign_boudica_suetonius_zoom_emote",
       "trigger": {
         "type": "hover",
         "target": "suetonius_paulinus",
@@ -731,6 +735,8 @@
         "target": "player",
         "gesture": "hover"
       },
+      "pause_game": true,
+      "camera_only": true,
       "next": "boudica_zoom_in"
     },
     {
@@ -739,8 +745,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_zoom_in_title",
       "hint_key": "tutorial.campaign_boudica_boudica_zoom_in_hint",
       "speaker": "stonea",
-      "pause_game": true,
-      "camera_only": true,
       "trigger": {
         "type": "zoom_in_complete",
         "target": "suetonius_paulinus",
@@ -751,11 +755,20 @@
       "marker": {
         "target": "suetonius_paulinus"
       },
+      "exchange": [
+        {
+          "speaker": "suetonius_paulinus",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_suetonius_zoom_emote"
+        }
+      ],
       "guide": {
         "kind": "world",
         "target": "player",
         "gesture": "zoom_in"
       },
+      "pause_game": true,
+      "camera_only": true,
       "next": "boudica_found_suetonius"
     },
     {
@@ -767,6 +780,7 @@
         "seconds": 1,
         "machinima": true
       },
+      "pause_game": true,
       "next": "boudica_camera_home",
       "exchange": [
         {
@@ -789,8 +803,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_camera_home_title",
       "hint_key": "tutorial.campaign_boudica_boudica_camera_home_hint",
       "speaker": "stonea",
-      "pause_game": true,
-      "camera_only": true,
       "trigger": {
         "type": "ui",
         "action": "hud_center_camera",
@@ -802,6 +814,8 @@
         "target": "hud_center_camera",
         "gesture": "tap"
       },
+      "pause_game": true,
+      "camera_only": true,
       "next": "boudica_choose_city"
     },
     {
@@ -821,11 +835,9 @@
       },
       "guide": {
         "kind": "world",
-        "target": "expand",
+        "target": "nameplate",
         "gesture": "tap"
       },
-      "pause_game": true,
-      "paused_action": "expand_once_then_resume",
       "next": "boudica_zoom_out",
       "camera": {
         "shot": "approach",
@@ -840,7 +852,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_transfer_target_title",
       "hint_key": "tutorial.campaign_boudica_boudica_transfer_target_hint",
       "speaker": "boudica",
-      "pause_game": true,
       "trigger": {
         "type": "ui",
         "action": "map_menu_open",
@@ -854,6 +865,7 @@
         "target": "player",
         "gesture": "tap"
       },
+      "pause_game": true,
       "next": "boudica_transfer_choose",
       "unavailable_next": "boudica_aid_kept"
     },
@@ -863,7 +875,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_transfer_choose_title",
       "hint_key": "tutorial.campaign_boudica_boudica_transfer_choose_hint",
       "speaker": "boudica",
-      "pause_game": true,
       "trigger": {
         "type": "ui",
         "action": "map_transfer",
@@ -877,6 +888,7 @@
         "target": "map_transfer",
         "gesture": "tap"
       },
+      "pause_game": true,
       "next": "boudica_transfer_send",
       "unavailable_next": "boudica_aid_kept"
     },
@@ -886,8 +898,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_transfer_send_title",
       "hint_key": "tutorial.campaign_boudica_boudica_transfer_send_hint",
       "speaker": "boudica",
-      "pause_game": true,
-      "paused_action": "send_resources_stay_paused",
       "trigger": {
         "type": "resource_transfer",
         "recipient": "trinovantes",
@@ -899,6 +909,8 @@
         "target": "transfer_send",
         "gesture": "tap"
       },
+      "pause_game": true,
+      "paused_action": "send_resources_stay_paused",
       "next": "boudica_share_sent",
       "unavailable_next": "boudica_aid_kept"
     },
@@ -938,8 +950,7 @@
     {
       "id": "boudica_choose_city",
       "type": "guide",
-      "title_key": "tutorial.campaign_boudica_boudica_city_intro_title",
-      "body_key": "tutorial.campaign_boudica_boudica_city_intro_body",
+      "title_key": "tutorial.campaign_boudica_boudica_choose_city_title",
       "hint_key": "tutorial.campaign_boudica_boudica_choose_city_hint",
       "speaker": "boudica",
       "trigger": {
@@ -1003,7 +1014,6 @@
     {
       "id": "boudica_city_rebuilt",
       "type": "scene",
-      "pause_game": false,
       "exchange": [
         {
           "speaker": "boudica",
@@ -1053,7 +1063,6 @@
     {
       "id": "boudica_snettisham_refuse_reply",
       "type": "scene",
-      "pause_game": false,
       "exchange": [
         {
           "speaker": "snettisham",
@@ -1107,7 +1116,6 @@
     {
       "id": "boudica_snettisham_accept_reply",
       "type": "scene",
-      "pause_game": false,
       "exchange": [
         {
           "speaker": "snettisham",
@@ -1281,7 +1289,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_alliance_target_title",
       "hint_key": "tutorial.campaign_boudica_boudica_alliance_target_hint",
       "speaker": "boudica",
-      "pause_game": true,
       "trigger": {
         "type": "ui",
         "action": "map_menu_open",
@@ -1295,6 +1302,7 @@
         "target": "player",
         "gesture": "tap"
       },
+      "pause_game": true,
       "unavailable_next": "boudica_aid_kept",
       "next": "boudica_alliance_request"
     },
@@ -1304,7 +1312,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_alliance_request_title",
       "hint_key": "tutorial.campaign_boudica_boudica_alliance_request_hint",
       "speaker": "boudica",
-      "pause_game": true,
       "trigger": {
         "type": "alliance_request",
         "target": "trinovantes",
@@ -1319,9 +1326,10 @@
         "target": "map_alliance",
         "gesture": "tap"
       },
+      "pause_game": true,
+      "paused_action": "request_alliance_stay_paused",
       "unavailable_next": "boudica_aid_kept",
-      "next": "boudica_alliance_reply",
-      "paused_action": "request_alliance_stay_paused"
+      "next": "boudica_alliance_reply"
     },
     {
       "id": "boudica_alliance_reply",
@@ -1344,7 +1352,6 @@
       "type": "objective",
       "title_key": "tutorial.campaign_boudica_boudica_alliance_wait_title",
       "speaker": "boudica",
-      "pause_game": true,
       "trigger": {
         "type": "alliance",
         "target": "trinovantes",
@@ -1748,7 +1755,6 @@
       "body_key": "tutorial.campaign_boudica_boudica_ninth_set_attack_ratio_body",
       "hint_key": "tutorial.campaign_boudica_boudica_ninth_set_attack_ratio_hint",
       "speaker": "boudica",
-      "pause_game": true,
       "trigger": {
         "type": "ui",
         "action": "attack_ratio",
@@ -1760,6 +1766,7 @@
         "target": "attack_ratio",
         "gesture": "drag"
       },
+      "pause_game": true,
       "next": "boudica_ninth_strike"
     },
     {
@@ -1833,7 +1840,6 @@
       "type": "guide",
       "title_key": "tutorial.campaign_boudica_boudica_alliance_target_title",
       "speaker": "boudica",
-      "pause_game": true,
       "trigger": {
         "type": "ui",
         "action": "map_menu_open",
@@ -1847,6 +1853,7 @@
         "target": "player",
         "gesture": "tap"
       },
+      "pause_game": true,
       "next": "boudica_alliance_dobunni_request",
       "unavailable_next": "boudica_alliance_corieltauvi_target"
     },
@@ -1855,7 +1862,6 @@
       "type": "guide",
       "title_key": "tutorial.campaign_boudica_boudica_alliance_target_title",
       "speaker": "boudica",
-      "pause_game": true,
       "trigger": {
         "type": "alliance_request",
         "target": "dobunni_1",
@@ -1870,6 +1876,8 @@
         "target": "map_alliance",
         "gesture": "tap"
       },
+      "pause_game": true,
+      "paused_action": "request_alliance_stay_paused",
       "next": "boudica_alliance_corieltauvi_target",
       "unavailable_next": "boudica_alliance_corieltauvi_target"
     },
@@ -1878,7 +1886,6 @@
       "type": "guide",
       "title_key": "tutorial.campaign_boudica_boudica_alliance_target_title",
       "speaker": "boudica",
-      "pause_game": true,
       "trigger": {
         "type": "ui",
         "action": "map_menu_open",
@@ -1892,6 +1899,7 @@
         "target": "player",
         "gesture": "tap"
       },
+      "pause_game": true,
       "next": "boudica_alliance_corieltauvi_request",
       "unavailable_next": "boudica_alliance_catuvellauni_target"
     },
@@ -1900,7 +1908,6 @@
       "type": "guide",
       "title_key": "tutorial.campaign_boudica_boudica_alliance_target_title",
       "speaker": "boudica",
-      "pause_game": true,
       "trigger": {
         "type": "alliance_request",
         "target": "corieltauvi_1",
@@ -1915,6 +1922,8 @@
         "target": "map_alliance",
         "gesture": "tap"
       },
+      "pause_game": true,
+      "paused_action": "request_alliance_stay_paused",
       "next": "boudica_alliance_catuvellauni_target",
       "unavailable_next": "boudica_alliance_catuvellauni_target"
     },
@@ -1923,7 +1932,6 @@
       "type": "guide",
       "title_key": "tutorial.campaign_boudica_boudica_alliance_target_title",
       "speaker": "boudica",
-      "pause_game": true,
       "trigger": {
         "type": "ui",
         "action": "map_menu_open",
@@ -1937,6 +1945,7 @@
         "target": "player",
         "gesture": "tap"
       },
+      "pause_game": true,
       "next": "boudica_alliance_catuvellauni_request",
       "unavailable_next": "boudica_final_battle_intro"
     },
@@ -1945,7 +1954,6 @@
       "type": "guide",
       "title_key": "tutorial.campaign_boudica_boudica_alliance_target_title",
       "speaker": "boudica",
-      "pause_game": true,
       "trigger": {
         "type": "alliance_request",
         "target": "catuvellauni",
@@ -1960,6 +1968,8 @@
         "target": "map_alliance",
         "gesture": "tap"
       },
+      "pause_game": true,
+      "paused_action": "request_alliance_stay_paused",
       "next": "boudica_final_battle_intro",
       "unavailable_next": "boudica_final_battle_intro"
     },
@@ -2061,7 +2071,10 @@
           "emote": "threat",
           "emote_text_key": "tutorial.campaign_boudica_boudica_last_stand_emote"
         }
-      ]
+      ],
+      "marker": {
+        "target": "suetonius_paulinus"
+      }
     },
     {
       "id": "boudica_last_stand_resist",
@@ -2106,7 +2119,10 @@
           "emote": "celebrate",
           "emote_text_key": "tutorial.campaign_boudica_boudica_last_stand_resist_emote"
         }
-      ]
+      ],
+      "marker": {
+        "target": "suetonius_paulinus"
+      }
     },
     {
       "id": "boudica_end",
