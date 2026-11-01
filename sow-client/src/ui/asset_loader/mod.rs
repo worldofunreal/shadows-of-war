@@ -1,20 +1,19 @@
 //! Shared portrait and hero-expression loading; see docs/nameplates-and-emotes.md.
 use sow_core::player::Leader;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::OnceLock;
 use web_time::{Duration, Instant};
 
 pub const MAX_AVATAR_FETCHES_IN_FLIGHT: usize = 6;
+pub const MAX_AVATAR_PREFETCHES_IN_FLIGHT: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AvatarFetchKey {
     Fallback,
     Leader(Leader),
     LeaderPortrait(Leader),
-    Campaign {
-        slug: String,
-        slot: usize,
-    },
+    Campaign { slug: String, slot: usize },
+    CampaignPrefetch(String),
 }
 
 #[derive(Clone, Debug)]
@@ -29,13 +28,22 @@ pub struct AssetLoader {
     pub catalog_in_flight: bool,
     pub maps: HashMap<String, Vec<u8>>,
     pub maps_in_flight: HashSet<String>,
-    pub avatars: HashMap<Leader, Vec<u8>>,
+    leader_sheets: HashSet<Leader>,
+    leader_portraits: HashSet<Leader>,
     pub campaign_avatar_slots: HashMap<String, usize>,
-    pub campaign_avatars: HashMap<String, Vec<u8>>,
-    pub avatar_fallback: Option<Vec<u8>>,
+    pub campaign_avatars: HashSet<String>,
+    avatar_fallback_loaded: bool,
     pub avatars_fetch_pending: Vec<AvatarFetchKey>,
     pub avatars_in_flight: HashSet<AvatarFetchKey>,
     avatar_retry_state: HashMap<AvatarFetchKey, Retry>,
+    avatar_prefetch_pending: VecDeque<String>,
+    avatar_prefetch_queued: HashSet<String>,
+    avatar_prefetch_retry: HashSet<String>,
+    avatar_prefetch_catalog: HashSet<String>,
+    avatar_prefetched: HashSet<String>,
+    avatar_prefetch_wants: HashMap<String, usize>,
+    avatar_prefetch_started: bool,
+    drawn_avatars: HashSet<String>,
     pub gpu_avatar_cells: Vec<(usize, Vec<u8>)>,
     /// Slots whose cell changed since the renderer last uploaded them.
     pub gpu_avatar_dirty: Vec<usize>,
@@ -61,13 +69,22 @@ impl AssetLoader {
             catalog_in_flight: false,
             maps: HashMap::new(),
             maps_in_flight: HashSet::new(),
-            avatars: HashMap::new(),
+            leader_sheets: HashSet::new(),
+            leader_portraits: HashSet::new(),
             campaign_avatar_slots: HashMap::new(),
-            campaign_avatars: HashMap::new(),
-            avatar_fallback: None,
+            campaign_avatars: HashSet::new(),
+            avatar_fallback_loaded: false,
             avatars_fetch_pending: Vec::new(),
             avatars_in_flight: HashSet::new(),
             avatar_retry_state: HashMap::new(),
+            avatar_prefetch_pending: VecDeque::new(),
+            avatar_prefetch_queued: HashSet::new(),
+            avatar_prefetch_retry: HashSet::new(),
+            avatar_prefetch_catalog: HashSet::new(),
+            avatar_prefetched: HashSet::new(),
+            avatar_prefetch_wants: HashMap::new(),
+            avatar_prefetch_started: false,
+            drawn_avatars: HashSet::new(),
             gpu_avatar_cells: vec![(
                 sow_render::text::AVATAR_GOLD_SLOT,
                 gold_icon_cell().to_vec(),
@@ -91,6 +108,7 @@ impl AssetLoader {
             AvatarFetchKey::Leader(leader) => format!("spritesheets/{}.webp", leader.art_slug()),
             AvatarFetchKey::LeaderPortrait(leader) => format!("{}.webp", leader.art_slug()),
             AvatarFetchKey::Campaign { slug, .. } => format!("{slug}.webp"),
+            AvatarFetchKey::CampaignPrefetch(slug) => format!("{slug}.webp"),
         }
     }
 
@@ -111,7 +129,22 @@ impl AssetLoader {
 
     pub fn queue_leader_avatar(&mut self, leader: Leader, priority: bool) {
         self.queue_avatar_fetch(AvatarFetchKey::Fallback, true);
+        let sheet = AvatarFetchKey::Leader(leader);
+        if !self.leader_sheets.contains(&leader)
+            && !self.avatars_in_flight.contains(&sheet)
+            && !self.avatars_fetch_pending.contains(&sheet)
+        {
+            self.queue_avatar_fetch(AvatarFetchKey::LeaderPortrait(leader), priority);
+        }
+    }
+
+    pub fn queue_leader_expressions(&mut self, leader: Leader, priority: bool) {
+        self.queue_avatar_fetch(AvatarFetchKey::Fallback, true);
         let key = self.leader_fetch_key(leader);
+        if matches!(&key, AvatarFetchKey::Leader(_)) {
+            self.avatars_fetch_pending
+                .retain(|pending| *pending != AvatarFetchKey::LeaderPortrait(leader));
+        }
         self.queue_avatar_fetch(key, priority);
     }
 
@@ -131,18 +164,26 @@ impl AssetLoader {
                     ),
                 );
             }
-            self.queue_leader_avatar(leader, false);
+            self.queue_leader_expressions(leader, true);
             return;
         }
         let Some(slot) = self.portrait_slot(slug) else {
             return;
         };
-        if self.campaign_avatars.contains_key(slug) {
+        if self.campaign_avatars.contains(slug) {
             return;
+        }
+        let prefetch = AvatarFetchKey::CampaignPrefetch(slug.to_string());
+        if self.avatars_in_flight.contains(&prefetch) {
+            self.avatar_prefetch_wants.insert(slug.to_owned(), slot);
+            return;
+        }
+        if self.avatar_prefetch_queued.remove(slug) {
+            self.avatar_prefetch_pending.retain(|queued| queued != slug);
         }
         self.queue_avatar_fetch(
             AvatarFetchKey::Campaign {
-                slug: slug.to_string(),
+                slug: slug.to_owned(),
                 slot,
             },
             false,
@@ -152,13 +193,130 @@ impl AssetLoader {
     /// Requests the portraits drawn this frame. Portraits not in this list may be evicted.
     pub fn request_drawn_portraits(&mut self, slugs: &[String]) {
         self.drawn_frame += 1;
+        let wanted: HashSet<_> = slugs.iter().cloned().collect();
+        self.drawn_avatars.clone_from(&wanted);
+        let mut stale = Vec::new();
+        self.avatars_fetch_pending.retain(|key| match key {
+            AvatarFetchKey::Campaign { slug, .. } if !wanted.contains(slug) => {
+                stale.push(slug.clone());
+                false
+            }
+            _ => true,
+        });
+        self.avatar_prefetch_wants
+            .retain(|slug, _| wanted.contains(slug));
+        for slug in stale {
+            if self.avatar_prefetch_catalog.contains(&slug) {
+                self.enqueue_avatar_prefetch(&slug);
+            }
+        }
         for slug in slugs {
             self.queue_campaign_avatar(slug);
         }
     }
 
-    pub(crate) fn request_additional_drawn_portrait(&mut self, slug: &str) {
-        self.queue_campaign_avatar(slug);
+    pub fn start_tutorial_bot_avatar_prefetch(&mut self) {
+        if self.avatar_prefetch_started {
+            return;
+        }
+        self.avatar_prefetch_started = true;
+        for role in [
+            sow_core::geo_entities::Role::Tribe,
+            sow_core::geo_entities::Role::Nation,
+        ] {
+            for entity in sow_core::geo_entities::bots(role) {
+                let Some(slug) = entity
+                    .avatar
+                    .as_deref()
+                    .filter(|slug| valid_avatar_id(slug))
+                else {
+                    continue;
+                };
+                if self.avatar_prefetch_catalog.insert(slug.to_owned()) {
+                    self.enqueue_avatar_prefetch(slug);
+                }
+            }
+        }
+    }
+
+    pub fn pump_tutorial_avatar_prefetch_retries(&mut self) {
+        let retry: Vec<_> = self.avatar_prefetch_retry.iter().cloned().collect();
+        for slug in retry {
+            let key = AvatarFetchKey::CampaignPrefetch(slug.clone());
+            if self
+                .avatar_retry_state
+                .get(&key)
+                .is_some_and(|state| state.permanent)
+            {
+                self.avatar_prefetch_retry.remove(&slug);
+            } else if self.retry_ready(&key) {
+                self.avatar_prefetch_retry.remove(&slug);
+                self.enqueue_avatar_prefetch(&slug);
+            }
+        }
+    }
+
+    fn enqueue_avatar_prefetch(&mut self, slug: &str) {
+        let key = AvatarFetchKey::CampaignPrefetch(slug.to_owned());
+        if self.avatar_prefetched.contains(slug)
+            || self.campaign_avatars.contains(slug)
+            || self.avatars_in_flight.contains(&key)
+            || self.avatar_prefetch_queued.contains(slug)
+            || self.avatars_fetch_pending.iter().any(
+                |pending| matches!(pending, AvatarFetchKey::Campaign { slug: queued, .. } if queued == slug),
+            )
+            || self.avatars_in_flight.iter().any(
+                |pending| matches!(pending, AvatarFetchKey::Campaign { slug: queued, .. } if queued == slug),
+            )
+            || !self.retry_ready(&key)
+        {
+            return;
+        }
+        self.avatar_prefetch_queued.insert(slug.to_owned());
+        self.avatar_prefetch_pending.push_back(slug.to_owned());
+    }
+
+    pub fn take_next_avatar_prefetch_pending(&mut self) -> Option<AvatarFetchKey> {
+        let pending = self.avatar_prefetch_pending.len();
+        for _ in 0..pending {
+            let slug = self.avatar_prefetch_pending.pop_front()?;
+            self.avatar_prefetch_queued.remove(&slug);
+            let key = AvatarFetchKey::CampaignPrefetch(slug.clone());
+            if self.avatar_prefetched.contains(&slug)
+                || self.campaign_avatars.contains(&slug)
+                || self.avatars_in_flight.contains(&key)
+            {
+                continue;
+            }
+            if !self.retry_ready(&key) {
+                if self
+                    .avatar_retry_state
+                    .get(&key)
+                    .is_some_and(|state| !state.permanent)
+                {
+                    self.avatar_prefetch_queued.insert(slug.clone());
+                    self.avatar_prefetch_pending.push_back(slug);
+                }
+                continue;
+            }
+            if self.avatars_fetch_pending.iter().any(
+                |pending| matches!(pending, AvatarFetchKey::Campaign { slug: queued, .. } if *queued == slug),
+            ) || self.avatars_in_flight.iter().any(
+                |pending| matches!(pending, AvatarFetchKey::Campaign { slug: queued, .. } if *queued == slug),
+            ) {
+                continue;
+            }
+            self.avatars_in_flight.insert(key.clone());
+            return Some(key);
+        }
+        None
+    }
+
+    pub fn avatar_prefetch_in_flight(&self) -> usize {
+        self.avatars_in_flight
+            .iter()
+            .filter(|key| matches!(key, AvatarFetchKey::CampaignPrefetch(_)))
+            .count()
     }
 
     /// The slot for a portrait drawn this frame. A full pool evicts the least recently drawn
@@ -189,6 +347,9 @@ impl AssetLoader {
             self.avatars_fetch_pending.retain(
                 |key| !matches!(key, AvatarFetchKey::Campaign { slug, .. } if *slug == evicted),
             );
+            if self.avatar_prefetch_catalog.contains(&evicted) {
+                self.enqueue_avatar_prefetch(&evicted);
+            }
             // Blank until the new portrait arrives, so the evicted face never shows under the new owner.
             let blank = vec![0; (sow_render::text::AVATAR_CELL as usize).pow(2) * 4];
             self.push_gpu_cell(slot, blank);
@@ -239,11 +400,15 @@ impl AssetLoader {
 
     fn avatar_loaded(&self, key: &AvatarFetchKey) -> bool {
         match key {
-            AvatarFetchKey::Fallback => self.avatar_fallback.is_some(),
-            AvatarFetchKey::Leader(leader) | AvatarFetchKey::LeaderPortrait(leader) => {
-                self.avatars.contains_key(&leader)
+            AvatarFetchKey::Fallback => self.avatar_fallback_loaded,
+            AvatarFetchKey::Leader(leader) => self.leader_sheets.contains(leader),
+            AvatarFetchKey::LeaderPortrait(leader) => {
+                self.leader_sheets.contains(leader) || self.leader_portraits.contains(leader)
             }
-            AvatarFetchKey::Campaign { slug, .. } => self.campaign_avatars.contains_key(slug),
+            AvatarFetchKey::Campaign { slug, .. } => self.campaign_avatars.contains(slug),
+            AvatarFetchKey::CampaignPrefetch(slug) => {
+                self.avatar_prefetched.contains(slug) || self.campaign_avatars.contains(slug)
+            }
         }
     }
 
@@ -301,22 +466,44 @@ impl AssetLoader {
             .map(|retry| retry.attempts + 1)
             .unwrap_or(1);
         let permanent = permanent_error || attempts >= 3;
-        if permanent && let AvatarFetchKey::Leader(leader) = key {
+        if permanent && let AvatarFetchKey::Leader(leader) = &key {
             log::warn!(
                 "Hero sheet unavailable for {}: {reason}; using static portrait",
-                sow_data::commerce::leader_id(leader)
+                sow_data::commerce::leader_id(*leader)
             );
-            self.queue_avatar_fetch(AvatarFetchKey::LeaderPortrait(leader), true);
+            self.queue_avatar_fetch(AvatarFetchKey::LeaderPortrait(*leader), true);
         }
-        self.avatar_retry_state.insert(
-            key,
-            Retry {
-                attempts,
-                next_retry_at: Instant::now()
-                    + Duration::from_millis(500 * (1 << attempts.saturating_sub(1).min(4))),
-                permanent,
-            },
-        );
+        let retry = Retry {
+            attempts,
+            next_retry_at: Instant::now()
+                + Duration::from_millis(500 * (1 << attempts.saturating_sub(1).min(4))),
+            permanent,
+        };
+        self.avatar_retry_state.insert(key.clone(), retry.clone());
+        match &key {
+            AvatarFetchKey::CampaignPrefetch(slug) => {
+                if let Some(slot) = self.avatar_prefetch_wants.remove(slug) {
+                    self.queue_avatar_fetch(
+                        AvatarFetchKey::Campaign {
+                            slug: slug.clone(),
+                            slot,
+                        },
+                        true,
+                    );
+                }
+                if !permanent {
+                    self.avatar_prefetch_retry.insert(slug.clone());
+                }
+            }
+            AvatarFetchKey::Campaign { slug, .. }
+                if self.avatar_prefetch_catalog.contains(slug) && !permanent =>
+            {
+                self.avatar_retry_state
+                    .insert(AvatarFetchKey::CampaignPrefetch(slug.clone()), retry);
+                self.avatar_prefetch_retry.insert(slug.clone());
+            }
+            _ => {}
+        }
     }
 
     pub fn ingest_avatar_webp_bytes(
@@ -326,10 +513,31 @@ impl AssetLoader {
     ) -> Result<(), String> {
         self.avatars_in_flight.remove(&key);
         self.avatar_retry_state.remove(&key);
+        if let AvatarFetchKey::CampaignPrefetch(slug) = &key {
+            self.avatar_prefetched.insert(slug.clone());
+            let Some(slot) = self.avatar_prefetch_wants.remove(slug) else {
+                return Ok(());
+            };
+            if self.campaign_avatar_slots.get(slug) != Some(&slot) {
+                return Ok(());
+            }
+            let image = image::load_from_memory(bytes)
+                .map_err(|error| format!("decode avatar: {error}"))?
+                .to_rgba8();
+            let campaign_key = AvatarFetchKey::Campaign {
+                slug: slug.clone(),
+                slot,
+            };
+            self.store_avatar_cells(campaign_key, image)?;
+            self.campaign_avatars.insert(slug.clone());
+            return Ok(());
+        }
         if let AvatarFetchKey::Campaign { slug, slot } = &key
-            && self.campaign_avatar_slots.get(slug) != Some(slot)
+            && (self.campaign_avatar_slots.get(slug) != Some(slot)
+                || !self.drawn_avatars.contains(slug))
         {
-            // Evicted while this fetch was in flight; the slot may already hold another portrait.
+            // The response also warmed the browser's HTTP cache.
+            self.avatar_prefetched.insert(slug.clone());
             return Ok(());
         }
         let image = image::load_from_memory(bytes)
@@ -337,18 +545,23 @@ impl AssetLoader {
             .to_rgba8();
         self.store_avatar_cells(key.clone(), image)?;
         match key {
-            AvatarFetchKey::Fallback => self.avatar_fallback = Some(bytes.to_vec()),
-            AvatarFetchKey::Leader(leader) | AvatarFetchKey::LeaderPortrait(leader) => {
-                self.avatars.insert(leader, bytes.to_vec());
+            AvatarFetchKey::Fallback => self.avatar_fallback_loaded = true,
+            AvatarFetchKey::Leader(leader) => {
+                self.leader_sheets.insert(leader);
+            }
+            AvatarFetchKey::LeaderPortrait(leader) => {
+                self.leader_portraits.insert(leader);
             }
             AvatarFetchKey::Campaign { slug, .. } => {
-                self.campaign_avatars.insert(slug, bytes.to_vec());
+                self.campaign_avatars.insert(slug.clone());
+                self.avatar_prefetched.insert(slug);
             }
+            AvatarFetchKey::CampaignPrefetch(_) => unreachable!("prefetch handled above"),
         }
         Ok(())
     }
 
-    /// The GPU cells a decoded avatar fills: four hero expressions, a fallback or campaign slot.
+    /// Decoded sheets fill all expressions; a Calm portrait fills one hero slot.
     fn store_avatar_cells(
         &mut self,
         key: AvatarFetchKey,
@@ -369,21 +582,22 @@ impl AssetLoader {
                 })
                 .collect::<Vec<_>>(),
             AvatarFetchKey::LeaderPortrait(leader) => {
-                let cell = square_avatar_cell(&image);
-                sow_core::emote::AvatarExpression::ALL
-                    .map(|expression| {
-                        (
-                            sow_render::text::leader_avatar_slot(leader, expression),
-                            cell.clone(),
-                        )
-                    })
-                    .to_vec()
+                vec![(
+                    sow_render::text::leader_avatar_slot(
+                        leader,
+                        sow_core::emote::AvatarExpression::Calm,
+                    ),
+                    square_avatar_cell(&image),
+                )]
             }
             AvatarFetchKey::Fallback => vec![(
                 sow_render::text::AVATAR_FALLBACK_SLOT,
                 square_avatar_cell(&image),
             )],
             AvatarFetchKey::Campaign { slot, .. } => vec![(slot, square_avatar_cell(&image))],
+            AvatarFetchKey::CampaignPrefetch(_) => {
+                return Err("cache-only avatar prefetch cannot fill an atlas slot".into());
+            }
         };
         for (slot, cell) in cells {
             self.push_gpu_cell(slot, cell);
@@ -506,7 +720,10 @@ mod tests {
         }
         let cells = hero_avatar_cells(&source).unwrap();
         for (index, cell) in cells.iter().enumerate() {
-            assert_eq!(cell.len(), (sow_render::text::AVATAR_CELL as usize).pow(2) * 4);
+            assert_eq!(
+                cell.len(),
+                (sow_render::text::AVATAR_CELL as usize).pow(2) * 4
+            );
             assert!(cell.chunks_exact(4).all(|pixel| pixel == colors[index]));
         }
     }
@@ -551,7 +768,7 @@ mod tests {
     }
 
     #[test]
-    fn calm_portrait_fallback_fills_each_hero_expression_slot() {
+    fn calm_portrait_fallback_fills_only_the_calm_slot() {
         let leader = Leader::of("boudica");
         let mut loader = AssetLoader::new();
         let portrait = image::RgbaImage::from_pixel(256, 256, image::Rgba([12, 34, 56, 255]));
@@ -563,8 +780,14 @@ mod tests {
             .iter()
             .filter(|entry| entry.0 != sow_render::text::AVATAR_GOLD_SLOT)
             .collect::<Vec<_>>();
-        assert_eq!(cells.len(), 4);
-        assert!(cells.windows(2).all(|pair| pair[0].1 == pair[1].1));
+        assert_eq!(cells.len(), 1);
+        assert_eq!(
+            cells[0].0,
+            sow_render::text::leader_avatar_slot(
+                leader,
+                sow_core::emote::AvatarExpression::Calm
+            )
+        );
     }
 
     #[test]
@@ -614,24 +837,28 @@ mod tests {
     #[wasm_bindgen_test]
     fn death_avatar_requests_cold_portraits_and_releases_the_slot_next_frame() {
         let mut loader = AssetLoader::new();
-        loader.request_drawn_portraits(&[]);
-        loader.request_additional_drawn_portrait("stonea");
+        loader.request_drawn_portraits(&["stonea".into()]);
 
         let slot = loader.campaign_avatar_slot("stonea").unwrap();
-        assert!(!loader.campaign_avatars.contains_key("stonea"));
-        assert!(loader.avatars_fetch_pending.contains(&AvatarFetchKey::Campaign {
-            slug: "stonea".into(),
-            slot,
-        }));
+        assert!(!loader.campaign_avatars.contains("stonea"));
+        assert!(
+            loader
+                .avatars_fetch_pending
+                .contains(&AvatarFetchKey::Campaign {
+                    slug: "stonea".into(),
+                    slot,
+                })
+        );
         assert_eq!(loader.portrait_last_drawn[slot], loader.drawn_frame);
 
         loader.request_drawn_portraits(&[]);
         assert!(loader.portrait_last_drawn[slot] < loader.drawn_frame);
 
-        loader.request_drawn_portraits(&[]);
-        loader.request_additional_drawn_portrait("boudica");
-        assert!(loader
-            .avatars_fetch_pending
-            .contains(&AvatarFetchKey::Leader(Leader::of("boudica"))));
+        loader.request_drawn_portraits(&["boudica".into()]);
+        assert!(
+            loader
+                .avatars_fetch_pending
+                .contains(&AvatarFetchKey::Leader(Leader::of("boudica")))
+        );
     }
 }

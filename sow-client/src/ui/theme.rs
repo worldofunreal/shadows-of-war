@@ -55,7 +55,7 @@ pub mod dev_config {
     impl Default for DevConfig {
         fn default() -> Self {
             Self {
-                thickness: 1.0,
+                thickness: 0.5,
                 darkness: 0.35,
                 shore_thickness: 0.35,
                 shore_darkness: 1.0,

@@ -18,7 +18,12 @@
     const paused = motionPaused || prefersReducedMotion.matches;
     document.documentElement.classList.toggle("landing-motion-paused", paused);
     stepVideos.forEach((video) => {
-      if (paused || document.visibilityState === "hidden" || video.dataset.inView === "false" || video.dataset.failed) {
+      if (
+        paused ||
+        document.visibilityState === "hidden" ||
+        video.dataset.inView === "false" ||
+        video.dataset.failed
+      ) {
         video.pause();
       } else {
         video.play()?.catch(() => {});
@@ -112,7 +117,9 @@
   let pickerReturnFocus = null;
 
   function getCardImg(card) {
-    return card?.querySelector ? card.querySelector("img") : card?.children?.find?.((c) => c.tagName === "IMG") || null;
+    return card?.querySelector
+      ? card.querySelector("img")
+      : card?.children?.find?.((c) => c.tagName === "IMG") || null;
   }
 
   const cardAvatarAnims = new WeakMap<any, any>();
@@ -136,7 +143,9 @@
 
     const running = cardAvatarAnims.get(img);
     if (running && typeof running.cancel === "function") {
-      try { running.cancel(); } catch {}
+      try {
+        running.cancel();
+      } catch {}
     }
 
     const anim = img.animate(
@@ -169,6 +178,31 @@
     }
   }
   const normalize = (text) => String(text).normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase();
+
+  const directoryCards = $$("[data-leader-directory-card]");
+  const directorySearch = $("[data-leader-directory-search]");
+  const directoryCount = $("[data-leader-directory-count]");
+  const directoryEmpty = $("[data-leader-directory-empty]");
+  function filterDirectory() {
+    const query = normalize(directorySearch?.value || "").trim();
+    let shown = 0;
+    directoryCards.forEach((card) => {
+      const id = card.dataset.leaderId;
+      const name = siteText(`heroes.leader_${id}_name`, card.dataset.name);
+      const civilization = siteText(`heroes.leader_${id}_civilization`, card.dataset.civ);
+      card.hidden = !normalize(`${name} ${civilization}`).includes(query);
+      if (!card.hidden) shown++;
+    });
+    if (directoryCount) directoryCount.textContent = `${shown} / ${directoryCards.length}`;
+    if (directoryEmpty) directoryEmpty.hidden = shown !== 0;
+  }
+  directorySearch?.addEventListener("input", filterDirectory);
+  $("[data-leader-directory-clear]")?.addEventListener("click", () => {
+    directorySearch.value = "";
+    filterDirectory();
+    directorySearch.focus({ preventScroll: true });
+  });
+  if (directoryCards.length) filterDirectory();
 
   function showText(element, leader, field) {
     if (!element) return "";
@@ -236,7 +270,12 @@
     );
   image?.addEventListener("load", () => {
     if (isCurrentArtwork()) {
-      art.classList.remove("is-loading", "is-unavailable", "is-animating-exit-next", "is-animating-exit-prev");
+      art.classList.remove(
+        "is-loading",
+        "is-unavailable",
+        "is-animating-exit-next",
+        "is-animating-exit-prev",
+      );
       showcase?.classList.remove("is-transitioning");
       triggerEnterAnimation();
     }
@@ -257,7 +296,9 @@
     const direction = explicitDirection !== 0 ? explicitDirection : index >= activeLeaderIndex ? 1 : -1;
     lastDirection = direction;
     activeLeaderIndex = index;
-    try { window.sessionStorage.setItem("sow_site_selected_leader", leader.id); } catch {}
+    try {
+      window.sessionStorage.setItem("sow_site_selected_leader", leader.id);
+    } catch {}
     const profile = $("[data-detail-profile]");
     if (profile) profile.href = `${document.documentElement.dataset.sitePrefix || "/"}leaders/${leader.id}/`;
     const name = showText($("[data-detail-name]"), leader, "name");
@@ -437,43 +478,79 @@
   });
 
   const mapCards = $$("[data-map-select]");
-  const mapImage = $("[data-map-image]");
-  const mapTitle = $("[data-map-name]");
+  const mapImage = ($("[data-map-image]") || $("[data-map-preview-image]")) as HTMLImageElement | null;
+  const mapTitle = $("[data-map-name]") || $("[data-map-current-name]");
   const mapFrame = $("[data-map-frame]");
   const mapPrev = $("[data-map-prev]");
   const mapNext = $("[data-map-next]");
   let activeMapImage = mapImage?.getAttribute("src") || "";
+  let activeMapName = mapTitle?.textContent || "";
   let activeMapIndex = mapCards.findIndex((card) => card.getAttribute("aria-pressed") === "true");
   if (activeMapIndex < 0) activeMapIndex = 0;
+  let activeMapDirection = "next";
+
+  function finishMapChange() {
+    if (!mapImage?.currentSrc.endsWith(activeMapImage)) return;
+    if (mapTitle) mapTitle.textContent = activeMapName;
+    mapFrame?.classList.remove("is-loading", "is-unavailable", "is-animating-exit-next", "is-animating-exit-prev");
+    if (!prefersReducedMotion.matches) {
+      mapFrame?.classList.add(activeMapDirection === "next" ? "is-animating-enter-next" : "is-animating-enter-prev");
+    }
+  }
 
   function selectMapIndex(index: number) {
     if (!mapCards.length) return;
     const bounded = (index + mapCards.length) % mapCards.length;
     const card = mapCards[bounded];
     if (!card) return;
+    const offset = (bounded - activeMapIndex + mapCards.length) % mapCards.length;
+    activeMapDirection = offset <= mapCards.length / 2 ? "next" : "prev";
     activeMapIndex = bounded;
+    activeMapImage = card.dataset.mapImage || activeMapImage;
+    activeMapName = card.dataset.mapName || activeMapName;
+    mapFrame?.classList.remove(
+      "is-animating-enter-next",
+      "is-animating-enter-prev",
+      "is-animating-exit-next",
+      "is-animating-exit-prev",
+    );
+    if (!prefersReducedMotion.matches)
+      mapFrame?.classList.add(activeMapDirection === "next" ? "is-animating-exit-next" : "is-animating-exit-prev");
     mapFrame?.classList.add("is-loading");
     mapFrame?.classList.remove("is-unavailable");
-    if (mapImage && card.dataset.mapName) mapImage.alt = card.dataset.mapName;
-    if (mapTitle && card.dataset.mapName) mapTitle.textContent = card.dataset.mapName;
-    if (card.dataset.mapImage) {
-      activeMapImage = card.dataset.mapImage;
-      if (mapImage) mapImage.src = activeMapImage;
+    if (mapTitle) mapTitle.textContent = activeMapName;
+    if (mapImage) {
+      mapImage.alt = activeMapName;
+      mapImage.src = activeMapImage;
     }
-    if (mapImage?.complete && mapImage.naturalWidth && mapImage.currentSrc.endsWith(activeMapImage))
-      mapFrame?.classList.remove("is-loading");
     mapCards.forEach((item) => item.setAttribute("aria-pressed", String(item === card)));
-    card.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    card.scrollIntoView?.({
+      block: "nearest",
+      inline: "nearest",
+      behavior: prefersReducedMotion.matches ? "instant" : "smooth",
+    });
+    if (mapImage?.complete && mapImage.naturalWidth && mapImage.currentSrc.endsWith(activeMapImage))
+      finishMapChange();
   }
 
   mapImage?.addEventListener("load", () => {
-    if (mapImage.currentSrc.endsWith(activeMapImage))
-      mapFrame.classList.remove("is-loading", "is-unavailable");
+    finishMapChange();
   });
   mapImage?.addEventListener("error", () => {
     if (!mapImage.currentSrc.endsWith(activeMapImage)) return;
-    mapFrame.classList.remove("is-loading");
+    if (mapTitle) mapTitle.textContent = activeMapName;
+    mapFrame.classList.remove(
+      "is-loading",
+      "is-animating-exit-next",
+      "is-animating-exit-prev",
+      "is-animating-enter-next",
+      "is-animating-enter-prev",
+    );
     mapFrame.classList.add("is-unavailable");
+  });
+  mapFrame?.addEventListener("animationend", (event) => {
+    if (event.target !== mapImage) return;
+    mapFrame.classList.remove("is-animating-enter-next", "is-animating-enter-prev");
   });
   mapCards.forEach((card, index) =>
     card.addEventListener("click", () => {

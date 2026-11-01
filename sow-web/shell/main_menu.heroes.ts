@@ -165,9 +165,9 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
         selected +
         "'>" +
         (queueLocked && typeof heroLockBadgeSvg === "function" ? heroLockBadgeSvg() : "") +
-        "<span class='sow-heroes__card-art' style=\"background-image:url('" +
+        "<span class='sow-heroes__card-art'><img src='" +
         esc(avatarUrl) +
-        "')\"></span>" +
+        "' alt='' width='68' height='68' loading='lazy' decoding='async'></span>" +
         "<span class='sow-heroes__card-copy'><strong>" +
         esc(leaderDisplayName(leader)) +
         "</strong><small>" +
@@ -209,9 +209,9 @@ function renderRandomLeaderCard(selected: boolean) {
         selected +
         "'>" +
         (queueLocked && typeof heroLockBadgeSvg === "function" ? heroLockBadgeSvg() : "") +
-        "<span class='sow-heroes__card-art' style=\"background-image:url('" +
+        "<span class='sow-heroes__card-art'><img src='" +
         esc(avatarUrl) +
-        "')\"></span>" +
+        "' alt='' width='68' height='68' loading='lazy' decoding='async'></span>" +
         "<span class='sow-heroes__card-copy'><strong>" +
         esc(randomLeaderName()) +
         "</strong><em>" +

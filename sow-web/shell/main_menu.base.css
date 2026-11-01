@@ -865,28 +865,25 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 }
 
 .sow-menu__quick-match {
-  min-height: 62px;
+  min-height: 56px;
   padding-block: 8px;
 }
 
 .sow-menu__quick-match > div {
   display: grid;
-  gap: 4px;
+  gap: 3px;
 }
 
 .sow-menu__quick-match strong {
-  font-size: 14px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
 }
 
 .sow-menu__quick-match small {
   color: rgba(255, 244, 220, 0.74);
   font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.09em;
-}
-
-.sow-menu__quick-match small b {
-  color: #fff4dc;
+  letter-spacing: 0.06em;
 }
 
 #sow-menu[data-screen="home"] .sow-menu__command {
@@ -1955,27 +1952,16 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   transform: scale(0.98);
 }
 .sow-ranked__actions button:focus-visible,
-.sow-ranked__queue-footer button:focus-visible,
-.sow-ranked__my-rank:focus-visible {
+.sow-ranked__queue-footer button:focus-visible {
   outline: 2px solid #ffdf96;
   outline-offset: 4px;
 }
-.sow-ranked__mode-icon {
-  width: 24px;
-  height: 24px;
-  margin-inline-end: 9px;
-  vertical-align: middle;
-}
 .sow-menu__quick-match [data-ranked-emblem] .sow-ranked__emblem {
-  width: 58px;
+  width: 40px;
 }
 .sow-menu__quick-match [data-ranked-emblem] b {
-  font-size: 9px;
-  padding: 1px 5px;
-}
-.sow-ranked__my-rank {
-  min-height: 44px;
-  color: #e1c28b;
+  font-size: 7px;
+  padding: 1px 4px;
 }
 .sow-menu__ranked-result-stage {
   padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));

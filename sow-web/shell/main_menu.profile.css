@@ -2122,6 +2122,14 @@
   background-size: cover;
 }
 
+.sow-heroes__card-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
 .sow-heroes__card-copy {
   display: flex;
   min-width: 0;

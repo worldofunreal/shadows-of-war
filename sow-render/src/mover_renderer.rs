@@ -187,6 +187,7 @@ impl MoverRenderer {
     }
 
     pub fn upload_atlas(&self, encoder: &mut gpu::CommandEncoder, context: &gpu::Context) {
+        encoder.init_texture(self.atlas.texture);
         self.atlas.upload(encoder, context);
     }
 

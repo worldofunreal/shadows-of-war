@@ -21,7 +21,6 @@ export async function publish(
     pages: string[];
     englishOnly?: string[];
     biographies: { leaders: Record<string, Record<string, any>> };
-    leaderExplorer: string;
     mapExplorer: string;
   },
   source = import.meta.dir,
@@ -152,12 +151,13 @@ export async function publish(
         const sourceNote = bio.isSaga
           ? `<p class="leader-history-source">${escape(bio.sourceNote)}</p>`
           : bio.sources?.length
-          ? `<p class="leader-history-source"><strong>${escape(t("site.historical_reference"))}</strong> ${bio.sources.map((source: { title: string; url: string }) => `<a href="${escape(source.url)}" rel="noopener noreferrer" target="_blank">${escape(source.title)}</a>`).join(" · ")}</p>`
-          : (() => {
-              const attributionParts = t("site.wikipedia_excerpt").split("{article}");
-              if (attributionParts.length !== 2) throw Error(`Invalid Wikipedia attribution translation ${code}`);
-              return `<p class="leader-history-source">${escape(attributionParts[0])}<a href="${escape(bio.url)}" rel="noopener noreferrer" target="_blank">${escape(bio.title)}</a>${escape(attributionParts[1])} <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener noreferrer" target="_blank">CC BY-SA 4.0</a>.</p>`;
-            })();
+            ? `<p class="leader-history-source"><strong>${escape(t("site.historical_reference"))}</strong> ${bio.sources.map((source: { title: string; url: string }) => `<a href="${escape(source.url)}" rel="noopener noreferrer" target="_blank">${escape(source.title)}</a>`).join(" · ")}</p>`
+            : (() => {
+                const attributionParts = t("site.wikipedia_excerpt").split("{article}");
+                if (attributionParts.length !== 2)
+                  throw Error(`Invalid Wikipedia attribution translation ${code}`);
+                return `<p class="leader-history-source">${escape(attributionParts[0])}<a href="${escape(bio.url)}" rel="noopener noreferrer" target="_blank">${escape(bio.title)}</a>${escape(attributionParts[1])} <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener noreferrer" target="_blank">CC BY-SA 4.0</a>.</p>`;
+              })();
         title = `${f.name} — ${f.civilization} | Shadows of War`;
         description = `${f.historical}. ${bio.highlight ?? bio.intro[0]}`.slice(0, 160).trim();
         const articleParagraphs = (paragraphs: string[]) =>
@@ -189,10 +189,20 @@ export async function publish(
       } else if (route === "leaders/") {
         title = `${t("site.leaders")} | Shadows of War`;
         description = t("site.leaders_summary");
-        if (indexTemplate.split("<!-- LEADER_EXPLORER -->").length !== 2 || !input.leaderExplorer)
-          throw Error("Leader directory needs one shared leader explorer");
+        if (
+          indexTemplate.split("<!-- LEADER_DIRECTORY_CARDS -->").length !== 2 ||
+          indexTemplate.split("<!-- LEADER_DIRECTORY_COUNT -->").length !== 2
+        )
+          throw Error("Leader directory needs one card and count marker");
+        const cards = leaders
+          .map((h) => {
+            const f = fields(h);
+            return `<a class="leader-directory-card" data-leader-directory-card data-leader-id="${escape(h.id)}" data-name="${escape(f.name)}" data-civ="${escape(f.civilization)}" aria-label="${escape(t("site.inspect_leader", { name: f.name }))}" href="${path(code, `leaders/${h.id}/`)}"><img class="leader-directory-art" src="/assets/shell/leaders/${escape(h.artSlug)}_mobile.webp" alt="" width="900" height="1600" loading="lazy" decoding="async"><img class="leader-directory-avatar" src="/assets/gameplay/avatars/${escape(h.artSlug)}.webp" alt="" width="128" height="128" loading="lazy" decoding="async"><span class="leader-directory-copy"><span class="leader-directory-civilization">${escape(f.civilization)}</span><span class="leader-directory-name">${escape(f.name)}</span><span class="leader-directory-ability">${escape(f.ability)}</span><span class="leader-directory-action">${escape(t("site.view_profile"))} <span aria-hidden="true">→</span></span></span></a>`;
+          })
+          .join("\n");
         html = indexTemplate
-          .replace("<!-- LEADER_EXPLORER -->", input.leaderExplorer)
+          .replace("<!-- LEADER_DIRECTORY_CARDS -->", cards)
+          .replace("<!-- LEADER_DIRECTORY_COUNT -->", `${leaders.length} / ${leaders.length}`)
           .replace("<!-- LEADER_FOOTER -->", footer);
       } else if (route === "maps/") {
         title = `${t("site.maps_in_rotation")} | Shadows of War`;

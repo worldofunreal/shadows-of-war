@@ -205,7 +205,7 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     require_config("SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID")?;
     require_secret("SOW_PLAY_GAMES_WEB_CLIENT_SECRET")?;
     require_secret("WOU_SOW_IDENTITY_SECRET")?;
-    println!("==> 1/8 Preflight (read-only)");
+    println!("==> 1/8 Preflight and asset preparation");
     preflight(paths, &config)?;
     let version = version(paths, bump)?;
     println!("==> Production {version}");
@@ -1097,16 +1097,12 @@ fn require_published_source(paths: &Paths) -> Result<super::SourceIdentity> {
     if !workspace_dirty_files(paths)?.is_empty() {
         bail!("release source must be committed and publicly available before building");
     }
-    let root = paths.root.to_str().context("workspace path is not UTF-8")?;
     let source = super::source_identity(paths)?;
-    // AGPL §5(a): identify the modified source revision and its relevant date.
-    let source_date = super::output("git", &["-C", root, "show", "-s", "--format=%cs", "HEAD"])?;
+    // AGPL §5(a): mark the OpenFront-derived work and when this project began.
     let readme = fs::read_to_string(paths.root.join("README.md"))?;
-    let modified_source_notice = format!("Modified from OpenFrontIO (`{source_date}`).");
-    if !readme.contains(&modified_source_notice) {
-        bail!(
-            "README must identify the modified OpenFront source and its revision date ({source_date})"
-        );
+    let modified_source_notice = "Modified from OpenFrontIO since `2026-05-08`.";
+    if !readme.contains(modified_source_notice) {
+        bail!("README must identify the OpenFront origin and project start date");
     }
     let status = super::output(
         "curl",

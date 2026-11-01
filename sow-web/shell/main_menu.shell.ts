@@ -2164,11 +2164,6 @@ root.addEventListener("click", function (event) {
         }
         return;
     }
-    if (command === "open_ranked_profile") {
-        menuUi.storeOpen = menuUi.heroesOpen = menuUi.campaignOpen = false;
-        openProfile(null);
-        return;
-    }
     if (command === "retry_ranked_board") {
         loadRankedLeaderboard(true);
         return;

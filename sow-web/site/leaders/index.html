@@ -30,12 +30,40 @@
         <header class="leaders-directory-heading">
           <h1 data-i18n="site.leaders">Leaders</h1>
           <p data-i18n="site.leaders_summary">
-            Choose a leader that matches how you play: economy, expansion, defense, production, or border pressure.
+            Choose a leader that matches how you play: economy, expansion, defense, production, or border
+            pressure.
           </p>
         </header>
       </div>
-      <section class="leaders leaders-directory-explorer">
-        <div class="container"><!-- LEADER_EXPLORER --></div>
+      <section class="leaders-directory-explorer">
+        <div class="container">
+          <div class="leader-directory-toolbar">
+            <label class="leader-directory-search">
+              <span data-i18n="heroes.search_leaders">Search leaders</span>
+              <input
+                type="search"
+                data-leader-directory-search
+                data-i18n="heroes.search_leader_civilization"
+                data-i18n-attr="placeholder"
+                placeholder="Search leader or civilization"
+                autocomplete="off"
+                aria-controls="leader-directory-grid"
+              />
+            </label>
+            <span data-leader-directory-count aria-live="polite" aria-atomic="true"
+              ><!-- LEADER_DIRECTORY_COUNT --></span
+            >
+          </div>
+          <div class="leader-directory-grid" id="leader-directory-grid">
+            <!-- LEADER_DIRECTORY_CARDS -->
+          </div>
+          <div class="leader-directory-empty" data-leader-directory-empty hidden>
+            <p data-i18n="heroes.no_leaders">No leaders found.</p>
+            <button class="hero-link" type="button" data-leader-directory-clear data-i18n="site.clear_search">
+              Clear search
+            </button>
+          </div>
+        </div>
       </section>
     </main>
     <!-- LEADER_FOOTER -->
