@@ -16,7 +16,13 @@ type Leader = { id: string; artSlug: string; region: string; wikipedia: string |
 
 export async function publish(
   out: string,
-  input: { leaders: Leader[]; pages: string[]; englishOnly?: string[]; biographies: { leaders: Record<string, Record<string, any>> } },
+  input: {
+    leaders: Leader[];
+    pages: string[];
+    englishOnly?: string[];
+    biographies: { leaders: Record<string, Record<string, any>> };
+    leaderExplorer: string;
+  },
   source = import.meta.dir,
 ) {
   const { leaders } = input;
@@ -181,14 +187,10 @@ export async function publish(
       } else if (route === "leaders/") {
         title = `${t("site.leaders")} | Shadows of War`;
         description = t("site.leaders_summary");
-        const cards = leaders
-          .map((h) => {
-            const f = fields(h);
-            return `<article class="compendium-card" data-compendium-card data-search="${escape(`${f.name} ${f.civilization}`)}"><a class="compendium-card-link" href="/leaders/${h.id}/"><picture class="compendium-thumb"><img src="/assets/gameplay/avatars/${h.artSlug}.webp" alt="${escape(f.name)}" width="256" height="256" loading="lazy" decoding="async"></picture><div class="compendium-card-body"><p class="compendium-civ">${escape(f.civilization)}</p><h2>${escape(f.name)}</h2><p class="compendium-ability"><strong>${escape(f.ability)}:</strong> ${escape(f.effect)}</p></div></a></article>`;
-          })
-          .join("\n");
+        if (indexTemplate.split("<!-- LEADER_EXPLORER -->").length !== 2 || !input.leaderExplorer)
+          throw Error("Leader directory needs one shared leader explorer");
         html = indexTemplate
-          .replace("<!-- LEADER_CONTENT -->", cards)
+          .replace("<!-- LEADER_EXPLORER -->", input.leaderExplorer)
           .replace("<!-- LEADER_FOOTER -->", footer);
       } else if (englishOnly.has(route)) {
         // English-only pages carry their own copy; the template is the source of

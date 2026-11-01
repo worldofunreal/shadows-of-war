@@ -8,6 +8,7 @@ const surfacesSource = fs.readFileSync(path.join(shell, "main_menu.surfaces.ts")
 const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.ts"), "utf8");
 const licenseJestSource = fs.readFileSync(path.join(shell, "main_menu.jest.ts"), "utf8");
 const landingHtml = fs.readFileSync(path.join(shell, "../../sow-web/site/index.html"), "utf8");
+const leaderExplorerHtml = fs.readFileSync(path.join(shell, "../../sow-web/site/leader-explorer.html"), "utf8");
 const readme = fs.readFileSync(path.join(shell, "../../README.md"), "utf8");
 const siteHeader = fs.readFileSync(path.join(shell, "../../sow-web/site/site-header.html"), "utf8");
 const gameControlsCss = fs.readFileSync(path.join(shell, "sow-controls.css"), "utf8");
@@ -32,13 +33,14 @@ const siteRedirectConfig = fs.readFileSync(
 test("public landing builds heroes, maps and videos from game data at publish time", () => {
   for (const marker of [
     "SOW_SITE_HERO_MEDIA",
-    "SOW_SITE_LEADER_SHOWCASE",
-    "SOW_SITE_LEADERS",
+    "SOW_SITE_LEADER_EXPLORER",
     "SOW_SITE_MAPS",
     "SOW_SITE_TRAILER",
   ]) {
     assert.equal(landingHtml.split(`<!-- ${marker} -->`).length, 2, `${marker} must appear once`);
   }
+  assert.equal(leaderExplorerHtml.split("<!-- SOW_SITE_LEADER_SHOWCASE -->").length, 2);
+  assert.equal(leaderExplorerHtml.split("<!-- SOW_SITE_LEADERS -->").length, 2);
   for (const shot of ["step-expand", "step-build", "step-war"]) {
     assert.ok(
       landingHtml.includes(`/assets/site/media/${shot}.webp`),
@@ -774,13 +776,15 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         ]),
       ),
     };
-    for (const page of ["", "support", "privacy", "cookies", "terms", "leaders"])
+    for (const page of ["", "support", "privacy", "cookies", "terms"])
       await put(
         path.join(source, page, "index.html"),
-        template
-          .replace("<!-- PAGE_HEADING -->", '<h1 data-i18n="site.title">Home</h1>')
-          .replace("<!-- LEADER_CONTENT -->", page === "leaders" ? "<!-- LEADER_CONTENT -->" : ""),
+        template.replace("<!-- PAGE_HEADING -->", '<h1 data-i18n="site.title">Home</h1>').replace("<!-- LEADER_CONTENT -->", ""),
       );
+    await put(
+      path.join(source, "leaders/index.html"),
+      template.replace("<!-- PAGE_HEADING -->", "").replace("<!-- LEADER_CONTENT -->", "<!-- LEADER_EXPLORER -->"),
+    );
     await put(path.join(source, "leader.html"), template.replace("<!-- PAGE_HEADING -->", ""));
     await put(
       path.join(source, "site-header.html"),
@@ -808,10 +812,12 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         wikipedia: "https://en.wikipedia.org/wiki/Julius_Caesar",
       },
     ];
+    const leaderExplorer = '<section class="leaders"><div class="leader-layout" data-shared-leader-explorer></div></section>';
     await publish(
       out,
       {
         leaders,
+        leaderExplorer,
         biographies,
         pages: [
           "index.html",
@@ -866,6 +872,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
       out,
       {
         leaders,
+        leaderExplorer,
         biographies: sagaBiographies,
         pages: [
           "index.html",
@@ -897,6 +904,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         out,
         {
           leaders,
+          leaderExplorer,
           biographies,
           pages: [
             "index.html",
@@ -929,6 +937,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         out,
         {
           leaders,
+          leaderExplorer,
           biographies,
           pages: [
             "index.html",
@@ -951,6 +960,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         out,
         {
           leaders,
+          leaderExplorer,
           biographies,
           pages: [
             "index.html",
@@ -971,6 +981,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         out,
         {
           leaders,
+          leaderExplorer,
           biographies,
           pages: [
             "index.html",

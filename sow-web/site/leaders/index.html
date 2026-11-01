@@ -22,31 +22,25 @@
     <link rel="stylesheet" href="/sow-controls.css" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body class="guide-page">
+  <body class="guide-page leaders-directory">
     <!-- SOW_SITE_HEADER -->
     <main class="guide-main">
       <div class="container">
         <nav class="guide-breadcrumbs"><a href="/" data-i18n="site.nav_home">Home</a></nav>
-        <section class="guide-hero section-rule">
+        <header class="leaders-directory-heading">
           <h1 data-i18n="site.leaders">Leaders</h1>
-          <p class="hero-lede" data-i18n="site.leaders_summary"></p>
-        </section>
-        <form class="compendium-search" role="search">
-          <label for="compendium-search" data-i18n="heroes.search_leaders">Search leaders</label
-          ><input id="compendium-search" type="search" autocomplete="off" data-compendium-search /><output
-            data-compendium-count
-            aria-live="polite"
-          ></output>
-        </form>
-        <div class="compendium-grid"><!-- LEADER_CONTENT --></div>
-        <p data-compendium-empty hidden>
-          <span data-i18n="heroes.no_leaders">No leaders found.</span>
-          <button type="button" data-compendium-reset data-i18n="site.clear_search">Reset search</button>
-        </p>
+          <p data-i18n="site.leaders_summary">
+            Choose a leader that matches how you play: economy, expansion, defense, production, or border pressure.
+          </p>
+        </header>
       </div>
+      <section class="leaders leaders-directory-explorer">
+        <div class="container"><!-- LEADER_EXPLORER --></div>
+      </section>
     </main>
     <!-- LEADER_FOOTER -->
     <script data-cfasync="false" src="/site-chrome.js"></script>
     <script src="/analytics.js"></script>
+    <script src="/app.js"></script>
   </body>
 </html>

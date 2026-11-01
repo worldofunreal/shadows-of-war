@@ -1,0 +1,49 @@
+<div class="leader-layout">
+  <div class="leader-stage">
+    <div class="showcase" data-leader-detail>
+      <!-- SOW_SITE_LEADER_SHOWCASE -->
+    </div>
+  </div>
+  <div class="leader-browser-home" data-leader-browser-home>
+    <div class="leader-browser" data-leader-browser>
+      <div class="leader-browser-heading">
+        <h3 id="leader-picker-title" data-i18n="heroes.leader_list">Leader list</h3>
+        <span data-roster-count aria-live="polite" aria-atomic="true"></span>
+        <button
+          class="picker-close"
+          type="button"
+          data-picker-close
+          aria-label="Close"
+          data-i18n="menu.close"
+          data-i18n-attr="aria-label"
+        >
+          <span aria-hidden="true">&#215;</span>
+        </button>
+      </div>
+      <label class="leader-search">
+        <span data-i18n="heroes.search_leaders">Search leaders</span>
+        <input
+          type="search"
+          data-leader-search
+          placeholder="Search leader or civilization"
+          data-i18n="heroes.search_leader_civilization"
+          data-i18n-attr="placeholder"
+          autocomplete="off"
+          aria-controls="leader-roster"
+        />
+      </label>
+      <div class="roster-scroll" data-roster-scroll>
+        <div class="roster" id="leader-roster" data-leaders-grid>
+          <!-- SOW_SITE_LEADERS -->
+        </div>
+        <div class="roster-empty" data-roster-empty hidden>
+          <p data-i18n="heroes.no_leaders">No leaders found.</p>
+          <button class="hero-link" type="button" data-clear-search data-i18n="site.clear_search">
+            Clear search
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<dialog class="leader-picker" id="leader-picker" aria-labelledby="leader-picker-title" data-leader-picker></dialog>

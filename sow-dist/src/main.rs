@@ -276,7 +276,7 @@ const GENERATED_FILES: [(&str, &str); 3] = [
 const PORTRAIT_PX: u32 = 256;
 /// Landing shots (assets/site/media/<stem>.<png|jpg|webp>): until the owner drops a
 /// capture, each slot publishes current game art (dir, stem) so nothing stale shows.
-const SITE_STILLS: [(&str, (&str, &str)); 13] = [
+const SITE_STILLS: [(&str, (&str, &str)); 14] = [
     ("game-expand", ("assets/maps/world", "thumbnail")),
     ("game-build", ("assets/maps/world", "thumbnail")),
     ("game-war", ("assets/maps/world", "thumbnail")),
@@ -308,6 +308,7 @@ const SITE_STILLS: [(&str, (&str, &str)); 13] = [
         ("assets/art/heroes", "richard_the_lionheart_desktop"),
     ),
     ("step-war", ("assets/art/heroes", "leonidas_desktop")),
+    ("support-six-sky", ("assets/art/heroes", "lady_six_sky_mobile")),
 ];
 /// Landing videos (assets/site/media/<stem>.<mp4|mov|webm|mkv>), published as webm,
 /// mp4 and a poster. Optional: the page shows a still while a slot is empty.
@@ -321,7 +322,7 @@ const SITE_BADGES: [&str; 6] = [
     "github.svg",
     "worldofunreal.svg",
 ];
-const SITE_SOURCE_ONLY_MEDIA: [&str; 8] = [
+const SITE_SOURCE_ONLY_MEDIA: [&str; 10] = [
     "session-battle.webp",
     "session-conflict.webp",
     "session-expansion.webp",
@@ -330,6 +331,8 @@ const SITE_SOURCE_ONLY_MEDIA: [&str; 8] = [
     "session-world.webp",
     "shadows-of-war-gameplay.mp4",
     "shadowsofwar-scroll.vp9.webm",
+    "caesar-cutout.png",
+    "caesar-cutout.webp",
 ];
 const SITE_STILL_PX: u32 = 1600;
 
@@ -2226,7 +2229,9 @@ const ENGLISH_ONLY_PAGES: [&str; 5] = [
 
 fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
     // The landing's generated sections and every localized page share one publisher.
-    let landing = expand_landing(&fs::read_to_string(out.join("index.html"))?, out)?;
+    let english = serde_json::to_value(sow_i18n::web(sow_i18n::Language::English))?;
+    let leader_explorer = landing_leader_explorer(&paths.root.join("sow-web/site"), &english)?;
+    let landing = expand_landing(&fs::read_to_string(out.join("index.html"))?, out, &leader_explorer)?;
     fs::write(out.join("index.html"), landing)?;
     let leaders = sow_core::player::Leader::all().map(|leader| {
         serde_json::json!({
@@ -2237,7 +2242,7 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
     }).collect::<Vec<_>>();
     let biographies = public_leader_biographies(&paths.root)?;
     let mut metadata = tempfile::NamedTempFile::new()?;
-    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies }))?;
+    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "leaderExplorer": leader_explorer }))?;
     run("bun", &[
         "run", paths.root.join("sow-web/site/generate.ts").to_str().context("site generator path")?,
         out.to_str().context("site output path")?,
@@ -2389,16 +2394,11 @@ fn public_leader_biographies(root: &Path) -> Result<serde_json::Value> {
 /// Landing sections built from data at publish time: the hero roster from the
 /// character catalog, the maps in rotation and the optional captured videos.
 /// A hero or map added to the game appears here without touching the page.
-fn expand_landing(source: &str, out: &Path) -> Result<String> {
+fn expand_landing(source: &str, out: &Path, leader_explorer: &str) -> Result<String> {
     let english = serde_json::to_value(sow_i18n::web(sow_i18n::Language::English))?;
     let media = out.join("assets/site/media");
     let sections = [
         ("<!-- SOW_SITE_HERO_MEDIA -->", landing_hero_media(&media)),
-        (
-            "<!-- SOW_SITE_LEADER_SHOWCASE -->",
-            landing_leader_showcase(&english)?,
-        ),
-        ("<!-- SOW_SITE_LEADERS -->", landing_leaders(&english)?),
         ("<!-- SOW_SITE_MAPS -->", landing_maps(&out.join("maps"))?),
         (
             "<!-- SOW_SITE_TRAILER -->",
@@ -2412,7 +2412,29 @@ fn expand_landing(source: &str, out: &Path) -> Result<String> {
         }
         page = page.replace(marker, &html);
     }
+    let marker = "<!-- SOW_SITE_LEADER_EXPLORER -->";
+    if page.matches(marker).count() != 1 {
+        bail!("the landing page must contain one {marker}");
+    }
+    page = page.replace(marker, leader_explorer);
     Ok(page)
+}
+
+fn landing_leader_explorer(site: &Path, english: &serde_json::Value) -> Result<String> {
+    let mut html = fs::read_to_string(site.join("leader-explorer.html"))?;
+    for (marker, content) in [
+        ("<!-- SOW_SITE_LEADER_SHOWCASE -->", landing_leader_showcase(english)?),
+        ("<!-- SOW_SITE_LEADERS -->", landing_leaders(english)?),
+    ] {
+        if html.matches(marker).count() != 1 {
+            bail!("the shared leader explorer must contain one {marker}");
+        }
+        html = html.replace(marker, &content);
+    }
+    if html.contains("<!-- SOW_SITE_") {
+        bail!("the shared leader explorer contains an unexpanded marker");
+    }
+    Ok(html)
 }
 
 fn html_text(value: &str) -> String {
@@ -2457,14 +2479,26 @@ fn landing_leader_showcase(english: &serde_json::Value) -> Result<String> {
               <img class="showcase-portrait" data-detail-portrait src="/assets/gameplay/avatars/{art_slug}.webp" alt="" width="256" height="256">
             </div>
             <picture><source media="(max-width: 960px)" srcset="/assets/shell/leaders/{art_slug}_mobile.webp" data-detail-image-mobile><img data-detail-image src="/assets/shell/leaders/{art_slug}_desktop.webp" alt="{name}" decoding="async" width="1600" height="900"></picture>
+            <div class="leader-controls">
+              <button class="leader-arrow leader-arrow--prev" type="button" data-leader-prev aria-label="Previous leader" data-i18n="site.previous_leader" data-i18n-attr="aria-label">
+                <svg class="leader-arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 19 8 12 15 5"></polyline></svg>
+              </button>
+              <span class="leader-position" data-leader-position aria-live="polite" aria-atomic="true"></span>
+              <button class="leader-browse" type="button" data-leader-browse aria-haspopup="dialog" aria-controls="leader-picker">
+                <span data-i18n="site.browse_all">Browse all</span> <span data-leader-total></span>
+              </button>
+              <button class="leader-arrow leader-arrow--next" type="button" data-leader-next aria-label="Next leader" data-i18n="site.next_leader" data-i18n-attr="aria-label">
+                <svg class="leader-arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 5 16 12 9 19"></polyline></svg>
+              </button>
+            </div>
           </div>
           <div class="showcase-copy">
             <div class="showcase-identity"><p class="eyebrow" data-detail-civ data-i18n="heroes.leader_{id}_civilization">{civ}</p>
             <h3 data-detail-name data-i18n="heroes.leader_{id}_name">{name}</h3>
             <p class="showcase-historical" data-detail-historical data-i18n="heroes.leader_{id}_historical"{hidden}>{historical}</p></div>
             <div class="showcase-trait"><p class="showcase-label" data-i18n="site.command_trait">{trait_label}</p>
-            <p class="showcase-ability" data-detail-ability data-i18n="site.leader_{id}_ability">{ability}</p>
-            <p class="showcase-description" data-detail-description data-i18n="site.leader_{id}_description">{description}</p></div>
+            <div class="showcase-ability-row"><img class="showcase-ability-icon" data-detail-ability-icon src="/assets/gameplay/icons/abilities/{art_slug}.webp" alt="" aria-hidden="true" width="48" height="48"><div class="showcase-ability-copy"><p class="showcase-ability" data-detail-ability data-i18n="site.leader_{id}_ability">{ability}</p>
+            <p class="showcase-description" data-detail-description data-i18n="site.leader_{id}_description">{description}</p></div></div></div>
             <a class="leader-profile-link" data-detail-profile href="/leaders/{id}/" data-i18n="site.view_profile">{profile_label}</a>
           </div>"#,
         civ = english_text(english, &format!("heroes.leader_{id}_civilization"))?,
@@ -2518,7 +2552,7 @@ fn landing_maps(maps: &Path) -> Result<String> {
         .first()
         .context("no map in rotation has a thumbnail for the landing page")?;
     let mut html = format!(
-        r#"<figure class="map-preview"><div class="map-preview-image" data-map-frame><span class="art-unavailable" data-i18n="site.art_unavailable">Artwork unavailable</span><img data-map-image src="/maps/{key}/thumbnail.webp?v={bust}" alt="{name}" width="1024" height="576" loading="lazy" decoding="async"></div><figcaption><span class="eyebrow" data-i18n="site.maps">Maps</span><h3 data-map-name aria-live="polite">{name}</h3></figcaption></figure><ul class="map-strip">"#,
+        r#"<div class="map-theatre" data-map-theatre><button type="button" class="map-nav-arrow map-nav-arrow--prev" data-map-prev aria-label="Previous map">‹</button><button type="button" class="map-nav-arrow map-nav-arrow--next" data-map-next aria-label="Next map">›</button><div class="map-theatre-stage"><figure class="map-preview"><div class="map-preview-image" data-map-frame><div class="map-grid-overlay" aria-hidden="true"></div><span class="art-unavailable" data-i18n="site.art_unavailable">Artwork unavailable</span><img data-map-image src="/maps/{key}/thumbnail.webp?v={bust}" alt="{name}" width="1024" height="576" loading="lazy" decoding="async"></div><div class="map-character-layer" aria-hidden="true"><picture><source srcset="/assets/site/media/caesar-cutout.webp" type="image/webp"><img class="map-character-img" src="/assets/site/media/caesar-cutout.png" alt="" width="560" height="995" loading="lazy" decoding="async"></picture></div><figcaption class="map-hud"><div class="map-hud-meta"><span class="eyebrow" data-i18n="site.maps">Maps</span><div class="map-status-badge"><span class="pulse-dot"></span> Live Rotation</div></div><h3 data-map-name aria-live="polite">{name}</h3><p class="map-telemetry">Up to 80 players · Real-time warfare · Coastal &amp; inland fronts</p><div class="map-hud-actions"><a class="button button-orange map-deploy-btn" href="/play/">DEPLOY NOW</a></div></figcaption></figure></div></div><div class="map-strip-container"><ul class="map-strip">"#,
         key = html_text(&first.key),
         name = html_text(&first.display_name)
     );
@@ -2530,7 +2564,7 @@ fn landing_maps(maps: &Path) -> Result<String> {
             active = index == 0
         );
     }
-    html.push_str("</ul>");
+    html.push_str("</ul></div>");
     Ok(html)
 }
 
@@ -6554,10 +6588,10 @@ mod tests {
         }
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
         let index_html = fs::read_to_string(root.join("sow-web/site/index.html"))?;
+        let explorer_html = fs::read_to_string(root.join("sow-web/site/leader-explorer.html"))?;
         for marker in [
             "<!-- SOW_SITE_HERO_MEDIA -->",
-            "<!-- SOW_SITE_LEADER_SHOWCASE -->",
-            "<!-- SOW_SITE_LEADERS -->",
+            "<!-- SOW_SITE_LEADER_EXPLORER -->",
             "<!-- SOW_SITE_MAPS -->",
             "<!-- SOW_SITE_TRAILER -->",
         ] {
@@ -6567,6 +6601,9 @@ mod tests {
             !index_html.contains("data-leader-id"),
             "heroes come from the catalog"
         );
+        for marker in ["<!-- SOW_SITE_LEADER_SHOWCASE -->", "<!-- SOW_SITE_LEADERS -->"] {
+            assert_eq!(explorer_html.matches(marker).count(), 1, "{marker}");
+        }
         Ok(())
     }
 
