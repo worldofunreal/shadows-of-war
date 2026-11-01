@@ -1258,7 +1258,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '<div class="sow-hud__nameplate" id="sow-hud-nameplate" data-command="center_camera" role="button" tabindex="0" aria-label="' +
             SOW_t("hud.center_camera") +
             '" hidden>' +
-            '  <img class="sow-hud__nameplate-avatar" id="sow-hud-nameplate-avatar" alt="" draggable="false">' +
+            '  <div class="sow-hud__nameplate-avatar-wrap"><img class="sow-hud__nameplate-avatar" id="sow-hud-nameplate-avatar" alt="" draggable="false"></div>' +
             '  <div class="sow-hud__nameplate-copy"><strong id="sow-hud-nameplate-name"></strong>' +
             '  <div class="sow-hud__nameplate-bar"><i id="sow-hud-nameplate-fill"></i><span class="sow-hud__nameplate-readout"><span id="sow-hud-nameplate-troops"></span>' +
             hudIcon("troops", "sow-hud__inline-icon") +
@@ -1307,7 +1307,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '<aside class="sow-hud__left-rail" id="sow-hud-left-rail">' +
             '  <div class="sow-hud__rail-card">' +
             '    <div class="sow-hud__slider-vertical-wrap">' +
-            '      <input type="range" min="5" max="100" value="50" step="5" class="sow-hud__range-vertical" id="sow-hud-slider" aria-label="' +
+            '      <input type="range" min="5" max="100" value="50" step="1" class="sow-hud__range-vertical" id="sow-hud-slider" aria-label="' +
             SOW_t("hud.map_action_attack") +
             '">' +
             "    </div>" +

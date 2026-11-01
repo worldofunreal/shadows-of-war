@@ -721,7 +721,6 @@ test("public publisher delivers localized linked profiles and rejects incomplete
           "all_leaders",
           "choose_leader",
           "play_now",
-          "suggest_language",
           "leader_caesar_ability",
           "leader_caesar_description",
           ...["support", "privacy", "cookies", "terms"].flatMap((p) => [p + "_title", p + "_description"]),

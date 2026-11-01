@@ -22,6 +22,7 @@ export async function publish(
     englishOnly?: string[];
     biographies: { leaders: Record<string, Record<string, any>> };
     leaderExplorer: string;
+    mapExplorer: string;
   },
   source = import.meta.dir,
 ) {
@@ -70,6 +71,7 @@ export async function publish(
   const header = await read(join(source, "site-header.html"));
   const leaderTemplate = await read(join(source, "leader.html"));
   const indexTemplate = await read(join(source, "leaders/index.html"));
+  const mapsTemplate = await read(join(source, "maps/index.html"));
   const footer = templates.get("")!.match(/<footer\b[\s\S]*?<\/footer>/)?.[0];
   if (!footer) throw Error("Landing footer missing");
   const fingerprints = new Map<string, string>();
@@ -192,6 +194,14 @@ export async function publish(
         html = indexTemplate
           .replace("<!-- LEADER_EXPLORER -->", input.leaderExplorer)
           .replace("<!-- LEADER_FOOTER -->", footer);
+      } else if (route === "maps/") {
+        title = `${t("site.maps_in_rotation")} | Shadows of War`;
+        description = t("site.maps_page_summary");
+        if (mapsTemplate.split("<!-- MAP_EXPLORER -->").length !== 2 || !input.mapExplorer)
+          throw Error("Map directory needs one shared map explorer");
+        html = mapsTemplate
+          .replace("<!-- MAP_EXPLORER -->", input.mapExplorer)
+          .replace("<!-- MAPS_FOOTER -->", footer);
       } else if (englishOnly.has(route)) {
         // English-only pages carry their own copy; the template is the source of
         // truth so no catalog entry has to exist in fifteen languages.
@@ -278,6 +288,16 @@ export async function publish(
             url: origin + path(code, `leaders/${h.id}/`),
           })),
         };
+      if (route === "maps/")
+        schemas[0].mainEntity = {
+          "@type": "ItemList",
+          numberOfItems: (input.mapExplorer.match(/data-map-select/g) ?? []).length,
+          itemListElement: [...input.mapExplorer.matchAll(/data-map-name="([^"]+)"/g)].map((match, i) => ({
+            "@type": "ListItem",
+            position: i + 1,
+            name: match[1],
+          })),
+        };
       if (route)
         schemas.push({
           "@type": "BreadcrumbList",
@@ -315,7 +335,6 @@ export async function publish(
             e.setAttribute("lang", code);
             e.setAttribute("dir", code === "ar" ? "rtl" : "ltr");
             e.setAttribute("data-site-page", route);
-            e.setAttribute("data-language-suggestion", t("site.suggest_language"));
             e.setAttribute("data-site-prefix", `/${prefix(code)}`);
             e.setAttribute(
               "data-locale-script",

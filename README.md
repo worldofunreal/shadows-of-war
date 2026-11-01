@@ -45,10 +45,8 @@ or fight bots in solo matches.
 
 ## Credits & licenses
 
-Modified from OpenFrontIO. Source revision date: `2026-10-29`.
-© OpenFront and Contributors. This is not an official OpenFront project.
+Modified from OpenFrontIO (`2026-10-31`). © OpenFront and Contributors.
 
-Game code is licensed under [AGPL-3.0-only](LICENSE), with OpenFront's additional terms. The in-game
-Source link identifies the exact revision. OpenFront-derived maps use CC BY-SA 4.0; see the
-[map source and credits](assets/maps/NOTICE). Other [asset licenses](docs/legal/LICENSE-ASSETS)
-and [third-party notices](docs/legal/NOTICE).
+Code: [AGPL-3.0-only](LICENSE) with OpenFront's additional terms. OpenFront-derived maps: CC BY-SA
+4.0 ([notice](assets/maps/NOTICE)); other [asset](docs/legal/LICENSE-ASSETS) and
+[third-party notices](docs/legal/NOTICE).

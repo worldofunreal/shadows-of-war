@@ -7,7 +7,20 @@ export interface AvatarExpressionTransition {
     stage: "exit" | "enter";
 }
 
-type AnimationState = { key: string; animation: Animation | null; source: string };
+type OutgoingBackground = {
+    host: HTMLElement;
+    image: string;
+    size: string;
+    position: string;
+    repeat: string;
+};
+
+type AnimationState = {
+    key: string;
+    animation: Animation | null;
+    source: string;
+    outgoingBackground: OutgoingBackground | null;
+};
 
 const states = new WeakMap<HTMLImageElement, AnimationState>();
 
@@ -15,11 +28,59 @@ function sourceOf(image: HTMLImageElement): string {
     return image.getAttribute("src") || "";
 }
 
-function stopAnimation(image: HTMLImageElement, state: AnimationState | undefined): void {
-    if (state && state.animation) state.animation.cancel();
+function restoreOutgoingBackground(state: AnimationState): void {
+    const background = state.outgoingBackground;
+    if (!background) return;
+    background.host.style.backgroundImage = background.image;
+    background.host.style.backgroundSize = background.size;
+    background.host.style.backgroundPosition = background.position;
+    background.host.style.backgroundRepeat = background.repeat;
+    state.outgoingBackground = null;
 }
 
-/** The shared in-match portrait switch: old expression exits, then the new one enters. */
+function settleAnimation(image: HTMLImageElement, state: AnimationState | undefined): void {
+    if (!state) return;
+    if (state.animation) {
+        state.animation.onfinish = null;
+        try {
+            state.animation.finish();
+        } catch {
+            // A finished or unsupported animation already has its final frame.
+        }
+        state.animation.cancel();
+    }
+    restoreOutgoingBackground(state);
+    states.set(image, { key: "", animation: null, source: sourceOf(image), outgoingBackground: null });
+}
+
+function addOutgoingBackground(image: HTMLImageElement, source: string): OutgoingBackground | null {
+    const host = image.parentElement;
+    if (!host || !host.style || !source) return null;
+
+    const view = image.ownerDocument && image.ownerDocument.defaultView;
+    const hostStyle = view ? view.getComputedStyle(host) : null;
+    const imageStyle = view ? view.getComputedStyle(image) : null;
+    const originalImage = hostStyle?.backgroundImage || "none";
+    const originalSize = hostStyle?.backgroundSize || "auto";
+    const originalPosition = hostStyle?.backgroundPosition || "0% 0%";
+    const originalRepeat = hostStyle?.backgroundRepeat || "repeat";
+    const outgoing: OutgoingBackground = {
+        host,
+        image: host.style.backgroundImage,
+        size: host.style.backgroundSize,
+        position: host.style.backgroundPosition,
+        repeat: host.style.backgroundRepeat,
+    };
+    const layers = originalImage === "none" ? "" : ", " + originalImage;
+    host.style.backgroundImage = "url(" + JSON.stringify(source) + ")" + layers;
+    host.style.backgroundSize = "cover" + (layers ? ", " + originalSize : "");
+    host.style.backgroundPosition =
+        (imageStyle?.objectPosition || "50% 50%") + (layers ? ", " + originalPosition : "");
+    host.style.backgroundRepeat = "no-repeat" + (layers ? ", " + originalRepeat : "");
+    return outgoing;
+}
+
+/** The shared in-match portrait switch: keep the outgoing portrait underneath the new one. */
 export function setAvatarPortrait(
     image: HTMLImageElement,
     source: string,
@@ -30,15 +91,15 @@ export function setAvatarPortrait(
     const previous = states.get(image);
     const stageKey = transition ? transition.id + ":" + transition.stage : "";
 
+    if (previous && previous.key === stageKey && previous.source === source) return;
+    settleAnimation(image, previous);
+
     if (reducedMotion || !transition || typeof image.animate !== "function") {
-        stopAnimation(image, previous);
         if (transition && reducedMotion) source = reducedSource;
         if (sourceOf(image) !== source && source) image.src = source;
-        states.set(image, { key: "", animation: null, source });
+        states.set(image, { key: "", animation: null, source, outgoingBackground: null });
         return;
     }
-
-    if (previous && previous.key === stageKey && previous.source === source) return;
 
     const view = image.ownerDocument && image.ownerDocument.defaultView;
     const computed = view ? view.getComputedStyle(image) : null;
@@ -46,22 +107,29 @@ export function setAvatarPortrait(
         opacity: computed ? computed.opacity : "1",
         transform: computed ? computed.transform : "none",
     };
-    stopAnimation(image, previous);
 
     if (transition.stage === "exit") {
         if (source && sourceOf(image) !== source) image.src = source;
         const animation = image.animate(
-            [currentFrame, { opacity: 0, transform: "scale(.82) translateY(3px)" }],
+            [currentFrame, { opacity: 1, transform: "scale(.82) translateY(3px)" }],
             { duration: 150, easing: "ease-in", fill: "both" },
         );
-        states.set(image, { key: stageKey, animation, source });
+        const state: AnimationState = { key: stageKey, animation, source, outgoingBackground: null };
+        states.set(image, state);
+        animation.onfinish = () => {
+            if (states.get(image) === state) restoreOutgoingBackground(state);
+        };
         return;
     }
 
+    const outgoingBackground = addOutgoingBackground(image, sourceOf(image));
     if (source && sourceOf(image) !== source) image.src = source;
     const animation = image.animate(
         [
-            { opacity: 0, transform: "scale(.82) translateY(3px)" },
+            {
+                opacity: outgoingBackground ? 0.5 : 1,
+                transform: "scale(.82) translateY(3px)",
+            },
             { opacity: 1, transform: "scale(1) translateY(0)" },
         ],
         {
@@ -70,5 +138,9 @@ export function setAvatarPortrait(
             fill: "both",
         },
     );
-    states.set(image, { key: stageKey, animation, source });
+    const state: AnimationState = { key: stageKey, animation, source, outgoingBackground };
+    states.set(image, state);
+    animation.onfinish = () => {
+        if (states.get(image) === state) restoreOutgoingBackground(state);
+    };
 }

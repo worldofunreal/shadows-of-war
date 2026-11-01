@@ -322,7 +322,10 @@ const SITE_BADGES: [&str; 6] = [
     "github.svg",
     "worldofunreal.svg",
 ];
+const SITE_STATIC_MEDIA: [&str; 0] = [];
 const SITE_SOURCE_ONLY_MEDIA: [&str; 10] = [
+    "caesar-cutout.png",
+    "caesar-cutout.webp",
     "session-battle.webp",
     "session-conflict.webp",
     "session-expansion.webp",
@@ -331,10 +334,19 @@ const SITE_SOURCE_ONLY_MEDIA: [&str; 10] = [
     "session-world.webp",
     "shadows-of-war-gameplay.mp4",
     "shadowsofwar-scroll.vp9.webm",
-    "caesar-cutout.png",
-    "caesar-cutout.webp",
 ];
 const SITE_STILL_PX: u32 = 1600;
+
+fn site_media_ready(out: &Path) -> bool {
+    let media = out.join("assets/site/media");
+    SITE_BADGES
+        .iter()
+        .chain(SITE_STATIC_MEDIA.iter())
+        .all(|name| media.join(name).is_file())
+        && SITE_STILLS
+            .iter()
+            .all(|(stem, _)| media.join(format!("{stem}.webp")).is_file())
+}
 
 /// The owner edits only assets/art; the tools write assets/generated. This is the
 /// single place that turns them into the published tree (/assets/shell, /assets/gameplay)
@@ -573,6 +585,9 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
     for badge in SITE_BADGES {
         publish(&media.join(badge), &format!("site/media/{badge}"), None)?;
     }
+    for asset in SITE_STATIC_MEDIA {
+        publish(&media.join(asset), &format!("site/media/{asset}"), None)?;
+    }
     for (stem, (dir, provisional)) in SITE_STILLS {
         let src = source_named(&media, stem)
             .or_else(|| source_named(&root.join(dir), provisional))
@@ -591,13 +606,14 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
         let stem = file.file_stem().unwrap_or_default().to_string_lossy();
         let ext = file.extension().unwrap_or_default().to_string_lossy();
         let known = SITE_BADGES.contains(&name.as_ref())
+            || SITE_STATIC_MEDIA.contains(&name.as_ref())
             || SITE_SOURCE_ONLY_MEDIA.contains(&name.as_ref())
             || (SITE_STILLS.iter().any(|(still, _)| *still == stem)
                 && ["webp", "png", "jpg", "jpeg"].contains(&ext.as_ref()))
             || (SITE_VIDEOS.contains(&stem.as_ref()) && SITE_VIDEO_SOURCES.contains(&ext.as_ref()));
         if !known {
             bail!(
-                "unregistered site media {}: add it to SITE_STILLS, SITE_VIDEOS or SITE_SOURCE_ONLY_MEDIA",
+                "unregistered site media {}: add it to SITE_STATIC_MEDIA, SITE_STILLS, SITE_VIDEOS or SITE_SOURCE_ONLY_MEDIA",
                 file.display()
             );
         }
@@ -2203,8 +2219,9 @@ fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
     Ok(())
 }
 
-const PUBLIC_SITE_PAGES: [&str; 10] = [
+const PUBLIC_SITE_PAGES: [&str; 11] = [
     "index.html",
+    "maps/index.html",
     "support/index.html",
     "privacy/index.html",
     "cookies/index.html",
@@ -2231,7 +2248,8 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
     // The landing's generated sections and every localized page share one publisher.
     let english = serde_json::to_value(sow_i18n::web(sow_i18n::Language::English))?;
     let leader_explorer = landing_leader_explorer(&paths.root.join("sow-web/site"), &english)?;
-    let landing = expand_landing(&fs::read_to_string(out.join("index.html"))?, out, &leader_explorer)?;
+    let map_explorer = landing_maps(&out.join("maps"), &paths.root.join("assets/maps/SOURCES.toml"))?;
+    let landing = expand_landing(&fs::read_to_string(out.join("index.html"))?, out, &leader_explorer, &map_explorer)?;
     fs::write(out.join("index.html"), landing)?;
     let leaders = sow_core::player::Leader::all().map(|leader| {
         serde_json::json!({
@@ -2242,7 +2260,7 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
     }).collect::<Vec<_>>();
     let biographies = public_leader_biographies(&paths.root)?;
     let mut metadata = tempfile::NamedTempFile::new()?;
-    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "leaderExplorer": leader_explorer }))?;
+    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "leaderExplorer": leader_explorer, "mapExplorer": map_explorer }))?;
     run("bun", &[
         "run", paths.root.join("sow-web/site/generate.ts").to_str().context("site generator path")?,
         out.to_str().context("site output path")?,
@@ -2394,12 +2412,12 @@ fn public_leader_biographies(root: &Path) -> Result<serde_json::Value> {
 /// Landing sections built from data at publish time: the hero roster from the
 /// character catalog, the maps in rotation and the optional captured videos.
 /// A hero or map added to the game appears here without touching the page.
-fn expand_landing(source: &str, out: &Path, leader_explorer: &str) -> Result<String> {
+fn expand_landing(source: &str, out: &Path, leader_explorer: &str, map_explorer: &str) -> Result<String> {
     let english = serde_json::to_value(sow_i18n::web(sow_i18n::Language::English))?;
     let media = out.join("assets/site/media");
     let sections = [
         ("<!-- SOW_SITE_HERO_MEDIA -->", landing_hero_media(&media)),
-        ("<!-- SOW_SITE_MAPS -->", landing_maps(&out.join("maps"))?),
+        ("<!-- SOW_SITE_MAPS -->", map_explorer.to_owned()),
         (
             "<!-- SOW_SITE_TRAILER -->",
             landing_trailer(&media, &english)?,
@@ -2536,29 +2554,37 @@ fn landing_leaders(english: &serde_json::Value) -> Result<String> {
     Ok(html)
 }
 
-fn landing_maps(maps: &Path) -> Result<String> {
+fn landing_maps(maps: &Path, sources_path: &Path) -> Result<String> {
     let catalog = sow_core::map_file::parse_catalog(&fs::read(maps.join("catalog.bin"))?)
         .map_err(|error| anyhow::anyhow!("read map catalog: {error}"))?;
+    let sources: toml::Value = fs::read_to_string(sources_path)?.parse()
+        .context("parse official map source catalog")?;
+    let recipes = sources.get("recipes").and_then(toml::Value::as_table)
+        .context("map source catalog has no recipes")?;
     let bust = thumbnail_cache_bust(maps)?;
     let entries: Vec<_> = catalog
         .entries
         .iter()
         .filter(|entry| {
             entry.multiplayer_frequency > 0
+                && recipes.get(&entry.key)
+                    .and_then(|recipe| recipe.get("origin_kind"))
+                    .and_then(toml::Value::as_str) == Some("openfront_image")
                 && maps.join(&entry.key).join("thumbnail.webp").is_file()
         })
         .collect();
     let first = entries
         .first()
         .context("no map in rotation has a thumbnail for the landing page")?;
+    let first_name = official_map_display_name(&first.key, &first.display_name);
     let mut html = format!(
-        r#"<div class="map-theatre" data-map-theatre><button type="button" class="map-nav-arrow map-nav-arrow--prev" data-map-prev aria-label="Previous map">‹</button><button type="button" class="map-nav-arrow map-nav-arrow--next" data-map-next aria-label="Next map">›</button><div class="map-theatre-stage"><figure class="map-preview"><div class="map-preview-image" data-map-frame><div class="map-grid-overlay" aria-hidden="true"></div><span class="art-unavailable" data-i18n="site.art_unavailable">Artwork unavailable</span><img data-map-image src="/maps/{key}/thumbnail.webp?v={bust}" alt="{name}" width="1024" height="576" loading="lazy" decoding="async"></div><div class="map-character-layer" aria-hidden="true"><picture><source srcset="/assets/site/media/caesar-cutout.webp" type="image/webp"><img class="map-character-img" src="/assets/site/media/caesar-cutout.png" alt="" width="560" height="995" loading="lazy" decoding="async"></picture></div><figcaption class="map-hud"><div class="map-hud-meta"><span class="eyebrow" data-i18n="site.maps">Maps</span><div class="map-status-badge"><span class="pulse-dot"></span> Live Rotation</div></div><h3 data-map-name aria-live="polite">{name}</h3><p class="map-telemetry">Up to 80 players · Real-time warfare · Coastal &amp; inland fronts</p><div class="map-hud-actions"><a class="button button-orange map-deploy-btn" href="/play/">DEPLOY NOW</a></div></figcaption></figure></div></div><div class="map-strip-container"><ul class="map-strip">"#,
+        r#"<div class="map-theatre" data-map-theatre><button type="button" class="map-nav-arrow map-nav-arrow--prev" data-map-prev aria-label="Previous map" data-i18n="site.previous_map" data-i18n-attr="aria-label">‹</button><button type="button" class="map-nav-arrow map-nav-arrow--next" data-map-next aria-label="Next map" data-i18n="site.next_map" data-i18n-attr="aria-label">›</button><div class="map-theatre-stage"><figure class="map-preview"><div class="map-preview-image" data-map-frame><div class="map-grid-overlay" aria-hidden="true"></div><span class="art-unavailable" data-i18n="site.art_unavailable">Artwork unavailable</span><img data-map-image src="/maps/{key}/thumbnail.webp?v={bust}" alt="{name}" width="1024" height="576" fetchpriority="high" decoding="async"></div><figcaption class="map-hud"><div class="map-hud-meta"><span class="eyebrow" data-i18n="site.maps_in_rotation">Maps in Rotation</span></div><h3 data-map-name aria-live="polite">{name}</h3></figcaption></figure></div></div><div class="map-strip-container"><ul class="map-strip">"#,
         key = html_text(&first.key),
-        name = html_text(&first.display_name)
+        name = html_text(&first_name)
     );
     for (index, entry) in entries.into_iter().enumerate() {
         let key = html_text(&entry.key);
-        let name = html_text(&entry.display_name);
+        let name = html_text(&official_map_display_name(&entry.key, &entry.display_name));
         html += &format!(
             r#"<li class="map-card"><button type="button" data-map-select data-map-name="{name}" data-map-image="/maps/{key}/thumbnail.webp?v={bust}" aria-pressed="{active}"><img src="/maps/{key}/thumbnail.webp?v={bust}" alt="" width="512" height="288" loading="lazy" decoding="async"><span>{name}</span></button></li>"#,
             active = index == 0
@@ -2566,6 +2592,21 @@ fn landing_maps(maps: &Path) -> Result<String> {
     }
     html.push_str("</ul></div>");
     Ok(html)
+}
+
+fn official_map_display_name(key: &str, catalog_name: &str) -> String {
+    match key {
+        "bajacalifornia" => "Baja California",
+        "eastasia" => "East Asia",
+        "indiansubcontinent" => "Indian Subcontinent",
+        "mena" => "Middle East and North Africa",
+        "middleeast" => "Middle East",
+        "northamerica" => "North America",
+        "southamerica" => "South America",
+        "southeastasia" => "South East Asia",
+        _ => return catalog_name.to_owned(),
+    }
+    .to_owned()
 }
 
 fn landing_trailer(media: &Path, english: &serde_json::Value) -> Result<String> {
@@ -4331,9 +4372,7 @@ fn package_native_web(
         && out
             .join("assets/gameplay/music/shadows-of-war.webm")
             .is_file()
-        && SITE_BADGES
-            .iter()
-            .all(|name| out.join("assets/site/media").join(name).is_file());
+        && site_media_ready(out);
 
     if !static_ready {
         if out.exists() {
@@ -5357,9 +5396,7 @@ fn package_local_preview(
         && out
             .join("assets/gameplay/music/shadows-of-war.webm")
             .is_file()
-        && SITE_BADGES
-            .iter()
-            .all(|name| out.join("assets/site/media").join(name).is_file());
+        && site_media_ready(out);
 
     if !static_ready {
         fs::create_dir_all(out)?;

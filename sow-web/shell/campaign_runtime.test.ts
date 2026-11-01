@@ -3486,7 +3486,7 @@ test("Roman Outpost taunts leave a three-second gap and loop without overlapping
     let view = update(6000);
     for (let index = 0; index < expected.length; index++) {
         assert.equal(view.exchange.emote_text_key, expected[index]);
-        assert.equal(view.paused, false, "timer emotes leave the attack objective live");
+        assert.equal(view.paused, true, "timer taunts preserve the paused attack objective");
         if (index + 1 < expected.length) {
             const nextStart = 12000 + index * 6000;
             const gap = update(nextStart - 3000);

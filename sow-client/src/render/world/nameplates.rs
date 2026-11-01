@@ -271,6 +271,10 @@ fn avatar_transition_enter_secs(expression: AvatarExpression) -> f32 {
     }
 }
 
+fn avatar_transition_crossfade(progress: f32) -> f32 {
+    0.5 + 0.5 * smoothstep(progress)
+}
+
 fn avatar_transition_emote(expression: AvatarExpression) -> EmoteKind {
     match expression {
         AvatarExpression::Happy => EmoteKind::Celebrate,
@@ -1599,6 +1603,7 @@ pub(super) fn render_nameplates(
                 } else if let Some(avatar) = &mut full.avatar
                     && let Some(transition) = system.avatar_transitions.get(&player.id).copied()
                 {
+                    let allow_crossfade = decoration_budget > 0;
                     apply_base_avatar_transition(
                         text,
                         avatar,
@@ -1606,7 +1611,11 @@ pub(super) fn render_nameplates(
                         campaign_avatar_slots,
                         transition,
                         now,
+                        allow_crossfade,
                     );
+                    if allow_crossfade && avatar.blend.is_some() {
+                        decoration_budget -= 1;
+                    }
                 }
                 paint_prepared_nameplate(text, state, full);
             }
@@ -2205,6 +2214,13 @@ mod emote_tests {
 
         system.advance_avatar_transitions(&snap, now + Duration::from_millis(400), true);
         assert!(system.avatar_transitions.is_empty());
+    }
+
+    #[wasm_bindgen_test]
+    fn avatar_expression_crossfade_starts_half_visible_and_never_dips_to_zero() {
+        assert_eq!(avatar_transition_crossfade(0.0), 0.5);
+        assert_eq!(avatar_transition_crossfade(0.5), 0.75);
+        assert_eq!(avatar_transition_crossfade(1.0), 1.0);
     }
 
     fn bubble_layout_at(center: [f32; 2], screen: [f32; 2], size: [f32; 2]) -> EmoteBubbleLayout {
@@ -2926,6 +2942,7 @@ fn apply_base_avatar_transition(
     campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     transition: AvatarTransition,
     now: Instant,
+    allow_crossfade: bool,
 ) {
     let progress = transition.progress(now);
     let identity = sow_core::player::avatar_identity_ref(player);
@@ -2941,7 +2958,7 @@ fn apply_base_avatar_transition(
             let scale = 1.0 - 0.18 * progress;
             avatar.scale = [scale; 2];
             avatar.center[1] += avatar.radius * 2.0 * 0.08 * progress;
-            avatar.alpha = 1.0 - smoothstep(progress);
+            avatar.alpha = 1.0;
         }
         AvatarTransitionStage::Enter => {
             avatar.content = to_content;
@@ -2953,7 +2970,12 @@ fn apply_base_avatar_transition(
                 true,
             );
             *avatar = apply_emote_avatar_motion(*avatar, motion);
-            avatar.alpha = smoothstep(progress);
+            avatar.alpha = 1.0;
+            if allow_crossfade
+                && let AvatarContent::Sprite(from_uv) = from_content
+            {
+                avatar.blend = Some((from_uv, avatar_transition_crossfade(progress)));
+            }
         }
     }
 }

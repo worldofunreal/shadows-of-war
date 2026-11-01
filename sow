@@ -87,7 +87,7 @@ run_dist_process() {
 production_summary() {
   local log_file="$1"
   local status="$2"
-  local stage no_op no_restart release_id diagnostics warnings skipped
+  local stage no_op no_restart release_id diagnostics
 
   if [[ ! -r "${log_file}" ]]; then
     printf '⚠ No se pudo leer el registro: %s\n' "${log_file}"
@@ -110,7 +110,7 @@ production_summary() {
       printf '⚠ El proceso terminó con código 0, pero no reconocí el resultado de publicación.\n'
     fi
   else
-    stage="$(awk '/^==> / { value=$0 } END { print value }' "${log_file}" 2>/dev/null || true)"
+    stage="$(awk '/^==> [0-9]+\/[0-9]+ / { value=$0 } END { print value }' "${log_file}" 2>/dev/null || true)"
     if [[ -z "${stage}" ]]; then stage='Preparación de sow-dist'; fi
     stage="${stage#==> }"
     printf '❌ Falló %s (código %s)\n' "${stage}" "${status}"
@@ -125,7 +125,7 @@ production_summary() {
         next
       }
       { cause=0 }
-      /^Error:/ || /^error:/ || /^error\[/ || /^fatal:/ || /^warning:/ || /^WARN(ING)?:/ || /^not ok / || /^✖ / || /^failures:/ || /^ssh:/ || /^flock:/ || /^curl:/ {
+      /^Error:/ || /^error:/ || /^error\[/ || /^fatal:/ || /^not ok / || /^✖ / || /^failures:/ || /^test .* \.\.\. FAILED/ || /^ssh:/ || /^flock:/ || /^curl:/ {
         lines[++count]=substr($0, 1, 240)
       }
       END {
@@ -144,24 +144,6 @@ production_summary() {
     printf 'Registro: %s\n' "${log_file}"
   fi
 
-  warnings="$(awk '
-    {
-      lower=tolower($0)
-      if (lower ~ /^(warning:|warn(ing)?:|⚠|i18n untranslated:)/ && !seen[$0]++) {
-        count++
-        if (count <= 5) print substr($0, 1, 240)
-      }
-    }
-    END { if (count > 5) printf "... y %d avisos más\n", count-5 }
-  ' "${log_file}" 2>/dev/null || true)"
-  if [[ -n "${warnings}" ]]; then
-    printf 'Avisos:\n%s\n' "${warnings}"
-  fi
-
-  skipped="$(awk '/^test .* \.\.\. ignored/ || /^ℹ skipped [1-9][0-9]*/ { found=1 } END { if (found) print "yes" }' "${log_file}" 2>/dev/null || true)"
-  if [[ "${skipped}" == yes ]]; then
-    printf '⚠ La suite omitió pruebas; detalles en el registro.\n'
-  fi
 }
 
 run_dist() {
