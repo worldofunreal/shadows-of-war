@@ -225,7 +225,7 @@ pub static PARAMS: &[ParamDef] = &[
         "thickness",
         "Border width",
         "Borders",
-        0.5,
+        1.0,
         0.0,
         1.0,
         0.01,
@@ -275,7 +275,7 @@ pub static PARAMS: &[ParamDef] = &[
         "territory_opacity",
         "Territory opacity",
         "Territories",
-        0.5,
+        0.77,
         0.0,
         1.0,
         0.01,
@@ -285,14 +285,14 @@ pub static PARAMS: &[ParamDef] = &[
         "blend_mode",
         "Territory blend",
         "Territories",
-        1.0,
+        0.0,
         BLEND_OPTIONS
     ),
     selection!(
         "tribe_blend_mode",
         "Tribe blend",
         "Territories",
-        3.0,
+        0.0,
         BLEND_OPTIONS
     ),
     legacy_number!(
@@ -876,7 +876,7 @@ pub static PARAMS: &[ParamDef] = &[
         "territory.local.fill",
         "Local territory shade",
         "Territories",
-        0.72,
+        0.77,
         0.0,
         2.0,
         0.01,
@@ -887,7 +887,7 @@ pub static PARAMS: &[ParamDef] = &[
         "territory.local.border",
         "Local border brightness",
         "Territories",
-        1.0,
+        0.86,
         0.0,
         2.0,
         0.01,
@@ -1359,7 +1359,7 @@ pub static PARAMS: &[ParamDef] = &[
         "territory.heartbeat.base",
         "Ability territory pulse base",
         "Territories",
-        0.88,
+        0.75,
         0.0,
         2.0,
         0.01,
@@ -1370,7 +1370,7 @@ pub static PARAMS: &[ParamDef] = &[
         "territory.heartbeat.amount",
         "Ability territory pulse strength",
         "Territories",
-        0.16,
+        0.2,
         0.0,
         1.0,
         0.005,
@@ -3232,7 +3232,7 @@ mod tests {
     }
 
     #[test]
-    fn tribe_blend_reuses_territory_modes_with_albedo_default() {
+    fn tribe_blend_reuses_territory_modes_with_normal_mix_default() {
         let territory = definition("blend_mode").unwrap();
         let tribes = definition("tribe_blend_mode").unwrap();
         assert_eq!(territory.options.len(), tribes.options.len());
@@ -3243,19 +3243,19 @@ mod tests {
                 .zip(tribes.options)
                 .all(|(a, b)| a.value == b.value && a.label == b.label)
         );
-        assert_eq!(territory.default[0], 1.0);
-        assert_eq!(tribes.default[0], 3.0);
+        assert_eq!(territory.default[0], 0.0);
+        assert_eq!(tribes.default[0], 0.0);
     }
 
     #[test]
     fn hero_pulses_use_visible_localized_defaults() {
         assert_eq!(
             definition("territory.heartbeat.base").unwrap().default[0],
-            0.88
+            0.75
         );
         assert_eq!(
             definition("territory.heartbeat.amount").unwrap().default[0],
-            0.16
+            0.2
         );
         assert_eq!(
             definition("border.breathe.amount").unwrap().default[0],

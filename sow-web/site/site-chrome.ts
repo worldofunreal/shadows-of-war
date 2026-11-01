@@ -27,38 +27,6 @@
       }
     });
   });
-  // Suggest a language only on the default entry. Its URL and rendered text stay English.
-  if (window.location.pathname === "/") {
-    let saved = "";
-    try {
-      saved = localStorage.getItem("sow_ui_locale") || "";
-    } catch {}
-    const links = [...document.querySelectorAll(".site-language a[data-site-language]")];
-    const aliases = { zh: "zh-cn", pt: "pt-br", tl: "fil" };
-    const match = (value) => {
-      const code = String(value || "")
-        .toLowerCase()
-        .replace(/_/g, "-");
-      return (
-        links.find((link) => link.dataset.siteLanguage.toLowerCase() === code) ||
-        links.find(
-          (link) =>
-            link.dataset.siteLanguage.toLowerCase() ===
-            (aliases[code] || aliases[code.split("-")[0]] || code.split("-")[0]),
-        )
-      );
-    };
-    const suggested = [saved, ...(navigator.languages || [navigator.language])].map(match).find(Boolean);
-    if (suggested && suggested.dataset.siteLanguage !== "en") {
-      const link = document.createElement("a");
-      link.className = "language-suggestion";
-      link.href = suggested.href;
-      link.dataset.siteLanguage = suggested.dataset.siteLanguage;
-      link.textContent = root.dataset.languageSuggestion.replace("{language}", suggested.textContent) + " →";
-      link.lang = suggested.lang;
-      document.querySelector(".hero-actions")?.append(link);
-    }
-  }
   if (window.SOW_I18N_READY) {
     window.SOW_I18N_READY.catch((error) =>
       console.error("[SOW site] interactive translations unavailable", error),

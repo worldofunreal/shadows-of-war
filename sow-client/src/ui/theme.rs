@@ -55,14 +55,14 @@ pub mod dev_config {
     impl Default for DevConfig {
         fn default() -> Self {
             Self {
-                thickness: 0.5,
+                thickness: 1.0,
                 darkness: 0.35,
                 shore_thickness: 0.35,
                 shore_darkness: 1.0,
                 conquest_duration: 1.5,
-                territory_opacity: 0.5,
-                blend_mode: 1.0,
-                tribe_blend_mode: 3.0,
+                territory_opacity: 0.77,
+                blend_mode: 0.0,
+                tribe_blend_mode: 0.0,
                 vfx_conquer: true,
                 vfx_border_breathe: true,
                 vfx_dialog_border: true,
@@ -268,14 +268,14 @@ mod tests {
     use super::dev_config::DevConfig;
 
     #[test]
-    fn territory_blend_defaults_keep_global_multiply_and_tribe_albedo() {
+    fn territory_blend_defaults_use_normal_mix_without_coupling_modes() {
         let mut config = DevConfig::default();
-        assert_eq!(config.value("territory_opacity")[0], 0.5);
-        assert_eq!(config.value("blend_mode")[0], 1.0);
-        assert_eq!(config.value("tribe_blend_mode")[0], 3.0);
+        assert_eq!(config.value("territory_opacity")[0], 0.77);
+        assert_eq!(config.value("blend_mode")[0], 0.0);
+        assert_eq!(config.value("tribe_blend_mode")[0], 0.0);
 
         assert!(config.assign("tribe_blend_mode", [1.0, 0.0, 0.0, 0.0]));
-        assert_eq!(config.value("blend_mode")[0], 1.0);
+        assert_eq!(config.value("blend_mode")[0], 0.0);
         assert_eq!(config.value("tribe_blend_mode")[0], 1.0);
     }
 }

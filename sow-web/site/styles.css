@@ -629,6 +629,41 @@ html[dir="rtl"] .hero-link:hover::after {
   position: relative;
   padding: clamp(80px, 11vw, 144px) 0;
 }
+.landing-section.maps {
+  isolation: isolate;
+  overflow: hidden;
+  background: linear-gradient(90deg, rgb(8 11 16 / 86%), rgb(8 11 16 / 58%)), var(--bg);
+}
+.maps-art {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  display: block;
+  opacity: .34;
+  pointer-events: none;
+}
+.maps-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 45%;
+  mask-image: linear-gradient(90deg, #000 0%, #000 48%, transparent 100%);
+}
+.maps > .container {
+  position: relative;
+}
+.all-maps-link {
+  margin: -1rem 0 1.5rem;
+  text-align: end;
+}
+.all-maps-link a {
+  color: var(--orange-soft);
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.all-maps-link a::after { content: " →"; }
+.all-maps-link a:hover { color: var(--ink); }
 .section-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
@@ -1719,31 +1754,6 @@ html[dir="rtl"] .leader-arrow {
   opacity: 0;
 }
 
-/* Commander Hero Cutout in Foreground */
-.map-character-layer {
-  position: absolute;
-  right: 48px;
-  bottom: 0;
-  height: 98%;
-  max-height: 520px;
-  z-index: 3;
-  pointer-events: none;
-  display: flex;
-  align-items: flex-end;
-  filter:
-    drop-shadow(0 20px 35px rgba(0, 0, 0, 0.9))
-    drop-shadow(0 0 30px rgba(245, 158, 11, 0.2));
-  transform: translateZ(0);
-}
-
-.map-character-img {
-  height: 100%;
-  width: auto;
-  max-width: 440px;
-  object-fit: contain;
-  object-position: bottom right;
-}
-
 /* Floating Tactical HUD Card */
 .map-hud {
   position: absolute;
@@ -1779,35 +1789,6 @@ html[dir="rtl"] .leader-arrow {
   color: var(--orange);
 }
 
-.map-status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
-  background: rgba(34, 197, 94, 0.12);
-  border: 1px solid rgba(34, 197, 94, 0.35);
-  border-radius: 12px;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #4ade80;
-}
-
-.pulse-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 8px #22c55e;
-  animation: map-pulse 2s infinite ease-in-out;
-}
-
-@keyframes map-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.8); }
-}
-
 .map-hud h3 {
   margin: 0 0 8px;
   font-size: clamp(28px, 3.2vw, 42px);
@@ -1825,23 +1806,6 @@ html[dir="rtl"] .leader-arrow {
   font-weight: 500;
   line-height: 1.45;
   color: #94a3b8;
-}
-
-.map-hud-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.map-deploy-btn {
-  min-height: 44px;
-  padding: 0 24px;
-  font-size: 13px;
-  font-weight: 850;
-  letter-spacing: 0.08em;
-  box-shadow:
-    var(--sow-button-primary-shadow),
-    0 0 18px rgba(245, 158, 11, 0.35);
 }
 
 /* Lateral Navigation Arrows */
@@ -2768,13 +2732,6 @@ html[dir="rtl"] .leader-arrow {
   .map-preview-image {
     min-height: 400px;
   }
-  .map-character-layer {
-    right: 24px;
-    max-height: 420px;
-  }
-  .map-character-img {
-    max-width: 320px;
-  }
   .map-hud {
     left: 24px;
     bottom: 24px;
@@ -3193,15 +3150,6 @@ html[dir="rtl"] .leader-arrow {
       linear-gradient(180deg, rgba(10, 14, 23, 0.1) 0%, rgba(10, 14, 23, 0.75) 50%, rgba(10, 14, 23, 0.98) 100%),
       linear-gradient(90deg, rgba(10, 14, 23, 0.6) 0%, transparent 60%);
   }
-  .map-character-layer {
-    right: -10px;
-    bottom: 0;
-    max-height: 280px;
-    opacity: 0.88;
-  }
-  .map-character-img {
-    max-width: 220px;
-  }
   .map-hud {
     position: relative;
     left: auto;
@@ -3217,10 +3165,6 @@ html[dir="rtl"] .leader-arrow {
   .map-telemetry {
     font-size: 12px;
     margin-bottom: 14px;
-  }
-  .map-deploy-btn {
-    width: 100%;
-    min-height: 42px;
   }
   .map-nav-arrow {
     width: 38px;
@@ -4031,10 +3975,6 @@ html[dir="rtl"] .leader-arrow {
 .all-leaders-link {
   margin-block: -1rem 1.5rem;
 }
-.language-suggestion {
-  color: var(--orange);
-  font-size: 0.9rem;
-}
 :where(a, button, input, summary):focus-visible {
   outline: 2px solid var(--orange);
   outline-offset: 4px;
@@ -4070,6 +4010,33 @@ html[dir="rtl"] .leader-arrow {
   color: var(--muted);
   font-size: 14px;
   line-height: 1.4;
+}
+.maps-directory-heading {
+  display: block;
+  padding-block: 10px 24px;
+}
+.maps-directory-heading .eyebrow {
+  margin: 0 0 10px;
+  color: var(--orange-soft);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.maps-directory-heading h1 {
+  margin-bottom: 12px;
+}
+.maps-directory-heading p:last-child {
+  max-width: 640px;
+}
+.maps-directory-section .map-explorer {
+  padding-top: 20px;
+}
+.maps-directory .maps-art {
+  opacity: .22;
+}
+.maps-directory .maps-art img {
+  mask-image: linear-gradient(180deg, #000 0%, transparent 88%);
 }
 .leaders-directory-explorer {
   padding: 16px 0 28px;
@@ -4120,6 +4087,23 @@ html[dir="rtl"] .leader-arrow {
   }
   .leaders-directory-heading p {
     font-size: 12px;
+  }
+  .maps-directory-heading {
+    display: block;
+    padding-block: 10px 16px;
+  }
+  .maps-directory-heading h1 {
+    font-size: clamp(28px, 8vw, 36px);
+  }
+  .maps-directory-section .map-explorer {
+    padding-top: 8px;
+  }
+  .all-maps-link {
+    margin: -16px 0 18px;
+  }
+  .maps-art img {
+    object-position: center;
+    mask-image: linear-gradient(180deg, #000 0%, transparent 82%);
   }
   .leaders-directory-explorer {
     padding: 0;

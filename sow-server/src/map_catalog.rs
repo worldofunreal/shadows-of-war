@@ -44,6 +44,7 @@ fn scan_items(root: &Path) -> Vec<(String, MapHeader, u32)> {
     items
 }
 
+#[cfg(test)]
 pub fn scan_maps_root(root: &Path) -> MapCatalog {
     map_file::catalog_from_headers(scan_items(root))
 }

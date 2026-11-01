@@ -1490,3 +1490,54 @@ test("apply-dev-settings script accurately updates shader_params and theme defau
     assert.match(resTheme.content, /pub thickness: f32,/); // Struct stays untouched
     assert.match(resTheme.content, /thickness: 0.95,/); // Default updated
 });
+
+test("attack ratio slider card matches the latest tactical HUD theme and style", () => {
+    const css = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
+    const hudTs = fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
+
+    // Markup: step="1" for 1-by-1 fine grain control
+    assert.match(hudTs, /id="sow-hud-slider"[^>]*step="1"|step="1"[^>]*id="sow-hud-slider"/);
+
+    // Tactical card framing
+    assert.match(css, /\.sow-hud__rail-card\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#18222b/);
+    assert.match(css, /\.sow-hud__rail-card\s*\{[^}]*border-top:\s*1px solid rgba\(255,\s*213,\s*79/);
+    assert.match(css, /\.sow-hud__rail-card\s*\{[^}]*backdrop-filter:\s*blur\(12px\)/);
+
+    // Thicker 16px track & emerald green filler matching army resource
+    assert.match(css, /--sow-range-track-width:\s*16px/);
+    assert.match(css, /\.sow-hud__range-vertical::-webkit-slider-runnable-track\s*\{[^}]*background:\s*linear-gradient\([^)]*#246e10[^)]*#a4ea4a/);
+    assert.match(
+        css,
+        /\.sow-hud__range-vertical::-webkit-slider-runnable-track\s*\{[^}]*border:\s*1px solid rgba\(255,\s*255,\s*255,\s*0\.08\)/,
+    );
+
+    // Active drag energy effect on track
+    assert.match(
+        css,
+        /\.sow-hud__left-rail\.is-adjusting\s+\.sow-hud__range-vertical::-webkit-slider-runnable-track[^}]*box-shadow:\s*[^}]*0 0 12px rgba\(118,\s*219,\s*54/
+    );
+
+    // Prominent knob with larger crossed swords icon
+    assert.match(css, /--sow-range-thumb-size:\s*34px/);
+    assert.match(
+        css,
+        /\.sow-hud__range-vertical::-webkit-slider-thumb\s*\{[^}]*border:\s*1\.5px solid var\(--sow-gold-bright\)/,
+    );
+    assert.match(css, /\.sow-hud__range-vertical::-webkit-slider-thumb\s*\{[^}]*background:\s*var\(--sow-crossed-swords\)\s*center\s*\/\s*23px\s*23px/);
+    assert.match(css, /\.sow-hud__range-vertical::-webkit-slider-thumb\s*\{[^}]*margin-left:\s*calc\(/);
+
+    // Active/dragging knob expansion and glow
+    assert.match(
+        css,
+        /\.sow-hud__left-rail\.is-adjusting\s+\.sow-hud__range-vertical::-webkit-slider-thumb[^}]*transform:\s*scale\(1\.18\)/
+    );
+    assert.match(
+        css,
+        /\.sow-hud__left-rail\.is-adjusting\s+\.sow-hud__range-vertical::-webkit-slider-thumb[^}]*box-shadow:[^}]*0 0 24px rgba\(255,\s*213,\s*79/
+    );
+
+    // Tactile allocation readout & highlight
+    assert.match(css, /\.sow-hud__army-allocation\s*\{[^}]*position:\s*relative/);
+    assert.match(css, /\.sow-hud__army-allocation::before\s*\{[^}]*background:\s*#a4ea4a/);
+    assert.match(css, /\.sow-hud__army-allocation strong\s*\{[^}]*text-shadow:\s*0 0 12px/);
+});

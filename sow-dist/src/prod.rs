@@ -1102,8 +1102,7 @@ fn require_published_source(paths: &Paths) -> Result<super::SourceIdentity> {
     // AGPL §5(a): identify the modified source revision and its relevant date.
     let source_date = super::output("git", &["-C", root, "show", "-s", "--format=%cs", "HEAD"])?;
     let readme = fs::read_to_string(paths.root.join("README.md"))?;
-    let modified_source_notice =
-        format!("Modified from OpenFrontIO. Source revision date: `{source_date}`.");
+    let modified_source_notice = format!("Modified from OpenFrontIO (`{source_date}`).");
     if !readme.contains(&modified_source_notice) {
         bail!(
             "README must identify the modified OpenFront source and its revision date ({source_date})"
@@ -3365,24 +3364,19 @@ cleanup() {{
     [ -z "$cert_test_stage" ] || sudo rm -rf -- "$cert_test_stage"
 }}
 trap cleanup EXIT
+issuance_check_required=0
+if [ -n "$credential_stage" ]; then issuance_check_required=1; fi
 if ! dpkg-query -W -f='${{Status}}' certbot 2>/dev/null | grep -qx 'install ok installed' \
     || ! dpkg-query -W -f='${{Status}}' python3-certbot-dns-cloudflare 2>/dev/null | grep -qx 'install ok installed'; then
     sudo apt-get update
     sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-dns-cloudflare
+    issuance_check_required=1
 fi
 sudo install -d -o root -g root -m 0755 /etc/letsencrypt/renewal-hooks/deploy
 sudo install -d -o root -g sowrelay -m 0750 /usr/local/etc/sow
 {credential_update}
 {hook_update}
 dns_cloudflare_propagation_seconds=60
-# Certbot 2.9 deactivates reused dry-run authorizations. Keep each simulation's
-# account state separate so a previous check cannot leave this one unusable.
-cert_test_stage=$(sudo mktemp -d /tmp/sow-relay-cert-test.XXXXXX)
-sudo certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
-    --config /dev/null --config-dir "$cert_test_stage/config" --work-dir "$cert_test_stage/work" \
-    --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
-    --dns-cloudflare-propagation-seconds "$dns_cloudflare_propagation_seconds" \
-    --cert-name relay.shadowsofwar.io -d relay.shadowsofwar.io --dry-run
 certbot_cli_ini=/etc/letsencrypt/cli.ini
 if ! sudo grep -Fxq "dns-cloudflare-propagation-seconds = $dns_cloudflare_propagation_seconds" "$certbot_cli_ini"; then
     if sudo test -e "$certbot_cli_ini"; then
@@ -3396,12 +3390,28 @@ if ! sudo grep -Fxq "dns-cloudflare-propagation-seconds = $dns_cloudflare_propag
     sudo install -o root -g root -m 0644 "$certbot_cli_stage" "$certbot_cli_ini"
     rm -f "$certbot_cli_stage"
     certbot_cli_stage=
+    issuance_check_required=1
 fi
 sudo systemctl enable --now certbot.timer
 renewal=/etc/letsencrypt/renewal/relay.shadowsofwar.io.conf
+renewal_needs_repair=0
 if ! sudo test -s "$renewal" \
     || ! sudo grep -Fxq 'authenticator = dns-cloudflare' "$renewal" \
     || ! sudo grep -Fxq 'dns_cloudflare_credentials = /etc/letsencrypt/cloudflare.ini' "$renewal"; then
+    renewal_needs_repair=1
+    issuance_check_required=1
+fi
+if [ "$issuance_check_required" -eq 1 ]; then
+    # Certbot 2.9 deactivates reused dry-run authorizations. Isolate this
+    # validation, and pay its DNS propagation delay only when issuance setup changed.
+    cert_test_stage=$(sudo mktemp -d /tmp/sow-relay-cert-test.XXXXXX)
+    sudo certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
+        --config /dev/null --config-dir "$cert_test_stage/config" --work-dir "$cert_test_stage/work" \
+        --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
+        --dns-cloudflare-propagation-seconds "$dns_cloudflare_propagation_seconds" \
+        --cert-name relay.shadowsofwar.io -d relay.shadowsofwar.io --dry-run
+fi
+if [ "$renewal_needs_repair" -eq 1 ]; then
     sudo certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
         --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
         --dns-cloudflare-propagation-seconds "$dns_cloudflare_propagation_seconds" \
@@ -3420,6 +3430,11 @@ systemctl is-active --quiet certbot.timer
 sudo grep -Fxq 'authenticator = dns-cloudflare' "$renewal"
 sudo grep -Fxq 'dns_cloudflare_credentials = /etc/letsencrypt/cloudflare.ini' "$renewal"
 sudo grep -Fxq "dns-cloudflare-propagation-seconds = $dns_cloudflare_propagation_seconds" "$certbot_cli_ini"
+if [ "$issuance_check_required" -eq 1 ]; then
+    printf '%s\n' 'relay Certbot DNS issuance dry-run passed'
+else
+    printf '%s\n' 'relay certificate automation unchanged; renewal and served certificate verified'
+fi
 "#,
         credential_stage_arg = credential_stage_arg,
         hook_stage_arg = hook_stage_arg,
@@ -3428,7 +3443,7 @@ sudo grep -Fxq "dns-cloudflare-propagation-seconds = $dns_cloudflare_propagation
     );
     run("ssh", &[&config.relay_host, &remote], None)
         .context("relay DNS certificate automation or renewal failed")?;
-    println!("  relay Certbot DNS issuance dry-run passed and automatic renewal verified");
+    println!("  relay certificate renewal automation verified");
     Ok(())
 }
 

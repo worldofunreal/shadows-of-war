@@ -409,9 +409,13 @@
       </section>
 
       <section class="landing-section maps" id="maps">
+        <picture class="maps-art" aria-hidden="true">
+          <source media="(max-width: 700px)" srcset="/assets/shell/leaders/random_mobile.webp" />
+          <img src="/assets/shell/leaders/random_desktop.webp" alt="" loading="lazy" decoding="async" />
+        </picture>
         <div class="container">
           <header class="section-head">
-            <p class="eyebrow" data-i18n="site.maps">Maps</p>
+            <p class="eyebrow" data-i18n="site.maps_in_rotation">Maps in Rotation</p>
             <h2>
               <span data-i18n="site.maps_fight_on">Fight on</span>
               <em data-i18n="site.maps_every_continent">every continent.</em>
@@ -420,6 +424,7 @@
               Matchmaking rotates through the world and regional maps, from Europe to the Pacific.
             </p>
           </header>
+          <p class="all-maps-link"><a href="/maps/" data-i18n="site.view_all_maps">View all maps</a></p>
           <div class="map-explorer" data-map-explorer>
             <!-- SOW_SITE_MAPS -->
           </div>

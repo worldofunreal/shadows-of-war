@@ -1,6 +1,6 @@
 use super::cpu_prep::{
     MapGlobals, PlayerColors, PlayerSkinStyles, compute_has_border, fill_terrain_buffer,
-    get_neighbors,
+    get_neighbors, get_neighbors_8,
 };
 use crate::context::RenderContext;
 use blade_graphics as gpu;
@@ -567,7 +567,7 @@ impl MapRenderer {
             self.dirty_chunks[(y / chunk_h) as usize] = true;
 
             // Also update and dirty all neighbors since their border status changes
-            let neighbors = get_neighbors(dt.index, width, height);
+            let neighbors = get_neighbors_8(dt.index, width, height);
             for &n_opt in &neighbors {
                 if let Some(n_idx) = n_opt {
                     let n_fade = self.vision_fade[n_idx as usize];
