@@ -59,29 +59,6 @@
       document.querySelector(".hero-actions")?.append(link);
     }
   }
-  const search = document.querySelector("[data-compendium-search]");
-  if (search) {
-    const cards = [...document.querySelectorAll("[data-compendium-card]")];
-    const fold = (value) => value.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase();
-    const filter = () => {
-      const query = fold(search.value.trim());
-      let count = 0;
-      cards.forEach((card) => {
-        card.hidden = !fold(card.dataset.search).includes(query);
-        if (!card.hidden) count++;
-      });
-      document.querySelector("[data-compendium-count]").textContent = `${count} / ${cards.length}`;
-      document.querySelector("[data-compendium-empty]").hidden = count !== 0;
-    };
-    search.form.addEventListener("submit", (event) => event.preventDefault());
-    search.addEventListener("input", filter);
-    document.querySelector("[data-compendium-reset]").addEventListener("click", () => {
-      search.value = "";
-      filter();
-      search.focus();
-    });
-    filter();
-  }
   if (window.SOW_I18N_READY) {
     window.SOW_I18N_READY.catch((error) =>
       console.error("[SOW site] interactive translations unavailable", error),

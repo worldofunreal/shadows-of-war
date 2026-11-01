@@ -1401,3 +1401,92 @@ test("dev tools sidebar scrolls via mouse wheel accessibility and blocks canvas 
     assert.match(hud, /body\.scrollTop \+= deltaY;/);
     assert.match(hud, /event\.stopPropagation\(\);/);
 });
+
+test("dev tools settings export, copy action, and local persistence", () => {
+    const css = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
+
+    // Markup checks
+    assert.match(hud, /data-command="dev_save_settings"/, "Save settings button exists");
+    assert.match(hud, /class="sow-hud__sheet-btn sow-hud__dev-save-btn"/, "Save button styled as sheet button");
+    assert.match(hud, /data-command="dev_copy_settings"/, "Copy settings menu option exists");
+
+    // Logic checks in main_menu.hud.ts
+    assert.match(hud, /function getStoredDevOverrides\(\)/);
+    assert.match(hud, /function saveDevOverride\(/);
+    assert.match(hud, /function removeDevOverride\(/);
+    assert.match(hud, /function restoreDevOverridesIfNeeded\(/);
+    assert.match(hud, /function getDevSettingsExport\(\)/);
+    assert.match(hud, /function downloadDevSettings\(\)/);
+    assert.match(hud, /function copyDevSettings\(/);
+    assert.match(hud, /window\.localStorage\.setItem\("sow_dev_overrides"/);
+    assert.match(hud, /window\.localStorage\.removeItem\("sow_dev_overrides"/);
+
+    // CSS styling checks
+    assert.match(css, /\.sow-hud__dev-save-btn\s*\{/);
+    assert.match(css, /\.sow-hud__dev-save-btn\.is-saved\s*\{/);
+});
+
+test("apply-dev-settings script accurately updates shader_params and theme defaults", async () => {
+    const { updateShaderParams, updateThemeDefaults, formatRustValue } = await import(
+        "../../scripts/apply-dev-settings.ts"
+    );
+
+    // Format helpers
+    assert.equal(formatRustValue(true), "true");
+    assert.equal(formatRustValue(false), "false");
+    assert.equal(formatRustValue(1), "1.0");
+    assert.equal(formatRustValue(0.75), "0.75");
+    assert.equal(formatRustValue([0.1, 0.2, 0.3]), "[0.1, 0.2, 0.3]");
+
+    // Test updateShaderParams
+    const sampleShaderParams = `
+    legacy_number!(
+        "thickness",
+        "Border width",
+        "Borders",
+        0.5,
+        0.0,
+        1.0,
+        0.01,
+        "cells"
+    ),
+    legacy_bool!("vfx_conquer", "Conquest effect", "Conquest", true),
+    color!(
+        "water.ocean.shore",
+        "Shore water",
+        "Ocean water",
+        [100.0 / 255.0, 143.0 / 255.0, 255.0 / 255.0],
+        "MAP_WATER_SHORE"
+    ),
+`;
+    const resNum = updateShaderParams(sampleShaderParams, "thickness", 0.85);
+    assert.equal(resNum.updated, true);
+    assert.match(resNum.content, /"Borders",\s*0\.85,\s*0\.0,/);
+
+    const resBool = updateShaderParams(sampleShaderParams, "vfx_conquer", false);
+    assert.equal(resBool.updated, true);
+    assert.match(resBool.content, /legacy_bool!\("vfx_conquer", "Conquest effect", "Conquest", false\)/);
+
+    const resColor = updateShaderParams(sampleShaderParams, "water.ocean.shore", [0.4, 0.5, 0.6]);
+    assert.equal(resColor.updated, true);
+    assert.match(resColor.content, /"Ocean water",\s*\[0\.4, 0\.5, 0\.6\],\s*"MAP_WATER_SHORE"/);
+
+    // Test updateThemeDefaults
+    const sampleTheme = `
+    pub struct DevConfig {
+        pub thickness: f32,
+    }
+    impl Default for DevConfig {
+        fn default() -> Self {
+            Self {
+                thickness: 0.5,
+                darkness: 0.35,
+            }
+        }
+    }
+`;
+    const resTheme = updateThemeDefaults(sampleTheme, "thickness", 0.95);
+    assert.equal(resTheme.updated, true);
+    assert.match(resTheme.content, /pub thickness: f32,/); // Struct stays untouched
+    assert.match(resTheme.content, /thickness: 0.95,/); // Default updated
+});

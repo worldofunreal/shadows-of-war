@@ -99,6 +99,7 @@
   let activeArtSlug = "";
   const image = $("[data-detail-image]");
   const mobileImage = $("[data-detail-image-mobile]");
+  const abilityIcon = $("[data-detail-ability-icon]");
   const portrait = $("[data-detail-portrait]");
   const art = $("[data-detail-art]");
   const search = $("[data-leader-search]");
@@ -260,6 +261,7 @@
     const profile = $("[data-detail-profile]");
     if (profile) profile.href = `${document.documentElement.dataset.sitePrefix || "/"}leaders/${leader.id}/`;
     const name = showText($("[data-detail-name]"), leader, "name");
+    if (abilityIcon) abilityIcon.src = `/assets/gameplay/icons/abilities/${leader.artSlug}.webp`;
     if (image) {
       image.alt = name;
       if (activeArtSlug !== leader.artSlug) {
@@ -438,7 +440,32 @@
   const mapImage = $("[data-map-image]");
   const mapTitle = $("[data-map-name]");
   const mapFrame = $("[data-map-frame]");
+  const mapPrev = $("[data-map-prev]");
+  const mapNext = $("[data-map-next]");
   let activeMapImage = mapImage?.getAttribute("src") || "";
+  let activeMapIndex = mapCards.findIndex((card) => card.getAttribute("aria-pressed") === "true");
+  if (activeMapIndex < 0) activeMapIndex = 0;
+
+  function selectMapIndex(index: number) {
+    if (!mapCards.length) return;
+    const bounded = (index + mapCards.length) % mapCards.length;
+    const card = mapCards[bounded];
+    if (!card) return;
+    activeMapIndex = bounded;
+    mapFrame?.classList.add("is-loading");
+    mapFrame?.classList.remove("is-unavailable");
+    if (mapImage && card.dataset.mapName) mapImage.alt = card.dataset.mapName;
+    if (mapTitle && card.dataset.mapName) mapTitle.textContent = card.dataset.mapName;
+    if (card.dataset.mapImage) {
+      activeMapImage = card.dataset.mapImage;
+      if (mapImage) mapImage.src = activeMapImage;
+    }
+    if (mapImage?.complete && mapImage.naturalWidth && mapImage.currentSrc.endsWith(activeMapImage))
+      mapFrame?.classList.remove("is-loading");
+    mapCards.forEach((item) => item.setAttribute("aria-pressed", String(item === card)));
+    card.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }
+
   mapImage?.addEventListener("load", () => {
     if (mapImage.currentSrc.endsWith(activeMapImage))
       mapFrame.classList.remove("is-loading", "is-unavailable");
@@ -448,20 +475,14 @@
     mapFrame.classList.remove("is-loading");
     mapFrame.classList.add("is-unavailable");
   });
-  mapCards.forEach((card) =>
+  mapCards.forEach((card, index) =>
     card.addEventListener("click", () => {
       if (card.getAttribute("aria-pressed") === "true") return;
-      mapFrame.classList.add("is-loading");
-      mapFrame.classList.remove("is-unavailable");
-      mapImage.alt = card.dataset.mapName;
-      mapTitle.textContent = card.dataset.mapName;
-      activeMapImage = card.dataset.mapImage;
-      mapImage.src = activeMapImage;
-      if (mapImage.complete && mapImage.naturalWidth && mapImage.currentSrc.endsWith(activeMapImage))
-        mapFrame.classList.remove("is-loading");
-      mapCards.forEach((item) => item.setAttribute("aria-pressed", String(item === card)));
+      selectMapIndex(index);
     }),
   );
+  mapPrev?.addEventListener("click", () => selectMapIndex(activeMapIndex - 1));
+  mapNext?.addEventListener("click", () => selectMapIndex(activeMapIndex + 1));
 
   function refreshLocale() {
     updateLeader(activeLeaderIndex);

@@ -1854,6 +1854,37 @@ html[dir="rtl"] .sow-hud__leaderboard-search {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.sow-hud__dev-save-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--sow-muted);
+  cursor: pointer;
+  transition: transform 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.sow-hud__dev-save-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.sow-hud__dev-save-btn:hover {
+  border-color: var(--sow-line);
+  background: rgb(255 255 255 / 6%);
+  color: var(--sow-gold-bright, #ffd54f);
+}
+.sow-hud__dev-save-btn.is-saved {
+  color: #8bc34a;
+  border-color: rgba(139, 195, 74, 0.4);
+}
+.sow-hud__dev-save-btn.is-saved svg {
+  transform: scale(1.18);
+}
 .sow-hud__dev-more-btn {
   display: grid;
   place-items: center;

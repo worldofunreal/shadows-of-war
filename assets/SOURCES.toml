@@ -101,7 +101,7 @@ notes = "Written only by sow-tools: buildings-atlas, badges-atlas and units-atla
 [site_media]
 path = "assets/site/media/"
 source = "original_and_ai_generated"
-notes = "Landing artwork in desktop/mobile pairs, original gameplay captures and optional hero-loop/gameplay videos, plus store badges. Exact generation prompts and references live in assets/site/landing-art.json. sow-dist publishes the registered media; these files are not loaded by the game."
+notes = "Landing artwork in desktop/mobile pairs, Support-page character art, original gameplay captures and optional hero-loop/gameplay videos, plus store badges. Exact landing prompts and references live in assets/site/landing-art.json. sow-dist publishes the registered media; these files are not loaded by the game."
 
 [site_icons]
 path = "assets/site/icons/"

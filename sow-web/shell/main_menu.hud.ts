@@ -1350,6 +1350,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             SOW_t("hud.dev_tools") +
             "      </h3>" +
             "    </div>" +
+            '    <button type="button" class="sow-hud__sheet-btn sow-hud__dev-save-btn" data-command="dev_save_settings" aria-label="' +
+            (SOW_t("hud.save_settings") || "Descargar ajustes JSON") +
+            '" title="' +
+            (SOW_t("hud.save_settings") || "Descargar ajustes JSON") +
+            '">' +
+            DEV_SAVE_ICON +
+            "</button>" +
             '    <button type="button" class="sow-hud__sheet-btn sow-hud__dev-more-btn" data-command="dev_menu" aria-label="More" aria-expanded="false">⋯</button>' +
             '    <button class="sow-hud__close-btn sow-hud__sheet-btn" type="button" data-command="toggle_dev_sidebar" aria-label="' +
             SOW_t("hud.close_developer_tools") +
@@ -1357,6 +1364,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             hudIcon("close", "sow-hud__close-icon") +
             "    </button>" +
             '    <div class="sow-hud__dev-menu" id="sow-hud-dev-menu" hidden>' +
+            '      <button type="button" data-command="dev_copy_settings">Copiar ajustes JSON</button>' +
             '      <button type="button" data-command="dev_vfx_all" data-on="1">All effects on</button>' +
             '      <button type="button" data-command="dev_vfx_all" data-on="0">All effects off</button>' +
             '      <button type="button" data-command="dev_reset_all" id="sow-hud-dev-reset-all">Reset all</button>' +
@@ -3311,6 +3319,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
     const DEV_RESET_ICON =
         '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/></svg>';
+    const DEV_SAVE_ICON =
+        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
 
     function devDecimals(step: number): number {
         const text = String(step);
@@ -3392,6 +3402,175 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             }
         }
         send("set_dev_config", { field: id, value: value });
+        saveDevOverride(id, value);
+    }
+
+    function getStoredDevOverrides(): Record<string, boolean | number | number[]> {
+        try {
+            const raw = window.localStorage.getItem("sow_dev_overrides");
+            return raw ? JSON.parse(raw) : {};
+        } catch {
+            return {};
+        }
+    }
+
+    function saveDevOverride(id: string, value: boolean | number | number[]): void {
+        try {
+            const overrides = getStoredDevOverrides();
+            const devTools = hudState && hudState.hud && hudState.hud.dev_tools;
+            const def =
+                devTools && devTools.schema
+                    ? devTools.schema.find(function (item) {
+                          return item.id === id;
+                      })
+                    : undefined;
+            if (def && !devIsDirty(def, value)) {
+                delete overrides[id];
+            } else {
+                overrides[id] = value;
+            }
+            if (Object.keys(overrides).length > 0) {
+                window.localStorage.setItem("sow_dev_overrides", JSON.stringify(overrides));
+            } else {
+                window.localStorage.removeItem("sow_dev_overrides");
+            }
+        } catch {
+            /* storage unavailable */
+        }
+    }
+
+    function removeDevOverride(opts: { field?: string | null; section?: string | null }): void {
+        try {
+            if (!opts.field && !opts.section) {
+                window.localStorage.removeItem("sow_dev_overrides");
+                return;
+            }
+            const overrides = getStoredDevOverrides();
+            if (opts.field) {
+                delete overrides[opts.field];
+            } else if (opts.section) {
+                const devTools = hudState && hudState.hud && hudState.hud.dev_tools;
+                if (devTools && devTools.schema) {
+                    devTools.schema.forEach(function (def) {
+                        if (def.section === opts.section) {
+                            delete overrides[def.id];
+                        }
+                    });
+                }
+            }
+            if (Object.keys(overrides).length > 0) {
+                window.localStorage.setItem("sow_dev_overrides", JSON.stringify(overrides));
+            } else {
+                window.localStorage.removeItem("sow_dev_overrides");
+            }
+        } catch {
+            /* storage unavailable */
+        }
+    }
+
+    let devOverridesRestored = false;
+    function restoreDevOverridesIfNeeded(_devTools: CompleteHudDevTools): void {
+        if (devOverridesRestored) return;
+        const overrides = getStoredDevOverrides();
+        const keys = Object.keys(overrides);
+        devOverridesRestored = true;
+        if (keys.length === 0) return;
+        keys.forEach(function (id) {
+            const val = overrides[id];
+            if (val !== undefined) {
+                send("set_dev_config", { field: id, value: val });
+            }
+        });
+    }
+
+    function getDevSettingsExport(): { json: string; count: number } {
+        const devTools = hudState && hudState.hud && hudState.hud.dev_tools;
+        const schema = (devTools && devTools.schema) || [];
+        const config = (devTools && devTools.config) || {};
+        const changes: Record<string, boolean | number | number[]> = {};
+        let count = 0;
+
+        schema.forEach(function (def) {
+            const current = config[def.id];
+            if (current !== undefined && devIsDirty(def, current)) {
+                changes[def.id] = current;
+                count++;
+            }
+        });
+
+        const payload = {
+            version: 1,
+            exported_at: new Date().toISOString(),
+            changes_count: count,
+            changes: changes,
+        };
+
+        return { json: JSON.stringify(payload, null, 2), count };
+    }
+
+    function downloadDevSettings(): void {
+        const exported = getDevSettingsExport();
+        const blob = new Blob([exported.json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "sow_dev_settings.json";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        const saveBtn =
+            hudRefs &&
+            hudRefs.devSidebar &&
+            hudRefs.devSidebar.querySelector<HTMLButtonElement>('[data-command="dev_save_settings"]');
+        if (saveBtn) {
+            saveBtn.classList.add("is-saved");
+            window.setTimeout(function () {
+                saveBtn.classList.remove("is-saved");
+            }, 1200);
+        }
+    }
+
+    function copyDevSettings(button?: HTMLElement | null): void {
+        const exported = getDevSettingsExport();
+        const originalText = button ? button.textContent : "";
+        const onSuccess = function () {
+            if (button) {
+                button.textContent = "¡Copiado!";
+                window.setTimeout(function () {
+                    if (button) button.textContent = originalText;
+                    setDevMenu(false);
+                }, 800);
+            } else {
+                setDevMenu(false);
+            }
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(exported.json).then(onSuccess, function () {
+                fallbackCopy(exported.json, onSuccess);
+            });
+        } else {
+            fallbackCopy(exported.json, onSuccess);
+        }
+    }
+
+    function fallbackCopy(text: string, cb: () => void): void {
+        try {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+            cb();
+        } catch {
+            setDevMenu(false);
+        }
     }
 
     function disarmDevReset() {
@@ -3671,6 +3850,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             buildDevPanel(completeDevTools, sidebar, host);
             devToolsSchemaKey = key;
         }
+        restoreDevOverridesIfNeeded(completeDevTools);
         const perfHost = sidebar.querySelector<HTMLElement>("#sow-hud-dev-perf");
         const perf = Array.isArray(completeDevTools.perf) ? completeDevTools.perf : [];
         if (perfHost) {
@@ -6004,7 +6184,15 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             } else if (cmd === "toggle_settings") {
                 setHudPanel("settings");
                 renderHud();
+            } else if (cmd === "dev_save_settings") {
+                downloadDevSettings();
+            } else if (cmd === "dev_copy_settings") {
+                copyDevSettings(btn);
             } else if (cmd === "reset_dev_config") {
+                removeDevOverride({
+                    section: btn.dataset.devSection || null,
+                    field: btn.dataset.devField || null,
+                });
                 send("reset_dev_config", {
                     section: btn.dataset.devSection || null,
                     field: btn.dataset.devField || null,
@@ -6032,6 +6220,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             } else if (cmd === "dev_reset_all") {
                 if (devResetTimer) {
                     setDevMenu(false);
+                    removeDevOverride({});
                     send("reset_dev_config", { section: null, field: null });
                 } else {
                     btn.textContent = "Tap again to reset all";
@@ -6427,5 +6616,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     updateHudSafeArea();
     if (hudRoot) hudRoot.hidden = true;
     if (hudDevLayer) hudDevLayer.hidden = true;
+    window.SOW_getDevSettingsExport = getDevSettingsExport;
     if (typeof window.SOW_MENU_STATE === "string") window.SOW_onStateUpdate(window.SOW_MENU_STATE);
 })();
