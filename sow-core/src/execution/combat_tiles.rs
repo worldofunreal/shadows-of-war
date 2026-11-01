@@ -265,6 +265,17 @@ fn city_capture_multiplier(
 // Attack execution tick (territory expansion and combat resolution)
 impl SowEngine {
     pub fn execute_combat(&mut self) {
+        self.execute_combat_using(
+            |attack, _| attack.to_conquer.len(),
+            |_, _, _| 1.0,
+        );
+    }
+
+    fn execute_combat_using<F, P>(&mut self, frontier_size: F, pacing_multiplier: P)
+    where
+        F: Fn(&crate::execution::AttackExecution, &GameState) -> usize,
+        P: Fn(f64, &crate::execution::AttackExecution, &GameState) -> f64,
+    {
         if self.state.phase != GamePhase::Playing {
             return;
         }
@@ -351,8 +362,7 @@ impl SowEngine {
                 continue;
             }
 
-            // Fast approximation of active frontier size without scanning the entire empire border
-            let adjacent = (execution.to_conquer.len() as f64).max(1.0);
+            let adjacent = (frontier_size(execution, &self.state) as f64).max(1.0);
 
             let troop_strength =
                 attack_strength(
@@ -401,6 +411,7 @@ impl SowEngine {
                 * (self.state.config.tick_rate_ms as f64 / 100.0)
                 * self.state.config.global_speed_multiplier;
             budget = budget.min(scaled_max_cap);
+            budget *= pacing_multiplier(effective_troops, execution, &self.state);
 
             // Hero expansion-speed abilities, after the cap so long fronts keep them.
             // Tribes are the bot players (not nations or humans).
@@ -831,8 +842,474 @@ mod tests {
     use crate::player::Player;
     use crate::rng::NextIntExt;
     use crate::water_components::WaterComponents;
-    use std::collections::BinaryHeap;
+    use std::collections::{BinaryHeap, HashSet};
     use wyrand::WyRand;
+
+    fn unique_valid_frontier_size(attack: &AttackExecution, state: &GameState) -> usize {
+        attack
+            .to_conquer
+            .iter()
+            .filter(|tile| {
+                state.map.owner_id(tile.x, tile.y) == attack.target_owner
+                    && state.map.terrain[state.map.ref_id(tile.x, tile.y)].is_land()
+                    && state
+                        .map
+                        .is_adjacent_to_player(tile.x, tile.y, attack.owner_id)
+            })
+            .map(|tile| (tile.x, tile.y))
+            .collect::<HashSet<_>>()
+            .len()
+    }
+
+    fn experimental_troop_pacing_multiplier(troops: f64) -> f64 {
+        const EARLY: (f64, f64) = (2_500.0, 0.70);
+        const MID: (f64, f64) = (25_000.0, 1.00);
+        const LATE: (f64, f64) = (100_000.0, 1.15);
+
+        let (low, high) = if troops <= MID.0 {
+            (EARLY, MID)
+        } else {
+            (MID, LATE)
+        };
+        if troops <= EARLY.0 {
+            return EARLY.1;
+        }
+        if troops >= LATE.0 {
+            return LATE.1;
+        }
+
+        let progress = (troops.log10() - low.0.log10()) / (high.0.log10() - low.0.log10());
+        low.1 + (high.1 - low.1) * progress
+    }
+
+    fn experimental_territory_pacing_multiplier(share: f64) -> f64 {
+        const EARLY: (f64, f64) = (0.01, 0.70);
+        const MID: (f64, f64) = (0.10, 1.00);
+        const LATE: (f64, f64) = (0.30, 1.15);
+
+        let (low, high) = if share <= MID.0 {
+            (EARLY, MID)
+        } else {
+            (MID, LATE)
+        };
+        if share <= EARLY.0 {
+            return EARLY.1;
+        }
+        if share >= LATE.0 {
+            return LATE.1;
+        }
+
+        let progress = (share.log10() - low.0.log10()) / (high.0.log10() - low.0.log10());
+        low.1 + (high.1 - low.1) * progress
+    }
+
+    fn pacing_experiment_engine_at_share(
+        seed: u64,
+        troops: f64,
+        frontier_size: usize,
+        target_owner: u16,
+        territory_share: Option<f64>,
+    ) -> crate::engine::SowEngine {
+        let (width, height) = (256, 256);
+        let mut config = GameConfig::default();
+        config.map_width = width;
+        config.map_height = height;
+        let mut state = GameState::new(seed, width, height, config);
+        state.phase = GamePhase::Playing;
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        state.register_player(Player::new_human(
+            1,
+            "Attacker".into(),
+            [1.0; 3],
+            &state.config,
+        ));
+        if target_owner != 0 {
+            state.register_player(Player::new_human(
+                2,
+                "Defender".into(),
+                [0.5; 3],
+                &state.config,
+            ));
+            for y in 16..height - 16 {
+                for x in 16..width - 16 {
+                    state.set_tile_owner(x, y, target_owner);
+                }
+            }
+        }
+
+        let center_y = height / 2;
+        let center_x = width / 3;
+        if let Some(share) = territory_share {
+            let area = ((width * height) as f64 * share).round() as u32;
+            let region_width = (area as f64).sqrt().floor().max(1.0) as u32;
+            let region_height = area.div_ceil(region_width);
+            let start_x = width / 2 - region_width / 2;
+            let start_y = center_y - region_height / 2;
+            for idx in 0..area {
+                let x = start_x + idx % region_width;
+                let y = start_y + idx / region_width;
+                state.set_tile_owner(x, y, 1);
+            }
+        } else {
+            let owned_width = (frontier_size / 2).max(1) as u32;
+            for x in center_x..center_x + owned_width {
+                state.set_tile_owner(x, center_y, 1);
+            }
+        }
+
+        let mut frontier = Vec::new();
+        for y in 1..height - 1 {
+            for x in 1..width - 1 {
+                if state.map.owner_id(x, y) == target_owner
+                    && state.map.terrain[state.map.ref_id(x, y)].is_land()
+                    && state.map.is_adjacent_to_player(x, y, 1)
+                {
+                    frontier.push((x, y));
+                }
+            }
+        }
+        frontier.truncate(frontier_size);
+        assert_eq!(
+            frontier.len(),
+            frontier_size,
+            "scenario frontier is too small"
+        );
+
+        let to_conquer = frontier
+            .into_iter()
+            .enumerate()
+            .map(|(seq, (x, y))| PrioritizedTile {
+                priority: 0,
+                insert_seq: seq as u32,
+                x,
+                y,
+            })
+            .collect();
+        let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+        engine.add_attack(AttackExecution {
+            landed: false,
+            id: 1,
+            owner_id: 1,
+            target_owner,
+            created_tick: 0,
+            troops,
+            to_conquer,
+            insert_seq_counter: frontier_size as u32,
+            rng: WyRand::new(seed.wrapping_add(1)),
+            retreating: false,
+        });
+        engine
+    }
+
+    #[derive(Default)]
+    struct PacingExperimentResult {
+        captures: u64,
+        active_ticks: u64,
+        queue_entries: u64,
+        unique_frontier: u64,
+        cap_ticks: u64,
+        troops_remaining: f64,
+    }
+
+    fn run_frontier_experiment<F, P>(
+        seed: u64,
+        troops: f64,
+        frontier_size: usize,
+        target_owner: u16,
+        frontier_counter: F,
+        pacing_multiplier: P,
+        territory_share: Option<f64>,
+    ) -> PacingExperimentResult
+    where
+        F: Fn(&AttackExecution, &GameState) -> usize + Copy,
+        P: Fn(f64, &AttackExecution, &GameState) -> f64 + Copy,
+    {
+        let mut engine = pacing_experiment_engine_at_share(
+            seed,
+            troops,
+            frontier_size,
+            target_owner,
+            territory_share,
+        );
+        let mut result = PacingExperimentResult::default();
+        let tick_scale = engine.state.config.tick_rate_ms as f64 / 100.0
+            * engine.state.config.global_speed_multiplier;
+        for tick in 0..300 {
+            engine.state.tick = tick;
+            engine.state.events.clear();
+            if let Some(attack) = engine.attacks.first() {
+                result.active_ticks += 1;
+                result.queue_entries += attack.to_conquer.len() as u64;
+                result.unique_frontier += unique_valid_frontier_size(attack, &engine.state) as u64;
+                let adjacent = frontier_counter(attack, &engine.state).max(1) as f64;
+                let base_budget = if target_owner == 0 {
+                    adjacent * 2.0
+                } else {
+                    let defender_troops = engine
+                        .state
+                        .player(target_owner)
+                        .map(|player| player.troops.max(1.0))
+                        .unwrap_or(1.0);
+                    let ratio = (5.0 * attack.troops) / defender_troops;
+                    (ratio * 2.0).clamp(0.01, 0.5) * adjacent * 3.0
+                };
+                let cap =
+                    max_tiles_cap_for_troops(attack.troops, &engine.state.config) * tick_scale;
+                result.cap_ticks += u64::from(base_budget * tick_scale > cap);
+                result.troops_remaining = attack.troops;
+            }
+            engine.execute_combat_using(frontier_counter, pacing_multiplier);
+            result.captures += engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, crate::game::GameEvent::TileCaptured { .. }))
+                .count() as u64;
+        }
+        result
+    }
+
+    #[test]
+    fn attack_frontier_size_experiment_compares_queue_and_unique_tiles() {
+        for target_owner in [0, 2] {
+            for troops in [2_500.0, 25_000.0, 100_000.0] {
+                for frontier_size in [6, 24, 96] {
+                    let mut queue_result = PacingExperimentResult::default();
+                    let mut unique_result = PacingExperimentResult::default();
+                    for seed in 1..=10 {
+                        let queue = run_frontier_experiment(
+                            seed,
+                            troops,
+                            frontier_size,
+                            target_owner,
+                            |attack, _| attack.to_conquer.len(),
+                            |_, _, _| 1.0,
+                            None,
+                        );
+                        let unique = run_frontier_experiment(
+                            seed,
+                            troops,
+                            frontier_size,
+                            target_owner,
+                            unique_valid_frontier_size,
+                            |_, _, _| 1.0,
+                            None,
+                        );
+                        queue_result.captures += queue.captures;
+                        queue_result.active_ticks += queue.active_ticks;
+                        queue_result.queue_entries += queue.queue_entries;
+                        queue_result.unique_frontier += queue.unique_frontier;
+                        queue_result.cap_ticks += queue.cap_ticks;
+                        queue_result.troops_remaining += queue.troops_remaining;
+                        unique_result.captures += unique.captures;
+                        unique_result.active_ticks += unique.active_ticks;
+                        unique_result.queue_entries += unique.queue_entries;
+                        unique_result.unique_frontier += unique.unique_frontier;
+                        unique_result.cap_ticks += unique.cap_ticks;
+                        unique_result.troops_remaining += unique.troops_remaining;
+                    }
+                    let seconds = 30.0 * 10.0;
+                    let avg_queue =
+                        queue_result.queue_entries as f64 / queue_result.active_ticks.max(1) as f64;
+                    let avg_unique = queue_result.unique_frontier as f64
+                        / queue_result.active_ticks.max(1) as f64;
+                    println!(
+                        "frontier_experiment target={target_owner} troops={troops:.0} frontier={frontier_size} queue_tiles_per_sec={:.2} unique_tiles_per_sec={:.2} queue_entries_per_tick={avg_queue:.2} unique_per_tick={avg_unique:.2} cap_ticks_queue={}/{} cap_ticks_unique={}/{} remaining={:.1}/{:.1}",
+                        queue_result.captures as f64 / seconds,
+                        unique_result.captures as f64 / seconds,
+                        queue_result.cap_ticks,
+                        queue_result.active_ticks,
+                        unique_result.cap_ticks,
+                        unique_result.active_ticks,
+                        queue_result.troops_remaining / 10.0,
+                        unique_result.troops_remaining / 10.0,
+                    );
+                    assert!(queue_result.captures > 0);
+                    assert!(unique_result.captures > 0);
+                    assert!(queue_result.queue_entries >= queue_result.unique_frontier);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn experimental_troop_pacing_curve_hits_anchors_and_is_monotonic() {
+        assert_eq!(experimental_troop_pacing_multiplier(2_500.0), 0.70);
+        assert_eq!(experimental_troop_pacing_multiplier(25_000.0), 1.00);
+        assert_eq!(experimental_troop_pacing_multiplier(100_000.0), 1.15);
+        let first_log_midpoint = (2_500.0_f64 * 25_000.0).sqrt();
+        let second_log_midpoint = (25_000.0_f64 * 100_000.0).sqrt();
+        assert!((experimental_troop_pacing_multiplier(first_log_midpoint) - 0.85).abs() < 1e-12);
+        assert!((experimental_troop_pacing_multiplier(second_log_midpoint) - 1.075).abs() < 1e-12);
+        for pair in [
+            [1_000.0, 2_500.0],
+            [2_500.0, 10_000.0],
+            [10_000.0, 25_000.0],
+            [25_000.0, 50_000.0],
+            [50_000.0, 100_000.0],
+            [100_000.0, 500_000.0],
+        ] {
+            assert!(
+                experimental_troop_pacing_multiplier(pair[0])
+                    <= experimental_troop_pacing_multiplier(pair[1])
+            );
+        }
+    }
+
+    #[test]
+    fn experimental_territory_pacing_curve_hits_anchors_and_is_monotonic() {
+        assert_eq!(experimental_territory_pacing_multiplier(0.01), 0.70);
+        assert_eq!(experimental_territory_pacing_multiplier(0.10), 1.00);
+        assert_eq!(experimental_territory_pacing_multiplier(0.30), 1.15);
+        let first_log_midpoint = (0.01_f64 * 0.10).sqrt();
+        let second_log_midpoint = (0.10_f64 * 0.30).sqrt();
+        assert!(
+            (experimental_territory_pacing_multiplier(first_log_midpoint) - 0.85).abs() < 1e-12
+        );
+        assert!(
+            (experimental_territory_pacing_multiplier(second_log_midpoint) - 1.075).abs() < 1e-12
+        );
+        for pair in [
+            [0.005, 0.01],
+            [0.01, 0.05],
+            [0.05, 0.10],
+            [0.10, 0.20],
+            [0.20, 0.30],
+            [0.30, 0.50],
+        ] {
+            assert!(
+                experimental_territory_pacing_multiplier(pair[0])
+                    <= experimental_territory_pacing_multiplier(pair[1])
+            );
+        }
+    }
+
+    #[test]
+    fn attack_troop_curve_experiment_compares_against_unique_frontier_baseline() {
+        for target_owner in [0, 2] {
+            for troops in [2_500.0, 25_000.0, 100_000.0] {
+                for frontier_size in [6, 24, 96] {
+                    let mut baseline = PacingExperimentResult::default();
+                    let mut curved = PacingExperimentResult::default();
+                    for seed in 1..=10 {
+                        let base = run_frontier_experiment(
+                            seed,
+                            troops,
+                            frontier_size,
+                            target_owner,
+                            unique_valid_frontier_size,
+                            |_, _, _| 1.0,
+                            None,
+                        );
+                        let curve = run_frontier_experiment(
+                            seed,
+                            troops,
+                            frontier_size,
+                            target_owner,
+                            unique_valid_frontier_size,
+                            |effective_troops, _, _| {
+                                experimental_troop_pacing_multiplier(effective_troops)
+                            },
+                            None,
+                        );
+                        baseline.captures += base.captures;
+                        baseline.active_ticks += base.active_ticks;
+                        baseline.cap_ticks += base.cap_ticks;
+                        baseline.troops_remaining += base.troops_remaining;
+                        curved.captures += curve.captures;
+                        curved.active_ticks += curve.active_ticks;
+                        curved.cap_ticks += curve.cap_ticks;
+                        curved.troops_remaining += curve.troops_remaining;
+                    }
+                    let seconds = 30.0 * 10.0;
+                    let baseline_rate = baseline.captures as f64 / seconds;
+                    let curved_rate = curved.captures as f64 / seconds;
+                    let change = (curved_rate / baseline_rate - 1.0) * 100.0;
+                    println!(
+                        "troop_curve_experiment target={target_owner} troops={troops:.0} frontier={frontier_size} multiplier={:.2} baseline_tiles_per_sec={baseline_rate:.2} curve_tiles_per_sec={curved_rate:.2} change={change:+.1}% active_ticks={}/{} cap_ticks={}/{} vs {}/{} remaining={:.1}/{:.1}",
+                        experimental_troop_pacing_multiplier(troops),
+                        baseline.active_ticks,
+                        curved.active_ticks,
+                        baseline.cap_ticks,
+                        baseline.active_ticks,
+                        curved.cap_ticks,
+                        curved.active_ticks,
+                        baseline.troops_remaining / 10.0,
+                        curved.troops_remaining / 10.0,
+                    );
+                    assert!(baseline.captures > 0);
+                    assert!(curved.captures > 0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn attack_territory_curve_experiment_compares_against_same_map_baseline() {
+        for target_owner in [0, 2] {
+            for territory_share in [0.01, 0.10, 0.30] {
+                for frontier_size in [6, 24, 96] {
+                    let mut baseline = PacingExperimentResult::default();
+                    let mut curved = PacingExperimentResult::default();
+                    for seed in 1..=10 {
+                        let base = run_frontier_experiment(
+                            seed,
+                            25_000.0,
+                            frontier_size,
+                            target_owner,
+                            unique_valid_frontier_size,
+                            |_, _, _| 1.0,
+                            Some(territory_share),
+                        );
+                        let curve = run_frontier_experiment(
+                            seed,
+                            25_000.0,
+                            frontier_size,
+                            target_owner,
+                            unique_valid_frontier_size,
+                            |_, attack, state| {
+                                let owned = state
+                                    .player(attack.owner_id)
+                                    .map_or(0, |player| player.tile_count);
+                                let total_land = (state.map.width * state.map.height) as f64;
+                                experimental_territory_pacing_multiplier(
+                                    f64::from(owned) / total_land,
+                                )
+                            },
+                            Some(territory_share),
+                        );
+                        baseline.captures += base.captures;
+                        baseline.active_ticks += base.active_ticks;
+                        baseline.cap_ticks += base.cap_ticks;
+                        baseline.troops_remaining += base.troops_remaining;
+                        curved.captures += curve.captures;
+                        curved.active_ticks += curve.active_ticks;
+                        curved.cap_ticks += curve.cap_ticks;
+                        curved.troops_remaining += curve.troops_remaining;
+                    }
+                    let seconds = 30.0 * 10.0;
+                    let baseline_rate = baseline.captures as f64 / seconds;
+                    let curved_rate = curved.captures as f64 / seconds;
+                    let change = (curved_rate / baseline_rate - 1.0) * 100.0;
+                    println!(
+                        "territory_curve_experiment target={target_owner} attack_troops=25000 share={:.0}% frontier={frontier_size} multiplier={:.2} baseline_tiles_per_sec={baseline_rate:.2} curve_tiles_per_sec={curved_rate:.2} change={change:+.1}% active_ticks={}/{} cap_ticks={}/{} vs {}/{} remaining={:.1}/{:.1}",
+                        territory_share * 100.0,
+                        experimental_territory_pacing_multiplier(territory_share),
+                        baseline.active_ticks,
+                        curved.active_ticks,
+                        baseline.cap_ticks,
+                        baseline.active_ticks,
+                        curved.cap_ticks,
+                        curved.active_ticks,
+                        baseline.troops_remaining / 10.0,
+                        curved.troops_remaining / 10.0,
+                    );
+                    assert!(baseline.captures > 0);
+                    assert!(curved.captures > 0);
+                }
+            }
+        }
+    }
 
     #[test]
     fn tower_defense_keeps_height_costs() {

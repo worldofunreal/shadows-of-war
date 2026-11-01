@@ -657,10 +657,10 @@ fn file_sha256(path: &Path) -> Result<String> {
 /// Content hashes keyed by the exact URL paths the shell builds (relative to
 /// assets/, e.g. "shell/leaders/boudica_desktop.webp"). Injected as
 /// window.SOW_ASSET_TS so ?v= cache keys stop changing on unrelated deploys:
-/// a music/leader redraw alone invalidates its own entry. Locale catalogs are
-/// hashed straight from the exported bytes (locales_dir) — WEB_CATALOG_VERSION
-/// alone is a hand-bumped constant, and immutable URLs must never depend on
-/// someone remembering to bump it.
+/// an avatar, music, or leader redraw invalidates only its own entry. Locale
+/// catalogs are hashed straight from the exported bytes (locales_dir) —
+/// WEB_CATALOG_VERSION alone is a hand-bumped constant, and immutable URLs must
+/// never depend on someone remembering to bump it.
 fn asset_versions(paths: &Paths, locales_dir: &Path) -> Result<serde_json::Value> {
     let mut map = serde_json::Map::new();
     let mut roots = vec![
@@ -685,6 +685,7 @@ fn asset_versions(paths: &Paths, locales_dir: &Path) -> Result<serde_json::Value
                 s if s.starts_with("shell/leaders/")
                     || s.starts_with("shell/mobile-nav/")
                     || s.starts_with("gameplay/music/")
+                    || s.starts_with("gameplay/avatars/")
             );
             if track && path.extension().is_some_and(|e| e == "webp" || e == "webm") {
                 map.insert(
@@ -1797,7 +1798,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     );
     // Portal builds keep the whole-build bust (their asset bytes are
     // re-encoded at packaging time); self-hosted and native use per-file
-    // content hashes so music/leader/loader cache keys survive unrelated deploys.
+    // content hashes so avatar/music/leader/loader cache keys survive unrelated deploys.
     let asset_versions = if portal {
         serde_json::json!({})
     } else {
@@ -2260,7 +2261,7 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
     }).collect::<Vec<_>>();
     let biographies = public_leader_biographies(&paths.root)?;
     let mut metadata = tempfile::NamedTempFile::new()?;
-    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "leaderExplorer": leader_explorer, "mapExplorer": map_explorer }))?;
+    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "mapExplorer": map_explorer }))?;
     run("bun", &[
         "run", paths.root.join("sow-web/site/generate.ts").to_str().context("site generator path")?,
         out.to_str().context("site output path")?,
@@ -2576,11 +2577,10 @@ fn landing_maps(maps: &Path, sources_path: &Path) -> Result<String> {
     let first = entries
         .first()
         .context("no map in rotation has a thumbnail for the landing page")?;
-    let first_name = official_map_display_name(&first.key, &first.display_name);
-    let mut html = format!(
-        r#"<div class="map-theatre" data-map-theatre><button type="button" class="map-nav-arrow map-nav-arrow--prev" data-map-prev aria-label="Previous map" data-i18n="site.previous_map" data-i18n-attr="aria-label">‹</button><button type="button" class="map-nav-arrow map-nav-arrow--next" data-map-next aria-label="Next map" data-i18n="site.next_map" data-i18n-attr="aria-label">›</button><div class="map-theatre-stage"><figure class="map-preview"><div class="map-preview-image" data-map-frame><div class="map-grid-overlay" aria-hidden="true"></div><span class="art-unavailable" data-i18n="site.art_unavailable">Artwork unavailable</span><img data-map-image src="/maps/{key}/thumbnail.webp?v={bust}" alt="{name}" width="1024" height="576" fetchpriority="high" decoding="async"></div><figcaption class="map-hud"><div class="map-hud-meta"><span class="eyebrow" data-i18n="site.maps_in_rotation">Maps in Rotation</span></div><h3 data-map-name aria-live="polite">{name}</h3></figcaption></figure></div></div><div class="map-strip-container"><ul class="map-strip">"#,
-        key = html_text(&first.key),
-        name = html_text(&first_name)
+    let first_key = html_text(&first.key);
+    let first_name = html_text(&official_map_display_name(&first.key, &first.display_name));
+    let mut html = String::from(
+        r#"<div class="map-layout"><nav class="map-picker" aria-label="Maps in Rotation" data-i18n="site.maps_in_rotation" data-i18n-attr="aria-label"><ul class="map-strip map-roster">"#,
     );
     for (index, entry) in entries.into_iter().enumerate() {
         let key = html_text(&entry.key);
@@ -2590,7 +2590,12 @@ fn landing_maps(maps: &Path, sources_path: &Path) -> Result<String> {
             active = index == 0
         );
     }
-    html.push_str("</ul></div>");
+    html.push_str("</ul></nav>");
+    html += &format!(
+        r#"<div class="map-theatre" data-map-theatre><button type="button" class="map-nav-arrow map-nav-arrow--prev" data-map-prev aria-label="Previous map" data-i18n="site.previous_map" data-i18n-attr="aria-label">‹</button><button type="button" class="map-nav-arrow map-nav-arrow--next" data-map-next aria-label="Next map" data-i18n="site.next_map" data-i18n-attr="aria-label">›</button><div class="map-theatre-stage"><figure class="map-preview"><div class="map-preview-image" data-map-frame><div class="map-grid-overlay" aria-hidden="true"></div><span class="art-unavailable" data-i18n="site.art_unavailable">Artwork unavailable</span><img data-map-preview-image src="/maps/{key}/thumbnail.webp?v={bust}" alt="{name}" width="1024" height="576" fetchpriority="high" decoding="async"></div><figcaption class="map-hud"><div class="map-hud-meta"><span class="eyebrow" data-i18n="site.maps_in_rotation">Maps in Rotation</span></div><h3 data-map-current-name aria-live="polite">{name}</h3></figcaption></figure></div></div></div>"#,
+        key = first_key,
+        name = first_name
+    );
     Ok(html)
 }
 

@@ -187,13 +187,10 @@ export function renderQuickMatchButton(): string {
     const rankedLabel = rankLabel(ranked);
     return (
         "<button class='sow-menu__primary sow-menu__quick-match' type='button' data-command='quick_match'><div><strong>" +
-        "<img class='sow-ranked__mode-icon' src='" + esc(asset("shell/ranked/ranked.svg")) + "' alt=''>" + esc(SOW_t("menu.quick_match")) +
-        "</strong><small>" +
         esc(SOW_t("lobbies.ranked_1v1")) +
-        " · <b data-ranked-current>" +
+        "</strong><small data-ranked-current>" +
         esc(rankedLabel) +
-        "</b></small></div><span data-ranked-emblem>" + rankEmblem(ranked?.placements_complete ? ranked.tier : "unranked", ranked?.placements_complete ? ranked.division : null) + "</span></button>" +
-        "<button class='sow-menu__ghost-button sow-ranked__my-rank' type='button' data-command='open_ranked_profile'>" + esc(SOW_t("ranked.my_rank")) + "</button>"
+        "</small></div><span data-ranked-emblem>" + rankEmblem(ranked?.placements_complete ? ranked.tier : "unranked", ranked?.placements_complete ? ranked.division : null) + "</span></button>"
     );
 }
 

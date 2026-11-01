@@ -541,41 +541,40 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
 
         if has_border || has_water_neighbor {
             let is_tribe = owner_id >= 200u;
+            const neighbor_dirs = array<vec2<f32>, 4>(
+                vec2<f32>(1.0, 0.0),  // East
+                vec2<f32>(-1.0, 0.0), // West
+                vec2<f32>(0.0, -1.0), // North
+                vec2<f32>(0.0, 1.0)   // South
+            );
 
-            // Border/shore distance = Euclidean distance to the nearest neighbor
-            // cell box. Diagonals (4..7) close staircase steps so the softness
-            // falloff stays continuous across cell edges; a 3x3 ring is exact
-            // for thickness <= 1 cell.
-            for (var direction = 0; direction < 4; direction = direction + 1) {
-                for (var ring = 0; ring < 2; ring = ring + 1) {
-                    let i = direction + ring * 4;
-                    let neighbor_hex = get_hex_neighbor(cell_hex, i);
-                    let neighbor_terrain = get_cell_terrain(neighbor_hex);
-                    let neighbor_owner = get_cell_owner(neighbor_hex);
-                    let neighbor_is_land = (neighbor_terrain & 0x80u) != 0u;
+            for (var i = 0; i < 4; i = i + 1) {
+                let neighbor_hex = get_hex_neighbor(cell_hex, i);
+                let neighbor_terrain = get_cell_terrain(neighbor_hex);
+                let neighbor_owner = get_cell_owner(neighbor_hex);
+                let neighbor_is_land = (neighbor_terrain & 0x80u) != 0u;
 
-                    let box_delta = abs(local_pos - vec2<f32>(neighbor_hex - cell_hex)) - vec2<f32>(0.5);
-                    let dist_to_edge = length(max(box_delta, vec2<f32>(0.0)));
+                let dir = neighbor_dirs[i];
+                let dist_to_edge = 0.5 - dot(local_pos, dir);
 
-                    if !neighbor_is_land {
-                        if i < 4 && dist_to_edge < shore_thickness {
-                            is_shore_edge = true;
-                            min_shore_dist = min(min_shore_dist, dist_to_edge);
+                if !neighbor_is_land {
+                    if dist_to_edge < shore_thickness {
+                        is_shore_edge = true;
+                        min_shore_dist = min(min_shore_dist, dist_to_edge);
+                    }
+                } else {
+                    if owner_id > 0u && neighbor_owner != owner_id {
+                        let green_exists = is_tribe && (neighbor_owner >= 200u);
+                        // LOD 3 Optimization: Skip drawing borders between minor tribes to reduce macro noise
+                        if globals.zoom < globals.shader_params[__MAP_TRIBE_ZOOM_CUTOFF__].x && green_exists {
+                            continue;
                         }
-                    } else {
-                        if owner_id > 0u && neighbor_owner != owner_id {
-                            let green_exists = is_tribe && (neighbor_owner >= 200u);
-                            // LOD 3 Optimization: Skip drawing borders between minor tribes to reduce macro noise
-                            if globals.zoom < globals.shader_params[__MAP_TRIBE_ZOOM_CUTOFF__].x && green_exists {
-                                continue;
-                            }
 
-                            if dist_to_edge < thickness {
-                                is_border = true;
-                                min_border_dist = min(min_border_dist, dist_to_edge);
-                                if green_exists {
-                                    is_green_border = true;
-                                }
+                        if dist_to_edge < thickness {
+                            is_border = true;
+                            min_border_dist = min(min_border_dist, dist_to_edge);
+                            if green_exists {
+                                is_green_border = true;
                             }
                         }
                     }

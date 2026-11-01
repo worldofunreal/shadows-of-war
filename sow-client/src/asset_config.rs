@@ -50,11 +50,23 @@ impl AssetConfig {
     pub fn avatar_url(&self, filename: &str) -> String {
         let base = self.assets_base.trim_end_matches('/');
         let path = format!("{base}/gameplay/avatars/{filename}");
-        if self.cache_bust.is_empty() {
+        let asset_key = format!("/assets/gameplay/avatars/{filename}");
+        let version = Self::asset_version(&asset_key).unwrap_or_else(|| self.cache_bust.clone());
+        if version.is_empty() {
             path
         } else {
-            format!("{path}?v={}", self.cache_bust)
+            format!("{path}?v={version}")
         }
+    }
+
+    fn asset_version(path: &str) -> Option<String> {
+        let window = web_sys::window()?;
+        let versions =
+            js_sys::Reflect::get(&window, &wasm_bindgen::JsValue::from_str("SOW_ASSET_TS")).ok()?;
+        js_sys::Reflect::get(&versions, &wasm_bindgen::JsValue::from_str(path))
+            .ok()?
+            .as_string()
+            .filter(|version| !version.is_empty())
     }
 
     fn resolve_cache_bust() -> String {

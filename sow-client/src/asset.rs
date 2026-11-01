@@ -108,10 +108,15 @@ impl SowApp {
         if self.ui.app.phase == ClientPhase::Playing {
             // The browser shell owns the main menu, so the normal WASM path never reaches
             // ClientApp::draw(MainMenu), where avatars are otherwise queued.
-            self.ui
-                .app
-                .asset_loader
-                .queue_leader_avatar(self.ui.app.main_menu_state.selected_leader, true);
+            let leader = self.ui.app.main_menu_state.selected_leader;
+            if self.ui.tutorial_active && self.net.is_offline {
+                self.ui
+                    .app
+                    .asset_loader
+                    .queue_leader_expressions(leader, true);
+            } else {
+                self.ui.app.asset_loader.queue_leader_avatar(leader, true);
+            }
         }
         self.poll_avatar_fetches();
         self.poll_portal_avatar_fetch();
@@ -275,43 +280,75 @@ impl SowApp {
     }
 
     fn poll_avatar_fetches(&mut self) {
-        use crate::ui::asset_loader::{AssetLoader, MAX_AVATAR_FETCHES_IN_FLIGHT};
+        use crate::ui::asset_loader::{
+            AssetLoader, MAX_AVATAR_FETCHES_IN_FLIGHT, MAX_AVATAR_PREFETCHES_IN_FLIGHT,
+        };
 
-        let priority = self
-            .ui
+        let priority = crate::ui::asset_loader::AvatarFetchKey::LeaderPortrait(
+            self.ui.app.main_menu_state.selected_leader,
+        );
+        let tutorial_prefetch = self.ui.tutorial_active && self.net.is_offline;
+        if tutorial_prefetch {
+            self.ui
+                .app
+                .asset_loader
+                .start_tutorial_bot_avatar_prefetch();
+        }
+        self.ui
             .app
             .asset_loader
-            .leader_fetch_key(self.ui.app.main_menu_state.selected_leader);
+            .pump_tutorial_avatar_prefetch_retries();
 
         if let Some(snapshot) = self.sim.current_snapshot.as_ref() {
             for player in &snapshot.players {
                 if player.player_type == sow_core::player::PlayerType::Human {
-                    self.ui.app.asset_loader.queue_leader_avatar(
-                        player.leader,
-                        player.id == self.sim.my_player_id.unwrap_or_default(),
-                    );
+                    let is_me = player.id == self.sim.my_player_id.unwrap_or_default();
+                    let presentation = self.ui.nameplates.avatar_presentation(player.id);
+                    let wants_expressions = (tutorial_prefetch && is_me)
+                        || presentation.expression != sow_core::emote::AvatarExpression::Calm
+                        || presentation.transition.is_some_and(|transition| {
+                            transition.from != sow_core::emote::AvatarExpression::Calm
+                                || transition.to != sow_core::emote::AvatarExpression::Calm
+                        });
+                    if wants_expressions {
+                        self.ui
+                            .app
+                            .asset_loader
+                            .queue_leader_expressions(player.leader, true);
+                    } else {
+                        self.ui
+                            .app
+                            .asset_loader
+                            .queue_leader_avatar(player.leader, is_me);
+                    }
                 }
             }
         }
-        let drawn = self.ui.nameplates.take_avatar_wants();
-        self.ui.app.asset_loader.request_drawn_portraits(&drawn);
+        let mut drawn = self.ui.nameplates.take_avatar_wants();
         let now = web_time::Instant::now();
         for animation in &self.ui.death_nameplates {
             if let Some(slug) = animation.active_avatar_slug(now) {
-                self.ui
-                    .app
-                    .asset_loader
-                    .request_additional_drawn_portrait(slug);
+                drawn.push(slug.to_owned());
             }
         }
+        self.ui.app.asset_loader.request_drawn_portraits(&drawn);
 
         while self.ui.app.asset_loader.avatars_in_flight.len() < MAX_AVATAR_FETCHES_IN_FLIGHT {
-            let Some(key) = self
+            let key = match self
                 .ui
                 .app
                 .asset_loader
                 .take_next_avatar_fetch_pending(&priority)
-            else {
+            {
+                Some(key) => Some(key),
+                None if self.ui.app.asset_loader.avatar_prefetch_in_flight()
+                    < MAX_AVATAR_PREFETCHES_IN_FLIGHT =>
+                {
+                    self.ui.app.asset_loader.take_next_avatar_prefetch_pending()
+                }
+                None => None,
+            };
+            let Some(key) = key else {
                 break;
             };
 

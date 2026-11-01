@@ -8,7 +8,10 @@ const surfacesSource = fs.readFileSync(path.join(shell, "main_menu.surfaces.ts")
 const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.ts"), "utf8");
 const licenseJestSource = fs.readFileSync(path.join(shell, "main_menu.jest.ts"), "utf8");
 const landingHtml = fs.readFileSync(path.join(shell, "../../sow-web/site/index.html"), "utf8");
-const leaderExplorerHtml = fs.readFileSync(path.join(shell, "../../sow-web/site/leader-explorer.html"), "utf8");
+const leaderExplorerHtml = fs.readFileSync(
+  path.join(shell, "../../sow-web/site/leader-explorer.html"),
+  "utf8",
+);
 const readme = fs.readFileSync(path.join(shell, "../../README.md"), "utf8");
 const siteHeader = fs.readFileSync(path.join(shell, "../../sow-web/site/site-header.html"), "utf8");
 const gameControlsCss = fs.readFileSync(path.join(shell, "sow-controls.css"), "utf8");
@@ -720,6 +723,8 @@ test("public publisher delivers localized linked profiles and rejects incomplete
           "wikipedia_excerpt",
           "all_leaders",
           "choose_leader",
+          "view_profile",
+          "inspect_leader",
           "play_now",
           "leader_caesar_ability",
           "leader_caesar_description",
@@ -778,12 +783,17 @@ test("public publisher delivers localized linked profiles and rejects incomplete
     for (const page of ["", "support", "privacy", "cookies", "terms"])
       await put(
         path.join(source, page, "index.html"),
-        template.replace("<!-- PAGE_HEADING -->", '<h1 data-i18n="site.title">Home</h1>').replace("<!-- LEADER_CONTENT -->", ""),
+        template
+          .replace("<!-- PAGE_HEADING -->", '<h1 data-i18n="site.title">Home</h1>')
+          .replace("<!-- LEADER_CONTENT -->", ""),
       );
     await put(
       path.join(source, "leaders/index.html"),
-      template.replace("<!-- PAGE_HEADING -->", "").replace("<!-- LEADER_CONTENT -->", "<!-- LEADER_EXPLORER -->"),
+      template
+        .replace("<!-- PAGE_HEADING -->", '<h1 data-i18n="site.leaders">Leaders</h1>')
+        .replace("<!-- LEADER_CONTENT -->", "<!-- LEADER_DIRECTORY_CARDS --><!-- LEADER_DIRECTORY_COUNT -->"),
     );
+    await put(path.join(source, "maps/index.html"), "<!-- MAP_EXPLORER -->");
     await put(path.join(source, "leader.html"), template.replace("<!-- PAGE_HEADING -->", ""));
     await put(
       path.join(source, "site-header.html"),
@@ -811,12 +821,10 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         wikipedia: "https://en.wikipedia.org/wiki/Julius_Caesar",
       },
     ];
-    const leaderExplorer = '<section class="leaders"><div class="leader-layout" data-shared-leader-explorer></div></section>';
     await publish(
       out,
       {
         leaders,
-        leaderExplorer,
         biographies,
         pages: [
           "index.html",
@@ -846,6 +854,10 @@ test("public publisher delivers localized linked profiles and rejects incomplete
     const sourcedProfile = await readFile(path.join(out, "leaders/caesar/index.html"), "utf8");
     assert.match(sourcedProfile, /en: historical_reference.*Historical source/s);
     assert.doesNotMatch(sourcedProfile, /CC BY-SA 4\.0/);
+    const directory = await readFile(path.join(out, "es/leaders/index.html"), "utf8");
+    assert.match(directory, /class="leader-directory-card"[^>]*href="\/es\/leaders\/caesar\/"/);
+    assert.match(directory, /Julius Caesar|Julio César/);
+    assert.doesNotMatch(directory, /class="leader-layout"|LEADER_DIRECTORY_/);
     const sagaBiographies = structuredClone(biographies);
     for (const code of ["en", "es"]) {
       sagaBiographies.leaders[code].caesar = {
@@ -871,7 +883,6 @@ test("public publisher delivers localized linked profiles and rejects incomplete
       out,
       {
         leaders,
-        leaderExplorer,
         biographies: sagaBiographies,
         pages: [
           "index.html",
@@ -903,7 +914,6 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         out,
         {
           leaders,
-          leaderExplorer,
           biographies,
           pages: [
             "index.html",
@@ -936,7 +946,6 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         out,
         {
           leaders,
-          leaderExplorer,
           biographies,
           pages: [
             "index.html",
@@ -959,7 +968,6 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         out,
         {
           leaders,
-          leaderExplorer,
           biographies,
           pages: [
             "index.html",
@@ -980,7 +988,6 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         out,
         {
           leaders,
-          leaderExplorer,
           biographies,
           pages: [
             "index.html",

@@ -2869,6 +2869,9 @@ fn resolve_avatar_content(
                 let slot = leader_avatar_slot(leader, expression);
                 return text
                     .avatar_uv(slot)
+                    .or_else(|| {
+                        text.avatar_uv(leader_avatar_slot(leader, AvatarExpression::Calm))
+                    })
                     .or_else(|| text.avatar_uv(AVATAR_FALLBACK_SLOT))
                     .map_or(AvatarContent::None, AvatarContent::Sprite);
             }
@@ -2885,6 +2888,7 @@ fn resolve_avatar_content(
             ..
         } => text
             .avatar_uv(leader_avatar_slot(leader, expression))
+            .or_else(|| text.avatar_uv(leader_avatar_slot(leader, AvatarExpression::Calm)))
             .or_else(|| text.avatar_uv(AVATAR_FALLBACK_SLOT))
             .map_or(AvatarContent::None, AvatarContent::Sprite),
         sow_core::player::AvatarIdentityRef::Fallback => text

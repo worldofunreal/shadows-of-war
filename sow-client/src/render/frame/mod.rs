@@ -135,6 +135,9 @@ impl SowApp {
                         tr.init_textures(&mut render_ctx.command_encoder);
                         tr.upload_atlas(&mut render_ctx.command_encoder, &render_ctx.context);
                     }
+                    if let Some(ref mover) = self.gfx.mover_renderer {
+                        mover.upload_atlas(&mut render_ctx.command_encoder, &render_ctx.context);
+                    }
                     self.gfx.needs_first_upload = false;
                     mr.upload_terrain(&mut render_ctx.command_encoder);
                 }
