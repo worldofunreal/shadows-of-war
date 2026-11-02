@@ -81,6 +81,6 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Wanli Emperor | Tribute Era | Smaller players' armies retreating from your land cost 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/wanli.webp` |
 | Jayaatu Khan | Yuan Treasury | Attackers lose 25% fewer troops when attacking richer players. | attacker_loss | 25% | `gameplay/icons/abilities/jayaatu_khan.webp` |
 | Sitting Bull | Unceded Territory | Nation armies need 25% more effort to conquer your territory. | defense_strength | 25% | `gameplay/icons/abilities/sitting_bull.webp` |
-| Pocahontas | Peace of Pocahontas | Foreign armies need 25% more effort to conquer your territory. | defense_strength | 25% | `gameplay/icons/abilities/pocahontas.webp` |
+| Matoaka | Peace of Matoaka | Foreign armies need 25% more effort to conquer your territory. | defense_strength | 25% | `gameplay/icons/abilities/matoaka.webp` |
 | Burebista | Carpathian Fortresses | Armies need 25% more effort to conquer your territory. | defense_strength | 25% | `gameplay/icons/abilities/burebista.webp` |
 | Bolesław II the Bold | Kievan Expeditions | Conquest of foreign players advances 25% faster. | conquest_speed | 25% | `gameplay/icons/abilities/boleslaw_ii.webp` |

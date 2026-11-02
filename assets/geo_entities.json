@@ -9158,7 +9158,7 @@
   },
   {
    "id": "pocahontas",
-   "name": "Pocahontas",
+   "name": "Matoaka",
    "entity": "Powhatan Confederacy",
    "role": "nation",
    "region": "americas",
@@ -9166,10 +9166,10 @@
    "lon": -76.8,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Pocahontas",
-   "avatar": "pocahontas",
+   "avatar": "matoaka",
    "hero": {
-    "name": "Pocahontas",
-    "art_slug": "pocahontas",
+    "name": "Matoaka",
+    "art_slug": "matoaka",
     "ability": {
      "kind": "defense_strength",
      "against": "foreign",
