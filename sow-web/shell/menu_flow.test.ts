@@ -901,18 +901,19 @@ test("queued identity refresh is applied before an older profile response", () =
     assert.ok(failedStart >= 0 && failedEnd > failedStart);
 });
 
-test("WOU login methods stay available while an expired saved session is recovering", () => {
+test("pending WOU recovery does not block profile loading or anonymous join proofs", () => {
     const proofStart = sessionSource.indexOf("fn make_auth_proof(&self)");
     const proofEnd = sessionSource.indexOf("pub(crate) fn sync_portal_room", proofStart);
     assert.ok(proofStart >= 0 && proofEnd > proofStart);
     const makeAuthProof = sessionSource.slice(proofStart, proofEnd);
-    assert.match(makeAuthProof, /wou_session_pending\(\)[\s\S]*return None/);
+    assert.doesNotMatch(makeAuthProof, /wou_session_pending/);
     assert.match(makeAuthProof, /!self\.identity_profile_verified[\s\S]*return None/);
+    assert.match(makeAuthProof, /identity\.provider == "wou"[\s\S]*identity_profile_verified/);
 
     const profileStart = accountSource.indexOf("pub(crate) fn fetch_cloud_progress");
     const profileEnd = accountSource.indexOf("fn fetch_anonymous_progress", profileStart);
     assert.ok(profileStart >= 0 && profileEnd > profileStart);
-    assert.match(accountSource.slice(profileStart, profileEnd), /wou_session_pending\(\)[\s\S]*return/);
+    assert.doesNotMatch(accountSource.slice(profileStart, profileEnd), /wou_session_pending/);
 
     const ensureStart = authSurfacesSource.indexOf("function ensureAuthSession()");
     const ensureEnd = authSurfacesSource.indexOf("function authIcon", ensureStart);
@@ -1223,7 +1224,7 @@ test("heroes featured art follows the panel shape, not the device name", () => {
     assert.match(previewBody, /image\.src = featuredArt\.column/, why);
     assert.match(
         renderBody,
-        /source media='\(max-width: 680px\), \(orientation: portrait\)' srcset='"\s*\+\s*esc\(featuredArt\.band\)/,
+        /source media='\(max-width: 900px\), \(orientation: portrait\)' srcset='"\s*\+\s*esc\(featuredArt\.band\)/,
         why,
     );
     assert.match(

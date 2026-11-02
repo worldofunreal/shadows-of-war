@@ -160,24 +160,6 @@ pub fn should_fetch_cloud_profile() -> bool {
     true
 }
 
-pub fn wou_session_pending() -> bool {
-    #[cfg(target_arch = "wasm32")]
-    {
-        let production_host = get_window_value("SOW_isSowProductionHost")
-            .and_then(|value| value.dyn_into::<js_sys::Function>().ok())
-            .and_then(|func| func.call0(&wasm_bindgen::JsValue::NULL).ok())
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-        return production_host
-            && get_window_value("SOW_WOU_SESSION_STATUS")
-                .and_then(|value| value.as_string())
-                .as_deref()
-                != Some("ready");
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    false
-}
-
 pub fn refresh_wou_session() {
     #[cfg(target_arch = "wasm32")]
     call_window_hook("SOW_retryWouProfile");
