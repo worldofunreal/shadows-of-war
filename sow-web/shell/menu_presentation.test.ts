@@ -1155,7 +1155,7 @@ test("weekly free rotation is a splash-only status", () => {
     const predicateStart = heroesSource.indexOf("function isWeeklyFreeRotation");
     const predicateEnd = heroesSource.indexOf("function renderHeroesCard", predicateStart);
     assert.ok(predicateStart >= 0 && predicateEnd > predicateStart);
-    const context = {};
+    const context = { root: { addEventListener() {} } };
     vm.runInNewContext(
         heroesSource.slice(predicateStart, predicateEnd).replace(/\bexport\s+/g, "") +
             "this.isWeeklyFreeRotation = isWeeklyFreeRotation;",
@@ -1203,6 +1203,7 @@ test("weekly rotation countdown replaces its label, observes the four-day window
         currentScreen: () => screen,
         root: {
             hidden: false,
+            addEventListener() {},
             querySelector(selector) {
                 return selector === "[data-hero-status]" ? statusNode : countdownNode;
             },

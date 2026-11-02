@@ -5356,12 +5356,12 @@ fn start_local_server(port: u16, webroot: &str) -> Result<LocalPreviewServer> {
 
 fn local_static_fingerprint(paths: &Paths) -> Result<String> {
     let roots = [
-        paths.assets_shell.clone(),
-        paths.assets_gameplay.clone(),
+        paths.root.join("assets/art"),
+        paths.root.join("assets/generated"),
+        paths.root.join("assets/site/media"),
+        paths.root.join("assets/site/icons"),
         paths.root.join("assets/campaign"),
         paths.root.join("assets/guides"),
-        paths.assets_site.join("media"),
-        paths.assets_site.join("icons"),
         paths.assets_maps.clone(),
         paths.map_sources.clone(),
         paths.root.join("sow-web/site/fonts"),

@@ -1706,6 +1706,7 @@
   transition:
     opacity 0.2s ease-out,
     transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
 }
 
 .sow-heroes__featured.is-transitioning .sow-heroes__featured-copy {
@@ -1713,9 +1714,65 @@
   transform: translateY(6px);
 }
 
+.sow-heroes__featured.is-animating-exit-next picture {
+  opacity: 0;
+  transform: scale(0.96) translateX(-24px);
+}
+
+.sow-heroes__featured.is-animating-exit-prev picture {
+  opacity: 0;
+  transform: scale(0.96) translateX(24px);
+}
+
+@keyframes sow-hero-enter-next {
+  from {
+    opacity: 0;
+    transform: scale(1.04) translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+}
+
+@keyframes sow-hero-enter-prev {
+  from {
+    opacity: 0;
+    transform: scale(1.04) translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+}
+
+@keyframes sow-hero-copy-enter {
+  from {
+    opacity: 0.3;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sow-heroes__featured.is-animating-enter-next picture {
+  animation: sow-hero-enter-next 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.sow-heroes__featured.is-animating-enter-prev picture {
+  animation: sow-hero-enter-prev 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.sow-heroes__featured.is-copy-entering .sow-heroes__featured-copy {
+  animation: sow-hero-copy-enter 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 .sow-heroes__featured.is-motion-reduced picture,
 .sow-heroes__featured.is-motion-reduced .sow-heroes__featured-copy {
   transition: none;
+  animation: none;
 }
 
 .sow-heroes__rotation {

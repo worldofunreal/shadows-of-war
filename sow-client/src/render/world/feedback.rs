@@ -796,13 +796,15 @@ fn render_attack_badges(
         };
         let icon_size = font_size;
         let gap = 3.0;
-        let row_width = icon_size * 2.0 + gap * 2.0 + entry.width;
+        let troop_row_width = icon_size + gap + entry.width;
         let row_height = icon_size.max(entry.height);
-        let row_left = screen[0] - row_width * 0.5;
-        let row_top = screen[1] - row_height * 0.5;
+        let total_height = icon_size + gap + row_height;
+        let row_left = screen[0] - troop_row_width * 0.5;
+        let avatar_top = screen[1] - total_height * 0.5;
+        let row_top = avatar_top + icon_size + gap;
         if row_left < 0.0
-            || row_left + row_width > screen_w
-            || row_top < 0.0
+            || row_left + troop_row_width > screen_w
+            || avatar_top < 0.0
             || row_top + row_height > screen_h
         {
             continue;
@@ -825,17 +827,13 @@ fn render_attack_badges(
             attacker,
             campaign_avatar_slots,
             loaded_campaign_avatars,
-            [
-                (row_left + icon_size * 0.5) * sf,
-                (row_top + row_height * 0.5) * sf,
-            ],
+            [screen[0] * sf, (avatar_top + icon_size * 0.5) * sf],
             icon_size * sf,
         );
 
-        let troop_icon_left = row_left + icon_size + gap;
         text.push_troop_icon(
             [
-                (troop_icon_left + icon_size * 0.5) * sf,
+                (row_left + icon_size * 0.5) * sf,
                 (row_top + row_height * 0.5) * sf,
             ],
             icon_size * 0.5 * sf,
@@ -845,7 +843,7 @@ fn render_attack_badges(
         text.push_string(
             &entry.text,
             [
-                (troop_icon_left + icon_size + gap) * sf,
+                (row_left + icon_size + gap) * sf,
                 (row_top + (row_height - entry.height) * 0.5 + entry.height * 0.85) * sf,
             ],
             font_size * sf,

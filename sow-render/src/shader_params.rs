@@ -1063,10 +1063,32 @@ pub static PARAMS: &[ParamDef] = &[
         "Borders",
         0.04,
         0.001,
-        0.3,
-        0.001,
+        1.0,
+        0.01,
         "cells",
         "MAP_BORDER_SOFTNESS"
+    ),
+    number!(
+        "border.mask_blur_radius",
+        "Boundary mask blur radius",
+        "Borders",
+        0.12,
+        0.0,
+        0.5,
+        0.01,
+        "cells",
+        "MAP_BORDER_MASK_BLUR_RADIUS"
+    ),
+    number!(
+        "border.mask_blur_strength",
+        "Boundary mask blur strength",
+        "Borders",
+        0.65,
+        0.0,
+        1.0,
+        0.01,
+        "×",
+        "MAP_BORDER_MASK_BLUR_STRENGTH"
     ),
     number!(
         "border.tribe_zoom_cutoff",
@@ -1111,10 +1133,10 @@ pub static PARAMS: &[ParamDef] = &[
         "coast.edge_softness",
         "Coast edge softness",
         "Coast",
-        0.04,
+        0.30,
         0.001,
-        0.3,
-        0.001,
+        1.0,
+        0.01,
         "cells",
         "MAP_COAST_SOFTNESS"
     ),
