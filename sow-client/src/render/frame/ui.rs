@@ -280,6 +280,8 @@ impl SowApp {
             if self.ui.app.phase == ClientPhase::Playing {
                 let campaign_avatar_slots =
                     std::mem::take(&mut self.ui.app.asset_loader.campaign_avatar_slots);
+                let loaded_campaign_avatars =
+                    std::mem::take(&mut self.ui.app.asset_loader.campaign_avatars);
                 let overlays_started_at = crate::diag::startup_perf_timer();
                 crate::render::world::render_overlays(
                     text,
@@ -287,6 +289,7 @@ impl SowApp {
                     &mut self.ui,
                     &self.input,
                     &campaign_avatar_slots,
+                    &loaded_campaign_avatars,
                     sf,
                     now,
                     placement_can_confirm,
@@ -298,6 +301,7 @@ impl SowApp {
                     );
                 }
                 self.ui.app.asset_loader.campaign_avatar_slots = campaign_avatar_slots;
+                self.ui.app.asset_loader.campaign_avatars = loaded_campaign_avatars;
             }
         }
         let menu_publish_started_at = crate::diag::startup_perf_timer();

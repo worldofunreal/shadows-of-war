@@ -10,11 +10,13 @@
 }
 
 .sow-campaign__intro h1 {
-  max-width: 7ch;
-  font-size: clamp(38px, 4.4vw, 64px);
+  max-width: 100%;
+  font-size: clamp(32px, 3.6vw, 52px);
   letter-spacing: -0.045em;
   line-height: 0.86;
   text-wrap: balance;
+  word-break: normal;
+  overflow-wrap: anywhere;
   text-shadow: 0 8px 34px #0009;
 }
 
@@ -69,10 +71,11 @@
   min-height: 178px;
   padding: 0;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: linear-gradient(118deg, #151b1b 0%, #0d1113 72%);
-  box-shadow: 0 10px 28px #0003;
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: var(--sow-tactical-surface-card-bg);
+  box-shadow: var(--sow-tactical-card-shadow);
   transition:
     border-color 160ms,
     background 160ms,
@@ -184,7 +187,7 @@
 }
 
 .sow-campaign__episode.is-locked {
-  background: linear-gradient(118deg, #15191a 0%, #0e1112 72%);
+  background: var(--sow-tactical-surface-card-bg);
 }
 
 .sow-campaign__episode.is-locked .sow-campaign__episode-art img {
@@ -296,6 +299,8 @@
   .sow-campaign__intro h1 {
     max-width: none;
     font-size: clamp(30px, 8vw, 44px);
+    word-break: normal;
+    overflow-wrap: anywhere;
   }
 
   .sow-campaign__intro .sow-menu__secondary {

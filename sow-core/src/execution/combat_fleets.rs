@@ -83,6 +83,7 @@ impl SowEngine {
         // fleets are sorted on insertion
         let mut to_remove = Vec::new();
         let mut elimination_candidates = Vec::new();
+        let mut territory_changes = Vec::new();
         let transport_base_steps_per_tick = self
             .state
             .config
@@ -254,7 +255,10 @@ impl SowEngine {
 
             if owner_here != fleet.owner_id
                 && Self::pre_defeat_watches(&pre_defeat_targets, pre_defeat_pending, owner_here)
-                && self.state.player(owner_here).is_some_and(Self::pre_defeat_reached)
+                && self
+                    .state
+                    .player(owner_here)
+                    .is_some_and(Self::pre_defeat_reached)
             {
                 if pre_defeat_pending.is_none() {
                     pre_defeat_pending = Some(owner_here);
@@ -298,14 +302,18 @@ impl SowEngine {
             let f_troops = fleet.troops;
             let f_id = fleet.id;
             // Transports ashore on another player's land: their troops land from ships.
-            let f_landed = fleet.unit_type == crate::game::UnitType::TransportShip && owner_here != 0;
+            let f_landed =
+                fleet.unit_type == crate::game::UnitType::TransportShip && owner_here != 0;
 
+            let (eliminated, candidates) = self.state.set_tile_owner_for_execution(lx, ly, f_owner);
             elimination_candidates.extend(
-                self.state
-                    .set_tile_owner_with_eliminations(lx, ly, f_owner)
+                eliminated
                     .into_iter()
                     .map(|(victim, x, y)| (victim, f_owner, x, y)),
             );
+            if let Some(change) = candidates {
+                territory_changes.push(change);
+            }
             self.state.events.push(GameEvent::TileCaptured {
                 x: lx,
                 y: ly,
@@ -331,6 +339,7 @@ impl SowEngine {
             self.fleets.sort_unstable_by_key(|f| f.id);
         }
 
+        elimination_candidates.extend(self.annex_enclosed_components(territory_changes));
         for (victim, conqueror, x, y) in elimination_candidates {
             self.eliminate_player(victim, conqueror, x, y, false);
         }
@@ -459,14 +468,15 @@ mod tests {
                 for y in 1..=3 {
                     for x in 1..=3 {
                         if (x, y) != (2, 1) && (x, y) != (2, 2) {
-                            state.map.terrain[(y * 5 + x) as usize] = MapTile::from_byte(0xC0);
+                            state.map.terrain[(y * 5 + x) as usize] = MapTile::from_byte(0x80);
                             state.set_tile_owner(x, y, 1);
                         }
                     }
                 }
-                state.map.terrain[2 * 5 + 2] = MapTile::from_byte(0xC0);
+                state.map.terrain[2 * 5 + 2] = MapTile::from_byte(0x80);
                 state.set_tile_owner(2, 2, 2);
-                state.map.terrain[1 * 5 + 2] = MapTile::from_byte(0xC0); // (x=2, y=1): row-major
+                state.map.terrain[1 * 5 + 2] = MapTile::from_byte(0x80); // (x=2, y=1): row-major
+                state.map.compute_shorelines();
 
                 let mut engine = SowEngine::new(state, WaterComponents::default());
                 if by_fleet {
@@ -483,7 +493,8 @@ mod tests {
                     engine.execute_fleets();
                     engine.execute_fleets();
                 } else {
-                    engine.add_attack(AttackExecution { landed: false,
+                    engine.add_attack(AttackExecution {
+                        landed: false,
                         id: 1,
                         owner_id: 1,
                         target_owner: 0,
@@ -542,6 +553,342 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn land_and_fleet_conquests_annex_a_sealed_multi_tile_region() {
+        const W: u32 = 7;
+        for by_fleet in [false, true] {
+            let mut state = GameState::new(
+                2,
+                W,
+                W,
+                GameConfig {
+                    random_spawn: true,
+                    global_speed_multiplier: 100.0,
+                    ..Default::default()
+                },
+            );
+            state.map.terrain.fill(MapTile::from_byte(0x20));
+            for (id, team) in [(1, Team::Blue), (2, Team::Red)] {
+                let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
+                player.gold = 0.0;
+                player.has_spawned = true;
+                player.team = Some(team);
+                state.register_player(player);
+            }
+
+            // P1 owns the ring except for one neutral coastal landing tile;
+            // P2 owns the connected inland 2x2 enclave.
+            for y in 1..=4 {
+                for x in 1..=4 {
+                    let enclave = (2..=3).contains(&x) && (2..=3).contains(&y);
+                    if !enclave && (x, y) != (2, 1) {
+                        state.map.terrain[(y * W + x) as usize] = MapTile::from_byte(0x80);
+                        state.set_tile_owner(x, y, 1);
+                    }
+                }
+            }
+            for y in 2..=3 {
+                for x in 2..=3 {
+                    state.map.terrain[(y * W + x) as usize] = MapTile::from_byte(0x80);
+                    state.set_tile_owner(x, y, 2);
+                }
+            }
+            state.map.terrain[W as usize + 2] = MapTile::from_byte(0x80);
+            state.map.compute_shorelines();
+
+            let mut engine = SowEngine::new(state, WaterComponents::default());
+            if by_fleet {
+                let gap = W + 2;
+                engine.add_fleet(WarpFleet::new(
+                    1,
+                    1,
+                    0,
+                    UnitType::TransportShip,
+                    100.0,
+                    (5, gap),
+                    vec![gap],
+                ));
+                engine.execute_fleets();
+            } else {
+                engine.add_attack(AttackExecution {
+                    landed: false,
+                    id: 1,
+                    owner_id: 1,
+                    target_owner: 0,
+                    created_tick: 0,
+                    troops: 100_000.0,
+                    to_conquer: BinaryHeap::from([PrioritizedTile {
+                        priority: 0,
+                        insert_seq: 0,
+                        x: 2,
+                        y: 1,
+                    }]),
+                    insert_seq_counter: 1,
+                    rng: wyrand::WyRand::new(2),
+                    retreating: false,
+                });
+                engine.execute_combat();
+            }
+
+            for y in 2..=3 {
+                for x in 2..=3 {
+                    assert_eq!(engine.state.map.owner_id(x, y), 1, "by_fleet={by_fleet}");
+                }
+            }
+            assert_eq!(engine.state.player(2).unwrap().tile_count, 0);
+            assert_eq!(engine.state.player(2).unwrap().deaths, 1);
+            assert_eq!(engine.state.player(1).unwrap().kills, 1);
+            assert_eq!(engine.state.player(1).unwrap().gold, 300.0);
+            assert_eq!(
+                engine
+                    .state
+                    .events
+                    .iter()
+                    .filter(|event| matches!(event, GameEvent::TileCaptured { .. }))
+                    .count(),
+                5,
+                "the gap and four enclave tiles must each be credited once"
+            );
+            assert_eq!(
+                engine
+                    .state
+                    .events
+                    .iter()
+                    .filter(|event| matches!(
+                        event,
+                        GameEvent::PlayerEliminated { player_id: 2, .. }
+                    ))
+                    .count(),
+                1,
+                "enclosed transfers must eliminate the defender once"
+            );
+        }
+    }
+
+    fn enclosure_fixture(case: &str) -> (SowEngine, (u32, u32), (u32, u32)) {
+        const W: u32 = 7;
+        let mut state = GameState::new(
+            3,
+            W,
+            W,
+            GameConfig {
+                random_spawn: true,
+                ..Default::default()
+            },
+        );
+        let mut captor = if case == "vanilla" {
+            Player::new_bot(1, "Tribe".into(), [1.0; 3], &state.config)
+        } else {
+            Player::new_human(1, "Captor".into(), [1.0; 3], &state.config)
+        };
+        let mut victim = Player::new_human(2, "Victim".into(), [1.0; 3], &state.config);
+        if case == "same-team" {
+            captor.team = Some(Team::Blue);
+            victim.team = Some(Team::Blue);
+        } else if case == "allied" {
+            captor.alliances.push(2);
+        }
+        state.register_player(captor);
+        state.register_player(victim);
+        if case == "multiple-captors" {
+            state.register_player(Player::new_human(
+                3,
+                "Other captor".into(),
+                [1.0; 3],
+                &state.config,
+            ));
+        }
+
+        let (gap, core) = if case == "map-edge" {
+            state.map.terrain.fill(MapTile::from_byte(0x80));
+            state.set_tile_owner(0, 3, 2);
+            for (x, y) in state.map.neighbors(0, 3) {
+                if (x, y) != (1, 3) {
+                    state.set_tile_owner(x, y, 1);
+                }
+            }
+            ((1, 3), (0, 3))
+        } else {
+            state.map.terrain.fill(MapTile::from_byte(0x20));
+            let gap = if case == "water-boundary" {
+                (1, 2)
+            } else {
+                (2, 1)
+            };
+            for y in 1..=4 {
+                for x in 1..=4 {
+                    let core_tile = (2..=3).contains(&x) && (2..=3).contains(&y);
+                    if core_tile || (x, y) == gap {
+                        continue;
+                    }
+                    if case == "open-neutral" && (x, y) == (3, 1) {
+                        state.map.terrain[(y * W + x) as usize] = MapTile::from_byte(0x80);
+                        continue;
+                    }
+                    let water_boundary = case == "water-boundary" && (x, y) == (2, 1);
+                    state.map.terrain[(y * W + x) as usize] =
+                        MapTile::from_byte(if water_boundary { 0x20 } else { 0x80 });
+                    if water_boundary {
+                        continue;
+                    }
+                    state.set_tile_owner(
+                        x,
+                        y,
+                        if case == "multiple-captors" && (x, y) == (1, 2) {
+                            3
+                        } else {
+                            1
+                        },
+                    );
+                }
+            }
+            for y in 2..=3 {
+                for x in 2..=3 {
+                    state.map.terrain[(y * W + x) as usize] = MapTile::from_byte(0x80);
+                    state.set_tile_owner(x, y, 2);
+                }
+            }
+            state.map.terrain[(gap.1 * W + gap.0) as usize] = MapTile::from_byte(0x80);
+            (gap, (2, 2))
+        };
+        state.map.compute_shorelines();
+        (SowEngine::new(state, WaterComponents::default()), gap, core)
+    }
+
+    #[test]
+    fn open_coastal_edge_mixed_captor_and_allied_regions_are_not_annexed() {
+        for case in [
+            "open-neutral",
+            "water-boundary",
+            "map-edge",
+            "multiple-captors",
+            "same-team",
+            "allied",
+        ] {
+            let (mut engine, gap, core) = enclosure_fixture(case);
+            let (_, change) = engine.state.set_tile_owner_for_execution(gap.0, gap.1, 1);
+            engine.annex_enclosed_components(change.into_iter().collect());
+            assert_eq!(
+                engine.state.map.owner_id(core.0, core.1),
+                2,
+                "invalid enclosure was annexed: {case}"
+            );
+        }
+    }
+
+    #[test]
+    fn vanilla_neutral_expansion_cannot_annex_but_directed_conquest_can() {
+        let (mut engine, gap, core) = enclosure_fixture("vanilla");
+        engine.state.config.bot_difficulty = crate::game_config::BotDifficulty::Vanilla;
+
+        let (_, neutral_change) = engine.state.set_tile_owner_for_execution(gap.0, gap.1, 1);
+        engine.annex_enclosed_components(neutral_change.into_iter().collect());
+        assert_eq!(engine.state.map.owner_id(core.0, core.1), 2);
+
+        // A directed conquest of defender land can close the enclave; its
+        // candidate is processed after the rest of this capture batch.
+        let (mut engine, gap, core) = enclosure_fixture("vanilla");
+        engine.state.config.bot_difficulty = crate::game_config::BotDifficulty::Vanilla;
+        let (_, directed_change) = engine.state.set_tile_owner_for_execution(core.0, core.1, 1);
+        let (_, neutral_change) = engine.state.set_tile_owner_for_execution(gap.0, gap.1, 1);
+        engine
+            .annex_enclosed_components(directed_change.into_iter().chain(neutral_change).collect());
+        for y in 2..=3 {
+            for x in 2..=3 {
+                assert_eq!(engine.state.map.owner_id(x, y), 1);
+            }
+        }
+    }
+
+    #[test]
+    fn losing_land_rechecks_the_victims_other_enclosed_regions() {
+        const W: u32 = 11;
+        let mut state = GameState::new(2, W, W, GameConfig::default());
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        state.register_player(Player::new_human(
+            1,
+            "Captor".into(),
+            [1.0; 3],
+            &state.config,
+        ));
+        state.register_player(Player::new_human(
+            2,
+            "Victim".into(),
+            [1.0; 3],
+            &state.config,
+        ));
+
+        // A one-tile enclave is already sealed far from the region where the
+        // victim is about to lose land.
+        for y in 2..=4 {
+            for x in 2..=4 {
+                if (x, y) != (3, 3) {
+                    state.set_tile_owner(x, y, 1);
+                }
+            }
+        }
+        state.set_tile_owner(3, 3, 2);
+        state.set_tile_owner(7, 5, 2);
+        state.set_tile_owner(8, 5, 2);
+        state.map.compute_shorelines();
+
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        let (_, change) = engine.state.set_tile_owner_for_execution(7, 5, 1);
+        engine.annex_enclosed_components(change.into_iter().collect());
+
+        assert_eq!(engine.state.map.owner_id(3, 3), 1);
+        assert_eq!(engine.state.map.owner_id(8, 5), 2);
+    }
+
+    #[test]
+    fn enclosed_unowned_hole_does_not_keep_the_defenders_land_open() {
+        const W: u32 = 13;
+        let mut state = GameState::new(2, W, W, GameConfig::default());
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        state.register_player(Player::new_human(
+            1,
+            "Captor".into(),
+            [1.0; 3],
+            &state.config,
+        ));
+        state.register_player(Player::new_human(
+            2,
+            "Victim".into(),
+            [1.0; 3],
+            &state.config,
+        ));
+
+        for y in 2..=10 {
+            for x in 2..=10 {
+                if x == 2 || y == 2 || x == 10 || y == 10 {
+                    state.set_tile_owner(x, y, 1);
+                } else if (x, y) != (6, 6) {
+                    state.set_tile_owner(x, y, 2);
+                }
+            }
+        }
+        state.set_tile_owner(11, 5, 2);
+        state.map.compute_shorelines();
+
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        let (_, change) = engine.state.set_tile_owner_for_execution(11, 5, 1);
+        let eliminated = engine.annex_enclosed_components(change.into_iter().collect());
+
+        assert_eq!(engine.state.map.owner_id(6, 5), 1);
+        assert_eq!(engine.state.map.owner_id(6, 6), 0);
+        assert_eq!(eliminated.len(), 1);
+        assert_eq!(eliminated[0].0, 2);
+        assert_eq!(
+            engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::TileCaptured { .. }))
+                .count(),
+            48
+        );
     }
 
     #[test]

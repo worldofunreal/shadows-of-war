@@ -106,17 +106,19 @@ impl SowApp {
                 }
                 UiAction::CenterCamera => {
                     let pid = self.sim.my_player_id.unwrap_or(1);
-                    if let Some(player) = self
+                    let has_land = self
                         .sim
                         .current_snapshot
                         .as_ref()
-                        .and_then(|s| s.players.iter().find(|p| p.id == pid))
-                        && player.tile_count > 0
-                        && player.alive
+                        .is_some_and(|snapshot| {
+                            snapshot.players.iter().any(|player| {
+                                player.id == pid && player.tile_count > 0 && player.alive
+                            })
+                        });
+                    if has_land
+                        && let Some([world_x, world_y]) = self.ui.nameplates.anchor_for(pid)
                     {
-                        let cx = player.centroid_x;
-                        let cy = player.centroid_y;
-                        self.center_camera_on(cx, cy);
+                        self.focus_camera_on_world(world_x, world_y, 10.0);
                     }
                 }
                 UiAction::FocusTile(col, row) => {
@@ -298,16 +300,21 @@ impl SowApp {
         }
     }
 
-    /// Eases the camera onto a tile at the zoom the HUD's center buttons use.
-    fn center_camera_on(&mut self, tile_x: f32, tile_y: f32) {
+    /// Eases the camera onto a world point at the requested zoom.
+    pub(crate) fn focus_camera_on_world(&mut self, world_x: f32, world_y: f32, zoom: f32) {
         self.input.has_snapped_camera_to_spawn = true;
-        self.input.camera_focus_target = Some((tile_x + 0.5, tile_y + 0.5));
+        self.input.camera_focus_target = Some((world_x, world_y));
         self.input.camera_focus_waiting_for_input_release = false;
-        self.input.target_zoom = 10.0;
+        self.input.target_zoom = zoom;
     }
 
-    /// The radial's center: recenters on the home of the entity that owns the tile the
-    /// radial is open on. Land nobody owns recenters on that tile.
+    /// Eases the camera onto a tile at the zoom the HUD's center buttons use.
+    fn center_camera_on(&mut self, tile_x: f32, tile_y: f32) {
+        self.focus_camera_on_world(tile_x + 0.5, tile_y + 0.5, 10.0);
+    }
+
+    /// The radial's center: recenters on the owning entity's nameplate. Unowned land
+    /// recenters on the selected tile.
     pub(crate) fn center_radial_home(&mut self) {
         let Some(menu) = self
             .input
@@ -316,20 +323,19 @@ impl SowApp {
         else {
             return;
         };
-        let Some(engine) = self.sim.engine.as_ref() else {
-            return;
+        let (owner, col, row) = {
+            let Some(engine) = self.sim.engine.as_ref() else {
+                return;
+            };
+            let map = &engine.state.map;
+            let (col, row) = (menu.tile_idx % map.width, menu.tile_idx / map.width);
+            (map.owner_id(col, row), col, row)
         };
-        let map = &engine.state.map;
-        let (col, row) = (menu.tile_idx % map.width, menu.tile_idx / map.width);
-        let owner = map.owner_id(col, row);
-        let (home_x, home_y) = engine
-            .state
-            .players
-            .iter()
-            .find(|player| player.id == owner)
-            .and_then(|player| player.home)
-            .unwrap_or((col, row));
-        self.center_camera_on(home_x as f32, home_y as f32);
+        if owner == 0 {
+            self.center_camera_on(col as f32, row as f32);
+        } else if let Some([world_x, world_y]) = self.ui.nameplates.anchor_for(owner) {
+            self.focus_camera_on_world(world_x, world_y, 10.0);
+        }
     }
 
     pub(crate) fn request_join(

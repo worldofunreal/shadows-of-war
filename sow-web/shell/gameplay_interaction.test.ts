@@ -1494,21 +1494,30 @@ test("apply-dev-settings script accurately updates shader_params and theme defau
 test("attack ratio slider card matches the latest tactical HUD theme and style", () => {
     const css = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
     const hudTs = fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
+    const controlsCss = fs.readFileSync(path.join(shell, "sow-controls.css"), "utf8");
 
     // Markup: step="1" for 1-by-1 fine grain control
     assert.match(hudTs, /id="sow-hud-slider"[^>]*step="1"|step="1"[^>]*id="sow-hud-slider"/);
 
     // Tactical card framing
-    assert.match(css, /\.sow-hud__rail-card\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#18222b/);
-    assert.match(css, /\.sow-hud__rail-card\s*\{[^}]*border-top:\s*1px solid rgba\(255,\s*213,\s*79/);
-    assert.match(css, /\.sow-hud__rail-card\s*\{[^}]*backdrop-filter:\s*blur\(12px\)/);
+    assert.match(css, /\.sow-hud__rail-card\s*\{[^}]*background:\s*var\(--sow-panel-card\)/);
+    assert.match(css, /\.sow-hud__rail-card\s*\{[^}]*border-top-color:\s*var\(--sow-tactical-surface-accent-border\)/);
+    assert.match(css, /\.sow-hud__rail-card\s*\{[^}]*backdrop-filter:\s*blur\(var\(--sow-tactical-surface-blur\)\)/);
 
     // Thicker 16px track & emerald green filler matching army resource
     assert.match(css, /--sow-range-track-width:\s*16px/);
-    assert.match(css, /\.sow-hud__range-vertical::-webkit-slider-runnable-track\s*\{[^}]*background:\s*linear-gradient\([^)]*#246e10[^)]*#a4ea4a/);
     assert.match(
         css,
-        /\.sow-hud__range-vertical::-webkit-slider-runnable-track\s*\{[^}]*border:\s*1px solid rgba\(255,\s*255,\s*255,\s*0\.08\)/,
+        /\.sow-hud__nameplate-bar\s*>\s*span\s*\{[^}]*direction:\s*ltr;[^}]*unicode-bidi:\s*isolate;/,
+    );
+    assert.match(
+        css,
+        /\.sow-hud__range-vertical::-webkit-slider-runnable-track\s*\{[^}]*background:\s*var\(--sow-fill-army-gradient\)[^;]*var\(--sow-tactical-track-bg\)/,
+    );
+    assert.match(controlsCss, /--sow-fill-army-gradient:\s*linear-gradient\([\s\S]*?#246e10[\s\S]*?#a4ea4a/);
+    assert.match(
+        css,
+        /\.sow-hud__range-vertical::-webkit-slider-runnable-track\s*\{[^}]*border:\s*1px solid var\(--sow-tactical-track-border\)/,
     );
 
     // Active drag energy effect on track
@@ -1538,6 +1547,7 @@ test("attack ratio slider card matches the latest tactical HUD theme and style",
 
     // Tactile allocation readout & highlight
     assert.match(css, /\.sow-hud__army-allocation\s*\{[^}]*position:\s*relative/);
-    assert.match(css, /\.sow-hud__army-allocation::before\s*\{[^}]*background:\s*#a4ea4a/);
+    assert.match(css, /\.sow-hud__army-allocation::before\s*\{[^}]*background:\s*var\(--sow-fill-army-highlight\)/);
+    assert.match(controlsCss, /--sow-fill-army-highlight:\s*#a4ea4a/);
     assert.match(css, /\.sow-hud__army-allocation strong\s*\{[^}]*text-shadow:\s*0 0 12px/);
 });

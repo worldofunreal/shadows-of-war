@@ -2,11 +2,11 @@
 /* Profile screen: the player dossier owns its layout instead of inheriting
    the two-column home screen grid. */
 #sow-menu[data-screen="profile"] {
-  --sow-profile-surface: #0b0e13;
-  --sow-profile-surface-soft: rgba(19, 24, 31, 0.88);
-  --sow-profile-line: rgba(220, 225, 232, 0.12);
-  --sow-profile-gold-line: rgba(243, 177, 43, 0.36);
-  --sow-profile-panel: rgba(12, 15, 20, 0.94);
+  --sow-profile-surface: var(--sow-tactical-panel-base);
+  --sow-profile-surface-soft: var(--sow-tactical-surface-subcard-bg);
+  --sow-profile-line: var(--sow-tactical-surface-border);
+  --sow-profile-gold-line: var(--sow-tactical-surface-accent-border);
+  --sow-profile-panel: var(--sow-tactical-surface-card-bg);
   color-scheme: dark;
 }
 
@@ -296,7 +296,7 @@
   margin: 0;
   border: 1px solid var(--sow-profile-line);
   border-top: 0;
-  background: linear-gradient(110deg, rgba(22, 27, 35, 0.96), rgba(13, 17, 23, 0.92));
+  background: var(--sow-tactical-surface-card-bg);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ranked {
@@ -427,9 +427,9 @@
   gap: 8px;
   min-height: 132px;
   padding: 16px;
-  border: 1px solid rgba(210, 219, 230, 0.14);
-  border-radius: 4px;
-  background: linear-gradient(145deg, rgba(22, 27, 35, 0.9), rgba(12, 15, 20, 0.82));
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: var(--sow-tactical-surface-subcard-bg);
   opacity: 0.62;
   transition:
     opacity 160ms ease,
@@ -781,9 +781,11 @@
   overflow: auto;
   overscroll-behavior: contain;
   padding: 28px;
-  border: 1px solid var(--sow-profile-gold-line);
-  background: #0c1015;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius);
+  background: var(--sow-tactical-surface-card-bg);
+  box-shadow: var(--sow-tactical-modal-shadow);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__detail h2 {
@@ -1094,8 +1096,8 @@
 }
 
 #sow-menu[data-screen="profile"] :is(button, input, textarea):focus-visible {
-  outline: 2px solid var(--sow-cyan);
-  outline-offset: 2px;
+  outline: var(--sow-tactical-focus-outline);
+  outline-offset: var(--sow-tactical-focus-offset);
 }
 
 /* Store: leader art carries the visual weight; cards carry the commerce state. */
@@ -1403,8 +1405,8 @@
 
 #sow-menu[data-screen="store"] button:focus-visible,
 #sow-menu[data-screen="store"] a:focus-visible {
-  outline: 2px solid var(--sow-gold-bright);
-  outline-offset: 2px;
+  outline: var(--sow-tactical-focus-outline);
+  outline-offset: var(--sow-tactical-focus-offset);
 }
 
 /* The shop is a focused offer surface. Inventory discovery lives in Heroes. */
@@ -1416,12 +1418,13 @@
   min-height: 150px;
   margin-top: 18px;
   padding: 24px;
-  border: 1px solid rgba(243, 177, 43, 0.58);
-  border-radius: 10px;
-  background: linear-gradient(105deg, rgba(92, 55, 10, 0.86), rgba(18, 20, 25, 0.92) 68%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 18px 38px rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background:
+    linear-gradient(105deg, color-mix(in srgb, var(--sow-gold) 18%, transparent), transparent 70%),
+    var(--sow-tactical-surface-card-bg);
+  box-shadow: var(--sow-tactical-card-shadow);
 }
 
 .sow-store__featured h2 {
@@ -1506,9 +1509,11 @@
 .sow-store__checkout {
   margin-top: 18px;
   padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  background: rgba(5, 7, 10, 0.92);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border-soft);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: var(--sow-tactical-surface-subcard-bg);
+  box-shadow: var(--sow-tactical-surface-highlight);
 }
 
 .sow-store__checkout-host {
@@ -1636,10 +1641,13 @@
   flex-direction: column;
   justify-content: end;
   overflow: hidden;
-  border: 1px solid rgba(243, 177, 43, 0.42);
-  border-radius: 8px;
-  background: rgba(8, 10, 14, 0.88);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+  container-type: size;
+  border: 1px solid var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: var(--sow-tactical-panel-base);
+  box-shadow:
+    var(--sow-tactical-card-shadow),
+    0 0 22px color-mix(in srgb, var(--sow-control-accent) 12%, transparent);
 }
 
 .sow-heroes__featured picture,
@@ -1651,40 +1659,63 @@
   height: 100%;
 }
 
-.sow-heroes__featured img {
+.sow-heroes__featured picture {
+  transform: scale(1);
+  transition:
+    opacity 0.22s cubic-bezier(0.2, 0.8, 0.3, 1),
+    transform 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.sow-heroes__featured picture img {
   object-fit: cover;
   object-position: center 24%;
 }
 
 .sow-heroes__featured.is-locked picture img,
-.sow-heroes__card.is-locked .sow-heroes__card-art,
-.sow-heroes__card.is-queue-locked:not(.is-selected) .sow-heroes__card-art {
+.sow-heroes__featured.is-locked .showcase-portrait,
+.sow-heroes__card.is-locked .sow-heroes__card-art {
   filter: grayscale(1);
   opacity: 0.52;
 }
 
-.sow-heroes__featured.is-locked .sow-heroes__confirm {
-  cursor: not-allowed;
-  opacity: 0.52;
+.sow-heroes__featured.is-loading picture,
+.sow-heroes__featured.is-unavailable picture {
+  transform: scale(0.96);
 }
 
 .sow-heroes__featured::after {
   position: absolute;
   inset: 0;
   content: "";
-  background: linear-gradient(
-    180deg,
-    rgba(5, 7, 10, 0.08) 20%,
-    rgba(5, 7, 10, 0.22) 42%,
-    rgba(5, 7, 10, 0.96) 100%
-  );
+  background:
+    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--sow-control-accent) 10%, transparent), transparent 55%),
+    linear-gradient(
+      180deg,
+      rgba(5, 7, 10, 0.08) 20%,
+      rgba(5, 7, 10, 0.22) 42%,
+      rgba(5, 7, 10, 0.96) 100%
+    );
   pointer-events: none;
 }
 
 .sow-heroes__featured-copy {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   padding: 24px;
+  transition:
+    opacity 0.2s ease-out,
+    transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sow-heroes__featured.is-transitioning .sow-heroes__featured-copy {
+  opacity: 0.35;
+  transform: translateY(6px);
+}
+
+.sow-heroes__featured.is-motion-reduced picture,
+.sow-heroes__featured.is-motion-reduced .sow-heroes__featured-copy {
+  transition: none;
 }
 
 .sow-heroes__rotation {
@@ -1695,9 +1726,10 @@
   width: fit-content;
   margin: 0 0 10px;
   padding: 5px 8px;
-  border: 1px solid rgba(243, 177, 43, 0.58);
-  border-radius: 4px;
-  background: rgba(8, 10, 14, 0.72);
+  border: 1px solid var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-tight);
+  background: var(--sow-tactical-surface-compact-bg);
+  box-shadow: var(--sow-tactical-surface-highlight);
   color: var(--sow-gold-bright);
   font-size: 9px;
   font-weight: 900;
@@ -1828,9 +1860,12 @@
   width: 40px;
   height: 40px;
   overflow: hidden;
-  border: 1px solid rgba(243, 177, 43, 0.5);
-  border-radius: 7px;
-  background: rgba(8, 10, 14, 0.7);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  border-radius: var(--sow-tactical-surface-radius-tight);
+  background: var(--sow-tactical-surface-subcard-bg);
+  box-shadow:
+    var(--sow-tactical-surface-highlight),
+    0 0 12px color-mix(in srgb, var(--sow-control-accent) 10%, transparent);
 }
 
 .sow-hero-briefing__icon {
@@ -2025,101 +2060,66 @@
   align-items: center;
   gap: 12px;
   padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 7px;
-  background: rgba(10, 13, 18, 0.82);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: var(--sow-tactical-surface-card-bg);
   color: #fff;
   text-align: start;
   cursor: pointer;
   transition:
     border-color 160ms ease,
     background-color 160ms ease,
+    box-shadow 160ms ease,
     transform 160ms ease;
 }
 
-.sow-heroes__card:hover,
-.sow-heroes__card:focus-visible {
-  border-color: rgba(243, 177, 43, 0.78);
-  background: rgba(25, 29, 37, 0.94);
+.sow-heroes__card:hover:not(.is-selected),
+.sow-heroes__card:focus-visible:not(.is-selected) {
+  border-color: var(--sow-tactical-surface-accent-border);
+  background: var(--sow-tactical-surface-compact-bg);
+  box-shadow:
+    var(--sow-tactical-surface-compact-shadow),
+    0 0 14px color-mix(in srgb, var(--sow-control-accent) 12%, transparent);
   transform: translateY(-1px);
 }
 
 .sow-heroes__card:focus-visible {
-  outline: 2px solid var(--sow-gold-bright);
-  outline-offset: 2px;
+  outline: var(--sow-tactical-focus-outline);
+  outline-offset: var(--sow-tactical-focus-offset);
 }
 
 .sow-heroes__card.is-selected {
-  border-color: var(--sow-gold);
-  background: rgba(243, 177, 43, 0.13);
+  border-color: var(--sow-control-accent-bright);
+  background:
+    linear-gradient(105deg, color-mix(in srgb, var(--sow-control-accent) 16%, transparent), transparent 72%),
+    var(--sow-tactical-surface-card-bg);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--sow-control-accent) 22%, transparent),
+    0 0 18px color-mix(in srgb, var(--sow-control-accent) 14%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 8%);
 }
 
 .sow-heroes__card.is-locked {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-.sow-heroes__card.is-queue-locked:not(.is-selected) {
-  border-color: rgba(255, 255, 255, 0.08);
-}
-
-.sow-heroes__card.is-queue-locked:not(.is-selected) strong {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.sow-heroes__card.is-queue-locked:not(.is-selected) small {
-  color: rgba(255, 255, 255, 0.45);
-}
-
-.sow-heroes__card-lock {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  background: rgba(10, 13, 18, 0.7);
-  color: rgba(243, 177, 43, 0.85);
-  pointer-events: none;
-  z-index: 2;
-}
-
-.sow-heroes__card-lock svg {
-  width: 14px;
-  height: 14px;
-}
-
-.sow-heroes__queue-notice {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 8px 14px;
-  border-radius: 6px;
-  background: rgba(243, 177, 43, 0.12);
-  border: 1px solid rgba(243, 177, 43, 0.35);
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.sow-heroes__queue-notice .sow-heroes__card-lock {
-  position: static;
-  background: transparent;
-  color: var(--sow-gold-bright, #f3b12b);
-}
-
 .sow-heroes__card-art {
   width: 68px;
   height: 68px;
   flex: 0 0 auto;
-  border: 1px solid rgba(243, 177, 43, 0.46);
-  border-radius: 6px;
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  border-radius: var(--sow-tactical-surface-radius-tight);
+  background: var(--sow-tactical-surface-subcard-bg);
   background-position: center;
   background-size: cover;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.sow-heroes__card.is-selected .sow-heroes__card-art {
+  border-color: var(--sow-control-accent-bright);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--sow-control-accent) 24%, transparent);
 }
 
 .sow-heroes__card-art img {
@@ -2316,10 +2316,11 @@
   height: 40px;
   min-height: 40px;
   padding: 0 11px;
-  border: 1px solid var(--sow-line);
-  border-radius: 7px;
+  border: 1px solid var(--sow-tactical-track-border);
+  border-radius: var(--sow-tactical-track-radius);
   outline: 0;
-  background: rgba(10, 13, 18, 0.86);
+  background: var(--sow-tactical-track-bg);
+  box-shadow: var(--sow-tactical-track-shadow);
   color: #f5f1e8;
   font-size: 13px;
 }
@@ -2329,8 +2330,8 @@
 }
 
 .sow-heroes__search input:focus-visible {
-  outline: 2px solid var(--sow-gold-bright);
-  outline-offset: 2px;
+  outline: var(--sow-tactical-focus-outline);
+  outline-offset: var(--sow-tactical-focus-offset);
 }
 
 .sow-heroes__sr-only {
@@ -2351,7 +2352,8 @@
   top: 0;
   margin-bottom: 10px;
   padding: 0 0 8px;
-  background: rgba(8, 10, 14, 0.9);
+  border-bottom: 1px solid var(--sow-tactical-surface-border);
+  background: var(--sow-tactical-surface-card-bg);
 }
 
 .sow-heroes__empty {

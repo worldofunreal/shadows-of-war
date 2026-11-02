@@ -36,9 +36,11 @@ notes = "<kind>-<level>.png for city, factory, port, tower and farm, levels 1-4.
 
 [units]
 path = "assets/art/units/"
-source = "twemoji_placeholder"
-license = "CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art"
-notes = "Ships and missiles moving on the map, packed into assets/generated/units-atlas.webp (embedded in the game)."
+source = "OpenFront and Contributors (ships); Twemoji 14.0.2 (projectile placeholders)"
+license = "transport-ship, trade-ship, warship: CC-BY-SA-4.0; atom-bomb, sam-missile: CC-BY-4.0"
+files = ["transport-ship.png", "trade-ship.png", "warship.png", "atom-bomb.png", "sam-missile.png"]
+license_doc = "docs/legal/LICENSE-ASSETS"
+notes = "The three OpenFront boat sprites are packed into assets/generated/units-atlas.webp and tinted by fleet owner at runtime. Projectile art remains provisional Twemoji."
 
 [icons]
 path = "assets/art/icons/"

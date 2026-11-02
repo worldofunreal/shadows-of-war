@@ -175,6 +175,16 @@ impl GameMap {
         }
     }
     #[inline(always)]
+    pub fn for_each_neighbor4(&self, x: u32, y: u32, mut f: impl FnMut(u32, u32)) {
+        for &(dx, dy) in &CARDINAL_NEIGHBOR_DELTAS {
+            let nx = x as i32 + dx;
+            let ny = y as i32 + dy;
+            if self.is_valid_coord(nx, ny) {
+                f(nx as u32, ny as u32);
+            }
+        }
+    }
+    #[inline(always)]
     pub fn neighbors(&self, x: u32, y: u32) -> Vec<(u32, u32)> {
         let mut r = Vec::with_capacity(8);
         self.for_each_neighbor(x, y, |nx, ny| r.push((nx, ny)));

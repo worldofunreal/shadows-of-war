@@ -137,6 +137,12 @@ pub(crate) struct NameplateSystem {
     avatar_wants: Vec<String>,
 }
 
+fn request_avatar_want(avatar_wants: &mut Vec<String>, slug: &str) {
+    if !avatar_wants.iter().any(|wanted| wanted == slug) {
+        avatar_wants.push(slug.to_owned());
+    }
+}
+
 struct CampaignEmoteCue {
     player_id: u16,
     event_id: u64,
@@ -987,6 +993,10 @@ impl NameplateSystem {
         std::mem::take(&mut self.avatar_wants)
     }
 
+    pub(crate) fn request_avatar(&mut self, slug: &str) {
+        request_avatar_want(&mut self.avatar_wants, slug);
+    }
+
     pub(crate) fn reset(&mut self) {
         let texts = std::mem::take(&mut self.emote_texts);
         let safe_area = self.safe_area;
@@ -1223,7 +1233,14 @@ impl NameplateSystem {
     }
 
     pub(crate) fn anchor_for(&self, player_id: u16) -> Option<[f32; 2]> {
-        self.visuals.get(&player_id).map(|state| state.to_center.0)
+        self.visuals
+            .get(&player_id)
+            .map(|state| state.to_center.0)
+            .or_else(|| {
+                self.land_cache
+                    .rect_for(player_id)
+                    .map(|rect| rect.center().0)
+            })
     }
 
     pub(crate) fn tutorial_target_contains(&self, player_id: u16, x: f64, y: f64) -> bool {
@@ -1560,7 +1577,7 @@ pub(super) fn render_nameplates(
         match plan.presentation {
             NameplatePresentation::Full => {
                 if let Some(slug) = &player.campaign_avatar {
-                    system.avatar_wants.push(slug.clone());
+                    request_avatar_want(&mut system.avatar_wants, slug);
                 }
                 let mut full = plan
                     .full
@@ -2897,6 +2914,42 @@ fn resolve_avatar_content(
     }
 }
 
+fn attack_avatar_identity_ref<'a>(
+    player: Option<&'a PlayerSnapshot>,
+    loaded_campaign_avatars: &HashSet<String>,
+) -> sow_core::player::AvatarIdentityRef<'a> {
+    let Some(player) = player else {
+        return sow_core::player::AvatarIdentityRef::Fallback;
+    };
+    let identity = sow_core::player::avatar_identity_ref(player);
+    match identity {
+        sow_core::player::AvatarIdentityRef::Portrait { slug, leader: None }
+            if !Leader::all().any(|leader| leader.id() == slug)
+                && !loaded_campaign_avatars.contains(slug) =>
+        {
+            sow_core::player::AvatarIdentityRef::Fallback
+        }
+        _ => identity,
+    }
+}
+
+pub(crate) fn paint_attack_badge_avatar(
+    text: &mut TextRenderer,
+    player: Option<&PlayerSnapshot>,
+    campaign_avatar_slots: &HashMap<String, usize>,
+    loaded_campaign_avatars: &HashSet<String>,
+    center: [f32; 2],
+    diameter: f32,
+) {
+    let content = resolve_avatar_content(
+        text,
+        attack_avatar_identity_ref(player, loaded_campaign_avatars),
+        campaign_avatar_slots,
+        AvatarExpression::Calm,
+    );
+    paint_prepared_avatar(text, avatar_plan(center, diameter * 0.5, content), 1.0);
+}
+
 fn prepare_avatar(
     text: &TextRenderer,
     player: &PlayerSnapshot,
@@ -3218,6 +3271,32 @@ mod status_badge_tests {
             };
             assert_eq!(death_avatar_expression(&assigned), AvatarExpression::Calm);
         }
+    }
+
+    #[wasm_bindgen_test]
+    fn attack_avatar_uses_fallback_until_campaign_portrait_is_loaded() {
+        let mut snap = snapshot(&[1]);
+        let player = &mut snap.players[0];
+        player.player_type = PlayerType::Bot;
+        player.campaign_avatar = Some("campaign_portrait".to_owned());
+        let mut loaded = HashSet::new();
+
+        assert_eq!(
+            attack_avatar_identity_ref(Some(player), &loaded),
+            sow_core::player::AvatarIdentityRef::Fallback
+        );
+        loaded.insert("campaign_portrait".to_owned());
+        assert_eq!(
+            attack_avatar_identity_ref(Some(player), &loaded),
+            sow_core::player::AvatarIdentityRef::Portrait {
+                slug: "campaign_portrait",
+                leader: None,
+            }
+        );
+        assert_eq!(
+            attack_avatar_identity_ref(None, &loaded),
+            sow_core::player::AvatarIdentityRef::Fallback
+        );
     }
 
     #[wasm_bindgen_test]

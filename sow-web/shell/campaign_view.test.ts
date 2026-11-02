@@ -2497,6 +2497,27 @@ test("player nameplate keeps the active leader portrait and shows the nickname r
     );
 });
 
+test("nameplate keeps available troops as the count and layers outgoing troops as pending", () => {
+    const availableTroops = hud.indexOf("const troops = Math.floor(hud.troops || 0);");
+    const pendingTroops = hud.indexOf("const pendingTroops = (hud.operations || []).reduce", availableTroops);
+    const troopRate = hud.indexOf("const prod = Math.floor(hud.troop_rate || 0);", pendingTroops);
+    assert.ok(availableTroops >= 0 && pendingTroops > availableTroops && troopRate > pendingTroops);
+
+    const troopData = hud.slice(availableTroops, troopRate);
+    assert.match(troopData, /if \(operation\.direction !== "outgoing"\) return total/);
+    assert.match(troopData, /Number\.isFinite\(amount\) \? total \+ Math\.max\(0, amount\) : total/);
+    assert.match(hud, /plateText = formatNameplateTroops\(troops\) \+ " \/ " \+ formatNameplateTroops\(maxTroops\)/);
+    assert.match(hud, /plateFillPct =\s*maxTroops > 0 \? Math\.min\(100, Math\.max\(0, \(troops \/ maxTroops\) \* 100\)\) : 0/);
+    assert.match(hud, /pendingFillPct =\s*maxTroops > 0[\s\S]*?pendingTroops \/ maxTroops/);
+
+    assert.match(hudCss, /--sow-nameplate-troop-fill: var\(--sow-fill-army-gradient\)/);
+    assert.match(hudCss, /background:\s*var\(--sow-fill-pending-wash\),\s*var\(--sow-nameplate-troop-fill\)/);
+    assert.match(
+        hudCss,
+        /\.sow-hud__nameplate-bar\.has-pending > #sow-hud-nameplate-fill\s*\{[^}]*border-start-end-radius: 0;[^}]*border-end-end-radius: 0;/,
+    );
+});
+
 test("tutorial troop totals keep grouped digits below 100k and compact decimals above it", () => {
     const start = hud.indexOf("    function formatNameplateTroops(");
     const end = hud.indexOf("\n    function formatHudMetric(", start);

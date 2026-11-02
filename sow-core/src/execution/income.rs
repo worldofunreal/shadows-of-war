@@ -142,7 +142,8 @@ impl SowEngine {
             let is_standard_bot = player.player_type == crate::player::PlayerType::Bot;
             let needs_city = if is_standard_bot {
                 player.cities == 0
-                    && (!self.campaign_city_requires_gold_ids.contains(&player.id) || player.gold > 0.0)
+                    && (!self.campaign_city_requires_gold_ids.contains(&player.id)
+                        || player.gold > 0.0)
             } else {
                 !has_city
             };
@@ -265,10 +266,9 @@ impl SowEngine {
             let Some(rebel_id) = self.state.next_free_player_id() else {
                 continue;
             };
-            let Some(color) = crate::player::best_available_nation_palette_color(
-                &self.state.players,
-                None,
-            ) else {
+            let Some(color) =
+                crate::player::best_available_nation_palette_color(&self.state.players, None)
+            else {
                 log::error!(
                     "debt rebellion: no Nation color remains at the required perceptual distance"
                 );
@@ -288,7 +288,16 @@ impl SowEngine {
             self.state.register_player(rebel);
             let x = building.tile_idx % self.state.map.width;
             let y = building.tile_idx / self.state.map.width;
-            self.state.set_tile_owner(x, y, rebel_id);
+            let (eliminated, change) = self.state.set_tile_owner_for_execution(x, y, rebel_id);
+            let mut elimination_candidates: Vec<_> = eliminated
+                .into_iter()
+                .map(|(victim, ex, ey)| (victim, rebel_id, ex, ey))
+                .collect();
+            elimination_candidates
+                .extend(self.annex_enclosed_components(change.into_iter().collect()));
+            for (victim, conqueror, ex, ey) in elimination_candidates {
+                self.eliminate_player(victim, conqueror, ex, ey, false);
+            }
             self.buildings[building_index].owner_id = rebel_id;
             self.building_aggregates_dirty = true;
             self.sea_lanes_dirty = true;
@@ -520,6 +529,9 @@ mod zero_troop_bot_income_tests {
             .iter()
             .filter(|b| b.owner_id == 1 && b.kind == BuildingKind::City)
             .count();
-        assert_eq!(cities, 1, "gold-gated bot with tile income must rebuild its city");
+        assert_eq!(
+            cities, 1,
+            "gold-gated bot with tile income must rebuild its city"
+        );
     }
 }

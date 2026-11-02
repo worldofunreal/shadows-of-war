@@ -97,7 +97,13 @@ function clearOAuthTransaction(): void {
 function finishSignIn(data: SignInReply, returnTo: string | undefined): void {
   const oldToken = localStorage.getItem("wou_session_token");
   const oldUser = localStorage.getItem("wou_user_data");
+  const oldRefreshToken = localStorage.getItem("wou_refresh_token");
+  const oldAccountId = String(readStoredJson<Account>("wou_user_data")?.account_id || "");
+  const newAccountId = String(data.account.account_id || data.account.id || "");
   try {
+    if (oldAccountId && newAccountId && oldAccountId !== newAccountId) {
+      localStorage.removeItem("wou_refresh_token");
+    }
     localStorage.setItem("wou_session_token", data.session_token);
     localStorage.setItem("wou_user_data", JSON.stringify(data.account));
   } catch (err) {
@@ -106,6 +112,8 @@ function finishSignIn(data: SignInReply, returnTo: string | undefined): void {
       else localStorage.setItem("wou_session_token", oldToken);
       if (oldUser === null) localStorage.removeItem("wou_user_data");
       else localStorage.setItem("wou_user_data", oldUser);
+      if (oldRefreshToken === null) localStorage.removeItem("wou_refresh_token");
+      else localStorage.setItem("wou_refresh_token", oldRefreshToken);
     } catch {
       // Restoring the previous session failed too; nothing more can be done.
     }

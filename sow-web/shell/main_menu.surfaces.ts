@@ -334,6 +334,13 @@ function authSession(): WouSession {
     try {
         const token = window.localStorage.getItem("wou_session_token") || "";
         const user = JSON.parse(window.localStorage.getItem("wou_user_data") || "null");
+        if (
+            typeof window.SOW_isSowProductionHost === "function" &&
+            window.SOW_isSowProductionHost() &&
+            window.SOW_WOU_SESSION_STATUS !== "ready"
+        ) {
+            return { token: "", accountId: "", user: user };
+        }
         return { token: token, accountId: (user && user.account_id) || "", user: user };
     } catch {
         return { token: "", accountId: "", user: null };
@@ -351,9 +358,6 @@ function authHeaders() {
 }
 
 function ensureAuthSession(): Promise<WouSession> {
-    if (typeof window.SOW_ensureWouAnonymousSession === "function") {
-        return window.SOW_ensureWouAnonymousSession();
-    }
     return Promise.resolve(authSession());
 }
 
@@ -397,28 +401,22 @@ interface WouLoginData {
 
 function finishWouLogin(data: WouLoginData) {
     if (!data || !data.session_token || !data.account) throw new Error(SOW_t("auth.identity_incomplete"));
+    let accepted = false;
     try {
-        window.localStorage.setItem("wou_session_token", data.session_token);
-        window.localStorage.setItem("wou_user_data", JSON.stringify(data.account));
+        if (typeof window.SOW_acceptWouSession !== "function") {
+            throw new Error("WOU-ID session handler is unavailable.");
+        }
+        accepted = window.SOW_acceptWouSession(data);
     } catch (error) {
         throw new Error(SOW_t("auth.account_save_failed"), { cause: error });
     }
+    if (!accepted) throw new Error("Sign-in canceled. Your current WOU-ID account is unchanged.");
     menuUi.authBusy = false;
     menuUi.authModalOpen = false;
     menuUi.authOtpSent = false;
     menuUi.authError = "";
     menuUi.authNotice = "";
-    window.dispatchEvent(
-        new CustomEvent("wou:auth-state-change", {
-            detail: {
-                authenticated: true,
-                isAuthenticated: true,
-                user: data.account,
-                token: data.session_token,
-            },
-        }),
-    );
-    window.location.reload();
+    render();
 }
 
 function authJson(response: Response) {

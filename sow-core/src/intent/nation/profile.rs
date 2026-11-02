@@ -65,8 +65,8 @@ pub(super) struct BotAiProfile {
     pub(super) reserve_ratio: f64,
     pub(super) expand_ratio: f64,
     pub(super) refuse_human_chance: i32,
-    /// Tribe-only: Vanilla permits neutral growth and self-defense only;
-    /// Terminator also permits player hunting.
+    /// Tribe-only: Vanilla permits neutral growth and delayed human attacks;
+    /// Terminator also hunts AI players.
     pub(super) attacks_players: bool,
 }
 
@@ -89,14 +89,18 @@ impl BotAiProfile {
         attacks_players: true,
     };
 
-    /// Tribe = passive food except self-defense on `Vanilla`, hunters on `Terminator`.
+    /// Tribe = passive food and delayed human attacks on `Vanilla`; broader
+    /// player hunting on `Terminator`.
     fn tribe(difficulty: BotDifficulty) -> BotAiProfile {
         match difficulty {
             BotDifficulty::Vanilla => BotAiProfile {
                 trigger_ratio: 0.75, // ignored while attacks_players=false
                 reserve_ratio: 0.50,
                 expand_ratio: 0.10,
-                refuse_human_chance: 100,
+                // Human initiation is separately unlocked by the shared
+                // match grace period; once eligible, Vanilla keeps the same
+                // 50% hesitation as Terminator rather than a permanent veto.
+                refuse_human_chance: 50,
                 attacks_players: false,
             },
             BotDifficulty::Terminator => BotAiProfile {

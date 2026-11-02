@@ -516,7 +516,16 @@
         }
     }
 
-    window.SOW_getWouSession = readWouSession;
+    window.SOW_getWouSession = function () {
+        const session = readWouSession();
+        if (
+            window.SOW_isSowProductionHost() &&
+            window.SOW_WOU_SESSION_STATUS !== "ready"
+        ) {
+            return { token: "", accountId: "", user: session.user };
+        }
+        return session;
+    };
 
     window.SOW_getAuthState = function () {
         const identity = window.SOW_PLATFORM_IDENTITY;
@@ -532,7 +541,7 @@
                 pending: !!androidPending(),
             };
         }
-        const session = readWouSession();
+        const session = window.SOW_getWouSession();
         const linkedProviders =
             session.user && Array.isArray(session.user.linked_identities)
                 ? session.user.linked_identities
@@ -866,7 +875,30 @@
     };
 
     window.SOW_AUTH_CHANGED = false;
+    window.SOW_WOU_SESSION_STATUS = "pending";
     let wouAnonymousPromise = null;
+    let wouSdkPromise = null;
+    let wouRetryTimer = null;
+    let wouRetryDelay = 1000;
+    let wouRecoveryGeneration = 0;
+    let wouProfileRefreshAttempted = false;
+
+    window.addEventListener("wou:session-state-change", function (event) {
+        const status = (event as CustomEvent<{ status?: string }>).detail?.status;
+        if (
+            typeof status !== "string" ||
+            !["refreshing", "retrying", "ready", "reauthentication_required"].includes(status)
+        ) return;
+        window.SOW_WOU_SESSION_STATUS = status;
+        if (status === "ready") {
+            wouRetryDelay = 1000;
+        }
+        if (status === "ready" || status === "reauthentication_required" || status === "refreshing") {
+            if (wouRetryTimer) clearTimeout(wouRetryTimer);
+            wouRetryTimer = null;
+        }
+        emitAuthStateChange();
+    });
 
     function isSowIdentityHost() {
         const host = String(window.location.hostname || "").toLowerCase();
@@ -880,55 +912,183 @@
     }
 
     window.SOW_isSowProductionHost = function () {
+        const host = String(window.location.hostname || "").toLowerCase();
         return (
             window.location.protocol === "https:" &&
-            String(window.location.hostname || "").toLowerCase() === "shadowsofwar.io" &&
+            (host === "shadowsofwar.io" || host === "www.shadowsofwar.io") &&
+            !isAndroidTwa() &&
             !isPortalEmbed()
         );
     };
+
+    function loadWouSdk() {
+        if (window.wouAuth && typeof window.wouAuth.ensureSession === "function") {
+            return Promise.resolve(window.wouAuth);
+        }
+        if (!wouSdkPromise) {
+            const sdkUrl = new URL("/wou-auth.js", window.location.origin);
+            sdkUrl.searchParams.set("v", window.SOW_LOCALE_VERSION || window.SOW_BUILD_TS || "0");
+            wouSdkPromise = import(sdkUrl.href).then(function () {
+                const auth = window.wouAuth;
+                if (!auth || typeof auth.ensureSession !== "function") {
+                    throw new Error("WOU-ID SDK is unavailable.");
+                }
+                auth.setDefaultContext("shadows_of_war");
+                return auth;
+            }).catch(function (error) {
+                wouSdkPromise = null;
+                throw error;
+            });
+        }
+        return wouSdkPromise;
+    }
+
+    function scheduleWouSessionRetry() {
+        if (wouRetryTimer || window.SOW_WOU_SESSION_STATUS === "reauthentication_required") return;
+        const delay = wouRetryDelay;
+        wouRetryDelay = Math.min(wouRetryDelay * 2, 30000);
+        wouRetryTimer = setTimeout(function () {
+            wouRetryTimer = null;
+            window.SOW_ensureWouAnonymousSession().catch(function () {});
+        }, delay);
+    }
+
+    function failWouSession(error) {
+        const status = Number(error && error.status || 0);
+        window.SOW_WOU_SESSION_STATUS = status === 401 || status === 403
+            ? "reauthentication_required"
+            : "retrying";
+        if (window.SOW_WOU_SESSION_STATUS === "retrying" && !(error && error.sessionRetryScheduled)) {
+            scheduleWouSessionRetry();
+        }
+        emitAuthStateChange();
+        throw error;
+    }
 
     function saveWouSession(data) {
         if (!data || !data.session_token || !data.account) {
             throw new Error("Identity service returned an incomplete anonymous session.");
         }
         try {
+            const old = readWouSession();
+            if (old.accountId && String(old.accountId) !== String(data.account.account_id || "")) {
+                window.localStorage.removeItem("wou_refresh_token");
+            }
             window.localStorage.setItem("wou_session_token", data.session_token);
             window.localStorage.setItem("wou_user_data", JSON.stringify(data.account));
         } catch (e) {
             throw new Error("Could not save the account on this device.", { cause: e });
         }
+        if (window.wouAuth && typeof window.wouAuth.setSession === "function") {
+            window.wouAuth.setSession(data.session_token, data.account, data.refresh_token);
+        }
+        window.SOW_WOU_SESSION_STATUS = "ready";
         emitAuthStateChange();
         return readWouSession();
     }
 
     window.SOW_ensureWouAnonymousSession = function () {
         const existing = readWouSession();
-        if (existing.token && existing.accountId) return Promise.resolve(existing);
         if (!isSowIdentityHost() || isAndroidTwa() || isPortalEmbed()) {
             return Promise.resolve(existing);
         }
         if (wouAnonymousPromise) return wouAnonymousPromise;
-        wouAnonymousPromise = fetch("https://id.worldofunreal.com/api/v1/auth/anonymous", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify({ context: "shadows_of_war" }),
-        })
-            .then(function (response) {
-                return response
-                    .json()
-                    .catch(function () {
-                        return {};
-                    })
-                    .then(function (data) {
-                        if (!response.ok)
-                            throw new Error(data.error || "Anonymous identity is unavailable right now.");
-                        return saveWouSession(data);
-                    });
+        const generation = ++wouRecoveryGeneration;
+        window.SOW_WOU_SESSION_STATUS = "restoring";
+        const recovery = loadWouSdk()
+            .then(async function (auth) {
+                if (existing.token && existing.accountId) {
+                    if (!existing.user) {
+                        const error = new Error("Saved WOU-ID account data is unreadable.");
+                        error.status = 401;
+                        throw error;
+                    }
+                    await auth.ensureSession();
+                } else {
+                    await auth.startAnonymous("shadows_of_war");
+                    await auth.ensureSession();
+                }
+                if (generation !== wouRecoveryGeneration) return readWouSession();
+                window.SOW_WOU_SESSION_STATUS = "ready";
+                wouRetryDelay = 1000;
+                if (wouRetryTimer) clearTimeout(wouRetryTimer);
+                wouRetryTimer = null;
+                emitAuthStateChange();
+                return readWouSession();
+            })
+            .catch(function (error) {
+                if (generation !== wouRecoveryGeneration) return readWouSession();
+                return failWouSession(error);
             })
             .finally(function () {
-                wouAnonymousPromise = null;
+                if (wouAnonymousPromise === recovery) wouAnonymousPromise = null;
             });
-        return wouAnonymousPromise;
+        wouAnonymousPromise = recovery;
+        return recovery;
+    };
+
+    window.SOW_refreshWouSession = function () {
+        if (wouAnonymousPromise) {
+            wouProfileRefreshAttempted = true;
+            return wouAnonymousPromise;
+        }
+        if (wouProfileRefreshAttempted) {
+            const error = new Error("WOU-ID rejected the profile retry; sign in again.");
+            error.status = 401;
+            window.SOW_WOU_SESSION_STATUS = "reauthentication_required";
+            emitAuthStateChange();
+            return Promise.reject(error);
+        }
+        wouProfileRefreshAttempted = true;
+        const generation = ++wouRecoveryGeneration;
+        window.SOW_WOU_SESSION_STATUS = "restoring";
+        const recovery = loadWouSdk()
+            .then(function (auth) { return auth.ensureSession(true); })
+            .then(function () {
+                if (generation !== wouRecoveryGeneration) return readWouSession();
+                window.SOW_WOU_SESSION_STATUS = "ready";
+                wouRetryDelay = 1000;
+                if (wouRetryTimer) clearTimeout(wouRetryTimer);
+                wouRetryTimer = null;
+                emitAuthStateChange();
+                return readWouSession();
+            })
+            .catch(function (error) {
+                if (generation !== wouRecoveryGeneration) return readWouSession();
+                return failWouSession(error);
+            })
+            .finally(function () {
+                if (wouAnonymousPromise === recovery) wouAnonymousPromise = null;
+            });
+        wouAnonymousPromise = recovery;
+        return recovery;
+    };
+
+    window.SOW_retryWouProfile = function () {
+        window.SOW_refreshWouSession().catch(function () {});
+    };
+
+    window.SOW_wouProfileLoadSucceeded = function () {
+        wouProfileRefreshAttempted = false;
+    };
+
+    window.SOW_acceptWouSession = function (data) {
+        const current = readWouSession();
+        const nextAccountId = String(data && data.account && data.account.account_id || "");
+        if (
+            current.accountId && nextAccountId && current.accountId !== nextAccountId &&
+            !window.confirm("This sign-in belongs to a different WOU-ID account. Switch accounts? Your current account's progress stays with that account.")
+        ) {
+            return false;
+        }
+        saveWouSession(data);
+        wouProfileRefreshAttempted = false;
+        wouRecoveryGeneration += 1;
+        wouAnonymousPromise = null;
+        if (wouRetryTimer) clearTimeout(wouRetryTimer);
+        wouRetryTimer = null;
+        wouRetryDelay = 1000;
+        return true;
     };
 
     function emitAuthStateChange() {
@@ -1032,7 +1192,7 @@
         try {
             const returnTo = window.location.href.split("#")[0];
             const callbackUri = await sowOAuthRedirectUri();
-            const session = await window.SOW_ensureWouAnonymousSession();
+            const session = window.SOW_getWouSession();
             const nonce = oauthNonce();
             const pkce = provider === "twitter" ? await oauthPkcePair() : null;
             const stateObj = {
@@ -1103,10 +1263,33 @@
 
     window.SOW_signOutWou = function () {
         if (isAndroidTwa()) return window.SOW_signOutAndroidPlayGames();
-        try {
-            window.localStorage.removeItem("wou_session_token");
-            window.localStorage.removeItem("wou_user_data");
-        } catch {}
+        wouRecoveryGeneration += 1;
+        wouAnonymousPromise = null;
+        if (wouRetryTimer) clearTimeout(wouRetryTimer);
+        wouRetryTimer = null;
+        if (window.wouAuth && typeof window.wouAuth.logout === "function") {
+            window.wouAuth.logout();
+        } else {
+            const session = readWouSession();
+            const refreshToken = window.localStorage.getItem("wou_refresh_token");
+            if (session.token || refreshToken) {
+                fetch("https://id.worldofunreal.com/api/v1/auth/logout", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        ...(session.token ? { Authorization: "Bearer " + session.token } : {}),
+                    },
+                    body: JSON.stringify({ refresh_token: refreshToken }),
+                }).catch(function () {});
+            }
+            try {
+                window.localStorage.removeItem("wou_session_token");
+                window.localStorage.removeItem("wou_user_data");
+                window.localStorage.removeItem("wou_refresh_token");
+            } catch {}
+        }
+        window.SOW_WOU_SESSION_STATUS = "signed_out";
+        wouProfileRefreshAttempted = false;
         if (window.SOW_PLATFORM_IDENTITY && window.SOW_PLATFORM_IDENTITY.provider === "wou") {
             window.SOW_PLATFORM_IDENTITY = null;
         }
@@ -1131,17 +1314,18 @@
             const token = params.get("session_token");
             const acc = params.get("account");
             if (!token || !acc) return;
-            const account = JSON.parse(decodeURIComponent(acc));
-            window.localStorage.setItem("wou_session_token", token);
-            window.localStorage.setItem("wou_user_data", JSON.stringify(account));
-            emitAuthStateChange();
+            const account = JSON.parse(acc);
             params.delete("session_token");
             params.delete("account");
             const clean =
                 window.location.pathname +
                 (params.toString() ? "?" + params.toString() : "") +
                 window.location.hash;
-            window.history.replaceState({}, document.title, clean);        } catch (e) {
+            window.history.replaceState({}, document.title, clean);
+            if (!window.SOW_acceptWouSession({ session_token: token, account: account })) {
+                console.info("WOU account switch was cancelled; the current account is unchanged.");
+            }
+        } catch (e) {
             console.warn("WOU login capture failed:", e);
         }
     }

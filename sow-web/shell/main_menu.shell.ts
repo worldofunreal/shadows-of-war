@@ -32,7 +32,6 @@ import {
     stageLeaderSelection,
 } from "./main_menu.core.ts";
 import {
-    isHeroSelectionQueueLocked,
     refreshHeroesRoster,
     renderHeroInfoModal,
     renderHeroes,
@@ -613,7 +612,10 @@ function renderTopbar() {
     const crowns = menuUi.state!.crowns || 0;
     const laurels = menuUi.state!.laurels || 0;
     const gems = menuUi.state!.gems || 0;
-    const showSignIn = portalOffersSignIn() && !(auth.linked || auth.pending);
+    const showSignIn =
+        portalOffersSignIn() &&
+        (window.SOW_WOU_SESSION_STATUS === "reauthentication_required" ||
+            !(auth.linked || auth.pending));
     const signInMarkup = { value: "" };
     /* POKI_SHARED_SIGNIN_MARKUP_BEGIN */
     signInMarkup.value =
@@ -935,7 +937,10 @@ function updateTopbar() {
     /* POKI_SHARED_AUTH_LOOKUP_BEGIN */
     if (typeof window.SOW_getAuthState === "function") Object.assign(auth, window.SOW_getAuthState());
     /* POKI_SHARED_AUTH_LOOKUP_END */
-    const showSignIn = portalOffersSignIn() && !(auth.linked || auth.pending);
+    const showSignIn =
+        portalOffersSignIn() &&
+        (window.SOW_WOU_SESSION_STATUS === "reauthentication_required" ||
+            !(auth.linked || auth.pending));
     const actions = topbar.querySelector(".sow-menu__top-actions");
     const settingsButton = actions && actions.querySelector("[data-command='toggle_settings']");
     let signIn = actions && actions.querySelector<HTMLButtonElement>(".sow-menu__signin");
@@ -2434,27 +2439,25 @@ root.addEventListener("click", function (event) {
     }
     if (command === "preview_leader") {
         const leaderId = target.dataset.leaderId || null;
-        if (!isHeroSelectionQueueLocked()) {
-            const leader = leaderById(leaderId);
-            if (leaderId && leader.available !== false) {
-                stageLeaderSelection(false, leaderId);
-                scheduleLeaderPersist(false, leaderId);
-            }
+        const leader = leaderById(leaderId);
+        if (leaderId && leader.available !== false) {
+            stageLeaderSelection(false, leaderId);
+            scheduleLeaderPersist(false, leaderId);
         }
         menuUi.tempSelectedLeader = leaderId;
         menuUi.tempSelectedRandom = false;
         if (!updateHeroesPreview()) render();
+        updateTopbar();
         maybePresentRewards();
         return;
     }
     if (command === "preview_random_leader") {
-        if (!isHeroSelectionQueueLocked()) {
-            stageLeaderSelection(true, null);
-            scheduleLeaderPersist(true, null);
-        }
+        stageLeaderSelection(true, null);
+        scheduleLeaderPersist(true, null);
         menuUi.tempSelectedLeader = null;
         menuUi.tempSelectedRandom = true;
         if (!updateHeroesPreview()) render();
+        updateTopbar();
         return;
     }
     if (command === "confirm_random_leader") {
@@ -2710,7 +2713,9 @@ document.addEventListener("pointercancel", finishMenuPointer);
 window.addEventListener("wou:auth-state-change", function () {
     if (!menuUi.state || root.hidden) return;
     const auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() || {} : {};
-    if (auth.linked && menuUi.authModalOpen) {
+    const reauthenticationRequired =
+        window.SOW_WOU_SESSION_STATUS === "reauthentication_required";
+    if (auth.linked && !reauthenticationRequired && menuUi.authModalOpen) {
         menuUi.authModalOpen = false;
         resetAuthFlow();
     }
@@ -2718,6 +2723,7 @@ window.addEventListener("wou:auth-state-change", function () {
         render();
         return;
     }
+    updateTopbar();
     updateFrameChrome(currentScreen());
     updateDynamic();
     if (menuUi.settingsOpen) syncOverlay("settings", renderSettings());

@@ -135,6 +135,7 @@ pub enum DbEvent {
     },
     LoadFailed {
         request_id: u64,
+        provider: String,
         status: Option<u16>,
     },
     TutorialCompletionFailed {

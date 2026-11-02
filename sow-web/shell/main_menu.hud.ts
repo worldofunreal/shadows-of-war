@@ -124,6 +124,7 @@ type HudRefs = {
     plateAvatar: HTMLImageElement;
     plateName: HTMLElement;
     plateFill: HTMLElement;
+    platePendingTroops: HTMLElement;
     plateTroops: HTMLElement;
     plateGold: HTMLElement;
     plateGoldWrap: HTMLElement;
@@ -1090,6 +1091,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             plateAvatar: requiredHudImage("sow-hud-nameplate-avatar"),
             plateName: requiredHudElement("sow-hud-nameplate-name"),
             plateFill: requiredHudElement("sow-hud-nameplate-fill"),
+            platePendingTroops: requiredHudElement("sow-hud-nameplate-pending-troops"),
             plateTroops: requiredHudElement("sow-hud-nameplate-troops"),
             plateGold: requiredHudElement("sow-hud-nameplate-gold"),
             plateGoldWrap: requiredHudQuery(root, ".sow-hud__nameplate-stat--gold"),
@@ -1260,7 +1262,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '" hidden>' +
             '  <div class="sow-hud__nameplate-avatar-wrap"><img class="sow-hud__nameplate-avatar" id="sow-hud-nameplate-avatar" alt="" draggable="false"></div>' +
             '  <div class="sow-hud__nameplate-copy"><strong id="sow-hud-nameplate-name"></strong>' +
-            '  <div class="sow-hud__nameplate-bar"><i id="sow-hud-nameplate-fill"></i><span class="sow-hud__nameplate-readout"><span id="sow-hud-nameplate-troops"></span>' +
+            '  <div class="sow-hud__nameplate-bar"><i id="sow-hud-nameplate-fill"></i><i id="sow-hud-nameplate-pending-troops" class="sow-hud__nameplate-pending" aria-hidden="true"></i><span class="sow-hud__nameplate-readout"><span id="sow-hud-nameplate-troops"></span>' +
             hudIcon("troops", "sow-hud__inline-icon") +
             "</span></div>" +
             '  <div class="sow-hud__nameplate-economy">' +
@@ -3107,7 +3109,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     function ringActivate(menu: HTMLElement, target: "hub" | number | null): void {
         console.info("[RING TRACE] activate target=" + String(target));
         if (target === "hub") {
-            // The center is "back" inside a submenu and "center on the entity's home, then close" at the root.
+            // The center goes back inside a submenu; at the root it focuses the nameplate and closes.
             const back = menu.querySelector<HTMLButtonElement>("[data-map-back]");
             if (back) back.click();
             else {
@@ -5456,6 +5458,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const goldRate = Number(hud.gold_rate) || 0;
         const troops = Math.floor(hud.troops || 0);
         const maxTroops = Math.floor(hud.max_troops || 0);
+        const pendingTroops = (hud.operations || []).reduce(function (total, operation) {
+            if (operation.direction !== "outgoing") return total;
+            const amount = Number(operation.troops);
+            return Number.isFinite(amount) ? total + Math.max(0, amount) : total;
+        }, 0);
         const prod = Math.floor(hud.troop_rate || 0);
         const currentRatio = Number.isFinite(hud.attack_ratio) ? hud.attack_ratio : 0.5;
         const spawnSecs = hud.spawn_timer_secs;
@@ -5520,6 +5527,26 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 if (hudRefs!.plateFill && hudRefs!.plateFill.style.width !== plateFillStr) {
                     hudRefs!.plateFill.style.width = plateFillStr;
                 }
+                const pendingFillPct =
+                    maxTroops > 0
+                        ? Math.min(100, (pendingTroops / maxTroops) * 100)
+                        : 0;
+                // ponytail: cap commitments at one bar width; add overflow UI if above-cap troops
+                // need exact display.
+                const pendingStartStr =
+                    Math.min(plateFillPct, 100 - pendingFillPct).toFixed(1) + "%";
+                const pendingFillStr = pendingFillPct.toFixed(1) + "%";
+                if (hudRefs!.platePendingTroops.style.insetInlineStart !== pendingStartStr) {
+                    hudRefs!.platePendingTroops.style.insetInlineStart = pendingStartStr;
+                }
+                if (hudRefs!.platePendingTroops.style.width !== pendingFillStr) {
+                    hudRefs!.platePendingTroops.style.width = pendingFillStr;
+                }
+                hudRefs!.platePendingTroops.hidden = pendingFillPct <= 0;
+                hudRefs!.plateFill.parentElement?.classList.toggle(
+                    "has-pending",
+                    pendingFillPct > 0,
+                );
             }
         }
 

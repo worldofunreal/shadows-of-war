@@ -15,9 +15,10 @@
   --sow-coin: #f5d898;
   --sow-panel: var(--sow-tactical-panel);
   --sow-panel-wash: var(--sow-tactical-panel-wash);
-  --sow-line: rgb(211 223 219 / 14%);
+  --sow-panel-card: var(--sow-tactical-surface-card-bg);
+  --sow-line: var(--sow-tactical-surface-border);
   --sow-muted: #9da9ad;
-  --sow-surface-shadow: 0 14px 36px rgb(0 0 0 / 38%), inset 0 1px rgb(255 255 255 / 5%);
+  --sow-surface-shadow: var(--sow-tactical-card-shadow);
   --sow-dock-reserve: 88px;
 }
 
@@ -92,6 +93,11 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
   font: inherit;
 }
 
+#sow-hud-dev-layer :is(button, input, select):focus-visible {
+  outline: var(--sow-tactical-focus-outline);
+  outline-offset: var(--sow-tactical-focus-offset);
+}
+
 html[dir="rtl"] #sow-hud-dev-layer {
   --sow-sal: env(safe-area-inset-right, 0px);
   --sow-sar: env(safe-area-inset-left, 0px);
@@ -117,8 +123,8 @@ html[dir="rtl"] #sow-hud-dev-layer {
 #sow-hud button:focus-visible,
 #sow-hud input:focus-visible,
 #sow-hud [role="button"]:focus-visible {
-  outline: 2px solid var(--sow-gold-bright);
-  outline-offset: 2px;
+  outline: var(--sow-tactical-focus-outline);
+  outline-offset: var(--sow-tactical-focus-offset);
 }
 
 /* Glyph icons: dark ink under a white face, like the outlined text. */
@@ -236,16 +242,30 @@ html[dir="rtl"] #sow-hud-dev-layer {
   min-width: 0;
   height: var(--sow-player-panel-height);
   padding: 6px;
-  border: 1px solid rgb(211 223 219 / 18%);
-  border-inline-start: 2px solid color-mix(in srgb, var(--sow-gold) 72%, transparent);
-  border-radius: 7px 3px 10px 3px;
-  background: var(--sow-panel);
-  box-shadow:
-    var(--sow-surface-shadow),
-    0 8px 24px rgb(0 0 0 / 32%);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-inline-start: 2px solid rgb(224 190 119 / 40%);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: var(--sow-tactical-surface-card-bg);
+  box-shadow: var(--sow-tactical-card-shadow);
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
+  -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
   pointer-events: auto;
   cursor: pointer;
   user-select: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.sow-hud__nameplate:hover,
+.sow-hud__nameplate:focus-visible {
+  border-color: var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-gold-bright);
+  box-shadow:
+    0 12px 36px rgb(0 0 0 / 75%),
+    0 0 16px rgb(110 215 60 / 20%),
+    inset 0 1px 0 rgb(255 255 255 / 12%);
 }
 
 .sow-hud__nameplate:not([hidden]) {
@@ -263,8 +283,9 @@ html[dir="rtl"] #sow-hud-dev-layer {
   border: 1px solid color-mix(in srgb, var(--sow-gold) 66%, transparent);
   box-shadow:
     0 0 0 2px rgb(5 10 13 / 84%),
-    0 0 12px color-mix(in srgb, var(--sow-gold) 12%, transparent);
-  background: rgb(0 0 0 / 55%);
+    0 0 12px color-mix(in srgb, var(--sow-gold) 20%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 12%);
+  background: var(--sow-tactical-surface-compact-bg);
 }
 
 .sow-hud__nameplate-avatar {
@@ -296,13 +317,14 @@ html[dir="rtl"] #sow-hud-dev-layer {
 
 .sow-hud__nameplate-bar {
   position: relative;
+  --sow-nameplate-troop-fill: var(--sow-fill-army-gradient);
   grid-column: 2;
   grid-row: 2;
   height: 20px;
-  border-radius: 7px;
-  background: linear-gradient(180deg, #0a1112, #1c2925);
-  border: 1px solid rgb(211 223 219 / 18%);
-  box-shadow: inset 0 1px 2px rgb(0 0 0 / 72%);
+  border-radius: var(--sow-tactical-track-radius);
+  background: var(--sow-tactical-track-bg);
+  border: 1px solid var(--sow-tactical-track-border);
+  box-shadow: var(--sow-tactical-track-shadow);
   overflow: hidden;
 }
 
@@ -313,10 +335,32 @@ html[dir="rtl"] #sow-hud-dev-layer {
   display: block;
   height: 100%;
   width: 0;
-  background: linear-gradient(180deg, #b6f06a 0%, #6cc835 48%, #4ea722 52%, #3d8f18 100%);
+  background: var(--sow-nameplate-troop-fill);
   border-radius: 6px;
-  box-shadow: 0 0 8px rgb(166 197 168 / 28%);
+  box-shadow:
+    inset 0 1px 0 rgb(217 255 136 / 38%),
+    0 0 8px rgb(118 219 54 / 35%),
+    0 0 3px rgb(217 255 136 / 28%);
   transition: width 0.15s ease;
+}
+
+.sow-hud__nameplate-bar.has-pending > #sow-hud-nameplate-fill {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+  box-shadow: inset 0 1px 0 rgb(217 255 136 / 38%);
+}
+
+.sow-hud__nameplate-bar .sow-hud__nameplate-pending {
+  z-index: 1;
+  background:
+    var(--sow-fill-pending-wash),
+    var(--sow-nameplate-troop-fill);
+  border-radius: 0;
+  border-start-end-radius: 6px;
+  border-end-end-radius: 6px;
+  border-inline-start: 1px solid rgb(255 255 255 / 72%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 42%);
+  transition: inset-inline-start 0.15s ease, width 0.15s ease;
 }
 
 .sow-hud__nameplate-bar > span {
@@ -324,6 +368,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
   inset: 0;
   z-index: 1;
   display: flex;
+  direction: ltr;
   align-items: center;
   justify-content: center;
   gap: 4px;
@@ -333,6 +378,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
   line-height: 1;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
   white-space: nowrap;
   text-shadow:
     0 1px 2px #000,
@@ -365,9 +411,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
   height: 100%;
   padding: 0 3px;
   overflow: hidden;
-  border: 1px solid rgb(211 223 219 / 13%);
-  border-radius: 4px;
-  background: rgb(255 255 255 / 4%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: var(--sow-tactical-surface-radius-tight);
+  background: var(--sow-tactical-surface-subcard-bg);
+  box-shadow: var(--sow-tactical-surface-highlight);
   color: #f5f1e8;
   font-size: 13px;
   font-weight: 750;
@@ -540,10 +587,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
   top: max(12px, var(--sow-sat));
   left: 50%;
   transform: translateX(-50%);
-  background: var(--sow-panel-wash), var(--sow-panel);
-  border: 1px solid var(--sow-line);
-  border-top-color: color-mix(in srgb, var(--sow-gold) 60%, transparent);
-  border-radius: 6px 6px 14px 4px;
+  background: var(--sow-panel-card);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
   padding: 9px 14px;
   display: flex;
   align-items: center;
@@ -600,20 +647,20 @@ html[dir="rtl"] #sow-hud-dev-layer {
 }
 
 .sow-hud__rail-card {
-  background: linear-gradient(180deg, #18222b 0%, #121920 100%);
-  border: 1px solid var(--sow-line);
-  border-top: 1px solid rgba(255, 213, 79, 0.55);
+  background: var(--sow-panel-card);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
   border-inline-start-color: rgba(224, 190, 119, 0.4);
-  border-radius: 6px 6px 14px 4px;
+  border-radius: var(--sow-tactical-surface-radius-compact);
   padding: 10px 8px 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 7px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: var(--sow-tactical-card-shadow);
   width: 70px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
+  -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
@@ -670,55 +717,34 @@ html[dir="rtl"] #sow-hud-dev-layer {
 
 .sow-hud__range-vertical::-webkit-slider-runnable-track {
   width: var(--sow-range-track-width);
-  border-radius: 8px;
-  background: linear-gradient(
-    to top,
-    #246e10 0%,
-    #3e9a1b 25%,
-    #63c02d 65%,
-    #a4ea4a calc(var(--sow-ratio, 50%) - 2%),
-    #d9ff88 var(--sow-ratio, 50%),
-    #090f12 var(--sow-ratio, 50%),
-    #090f12 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.85), 0 1px 0 rgba(255, 255, 255, 0.06);
+  border-radius: var(--sow-tactical-track-radius);
+  background:
+    var(--sow-fill-army-gradient) center bottom / 100% var(--sow-ratio, 50%) no-repeat,
+    var(--sow-tactical-track-bg);
+  border: 1px solid var(--sow-tactical-track-border);
+  box-shadow: var(--sow-tactical-track-shadow);
   margin: 0 auto;
   transition: box-shadow 0.2s ease, filter 0.2s ease;
 }
 
 .sow-hud__range-vertical::-moz-range-track {
   width: var(--sow-range-track-width);
-  border-radius: 8px;
-  background: linear-gradient(
-    to top,
-    #246e10 0%,
-    #3e9a1b 25%,
-    #63c02d 65%,
-    #a4ea4a calc(var(--sow-ratio, 50%) - 2%),
-    #d9ff88 var(--sow-ratio, 50%),
-    #090f12 var(--sow-ratio, 50%),
-    #090f12 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.85), 0 1px 0 rgba(255, 255, 255, 0.06);
+  border-radius: var(--sow-tactical-track-radius);
+  background:
+    var(--sow-fill-army-gradient) center bottom / 100% var(--sow-ratio, 50%) no-repeat,
+    var(--sow-tactical-track-bg);
+  border: 1px solid var(--sow-tactical-track-border);
+  box-shadow: var(--sow-tactical-track-shadow);
   transition: box-shadow 0.2s ease, filter 0.2s ease;
 }
 
 .sow-hud__left-rail.is-adjusting .sow-hud__range-vertical::-webkit-slider-runnable-track,
 .sow-hud__range-vertical:active::-webkit-slider-runnable-track {
-  background: linear-gradient(
-    to top,
-    #2e8815 0%,
-    #4cb821 28%,
-    #76db36 68%,
-    #c4ff66 calc(var(--sow-ratio, 50%) - 2%),
-    #ffffff var(--sow-ratio, 50%),
-    #090f12 var(--sow-ratio, 50%),
-    #090f12 100%
-  );
+  background:
+    var(--sow-fill-army-active-gradient) center bottom / 100% var(--sow-ratio, 50%) no-repeat,
+    var(--sow-tactical-track-bg);
   box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, 0.9),
+    var(--sow-tactical-track-shadow),
     0 0 12px rgba(118, 219, 54, 0.5),
     0 0 4px rgba(217, 255, 136, 0.8),
     0 1px 0 rgba(255, 255, 255, 0.12);
@@ -727,18 +753,11 @@ html[dir="rtl"] #sow-hud-dev-layer {
 
 .sow-hud__left-rail.is-adjusting .sow-hud__range-vertical::-moz-range-track,
 .sow-hud__range-vertical:active::-moz-range-track {
-  background: linear-gradient(
-    to top,
-    #2e8815 0%,
-    #4cb821 28%,
-    #76db36 68%,
-    #c4ff66 calc(var(--sow-ratio, 50%) - 2%),
-    #ffffff var(--sow-ratio, 50%),
-    #090f12 var(--sow-ratio, 50%),
-    #090f12 100%
-  );
+  background:
+    var(--sow-fill-army-active-gradient) center bottom / 100% var(--sow-ratio, 50%) no-repeat,
+    var(--sow-tactical-track-bg);
   box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, 0.9),
+    var(--sow-tactical-track-shadow),
     0 0 12px rgba(118, 219, 54, 0.5),
     0 0 4px rgba(217, 255, 136, 0.8),
     0 1px 0 rgba(255, 255, 255, 0.12);
@@ -830,9 +849,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__icon-btn {
   width: 44px;
   height: 44px;
-  border-radius: 5px 5px 11px 4px;
-  background: var(--sow-panel);
-  border: 1px solid var(--sow-line);
+  border-radius: var(--sow-tactical-surface-radius-tight);
+  background: var(--sow-tactical-surface-compact-bg);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border-soft);
   border-inline-start-color: color-mix(in srgb, var(--sow-gold) 34%, transparent);
   color: #dedfd9;
   font-size: 18px;
@@ -869,7 +889,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__icon-btn[data-command="center_camera"]:hover {
   border-color: #00e5ff;
   color: #00e5ff;
-  background: var(--sow-panel);
+  background: var(--sow-tactical-surface-card-bg);
   box-shadow: 0 0 12px color-mix(in srgb, #00e5ff 32%, transparent);
 }
 
@@ -901,7 +921,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__icon-btn[data-command="center_camera"]:active {
   border-color: #ff9800;
   color: #ff9800;
-  background: var(--sow-panel);
+  background: var(--sow-tactical-surface-card-bg);
   box-shadow: 0 0 14px color-mix(in srgb, #ff9800 36%, transparent);
   transform: scale(0.96);
 }
@@ -916,7 +936,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__icon-btn.is-holding:hover {
   border-color: #ffa726;
   color: #ffa726;
-  background: var(--sow-panel);
+  background: var(--sow-tactical-surface-card-bg);
   box-shadow: 0 0 16px color-mix(in srgb, #ff9800 45%, transparent);
 }
 
@@ -956,10 +976,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
   flex-direction: column;
   align-items: stretch;
   gap: 7px;
-  background: var(--sow-panel);
-  border: 1px solid var(--sow-line);
-  border-top-color: color-mix(in srgb, var(--sow-gold) 55%, transparent);
-  border-radius: 6px 6px 16px 4px;
+  background: var(--sow-panel-card);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
   padding: 7px 9px 8px;
   box-shadow: var(--sow-surface-shadow);
   pointer-events: auto;
@@ -994,9 +1014,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
   gap: 1px;
   place-items: center;
   padding: 3px 2px 2px;
-  border: 1px solid var(--sow-line);
-  border-radius: 5px 5px 11px 4px;
-  background: rgb(255 255 255 / 3%);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-radius: var(--sow-tactical-surface-radius-tight);
+  background: var(--sow-tactical-surface-subcard-bg);
+  box-shadow: var(--sow-tactical-surface-highlight);
   color: var(--sow-gold-bright);
   cursor: pointer;
   touch-action: manipulation;
@@ -1021,10 +1042,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
   padding: 6px;
   transform: translateX(-50%);
   overflow: hidden;
-  border: 1px solid var(--sow-line);
-  border-top-color: color-mix(in srgb, var(--sow-gold) 55%, transparent);
-  border-radius: 6px 6px 12px 4px;
-  background: var(--sow-panel);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: var(--sow-panel-card);
   box-shadow: var(--sow-surface-shadow);
   pointer-events: auto;
 }
@@ -1049,9 +1070,9 @@ html[dir="rtl"] #sow-hud-dev-layer {
   min-width: 0;
   min-height: 48px;
   padding: 3px 5px;
-  border: 1px solid rgb(211 223 219 / 10%);
-  border-radius: 4px 4px 10px 3px;
-  background: linear-gradient(105deg, rgb(255 255 255 / 5%), rgb(255 255 255 / 2%));
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: var(--sow-tactical-surface-subcard-bg);
 }
 .sow-hud__operation.is-incoming {
   border-inline-start: 2px solid var(--sow-red);
@@ -1291,7 +1312,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
   top: -1px;
   width: 24px;
   height: 1px;
-  background: #a4ea4a;
+  background: var(--sow-fill-army-highlight);
   box-shadow: 0 0 8px rgba(164, 234, 74, 0.7);
 }
 
@@ -1310,14 +1331,14 @@ html[dir="rtl"] #sow-hud-dev-layer {
   width: max-content;
   max-width: min(300px, calc(100vw - 110px));
   padding: 8px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--sow-tactical-surface-border);
   border-inline-start: 2px solid var(--sow-gold-bright, #ffd54f);
-  border-top: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 4px 8px 8px 4px;
-  background: linear-gradient(135deg, rgba(24, 34, 43, 0.98) 0%, rgba(16, 23, 29, 0.98) 100%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: var(--sow-panel-card);
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
+  -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
+  box-shadow: var(--sow-tactical-card-shadow);
   color: #f0ece1;
   font-size: 11px;
   font-weight: 550;
@@ -1421,9 +1442,9 @@ html[dir="rtl"] #sow-hud-dev-layer {
   padding: 0 0 env(safe-area-inset-bottom, 0px);
   border: 1px solid var(--sow-line);
   border-bottom: 0;
-  border-top-color: color-mix(in srgb, var(--sow-gold) 56%, transparent);
+  border-top-color: var(--sow-tactical-surface-accent-border);
   border-radius: 18px 18px 0 0;
-  background: var(--sow-panel);
+  background: var(--sow-panel-card);
   box-shadow: var(--sow-surface-shadow);
   color: #f5f1e8;
   font-size: 16px;
@@ -1538,8 +1559,8 @@ html[dir="rtl"] #sow-hud-dev-layer {
   -webkit-overflow-scrolling: touch;
 }
 .sow-hud__sheet :focus-visible {
-  outline: 2px solid var(--sow-gold-bright);
-  outline-offset: 2px;
+  outline: var(--sow-tactical-focus-outline);
+  outline-offset: var(--sow-tactical-focus-offset);
 }
 
 /* Shared controls */
@@ -1555,8 +1576,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__sheet input[type="range"]::-webkit-slider-runnable-track,
 #sow-menu .sow-menu__settings-controls input[type="range"]::-webkit-slider-runnable-track {
   height: 12px;
-  border-radius: 6px;
-  background: var(--sow-track, rgb(255 255 255 / 16%));
+  border: 1px solid var(--sow-tactical-track-border);
+  border-radius: var(--sow-tactical-track-radius);
+  background: var(--sow-track, var(--sow-tactical-track-bg));
+  box-shadow: var(--sow-tactical-track-shadow);
 }
 .sow-hud__sheet input[type="range"]::-webkit-slider-thumb,
 #sow-menu .sow-menu__settings-controls input[type="range"]::-webkit-slider-thumb {
@@ -1572,8 +1595,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__sheet input[type="range"]::-moz-range-track,
 #sow-menu .sow-menu__settings-controls input[type="range"]::-moz-range-track {
   height: 12px;
-  border-radius: 6px;
-  background: var(--sow-track, rgb(255 255 255 / 16%));
+  border: 1px solid var(--sow-tactical-track-border);
+  border-radius: var(--sow-tactical-track-radius);
+  background: var(--sow-track, var(--sow-tactical-track-bg));
+  box-shadow: var(--sow-tactical-track-shadow);
 }
 .sow-hud__sheet input[type="range"]::-moz-range-thumb,
 #sow-menu .sow-menu__settings-controls input[type="range"]::-moz-range-thumb {
@@ -2591,8 +2616,10 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 }
 .sow-hud__dev-sidebar input[type="range"]::-webkit-slider-runnable-track {
   height: 3px;
-  border-radius: 2px;
-  background: var(--sow-track, rgb(255 255 255 / 14%));
+  border: 1px solid var(--sow-tactical-track-border);
+  border-radius: var(--sow-tactical-track-radius-compact);
+  background: var(--sow-track, var(--sow-tactical-track-bg));
+  box-shadow: var(--sow-tactical-track-shadow);
 }
 .sow-hud__dev-sidebar input[type="range"]::-webkit-slider-thumb {
   width: 12px;
@@ -2611,8 +2638,10 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 }
 .sow-hud__dev-sidebar input[type="range"]::-moz-range-track {
   height: 3px;
-  border-radius: 2px;
-  background: var(--sow-track, rgb(255 255 255 / 14%));
+  border: 1px solid var(--sow-tactical-track-border);
+  border-radius: var(--sow-tactical-track-radius-compact);
+  background: var(--sow-track, var(--sow-tactical-track-bg));
+  box-shadow: var(--sow-tactical-track-shadow);
 }
 .sow-hud__dev-sidebar input[type="range"]::-moz-range-thumb {
   width: 12px;
@@ -2805,16 +2834,15 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__endgame-card {
-  background: var(--sow-panel);
-  border: 1px solid var(--sow-line);
-  border-radius: 6px 6px 18px 4px;
+  background: var(--sow-panel-card);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius);
   padding: 28px;
   max-width: 420px;
   width: 90%;
   text-align: center;
-  box-shadow:
-    var(--sow-surface-shadow),
-    0 22px 60px rgb(0 0 0 / 55%);
+  box-shadow: var(--sow-tactical-modal-shadow);
 }
 
 .sow-hud__endgame-stats {
@@ -2830,9 +2858,9 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   width: min(520px, calc(100vw - 32px));
   max-width: none;
   padding: 30px;
-  border-color: color-mix(in srgb, var(--sow-gold) 34%, transparent);
-  border-top-color: color-mix(in srgb, var(--sow-gold) 70%, transparent);
-  background: linear-gradient(145deg, rgb(25 37 44 / 98%), rgb(9 15 20 / 99%) 72%);
+  border-color: var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  background: var(--sow-panel-card);
   text-align: start;
 }
 
@@ -3029,7 +3057,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 #sow-hud .sow-hud__ring-slot:focus-visible {
-  outline: 2px solid #fff8e8;
+  outline: var(--sow-tactical-focus-outline);
   outline-offset: 0;
 }
 
@@ -3165,10 +3193,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   min-width: 128px;
   max-width: min(264px, calc(100vw - 24px));
   padding: 7px 14px 8px;
-  border: 1px solid var(--sow-line);
-  border-top-color: color-mix(in srgb, var(--sow-gold) 55%, transparent);
-  border-radius: 6px;
-  background: var(--sow-panel-wash), var(--sow-panel);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-tight);
+  background: var(--sow-panel-card);
   box-shadow: var(--sow-surface-shadow);
   text-align: center;
   pointer-events: none;
@@ -3302,9 +3330,9 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   max-width: min(296px, calc(100vw - 24px));
   padding: 10px 12px;
   border: 1px solid var(--sow-tactical-surface-border);
-  border-top-color: color-mix(in srgb, var(--sow-gold) 68%, transparent);
+  border-top-color: var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius);
-  background: var(--sow-panel-wash), var(--sow-panel);
+  background: var(--sow-panel-card);
   box-shadow: var(--sow-tactical-card-shadow);
   backdrop-filter: blur(var(--sow-tactical-surface-blur));
   color: #f8f3e8;
@@ -3606,11 +3634,11 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   min-width: 0;
   min-height: 54px;
   padding: 6px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-top-color: color-mix(in srgb, var(--sow-gold) 68%, transparent);
-  border-radius: 5px 5px 11px 4px;
-  background: var(--sow-panel-wash), var(--sow-panel);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: var(--sow-tactical-surface-subcard-bg);
+  box-shadow: var(--sow-tactical-surface-highlight);
 }
 
 .sow-hud__building-progress-row {
@@ -3631,12 +3659,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   height: 32px;
   padding: 0 10px;
   overflow: hidden;
-  border: 1px solid rgba(240, 169, 43, 0.42);
-  border-radius: 8px;
-  background: rgba(8, 12, 15, 0.86);
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.65),
-    0 1px 0 rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--sow-tactical-track-accent-border);
+  border-radius: var(--sow-tactical-track-radius);
+  background: var(--sow-tactical-track-bg);
+  box-shadow: var(--sow-tactical-track-shadow);
 }
 
 .sow-hud__building-progress-fill {
@@ -3645,10 +3671,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   bottom: 0;
   left: 0;
   width: 0%;
-  background: linear-gradient(90deg, #d88310 0%, #f5ab29 60%, #ffcf5c 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.42),
-    0 0 12px rgba(240, 169, 43, 0.35);
+  background: var(--sow-fill-construction-gradient);
+  box-shadow: var(--sow-fill-construction-shadow);
   transition: width 120ms linear;
 }
 
@@ -3770,14 +3794,11 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-top-color: color-mix(in srgb, var(--sow-gold) 65%, transparent);
-  background: var(--sow-panel-wash), var(--sow-panel);
-  box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border-radius: var(--sow-tactical-surface-radius-tight);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  background: var(--sow-panel-card);
+  box-shadow: var(--sow-tactical-card-shadow);
   backdrop-filter: blur(8px);
   color: #f8f3e8;
   font-size: 13px;
@@ -3794,7 +3815,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 
 .sow-hud__placement-arrow-btn:hover {
   transform: translate(-50%, -50%) scale(1.1);
-  background: rgba(255, 255, 255, 0.15), var(--sow-panel);
+  background: var(--sow-tactical-surface-compact-bg);
   border-color: rgba(255, 215, 0, 0.6);
   color: #fff;
   box-shadow: 0 0 12px rgba(255, 215, 0, 0.35);
@@ -3814,9 +3835,9 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   max-width: min(280px, calc(100vw - 24px));
   padding: 10px 12px;
   border: 1px solid var(--sow-tactical-surface-border);
-  border-top-color: color-mix(in srgb, var(--sow-gold) 68%, transparent);
+  border-top-color: var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius);
-  background: var(--sow-panel-wash), var(--sow-panel);
+  background: var(--sow-panel-card);
   box-shadow: var(--sow-tactical-card-shadow);
   backdrop-filter: blur(var(--sow-tactical-surface-blur));
   color: #f8f3e8;
@@ -3993,13 +4014,11 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   max-width: 140px;
   height: 28px;
   box-sizing: border-box;
-  background: rgba(14, 20, 25, 0.92);
-  border: 1px solid rgba(218, 165, 32, 0.55);
-  border-top-color: rgba(255, 215, 0, 0.75);
-  border-radius: 6px;
-  box-shadow:
-    0 4px 12px rgba(0, 0, 0, 0.65),
-    0 0 8px rgba(218, 165, 32, 0.25);
+  background: var(--sow-tactical-surface-compact-bg);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  box-shadow: var(--sow-tactical-surface-compact-shadow), 0 0 8px rgb(218 165 32 / 25%);
   backdrop-filter: blur(4px);
   pointer-events: none;
   will-change: transform, left, top;
@@ -4030,10 +4049,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   height: 18px;
   padding: 0 6px;
   overflow: hidden;
-  border: 1px solid rgba(240, 169, 43, 0.35);
-  border-radius: 4px;
-  background: rgba(8, 12, 15, 0.88);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+  border: 1px solid var(--sow-tactical-track-accent-border);
+  border-radius: var(--sow-tactical-track-radius-compact);
+  background: var(--sow-tactical-track-bg);
+  box-shadow: var(--sow-tactical-track-shadow);
 }
 
 .sow-hud__world-building-fill {
@@ -4042,10 +4061,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   bottom: 0;
   left: 0;
   width: 0%;
-  background: linear-gradient(90deg, #d88310 0%, #f5ab29 55%, #ffe082 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    0 0 8px rgba(240, 169, 43, 0.4);
+  background: var(--sow-fill-construction-gradient);
+  box-shadow: var(--sow-fill-construction-shadow);
   transition: width 120ms linear;
 }
 
@@ -4579,15 +4596,16 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 .sow-hud__dialog-participant {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgb(238 194 104 / 58%);
-  border-radius: 8px 8px 16px 5px;
-  background: linear-gradient(112deg, rgb(48 43 33 / 97%), rgb(27 29 29 / 98%) 48%, rgb(14 20 23 / 98%));
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: var(--sow-panel-card);
   color: #fff5d8;
   text-align: start;
   box-shadow:
-    0 12px 34px rgb(0 0 0 / 44%),
+    var(--sow-tactical-card-shadow),
     0 0 18px color-mix(in srgb, var(--sow-gold) 12%, transparent),
-    inset 0 1px rgb(255 243 205 / 12%);
+    var(--sow-tactical-surface-highlight);
 }
 
 .sow-hud__notification {
@@ -4616,13 +4634,17 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__notification--support {
-  border: 1px solid rgb(238 194 104 / 72%);
-  background: linear-gradient(112deg, rgb(91 67 31 / 96%), rgb(27 29 29 / 98%) 48%, rgb(14 20 23 / 98%));
+  border-color: var(--sow-tactical-surface-accent-border);
+  background:
+    linear-gradient(112deg, color-mix(in srgb, var(--sow-gold) 15%, transparent), transparent 70%),
+    var(--sow-panel-card);
 }
 
 .sow-hud__notification--urgent {
   border-color: rgb(246 116 104 / 78%);
-  background: linear-gradient(112deg, rgb(74 34 34 / 98%), rgb(27 25 27 / 98%) 48%, rgb(14 20 23 / 98%));
+  background:
+    linear-gradient(112deg, color-mix(in srgb, var(--sow-red) 20%, transparent), transparent 72%),
+    var(--sow-panel-card);
   box-shadow:
     0 12px 34px rgb(0 0 0 / 48%),
     0 0 20px rgb(226 86 76 / 21%),
@@ -4774,11 +4796,11 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__dialog {
-  background: var(--sow-panel);
-  border: 1px solid var(--sow-line);
-  border-top-color: color-mix(in srgb, var(--sow-gold) 55%, transparent);
-  border-radius: 6px 6px 16px 4px;
-  box-shadow: var(--sow-surface-shadow);
+  background: var(--sow-panel-card);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius);
+  box-shadow: var(--sow-tactical-modal-shadow);
   pointer-events: auto;
   z-index: 70;
 }

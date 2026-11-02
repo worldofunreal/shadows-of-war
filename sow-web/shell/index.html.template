@@ -458,6 +458,7 @@
                 var prev = sessionStorage.getItem(PANIC_KEY);
                 if (prev) {
                     console.warn("[SOW watchdog] previous page crashed; captured panic:", prev);
+                    sessionStorage.removeItem(PANIC_KEY);
                 }
             } catch (e) {}
             var t0 = Date.now();
@@ -564,12 +565,14 @@
                 window.SOW_isSowProductionHost() &&
                 typeof window.SOW_ensureWouAnonymousSession === "function") {
                 try {
-                    await window.SOW_ensureWouAnonymousSession();
+                    await Promise.race([
+                        window.SOW_ensureWouAnonymousSession(),
+                        new Promise(function (resolve) { setTimeout(resolve, 5000); }),
+                    ]);
                 } catch (error) {
-                    // WOU-ID is the canonical web identity when available;
-                    // keep the game playable with its existing anonymous
-                    // fallback if the identity service is temporarily down.
-                    console.warn("WOU anonymous identity unavailable; using local fallback:", error);
+                    // Keep local play available; the SDK retries identity
+                    // recovery and online actions wait until it succeeds.
+                    console.warn("WOU-ID session recovery is pending:", error);
                 }
             }
             /* POKI_WOU_AUTH_END */
