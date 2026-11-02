@@ -36,6 +36,7 @@ import {
     renderHeroInfoModal,
     renderHeroes,
     selectDropdown,
+    settleHeroesFeaturedArt,
     setDropdownOpen,
     syncDropdowns,
     syncHeroesRotationCountdown,
@@ -1076,6 +1077,7 @@ export function render() {
         updateFrameChrome(screen);
         syncScreenPanel(screen, screenChanged);
     }
+    if (screen === "heroes") settleHeroesFeaturedArt();
     syncOverlay("password", renderPasswordModal());
     syncOverlay("settings", menuUi.settingsOpen ? renderSettings() : "");
     syncOverlay("auth", menuUi.authModalOpen ? renderAuthModal() : "");
