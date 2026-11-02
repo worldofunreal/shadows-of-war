@@ -191,7 +191,12 @@ root.addEventListener(
 );
 root.addEventListener("pointerover", function (event) {
     const card = heroesAvatarCard(event);
-    if (!card || (event.relatedTarget instanceof Node && card.contains(event.relatedTarget))) return;
+    if (
+        !card ||
+        card.classList.contains("is-selected") ||
+        (event.relatedTarget instanceof Node && card.contains(event.relatedTarget))
+    )
+        return;
     setHeroesCardAvatar(card, "happy");
 });
 root.addEventListener("pointerout", function (event) {
@@ -201,7 +206,7 @@ root.addEventListener("pointerout", function (event) {
 });
 root.addEventListener("focusin", function (event) {
     const card = heroesAvatarCard(event);
-    if (card) setHeroesCardAvatar(card, "happy");
+    if (card && !card.classList.contains("is-selected")) setHeroesCardAvatar(card, "happy");
 });
 root.addEventListener("focusout", function (event) {
     const card = heroesAvatarCard(event);

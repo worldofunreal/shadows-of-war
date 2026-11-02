@@ -415,7 +415,7 @@
       if (picker?.open) picker.close();
     });
     card.addEventListener("mouseenter", () => {
-      setCardAvatar(card, index, "happy");
+      if (index !== activeLeaderIndex) setCardAvatar(card, index, "happy");
     });
     card.addEventListener("mouseleave", () => {
       setCardAvatar(card, index, index === activeLeaderIndex ? "angry" : "calm");
