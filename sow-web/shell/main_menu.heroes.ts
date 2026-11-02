@@ -31,6 +31,9 @@ function isWeeklyFreeRotation(leader: MenuLeader | null) {
 type HeroesAvatarExpression = "calm" | "happy" | "angry";
 
 const heroesAvatarAnimations = new WeakMap<HTMLImageElement, Animation>();
+const heroesAvatarRevisions = new WeakMap<HTMLImageElement, number>();
+let heroesFeaturedExitTimer: number | null = null;
+let heroesFeaturedEnterTimer: number | null = null;
 
 function heroesAvatarUrl(slug: string, expression: HeroesAvatarExpression) {
     const path =
@@ -53,23 +56,40 @@ function setHeroesAvatar(image: HTMLImageElement | null, slug: string, expressio
     const source = heroesAvatarUrl(slug, expression);
     const previousSource = image.getAttribute("src") || image.src || "";
     if (previousSource === source || (previousSource && previousSource.endsWith(source))) return;
+    const revision = (heroesAvatarRevisions.get(image) || 0) + 1;
+    heroesAvatarRevisions.set(image, revision);
+    const running = heroesAvatarAnimations.get(image);
+    if (running) running.cancel();
     image.src = source;
     if (heroesMotionReduced() || typeof image.animate !== "function") return;
 
-    const running = heroesAvatarAnimations.get(image);
-    if (running) running.cancel();
-    const animation = image.animate(
-        [
-            { opacity: 0.35, transform: "scale(0.86) translateY(2px)" },
-            { opacity: 1, transform: "scale(1) translateY(0)" },
-        ],
-        {
-            duration: expression === "happy" ? 340 : 250,
-            easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
-            fill: "both",
-        },
-    );
-    heroesAvatarAnimations.set(image, animation);
+    const animateLoadedAvatar = function () {
+        if (
+            heroesAvatarRevisions.get(image) !== revision ||
+            !image.naturalWidth ||
+            heroesMotionReduced() ||
+            typeof image.animate !== "function"
+        )
+            return;
+        const animation = image.animate(
+            [
+                { opacity: 0.35, transform: "scale(0.86) translateY(2px)" },
+                { opacity: 1, transform: "scale(1) translateY(0)" },
+            ],
+            {
+                duration: expression === "happy" ? 340 : 250,
+                easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+                fill: "both",
+            },
+        );
+        heroesAvatarAnimations.set(image, animation);
+    };
+    if (image.complete) {
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(animateLoadedAvatar);
+        else animateLoadedAvatar();
+    } else {
+        image.addEventListener("load", animateLoadedAvatar, { once: true });
+    }
 }
 
 function setHeroesCardAvatar(card: HTMLElement, expression: HeroesAvatarExpression) {
@@ -83,6 +103,40 @@ function heroesAvatarCard(event: Event) {
         : null;
 }
 
+function clearHeroesFeaturedAnimation(featured: HTMLElement) {
+    if (heroesFeaturedExitTimer !== null) window.clearTimeout(heroesFeaturedExitTimer);
+    if (heroesFeaturedEnterTimer !== null) window.clearTimeout(heroesFeaturedEnterTimer);
+    heroesFeaturedExitTimer = null;
+    heroesFeaturedEnterTimer = null;
+    featured.classList.remove(
+        "is-animating-exit-next",
+        "is-animating-exit-prev",
+        "is-animating-enter-next",
+        "is-animating-enter-prev",
+        "is-copy-entering",
+    );
+}
+
+function heroesLeaderDirection(previousId: string, nextId: string) {
+    if (!previousId) return 1;
+    const leaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
+    const previousIndex = previousId === "random" ? -1 : leaders.findIndex((leader) => leader.id === previousId);
+    const nextIndex = nextId === "random" ? -1 : leaders.findIndex((leader) => leader.id === nextId);
+    if (previousIndex < 0 && previousId !== "random") return 1;
+    if (nextIndex < 0 && nextId !== "random") return 1;
+    return nextIndex >= previousIndex ? 1 : -1;
+}
+
+function triggerHeroesFeaturedEnter(featured: HTMLElement, direction: number) {
+    if (heroesMotionReduced()) return;
+    const enterClass = direction === 1 ? "is-animating-enter-next" : "is-animating-enter-prev";
+    featured.classList.add(enterClass, "is-copy-entering");
+    heroesFeaturedEnterTimer = window.setTimeout(function () {
+        featured.classList.remove(enterClass, "is-copy-entering");
+        heroesFeaturedEnterTimer = null;
+    }, 380);
+}
+
 function setFeaturedArtAvailability(image: HTMLImageElement, unavailable: boolean) {
     const slug = image.dataset.heroArtSlug;
     const source = (image.currentSrc || image.src || "").split(/[?#]/, 1)[0];
@@ -94,8 +148,21 @@ function setFeaturedArtAvailability(image: HTMLImageElement, unavailable: boolea
         return;
     const featured = image.closest<HTMLElement>(".sow-heroes__featured");
     if (!featured) return;
-    featured.classList.remove("is-loading", "is-unavailable", "is-transitioning");
-    if (unavailable) featured.classList.add("is-unavailable");
+    const animateEntrance = featured.classList.contains("is-transitioning");
+    featured.classList.remove(
+        "is-loading",
+        "is-unavailable",
+        "is-transitioning",
+        "is-animating-exit-next",
+        "is-animating-exit-prev",
+    );
+    if (unavailable) {
+        clearHeroesFeaturedAnimation(featured);
+        featured.classList.add("is-unavailable");
+    } else if (animateEntrance) {
+        const direction = featured.dataset.heroDirection === "-1" ? -1 : 1;
+        triggerHeroesFeaturedEnter(featured, direction);
+    }
 }
 
 root.addEventListener(
@@ -411,22 +478,47 @@ export function updateHeroesPreview() {
     const artSlug = leaderArtSlug(activeLeader);
     if (image) {
         image.alt = randomSelected ? randomLeaderName() : leaderDisplayName(activeLeader);
+        const leaderId = randomSelected ? "random" : activeLeader.id;
         if (image.dataset.heroArtSlug !== artSlug) {
-            featured.classList.remove("is-unavailable");
-            featured.classList.add("is-loading", "is-transitioning");
+            const previousLeaderId = image.dataset.heroLeaderId || "";
+            const direction = heroesLeaderDirection(previousLeaderId, leaderId);
+            clearHeroesFeaturedAnimation(featured);
+            const pictureElement = image.closest("picture");
+            if (pictureElement) void pictureElement.offsetWidth;
+            image.dataset.heroLeaderId = leaderId;
             image.dataset.heroArtSlug = artSlug;
-            if (source) source.srcset = featuredArt.band;
-            image.src = featuredArt.column;
-            const fallbackAvatar = featured.querySelector<HTMLImageElement>("[data-hero-art-avatar]");
-            if (fallbackAvatar) fallbackAvatar.hidden = false;
-            setHeroesAvatar(fallbackAvatar, artSlug, "calm");
-            if (image.complete) {
-                const settle = function () {
-                    setFeaturedArtAvailability(image, image.naturalWidth === 0);
-                };
-                if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(settle);
-                else settle();
+            image.dataset.heroDirection = String(direction);
+            const loadArt = function () {
+                if (!featured.isConnected) return;
+                featured.classList.remove("is-unavailable", "is-animating-exit-next", "is-animating-exit-prev");
+                featured.classList.add("is-loading");
+                if (source) source.srcset = featuredArt.band;
+                image.src = featuredArt.column;
+                const fallbackAvatar = featured.querySelector<HTMLImageElement>("[data-hero-art-avatar]");
+                if (fallbackAvatar) fallbackAvatar.hidden = false;
+                setHeroesAvatar(fallbackAvatar, artSlug, "calm");
+                if (image.complete) {
+                    const settle = function () {
+                        setFeaturedArtAvailability(image, image.naturalWidth === 0);
+                    };
+                    if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(settle);
+                    else settle();
+                }
+            };
+            if (previousLeaderId && !heroesMotionReduced()) {
+                const exitClass = direction === 1 ? "is-animating-exit-next" : "is-animating-exit-prev";
+                featured.classList.add(exitClass, "is-transitioning");
+                featured.dataset.heroDirection = String(direction);
+                heroesFeaturedExitTimer = window.setTimeout(function () {
+                    heroesFeaturedExitTimer = null;
+                    loadArt();
+                }, 220);
+            } else {
+                featured.classList.remove("is-transitioning");
+                loadArt();
             }
+        } else {
+            image.dataset.heroLeaderId = randomSelected ? "random" : activeLeader.id;
         }
     }
     if (briefing)
@@ -598,7 +690,9 @@ export function renderHeroes() {
         esc(featuredArt.column) +
         "' alt='" +
         esc(displayName) +
-        "' width='1080' height='1920' data-hero-featured-art data-hero-art-slug='" +
+        "' width='1080' height='1920' data-hero-featured-art data-hero-leader-id='" +
+        esc(activeRandom ? "random" : activeLeader.id) +
+        "' data-hero-art-slug='" +
         esc(artSlug) +
         "' fetchpriority='high'></picture>" +
         renderHeroesArtLoader(artSlug) +
