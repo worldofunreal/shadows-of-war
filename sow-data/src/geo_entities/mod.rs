@@ -289,8 +289,12 @@ impl Cue {
 /// Fields only playable heroes have.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Hero {
-    /// Short name. Saved as the key of each player's hero XP: never rename.
+    /// Short name, saved as the key of each player's hero XP. Renamed heroes
+    /// must retain a resolvable legacy ID so stored progress can migrate.
     pub name: String,
+    /// IDs accepted from saves created before this hero was renamed.
+    #[serde(default)]
+    pub legacy_ids: Vec<String>,
     /// Art filenames; defaults to the catalog id.
     #[serde(default)]
     pub art_slug: Option<String>,

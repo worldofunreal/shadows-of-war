@@ -80,6 +80,7 @@
   const cards = $$(".roster-card[data-leader-id]");
   const leaders = cards.map((card) => ({
     id: card.dataset.leaderId,
+    legacyIds: (card.dataset.legacyIds || "").split(",").filter(Boolean),
     artSlug: card.dataset.artSlug || card.dataset.leaderId,
     name: card.dataset.name,
     civilization: card.dataset.civ,
@@ -98,7 +99,7 @@
   );
   try {
     const saved = window.sessionStorage.getItem("sow_site_selected_leader");
-    const index = leaders.findIndex((leader) => leader.id === saved);
+    const index = leaders.findIndex((leader) => leader.id === saved || leader.legacyIds.includes(saved));
     if (index >= 0) activeLeaderIndex = index;
   } catch {}
   let activeArtSlug = "";
@@ -478,8 +479,8 @@
   });
 
   const mapCards = $$("[data-map-select]");
-  const mapImage = ($("[data-map-image]") || $("[data-map-preview-image]")) as HTMLImageElement | null;
-  const mapTitle = $("[data-map-name]") || $("[data-map-current-name]");
+  const mapImage = ($("[data-map-preview-image]") || $("[data-map-image]")) as HTMLImageElement | null;
+  const mapTitle = $("[data-map-current-name]") || $("[data-map-name]");
   const mapFrame = $("[data-map-frame]");
   const mapPrev = $("[data-map-prev]");
   const mapNext = $("[data-map-next]");
@@ -489,8 +490,13 @@
   if (activeMapIndex < 0) activeMapIndex = 0;
   let activeMapDirection = "next";
 
+  function isActiveMapImage() {
+    const source = mapImage?.getAttribute("src") || mapImage?.src || mapImage?.currentSrc || "";
+    return !!activeMapImage && source.endsWith(activeMapImage);
+  }
+
   function finishMapChange() {
-    if (!mapImage?.currentSrc.endsWith(activeMapImage)) return;
+    if (!isActiveMapImage()) return;
     if (mapTitle) mapTitle.textContent = activeMapName;
     mapFrame?.classList.remove("is-loading", "is-unavailable", "is-animating-exit-next", "is-animating-exit-prev");
     if (!prefersReducedMotion.matches) {
@@ -529,24 +535,23 @@
       inline: "nearest",
       behavior: prefersReducedMotion.matches ? "instant" : "smooth",
     });
-    if (mapImage?.complete && mapImage.naturalWidth && mapImage.currentSrc.endsWith(activeMapImage))
-      finishMapChange();
+    if (mapImage?.complete && mapImage.naturalWidth && isActiveMapImage()) finishMapChange();
   }
 
   mapImage?.addEventListener("load", () => {
     finishMapChange();
   });
   mapImage?.addEventListener("error", () => {
-    if (!mapImage.currentSrc.endsWith(activeMapImage)) return;
+    if (!isActiveMapImage()) return;
     if (mapTitle) mapTitle.textContent = activeMapName;
-    mapFrame.classList.remove(
+    mapFrame?.classList.remove(
       "is-loading",
       "is-animating-exit-next",
       "is-animating-exit-prev",
       "is-animating-enter-next",
       "is-animating-enter-prev",
     );
-    mapFrame.classList.add("is-unavailable");
+    mapFrame?.classList.add("is-unavailable");
   });
   mapFrame?.addEventListener("animationend", (event) => {
     if (event.target !== mapImage) return;

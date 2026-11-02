@@ -12,7 +12,7 @@ const escape = (value: unknown) =>
   );
 const json = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
 const read = (path: string) => readFile(path, "utf8");
-type Leader = { id: string; artSlug: string; region: string; wikipedia: string | null };
+type Leader = { id: string; artSlug: string; legacyIds: string[]; region: string; wikipedia: string | null };
 
 export async function publish(
   out: string,
@@ -508,6 +508,17 @@ export async function publish(
       if (info.isDirectory()) await stat(join(file, "index.html"));
     } catch {
       throw Error(`Broken public reference ${pathname}`);
+    }
+  }
+  for (const language of languages) {
+    for (const leader of leaders) {
+      for (const legacyId of leader.legacyIds) {
+        const target = path(language.code, `leaders/${leader.id}/`);
+        const destination = join(out, prefix(language.code), `leaders/${legacyId}/`, "index.html");
+        const redirect = `<!doctype html><html lang="${escape(language.code)}"><head><meta charset="utf-8"><meta name="robots" content="noindex"><link rel="canonical" href="${escape(origin + target)}"><meta http-equiv="refresh" content="0;url=${escape(target)}"><title>Profile moved</title></head><body><a href="${escape(target)}">Continue to the current leader profile</a></body></html>`;
+        await mkdir(dirname(destination), { recursive: true });
+        await writeFile(destination, redirect);
+      }
     }
   }
   const urls = languages

@@ -1863,13 +1863,14 @@ html[dir="rtl"] .leader-arrow {
   .map-layout {
     display: grid;
     grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
-    align-items: start;
+    align-items: stretch;
     gap: 32px;
   }
   .map-picker {
     order: 0;
-    height: min(640px, calc(100svh - 280px));
-    min-height: 380px;
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
     padding: 8px;
     overflow: hidden;
     border: 1px solid rgb(255 255 255 / 9%);
@@ -1883,8 +1884,9 @@ html[dir="rtl"] .leader-arrow {
     grid-auto-columns: auto;
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
+    flex: 1 1 0;
     gap: 8px;
-    height: 100%;
+    min-height: 0;
     padding: 4px 6px 4px 2px;
     overflow-x: hidden;
     overflow-y: auto;

@@ -90,6 +90,11 @@ impl Leader {
         &self.character().id
     }
 
+    /// Earlier catalog IDs accepted when reading saved profiles or messages.
+    pub fn legacy_ids(self) -> &'static [String] {
+        &self.hero().legacy_ids
+    }
+
     /// Asset filename slug, independent of the saved hero id.
     pub fn art_slug(self) -> &'static str {
         self.hero().art_slug.as_deref().unwrap_or_else(|| self.id())
