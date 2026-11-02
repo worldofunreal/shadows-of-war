@@ -1729,6 +1729,119 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   }
 }
 
+.sow-menu__modal.sow-purchase-modal.is-leader {
+  width: min(100%, 960px);
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  overflow: hidden;
+}
+
+.sow-purchase-modal.is-leader .sow-purchase-modal__layout {
+  position: relative;
+  display: block;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 1.9 / 1;
+}
+
+.sow-purchase-modal.is-leader .sow-purchase-modal__visual {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  background: #080b11;
+}
+
+.sow-purchase-modal.is-leader .sow-purchase-modal__visual::after {
+  background:
+    linear-gradient(0deg, rgba(6, 8, 12, 0.96), rgba(6, 8, 12, 0.7) 28%, transparent 76%),
+    linear-gradient(90deg, rgba(6, 8, 12, 0.2), transparent 72%),
+    radial-gradient(circle at center, transparent 34%, rgba(8, 10, 14, 0.6) 100%);
+}
+
+.sow-purchase-modal.is-leader .sow-purchase-modal__art-image {
+  object-position: center 28%;
+  filter: contrast(1.06) saturate(1.08) brightness(0.9);
+}
+
+.sow-purchase-modal.is-leader .sow-purchase-modal__copy {
+  position: absolute;
+  z-index: 4;
+  inset-inline-start: clamp(14px, 2.8vw, 28px);
+  bottom: clamp(14px, 2.8vw, 28px);
+  width: min(420px, calc(100% - 36px));
+  max-height: calc(100% - 28px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: clamp(16px, 2.4vw, 26px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-inline-start: 3px solid var(--sow-control-accent-bright);
+  border-radius: 10px;
+  background: linear-gradient(155deg, rgba(13, 18, 27, 0.9), rgba(7, 10, 16, 0.84));
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.58),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  justify-content: flex-start;
+  gap: 0;
+}
+
+.sow-purchase-modal.is-leader .sow-purchase-modal__copy .sow-menu__modal-head {
+  margin-bottom: 14px;
+}
+
+.sow-purchase-modal.is-leader .sow-purchase-modal__copy h2 {
+  max-width: 12ch;
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 0.98;
+}
+
+.sow-purchase-modal.is-leader .sow-purchase-modal__price {
+  font-size: clamp(26px, 3vw, 36px);
+}
+
+.sow-purchase-modal.is-leader .sow-purchase-modal__copy .sow-menu__modal-actions {
+  margin-top: 0;
+  padding-top: 20px;
+}
+
+@media (orientation: portrait) {
+  .sow-menu__modal.sow-purchase-modal.is-leader {
+    width: min(100%, 480px);
+    height: min(92dvh, 760px);
+    max-height: calc(
+      100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 48px
+    );
+  }
+
+  .sow-purchase-modal.is-leader .sow-purchase-modal__layout {
+    height: 100%;
+    aspect-ratio: auto;
+  }
+
+  .sow-purchase-modal.is-leader .sow-purchase-modal__copy {
+    inset-inline: 12px;
+    bottom: 12px;
+    width: auto;
+    max-height: calc(100% - 24px);
+    padding: 16px;
+  }
+
+  .sow-purchase-modal.is-leader .sow-purchase-modal__copy .sow-menu__modal-head {
+    margin-bottom: 10px;
+  }
+
+  .sow-purchase-modal.is-leader .sow-purchase-modal__copy h2 {
+    max-width: none;
+    font-size: clamp(24px, 7vw, 36px);
+  }
+
+  .sow-purchase-modal.is-leader .sow-purchase-modal__copy .sow-menu__modal-actions {
+    gap: 8px;
+    padding-top: 14px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sow-menu__progress [data-progression-xp-value].is-reward-value-hit,
   .sow-menu__progress [data-progression-crowns-value].is-reward-value-hit,

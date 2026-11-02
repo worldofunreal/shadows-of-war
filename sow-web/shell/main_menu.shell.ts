@@ -2442,24 +2442,23 @@ root.addEventListener("click", function (event) {
     if (command === "preview_leader") {
         const leaderId = target.dataset.leaderId || null;
         const leader = leaderById(leaderId);
-        if (leaderId && leader.available !== false) {
-            stageLeaderSelection(false, leaderId);
-            scheduleLeaderPersist(false, leaderId);
-        }
+        const persistSelection = !!leaderId && leader.available !== false;
+        if (persistSelection) stageLeaderSelection(false, leaderId);
         menuUi.tempSelectedLeader = leaderId;
         menuUi.tempSelectedRandom = false;
         if (!updateHeroesPreview()) render();
         updateTopbar();
+        if (persistSelection) scheduleLeaderPersist(false, leaderId);
         maybePresentRewards();
         return;
     }
     if (command === "preview_random_leader") {
         stageLeaderSelection(true, null);
-        scheduleLeaderPersist(true, null);
         menuUi.tempSelectedLeader = null;
         menuUi.tempSelectedRandom = true;
         if (!updateHeroesPreview()) render();
         updateTopbar();
+        scheduleLeaderPersist(true, null);
         return;
     }
     if (command === "confirm_random_leader") {

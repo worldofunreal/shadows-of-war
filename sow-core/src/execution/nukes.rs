@@ -164,3 +164,92 @@ impl SowEngine {
         territory_changes
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SowEngine;
+    use crate::game::{GameEvent, GamePhase, GameState, Projectile, ProjectileKind};
+    use crate::game_config::GameConfig;
+    use crate::map::MapTile;
+    use crate::player::Player;
+    use crate::water_components::WaterComponents;
+
+    #[test]
+    fn nuke_territory_loss_rechecks_and_annexes_a_sealed_region() {
+        const WIDTH: u32 = 100;
+        let mut state = GameState::new(WIDTH as u64, WIDTH, WIDTH, GameConfig::default());
+        state.phase = GamePhase::Playing;
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        state.register_player(Player::new_human(
+            1,
+            "Captor".into(),
+            [1.0; 3],
+            &state.config,
+        ));
+        state.register_player(Player::new_human(
+            2,
+            "Victim".into(),
+            [1.0; 3],
+            &state.config,
+        ));
+
+        for y in 10..=13 {
+            for x in 10..=13 {
+                if !((11..=12).contains(&x) && (11..=12).contains(&y)) {
+                    state.set_tile_owner(x, y, 1);
+                }
+            }
+        }
+        for y in 11..=12 {
+            for x in 11..=12 {
+                state.set_tile_owner(x, y, 2);
+            }
+        }
+        state.set_tile_owner(80, 80, 2);
+        state.map.compute_shorelines();
+
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        let tile = 80 * WIDTH + 80;
+        engine.projectiles.push(Projectile {
+            id: 1,
+            kind: ProjectileKind::Nuke { level: 0 },
+            owner_id: 1,
+            src_tile: tile,
+            dst_tile: tile,
+            path: vec![tile],
+            path_cursor: 0,
+            steps_per_tick: 1,
+            active: true,
+        });
+
+        engine.execute_projectiles();
+
+        for y in 11..=12 {
+            for x in 11..=12 {
+                assert_eq!(engine.state.map.owner_id(x, y), 1);
+            }
+        }
+        let victim = engine.state.player(2).unwrap();
+        assert!(!victim.alive);
+        assert_eq!(victim.deaths, 1);
+        assert_eq!(engine.state.player(1).unwrap().kills, 1);
+        assert_eq!(
+            engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::TileCaptured { .. }))
+                .count(),
+            4
+        );
+        assert_eq!(
+            engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::PlayerEliminated { player_id: 2, .. }))
+                .count(),
+            1
+        );
+    }
+}

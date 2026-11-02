@@ -804,13 +804,13 @@ function renderPurchaseArt(
             "' width='256' height='256'>";
     } else {
         art =
-            "<picture><source media='(max-width: 700px) and (orientation: portrait)' srcset='" +
+            "<picture><source media='(orientation: portrait)' srcset='" +
             esc(leaderArtUrl(leaderArtSlug(leader), "mobile")) +
             "'><img class='sow-purchase-modal__art-image' src='" +
             esc(leaderArtUrl(leaderArtSlug(leader), "desktop")) +
             "' alt='" +
             esc(leaderDisplayName(leader)) +
-            "' width='1080' height='1920'></picture>";
+            "' width='1920' height='1080'></picture>";
     }
     const effects = success
         ? "<div class='sow-purchase-modal__effects' aria-hidden='true'><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>"
@@ -894,6 +894,7 @@ export function renderPurchaseModal() {
             ? ""
             : "<strong class='sow-purchase-modal__price'>" + summary + "</strong>";
     const successClass = success ? " is-success" : "";
+    const itemClass = menuUi.purchaseModal.leaderId ? " is-leader" : "";
     const phaseClass =
         (spending ? " is-spending" : processing ? " is-processing" : "") +
         (reducedRewardMotion() ? " is-reduced-motion" : "");
@@ -907,6 +908,7 @@ export function renderPurchaseModal() {
     return (
         "<div class='sow-menu__overlay' data-menu-overlay='purchase'><section class='sow-menu__modal sow-purchase-modal" +
         successClass +
+        itemClass +
         phaseClass +
         "' role='dialog' aria-modal='true' aria-live='polite' aria-busy='" +
         (spending || processing ? "true" : "false") +

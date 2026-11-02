@@ -224,10 +224,12 @@ mod bot_iq_alliance_tests {
                 false,
                 &mut decisions,
             );
-            let accepted = decisions.iter().any(|decision| matches!(
-                decision.intent,
-                GameplayIntent::AcceptAlliance { target_player: 2 }
-            ));
+            let accepted = decisions.iter().any(|decision| {
+                matches!(
+                    decision.intent,
+                    GameplayIntent::AcceptAlliance { target_player: 2 }
+                )
+            });
             assert_eq!(accepted, scripted_acceptance);
 
             for decision in decisions {
@@ -369,7 +371,8 @@ mod bot_iq_alliance_tests {
         third.troops = 3_000.0;
         engine.state.register_player(third);
         for (id, owner_id, troops) in [(11, 2, 200.0), (12, 3, 500.0)] {
-            engine.attacks.push(crate::execution::AttackExecution { landed: false,
+            engine.attacks.push(crate::execution::AttackExecution {
+                landed: false,
                 id,
                 owner_id,
                 target_owner: 1,
@@ -398,7 +401,8 @@ mod bot_iq_alliance_tests {
         ghost.player_type = PlayerType::Human;
         ghost.is_ai_controlled = true;
         ghost.iq = 60;
-        engine.attacks.push(crate::execution::AttackExecution { landed: false,
+        engine.attacks.push(crate::execution::AttackExecution {
+            landed: false,
             id: 91,
             owner_id: 2,
             target_owner: 1,
@@ -426,7 +430,8 @@ mod bot_iq_alliance_tests {
         ghost.player_type = PlayerType::Human;
         ghost.is_ai_controlled = true;
         engine.attacks.extend([
-            crate::execution::AttackExecution { landed: false,
+            crate::execution::AttackExecution {
+                landed: false,
                 id: 11,
                 owner_id: 2,
                 target_owner: 1,
@@ -437,7 +442,8 @@ mod bot_iq_alliance_tests {
                 rng: wyrand::WyRand::new(11),
                 retreating: false,
             },
-            crate::execution::AttackExecution { landed: false,
+            crate::execution::AttackExecution {
+                landed: false,
                 id: 12,
                 owner_id: 1,
                 target_owner: 2,
@@ -469,7 +475,8 @@ mod bot_iq_alliance_tests {
         ghost.troops = 10.0;
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
         engine.state.config.attack_cost_neutral = 50.0;
-        engine.attacks.push(crate::execution::AttackExecution { landed: false,
+        engine.attacks.push(crate::execution::AttackExecution {
+            landed: false,
             id: attack_id,
             owner_id: 2,
             target_owner: 1,
@@ -676,6 +683,85 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
+    fn terminator_nation_orders_bot_targets_to_leave_walled_in_tribes_for_annexation() {
+        use crate::map::MapTile;
+
+        let config = crate::game_config::GameConfig {
+            bot_difficulty: BotDifficulty::Terminator,
+            ..Default::default()
+        };
+        let mut state = GameState::new(45, 7, 7, config.clone());
+        state.phase = GamePhase::Playing;
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        for id in 1..=4 {
+            let mut player = Player::new_bot(id, format!("AI{id}"), [1.0; 3], &config);
+            player.player_type = if id == 1 {
+                PlayerType::Nation
+            } else {
+                PlayerType::Bot
+            };
+            player.troops = if id == 1 { 10_000.0 } else { 100.0 };
+            player.max_troops = 10_000.0;
+            state.register_player(player);
+        }
+        for (x, y) in [(4, 3), (3, 2), (3, 4), (1, 3), (2, 2), (2, 4)] {
+            state.set_tile_owner(x, y, 1);
+        }
+        state.set_tile_owner(3, 3, 2); // Closed front bot, keeping bot 4 behind it.
+        state.set_tile_owner(5, 3, 3); // Open front bot that should be attacked first.
+        state.set_tile_owner(2, 3, 4);
+        let engine = SowEngine::new(state, WaterComponents::default());
+
+        assert_eq!(engine.nation_bot_attack_order(1, &[2, 3]), vec![3]);
+    }
+
+    #[test]
+    fn terminator_nation_probes_a_walled_in_bot_with_one_percent_of_its_troops() {
+        use crate::map::MapTile;
+
+        let config = crate::game_config::GameConfig {
+            bot_difficulty: BotDifficulty::Terminator,
+            ..Default::default()
+        };
+        let mut state = GameState::new(46, 7, 7, config.clone());
+        state.phase = GamePhase::Playing;
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        let mut nation = Player::new_bot(1, "Nation".into(), [1.0; 3], &config);
+        nation.player_type = PlayerType::Nation;
+        nation.troops = 10_000.0;
+        nation.max_troops = 10_000.0;
+        state.register_player(nation);
+        let tribe = Player::new_bot(2, "Tribe".into(), [1.0; 3], &config);
+        state.register_player(tribe);
+        for y in 2..=4 {
+            for x in 2..=4 {
+                if (x, y) != (3, 3) {
+                    state.set_tile_owner(x, y, 1);
+                }
+            }
+        }
+        state.set_tile_owner(3, 3, 2);
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        let slot = AiSlot {
+            bot_id: 1,
+            tier: AiTier::Nation,
+            do_attack: true,
+            do_structures: false,
+            is_under_attack: false,
+            ghost_retaliation: None,
+            profile: ai_profile_for(AiTier::Nation, BotDifficulty::Terminator),
+        };
+        let mut decisions = Vec::new();
+        engine.nation_run_combat_for_slot(&slot, (1, 150), (5.0, 5.0), &[2], false, &mut decisions);
+
+        assert!(matches!(
+            decisions.as_slice(),
+            [decision] if matches!(&decision.intent, GameplayIntent::Attack(attack)
+                if attack.target_owner == 2 && attack.troops == Some(100.0))
+        ));
+    }
+
+    #[test]
     fn campaign_neutral_retaliates_only_after_being_attacked() {
         use crate::protocol::CampaignRelation;
 
@@ -689,7 +775,8 @@ mod bot_iq_alliance_tests {
         let idle = run_nation_attack(&mut engine, &[2], false);
         assert!(attack_targets(&idle).is_empty());
 
-        engine.attacks.push(crate::execution::AttackExecution { landed: false,
+        engine.attacks.push(crate::execution::AttackExecution {
+            landed: false,
             id: 1,
             owner_id: 2,
             target_owner: 1,
@@ -715,7 +802,8 @@ mod bot_iq_alliance_tests {
         let idle = run_vanilla_tribe_attack(&mut engine, &[2], false, false);
         assert!(attack_targets(&idle).is_empty());
 
-        engine.attacks.push(crate::execution::AttackExecution { landed: false,
+        engine.attacks.push(crate::execution::AttackExecution {
+            landed: false,
             id: 1,
             owner_id: 2,
             target_owner: 1,
@@ -967,7 +1055,8 @@ mod bot_iq_alliance_tests {
 
         let water = WaterComponents::compute(&state.map, |_| {});
         let mut engine = SowEngine::new(state, water);
-        engine.attacks.push(crate::execution::AttackExecution { landed: false,
+        engine.attacks.push(crate::execution::AttackExecution {
+            landed: false,
             id: 7,
             owner_id: 2,
             target_owner: 1,
@@ -1082,7 +1171,8 @@ mod bot_iq_alliance_tests {
         let mut engine = test_engine_two_players(42);
         engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
-        engine.attacks.push(crate::execution::AttackExecution { landed: false,
+        engine.attacks.push(crate::execution::AttackExecution {
+            landed: false,
             id: 1,
             owner_id: 2,
             target_owner: 1,

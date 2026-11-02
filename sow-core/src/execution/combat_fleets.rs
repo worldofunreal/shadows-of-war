@@ -464,7 +464,8 @@ mod tests {
                     state.register_player(player);
                 }
 
-                // P1 surrounds P2 except for one neutral land tile to be captured.
+                // P1 surrounds P2 except for one P2 land tile to be captured.
+                // Capturing the victim's tile triggers OpenFront's check.
                 for y in 1..=3 {
                     for x in 1..=3 {
                         if (x, y) != (2, 1) && (x, y) != (2, 2) {
@@ -476,15 +477,25 @@ mod tests {
                 state.map.terrain[2 * 5 + 2] = MapTile::from_byte(0x80);
                 state.set_tile_owner(2, 2, 2);
                 state.map.terrain[1 * 5 + 2] = MapTile::from_byte(0x80); // (x=2, y=1): row-major
+                state.set_tile_owner(2, 1, 2);
                 state.map.compute_shorelines();
 
                 let mut engine = SowEngine::new(state, WaterComponents::default());
-                if by_fleet {
-                    // The fleet is already at the neutral gap's landing tile.
+                if same_team {
+                    // A direct defender change triggers the enclosure check,
+                    // which must leave the still-owned core with its teammate.
+                    let (_, change) = engine.state.set_tile_owner_for_execution(2, 1, 1);
+                    assert!(
+                        engine
+                            .annex_enclosed_components(change.into_iter().collect())
+                            .is_empty()
+                    );
+                } else if by_fleet {
+                    // The fleet is already at the victim-owned landing tile.
                     engine.add_fleet(WarpFleet::new(
                         1,
                         1,
-                        0,
+                        2,
                         UnitType::TransportShip,
                         100.0,
                         (5, 7),
@@ -497,7 +508,7 @@ mod tests {
                         landed: false,
                         id: 1,
                         owner_id: 1,
-                        target_owner: 0,
+                        target_owner: 2,
                         created_tick: 0,
                         troops: 100_000.0,
                         to_conquer: BinaryHeap::from([PrioritizedTile {
@@ -578,8 +589,9 @@ mod tests {
                 state.register_player(player);
             }
 
-            // P1 owns the ring except for one neutral coastal landing tile;
-            // P2 owns the connected inland 2x2 enclave.
+            // P1 owns the ring except for one coastal landing tile. P2 owns
+            // that tile and the connected inland 2x2 enclave; taking the
+            // victim's tile triggers the same owner check as OpenFront.
             for y in 1..=4 {
                 for x in 1..=4 {
                     let enclave = (2..=3).contains(&x) && (2..=3).contains(&y);
@@ -596,6 +608,7 @@ mod tests {
                 }
             }
             state.map.terrain[W as usize + 2] = MapTile::from_byte(0x80);
+            state.set_tile_owner(2, 1, 2);
             state.map.compute_shorelines();
 
             let mut engine = SowEngine::new(state, WaterComponents::default());
@@ -604,7 +617,7 @@ mod tests {
                 engine.add_fleet(WarpFleet::new(
                     1,
                     1,
-                    0,
+                    2,
                     UnitType::TransportShip,
                     100.0,
                     (5, gap),
@@ -616,7 +629,7 @@ mod tests {
                     landed: false,
                     id: 1,
                     owner_id: 1,
-                    target_owner: 0,
+                    target_owner: 2,
                     created_tick: 0,
                     troops: 100_000.0,
                     to_conquer: BinaryHeap::from([PrioritizedTile {
@@ -768,8 +781,13 @@ mod tests {
             "allied",
         ] {
             let (mut engine, gap, core) = enclosure_fixture(case);
-            let (_, change) = engine.state.set_tile_owner_for_execution(gap.0, gap.1, 1);
-            engine.annex_enclosed_components(change.into_iter().collect());
+            // A direct loss by the victim triggers its OpenFront cluster
+            // check; closing the ring through neutral land alone does not.
+            engine.state.map.terrain[5 * 7 + 5] = MapTile::from_byte(0x80);
+            engine.state.set_tile_owner(5, 5, 2);
+            let (_, trigger) = engine.state.set_tile_owner_for_execution(5, 5, 1);
+            let (_, close_gap) = engine.state.set_tile_owner_for_execution(gap.0, gap.1, 1);
+            engine.annex_enclosed_components(trigger.into_iter().chain(close_gap).collect());
             assert_eq!(
                 engine.state.map.owner_id(core.0, core.1),
                 2,

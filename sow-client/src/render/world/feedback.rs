@@ -31,7 +31,8 @@ const DEATH_NAMEPLATE_ICON_SIZE: f32 = 24.0;
 const GOLD_REWARD_FONT_SIZE: f32 = 22.0;
 const GOLD_REWARD_COIN_SIZE: f32 = 26.0;
 const GOLD_REWARD_ASSIST_SIZE: f32 = 28.0;
-const GOLD_REWARD_MAX_TEXT_SCALE: f32 = 1.3;
+const GOLD_REWARD_SCALE: f32 = 0.94;
+const GOLD_REWARD_MAX_TEXT_SCALE: f32 = 1.2;
 const DEATH_GOLD_ROW_GAP: f32 = 8.0;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
 const ATTACK_BADGE_UPDATE_SECS: f32 = 0.09;
@@ -456,13 +457,15 @@ fn render_death_nameplates(
         else {
             continue;
         };
+        let scale = scale.min(GOLD_REWARD_MAX_TEXT_SCALE);
         let mut screen = world_to_screen(animation.world_x, animation.world_y - rise, input, sf);
-        let rough_width = amount_len as f32 * GOLD_REWARD_FONT_SIZE * font_scale
-            + GOLD_REWARD_COIN_SIZE * font_scale
+        let reward_scale = font_scale * GOLD_REWARD_SCALE;
+        let rough_width = amount_len as f32 * GOLD_REWARD_FONT_SIZE * reward_scale
+            + GOLD_REWARD_COIN_SIZE * reward_scale
             + if is_assist {
-                (GOLD_REWARD_ASSIST_SIZE + 2.0 * DEATH_GOLD_ROW_GAP) * font_scale
+                (GOLD_REWARD_ASSIST_SIZE + 2.0 * DEATH_GOLD_ROW_GAP) * reward_scale
             } else {
-                DEATH_GOLD_ROW_GAP * font_scale
+                DEATH_GOLD_ROW_GAP * reward_scale
             };
         if screen[0] < -rough_width
             || screen[0] > screen_w + rough_width
@@ -480,11 +483,11 @@ fn render_death_nameplates(
             continue;
         };
         let alpha = 1.0 - progress;
-        let font_size = GOLD_REWARD_FONT_SIZE * scale * font_scale * sf;
+        let font_size = GOLD_REWARD_FONT_SIZE * scale * reward_scale * sf;
         let measure = prepared.measure_at(font_size);
-        let badge_size = GOLD_REWARD_ASSIST_SIZE * font_scale * sf;
-        let coin_size = GOLD_REWARD_COIN_SIZE * font_scale * sf;
-        let gap = DEATH_GOLD_ROW_GAP * 0.5 * font_scale * sf;
+        let badge_size = GOLD_REWARD_ASSIST_SIZE * reward_scale * sf;
+        let coin_size = GOLD_REWARD_COIN_SIZE * reward_scale * sf;
+        let gap = DEATH_GOLD_ROW_GAP * 0.5 * reward_scale * sf;
         let death_font_size = DEATH_NAMEPLATE_FONT_SIZE * font_scale * sf;
         let death_measure = animation.prepared_name.measure_at(death_font_size);
         let death_bounds = animation
@@ -497,7 +500,7 @@ fn render_death_nameplates(
                 death_measure.height * 0.35,
             ]);
         let max_reward_font_size =
-            GOLD_REWARD_FONT_SIZE * GOLD_REWARD_MAX_TEXT_SCALE * font_scale * sf;
+            GOLD_REWARD_FONT_SIZE * GOLD_REWARD_MAX_TEXT_SCALE * reward_scale * sf;
         let max_reward_measure = prepared.measure_at(max_reward_font_size);
         let max_reward_bounds = prepared.visual_bounds_at(max_reward_font_size).unwrap_or([
             0.0,

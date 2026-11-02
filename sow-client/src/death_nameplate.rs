@@ -4,7 +4,7 @@ use web_time::Instant;
 
 pub const MAX_DEATH_NAMEPLATES: usize = 64;
 pub const DEATH_NAMEPLATE_DURATION: f32 = 1.5;
-pub const GOLD_REWARD_DELAY: f32 = 1.0;
+pub const GOLD_REWARD_DELAY: f32 = 0.5;
 pub const GOLD_REWARD_DURATION: f32 = 3.0;
 
 #[derive(Clone, Debug)]
@@ -174,14 +174,13 @@ mod tests {
     }
 
     #[test]
-    fn gold_reward_starts_at_one_second_overlaps_death_and_expires_at_four() {
-        assert!(death_animation(0.999).is_some());
-        assert!(gold_reward_elapsed(0.999).is_none());
-        assert!(death_animation(1.0).is_some());
-        assert_eq!(gold_reward_elapsed(1.0), Some(0.0));
-        assert_eq!(gold_reward_elapsed(1.5), Some(0.5));
-        assert_eq!(gold_reward_elapsed(3.999), Some(2.999));
-        assert!(gold_reward_elapsed(4.0).is_none());
+    fn gold_reward_starts_after_half_a_second_and_lasts_three_seconds() {
+        assert!(death_animation(0.499).is_some());
+        assert!(gold_reward_elapsed(0.499).is_none());
+        assert_eq!(gold_reward_elapsed(0.5), Some(0.0));
+        assert_eq!(gold_reward_elapsed(1.0), Some(0.5));
+        assert_eq!(gold_reward_elapsed(3.499), Some(2.999));
+        assert!(gold_reward_elapsed(3.5).is_none());
     }
 
     #[test]
