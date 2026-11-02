@@ -2535,16 +2535,16 @@ fn s16_building_rules_trace(legacy: bool) -> Vec<(u64, u64)> {
 fn s16_checkpoint_decision_and_state_reference() {
     let checkpoints = s16_building_rules_trace(false);
     // Uses current building footprints; historical footprints are tested below.
+    // These checkpoints include Vanilla Tribes' post-grace human-attack policy;
+    // the S16 behavior contracts below separately guard progress and survival.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x2d26_a87e_c82c_081b),
-        (500, 0x6202_a61f_efb3_6fd6),
-        (750, 0x03f8_5346_e43c_76c3),
-        (1000, 0x74fb_460f_b0ac_5d1c),
-        (1250, 0xe26e_6658_9fbe_fc88),
-        (1500, 0x6433_7310_8b92_e560),
-        (1750, 0x9b5a_e87f_44d8_a813),
-        (2000, 0x2cab_a0d5_1088_0d56),
-        (2102, 0xd8d1_98cf_fade_032a),
+        (250, 0xe303_e11b_57b8_b0b7),
+        (500, 0xa21e_0995_4bbf_a6c3),
+        (750, 0xca5a_f7dd_becc_9001),
+        (1000, 0xdb01_ae52_d9d1_1cdb),
+        (1250, 0xed99_3c7d_23a8_99f2),
+        (1500, 0xa631_521e_0eab_3904),
+        (1632, 0xaebb_bc63_1327_eec0),
     ];
     assert_eq!(
         checkpoints,
@@ -2567,13 +2567,13 @@ fn historical_s16_building_rules_keep_recorded_results() {
     );
     // Historical building rules with the same fixed leader as the current trace.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0xd71f_fd45_3535_713d),
-        (500, 0x6670_1595_d8fc_7b68),
-        (750, 0xd213_db1e_f7db_8fb9),
-        (1000, 0xf125_994e_eb55_197b),
-        (1250, 0xb5c8_4a3f_ecf3_61d8),
-        (1500, 0x37f9_7718_d3dc_f795),
-        (1561, 0x6e7f_60aa_7e18_a400),
+        (250, 0x68a9_0784_5ae1_cc93),
+        (500, 0x91b8_01c0_630f_6557),
+        (750, 0x3c0d_f748_1dcf_397a),
+        (1000, 0x8ef9_82ce_61db_747d),
+        (1250, 0x39f4_83fc_bd34_3e4d),
+        (1500, 0x82aa_c73b_b1dd_47f2),
+        (1627, 0x1012_eeb6_edfc_ce27),
     ];
     assert_eq!(
         checkpoints, REFERENCE,
