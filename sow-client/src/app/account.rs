@@ -522,13 +522,6 @@ impl SowApp {
         if self.fetch_match_result() {
             return;
         }
-        if crate::store_portals::wou_session_pending() {
-            #[cfg(target_arch = "wasm32")]
-            {
-                self.boot_db_settled = true;
-            }
-            return;
-        }
         if self.display_name_save_request_id.is_some() {
             self.profile_refresh_pending = true;
             log::debug!(

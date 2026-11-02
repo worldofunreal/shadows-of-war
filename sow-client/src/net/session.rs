@@ -78,9 +78,6 @@ impl SowApp {
         if self.net.is_offline {
             return None;
         }
-        if crate::store_portals::wou_session_pending() {
-            return None;
-        }
         let identity = crate::store_portals::load_identity("Player");
         if identity.provider == "wou" {
             if !self.identity_profile_verified
