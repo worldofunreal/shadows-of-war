@@ -311,6 +311,8 @@ fn tower_reaches(defender: Leader) -> bool {
 /// Troops the attacker has left after hitting a tower-defended border.
 fn attacker_troops_against_tower(defender: Leader) -> (f64, Marks) {
     let mut engine = arena(24, 4, Leader::of("cleopatra"), Some(defender));
+    // Amplify the tower signal so a 50% hero modifier is measurable over this short fight.
+    engine.state.config.tower_strength = 1.0;
     add_building(&mut engine, 2, 6, 12, BuildingKind::Tower);
     engine.refresh_defense_grid();
     let marks = attack(&mut engine, 2, 20);
@@ -589,8 +591,8 @@ fn tiles_taken_from_city(attacker: Leader, defender: Leader) -> (f64, Marks) {
     (f64::from(engine.state.player(1).unwrap().tile_count), marks)
 }
 
-/// Troops player 1 has left: at home plus still attacking.
-fn attacker_troops_left(engine: &SowEngine) -> i64 {
+/// Exact troops player 1 has left: at home plus still attacking.
+fn attacker_troop_total(engine: &SowEngine) -> f64 {
     let player = engine.state.player(1).unwrap();
     let attacking: f64 = engine
         .attacks
@@ -598,16 +600,22 @@ fn attacker_troops_left(engine: &SowEngine) -> i64 {
         .filter(|attack| attack.owner_id == 1)
         .map(|attack| attack.troops)
         .sum();
-    (player.troops + attacking).round() as i64
+    player.troops + attacking
+}
+
+/// Rounded troops player 1 has left, for checks where a whole-troop comparison is enough.
+fn attacker_troops_left(engine: &SowEngine) -> i64 {
+    attacker_troop_total(engine).round() as i64
 }
 
 /// Troops the attacker keeps after hitting a tower on a plain rival's border.
 fn tower_siege_troops(attacker: Leader) -> (f64, Marks) {
     let mut engine = arena(24, 4, attacker, Some(Leader::of("caesar")));
+    engine.state.config.tower_strength = 1.0;
     add_building(&mut engine, 2, 6, 12, BuildingKind::Tower);
     engine.refresh_defense_grid();
     let marks = attack(&mut engine, 2, 20);
-    (attacker_troops_left(&engine) as f64, marks)
+    (attacker_troop_total(&engine), marks)
 }
 
 /// Player 2 takes player 1's border city through real attack intents (`victim` is player 1).
@@ -648,7 +656,7 @@ fn lose_city(victim: Leader) -> SowEngine {
 fn recapture_troops(victim: Leader) -> (f64, Marks) {
     let mut engine = lose_city(victim);
     let marks = attack(&mut engine, 2, 20);
-    (attacker_troops_left(&engine) as f64, marks)
+    (attacker_troop_total(&engine), marks)
 }
 
 /// Troops `attacker` gets back when it retreats at once from `defender`'s land, and the marks.
