@@ -165,6 +165,12 @@ function setFeaturedArtAvailability(image: HTMLImageElement, unavailable: boolea
     }
 }
 
+export function settleHeroesFeaturedArt() {
+    const panel = activeScreenPanel() || root;
+    const image = panel.querySelector<HTMLImageElement>("[data-hero-featured-art]");
+    if (image && image.complete) setFeaturedArtAvailability(image, image.naturalWidth === 0);
+}
+
 root.addEventListener(
     "load",
     function (event) {
