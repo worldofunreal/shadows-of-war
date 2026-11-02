@@ -921,3 +921,35 @@
     display: none;
   }
 }
+
+@media (orientation: landscape) {
+  #sow-menu[data-screen="home"] .sow-menu__backdrop {
+    background-image:
+      linear-gradient(
+        90deg,
+        rgba(8, 10, 14, 0.96) 0%,
+        rgba(8, 10, 14, 0.82) 23%,
+        rgba(8, 10, 14, 0.18) 62%,
+        rgba(8, 10, 14, 0.28) 100%
+      ),
+      linear-gradient(
+        0deg,
+        rgba(8, 10, 14, 0.98) 0%,
+        rgba(8, 10, 14, 0.72) 42%,
+        rgba(8, 10, 14, 0.08) 78%
+      ),
+      var(--sow-hero);
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__battlefield {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 680px) and (orientation: landscape) {
+  #sow-menu[data-screen="home"] .sow-menu__leader-copy {
+    inset-block-start: auto;
+    inset-block-end: clamp(16px, 6vh, 40px);
+    margin: 0;
+  }
+}

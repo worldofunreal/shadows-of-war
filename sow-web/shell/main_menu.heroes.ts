@@ -8,7 +8,6 @@ import {
     leaderCivilization,
     leaderDisplayName,
     leaderHistoricalName,
-    leaderPerk,
     menuUi,
     prepareLeaderArt,
     renderHeroBriefing,
@@ -32,8 +31,9 @@ type HeroesAvatarExpression = "calm" | "happy" | "angry";
 
 const heroesAvatarAnimations = new WeakMap<HTMLImageElement, Animation>();
 const heroesAvatarRevisions = new WeakMap<HTMLImageElement, number>();
-let heroesFeaturedExitTimer: number | null = null;
 let heroesFeaturedEnterTimer: number | null = null;
+let heroesFeaturedPreloadUrl = "";
+let heroesFeaturedPreloadImage: HTMLImageElement | null = null;
 
 function heroesAvatarUrl(slug: string, expression: HeroesAvatarExpression) {
     const path =
@@ -41,6 +41,29 @@ function heroesAvatarUrl(slug: string, expression: HeroesAvatarExpression) {
             ? "gameplay/avatars/" + slug + ".webp"
             : "gameplay/avatars/expressions/" + slug + "_" + expression + ".webp";
     return asset(path);
+}
+
+function setHeroesFeaturedPlaceholder(featured: HTMLElement, slug: string) {
+    featured.style.setProperty(
+        "--sow-hero-featured-placeholder",
+        "url(" + JSON.stringify(heroesAvatarUrl(slug, "calm")) + ")",
+    );
+}
+
+function preloadHeroesFeaturedArt(leader: MenuLeader) {
+    const art = heroesFeaturedArt(leader.slug);
+    const compact =
+        typeof window.matchMedia === "function"
+            ? window.matchMedia("(max-width: 900px), (orientation: portrait)").matches
+            : window.innerWidth <= 900 || window.innerHeight >= window.innerWidth;
+    const url = compact ? art.band : art.column;
+    if (!url || (url === heroesFeaturedPreloadUrl && heroesFeaturedPreloadImage)) return;
+    const image = new Image();
+    image.decoding = "async";
+    image.fetchPriority = "low";
+    image.src = url;
+    heroesFeaturedPreloadUrl = url;
+    heroesFeaturedPreloadImage = image;
 }
 
 function heroesMotionReduced() {
@@ -104,13 +127,10 @@ function heroesAvatarCard(event: Event) {
 }
 
 function clearHeroesFeaturedAnimation(featured: HTMLElement) {
-    if (heroesFeaturedExitTimer !== null) window.clearTimeout(heroesFeaturedExitTimer);
     if (heroesFeaturedEnterTimer !== null) window.clearTimeout(heroesFeaturedEnterTimer);
-    heroesFeaturedExitTimer = null;
     heroesFeaturedEnterTimer = null;
     featured.classList.remove(
-        "is-animating-exit-next",
-        "is-animating-exit-prev",
+        "is-transitioning",
         "is-animating-enter-next",
         "is-animating-enter-prev",
         "is-copy-entering",
@@ -153,22 +173,27 @@ function setFeaturedArtAvailability(image: HTMLImageElement, unavailable: boolea
         "is-loading",
         "is-unavailable",
         "is-transitioning",
-        "is-animating-exit-next",
-        "is-animating-exit-prev",
     );
     if (unavailable) {
         clearHeroesFeaturedAnimation(featured);
         featured.classList.add("is-unavailable");
-    } else if (animateEntrance) {
-        const direction = featured.dataset.heroDirection === "-1" ? -1 : 1;
-        triggerHeroesFeaturedEnter(featured, direction);
+    } else {
+        featured.style.removeProperty("--sow-hero-featured-placeholder");
+        if (animateEntrance) {
+            const direction = featured.dataset.heroDirection === "-1" ? -1 : 1;
+            triggerHeroesFeaturedEnter(featured, direction);
+        }
     }
 }
 
 export function settleHeroesFeaturedArt() {
     const panel = activeScreenPanel() || root;
     const image = panel.querySelector<HTMLImageElement>("[data-hero-featured-art]");
-    if (image && image.complete) setFeaturedArtAvailability(image, image.naturalWidth === 0);
+    if (!image) return;
+    const featured = image.closest<HTMLElement>(".sow-heroes__featured");
+    if (featured && image.dataset.heroArtSlug)
+        setHeroesFeaturedPlaceholder(featured, image.dataset.heroArtSlug);
+    if (image.complete) setFeaturedArtAvailability(image, image.naturalWidth === 0);
 }
 
 root.addEventListener(
@@ -198,6 +223,8 @@ root.addEventListener("pointerover", function (event) {
     )
         return;
     setHeroesCardAvatar(card, "happy");
+    const leader = leaderById(card.dataset.leaderId);
+    if (leader) preloadHeroesFeaturedArt(leader);
 });
 root.addEventListener("pointerout", function (event) {
     const card = heroesAvatarCard(event);
@@ -206,7 +233,11 @@ root.addEventListener("pointerout", function (event) {
 });
 root.addEventListener("focusin", function (event) {
     const card = heroesAvatarCard(event);
-    if (card && !card.classList.contains("is-selected")) setHeroesCardAvatar(card, "happy");
+    if (card && !card.classList.contains("is-selected")) {
+        setHeroesCardAvatar(card, "happy");
+        const leader = leaderById(card.dataset.leaderId);
+        if (leader) preloadHeroesFeaturedArt(leader);
+    }
 });
 root.addEventListener("focusout", function (event) {
     const card = heroesAvatarCard(event);
@@ -284,14 +315,10 @@ export function syncHeroesRotationCountdown() {
 //
 // The heroes featured art is chosen by the SHAPE OF THE PANEL, not by the
 // device and not by the file name:
-//   - Desktop / landscape screen: the panel is a tall narrow column
-//     (".sow-heroes__workspace { grid-template-columns: minmax(320px, .8fr)
-//     minmax(0, 1.2fr) }" in main_menu.profile.css), so it takes the
-//     PORTRAIT art *_mobile.webp (1080x1920).
-//   - Phone / portrait screen: the panel collapses into a short wide band
-//     ("#sow-menu[data-screen="heroes"] .sow-heroes__featured {
-//     flex: 0 0 clamp(192px, 29dvh, 236px) }"), so it takes the LANDSCAPE
-//     art *_desktop.webp (1920x1080).
+//   - Wide landscape layout: the panel is a tall narrow column, so it takes
+//     the PORTRAIT art *_mobile.webp (1080x1920).
+//   - Compact layout (portrait or landscape up to 900px): the panel becomes a
+//     short wide band, so it takes the LANDSCAPE art *_desktop.webp (1920x1080).
 //
 // The file names are backwards, which is exactly why this line keeps
 // getting "corrected" without authorization. Incident history:
@@ -337,9 +364,7 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
         esc(leaderDisplayName(leader)) +
         "</strong><small>" +
         esc(leaderCivilization(leader)) +
-        "</small><em>" +
-        esc(leaderPerk(leader)) +
-        "</em></span>" +
+        "</small></span>" +
         "</button>"
     );
 }
@@ -481,9 +506,8 @@ export function updateHeroesPreview() {
     const locked = activeLeader.available === false;
     featured.classList.toggle("is-locked", locked);
     featured.classList.toggle("is-motion-reduced", heroesMotionReduced());
-    // prepareLeaderArt() warms the loader splash art (loader.js), not this
-    // panel art. Leave it alone; the <picture> fetches its own file.
-    prepareLeaderArt(activeLeader);
+    // The selected scene is requested by the picture; keep next-game art low priority.
+    prepareLeaderArt(activeLeader, "low");
     // Panel-shape mapping — see heroesFeaturedArt(). Do not invert it.
     const featuredArt = heroesFeaturedArt(activeLeader.slug);
     const artSlug = leaderArtSlug(activeLeader);
@@ -496,12 +520,13 @@ export function updateHeroesPreview() {
             clearHeroesFeaturedAnimation(featured);
             const pictureElement = image.closest("picture");
             if (pictureElement) void pictureElement.offsetWidth;
+            setHeroesFeaturedPlaceholder(featured, artSlug);
             image.dataset.heroLeaderId = leaderId;
             image.dataset.heroArtSlug = artSlug;
             image.dataset.heroDirection = String(direction);
             const loadArt = function () {
                 if (!featured.isConnected) return;
-                featured.classList.remove("is-unavailable", "is-animating-exit-next", "is-animating-exit-prev");
+                featured.classList.remove("is-unavailable");
                 featured.classList.add("is-loading");
                 if (source) source.srcset = featuredArt.band;
                 image.src = featuredArt.column;
@@ -517,17 +542,12 @@ export function updateHeroesPreview() {
                 }
             };
             if (previousLeaderId && !heroesMotionReduced()) {
-                const exitClass = direction === 1 ? "is-animating-exit-next" : "is-animating-exit-prev";
-                featured.classList.add(exitClass, "is-transitioning");
+                featured.classList.add("is-transitioning");
                 featured.dataset.heroDirection = String(direction);
-                heroesFeaturedExitTimer = window.setTimeout(function () {
-                    heroesFeaturedExitTimer = null;
-                    loadArt();
-                }, 220);
             } else {
                 featured.classList.remove("is-transitioning");
-                loadArt();
             }
+            loadArt();
         } else {
             image.dataset.heroLeaderId = randomSelected ? "random" : activeLeader.id;
         }
@@ -674,9 +694,8 @@ export function renderHeroes() {
     const locked = activeLeader.available === false;
     const artSlug = leaderArtSlug(activeLeader);
     const motionReduced = heroesMotionReduced();
-    // prepareLeaderArt() warms the loader splash art (loader.js), not this
-    // panel art. Leave it alone; the <picture> fetches its own file.
-    prepareLeaderArt(activeLeader);
+    // Keep next-game art available without competing with the featured image.
+    prepareLeaderArt(activeLeader, "low");
     // Panel-shape mapping — see heroesFeaturedArt(). Do not invert it.
     // The <img> fallback is the tall column art, so width='1080'
     // height='1920' below are correct on purpose.
@@ -695,7 +714,7 @@ export function renderHeroes() {
         esc(displayName) +
         "'" +
         (activeRandom ? " hidden" : "") +
-        ">i</button><picture><source media='(max-width: 680px), (orientation: portrait)' srcset='" +
+        ">i</button><picture><source media='(max-width: 900px), (orientation: portrait)' srcset='" +
         esc(featuredArt.band) +
         "'><img src='" +
         esc(featuredArt.column) +

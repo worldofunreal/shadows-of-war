@@ -554,14 +554,14 @@ impl GameState {
         )
     }
 
-    pub(crate) fn capture_enclosed_components(
+    pub(crate) fn capture_enclosed_component(
         &mut self,
         captor_id: u16,
         victim_id: u16,
-        starts: &[u32],
+        start: u32,
     ) -> Vec<(u16, u32, u32)> {
         if self.map.width == 0
-            || self.map.height == 0
+            || start as usize >= self.map.terrain.len()
             || captor_id == victim_id
             || !self.player(captor_id).is_some_and(|player| player.alive)
             || !self.player(victim_id).is_some_and(|player| player.alive)
@@ -573,185 +573,45 @@ impl GameState {
         if captor.alliances.contains(&victim_id)
             || victim.alliances.contains(&captor_id)
             || (captor.team.is_some() && captor.team == victim.team)
+            || self
+                .map
+                .owner_id(start % self.map.width, start / self.map.width)
+                != victim_id
         {
             return Vec::new();
         }
 
         let width = self.map.width;
-        let mut seen = std::collections::HashSet::new();
-        let mut eliminated = Vec::new();
-        for &start in starts {
-            if start as usize >= self.map.terrain.len()
-                || self.map.owner_id(start % width, start / width) != victim_id
-                || !seen.insert(start)
-            {
-                continue;
-            }
-            let mut component = vec![start];
-            let mut cursor = 0;
-            while cursor < component.len() {
-                let tile = component[cursor];
-                cursor += 1;
-                let x = tile % width;
-                let y = tile / width;
-                self.map.for_each_neighbor4(x, y, |nx, ny| {
+        let mut component = vec![start];
+        let mut seen = std::collections::HashSet::from([start]);
+        let mut cursor = 0;
+        while cursor < component.len() {
+            let tile = component[cursor];
+            cursor += 1;
+            self.map
+                .for_each_neighbor4(tile % width, tile / width, |nx, ny| {
                     let neighbor = ny * width + nx;
                     if self.map.owner_id(nx, ny) == victim_id && seen.insert(neighbor) {
                         component.push(neighbor);
                     }
                 });
-            }
+        }
 
-            let mut border_tiles = Vec::new();
-            let mut border_members = std::collections::HashSet::new();
-            for &tile in &component {
-                let x = tile % width;
-                let y = tile / width;
-                let mut is_border = false;
-                self.map.for_each_neighbor4(x, y, |nx, ny| {
-                    if self.map.owner_id(nx, ny) != victim_id {
-                        is_border = true;
-                    }
-                });
-                if is_border {
-                    border_tiles.push(tile);
-                    border_members.insert(tile);
-                }
-            }
-
-            let mut seen_border = std::collections::HashSet::new();
-            let mut enclosed = false;
-            for start in border_tiles {
-                if !seen_border.insert(start) {
-                    continue;
-                }
-                let mut cluster = vec![start];
-                let mut cursor = 0;
-                while cursor < cluster.len() {
-                    let tile = cluster[cursor];
-                    cursor += 1;
-                    let x = tile % width;
-                    let y = tile / width;
-                    self.map.for_each_neighbor(x, y, |nx, ny| {
-                        let neighbor = ny * width + nx;
-                        if border_members.contains(&neighbor) && seen_border.insert(neighbor) {
-                            cluster.push(neighbor);
-                        }
-                    });
-                }
-                if self.border_cluster_surrounded_by(captor_id, victim_id, &cluster)
-                    && self.territory_is_enclosed(victim_id, start)
-                {
-                    enclosed = true;
-                    break;
-                }
-            }
-
-            if enclosed {
-                for tile in component {
-                    let x = tile % width;
-                    let y = tile / width;
-                    self.events.push(GameEvent::TileCaptured {
-                        x,
-                        y,
-                        new_owner: captor_id,
-                        previous_owner: victim_id,
-                        troops: 0.0,
-                    });
-                    self.set_tile_owner_inner(x, y, captor_id, Some(&mut eliminated));
-                }
-            }
+        let mut eliminated = Vec::new();
+        for tile in component {
+            let x = tile % width;
+            let y = tile / width;
+            self.events.push(GameEvent::TileCaptured {
+                x,
+                y,
+                new_owner: captor_id,
+                previous_owner: victim_id,
+                troops: 0.0,
+            });
+            let (newly_eliminated, _) = self.set_tile_owner_for_execution(x, y, captor_id);
+            eliminated.extend(newly_eliminated);
         }
         eliminated
-    }
-
-    fn border_cluster_surrounded_by(
-        &self,
-        captor_id: u16,
-        victim_id: u16,
-        cluster: &[u32],
-    ) -> bool {
-        let width = self.map.width;
-        let height = self.map.height;
-        let mut captors = std::collections::HashSet::new();
-        let (mut min_x, mut min_y, mut max_x, mut max_y) = (u32::MAX, u32::MAX, 0, 0);
-        let (mut min_cx, mut min_cy, mut max_cx, mut max_cy) = (u32::MAX, u32::MAX, 0, 0);
-
-        for &tile in cluster {
-            let x = tile % width;
-            let y = tile / width;
-            if x == 0
-                || y == 0
-                || x + 1 == width
-                || y + 1 == height
-                || self.map.terrain[self.map.ref_id(x, y)].is_shoreline()
-            {
-                return false;
-            }
-            min_x = min_x.min(x);
-            min_y = min_y.min(y);
-            max_x = max_x.max(x);
-            max_y = max_y.max(y);
-
-            let mut open = false;
-            self.map.for_each_neighbor4(x, y, |nx, ny| {
-                let owner = self.map.owner_id(nx, ny);
-                if owner == 0 {
-                    open = true;
-                } else if owner != victim_id {
-                    captors.insert(owner);
-                    min_cx = min_cx.min(nx);
-                    min_cy = min_cy.min(ny);
-                    max_cx = max_cx.max(nx);
-                    max_cy = max_cy.max(ny);
-                }
-            });
-            if open || captors.len() > 1 {
-                return false;
-            }
-        }
-
-        captors.len() == 1
-            && captors.contains(&captor_id)
-            && min_cx <= min_x
-            && min_cy <= min_y
-            && max_cx >= max_x
-            && max_cy >= max_y
-    }
-
-    fn territory_is_enclosed(&self, victim_id: u16, start: u32) -> bool {
-        let width = self.map.width;
-        let height = self.map.height;
-        let mut seen = std::collections::HashSet::from([start]);
-        let mut stack = vec![start];
-        while let Some(tile) = stack.pop() {
-            let x = tile % width;
-            let y = tile / width;
-            if x == 0 || y == 0 || x + 1 == width || y + 1 == height {
-                return false;
-            }
-            let mut open = false;
-            self.map.for_each_neighbor4(x, y, |nx, ny| {
-                let neighbor = ny * width + nx;
-                if seen.contains(&neighbor) {
-                    return;
-                }
-                let owner = self.map.owner_id(nx, ny);
-                if owner != 0 && owner != victim_id {
-                    return;
-                }
-                if owner == 0 && !self.map.terrain[self.map.ref_id(nx, ny)].is_land() {
-                    open = true;
-                    return;
-                }
-                seen.insert(neighbor);
-                stack.push(neighbor);
-            });
-            if open {
-                return false;
-            }
-        }
-        true
     }
 
     fn set_tile_owner_inner(

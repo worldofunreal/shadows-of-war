@@ -7,6 +7,12 @@ use crate::game_config::max_tiles_cap_for_troops;
 use crate::geo_entities::{Ability, LossWhen, Side, Source, Target};
 use crate::map::TerrainType;
 use crate::rng::NextIntExt;
+use std::collections::{BTreeSet, HashSet, VecDeque};
+
+struct BorderCluster {
+    tiles: Vec<u32>,
+    bounds: [u32; 4],
+}
 
 #[inline]
 fn terrain_capture_speed(terrain: TerrainType) -> f64 {
@@ -266,85 +272,384 @@ impl SowEngine {
         &mut self,
         changes: Vec<TerritoryChange>,
     ) -> Vec<(u16, u16, u32, u32)> {
-        let mut candidates_by_pair = std::collections::BTreeMap::<(u16, u16), Vec<u32>>::new();
-        let mut changed_victims = std::collections::BTreeSet::new();
+        // OpenFront reruns the owner's cluster check when that owner loses a
+        // tile; a neutral capture by itself does not trigger another player's scan.
+        let mut changed_victims = BTreeSet::new();
         for change in changes {
             if change.old_owner != 0 {
                 changed_victims.insert(change.old_owner);
             }
-
-            let passive_neutral_expansion = change.old_owner == 0
-                && self.state.config.bot_difficulty == crate::game_config::BotDifficulty::Vanilla
-                && self
-                    .state
-                    .player(change.new_owner)
-                    .is_some_and(|player| player.player_type == crate::player::PlayerType::Bot);
-            if change.new_owner != 0 && !passive_neutral_expansion {
-                self.state
-                    .map
-                    .for_each_neighbor4(change.x, change.y, |nx, ny| {
-                        let victim = self.state.map.owner_id(nx, ny);
-                        if victim != 0 && victim != change.new_owner {
-                            candidates_by_pair
-                                .entry((change.new_owner, victim))
-                                .or_default()
-                                .push(ny * self.state.map.width + nx);
-                        }
-                    });
-            }
-        }
-
-        // OpenFront reruns the changed player's full border scan. This catches
-        // an enclosed component elsewhere in their territory, even when the
-        // tile they just lost was in a separate region.
-        for victim in changed_victims {
-            let starts: Vec<u32> = self
-                .state
-                .player(victim)
-                .map(|player| {
-                    player
-                        .border_coords(self.state.map.width)
-                        .map(|(x, y)| y * self.state.map.width + x)
-                        .collect()
-                })
-                .unwrap_or_default();
-            for start in starts {
-                let x = start % self.state.map.width;
-                let y = start / self.state.map.width;
-                if self.state.map.owner_id(x, y) != victim {
-                    continue;
-                }
-                self.state.map.for_each_neighbor4(x, y, |nx, ny| {
-                    let captor = self.state.map.owner_id(nx, ny);
-                    if captor != 0 && captor != victim {
-                        candidates_by_pair
-                            .entry((captor, victim))
-                            .or_default()
-                            .push(start);
-                    }
-                });
-            }
         }
 
         let mut eliminated = Vec::new();
-        for ((captor, victim), mut starts) in candidates_by_pair {
-            if self
-                .campaign_relations
-                .get(&captor)
-                .is_some_and(|relation| *relation != crate::protocol::CampaignRelation::Enemy)
+        for victim_id in changed_victims {
+            if !self
+                .state
+                .player(victim_id)
+                .is_some_and(|player| player.alive && player.tile_count > 0)
             {
                 continue;
             }
-            starts.sort_unstable();
-            starts.dedup();
-            eliminated.extend(
-                self.state
-                    .capture_enclosed_components(captor, victim, &starts)
-                    .into_iter()
-                    .map(|(victim, x, y)| (victim, captor, x, y)),
-            );
+            let clusters = self.border_clusters(victim_id);
+            if clusters.is_empty() {
+                continue;
+            }
+
+            let primary = self.primary_border_cluster(victim_id, &clusters);
+            let mut candidates = Vec::new();
+            if clusters.len() == 1 {
+                if let Some(captor) = self.surrounded_by_single_enemy(victim_id, &clusters[0]) {
+                    candidates.push((clusters[0].tiles.clone(), captor));
+                }
+            } else {
+                let main = &clusters[primary];
+                if let Some(captor) = self.surrounded_by_single_enemy(victim_id, main) {
+                    candidates.push((main.tiles.clone(), captor));
+                }
+                for (index, cluster) in clusters.iter().enumerate() {
+                    if index == primary || !self.secondary_cluster_is_surrounded(victim_id, cluster)
+                    {
+                        continue;
+                    }
+                    if let Some(captor) = self.capturing_player(victim_id, cluster) {
+                        candidates.push((cluster.tiles.clone(), captor));
+                    }
+                }
+            }
+
+            for (cluster, captor_id) in candidates {
+                if captor_id == victim_id
+                    || self.annex_players_friendly(captor_id, victim_id)
+                    || self
+                        .campaign_relations
+                        .get(&captor_id)
+                        .is_some_and(|relation| {
+                            *relation != crate::protocol::CampaignRelation::Enemy
+                        })
+                    || cluster.iter().any(|&tile| {
+                        self.state
+                            .map
+                            .owner_id(tile % self.state.map.width, tile / self.state.map.width)
+                            != victim_id
+                    })
+                    || !cluster
+                        .first()
+                        .is_some_and(|&start| self.territory_is_enclosed(victim_id, start))
+                {
+                    continue;
+                }
+                eliminated.extend(
+                    self.state
+                        .capture_enclosed_component(captor_id, victim_id, cluster[0])
+                        .into_iter()
+                        .map(|(victim, x, y)| (victim, captor_id, x, y)),
+                );
+            }
         }
         eliminated
+    }
+
+    fn border_clusters(&self, player_id: u16) -> Vec<BorderCluster> {
+        let Some(player) = self.state.player(player_id) else {
+            return Vec::new();
+        };
+        if self.state.map.width == 0 {
+            return Vec::new();
+        }
+
+        let border_tiles: Vec<u32> = player
+            .border_coords(self.state.map.width)
+            .map(|(x, y)| y * self.state.map.width + x)
+            .collect();
+        let border_members: HashSet<u32> = border_tiles.iter().copied().collect();
+        let mut seen = HashSet::new();
+        let mut clusters = Vec::new();
+        for start in border_tiles {
+            if !seen.insert(start) {
+                continue;
+            }
+            let mut tiles = vec![start];
+            let mut cursor = 0;
+            let (mut min_x, mut min_y, mut max_x, mut max_y) = (
+                start % self.state.map.width,
+                start / self.state.map.width,
+                start % self.state.map.width,
+                start / self.state.map.width,
+            );
+            while cursor < tiles.len() {
+                let tile = tiles[cursor];
+                cursor += 1;
+                let x = tile % self.state.map.width;
+                let y = tile / self.state.map.width;
+                self.state.map.for_each_neighbor(x, y, |nx, ny| {
+                    let neighbor = ny * self.state.map.width + nx;
+                    if border_members.contains(&neighbor) && seen.insert(neighbor) {
+                        min_x = min_x.min(nx);
+                        min_y = min_y.min(ny);
+                        max_x = max_x.max(nx);
+                        max_y = max_y.max(ny);
+                        tiles.push(neighbor);
+                    }
+                });
+            }
+            clusters.push(BorderCluster {
+                tiles,
+                bounds: [min_x, min_y, max_x, max_y],
+            });
+        }
+        clusters
+    }
+
+    fn primary_border_cluster(&self, player_id: u16, clusters: &[BorderCluster]) -> usize {
+        let largest = clusters
+            .iter()
+            .enumerate()
+            .max_by_key(|(index, cluster)| (cluster.tiles.len(), std::cmp::Reverse(*index)))
+            .map_or(0, |(index, _)| index);
+        if !self.border_cluster_is_hole(player_id, largest, clusters) {
+            return largest;
+        }
+
+        clusters
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !self.border_cluster_is_hole(player_id, *index, clusters))
+            .max_by_key(|(index, cluster)| (cluster.tiles.len(), std::cmp::Reverse(*index)))
+            .map_or(largest, |(index, _)| index)
+    }
+
+    fn border_cluster_is_hole(
+        &self,
+        player_id: u16,
+        index: usize,
+        clusters: &[BorderCluster],
+    ) -> bool {
+        let cluster = &clusters[index];
+        clusters.iter().enumerate().any(|(other_index, other)| {
+            other_index != index
+                && other.bounds[0] <= cluster.bounds[0]
+                && other.bounds[1] <= cluster.bounds[1]
+                && other.bounds[2] >= cluster.bounds[2]
+                && other.bounds[3] >= cluster.bounds[3]
+                && self.border_clusters_share_territory(player_id, cluster, other)
+        })
+    }
+
+    fn border_clusters_share_territory(
+        &self,
+        player_id: u16,
+        first: &BorderCluster,
+        second: &BorderCluster,
+    ) -> bool {
+        let second_tiles: HashSet<u32> = second.tiles.iter().copied().collect();
+        let mut seen = HashSet::new();
+        let mut stack = VecDeque::new();
+        for &tile in &first.tiles {
+            if self
+                .state
+                .map
+                .owner_id(tile % self.state.map.width, tile / self.state.map.width)
+                == player_id
+                && seen.insert(tile)
+            {
+                stack.push_back(tile);
+            }
+        }
+        while let Some(tile) = stack.pop_front() {
+            if second_tiles.contains(&tile) {
+                return true;
+            }
+            self.state.map.for_each_neighbor(
+                tile % self.state.map.width,
+                tile / self.state.map.width,
+                |nx, ny| {
+                    let neighbor = ny * self.state.map.width + nx;
+                    if self.state.map.owner_id(nx, ny) == player_id && seen.insert(neighbor) {
+                        stack.push_back(neighbor);
+                    }
+                },
+            );
+        }
+        false
+    }
+
+    fn surrounded_by_single_enemy(&self, victim_id: u16, cluster: &BorderCluster) -> Option<u16> {
+        let map = &self.state.map;
+        let width = map.width;
+        let height = map.height;
+        let (mut min_x, mut min_y, mut max_x, mut max_y) = (u32::MAX, u32::MAX, 0, 0);
+        let (mut min_enemy_x, mut min_enemy_y, mut max_enemy_x, mut max_enemy_y) =
+            (u32::MAX, u32::MAX, 0, 0);
+        let mut enemies = BTreeSet::new();
+
+        for &tile in &cluster.tiles {
+            let x = tile % width;
+            let y = tile / width;
+            if x == 0
+                || y == 0
+                || x + 1 == width
+                || y + 1 == height
+                || map.terrain[map.ref_id(x, y)].is_shoreline()
+            {
+                return None;
+            }
+            min_x = min_x.min(x);
+            min_y = min_y.min(y);
+            max_x = max_x.max(x);
+            max_y = max_y.max(y);
+            let mut open = false;
+            map.for_each_neighbor4(x, y, |nx, ny| {
+                let owner = map.owner_id(nx, ny);
+                if owner == 0 {
+                    open = true;
+                } else if owner != victim_id {
+                    enemies.insert(owner);
+                    min_enemy_x = min_enemy_x.min(nx);
+                    min_enemy_y = min_enemy_y.min(ny);
+                    max_enemy_x = max_enemy_x.max(nx);
+                    max_enemy_y = max_enemy_y.max(ny);
+                }
+            });
+            if open || enemies.len() != 1 {
+                return None;
+            }
+        }
+        if enemies.len() != 1
+            || min_enemy_x > min_x
+            || min_enemy_y > min_y
+            || max_enemy_x < max_x
+            || max_enemy_y < max_y
+        {
+            return None;
+        }
+        enemies.into_iter().next()
+    }
+
+    fn secondary_cluster_is_surrounded(&self, victim_id: u16, cluster: &BorderCluster) -> bool {
+        let map = &self.state.map;
+        let width = map.width;
+        let height = map.height;
+        let mut has_enemy = false;
+        let (mut min_enemy_x, mut min_enemy_y, mut max_enemy_x, mut max_enemy_y) =
+            (u32::MAX, u32::MAX, 0, 0);
+        for &tile in &cluster.tiles {
+            let x = tile % width;
+            let y = tile / width;
+            if x == 0
+                || y == 0
+                || x + 1 == width
+                || y + 1 == height
+                || map.terrain[map.ref_id(x, y)].is_shoreline()
+            {
+                return false;
+            }
+            map.for_each_neighbor4(x, y, |nx, ny| {
+                let owner = map.owner_id(nx, ny);
+                if owner != 0 && owner != victim_id {
+                    has_enemy = true;
+                    min_enemy_x = min_enemy_x.min(nx);
+                    min_enemy_y = min_enemy_y.min(ny);
+                    max_enemy_x = max_enemy_x.max(nx);
+                    max_enemy_y = max_enemy_y.max(ny);
+                }
+            });
+        }
+        has_enemy
+            && min_enemy_x <= cluster.bounds[0]
+            && min_enemy_y <= cluster.bounds[1]
+            && max_enemy_x >= cluster.bounds[2]
+            && max_enemy_y >= cluster.bounds[3]
+    }
+
+    fn territory_is_enclosed(&self, victim_id: u16, start: u32) -> bool {
+        let width = self.state.map.width;
+        let height = self.state.map.height;
+        let mut seen = HashSet::from([start]);
+        let mut stack = vec![start];
+        while let Some(tile) = stack.pop() {
+            let x = tile % width;
+            let y = tile / width;
+            if x == 0 || y == 0 || x + 1 == width || y + 1 == height {
+                return false;
+            }
+            let mut open = false;
+            self.state.map.for_each_neighbor4(x, y, |nx, ny| {
+                let neighbor = ny * width + nx;
+                if seen.contains(&neighbor) {
+                    return;
+                }
+                let owner = self.state.map.owner_id(nx, ny);
+                if owner != 0 && owner != victim_id {
+                    return;
+                }
+                if owner == 0 && !self.state.map.terrain[self.state.map.ref_id(nx, ny)].is_land() {
+                    open = true;
+                    return;
+                }
+                seen.insert(neighbor);
+                stack.push(neighbor);
+            });
+            if open {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn capturing_player(&self, victim_id: u16, cluster: &BorderCluster) -> Option<u16> {
+        let map = &self.state.map;
+        let width = map.width;
+        let mut neighbors: Vec<(u16, u32)> = Vec::new();
+        for &tile in &cluster.tiles {
+            map.for_each_neighbor4(tile % width, tile / width, |nx, ny| {
+                let owner = map.owner_id(nx, ny);
+                if owner == 0 || owner == victim_id || self.annex_players_friendly(owner, victim_id)
+                {
+                    return;
+                }
+                if let Some((_, count)) = neighbors.iter_mut().find(|(id, _)| *id == owner) {
+                    *count += 1;
+                } else {
+                    neighbors.push((owner, 1));
+                }
+            });
+        }
+        if neighbors.is_empty() {
+            return None;
+        }
+
+        let mut largest_attack: Option<(u16, f64)> = None;
+        for &(neighbor, _) in &neighbors {
+            for attack in &self.attacks {
+                if attack.owner_id == neighbor
+                    && attack.target_owner == victim_id
+                    && attack.troops > 0.0
+                    && largest_attack.is_none_or(|(_, troops)| attack.troops > troops)
+                {
+                    largest_attack = Some((neighbor, attack.troops));
+                }
+            }
+        }
+        largest_attack.map(|(id, _)| id).or_else(|| {
+            let mut most_border_cells = None;
+            for (id, count) in neighbors {
+                if most_border_cells.is_none_or(|(_, best_count)| count > best_count) {
+                    most_border_cells = Some((id, count));
+                }
+            }
+            most_border_cells.map(|(id, _)| id)
+        })
+    }
+
+    fn annex_players_friendly(&self, first_id: u16, second_id: u16) -> bool {
+        let (Some(first), Some(second)) =
+            (self.state.player(first_id), self.state.player(second_id))
+        else {
+            return false;
+        };
+        first.alliances.contains(&second_id)
+            || second.alliances.contains(&first_id)
+            || (first.team.is_some() && first.team == second.team)
     }
 
     pub fn execute_combat(&mut self) {

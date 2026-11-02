@@ -2537,14 +2537,16 @@ fn s16_checkpoint_decision_and_state_reference() {
     // Uses current building footprints; historical footprints are tested below.
     // These checkpoints include Vanilla Tribes' post-grace human-attack policy;
     // the S16 behavior contracts below separately guard progress and survival.
+    // Target planning follows the current OpenFront nation/tribe priorities.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0xe303_e11b_57b8_b0b7),
-        (500, 0xa21e_0995_4bbf_a6c3),
-        (750, 0xca5a_f7dd_becc_9001),
-        (1000, 0xdb01_ae52_d9d1_1cdb),
-        (1250, 0xed99_3c7d_23a8_99f2),
-        (1500, 0xa631_521e_0eab_3904),
-        (1632, 0xaebb_bc63_1327_eec0),
+        (250, 0x5932_2135_8345_f1fe),
+        (500, 0x420f_7ffe_8119_9b45),
+        (750, 0x11b0_ec31_3f75_9ada),
+        (1000, 0xfa16_366f_66d5_b4ab),
+        (1250, 0x210f_06dc_8a7c_5337),
+        (1500, 0x43f6_1e66_3885_99f2),
+        (1750, 0xf56d_9803_4882_1c65),
+        (1848, 0x610a_1762_6f9e_5992),
     ];
     assert_eq!(
         checkpoints,
@@ -2567,13 +2569,14 @@ fn historical_s16_building_rules_keep_recorded_results() {
     );
     // Historical building rules with the same fixed leader as the current trace.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x68a9_0784_5ae1_cc93),
-        (500, 0x91b8_01c0_630f_6557),
-        (750, 0x3c0d_f748_1dcf_397a),
-        (1000, 0x8ef9_82ce_61db_747d),
-        (1250, 0x39f4_83fc_bd34_3e4d),
-        (1500, 0x82aa_c73b_b1dd_47f2),
-        (1627, 0x1012_eeb6_edfc_ce27),
+        (250, 0x3f2d_811a_12e6_6fe3),
+        (500, 0x8054_c141_d673_2837),
+        (750, 0x5656_c626_641c_63d5),
+        (1000, 0x602f_205a_ba3a_b721),
+        (1250, 0xf7d0_4b9a_0708_e6cc),
+        (1500, 0xe273_8498_c304_976f),
+        (1750, 0xdf86_99ac_caad_89aa),
+        (1761, 0x6c82_2cbc_e8eb_e135),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

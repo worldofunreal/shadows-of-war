@@ -3,6 +3,7 @@ use crate::engine::SowEngine;
 use crate::game::{BuildingKind, NukeKind};
 use crate::protocol::{AttackIntent, GameplayIntent};
 use crate::rng::NextIntExt;
+use std::collections::{BTreeSet, HashMap};
 use wyrand::WyRand;
 
 use super::profile::{AiSlot, AiTier, BotDecision, BotDecisionKind, GhostRetaliation};
@@ -20,6 +21,12 @@ struct NavalDecisionContext {
     has_land_move: bool,
     force_naval: bool,
     has_hostile_neighbors: bool,
+}
+
+struct BotSurroundings {
+    borders_actor: bool,
+    open: bool,
+    bots: BTreeSet<u16>,
 }
 
 #[inline]
@@ -316,6 +323,239 @@ impl SowEngine {
             },
         });
         true
+    }
+
+    fn scan_bot_surroundings(
+        &self,
+        actor_id: u16,
+        bot_id: u16,
+        closed_only: bool,
+        within: Option<&BTreeSet<u16>>,
+    ) -> Option<BotSurroundings> {
+        let map = &self.state.map;
+        let bot = self.state.player(bot_id)?;
+        if map.width == 0 {
+            return None;
+        }
+        let mut result = BotSurroundings {
+            borders_actor: false,
+            open: false,
+            bots: BTreeSet::new(),
+        };
+        let mut gave_up = false;
+        for (x, y) in bot.border_coords(map.width) {
+            if gave_up {
+                break;
+            }
+            if x == 0
+                || y == 0
+                || x + 1 == map.width
+                || y + 1 == map.height
+                || map.terrain[map.ref_id(x, y)].is_shoreline()
+            {
+                result.open = true;
+                gave_up = closed_only;
+                continue;
+            }
+            map.for_each_neighbor4(x, y, |nx, ny| {
+                if gave_up {
+                    return;
+                }
+                let owner_id = map.owner_id(nx, ny);
+                if owner_id == bot_id {
+                    return;
+                }
+                if owner_id == actor_id {
+                    result.borders_actor = true;
+                    return;
+                }
+                let attackable_bot = self.state.player(owner_id).is_some_and(|owner| {
+                    owner.player_type == crate::player::PlayerType::Bot
+                        && !self.players_friendly(actor_id, owner_id)
+                });
+                if !attackable_bot {
+                    result.open = true;
+                    gave_up = closed_only;
+                } else if within.is_some_and(|within| !within.contains(&owner_id)) {
+                    gave_up = true;
+                } else {
+                    result.bots.insert(owner_id);
+                }
+            });
+        }
+        (!gave_up).then_some(result)
+    }
+
+    fn players_friendly(&self, first_id: u16, second_id: u16) -> bool {
+        let (Some(first), Some(second)) =
+            (self.state.player(first_id), self.state.player(second_id))
+        else {
+            return false;
+        };
+        first.alliances.contains(&second_id)
+            || second.alliances.contains(&first_id)
+            || (first.team.is_some() && first.team == second.team)
+    }
+
+    fn bot_is_attacked_by(&self, actor_id: u16, target_id: u16) -> bool {
+        self.attacks
+            .iter()
+            .any(|attack| attack.owner_id == actor_id && attack.target_owner == target_id)
+    }
+
+    fn bot_has_structures(&self, bot_id: u16) -> bool {
+        self.buildings
+            .iter()
+            .any(|building| building.owner_id == bot_id)
+    }
+
+    fn walled_in_bot_targets(&self, actor_id: u16, bots: &[u16]) -> Vec<u16> {
+        let no_other_bots = BTreeSet::new();
+        bots.iter()
+            .copied()
+            .filter(|&bot_id| !self.bot_is_attacked_by(actor_id, bot_id))
+            .filter(|&bot_id| {
+                self.scan_bot_surroundings(actor_id, bot_id, true, Some(&no_other_bots))
+                    .is_some_and(|surroundings| surroundings.borders_actor)
+            })
+            .collect()
+    }
+
+    fn plan_bot_attacks(&self, actor_id: u16, bots: &[u16]) -> Vec<u16> {
+        let mut region = HashMap::new();
+        for &bot_id in bots {
+            if let Some(surroundings) = self.scan_bot_surroundings(actor_id, bot_id, false, None) {
+                region.insert(bot_id, surroundings);
+            }
+        }
+        let front: Vec<u16> = bots
+            .iter()
+            .copied()
+            .filter(|bot_id| {
+                region
+                    .get(bot_id)
+                    .is_some_and(|surroundings: &BotSurroundings| surroundings.borders_actor)
+            })
+            .collect();
+        let mut behind = BTreeSet::new();
+        for &bot_id in &front {
+            let others = region
+                .get(&bot_id)
+                .map(|surroundings| surroundings.bots.iter().copied().collect::<Vec<_>>())
+                .unwrap_or_default();
+            for other_id in others {
+                if region.contains_key(&other_id) || !behind.insert(other_id) {
+                    continue;
+                }
+                if let Some(surroundings) =
+                    self.scan_bot_surroundings(actor_id, other_id, true, None)
+                {
+                    region.insert(other_id, surroundings);
+                }
+            }
+        }
+
+        let mut candidates: Vec<u16> = region
+            .iter()
+            .filter_map(|(&bot_id, surroundings)| {
+                (!surroundings.open
+                    && !surroundings.bots.is_empty()
+                    && !self.bot_is_attacked_by(actor_id, bot_id)
+                    && !self.bot_has_structures(bot_id))
+                .then_some(bot_id)
+            })
+            .collect();
+        candidates.sort_by(|a, b| {
+            let a_tiles = self.state.player(*a).map_or(0, |player| player.tile_count);
+            let b_tiles = self.state.player(*b).map_or(0, |player| player.tile_count);
+            b_tiles.cmp(&a_tiles).then_with(|| a.cmp(b))
+        });
+
+        let mut kept = BTreeSet::new();
+        let mut next_to_kept = BTreeSet::new();
+        let mut walled_in = HashMap::<u16, f64>::new();
+        for bot_id in candidates {
+            if next_to_kept.contains(&bot_id) {
+                continue;
+            }
+            kept.insert(bot_id);
+            let surroundings = &region[&bot_id];
+            let tile_count = self
+                .state
+                .player(bot_id)
+                .map_or(0, |player| player.tile_count);
+            let share = tile_count as f64 / surroundings.bots.len() as f64;
+            for &other_id in &surroundings.bots {
+                next_to_kept.insert(other_id);
+                *walled_in.entry(other_id).or_default() += share;
+            }
+        }
+
+        let value = |bot_id: u16| {
+            let player = self.state.player(bot_id);
+            let tiles = player.map_or(0, |player| player.tile_count) as f64;
+            let troops = player.map_or(0.0, |player| player.troops).max(1.0);
+            (tiles + walled_in.get(&bot_id).copied().unwrap_or(0.0)) / troops
+        };
+        let mut targets: Vec<u16> = bots
+            .iter()
+            .copied()
+            .filter(|bot_id| {
+                let Some(surroundings) = region.get(bot_id) else {
+                    return false;
+                };
+                let walled = surroundings.borders_actor
+                    && !surroundings.open
+                    && surroundings.bots.is_empty();
+                !kept.contains(bot_id) && !walled
+            })
+            .collect();
+        targets.sort_by(|a, b| value(*b).total_cmp(&value(*a)).then_with(|| a.cmp(b)));
+        if !targets.iter().any(|bot_id| {
+            region
+                .get(bot_id)
+                .is_some_and(|surroundings| surroundings.borders_actor)
+        }) {
+            let mut fallback: Vec<u16> = front
+                .into_iter()
+                .filter(|bot_id| kept.contains(bot_id))
+                .collect();
+            fallback.sort_by(|a, b| value(*b).total_cmp(&value(*a)).then_with(|| a.cmp(b)));
+            targets.extend(fallback);
+        }
+        targets
+    }
+
+    pub(super) fn nation_bot_attack_order(&self, actor_id: u16, targets: &[u16]) -> Vec<u16> {
+        let mut bots: Vec<u16> = targets
+            .iter()
+            .copied()
+            .filter(|target_id| {
+                self.state
+                    .player(*target_id)
+                    .is_some_and(|player| player.player_type == crate::player::PlayerType::Bot)
+            })
+            .collect();
+        if bots.is_empty() {
+            return bots;
+        }
+        if self.state.config.bot_difficulty == crate::game_config::BotDifficulty::Terminator {
+            bots = self.plan_bot_attacks(actor_id, &bots);
+        } else {
+            bots.sort_by(|a, b| {
+                let density = |id| {
+                    self.state.player(id).map_or(f64::INFINITY, |player| {
+                        player.troops.max(0.0) / f64::from(player.tile_count.max(1))
+                    })
+                };
+                density(*a).total_cmp(&density(*b)).then_with(|| a.cmp(b))
+            });
+        }
+        bots.sort_by(|a, b| {
+            self.bot_has_structures(*b)
+                .cmp(&self.bot_has_structures(*a))
+        });
+        bots
     }
 
     pub(super) fn nation_run_combat_for_slot(
@@ -675,6 +915,42 @@ impl SowEngine {
                     })
                     .collect();
 
+                let nation_bot_order = if is_mfo {
+                    self.nation_bot_attack_order(bot_id, &targets)
+                } else {
+                    Vec::new()
+                };
+                if is_mfo
+                    && self.state.config.bot_difficulty
+                        == crate::game_config::BotDifficulty::Terminator
+                    && !assault_controls_attacks
+                    && campaign_target.is_none()
+                    && defender_target.is_none()
+                {
+                    let neighboring_bots: Vec<u16> = targets
+                        .iter()
+                        .copied()
+                        .filter(|target_id| {
+                            self.state.player(*target_id).is_some_and(|player| {
+                                player.player_type == crate::player::PlayerType::Bot
+                            })
+                        })
+                        .collect();
+                    let probe_troops = (troops / 100.0).floor();
+                    if probe_troops >= 1.0 {
+                        for target_owner in self.walled_in_bot_targets(bot_id, &neighboring_bots) {
+                            decisions.push(BotDecision {
+                                bot_id,
+                                kind: BotDecisionKind::Attack,
+                                intent: GameplayIntent::Attack(AttackIntent {
+                                    target_owner,
+                                    troops: Some(probe_troops),
+                                }),
+                            });
+                        }
+                    }
+                }
+
                 let has_land_attack = if is_mfo {
                     !attackable_targets.is_empty() && (!has_neutral || has_tribe_target)
                 } else {
@@ -726,22 +1002,34 @@ impl SowEngine {
                 let (target_owner, is_neutral) = if let Some(attacker_id) = land_defender_target {
                     (attacker_id, false)
                 } else if is_mfo && !targets.is_empty() && (!has_neutral || has_tribe_target) {
-                    let mut chosen_target = None;
-                    let mut min_troops = f64::MAX;
-                    for &t_id in &targets {
-                        let Some(p_t) = self.state.player(t_id) else {
-                            continue;
-                        };
-                        if has_tribe_target && p_t.player_type != crate::player::PlayerType::Bot {
-                            continue;
-                        }
-                        if !self.ai_target_allowed(bot_id, t_id, defender_target) {
-                            continue;
-                        }
-                        if p_t.troops < min_troops {
-                            min_troops = p_t.troops;
-                            chosen_target = Some(t_id);
-                        }
+                    let mut chosen_target = has_tribe_target
+                        .then(|| {
+                            nation_bot_order
+                                .iter()
+                                .copied()
+                                .find(|target| attackable_targets.contains(target))
+                        })
+                        .flatten();
+                    if chosen_target.is_none()
+                        && (!has_tribe_target
+                            || self.state.config.bot_difficulty
+                                == crate::game_config::BotDifficulty::Terminator)
+                    {
+                        chosen_target = attackable_targets
+                            .iter()
+                            .copied()
+                            .filter(|target_id| {
+                                (!has_tribe_target
+                                    || self.state.player(*target_id).is_some_and(|target| {
+                                        target.player_type != crate::player::PlayerType::Bot
+                                    }))
+                                    && self.ai_target_allowed(bot_id, *target_id, defender_target)
+                            })
+                            .min_by(|a, b| {
+                                let a_troops = self.state.player(*a).map_or(f64::MAX, |p| p.troops);
+                                let b_troops = self.state.player(*b).map_or(f64::MAX, |p| p.troops);
+                                a_troops.total_cmp(&b_troops).then_with(|| a.cmp(b))
+                            });
                     }
                     if let Some(chosen_target) = chosen_target {
                         let is_defensive_target = defender_target == Some(chosen_target)

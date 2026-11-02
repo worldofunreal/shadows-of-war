@@ -1619,8 +1619,8 @@
 }
 
 /* The panel shape below decides which leader art file the heroes screen shows:
-   this tall column takes *_mobile.webp (portrait art), the short band in the
-   phone media query takes *_desktop.webp (landscape art). Owner decision, the
+   the tall column takes *_mobile.webp (portrait art), the compact-layout band
+   takes *_desktop.webp (landscape art). Owner decision, the
    file names are backwards on purpose — see heroesFeaturedArt() in
    main_menu.heroes.ts and AGENTS.md -> "Heroes featured art". */
 .sow-heroes__workspace {
@@ -1650,6 +1650,30 @@
     0 0 22px color-mix(in srgb, var(--sow-control-accent) 12%, transparent);
 }
 
+.sow-heroes__featured::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background-image: var(--sow-hero-featured-placeholder);
+  background-position: center 24%;
+  background-size: cover;
+  filter: blur(12px) brightness(0.46) saturate(0.86);
+  opacity: 0;
+  transform: scale(1.06);
+  transition: opacity 180ms ease;
+  content: "";
+  pointer-events: none;
+}
+
+.sow-heroes__featured.is-loading::before,
+.sow-heroes__featured.is-unavailable::before {
+  opacity: 0.72;
+}
+
+.sow-heroes__featured.is-locked::before {
+  filter: grayscale(1) blur(12px) brightness(0.46);
+}
+
 .sow-heroes__featured picture,
 .sow-heroes__featured picture img {
   position: absolute;
@@ -1660,6 +1684,7 @@
 }
 
 .sow-heroes__featured picture {
+  z-index: 1;
   transform: scale(1);
   transition:
     opacity 0.22s cubic-bezier(0.2, 0.8, 0.3, 1),
@@ -1681,11 +1706,13 @@
 
 .sow-heroes__featured.is-loading picture,
 .sow-heroes__featured.is-unavailable picture {
+  opacity: 0;
   transform: scale(0.96);
 }
 
 .sow-heroes__featured::after {
   position: absolute;
+  z-index: 2;
   inset: 0;
   content: "";
   background:
@@ -1699,9 +1726,13 @@
   pointer-events: none;
 }
 
+.sow-heroes__featured .showcase-loader {
+  z-index: 3;
+}
+
 .sow-heroes__featured-copy {
   position: relative;
-  z-index: 2;
+  z-index: 4;
   padding: 24px;
   transition:
     opacity 0.2s ease-out,
@@ -1712,16 +1743,6 @@
 .sow-heroes__featured.is-transitioning .sow-heroes__featured-copy {
   opacity: 0.35;
   transform: translateY(6px);
-}
-
-.sow-heroes__featured.is-animating-exit-next picture {
-  opacity: 0;
-  transform: scale(0.96) translateX(-24px);
-}
-
-.sow-heroes__featured.is-animating-exit-prev picture {
-  opacity: 0;
-  transform: scale(0.96) translateX(24px);
 }
 
 @keyframes sow-hero-enter-next {
@@ -2012,7 +2033,7 @@
 .sow-heroes__info {
   display: none;
   position: absolute;
-  z-index: 2;
+  z-index: 4;
   top: 10px;
   inset-inline-end: 10px;
   width: 36px;
@@ -2225,12 +2246,25 @@
   -webkit-line-clamp: 2;
 }
 
-@media (max-width: 900px) {
-  .sow-heroes__workspace {
-    grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.28fr);
+@media (min-width: 681px) and (max-width: 900px) and (orientation: landscape) {
+  #sow-menu[data-screen="heroes"] .sow-heroes__workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 2px;
   }
+
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured {
+    flex: 0 0 clamp(220px, 34dvh, 280px);
+    height: auto;
+  }
+
+  #sow-menu[data-screen="heroes"] .sow-heroes__roster {
+    flex: 1 1 auto;
+  }
+
   .sow-heroes__grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -2244,12 +2278,20 @@
   }
 
   .sow-heroes__workspace {
-    grid-template-columns: 1fr;
-    padding-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 2px;
   }
 
   .sow-heroes__featured {
     min-height: 0;
+    flex: 0 0 clamp(220px, 34dvh, 280px);
+    height: auto;
+  }
+
+  #sow-menu[data-screen="heroes"] .sow-heroes__roster {
+    flex: 1 1 auto;
   }
 
   .sow-heroes__featured-copy {
@@ -2432,20 +2474,6 @@
     padding-inline: 0;
   }
 
-  #sow-menu[data-screen="heroes"] .sow-heroes__workspace {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding-top: 2px;
-  }
-
-  /* Short band panel -> *_desktop.webp (landscape art). Owner decision, the
-       file names are backwards on purpose — see heroesFeaturedArt(). */
-  #sow-menu[data-screen="heroes"] .sow-heroes__featured {
-    flex: 0 0 clamp(220px, 34dvh, 280px);
-    height: auto;
-  }
-
   .sow-heroes__featured-copy {
     padding: 14px 16px;
   }
@@ -2486,7 +2514,6 @@
   }
 
   #sow-menu[data-screen="heroes"] .sow-heroes__roster {
-    flex: 1 1 auto;
     padding-inline-end: 0;
   }
 
