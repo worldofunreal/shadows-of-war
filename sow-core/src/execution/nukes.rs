@@ -1,5 +1,5 @@
 use crate::engine::SowEngine;
-use crate::game::{GamePhase, ProjectileKind};
+use crate::game::{GamePhase, ProjectileKind, TerritoryChange};
 
 /// Silo cooldown in ticks (90 ticks ≈ 9 seconds at 100ms/tick).
 pub const SILO_COOLDOWN_TICKS: u32 = 90;
@@ -51,12 +51,24 @@ impl SowEngine {
         self.projectiles.retain(|p| p.active);
 
         // Process detonations
+        let mut territory_changes = Vec::new();
         for (dx, dy, inner, outer, owner_id) in detonations {
-            self.detonate_nuke(dx, dy, inner, outer, owner_id);
+            territory_changes.extend(self.detonate_nuke(dx, dy, inner, outer, owner_id));
+        }
+        let elimination_candidates = self.annex_enclosed_components(territory_changes);
+        for (victim, conqueror, x, y) in elimination_candidates {
+            self.eliminate_player(victim, conqueror, x, y, false);
         }
     }
 
-    fn detonate_nuke(&mut self, cx: u32, cy: u32, inner: u32, outer: u32, owner_id: u16) {
+    fn detonate_nuke(
+        &mut self,
+        cx: u32,
+        cy: u32,
+        inner: u32,
+        outer: u32,
+        owner_id: u16,
+    ) -> Vec<TerritoryChange> {
         let w = self.state.map.width;
         let h = self.state.map.height;
         let outer_sq = (outer * outer) as i64;
@@ -70,6 +82,7 @@ impl SowEngine {
         let y_max = (cy_i + outer as i32).min(h as i32 - 1) as u32;
 
         let mut troops_damage: Vec<(u16, f64)> = Vec::new();
+        let mut territory_changes = Vec::new();
 
         for y in y_min..=y_max {
             for x in x_min..=x_max {
@@ -86,7 +99,10 @@ impl SowEngine {
                 if dist_sq <= inner_sq {
                     // Inner radius: wipe ownership
                     if tile_owner != 0 {
-                        self.state.set_tile_owner(x, y, 0);
+                        let (_, change) = self.state.set_tile_owner_for_execution(x, y, 0);
+                        if let Some(change) = change {
+                            territory_changes.push(change);
+                        }
                     }
                 } else {
                     // Outer radius: troop damage proportional to proximity
@@ -145,5 +161,6 @@ impl SowEngine {
         for victim_id in eliminated {
             self.eliminate_player(victim_id, owner_id, cx, cy, true);
         }
+        territory_changes
     }
 }

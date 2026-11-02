@@ -23,6 +23,7 @@ impl SowApp {
         self.update_assets();
         self.update_loader();
         self.poll_reward_profile_sync(now);
+        self.poll_identity_profile_retry(now);
         self.poll_profile_actions(now);
         self.poll_pointer_hold();
         let sim_started_at = crate::diag::startup_perf_timer();

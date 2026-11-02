@@ -122,7 +122,7 @@ pub struct Player {
     pub color: [f32; 3],
     pub alive: bool,
     pub has_spawned: bool,
-    /// Tile this player last spawned on. The radial's center recenters the camera here.
+    /// Tile this player last spawned on.
     #[serde(default)]
     pub home: Option<(u32, u32)>,
     pub sum_x: u64,

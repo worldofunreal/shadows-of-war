@@ -429,9 +429,10 @@
   margin: 0 auto;
   padding: var(--sow-menu-nav-padding);
   border: 1px solid var(--sow-line);
-  border-radius: 0.625rem;
-  background: rgba(9, 11, 15, 0.94);
-  box-shadow: 0 -0.5rem 1.5rem rgba(0, 0, 0, 0.18);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: var(--sow-tactical-surface-card-bg);
+  box-shadow: var(--sow-tactical-card-shadow);
   contain: layout;
 }
 
@@ -496,7 +497,7 @@
 }
 
 #sow-menu .sow-menu__main-nav-item:focus-visible {
-  outline: 2px solid var(--sow-gold-bright);
+  outline: var(--sow-tactical-focus-outline);
   outline-offset: -2px;
 }
 

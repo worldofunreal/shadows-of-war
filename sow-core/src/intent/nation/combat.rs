@@ -11,6 +11,7 @@ const GHOST_RETALIATION_DELAY_SALT: u64 = 0x4752_4459_0000_0001;
 const GHOST_RETALIATION_FORCE_SALT: u64 = 0x4752_4643_0000_0002;
 const BOT_NAVAL_CANDIDATE_BUDGET: usize = 256;
 const BOT_NAVAL_CHANCE_SALT: u64 = 0x4E41_5641_4C00_0003;
+const HUMAN_ATTACK_GRACE_MS: f64 = 120_000.0;
 
 struct NavalDecisionContext {
     attacks_players: bool,
@@ -73,19 +74,6 @@ fn is_real_human(player: &crate::player::Player) -> bool {
 }
 
 #[inline]
-pub(super) fn nation_target_allowed(
-    target_id: u16,
-    target_is_human: bool,
-    defender_target: Option<u16>,
-) -> bool {
-    if let Some(defender_id) = defender_target {
-        target_id == defender_id
-    } else {
-        !target_is_human
-    }
-}
-
-#[inline]
 fn human_betrayal_allowed(
     is_nation: bool,
     relation: Option<crate::protocol::CampaignRelation>,
@@ -112,6 +100,70 @@ fn campaign_attacks_players(
 }
 
 impl SowEngine {
+    fn human_attack_grace_elapsed(&self) -> bool {
+        let tick_rate_ms =
+            if self.state.config.tick_rate_ms.is_finite() && self.state.config.tick_rate_ms > 0.0 {
+                self.state.config.tick_rate_ms
+            } else {
+                100.0
+            };
+        let playing_start_tick = if self.state.config.random_spawn {
+            0
+        } else {
+            crate::game::deployment_phase_end_tick(tick_rate_ms)
+        };
+        let elapsed_ticks = self.state.tick.saturating_sub(playing_start_tick);
+        (elapsed_ticks as f64 * f64::from(tick_rate_ms)) >= HUMAN_ATTACK_GRACE_MS
+    }
+
+    fn is_attacked_by(&self, defender_id: u16, attacker_id: u16) -> bool {
+        self.ai_attack_index
+            .get(defender_id as usize)
+            .is_some_and(|indices| {
+                indices.iter().any(|&attack_index| {
+                    self.attacks.get(attack_index).is_some_and(|attack| {
+                        attack.owner_id == attacker_id
+                            && attack.target_owner == defender_id
+                            && !attack.retreating
+                    })
+                })
+            })
+    }
+
+    /// Real humans are protected during the opening grace period, except in
+    /// HumansVsNations and while disconnected. Campaign relations remain the
+    /// authority for scripted factions, and retaliation is always eligible.
+    fn ai_target_allowed(
+        &self,
+        attacker_id: u16,
+        target_id: u16,
+        defender_target: Option<u16>,
+    ) -> bool {
+        if defender_target == Some(target_id) || self.is_attacked_by(attacker_id, target_id) {
+            return true;
+        }
+        let Some(target) = self.state.player(target_id) else {
+            return false;
+        };
+        if !is_real_human(target) {
+            return true;
+        }
+
+        if self.campaign_relations.contains_key(&attacker_id) {
+            let relation = self.campaign_relations.get(&attacker_id).copied();
+            let override_attack = self.campaign_can_attack_player.get(&attacker_id).copied();
+            return campaign_attacks_players(relation, override_attack, true);
+        }
+
+        (self.state.config.game_mode == "HumansVsNations"
+            && self
+                .state
+                .player(attacker_id)
+                .is_some_and(|attacker| attacker.player_type == crate::player::PlayerType::Nation))
+            || target.disconnected
+            || self.human_attack_grace_elapsed()
+    }
+
     pub(super) fn ghost_retaliation_for(
         &self,
         ghost_id: u16,
@@ -379,6 +431,11 @@ impl SowEngine {
                             let Some(p_ally) = self.state.player(ally_id) else {
                                 continue;
                             };
+                            if is_real_human(p_ally)
+                                && !self.ai_target_allowed(bot_id, ally_id, None)
+                            {
+                                continue;
+                            }
                             if p_ally.is_human()
                                 && !human_betrayal_allowed(is_mfo, campaign_relation)
                             {
@@ -497,6 +554,19 @@ impl SowEngine {
                             {
                                 return false;
                             }
+                            let human_target_allowed =
+                                self.state.player(id).is_some_and(is_real_human)
+                                    && (defensive_player_attackers.contains(&id)
+                                        || ready_retaliation.is_some_and(|retaliation| {
+                                            retaliation.attacker_id == id
+                                                && retaliation.is_ready_at(self.state.tick)
+                                        })
+                                        || self.ai_target_allowed(bot_id, id, None));
+                            if self.state.player(id).is_some_and(is_real_human)
+                                && !human_target_allowed
+                            {
+                                return false;
+                            }
                             if betray_then_attack == Some(id) {
                                 return true;
                             }
@@ -511,6 +581,7 @@ impl SowEngine {
                                     && let Some(t) = self.state.player(id)
                                     && t.player_type != crate::player::PlayerType::Bot
                                     && !defensive_player_attackers.contains(&id)
+                                    && !human_target_allowed
                                 {
                                     return false;
                                 }
@@ -586,15 +657,28 @@ impl SowEngine {
                     targets.push(defender_id);
                 }
 
-                let has_land_attack = if is_mfo {
-                    targets.iter().any(|&target_id| {
+                // Vanilla tribes keep their passive AI-vs-AI food-chain role,
+                // but may include eligible real humans after the shared grace
+                // period (or when disconnected / explicitly defending).
+                let attackable_targets: Vec<u16> = targets
+                    .iter()
+                    .copied()
+                    .filter(|&target_id| {
                         self.state.player(target_id).is_some_and(|target| {
-                            nation_target_allowed(target_id, is_real_human(target), defender_target)
+                            if is_real_human(target) {
+                                defensive_player_attackers.contains(&target_id)
+                                    || self.ai_target_allowed(bot_id, target_id, defender_target)
+                            } else {
+                                attacks_players
+                            }
                         })
-                    }) && (!has_neutral || has_tribe_target)
+                    })
+                    .collect();
+
+                let has_land_attack = if is_mfo {
+                    !attackable_targets.is_empty() && (!has_neutral || has_tribe_target)
                 } else {
-                    !targets.is_empty()
-                        && attacks_players
+                    !attackable_targets.is_empty()
                         && troops >= max_troops * slot.profile.trigger_ratio
                 };
                 let local_defense =
@@ -615,7 +699,7 @@ impl SowEngine {
                             defender_target,
                             has_land_move,
                             force_naval,
-                            has_hostile_neighbors: attacks_players && !targets.is_empty(),
+                            has_hostile_neighbors: !attackable_targets.is_empty(),
                         },
                         decisions,
                     )
@@ -627,8 +711,8 @@ impl SowEngine {
                 //   1. Defend the biggest inbound attack.
                 //   2. Nations: eat tribes or expand into wilderness.
                 //      Tribes remain valid food even while free land exists.
-                //   3. Nations: never initiate against Humans; other AI
-                //      players remain valid fallback.
+                //   3. Nations: prefer tribes, then wilderness, then any
+                //      eligible rival (including humans after the grace).
                 //   4. Other tiers keep their existing player/neutral behavior.
                 let land_defender_target =
                     defender_target.filter(|target| neighbor_players.contains(target));
@@ -651,7 +735,7 @@ impl SowEngine {
                         if has_tribe_target && p_t.player_type != crate::player::PlayerType::Bot {
                             continue;
                         }
-                        if !nation_target_allowed(t_id, is_real_human(p_t), defender_target) {
+                        if !self.ai_target_allowed(bot_id, t_id, defender_target) {
                             continue;
                         }
                         if p_t.troops < min_troops {
@@ -660,6 +744,21 @@ impl SowEngine {
                         }
                     }
                     if let Some(chosen_target) = chosen_target {
+                        let is_defensive_target = defender_target == Some(chosen_target)
+                            || self.is_attacked_by(bot_id, chosen_target);
+                        let is_target_human =
+                            self.state.player(chosen_target).is_some_and(is_real_human);
+                        if is_target_human && !is_defensive_target {
+                            let refuse_roll = self
+                                .state
+                                .player_mut(bot_id)
+                                .unwrap()
+                                .bot_rng
+                                .next_int(0, 100);
+                            if refuse_roll < refuse_human_chance {
+                                return;
+                            }
+                        }
                         (chosen_target, false)
                     } else if has_neutral {
                         (0, true)
@@ -668,13 +767,10 @@ impl SowEngine {
                     }
                 } else if is_mfo && has_neutral {
                     (0, true)
-                } else if attacks_players
-                    && !targets.is_empty()
-                    && troops >= max_troops * trigger_ratio
-                {
+                } else if !attackable_targets.is_empty() && troops >= max_troops * trigger_ratio {
                     let target_owner = if bot_iq >= 130 {
-                        let mut best_target = targets[0];
-                        for &t_id in &targets {
+                        let mut best_target = attackable_targets[0];
+                        for &t_id in &attackable_targets {
                             if let (Some(p_t), Some(p_b)) =
                                 (self.state.player(t_id), self.state.player(best_target))
                             {
@@ -690,8 +786,8 @@ impl SowEngine {
                         }
                         best_target
                     } else if bot_iq >= 100 {
-                        let mut weakest = targets[0];
-                        for &t_id in &targets {
+                        let mut weakest = attackable_targets[0];
+                        for &t_id in &attackable_targets {
                             if let (Some(p_t), Some(p_w)) =
                                 (self.state.player(t_id), self.state.player(weakest))
                                 && p_t.troops < p_w.troops
@@ -702,22 +798,26 @@ impl SowEngine {
                         weakest
                     } else {
                         let p_mut = self.state.player_mut(bot_id).unwrap();
-                        let roll = p_mut.bot_rng.next_int(0, targets.len() as i32) as usize;
-                        targets[roll]
+                        let roll =
+                            p_mut.bot_rng.next_int(0, attackable_targets.len() as i32) as usize;
+                        attackable_targets[roll]
                     };
 
-                    let is_target_human = self
-                        .state
-                        .player(target_owner)
-                        .map(is_real_human)
-                        .unwrap_or(false);
+                    // Keep the historical random stream for active non-Nation
+                    // target choices, including AI opponents. Only apply the
+                    // refusal decision to eligible proactive human targets.
                     let refuse_roll = self
                         .state
                         .player_mut(bot_id)
                         .unwrap()
                         .bot_rng
                         .next_int(0, 100);
-                    if is_target_human && refuse_roll < refuse_human_chance {
+                    let is_defensive_target = defender_target == Some(target_owner)
+                        || self.is_attacked_by(bot_id, target_owner);
+                    let is_target_human =
+                        self.state.player(target_owner).is_some_and(is_real_human);
+                    if is_target_human && !is_defensive_target && refuse_roll < refuse_human_chance
+                    {
                         return;
                     }
 
@@ -742,11 +842,15 @@ impl SowEngine {
                 };
 
                 let is_defending = land_defender_target.is_some();
-                // Initiation against players is gated on `attacks_players`
-                // (Vanilla tribes expand into neutral land but never initiate
-                // against another player). Active tiers may
-                // initiate once their trigger threshold is reached.
-                let can_initiate = attacks_players && !assault_controls_attacks;
+                // Vanilla tribes may initiate only against humans permitted by
+                // the shared grace/disconnection rule; their neutral growth
+                // remains independent of player-target behavior.
+                let target_is_real_human =
+                    self.state.player(target_owner).is_some_and(is_real_human);
+                let can_initiate = !assault_controls_attacks
+                    && (attacks_players
+                        || (target_is_real_human
+                            && self.ai_target_allowed(bot_id, target_owner, defender_target)));
                 let (mut target_owner, mut is_neutral) = (target_owner, is_neutral);
 
                 // OF odds discipline (AiAttackBehavior parity) — initiation
@@ -1114,12 +1218,8 @@ impl SowEngine {
                 {
                     continue;
                 }
-                if slot.tier == AiTier::Nation
-                    && !nation_target_allowed(
-                        target_owner,
-                        is_real_human(target),
-                        context.defender_target,
-                    )
+                if is_real_human(target)
+                    && !self.ai_target_allowed(bot_id, target_owner, context.defender_target)
                 {
                     continue;
                 }
@@ -1131,8 +1231,9 @@ impl SowEngine {
                 {
                     continue;
                 }
+                let can_attack_player = context.attacks_players || is_real_human(target);
                 if !is_defending
-                    && (!context.attacks_players
+                    && (!can_attack_player
                         || (!trigger_met
                             && !(slot.tier == AiTier::Nation
                                 && target.player_type == crate::player::PlayerType::Bot)))
@@ -1248,14 +1349,17 @@ impl SowEngine {
             return;
         }
 
-        let target_allowed = |target_id: u16| {
-            self.state.player(target_id).is_some_and(|p| {
-                nation_target_allowed(target_id, is_real_human(p), defender_target)
+        let legal_targets: Vec<u16> = targets
+            .iter()
+            .copied()
+            .filter(|&target_id| {
+                self.state.player(target_id).is_some()
+                    && self.ai_target_allowed(bot_id, target_id, defender_target)
             })
-        };
+            .collect();
         let has_legal_target = defender_target
             .is_some_and(|target_id| targets.contains(&target_id))
-            || targets.iter().copied().any(target_allowed);
+            || !legal_targets.is_empty();
         if !has_legal_target {
             return;
         }
@@ -1326,13 +1430,10 @@ impl SowEngine {
         let primary_target = defender_target
             .filter(|target_id| targets.contains(target_id))
             .or_else(|| {
-                if targets.contains(&leader) && target_allowed(leader) {
+                if legal_targets.contains(&leader) {
                     Some(leader)
                 } else {
-                    targets
-                        .iter()
-                        .copied()
-                        .find(|&target_id| target_allowed(target_id))
+                    legal_targets.first().copied()
                 }
             });
         let Some(primary_target) = primary_target else {

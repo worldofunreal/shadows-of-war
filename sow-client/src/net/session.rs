@@ -78,8 +78,16 @@ impl SowApp {
         if self.net.is_offline {
             return None;
         }
+        if crate::store_portals::wou_session_pending() {
+            return None;
+        }
         let identity = crate::store_portals::load_identity("Player");
         if identity.provider == "wou" {
+            if !self.identity_profile_verified
+                || self.progress_account_id.as_deref() != identity.external_id.as_deref()
+            {
+                return None;
+            }
             let token = identity.auth_token.clone().filter(|t| !t.is_empty())?;
             return Some(sow_core::protocol::AuthProof {
                 provider: "wou".to_string(),

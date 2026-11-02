@@ -96,10 +96,12 @@
 .sow-menu__custom-card {
   position: relative;
   padding: 16px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(12, 14, 18, 0.85);
-  backdrop-filter: blur(12px);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  background: var(--sow-tactical-surface-card-bg);
+  box-shadow: var(--sow-tactical-card-shadow);
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
   box-sizing: border-box;
 }
 
@@ -213,9 +215,16 @@
   -webkit-appearance: none;
   appearance: none;
   height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--sow-tactical-track-border);
+  border-radius: var(--sow-tactical-track-radius-compact);
+  background: var(--sow-tactical-track-bg);
+  box-shadow: var(--sow-tactical-track-shadow);
   outline: none;
+}
+
+.sow-menu__range:focus-visible {
+  outline: var(--sow-tactical-focus-outline);
+  outline-offset: var(--sow-tactical-focus-offset);
 }
 
 .sow-menu__range::-webkit-slider-thumb {

@@ -37,6 +37,8 @@ const menuCss = Object.fromEntries(
     menuCssFiles.map((file) => [file, fs.readFileSync(path.join(shell, file), "utf8")]),
 );
 const profileCss = fs.readFileSync(path.join(shell, "main_menu.profile.css"), "utf8");
+const tutorialCss = fs.readFileSync(path.join(shell, "main_menu.tutorial.css"), "utf8");
+const controlsCss = fs.readFileSync(path.join(shell, "sow-controls.css"), "utf8");
 const profileSource = fs.readFileSync(path.join(shell, "main_menu.profile.ts"), "utf8");
 const serverSource = fs.readFileSync(path.join(shell, "../../sow-data/src/main.rs"), "utf8");
 const privacyPage = fs.readFileSync(path.join(shell, "../site/privacy/index.html"), "utf8");
@@ -44,12 +46,69 @@ const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.ts"), "utf8"
 const jestSource = fs.readFileSync(path.join(shell, "main_menu.jest.ts"), "utf8");
 const campaignModule = fs.readFileSync(path.join(shell, "../../sow-client/src/campaign/mod.rs"), "utf8");
 
-function renderSettingsBody(source, endMarker) {
+test("in-game GUI panels, tracks, and semantic fills share the tactical theme tokens", () => {
+    assert.match(controlsCss, /--sow-tactical-surface-card-bg:/);
+    assert.match(controlsCss, /--sow-tactical-surface-subcard-bg:/);
+    assert.match(controlsCss, /--sow-tactical-track-bg:/);
+    assert.match(controlsCss, /--sow-tactical-focus-outline:/);
+    assert.match(controlsCss, /--sow-fill-army-gradient:/);
+    assert.match(controlsCss, /--sow-fill-pending-wash:/);
+    assert.match(controlsCss, /--sow-fill-construction-gradient:/);
+
+    assert.match(menuCss["main_menu.base.css"], /\.sow-menu__topbar\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
+    assert.match(menuCss["main_menu.layout.css"], /\.sow-menu__main-nav\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
+    assert.match(menuCss["main_menu.lobbies.css"], /\.sow-menu__lobby-chip,[\s\S]*?background: var\(--sow-tactical-surface-compact-bg\)/);
+    assert.match(menuCss["main_menu.create.css"], /\.sow-menu__custom-card\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
+    assert.match(menuCss["main_menu.queue.css"], /\.sow-menu__queue-summary-card\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
+    assert.match(menuCss["main_menu.settings.css"], /\.sow-menu__settings-modal\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
+    assert.match(menuCss["main_menu.campaign.css"], /\.sow-campaign__episode\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
+    assert.match(profileCss, /--sow-profile-panel: var\(--sow-tactical-surface-card-bg\)/);
+    assert.match(hudCss, /--sow-nameplate-troop-fill: var\(--sow-fill-army-gradient\)/);
+    assert.match(hudCss, /var\(--sow-fill-pending-wash\)/);
+    assert.match(hudCss, /\.sow-hud__building-progress-fill\s*\{[^}]*background: var\(--sow-fill-construction-gradient\)/);
+    assert.match(tutorialCss, /\.sow-story__dialog\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
+
+    const themedUiCss = [
+        menuCss["main_menu.base.css"],
+        menuCss["main_menu.layout.css"],
+        menuCss["main_menu.lobbies.css"],
+        menuCss["main_menu.create.css"],
+        menuCss["main_menu.queue.css"],
+        menuCss["main_menu.settings.css"],
+        menuCss["main_menu.campaign.css"],
+        hudCss,
+        tutorialCss,
+        profileCss,
+    ].join("\n");
+    assert.doesNotMatch(themedUiCss, /linear-gradient\(\s*to top,\s*#246e10/);
+    assert.doesNotMatch(themedUiCss, /linear-gradient\(90deg,\s*#d88310/);
+});
+
+test("campaign heading uses available width before wrapping translated words", () => {
+    const campaignCss = menuCss["main_menu.campaign.css"];
+    const headingStart = campaignCss.indexOf(".sow-campaign__intro h1 {");
+    const headingEnd = campaignCss.indexOf("}", headingStart);
+    assert.ok(headingStart >= 0 && headingEnd > headingStart);
+    const desktopHeading = campaignCss.slice(headingStart, headingEnd);
+    assert.match(desktopHeading, /max-width:\s*100%/);
+    assert.match(desktopHeading, /word-break:\s*normal/);
+    assert.match(desktopHeading, /overflow-wrap:\s*anywhere/);
+    assert.doesNotMatch(desktopHeading, /max-width:\s*7ch/);
+
+    const mobileHeadingStart = campaignCss.indexOf(".sow-campaign__intro h1 {", headingEnd);
+    const mobileHeadingEnd = campaignCss.indexOf("}", mobileHeadingStart);
+    assert.ok(mobileHeadingStart > headingEnd && mobileHeadingEnd > mobileHeadingStart);
+    const mobileHeading = campaignCss.slice(mobileHeadingStart, mobileHeadingEnd);
+    assert.match(mobileHeading, /word-break:\s*normal/);
+    assert.match(mobileHeading, /overflow-wrap:\s*anywhere/);
+});
+
+function renderSettingsBody(source) {
     const start = source.indexOf("function renderSettings()");
-    const end = source.indexOf(endMarker, start);
+    const end = source.indexOf("\n}\n", start);
     assert.notEqual(start, -1);
     assert.notEqual(end, -1);
-    return source.slice(start, end);
+    return source.slice(start, end + 2);
 }
 
 test("profile presents verified history, career commanders, localized achievements, and a paged global board", () => {
@@ -259,7 +318,7 @@ test("confirmed leader choice stays current until the published state catches up
     assert.equal(context.currentLeaderSelection().selected_leader, "SunTzu");
 });
 
-test("leader selection is instant, debounced, queue-locked, and reopening uses the staged choice", () => {
+test("leader selection confirms immediately, persists after debounce, and reopening uses the staged choice", () => {
     const previewConcreteStart = shellSource.indexOf('if (command === "preview_leader")');
     const previewRandomStart = shellSource.indexOf('if (command === "preview_random_leader")');
     const randomStart = shellSource.indexOf('if (command === "confirm_random_leader")');
@@ -280,25 +339,19 @@ test("leader selection is instant, debounced, queue-locked, and reopening uses t
     );
     const heroesNavigation = shellSource.slice(navStart, navEnd);
 
-    assert.match(
-        previewConcrete,
-        /!isHeroSelectionQueueLocked\(\)/,
-        "Concrete selection must respect queue lock",
-    );
+    assert.doesNotMatch(previewConcrete, /isHeroSelectionQueueLocked/);
     assert.match(
         previewConcrete,
         /stageLeaderSelection\(false, leaderId\);\s*scheduleLeaderPersist\(false, leaderId\);/,
     );
+    assert.match(previewConcrete, /if \(!updateHeroesPreview\(\)\) render\(\);\s*updateTopbar\(\);/);
 
-    assert.match(
-        previewRandom,
-        /!isHeroSelectionQueueLocked\(\)/,
-        "Random selection must respect queue lock",
-    );
+    assert.doesNotMatch(previewRandom, /isHeroSelectionQueueLocked/);
     assert.match(
         previewRandom,
         /stageLeaderSelection\(true, null\);\s*scheduleLeaderPersist\(true, null\);/,
     );
+    assert.match(previewRandom, /if \(!updateHeroesPreview\(\)\) render\(\);\s*updateTopbar\(\);/);
     assert.doesNotMatch(previewRandom, /leader_id/, "Random must not carry a previous concrete leader ID");
 
     assert.match(pickerOpen, /currentLeaderSelection\(\)/);
@@ -316,6 +369,13 @@ test("header keeps only the nickname and sizes it to the available space", () =>
     const topbar = shellSource.slice(topbarStart, topbarEnd);
     assert.match(topbar, /data-role='display-name'/);
     assert.doesNotMatch(topbar, /selected_leader_name|selected_civilization|kingdom/i);
+
+    const updateStart = shellSource.indexOf("function updateTopbar()");
+    const updateEnd = shellSource.indexOf("\nfunction ", updateStart + 1);
+    assert.ok(updateStart >= 0 && updateEnd > updateStart);
+    const topbarUpdate = shellSource.slice(updateStart, updateEnd);
+    assert.match(topbarUpdate, /const avatarUrl = avatarImage\(\)/);
+    assert.match(topbarUpdate, /avatar\.style\.backgroundImage =/);
 
     const baseCss = menuCss["main_menu.base.css"];
     const layoutCss = menuCss["main_menu.layout.css"];
@@ -402,8 +462,8 @@ test("match history row shows the leader and verified KDA while provisional exit
 
 test("settings panel keeps only useful controls and real account state", () => {
     const settings = [
-        renderSettingsBody(surfacesSource, "export function renderAuthModal"),
-        renderSettingsBody(pokiSource, "function pokiLicenseUrl"),
+        renderSettingsBody(surfacesSource),
+        renderSettingsBody(pokiSource),
     ];
     for (const body of settings) {
         assert.match(body, /menu\.settings/);
@@ -423,11 +483,11 @@ test("settings panel keeps only useful controls and real account state", () => {
         );
     }
     assert.match(
-        renderSettingsBody(jestSource, "function renderMenuAttribution"),
+        renderSettingsBody(jestSource),
         /renderSettingsPrivacySection/,
     );
     assert.match(
-        renderSettingsBody(jestSource, "function renderMenuAttribution"),
+        renderSettingsBody(jestSource),
         /renderLocaleSettingRow\(\)/,
     );
     assert.match(settingsSource, /SOW_t\("menu\.language"\)/);
@@ -1320,21 +1380,17 @@ test("skill icons stay beside full hero details and out of compact avatar cards"
     assert.match(home, /renderHeroBriefing\(leader, "home", "sow-home-selected"\)/);
 });
 
-test("hero cards show lock badge and queue notice during matchmaking and omit confirm button", () => {
+test("hero cards confirm selection without a lock notice or a confirm button", () => {
     const fullStart = heroesSource.indexOf("export function renderHeroes()");
     const full = heroesSource.slice(fullStart);
     assert.doesNotMatch(full, /class='[^']*sow-heroes__confirm/);
-    assert.match(full, /data-hero-queue-notice/);
+    assert.doesNotMatch(full, /data-hero-queue-notice|isHeroSelectionQueueLocked|heroLockBadgeSvg/);
 
     const cardStart = heroesSource.indexOf("function renderHeroesCard");
     const cardEnd = heroesSource.indexOf("function randomLeaderName", cardStart);
     const card = heroesSource.slice(cardStart, cardEnd);
-    assert.match(card, /isHeroSelectionQueueLocked\(\)/);
-    assert.match(card, /is-queue-locked/);
-    assert.match(card, /heroLockBadgeSvg\(\)/);
-
-    assert.match(profileCss, /\.sow-heroes__card-lock\s*\{/);
-    assert.match(profileCss, /\.sow-heroes__card\.is-queue-locked:not\(\.is-selected\)/);
+    assert.doesNotMatch(card, /is-queue-locked|heroLockBadgeSvg/);
+    assert.doesNotMatch(profileCss, /\.sow-heroes__queue-notice|\.sow-heroes__card-lock|is-queue-locked/);
 });
 
 test("hero selection stacks the skill below identity and the home briefing stays behind controls and hides in portrait", () => {

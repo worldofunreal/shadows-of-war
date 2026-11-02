@@ -1,6 +1,5 @@
 import {
     asset,
-    currentLeaderSelection,
     currentScreen,
     esc,
     leaderArtUrl,
@@ -29,25 +28,113 @@ function isWeeklyFreeRotation(leader: MenuLeader | null) {
     return !!leader && leader.available === true && leader.free_rotation === true && leader.owned === false;
 }
 
-export function isHeroSelectionQueueLocked(): boolean {
-    if (!menuUi.state) return false;
-    return !!(
-        menuUi.state.waiting ||
-        menuUi.state.ranked_search_active ||
-        menuUi.state.joined_lobby_id != null ||
-        menuUi.state.pending_lobby_id != null
+type HeroesAvatarExpression = "calm" | "happy" | "angry";
+
+const heroesAvatarAnimations = new WeakMap<HTMLImageElement, Animation>();
+
+function heroesAvatarUrl(slug: string, expression: HeroesAvatarExpression) {
+    const path =
+        expression === "calm"
+            ? "gameplay/avatars/" + slug + ".webp"
+            : "gameplay/avatars/expressions/" + slug + "_" + expression + ".webp";
+    return asset(path);
+}
+
+function heroesMotionReduced() {
+    return (
+        (typeof window.matchMedia === "function" &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches) ||
+        !!(menuUi.state && menuUi.state.settings && menuUi.state.settings.reduced_motion)
     );
 }
 
-export function heroLockBadgeSvg(): string {
-    return (
-        "<span class='sow-heroes__card-lock' aria-hidden='true'>" +
-        "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>" +
-        "<rect x='3' y='11' width='18' height='11' rx='2' ry='2'></rect>" +
-        "<path d='M7 11V7a5 5 0 0 1 10 0v4'></path>" +
-        "</svg></span>"
+function setHeroesAvatar(image: HTMLImageElement | null, slug: string, expression: HeroesAvatarExpression) {
+    if (!image || !slug) return;
+    const source = heroesAvatarUrl(slug, expression);
+    const previousSource = image.getAttribute("src") || image.src || "";
+    if (previousSource === source || (previousSource && previousSource.endsWith(source))) return;
+    image.src = source;
+    if (heroesMotionReduced() || typeof image.animate !== "function") return;
+
+    const running = heroesAvatarAnimations.get(image);
+    if (running) running.cancel();
+    const animation = image.animate(
+        [
+            { opacity: 0.35, transform: "scale(0.86) translateY(2px)" },
+            { opacity: 1, transform: "scale(1) translateY(0)" },
+        ],
+        {
+            duration: expression === "happy" ? 340 : 250,
+            easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+            fill: "both",
+        },
     );
+    heroesAvatarAnimations.set(image, animation);
 }
+
+function setHeroesCardAvatar(card: HTMLElement, expression: HeroesAvatarExpression) {
+    setHeroesAvatar(card.querySelector<HTMLImageElement>("img"), card.dataset.avatarSlug || "", expression);
+}
+
+function heroesAvatarCard(event: Event) {
+    const target = event.target;
+    return target instanceof Element
+        ? target.closest<HTMLElement>(".sow-heroes__card[data-avatar-slug]")
+        : null;
+}
+
+function setFeaturedArtAvailability(image: HTMLImageElement, unavailable: boolean) {
+    const slug = image.dataset.heroArtSlug;
+    const source = (image.currentSrc || image.src || "").split(/[?#]/, 1)[0];
+    if (
+        !slug ||
+        (!source.endsWith("/leaders/" + slug + "_desktop.webp") &&
+            !source.endsWith("/leaders/" + slug + "_mobile.webp"))
+    )
+        return;
+    const featured = image.closest<HTMLElement>(".sow-heroes__featured");
+    if (!featured) return;
+    featured.classList.remove("is-loading", "is-unavailable", "is-transitioning");
+    if (unavailable) featured.classList.add("is-unavailable");
+}
+
+root.addEventListener(
+    "load",
+    function (event) {
+        const image = event.target instanceof HTMLImageElement ? event.target : null;
+        if (image && image.hasAttribute("data-hero-featured-art")) setFeaturedArtAvailability(image, false);
+    },
+    true,
+);
+root.addEventListener(
+    "error",
+    function (event) {
+        const image = event.target instanceof HTMLImageElement ? event.target : null;
+        if (!image) return;
+        if (image.hasAttribute("data-hero-featured-art")) setFeaturedArtAvailability(image, true);
+        if (image.hasAttribute("data-hero-art-avatar")) image.hidden = true;
+    },
+    true,
+);
+root.addEventListener("pointerover", function (event) {
+    const card = heroesAvatarCard(event);
+    if (!card || (event.relatedTarget instanceof Node && card.contains(event.relatedTarget))) return;
+    setHeroesCardAvatar(card, "happy");
+});
+root.addEventListener("pointerout", function (event) {
+    const card = heroesAvatarCard(event);
+    if (!card || (event.relatedTarget instanceof Node && card.contains(event.relatedTarget))) return;
+    setHeroesCardAvatar(card, card.classList.contains("is-selected") ? "angry" : "calm");
+});
+root.addEventListener("focusin", function (event) {
+    const card = heroesAvatarCard(event);
+    if (card) setHeroesCardAvatar(card, "happy");
+});
+root.addEventListener("focusout", function (event) {
+    const card = heroesAvatarCard(event);
+    if (!card || (event.relatedTarget instanceof Node && card.contains(event.relatedTarget))) return;
+    setHeroesCardAvatar(card, card.classList.contains("is-selected") ? "angry" : "calm");
+});
 
 function heroesStatusLabel(leader: MenuLeader) {
     if (!leader || leader.id === "Boudica") return "";
@@ -152,19 +239,19 @@ function heroesFeaturedArt(slug: string) {
 function renderHeroesCard(leader: MenuLeader, activeId: string) {
     const selected = leader.id === activeId;
     const locked = leader.available === false;
-    const queueLocked = typeof isHeroSelectionQueueLocked === "function" && isHeroSelectionQueueLocked();
-    const avatarUrl = asset("gameplay/avatars/" + leaderArtSlug(leader) + ".webp");
+    const avatarSlug = leaderArtSlug(leader);
+    const avatarUrl = heroesAvatarUrl(avatarSlug, selected ? "angry" : "calm");
     return (
         "<button class='sow-heroes__card" +
         (selected ? " is-selected" : "") +
         (locked ? " is-locked" : "") +
-        (queueLocked ? " is-queue-locked" : "") +
         "' type='button' data-command='preview_leader' data-leader-id='" +
         esc(leader.id) +
+        "' data-avatar-slug='" +
+        esc(avatarSlug) +
         "' aria-pressed='" +
         selected +
         "'>" +
-        (queueLocked && typeof heroLockBadgeSvg === "function" ? heroLockBadgeSvg() : "") +
         "<span class='sow-heroes__card-art'><img src='" +
         esc(avatarUrl) +
         "' alt='' width='68' height='68' loading='lazy' decoding='async'></span>" +
@@ -199,16 +286,13 @@ function renderRandomLeaderCard(selected: boolean) {
         !menuUi.heroesSearchQuery.trim() ||
         randomLeaderName().toLowerCase().indexOf(menuUi.heroesSearchQuery.trim().toLowerCase()) !== -1;
     if (!matchesSearch || menuUi.heroesRegionFilter !== "all") return "";
-    const queueLocked = typeof isHeroSelectionQueueLocked === "function" && isHeroSelectionQueueLocked();
     const avatarUrl = asset("gameplay/avatars/random.webp");
     return (
         "<button class='sow-heroes__card" +
         (selected ? " is-selected" : "") +
-        (queueLocked ? " is-queue-locked" : "") +
         "' type='button' data-command='preview_random_leader' aria-pressed='" +
         selected +
         "'>" +
-        (queueLocked && typeof heroLockBadgeSvg === "function" ? heroLockBadgeSvg() : "") +
         "<span class='sow-heroes__card-art'><img src='" +
         esc(avatarUrl) +
         "' alt='' width='68' height='68' loading='lazy' decoding='async'></span>" +
@@ -272,15 +356,11 @@ function renderHeroesRegionDropdown() {
 function renderHeroesRoster(activeId: string, randomSelected: boolean) {
     const leaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
     const filtered = heroesRoster(leaders);
-    const queueLocked = typeof isHeroSelectionQueueLocked === "function" && isHeroSelectionQueueLocked();
-    const equippedSelection = typeof currentLeaderSelection === "function" ? currentLeaderSelection() : { selected_leader: null, prefer_random_leader: false };
-    const activeEquippedId = equippedSelection.selected_leader;
-    const activeEquippedRandom = !!equippedSelection.prefer_random_leader;
     const cards =
-        renderRandomLeaderCard(queueLocked ? activeEquippedRandom : randomSelected) +
+        renderRandomLeaderCard(randomSelected) +
         filtered
             .map(function (leader) {
-                return renderHeroesCard(leader, queueLocked ? activeEquippedId || "" : activeId);
+                return renderHeroesCard(leader, randomSelected ? "" : activeId);
             })
             .join("");
     return (
@@ -322,15 +402,32 @@ export function updateHeroesPreview() {
     const status = featured.querySelector<HTMLElement>("[data-hero-status]");
     const locked = activeLeader.available === false;
     featured.classList.toggle("is-locked", locked);
+    featured.classList.toggle("is-motion-reduced", heroesMotionReduced());
     // prepareLeaderArt() warms the loader splash art (loader.js), not this
     // panel art. Leave it alone; the <picture> fetches its own file.
     prepareLeaderArt(activeLeader);
     // Panel-shape mapping — see heroesFeaturedArt(). Do not invert it.
     const featuredArt = heroesFeaturedArt(activeLeader.slug);
-    if (source) source.srcset = featuredArt.band;
+    const artSlug = leaderArtSlug(activeLeader);
     if (image) {
-        image.src = featuredArt.column;
         image.alt = randomSelected ? randomLeaderName() : leaderDisplayName(activeLeader);
+        if (image.dataset.heroArtSlug !== artSlug) {
+            featured.classList.remove("is-unavailable");
+            featured.classList.add("is-loading", "is-transitioning");
+            image.dataset.heroArtSlug = artSlug;
+            if (source) source.srcset = featuredArt.band;
+            image.src = featuredArt.column;
+            const fallbackAvatar = featured.querySelector<HTMLImageElement>("[data-hero-art-avatar]");
+            if (fallbackAvatar) fallbackAvatar.hidden = false;
+            setHeroesAvatar(fallbackAvatar, artSlug, "calm");
+            if (image.complete) {
+                const settle = function () {
+                    setFeaturedArtAvailability(image, image.naturalWidth === 0);
+                };
+                if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(settle);
+                else settle();
+            }
+        }
     }
     if (briefing)
         briefing.innerHTML = renderHeroBriefing(
@@ -348,25 +445,17 @@ export function updateHeroesPreview() {
     updateHeroesRotationCountdown();
     const purchase = featured.querySelector("[data-hero-purchase]");
     if (purchase) purchase.innerHTML = randomSelected ? "" : renderLeaderPurchase(activeLeader);
-    const queueNotice = featured.querySelector<HTMLElement>("[data-hero-queue-notice]");
-    if (queueNotice) queueNotice.hidden = !isHeroSelectionQueueLocked();
-    const isQueueLocked = isHeroSelectionQueueLocked();
-    const equippedSelection = currentLeaderSelection();
-    const activeEquippedId = equippedSelection.selected_leader;
     const cards = panel.querySelectorAll<HTMLElement>("[data-command='preview_leader']");
     for (let i = 0; i < cards.length; i++) {
         const cardLeaderId = cards[i].dataset.leaderId;
-        const selected = isQueueLocked
-            ? cardLeaderId === activeEquippedId
-            : cardLeaderId === activeLeader.id;
+        const selected = cardLeaderId === activeLeader.id;
         cards[i].classList.toggle("is-selected", selected);
         cards[i].setAttribute("aria-pressed", selected ? "true" : "false");
+        setHeroesCardAvatar(cards[i], selected ? "angry" : "calm");
     }
     const randomCard = panel.querySelector("[data-command='preview_random_leader']");
     if (randomCard) {
-        const selected = isQueueLocked
-            ? !!equippedSelection.prefer_random_leader
-            : randomSelected;
+        const selected = randomSelected;
         randomCard.classList.toggle("is-selected", selected);
         randomCard.setAttribute("aria-pressed", selected ? "true" : "false");
     }
@@ -463,6 +552,16 @@ export function selectDropdown(key: string, value: string) {
     input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function renderHeroesArtLoader(avatarSlug: string) {
+    return (
+        "<div class='showcase-loader' data-hero-art-loader aria-hidden='true'>" +
+        "<svg class='showcase-loader-ring' viewBox='0 0 120 120' focusable='false'><defs><linearGradient id='showcase-loader-arc' x1='0' y1='0' x2='1' y2='1'><stop offset='0' class='showcase-loader-head'></stop><stop offset='.45' class='showcase-loader-body'></stop><stop offset='1' class='showcase-loader-tail'></stop></linearGradient></defs><circle class='showcase-loader-orbit' cx='60' cy='60' r='58.5' pathLength='100'></circle><circle class='showcase-loader-track' cx='60' cy='60' r='54'></circle><circle class='showcase-loader-arc' cx='60' cy='60' r='54' pathLength='100'></circle></svg>" +
+        "<img class='showcase-portrait' data-hero-art-avatar src='" +
+        esc(heroesAvatarUrl(avatarSlug, "calm")) +
+        "' alt='' width='256' height='256' decoding='async'></div>"
+    );
+}
+
 export function renderHeroes() {
     const activeId = menuUi.tempSelectedLeader || (menuUi.state && menuUi.state.selected_leader) || "Caesar";
     const activeRandom =
@@ -470,6 +569,8 @@ export function renderHeroes() {
         (!menuUi.tempSelectedLeader && !!(menuUi.state && menuUi.state.prefer_random_leader));
     const activeLeader = activeRandom ? randomLeaderOption() : leaderById(activeId);
     const locked = activeLeader.available === false;
+    const artSlug = leaderArtSlug(activeLeader);
+    const motionReduced = heroesMotionReduced();
     // prepareLeaderArt() warms the loader splash art (loader.js), not this
     // panel art. Leave it alone; the <picture> fetches its own file.
     prepareLeaderArt(activeLeader);
@@ -484,8 +585,9 @@ export function renderHeroes() {
         esc(SOW_t("menu.heroes")) +
         "'>" +
         "<div class='sow-heroes__workspace'>" +
-        "<section class='sow-heroes__featured" +
+        "<section class='sow-heroes__featured is-loading" +
         (locked ? " is-locked" : "") +
+        (motionReduced ? " is-motion-reduced" : "") +
         "' aria-labelledby='sow-heroes-selected'><button class='sow-menu__icon-button sow-heroes__info' type='button' data-command='open_hero_info' aria-label='" +
         esc(displayName) +
         "'" +
@@ -496,7 +598,11 @@ export function renderHeroes() {
         esc(featuredArt.column) +
         "' alt='" +
         esc(displayName) +
-        "' width='1080' height='1920' fetchpriority='high'></picture><div class='sow-heroes__featured-copy'><p class='sow-heroes__rotation' data-hero-status" +
+        "' width='1080' height='1920' data-hero-featured-art data-hero-art-slug='" +
+        esc(artSlug) +
+        "' fetchpriority='high'></picture>" +
+        renderHeroesArtLoader(artSlug) +
+        "<div class='sow-heroes__featured-copy'><p class='sow-heroes__rotation' data-hero-status" +
         (!statusLabel ? " hidden" : "") +
         "><span data-hero-status-label>" +
         esc(statusLabel) +
@@ -505,13 +611,6 @@ export function renderHeroes() {
         "</div><div class='sow-heroes__actions'><div data-hero-purchase>" +
         (activeRandom ? "" : renderLeaderPurchase(activeLeader)) +
         "</div>" +
-        "<p class='sow-heroes__queue-notice' data-hero-queue-notice" +
-        (!isHeroSelectionQueueLocked() ? " hidden" : "") +
-        ">" +
-        heroLockBadgeSvg() +
-        " <span>" +
-        esc(SOW_t("heroes.locked")) +
-        "</span></p>" +
         "</div></div></section>" +
         "<section class='sow-heroes__roster' aria-label='" +
         esc(SOW_t("heroes.leader_list")) +

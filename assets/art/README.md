@@ -2,7 +2,7 @@
 
 Para reemplazar algo, sobrescribe el archivo con el mismo nombre.
 
-- Formato: PNG o WebP, del tamaño que quieras. Lo ideal son unos 1200 px.
+- Formato: PNG o WebP, del tamaño que quieras. Lo ideal son unos 1200 px; los barcos pixel art pueden ser diminutos y se amplían conservando los píxeles.
 - Fondo: transparente para íconos, unidades y edificios.
 - `./sow p` y `./sow l` lo optimizan, lo convierten y lo publican.
 - No toques `assets/generated/`: lo arma la herramienta.
@@ -59,7 +59,7 @@ Las escenas son independientes de la hoja y se publican si el archivo existe. Si
 
 "atlas" quiere decir que `./sow p` los junta solo en una imagen (celdas de 128 px; unidades de 64 px). Tú solo cambias el archivo.
 
-Hoy, los íconos, las unidades y los edificios que no tienen arte propio usan una imagen provisional; están marcados en `assets/SOURCES.toml`.
+Los tres sprites de barcos vienen de OpenFront; las bombas y misiles todavía usan imágenes provisionales. Las demás imágenes provisionales están marcadas en `assets/SOURCES.toml`.
 
 ## Arte y tomas del landing (`assets/site/media/`)
 

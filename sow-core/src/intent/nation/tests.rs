@@ -3,7 +3,6 @@ mod bot_iq_alliance_tests {
     use crate::engine::SowEngine;
     use crate::game::{BuildingKind, GamePhase, GameState};
     use crate::game_config::BotDifficulty;
-    use crate::intent::nation::combat::nation_target_allowed;
     use crate::intent::nation::combat::{
         ghost_retaliation_delay_ticks, ghost_retaliation_send_troops,
         ranked_ghost_retaliation_delay_ticks,
@@ -118,6 +117,62 @@ mod bot_iq_alliance_tests {
             &mut decisions,
         );
         decisions
+    }
+
+    fn run_ai_attack(
+        engine: &mut SowEngine,
+        tier: AiTier,
+        neighbors: &[u16],
+        has_neutral: bool,
+    ) -> Vec<crate::intent::nation::profile::BotDecision> {
+        let bot_id = 1;
+        let iq = engine.state.player(bot_id).unwrap().iq;
+        let mut profile = ai_profile_for(tier, BotDifficulty::Vanilla);
+        profile.refuse_human_chance = 0;
+        let slot = AiSlot {
+            bot_id,
+            tier,
+            do_attack: true,
+            do_structures: false,
+            is_under_attack: false,
+            ghost_retaliation: None,
+            profile,
+        };
+        let mut decisions = Vec::new();
+        engine.nation_run_combat_for_slot(
+            &slot,
+            (bot_id, iq),
+            (5.0, 5.0),
+            neighbors,
+            has_neutral,
+            &mut decisions,
+        );
+        decisions
+    }
+
+    fn human_target_engine(seed: u64, tier: AiTier) -> SowEngine {
+        let mut engine = test_engine_two_players(seed);
+        engine.state.config.random_spawn = true;
+        let attacker = engine.state.player_mut(1).unwrap();
+        attacker.troops = 5_000.0;
+        attacker.max_troops = 6_000.0;
+        match tier {
+            AiTier::Ghost => {
+                attacker.player_type = PlayerType::Human;
+                attacker.is_ai_controlled = true;
+                attacker.iq = 170;
+            }
+            AiTier::Nation => {
+                attacker.player_type = PlayerType::Nation;
+                attacker.iq = 150;
+            }
+            AiTier::Tribe => {
+                attacker.player_type = PlayerType::Bot;
+                attacker.iq = 60;
+            }
+        }
+        engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
+        engine
     }
 
     fn attack_targets(decisions: &[crate::intent::nation::profile::BotDecision]) -> Vec<u16> {
@@ -490,24 +545,134 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
-    fn test_nation_food_chain_never_initiates_against_humans() {
-        let mut engine = test_engine_two_players(42);
-        engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
-        engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
-        let decisions = run_nation_attack(&mut engine, &[2], true);
-        assert!(!attack_targets(&decisions).contains(&2));
-        let decisions = run_nation_attack(&mut engine, &[2], false);
-        assert!(attack_targets(&decisions).is_empty());
+    fn all_ai_tiers_unlock_human_targets_after_two_minutes() {
+        for tier in [AiTier::Ghost, AiTier::Nation, AiTier::Tribe] {
+            let mut engine = human_target_engine(42, tier);
+            engine.state.config.global_speed_multiplier = 50.0;
+            engine.state.tick = 1_199;
+            let before = run_ai_attack(&mut engine, tier, &[2], false);
+            assert!(
+                !attack_targets(&before).contains(&2),
+                "{tier:?} attacked a connected human before 120 seconds"
+            );
 
-        let mut ghost_engine = test_engine_two_players(42);
-        ghost_engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
-        let ghost = ghost_engine.state.player_mut(2).unwrap();
-        ghost.player_type = PlayerType::Human;
-        ghost.is_ai_controlled = true;
-        let decisions = run_nation_attack(&mut ghost_engine, &[2], true);
-        assert!(!attack_targets(&decisions).contains(&2));
-        let decisions = run_nation_attack(&mut ghost_engine, &[2], false);
-        assert!(attack_targets(&decisions).contains(&2));
+            engine.state.tick = 1_200;
+            let after = run_ai_attack(&mut engine, tier, &[2], false);
+            assert!(
+                attack_targets(&after).contains(&2),
+                "{tier:?} did not unlock a human target at 120 seconds"
+            );
+        }
+    }
+
+    #[test]
+    fn human_attack_grace_uses_tick_rate_and_ignores_global_speed() {
+        let mut engine = human_target_engine(43, AiTier::Ghost);
+        engine.state.config.tick_rate_ms = 200.0;
+        engine.state.config.global_speed_multiplier = 50.0;
+        engine.state.tick = 599;
+        assert!(attack_targets(&run_ai_attack(&mut engine, AiTier::Ghost, &[2], false)).is_empty());
+        engine.state.tick = 600;
+        assert_eq!(
+            attack_targets(&run_ai_attack(&mut engine, AiTier::Ghost, &[2], false)),
+            vec![2]
+        );
+    }
+
+    #[test]
+    fn deployment_time_does_not_count_toward_human_attack_grace() {
+        for tier in [AiTier::Ghost, AiTier::Nation, AiTier::Tribe] {
+            let mut engine = human_target_engine(43, tier);
+            engine.state.config.random_spawn = false;
+            engine.state.tick = 1_349;
+            assert!(attack_targets(&run_ai_attack(&mut engine, tier, &[2], false)).is_empty());
+            engine.state.tick = 1_350;
+            assert_eq!(
+                attack_targets(&run_ai_attack(&mut engine, tier, &[2], false)),
+                vec![2]
+            );
+        }
+    }
+
+    #[test]
+    fn disconnected_humans_are_targets_until_reconnect_and_humans_vs_nations_is_immediate() {
+        for tier in [AiTier::Ghost, AiTier::Nation, AiTier::Tribe] {
+            let mut engine = human_target_engine(44, tier);
+            engine.state.player_mut(2).unwrap().disconnected = true;
+            assert_eq!(
+                attack_targets(&run_ai_attack(&mut engine, tier, &[2], false)),
+                vec![2]
+            );
+
+            engine.state.player_mut(2).unwrap().disconnected = false;
+            assert!(attack_targets(&run_ai_attack(&mut engine, tier, &[2], false)).is_empty());
+
+            engine.state.config.game_mode = "HumansVsNations".into();
+            let mode_attack = attack_targets(&run_ai_attack(&mut engine, tier, &[2], false));
+            assert_eq!(mode_attack.contains(&2), tier == AiTier::Nation);
+        }
+    }
+
+    #[test]
+    fn human_refusal_profiles_remain_seeded_and_keep_their_chances() {
+        fn refuses(seed: u64, tier: AiTier, difficulty: BotDifficulty) -> bool {
+            let mut engine = human_target_engine(seed, tier);
+            engine.state.tick = 1_200;
+            engine.state.player_mut(1).unwrap().bot_rng = wyrand::WyRand::new(seed);
+            let profile = ai_profile_for(tier, difficulty);
+            let iq = engine.state.player(1).unwrap().iq;
+            let slot = AiSlot {
+                bot_id: 1,
+                tier,
+                do_attack: true,
+                do_structures: false,
+                is_under_attack: false,
+                ghost_retaliation: None,
+                profile,
+            };
+            let mut decisions = Vec::new();
+            engine.nation_run_combat_for_slot(
+                &slot,
+                (1, iq),
+                (5.0, 5.0),
+                &[2],
+                false,
+                &mut decisions,
+            );
+            attack_targets(&decisions).is_empty()
+        }
+
+        assert_eq!(
+            ai_profile_for(AiTier::Tribe, BotDifficulty::Vanilla).refuse_human_chance,
+            50
+        );
+        assert_eq!(
+            ai_profile_for(AiTier::Nation, BotDifficulty::Vanilla).refuse_human_chance,
+            20
+        );
+        assert_eq!(
+            ai_profile_for(AiTier::Ghost, BotDifficulty::Vanilla).refuse_human_chance,
+            0
+        );
+        assert_eq!(
+            ai_profile_for(AiTier::Tribe, BotDifficulty::Terminator).refuse_human_chance,
+            50
+        );
+        for (tier, difficulty) in [
+            (AiTier::Nation, BotDifficulty::Vanilla),
+            (AiTier::Tribe, BotDifficulty::Vanilla),
+            (AiTier::Tribe, BotDifficulty::Terminator),
+        ] {
+            let first: Vec<_> = (1..=64)
+                .map(|seed| refuses(seed, tier, difficulty))
+                .collect();
+            let second: Vec<_> = (1..=64)
+                .map(|seed| refuses(seed, tier, difficulty))
+                .collect();
+            assert_eq!(first, second, "{tier:?} must be deterministic by seed");
+            assert!(first.iter().any(|&refused| refused));
+            assert!(first.iter().any(|&refused| !refused));
+        }
     }
 
     #[test]
@@ -542,7 +707,7 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
-    fn vanilla_tribe_never_initiates_against_humans_but_defends_when_attacked() {
+    fn vanilla_tribe_waits_for_human_grace_but_defends_when_attacked() {
         let mut engine = test_engine_two_players(43);
         engine.state.player_mut(1).unwrap().iq = 60;
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
@@ -666,10 +831,85 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
-    fn nations_do_not_initiate_naval_attacks_against_real_humans() {
-        let (engine, decisions) = naval_target_decision(AiTier::Nation, PlayerType::Human, 1.0);
-        assert!(decisions.is_empty());
-        assert_eq!(engine.bot_work.naval_routes_calculated, 0);
+    fn all_ai_tiers_unlock_naval_attacks_against_real_humans_after_grace() {
+        for tier in [AiTier::Ghost, AiTier::Nation, AiTier::Tribe] {
+            let (mut engine, decisions) = naval_target_decision(tier, PlayerType::Human, 1.0);
+            assert!(
+                decisions.is_empty(),
+                "{tier:?} attacked during opening grace"
+            );
+            assert_eq!(engine.bot_work.naval_routes_calculated, 0);
+            if tier == AiTier::Tribe {
+                let tribe = engine.state.player_mut(1).unwrap();
+                tribe.troops = 8_000.0;
+                tribe.max_troops = 10_000.0;
+            }
+            engine.state.tick = 1_350;
+            let slot = AiSlot {
+                bot_id: 1,
+                tier,
+                do_attack: true,
+                do_structures: false,
+                is_under_attack: false,
+                ghost_retaliation: None,
+                profile: ai_profile_for(tier, BotDifficulty::Vanilla),
+            };
+            let iq = engine.state.player(1).unwrap().iq;
+            let mut decisions = Vec::new();
+            engine.nation_run_combat_for_slot(
+                &slot,
+                (1, iq),
+                (5.0, 5.0),
+                &[],
+                false,
+                &mut decisions,
+            );
+            assert!(
+                decisions.iter().any(|decision| {
+                    matches!(&decision.intent, GameplayIntent::LaunchFleet { .. })
+                }),
+                "{tier:?} did not unlock a naval human target"
+            );
+            assert_eq!(engine.bot_work.naval_routes_calculated, 1);
+        }
+    }
+
+    #[test]
+    fn disconnected_humans_can_be_naval_targets_before_grace() {
+        for tier in [AiTier::Ghost, AiTier::Nation, AiTier::Tribe] {
+            let (mut engine, _) = naval_target_decision(tier, PlayerType::Human, 1.0);
+            engine.state.player_mut(2).unwrap().disconnected = true;
+            if tier == AiTier::Tribe {
+                let tribe = engine.state.player_mut(1).unwrap();
+                tribe.troops = 8_000.0;
+                tribe.max_troops = 10_000.0;
+            }
+            let slot = AiSlot {
+                bot_id: 1,
+                tier,
+                do_attack: true,
+                do_structures: false,
+                is_under_attack: false,
+                ghost_retaliation: None,
+                profile: ai_profile_for(tier, BotDifficulty::Vanilla),
+            };
+            let iq = engine.state.player(1).unwrap().iq;
+            let mut decisions = Vec::new();
+            engine.nation_run_combat_for_slot(
+                &slot,
+                (1, iq),
+                (5.0, 5.0),
+                &[],
+                false,
+                &mut decisions,
+            );
+            assert!(
+                decisions.iter().any(|decision| {
+                    matches!(&decision.intent, GameplayIntent::LaunchFleet { .. })
+                }),
+                "{tier:?} did not target a disconnected human by sea"
+            );
+        }
     }
 
     fn remote_bot_defense_scenario(
@@ -858,16 +1098,6 @@ mod bot_iq_alliance_tests {
 
         let decisions = run_nation_attack(&mut engine, &[2], true);
         assert_eq!(attack_targets(&decisions), vec![2]);
-    }
-
-    #[test]
-    fn test_nation_human_gate_is_shared_by_fleet_and_nuke() {
-        // `target_is_human` means a person-controlled Human. Ghosts are AI
-        // opponents, not protected human players.
-        assert!(!nation_target_allowed(2, true, None));
-        assert!(nation_target_allowed(2, true, Some(2)));
-        assert!(!nation_target_allowed(3, true, Some(2)));
-        assert!(nation_target_allowed(2, false, None));
     }
 
     #[test]
@@ -1122,7 +1352,7 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
-    fn test_nation_nuke_ignores_human_except_defense() {
+    fn nation_nuke_unlocks_humans_after_grace_and_keeps_defense_exception() {
         let mut engine = test_engine_two_players(42);
         engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
         engine.state.player_mut(1).unwrap().iq_points = 500.0;
@@ -1153,8 +1383,20 @@ mod bot_iq_alliance_tests {
         engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], None);
         assert!(decisions.is_empty());
 
+        engine.state.player_mut(2).unwrap().disconnected = true;
+        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], None);
+        assert!(!decisions.is_empty());
+        decisions.clear();
+        engine.recent_nuke_targets.clear();
+        engine.state.player_mut(2).unwrap().disconnected = false;
+
+        engine.state.tick = 1_349;
         engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], None);
         assert!(decisions.is_empty());
+
+        engine.state.tick = 1_350;
+        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], None);
+        assert!(!decisions.is_empty());
 
         decisions.clear();
         engine.recent_nuke_targets.clear();

@@ -53,6 +53,7 @@ pub(crate) fn render_overlays(
     ui: &mut UiState,
     input: &InputState,
     campaign_avatar_slots: &std::collections::HashMap<String, usize>,
+    loaded_campaign_avatars: &std::collections::HashSet<String>,
     sf: f32,
     now: Instant,
     placement_can_confirm: bool,
@@ -105,6 +106,7 @@ pub(crate) fn render_overlays(
         input,
         &dev,
         campaign_avatar_slots,
+        loaded_campaign_avatars,
         sf,
         now,
     );

@@ -13,7 +13,7 @@ use crate::execution::income_rates::{
 };
 use crate::game::{BuildingKind, GameEvent, GamePhase, GameState, UnitType};
 use crate::game_config::GameConfig;
-use crate::geo_entities::{Ability, LossWhen, Side, Source, District, Resource, Target};
+use crate::geo_entities::{Ability, District, LossWhen, Resource, Side, Source, Target};
 use crate::map::MapTile;
 use crate::player::{Leader, Player, PlayerType};
 use crate::protocol::{AttackIntent, CampaignRelation, GameplayIntent, StampedIntent};
@@ -322,11 +322,19 @@ fn elimination_gold(conqueror: Leader) -> (f64, Marks) {
     engine.state.player_mut(2).unwrap().player_type = PlayerType::Bot;
     let before = engine.state.player(1).unwrap().gold;
     engine.eliminate_player(2, 1, 0, 0, false);
-    (engine.state.player(1).unwrap().gold - before, owner_marks(&engine))
+    (
+        engine.state.player(1).unwrap().gold - before,
+        owner_marks(&engine),
+    )
 }
 
 fn territory_gold(leader: Leader) -> f64 {
-    gold_income_per_second(2_048, BuildingAggregate::default(), leader, &GameConfig::default())
+    gold_income_per_second(
+        2_048,
+        BuildingAggregate::default(),
+        leader,
+        &GameConfig::default(),
+    )
 }
 
 fn alliance_gold(leader: Leader) -> f64 {
@@ -338,7 +346,12 @@ fn alliance_troops(leader: Leader) -> f64 {
 }
 
 fn territory_troops(leader: Leader) -> f64 {
-    troop_income_per_second(2_048, BuildingAggregate::default(), leader, &GameConfig::default())
+    troop_income_per_second(
+        2_048,
+        BuildingAggregate::default(),
+        leader,
+        &GameConfig::default(),
+    )
 }
 
 fn trade_gold(leader: Leader) -> f64 {
@@ -352,8 +365,16 @@ fn trade_troops(leader: Leader) -> f64 {
 /// Marks `leader` shows when it forms a campaign alliance with a rival.
 fn alliance_marks(leader: Leader) -> usize {
     let mut engine = arena(32, 16, leader, Some(Leader::of("cleopatra")));
-    send(&mut engine, 1, GameplayIntent::ProposeAlliance { target_player: 2 });
-    send(&mut engine, 2, GameplayIntent::AcceptAlliance { target_player: 1 });
+    send(
+        &mut engine,
+        1,
+        GameplayIntent::ProposeAlliance { target_player: 2 },
+    );
+    send(
+        &mut engine,
+        2,
+        GameplayIntent::AcceptAlliance { target_player: 1 },
+    );
     owner_marks(&engine)[1]
 }
 
@@ -400,7 +421,10 @@ fn elimination_troops(conqueror: Leader) -> (f64, Marks) {
     engine.state.player_mut(1).unwrap().max_troops = 1.0e9;
     let before = engine.state.player(1).unwrap().troops;
     engine.eliminate_player(2, 1, 0, 0, false);
-    (engine.state.player(1).unwrap().troops - before, owner_marks(&engine))
+    (
+        engine.state.player(1).unwrap().troops - before,
+        owner_marks(&engine),
+    )
 }
 
 /// Makes player `subject` (1 or 2) fit `target` against the other player. Sizes are set by
@@ -478,7 +502,11 @@ fn launch_target(attacker: Leader, target: Target) -> SowEngine {
     } else {
         // A smaller rival needs the attacker to own more tiles. On a wider map the rival still
         // holds enough land that the 20-tick attack is not capped by the map's size.
-        let (width, own) = if target == Target::Smaller { (40, 22) } else { (24, 4) };
+        let (width, own) = if target == Target::Smaller {
+            (40, 22)
+        } else {
+            (24, 4)
+        };
         let mut engine = arena(width, own, attacker, Some(Leader::of("caesar")));
         shape_subject(&mut engine, 2, target);
         let rival_troops = if target == Target::Outnumbered {
@@ -538,7 +566,12 @@ fn retreat_against(retreater: Leader, defender: Leader, target: Target) -> (f64,
             troops: Some(1_000.0),
         }),
     );
-    let attack_id = engine.attacks.iter().find(|attack| attack.owner_id == 1).unwrap().id;
+    let attack_id = engine
+        .attacks
+        .iter()
+        .find(|attack| attack.owner_id == 1)
+        .unwrap()
+        .id;
     let before = engine.state.player(1).unwrap().troops;
     send(&mut engine, 1, GameplayIntent::CancelAttack { attack_id });
     let mut marks = [0; 4];
@@ -634,7 +667,9 @@ fn alliance_price_against(human: Leader, target: Target) -> (f64, Marks) {
     };
     let mut engine = arena(12, own, human, Some(Leader::of("caesar")));
     shape_subject(&mut engine, 2, target);
-    engine.campaign_relations.insert(2, CampaignRelation::Neutral);
+    engine
+        .campaign_relations
+        .insert(2, CampaignRelation::Neutral);
     // The human can pay in every case; the gold shape above decides the Richer/Poorer rule.
     engine.state.player_mut(1).unwrap().gold = 300.0;
     engine.apply_intents(&[StampedIntent {
@@ -645,7 +680,10 @@ fn alliance_price_against(human: Leader, target: Target) -> (f64, Marks) {
             gold_cost: 200.0,
         },
     }]);
-    (300.0 - engine.state.player(1).unwrap().gold, owner_marks(&engine))
+    (
+        300.0 - engine.state.player(1).unwrap().gold,
+        owner_marks(&engine),
+    )
 }
 
 /// Every hero's situation changes the game and shows its mark there. The control hero
@@ -686,7 +724,8 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
                 resource,
                 ..
             } => (
-                district_income(hero, district, resource) > district_income(base, district, resource),
+                district_income(hero, district, resource)
+                    > district_income(base, district, resource),
                 completion_marks(hero, district_building(district)),
                 completion_marks(idle, district_building(district)),
             ),
@@ -931,25 +970,58 @@ fn send(engine: &mut SowEngine, player_id: u16, intent: GameplayIntent) {
 fn revenge(hero: Leader, delay: u32, traitor_attacks: bool) -> (i64, i64, bool, bool) {
     let mut engine = arena(32, 16, hero, Some(Leader::of("cleopatra")));
     engine.execute_income();
-    send(&mut engine, 1, GameplayIntent::ProposeAlliance { target_player: 2 });
-    send(&mut engine, 2, GameplayIntent::AcceptAlliance { target_player: 1 });
-    assert!(engine.state.player(1).unwrap().alliances.contains(&2), "alliance never formed");
-    send(&mut engine, 2, GameplayIntent::BreakAlliance { target_player: 1 });
+    send(
+        &mut engine,
+        1,
+        GameplayIntent::ProposeAlliance { target_player: 2 },
+    );
+    send(
+        &mut engine,
+        2,
+        GameplayIntent::AcceptAlliance { target_player: 1 },
+    );
+    assert!(
+        engine.state.player(1).unwrap().alliances.contains(&2),
+        "alliance never formed"
+    );
+    send(
+        &mut engine,
+        2,
+        GameplayIntent::BreakAlliance { target_player: 1 },
+    );
     if traitor_attacks {
         let half = engine.state.player(2).unwrap().troops * 0.5;
-        send(&mut engine, 2, GameplayIntent::Attack(AttackIntent { target_owner: 1, troops: Some(half) }));
+        send(
+            &mut engine,
+            2,
+            GameplayIntent::Attack(AttackIntent {
+                target_owner: 1,
+                troops: Some(half),
+            }),
+        );
     }
     for _ in 0..delay {
         engine.tick();
     }
     let tiles_before = engine.state.player(1).unwrap().tile_count as i64;
     let traitor_before = engine.state.player(2).unwrap().troops;
-    let badge = engine.build_snapshot().players.iter().any(|p| p.id == 2 && p.traitor);
+    let badge = engine
+        .build_snapshot()
+        .players
+        .iter()
+        .any(|p| p.id == 2 && p.traitor);
     let half = engine.state.player(1).unwrap().troops * 0.5;
     let fights_harder = targeted_multiplier(&engine.state, 1, 2, half, |target| {
         hero.attack_strength_multiplier(target)
     }) > 1.0;
-    send(&mut engine, 1, GameplayIntent::Attack(AttackIntent { target_owner: 2, troops: Some(half) }));
+    send(
+        &mut engine,
+        1,
+        GameplayIntent::Attack(AttackIntent {
+            target_owner: 2,
+            troops: Some(half),
+        }),
+    );
     for _ in 0..10 {
         engine.tick();
     }
@@ -1030,16 +1102,22 @@ fn artigas_takes_traitor_land_faster_only_while_the_badge_lasts() {
     for (delay, marked) in [(window - 10, true), (window + 1, false)] {
         let (a, _, a_badge, _) = revenge(artigas, delay, false);
         let (p, _, p_badge, _) = revenge(plain, delay, false);
-        assert_eq!((a_badge, p_badge), (marked, marked), "badge at tick {delay}");
+        assert_eq!(
+            (a_badge, p_badge),
+            (marked, marked),
+            "badge at tick {delay}"
+        );
         assert!(p > 0, "plain attack must take land at tick {delay}");
         if marked {
-            assert!(a > p, "no faster conquest of a traitor while the badge is on");
+            assert!(
+                a > p,
+                "no faster conquest of a traitor while the badge is on"
+            );
         } else {
             assert_eq!(a, p, "the bonus outlived the badge");
         }
     }
 }
-
 
 /// The real betrayal path (`BreakAlliance` intent) must mark the breaker as an
 /// active traitor, and the snapshot the map and combat read must carry it.
@@ -1066,7 +1144,10 @@ fn breaking_an_alliance_marks_the_breaker_as_traitor() {
 fn every_hero_in_the_betrayal_scene() {
     for hero in Leader::all() {
         let (tiles, kills, _, fights_harder) = revenge(hero, 0, true);
-        eprintln!("{hero:?}: {:?} → {tiles} tiles, {kills} troops", hero.ability());
+        eprintln!(
+            "{hero:?}: {:?} → {tiles} tiles, {kills} troops",
+            hero.ability()
+        );
         assert_eq!(tiles > 0, fights_harder, "{hero:?} in the betrayal scene");
     }
 }
@@ -1086,13 +1167,21 @@ fn crush(hero: Leader, victim: PlayerType) -> (u32, u32) {
     for tick in 1..=600 {
         if !engine.attacks.iter().any(|a| a.owner_id == 1) {
             let half = engine.state.player(1).unwrap().troops * 0.5;
-            send(&mut engine, 1, GameplayIntent::Attack(AttackIntent { target_owner: 2, troops: Some(half) }));
+            send(
+                &mut engine,
+                1,
+                GameplayIntent::Attack(AttackIntent {
+                    target_owner: 2,
+                    troops: Some(half),
+                }),
+            );
         }
         engine.tick();
         if tick == 10 {
             first_second = engine.state.player(1).unwrap().tile_count - start;
         }
-        if !engine.state.player(2).unwrap().alive || engine.state.player(2).unwrap().tile_count == 0 {
+        if !engine.state.player(2).unwrap().alive || engine.state.player(2).unwrap().tile_count == 0
+        {
             return (tick, first_second);
         }
     }
@@ -1122,7 +1211,10 @@ fn genghis_khan_crushes_tribes() {
     let vs_human = crush(genghis, PlayerType::Human);
     let plain_vs_human = crush(plain, PlayerType::Human);
     eprintln!("vs human: Genghis Khan {vs_human:?}, plain {plain_vs_human:?}");
-    assert_eq!(vs_human, plain_vs_human, "the tribe bonus leaked onto human players");
+    assert_eq!(
+        vs_human, plain_vs_human,
+        "the tribe bonus leaked onto human players"
+    );
 }
 
 const MOUNTAIN: u8 = 0x80 | 25;
@@ -1182,7 +1274,10 @@ fn army_loss_per_tile(engine: &mut SowEngine, ticks: u32) -> (f64, Marks) {
     let mut marks = [0; 4];
     tick_counting(engine, ticks, &mut marks);
     let tiles = engine.state.player(1).unwrap().tile_count - start_tiles;
-    assert!(tiles > 0, "the army took no tile, so its loss per tile is undefined");
+    assert!(
+        tiles > 0,
+        "the army took no tile, so its loss per tile is undefined"
+    );
     ((army_start - army(engine)) / f64::from(tiles), marks)
 }
 
@@ -1258,16 +1353,31 @@ fn kin_and_foreign_follow_the_people_each_hero_leads() {
             if t == target { 2.0 } else { 1.0 }
         }) == 2.0
     };
-    assert!(describes(kinsman, None, 2, Target::Kin), "same people, another hero");
+    assert!(
+        describes(kinsman, None, 2, Target::Kin),
+        "same people, another hero"
+    );
     assert!(!describes(kinsman, None, 2, Target::Foreign));
-    assert!(describes(stranger, None, 2, Target::Foreign), "another people");
+    assert!(
+        describes(stranger, None, 2, Target::Foreign),
+        "another people"
+    );
     assert!(!describes(stranger, None, 2, Target::Kin));
-    assert!(describes(stranger, Some(kinsman), 2, Target::Kin), "a bot shown as the same people");
+    assert!(
+        describes(stranger, Some(kinsman), 2, Target::Kin),
+        "a bot shown as the same people"
+    );
     assert!(!describes(stranger, Some(kinsman), 2, Target::Foreign));
-    assert!(describes(kinsman, Some(stranger), 2, Target::Foreign), "a bot shown as another people");
+    assert!(
+        describes(kinsman, Some(stranger), 2, Target::Foreign),
+        "a bot shown as another people"
+    );
     assert!(!describes(kinsman, Some(stranger), 2, Target::Kin));
     for target in [Target::Kin, Target::Foreign] {
-        assert!(!describes(kinsman, None, 0, target), "neutral land leads no people");
+        assert!(
+            !describes(kinsman, None, 0, target),
+            "neutral land leads no people"
+        );
         assert!(!describes(kinsman, None, 1, target), "the hero's own land");
     }
 
@@ -1313,7 +1423,10 @@ fn target_loss_marks_the_discounted_tile_during_the_tick() {
             )
         })
     });
-    assert!(marked_taken_tile, "{hero:?} shows no mark at a tile its {against:?} loss discounts");
+    assert!(
+        marked_taken_tile,
+        "{hero:?} shows no mark at a tile its {against:?} loss discounts"
+    );
 }
 
 /// Tenamaxtli, "Mixtón Stronghold": his attacks fight 25% stronger only against a player
@@ -1386,7 +1499,8 @@ fn napoleon_blitz_speeds_up_other_players_not_neutral_land() {
     let napoleon = Leader::of("napoleon");
     let plain = Leader::of("cleopatra");
     assert!(
-        tiles_against(napoleon, Target::OtherPlayer).0 > tiles_against(plain, Target::OtherPlayer).0,
+        tiles_against(napoleon, Target::OtherPlayer).0
+            > tiles_against(plain, Target::OtherPlayer).0,
         "Napoleon must take more land from other players than a plain hero"
     );
     assert_eq!(
@@ -1402,15 +1516,25 @@ fn napoleon_blitz_speeds_up_other_players_not_neutral_land() {
 fn musa_recapture_window_opens_on_a_lost_city_and_closes_after_it() {
     let mut engine = lose_city(Leader::of("musa_i"));
     let victim = engine.state.player(1).unwrap();
-    assert_eq!(victim.recapture_target, 2, "the city's captor is the target");
-    assert!(victim.recapture_ticks > 0, "losing the city opens the window");
+    assert_eq!(
+        victim.recapture_target, 2,
+        "the city's captor is the target"
+    );
+    assert!(
+        victim.recapture_ticks > 0,
+        "losing the city opens the window"
+    );
 
     let mut ticks = 0;
     while engine.state.player(1).unwrap().recapture_ticks > 0 && ticks < 1_000 {
         engine.tick();
         ticks += 1;
     }
-    assert_eq!(engine.state.player(1).unwrap().recapture_ticks, 0, "the window closes");
+    assert_eq!(
+        engine.state.player(1).unwrap().recapture_ticks,
+        0,
+        "the window closes"
+    );
 
     let plain = lose_city(Leader::of("cleopatra"));
     assert_eq!(plain.state.player(1).unwrap().recapture_ticks, 0);
@@ -1423,7 +1547,11 @@ fn isabella_captures_enemy_cities_faster_on_open_land_no_faster() {
     let isabella = Leader::of("isabella_of_castile");
     let plain = Leader::of("cleopatra");
     assert!(tiles_taken_from_city(isabella, plain).0 > tiles_taken_from_city(plain, plain).0);
-    assert_eq!(neutral_conquest(isabella), neutral_conquest(plain), "open land is no faster");
+    assert_eq!(
+        neutral_conquest(isabella),
+        neutral_conquest(plain),
+        "open land is no faster"
+    );
 }
 
 /// Ability marks (the visible effect events) that `owner` shows right now.
@@ -1435,9 +1563,19 @@ fn marks(engine: &SowEngine, owner: u16) -> usize {
 /// stays silent on a human rival of the same army and land.
 #[test]
 fn a_mark_needs_its_target_not_just_its_hero() {
-    let mut nation = arena(24, 4, Leader::of("yaa_asantewaa"), Some(Leader::of("caesar")));
+    let mut nation = arena(
+        24,
+        4,
+        Leader::of("yaa_asantewaa"),
+        Some(Leader::of("caesar")),
+    );
     nation.state.player_mut(2).unwrap().player_type = PlayerType::Nation;
-    let mut human = arena(24, 4, Leader::of("yaa_asantewaa"), Some(Leader::of("caesar")));
+    let mut human = arena(
+        24,
+        4,
+        Leader::of("yaa_asantewaa"),
+        Some(Leader::of("caesar")),
+    );
     for engine in [&mut nation, &mut human] {
         send(
             engine,
@@ -1448,8 +1586,16 @@ fn a_mark_needs_its_target_not_just_its_hero() {
             }),
         );
     }
-    assert_eq!(marks(&nation, 1), 1, "Yaa Asantewaa marks an attack on a nation");
-    assert_eq!(marks(&human, 1), 0, "Yaa Asantewaa's mark needs a nation target");
+    assert_eq!(
+        marks(&nation, 1),
+        1,
+        "Yaa Asantewaa marks an attack on a nation"
+    );
+    assert_eq!(
+        marks(&human, 1),
+        0,
+        "Yaa Asantewaa's mark needs a nation target"
+    );
 }
 
 /// Burebista, "Carpathian Fortresses": the mark reaches the human attacker even when
@@ -1513,10 +1659,11 @@ fn boleslaw_conquest_announces_to_a_foreign_target_only() {
     for target in [Target::Neutral, Target::Kin] {
         let engine = launch_target(hero, target);
         assert!(
-            !engine.state.events.iter().any(|event| matches!(
-                event,
-                GameEvent::AbilityTriggered { owner_id: 1, .. }
-            )),
+            !engine
+                .state
+                .events
+                .iter()
+                .any(|event| matches!(event, GameEvent::AbilityTriggered { owner_id: 1, .. })),
             "{target:?} must not announce"
         );
     }

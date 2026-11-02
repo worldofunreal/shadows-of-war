@@ -261,7 +261,12 @@ fn pixel_cell(source: &RgbaImage, cell_px: u32) -> Result<RgbaImage, Box<dyn Err
         (max_side as f32 / cropped.width() as f32).min(max_side as f32 / cropped.height() as f32);
     let width = ((cropped.width() as f32 * scale).round() as u32).clamp(1, max_side);
     let height = ((cropped.height() as f32 * scale).round() as u32).clamp(1, max_side);
-    let resized = image::imageops::resize(&cropped, width, height, FilterType::Lanczos3);
+    let filter = if cell_px == UNIT_CELL_PX && scale > 1.0 {
+        FilterType::Nearest
+    } else {
+        FilterType::Lanczos3
+    };
+    let resized = image::imageops::resize(&cropped, width, height, filter);
 
     let mut cell = ImageBuffer::from_pixel(cell_px, cell_px, Rgba([0, 0, 0, 0]));
     let x = (cell_px - width) / 2;

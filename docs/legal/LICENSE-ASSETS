@@ -7,3 +7,17 @@ You may share and adapt the material under CC BY-SA 4.0:
 https://creativecommons.org/licenses/by-sa/4.0/
 
 Attribution: Shadows of War + link to this repository.
+
+## OpenFront boat sprites
+
+The transport ship, trade ship, and warship sprites in `assets/art/units/`
+come from OpenFront and its contributors: `transportship.png`, `tradeship.png`,
+and `warship.png` in `resources/sprites/`.
+
+Source: https://github.com/openfrontio/openfrontio/tree/a8c87e3bf10f93dec77cba5eb5f844e59f3dc397/resources/sprites
+License: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0):
+https://creativecommons.org/licenses/by-sa/4.0/
+
+Changes in Shadows of War: the files are renamed for the SOW asset catalog,
+packed into the game's units atlas, and tinted at runtime with each fleet
+owner's color. The sprites remain under CC BY-SA 4.0.

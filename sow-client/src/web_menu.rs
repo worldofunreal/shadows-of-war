@@ -1761,18 +1761,21 @@ impl SowApp {
                     self.ui.nameplates.set_emote_texts(texts, safe_area);
                 }
                 WebMenuCommand::FocusPlayer { player_id } => {
-                    if let Some(snap) = &self.sim.current_snapshot {
-                        if let Some(player) = snap.players.iter().find(|p| p.id == player_id) {
-                            if player.tile_count > 0 && player.alive {
-                                let world_cx = player.centroid_x + 0.5;
-                                let world_cy = player.centroid_y + 0.5;
-                                self.input.has_snapped_camera_to_spawn = true;
-                                self.input.camera_focus_target = Some((world_cx, world_cy));
-                                self.input.target_zoom = 8.0;
-                                self.input.tutorial_camera_focus = false;
-                                self.input.camera_focus_waiting_for_input_release = false;
-                            }
-                        }
+                    let has_land = self
+                        .sim
+                        .current_snapshot
+                        .as_ref()
+                        .is_some_and(|snapshot| {
+                            snapshot.players.iter().any(|player| {
+                                player.id == player_id && player.tile_count > 0 && player.alive
+                            })
+                        });
+                    if has_land
+                        && let Some([world_x, world_y]) =
+                            self.ui.nameplates.anchor_for(player_id)
+                    {
+                        self.input.tutorial_camera_focus = false;
+                        self.focus_camera_on_world(world_x, world_y, 8.0);
                     }
                 }
                 WebMenuCommand::FocusWorld { x, y, shot } => {

@@ -90,6 +90,7 @@ fn fetch_anonymous_profile_request(
         );
         let _ = tx.send(crate::player_progress::DbEvent::LoadFailed {
             request_id,
+            provider: "anonymous".to_string(),
             status: None,
         });
         return;
@@ -144,6 +145,7 @@ fn fetch_anonymous_profile_request(
                     log::error!("[identity] profile request id={request_id} parse_failed: {error}");
                     let _ = tx.send(crate::player_progress::DbEvent::LoadFailed {
                         request_id,
+                        provider: "anonymous".to_string(),
                         status: Some(res.status),
                     });
                 }
@@ -175,6 +177,7 @@ fn fetch_anonymous_profile_request(
             );
             let _ = tx.send(crate::player_progress::DbEvent::LoadFailed {
                 request_id,
+                provider: "anonymous".to_string(),
                 status: Some(res.status),
             });
         }
@@ -182,6 +185,7 @@ fn fetch_anonymous_profile_request(
             log::error!("[identity] profile request id={request_id} network_failed: {error}");
             let _ = tx.send(crate::player_progress::DbEvent::LoadFailed {
                 request_id,
+                provider: "anonymous".to_string(),
                 status: None,
             });
         }
@@ -495,8 +499,34 @@ impl SowApp {
         }
     }
 
+    pub(crate) fn schedule_identity_profile_retry(&mut self) {
+        let delay = self.identity_profile_retry_delay;
+        self.identity_profile_retry_at = Some(Instant::now() + delay);
+        self.identity_profile_retry_delay =
+            Duration::from_secs(delay.as_secs().saturating_mul(2).min(30));
+    }
+
+    pub(crate) fn poll_identity_profile_retry(&mut self, now: Instant) {
+        if self.ui.app.phase != crate::ClientPhase::MainMenu
+            || !self
+                .identity_profile_retry_at
+                .is_some_and(|retry_at| retry_at <= now)
+        {
+            return;
+        }
+        self.identity_profile_retry_at = None;
+        self.fetch_cloud_progress();
+    }
+
     pub(crate) fn fetch_cloud_progress(&mut self) {
         if self.fetch_match_result() {
+            return;
+        }
+        if crate::store_portals::wou_session_pending() {
+            #[cfg(target_arch = "wasm32")]
+            {
+                self.boot_db_settled = true;
+            }
             return;
         }
         if self.display_name_save_request_id.is_some() {
@@ -582,6 +612,7 @@ impl SowApp {
                                 );
                                 let _ = tx.send(crate::player_progress::DbEvent::LoadFailed {
                                     request_id,
+                                    provider: profile_provider.clone(),
                                     status: Some(res.status),
                                 });
                             }
@@ -593,6 +624,7 @@ impl SowApp {
                         );
                         let _ = tx.send(crate::player_progress::DbEvent::LoadFailed {
                             request_id,
+                            provider: profile_provider.clone(),
                             status: Some(res.status),
                         });
                     }
@@ -601,6 +633,7 @@ impl SowApp {
                     log::error!("[identity] profile request id={request_id} network_failed: {e}");
                     let _ = tx.send(crate::player_progress::DbEvent::LoadFailed {
                         request_id,
+                        provider: profile_provider.clone(),
                         status: None,
                     });
                 }

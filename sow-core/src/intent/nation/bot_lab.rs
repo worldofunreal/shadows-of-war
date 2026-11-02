@@ -10,7 +10,7 @@
 //!      match is live and legal actions exist (anti-"cómodo").
 //!   2. Tier roles: Ghost = top aggressor/teammate; Nation = mid challenger
 //!      that defends; Tribe on Vanilla expands into free land, defends when
-//!      struck, and never initiates against players.
+//!      struck, and unlocks human attacks after the opening grace period.
 //!   3. Enclosed ghosts (allies everywhere) break out by sea when a coast
 //!      exists. KNOWN-LIMIT (needs design GO): fully inland enclosed ghosts
 //!      have no legal action and stay idle.
@@ -448,7 +448,7 @@ impl S16Scenario {
         );
         assert_eq!(
             profile_signature(AiTier::Tribe),
-            (0.75, 0.50, 0.10, 100, false),
+            (0.75, 0.50, 0.10, 50, false),
             "S16 SETUP FAIL: Vanilla Tribe profile changed"
         );
         assert_eq!(super::structures::iq_build_interval_base(AiTier::Ghost), 5);
@@ -1323,14 +1323,8 @@ fn s2_armed_ghost_presses_player_over_neutral() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// S3 — Vanilla tribe NEVER initiates against players, yet still expands into
-// free land (passive food, not statue).
-//
-// KNOWN BUG (awaiting design ruling a/b/c): the enclosure-capture cascade in
-// GameState::set_tile_owner (game.rs — fully-surrounded neighbors flip to the
-// surrounding owner) lets a neutral-expansion wave eat PLAYER tiles without
-// any directed attack. Reproduced here: tribe ends 32 tiles vs human 0 while
-// alive=true, owner(3,3)=2, single ATT owner=2 target=0 in flight.
+// S3 — Vanilla tribes do not initiate against connected humans during the
+// opening grace, and neutral expansion never captures player territory.
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn s3_vanilla_tribe_passive_but_growing() {
@@ -1364,6 +1358,7 @@ fn s3_vanilla_tribe_passive_but_growing() {
         }
     }
 
+    // 800 ticks at 100ms is 80 seconds, still inside the 120-second grace.
     run_window(&mut engine, WINDOW_TICKS * 2);
 
     if std::env::var("SOW_LAB_VERBOSE").is_ok() {
@@ -2541,15 +2536,15 @@ fn s16_checkpoint_decision_and_state_reference() {
     let checkpoints = s16_building_rules_trace(false);
     // Uses current building footprints; historical footprints are tested below.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x3932_acc5_c591_74d8),
-        (500, 0xa570_5518_dfd7_6143),
-        (750, 0x6c27_eda4_85c6_3611),
-        (1000, 0x07ed_b28d_1145_f86d),
-        (1250, 0x910c_a632_de70_848d),
-        (1500, 0x7017_4f3c_eaec_7884),
-        (1750, 0x3503_57f0_43a4_6e7f),
-        (2000, 0x5f48_db0f_8ae0_8222),
-        (2102, 0xc40e_854a_f8e5_0c85),
+        (250, 0x2d26_a87e_c82c_081b),
+        (500, 0x6202_a61f_efb3_6fd6),
+        (750, 0x03f8_5346_e43c_76c3),
+        (1000, 0x74fb_460f_b0ac_5d1c),
+        (1250, 0xe26e_6658_9fbe_fc88),
+        (1500, 0x6433_7310_8b92_e560),
+        (1750, 0x9b5a_e87f_44d8_a813),
+        (2000, 0x2cab_a0d5_1088_0d56),
+        (2102, 0xd8d1_98cf_fade_032a),
     ];
     assert_eq!(
         checkpoints,
@@ -2565,16 +2560,20 @@ fn s16_checkpoint_decision_and_state_reference() {
 #[test]
 fn historical_s16_building_rules_keep_recorded_results() {
     let checkpoints = s16_building_rules_trace(true);
+    assert_eq!(
+        checkpoints,
+        s16_building_rules_trace(true),
+        "same seed must reproduce historical-building checkpoints"
+    );
     // Historical building rules with the same fixed leader as the current trace.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x7d50_5153_13df_36f7),
-        (500, 0x5650_af52_58e1_9f2f),
-        (750, 0x6e19_4040_a5aa_434e),
-        (1000, 0xdc04_e6dd_f4f3_22dd),
-        (1250, 0xe61b_79ec_103d_0cb1),
-        (1500, 0x2017_81c3_0590_4c3d),
-        (1750, 0x75a9_d30d_de55_8aeb),
-        (1912, 0x3437_bfe0_17da_a62d),
+        (250, 0xd71f_fd45_3535_713d),
+        (500, 0x6670_1595_d8fc_7b68),
+        (750, 0xd213_db1e_f7db_8fb9),
+        (1000, 0xf125_994e_eb55_197b),
+        (1250, 0xb5c8_4a3f_ecf3_61d8),
+        (1500, 0x37f9_7718_d3dc_f795),
+        (1561, 0x6e7f_60aa_7e18_a400),
     ];
     assert_eq!(
         checkpoints, REFERENCE,
@@ -2866,4 +2865,3 @@ fn s18_world_map_team_spawn_zones() {
         half
     );
 }
-

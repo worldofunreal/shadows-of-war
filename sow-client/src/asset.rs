@@ -505,6 +505,8 @@ impl SowApp {
                         self.fetch_cloud_progress();
                         continue;
                     }
+                    self.identity_profile_retry_at = None;
+                    self.identity_profile_retry_delay = web_time::Duration::from_secs(1);
                     self.profile_last_applied_request = request_id;
                     let old_level = self.progress.level;
                     log::info!(
@@ -512,7 +514,9 @@ impl SowApp {
                         account_id.chars().count(),
                         display_name.chars().count()
                     );
+                    self.identity_profile_verified = provider == "wou";
                     self.apply_cloud_profile(progress, account_id, display_name, provider);
+                    crate::store_portals::wou_profile_load_succeeded();
                     log::info!(
                         "Successfully synced profile from cloud database: level {} ({} XP)",
                         self.progress.level,
@@ -609,12 +613,26 @@ impl SowApp {
                         self.fetch_cloud_progress();
                     }
                 }
-                crate::player_progress::DbEvent::LoadFailed { request_id, status } => {
+                crate::player_progress::DbEvent::LoadFailed {
+                    request_id,
+                    provider,
+                    status,
+                } => {
                     if request_id <= self.profile_last_applied_request {
                         continue;
                     }
                     self.profile_request_in_flight = false;
-                    if self.profile_refresh_pending && self.display_name_save_request_id.is_none() {
+                    let wou_unauthorized = provider == "wou" && status == Some(401);
+                    if provider == "wou" {
+                        self.identity_profile_verified = false;
+                    }
+                    if wou_unauthorized {
+                        crate::store_portals::refresh_wou_session();
+                    }
+                    if self.profile_refresh_pending
+                        && self.display_name_save_request_id.is_none()
+                        && !wou_unauthorized
+                    {
                         self.profile_refresh_pending = false;
                         self.fetch_cloud_progress();
                         continue;
@@ -624,16 +642,28 @@ impl SowApp {
                         log::warn!(
                             "[rewards] profile refresh id={request_id} failed status={status:?}; keeping retry window"
                         );
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            self.boot_db_settled = true;
+                        }
                         self.schedule_reward_profile_retry();
                         continue;
                     }
                     self.profile_refresh_pending = false;
-                    // No fallback: continuing without an identity once masked a
-                    // 403 from a misrouted endpoint and booted the wrong mode.
-                    // A failed identity load is a hard failure — crash loudly.
-                    panic!(
-                        "[identity] profile request id={request_id} failed status={status:?} — no fallback, refusing to continue without identity"
+                    log::warn!(
+                        "[identity] profile request id={request_id} provider={provider} failed status={status:?}; keeping local play available"
                     );
+                    self.ui.app.main_menu_state.error_message =
+                        Some(crate::ui::UiText::new("profile.profile_unavailable"));
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        self.boot_db_settled = true;
+                    }
+                    if !wou_unauthorized
+                        && status.map_or(true, |code| code == 200 || code == 429 || code >= 500)
+                    {
+                        self.schedule_identity_profile_retry();
+                    }
                 }
                 crate::player_progress::DbEvent::TutorialCompletionFailed {
                     request_id,

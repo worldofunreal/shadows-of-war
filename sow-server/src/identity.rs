@@ -280,7 +280,11 @@ impl IdentityState {
                     .await
                     .map_err(|error| format!("WOU-ID service unreachable: {error}"))?;
                 if !response.status().is_success() {
-                    return Err(format!("WOU-ID token rejected: HTTP {}", response.status()));
+                    let status = response.status();
+                    if matches!(status, reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN) {
+                        return Err(format!("WOU-ID token rejected: HTTP {status}"));
+                    }
+                    return Err(format!("WOU-ID service unavailable: HTTP {status}"));
                 }
                 let body: serde_json::Value = response
                     .json()
@@ -827,16 +831,37 @@ pub(crate) async fn handle_profile(
     {
         Ok(account) => (StatusCode::OK, Json(account)).into_response(),
         Err(error) => (
-            StatusCode::UNAUTHORIZED,
+            profile_error_status(&error),
             Json(serde_json::json!({"error": error})),
         )
             .into_response(),
     }
 }
 
+fn profile_error_status(error: &str) -> StatusCode {
+    if error.starts_with("WOU-ID token rejected") {
+        StatusCode::UNAUTHORIZED
+    } else if error.starts_with("WOU-ID service unavailable")
+        || error.starts_with("WOU-ID service unreachable")
+        || error.starts_with("invalid WOU-ID response")
+        || error.starts_with("identity database")
+    {
+        StatusCode::SERVICE_UNAVAILABLE
+    } else {
+        StatusCode::UNAUTHORIZED
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn profile_auth_and_dependency_errors_have_distinct_statuses() {
+        assert_eq!(profile_error_status("WOU-ID token rejected: HTTP 401"), StatusCode::UNAUTHORIZED);
+        assert_eq!(profile_error_status("WOU-ID service unreachable: timeout"), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(profile_error_status("identity database returned HTTP 500"), StatusCode::SERVICE_UNAVAILABLE);
+    }
 
     fn state() -> IdentityState {
         IdentityState::from_env("http://127.0.0.1:25585".to_string(), "secret".to_string())

@@ -2,7 +2,7 @@ use crate::building::BuildingGrid;
 use crate::diplomacy::is_traitor_active;
 use crate::engine::SowEngine;
 use crate::execution::{PrioritizedTile, RETREAT_PENALTY_VS_PLAYER};
-use crate::game::{GameEvent, GamePhase, GameState};
+use crate::game::{GameEvent, GamePhase, GameState, TerritoryChange};
 use crate::game_config::max_tiles_cap_for_troops;
 use crate::geo_entities::{Ability, LossWhen, Side, Source, Target};
 use crate::map::TerrainType;
@@ -90,12 +90,8 @@ pub(crate) fn target_applies(
         Target::Tribe => owner.is_some_and(|t| t.player_type == PlayerType::Bot),
         Target::Nation => owner.is_some_and(|t| t.player_type == PlayerType::Nation),
         Target::ActiveTraitor => owner.is_some_and(|t| is_traitor_active(t, state.tick as u32)),
-        Target::Outnumbering => {
-            subject != 0 && owner.is_some_and(|rival| rival.troops > army)
-        }
-        Target::Outnumbered => {
-            subject != 0 && owner.is_some_and(|rival| rival.troops < army)
-        }
+        Target::Outnumbering => subject != 0 && owner.is_some_and(|rival| rival.troops > army),
+        Target::Outnumbered => subject != 0 && owner.is_some_and(|rival| rival.troops < army),
         Target::Larger => compared(|p| f64::from(p.tile_count), true),
         Target::Smaller => compared(|p| f64::from(p.tile_count), false),
         Target::Richer => compared(|p| p.gold, true),
@@ -191,9 +187,9 @@ fn landing_attacker_loss(state: &GameState, attacker: u16, landed: bool) -> f64 
     if !landed {
         return 1.0;
     }
-    state
-        .player(attacker)
-        .map_or(1.0, |p| p.leader.attacker_loss_multiplier(LossWhen::Landing))
+    state.player(attacker).map_or(1.0, |p| {
+        p.leader.attacker_loss_multiplier(LossWhen::Landing)
+    })
 }
 
 /// Hero mountain ability: mountain tiles cost the attacker fewer troops.
@@ -235,7 +231,9 @@ fn recapture_multiplier(state: &GameState, attacker: u16, target: u16) -> f64 {
     state
         .player(attacker)
         .filter(|p| p.recapture_ticks > 0 && p.recapture_target == target)
-        .map_or(1.0, |p| p.leader.attacker_loss_multiplier(LossWhen::RecaptureWindow))
+        .map_or(1.0, |p| {
+            p.leader.attacker_loss_multiplier(LossWhen::RecaptureWindow)
+        })
 }
 
 /// Hero city abilities: a city tile costs more to take from a defender with `CityDefense`
@@ -264,11 +262,93 @@ fn city_capture_multiplier(
 
 // Attack execution tick (territory expansion and combat resolution)
 impl SowEngine {
+    pub(crate) fn annex_enclosed_components(
+        &mut self,
+        changes: Vec<TerritoryChange>,
+    ) -> Vec<(u16, u16, u32, u32)> {
+        let mut candidates_by_pair = std::collections::BTreeMap::<(u16, u16), Vec<u32>>::new();
+        let mut changed_victims = std::collections::BTreeSet::new();
+        for change in changes {
+            if change.old_owner != 0 {
+                changed_victims.insert(change.old_owner);
+            }
+
+            let passive_neutral_expansion = change.old_owner == 0
+                && self.state.config.bot_difficulty == crate::game_config::BotDifficulty::Vanilla
+                && self
+                    .state
+                    .player(change.new_owner)
+                    .is_some_and(|player| player.player_type == crate::player::PlayerType::Bot);
+            if change.new_owner != 0 && !passive_neutral_expansion {
+                self.state
+                    .map
+                    .for_each_neighbor4(change.x, change.y, |nx, ny| {
+                        let victim = self.state.map.owner_id(nx, ny);
+                        if victim != 0 && victim != change.new_owner {
+                            candidates_by_pair
+                                .entry((change.new_owner, victim))
+                                .or_default()
+                                .push(ny * self.state.map.width + nx);
+                        }
+                    });
+            }
+        }
+
+        // OpenFront reruns the changed player's full border scan. This catches
+        // an enclosed component elsewhere in their territory, even when the
+        // tile they just lost was in a separate region.
+        for victim in changed_victims {
+            let starts: Vec<u32> = self
+                .state
+                .player(victim)
+                .map(|player| {
+                    player
+                        .border_coords(self.state.map.width)
+                        .map(|(x, y)| y * self.state.map.width + x)
+                        .collect()
+                })
+                .unwrap_or_default();
+            for start in starts {
+                let x = start % self.state.map.width;
+                let y = start / self.state.map.width;
+                if self.state.map.owner_id(x, y) != victim {
+                    continue;
+                }
+                self.state.map.for_each_neighbor4(x, y, |nx, ny| {
+                    let captor = self.state.map.owner_id(nx, ny);
+                    if captor != 0 && captor != victim {
+                        candidates_by_pair
+                            .entry((captor, victim))
+                            .or_default()
+                            .push(start);
+                    }
+                });
+            }
+        }
+
+        let mut eliminated = Vec::new();
+        for ((captor, victim), mut starts) in candidates_by_pair {
+            if self
+                .campaign_relations
+                .get(&captor)
+                .is_some_and(|relation| *relation != crate::protocol::CampaignRelation::Enemy)
+            {
+                continue;
+            }
+            starts.sort_unstable();
+            starts.dedup();
+            eliminated.extend(
+                self.state
+                    .capture_enclosed_components(captor, victim, &starts)
+                    .into_iter()
+                    .map(|(victim, x, y)| (victim, captor, x, y)),
+            );
+        }
+        eliminated
+    }
+
     pub fn execute_combat(&mut self) {
-        self.execute_combat_using(
-            |attack, _| attack.to_conquer.len(),
-            |_, _, _| 1.0,
-        );
+        self.execute_combat_using(|attack, _| attack.to_conquer.len(), |_, _, _| 1.0);
     }
 
     fn execute_combat_using<F, P>(&mut self, frontier_size: F, pacing_multiplier: P)
@@ -303,6 +383,7 @@ impl SowEngine {
         // attacks are sorted on insertion
 
         let mut elimination_candidates = Vec::new();
+        let mut territory_changes = Vec::new();
         let mut to_remove = Vec::new();
 
         for i in 0..self.attacks.len() {
@@ -327,10 +408,9 @@ impl SowEngine {
                                 |t| p.leader.enemy_retreat_penalty_multiplier(t),
                             )
                         });
-                        let softening = self
-                            .state
-                            .player(execution.owner_id)
-                            .map_or(1.0, |p| p.leader.attacker_loss_multiplier(LossWhen::Retreat));
+                        let softening = self.state.player(execution.owner_id).map_or(1.0, |p| {
+                            p.leader.attacker_loss_multiplier(LossWhen::Retreat)
+                        });
                         if penalty != 1.0 {
                             self.state.announce_leader_ability_to(
                                 execution.target_owner,
@@ -364,13 +444,12 @@ impl SowEngine {
 
             let adjacent = (frontier_size(execution, &self.state) as f64).max(1.0);
 
-            let troop_strength =
-                attack_strength(
-                    &self.state,
-                    execution.owner_id,
-                    execution.target_owner,
-                    execution.troops,
-                );
+            let troop_strength = attack_strength(
+                &self.state,
+                execution.owner_id,
+                execution.target_owner,
+                execution.troops,
+            );
             let defense_strength = defense_strength(
                 &self.state,
                 execution.owner_id,
@@ -430,7 +509,11 @@ impl SowEngine {
 
             loop {
                 if held_target == Some(execution.target_owner)
-                    && !Self::pre_defeat_watches(&pre_defeat_targets, pre_defeat_pending, execution.target_owner)
+                    && !Self::pre_defeat_watches(
+                        &pre_defeat_targets,
+                        pre_defeat_pending,
+                        execution.target_owner,
+                    )
                     && self
                         .state
                         .player(execution.target_owner)
@@ -483,9 +566,16 @@ impl SowEngine {
                     }
 
                     let target_reached_pre_defeat = execution.target_owner != 0
-                        && self.state.player(execution.target_owner).is_some_and(Self::pre_defeat_reached);
+                        && self
+                            .state
+                            .player(execution.target_owner)
+                            .is_some_and(Self::pre_defeat_reached);
                     if target_reached_pre_defeat
-                        && Self::pre_defeat_watches(&pre_defeat_targets, pre_defeat_pending, execution.target_owner)
+                        && Self::pre_defeat_watches(
+                            &pre_defeat_targets,
+                            pre_defeat_pending,
+                            execution.target_owner,
+                        )
                     {
                         if pre_defeat_pending.is_none() {
                             pre_defeat_pending = Some(execution.target_owner);
@@ -582,11 +672,8 @@ impl SowEngine {
                         (target_tile.x, target_tile.y),
                         execution.owner_id,
                     );
-                    let landing_loss = landing_attacker_loss(
-                        &self.state,
-                        execution.owner_id,
-                        execution.landed,
-                    );
+                    let landing_loss =
+                        landing_attacker_loss(&self.state, execution.owner_id, execution.landed);
                     if terrain_loss != 1.0
                         || city_loss != 1.0
                         || target_loss != 1.0
@@ -602,11 +689,8 @@ impl SowEngine {
                     let terrain_multiplier =
                         terrain_loss_multiplier(terrain_type, &self.state.config) * terrain_loss;
                     // Hero city-tile, coast, landing and target loss abilities scale the same per-tile cost.
-                    let loss_multiplier = terrain_multiplier
-                        * city_loss
-                        * target_loss
-                        * coast_loss
-                        * landing_loss;
+                    let loss_multiplier =
+                        terrain_multiplier * city_loss * target_loss * coast_loss * landing_loss;
 
                     if execution.target_owner == 0 {
                         // Neutral: attacker pays constant base cost scaled by terrain multiplier
@@ -636,10 +720,8 @@ impl SowEngine {
 
                         // Defense posts increase attacker losses slightly. The defender's
                         // tower ability raises that extra, the attacker's tower siege lowers it.
-                        let tower_siege = self
-                            .state
-                            .player(execution.owner_id)
-                            .map_or(1.0, |player| {
+                        let tower_siege =
+                            self.state.player(execution.owner_id).map_or(1.0, |player| {
                                 player.leader.tower_loss_multiplier(Side::Attacker)
                             });
                         let tower_extra =
@@ -760,16 +842,19 @@ impl SowEngine {
                     // Apply change AFTER enqueuing neighbors
                     // This ensures new neighbors don't artificially lower their priority by counting this tile as friendly yet!
                     // Guaranteed BFS spread without DFS spikes!
+                    let (eliminated, candidates) = self.state.set_tile_owner_for_execution(
+                        target_tile.x,
+                        target_tile.y,
+                        execution.owner_id,
+                    );
                     elimination_candidates.extend(
-                        self.state
-                            .set_tile_owner_with_eliminations(
-                                target_tile.x,
-                                target_tile.y,
-                                execution.owner_id,
-                            )
+                        eliminated
                             .into_iter()
                             .map(|(victim, x, y)| (victim, execution.owner_id, x, y)),
                     );
+                    if let Some(change) = candidates {
+                        territory_changes.push(change);
+                    }
 
                     if self.state.player(execution.owner_id).is_some_and(|player| {
                         player.leader.has_resource_bonus_from(Source::Territory)
@@ -781,11 +866,11 @@ impl SowEngine {
                     }
 
                     // A player whose leader can recapture opens its counterattack window when it loses a city.
-                    if self.building_grid.city_covers_tile(target_tile.x, target_tile.y)
+                    if self
+                        .building_grid
+                        .city_covers_tile(target_tile.x, target_tile.y)
                         && let Some(victim) = self.state.player_mut(execution.target_owner)
-                        && victim
-                            .leader
-                            .has_attacker_loss(LossWhen::RecaptureWindow)
+                        && victim.leader.has_attacker_loss(LossWhen::RecaptureWindow)
                     {
                         victim.recapture_target = execution.owner_id;
                         victim.recapture_ticks = RECAPTURE_WINDOW_TICKS;
@@ -823,6 +908,7 @@ impl SowEngine {
             self.ai_attack_index_dirty = true;
         }
 
+        elimination_candidates.extend(self.annex_enclosed_components(territory_changes));
         for (victim, conqueror, x, y) in elimination_candidates {
             self.eliminate_player(victim, conqueror, x, y, false);
         }
@@ -833,11 +919,11 @@ impl SowEngine {
 #[cfg(test)]
 mod tests {
     use super::{terrain_capture_speed, terrain_loss_multiplier};
-    use crate::geo_entities::Target;
     use crate::building::Building;
     use crate::execution::{AttackExecution, PrioritizedTile};
     use crate::game::{BuildingKind, GamePhase, GameState};
     use crate::game_config::{GameConfig, max_tiles_cap_for_troops};
+    use crate::geo_entities::Target;
     use crate::map::{MapTile, TerrainType};
     use crate::player::Player;
     use crate::rng::NextIntExt;
@@ -1395,7 +1481,8 @@ mod tests {
             "the test must reach the capture-cost branch without the per-tick cap"
         );
 
-        engine.add_attack(AttackExecution { landed: false,
+        engine.add_attack(AttackExecution {
+            landed: false,
             id: 1,
             owner_id: 1,
             target_owner: 2,
@@ -1477,7 +1564,8 @@ mod tests {
             focus_targets: std::collections::HashMap::new(),
             reserve_spawned: false,
         });
-        engine.add_attack(AttackExecution { landed: false,
+        engine.add_attack(AttackExecution {
+            landed: false,
             id: 1,
             owner_id: 1,
             target_owner: 2,
@@ -1510,7 +1598,8 @@ mod tests {
             .into_iter()
             .find(|(x, y)| engine.state.map.owner_id(*x, *y) == 2)
             .unwrap();
-        engine.add_attack(AttackExecution { landed: false,
+        engine.add_attack(AttackExecution {
+            landed: false,
             id: 2,
             owner_id: 1,
             target_owner: 2,

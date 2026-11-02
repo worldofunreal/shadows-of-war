@@ -6,7 +6,7 @@
  * WOU_ID_VERSION below (must be a published version) and deploy.
  * No auth logic lives here on purpose.
  */
-const WOU_ID_VERSION = "2.0.0";
+const WOU_ID_VERSION = "2.0.5";
 const WOU_ID_CDNS = [
   `https://cdn.jsdelivr.net/npm/@worldofunreal/id@${WOU_ID_VERSION}/dist/index.js`,
   `https://unpkg.com/@worldofunreal/id@${WOU_ID_VERSION}/dist/index.js`,

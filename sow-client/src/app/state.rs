@@ -957,6 +957,9 @@ pub struct SowApp {
     /// Prevents a profile refresh from racing an in-flight rename.
     pub profile_request_in_flight: bool,
     pub profile_refresh_pending: bool,
+    pub identity_profile_verified: bool,
+    pub identity_profile_retry_at: Option<Instant>,
+    pub identity_profile_retry_delay: Duration,
     /// Receipts still being fetched before their menu presentation.
     pub pending_reward_receipt_ids: std::collections::BTreeSet<String>,
     pub reward_profile_retry_at: Option<Instant>,

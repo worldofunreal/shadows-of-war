@@ -28,8 +28,11 @@ const messageHandlingSource = fs.readFileSync(
 );
 const dataMainSource = fs.readFileSync(path.join(shell, "../../sow-data/src/main.rs"), "utf8");
 const accountSource = fs.readFileSync(path.join(shell, "../../sow-client/src/app/account.rs"), "utf8");
+const sessionSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/session.rs"), "utf8");
 const assetSource = fs.readFileSync(path.join(shell, "../../sow-client/src/asset.rs"), "utf8");
 const verificationSource = fs.readFileSync(path.join(shell, "../../sow-server/src/verification.rs"), "utf8");
+const authSurfacesSource = fs.readFileSync(path.join(shell, "main_menu.surfaces.ts"), "utf8");
+const portalSource = fs.readFileSync(path.join(shell, "sdk/store_portals.ts"), "utf8");
 
 function extractShellFunction(name, nextName) {
     const declaration = (functionName) =>
@@ -40,6 +43,70 @@ function extractShellFunction(name, nextName) {
     const end = endMatch ? start + name.length + endMatch.index : -1;
     assert.ok(start >= 0 && end > start, name + " is present before " + nextName);
     return shellSource.slice(start, end).replace(/\bexport\s+/g, "");
+}
+
+function createWouRecoveryHarness() {
+    const timers = new Map();
+    const retryDelays = [];
+    let nextTimerId = 0;
+    const context = vm.createContext({
+        window: {
+            SOW_WOU_SESSION_STATUS: "pending",
+            currentSession: { token: "jwt-1", accountId: "account-1", user: { account_id: "account-1" } },
+            wouAuth: { ensureSession: () => Promise.resolve(null) },
+            SOW_ensureWouAnonymousSession() {
+                return Promise.resolve(null);
+            },
+        },
+        console: { warn() {}, info() {} },
+        setTimeout(callback, delay) {
+            const id = ++nextTimerId;
+            timers.set(id, callback);
+            retryDelays.push(delay);
+            return id;
+        },
+        clearTimeout(id) {
+            timers.delete(id);
+        },
+    });
+    const retryStart = portalSource.indexOf("function scheduleWouSessionRetry()");
+    const retryEnd = portalSource.indexOf("function saveWouSession(data)", retryStart);
+    const ensureStart = portalSource.indexOf("window.SOW_ensureWouAnonymousSession = function ()");
+    const refreshStart = portalSource.indexOf("window.SOW_refreshWouSession = function ()");
+    const acceptStart = portalSource.indexOf("window.SOW_acceptWouSession = function (data)", refreshStart);
+    assert.ok(
+        retryStart >= 0 && retryEnd > retryStart && ensureStart > retryEnd &&
+            refreshStart > ensureStart && acceptStart > refreshStart,
+    );
+    const harness = [
+        "let wouAnonymousPromise = null;",
+        "let wouRetryTimer = null;",
+        "let wouRetryDelay = 1000;",
+        "let wouRecoveryGeneration = 0;",
+        "let wouProfileRefreshAttempted = false;",
+        "function isSowIdentityHost() { return true; }",
+        "function isAndroidTwa() { return false; }",
+        "function isPortalEmbed() { return false; }",
+        "function loadWouSdk() { return Promise.resolve(window.wouAuth); }",
+        "function readWouSession() { return window.currentSession; }",
+        "function emitAuthStateChange() { window.authEvents = (window.authEvents || 0) + 1; window.SOW_AUTH_CHANGED = true; }",
+        portalSource.slice(retryStart, retryEnd),
+        portalSource.slice(ensureStart, refreshStart),
+        portalSource.slice(refreshStart, acceptStart),
+        "this.__wouFailSession = failWouSession;",
+    ].join("\n");
+    vm.runInContext(harness, context);
+    return {
+        context,
+        retryDelays,
+        timers,
+        fireNextTimer() {
+            const first = timers.entries().next().value;
+            assert.ok(first, "a retry timer was scheduled");
+            timers.delete(first[0]);
+            first[1]();
+        },
+    };
 }
 
 test("menu disconnect notice waits 30 seconds, clears on recovery, and can be dismissed offline", () => {
@@ -829,9 +896,200 @@ test("queued identity refresh is applied before an older profile response", () =
         profileEvent.indexOf("continue;") < profileEvent.indexOf("profile_last_applied_request = request_id"),
     );
 
-    const failedStart = assetSource.indexOf("DbEvent::LoadFailed { request_id, status }");
+    const failedStart = assetSource.indexOf("DbEvent::LoadFailed {");
     const failedEnd = assetSource.indexOf("DbEvent::TutorialCompletionFailed", failedStart);
     assert.ok(failedStart >= 0 && failedEnd > failedStart);
+});
+
+test("WOU login methods stay available while an expired saved session is recovering", () => {
+    const proofStart = sessionSource.indexOf("fn make_auth_proof(&self)");
+    const proofEnd = sessionSource.indexOf("pub(crate) fn sync_portal_room", proofStart);
+    assert.ok(proofStart >= 0 && proofEnd > proofStart);
+    const makeAuthProof = sessionSource.slice(proofStart, proofEnd);
+    assert.match(makeAuthProof, /wou_session_pending\(\)[\s\S]*return None/);
+    assert.match(makeAuthProof, /!self\.identity_profile_verified[\s\S]*return None/);
+
+    const profileStart = accountSource.indexOf("pub(crate) fn fetch_cloud_progress");
+    const profileEnd = accountSource.indexOf("fn fetch_anonymous_progress", profileStart);
+    assert.ok(profileStart >= 0 && profileEnd > profileStart);
+    assert.match(accountSource.slice(profileStart, profileEnd), /wou_session_pending\(\)[\s\S]*return/);
+
+    const ensureStart = authSurfacesSource.indexOf("function ensureAuthSession()");
+    const ensureEnd = authSurfacesSource.indexOf("function authIcon", ensureStart);
+    assert.ok(ensureStart >= 0 && ensureEnd > ensureStart);
+    const ensureSession = authSurfacesSource.slice(ensureStart, ensureEnd);
+    assert.match(ensureSession, /return Promise\.resolve\(authSession\(\)\)/);
+    assert.doesNotMatch(ensureSession, /SOW_ensureWouAnonymousSession|\.ensureSession\(/);
+
+    const otpStart = authSurfacesSource.indexOf("export function requestAuthOtp()");
+    const verifyStart = authSurfacesSource.indexOf("export function verifyAuthOtp()", otpStart);
+    assert.ok(otpStart >= 0 && verifyStart > otpStart);
+    const requestOtp = authSurfacesSource.slice(otpStart, verifyStart);
+    assert.match(requestOtp, /ensureAuthSession\(\)/);
+    assert.match(requestOtp, /\/api\/v1\/auth\/otp\/request/);
+
+    const oauthStart = portalSource.indexOf("window.SOW_startWouOAuth = async function (provider)");
+    const oauthEnd = portalSource.indexOf("window.SOW_portalShowAuthPrompt", oauthStart);
+    assert.ok(oauthStart >= 0 && oauthEnd > oauthStart);
+    const startOAuth = portalSource.slice(oauthStart, oauthEnd);
+    assert.match(startOAuth, /api\/v1\/auth\/oauth\/login/);
+    assert.doesNotMatch(startOAuth, /SOW_ensureWouAnonymousSession|ensureSession\(/);
+
+    const acceptStart = portalSource.indexOf("window.SOW_acceptWouSession = function (data)");
+    const signOutStart = portalSource.indexOf("window.SOW_signOutWou = function ()", acceptStart);
+    assert.ok(acceptStart >= 0 && signOutStart > acceptStart);
+    const acceptSession = portalSource.slice(acceptStart, signOutStart);
+    assert.match(acceptSession, /saveWouSession\(data\)[\s\S]*wouRecoveryGeneration \+= 1[\s\S]*wouAnonymousPromise = null/);
+    assert.match(acceptSession, /window\.confirm/);
+    assert.match(portalSource, /generation !== wouRecoveryGeneration\) return readWouSession\(\)/);
+
+    const captureStart = portalSource.indexOf("function sowCaptureWouReturn()");
+    const captureEnd = portalSource.indexOf("function sowLoadBlocks()", captureStart);
+    assert.ok(captureStart >= 0 && captureEnd > captureStart);
+    const captureReturn = portalSource.slice(captureStart, captureEnd);
+    assert.match(captureReturn, /SOW_acceptWouSession\(/);
+    assert.doesNotMatch(captureReturn, /localStorage\.setItem\("wou_session_token"/);
+
+    const failedStart = assetSource.indexOf("DbEvent::LoadFailed {");
+    const failedEnd = assetSource.indexOf("DbEvent::TutorialCompletionFailed", failedStart);
+    assert.ok(failedStart >= 0 && failedEnd > failedStart);
+    const failedProfile = assetSource.slice(failedStart, failedEnd);
+    assert.doesNotMatch(failedProfile, /panic!/);
+    assert.match(failedProfile, /boot_db_settled = true/);
+    assert.match(failedProfile, /provider == "wou" && status == Some\(401\)[\s\S]*refresh_wou_session\(\)/);
+    assert.match(failedProfile, /if provider == "wou"[\s\S]*identity_profile_verified = false/);
+    assert.match(failedProfile, /schedule_identity_profile_retry\(\)/);
+    assert.match(portalSource, /wou:session-state-change/);
+});
+
+test("SOW profile recovery handles success, definitive 401, outages, and bounded backoff", async () => {
+    const success = createWouRecoveryHarness();
+    const stableSession = success.context.window.currentSession;
+    success.context.window.wouAuth.ensureSession = (force) => {
+        assert.equal(force, true);
+        return Promise.resolve({ session_token: "jwt-refreshed" });
+    };
+    const recovered = await success.context.window.SOW_refreshWouSession();
+    assert.equal(success.context.window.SOW_WOU_SESSION_STATUS, "ready");
+    assert.equal(recovered, stableSession);
+    assert.equal(success.context.window.currentSession.accountId, "account-1");
+    assert.equal(success.context.window.authEvents, 1);
+
+    for (const scenario of [
+        { status: 401, expected: "reauthentication_required", retries: 0 },
+        { status: 503, expected: "retrying", retries: 1 },
+        { status: undefined, expected: "retrying", retries: 1 },
+    ]) {
+        const harness = createWouRecoveryHarness();
+        const failure = Object.assign(new Error("identity unavailable"), { status: scenario.status });
+        harness.context.window.wouAuth.ensureSession = () => Promise.reject(failure);
+        await assert.rejects(
+            harness.context.window.SOW_refreshWouSession(),
+            (error) => error === failure,
+        );
+        assert.equal(harness.context.window.SOW_WOU_SESSION_STATUS, scenario.expected);
+        assert.equal(harness.context.window.currentSession.accountId, "account-1");
+        assert.equal(harness.retryDelays.length, scenario.retries);
+        if (scenario.retries) assert.equal(harness.retryDelays[0], 1_000);
+    }
+
+    const backoff = createWouRecoveryHarness();
+    for (const expectedDelay of [1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000]) {
+        const failure = new Error("identity service offline");
+        assert.throws(() => backoff.context.__wouFailSession(failure), (error) => error === failure);
+        assert.equal(backoff.retryDelays.at(-1), expectedDelay);
+        backoff.fireNextTimer();
+    }
+});
+
+test("SOW preserves an existing WOU account and does not create a guest during an outage", async () => {
+    const harness = createWouRecoveryHarness();
+    const savedSession = harness.context.window.currentSession;
+    let anonymousStarts = 0;
+    harness.context.window.wouAuth.ensureSession = () =>
+        Promise.reject(Object.assign(new Error("identity unavailable"), { status: 503 }));
+    harness.context.window.wouAuth.startAnonymous = () => {
+        anonymousStarts += 1;
+        return Promise.resolve(null);
+    };
+
+    await assert.rejects(
+        harness.context.window.SOW_ensureWouAnonymousSession(),
+        /identity unavailable/,
+    );
+
+    assert.equal(anonymousStarts, 0);
+    assert.equal(harness.context.window.currentSession, savedSession);
+    assert.equal(harness.context.window.currentSession.accountId, "account-1");
+    assert.equal(harness.context.window.SOW_WOU_SESSION_STATUS, "retrying");
+    assert.equal(harness.retryDelays[0], 1000);
+});
+
+test("SOW retries a rejected profile once per login and preserves the selected account", async () => {
+    const harness = createWouRecoveryHarness();
+    let refreshCalls = 0;
+    harness.context.window.wouAuth.ensureSession = () => {
+        refreshCalls += 1;
+        return Promise.resolve({ session_token: "jwt-refreshed" });
+    };
+
+    await harness.context.window.SOW_refreshWouSession();
+    await assert.rejects(
+        harness.context.window.SOW_refreshWouSession(),
+        (error) => error.status === 401,
+    );
+    assert.equal(refreshCalls, 1);
+    assert.equal(harness.context.window.SOW_WOU_SESSION_STATUS, "reauthentication_required");
+    assert.equal(harness.context.window.currentSession.accountId, "account-1");
+
+    harness.context.window.SOW_wouProfileLoadSucceeded();
+    harness.context.window.SOW_WOU_SESSION_STATUS = "ready";
+    await harness.context.window.SOW_refreshWouSession();
+    assert.equal(refreshCalls, 2);
+});
+
+test("SOW account acceptance requires confirmation before changing WOU-ID accounts", () => {
+    const acceptStart = portalSource.indexOf("window.SOW_acceptWouSession = function (data)");
+    const signOutStart = portalSource.indexOf("window.SOW_signOutWou = function ()", acceptStart);
+    assert.ok(acceptStart >= 0 && signOutStart > acceptStart);
+    const state = {
+        current: { token: "jwt-account-1", accountId: "account-1", user: { account_id: "account-1" } },
+        confirm: false,
+        confirmCalls: 0,
+        saves: [],
+    };
+    const context = vm.createContext({
+        window: {
+            confirm() {
+                state.confirmCalls += 1;
+                return state.confirm;
+            },
+        },
+        readWouSession: () => state.current,
+        saveWouSession(data) {
+            state.saves.push(data);
+            state.current = { token: data.session_token, accountId: data.account.account_id, user: data.account };
+        },
+        emitAuthStateChange() {},
+        clearTimeout() {},
+    });
+    vm.runInContext(
+        "let wouRecoveryGeneration = 0; let wouAnonymousPromise = null; let wouRetryTimer = null; let wouRetryDelay = 1000;\n" +
+            portalSource.slice(acceptStart, signOutStart) +
+            "\nthis.acceptWouSession = window.SOW_acceptWouSession;",
+        context,
+    );
+
+    const nextAccount = { account_id: "account-2" };
+    assert.equal(context.acceptWouSession({ session_token: "jwt-account-2", account: nextAccount }), false);
+    assert.equal(state.current.accountId, "account-1");
+    assert.equal(state.saves.length, 0);
+    assert.equal(state.confirmCalls, 1);
+
+    state.confirm = true;
+    assert.equal(context.acceptWouSession({ session_token: "jwt-account-2", account: nextAccount }), true);
+    assert.equal(state.current.accountId, "account-2");
+    assert.equal(state.saves.length, 1);
 });
 
 test("lobby exit keeps the live connection and match exit owns teardown", () => {
