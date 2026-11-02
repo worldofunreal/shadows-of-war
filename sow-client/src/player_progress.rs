@@ -52,9 +52,9 @@ pub struct PlayerProgress {
     pub deaths: u32,
     #[serde(default)]
     pub assists: u32,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_leader_xp")]
     pub leader_xp: std::collections::BTreeMap<String, u32>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_leader_stats")]
     pub leader_stats: std::collections::BTreeMap<String, sow_data::profile::LeaderCareerStats>,
     /// Free spendable currency (legacy local saves stored it under "laurels";
     /// [`migrate_legacy_currency_json`] moves it here on load).
@@ -94,6 +94,49 @@ where
     Ok(value
         .as_deref()
         .and_then(sow_data::commerce::leader_from_id))
+}
+
+fn deserialize_leader_xp<'de, D>(
+    deserializer: D,
+) -> Result<std::collections::BTreeMap<String, u32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let saved = std::collections::BTreeMap::<String, u32>::deserialize(deserializer)?;
+    let mut current = std::collections::BTreeMap::new();
+    for (saved_name, xp) in saved {
+        let name = sow_data::commerce::leader_from_id(&saved_name)
+            .map_or(saved_name, |leader| leader.name().to_owned());
+        let total = current.entry(name).or_insert(0u32);
+        *total = total.saturating_add(xp);
+    }
+    Ok(current)
+}
+
+fn deserialize_leader_stats<'de, D>(
+    deserializer: D,
+) -> Result<std::collections::BTreeMap<String, sow_data::profile::LeaderCareerStats>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let saved: std::collections::BTreeMap<String, sow_data::profile::LeaderCareerStats> =
+        Deserialize::deserialize(deserializer)?;
+    let mut current = std::collections::BTreeMap::new();
+    for (saved_name, stats) in saved {
+        let name = sow_data::commerce::leader_from_id(&saved_name)
+            .map_or(saved_name, |leader| leader.name().to_owned());
+        let total = current
+            .entry(name)
+            .or_insert_with(sow_data::profile::LeaderCareerStats::default);
+        total.matches_played = total.matches_played.saturating_add(stats.matches_played);
+        total.wins = total.wins.saturating_add(stats.wins);
+        total.verified_wins = total.verified_wins.saturating_add(stats.verified_wins);
+        total.kills = total.kills.saturating_add(stats.kills);
+        total.deaths = total.deaths.saturating_add(stats.deaths);
+        total.assists = total.assists.saturating_add(stats.assists);
+        total.xp = total.xp.saturating_add(stats.xp);
+    }
+    Ok(current)
 }
 
 #[derive(Clone, Debug)]
