@@ -169,7 +169,19 @@ pub fn leader_from_id(value: &str) -> Option<Leader> {
         ]
             .into_iter()
             .any(|candidate| normalize(candidate) == normalized)
+            || leader
+                .legacy_ids()
+                .iter()
+                .any(|candidate| normalize(candidate) == normalized)
     })
+}
+
+pub fn owns_leader(owned: &BTreeSet<String>, leader: Leader) -> bool {
+    owned.contains(leader_id(leader))
+        || leader
+            .legacy_ids()
+            .iter()
+            .any(|legacy_id| owned.contains(legacy_id))
 }
 
 pub fn assigned_leader_for_account(account_id: &str, period: u64) -> Leader {
@@ -181,7 +193,7 @@ pub fn assigned_leader_for_account(account_id: &str, period: u64) -> Leader {
 
 pub fn leader_available(leader: Leader, owned: &BTreeSet<String>, period: u64) -> bool {
     leader.always_free()
-        || owned.contains(leader_id(leader))
+        || owns_leader(owned, leader)
         || rotation_for_period(period).contains(&leader)
 }
 
@@ -304,7 +316,7 @@ pub fn catalog_for_profile(
     let free = rotation_for_period(period);
     let leaders = Leader::all()
         .map(|leader| {
-            let owned = owned_leaders.contains(leader_id(leader));
+            let owned = owns_leader(owned_leaders, leader);
             let free_rotation = free.contains(&leader);
             let permanently_free = leader.always_free();
             LeaderOffer {

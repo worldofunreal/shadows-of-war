@@ -388,6 +388,7 @@ pub fn parse_account_with_migration(raw: &[u8]) -> serde_json::Result<PlayerAcco
     }
     if let Some(profile) = value.get_mut("profile").and_then(|p| p.as_object_mut()) {
         migrate_legacy_currency(profile);
+        migrate_legacy_leader_ids(profile);
         migrate_legacy_leader_names(profile);
         migrate_legacy_ranked_bot_leader(profile);
     }
@@ -407,6 +408,67 @@ fn migrate_legacy_currency(profile: &mut serde_json::Map<String, serde_json::Val
     }
     if let Some(legacy) = profile.remove("laurels") {
         profile.insert("crowns".to_string(), legacy);
+    }
+}
+
+/// Rewrite renamed hero IDs while loading old profiles. Purchased leader IDs
+/// stay intact because they also key historical purchase markers.
+fn migrate_legacy_leader_ids(profile: &mut serde_json::Map<String, serde_json::Value>) {
+    let canonical_id = |value: &str| {
+        crate::commerce::leader_from_id(value).map(|leader| crate::commerce::leader_id(leader))
+    };
+    if let Some(saved) = profile
+        .get("preferred_leader")
+        .and_then(serde_json::Value::as_str)
+        .and_then(crate::commerce::leader_from_id)
+    {
+        profile.insert(
+            "preferred_leader".to_string(),
+            serde_json::Value::String(crate::commerce::leader_wire_id(saved).to_string()),
+        );
+    }
+    for field in ["owned_leaders", "purchased_leaders"] {
+        if let Some(ids) = profile
+            .get_mut(field)
+            .and_then(serde_json::Value::as_array_mut)
+        {
+            for id in ids {
+                if let Some(canonical) = id.as_str().and_then(canonical_id) {
+                    *id = serde_json::Value::String(canonical.to_string());
+                }
+            }
+        }
+    }
+    if let Some(receipts) = profile
+        .get_mut("reward_receipts")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        for receipt in receipts.values_mut() {
+            if let Some(ids) = receipt
+                .get_mut("unlocked_leaders")
+                .and_then(serde_json::Value::as_array_mut)
+            {
+                for id in ids {
+                    if let Some(canonical) = id.as_str().and_then(canonical_id) {
+                        *id = serde_json::Value::String(canonical.to_string());
+                    }
+                }
+            }
+        }
+    }
+    if let Some(guides) = profile
+        .get_mut("menu_guides")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        for guide in guides.values_mut() {
+            if let Some(selected) = guide
+                .get("selected_leader")
+                .and_then(serde_json::Value::as_str)
+                .and_then(canonical_id)
+            {
+                guide["selected_leader"] = serde_json::Value::String(selected.to_string());
+            }
+        }
     }
 }
 
@@ -960,6 +1022,11 @@ fn collect_purchase_markers(
     }
     for leader_id in &account.profile.purchased_leaders {
         markers.insert(format!("{}:leader:{leader_id}", account.id));
+        if let Some(leader) = crate::commerce::leader_from_id(leader_id) {
+            for legacy_id in leader.legacy_ids() {
+                markers.insert(format!("{}:leader:{legacy_id}", account.id));
+            }
+        }
     }
     for skin_id in &account.profile.purchased_skins {
         markers.insert(format!("{}:skin:{skin_id}", account.id));
@@ -3645,10 +3712,7 @@ impl PlayerDb {
                         &account.profile.completed_episodes,
                     )
                     .filter(|leader| {
-                        !account
-                            .profile
-                            .owned_leaders
-                            .contains(crate::commerce::leader_id(*leader))
+                        !crate::commerce::owns_leader(&account.profile.owned_leaders, *leader)
                     });
                     if let Some(leader) = unlocked_leader {
                         account
@@ -3898,7 +3962,7 @@ impl PlayerDb {
         let mut failure = None;
         let account = self
             .update_account_atomic(account_id, &[&purchase_id], |account| {
-                if account.profile.owned_leaders.contains(&leader_id) {
+                if crate::commerce::owns_leader(&account.profile.owned_leaders, leader) {
                     failure = Some("leader already owned");
                 } else if (if use_gems {
                     account.profile.gems

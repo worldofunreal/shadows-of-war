@@ -2255,6 +2255,7 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
     let leaders = sow_core::player::Leader::all().map(|leader| {
         serde_json::json!({
             "id": leader.id(), "artSlug": leader.art_slug(),
+            "legacyIds": leader.legacy_ids(),
             "region": leader.character().region,
             "wikipedia": leader.character().wikipedia,
         })
@@ -2535,6 +2536,7 @@ fn landing_leaders(english: &serde_json::Value) -> Result<String> {
     for leader in sow_core::player::Leader::all() {
         let id = leader.id();
         let art_slug = leader.art_slug();
+        let legacy_ids = leader.legacy_ids().join(",");
         let active = leader == sow_core::player::Leader::default();
         let avatar_src = if active {
             format!("/assets/gameplay/avatars/expressions/{art_slug}_angry.webp")
@@ -2542,9 +2544,10 @@ fn landing_leaders(english: &serde_json::Value) -> Result<String> {
             format!("/assets/gameplay/avatars/{art_slug}.webp")
         };
         html += &format!(
-            r#"<button class="roster-card{class}" type="button" aria-pressed="{active}" data-leader-id="{id}" data-art-slug="{art_slug}" data-name="{name}" data-civ="{civ}" data-historical="{historical}" data-ability="{ability}" data-description="{description}"><img src="{avatar_src}" alt="" width="128" height="128" loading="lazy" decoding="async"><span data-i18n="heroes.leader_{id}_name">{name}</span></button>
+            r#"<button class="roster-card{class}" type="button" aria-pressed="{active}" data-leader-id="{id}" data-legacy-ids="{legacy_ids}" data-art-slug="{art_slug}" data-name="{name}" data-civ="{civ}" data-historical="{historical}" data-ability="{ability}" data-description="{description}"><img src="{avatar_src}" alt="" width="128" height="128" loading="lazy" decoding="async"><span data-i18n="heroes.leader_{id}_name">{name}</span></button>
 "#,
             class = if active { " is-active" } else { "" },
+            legacy_ids = legacy_ids,
             name = english_text(english, &format!("heroes.leader_{id}_name"))?,
             civ = english_text(english, &format!("heroes.leader_{id}_civilization"))?,
             historical = english_text(english, &format!("heroes.leader_{id}_historical"))?,
@@ -5367,6 +5370,7 @@ fn local_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.root.join("sow-web/site/fonts"),
     ];
     let mut hash = Sha256::new();
+    hash.update(b"local-static-output-v2\0");
     for stamp in local_source_snapshot(paths)?
         .into_iter()
         .filter(|stamp| roots.iter().any(|root| stamp.path.starts_with(root)))
@@ -5404,6 +5408,13 @@ fn package_local_preview(
         && site_media_ready(out);
 
     if !static_ready {
+        for name in ["assets", "maps", "fonts"] {
+            let stale = out.join(name);
+            if stale.exists() {
+                fs::remove_dir_all(&stale)
+                    .with_context(|| format!("reset local preview {}", stale.display()))?;
+            }
+        }
         fs::create_dir_all(out)?;
         let assets = out.join("assets");
         copy_dir(&paths.assets_shell, &assets.join("shell"))?;

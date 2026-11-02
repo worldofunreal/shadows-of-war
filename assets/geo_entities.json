@@ -8915,18 +8915,20 @@
    "territory_color": "#3498db"
   },
   {
-   "id": "justinian_i",
-   "name": "Justinian I",
+   "id": "justinian_ii_hero",
+   "name": "Justinian II",
    "entity": "Byzantine Empire",
    "role": "nation",
    "region": "europe",
    "lat": 41.01,
    "lon": 28.98,
    "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Justinian_I",
-   "avatar": "justinian_i",
+   "wikipedia": "https://en.wikipedia.org/wiki/Justinian_II",
+   "avatar": "justinian_ii_hero",
    "hero": {
-    "name": "Justinian I",
+    "name": "Justinian II",
+    "legacy_ids": ["justinian_i"],
+    "art_slug": "justinian_ii_hero",
     "ability": {
      "kind": "attacker_loss",
      "when": "city",
@@ -9157,7 +9159,7 @@
    "territory_color": "#7b241c"
   },
   {
-   "id": "pocahontas",
+   "id": "matoaka",
    "name": "Matoaka",
    "entity": "Powhatan Confederacy",
    "role": "nation",
@@ -9165,10 +9167,10 @@
    "lat": 37.4,
    "lon": -76.8,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Pocahontas",
    "avatar": "matoaka",
    "hero": {
     "name": "Matoaka",
+    "legacy_ids": [],
     "art_slug": "matoaka",
     "ability": {
      "kind": "defense_strength",

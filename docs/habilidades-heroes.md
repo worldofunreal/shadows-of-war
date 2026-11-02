@@ -72,7 +72,7 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Shah Jahan | Monumental Cities | Cities pay 25% more troops. | resource_bonus (city / troops) | 25% | `gameplay/icons/abilities/shah_jahan.webp` |
 | Xerxes I | Host of Xerxes | Attackers lose 25% fewer troops when attacking outnumbered players. | attacker_loss | 25% | `gameplay/icons/abilities/xerxes_i.webp` |
 | Marcus Aurelius | Danube Frontier | Foreign armies retreating from your land cost 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/marcus_aurelius.webp` |
-| Justinian I | Imperial Sieges | Attackers lose 25% fewer troops when conquering city tiles. | attacker_loss | 25% | `gameplay/icons/abilities/justinian_i.webp` |
+| Justinian II | The Aqueduct Return | Attackers lose 25% fewer troops when conquering city tiles. | attacker_loss | 25% | `gameplay/icons/abilities/justinian_ii_hero.webp` |
 | Totila | Siege of Rome | Attackers lose 25% fewer troops when attacking nations. | attacker_loss | 25% | `gameplay/icons/abilities/totila.webp` |
 | Chilperic I | Frankish Campaigns | Attackers lose 10% fewer troops in every attack. | attacker_loss | 10% | `gameplay/icons/abilities/chilperic_i.webp` |
 | Lothair I | Treaty of Verdun | Attackers lose 25% fewer troops when attacking poorer players. | attacker_loss | 25% | `gameplay/icons/abilities/lothair_i.webp` |
