@@ -37,6 +37,21 @@ pub struct BuildingPlacement {
     pub pending: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TransferMode {
+    Send,
+    Request,
+}
+
+impl TransferMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Send => "send",
+            Self::Request => "request",
+        }
+    }
+}
+
 pub struct HudState {
     pub gold: f64,
     pub troops: f64,
@@ -62,8 +77,8 @@ pub struct HudState {
     pub map_feedback: Option<HudMapFeedback>,
     pub notification_revision: u64,
     pub show_ask_panel: Option<u16>,
-    pub ask_gold: f64,
-    pub ask_troops: f64,
+    /// The radial's Send or Request. `None` lets the panel lead with the stronger side.
+    pub transfer_mode: Option<TransferMode>,
     pub prev_resource_requests: Vec<u16>,
     pub transfer_confirm_pending: bool,
 }
@@ -95,8 +110,7 @@ impl Default for HudState {
             map_feedback: None,
             notification_revision: 0,
             show_ask_panel: None,
-            ask_gold: 0.0,
-            ask_troops: 0.0,
+            transfer_mode: None,
             prev_resource_requests: Vec::new(),
             transfer_confirm_pending: false,
         }

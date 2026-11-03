@@ -18,6 +18,7 @@ COMMANDS:
   native                Fast-build and open the native Electron/WASM game
    p, prod              Run production build & deploy (WASM + FreeBSD + Azure, no Android)
    a, android           Build the Android AAB and publish it to Google Play alpha
+   poki                 Build the self-contained Poki upload folder (no upload/deploy)
    jest                 Build the self-contained Jest bundle + dist/jest.zip (no deploy)
    help, -h, --help     Show this help message
 
@@ -29,6 +30,7 @@ EXAMPLES:
   SOW_NATIVE_RELEASE=1 ./sow  # Compare with optimized WASM in Electron, without an installer
    ./sow p              # Production build and deploy to IONOS & Azure
    ./sow p -v           # Production deploy with public version bump
+   ./sow poki           # Build dist/poki for local review and Poki Inspector
    ./sow jest           # Jest bundle + upload zip (upload via console/MCP, never auto)
   ./sow a              # Android AAB + Play alpha upload (each upload restarts Play review)
 EOF
@@ -80,6 +82,9 @@ run_dist_process() {
   if [[ "${log_prefix}" == production ]]; then
     command -v flock >/dev/null || { echo "flock is required to prevent overlapping production builds" >&2; return 127; }
     exec flock -n "${ROOT}/dist/.production.lock" "${bin}" "$@"
+  elif [[ "${log_prefix}" == poki ]]; then
+    command -v flock >/dev/null || { echo "flock is required to prevent overlapping Poki package builds" >&2; return 127; }
+    exec flock -n "${ROOT}/dist/.poki-build.lock" "${bin}" "$@"
   fi
   exec "${bin}" "$@"
 }
@@ -223,6 +228,10 @@ case "${CMD}" in
   jest)
     load_dist_env
     run_dist jest "$@"
+    ;;
+  poki)
+    load_dist_env
+    run_dist poki "$@"
     ;;
   *)
     echo "Unknown command: ${CMD}" >&2

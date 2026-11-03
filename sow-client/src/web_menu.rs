@@ -337,6 +337,8 @@ enum WebMenuCommand {
         x: f32,
         y: f32,
         #[serde(default)]
+        fleet_id: Option<u64>,
+        #[serde(default)]
         shot: Option<CameraShotRequest>,
     },
 }
@@ -1193,8 +1195,7 @@ impl SowApp {
                 }
                 WebMenuCommand::OpenTransfer { target_player_id } => {
                     self.ui.app.hud_state.show_ask_panel = Some(target_player_id);
-                    self.ui.app.hud_state.ask_gold = 0.0;
-                    self.ui.app.hud_state.ask_troops = 0.0;
+                    self.ui.app.hud_state.transfer_mode = None;
                     self.ui.app.hud_state.transfer_confirm_pending = false;
                 }
                 WebMenuCommand::CloseTransfer => {
@@ -1778,7 +1779,12 @@ impl SowApp {
                         self.focus_camera_on_world(world_x, world_y, 8.0);
                     }
                 }
-                WebMenuCommand::FocusWorld { x, y, shot } => {
+                WebMenuCommand::FocusWorld {
+                    x,
+                    y,
+                    shot,
+                    fleet_id,
+                } => {
                     let on_map = |x: f32, y: f32| {
                         x.is_finite()
                             && y.is_finite()
@@ -1789,6 +1795,21 @@ impl SowApp {
                     };
                     if !on_map(x, y) {
                         continue;
+                    }
+                    if let Some(fleet_id) = fleet_id {
+                        let my_id = self.sim.my_player_id.unwrap_or(0);
+                        let is_my_fleet = self
+                            .sim
+                            .current_snapshot
+                            .as_ref()
+                            .is_some_and(|snapshot| {
+                                snapshot.fleets.iter().any(|fleet| {
+                                    fleet.id == fleet_id && fleet.owner_id == my_id
+                                })
+                            });
+                        if is_my_fleet {
+                            self.ui.mover_scene.highlight_fleet(fleet_id);
+                        }
                     }
                     if let Some(shot) = shot
                         .filter(|shot| on_map(shot.from_x, shot.from_y) && shot.seconds.is_finite())
@@ -3206,12 +3227,17 @@ fn build_leaderboard(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) ->
     human_players.sort_unstable_by(leaderboard_cmp);
 
     let my_player = snapshot.players.iter().find(|player| player.id == my_pid);
+    // The trade button is offered only where the server would accept the transfer.
+    let row = |player: &sow_core::protocol::PlayerSnapshot, rank: usize| {
+        let mut value = player_json(player, my_pid, snapshot.total_land_tiles, Some(rank));
+        value["can_trade"] =
+            serde_json::json!(my_player.is_some_and(|me| me.can_trade_with(player)));
+        value
+    };
     let mut payload = players
         .into_iter()
         .enumerate()
-        .map(|(index, player)| {
-            player_json(player, my_pid, snapshot.total_land_tiles, Some(index + 1))
-        })
+        .map(|(index, player)| row(player, index + 1))
         .collect::<Vec<_>>();
 
     for player in human_players {
@@ -3221,12 +3247,7 @@ fn build_leaderboard(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) ->
             .filter(|other| leaderboard_cmp(other, &player) == Ordering::Less)
             .count()
             + 1;
-        payload.push(player_json(
-            player,
-            my_pid,
-            snapshot.total_land_tiles,
-            Some(rank),
-        ));
+        payload.push(row(player, rank));
         included_ids.insert(player.id);
     }
 
@@ -3238,12 +3259,7 @@ fn build_leaderboard(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) ->
                 .filter(|player| leaderboard_cmp(player, &my_player) == Ordering::Less)
                 .count()
                 + 1;
-            payload.push(player_json(
-                my_player,
-                my_pid,
-                snapshot.total_land_tiles,
-                Some(rank),
-            ));
+            payload.push(row(my_player, rank));
         }
     }
     serde_json::Value::Array(payload)
@@ -3739,6 +3755,30 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 let alliance_state = app
                     .map_menu_alliance_state(menu.tile_idx)
                     .map(sow_core::diplomacy::AllianceActionState::as_str);
+                let relation = app.map_menu_relation(menu.tile_idx);
+                let alliance_remaining_seconds = if relation == Some("ally") {
+                    let my_id = app
+                        .sim
+                        .my_player_id
+                        .unwrap_or(app.ui.app.hud_state.my_player_id);
+                    app.sim
+                        .current_snapshot
+                        .as_ref()
+                        .and_then(|snapshot| {
+                            snapshot
+                                .players
+                                .iter()
+                                .find(|player| player.id == my_id)
+                                .and_then(|player| player.alliance_timers.get(&target_player_id))
+                                .copied()
+                        })
+                        .map(|ticks| {
+                            (f64::from(ticks) * f64::from(app.sim.config.tick_rate_ms) / 1000.0)
+                                .ceil() as u32
+                        })
+                } else {
+                    None
+                };
                 let items = app
                     .map_menu_items(menu.tile_idx)
                     .into_iter()
@@ -3784,7 +3824,8 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                     "actions": actions,
                     "items": items,
                     "alliance_state": alliance_state,
-                    "relation": app.map_menu_relation(menu.tile_idx),
+                    "alliance_remaining_seconds": alliance_remaining_seconds,
+                    "relation": relation,
                     "target_name": target_name,
                     "target_avatar": target_avatar,
                     "building": building,
@@ -4306,9 +4347,11 @@ fn append_player_dialog_payloads(
             "target_name": &target.name,
             "target_avatar": sow_core::player::avatar_identity(target),
             "target_alive": target.alive,
+            "target_gold": target.gold,
+            "target_troops": target.troops,
+            "target_max_troops": target.max_troops,
             "confirm_pending": hud.transfer_confirm_pending,
-            "suggested_gold": hud.ask_gold,
-            "suggested_troops": hud.ask_troops,
+            "mode": hud.transfer_mode.map(crate::ui::hud::state::TransferMode::as_str),
         });
     }
     if let Some((ally_id, _)) = hud
@@ -5257,8 +5300,7 @@ mod tests {
                 });
             let mut hud = crate::ui::hud::HudState::default();
             hud.show_ask_panel = Some(player.id);
-            hud.ask_gold = 25.0;
-            hud.ask_troops = 12.0;
+            hud.transfer_mode = Some(crate::ui::hud::state::TransferMode::Request);
             hud.betrayal_warning_cached = Some((player.id, intent.clone()));
             let mut payload = serde_json::json!({});
             append_player_dialog_payloads(&mut payload, Some(&snapshot), &hud);
@@ -5267,9 +5309,11 @@ mod tests {
             assert_eq!(payload["betrayal"]["ally_avatar"], identity);
             assert_eq!(payload["transfer"]["target_name"], player.name);
             assert_eq!(payload["transfer"]["target_alive"], player.alive);
+            assert_eq!(payload["transfer"]["target_gold"], player.gold);
+            assert_eq!(payload["transfer"]["target_troops"], player.troops);
+            assert_eq!(payload["transfer"]["target_max_troops"], player.max_troops);
             assert_eq!(payload["betrayal"]["ally_name"], player.name);
-            assert_eq!(payload["transfer"]["suggested_gold"], 25.0);
-            assert_eq!(payload["transfer"]["suggested_troops"], 12.0);
+            assert_eq!(payload["transfer"]["mode"], "request");
             assert_eq!(hud.betrayal_warning_cached.as_ref().unwrap().1, intent);
             hud.show_ask_panel = None;
             hud.betrayal_warning_cached = None;
@@ -5741,5 +5785,38 @@ mod tests {
         assert_eq!(human_rows.len(), 2);
         assert_eq!(human_rows[0]["rank"], serde_json::json!(141));
         assert_eq!(human_rows[1]["rank"], serde_json::json!(142));
+    }
+
+    #[test]
+    fn leaderboard_offers_trade_only_to_allies_and_teammates() {
+        use sow_core::protocol::Team;
+
+        let mut players = vec![
+            test_player(1, 10, 0.0),
+            test_player(2, 10, 0.0),
+            test_player(3, 10, 0.0),
+            test_player(4, 10, 0.0),
+            test_player(5, 10, 0.0),
+        ];
+        players[0].alliances.push(2);
+        players[0].team = Some(Team::Red);
+        players[2].team = Some(Team::Red);
+        players[3].team = Some(Team::Blue);
+        let snapshot = test_snapshot(players);
+
+        let serde_json::Value::Array(rows) = build_leaderboard(&snapshot, 1) else {
+            panic!("leaderboard must be an array");
+        };
+        let can_trade = |id: u16| -> bool {
+            rows.iter()
+                .find(|row| row["id"] == serde_json::json!(id))
+                .and_then(|row| row["can_trade"].as_bool())
+                .expect("leaderboard row with can_trade")
+        };
+        assert!(!can_trade(1), "self");
+        assert!(can_trade(2), "ally");
+        assert!(can_trade(3), "teammate");
+        assert!(!can_trade(4), "other team");
+        assert!(!can_trade(5), "stranger");
     }
 }

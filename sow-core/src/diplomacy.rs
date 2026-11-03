@@ -8,6 +8,8 @@ use wyrand::WyRand;
 pub const ALLIANCE_REQUEST_TTL_TICKS: u32 = 200;
 /// Minimum delay before the same pair can get another outgoing request (~30s).
 pub const ALLIANCE_REQUEST_COOLDOWN_TICKS: u32 = 300;
+/// Minimum delay before the same pair can send another resource request (~10s).
+pub const RESOURCE_REQUEST_COOLDOWN_TICKS: u32 = 100;
 /// Last ~30s of an alliance: renewal proposals may be attempted (throttled by RNG).
 pub const ALLIANCE_RENEWAL_WINDOW_TICKS: u32 = 300;
 /// Minimum time between betrayals for one bot (~60s).

@@ -163,7 +163,6 @@ impl SowApp {
                 campaign_player_color: Some(player_color),
                 starting_troops,
                 starting_gold,
-                global_speed_multiplier: 0.5,
                 buildings_enabled: true,
                 campaign_support,
                 ..Default::default()

@@ -104,6 +104,32 @@ export async function publish(
     ),
   );
   const localLinks = new Set<string>();
+  const fileExists = async (path: string) => {
+    try {
+      return (await stat(join(out, path))).isFile();
+    } catch (error) {
+      if ((error as { code?: string }).code === "ENOENT") return false;
+      throw error;
+    }
+  };
+  const leaderArt = new Map(
+    await Promise.all(
+      leaders.map(async (leader) => {
+        const base = `assets/shell/leaders/${leader.artSlug}`;
+        const [desktop, mobile] = await Promise.all([
+          fileExists(`${base}_desktop.webp`),
+          fileExists(`${base}_mobile.webp`),
+        ]);
+        return [
+          leader.id,
+          {
+            desktop: desktop ? `/${base}_desktop.webp` : null,
+            mobile: mobile ? `/${base}_mobile.webp` : null,
+          },
+        ] as const;
+      }),
+    ),
+  );
   let count = 0;
   for (const language of languages) {
     const code = language.code;
@@ -141,9 +167,12 @@ export async function publish(
     for (const route of routes) {
       if (code !== "en" && englishOnly.has(route)) continue;
       const leader = leaders.find((h) => route === `leaders/${h.id}/`);
+      const art = leader ? leaderArt.get(leader.id) : undefined;
       let html: string, title: string, description: string;
       const image = leader
-        ? `/assets/shell/leaders/${leader.artSlug}_desktop.webp`
+        ? art?.desktop && art.mobile
+          ? art.desktop
+          : null
         : "/assets/shell/loader/sow-splash-desktop.webp";
       if (leader) {
         const f = fields(leader);
@@ -178,8 +207,11 @@ export async function publish(
         const introduction = bio.isSaga
           ? `<section class="leader-history-intro leader-history-highlight" id="historical-context" lang="${escape(bio.lang)}"><p class="eyebrow">${escape(bio.highlightLabel)}</p><p>${escape(bio.highlight)}</p></section>`
           : `<section class="leader-history-intro" id="historical-context" lang="${escape(bio.lang)}" dir="auto"><h2>${escape(t("site.historical_context"))}</h2>${articleParagraphs(bio.intro)}</section>`;
+        const coverArt = art?.desktop && art.mobile
+          ? `<picture class="leader-cover-art"><source media="(max-width: 700px)" srcset="${art.mobile}"><img src="${art.desktop}" alt="${escape(f.name)}" width="1600" height="900" fetchpriority="high"></picture>`
+          : "";
         const content = `<article class="leader-encyclopedia"><div class="container"><nav class="guide-breadcrumbs" aria-label="${escape(t("site.main_navigation"))}"><a href="/">${escape(t("site.nav_home"))}</a><span aria-hidden="true">/</span><a href="/leaders/">${escape(t("site.leaders"))}</a><span aria-hidden="true">/</span><span aria-current="page">${escape(f.name)}</span></nav></div>
-<header class="container leader-cover"><picture class="leader-cover-art"><source media="(max-width: 700px)" srcset="/assets/shell/leaders/${leader.artSlug}_mobile.webp"><img src="${image}" alt="${escape(f.name)}" width="1600" height="900" fetchpriority="high"></picture><div class="leader-cover-shade" aria-hidden="true"></div><div class="leader-cover-copy"><p class="leader-cover-meta">${escape(f.civilization)} <span aria-hidden="true">·</span> ${escape(t(`heroes.${leader.region}`))}</p><h1>${escape(f.name)}</h1><p class="leader-cover-historical">${escape(f.historical)}</p><a class="button button-orange" href="/play/">${escape(t("site.play_now"))}</a></div></header>
+<header class="container leader-cover">${coverArt}<div class="leader-cover-shade" aria-hidden="true"></div><div class="leader-cover-copy"><p class="leader-cover-meta">${escape(f.civilization)} <span aria-hidden="true">·</span> ${escape(t(`heroes.${leader.region}`))}</p><h1>${escape(f.name)}</h1><p class="leader-cover-historical">${escape(f.historical)}</p><a class="button button-orange" href="/play/">${escape(t("site.play_now"))}</a></div></header>
 <div class="container leader-reading-layout"><nav class="leader-toc" aria-label="${escape(t("site.page_contents"))}"><p>${escape(t("site.page_contents"))}</p><ol>${contents}</ol></nav><div class="leader-history">${introduction}${chapters}${sourceNote}</div>
 <aside class="leader-sidebar"><section class="leader-trait"><p class="eyebrow">${escape(t("site.command_trait"))}</p><h2>${escape(f.ability)}</h2><p>${escape(f.effect)}</p></section><a class="leader-sidebar-link" href="/leaders/">← ${escape(t("site.all_leaders"))}</a><a class="leader-sidebar-link" href="/#leaders">${escape(t("site.choose_leader"))}</a></aside></div></article>`;
         html = leaderTemplate
@@ -197,7 +229,11 @@ export async function publish(
         const cards = leaders
           .map((h) => {
             const f = fields(h);
-            return `<a class="leader-directory-card" data-leader-directory-card data-leader-id="${escape(h.id)}" data-name="${escape(f.name)}" data-civ="${escape(f.civilization)}" aria-label="${escape(t("site.inspect_leader", { name: f.name }))}" href="${path(code, `leaders/${h.id}/`)}"><img class="leader-directory-art" src="/assets/shell/leaders/${escape(h.artSlug)}_mobile.webp" alt="" width="900" height="1600" loading="lazy" decoding="async"><img class="leader-directory-avatar" src="/assets/gameplay/avatars/${escape(h.artSlug)}.webp" alt="" width="128" height="128" loading="lazy" decoding="async"><span class="leader-directory-copy"><span class="leader-directory-civilization">${escape(f.civilization)}</span><span class="leader-directory-name">${escape(f.name)}</span><span class="leader-directory-ability">${escape(f.ability)}</span><span class="leader-directory-action">${escape(t("site.view_profile"))} <span aria-hidden="true">→</span></span></span></a>`;
+            const mobileArt = leaderArt.get(h.id)?.mobile;
+            const artImage = mobileArt
+              ? `<img class="leader-directory-art" src="${mobileArt}" alt="" width="900" height="1600" loading="lazy" decoding="async">`
+              : "";
+            return `<a class="leader-directory-card" data-leader-directory-card data-leader-id="${escape(h.id)}" data-name="${escape(f.name)}" data-civ="${escape(f.civilization)}" aria-label="${escape(t("site.inspect_leader", { name: f.name }))}" href="${path(code, `leaders/${h.id}/`)}">${artImage}<img class="leader-directory-avatar" src="/assets/gameplay/avatars/${escape(h.artSlug)}.webp" alt="" width="128" height="128" loading="lazy" decoding="async"><span class="leader-directory-copy"><span class="leader-directory-civilization">${escape(f.civilization)}</span><span class="leader-directory-name">${escape(f.name)}</span><span class="leader-directory-ability">${escape(f.ability)}</span><span class="leader-directory-action">${escape(t("site.view_profile"))} <span aria-hidden="true">→</span></span></span></a>`;
           })
           .join("\n");
         html = indexTemplate
@@ -256,7 +292,7 @@ export async function publish(
         },
         { "@type": "WebSite", "@id": origin + "/#website", url: origin + "/", name: "Shadows of War" },
       ];
-      schemas[0].image = origin + image;
+      if (image) schemas[0].image = origin + image;
       const organization = sourceGraph.find((node) => node["@type"] === "Organization");
       if (organization) {
         schemas.push(organization);
@@ -412,7 +448,8 @@ export async function publish(
         })
         .on('meta[property="og:image"],meta[name="twitter:image"]', {
           element(e) {
-            e.setAttribute("content", origin + image);
+            if (image) e.setAttribute("content", origin + image);
+            else e.remove();
           },
         })
         .on('meta[property="og:url"]', {

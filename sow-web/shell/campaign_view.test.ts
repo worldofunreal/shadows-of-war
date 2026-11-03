@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { vm } from "./typescript-test-support.ts";
-import { setAvatarPortrait } from "./avatar-presentation.ts";
+import { avatarPortraitPath } from "./avatar-presentation.ts";
 const shell = __dirname;
 import { bundleTs, loadTypeScriptModule } from "./typescript-test-support.ts";
 import type { CampaignRecord } from "./campaign/types.ts";
@@ -1677,7 +1677,19 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     const root = new Element(doc, "div");
     root.ownerDocument = doc;
     root.hidden = true;
-    const sandbox = { console: { warn: (...args) => warnings.push(args) }, setTimeout, clearTimeout };
+    const sandbox = {
+        console: { warn: (...args) => warnings.push(args) },
+        setTimeout,
+        clearTimeout,
+        Image: class {
+            crossOrigin = "";
+            decoding = "";
+            src = "";
+            decode() {
+                return Promise.resolve(this);
+            }
+        },
+    };
     vm.runInNewContext(campaignViewBundle, sandbox, { filename: "sow-campaign-view.ts" });
     const renderer = sandbox.SOWCampaignView.mount(root, {
         asset: (value) => "/" + value,
@@ -1699,8 +1711,9 @@ test("campaign view recovers portraits and renders compact objective guidance", 
             retry: { name: "Retry Speaker", avatar: "retry" },
             recover: { name: "Recover Speaker", avatar: "recover" },
             late: { name: "Late Speaker", avatar: "late" },
+            neutral: { name: "Neutral Speaker", avatar: "boudica" },
         },
-        steps: [],
+        steps: [{ id: "neutral_scene", speaker: "neutral", portrait_expression: "calm" }],
         reactions: [],
     };
     const paint = (id, speakerKey) => {
@@ -1734,6 +1747,15 @@ test("campaign view recovers portraits and renders compact objective guidance", 
     const settle = () => new Promise((resolve) => setImmediate(resolve));
 
     paint("first_scene", "first");
+    assert.ok(
+        createdImages.some((image) => image.src === "/gameplay/avatars/boudica.webp"),
+        "the Calm portrait preloads the existing base avatar",
+    );
+    assert.equal(
+        createdImages.some((image) => image.src === "/gameplay/avatars/expressions/boudica_calm.webp"),
+        false,
+        "campaign preload does not request a duplicate Calm crop",
+    );
     const portrait = root.querySelector(".sow-story__portrait");
     const stablePortrait = portrait.children[0];
     candidate("first").dispatch("load");
@@ -2450,39 +2472,14 @@ test("player nameplate keeps the active leader portrait and shows the nickname r
     assert.ok(plateStart >= 0 && plateEnd > plateStart);
     const plateUpdate = hud.slice(plateStart, plateEnd);
     assert.match(plateUpdate, /plateLeader = leaderById\(hud\.player_leader/);
-    const pathStart = hud.indexOf("    function avatarPortraitPath(");
-    const pathEnd = hud.indexOf("    function renderAvatarIdentity(", pathStart);
-    const image = {
-        src: "",
-        getAttribute() {
-            return this.src;
-        },
-    };
-    const context = {
-        hud: {
-            is_spectating: false,
-            player_leader: "boudica",
-            player_name: "Queen",
-            player_avatar_expression: "angry",
-        },
-        hudRefs: { nameplate: { hidden: false }, plateAvatar: image, plateName: { textContent: "" } },
-        hudState: {},
-        leaderById: (id) => ({ art_slug: id, slug: id }),
-        asset: (path) => path,
-        setAvatarPortrait,
-    };
-    const updatePlate = vm.runInNewContext(
-        hud.slice(pathStart, pathEnd) + "\n(function () {" + plateUpdate + "\n}}})",
-        context,
+    assert.match(
+        plateUpdate,
+        /avatarPortraitPath\(\s*plateLeader\.art_slug \|\| plateLeader\.slug,\s*hud\.player_avatar_expression,/,
     );
-    updatePlate();
-    assert.equal(image.src, "gameplay/avatars/expressions/boudica_angry.webp");
-    context.hud.player_avatar_expression = "happy";
-    updatePlate();
-    assert.equal(image.src, "gameplay/avatars/expressions/boudica_happy.webp");
-    context.hud.player_avatar_expression = "calm";
-    updatePlate();
-    assert.equal(image.src, "gameplay/avatars/boudica.webp");
+    assert.match(plateUpdate, /setAvatarPortrait\(/);
+    assert.equal(avatarPortraitPath("boudica", "angry"), "gameplay/avatars/expressions/boudica_angry.webp");
+    assert.equal(avatarPortraitPath("boudica", "happy"), "gameplay/avatars/expressions/boudica_happy.webp");
+    assert.equal(avatarPortraitPath("boudica", "calm"), "gameplay/avatars/boudica.webp");
     assert.match(plateUpdate, /platePlayerName = String\(hud\.player_name/);
     assert.match(plateUpdate, /plateName\.textContent = platePlayerName/);
     assert.doesNotMatch(plateUpdate, /plateName\.textContent = plateLeader\.name/);
@@ -2518,16 +2515,19 @@ test("nameplate keeps available troops as the count and layers outgoing troops a
     );
 });
 
-test("tutorial troop totals keep grouped digits below 100k and compact decimals above it", () => {
+test("nameplate troop totals use the Rust K/M compact format", () => {
     const start = hud.indexOf("    function formatNameplateTroops(");
     const end = hud.indexOf("\n    function formatHudMetric(", start);
     assert.ok(start >= 0 && end > start);
     const formatNameplateTroops = vm.runInNewContext(hud.slice(start, end) + "\nformatNameplateTroops;");
-    assert.equal(formatNameplateTroops(42003), (42003).toLocaleString());
-    assert.equal(formatNameplateTroops(99999), (99999).toLocaleString());
-    assert.equal(formatNameplateTroops(100000), "100.0K");
-    assert.equal(formatNameplateTroops(123300), "123.3K");
-    assert.equal(formatNameplateTroops(999999), "1.0M");
+    assert.equal(formatNameplateTroops(999), "999");
+    assert.equal(formatNameplateTroops(1000), "1.00K");
+    assert.equal(formatNameplateTroops(29224), "29.2K");
+    assert.equal(formatNameplateTroops(99999), "99.9K");
+    assert.equal(formatNameplateTroops(100000), "100K");
+    assert.equal(formatNameplateTroops(123300), "123K");
+    assert.equal(formatNameplateTroops(999999), "999K");
+    assert.equal(formatNameplateTroops(1000000), "1.00M");
     assert.equal(formatNameplateTroops(34200000), "34.2M");
     const metricStart = hud.indexOf("    function formatHudMetric(");
     const metricEnd = hud.indexOf("\n    function notificationAnchor", metricStart);

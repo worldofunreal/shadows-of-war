@@ -6558,7 +6558,7 @@
       else if (action) hudRoot.dataset.previewMapMenu = "";
       else return;
       const transferPanel = $("#sow-hud-transfer");
-      if (transferPanel && action && (action as HTMLElement).dataset.mapAction === "transfer")
+      if (transferPanel && action && ["send", "request"].includes((action as HTMLElement).dataset.mapAction ?? ""))
         transferPanel.hidden = false;
       const popup = hudRoot.querySelector(".sample-map-popup");
       if (popup) popup.hidden = !hudRoot.dataset.previewMapMenu;

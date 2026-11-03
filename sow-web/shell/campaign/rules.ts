@@ -351,7 +351,7 @@ export const UI_TARGETS: Record<string, string> = {
     map_menu_open: "#sow-hud-map-menu",
     map_spawn: '#sow-hud [data-map-action="spawn"]',
     map_attack: '#sow-hud [data-map-action="attack"]',
-    map_transfer: '#sow-hud [data-map-action="transfer"]',
+    map_transfer: '#sow-hud [data-map-action="send"]',
     map_fleet: '#sow-hud [data-map-action="fleet"]',
     map_alliance: '#sow-hud [data-map-action="alliance"]',
     map_build: '#sow-hud [data-map-group="build"]',

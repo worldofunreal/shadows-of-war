@@ -1,4 +1,5 @@
 use crate::app::{MapContextMenu, MapContextMenuView, SowApp};
+use crate::ui::hud::state::TransferMode;
 use serde::Deserialize;
 
 pub(crate) const TOUCH_HOLD_MS: u128 = 300;
@@ -24,7 +25,9 @@ pub(crate) enum MapMenuAction {
     Spawn,
     Attack,
     Fleet,
-    Transfer,
+    Send,
+    Request,
+    RequestAllies,
     Alliance,
     BuildCity,
     BuildFactory,
@@ -42,7 +45,9 @@ impl MapMenuAction {
             Self::Spawn => "spawn",
             Self::Attack => "attack",
             Self::Fleet => "fleet",
-            Self::Transfer => "transfer",
+            Self::Send => "send",
+            Self::Request => "request",
+            Self::RequestAllies => "request_allies",
             Self::Alliance => "alliance",
             Self::BuildCity => "build_city",
             Self::BuildFactory => "build_factory",
@@ -168,7 +173,8 @@ impl MapTarget {
 
         let mut actions = Vec::new();
         if self.is_friendly() {
-            actions.push(MapMenuAction::Transfer);
+            actions.push(MapMenuAction::Send);
+            actions.push(MapMenuAction::Request);
             if self.is_allied && !self.is_teammate && self.is_land && can_attack {
                 actions.push(MapMenuAction::Attack);
             }
@@ -697,6 +703,7 @@ impl SowApp {
                 }
             }
         }
+        actions.push(MapMenuAction::RequestAllies);
         actions
     }
 
@@ -786,6 +793,9 @@ impl SowApp {
                             false
                         }
                     }
+                } else if action == MapMenuAction::RequestAllies {
+                    reason_key = self.ally_resource_requests().err();
+                    reason_key.is_some()
                 } else {
                     false
                 };
@@ -870,8 +880,18 @@ impl SowApp {
             MapMenuAction::Fleet => {
                 self.launch_fleet_from_tile(tile_idx);
             }
-            MapMenuAction::Transfer => {
-                self.open_transfer_from_tile(tile_idx);
+            MapMenuAction::Send => {
+                self.open_transfer_from_tile(tile_idx, TransferMode::Send);
+            }
+            MapMenuAction::Request => {
+                self.open_transfer_from_tile(tile_idx, TransferMode::Request);
+            }
+            MapMenuAction::RequestAllies => {
+                if let Ok(intents) = self.ally_resource_requests() {
+                    for intent in intents {
+                        self.send_intent(intent);
+                    }
+                }
             }
             MapMenuAction::Alliance => {
                 self.alliance_from_tile(tile_idx);
@@ -1514,7 +1534,7 @@ impl SowApp {
         true
     }
 
-    fn open_transfer_from_tile(&mut self, tile_idx: u32) -> bool {
+    fn open_transfer_from_tile(&mut self, tile_idx: u32, mode: TransferMode) -> bool {
         let Some(target) = self.map_target(tile_idx) else {
             return false;
         };
@@ -1523,22 +1543,52 @@ impl SowApp {
             return false;
         }
         self.ui.app.hud_state.show_ask_panel = Some(target.owner);
-        if target.is_allied || target.is_teammate {
-            if let Some(player) = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
-                snapshot
-                    .players
-                    .iter()
-                    .find(|player| player.id == target.owner)
-            }) {
-                self.ui.app.hud_state.ask_gold = (player.gold * 0.10).floor();
-                self.ui.app.hud_state.ask_troops = (player.troops * 0.10).floor();
-            }
-        } else {
-            self.ui.app.hud_state.ask_gold = 0.0;
-            self.ui.app.hud_state.ask_troops = 0.0;
-        }
+        self.ui.app.hud_state.transfer_mode = Some(mode);
         self.ui.app.hud_state.transfer_confirm_pending = false;
         true
+    }
+
+    /// One request to each living ally or teammate, asking a quarter of their stock. Troops stop
+    /// at our free room. The server applies the same caps when it pays.
+    fn ally_resource_requests(
+        &self,
+    ) -> Result<Vec<sow_core::protocol::GameplayIntent>, &'static str> {
+        const ASK_SHARE: f64 = 0.25;
+        let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
+            return Err("hud.resources_no_allies");
+        };
+        let my_id = self.sim.my_player_id.unwrap_or_default();
+        let Some(me) = snapshot.players.iter().find(|player| player.id == my_id) else {
+            return Err("hud.resources_no_allies");
+        };
+        let room = (me.max_troops - me.troops).max(0.0);
+        let partners: Vec<_> = snapshot
+            .players
+            .iter()
+            .filter(|player| me.can_trade_with(player))
+            .collect();
+        if partners.is_empty() {
+            return Err("hud.resources_no_allies");
+        }
+        let intents: Vec<_> = partners
+            .into_iter()
+            .filter_map(|player| {
+                let gold = (player.gold * ASK_SHARE).floor().max(0.0);
+                let troops = (player.troops * ASK_SHARE).floor().min(room).max(0.0);
+                (gold > 0.0 || troops > 0.0).then_some(
+                    sow_core::protocol::GameplayIntent::RequestResources {
+                        target_player: player.id,
+                        gold,
+                        troops,
+                    },
+                )
+            })
+            .collect();
+        if intents.is_empty() {
+            Err("hud.resources_nothing_to_ask")
+        } else {
+            Ok(intents)
+        }
     }
 
     fn alliance_from_tile(&mut self, tile_idx: u32) -> bool {
@@ -2141,7 +2191,8 @@ mod tests {
         assert_eq!(
             ally.menu_actions(false, false, false),
             vec![
-                MapMenuAction::Transfer,
+                MapMenuAction::Send,
+                MapMenuAction::Request,
                 MapMenuAction::Fleet,
                 MapMenuAction::Alliance
             ]
@@ -2149,7 +2200,8 @@ mod tests {
         assert_eq!(
             ally.menu_actions(false, true, false),
             vec![
-                MapMenuAction::Transfer,
+                MapMenuAction::Send,
+                MapMenuAction::Request,
                 MapMenuAction::Attack,
                 MapMenuAction::Fleet,
                 MapMenuAction::Alliance,
@@ -2192,7 +2244,7 @@ mod tests {
         };
         assert_eq!(
             teammate.menu_actions(false, true, false),
-            vec![MapMenuAction::Transfer]
+            vec![MapMenuAction::Send, MapMenuAction::Request]
         );
         let allied_teammate = MapTarget {
             is_teammate: true,
@@ -2200,7 +2252,7 @@ mod tests {
         };
         assert_eq!(
             allied_teammate.menu_actions(false, true, true),
-            vec![MapMenuAction::Transfer]
+            vec![MapMenuAction::Send, MapMenuAction::Request]
         );
 
         let own_land = MapTarget { owner: 1, ..enemy };

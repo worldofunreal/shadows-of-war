@@ -3171,6 +3171,48 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   line-height: 1;
 }
 
+.sow-hud__ring-hub-status {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: inherit;
+  background: rgb(5 9 12 / 82%);
+  text-align: center;
+}
+
+.sow-hud__ring-hub-status[hidden] {
+  display: none;
+}
+
+.sow-hud__ring-hub-status strong {
+  max-width: 100%;
+  font-size: clamp(16px, 1.35rem, 22px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.sow-hud__ring-hub-status small {
+  color: var(--sow-gold-bright);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.sow-hud__ring-hub[data-alliance-display="fixed"] .sow-hud__ring-hub-status strong {
+  font-size: clamp(8px, 2.6vw, 12px);
+  line-height: 1.05;
+}
+
 .sow-hud__ring-hub[data-map-back] .sow-hud__ring-icon {
   color: var(--sow-gold-bright);
 }
@@ -4964,20 +5006,104 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   gap: 0.75rem;
 }
 
+.sow-hud__transfer-stock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  margin: 0;
+  padding: 0 0.25rem;
+  color: var(--sow-muted);
+  font-size: 0.8125rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+}
+
+.sow-hud__transfer-stock-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.sow-hud__transfer-stock-item b {
+  color: #f5f1e8;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sow-hud__transfer-stock-item small {
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.sow-hud__transfer-stock-item :is(.sow-hud__inline-icon, .sow-hud__currency-icon) {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  flex: 0 0 auto;
+}
+
+.sow-hud__transfer-field {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--sow-line);
+  border-radius: 0.375rem 0.75rem 0.375rem 0.375rem;
+  background: rgb(4 9 12 / 36%);
+}
+
 .sow-hud__transfer label {
   display: grid;
   gap: 0.625rem;
   min-width: 0;
   margin: 0;
   color: var(--sow-muted);
-  padding: 0.75rem;
-  border: 1px solid var(--sow-line);
-  border-radius: 0.375rem 0.75rem 0.375rem 0.375rem;
-  background: rgb(4 9 12 / 36%);
   font-size: 0.875rem;
   font-weight: 850;
   letter-spacing: 0.07em;
   text-transform: uppercase;
+}
+
+.sow-hud__transfer-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.375rem;
+}
+
+#sow-hud .sow-hud__transfer-preset {
+  min-block-size: 2.25rem;
+  padding: 0.375rem 0;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 30%, transparent);
+  border-radius: 4px 7px 4px 4px;
+  background: rgb(255 255 255 / 4%);
+  color: var(--sow-gold-bright);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  touch-action: manipulation;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+
+#sow-hud .sow-hud__transfer-preset:hover {
+  border-color: var(--sow-gold);
+  background: color-mix(in srgb, var(--sow-gold) 12%, transparent);
+}
+
+#sow-hud .sow-hud__transfer-preset:active {
+  transform: translateY(1px);
+}
+
+@media (pointer: coarse) {
+  #sow-hud .sow-hud__transfer-preset {
+    min-block-size: 2.75rem;
+  }
 }
 
 .sow-hud__transfer label > span {
@@ -5070,7 +5196,13 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     box-shadow 0.16s ease;
 }
 
-.sow-hud__transfer-actions .sow-hud__transfer-send {
+#sow-hud-transfer .sow-hud__transfer-cta {
+  border-color: color-mix(in srgb, var(--sow-gold) 62%, transparent);
+  background: color-mix(in srgb, var(--sow-gold) 8%, transparent);
+  color: var(--sow-gold-bright);
+}
+
+#sow-hud-transfer .sow-hud__transfer-cta.is-primary {
   border-color: var(--sow-gold);
   background: linear-gradient(110deg, #d9a64d, #f0ca78 55%, #d8a34a);
   box-shadow:
@@ -5079,17 +5211,26 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   color: #17150f;
 }
 
-.sow-hud__transfer-actions .sow-hud__transfer-send {
-  justify-content: space-between;
-  padding-inline: 14px;
+#sow-hud-transfer .sow-hud__transfer-cta .sow-hud__cta-icon {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  flex: 0 0 auto;
 }
 
-.sow-hud__transfer-actions .sow-hud__transfer-send > span:last-child {
-  font-size: 18px;
-  line-height: 0.8;
+#sow-hud-transfer .sow-hud__transfer-cta:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-.sow-hud__transfer-actions .sow-hud__transfer-request {
+.sow-hud__transfer-hint {
+  margin: 0;
+  padding: 10px 14px 0;
+  color: var(--sow-muted);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.sow-hud__betrayal-actions .sow-hud__transfer-request {
   border-color: var(--sow-line);
   background: transparent;
   color: var(--sow-muted);
@@ -5100,7 +5241,11 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   transform: translateY(-1px);
 }
 
-.sow-hud__transfer-actions .sow-hud__transfer-send:not(:disabled):hover {
+#sow-hud-transfer .sow-hud__transfer-cta:not(:disabled):hover {
+  border-color: var(--sow-gold-bright);
+}
+
+#sow-hud-transfer .sow-hud__transfer-cta.is-primary:not(:disabled):hover {
   border-color: #ffe6a7;
   background: linear-gradient(110deg, #edc16b, #ffe09a 55%, #e7b85e);
   box-shadow:
@@ -5192,6 +5337,13 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 #sow-hud[data-compact="true"] .sow-hud__dialog-body {
   padding: 0.75rem;
   gap: 0.625rem;
+}
+#sow-hud[data-compact="true"] .sow-hud__transfer-field {
+  gap: 0.375rem;
+  padding: 0.5rem;
+}
+#sow-hud[data-compact="true"] #sow-hud-transfer .sow-hud__dialog-participant {
+  padding: 0.5rem 0.75rem;
 }
 
 @media (orientation: portrait) and (max-width: 959px) {
@@ -5433,8 +5585,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     grid-auto-rows: max-content;
   }
   .sow-hud__operation {
-    grid-template-columns: max-content minmax(0, 1fr);
-    gap: 2px;
+    grid-template-columns: 28px minmax(0, 1fr) max-content max-content;
+    gap: 2px 4px;
   }
   .sow-hud__operation-avatar {
     grid-column: 1;
@@ -5461,12 +5613,12 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     flex: 0 0 auto;
   }
   .sow-hud__operation-troops {
-    grid-column: 1;
-    grid-row: 2;
+    grid-column: 3;
+    grid-row: 1;
   }
   .sow-hud__operation-actions {
-    grid-column: 2;
-    grid-row: 2;
+    grid-column: 4;
+    grid-row: 1;
     gap: 0;
   }
   .sow-hud__dock-inner {

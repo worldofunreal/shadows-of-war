@@ -252,9 +252,8 @@ mod badge_atlas_tests {
 }
 
 // Four expressions per hero plus campaign portraits. Keep each texture side under 4096 px for
-// mobile GPUs: 23×24 cells of 170 px (3910×4080) fit the current catalog, two fixed cells and 106
-// campaign portraits. The catalog outgrew the old 23×23 layout, so use the existing resize path.
-pub const AVATAR_CELL: u32 = 170;
+// mobile GPUs: 23×24 cells of 128 px (2944×3072) preserve 552 slots with a smaller fixed atlas.
+pub const AVATAR_CELL: u32 = 128;
 pub const AVATAR_COLS: u32 = 23;
 pub const AVATAR_ROWS: u32 = 24;
 pub const AVATAR_SLOT_COUNT: usize = (AVATAR_COLS * AVATAR_ROWS) as usize;
@@ -334,8 +333,24 @@ mod avatar_atlas_tests {
     /// many heroes must grow the atlas (`AVATAR_ROWS`) instead of overflowing it.
     #[test]
     fn every_hero_fits_the_avatar_atlas_with_room_for_campaigns() {
+        assert_eq!(super::AVATAR_CELL, 128);
+        assert_eq!(super::AVATAR_SLOT_COUNT, 552);
+        assert_eq!(super::AVATAR_COLS * super::AVATAR_CELL, 2944);
+        assert_eq!(super::AVATAR_ROWS * super::AVATAR_CELL, 3072);
         assert!(super::avatar_campaign_first_slot() + 106 <= super::AVATAR_SLOT_COUNT);
         assert!(super::AVATAR_COLS * super::AVATAR_CELL <= 4096);
         assert!(super::AVATAR_ROWS * super::AVATAR_CELL <= 4096);
+
+        let expected_u_span = (super::AVATAR_CELL - 1) as f32
+            / (super::AVATAR_COLS * super::AVATAR_CELL) as f32;
+        let expected_v_span = (super::AVATAR_CELL - 1) as f32
+            / (super::AVATAR_ROWS * super::AVATAR_CELL) as f32;
+        for slot in 0..super::AVATAR_SLOT_COUNT {
+            let [u0, v0, u1, v1] = super::avatar_slot_uv(slot);
+            assert!(u0 >= 0.0 && v0 >= 0.0 && u1 <= 1.0 && v1 <= 1.0);
+            assert!(u0 < u1 && v0 < v1);
+            assert!((u1 - u0 - expected_u_span).abs() < 1e-6);
+            assert!((v1 - v0 - expected_v_span).abs() < 1e-6);
+        }
     }
 }

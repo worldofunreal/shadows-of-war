@@ -110,7 +110,7 @@ El atlas es de 23 × 22 celdas de 176 px (506 casillas, 4048 × 3872 px), bajo e
 3. Atlas: 16 × 12 celdas (no 24 filas × 8 columnas, por el límite de textura de celulares viejos).
 4. Ingresos y costos nuevos: solo para su héroe, con bases en la configuración de juego.
 5. Lista de 13 aprobada: entra Simón Bolívar en lugar de Awashonks, y se suman 12 más. Solimán recibe el efecto que ya usa Hannibal (tropas 25 % más fuertes contra otros jugadores). La propuesta decía −25 %; era un error.
-6. Lista de 27 nuevos aprobada. Tomyris se reemplaza por Mulan (Asia, mujer): la Reina de Saba del plan es Makeda, que ya es héroe.
+6. Lista de 27 nuevos aprobada. Tomyris se reemplaza por Qin Liangyu (China Ming, comandante militar): la Reina de Saba del plan es Makeda, que ya es héroe.
 7. Caras de expresión: solo los 12 héroes de la sección 2 las tienen. Los demás muestran su cara base; en el anillo de emociones muestran el icono genérico, como hoy.
 8. Naciones: se publica con 204 bots de nación con retrato. Los 9 que faltan entran al juego cuando tengan retrato; no se publican sin cara.
 9. Habilidades: cada una tiene una situación que ningún otro héroe usa. La versión vigente está en [docs/habilidades-heroes.md](../../docs/habilidades-heroes.md).

@@ -1,0 +1,188 @@
+# Distribución web: inventario, peso y optimización
+
+Auditoría del 2 de noviembre de 2026; paquete Poki reconstruido a las 21:12. Los bytes de paquetes se miden sobre los archivos, no sobre `du` redondeado. MiB usa 1,048,576 bytes; MB usa 1,000,000.
+
+## Resumen para subir
+
+- **Poki:** los assets estáticos de runtime van dentro del paquete. Poki bloquea las solicitudes externas por defecto y pide incluir assets, fuentes y librerías en el build. No encontré un máximo numérico público para el peso total del build. Sí exige un paquete pequeño, recomienda carga progresiva y advierte que muchos jugadores abandonan si la carga tarda más de 10 segundos. El [Poki Inspector](https://developers.poki.com/guide/inspector) reporta peso/tiempo de carga y avisos de optimización; ese es el control práctico, no una cifra fija de “legal”. Fuentes: [requisitos](https://developers.poki.com/guide/requirements-quality), [recursos externos](https://developers.poki.com/guide/external-resources-policy), [carga progresiva](https://developers.poki.com/guide/easy-access).
+- **Paquete Poki actual:** `dist/poki` contiene **64,959,867 B (64.96 MB / 61.95 MiB), 1,532 archivos**. Incluye **49,821,547 B (49.82 MB / 47.51 MiB) de assets**, incluidos los avatares; también 2,600,395 B de mapas, 8,597,275 B de WASM, 1,510,997 B de locales y el shell/HTML. Un ZIP DEFLATE 9 de esa carpeta mide **58,024,838 B (58.02 MB / 55.34 MiB)**. El ZIP es una medición comprimida local; aún no se ha medido la transferencia del portal. La cifra anterior de **54.60 MiB** era una proyección de ZIP al sustituir avatares dentro de un candidato viejo, no el tamaño del paquete actual.
+- **Fuentes vs. paquete:** el árbol fuente completo `assets/` pesa **477,579,633 B (477.58 MB / 455.46 MiB)**. No se sube tal cual: el paquete selecciona y transforma lo que necesita el runtime Poki. Los assets publicados ocupan 49.82 MB; los avatares, 22.11 MB.
+- **Build fresco:** `./sow poki` terminó correctamente el 2 nov. a las 21:12. Regeneró el staging, recompiló el WASM con los shaders actuales, exportó los 15 idiomas, copió y verificó inventarios de assets/mapas y pasó `verify_poki_layout`. Revisé además que el catálogo embebido enumera los 1,160 WebP de avatares del paquete sin faltantes ni sobrantes y que `index.html` usa `./assets` y `./maps`, sin rutas estáticas a SOW. El intento anterior sí había fallado por el icono de Abd; ya se añadió un recorte provisional de su propia expresión Calm, byte idéntico al recorte generado del sheet. El arte final de habilidad sigue pendiente.
+- **Paquete anterior en caché:** **90,337,078 B (90.34 MB / 86.15 MiB), 1,441 archivos**; su ZIP DEFLATE 9 pesó **83,486,770 B (83.49 MB / 79.62 MiB)**. Era una salida vieja: contenía 75,310,577 B de assets y 48,250,178 B de avatares antiguos. No representa el paquete actual.
+- **Auditoría del empaquetador:** `copy_poki_assets()` copia el árbol runtime y valida inventario y hashes. `package_poki()` arma y valida en un directorio temporal, y solo sustituye `dist/poki` si el bundle pasa todos los verificadores; una falla no deja un paquete parcial con nombre de subida. La ejecución actual ejercitó ese flujo completo.
+- **Poki no publica un máximo numérico total** en sus requisitos revisados. El tamaño por sí solo no demuestra aprobación ni rechazo; falta revisar la subida con Poki Inspector y medir la descarga que presenta esa herramienta. La carpeta, el ZIP y los bytes que el jugador descarga al inicio son mediciones distintas.
+- **CrazyGames:** su tope de paquete es 250 MB y 1,500 archivos; el máximo inicial es 50 MB hasta `Gameplay start` (20 MB para optar a portada móvil). Eso mide transferencia hasta que el juego ya es jugable, no el ZIP que se sube. CrazyGames sirve por su CDN los archivos del Developer Portal. Fuentes: [límites técnicos](https://docs.crazygames.com/requirements/technical/) y [CDN del portal](https://docs.crazygames.com/faq/). El paquete Poki de 1,532 archivos no sirve para inferir si el paquete CrazyGames cumple su límite de 1,500.
+- **Paquete CrazyGames:** el `dist/crazygames` existente (12,389,925 B / 35 archivos) es viejo y no sirve como medida actual. `package_cg()` solo se ejecuta desde `build_web()` en `sow-dist/src/prod.rs`, dentro de `./sow p`; `./sow help` no ofrece un empaquetado CG local sin despliegue. Por eso los ~86 MB / 1,464 archivos de esta guía son una proyección antigua, no un candidato verificado actual.
+- **Subida:** usa `dist/poki`, que contiene `index.html` y pasó el verificador de layout. No subas `dist/`, que además incluye cachés y artefactos de compilación.
+
+`./sow poki` genera el paquete local, sin desplegar ni subir. El catálogo de héroes exige un icono de habilidad por héroe. Para completar el build se registró el icono provisional de Abd como recorte de su propia hoja Calm; está marcado como provisional en `assets/SOURCES.toml` y debe reemplazarse cuando llegue el arte final. CrazyGames también necesita el icono para construir su atlas.
+
+## De qué se compone el paquete Poki
+
+Las filas son categorías disjuntas y suman los **64,959,867 B** del paquete; el porcentaje es sobre el paquete entero.
+
+| Contenido | Archivos | Bytes | % | Formato / lectura |
+| --- | ---: | ---: | ---: | --- |
+| Avatares | 1,160 | 22,107,362 | 34.03% | WebP; retratos, sheets y expresiones. |
+| Escenas de héroes | 162 | 13,855,762 | 21.33% | WebP reescalado y recomprimido para el portal. |
+| WASM | 1 | 8,597,275 | 13.23% | WASM plano dentro del paquete. El staging tiene `.wasm.br` de 3,760,724 B, pero no se incluye. |
+| Campaña | 10 | 5,564,015 | 8.57% | Incluye un MP4 de 5,412,982 B y sus poster/triggers. |
+| Sprites de unidades | 5 | 3,589,031 | 5.52% | PNG; `sam-missile.png` pesa 2,649,061 B y `atom-bomb.png` 939,608 B. |
+| Música | 1 | 3,215,191 | 4.95% | WebM/Opus. |
+| Mapas | 46 | 2,600,395 | 4.00% | Incluye 22 mapas `.br` que suman 2,536,902 B; lo demás son miniaturas y catálogos. |
+| `index.html` | 1 | 1,774,548 | 2.73% | Incrusta unos 861 KB del bundle JS del menú/manifiesto del atlas, 397 KB de CSS y 125 KB de loader/catálogos/hash de assets. |
+| Locales | 16 | 1,510,997 | 2.33% | JSON de idioma, almacenado sin Brotli en la carpeta. |
+| Resto | 130 | 2,145,291 | 3.30% | Iconos/atlas, fuentes, runtime JS/CSS, manifiestos y avisos. |
+
+Los **1,442 WebP suman 37,531,548 B**; junto con el MP4, el WebM y los mapas `.br`, son formatos que ya llevan compresión y por eso apenas se reducen al comprimir el paquete otra vez. El ZIP local pasa de 64,959,867 a 58,024,838 B: ahorra 6,935,029 B (10.68%), no la mitad. Por eso el peso se concentra en medios ya comprimidos y el WASM, no en copias crudas de todo `assets/`.
+
+El WASM sí es una oportunidad de **transferencia**: el `.wasm.br` que ya genera el staging es 4,836,551 B menor que el WASM plano. Ese archivo no está en `dist/poki`; aprovecharlo depende de que el host del portal lo sirva como `Content-Encoding: br`. Tampoco medimos aún los headers del portal, así que el ZIP y el tamaño de carpeta no equivalen a los bytes que recibe el jugador.
+
+## Quién publica qué
+
+`assets/art/` es la fuente editable. `stage_runtime_assets()` en `sow-dist/src/main.rs` crea el árbol de runtime `assets/gameplay` y `assets/shell`; luego cada empaquetador elige y transforma lo que se sirve:
+
+| Destino | Flujo actual |
+| --- | --- |
+| Web propia | `./sow p` publica los assets en el CDN de SOW y la web los pide desde `/assets` y `/maps`. |
+| Poki | `package_poki()` copia los assets runtime y mapas a `dist/poki`; el HTML usa `./assets` y `./maps`. Poki exige assets en el build, así que no se apuntan al CDN de SOW. |
+| CrazyGames | `package_cg()` empaqueta assets runtime, fuentes y mapas; las rutas relativas `./assets` y `./maps` hacen que CrazyGames los sirva por su CDN. Agrupa los iconos de habilidad en un atlas para respetar el límite de archivos. |
+| Jest | `package_jest()` empaqueta assets runtime y mapas en `dist/jest.zip`; sirve como paquete autocontenido de prueba. |
+
+**Estrategia de CDN:** para CrazyGames, sí: subir los assets al portal y dejar que su CDN los entregue ahorra ancho de banda estático de SOW; no reduce los bytes que descarga el jugador. Para Poki, incluirlos en el build es requisito y evita pedirlos a nuestro dominio; la documentación pública revisada no especifica qué CDN interno usa Poki. En ambos portales, los endpoints de API y multiplayer no son assets: siguen apuntando a SOW y requieren la aprobación/integración aplicable del portal. No se debe usar el CDN de SOW como atajo para saltarse la política de assets externos de Poki.
+
+El paquete CrazyGames incluye assets runtime, fuentes y mapas. Esto reduce el egress estático de SOW, no el volumen total que descarga cada jugador. El evento `Gameplay start` debe coincidir con el primer estado jugable. La proyección de 86 MB / 1,464 archivos que aparece abajo es de un artefacto anterior; no prueba los límites del paquete actual ni la descarga inicial. Falta medir el tráfico real hasta ese evento, especialmente por la precarga de avatares.
+
+La proyección CrazyGames con assets, fuentes y mapas rondaba 85.98 MB y 1,543 archivos con iconos individuales. El atlas de iconos elimina 80 archivos con los 81 iconos actuales y deja un candidato anterior de unos **86 MB y 1,464 archivos**, 36 archivos debajo del tope. Sigue siendo una proyección con HTML/WASM anteriores, no un build final de CrazyGames; refrescarla requiere un comando de empaquetado local o el siguiente `./sow p` autorizado. El preload del loader usa `./assets` servido por CrazyGames; el verificador exige imágenes locales y rechaza URLs `shadowsofwar.io/assets/`. Falta medir el tráfico de red real antes de `Gameplay start`, en especial los 21.08 MiB de precarga de avatares.
+
+## Inventario medido
+
+| Árbol | Archivos | Tamaño | Estado y alcance |
+| --- | ---: | ---: | --- |
+| `assets/` completo | 1,228 | 477,579,633 B / 455.46 MiB | Archivos de fuente del juego; no es el contenido que se sube tal cual. El paquete Poki publicado tiene 49,821,547 B de assets runtime. |
+| `assets/art` | 1,083 | 406,863,694 B / 388.02 MiB | Arte fuente completo de trabajo; Poki no sube esta carpeta tal cual. |
+| `assets/art/avatars` | 755 | 271,001,774 B / 258.45 MiB | Originales de trabajo; no se suben tal cual. |
+| `assets/art/buildings` | 20 | 51,465,992 B / 49.08 MiB | PNG fuente para 5 tipos × 4 niveles. |
+| Atlas de edificios runtime | 2 | 498,178 B / 0.48 MiB | WebP lossless de 493,522 B más manifiesto de 4,656 B; 128 px por celda. Los SHA-256 del generado, staging y último paquete Poki coinciden; sustituye los 20 PNG fuente. |
+| `assets/art/heroes` | 162 | 72,256,450 B / 68.91 MiB | Originales de escenas; Poki reescala y recomprime al empaquetar. |
+| `assets/art/icons/abilities` | 81 | 146,404 B / 0.14 MiB | Iconos fuente actuales. El de Abd es un recorte provisional de su hoja Calm y está pendiente de arte final. |
+| `assets/maps` | 91 | 47,685,933 B / 45.48 MiB | Árbol de trabajo con `.bin` y `.br`; no equivale al mapa que se transfiere. |
+| Mapas binarios por portal | 22 | 2,536,902 B / 2.42 MiB | Los mismos 22 mapas bajan de 42,788,971 B `.bin` a 2,536,902 B `.br`: 40,252,069 B (94.1%) menos. Se copian los `.br`; los `.bin` de trabajo no entran. |
+| `sow-web/site/fonts` | 9 | 20,493,774 B / 19.54 MiB | Fuentes y materiales de generación; no se copian completos al paquete web. |
+| Fuentes web del paquete anterior | 6 | 152,570 B / 0.15 MiB | Cuatro WOFF2, `fonts.css` y `OFL.txt`. Noto TTF/TTC no se publican como ficheros: el atlas MSDF y la fuente árabe se incorporan al WASM. |
+| `dist/.sow-state/poki-runtime-assets` | 1,466 | 109,714,916 B / 104.63 MiB | Staging regenerado por el build Poki del 2 nov.; no es el paquete de subida. |
+| └ `gameplay` en ese staging | 1,263 | 30,061,878 B / 28.67 MiB | Assets runtime de gameplay, antes de las exclusiones y transformaciones del paquete. |
+| └ `shell` en ese staging | 183 | 75,750,573 B / 72.24 MiB | Incluye las escenas originales grandes; Poki las reduce a 960×540 o 540×960. |
+| └ `site` en ese staging | 20 | 3,902,465 B / 3.72 MiB | Medios de sitio que el target Poki no usa y elimina. |
+| Avatares en ese staging | 1,160 | 22,107,362 B / 21.08 MiB | Retratos, sheets y expresiones incluidos en el paquete actual. |
+| Retratos planos | 755 | 13,556,618 B / 12.93 MiB | Retratos de naciones, tribus, héroes, fallback y random. |
+| Sheets 2×2 | 81 | 3,649,900 B / 3.48 MiB | Un sheet por héroe del catálogo actual, máximo 384×384 px, WebP q85. |
+| Recortes de expresiones | 324 | 4,900,844 B / 4.67 MiB | Cuatro expresiones por cada uno de esos 81 héroes. |
+| `gameplay/icons` en staging | 85 | 610,974 B / 0.58 MiB | 81 iconos de habilidad y 4 iconos/atlas de UI. |
+| Assets en el paquete Poki actual | 1,446 | 49,821,547 B / 47.51 MiB | Medición exacta de `dist/poki/assets`, incluyendo campaña MP4 y guías. |
+| └ `assets/gameplay` en el paquete | 1,257 | 30,043,478 B / 28.65 MiB | Assets consumidos por el runtime, con las exclusiones Poki aplicadas. |
+| └ `assets/shell` en el paquete | 178 | 14,212,810 B / 13.55 MiB | Incluye 162 escenas de héroes optimizadas: 13,855,762 B / 13.21 MiB. |
+| └ `assets/campaign` y `assets/guides` | 11 | 5,565,259 B / 5.31 MiB | Campaña MP4 y guía de menú. |
+| `dist/.sow-state/prod-web/poki` | 1,441 | 90,337,078 B / 86.15 MiB | Último paquete completo encontrado; usa 46.01 MiB de avatares antiguos y omite `gameplay/icons`. Incluye 8.21 MiB de WASM, 2.48 MiB de mapas, 1.43 MiB de locales y 13.17 MiB de arte de líderes. |
+| ZIP de ese paquete en caché, DEFLATE 9 | — | 83,486,770 B / 79.62 MiB | Medido localmente; exacto para la caché vieja, no para el build actual. |
+| `dist/poki` | 1,532 | 64,959,867 B / 61.95 MiB | Paquete completo fresco; contiene `index.html` y pasó `verify_poki_layout`. |
+| ZIP local DEFLATE 9 de `dist/poki` | 1,532 | 58,024,838 B / 55.34 MiB | Archivo de comparación local; el tamaño exacto que acepte el portal depende del método de subida. |
+| `dist/crazygames` | 35 | 12,389,925 B / 11.82 MiB | Artefacto generado con la configuración anterior; no representa el nuevo empaquetador. |
+| Candidato Poki (assets transformados + bundle anterior) | 1,531 | 65,327,622 B / 62.30 MiB | Proyección histórica; el build actual la reemplaza. |
+| ZIP Poki DEFLATE 9 del candidato | — | 58,478,962 B / 55.77 MiB | Medición histórica, reemplazada por el ZIP fresco de arriba. |
+| Candidato CrazyGames con atlas y mapas | 1,464 | ~86 MB | Proyección histórica con HTML/WASM anteriores y el icono provisional de Abd; deja 36 archivos de margen, pero no verifica el paquete actual. |
+
+El paquete Poki actual conserva 1,446 archivos de assets: `gameplay` aporta 30,043,478 B, `shell` 14,212,810 B después de recomprimir las escenas de líderes, campaña 5,564,015 B y guías 1,244 B. Suma 49,821,547 B de assets. La carpeta completa incluye 8,597,275 B de WASM, 1,774,548 B de HTML, 2,600,395 B de mapas y los demás archivos, para 64,959,867 B y 1,532 archivos. Su ZIP DEFLATE 9 mide 58,024,838 B. La proyección anterior quedó 367,755 B por encima del build real; queda reemplazada por esta medición.
+
+En el paquete actual, los avatares ocupan 21.08 MiB, las escenas de líderes optimizadas 13.21 MiB y la campaña 5.31 MiB. El paquete viejo de caché tenía 13.17 MiB de escenas y un WASM de 8.21 MiB; no mezclar esos builds al sumar tamaños. El WASM del paquete fresco ocupa 8,597,275 B y se publica plano; no se asume que Poki lo sirva luego con `Content-Encoding: br`.
+
+## Qué mete Poki y qué se queda fuera
+
+El empaquetador parte del árbol completo de assets del build web y copia los archivos por defecto. Solo elimina para Poki la tienda/skins, los medios del sitio, los SVG duplicados de marca, el icono de navegación a tienda y las versiones WebM de campaña; además optimiza las escenas de líderes y reescribe sus triggers a MP4. Compara el inventario completo y los hashes de los archivos byte-idénticos, valida las dimensiones de escenas transformadas y exige el icono de habilidad de cada héroe jugable. Así una nueva carpeta de assets no se omite silenciosamente.
+
+Los archivos estáticos locales son distintos de identidad, API y multiplayer. El target Poki inyecta `shadowsofwar.io/api` y `wss://shadowsofwar.io/ws/`, pero este audit de assets no demuestra que Poki haya aprobado cada flujo. Su política permite revisar servidores de multiplayer externos caso por caso y prohíbe sistemas externos de login/cuenta; confirmar la aprobación de API y multiplayer es un gate separado del empaquetado. Fuente: [política de recursos externos de Poki](https://developers.poki.com/guide/external-resources-policy).
+
+La superficie `main_menu.poki.ts` oculta tienda y skins; por eso esas carpetas y el icono de navegación de tienda se excluyen. Se conserva el inventario completo de avatares, los iconos de HUD y habilidades, mapas, fuentes, campaña y todo el resto del árbol de assets que el runtime Poki consume. También se excluye `site/media`: el build sustituye `main_menu.surfaces.ts` por `main_menu.poki.ts`, cuyo panel de ajustes no renderiza los enlaces sociales con SVG. Los 20 archivos de `site/media` suman 3,902,465 B en staging y no son solicitudes del runtime Poki. CrazyGames conserva la superficie compartida y empaqueta solo `discord.svg`, `telegram.svg` y `github.svg` de esa carpeta.
+
+## Descarga y carga de avatares
+
+El cliente genera el catálogo desde los archivos de runtime realmente publicados. En el menú precarga hasta cuatro assets en paralelo, guarda los bytes en la caché HTTP sin decodificar imágenes ni subirlas al GPU, y deja hasta dos slots adicionales para peticiones visibles (máximo total de seis fetches de avatares). Las URLs de avatar llevan un SHA-256 en `?v=`; el CDN propio responde esas URLs con `max-age=31536000, immutable`, y `ehttp` usa Fetch sin desactivar su caché. Al entrar a partida deja de iniciar la cola general; las solicitudes que ya estaban en vuelo terminan y las visibles tienen prioridad en los slots libres. Al volver al menú reanuda pendientes. El catálogo del último staging suma 21.08 MiB. Empaquetar los assets no los descarga automáticamente, pero la precarga puede pedir esos 21 MiB antes de jugar. CrazyGames confirma que administra su caché CDN para todo lo que se sube; en ese portal hay que medir cuántos bytes cruzan la red antes de `Gameplay start`, pues el paquete bajo el límite total no demuestra por sí solo que pase el límite inicial.
+
+Ese tamaño de red no es memoria de textura. El atlas GPU usa celdas de 128 px en 23×24 posiciones (552 slots), es decir 2,944×3,072 RGBA: ~34.5 MiB por copia. La celda anterior de 170 px ocupaba ~60.8 MiB por copia; con textura y buffer de subida, la reducción ronda 52.6 MiB. Esto baja memoria en ejecución, no los bytes descargados.
+
+CrazyGames permite 250 MB totales y 1,500 archivos. Con el SDK, mide el máximo de 50 MB iniciales (20 MB para portada móvil) desde el comienzo de carga hasta el primer `Gameplay start`; sin SDK usa el tamaño total. El evento debe representar que el juego ya es jugable. No moverlo para ocultar descargas; medir el flujo real del paquete actualizado y mantener el inicio jugable dentro del umbral.
+
+## Optimizaciones ordenadas por ganancia
+
+### Ya aplicadas en el empaquetado
+
+| Transformación aplicada | Última medición registrada |
+| --- | ---: |
+| Generar el catálogo de avatares de runtime en WebP q85 | 258.45 MiB de fuente → 21.08 MiB en el staging/package actual; ahorro medido de 237.36 MiB (91.8%). |
+| Reescalar y recomprimir 162 escenas de héroes para Poki | 72,256,450 B → 13,855,762 B; ahorro de 55.70 MiB en el paquete actual. |
+| Empacar 20 imágenes de edificios en un atlas WebP lossless | 51,465,992 B → 498,178 B entre atlas y manifiesto; ahorro de 48.61 MiB (99.0%). Las fuentes PNG se reducen a celdas de 128 px antes del atlas. |
+| Publicar mapas binarios con Brotli | 22 mapas: 42,788,971 B `.bin` → 2,536,902 B `.br`; ahorro de 40,252,069 B (38.39 MiB, 94.1%). |
+| Reducir miniaturas de mapas para portal | 22 WebP: 2,340,666 B → 61,990 B a 256×144 q70; ahorro de 2,278,676 B (2.17 MiB, 97.4%). |
+| No entregar fuentes Noto como ficheros web | 20,493,774 B de materiales fuente → 152,570 B de ficheros de fuente/estilo en el webroot. El MSDF y el TTF árabe van dentro del WASM; la diferencia no debe restarse otra vez del paquete total. |
+| Omitir el WebM duplicado de campaña en Poki | 5,563,674 B menos; quedan MP4, poster y triggers. |
+| Subir assets, fuentes y mapas a CrazyGames para que los sirva desde su CDN | Reduce egreso estático de SOW; no reduce lo que descarga el jugador. |
+| Atlas de habilidades para CrazyGames | 80 archivos menos con los 81 iconos actuales. Ahorro de bytes pequeño. |
+
+### Ahorro incremental de tamaño del paquete
+
+#### Pruebas de resolución en copias temporales
+
+Recomprimí copias de los WebP actuales a q85; no cambié los originales ni el paquete. La prueba aisló los 647 retratos de naciones/tribus para dejar intactos los retratos de héroes y campaña. Son medidas de bytes, sin revisión visual:
+
+| Grupo | Actual | Variante | Resultado | Ahorro |
+| --- | ---: | ---: | ---: | ---: |
+| 647 retratos de naciones/tribus (256×256) | 11,857,548 B | 192×192 q85 | 7,227,010 B | 4,630,538 B / 4.42 MiB |
+| Los mismos 647 retratos | 11,857,548 B | 128×128 q85 | 3,879,132 B | 7,978,416 B / 7.61 MiB |
+| 324 crops de expresiones (256×256) | 4,900,844 B | 192×192 q85 | 3,282,188 B | 1,618,656 B / 1.54 MiB |
+| Los mismos 324 crops | 4,900,844 B | 128×128 q85 | 1,879,390 B | 3,021,454 B / 2.88 MiB |
+| 81 sheets de héroes (384×384) | 3,649,900 B | 256×256 q85 | 1,910,822 B | 1,739,078 B / 1.66 MiB |
+
+192 px es el primer candidato razonable para los retratos pequeños; 128 px es agresivo. Los retratos de campaña se conservan en 256 px porque algunos ocupan casi todo el panel de diálogo. Las expresiones se muestran también en el panel grande de campaña, así que no bajaría sus 256 px sin revisar ahí la nitidez. Reducir cada sheet a 256 px deja cada cara en 128 px, igual que la celda GPU actual, pero también requiere aceptación visual. Al aplicar una receta a los originales, hay que regenerar y volver a medir: estos números salen de una segunda codificación temporal del paquete WebP actual.
+
+| Prioridad | Cambio | Ahorro medido | Costo / límite |
+| --- | --- | ---: | --- |
+| 1 | Reducir los 647 retratos de naciones/tribus de 256 a 128 px; la alternativa 192 px es menos agresiva. | 7.61 MiB a 128 px; 4.42 MiB a 192 px, ambas q85. | Prueba temporal de bytes, sin revisión visual; conservar los 25 retratos de campaña y los retratos de héroes a 256 px. |
+| 2 | Generar las cuatro expresiones desde cada sheet 2×2 y dejar de publicar los 324 crops. | 4.67 MiB al tamaño actual; 3.96 MiB después de q80. | Cambia el plan aprobado de conservar los crops; mantener el mismo recorte y fallback en runtime y revisar expresiones. |
+| 3 | Reencodear avatares a WebP q80 en la salida, conservando intactos los originales. | Ensayo sobre 1,160 archivos: 22,107,362 → 18,463,210 B; ahorro de 3,644,152 B (3.475 MiB, 16.5%). | Revisar calidad visual; el ahorro se solapa con los cambios de resolución y deduplicación. |
+| 4 | Reducir los crops de expresiones de 256 a 128 px; 192 px es la opción moderada. | 2.88 MiB a 128 px; 1.54 MiB a 192 px, q85. | Prueba temporal sin revisión visual; solapa con quitar crops y afecta retratos grandes de campaña. |
+| 5 | Reducir los sheets 2×2 de 384 a 256 px y usar q80. | 81 sheets: 3,649,900 → 1,615,432 B; ahorro 1.940 MiB. La prueba q85 en copias ahorró 1.66 MiB. Con q80 global y sheets a 256 px, el catálogo queda en 16,987,124 B (16.20 MiB), 4.88 MiB menos. | Solapa con q80; cada expresión queda en 128×128 px. Confirmar detalle en nameplates y recortes. |
+| 6 | Cambiar los cinco PNG de unidades a WebP lossless en la salida. | Medición temporal: 3,589,031 B → 2,236,556 B; ahorro 1.29 MiB. | Requiere actualizar `main_menu.hud.ts`, que forma la ruta `.png`, y el verificador de paquete; validar decodificación y conservar los originales. |
+| 7 | Dejar de publicar los 81 crops Calm duplicados y usar el retrato plano, que contiene exactamente los mismos bytes. | 1,204,158 B / 1.15 MiB y 81 solicitudes menos. | Los renderers ya resuelven Calm al retrato plano. El preloader de campaña debe resolver Calm igual antes de quitar los archivos; verificar catálogo y todas las expresiones. |
+| 8 | Bajar bitrate del WebM de música (Opus, 48 kHz estéreo, 249.2 s). | Experimentos temporales desde 3,215,191 B: 96 kb/s → 3,179,405 B (−1.1%); 80 kb/s → 2,649,652 B (−565,539 B, 17.6%); 64 kb/s → 2,118,537 B (−1,096,654 B, 34.1%). | No se tocaron los originales. Falta escuchar/aceptar calidad; los dos bitrates más bajos pueden degradar música. Ninguna variante está aplicada. |
+| 9 | Reducir la resolución del MP4 de campaña. | Transcodificación temporal: 720p CRF28, 5,412,982 → 5,371,425 B (0.8% menos); 540p CRF26, 5,412,982 → 4,855,061 B (10.3%, 557,921 B menos). | El original sigue intacto. 540p pierde resolución y ahorra solo 0.53 MiB; falta revisión visual antes de considerar el cambio. |
+| 10 | Seguir reduciendo escenas de héroes. | El paquete Poki ya las reduce a 13.21 MiB. | Ganancia adicional no medida; el loader depende de su apariencia y puede perder nitidez. |
+
+El orden compara el ahorro incremental de cada técnica por separado contra el catálogo actual. Los escenarios combinados se indican aparte y no deben sumarse con los ahorros individuales. Como referencia, bajar solo naciones/tribus a 192 px, quitar los 81 Calm duplicados y bajar los sheets a 256 px ahorraría **7,573,774 B** en conjunto; `dist/poki` quedaría cerca de **57,386,093 B (57.39 MB)**. Con retratos a 128 px, el mismo paquete candidato quedaría cerca de **54,038,215 B (54.04 MB)**. Son sumas de grupos distintos medidas en copias temporales, sin revisión visual; hay que regenerar desde los originales antes de decidir. El ahorro medido no implica que el cambio visual o auditivo esté aprobado; las variantes de calidad requieren aceptación antes de incorporarse a la receta de publicación.
+
+Si además se deja de publicar los 324 crops y el runtime los obtiene de los sheets q80 de 256 px, el catálogo quedaría en unos 12,838,478 B (12.24 MiB), 8.84 MiB menos que el actual. Es un escenario distinto al plan aprobado —que conserva los crops— y requiere implementar y validar el recorte durante la ejecución; no está aplicado.
+
+### Reducción de bytes antes de empezar a jugar
+
+- El WASM del paquete actual mide 8,597,275 B (8.60 MB / 8.20 MiB) y se incluye plano. El staging genera también un `.wasm.br` de 3,760,724 B: reducción potencial de 4,836,551 B (4.61 MiB, 56.3%) si el host sirve el `.wasm` con `Content-Encoding: br`. Ese archivo comprimido no está en `dist/poki`; no conviene sustituirlo ni añadirlo hasta confirmar en Poki Inspector qué headers entrega su host. Brotli de transferencia no equivale al tamaño de la carpeta o del ZIP.
+- El catálogo de avatares añade 21.08 MiB de posibles solicitudes desde el menú. La precarga actual corre en segundo plano con cuatro solicitudes, sin decodificar ni subir al GPU; al entrar a partida cede la prioridad. Posponerla reduce bytes iniciales, no el paquete total, y contradice la decisión previa de empezar a precargar en el menú: solo cambiarla si Inspector muestra que hace falta.
+- El umbral de descarga inicial de CrazyGames se mide hasta el primer `Gameplay start`; en Poki hay que leer la cifra que presenta su Inspector. No tenemos una medición de red en un navegador/portal y no debe inferirse del peso de la carpeta o del ZIP.
+
+WebP y MP4/WebM ya llevan compresión; los mapas se publican en Brotli. El WASM del paquete Poki sigue plano; Brotli es solo una opción de transferencia si la plataforma admite `Content-Encoding: br`. El ZIP local mide 6.94 MB menos que la carpeta, pero no representa por sí mismo lo descargado por el jugador. Los PNG de unidades sí mostraron ahorro lossless medible. `dist/` no es una medida de subida porque acumula compilaciones, cachés y paquetes de más de un destino.
+
+## Verificación local
+
+Los tests siguientes son resultados registrados del trabajo previo; no se reejecutaron en esta revisión. Sí se volvió a ejecutar el empaquetado oficial local de Poki; no despliega ni sube.
+
+- `CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$(command -v wasm-bindgen-test-runner)" cargo test -p sow-client --target wasm32-unknown-unknown --lib catalog_prefetch` y el mismo comando con `visible_portrait`: 4 tests WebAssembly pasaron. Cubren límite de cuatro prefetch en paralelo, bytes sin decodificar/GPU, pausa fuera del menú/tutorial y prioridad de retratos visibles.
+- `cargo test -p sow-dist --bin sow hero_sheet`: 2 tests pasaron; cubren recortes 2×2 y que el cache invalide una salida copiada/vieja con la receta nueva.
+- `cargo test -p sow-dist --bin sow poki_package_keeps_runtime_assets_and_only_drops_explicit_exclusions`: pasó; verifica que el empaquetador conserva avatar, atlas, icono, video de campaña MP4 y navegación usados, y elimina únicamente las exclusiones declaradas.
+- `cargo test -p sow-render every_hero_fits_the_avatar_atlas_with_room_for_campaigns`: pasó; verifica celda de 128 px, 552 slots, dimensiones 2944×3072 y UV dentro del atlas.
+- `./sow poki`: pasó el 2 nov. a las 21:12. Recompiló WASM y shell con los shaders actuales, validó los 15 catálogos, regeneró el staging, comprobó inventarios de assets/mapas y publicó `dist/poki` tras pasar `verify_poki_layout`. La auditoría posterior encontró 1,160 rutas de avatar del catálogo y 1,160 archivos coincidentes; las rutas de assets/mapas son locales. Salida: 1,532 archivos / 64,959,867 B. Log: `dist/logs/poki-20261102-210802.log`.
+- La revisión visual de nameplates, expresiones y calidad de compresión sigue pendiente del dueño del juego.
+
+## Siguiente verificación
+
+1. Revisar `dist/poki` con Poki Inspector y medir peso/tiempo de carga en el portal. El build local no prueba aprobación de API/multiplayer.
+2. Aceptar visualmente los nameplates, las cuatro expresiones, los avatares del menú radial y la calidad de compresión. El icono de Abd aún es provisional.
+3. Conseguir un empaquetado local/no-deploy de CrazyGames o medirlo en el siguiente `./sow p` autorizado; confirmar mapas/atlas, límite de 1,500 archivos y 250 MB, y ZIP real.
+4. Medir la descarga de red antes de `Gameplay start` en escritorio y móvil sin adelantar ese evento mientras haya pantalla de carga.

@@ -302,7 +302,11 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
                     definition.episode_id,
                 );
                 (definition.steps || []).forEach((item) => {
-                    if (item.portrait_expression && item.speaker === key)
+                    if (
+                        item.portrait_expression &&
+                        item.portrait_expression !== "calm" &&
+                        item.speaker === key
+                    )
                         portraitImage(
                             options.asset(
                                 "gameplay/avatars/expressions/" +

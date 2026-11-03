@@ -278,6 +278,62 @@ export function asset(path: string): string {
     return window.SOW_assetUrl ? window.SOW_assetUrl(url) : url;
 }
 
+export function abilityIconMarkup(
+    artSlug: string,
+    className: string,
+    imageAttributes = "",
+): string {
+    const slug = String(artSlug || "");
+    if (!/^[a-z0-9_]+$/.test(slug)) return "";
+    const atlas = window.SOW_ABILITY_ICON_ATLAS;
+    const index = atlas && atlas.icons[slug];
+    if (
+        window.SOW_PORTAL === "crazygames" &&
+        atlas &&
+        typeof index === "number" &&
+        Number.isInteger(index) &&
+        atlas.columns > 0 &&
+        atlas.rows > 0 &&
+        index >= 0 &&
+        index < atlas.columns * atlas.rows
+    ) {
+        const column = index % atlas.columns;
+        const row = Math.floor(index / atlas.columns);
+        const x = atlas.columns === 1 ? 0 : (column / (atlas.columns - 1)) * 100;
+        const y = atlas.rows === 1 ? 0 : (row / (atlas.rows - 1)) * 100;
+        const style =
+            "display:block;background-image:url('" +
+            asset(atlas.path) +
+            "');background-size:" +
+            atlas.columns * 100 +
+            "% " +
+            atlas.rows * 100 +
+            "%;background-position:" +
+            x +
+            "% " +
+            y +
+            "%;background-repeat:no-repeat";
+        return (
+            "<span class='" +
+            esc(className) +
+            " sow-ability-atlas-icon' aria-hidden='true' style='" +
+            esc(style) +
+            "'></span>"
+        );
+    }
+    return (
+        "<img class='" +
+        esc(className) +
+        "' src='" +
+        esc(asset("gameplay/icons/abilities/" + slug + ".webp")) +
+        "' alt=''" +
+        (imageAttributes ? " " + imageAttributes : "") +
+        ">"
+    );
+}
+
+window.SOW_abilityIconMarkup = abilityIconMarkup;
+
 export function leaderArtUrl(slug: string, variant?: string): string {
     return window.SOW_leaderArtUrl(slug, variant);
 }
@@ -481,9 +537,13 @@ export function renderHeroBriefing(leaderOrSlug: unknown, surface?: string, head
         const artSlug = leaderArtSlug(leader) || slug;
         const icon =
             artSlug && /^[a-z0-9_]+$/.test(artSlug)
-                ? "<span class='sow-hero-briefing__icon-slot'><img class='sow-heroes__ability-icon sow-hero-briefing__icon' src='" +
-                  esc(asset("gameplay/icons/abilities/" + artSlug + ".webp")) +
-                  "' alt='' decoding='async'></span>"
+                ? "<span class='sow-hero-briefing__icon-slot'>" +
+                  abilityIconMarkup(
+                      artSlug,
+                      "sow-heroes__ability-icon sow-hero-briefing__icon",
+                      "decoding='async'",
+                  ) +
+                  "</span>"
                 : "";
         ability =
             "<div class='sow-heroes__perk-row sow-hero-briefing__ability'>" +

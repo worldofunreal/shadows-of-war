@@ -174,9 +174,12 @@ fn spawn_sow_client_connect(
 pub enum MapDownloadEvent {
     CatalogReady(Vec<sow_core::maps::MapCatalogEntry>),
     MapReady(String, Vec<u8>),
-    AvatarReady {
+    AvatarPixelsReady {
         key: crate::ui::asset_loader::AvatarFetchKey,
-        bytes: Vec<u8>,
+        pixels: Vec<u8>,
+    },
+    AvatarPrefetchReady {
+        key: crate::ui::asset_loader::AvatarFetchKey,
     },
     AvatarFailed {
         key: crate::ui::asset_loader::AvatarFetchKey,
