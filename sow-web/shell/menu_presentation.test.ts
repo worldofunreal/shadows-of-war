@@ -342,14 +342,17 @@ test("leader selection confirms immediately, persists after debounce, and reopen
     assert.doesNotMatch(previewConcrete, /isHeroSelectionQueueLocked/);
     assert.match(
         previewConcrete,
-        /stageLeaderSelection\(false, leaderId\);\s*scheduleLeaderPersist\(false, leaderId\);/,
+        /const persistSelection = !!leaderId && leader\.available !== false;\s*if \(persistSelection\) stageLeaderSelection\(false, leaderId\);/,
     );
+    assert.match(previewConcrete, /if \(persistSelection\) scheduleLeaderPersist\(false, leaderId\);/);
     assert.match(previewConcrete, /if \(!updateHeroesPreview\(\)\) render\(\);\s*updateTopbar\(\);/);
 
     assert.doesNotMatch(previewRandom, /isHeroSelectionQueueLocked/);
-    assert.match(
-        previewRandom,
-        /stageLeaderSelection\(true, null\);\s*scheduleLeaderPersist\(true, null\);/,
+    assert.match(previewRandom, /stageLeaderSelection\(true, null\);/);
+    assert.match(previewRandom, /scheduleLeaderPersist\(true, null\);/);
+    assert.ok(
+        previewRandom.indexOf("stageLeaderSelection(true, null)") <
+            previewRandom.indexOf("scheduleLeaderPersist(true, null)"),
     );
     assert.match(previewRandom, /if \(!updateHeroesPreview\(\)\) render\(\);\s*updateTopbar\(\);/);
     assert.doesNotMatch(previewRandom, /leader_id/, "Random must not carry a previous concrete leader ID");

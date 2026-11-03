@@ -3,6 +3,7 @@
 
 import {
     MAIN_NAV_ITEMS,
+    asset,
     esc,
     localizedText,
     menuIcon,
@@ -94,9 +95,9 @@ function renderSettingsLink(
     if (!url) return "";
     const content =
         (socialIcon
-            ? "<img class='sow-menu__settings-social-icon' src='/assets/site/media/" +
-              socialIcon +
-              ".svg' alt='' aria-hidden='true'>"
+            ? "<img class='sow-menu__settings-social-icon' src='" +
+              esc(asset("site/media/" + socialIcon + ".svg")) +
+              "' alt='' aria-hidden='true'>"
             : "") + esc(SOW_t(key));
     if (isAndroidTwa()) {
         return (

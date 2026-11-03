@@ -302,6 +302,8 @@ export interface HudLeaderboardPlayer {
     territory_pct: number;
     is_alive: boolean;
     is_me: boolean;
+    /** Allies and teammates only: the server accepts resource moves with this player. */
+    can_trade?: boolean;
     leader: string;
     avatar: string | null;
     avatar_expression?: "happy" | "calm" | "fear" | "angry" | null;
@@ -424,6 +426,7 @@ export interface HudMapMenu {
     actions?: string[];
     items?: HudMapMenuItem[];
     alliance_state?: string | null;
+    alliance_remaining_seconds?: number | null;
     relation?: string | null;
     target_name?: string | null;
     target_avatar?: HudAvatarIdentity | null;
@@ -592,9 +595,12 @@ export interface MenuHudPayload {
         target_name: string;
         target_avatar: HudAvatarIdentity;
         target_alive: boolean;
+        target_gold: number;
+        target_troops: number;
+        target_max_troops: number;
         confirm_pending: boolean;
-        suggested_gold: number;
-        suggested_troops: number;
+        /** The radial's pick; null when the panel was opened from the leaderboard. */
+        mode: "send" | "request" | null;
     } | null;
     betrayal?: { ally_id: number; ally_name: string; ally_avatar: HudAvatarIdentity } | null;
     sync?: { [key: string]: string | number | boolean | null } | null;

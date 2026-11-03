@@ -12,8 +12,7 @@ pub struct AssetConfig {
     pub maps_base: String,
     pub assets_base: String,
     pub database_base: String,
-    /// Deploy timestamp for cache busting CDN UI assets.
-    pub cache_bust: String,
+    pub avatar_catalog: Vec<String>,
 }
 impl AssetConfig {
     /// Resolve once at boot from explicit JavaScript globals.
@@ -22,7 +21,7 @@ impl AssetConfig {
         let maps_base = require_endpoint("SOW_MAPS_URL");
         let assets_base = require_endpoint("SOW_ASSETS_URL");
         let database_base = require_endpoint("SOW_DATABASE_URL");
-        let cache_bust = Self::resolve_cache_bust();
+        let avatar_catalog = Self::resolve_avatar_catalog();
         log::info!(
             "AssetConfig maps={} assets={} database={}",
             maps_base,
@@ -33,8 +32,27 @@ impl AssetConfig {
             maps_base,
             assets_base,
             database_base,
-            cache_bust,
+            avatar_catalog,
         }
+    }
+
+    fn resolve_avatar_catalog() -> Vec<String> {
+        let Some(window) = web_sys::window() else {
+            return Vec::new();
+        };
+        let Ok(value) = js_sys::Reflect::get(
+            &window,
+            &wasm_bindgen::JsValue::from_str("SOW_AVATAR_ASSETS"),
+        ) else {
+            return Vec::new();
+        };
+        if !js_sys::Array::is_array(&value) {
+            return Vec::new();
+        }
+        js_sys::Array::from(&value)
+            .iter()
+            .filter_map(|entry| entry.as_string())
+            .collect()
     }
 
     pub fn map_url(&self, map_key: &str, file: &str) -> String {
@@ -44,39 +62,6 @@ impl AssetConfig {
             map_key,
             file
         )
-    }
-
-    /// Gameplay avatars (`/assets/gameplay/avatars/`).
-    pub fn avatar_url(&self, filename: &str) -> String {
-        let base = self.assets_base.trim_end_matches('/');
-        let path = format!("{base}/gameplay/avatars/{filename}");
-        let asset_key = format!("/assets/gameplay/avatars/{filename}");
-        let version = Self::asset_version(&asset_key).unwrap_or_else(|| self.cache_bust.clone());
-        if version.is_empty() {
-            path
-        } else {
-            format!("{path}?v={version}")
-        }
-    }
-
-    fn asset_version(path: &str) -> Option<String> {
-        let window = web_sys::window()?;
-        let versions =
-            js_sys::Reflect::get(&window, &wasm_bindgen::JsValue::from_str("SOW_ASSET_TS")).ok()?;
-        js_sys::Reflect::get(&versions, &wasm_bindgen::JsValue::from_str(path))
-            .ok()?
-            .as_string()
-            .filter(|version| !version.is_empty())
-    }
-
-    fn resolve_cache_bust() -> String {
-        if let Some(ts) = Self::js_global("SOW_BUILD_TS")
-            && ts != "__BUILD_TS__"
-            && !ts.is_empty()
-        {
-            return ts;
-        }
-        String::new()
     }
 
     fn js_global(name: &str) -> Option<String> {

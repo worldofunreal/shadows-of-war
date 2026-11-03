@@ -1998,34 +1998,21 @@ sections = [
 ]
 
 [articles.article_f18ad60ca9fe89bd]
-text = "Hua Mulan is a legendary folk heroine from the Northern and Southern dynasties era of Chinese history. Hua Mulan is depicted in the Wu Shuang Pu by Jin Guliang."
-title = "Hua Mulan"
+text = "Qin Liangyu (1574–1648) was a military commander of the Ming dynasty, born at Zhongzhou in Sichuan, now Zhong County in Chongqing. Her marriage to Ma Qiancheng connected her to Shizhu’s hereditary Tusi administration, but historical records also describe her in her own right as a commander who organized and led troops. She helped suppress the Bozhou rebellion and later took command of Shizhu’s forces after Ma’s death."
+title = "Qin Liangyu"
 lang = "en"
-url = "https://en.wikipedia.org/wiki/Hua_Mulan"
+url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html"
+highlight = "A Ming commander who led Shizhu forces and defended the southwest during repeated military crises."
+shortArticle = true
 intro = [
-  "Hua Mulan (traditional Chinese: 花木蘭; simplified Chinese: 花木兰; pinyin: Huā Mùlán) is a legendary folk heroine from the Northern and Southern dynasties era (4th to 6th century CE) of Chinese history. Hua Mulan is depicted in the Wu Shuang Pu (無雙譜, Table of Peerless Heroes) by Jin Guliang.",
+  "Qin Liangyu (1574–1648) was a military commander of the Ming dynasty, born at Zhongzhou in Sichuan, now Zhong County in Chongqing. Her marriage to Ma Qiancheng connected her to Shizhu’s hereditary Tusi administration, but historical records also describe her in her own right as a commander who organized and led troops. She helped suppress the Bozhou rebellion and later took command of Shizhu’s forces after Ma’s death.",
+  "During the military crises of the late Ming, the court repeatedly called Qin into service to defend the region and assist campaigns elsewhere. She mobilized soldiers, made operational decisions, and fought rebel forces in Sichuan. Chongqing’s local history records that in 1634 she and her son Ma Xianglin fought Zhang Xianzhong’s forces. The History of Ming includes Qin’s biography in its section on military figures, preserving an unusually detailed record of a woman exercising recognized command. The biography also recounts her military reports to the court and petitions for recognition of fallen soldiers. She died in 1648. Her historical importance rests on the troops she led and the decisions she made, not simply on her marriage.",
 ]
-sections = [
-  { "title" = "Overview", "paragraphs" = [
-      "According to legend, Mulan took her aged father's place in the conscription for the army by disguising herself as a man, as there were no other male relatives of-age in her family. In the story, after prolonged and distinguished military service against nomadic barbarian tribes beyond the northern frontier, Mulan is honored by the emperor, but she declines a position of high office, asking only for a horse for her return home. She retires to her hometown, where she is reunited with her family and, much to the astonishment of her comrades, reveals herself as a woman after 12 years of traveling together.",
-    ] },
-  { "title" = "First mentions", "paragraphs" = [
-      "The first known written record of Mulan is the Ballad of Mulan, a folk song believed to have been composed during the Northern Wei regime (386–535 CE) and included in an anthology of books and songs during the Southern Chen dynasty (557–589 CE). While this anthology is itself lost, significant excerpts, including the Ballad of Mulan, survive in the Song dynasty anthology Yuefu Shiji (Chinese: 樂府詩集).",
-      "The historical setting of the Ballad of Mulan is usually the Northern Wei's military campaigns against the nomadic Rouran. A later adaptation has Mulan active around the founding of the Tang dynasty (c. 620 CE).",
-      "The story of Mulan was taken up in a number of later works, including the 17th-century work of historical fiction Romance of Sui and Tang, and many screen and stage adaptations.",
-    ] },
-  { "title" = "Ballad of Mulan", "paragraphs" = [
-      "Mulan sighs at her loom. The Khan is mobilizing the military, and her father is named in most of conscription notices from the emperor. As the eldest child, she decides to take her father's place. She buys a fine horse from the eastern market, saddle and stirrup from the western market, bridle and reins from the southern market and a long whip from the northern market.",
-      "She bids farewell to her parents in the morning and leaves for the Black Mountain, encamping by the Yellow River in the evening, where she cannot hear the calls of her parents due to the rushing waters; only the sounds of the barbarians' cavalry in the Yan Mountains. She advances ten thousand li to battle as if flying past the mountains. The sound of the sentry gong cuts through the cold night air, and the moonlight reflects off her metal armor. A hundred battles take place, and generals die.",
-      "After the ten-year campaign, the veterans return to meet the Son of Heaven (Mandate of Heaven), enthroned in the splendid palace, who confers promotions in rank and prizes of hundreds of thousands. He asks Mulan what she would like. Mulan turns down the high-ranking position of shangshulang in the central government, and asks only for a swift mount to take her back home.",
-    ] },
-  { "title" = "Romance of Sui and Tang", "paragraphs" = [
-      "Chu Renhuo's Romance of the Sui and Tang (c. 1675) provides additional backdrops and plot-twists. Here, Mulan lives under the rule of Heshana Khan of the Western Turkic Khaganate. When the Khan agrees to wage war in alliance with the emergent Tang dynasty, which was poised to conquer all of China, Mulan's father Hua Hu (Chinese: 花弧) fears he will be conscripted into military service since he only has two daughters and an infant son. Mulan crossdresses as a man and enlists in her father's stead. She is intercepted by the forces of the Xia king Dou Jiande and is brought under questioning by the king's warrior daughter Xianniang (Chinese: 線娘), who tries to recruit Mulan as a man. Discovering Mulan to be a fellow female warrior, she is so delighted that they become sworn sisters.",
-      "In the Sui Tang Romance, Mulan comes to a tragic end, a \"detail that cannot be found in any previous legends or stories associated Hua Mulan\", and believed to have been interpolated by the author Chu Renho. Xianniang's father is vanquished after siding with the enemy of the Tang dynasty, and the two sworn sisters, with knives in their mouths, surrender themselves to be executed in the place of the condemned man. This act of filial piety wins a reprieve from Emperor Taizong of Tang, and the imperial consort, who was birth-mother to the Emperor, bestows money to Mulan to provide for her parents, as well as wedding funds for the princess, who had confessed to having promised herself to general Luó Chéng (Chinese: 羅成). In reality, Dou Jiande was executed, but in the novel he lives on as a monk.",
-      "Mulan is given leave to journey back to her homeland, and once arrangements were made for Mulan's parents to relocate, it is expected that they will all be living in the princess's old capital of Leshou (Chinese: 樂壽, modern Xian County, Hebei). Mulan is devastated to discover her father has long died and her mother has remarried. According to the novel, Mulan's mother was surnamed Yuan (袁) and remarried a man named Wei (魏). Even worse, the Khan has summoned her to the palace to become his concubine.",
-    ] },
+sections = []
+sources = [
+  { title = "Chongqing Local Records Office: Qin Liangyu", url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html" },
+  { title = "History of Ming, vol. 273: Qin Liangyu", url = "https://www.shidianguji.com/zh/book/LS0024/chapter/LS0024_1492" },
 ]
-
 [articles.article_582fe914869a72ca]
 text = "Lobengula Khumalo was the second and last official king of Mthwakazi. Both names in the Ndebele language mean \"the men of the long shields\", a reference to the Ndebele warriors' use of the Nguni shield."
 title = "Lobengula"
@@ -3304,25 +3291,21 @@ sections = [
 ]
 
 [articles.article_dbc9ecccee8fcf1a]
-text = "Hua Mulan (en chino: 花木蘭) es la protagonista de una muy conocida leyenda china. La historia cuenta sobre una joven que, disfrazada de guerrero, se une al ejército para reemplazar y salvar a su padre de ir a pelear una guerra contra los invasores nómadas."
-title = "Hua Mulan"
+text = "Qin Liangyu (1574–1648) fue una comandante militar de la dinastía Ming. Nació en Zhongzhou, provincia de Sichuan, hoy distrito de Zhong, Chongqing. Su matrimonio con Ma Qiancheng la vinculó con la administración hereditaria tusi de Shizhu, pero las crónicas también la registran como comandante por derecho propio: organizó y condujo tropas. Participó en la represión de la rebelión de Bozhou y, tras la muerte de Ma, asumió el mando de las fuerzas de Shizhu."
+title = "Qin Liangyu"
 lang = "es"
-url = "https://es.wikipedia.org/wiki/Hua_Mulan"
+url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html"
+highlight = "Comandante de la dinastía Ming, dirigió las fuerzas de Shizhu y defendió el suroeste en varias crisis militares."
+shortArticle = true
 intro = [
-  "Hua Mulan (en chino: 花木蘭) es la protagonista de una muy conocida leyenda china. La historia cuenta sobre una joven que, disfrazada de guerrero, se une al ejército para reemplazar y salvar a su padre de ir a pelear una guerra contra los invasores nómadas. La obra se compuso en el siglo VI, durante la mayor parte del cual gobernó China la dinastía Tang. La colección de cantos a la que pertenecía originalmente se ha perdido, pero se conserva una versión posterior, incluida en una antología de poemas líricos y baladas compilada por Guo Maoqian en el siglo XI. Se desconoce si la balada tiene o no base histórica. Hua Mulan aparece en el Wu Shuang Pu de Jin Guliang (無雙 譜, Tabla de los héroes inigualables).",
+  "Qin Liangyu (1574–1648) fue una comandante militar de la dinastía Ming. Nació en Zhongzhou, provincia de Sichuan, hoy distrito de Zhong, Chongqing. Su matrimonio con Ma Qiancheng la vinculó con la administración hereditaria tusi de Shizhu, pero las crónicas también la registran como comandante por derecho propio: organizó y condujo tropas. Participó en la represión de la rebelión de Bozhou y, tras la muerte de Ma, asumió el mando de las fuerzas de Shizhu.",
+  "Durante las crisis militares del final de los Ming, la corte volvió a convocarla para defender la región y apoyar campañas en otros territorios. Qin movilizó soldados, tomó decisiones operativas y combatió a fuerzas rebeldes en Sichuan. La historia local de Chongqing registra que en 1634 ella y su hijo Ma Xianglin lucharon contra las fuerzas de Zhang Xianzhong. La Historia de los Ming incluye una biografía de Qin en la sección dedicada a figuras militares, un registro inusualmente detallado de una mujer con mando reconocido. También conserva informes militares suyos y solicitudes de reconocimiento para soldados caídos. Murió en 1648. Su importancia histórica se basa en las tropas que dirigió y las decisiones que tomó, no solo en su matrimonio.",
 ]
-sections = [
-  { "title" = "Leyenda", "paragraphs" = [
-      "En la historia, Mulan se disfraza de hombre para sustituir a su padre en el ejército. Tras cumplir su servicio en el ejército, el Emperador le ofrece los más altos honores. Sin embargo, Mulan no desea seguir en el ejército, y pide solo un caballo para volver al hogar paterno. Cuando sus antiguos compañeros del ejército acuden a visitarla, quedan impactados al verla vestida como mujer, pues nunca sospecharon su verdadera identidad. El poema termina con la imagen de una liebre hembra (Mulan) y una liebre macho (sus compañeros) corriendo juntos, y el narrador preguntando si alguien sería capaz de distinguirlos.",
-      "El período en el que transcurre la historia es incierto. Los primeros testimonios de la leyenda afirman que vivió durante la dinastía Wei del Norte (北魏 Běi Wèi, 386-534). Sin embargo, otra versión sostiene que Mulan fue solicitada como concubina por el Emperador Sui Yangdi (quien reinó entre 604 y 617). Algunas evidencias del poema apuntan a la primera interpretación. Al Emperador (\"Hijo del Cielo\") se le llama también como \"hi Khan\" (hijo del viento), título utilizado por los gobernantes descendientes de la nación Xianbei, en la antigua China. Los gobernantes de la dinastía Wei del Norte eran de etnia Xianbei. Por otra parte, la referencia al \"Khan\" podría reflejar la fecha de composición del poema, y no la época en que suceden los hechos.",
-    ] },
-  { "title" = "Adaptaciones", "paragraphs" = [
-      "The Heroine Mulan Goes to War in Her Father's Place (1593): A finales de la dinastía Ming (1368–1644) el dramaturgo Xu Wei (muerto en 1593) publicó una novela basada en la balada tradicional.​",
-      "Hua Mulan Joins the Army (1927): Versión muda dirigida por Hou Yao. Está considerada como una película perdida.",
-      "Mulan se une al ejército (1939): Las primeras versiones de la leyenda en cine realizadas en China datan de 1927 y 1928 y Mulan se une al ejército, estrenada en 1939 en plena guerra sino-japonesa, fue especialmente exitosa.",
-    ] },
+sections = []
+sources = [
+  { title = "Oficina de Crónicas Locales de Chongqing: Qin Liangyu", url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html" },
+  { title = "《明史》卷二百七十三：秦良玉传", url = "https://www.shidianguji.com/zh/book/LS0024/chapter/LS0024_1492" },
 ]
-
 [articles.article_203ccc8bf4819165]
 text = "Lobengula Khumalo (1845-1894) fue el segundo y último rey del pueblo matabele, ahora más conocido como ndebele. Ambos nombres, en la lengua Sindebele, significan \"El pueblo de los escudos largos\", que hace referencia al uso por parte de los guerreros matabele del escudo y la lanza zulúes."
 title = "Lobengula"
@@ -4477,32 +4460,21 @@ sections = [
 ]
 
 [articles.article_dffe2d47e0cfc036]
-text = "Hua Mulan (chinois simplifié : 花木兰 ; chinois traditionnel : 花木蘭 ; pinyin : Huā Mùlán ; Wade : Hua¹ Mu⁴-lan² ; EFEO : houa-mou-lan ; cantonais Jyutping : Faa¹ Muk⁶-laan⁴) est l'héroïne d'origine tabghache d'une légende chinoise qui raconte comment une jeune fille se déguise en homme pour prendre la place de son père trop vieux lors d'une mobilisation ordonnée par l'empereur de Chine pour combattre un royaume anonyme. Elle combat de nombreuses années avec succès avant qu'on s'aperçoive qu'elle est une femme."
-title = "Hua Mulan"
+text = "Qin Liangyu (1574–1648) fut une commandante militaire de la dynastie Ming, née à Zhongzhou, dans l’actuel district de Zhong, à Chongqing. Son mariage avec Ma Qiancheng la lia à l’administration héréditaire tusi de Shizhu, mais les sources la décrivent aussi comme une cheffe militaire à part entière, qui organisait et conduisait des troupes. Elle participa à la répression de la révolte de Bozhou puis, après la mort de Ma, prit la tête des forces de Shizhu."
+title = "Qin Liangyu"
 lang = "fr"
-url = "https://fr.wikipedia.org/wiki/Hua_Mulan"
+url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html"
+highlight = "Commandante des Ming, elle dirigea les forces de Shizhu et défendit le sud-ouest lors de plusieurs crises militaires."
+shortArticle = true
 intro = [
-  "Hua Mulan (chinois simplifié : 花木兰 ; chinois traditionnel : 花木蘭 ; pinyin : Huā Mùlán ; Wade : Hua¹ Mu⁴-lan² ; EFEO : houa-mou-lan ; cantonais Jyutping : Faa¹ Muk⁶-laan⁴) est l'héroïne d'origine tabghache d'une légende chinoise qui raconte comment une jeune fille se déguise en homme pour prendre la place de son père trop vieux lors d'une mobilisation ordonnée par l'empereur de Chine pour combattre un royaume anonyme. Elle combat de nombreuses années avec succès avant qu'on s'aperçoive qu'elle est une femme.",
-  "La légende s'est développée à partir d'un poème anonyme de l'époque médiévale, La Ballade de Mulan (木蘭詩, Mùlán shī). Le nom de famille Hua (花) lui fut attribué ultérieurement. En chinois mandarin, Hua signifie « fleur » et Mulan signifie « magnolia ». Une autre hypothèse indique que son nom aurait pour origine une ancienne langue altaïque d'Asie centrale et signifierait « cerf » ou « élan ».",
+  "Qin Liangyu (1574–1648) fut une commandante militaire de la dynastie Ming, née à Zhongzhou, dans l’actuel district de Zhong, à Chongqing. Son mariage avec Ma Qiancheng la lia à l’administration héréditaire tusi de Shizhu, mais les sources la décrivent aussi comme une cheffe militaire à part entière, qui organisait et conduisait des troupes. Elle participa à la répression de la révolte de Bozhou puis, après la mort de Ma, prit la tête des forces de Shizhu.",
+  "Lors des crises militaires de la fin des Ming, la cour fit de nouveau appel à Qin pour défendre la région et soutenir des campagnes ailleurs. Elle mobilisa des soldats, prit des décisions opérationnelles et combattit des forces rebelles au Sichuan. Les archives locales de Chongqing indiquent qu’en 1634 elle affronta avec son fils Ma Xianglin les forces de Zhang Xianzhong. L’Histoire des Ming lui consacre une biographie dans sa section sur les figures militaires, témoignage particulièrement détaillé d’une femme investie d’un commandement reconnu. Le texte rapporte également ses comptes rendus militaires et ses demandes de récompense pour les soldats morts. Elle mourut en 1648. Son importance tient aux troupes qu’elle dirigea et à ses propres décisions, pas seulement à son mariage.",
 ]
-sections = [
-  { "title" = "Origine", "paragraphs" = [
-      "Dans l’histoire originelle, Mulan n'est pas à proprement parler une soldate chinoise. Elle aurait été d'origine tabghache, un peuple turco-mongol ou xianbei, un peuple nomade du Nord-Ouest de l'Asie intérieure.",
-    ] },
-  { "title" = "La Ballade de Mulan", "paragraphs" = [
-      "La Ballade de Mulan (chinois : 木蘭詩 ; pinyin : Mùlán shí) est la plus ancienne version connue de l'histoire, par une anthologie de la dynastie Song (XIIIe siècle), qui le présente comme un texte plus ancien encore. Elle raconte l'histoire d'une jeune fille qui s'engage dans l'armée d'un royaume des steppes du nord de la Chine en se faisant passer pour un homme, afin d'éviter cette charge à son vieux père, et qui se distingue au combat avant de revenir dans son village après de nombreuses années. L'histoire est par la suite adaptée sous d'autres formes. C’est sous les Ming que Xu Wei dans sa pièce Mulan, femme, remplace son père sous les drapeaux lui donne le nom de famille Hua (花) qui lui restera. Toujours sous les Ming, Liu Weide (劉惟德) en fait l’héroïne d’un roman dans lequel elle s’appelle Han E (韓娥) et change son prénom en Mulan. Auparavant, elle avait été mentionnée sous le nom de famille Ren (任) dans le Nouveau livre des Tang. Des archives locales en ont fait une enfant du pays sous d’autres noms de famille : Zhu (朱), Wei (魏).",
-    ] },
-  { "title" = "Dans les arts et la culture populaire", "paragraphs" = [
-      "Une première adaptation cinématographique est faite en 1928 avec Mulan rejoint l'armée (木兰从军), suivie d'une seconde version portant le même titre en 1939, puis Lady General Hua Mu-lan en 1964.",
-      "La société Disney s'inspire librement de cette histoire pour son film d'animation Mulan, sorti en 1998. Ce film connaît une suite sortie en vidéo en 2004.",
-      "En 2009, cette légende est à nouveau adaptée au cinéma par Jingle Ma, sous le titre Mulan, la guerrière légendaire, avec dans le rôle-titre l'actrice et chanteuse chinoise Zhao Wei.",
-    ] },
-  { "title" = "Annexes", "paragraphs" = [
-      "(en) Louise Edwards, « Re-fashioning the warrior Hua Mulan: changing norms of sexuality in China », Newsletter 48, International Institute for Asian Studies (en),‎ 2009 (lire en ligne).",
-      "Une biographie de Hua Mulan est incluse dans le Wu Shuang Pu (« Le livre des héros inégalés »), 1694.",
-    ] },
+sections = []
+sources = [
+  { title = "Bureau des archives locales de Chongqing : Qin Liangyu", url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html" },
+  { title = "《明史》卷二百七十三：秦良玉传", url = "https://www.shidianguji.com/zh/book/LS0024/chapter/LS0024_1492" },
 ]
-
 [articles.article_7db1c9b1e838f202]
 text = "Marc Aurèle (en latin : Marcus Aurelius), né le 26 avril 121 à Rome et mort le 17 mars 180 à Sirmium ou à Vindobona, est un empereur et philosophe romain de la dynastie des Antonins, consul en 140, 145 et 161, régnant de 161 à 180. Dernier des « cinq bons empereurs » selon Machiavel, il est aussi le dernier empereur de la période de la « paix romaine », période de relative stabilité commencée sous le règne d'Auguste (27 av."
 title = "Marc Aurèle"
@@ -5284,28 +5256,21 @@ sections = [
 ]
 
 [articles.article_6ac80948f41094eb]
-text = "Hua Mulan (chinesisch 花木蘭 / 花木兰, Pinyin Huā Mùlán) ist die Heldin eines alten chinesischen Volksgedichtes (sogenannte Yuefu), das wohl zwischen 420 und 589 nach Christus entstand und erst einige Jahrhunderte später in schriftlicher Form festgehalten wurde. Die Protagonistin, ein Mädchen aus gutem Hause mit Namen Mulan, soll im 5."
-title = "Hua Mulan"
+text = "Qin Liangyu (1574–1648) war eine Militärkommandeurin der Ming-Dynastie. Sie wurde in Zhongzhou geboren, im heutigen Kreis Zhong in Chongqing. Durch ihre Ehe mit Ma Qiancheng war sie mit der erblichen Tusi-Verwaltung von Shizhu verbunden; die Quellen schildern sie jedoch auch als eigenständige Befehlshaberin, die Truppen aufstellte und führte. Sie wirkte an der Niederschlagung des Aufstands von Bozhou mit und übernahm nach Ma Qianchengs Tod das Kommando über die Streitkräfte von Shizhu."
+title = "Qin Liangyu"
 lang = "de"
-url = "https://de.wikipedia.org/wiki/Hua_Mulan"
+url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html"
+highlight = "Als Kommandeurin der Ming führte sie die Truppen von Shizhu und verteidigte den Südwesten in mehreren militärischen Krisen."
+shortArticle = true
 intro = [
-  "Hua Mulan (chinesisch 花木蘭 / 花木兰, Pinyin Huā Mùlán) ist die Heldin eines alten chinesischen Volksgedichtes (sogenannte Yuefu), das wohl zwischen 420 und 589 nach Christus entstand und erst einige Jahrhunderte später in schriftlicher Form festgehalten wurde.",
-  "Die Protagonistin, ein Mädchen aus gutem Hause mit Namen Mulan, soll im 5. Jahrhundert nach Christus gelebt und sich als Mann verkleidet haben, um an Stelle ihres Vaters in den Krieg zu ziehen. Aus den frühesten Quellen der Ballade von Mulan lässt sich herauslesen, dass sie wahrscheinlich während der Nördlichen Wei-Dynastie (386–534) lebte. In einer anderen Version der Legende wird Mulan jedoch als Konkubine des Kaisers Yang, der 604–617 regierte, beschrieben.",
+  "Qin Liangyu (1574–1648) war eine Militärkommandeurin der Ming-Dynastie. Sie wurde in Zhongzhou geboren, im heutigen Kreis Zhong in Chongqing. Durch ihre Ehe mit Ma Qiancheng war sie mit der erblichen Tusi-Verwaltung von Shizhu verbunden; die Quellen schildern sie jedoch auch als eigenständige Befehlshaberin, die Truppen aufstellte und führte. Sie wirkte an der Niederschlagung des Aufstands von Bozhou mit und übernahm nach Ma Qianchengs Tod das Kommando über die Streitkräfte von Shizhu.",
+  "Während der militärischen Krisen am Ende der Ming-Zeit zog der Hof Qin wiederholt zur Verteidigung der Region und zu Feldzügen in anderen Gebieten heran. Sie mobilisierte Soldaten, traf operative Entscheidungen und kämpfte gegen Rebellen in Sichuan. Laut der Lokalgeschichte von Chongqing trat sie 1634 gemeinsam mit ihrem Sohn Ma Xianglin den Truppen von Zhang Xianzhong entgegen. Die Geschichte der Ming widmet Qin im Abschnitt über Militärpersönlichkeiten eine Biografie und bewahrt damit einen ungewöhnlich ausführlichen Bericht über eine Frau mit anerkannter Befehlsgewalt. Sie enthält auch ihre Militärberichte an den Hof und ihre Bitten um Anerkennung gefallener Soldaten. Qin starb 1648. Ihre Bedeutung beruht auf den Truppen, die sie führte, und ihren eigenen Entscheidungen, nicht allein auf ihrer Ehe.",
 ]
-sections = [
-  { "title" = "Originalfassung und Übersetzung", "paragraphs" = [
-      "唧唧复唧唧，木兰当户织，不闻机杼声，惟闻女叹息。 问女何所思，问女何所忆，女亦无所思，女亦无所忆。 昨夜见军帖，可汗大点兵。军书十二卷，卷卷有爷名。 阿爷无大儿，木兰无长兄，愿为市鞍马，从此替爷征。 东市买骏马，西市买鞍貉，南市买辔头，北市买长鞭。 旦辞爷娘去，暮至黄河边。不闻爷娘唤女声，但闻黄河流水鸣溅溅。 但辞黄河去，暮宿黑山头。不闻爷娘唤女声，但闻燕山胡骑鸣啾啾。 万里赴戎机，关山度若飞。朔气传金析，寒光照铁衣。 将军百战死，壮士十年归。归来见天子，天子坐明堂。 策勋十二转，赏赐百千强。可汗问所欲，木兰不用尚书郎。 愿驰千里足，送儿还故乡。爷娘闻女来，出郭相扶将。 阿姊闻妹来，当户理红妆。小弟闻姊来，磨刀霍霍向猪羊。 开我东阁门，坐我西阁床。脱我战时袍，着我旧时裳。 当窗理云鬓，对镜贴花黄。出门看伙伴，伙伴皆惊惶。 同行十二年，不知木兰是女郎！ 雄兔脚扑朔，雌兔眼迷离。 双兔傍地走，安能辨我是雄雌。",
-    ] },
-  { "title" = "Medien", "paragraphs" = [
-      "1998 veröffentlichte Disney einen Zeichentrickfilm unter dem Titel Mulan, der auf der Ballade basiert. Die Geschichte ist jedoch zeitlich später angesiedelt als die Vorlage und mit einiger erzählerischer Freiheit wiedergegeben. Infolge der Verfilmung verlegte der Disney-Konzern immer wieder, in verschiedenem Umfang, Formaten und von unterschiedlichen Zeichnern, Bilderbücher zur Legende. Eine Hörspielfassung produzierte das Label Disky (Niederlande) 1999 in verschiedenen Sprachen, auch auf Deutsch, auf einer CD. Im Jahr 2004 folgte die Video- und DVD-Fortsetzung Mulan 2.",
-      "2009 wurde mit Mulan – Legende einer Kriegerin eine chinesische Realverfilmung produziert. 2020 erschien eine weitere, von Disney produzierte Realverfilmung mit dem Titel Mulan, in der Liu Yifei die Titelrolle übernahm.",
-    ] },
-  { "title" = "Weblinks", "paragraphs" = [
-      "Die Ballade von Mu-lan. (Memento vom 20. Januar 2016 im Internet Archive) (chinesische Fassung von Mi Fu – 米芾)",
-      "Die Ballade von Mu-lan. (Memento vom 16. Oktober 2007 im Internet Archive) (englische Übersetzung)",
-    ] },
+sections = []
+sources = [
+  { title = "Amt für lokale Chroniken von Chongqing: Qin Liangyu", url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html" },
+  { title = "《明史》卷二百七十三：秦良玉传", url = "https://www.shidianguji.com/zh/book/LS0024/chapter/LS0024_1492" },
 ]
-
 [articles.article_44de13aaf26fe0e2]
 text = "Lobengula (* 1833; † ca. 1893 in Matabeleland) war der zweite und zugleich letzte König des Matabele-Königreichs im südlichen Afrika."
 title = "Lobengula"
@@ -6300,39 +6265,21 @@ sections = [
 ]
 
 [articles.article_0f0a78dec31467fd]
-text = "Hua Mulan (花木蘭T, 花木兰S, Huā MùlánP) è una leggendaria eroina cinese che si arruolò in un esercito di soli uomini durante la dinastia Běi Wèi (386-534), descritto in un famoso poema cinese conosciuto come La ballata di Mulan (in cinese: 木蘭辭T, 木兰辞S, Mùlán cíP). Il poema, forse opera del filosofo e scrittore Liang Tao, è stato composto nel VI secolo durante il periodo delle dinastie del nord, ma il testo originale è andato perduto."
-title = "Hua Mulan"
+text = "Qin Liangyu (1574–1648) fu una comandante militare della dinastia Ming. Nacque a Zhongzhou, nell’attuale contea di Zhong, a Chongqing. Il matrimonio con Ma Qiancheng la collegò all’amministrazione ereditaria tusi di Shizhu, ma le fonti la descrivono anche come comandante in proprio, capace di organizzare e guidare truppe. Partecipò alla repressione della rivolta di Bozhou e, dopo la morte di Ma, assunse il comando delle forze di Shizhu."
+title = "Qin Liangyu"
 lang = "it"
-url = "https://it.wikipedia.org/wiki/Hua_Mulan"
+url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html"
+highlight = "Comandante dei Ming, guidò le forze di Shizhu e difese il sud-ovest durante diverse crisi militari."
+shortArticle = true
 intro = [
-  "Hua Mulan (花木蘭T, 花木兰S, Huā MùlánP) è una leggendaria eroina cinese che si arruolò in un esercito di soli uomini durante la dinastia Běi Wèi (386-534), descritto in un famoso poema cinese conosciuto come La ballata di Mulan (in cinese: 木蘭辭T, 木兰辞S, Mùlán cíP).",
-  "Il poema, forse opera del filosofo e scrittore Liang Tao, è stato composto nel VI secolo durante il periodo delle dinastie del nord, ma il testo originale è andato perduto.",
-  "Hua Mulan è raffigurata nel Wu Shuang Pu di Jin Guliang (无双谱, lett. \"Tavola degli eroi incomparabili\").",
-  "Non esistono prove o testimonianze indipendenti riguardo alla vita e l’esistenza di Mulan, non è pertanto possibile attestare la sua storicità.",
+  "Qin Liangyu (1574–1648) fu una comandante militare della dinastia Ming. Nacque a Zhongzhou, nell’attuale contea di Zhong, a Chongqing. Il matrimonio con Ma Qiancheng la collegò all’amministrazione ereditaria tusi di Shizhu, ma le fonti la descrivono anche come comandante in proprio, capace di organizzare e guidare truppe. Partecipò alla repressione della rivolta di Bozhou e, dopo la morte di Ma, assunse il comando delle forze di Shizhu.",
+  "Durante le crisi militari della tarda dinastia Ming, la corte richiamò Qin più volte per difendere la regione e sostenere campagne in altri territori. Mobilitò soldati, prese decisioni operative e combatté forze ribelli nel Sichuan. Secondo la storia locale di Chongqing, nel 1634 affrontò le forze di Zhang Xianzhong insieme al figlio Ma Xianglin. La Storia dei Ming le dedica una biografia nella sezione sulle figure militari, una testimonianza insolitamente dettagliata di una donna cui fu riconosciuto il comando. Il testo conserva inoltre rapporti militari inviati da Qin alla corte e richieste di riconoscimento per i soldati caduti. Morì nel 1648. La sua importanza deriva dalle truppe che guidò e dalle decisioni che prese personalmente, non soltanto dal matrimonio.",
 ]
-sections = [
-  { "title" = "Storia", "paragraphs" = [
-      "Si narra che, in seguito ai continui attacchi da parte delle tribù nomadi dei Rouran, l'imperatore richiamò alle armi tutti gli uomini cinesi iscritti nell'elenco dei riservisti, tra cui Hua Hu, noto condottiero e padre di Hua Mulan. Nonostante la sua veneranda età e il suo precario stato di salute, Hua Hu decise di rispondere alla chiamata per onorare il nome della sua famiglia e dei suoi antenati. Mulan, preoccupata per il padre, decise, con il consenso restio di lui, di rispondere alla chiamata in sua vece, utilizzando il nome di suo fratello minore.",
-      "I successivi mesi per Mulan furono difficilissimi a causa del duro addestramento militare e per paura di far scoprire la sua vera identità. Successivamente però, durante le numerose battaglie, Mulan capì quanto fosse importante continuare a combattere per proteggere la propria famiglia e la propria patria. Dopo dodici anni di combattimenti e incredibili gesta, Mulan fu nominata generale e successivamente comandante delle armate settentrionali, il tutto continuando a nascondere il fatto di essere una donna.",
-      "La guerra finì proprio grazie a Mulan, che batté sul campo un famosissimo generale Rouran. Al suo ritorno, la ragazza fu colmata di onori imperiali e le fu proposto il posto di alto funzionario, ma lei rifiutò per poter tornare a casa dal padre malato. La sua vera identità fu scoperta a causa delle diatribe con un comandante anziano, che cercò in ogni modo di offrire a Mulan sua figlia come sposa, con continui rifiuti da parte di quest'ultima. Alla fine il generale, indispettito, raggiunse Mulan a casa e fu lì che scoprì la vera identità della ragazza. Nonostante la scoperta, il generale ebbe ancor più ammirazione nei suoi confronti.",
-    ] },
-  { "title" = "Nei media", "paragraphs" = [
-      "Mulan di Tony Bancroft, Barry Cook (1998) - film animato della Disney, base per molte opere derivate.",
-      "Mulan II di Darrell Rooney, Lynne Southerland (2004) - seguito al film della Disney del 1998",
-      "Mulan compare dalla seconda alla quinta stagione della serie televisiva C'era una volta.",
-    ] },
-  { "title" = "Bibliografia", "paragraphs" = [
-      "Giorgia Valesin (a cura di), Liriche cinesi (1753 a.C. - 1278 d.C.), prefazione di Eugenio Montale, 1ª ed., Torino, Einaudi, 1943, ISBN 88-06-59817-1.",
-      "Vincenzo Chessa, Antiche liriche cinesi - Arie dei principati dal libro dei canti, 1ª ed., Genova, Marietti, 2000, ISBN 88-211-6313-X.",
-      "Dall'antologia Lidai Shige Xua N (Pechino, 1980), Anna Bujatti (a cura di), La ballata di Mulan, 1ª ed., Roma, Fahrenheit 451, 1991, SBN TO01388111.",
-    ] },
-  { "title" = "Collegamenti esterni", "paragraphs" = [
-      "Danilo Caruso, La ballata di Mulan, su Humanitas. URL consultato il 12 giugno 2012. Ospitato su Blogspot.",
-      "Kay Asuma, La leggenda di Mulan, su AssoCina - Seconde Generazioni, 5 settembre 2008 (archiviato dall'url originale il 31 marzo 2019).",
-      "Patrizia Berzuini, Mulan - Ovvero la storia di un’intrepida orchidea, in Frammenti d'Oriente, n. 5, Tuttocina.it - Il portale della Cina, dicembre 1998 (archiviato dall'url originale il 2 ottobre 2009).",
-    ] },
+sections = []
+sources = [
+  { title = "Ufficio di storia locale di Chongqing: Qin Liangyu", url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html" },
+  { title = "《明史》卷二百七十三：秦良玉传", url = "https://www.shidianguji.com/zh/book/LS0024/chapter/LS0024_1492" },
 ]
-
 [articles.article_5a71286b6a9643f9]
 text = "Lobengula Khumalo, trascritto in italiano anche come Lobenguela (1845 – gennaio 1894), è stato il secondo e ultimo re del popolo dei Ndebele (in inglese Matabele). Tale popolazione, con un grado di civiltà paragonabile all'età del ferro, era stanziato in una regione geografica che oggi corrisponde al sud-ovest dello Zimbabwe."
 title = "Lobengula"
@@ -6988,32 +6935,21 @@ sections = [
 ]
 
 [articles.article_107baeb5ee327886]
-text = "Hua Mulan (Çince: 花木蘭; pinyin: Huā Mùlán), Çin tarihinde Güney ve Kuzey hanedanları dönemine ait efsanevi bir halk kahramanıdır. Akademisyenler genellikle Mulan'ı kurgusal bir karakter olarak görmektedirler."
-title = "Hua Mulan"
+text = "Qin Liangyu (1574–1648), Ming Hanedanı döneminde yaşamış bir askerî komutandı. Bugünkü Chongqing’e bağlı Zhong ilçesinin bulunduğu Zhongzhou’da doğdu. Ma Qiancheng ile evliliği onu Shizhu’daki kalıtsal tusi yönetimine bağladı; ancak tarihî kayıtlar onu kendi adına birlikler kurup yöneten bir komutan olarak da anlatır. Bozhou Ayaklanması’nın bastırılmasına katıldı ve Ma’nın ölümünden sonra Shizhu kuvvetlerinin komutasını devraldı."
+title = "Qin Liangyu"
 lang = "tr"
-url = "https://tr.wikipedia.org/wiki/Hua_Mulan"
+url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html"
+highlight = "Ming komutanı olarak Shizhu kuvvetlerine liderlik etti ve çeşitli askerî krizlerde güneybatıyı savundu."
+shortArticle = true
 intro = [
-  "Hua Mulan (Çince: 花木蘭; pinyin: Huā Mùlán), Çin tarihinde Güney ve Kuzey hanedanları dönemine ait efsanevi bir halk kahramanıdır. Akademisyenler genellikle Mulan'ı kurgusal bir karakter olarak görmektedirler. Hua Mulan, Jin Guliang tarafından Wu Shuang Pu eserinde tasvir edilmiştir.",
-  "Efsaneye göre Mulan, erkek kılığına girerek zorunlu askerlik hizmetindeki yaşlı babasının yerini aldı. Hikâyede, kuzey sınırının ötesindeki göçebe sürülere karşı uzun süreli ve seçkin askerlik hizmetinden sonra Mulan, imparator tarafından onurlandırılır ancak yüksek bir makam pozisyonunu reddeder. Memleketine çekilir, burada ailesiyle yeniden bir araya gelir ve yoldaşlarını hayrete düşürecek şekilde kendisini bir kadın olarak gösterir.",
-  "Mulan'ın ilk yazılı kaydı, Kuzey Vey hanedanı döneminde bestelendiğine inanılan ve Güney Chen hanedanı döneminde kitap ve şarkılardan oluşan bir antolojide derlendiğine inanılan Mulan Baladı adlı bir halk şarkısıdır. Şarkının tarihi ortamı genellikle Kuzey Vey'in göçebe Cücenler'e karşı askerî harekâtlarıdır. Daha sonraki bir uyarlamada Mulan, Tang Hanedanı'nın kuruluşu etrafında aktif hale gelmektedir.",
-  "Mulan'ın hikâyesi, 17. yüzyıldan kalma Sui ve Tang'ın Sui ve Tang'ın Romantizmi adlı tarihi kurgu romanı yanı sıra birçok beyazperde ve sahne uyarlaması da dahil olmak üzere daha sonraki bir dizi eserde ele alındı.",
+  "Qin Liangyu (1574–1648), Ming Hanedanı döneminde yaşamış bir askerî komutandı. Bugünkü Chongqing’e bağlı Zhong ilçesinin bulunduğu Zhongzhou’da doğdu. Ma Qiancheng ile evliliği onu Shizhu’daki kalıtsal tusi yönetimine bağladı; ancak tarihî kayıtlar onu kendi adına birlikler kurup yöneten bir komutan olarak da anlatır. Bozhou Ayaklanması’nın bastırılmasına katıldı ve Ma’nın ölümünden sonra Shizhu kuvvetlerinin komutasını devraldı.",
+  "Ming döneminin sonundaki askerî krizlerde saray, bölgeyi savunması ve başka seferleri desteklemesi için Qin’i tekrar tekrar görevlendirdi. Askerleri seferber etti, operasyon kararları aldı ve Sichuan’daki isyancı kuvvetlerle savaştı. Chongqing yerel tarih kaydına göre 1634’te oğlu Ma Xianglin ile birlikte Zhang Xianzhong’un kuvvetlerine karşı çarpıştı. Ming Tarihi, askerî kişilere ayrılan bölümde Qin’in biyografisine yer verir; bu, tanınmış komuta yetkisi kullanan bir kadın hakkında olağan dışı ölçüde ayrıntılı bir kayıttır. Biyografi, onun saraya gönderdiği askerî raporları ve savaşta ölen askerler için yaptığı ödül başvurularını da aktarır. Qin 1648’de öldü. Tarihsel önemi yalnızca evliliğinden değil, bizzat yönettiği birliklerden ve aldığı askerî kararlardan kaynaklanır.",
 ]
-sections = [
-  { "title" = "Kaynakça", "paragraphs" = [
-      "Kwa, Shiamin; Idema, Wilt L. (2010), Mulan: Five Versions of a Classic Chinese Legend with Related Texts, Hackett Publishing, ISBN 978-1-60384-871-8",
-    ] },
-  { "title" = "Bibliyografi", "paragraphs" = [
-      "Dong, Lan. Mulan's Legend and Legacy in China and the United States (Temple University Press, 2010) 263 pages; Traces literary and other images of Mulan from premodern China to contemporary China and the United States.",
-      "Kwa, Shiamin and Wilt L. Idema. Mulan: Five Versions of a Chinese Legend (Hackett, 2011).",
-      "Rea, Christopher. Chinese Film Classics, 1922-1949 (Columbia University Press, 2021), chapter 9: Hua Mu Lan (Mulan congjun 木蘭從軍).",
-    ] },
-  { "title" = "Dış bağlantılar", "paragraphs" = [
-      "The Legend of Mulan: A Heroine of Ancient China, a bilingual Chinese/English children's picture book",
-      "The female individual and the empire: A historicist approach to Mulan and Kingston's woman warrior",
-      "The poem in Chinese calligraphy (images), simplified characters, traditional characters, and an English translation",
-    ] },
+sections = []
+sources = [
+  { title = "Chongqing Yerel Tarih Ofisi: Qin Liangyu", url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html" },
+  { title = "《明史》卷二百七十三：秦良玉传", url = "https://www.shidianguji.com/zh/book/LS0024/chapter/LS0024_1492" },
 ]
-
 [articles.article_9302d151b89baa67]
 text = "Şah Cihan veya Ebû'l Muzaffer Şehâbeddin Muhammed Sâhib-kıran (Farsça: شاه جهان‎, 5 Ocak 1592 - 22 Ocak 1666), eşi Mümtaz Mahal uğruna Tac Mahal'i yaptırmasıyla tanınan ve Hindistan'da kurulmuş olan Babür İmparatorluğu'nu 1627-1658 yılları arasında yönetmiş olan beşinci Babür hükümdardır."
 title = "Şah Cihan"
@@ -7788,32 +7724,23 @@ sections = [
 ]
 
 [articles.article_2419010a90b6ac4c]
-text = "花木蘭，是北朝詩歌《木蘭辭》描述的一位以女扮男裝來代父從軍的傳奇女戰士，原作《木蘭辭》並未明示木蘭的姓氏、所處年代、籍貫等信息，历史上也没有正史載其事蹟，而是由詩歌、民間戲曲及地方志，逐漸發展成為民間耳熟能詳的古代女性從軍的指標人物，其人存在與否及族属都有爭議。"
-title = "花木兰"
+text = "秦良玉（1574—1648）是明朝将领，字贞素，出生于明重庆府忠州（今重庆市忠县）。她与石砫宣抚使马千乘成婚，进入西南土司军政体系；但史料记载她并非仅以家族身份出现，而是亲自统率军队、参与重大军事行动。万历年间，她随军参与播州平叛及援辽战事。马千乘去世后，她接掌石砫部众，继续承担朝廷征调与地方防守。"
+title = "秦良玉"
 lang = "zh"
-url = "https://zh.wikipedia.org/wiki/%E8%8A%B1%E6%9C%A8%E5%85%B0"
+url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html"
+highlight = "明朝将领秦良玉曾率领石砫军队，在多次军事危机中守卫西南地区。"
+shortArticle = true
 intro = [
-  "花木蘭，是北朝詩歌《木蘭辭》描述的一位以女扮男裝來代父從軍的傳奇女戰士，原作《木蘭辭》並未明示木蘭的姓氏、所處年代、籍貫等信息，历史上也没有正史載其事蹟，而是由詩歌、民間戲曲及地方志，逐漸發展成為民間耳熟能詳的古代女性從軍的指標人物，其人存在與否及族属都有爭議。",
+  "秦良玉（1574—1648）是明朝将领，字贞素，出生于明重庆府忠州（今重庆市忠县）。她与石砫宣抚使马千乘成婚，进入西南土司军政体系；但史料记载她并非仅以家族身份出现，而是亲自统率军队、参与重大军事行动。万历年间，她随军参与播州平叛及援辽战事。马千乘去世后，她接掌石砫部众，继续承担朝廷征调与地方防守。",
+  "《明史》卷二百七十三为秦良玉立传，记述她的军职、战斗、奉诏调兵、上奏军情及军中安排。明末流寇侵扰西南时，她多次组织防守；崇祯七年（1634），重庆地方志记载她与儿子马祥麟在夔州击退张献忠部。地方军政制度解释了她如何取得军职与兵员，但领兵、调度和临阵决策由她本人承担。史书还记载她曾为战死的兄弟请求优恤，并多次奉诏出征。相关记载保存了调令、战事和军事争论，使她的事迹不只是后世传说。她在万历、天启、崇祯数朝持续掌握军队，于1648年去世。她的历史意义在于凭本人名义行使统兵与决策职权，并进入正史将领传记，而非仅因婚姻关系被记住。",
+  "《明史》还记载，秦良玉曾率石砫兵赴辽东援助明军，参与浑河作战；后来朝廷多次征调她入援京师。她不仅出兵，还向朝廷上奏说明战况、请求奖恤阵亡亲属，并对后续调兵提出意见。地方土司制度使石砫拥有世袭军队，但战时兵员由秦良玉亲自统率，她也需决定路线、粮运和防守部署。地方志将她的战事放在明末西南边防中叙述，而《明史》则保存朝廷任命、战役和奏疏，提供了不同层次的记录。",
+  "她的军队曾被调往四川、贵州、辽东等地，说明其影响不限于一座城寨。面对叛乱与流寇，她与部属在多地作战，也经历失利和军事争论。这样的细节提醒读者，秦良玉不是传奇叙事里的抽象“女将”，而是明代军政体系中承担责任的将领。记载她的材料大多来自官修史书和地方志，因此许多家庭生活细节并不清楚；可确认的核心，是她长期领兵、受朝廷调遣并拥有自己的军事判断。",
 ]
-sections = [
-  { "title" = "真實性爭議", "paragraphs" = [
-      "原著《木蘭辭》為古樂府，在南朝陳時被釋智匠收錄於《古今樂錄》。因原著未作详细记载，木兰所處之年代、年齡、籍貫、居住地等均不可考。木蘭的事情雖然被記載於古樂府詩《木蘭辭》，但明史也有記載元末時韓貞女扮男裝從軍的故事，徐渭大概因為這件事替木蘭寫劇本。本來不知道木蘭姓氏，稱木蘭父親姓花名弧以及木蘭後來嫁給王郎，都是徐渭杜撰出來的故事。",
-    ] },
-  { "title" = "族裔爭議", "paragraphs" = [
-      "鮮卑說的支持者認為，木蘭的故事自隋唐朝起在漢人口耳相傳的敘事添加了漢人社會觀念，後世的改編作品裡木蘭的游牧和部落血統被抹去，明代徐渭《雌木蘭替父從軍》更增加了「木蘭纏足」的劇情，不過北魏時代沒有纏足陋習，又以2020年考古學家克里斯汀·李和亚海拉·冈萨雷斯在蒙古國出土的貴族女性骸骨裡，發現鮮卑女貴族比起匈奴和突厥女貴族更常騎馬，據此推測鮮卑平民女性幾乎都要騎馬上戰場。",
-    ] },
-  { "title" = "姓名和籍貫", "paragraphs" = [
-      "原作沒提到木蘭真實的姓氏。學者徐中舒認為木蘭實際上可能是一個複姓。明代文學家徐渭將《木蘭辭》改編為《雌木蘭替父從軍》；女主角在劇中自稱「妾身姓花名木蘭，祖上在西漢時，以六郡良家子，世住河北魏郡。吾父名弧字桑之，平生好武能文，舊時也做一個有名的千夫長」；自此，木蘭的父親叫花弧，姐姐叫花木蓮，弟弟叫花雄，母親是花袁氏。《隋唐演義》記載花木蘭有一妹名花又蘭，與竇線娘義結金蘭。",
-      "又有一說木蘭本姓朱，清康熙年間《黃陂縣志》寫道「木蘭，本縣朱氏女，生於唐初，⋯⋯假男子代父從軍，⋯⋯至今其家猶在木蘭山下」焦竑《焦氏筆乘》也寫道「木蘭，朱氏女子，代父從征。今黃州黃陂縣北七十里，即隋木蘭縣。有木蘭山、將軍冢、忠烈廟，足以補《樂府題解》之缺」但是，還有木蘭姓魏的說法，也有一說她的原本姓名為韓娥。",
-      "花木蘭的籍貫也是眾說紛紜，《大清一統志》稱她是潁州譙郡城東魏村人（今安徽省亳州市譙城區）；姚瑩《康輶紀行》稱她是甘肅武威人，而劉廷直《木蘭碑》則稱木蘭是直隶完縣人，《商丘縣誌》記載木蘭為河南商丘縣人。",
-    ] },
-  { "title" = "相關作品", "paragraphs" = [
-      "《花木兰》（Hua Mulan），一部由意大利Mondo TV制作，以影碟形式首发的动画电影，摘自《超级小芬达英雄》（Super Little Fanta Heroes）中的4集故事，发行于1997年。",
-      "《花木兰》（Mulan），一部由美国迪士尼制作的动画电影，花木兰自此成为迪士尼公主之一，温明娜声演（中国大陆、香港、台湾版则分别由许晴、陈慧琳、李玟声演），上映于1998年。",
-      "《木蘭少女》：2011年首演，後歷經多次臺北、新加坡等重製製作。故事圍繞木蘭對自我身份的追尋，並展開木蘭、將軍，與青梅竹馬蔣冠甫之間的三角愛情。故事引入更多現代議題的註解，包括女性自主、性向與性別特質等劇情。",
-    ] },
+sections = []
+sources = [
+  { title = "重庆市地方志办公室：秦良玉", url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html" },
+  { title = "《明史》卷二百七十三·秦良玉传", url = "https://www.shidianguji.com/zh/book/LS0024/chapter/LS0024_1492" },
 ]
-
 [articles.article_4559555bd9062c60]
 text = "沙贾汉一世（烏爾都語：شاه جهان，印地語：शाह जहाँ，波斯語：شاه جهان；1592年1月5日—1666年1月22日），或譯沙賈汗、沙迦罕，第5任蒙兀兒皇帝（1628年—1658年在位）。“沙贾汉”在波斯语中的意思是世界统治者。沙贾汉在位期间，为他最喜愛的妻子已故皇后姬蔓·芭奴修筑了举世闻名的泰姬陵；後於晚年遭到軟禁。"
 title = "沙贾汉"
@@ -9247,35 +9174,21 @@ sections = [
 ]
 
 [articles.article_286ff69b60180e74]
-text = "Hoa Mộc Lan (Phồn thể: 花木蘭; giản thể: 花木兰; bính âm: Huā Mùlán; Wade–Giles: Hua1 mu4 lan2) là một nhân vật nữ anh hùng trong truyền thuyết dân gian của Trung Quốc. Nhân vật này xuất hiện lần đầu trong một truyện thơ mang tên Mộc Lan thi (木蘭詩)."
-title = "Hoa Mộc Lan"
+text = "Tần Lương Ngọc (1574–1648) là một nữ chỉ huy quân sự thời nhà Minh, sinh tại Trung Châu, nay thuộc huyện Trung, thành phố Trùng Khánh. Cuộc hôn nhân với Mã Thiên Thừa gắn bà với hệ thống thổ ty cha truyền con nối ở Thạch Trụ, nhưng sử liệu cũng ghi nhận bà là người tự tổ chức và chỉ huy quân đội. Bà tham gia dẹp loạn Bác Châu; sau khi Mã Thiên Thừa qua đời, bà tiếp quản quyền chỉ huy lực lượng Thạch Trụ. Trong những cuộc khủng hoảng quân sự cuối triều Minh, triều đình nhiều lần triệu bà về bảo vệ khu vực và hỗ trợ các chiến dịch khác."
+title = "Tần Lương Ngọc"
 lang = "vi"
-url = "https://vi.wikipedia.org/wiki/Hoa_M%E1%BB%99c_Lan"
+url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html"
+highlight = "Bà là nữ tướng nhà Minh, trực tiếp chỉ huy quân Thạch Trụ và bảo vệ vùng tây nam qua nhiều cuộc khủng hoảng."
+shortArticle = true
 intro = [
-  "Hoa Mộc Lan (Phồn thể: 花木蘭; giản thể: 花木兰; bính âm: Huā Mùlán; Wade–Giles: Hua1 mu4 lan2) là một nhân vật nữ anh hùng trong truyền thuyết dân gian của Trung Quốc. Nhân vật này xuất hiện lần đầu trong một truyện thơ mang tên Mộc Lan thi (木蘭詩).",
-  "Trong bài thơ này, Mộc Lan vẫn không có họ, quê quán thậm chí cũng không đề cập đến niên đại của nhân vật. Cái họ tên đầy đủ 「\"Hoa Mộc Lan\"」 trở nên phổ biến cũng bắt đầu từ \"Tứ thanh viên\" (四聲猿) của học giả đời nhà Minh là Từ Vị. Hình tượng Hoa Mộc Lan đi vào văn hóa Trung Quốc biểu thị một ý nghĩa lý tưởng cao thượng, nói về một thiếu nữ yếu đuối thay cha già đi giả nam để tòng quân. Do đó, cô được lưu truyền rộng rãi qua truyền thuyết và những tác phẩm thiên về thơ ca hoặc sân khấu. Truyền thuyết về Hoa Mộc Lan đã được làm thành phim, cả phim hoạt hình lẫn phim do người đóng, bởi hãng Walt Disney (Mỹ).",
+  "Tần Lương Ngọc (1574–1648) là một nữ chỉ huy quân sự thời nhà Minh, sinh tại Trung Châu, nay thuộc huyện Trung, thành phố Trùng Khánh. Cuộc hôn nhân với Mã Thiên Thừa gắn bà với hệ thống thổ ty cha truyền con nối ở Thạch Trụ, nhưng sử liệu cũng ghi nhận bà là người tự tổ chức và chỉ huy quân đội. Bà tham gia dẹp loạn Bác Châu; sau khi Mã Thiên Thừa qua đời, bà tiếp quản quyền chỉ huy lực lượng Thạch Trụ. Trong những cuộc khủng hoảng quân sự cuối triều Minh, triều đình nhiều lần triệu bà về bảo vệ khu vực và hỗ trợ các chiến dịch khác.",
+  "Theo địa chí Trùng Khánh, năm 1634 bà cùng con trai Mã Tường Lân chiến đấu ở Tứ Xuyên chống lại quân của Trương Hiến Trung. Chính sử Minh sử dành cho Tần Lương Ngọc một tiểu truyện trong phần viết về các tướng lĩnh, lưu lại một ghi chép đặc biệt chi tiết về một phụ nữ được giao quyền chỉ huy quân sự chính thức. Sử sách còn ghi các cuộc hành quân, tấu trình của bà về tình hình chiến trường và việc bà xin triều đình khen thưởng binh sĩ tử trận. Các sắc lệnh điều quân cho thấy bà nhiều lần được giao nhiệm vụ chỉ huy trực tiếp, chứ không chỉ thay chồng trông coi lãnh địa. Bà mất năm 1648. Vai trò lịch sử của bà thể hiện qua đội quân bà chỉ huy và những quyết định quân sự do chính bà đưa ra, chứ không chỉ qua hôn nhân.",
 ]
-sections = [
-  { "title" = "Giai thoại", "paragraphs" = [
-      "Thời Bắc Ngụy, có một cô gái tên Hoa Mộc Lan, mồ côi mẹ, sống cùng cha là Hoa Hồ. Ngay từ nhỏ, Hoa Mộc Lan đã xinh đẹp, lại rất thông minh nên được cha yêu quý, vì vậy Mộc Lan được cha cho học cả thơ văn võ thuật.",
-      "Sở dĩ cha mẹ của cô lấy tên \"Mộc Lan\" là vì cha mẹ đi cầu tự trên núi Mộc Lan ở quê nhà, sau đó sinh ra cô. Riêng về võ nghệ, Mộc Lan được nhà sư chùa Đại Ngô truyền dạy các môn đao kiếm, lại giảng cho cả binh pháp, nên mới 10 tuổi, mà Mộc Lan đã có tài nghệ khác thường (vị sư này chính là Ngũ Vân Thiệu, một võ tướng vì thất thủ thành Nam Xương, nên bỏ trốn rồi đổi họ tên đi tu). Năm Hoa Mộc Lan 18 tuổi, dân tộc du mục Nhu Nhiên xâm phạm biên cảnh khiến quân tình khẩn cấp, toàn dân Bắc Nguỵ lên đường ra trận. Hoa Mộc Lan không muốn cha già cực khổ nên lén chuốc rượu cha và âm thầm lên đường tòng quân len lỏi vào đám nam nhân để giết giặc. Sau khi cuộc chiến kết thúc, Hoa Mộc Lan trở về quê nhà và trở lại thân phận một cô gái hiếu thảo. Sau cùng, Mộc Lan được gả cho chàng trai tên Vương Lang.",
-    ] },
-  { "title" = "Khảo cứu", "paragraphs" = [
-      "Bài thơ \"Mộc Lan từ\" là nguồn khởi đầu của nhân vật Hoa Mộc Lan, cho đến nay vẫn không có đề cập Mộc Lan họ gì và quê quán ở đâu. Căn cứ câu 「\"Đán từ Hoàng Hà khứ, Mộ túc Hắc sơn đầu\"」, rồi 「\"Đãn văn Yên sơn Hồ kỵ thanh thu thu\"」 thì địa điểm chinh chiến có lẽ tọa lạc ở Hoàng Hà và hai vùng Hắc Sơn cùng Yên Sơn.",
-      "Thời đại của nhân vật cũng không có đề cập, \"Mộc Lan từ\" cung cấp cực ít tin tức, đại khái họ và quê quán là có nhiều dị bản cùng tranh luận nhất. Còn về thời đại, ban đầu bài thơ này là nhạc phủ, được trích thấy ở \"Cổ kim nhạc lục\" (古今樂錄) thời Nam triều nhà Trần của thời Nam-Bắc triều, do địa danh trong thơ đại đa số ứng với phía Bắc nên rất dễ hình dung thời đại được đề cập là Bắc Ngụy, dù chẳng ai khẳng định điều này, vì thế có không ít dị bản nói thời đại của nhân vật là thời nhà Đường. Từ đó, \"Mộc Lan từ\" nổi tiếng và bắt đầu thêu dệt hình ảnh truyền kỳ, nhưng thực sự nổi tiếng là qua Thư Mộc Lan thế phụ tòng quân (雌木蘭替父從軍) của Từ Vị nhà Minh. Trong vở kịch này, Mộc Lan tự xưng:「\"Thiếp thân họ Hoa, tên Mộc Lan, tổ tiên từ thuở Tây Hán là Lương gia tử của 6 quận, nhiều đời trú ngụ ở quận Ngụy thuộc Hà Bắc\"; 妾身姓花名木蘭，祖上在西漢時，以六郡良家子，世住河北魏郡。」, cũng từ đây mà [Hoa Mộc Lan] mởi dần phổ biến và biến thành một hình tượng nữ tử nổi tiếng.",
-      "Do \"Hoa Mộc Lan\" chỉ là một sản phẩm hư cấu, vô tình phổ biến của Từ Vị nên cái họ Hoa của Mộc Lan không có thực, cũng vì thế mà rất nhiều người đời Minh và đời Thanh cũng tự có một \"phiên bản Mộc Lan\" với đủ loại họ. Sách \"Huyện chí\" của huyện Hoàng Bi thời Khang Hi có ghi:「\"Mộc Lan, con gái bổn huyện, mang họ Chu thị, sinh thời Đường,... giả nam tử thay cha tòng quân,... Đến nay nhà này vẫn còn ở dưới núi Mộc Lan\";木蘭，本縣朱氏女，生於唐初，......假男子代父從軍，......至今其家猶在木蘭山下」. Người đời Minh là Lưu Duy Đức (刘惟德) có sáng tác \"Hàn Mộc Lan truyện\" (韓木蘭傳), có ghi:「\"Thiếu nữ Mộc Lan, họ Hàn, nguyên tên là Nga, người Lãng Trung thuộc Tứ Xuyên\"; 少女木蘭，姓韓，原名娥，四川閬中人」.",
-    ] },
-  { "title" = "Bài thơ Mộc Lan", "paragraphs" = [
-      "Đây là bài quân ca nổi tiếng trong lịch sử văn học Trung Quốc. Nội dung bài thơ đơn giản, không có những chi tiết ly kỳ, không có những éo le làm xao xuyến lòng người. Bài thơ kể về câu chuyện một người thiếu nữ thay cha tòng quân. Nhà không có con trai lớn để nhập ngũ, cha già thì đã cao tuổi, người thiếu nữ ấy liền ăn mặc giả nam nhi để tòng quân thay cha. Nàng ở trong quân ngũ mười hai năm, lập được nhiều chiến công. Khi trở về triều đình, nhà vua muốn ban thưởng chức tước, nàng đều không nhận, chỉ xin ngựa tốt để trở về quê nhà. Về đến nhà, nàng lại mặc trang phục nữ nhi, trang điểm soi gương, trở lại với cuộc sống bình thường như trước khi nhập ngũ.",
-      "Trong kho tàng dân ca nhạc phủ phong phú của dân tộc Trung Quốc, \"Mộc Lan từ\" và \"Khổng tước đông nam phi\" đời Đông Hán được đánh giá là hai bài dân ca hay vào bậc nhất. Nhưng hai tác phẩm này hoàn toàn khác nhau. Nếu \"Khổng tước đông nam phi\" là bài tình ca diễm lệ bi thảm mang theo tình điệu của người phương Nam, thì \"Mộc Lan từ\" là bài quân ca hùng tráng khẳng khái thể hiện khí chất của người phương Bắc. Bản \"Mộc Lan từ\" còn lưu truyền ngày nay là bản đã qua bút pháp của các thi nhân đời nhà Đường, tuy nhiên vẻ hào hùng đẹp đẽ nguyên thủy vẫn còn được thể hiện rõ ràng.",
-    ] },
-  { "title" = "Hình ảnh văn hóa", "paragraphs" = [
-      "Tiếng Trung: vở kinh kịch và các thể loại ca kịch Trung Quốc khác đã xây dựng nhiều vở kịch về Hoa Mộc Lan",
-      "Tiếng Việt: sân khấu cải lương Sài Gòn thời Việt Nam cộng hòa đã có nhiều vở cải lương về đề tài nhân vật này.",
-      "Phim Mộc Lan năm 2011 của đạo diễn Jan de Bont, kịch bản phim John Blickstead với sự tham gia diễn xuất của ngôi sao màn bạc Hoa ngữ Chương Tử Di. Tuy nhiên hiện nay dự án vẫn chưa được thực hiện.",
-    ] },
+sections = []
+sources = [
+  { title = "Văn phòng Địa chí Trùng Khánh: Tần Lương Ngọc", url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html" },
+  { title = "《明史》卷二百七十三：秦良玉传", url = "https://www.shidianguji.com/zh/book/LS0024/chapter/LS0024_1492" },
 ]
-
 [articles.article_04d02cb36b0d7e00]
 text = "샤 자한(우르두어: شاه ‌جہاں, 페르시아어: شاه جهان; 샤 제한과 같이 전사되기도 한다; 1592년 1월 5일~1666년 1월 22일)은 1628년부터 1658년까지 인도아대륙을 다스린 무굴 제국의 황제이며, ‘샤 자한’이란 페르시아어로 ‘세계의 왕’이라는 의미이다. 그는 바부르, 후마윤, 악바르, 자한기르의 뒤를 이은 5번째 무굴 황제이다."
 title = "샤 자한"
@@ -10090,27 +10003,21 @@ sections = [
 ]
 
 [articles.article_292817bee900bc5c]
-text = "هوا مولان قصيدة صينية قديمة تحكي عن فتاة صينية تدخل الجيش الصيني الذي كان حكرا على الرجال فقط. تنكرت مولان بزي رجل ودخلت الجيش."
-title = "هوا مولان"
+text = "كانت تشين ليانغيو (1574–1648) قائدة عسكرية في عهد أسرة مينغ، وُلدت في تشونغتشو، في المنطقة التي تُعرف اليوم بمقاطعة تشونغ في تشونغتشينغ. ربطها زواجها من ما تشيانشنغ بالإدارة الوراثية لنظام توسي في شيجو، لكن السجلات التاريخية تذكرها أيضاً قائدةً مستقلة نظّمت الجنود وقادتهم. شاركت في قمع تمرد بوزهو، وبعد وفاة ما تولّت قيادة قوات شيجو. وخلال الأزمات العسكرية في أواخر عهد مينغ، استدعاها البلاط مراراً للدفاع عن المنطقة ومساندة حملات أخرى."
+title = "تشين ليانغيو"
 lang = "ar"
-url = "https://ar.wikipedia.org/wiki/%D9%87%D9%88%D8%A7_%D9%85%D9%88%D9%84%D8%A7%D9%86"
+url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html"
+highlight = "قادت قوات شيجو بصفتها قائدة عسكرية في عهد مينغ ودافعت عن الجنوب الغربي خلال أزمات متكررة."
+shortArticle = true
 intro = [
-  "هوا مولان قصيدة صينية قديمة تحكي عن فتاة صينية تدخل الجيش الصيني الذي كان حكرا على الرجال فقط. تنكرت مولان بزي رجل ودخلت الجيش.",
+  "كانت تشين ليانغيو (1574–1648) قائدة عسكرية في عهد أسرة مينغ، وُلدت في تشونغتشو، في المنطقة التي تُعرف اليوم بمقاطعة تشونغ في تشونغتشينغ. ربطها زواجها من ما تشيانشنغ بالإدارة الوراثية لنظام توسي في شيجو، لكن السجلات التاريخية تذكرها أيضاً قائدةً مستقلة نظّمت الجنود وقادتهم. شاركت في قمع تمرد بوزهو، وبعد وفاة ما تولّت قيادة قوات شيجو. وخلال الأزمات العسكرية في أواخر عهد مينغ، استدعاها البلاط مراراً للدفاع عن المنطقة ومساندة حملات أخرى.",
+  "ووفقاً لسجل التاريخ المحلي في تشونغتشينغ، قاتلت تشين وابنها ما شيانغلين قوات تشانغ شيانزونغ في سيتشوان سنة 1634. ويخصص كتاب «تاريخ مينغ» لها ترجمة في قسم القادة العسكريين، وهو سجل مفصل على نحو غير مألوف لامرأة تمتعت بقيادة عسكرية معترف بها. كما يروي الكتاب حملاتها وتقاريرها العسكرية وطلبها مكافأة الجنود الذين قُتلوا. وتُظهر أوامر التعبئة أنها تلقت مهام قيادة مباشرة، ولم يقتصر دورها على إدارة أملاك زوجها. توفيت تشين سنة 1648. وتنبع أهميتها التاريخية من القوات التي قادتها والقرارات العسكرية التي اتخذتها بنفسها، لا من زواجها وحده.",
 ]
-sections = [
-  { "title" = "القصة", "paragraphs" = [
-      "تدور هذه القصة في فترة غزو قبائل الهون العالم القديم وذلك في القرن الخامس للميلاد والذين استطاعوا تأسيس امبراطورية عظيمة نافست في وجودها الامبراطوريتين الرومانية والفارسية وقد هددت كيان الامبراطورية الرومانية لأكثر من مرة حيث كانت المرة الأخيرة عندما هاجم قائدها أتيلا روما محاولا دخولها إلا أن الظروف لم تكن حليفة له وتركها بعد أن توسل اليه البابا ليو الأول بعدم احتلال روما.",
-      "و في قرية بشمال الصين، جلست مولان تنسج على النول. لا صوت غير صوت المغزل ثم تنهداتها الحزينة. سألتها أمها: ماذا يزعجك، يا مولان؟ أجابت: لا شيء. سألتها ثانية: من يشغل قلبك؟ أجابت: لا أحد. من يشغل عقلك؟ أجابت: لا أحد. عاد صوت المغزل دون التنهدات.",
-      "تنهدت مولان وقالت: والدي عجوز وضعيف، كيف يقاتل؟ أخي صغير لا يستطيع أن يقاتل. أخاف على والدي، عليه أن يلبي نداء الإمبراطور. لن أدعه يذهب إلى الحرب، سأذهب بدلاً منه. سأشتري حصاناً وسرجاً. وبالفعل اشترت مولان حصاناً من السوق الشرقي، وسرجاً من السوق الغربي، ولجاماً من السوق الشمالي، وسوطاً من السوق الجنوبي. وفي الفجر لبست الدرع وامتطت الحصان وقالت لوالديها وأختها وأخيها وداعا.",
-    ] },
-  { "title" = "الاسم", "paragraphs" = [
-      "في الصينية، مو تعني «الخشب» ولان يعني زهرة الأوركيد «السحلب». واسم عائلة بطلة القصيدة يختلف من إصدار إلى اخر من قصتها، وفقا لتاريخ مينغ، اسم عائلتها هو تشو، في حين ان تاريخ اسرة تشينغ يقول انه وى (wei). لكن أصبح اسم العائلة هوا (花، ويعني «زهرة») أكثر شعبية في السنوات الأخيرة، لأنه أكثر شاعرية.",
-    ] },
-  { "title" = "في التلفاز والسينما", "paragraphs" = [
-      "مولان (2020): الفيلم هو النسخة الحية لفيلم الرسوم المتحركة مولان المأخوذ من الفلكلور الصيني لأسطورة هوا مولان.",
-    ] },
+sections = []
+sources = [
+  { title = "مكتب سجلات تشونغتشينغ المحلية: تشين ليانغيو", url = "https://dfz.cq.gov.cn/zqlswh/rwby_417819/202311/t20231102_12510540.html" },
+  { title = "《明史》卷二百七十三：秦良玉传", url = "https://www.shidianguji.com/zh/book/LS0024/chapter/LS0024_1492" },
 ]
-
 [articles.article_4f01f1c9cf51392b]
 text = "ماركوس أوريليوس أنطونينوس أغسطس أو مُرْقُس أُورُلْيُوس أَنْطُنْيَنْس أُغُسْطُس (اللاتينية: Marcus Aurelius Antoninus Augustus) (26 أبريل 121 - 17 مارس 180) هو فيلسوف رواقي وإمبراطور الروم السادس عشر (161 - 180) وخامس الأباطرة الأنطونيين الرومان. وهو أبو الإمبراطور قومودوس."
 title = "ماركوس أوريليوس"
@@ -13557,6 +13464,321 @@ sources = [
   { title = "Powhatan People and the English at Jamestown (DPLA)", url = "https://www.dp.la/primary-source-sets/powhatan-people-and-the-english-at-jamestown" },
 ]
 
+[articles.article_al_ghafiqi_en]
+text = "A near-contemporary Iberian chronicle says al-Ghafiqi’s army crossed mountainous Basque country, entered Frankish lands, fought Duke Eudo of Aquitaine near the Garonne and Dordogne, and continued after Eudo fled. Modern scholarship describes the campaign as an invasion of Aquitaine and records that Eudo later sought help from Charles Martel. Their armies met on the route between Tours and Poitiers. These reports place al-Ghafiqi’s command in a frontier conflict among Umayyad al-Andalus, Aquitaine, and the Frankish realms. Al-Ghafiqi was killed in the battle; Oxford notes that his army withdrew in good order. The encounter is commonly called the Battle of Tours or Poitiers. Its traditional date is October 732, but scholars have argued for late 733 or 734 based on Iberian chronology. The precise site and the battle’s broader significance are also disputed. This account therefore avoids treating one date, casualty total, or claim that the battle permanently ended Muslim activity in western Europe as settled fact."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "en"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "An Umayyad governor whose campaign crossed the Pyrenees into Aquitaine and ended in the disputed battle near Tours."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi served as governor of Umayyad al-Andalus and led a major expedition north of the Pyrenees. Surviving accounts describe the route and clashes, but do not support every later legend about the battle or its scale.",
+]
+sections = [
+  { "title" = "Campaign across the Pyrenees", "paragraphs" = [
+    "A near-contemporary Iberian chronicle says al-Ghafiqi’s army crossed mountainous Basque country, entered Frankish lands, fought Duke Eudo of Aquitaine near the Garonne and Dordogne, and continued after Eudo fled. Modern scholarship describes the campaign as an invasion of Aquitaine and records that Eudo later sought help from Charles Martel. Their armies met on the route between Tours and Poitiers. These reports place al-Ghafiqi’s command in a frontier conflict among Umayyad al-Andalus, Aquitaine, and the Frankish realms.",
+    "Al-Ghafiqi was killed in the battle; Oxford notes that his army withdrew in good order. The encounter is commonly called the Battle of Tours or Poitiers. Its traditional date is October 732, but scholars have argued for late 733 or 734 based on Iberian chronology. The precise site and the battle’s broader significance are also disputed. This account therefore avoids treating one date, casualty total, or claim that the battle permanently ended Muslim activity in western Europe as settled fact."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_es]
+text = "Una crónica ibérica cercana a los hechos cuenta que el ejército de al-Ghafiqi atravesó zonas montañosas vascas, entró en territorio franco y combatió contra el duque Eudes de Aquitania cerca de los ríos Garona y Dordoña. La crónica relata que Eudes huyó y que la campaña continuó. La investigación moderna describe la expedición como una invasión de Aquitania y señala que Eudes pidió después ayuda a Carlos Martel. Los ejércitos se enfrentaron en la ruta entre Tours y Poitiers. Estos relatos sitúan el mando de al-Ghafiqi en un conflicto fronterizo entre al-Ándalus omeya, Aquitania y los dominios francos. Al-Ghafiqi murió en la batalla; Oxford señala que su ejército se retiró en buen orden. El enfrentamiento suele llamarse batalla de Tours o de Poitiers. La fecha tradicional es octubre de 732, pero algunos estudiosos proponen finales de 733 o 734 a partir de la cronología ibérica. También se discuten el lugar exacto y la importancia general de la batalla. Por eso este relato no presenta como hechos seguros una fecha única, cifras de bajas ni la idea de que el combate acabó definitivamente con la presencia musulmana en Europa occidental."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "es"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Gobernador omeya de al-Ándalus; su campaña cruzó los Pirineos y terminó en la batalla, de fecha discutida, cerca de Tours."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi fue gobernador de al-Ándalus bajo los omeyas y dirigió una expedición al norte de los Pirineos. Las fuentes conservadas describen la ruta y los combates, pero no respaldan todas las leyendas posteriores sobre la batalla ni su escala.",
+]
+sections = [
+  { "title" = "La campaña al norte de los Pirineos", "paragraphs" = [
+    "Una crónica ibérica cercana a los hechos cuenta que el ejército de al-Ghafiqi atravesó zonas montañosas vascas, entró en territorio franco y combatió contra el duque Eudes de Aquitania cerca de los ríos Garona y Dordoña. La crónica relata que Eudes huyó y que la campaña continuó. La investigación moderna describe la expedición como una invasión de Aquitania y señala que Eudes pidió después ayuda a Carlos Martel. Los ejércitos se enfrentaron en la ruta entre Tours y Poitiers. Estos relatos sitúan el mando de al-Ghafiqi en un conflicto fronterizo entre al-Ándalus omeya, Aquitania y los dominios francos.",
+    "Al-Ghafiqi murió en la batalla; Oxford señala que su ejército se retiró en buen orden. El enfrentamiento suele llamarse batalla de Tours o de Poitiers. La fecha tradicional es octubre de 732, pero algunos estudiosos proponen finales de 733 o 734 a partir de la cronología ibérica. También se discuten el lugar exacto y la importancia general de la batalla. Por eso este relato no presenta como hechos seguros una fecha única, cifras de bajas ni la idea de que el combate acabó definitivamente con la presencia musulmana en Europa occidental."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_de]
+text = "Eine zeitnahe iberische Chronik berichtet, al-Ghafiqis Heer habe das gebirgige Baskenland durchquert, fränkisches Gebiet betreten und nahe Garonne und Dordogne gegen Herzog Eudo von Aquitanien gekämpft. Eudo sei geflohen, während der Feldzug weiterging. Die moderne Forschung beschreibt den Vorstoß als Invasion Aquitaniens und hält fest, dass Eudo später Karl Martell um Hilfe bat. Ihre Heere trafen auf der Route zwischen Tours und Poitiers aufeinander. Die Berichte verorten al-Ghafiqis Führung in einem Grenzkonflikt zwischen dem umayyadischen al-Andalus, Aquitanien und den fränkischen Herrschaftsgebieten. Al-Ghafiqi fiel in der Schlacht; Oxford zufolge zog sich sein Heer geordnet zurück. Die Auseinandersetzung wird meist Schlacht bei Tours oder Poitiers genannt. Als traditionelles Datum gilt Oktober 732, doch manche Forschende setzen sie aufgrund iberischer Chronologie auf Ende 733 oder 734. Auch der genaue Ort und die weiterreichende Bedeutung der Schlacht bleiben umstritten. Deshalb behandelt dieser Text weder ein einzelnes Datum noch Verlustzahlen oder die Behauptung, die Schlacht habe die muslimische Präsenz in Westeuropa dauerhaft beendet, als gesicherte Tatsachen."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "de"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Ein umayyadischer Statthalter führte einen Feldzug über die Pyrenäen nach Aquitanien; das Ende bei Tours ist umstritten datiert."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi war Statthalter des umayyadischen al-Andalus und führte einen großen Feldzug nördlich der Pyrenäen. Die erhaltenen Berichte schildern Route und Kämpfe, bestätigen jedoch nicht alle späteren Legenden über die Schlacht oder deren Ausmaß.",
+]
+sections = [
+  { "title" = "Der Feldzug über die Pyrenäen", "paragraphs" = [
+    "Eine zeitnahe iberische Chronik berichtet, al-Ghafiqis Heer habe das gebirgige Baskenland durchquert, fränkisches Gebiet betreten und nahe Garonne und Dordogne gegen Herzog Eudo von Aquitanien gekämpft. Eudo sei geflohen, während der Feldzug weiterging. Die moderne Forschung beschreibt den Vorstoß als Invasion Aquitaniens und hält fest, dass Eudo später Karl Martell um Hilfe bat. Ihre Heere trafen auf der Route zwischen Tours und Poitiers aufeinander. Die Berichte verorten al-Ghafiqis Führung in einem Grenzkonflikt zwischen dem umayyadischen al-Andalus, Aquitanien und den fränkischen Herrschaftsgebieten.",
+    "Al-Ghafiqi fiel in der Schlacht; Oxford zufolge zog sich sein Heer geordnet zurück. Die Auseinandersetzung wird meist Schlacht bei Tours oder Poitiers genannt. Als traditionelles Datum gilt Oktober 732, doch manche Forschende setzen sie aufgrund iberischer Chronologie auf Ende 733 oder 734. Auch der genaue Ort und die weiterreichende Bedeutung der Schlacht bleiben umstritten. Deshalb behandelt dieser Text weder ein einzelnes Datum noch Verlustzahlen oder die Behauptung, die Schlacht habe die muslimische Präsenz in Westeuropa dauerhaft beendet, als gesicherte Tatsachen."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_fr]
+text = "Une chronique ibérique proche des événements rapporte que l’armée d’al-Ghafiqi traversa les régions montagneuses basques, entra en territoire franc et combattit le duc Eudes d’Aquitaine près de la Garonne et de la Dordogne. Eudes aurait fui tandis que l’expédition se poursuivait. Les travaux modernes décrivent l’opération comme une invasion de l’Aquitaine et indiquent qu’Eudes demanda ensuite l’aide de Charles Martel. Leurs armées se rencontrèrent sur la route entre Tours et Poitiers. Ces récits replacent le commandement d’al-Ghafiqi dans un conflit frontalier entre l’al-Andalus omeyyade, l’Aquitaine et les territoires francs. Al-Ghafiqi fut tué lors de la bataille; Oxford précise que son armée se retira en bon ordre. L’affrontement est généralement appelé bataille de Tours ou de Poitiers. La date traditionnelle est octobre 732, mais certains chercheurs proposent la fin de 733 ou 734 à partir de la chronologie ibérique. Le lieu exact et la portée générale de la bataille sont également débattus. Ce récit ne présente donc comme certains ni une date unique, ni des chiffres de pertes, ni l’idée que le combat mit définitivement fin à la présence musulmane en Europe occidentale."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "fr"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Gouverneur omeyyade, il mena une campagne au-delà des Pyrénées jusqu’en Aquitaine; la date de la bataille près de Tours reste discutée."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi gouverna al-Andalus sous les Omeyyades et dirigea une importante expédition au nord des Pyrénées. Les récits conservés décrivent l’itinéraire et les combats, mais ne confirment pas toutes les légendes postérieures sur la bataille ou son ampleur.",
+]
+sections = [
+  { "title" = "La campagne au-delà des Pyrénées", "paragraphs" = [
+    "Une chronique ibérique proche des événements rapporte que l’armée d’al-Ghafiqi traversa les régions montagneuses basques, entra en territoire franc et combattit le duc Eudes d’Aquitaine près de la Garonne et de la Dordogne. Eudes aurait fui tandis que l’expédition se poursuivait. Les travaux modernes décrivent l’opération comme une invasion de l’Aquitaine et indiquent qu’Eudes demanda ensuite l’aide de Charles Martel. Leurs armées se rencontrèrent sur la route entre Tours et Poitiers. Ces récits replacent le commandement d’al-Ghafiqi dans un conflit frontalier entre l’al-Andalus omeyyade, l’Aquitaine et les territoires francs.",
+    "Al-Ghafiqi fut tué lors de la bataille; Oxford précise que son armée se retira en bon ordre. L’affrontement est généralement appelé bataille de Tours ou de Poitiers. La date traditionnelle est octobre 732, mais certains chercheurs proposent la fin de 733 ou 734 à partir de la chronologie ibérique. Le lieu exact et la portée générale de la bataille sont également débattus. Ce récit ne présente donc comme certains ni une date unique, ni des chiffres de pertes, ni l’idée que le combat mit définitivement fin à la présence musulmane en Europe occidentale."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_it]
+text = "Una cronaca iberica vicina agli eventi racconta che l’esercito di al-Ghafiqi attraversò le zone montuose basche, entrò in territorio franco e combatté il duca Eudo d’Aquitania presso i fiumi Garonna e Dordogna. Eudo sarebbe fuggito mentre la campagna proseguiva. Gli studi moderni descrivono la spedizione come un’invasione dell’Aquitania e riferiscono che in seguito Eudo chiese aiuto a Carlo Martello. I loro eserciti si scontrarono sulla strada tra Tours e Poitiers. Questi resoconti collocano il comando di al-Ghafiqi in un conflitto di frontiera fra l’al-Andalus omayyade, l’Aquitania e i territori franchi. Al-Ghafiqi morì nello scontro; Oxford osserva che il suo esercito si ritirò in buon ordine. La battaglia è chiamata di solito battaglia di Tours o di Poitiers. La data tradizionale è ottobre 732, ma alcuni studiosi propongono la fine del 733 o il 734 sulla base della cronologia iberica. Anche il luogo preciso e il significato più ampio dello scontro sono discussi. Perciò questo resoconto non presenta come certi una sola data, il numero delle perdite o l’affermazione che la battaglia pose fine per sempre alla presenza musulmana nell’Europa occidentale."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "it"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Governatore omayyade, guidò una campagna oltre i Pirenei in Aquitania; la data della battaglia presso Tours è discussa."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi fu governatore dell’al-Andalus omayyade e guidò una grande spedizione a nord dei Pirenei. Le fonti conservate descrivono il percorso e gli scontri, ma non confermano tutte le leggende successive sulla battaglia o sulla sua portata.",
+]
+sections = [
+  { "title" = "La campagna oltre i Pirenei", "paragraphs" = [
+    "Una cronaca iberica vicina agli eventi racconta che l’esercito di al-Ghafiqi attraversò le zone montuose basche, entrò in territorio franco e combatté il duca Eudo d’Aquitania presso i fiumi Garonna e Dordogna. Eudo sarebbe fuggito mentre la campagna proseguiva. Gli studi moderni descrivono la spedizione come un’invasione dell’Aquitania e riferiscono che in seguito Eudo chiese aiuto a Carlo Martello. I loro eserciti si scontrarono sulla strada tra Tours e Poitiers. Questi resoconti collocano il comando di al-Ghafiqi in un conflitto di frontiera fra l’al-Andalus omayyade, l’Aquitania e i territori franchi.",
+    "Al-Ghafiqi morì nello scontro; Oxford osserva che il suo esercito si ritirò in buon ordine. La battaglia è chiamata di solito battaglia di Tours o di Poitiers. La data tradizionale è ottobre 732, ma alcuni studiosi propongono la fine del 733 o il 734 sulla base della cronologia iberica. Anche il luogo preciso e il significato più ampio dello scontro sono discussi. Perciò questo resoconto non presenta come certi una sola data, il numero delle perdite o l’affermazione che la battaglia pose fine per sempre alla presenza musulmana nell’Europa occidentale."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_pt_br]
+text = "Uma crônica ibérica próxima dos acontecimentos relata que o exército de al-Ghafiqi atravessou áreas montanhosas bascas, entrou em território franco e combateu o duque Eudo da Aquitânia perto dos rios Garona e Dordonha. Eudo teria fugido enquanto a campanha prosseguia. Estudos modernos descrevem a expedição como uma invasão da Aquitânia e registram que Eudo depois pediu ajuda a Carlos Martel. Os exércitos se encontraram na rota entre Tours e Poitiers. Esses relatos situam o comando de al-Ghafiqi em um conflito de fronteira entre o al-Andalus omíada, a Aquitânia e os domínios francos. Al-Ghafiqi morreu na batalha; Oxford observa que seu exército recuou em boa ordem. O confronto é geralmente chamado de Batalha de Tours ou de Poitiers. A data tradicional é outubro de 732, mas alguns estudiosos propõem o fim de 733 ou 734 com base na cronologia ibérica. O local exato e a importância mais ampla do combate também são debatidos. Por isso, este relato não trata como fatos estabelecidos uma data única, números de baixas ou a afirmação de que a batalha encerrou definitivamente a presença muçulmana na Europa Ocidental."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "pt"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Governador omíada, comandou uma campanha além dos Pireneus até a Aquitânia; a data da batalha perto de Tours é debatida."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi foi governador de al-Andalus sob os omíadas e liderou uma grande expedição ao norte dos Pireneus. Os relatos preservados descrevem o percurso e os combates, mas não confirmam todas as lendas posteriores sobre a batalha ou sua dimensão.",
+]
+sections = [
+  { "title" = "A campanha além dos Pireneus", "paragraphs" = [
+    "Uma crônica ibérica próxima dos acontecimentos relata que o exército de al-Ghafiqi atravessou áreas montanhosas bascas, entrou em território franco e combateu o duque Eudo da Aquitânia perto dos rios Garona e Dordonha. Eudo teria fugido enquanto a campanha prosseguia. Estudos modernos descrevem a expedição como uma invasão da Aquitânia e registram que Eudo depois pediu ajuda a Carlos Martel. Os exércitos se encontraram na rota entre Tours e Poitiers. Esses relatos situam o comando de al-Ghafiqi em um conflito de fronteira entre o al-Andalus omíada, a Aquitânia e os domínios francos.",
+    "Al-Ghafiqi morreu na batalha; Oxford observa que seu exército recuou em boa ordem. O confronto é geralmente chamado de Batalha de Tours ou de Poitiers. A data tradicional é outubro de 732, mas alguns estudiosos propõem o fim de 733 ou 734 com base na cronologia ibérica. O local exato e a importância mais ampla do combate também são debatidos. Por isso, este relato não trata como fatos estabelecidos uma data única, números de baixas ou a afirmação de que a batalha encerrou definitivamente a presença muçulmana na Europa Ocidental."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_ru]
+text = "Близкая к событиям иберийская хроника сообщает, что войско аль-Гафики пересекло горные земли басков, вступило на франкскую территорию и сражалось с герцогом Аквитании Эдом у рек Гаронны и Дордони. По хронике, Эд бежал, а поход продолжился. Современные исследования называют выступление вторжением в Аквитанию и отмечают, что позднее Эд обратился за помощью к Карлу Мартеллу. Их армии встретились на дороге между Туром и Пуатье. Эти сообщения помещают командование аль-Гафики в пограничный конфликт между Омейским аль-Андалусом, Аквитанией и франкскими владениями. Аль-Гафики погиб в битве; Oxford отмечает, что его войско отступило организованно. Столкновение обычно называют битвой при Туре или Пуатье. Традиционная дата — октябрь 732 года, однако некоторые исследователи, опираясь на иберийскую хронологию, предлагают конец 733-го или 734 год. Точное место и более широкое значение битвы также обсуждаются. Поэтому здесь не выдаются за установленные факты одна конкретная дата, число потерь или утверждение, будто сражение навсегда прекратило мусульманское присутствие в Западной Европе."
+title = "Абд ар-Рахман аль-Гафики"
+lang = "ru"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Омейский наместник провёл поход через Пиренеи в Аквитанию; дата битвы у Тура остаётся предметом споров."
+shortArticle = true
+intro = [
+  "Абд ар-Рахман ибн Абдаллах аль-Гафики был наместником Омейского аль-Андалуса и возглавил крупный поход к северу от Пиренеев. Сохранившиеся свидетельства описывают маршрут и столкновения, но не подтверждают все поздние легенды о битве и её масштабе.",
+]
+sections = [
+  { "title" = "Поход через Пиренеи", "paragraphs" = [
+    "Близкая к событиям иберийская хроника сообщает, что войско аль-Гафики пересекло горные земли басков, вступило на франкскую территорию и сражалось с герцогом Аквитании Эдом у рек Гаронны и Дордони. По хронике, Эд бежал, а поход продолжился. Современные исследования называют выступление вторжением в Аквитанию и отмечают, что позднее Эд обратился за помощью к Карлу Мартеллу. Их армии встретились на дороге между Туром и Пуатье. Эти сообщения помещают командование аль-Гафики в пограничный конфликт между Омейским аль-Андалусом, Аквитанией и франкскими владениями.",
+    "Аль-Гафики погиб в битве; Oxford отмечает, что его войско отступило организованно. Столкновение обычно называют битвой при Туре или Пуатье. Традиционная дата — октябрь 732 года, однако некоторые исследователи, опираясь на иберийскую хронологию, предлагают конец 733-го или 734 год. Точное место и более широкое значение битвы также обсуждаются. Поэтому здесь не выдаются за установленные факты одна конкретная дата, число потерь или утверждение, будто сражение навсегда прекратило мусульманское присутствие в Западной Европе."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_tr]
+text = "Olaylara yakın dönemde yazılmış bir İber kroniği, al-Gafiki’nin ordusunun dağlık Bask bölgelerini geçtiğini, Frank topraklarına girdiğini ve Akitanya Dükü Eudes ile Garonne ve Dordogne nehirleri yakınlarında savaştığını bildirir. Kroniğe göre Eudes kaçarken sefer devam etti. Modern araştırmalar bu harekâtı Akitanya’nın işgali olarak tanımlar ve Eudes’in daha sonra Charles Martel’den yardım istediğini belirtir. Ordular Tours ile Poitiers arasındaki güzergâhta karşılaştı. Bu kayıtlar, al-Gafiki’nin komutasını Emevî Endülüsü, Akitanya ve Frank toprakları arasındaki bir sınır çatışması bağlamına yerleştirir. Al-Gafiki savaşta öldürüldü; Oxford, ordusunun düzenini koruyarak geri çekildiğini belirtir. Çatışma genellikle Tours ya da Poitiers Savaşı olarak anılır. Geleneksel tarih Ekim 732’dir, ancak bazı araştırmacılar İber kronolojisine dayanarak 733’ün sonlarını veya 734’ü önerir. Kesin konum ve savaşın daha geniş tarihsel önemi de tartışmalıdır. Bu nedenle burada tek bir tarih, kayıp sayısı ya da savaşın Batı Avrupa’daki Müslüman varlığını kalıcı biçimde sona erdirdiği iddiası kesinleşmiş bilgi olarak sunulmaz."
+title = "Abd al-Rahman el-Gafiki"
+lang = "tr"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Emevî Endülüsü valisi, Pireneler’i aşarak Akitanya’ya uzanan sefere komuta etti; Tours yakınındaki savaşın tarihi tartışmalıdır."
+shortArticle = true
+intro = [
+  "Abd al-Rahman ibn Abd Allah al-Ghāfiqī, Emevî Endülüsü valisi olarak görev yaptı ve Pireneler’in kuzeyine büyük bir sefer düzenledi. Günümüze ulaşan anlatılar güzergâhı ve çatışmaları aktarır; ancak savaşın ölçeğine ilişkin sonraki bütün efsaneleri doğrulamaz.",
+]
+sections = [
+  { "title" = "Pireneler’i aşan sefer", "paragraphs" = [
+    "Olaylara yakın dönemde yazılmış bir İber kroniği, al-Gafiki’nin ordusunun dağlık Bask bölgelerini geçtiğini, Frank topraklarına girdiğini ve Akitanya Dükü Eudes ile Garonne ve Dordogne nehirleri yakınlarında savaştığını bildirir. Kroniğe göre Eudes kaçarken sefer devam etti. Modern araştırmalar bu harekâtı Akitanya’nın işgali olarak tanımlar ve Eudes’in daha sonra Charles Martel’den yardım istediğini belirtir. Ordular Tours ile Poitiers arasındaki güzergâhta karşılaştı. Bu kayıtlar, al-Gafiki’nin komutasını Emevî Endülüsü, Akitanya ve Frank toprakları arasındaki bir sınır çatışması bağlamına yerleştirir.",
+    "Al-Gafiki savaşta öldürüldü; Oxford, ordusunun düzenini koruyarak geri çekildiğini belirtir. Çatışma genellikle Tours ya da Poitiers Savaşı olarak anılır. Geleneksel tarih Ekim 732’dir, ancak bazı araştırmacılar İber kronolojisine dayanarak 733’ün sonlarını veya 734’ü önerir. Kesin konum ve savaşın daha geniş tarihsel önemi de tartışmalıdır. Bu nedenle burada tek bir tarih, kayıp sayısı ya da savaşın Batı Avrupa’daki Müslüman varlığını kalıcı biçimde sona erdirdiği iddiası kesinleşmiş bilgi olarak sunulmaz."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_vi]
+text = "Một biên niên sử Iberia gần thời điểm sự kiện ghi rằng quân của al-Ghafiqi vượt qua vùng núi của người Basque, tiến vào đất Frank và giao chiến với công tước Eudo xứ Aquitaine gần sông Garonne và Dordogne. Theo biên niên sử, Eudo bỏ chạy trong khi chiến dịch tiếp tục. Nghiên cứu hiện đại mô tả đây là cuộc tiến công vào Aquitaine và cho biết Eudo sau đó tìm sự trợ giúp của Charles Martel. Hai đạo quân gặp nhau trên tuyến đường giữa Tours và Poitiers. Các ghi chép đặt quyền chỉ huy của al-Ghafiqi trong một cuộc xung đột biên giới giữa al-Andalus thời Umayyad, Aquitaine và các lãnh địa Frank. Al-Ghafiqi tử trận; Oxford ghi nhận quân đội của ông rút lui có trật tự. Cuộc giao chiến thường được gọi là trận Tours hoặc Poitiers. Niên đại truyền thống là tháng 10 năm 732, nhưng một số học giả dựa trên niên đại Iberia và đề xuất cuối năm 733 hoặc năm 734. Địa điểm chính xác và ý nghĩa rộng hơn của trận đánh cũng còn tranh luận. Vì vậy, bài viết không coi một niên đại duy nhất, số thương vong hay nhận định rằng trận đánh chấm dứt vĩnh viễn sự hiện diện của người Hồi giáo ở Tây Âu là sự thật đã được xác lập."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "vi"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Vị thống đốc Umayyad chỉ huy chiến dịch vượt Pyrenees vào Aquitaine; niên đại trận chiến gần Tours vẫn còn tranh luận."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi từng làm thống đốc al-Andalus dưới quyền Umayyad và chỉ huy một cuộc viễn chinh lớn về phía bắc dãy Pyrenees. Các tư liệu còn lại mô tả lộ trình và những trận giao chiến, nhưng không xác nhận mọi truyền thuyết về quy mô trận đánh.",
+]
+sections = [
+  { "title" = "Chiến dịch vượt dãy Pyrenees", "paragraphs" = [
+    "Một biên niên sử Iberia gần thời điểm sự kiện ghi rằng quân của al-Ghafiqi vượt qua vùng núi của người Basque, tiến vào đất Frank và giao chiến với công tước Eudo xứ Aquitaine gần sông Garonne và Dordogne. Theo biên niên sử, Eudo bỏ chạy trong khi chiến dịch tiếp tục. Nghiên cứu hiện đại mô tả đây là cuộc tiến công vào Aquitaine và cho biết Eudo sau đó tìm sự trợ giúp của Charles Martel. Hai đạo quân gặp nhau trên tuyến đường giữa Tours và Poitiers. Các ghi chép đặt quyền chỉ huy của al-Ghafiqi trong một cuộc xung đột biên giới giữa al-Andalus thời Umayyad, Aquitaine và các lãnh địa Frank.",
+    "Al-Ghafiqi tử trận; Oxford ghi nhận quân đội của ông rút lui có trật tự. Cuộc giao chiến thường được gọi là trận Tours hoặc Poitiers. Niên đại truyền thống là tháng 10 năm 732, nhưng một số học giả dựa trên niên đại Iberia và đề xuất cuối năm 733 hoặc năm 734. Địa điểm chính xác và ý nghĩa rộng hơn của trận đánh cũng còn tranh luận. Vì vậy, bài viết không coi một niên đại duy nhất, số thương vong hay nhận định rằng trận đánh chấm dứt vĩnh viễn sự hiện diện của người Hồi giáo ở Tây Âu là sự thật đã được xác lập."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_id]
+text = "Sebuah kronik Iberia yang dekat dengan masa peristiwa itu menyebut pasukan al-Ghafiqi melintasi wilayah pegunungan Basque, memasuki daerah Franka, lalu bertempur melawan Adipati Eudo dari Aquitaine di dekat sungai Garonne dan Dordogne. Menurut kronik, Eudo melarikan diri sementara ekspedisi berlanjut. Kajian modern menggambarkan gerakan itu sebagai invasi ke Aquitaine dan mencatat bahwa Eudo kemudian meminta bantuan Charles Martel. Kedua pasukan bertemu di jalur antara Tours dan Poitiers. Catatan ini menempatkan kepemimpinan al-Ghafiqi dalam konflik perbatasan antara Al-Andalus Umayyah, Aquitaine, dan wilayah Franka. Al-Ghafiqi gugur dalam pertempuran; Oxford mencatat bahwa pasukannya mundur dengan tertib. Pertempuran itu biasanya disebut Pertempuran Tours atau Poitiers. Tanggal tradisionalnya adalah Oktober 732, tetapi sejumlah sejarawan mengusulkan akhir 733 atau 734 berdasarkan kronologi Iberia. Lokasi persis dan makna yang lebih luas juga diperdebatkan. Karena itu, tulisan ini tidak menyajikan satu tanggal, jumlah korban, atau klaim bahwa pertempuran tersebut secara permanen mengakhiri keberadaan Muslim di Eropa Barat sebagai fakta yang sudah pasti."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "id"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Gubernur Umayyah ini memimpin ekspedisi melintasi Pyrenees ke Aquitaine; tanggal pertempuran dekat Tours masih diperdebatkan."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi menjabat sebagai gubernur Al-Andalus pada masa Umayyah dan memimpin ekspedisi besar ke utara Pyrenees. Sumber yang masih ada menjelaskan rute dan pertempurannya, tetapi tidak membenarkan semua legenda kemudian mengenai skala pertempuran tersebut.",
+]
+sections = [
+  { "title" = "Ekspedisi melintasi Pyrenees", "paragraphs" = [
+    "Sebuah kronik Iberia yang dekat dengan masa peristiwa itu menyebut pasukan al-Ghafiqi melintasi wilayah pegunungan Basque, memasuki daerah Franka, lalu bertempur melawan Adipati Eudo dari Aquitaine di dekat sungai Garonne dan Dordogne. Menurut kronik, Eudo melarikan diri sementara ekspedisi berlanjut. Kajian modern menggambarkan gerakan itu sebagai invasi ke Aquitaine dan mencatat bahwa Eudo kemudian meminta bantuan Charles Martel. Kedua pasukan bertemu di jalur antara Tours dan Poitiers. Catatan ini menempatkan kepemimpinan al-Ghafiqi dalam konflik perbatasan antara Al-Andalus Umayyah, Aquitaine, dan wilayah Franka.",
+    "Al-Ghafiqi gugur dalam pertempuran; Oxford mencatat bahwa pasukannya mundur dengan tertib. Pertempuran itu biasanya disebut Pertempuran Tours atau Poitiers. Tanggal tradisionalnya adalah Oktober 732, tetapi sejumlah sejarawan mengusulkan akhir 733 atau 734 berdasarkan kronologi Iberia. Lokasi persis dan makna yang lebih luas juga diperdebatkan. Karena itu, tulisan ini tidak menyajikan satu tanggal, jumlah korban, atau klaim bahwa pertempuran tersebut secara permanen mengakhiri keberadaan Muslim di Eropa Barat sebagai fakta yang sudah pasti."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_fil]
+text = "Isinalaysay ng isang kronikang Iberian na malapit sa panahong iyon na tumawid ang hukbo ni al-Ghafiqi sa kabundukan ng mga Basque, pumasok sa lupain ng mga Frank, at nakipaglaban kay Duke Eudo ng Aquitaine malapit sa mga ilog ng Garonne at Dordogne. Ayon sa kronika, tumakas si Eudo habang nagpatuloy ang kampanya. Inilalarawan ng makabagong pananaliksik ang pagsulong bilang pananakop sa Aquitaine at itinatala na humingi kalaunan si Eudo ng tulong kay Charles Martel. Nagtagpo ang kanilang mga hukbo sa daan sa pagitan ng Tours at Poitiers. Inilalagay ng mga salaysay ang pamumuno ni al-Ghafiqi sa isang tunggalian sa hangganan ng Umayyad al-Andalus, Aquitaine, at mga lupain ng Frank. Napatay si al-Ghafiqi sa labanan; ayon sa Oxford, maayos na umatras ang kanyang hukbo. Karaniwang tinatawag ang sagupaan na Labanan sa Tours o Poitiers. Tradisyonal na itinatakda ito sa Oktubre 732, ngunit may mga iskolar na nagmumungkahi ng huling bahagi ng 733 o 734 batay sa kronolohiyang Iberian. Pinagtatalunan din ang eksaktong lugar at ang mas malawak na kahalagahan nito. Kaya hindi itinuturing ng salaysay na ito bilang tiyak ang iisang petsa, bilang ng nasawi, o pahayag na tuluyan nitong tinapos ang presensiyang Muslim sa Kanlurang Europa."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "fil"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Pinamunuan ng gobernador ng Umayyad al-Andalus ang kampanyang tumawid sa Pyrenees patungong Aquitaine; pinagtatalunan ang petsa ng labanan malapit sa Tours."
+shortArticle = true
+intro = [
+  "Nagsilbi si ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi bilang gobernador ng al-Andalus sa ilalim ng mga Umayyad at namuno sa isang malaking ekspedisyon pahilaga ng Pyrenees. Inilalarawan ng mga natitirang salaysay ang ruta at mga sagupaan, ngunit hindi pinatutunayan ang lahat ng sumunod na alamat tungkol sa laki ng labanan.",
+]
+sections = [
+  { "title" = "Ang kampanya sa kabila ng Pyrenees", "paragraphs" = [
+    "Isinalaysay ng isang kronikang Iberian na malapit sa panahong iyon na tumawid ang hukbo ni al-Ghafiqi sa kabundukan ng mga Basque, pumasok sa lupain ng mga Frank, at nakipaglaban kay Duke Eudo ng Aquitaine malapit sa mga ilog ng Garonne at Dordogne. Ayon sa kronika, tumakas si Eudo habang nagpatuloy ang kampanya. Inilalarawan ng makabagong pananaliksik ang pagsulong bilang pananakop sa Aquitaine at itinatala na humingi kalaunan si Eudo ng tulong kay Charles Martel. Nagtagpo ang kanilang mga hukbo sa daan sa pagitan ng Tours at Poitiers. Inilalagay ng mga salaysay ang pamumuno ni al-Ghafiqi sa isang tunggalian sa hangganan ng Umayyad al-Andalus, Aquitaine, at mga lupain ng Frank.",
+    "Napatay si al-Ghafiqi sa labanan; ayon sa Oxford, maayos na umatras ang kanyang hukbo. Karaniwang tinatawag ang sagupaan na Labanan sa Tours o Poitiers. Tradisyonal na itinatakda ito sa Oktubre 732, ngunit may mga iskolar na nagmumungkahi ng huling bahagi ng 733 o 734 batay sa kronolohiyang Iberian. Pinagtatalunan din ang eksaktong lugar at ang mas malawak na kahalagahan nito. Kaya hindi itinuturing ng salaysay na ito bilang tiyak ang iisang petsa, bilang ng nasawi, o pahayag na tuluyan nitong tinapos ang presensiyang Muslim sa Kanlurang Europa."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_ar]
+text = "تذكر مدونة إيبيرية كُتبت بعد الأحداث بوقت قريب أن جيش الغافقي اجتاز مناطق الباسك الجبلية ودخل أراضي الفرنجة، ثم قاتل دوق آكيتين أودو قرب نهري غارون ودوردوني. وتقول المدونة إن أودو فرّ بينما واصلت الحملة تقدمها. وتصف دراسات حديثة هذا التحرك بأنه اجتياح لآكيتين، وتشير إلى أن أودو طلب لاحقاً مساعدة شارل مارتل. والتقى الجيشان على الطريق بين تور وبواتييه. وتضع هذه الروايات قيادة الغافقي ضمن صراع حدودي بين الأندلس الأموية وآكيتين وممالك الفرنجة. قُتل الغافقي في المعركة؛ وتشير دراسة أكسفورد إلى أن جيشه انسحب بانتظام. ويُعرف الاشتباك عادة بمعركة تور أو بواتييه. ويؤرخ التقليد المعركة بأكتوبر 732، لكن بعض الباحثين يرجحون أواخر 733 أو سنة 734 استناداً إلى التسلسل الزمني الإيبيري. كما يظل موقعها الدقيق وأهميتها الأوسع موضع نقاش. لذلك لا يعرض هذا النص تاريخاً واحداً أو أعداداً للقتلى أو القول إن المعركة أنهت نهائياً الوجود الإسلامي في أوروبا الغربية بوصفها حقائق محسومة."
+title = "عبد الرحمن الغافقي"
+lang = "ar"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "قاد والي الأندلس الأموي حملة عبر جبال البرانس إلى آكيتين؛ وما زال تاريخ المعركة قرب تور موضع نقاش."
+shortArticle = true
+intro = [
+  "تولى عبد الرحمن بن عبد الله الغافقي ولاية الأندلس في العصر الأموي، وقاد حملة كبيرة إلى شمال جبال البرانس. وتصف الروايات الباقية مسار الحملة والاشتباكات، لكنها لا تثبت جميع الأساطير اللاحقة عن حجم المعركة.",
+]
+sections = [
+  { "title" = "الحملة عبر جبال البرانس", "paragraphs" = [
+    "تذكر مدونة إيبيرية كُتبت بعد الأحداث بوقت قريب أن جيش الغافقي اجتاز مناطق الباسك الجبلية ودخل أراضي الفرنجة، ثم قاتل دوق آكيتين أودو قرب نهري غارون ودوردوني. وتقول المدونة إن أودو فرّ بينما واصلت الحملة تقدمها. وتصف دراسات حديثة هذا التحرك بأنه اجتياح لآكيتين، وتشير إلى أن أودو طلب لاحقاً مساعدة شارل مارتل. والتقى الجيشان على الطريق بين تور وبواتييه. وتضع هذه الروايات قيادة الغافقي ضمن صراع حدودي بين الأندلس الأموية وآكيتين وممالك الفرنجة.",
+    "قُتل الغافقي في المعركة؛ وتشير دراسة أكسفورد إلى أن جيشه انسحب بانتظام. ويُعرف الاشتباك عادة بمعركة تور أو بواتييه. ويؤرخ التقليد المعركة بأكتوبر 732، لكن بعض الباحثين يرجحون أواخر 733 أو سنة 734 استناداً إلى التسلسل الزمني الإيبيري. كما يظل موقعها الدقيق وأهميتها الأوسع موضع نقاش. لذلك لا يعرض هذا النص تاريخاً واحداً أو أعداداً للقتلى أو القول إن المعركة أنهت نهائياً الوجود الإسلامي في أوروبا الغربية بوصفها حقائق محسومة."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_ja]
+text = "事件に比較的近い時代のイベリア年代記によれば、アル＝ガーフィキーの軍はバスク地方の山地を越えてフランク領へ入り、ガロンヌ川とドルドーニュ川の近くでアキテーヌ公エウドと戦った。年代記はエウドが逃れた後も遠征が続いたと記す。近年の研究はこの進軍をアキテーヌへの侵攻と説明し、エウドが後にシャルル・マルテルへ援軍を求めたことを伝えている。両軍はトゥールとポワティエの間の道で対峙した。こうした記録は、アル＝ガーフィキーの指揮をウマイヤ朝アンダルス、アキテーヌ、フランク諸勢力の境界紛争の中に位置づける。 アル＝ガーフィキーはこの戦いで命を落とした。オックスフォードの研究は、彼の軍が秩序を保って退却したと記す。この戦いは一般にトゥールの戦い、またはポワティエの戦いと呼ばれる。伝統的には732年10月とされるが、イベリアの年代記を根拠に733年末または734年とする研究者もいる。正確な場所や戦いの歴史的意義にも議論がある。そのため本稿では、単一の日付、死傷者数、あるいはこの戦いが西ヨーロッパのイスラム勢力を永久に終わらせたという説を確定した事実として扱わない。また、史料の偏りや年代記の食い違いを考慮し、断定できる範囲を区別する必要がある。"
+title = "アブド・アッラフマーン・アル＝ガーフィキー"
+lang = "ja"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "ウマイヤ朝アンダルスの総督としてピレネーを越えアキテーヌへ遠征した。トゥール近郊の戦いの年代には異説がある。"
+shortArticle = true
+intro = [
+  "アブド・アッラフマーン・イブン・アブドゥッラー・アル＝ガーフィキーは、ウマイヤ朝統治下のアンダルスで総督を務め、ピレネー山脈の北へ大規模な遠征を率いた。現存する記録は進軍経路と戦闘を伝えるが、後世に語られた戦いの規模に関する伝説すべてを裏付けるものではない。",
+]
+sections = [
+  { "title" = "ピレネーを越えた遠征", "paragraphs" = [
+    "事件に比較的近い時代のイベリア年代記によれば、アル＝ガーフィキーの軍はバスク地方の山地を越えてフランク領へ入り、ガロンヌ川とドルドーニュ川の近くでアキテーヌ公エウドと戦った。年代記はエウドが逃れた後も遠征が続いたと記す。近年の研究はこの進軍をアキテーヌへの侵攻と説明し、エウドが後にシャルル・マルテルへ援軍を求めたことを伝えている。両軍はトゥールとポワティエの間の道で対峙した。こうした記録は、アル＝ガーフィキーの指揮をウマイヤ朝アンダルス、アキテーヌ、フランク諸勢力の境界紛争の中に位置づける。",
+    "アル＝ガーフィキーはこの戦いで命を落とした。オックスフォードの研究は、彼の軍が秩序を保って退却したと記す。この戦いは一般にトゥールの戦い、またはポワティエの戦いと呼ばれる。伝統的には732年10月とされるが、イベリアの年代記を根拠に733年末または734年とする研究者もいる。正確な場所や戦いの歴史的意義にも議論がある。そのため本稿では、単一の日付、死傷者数、あるいはこの戦いが西ヨーロッパのイスラム勢力を永久に終わらせたという説を確定した事実として扱わない。また、史料の偏りや年代記の食い違いを考慮し、断定できる範囲を区別する必要がある。"
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_ko]
+text = "사건과 가까운 시기에 작성된 이베리아 연대기는 알가피키의 군대가 바스크 산악 지대를 지나 프랑크 영토로 들어갔고, 가론강과 도르도뉴강 부근에서 아키텐 공작 에우도와 싸웠다고 전한다. 연대기에 따르면 에우도가 달아난 뒤에도 원정은 계속되었다. 현대 연구는 이를 아키텐 침공으로 설명하며, 에우도가 뒤이어 샤를 마르텔에게 도움을 요청했다고 기록한다. 양측 군대는 투르와 푸아티에 사이의 길에서 맞붙었다. 이 기록은 알가피키의 지휘를 우마이야 왕조의 알안달루스, 아키텐, 프랑크 세력 사이의 국경 분쟁 속에 놓는다. 알가피키는 전투에서 전사했다. 옥스퍼드 연구는 그의 군대가 질서를 유지하며 후퇴했다고 설명한다. 이 충돌은 보통 투르 전투 또는 푸아티에 전투라고 불린다. 전통적인 날짜는 732년 10월이지만, 일부 연구자는 이베리아 연대기를 근거로 733년 말이나 734년으로 본다. 정확한 전장과 전투의 더 넓은 의미도 논쟁 중이다. 따라서 이 글은 하나의 날짜나 사상자 수, 혹은 이 전투가 서유럽에서 무슬림 활동을 영구히 끝냈다는 주장을 확정된 사실로 다루지 않는다."
+title = "압드 알라흐만 알가피키"
+lang = "ko"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "우마이야 왕조의 알안달루스 총독으로서 피레네를 넘어 아키텐으로 진군했다. 투르 인근 전투의 연대는 논쟁 중이다."
+shortArticle = true
+intro = [
+  "압드 알라흐만 이븐 압둘라 알가피키는 우마이야 왕조 아래 알안달루스의 총독을 지냈으며 피레네 산맥 북쪽으로 대규모 원정을 이끌었다. 남아 있는 기록은 진군 경로와 전투를 설명하지만, 전투의 규모를 둘러싼 후대의 모든 전설을 입증하지는 않는다.",
+]
+sections = [
+  { "title" = "피레네 산맥을 넘은 원정", "paragraphs" = [
+    "사건과 가까운 시기에 작성된 이베리아 연대기는 알가피키의 군대가 바스크 산악 지대를 지나 프랑크 영토로 들어갔고, 가론강과 도르도뉴강 부근에서 아키텐 공작 에우도와 싸웠다고 전한다. 연대기에 따르면 에우도가 달아난 뒤에도 원정은 계속되었다. 현대 연구는 이를 아키텐 침공으로 설명하며, 에우도가 뒤이어 샤를 마르텔에게 도움을 요청했다고 기록한다. 양측 군대는 투르와 푸아티에 사이의 길에서 맞붙었다. 이 기록은 알가피키의 지휘를 우마이야 왕조의 알안달루스, 아키텐, 프랑크 세력 사이의 국경 분쟁 속에 놓는다.",
+    "알가피키는 전투에서 전사했다. 옥스퍼드 연구는 그의 군대가 질서를 유지하며 후퇴했다고 설명한다. 이 충돌은 보통 투르 전투 또는 푸아티에 전투라고 불린다. 전통적인 날짜는 732년 10월이지만, 일부 연구자는 이베리아 연대기를 근거로 733년 말이나 734년으로 본다. 정확한 전장과 전투의 더 넓은 의미도 논쟁 중이다. 따라서 이 글은 하나의 날짜나 사상자 수, 혹은 이 전투가 서유럽에서 무슬림 활동을 영구히 끝냈다는 주장을 확정된 사실로 다루지 않는다."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.article_al_ghafiqi_zh_cn]
+text = "一部接近事件年代的伊比利亚编年史称，加菲基的军队穿越巴斯克山区，进入法兰克人的领地，并在加龙河和多尔多涅河附近与阿基坦公爵欧多交战。编年史记载欧多逃离后，远征仍继续进行。现代研究将这次行动描述为对阿基坦的入侵，并指出欧多随后向查理·马特尔求援。双方军队在图尔和普瓦捷之间的道路上相遇。这些记载将加菲基的指挥置于倭马亚安达卢斯、阿基坦和法兰克诸势力之间的边境冲突之中，也说明这不是一场与周边政治毫无关系的单独战役。 加菲基在战斗中阵亡；牛津的研究指出，他的军队有秩序地撤退。这场冲突通常称为图尔战役或普瓦捷战役。传统说法将其日期定在732年10月，但一些学者依据伊比利亚年代记录，认为可能发生于733年末或734年。具体战场和这场战斗更广泛的历史意义也仍有争论。因此，本文不把单一日期、伤亡数字，或战斗永久终止穆斯林在西欧活动的说法，当作已经确定的事实。此外，研究者指出，战斗发生后，穆斯林军队仍继续袭扰法兰克领地，所以不能把这场交战写成西欧军事行动的绝对终点。它属于八世纪伊比利亚、阿基坦与法兰克势力彼此竞争的更长历史过程。史料的年代记录、叙述立场和保存状况各不相同，现代研究也会重新比较这些证据。阅读这段历史时，应将可由编年史支持的行动，与后来赋予战役的象征意义分开；这样既能看见阿尔-加菲基所率远征的真实范围，也不会把争论中的解释误当作确定事实。"
+title = "阿卜杜勒-拉赫曼·加菲基"
+lang = "zh"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "这位倭马亚王朝安达卢斯总督越过比利牛斯山远征阿基坦；图尔附近战役的年代仍有争议。"
+shortArticle = true
+intro = [
+  "阿卜杜勒-拉赫曼·伊本·阿卜杜拉·加菲基曾任倭马亚王朝安达卢斯的总督，并率领一支大军越过比利牛斯山向北远征。现存史料记载了行军路线和交战经过，但并不能证实后世有关战役规模的所有传说。",
+]
+sections = [
+  { "title" = "越过比利牛斯山的远征", "paragraphs" = [
+    "一部接近事件年代的伊比利亚编年史称，加菲基的军队穿越巴斯克山区，进入法兰克人的领地，并在加龙河和多尔多涅河附近与阿基坦公爵欧多交战。编年史记载欧多逃离后，远征仍继续进行。现代研究将这次行动描述为对阿基坦的入侵，并指出欧多随后向查理·马特尔求援。双方军队在图尔和普瓦捷之间的道路上相遇。这些记载将加菲基的指挥置于倭马亚安达卢斯、阿基坦和法兰克诸势力之间的边境冲突之中，也说明这不是一场与周边政治毫无关系的单独战役。",
+    "加菲基在战斗中阵亡；牛津的研究指出，他的军队有秩序地撤退。这场冲突通常称为图尔战役或普瓦捷战役。传统说法将其日期定在732年10月，但一些学者依据伊比利亚年代记录，认为可能发生于733年末或734年。具体战场和这场战斗更广泛的历史意义也仍有争论。因此，本文不把单一日期、伤亡数字，或战斗永久终止穆斯林在西欧活动的说法，当作已经确定的事实。此外，研究者指出，战斗发生后，穆斯林军队仍继续袭扰法兰克领地，所以不能把这场交战写成西欧军事行动的绝对终点。它属于八世纪伊比利亚、阿基坦与法兰克势力彼此竞争的更长历史过程。史料的年代记录、叙述立场和保存状况各不相同，现代研究也会重新比较这些证据。阅读这段历史时，应将可由编年史支持的行动，与后来赋予战役的象征意义分开；这样既能看见阿尔-加菲基所率远征的真实范围，也不会把争论中的解释误当作确定事实。"
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
 [leaders.en]
 caesar = "article_958dfa969fd8f92d"
 cleopatra = "article_2d80f84e9d379a2e"
@@ -13638,6 +13860,7 @@ sitting_bull = "article_7f42199f3ba8ddfd"
 matoaka = "article_5a55ad9791296bb9"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_en"
 
 [leaders.es]
 caesar = "article_2d118dcb71e97315"
@@ -13720,6 +13943,7 @@ sitting_bull = "article_7f42199f3ba8ddfd"
 matoaka = "article_5a55ad9791296bb9"
 burebista = "article_f31bb8ed0f8bbdb6"
 boleslaw_ii = "article_0b8c7b7c1bf5207d"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_es"
 
 [leaders.fr]
 caesar = "article_1f320d58da5e1836"
@@ -13802,6 +14026,7 @@ sitting_bull = "article_7f42199f3ba8ddfd"
 matoaka = "article_3eed1e78becc1afb"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_5ba775318ef9fed1"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_fr"
 
 [leaders.de]
 caesar = "article_958dfa969fd8f92d"
@@ -13884,6 +14109,7 @@ sitting_bull = "article_7f42199f3ba8ddfd"
 matoaka = "article_c2d399f3ca8e15f6"
 burebista = "article_c8a3307d1c8331a4"
 boleslaw_ii = "article_fa61c8d15113252a"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_de"
 
 [leaders.it]
 caesar = "article_c0a45f5281cc7699"
@@ -13966,6 +14192,7 @@ sitting_bull = "article_7f42199f3ba8ddfd"
 matoaka = "article_2715496637460c3b"
 burebista = "article_d395fa1dc200d604"
 boleslaw_ii = "article_ebac36937dd75c06"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_it"
 
 [leaders.tr]
 caesar = "article_958dfa969fd8f92d"
@@ -14048,6 +14275,7 @@ sitting_bull = "article_7f42199f3ba8ddfd"
 matoaka = "article_5a55ad9791296bb9"
 burebista = "article_b7a8c875d611df4c"
 boleslaw_ii = "article_ebac36937dd75c06"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_tr"
 
 [leaders.zh-CN]
 caesar = "article_41502e8862c4d0cb"
@@ -14130,6 +14358,7 @@ sitting_bull = "article_7f42199f3ba8ddfd"
 matoaka = "article_235f0593be7f5ffb"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_zh_cn"
 
 [leaders.ja]
 caesar = "article_f8f991956ad63a2d"
@@ -14212,6 +14441,7 @@ sitting_bull = "article_75a5d4a4e2f047fe"
 matoaka = "article_62b0d1b702d9792c"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_ja"
 
 [leaders.ko]
 caesar = "article_958dfa969fd8f92d"
@@ -14294,6 +14524,7 @@ sitting_bull = "article_acf510e75d93d002"
 matoaka = "article_e3ea177ae0b3d362"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_ko"
 
 [leaders.ar]
 caesar = "article_958dfa969fd8f92d"
@@ -14376,6 +14607,7 @@ sitting_bull = "article_168472e2f61b84af"
 matoaka = "article_f8549d6e7bb262f2"
 burebista = "article_a63542510368c748"
 boleslaw_ii = "article_ebac36937dd75c06"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_ar"
 
 [leaders.ru]
 caesar = "article_d2c71771aaca05ea"
@@ -14458,6 +14690,7 @@ sitting_bull = "article_7f42199f3ba8ddfd"
 matoaka = "article_d57c8edaeba408bf"
 burebista = "article_ac662fd078bf91c3"
 boleslaw_ii = "article_39b89fbe687969de"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_ru"
 
 [leaders.vi]
 caesar = "article_cf81c2d30a248557"
@@ -14540,6 +14773,7 @@ sitting_bull = "article_7f42199f3ba8ddfd"
 matoaka = "article_f4e695193bb7690a"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_vi"
 
 [leaders.id]
 caesar = "article_958dfa969fd8f92d"
@@ -14622,6 +14856,7 @@ sitting_bull = "article_7f42199f3ba8ddfd"
 matoaka = "article_5a55ad9791296bb9"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_bf5973d18390907d"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_id"
 
 [leaders.fil]
 caesar = "article_c2c77d5178a1ed5b"
@@ -14704,6 +14939,7 @@ sitting_bull = "article_7f42199f3ba8ddfd"
 matoaka = "article_5a55ad9791296bb9"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_fil"
 
 [leaders.pt-BR]
 caesar = "article_5feff0b7dce369c5"
@@ -14786,3 +15022,4 @@ sitting_bull = "article_7f42199f3ba8ddfd"
 matoaka = "article_243adee95405a892"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
+abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_pt_br"

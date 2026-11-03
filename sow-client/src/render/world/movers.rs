@@ -9,6 +9,8 @@ const NUKE_ARC_SAMPLES: usize = 128;
 const NUKE_CURVE_MIN_SAMPLES: usize = 64;
 const NUKE_CURVE_MAX_SAMPLES: usize = 4096;
 const MIN_TRANSPORT_SCREEN_PX: f32 = 12.0;
+const FLEET_LOCATE_DURATION_SECS: f32 = 3.0;
+const FLEET_LOCATE_RING_SEGMENTS: usize = 24;
 
 #[inline]
 pub fn world_to_tile(wx: f32, wy: f32) -> (i32, i32) {
@@ -227,6 +229,16 @@ fn in_viewport(sx: f32, sy: f32, min_sx: f32, min_sy: f32, max_sx: f32, max_sy: 
     sx >= min_sx && sx <= max_sx && sy >= min_sy && sy <= max_sy
 }
 
+fn locate_highlight_color(color: [f32; 4], intensity: f32) -> [f32; 4] {
+    let amount = intensity.clamp(0.0, 1.0) * 0.35;
+    [
+        color[0] + (1.0 - color[0]) * amount,
+        color[1] + (1.0 - color[1]) * amount,
+        color[2] + (1.0 - color[2]) * amount,
+        color[3] + (1.0 - color[3]) * amount,
+    ]
+}
+
 #[derive(Clone, Copy)]
 struct MoverSlot {
     prev_x: f32,
@@ -256,6 +268,7 @@ pub struct MoverScene {
     last_snap_tick: u64,
     last_curve_tuning: [u32; 3],
     map_w: u32,
+    located_fleet: Option<(u64, web_time::Instant)>,
 }
 
 pub struct MoverPackParams<'a> {
@@ -283,7 +296,12 @@ impl MoverScene {
             last_snap_tick: u64::MAX,
             last_curve_tuning: [0; 3],
             map_w: 1,
+            located_fleet: None,
         }
+    }
+
+    pub fn highlight_fleet(&mut self, fleet_id: u64) {
+        self.located_fleet = Some((fleet_id, web_time::Instant::now()));
     }
 
     pub fn on_snapshot(
@@ -693,6 +711,13 @@ impl MoverScene {
         let sam_scale = setting("mover.sam.scale", 1.0);
         renderer.begin_frame();
         let mut arc_scratch = std::mem::take(&mut self.arc_scratch);
+        let located_fleet = self.located_fleet.as_ref().and_then(|(fleet_id, started)| {
+            let elapsed = started.elapsed().as_secs_f32();
+            (elapsed < FLEET_LOCATE_DURATION_SECS).then_some((*fleet_id, elapsed))
+        });
+        if located_fleet.is_none() {
+            self.located_fleet = None;
+        }
 
         for (id, &idx) in &self.id_to_idx {
             arc_scratch.clear();
@@ -760,6 +785,19 @@ impl MoverScene {
             if minimum_screen_size > 0.0 && sprite_size * params.camera_zoom < minimum_screen_size {
                 sprite_size = minimum_screen_size / params.camera_zoom;
             }
+            let locate_age = located_fleet
+                .filter(|(fleet_id, _)| slot.is_fleet && fleet_id == id)
+                .map(|(_, age)| age);
+            let locate_pulse = locate_age
+                .map(|age| 0.5 + 0.5 * (age * std::f32::consts::TAU * 1.2).sin())
+                .unwrap_or(0.0);
+            let locate_strength = locate_age
+                .map(|age| {
+                    (1.0 - age / FLEET_LOCATE_DURATION_SECS).clamp(0.0, 1.0)
+                        * (0.7 + 0.3 * locate_pulse)
+                })
+                .unwrap_or(0.0);
+            sprite_size *= 1.0 + locate_strength * 0.08;
 
             let sx = params.camera_x + wx * params.camera_zoom;
             let sy = params.camera_y + world_pos[1] * params.camera_zoom;
@@ -825,12 +863,35 @@ impl MoverScene {
                         trail_points,
                         world_pos,
                         trail_width,
-                        slot.trail_color,
+                        locate_highlight_color(slot.trail_color, locate_strength),
                         slot.is_fleet,
                         trail_length,
                         tail_fade,
                     );
                 }
+            }
+
+            if locate_strength > 0.02 {
+                let radius = sprite_size * (0.78 + locate_pulse * 0.16);
+                for segment in 0..FLEET_LOCATE_RING_SEGMENTS {
+                    let angle = std::f32::consts::TAU * segment as f32
+                        / FLEET_LOCATE_RING_SEGMENTS as f32;
+                    arc_scratch.push([
+                        wx + angle.cos() * radius,
+                        wy + angle.sin() * radius,
+                    ]);
+                }
+                let ring_head = arc_scratch[0];
+                self.push_trail_segments(
+                    renderer,
+                    &arc_scratch,
+                    ring_head,
+                    1.2 + locate_strength,
+                    [1.0, 0.92, 0.68, 0.72 * locate_strength],
+                    false,
+                    1.0,
+                    1.0,
+                );
             }
 
             if !params.sprites_enabled || !sprite_visible {
@@ -871,7 +932,7 @@ impl MoverScene {
                 world_pos: [wx, wy],
                 size: sprite_size,
                 rotation,
-                color: slot.color,
+                color: locate_highlight_color(slot.color, locate_strength),
                 uv_rect: slot.sprite.uv_rect(),
                 height: 0.0,
             });

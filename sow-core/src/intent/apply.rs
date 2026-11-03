@@ -313,6 +313,41 @@ impl SowEngine {
         }
     }
 
+    /// Allies and teammates may move gold and troops to each other. Send, Request and
+    /// Accept all ask this one question, so a broken alliance also voids a pending request.
+    pub(crate) fn resources_can_move(&self, payer: u16, receiver: u16) -> bool {
+        let (Some(payer_player), Some(receiver_player)) =
+            (self.state.player(payer), self.state.player(receiver))
+        else {
+            return false;
+        };
+        payer != receiver
+            && payer_player.alive
+            && receiver_player.alive
+            && (payer_player.alliances.contains(&receiver)
+                || (payer_player.team.is_some() && payer_player.team == receiver_player.team))
+    }
+
+    /// Gold the payer can give now: the requested amount, capped at what it holds.
+    fn gold_transferable(&self, payer: u16, requested: f64) -> f64 {
+        let held = self.state.player(payer).map_or(0.0, |p| p.gold.max(0.0));
+        requested.max(0.0).min(held)
+    }
+
+    /// Troops the payer can give the receiver now. The payer keeps one troop and the
+    /// receiver never goes past its max, so whatever does not fit stays with the payer.
+    fn troops_transferable(&self, payer: u16, receiver: u16, requested: f64) -> f64 {
+        let spare = self
+            .state
+            .player(payer)
+            .map_or(0.0, |p| (p.troops - 1.0).max(0.0));
+        let room = self
+            .state
+            .player(receiver)
+            .map_or(0.0, |p| (p.max_troops - p.troops).max(0.0));
+        requested.max(0.0).min(spare).min(room)
+    }
+
     pub fn apply_stamped_intent(&mut self, stamped: &StampedIntent, intent_index: u32) {
         if self.state.config.ranked_1v1 {
             let target = match &stamped.intent {
@@ -720,38 +755,11 @@ impl SowEngine {
                 let target = *target_player;
                 let g = *gold;
                 let t = *troops;
-                let is_allied = self
-                    .state
-                    .player(sender)
-                    .map(|p| {
-                        p.alliances.contains(&target)
-                            || (p.team.is_some()
-                                && p.team == self.state.player(target).and_then(|t| t.team))
-                    })
-                    .unwrap_or(false);
-                let sender_alive = self.state.player(sender).is_some_and(|p| p.alive);
-                let target_alive = self.state.player(target).is_some_and(|p| p.alive);
                 let valid_amounts = (g > 0.0 || t > 0.0) && g.is_finite() && t.is_finite();
-                if sender != target && is_allied && sender_alive && target_alive && valid_amounts {
-                    let target_troop_room = self
-                        .state
-                        .player(target)
-                        .map(|player| (player.max_troops - player.troops).max(0.0))
-                        .unwrap_or(0.0);
-                    let mut actual_g = 0.0;
-                    let mut actual_t = 0.0;
+                if valid_amounts && self.resources_can_move(sender, target) {
+                    let actual_g = self.gold_transferable(sender, g);
+                    let actual_t = self.troops_transferable(sender, target, t);
                     if let Some(s_player) = self.state.player_mut(sender) {
-                        actual_g = if g > 0.0 {
-                            g.min(s_player.gold.max(0.0))
-                        } else {
-                            0.0
-                        };
-                        let max_t_to_send = (s_player.troops - 1.0).max(0.0);
-                        actual_t = if t > 0.0 {
-                            t.min(max_t_to_send).min(target_troop_room)
-                        } else {
-                            0.0
-                        };
                         s_player.gold -= actual_g;
                         s_player.troops -= actual_t;
                     }
@@ -800,28 +808,25 @@ impl SowEngine {
             } => {
                 let proposer = stamped.player_id;
                 let target = *target_player;
-                let g = *gold;
-                let t = *troops;
-                if proposer != target && (g > 0.0 || t > 0.0) && !g.is_nan() && !t.is_nan() {
-                    let proposer_alive = self
-                        .state
-                        .player(proposer)
-                        .map(|p| p.alive)
-                        .unwrap_or(false);
-                    let target_alive = self.state.player(target).map(|p| p.alive).unwrap_or(false);
-                    if proposer_alive && target_alive {
-                        // Clear any existing request between these two
-                        self.resource_requests_proposed
-                            .retain(|r| !(r.proposer == proposer && r.target == target));
-                        self.resource_requests_proposed.push(
-                            crate::engine::ResourceRequestProposed {
-                                proposer,
-                                target,
-                                gold: g,
-                                troops: t,
-                            },
-                        );
-                    }
+                // Only what the target can pay now and the proposer can hold, so the
+                // request shows the amount that will actually move.
+                let g = self.gold_transferable(target, *gold);
+                let t = self.troops_transferable(target, proposer, *troops);
+                if (g > 0.0 || t > 0.0)
+                    && self.resources_can_move(proposer, target)
+                    && self.can_send_resource_request(proposer, target)
+                {
+                    // Clear any existing request between these two
+                    self.resource_requests_proposed
+                        .retain(|r| !(r.proposer == proposer && r.target == target));
+                    self.resource_requests_proposed
+                        .push(crate::engine::ResourceRequestProposed {
+                            proposer,
+                            target,
+                            gold: g,
+                            troops: t,
+                        });
+                    self.mark_resource_request_cooldown(proposer, target);
                 }
             }
             GameplayIntent::AcceptResourceRequest { target_player } => {
@@ -833,44 +838,21 @@ impl SowEngine {
                     .position(|r| r.proposer == target && r.target == acceptor)
                 {
                     let req = self.resource_requests_proposed.remove(pos);
-                    if !self
-                        .state
-                        .player(acceptor)
-                        .is_some_and(|player| player.alive)
-                        || !self.state.player(target).is_some_and(|player| player.alive)
-                    {
+                    if !self.resources_can_move(acceptor, target) {
                         return;
                     }
-                    let mut actual_g = 0.0;
-                    let mut actual_t = 0.0;
-                    let mut acceptor_ok = false;
-                    // Acceptor pays the resources
-                    if let Some(acc_player) = self.state.player_mut(acceptor)
-                        && acc_player.alive
-                    {
-                        actual_g = if req.gold > 0.0 {
-                            req.gold.min(acc_player.gold.max(0.0))
-                        } else {
-                            0.0
-                        };
-                        let max_t_to_send = (acc_player.troops - 1.0).max(0.0);
-                        actual_t = if req.troops > 0.0 {
-                            req.troops.min(max_t_to_send)
-                        } else {
-                            0.0
-                        };
+                    // The acceptor pays only what fits; the rest stays with the acceptor.
+                    let actual_g = self.gold_transferable(acceptor, req.gold);
+                    let actual_t = self.troops_transferable(acceptor, target, req.troops);
+                    if let Some(acc_player) = self.state.player_mut(acceptor) {
                         acc_player.gold -= actual_g;
                         acc_player.troops -= actual_t;
-                        acceptor_ok = true;
                     }
-                    // Proposer receives the resources
-                    if acceptor_ok
-                        && (actual_g > 0.0 || actual_t > 0.0)
+                    if (actual_g > 0.0 || actual_t > 0.0)
                         && let Some(prop_player) = self.state.player_mut(target)
-                        && prop_player.alive
                     {
                         prop_player.credit_gold(actual_g);
-                        prop_player.credit_troops_capped(actual_t, prop_player.max_troops);
+                        prop_player.credit_troops(actual_t);
                     }
                 }
             }
@@ -1069,6 +1051,7 @@ mod tests {
                 player.gold = 100.0;
                 player.troops = 100.0;
                 player.max_troops = 1_000.0;
+                player.alliances.push(if id == 1 { 2 } else { 1 });
                 state.register_player(player);
             }
             let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
@@ -1127,6 +1110,7 @@ mod tests {
                 state.register_player(Player::new_human(id, format!("P{id}"), [1.0; 3], &config));
             }
             let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+            engine.state.player_mut(1).unwrap().alliances.push(2);
             engine.apply_stamped_intent(&StampedIntent {
                 player_id: 1,
                 intent: GameplayIntent::RequestResources { target_player: 2, gold: 20.0, troops: 0.0 },
@@ -1240,5 +1224,152 @@ mod tests {
 
         assert_eq!(engine.state.player(1).unwrap().gold, -25.0);
         assert_eq!(engine.state.player(2).unwrap().gold, 80.0);
+    }
+
+    #[test]
+    fn requests_keep_only_what_the_payer_can_give_and_the_proposer_can_hold() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 4, 4, config.clone());
+        let mut proposer = Player::new_human(1, "Proposer".into(), [1.0; 3], &config);
+        proposer.troops = 90.0;
+        proposer.max_troops = 100.0;
+        proposer.alliances.push(2);
+        let mut payer = Player::new_human(2, "Payer".into(), [0.5; 3], &config);
+        payer.gold = 30.0;
+        payer.troops = 50.0;
+        payer.max_troops = 1_000.0;
+        payer.alliances.push(1);
+        state.register_player(proposer);
+        state.register_player(payer);
+        let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::RequestResources {
+                    target_player: 2,
+                    gold: 100.0,
+                    troops: 100.0,
+                },
+            },
+            0,
+        );
+
+        let request = &engine.resource_requests_proposed[0];
+        assert_eq!((request.gold, request.troops), (30.0, 10.0));
+    }
+
+    #[test]
+    fn accepted_request_moves_only_what_fits_and_the_payer_keeps_the_rest() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 4, 4, config.clone());
+        let mut proposer = Player::new_human(1, "Proposer".into(), [1.0; 3], &config);
+        proposer.troops = 90.0;
+        proposer.max_troops = 100.0;
+        proposer.alliances.push(2);
+        let mut payer = Player::new_human(2, "Payer".into(), [0.5; 3], &config);
+        payer.troops = 100.0;
+        payer.max_troops = 1_000.0;
+        payer.alliances.push(1);
+        state.register_player(proposer);
+        state.register_player(payer);
+        let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+        engine
+            .resource_requests_proposed
+            .push(crate::engine::ResourceRequestProposed {
+                proposer: 1,
+                target: 2,
+                gold: 0.0,
+                troops: 50.0,
+            });
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 2,
+                intent: GameplayIntent::AcceptResourceRequest { target_player: 1 },
+            },
+            0,
+        );
+
+        assert_eq!(engine.state.player(1).unwrap().troops, 100.0);
+        assert_eq!(engine.state.player(2).unwrap().troops, 90.0);
+        assert!(engine.resource_requests_proposed.is_empty());
+    }
+
+    #[test]
+    fn resource_request_cooldown_limits_repeat_requests_between_the_same_pair() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 4, 4, config.clone());
+        for id in 1..=2 {
+            let mut player = Player::new_human(id, format!("Player {id}"), [1.0; 3], &config);
+            player.alliances.push(if id == 1 { 2 } else { 1 });
+            state.register_player(player);
+        }
+        let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+        let request = StampedIntent {
+            player_id: 1,
+            intent: GameplayIntent::RequestResources {
+                target_player: 2,
+                gold: 20.0,
+                troops: 0.0,
+            },
+        };
+
+        engine.apply_stamped_intent(&request, 0);
+        engine.resource_requests_proposed.clear();
+        engine.apply_stamped_intent(&request, 1);
+        assert!(engine.resource_requests_proposed.is_empty());
+
+        engine.state.tick += u64::from(crate::diplomacy::RESOURCE_REQUEST_COOLDOWN_TICKS);
+        engine.apply_stamped_intent(&request, 2);
+        assert_eq!(engine.resource_requests_proposed.len(), 1);
+    }
+
+    #[test]
+    fn broken_alliance_hides_and_voids_a_pending_request() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 4, 4, config.clone());
+        for id in 1..=2 {
+            let mut player = Player::new_human(id, format!("Player {id}"), [1.0; 3], &config);
+            player.troops = 100.0;
+            player.max_troops = 1_000.0;
+            player.alliances.push(if id == 1 { 2 } else { 1 });
+            state.register_player(player);
+        }
+        let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::RequestResources {
+                    target_player: 2,
+                    gold: 20.0,
+                    troops: 10.0,
+                },
+            },
+            0,
+        );
+        assert_eq!(engine.resource_requests_proposed.len(), 1);
+
+        for id in 1..=2 {
+            engine.state.player_mut(id).unwrap().alliances.clear();
+        }
+        let snapshot = engine.build_snapshot();
+        assert!(
+            snapshot
+                .players
+                .iter()
+                .all(|p| p.resource_requests.is_empty())
+        );
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 2,
+                intent: GameplayIntent::AcceptResourceRequest { target_player: 1 },
+            },
+            1,
+        );
+        assert!(engine.resource_requests_proposed.is_empty());
+        assert_eq!(engine.state.player(1).unwrap().troops, 100.0);
+        assert_eq!(engine.state.player(2).unwrap().troops, 100.0);
     }
 }

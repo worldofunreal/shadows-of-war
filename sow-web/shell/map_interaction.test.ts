@@ -146,7 +146,9 @@ test("primary click selects owned buildings without changing other map gestures"
     const actionBody = mapClick.slice(actionStart, actionEnd);
     assert.match(actionBody, /menu\.session != session \|\| menu\.tile_idx != tile_idx/);
     assert.match(actionBody, /!self\.map_menu_actions\(tile_idx\)\.contains\(&action\)/);
-    assert.match(actionBody, /MapMenuAction::Transfer => \{\s*self\.open_transfer_from_tile\(tile_idx\);/);
+    assert.match(actionBody, /MapMenuAction::Send => \{\s*self\.open_transfer_from_tile\(tile_idx, TransferMode::Send\);/);
+    assert.match(actionBody, /MapMenuAction::Request => \{\s*self\.open_transfer_from_tile\(tile_idx, TransferMode::Request\);/);
+    assert.match(actionBody, /MapMenuAction::RequestAllies => \{\s*if let Ok\(intents\) = self\.ally_resource_requests\(\)/);
 });
 
 test("out-of-range primary clicks reuse fleet routing and report full capacity", () => {
@@ -271,7 +273,8 @@ test("radial and HUD icons use one concept-based visual contract", () => {
         spawn: "spawn",
         attack: "attack",
         fleet: "fleet",
-        transfer: "transfer",
+        send: "send",
+        request: "request",
         nuke: "nuke",
     }))
         assert.equal(config.mapActionLabels[action].icon, icon);
@@ -648,17 +651,17 @@ test("ring slots stay fixed per action and leave notches for inapplicable ones",
         "-",
         "-",
     ]);
-    // Ally: same positions for shared actions.
-    assert.deepEqual(ids(act("transfer", "attack", "fleet", "alliance")), [
+    // Ally: same positions for shared actions; Send and Request share the right-hand side.
+    assert.deepEqual(ids(act("send", "request", "attack", "fleet", "alliance")), [
         "attack",
         "fleet",
         "-",
         "alliance",
-        "transfer",
-        "-",
+        "send",
+        "request",
     ]);
     // Teammate: a single action never becomes a 360° slice.
-    assert.deepEqual(ids(act("transfer")), ["-", "-", "-", "-", "transfer", "-"]);
+    assert.deepEqual(ids(act("send", "request")), ["-", "-", "-", "-", "send", "request"]);
     // Own empty tile: Build is the primary slot, Emote keeps 300°.
     assert.deepEqual(ids(act("emote", "build_city", "build_port")), [
         "group:build",
@@ -675,6 +678,15 @@ test("ring slots stay fixed per action and leave notches for inapplicable ones",
         "-",
         "-",
         "-",
+        "group:emote",
+    ]);
+    // Own territory: Request allies takes the trade slot while Build and Emote keep theirs.
+    assert.deepEqual(ids(act("emote", "build_city", "request_allies")), [
+        "group:build",
+        "-",
+        "-",
+        "-",
+        "request_allies",
         "group:emote",
     ]);
     assert.deepEqual(ids(act("spawn")), ["spawn", "-", "-", "-", "-", "-"]);

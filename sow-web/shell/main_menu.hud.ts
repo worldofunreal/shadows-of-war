@@ -1,4 +1,9 @@
-import { setAvatarPortrait } from "./avatar-presentation.ts";
+import {
+    avatarAssetUrl,
+    avatarPortraitPath,
+    loadAvatarImage,
+    setAvatarPortrait,
+} from "./avatar-presentation.ts";
 import { renderLocaleSettingRow } from "./main_menu.settings.ts";
 import { syncDropdownScope } from "./sow-dropdown.ts";
 import type {
@@ -175,6 +180,12 @@ type HudRefs = {
     transferReturnFocus: HTMLElement | null;
     transferGold: HTMLInputElement;
     transferTroops: HTMLInputElement;
+    transferHint: HTMLElement;
+    transferSend: HTMLButtonElement;
+    transferRequest: HTMLButtonElement;
+    transferStockTroops: HTMLElement;
+    transferStockMaxTroops: HTMLElement;
+    transferStockGold: HTMLElement;
     transferIdentity: PlayerIdentityParts;
     betrayal: HTMLElement;
     betrayalTarget: HTMLElement;
@@ -280,6 +291,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     let hudInitialized = false;
     let hudRefs: ReturnType<typeof createHudRefs> | null = null;
     let leaderboardRows: Record<string, LeaderboardRow> = Object.create(null);
+    // When we may ask each target again: the same ~10s the server enforces per pair.
+    const TRANSFER_REQUEST_COOLDOWN_MS = 10_000;
+    const transferRequestReadyAt: Record<number, number> = Object.create(null);
     let leaderboardRenderKey = "";
     let leaderboardFilterQuery = "";
     let pendingCounterAttacks: Record<string, number> = Object.create(null);
@@ -622,10 +636,20 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         leave: '<path d="M13 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6M11 16l4-4-4-4M15 12H3"/>',
         camera: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
         tools: '<path d="M15 5a4.5 4.5 0 0 0-6 6.2L3.5 16.7a1.8 1.8 0 0 0 2.5 2.5L11.5 13.7A4.5 4.5 0 0 0 17.7 8L15 10.7l-2-2L15.7 6A4.5 4.5 0 0 0 15 5Z"/>',
+        retreat: '<path d="M9 14 4 9l5-5M4 9h8a7 7 0 0 1 7 7v2"/>',
         spawn: '<path d="M5 21V4m1 1h12l-3 4 3 4H6"/>',
         attack: '<path d="m5 4 14 16M19 4 5 20M3 6l3-3 3 3M15 18l3 3 3-3M3 18l3 3 3-3M15 6l3-3 3 3"/>',
         fleet: '<path d="M3 15h18l-3 5H7l-4-5ZM6 12l6-9 6 9M12 3v12M2 21c2 1 3 1 5 0s3-1 5 0 3 1 5 0 3-1 5 0"/>',
         transfer: '<path d="M4 7h15l-3-3M20 17H5l3 3M19 7l-3 3M5 17l3-3"/>',
+        // Filled send glyph: Wikimedia Commons "Send icon.svg" (CC0 1.0, by Lycopene579), recolored to currentColor.
+        send:
+            '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+            '<path fill-rule="evenodd" d="M16.6915026,12.4744748 L3.50612381,13.2599618 C3.19218622,13.2599618 3.03521743,13.4170592 3.03521743,13.5741566 L1.15159189,20.0151496 C0.8376543,20.8006365 0.99,21.89 1.77946707,22.52 C2.41,22.99 3.50612381,23.1 4.13399899,22.8429026 L21.714504,14.0454487 C22.6563168,13.5741566 23.1272231,12.6315722 22.9702544,11.6889879 C22.8132856,11.0605983 22.3423792,10.4322088 21.714504,10.118014 L4.13399899,1.16346272 C3.34915502,0.9 2.40734225,1.00636533 1.77946707,1.4776575 C0.994623095,2.10604706 0.8376543,3.0486314 1.15159189,3.99121575 L3.03521743,10.4322088 C3.03521743,10.5893061 3.34915502,10.7464035 3.50612381,10.7464035 L16.6915026,11.5318905 C16.6915026,11.5318905 17.1624089,11.5318905 17.1624089,12.0031827 C17.1624089,12.4744748 16.6915026,12.4744748 16.6915026,12.4744748 Z"/>' +
+            "</svg>",
+        // Question bubble for requests, drawn as a line glyph like the other actions.
+        request:
+            '<path d="M5 3h14a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3h-7l-4.5 4v-4H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z"/>' +
+            '<path d="M9.5 8.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5v.4M12 15.2h.01"/>',
         city: '<path d="M3 21h18M5 21V10l7-6 7 6v11M9 21v-6h6v6"/>',
         nuke: '<path d="M12 22V9M9 12l3-3 3 3M12 9l5-5M17 4h4M17 4V1M7 21h10M9 18h6"/>',
         upgrade: '<path d="m12 3 2.2 5.2L20 10l-4.4 3.5L17 19l-5-3-5 3 1.4-5.5L4 10l5.8-1.8L12 3Z"/>',
@@ -644,6 +668,78 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
         solo: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
     };
+
+    function transferPresetButtons(resource: string): string {
+        return (
+            '<div class="sow-hud__transfer-presets">' +
+            ["25", "50", "max"]
+                .map(function (percent) {
+                    return (
+                        '<button class="sow-hud__transfer-preset" type="button" data-command="set_transfer_amount" data-resource="' +
+                        resource +
+                        '" data-percent="' +
+                        percent +
+                        '">' +
+                        (percent === "max" ? SOW_t("hud.max") : percent + "%") +
+                        "</button>"
+                    );
+                })
+                .join("") +
+            "</div>"
+        );
+    }
+
+    type TransferSide = "send" | "request";
+    type TransferOffer = NonNullable<MenuHudPayload["transfer"]>;
+
+    function wholeAmount(value: number): number {
+        return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+    }
+
+    // The side the panel acts on: the radial's pick, else the stronger army leads.
+    function transferSide(offer: TransferOffer, own: MenuHudPayload): TransferSide {
+        if (offer.mode) return offer.mode;
+        return Number(own.troops) >= Number(offer.target_troops) ? "send" : "request";
+    }
+
+    // The server's caps for one side: the payer keeps one troop, and a receiver takes only its room.
+    function transferCaps(side: TransferSide, offer: TransferOffer, own: MenuHudPayload) {
+        const send = side === "send";
+        const room = send
+            ? Number(offer.target_max_troops) - Number(offer.target_troops)
+            : Number(own.max_troops) - Number(own.troops);
+        return {
+            troops: wholeAmount(Math.min(Number(send ? own.troops : offer.target_troops) - 1, room)),
+            gold: wholeAmount(Number(send ? own.gold : offer.target_gold)),
+        };
+    }
+
+    // A preset is a share of the stock on the side being sized, never more than that side can move.
+    function transferPresetAmount(
+        resource: "troops" | "gold",
+        percent: string,
+        offer: TransferOffer,
+        own: MenuHudPayload,
+    ): number {
+        const side = transferSide(offer, own);
+        const cap = transferCaps(side, offer, own)[resource];
+        if (percent === "max") return cap;
+        const stock =
+            side === "send"
+                ? { troops: own.troops, gold: own.gold }
+                : { troops: offer.target_troops, gold: offer.target_gold };
+        return Math.min(cap, wholeAmount((Number(stock[resource]) * Number(percent)) / 100));
+    }
+
+    // Why a side cannot send right now, or null when its button is live.
+    function transferBlockReason(side: TransferSide, offer: TransferOffer, own: MenuHudPayload): string | null {
+        const waitMs = side === "request" ? (transferRequestReadyAt[offer.target_id] || 0) - Date.now() : 0;
+        if (waitMs > 0) return SOW_t("hud.transfer_request_cooldown");
+        const caps = transferCaps(side, offer, own);
+        if (!offer.target_alive || (caps.troops === 0 && caps.gold === 0))
+            return SOW_t(side === "send" ? "hud.transfer_blocked_send" : "hud.transfer_blocked_request");
+        return null;
+    }
 
     function hudIcon(name: string, cls?: string): string {
         const glyph = HUD_GLYPHS[BUILDING_GLYPHS[name] || name];
@@ -870,10 +966,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
 
     function formatNameplateTroops(value: number | string | null | undefined): string {
-        const count = Math.max(0, Math.floor(Number(value) || 0));
-        if (count < 100000) return count.toLocaleString();
-        const useMillions = count >= 999950;
-        return (count / (useMillions ? 1000000 : 1000)).toFixed(1) + (useMillions ? "M" : "K");
+        let count = Number(value);
+        if (!Number.isFinite(count)) return "0";
+        const rounded = Math.round(count);
+        if (Math.abs(count - rounded) < 1e-3) count = rounded;
+        count = Math.max(0, count);
+        if (count >= 10000000) return (Math.floor(count / 100000) / 10).toFixed(1) + "M";
+        if (count >= 1000000) return (Math.floor(count / 10000) / 100).toFixed(2) + "M";
+        if (count >= 100000) return Math.floor(count / 1000) + "K";
+        if (count >= 10000) return (Math.floor(count / 100) / 10).toFixed(1) + "K";
+        if (count >= 1000) return (Math.floor(count / 10) / 100).toFixed(2) + "K";
+        return String(Math.round(count));
     }
 
     function formatHudMetric(value: number | string | null | undefined): string {
@@ -1015,6 +1118,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             const onViewportChange = function () {
                 const hudScreen = measureHudScreen();
                 syncCompactHudBounds(hudScreen);
+                if (hudState && hudState.phase === "Playing" && hudState.hud)
+                    renderPlacementPanel(hudState.hud.building_placement);
                 renderNotifications([], false, hudScreen);
                 scheduleNotificationPlacement();
             };
@@ -1146,6 +1251,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             transferReturnFocus: null,
             transferGold: requiredHudInput("sow-hud-transfer-gold"),
             transferTroops: requiredHudInput("sow-hud-transfer-troops"),
+            transferHint: requiredHudElement("sow-hud-transfer-hint"),
+            transferSend: requiredHudButton("sow-hud-transfer-send"),
+            transferRequest: requiredHudButton("sow-hud-transfer-request"),
+            transferStockTroops: requiredHudElement("sow-hud-transfer-stock-troops"),
+            transferStockMaxTroops: requiredHudElement("sow-hud-transfer-stock-max-troops"),
+            transferStockGold: requiredHudElement("sow-hud-transfer-stock-gold"),
             transferIdentity: createPlayerIdentity(),
             betrayal: requiredHudElement("sow-hud-betrayal-modal"),
             betrayalTarget: requiredHudElement("sow-hud-betrayal-target"),
@@ -1578,23 +1689,43 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '">✕</button></div>' +
             '  <div class="sow-hud__dialog-body">' +
             '  <div class="sow-hud__dialog-participant" id="sow-hud-transfer-target"></div>' +
+            '  <p class="sow-hud__transfer-stock">' +
+            '<span class="sow-hud__transfer-stock-item">' +
+            hudIcon("troops", "sow-hud__inline-icon") +
+            '<b id="sow-hud-transfer-stock-troops">0</b><small>/ <span id="sow-hud-transfer-stock-max-troops">0</span></small></span>' +
+            '<span class="sow-hud__transfer-stock-item"><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' +
+            currencyAsset("gold") +
+            '" alt=""><b id="sow-hud-transfer-stock-gold">0</b></span>' +
+            "</p>" +
             '  <div class="sow-hud__transfer-fields">' +
-            "    <label><span>" +
+            '    <div class="sow-hud__transfer-field"><label><span>' +
             hudIcon("troops", "sow-hud__inline-icon") +
             SOW_t("hud.troops") +
             '</span><input id="sow-hud-transfer-troops" type="number" inputmode="numeric" min="0" step="1" value="0"></label>' +
-            '    <label><span><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' +
+            transferPresetButtons("troops") +
+            "</div>" +
+            '    <div class="sow-hud__transfer-field"><label><span><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' +
             currencyAsset("gold") +
             '" alt="">' +
             SOW_t("hud.gold") +
             '</span><input id="sow-hud-transfer-gold" type="number" inputmode="numeric" min="0" step="1" value="0"></label>' +
+            transferPresetButtons("gold") +
+            "</div>" +
             "  </div>" +
             "  </div>" +
-            '  <div class="sow-hud__transfer-actions"><button class="sow-hud__transfer-send" type="button" data-command="send_resources"><span>' +
+            '  <p class="sow-hud__transfer-hint" id="sow-hud-transfer-hint" aria-live="polite" hidden></p>' +
+            '  <div class="sow-hud__transfer-actions">' +
+            '<button class="sow-hud__transfer-cta sow-hud__transfer-send" id="sow-hud-transfer-send" type="button" data-command="send_resources">' +
+            hudIcon("send", "sow-hud__cta-icon") +
+            "<span>" +
             SOW_t("hud.send") +
-            '</span><span aria-hidden="true">→</span></button><button class="sow-hud__transfer-request" type="button" data-command="request_resources">' +
+            "</span></button>" +
+            '<button class="sow-hud__transfer-cta sow-hud__transfer-request" id="sow-hud-transfer-request" type="button" data-command="request_resources">' +
+            hudIcon("request", "sow-hud__cta-icon") +
+            "<span>" +
             SOW_t("hud.request") +
-            "</button></div>" +
+            "</span></button>" +
+            "</div>" +
             "</aside>" +
             '<div class="sow-hud__modal-backdrop sow-hud__betrayal-backdrop hidden" id="sow-hud-betrayal-modal">' +
             '  <section class="sow-hud__dialog sow-hud__betrayal" role="dialog" aria-modal="true" aria-labelledby="sow-hud-betrayal-title" aria-describedby="sow-hud-betrayal-copy">' +
@@ -1971,7 +2102,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         spawn: { icon: "spawn", key: "hud.map_action_deploy" },
         attack: { icon: "attack", key: "hud.map_action_attack" },
         fleet: { icon: "fleet", key: "hud.map_action_fleet" },
-        transfer: { icon: "transfer", key: "hud.map_action_transfer" },
+        send: { icon: "send", key: "hud.map_action_send" },
+        request: { icon: "request", key: "hud.map_action_request" },
+        request_allies: { icon: "request", key: "hud.map_action_request_allies" },
         alliance: { status: "allied", key: "hud.map_action_alliance" },
         build_city: { key: "hud.map_action_city" },
         build_factory: { key: "hud.map_action_factory" },
@@ -2073,6 +2206,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             cost: Math.ceil(item.cost).toLocaleString(),
             available: Math.floor(Number(availableGold) || 0).toLocaleString(),
         });
+    }
+
+    function formatAllianceCountdown(value: number): string {
+        const seconds = Math.max(0, Math.ceil(value));
+        const minutesText = String(Math.floor(seconds / 60)).padStart(2, "0");
+        const secondsText = String(seconds % 60).padStart(2, "0");
+        return minutesText + ":" + secondsText;
     }
 
     function campaignUnlocks(
@@ -2381,23 +2521,36 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
 
     function positionPlacementOverlay(overlay: HTMLElement, placement: HudBuildingPlacement): void {
-        const vw = window.innerWidth || 800;
-        const vh = window.innerHeight || 600;
-        const anchorX = Number.isFinite(Number(placement.anchor_x)) ? Number(placement.anchor_x) : vw * 0.5;
-        const anchorY = Number.isFinite(Number(placement.anchor_y)) ? Number(placement.anchor_y) : vh * 0.5;
+        const viewport = window.visualViewport;
+        const viewLeft = (viewport && viewport.offsetLeft) || 0;
+        const viewTop = (viewport && viewport.offsetTop) || 0;
+        const vw = (viewport && viewport.width) || window.innerWidth || 800;
+        const vh = (viewport && viewport.height) || window.innerHeight || 600;
+        const anchorX = Number.isFinite(Number(placement.anchor_x))
+            ? Number(placement.anchor_x)
+            : viewLeft + vw * 0.5;
+        const anchorY = Number.isFinite(Number(placement.anchor_y))
+            ? Number(placement.anchor_y)
+            : viewTop + vh * 0.5;
+        const clamp = (value: number, min: number, max: number) =>
+            Math.min(Math.max(value, min), Math.max(min, max));
 
         // Position 4 arrows around the building footprint
         const arrows = placement.arrows;
         const refs = hudRefs && hudRefs.placementArrows;
         if (arrows && refs) {
-            refs.up.style.left = arrows.up[0].toFixed(1) + "px";
-            refs.up.style.top = arrows.up[1].toFixed(1) + "px";
-            refs.right.style.left = arrows.right[0].toFixed(1) + "px";
-            refs.right.style.top = arrows.right[1].toFixed(1) + "px";
-            refs.down.style.left = arrows.down[0].toFixed(1) + "px";
-            refs.down.style.top = arrows.down[1].toFixed(1) + "px";
-            refs.left.style.left = arrows.left[0].toFixed(1) + "px";
-            refs.left.style.top = arrows.left[1].toFixed(1) + "px";
+            const minX = viewLeft + 20;
+            const maxX = viewLeft + vw - 20;
+            const minY = viewTop + 20;
+            const maxY = viewTop + vh - 20;
+            refs.up.style.left = clamp(arrows.up[0], minX, maxX).toFixed(1) + "px";
+            refs.up.style.top = clamp(arrows.up[1], minY, maxY).toFixed(1) + "px";
+            refs.right.style.left = clamp(arrows.right[0], minX, maxX).toFixed(1) + "px";
+            refs.right.style.top = clamp(arrows.right[1], minY, maxY).toFixed(1) + "px";
+            refs.down.style.left = clamp(arrows.down[0], minX, maxX).toFixed(1) + "px";
+            refs.down.style.top = clamp(arrows.down[1], minY, maxY).toFixed(1) + "px";
+            refs.left.style.left = clamp(arrows.left[0], minX, maxX).toFixed(1) + "px";
+            refs.left.style.top = clamp(arrows.left[1], minY, maxY).toFixed(1) + "px";
         }
 
         // Position the action card directly below the down arrow
@@ -2408,7 +2561,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const halfW = width * 0.5;
         const halfH = height * 0.5;
 
-        let bottomLimit = vh - 96;
+        let bottomLimit = viewTop + vh - 96;
         if (
             hudRefs &&
             hudRefs.dock &&
@@ -2416,7 +2569,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             typeof hudRefs.dock.getBoundingClientRect === "function"
         ) {
             const dockRect = hudRefs.dock.getBoundingClientRect();
-            if (dockRect && dockRect.height > 0 && dockRect.top > 0) {
+            if (dockRect && dockRect.height > 0 && dockRect.top > viewTop) {
                 bottomLimit = Math.min(bottomLimit, dockRect.top - 10);
             }
         }
@@ -2426,14 +2579,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const gap = 14;
         const belowCenterY = downArrowY + gap + halfH;
         const aboveCenterY = upArrowY - gap - halfH;
-        const placeBelow = belowCenterY + halfH <= bottomLimit || aboveCenterY - halfH < 64;
+        const placeBelow = belowCenterY + halfH <= bottomLimit || aboveCenterY - halfH < viewTop + 64;
         const rawCenterY = placeBelow ? belowCenterY : aboveCenterY;
-        const minX = halfW + 10;
-        const maxX = Math.max(minX, vw - halfW - 10);
-        const minY = halfH + 10;
-        const maxY = Math.max(minY, Math.min(vh - halfH - 10, bottomLimit - halfH));
-        const left = Math.min(Math.max(anchorX, minX), maxX);
-        const top = Math.min(Math.max(rawCenterY, minY), maxY);
+        const minX = viewLeft + halfW + 10;
+        const maxX = viewLeft + vw - halfW - 10;
+        const minY = viewTop + halfH + 10;
+        const maxY = Math.min(viewTop + vh - halfH - 10, bottomLimit - halfH);
+        const left = clamp(anchorX, minX, maxX);
+        const top = clamp(rawCenterY, minY, maxY);
         panel.style.left = left.toFixed(1) + "px";
         panel.style.top = top.toFixed(1) + "px";
         panel.dataset.placement = placeBelow ? "below" : "above";
@@ -2641,7 +2794,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         fleet: 1,
         nuke: 2,
         alliance: 3,
-        transfer: 4,
+        send: 4,
+        request: 5,
+        request_allies: 4,
         emote: 5,
     };
     const RING_BUILD_SLOTS: Record<string, number> = {
@@ -2657,7 +2812,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         nuke: "red",
         spawn: "green",
         alliance: "green",
-        transfer: "green",
+        send: "green",
+        request: "green",
+        request_allies: "green",
         fleet: "cyan",
     };
     const RING_HOLD_ACTIONS: Record<string, boolean> = { nuke: true };
@@ -2907,6 +3064,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 renderAvatarIdentity(image, emblem, mapMenu.target_avatar);
                 hub.append(image, emblem);
             } else hub.innerHTML = hudIcon("camera", "sow-hud__ring-icon");
+            const allianceStatus = document.createElement("span");
+            allianceStatus.className = "sow-hud__ring-hub-status";
+            allianceStatus.hidden = true;
+            allianceStatus.append(document.createElement("strong"), document.createElement("small"));
+            hub.appendChild(allianceStatus);
         } else {
             hub = document.createElement("button");
             hub.type = "button";
@@ -2997,6 +3159,38 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const image = menu.querySelector<HTMLImageElement>(".sow-hud__ring-portrait");
         const emblem = menu.querySelector<HTMLElement>(".sow-hud__ring-emblem");
         if (image && emblem) renderAvatarIdentity(image, emblem, targetAvatar);
+        const mapMenu: HudMapMenu = hudState?.hud?.map_menu || {};
+        const hub = menu.querySelector<HTMLElement>(".sow-hud__ring-hub");
+        if (hub) {
+            const relation = mapMenu.relation || "neutral";
+            if (hub.dataset.relation !== relation) hub.dataset.relation = relation;
+            const allianceStatus = hub.querySelector<HTMLElement>(".sow-hud__ring-hub-status");
+            if (allianceStatus) {
+                const fixed = mapMenu.relation === "teammate";
+                const seconds = Number(mapMenu.alliance_remaining_seconds);
+                const timed = mapMenu.relation === "ally" && Number.isFinite(seconds) && seconds > 0;
+                const display = fixed ? "fixed" : timed ? "countdown" : "none";
+                if (hub.dataset.allianceDisplay !== display) hub.dataset.allianceDisplay = display;
+                const hidden = !fixed && !timed;
+                if (allianceStatus.hidden !== hidden) allianceStatus.hidden = hidden;
+                const role = fixed ? "status" : "timer";
+                if (allianceStatus.getAttribute("role") !== role) allianceStatus.setAttribute("role", role);
+                const title = allianceStatus.querySelector("strong");
+                const detail = allianceStatus.querySelector("small");
+                const titleText = fixed
+                    ? SOW_t("hud.map_relation_teammate")
+                    : timed
+                      ? formatAllianceCountdown(seconds)
+                      : "";
+                if (title && title.textContent !== titleText) title.textContent = titleText;
+                if (detail) {
+                    const detailText = timed ? SOW_t("hud.map_action_alliance") : "";
+                    if (detail.textContent !== detailText) detail.textContent = detailText;
+                    const detailHidden = !timed;
+                    if (detail.hidden !== detailHidden) detail.hidden = detailHidden;
+                }
+            }
+        }
         slots.forEach(function (slot, index) {
             if (!slot) return;
             const button = menu.querySelector<HTMLButtonElement>(
@@ -4222,6 +4416,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 player.territory_pct,
                 player.is_alive,
                 player.is_me,
+                player.can_trade,
                 player.leader,
                 player.avatar,
                 player.avatar_expression,
@@ -4252,7 +4447,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
                 row.gpsBtn.dataset.playerId = String(player.id);
                 row.transferBtn.dataset.playerId = String(player.id);
-                row.transferBtn.disabled = !player.is_alive || !!player.is_me;
+                row.transferBtn.hidden = !player.can_trade;
+                row.transferBtn.disabled = !player.is_alive;
                 row.gpsBtn.disabled = !player.is_alive;
             }
             fragment.appendChild(row.card);
@@ -4302,26 +4498,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
     function bindAvatarFallback(image: HTMLImageElement): void {
         image.onerror = function () {
-            const fallback = asset("gameplay/avatars/null.webp");
+            const fallback = avatarAssetUrl("gameplay/avatars/null.webp");
             if (this.getAttribute("src") !== fallback) {
                 this.hidden = false;
+                this.crossOrigin = "anonymous";
                 this.src = fallback;
+                void loadAvatarImage(fallback).catch(() => undefined);
             } else {
                 this.hidden = true;
                 this.removeAttribute("src");
             }
         };
-    }
-
-    function avatarPortraitPath(
-        slug: string,
-        expression: HudAvatarIdentity["expression"] | null | undefined,
-    ): string {
-        const path =
-            expression && expression !== "calm" && ["happy", "fear", "angry"].includes(expression)
-                ? "expressions/" + slug + "_" + expression
-                : slug;
-        return "gameplay/avatars/" + path + ".webp";
     }
 
     function renderAvatarIdentity(
@@ -4357,8 +4544,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             presentation.kind === "portrait" && /^[a-z][a-z0-9_]*$/.test(presentation.slug || "")
                 ? presentation.slug || "null"
                 : "null";
-        const src = asset(avatarPortraitPath(slug, presentation.expression));
-        const reducedSource = asset(
+        const src = avatarAssetUrl(avatarPortraitPath(slug, presentation.expression));
+        const reducedSource = avatarAssetUrl(
             avatarPortraitPath(
                 slug,
                 presentation.transition ? presentation.transition.to : presentation.expression,
@@ -4396,6 +4583,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         // A notice that names the hero whose ability fired shows that ability's icon.
         if (/^[a-z][a-z0-9_]*$/.test(values.hero || "")) {
             const artSlug = leaderById(values.hero).art_slug || values.hero;
+            if (typeof window.SOW_abilityIconMarkup === "function") {
+                return window.SOW_abilityIconMarkup(
+                    artSlug,
+                    "sow-hud__notification-ability",
+                    "draggable='false'",
+                );
+            }
             return (
                 "<img class='sow-hud__notification-ability' src='" +
                 asset("gameplay/icons/abilities/" + artSlug + ".webp") +
@@ -4866,8 +5060,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 "aria-label",
                 SOW_t(request.kind === "resources" ? "hud.resource_request" : "hud.alliance_request", values),
             );
-            row.accept.textContent = SOW_t("hud.accept");
-            row.reject.textContent = SOW_t("hud.reject");
+            // A resource request is answered with Send, or Ignore; alliances keep Accept and Reject.
+            const resourceRequest = request.kind === "resources";
+            row.accept.textContent = SOW_t(resourceRequest ? "hud.send" : "hud.accept");
+            row.reject.textContent = SOW_t(resourceRequest ? "hud.ignore_request" : "hud.reject");
             row.accept.disabled = request.active === false;
             row.accept.title = row.accept.disabled ? SOW_t("hud.action_unavailable") : "";
             row.element.classList.toggle("is-inactive", row.accept.disabled);
@@ -5157,6 +5353,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         if (command === "focus_world") {
             button.dataset.focusX = String(operation.focus_x);
             button.dataset.focusY = String(operation.focus_y);
+            if (operation.kind === "fleet" && operation.direction === "outgoing")
+                button.dataset.fleetId = String(operation.id);
         } else if (command === "counter_attack") {
             button.dataset.playerId = String(operation.player_id);
             button.dataset.incomingTroops = String(operation.incoming_troops || operation.troops || 0);
@@ -5269,7 +5467,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 if (canCancel) {
                     const cancelLabel = SOW_t("endgame.cancel");
                     row.actions.appendChild(
-                        operationAction("cancel_attack", "minus", cancelLabel, operation),
+                        operationAction("cancel_attack", "retreat", cancelLabel, operation),
                     );
                 }
                 if (canRecall) {
@@ -5289,6 +5487,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 .forEach(function (button) {
                     button.dataset.focusX = String(operation.focus_x);
                     button.dataset.focusY = String(operation.focus_y);
+                    button.dataset.fleetId =
+                        operation.kind === "fleet" && outgoing ? String(operation.id) : "";
                 });
             row.actions
                 .querySelectorAll<HTMLButtonElement>('[data-command="counter_attack"]')
@@ -5850,17 +6050,34 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                         name: hud.transfer.target_name || SOW_t("hud.player_name"),
                     }),
                 );
+                const transferLive = hud.transfer;
+                hudRefs!.transferStockTroops.textContent = formatNameplateTroops(transferLive.target_troops);
+                hudRefs!.transferStockMaxTroops.textContent = formatNameplateTroops(
+                    transferLive.target_max_troops,
+                );
+                hudRefs!.transferStockGold.textContent = formatNameplateTroops(transferLive.target_gold);
+                const side = transferSide(transferLive, hud);
+                const sendBlock = transferBlockReason("send", transferLive, hud);
+                const requestBlock = transferBlockReason("request", transferLive, hud);
+                hudRefs!.transferSend.disabled = sendBlock !== null;
+                hudRefs!.transferRequest.disabled = requestBlock !== null;
+                hudRefs!.transferSend.classList.toggle("is-primary", side === "send");
+                hudRefs!.transferRequest.classList.toggle("is-primary", side === "request");
+                // The side in focus explains its block first; the other side's block is the fallback.
+                const hint =
+                    (side === "send" ? sendBlock : requestBlock) ??
+                    (side === "send" ? requestBlock : sendBlock);
+                hudRefs!.transferHint.textContent = hint ?? "";
+                hudRefs!.transferHint.hidden = hint === null;
                 if (
                     transferWasHidden ||
-                    hudRefs!.transfer.dataset.suggestedTarget !== String(hud.transfer.target_id)
+                    hudRefs!.transfer.dataset.seededTarget !== String(transferLive.target_id)
                 ) {
-                    hudRefs!.transfer.dataset.suggestedTarget = String(hud.transfer.target_id);
-                    if (hudRefs!.transferGold)
-                        hudRefs!.transferGold.value = String(Math.floor(hud.transfer.suggested_gold || 0));
-                    if (hudRefs!.transferTroops)
-                        hudRefs!.transferTroops.value = String(
-                            Math.floor(hud.transfer.suggested_troops || 0),
-                        );
+                    hudRefs!.transfer.dataset.seededTarget = String(transferLive.target_id);
+                    hudRefs!.transferGold.value = String(transferPresetAmount("gold", "25", transferLive, hud));
+                    hudRefs!.transferTroops.value = String(
+                        transferPresetAmount("troops", "25", transferLive, hud),
+                    );
                 }
                 if (transferWasHidden) {
                     const activeElement = document.activeElement;
@@ -6267,16 +6484,40 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 renderHud();
             } else if (cmd === "close_transfer") {
                 send("close_transfer");
+            } else if (cmd === "set_transfer_amount") {
+                const live = hudState && hudState.hud;
+                const offer = live && live.transfer;
+                const troops = btn.dataset.resource === "troops";
+                const input = hudRefs && (troops ? hudRefs.transferTroops : hudRefs.transferGold);
+                if (live && offer && input)
+                    input.value = String(
+                        transferPresetAmount(
+                            troops ? "troops" : "gold",
+                            btn.dataset.percent || "0",
+                            offer,
+                            live,
+                        ),
+                    );
             } else if (cmd === "send_resources" || cmd === "request_resources") {
-                const transfer = hudRefs && hudRefs.transfer;
-                const targetId = transfer ? Number(transfer.dataset.targetId) : 0;
-                let gold = hudRefs && hudRefs.transferGold ? Number(hudRefs.transferGold.value) : 0;
-                let transferTroops =
-                    hudRefs && hudRefs.transferTroops ? Number(hudRefs.transferTroops.value) : 0;
-                if (!Number.isFinite(gold)) gold = 0;
-                if (!Number.isFinite(transferTroops)) transferTroops = 0;
-                if (targetId > 0)
-                    send(cmd, { target_player_id: targetId, gold: gold, troops: transferTroops });
+                const side = cmd === "send_resources" ? "send" : "request";
+                const live = hudState && hudState.hud;
+                const offer = live && live.transfer;
+                const targetId = hudRefs && hudRefs.transfer ? Number(hudRefs.transfer.dataset.targetId) : 0;
+                // Poka-yoke: each button sends only what its side can move, so nothing is clipped silently.
+                if (live && offer && hudRefs && targetId > 0 && transferBlockReason(side, offer, live) === null) {
+                    const caps = transferCaps(side, offer, live);
+                    const gold = Math.min(wholeAmount(Number(hudRefs.transferGold.value)), caps.gold);
+                    const troops = Math.min(wholeAmount(Number(hudRefs.transferTroops.value)), caps.troops);
+                    if (gold > 0 || troops > 0) {
+                        if (side === "request") {
+                            transferRequestReadyAt[targetId] = Date.now() + TRANSFER_REQUEST_COOLDOWN_MS;
+                            // The wasm pushes state only when it changes, so re-render when the lock lifts.
+                            window.setTimeout(renderHud, TRANSFER_REQUEST_COOLDOWN_MS);
+                        }
+                        send(cmd, { target_player_id: targetId, gold: gold, troops: troops });
+                        renderHud();
+                    }
+                }
             } else if (
                 cmd === "accept_alliance" ||
                 cmd === "reject_alliance" ||
@@ -6326,8 +6567,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             } else if (cmd === "focus_world") {
                 const focusX = Number(btn.dataset.focusX);
                 const focusY = Number(btn.dataset.focusY);
-                if (Number.isFinite(focusX) && Number.isFinite(focusY))
-                    send("focus_world", { x: focusX, y: focusY });
+                if (Number.isFinite(focusX) && Number.isFinite(focusY)) {
+                    const fleetId = Number(btn.dataset.fleetId);
+                    send("focus_world", {
+                        x: focusX,
+                        y: focusY,
+                        ...(Number.isSafeInteger(fleetId) && fleetId > 0 ? { fleet_id: fleetId } : {}),
+                    });
+                }
             } else if (cmd === "prompt_surrender") {
                 send("request_endgame_stats");
                 surrenderModalOpen = true;

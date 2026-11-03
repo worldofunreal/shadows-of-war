@@ -1748,6 +1748,7 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   position: absolute;
   inset: 0;
   min-height: 0;
+  max-height: none;
   background: #080b11;
 }
 
@@ -1771,8 +1772,9 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   width: min(420px, calc(100% - 36px));
   max-height: calc(100% - 28px);
   box-sizing: border-box;
-  overflow-y: auto;
-  padding: clamp(16px, 2.4vw, 26px);
+  min-width: 0;
+  overflow: hidden;
+  padding: clamp(12px, 2.4vw, 24px);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-inline-start: 3px solid var(--sow-control-accent-bright);
   border-radius: 10px;
@@ -1787,22 +1789,46 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 }
 
 .sow-purchase-modal.is-leader .sow-purchase-modal__copy .sow-menu__modal-head {
-  margin-bottom: 14px;
+  min-width: 0;
+  margin-bottom: clamp(8px, 1.3vw, 14px);
+}
+
+.sow-purchase-modal.is-leader .sow-purchase-modal__copy .sow-menu__modal-head > div {
+  width: 100%;
+  min-width: 0;
 }
 
 .sow-purchase-modal.is-leader .sow-purchase-modal__copy h2 {
-  max-width: 12ch;
-  font-size: clamp(30px, 4vw, 46px);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: clamp(20px, min(4vw, 6vh), 38px);
   line-height: 0.98;
 }
 
 .sow-purchase-modal.is-leader .sow-purchase-modal__price {
-  font-size: clamp(26px, 3vw, 36px);
+  max-width: 100%;
+  font-size: clamp(18px, min(3vw, 5vh), 32px);
+}
+
+.sow-purchase-modal.is-leader .sow-purchase-modal__price .sow-store__currency-icon {
+  width: 0.82em;
+  height: 0.82em;
 }
 
 .sow-purchase-modal.is-leader .sow-purchase-modal__copy .sow-menu__modal-actions {
+  min-width: 0;
+  gap: clamp(6px, 1vw, 10px);
   margin-top: 0;
-  padding-top: 20px;
+  padding-top: clamp(10px, 1.8vw, 20px);
+}
+
+.sow-purchase-modal.is-leader .sow-purchase-modal__copy .sow-menu__modal-actions button {
+  min-width: 0;
+  min-height: clamp(40px, 6vh, 50px);
+  padding-inline: clamp(8px, 1.5vw, 16px);
+  font-size: clamp(11px, 1.2vw, 14px);
 }
 
 @media (orientation: portrait) {
@@ -1824,7 +1850,7 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     bottom: 12px;
     width: auto;
     max-height: calc(100% - 24px);
-    padding: 16px;
+    padding: clamp(10px, 3.4vw, 16px);
   }
 
   .sow-purchase-modal.is-leader .sow-purchase-modal__copy .sow-menu__modal-head {
@@ -1833,12 +1859,16 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 
   .sow-purchase-modal.is-leader .sow-purchase-modal__copy h2 {
     max-width: none;
-    font-size: clamp(24px, 7vw, 36px);
+    font-size: clamp(19px, min(6vw, 5.5vh), 30px);
+  }
+
+  .sow-purchase-modal.is-leader .sow-purchase-modal__price {
+    font-size: clamp(18px, min(5.2vw, 4.8vh), 26px);
   }
 
   .sow-purchase-modal.is-leader .sow-purchase-modal__copy .sow-menu__modal-actions {
-    gap: 8px;
-    padding-top: 14px;
+    gap: clamp(6px, 2vw, 8px);
+    padding-top: clamp(8px, 2.8vw, 14px);
   }
 }
 

@@ -47,8 +47,14 @@ declare global {
         SOWCampaignView: CampaignViewApi;
         SOW_getAuthState?: () => SowAuthState;
         SOW_hudIcon: (name: string) => string;
+        SOW_loadAvatarPixels?: (
+            pathOrSlug: string,
+            cellSize: number,
+            expression?: "happy" | "calm" | "fear" | "angry",
+        ) => Promise<Uint8Array>;
         SOW_leaderArtUrl: (slug: string, variant?: string) => string;
         SOW_prepareLeaderArt: (slug: string, priority?: string) => Promise<boolean>;
+        SOW_prefetchAvatarImage?: (path: string) => Promise<void>;
         SOW_menu_flow: { canGuide(): boolean };
         SOW_menu_guide: {
             update(state: unknown, facts?: unknown): void;
@@ -62,6 +68,7 @@ declare global {
         SOW_tutorial_pointer_update: (raw: string) => void;
         SOW_t: (key: string, values?: Record<string, unknown>) => string;
         SOW_assetUrl: (url: string) => string;
+        SOW_abilityIconMarkup?: (artSlug: string, className: string, imageAttributes?: string) => string;
         SOW_menu_command: (message: string) => void;
         SOW_trackExperienceEvent: (payload: unknown) => void;
         SOW_isAndroidTwa: () => boolean;
@@ -87,6 +94,13 @@ declare global {
         SOW_ASSET_TS: Record<string, string>;
         SOW_BUILD_TS: string;
         SOW_ASSETS_URL: string;
+        SOW_ABILITY_ICON_ATLAS?: {
+            path: string;
+            cellSize: number;
+            columns: number;
+            rows: number;
+            icons: Record<string, number>;
+        };
         SOW_BOOT_UI_BASE: string;
         SOW_PORTAL: string;
         SOW_SOURCE_URL: string;

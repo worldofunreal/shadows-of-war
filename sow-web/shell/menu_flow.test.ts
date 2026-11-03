@@ -909,11 +909,24 @@ test("pending WOU recovery does not block profile loading or anonymous join proo
     assert.doesNotMatch(makeAuthProof, /wou_session_pending/);
     assert.match(makeAuthProof, /!self\.identity_profile_verified[\s\S]*return None/);
     assert.match(makeAuthProof, /identity\.provider == "wou"[\s\S]*identity_profile_verified/);
+    assert.match(makeAuthProof, /self\.progress_account_id\.as_deref\(\) != identity\.external_id\.as_deref\(\)/);
+    assert.match(makeAuthProof, /identity\.auth_token\.clone\(\)\.filter\(\|t\| !t\.is_empty\(\)\)\?/);
+    assert.match(makeAuthProof, /provider: "anonymous"\.to_string\(\)/);
 
     const profileStart = accountSource.indexOf("pub(crate) fn fetch_cloud_progress");
     const profileEnd = accountSource.indexOf("fn fetch_anonymous_progress", profileStart);
     assert.ok(profileStart >= 0 && profileEnd > profileStart);
-    assert.doesNotMatch(accountSource.slice(profileStart, profileEnd), /wou_session_pending/);
+    const profileFetch = accountSource.slice(profileStart, profileEnd);
+    assert.doesNotMatch(profileFetch, /wou_session_pending/);
+    assert.match(profileFetch, /else\s*\{[\s\S]*self\.fetch_anonymous_progress\(\);\s*return;/);
+
+    const loadedStart = assetSource.indexOf("DbEvent::ProfileLoaded {");
+    const loadedEnd = assetSource.indexOf("DbEvent::DisplayNameSaved", loadedStart);
+    assert.ok(loadedStart >= 0 && loadedEnd > loadedStart);
+    const loadedProfile = assetSource.slice(loadedStart, loadedEnd);
+    assert.match(loadedProfile, /identity_profile_verified = provider == "wou"/);
+    assert.match(loadedProfile, /apply_cloud_profile\(progress, account_id, display_name, provider\)/);
+    assert.match(loadedProfile, /join_waiting_for_identity[\s\S]*make_join_message\([\s\S]*client\.send\(json\)[\s\S]*join_waiting_for_identity = false/);
 
     const ensureStart = authSurfacesSource.indexOf("function ensureAuthSession()");
     const ensureEnd = authSurfacesSource.indexOf("function authIcon", ensureStart);
@@ -959,6 +972,7 @@ test("pending WOU recovery does not block profile loading or anonymous join proo
     assert.match(failedProfile, /boot_db_settled = true/);
     assert.match(failedProfile, /provider == "wou" && status == Some\(401\)[\s\S]*refresh_wou_session\(\)/);
     assert.match(failedProfile, /if provider == "wou"[\s\S]*identity_profile_verified = false/);
+    assert.match(failedProfile, /keeping local play available/);
     assert.match(failedProfile, /schedule_identity_profile_retry\(\)/);
     assert.match(portalSource, /wou:session-state-change/);
 });

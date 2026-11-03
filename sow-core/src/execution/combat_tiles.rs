@@ -34,6 +34,45 @@ fn terrain_loss_multiplier(terrain: TerrainType, config: &crate::game_config::Ga
     }
 }
 
+fn occupied_land_share(state: &GameState) -> f64 {
+    if state.total_land_tiles == 0 {
+        return 0.0;
+    }
+
+    let occupied_tiles: u64 = state
+        .players
+        .iter()
+        .map(|player| u64::from(player.tile_count))
+        .sum();
+    (occupied_tiles as f64 / f64::from(state.total_land_tiles)).clamp(0.0, 1.0)
+}
+
+fn neutral_expansion_pacing_multiplier(occupied_share: f64) -> f64 {
+    let occupied_share = if occupied_share.is_finite() {
+        occupied_share.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+
+    if occupied_share <= 0.10 {
+        0.70
+    } else if occupied_share <= 0.50 {
+        0.70 + (occupied_share - 0.10) / (0.50 - 0.10) * (1.00 - 0.70)
+    } else if occupied_share < 0.90 {
+        1.00 + (occupied_share - 0.50) / (0.90 - 0.50) * (1.15 - 1.00)
+    } else {
+        1.15
+    }
+}
+
+fn attack_pacing_multiplier(target_owner: u16, neutral_pacing: f64) -> f64 {
+    if target_owner == 0 {
+        neutral_pacing
+    } else {
+        1.0
+    }
+}
+
 /// Hero "against the odds" ability: `attacker` fights a player with more troops.
 /// Shared by the strength formula and the player snapshot, so the visual and the
 /// combat can never disagree.
@@ -653,7 +692,12 @@ impl SowEngine {
     }
 
     pub fn execute_combat(&mut self) {
-        self.execute_combat_using(|attack, _| attack.to_conquer.len(), |_, _, _| 1.0);
+        // ponytail: sum players once per tick; maintain a counter only if profiling shows this is hot.
+        let neutral_pacing = neutral_expansion_pacing_multiplier(occupied_land_share(&self.state));
+        self.execute_combat_using(
+            |attack, _| attack.to_conquer.len(),
+            move |_, attack, _| attack_pacing_multiplier(attack.target_owner, neutral_pacing),
+        );
     }
 
     fn execute_combat_using<F, P>(&mut self, frontier_size: F, pacing_multiplier: P)
@@ -1223,7 +1267,10 @@ impl SowEngine {
 
 #[cfg(test)]
 mod tests {
-    use super::{terrain_capture_speed, terrain_loss_multiplier};
+    use super::{
+        attack_pacing_multiplier, neutral_expansion_pacing_multiplier, occupied_land_share,
+        terrain_capture_speed, terrain_loss_multiplier,
+    };
     use crate::building::Building;
     use crate::execution::{AttackExecution, PrioritizedTile};
     use crate::game::{BuildingKind, GamePhase, GameState};
@@ -1235,6 +1282,209 @@ mod tests {
     use crate::water_components::WaterComponents;
     use std::collections::{BinaryHeap, HashSet};
     use wyrand::WyRand;
+
+    #[test]
+    fn occupied_land_share_uses_actual_land_and_handles_missing_land() {
+        let mut state = GameState::new(1, 10, 10, GameConfig::default());
+        state.map.terrain.fill(MapTile::from_byte(0x20));
+        for y in 0..10 {
+            for x in 0..2 {
+                let idx = state.map.ref_id(x, y);
+                state.map.terrain[idx] = MapTile::from_byte(0x80);
+            }
+        }
+        state.total_land_tiles = 20;
+        state.register_player(Player::new_human(1, "One".into(), [1.0; 3], &state.config));
+        state.register_player(Player::new_human(2, "Two".into(), [0.5; 3], &state.config));
+        for y in 0..5 {
+            state.set_tile_owner(0, y, 1);
+        }
+        for y in 5..7 {
+            state.set_tile_owner(1, y, 2);
+        }
+
+        assert_eq!(
+            state
+                .map
+                .terrain
+                .iter()
+                .filter(|tile| tile.is_land())
+                .count(),
+            state.total_land_tiles as usize
+        );
+        assert!((occupied_land_share(&state) - 0.35).abs() < 1e-12);
+
+        state.total_land_tiles = 0;
+        assert_eq!(occupied_land_share(&state), 0.0);
+    }
+
+    #[test]
+    fn neutral_occupancy_curve_hits_anchors_is_monotonic_and_bounded() {
+        assert_eq!(neutral_expansion_pacing_multiplier(0.0), 0.70);
+        assert_eq!(neutral_expansion_pacing_multiplier(0.10), 0.70);
+        assert_eq!(neutral_expansion_pacing_multiplier(0.50), 1.00);
+        assert_eq!(neutral_expansion_pacing_multiplier(0.90), 1.15);
+        assert_eq!(neutral_expansion_pacing_multiplier(1.0), 1.15);
+        assert_eq!(neutral_expansion_pacing_multiplier(f64::NAN), 0.70);
+        assert_eq!(neutral_expansion_pacing_multiplier(-1.0), 0.70);
+        assert_eq!(neutral_expansion_pacing_multiplier(2.0), 1.15);
+
+        let shares = [0.0, 0.10, 0.25, 0.50, 0.70, 0.90, 1.0];
+        for pair in shares.windows(2) {
+            assert!(
+                neutral_expansion_pacing_multiplier(pair[0])
+                    <= neutral_expansion_pacing_multiplier(pair[1])
+            );
+        }
+    }
+
+    #[test]
+    fn occupancy_pacing_only_changes_neutral_attacks() {
+        assert_eq!(attack_pacing_multiplier(0, 0.70), 0.70);
+        assert_eq!(attack_pacing_multiplier(0, 1.15), 1.15);
+        assert_eq!(attack_pacing_multiplier(2, 0.70), 1.0);
+        assert_eq!(attack_pacing_multiplier(2, 1.15), 1.0);
+    }
+
+    fn multi_neutral_attack_engine(
+        seed: u64,
+        initial_occupied_share: f64,
+    ) -> crate::engine::SowEngine {
+        const WIDTH: u32 = 100;
+        const HEIGHT: u32 = 100;
+        const LAND_WIDTH: u32 = 80;
+        const TOTAL_LAND: u32 = LAND_WIDTH * HEIGHT;
+
+        let mut config = GameConfig::default();
+        config.map_width = WIDTH;
+        config.map_height = HEIGHT;
+        let mut state = GameState::new(seed, WIDTH, HEIGHT, config);
+        state.phase = GamePhase::Playing;
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        for y in 0..HEIGHT {
+            for x in LAND_WIDTH..WIDTH {
+                let idx = state.map.ref_id(x, y);
+                state.map.terrain[idx] = MapTile::from_byte(0x20);
+            }
+        }
+        state.total_land_tiles = TOTAL_LAND;
+        for (player_id, name) in [(1, "One"), (2, "Two"), (3, "Filler")] {
+            state.register_player(Player::new_human(
+                player_id,
+                name.into(),
+                [1.0; 3],
+                &state.config,
+            ));
+        }
+
+        for x in 20..68 {
+            state.set_tile_owner(x, 30, 1);
+            state.set_tile_owner(x, 70, 2);
+        }
+
+        let target_occupied_tiles = (f64::from(TOTAL_LAND) * initial_occupied_share).round() as u64;
+        let mut occupied_tiles: u64 = state
+            .players
+            .iter()
+            .map(|player| u64::from(player.tile_count))
+            .sum();
+        'fill: for y in 0..HEIGHT {
+            for x in 0..LAND_WIDTH {
+                let protected =
+                    (18..70).contains(&x) && ((28..33).contains(&y) || (68..73).contains(&y));
+                if !protected && state.map.owner_id(x, y) == 0 {
+                    if occupied_tiles >= target_occupied_tiles {
+                        break 'fill;
+                    }
+                    state.set_tile_owner(x, y, 3);
+                    occupied_tiles += 1;
+                }
+            }
+        }
+        assert_eq!(occupied_tiles, target_occupied_tiles);
+        assert!((occupied_land_share(&state) - initial_occupied_share).abs() < 1e-12);
+        assert_eq!(
+            state
+                .map
+                .terrain
+                .iter()
+                .filter(|tile| tile.is_land())
+                .count(),
+            TOTAL_LAND as usize
+        );
+
+        let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+        for (id, owner_id, y) in [(1, 1, 31), (2, 2, 71)] {
+            let to_conquer = (20..68)
+                .enumerate()
+                .map(|(seq, x)| PrioritizedTile {
+                    priority: 0,
+                    insert_seq: seq as u32,
+                    x,
+                    y,
+                })
+                .collect();
+            engine.add_attack(AttackExecution {
+                landed: false,
+                id,
+                owner_id,
+                target_owner: 0,
+                created_tick: 0,
+                troops: 25_000.0,
+                to_conquer,
+                insert_seq_counter: 48,
+                rng: WyRand::new(seed.wrapping_add(u64::from(owner_id))),
+                retreating: false,
+            });
+        }
+        engine
+    }
+
+    fn multi_neutral_attack_capture_rate(
+        seed: u64,
+        initial_occupied_share: f64,
+    ) -> (f64, Vec<u32>) {
+        const TICKS: u64 = 5;
+        let mut engine = multi_neutral_attack_engine(seed, initial_occupied_share);
+        let mut captures = 0u64;
+        for tick in 0..TICKS {
+            engine.state.tick = tick;
+            engine.state.events.clear();
+            engine.execute_combat();
+            captures += engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, crate::game::GameEvent::TileCaptured { .. }))
+                .count() as u64;
+        }
+        let duration_seconds = TICKS as f64 * f64::from(engine.state.config.tick_rate_ms) / 1000.0;
+        let final_tiles = engine
+            .state
+            .players
+            .iter()
+            .map(|player| player.tile_count)
+            .collect();
+        (captures as f64 / duration_seconds, final_tiles)
+    }
+
+    #[test]
+    fn global_occupancy_curve_speeds_neutral_multi_attacks_deterministically() {
+        for seed in 1..=3 {
+            let early = multi_neutral_attack_capture_rate(seed, 0.10);
+            let middle = multi_neutral_attack_capture_rate(seed, 0.50);
+            let late = multi_neutral_attack_capture_rate(seed, 0.90);
+            assert!(early.0 < middle.0, "seed {seed}: {early:?} >= {middle:?}");
+            assert!(middle.0 < late.0, "seed {seed}: {middle:?} >= {late:?}");
+            println!(
+                "global_neutral_pacing seed={seed} occupied=10/50/90 captures_per_second={:.2}/{:.2}/{:.2}",
+                early.0, middle.0, late.0
+            );
+            assert_eq!(early, multi_neutral_attack_capture_rate(seed, 0.10));
+            assert_eq!(middle, multi_neutral_attack_capture_rate(seed, 0.50));
+            assert_eq!(late, multi_neutral_attack_capture_rate(seed, 0.90));
+        }
+    }
 
     fn unique_valid_frontier_size(attack: &AttackExecution, state: &GameState) -> usize {
         attack

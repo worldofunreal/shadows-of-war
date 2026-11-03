@@ -23,9 +23,121 @@ type AnimationState = {
 };
 
 const states = new WeakMap<HTMLImageElement, AnimationState>();
+const imageLoads = new Map<string, Promise<HTMLImageElement>>();
+const MAX_CACHED_AVATAR_IMAGES = 64;
+
+export function avatarAssetUrl(path: string): string {
+    const base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
+    const url = base + "/" + path.split("/").map(encodeURIComponent).join("/");
+    return window.SOW_assetUrl ? window.SOW_assetUrl(url) : url;
+}
+
+export function avatarPortraitPath(slug: string, expression: AvatarExpression | null | undefined): string {
+    const portrait =
+        expression && expression !== "calm" && ["happy", "fear", "angry"].includes(expression)
+            ? "expressions/" + slug + "_" + expression
+            : slug;
+    return "gameplay/avatars/" + portrait + ".webp";
+}
+
+function imageSource(image: HTMLImageElement): string {
+    return image.getAttribute("src") || "";
+}
+
+/** One stable browser-native image load shared by the radial and the map atlas bridge. */
+export function loadAvatarImage(source: string): Promise<HTMLImageElement> {
+    const cached = imageLoads.get(source);
+    if (cached) {
+        imageLoads.delete(source);
+        imageLoads.set(source, cached);
+        return cached;
+    }
+
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.decoding = "async";
+    image.src = source;
+    const promise =
+        typeof image.decode === "function"
+            ? image.decode().then(() => image)
+            : typeof image.addEventListener === "function"
+              ? new Promise<HTMLImageElement>((resolve, reject) => {
+                    image.addEventListener("load", () => resolve(image), { once: true });
+                    image.addEventListener("error", () => reject(new Error("avatar image load failed")), {
+                        once: true,
+                    });
+                })
+              : Promise.resolve(image);
+    imageLoads.set(source, promise);
+    while (imageLoads.size > MAX_CACHED_AVATAR_IMAGES) {
+        const oldest = imageLoads.keys().next().value;
+        if (oldest === undefined) break;
+        imageLoads.delete(oldest);
+    }
+    void promise.catch(() => {
+        if (imageLoads.get(source) === promise) imageLoads.delete(source);
+    });
+    return promise;
+}
+
+/** Browser decode/crop path used to transfer a portrait into the existing GPU atlas. */
+export async function loadAvatarPixels(
+    pathOrSlug: string,
+    cellSize: number,
+    expression?: AvatarExpression,
+): Promise<Uint8Array> {
+    const portraitPath = expression
+        ? avatarPortraitPath(pathOrSlug, expression)
+        : "gameplay/avatars/" + pathOrSlug;
+    const source = avatarAssetUrl(portraitPath);
+    let image: HTMLImageElement;
+    try {
+        image = await loadAvatarImage(source);
+    } catch (error) {
+        const fallback = avatarAssetUrl("gameplay/avatars/null.webp");
+        if (source === fallback) throw error;
+        image = await loadAvatarImage(fallback);
+    }
+
+    const size = Math.floor(cellSize);
+    if (!Number.isFinite(size) || size < 1) throw new Error("invalid avatar cell size");
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    const side = Math.min(width, height);
+    if (side < 1) throw new Error("avatar image has no pixels");
+
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("avatar canvas context unavailable");
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(image, (width - side) / 2, (height - side) / 2, side, side, 0, 0, size, size);
+    const pixels = context.getImageData(0, 0, size, size).data;
+    return new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength);
+}
+
+export async function prefetchAvatarImage(path: string): Promise<void> {
+    await loadAvatarImage(avatarAssetUrl("gameplay/avatars/" + path));
+}
+
+if (typeof window !== "undefined") {
+    window.SOW_loadAvatarPixels = loadAvatarPixels;
+    window.SOW_prefetchAvatarImage = prefetchAvatarImage;
+}
 
 function sourceOf(image: HTMLImageElement): string {
-    return image.getAttribute("src") || "";
+    return imageSource(image);
+}
+
+function setSource(image: HTMLImageElement, source: string): void {
+    if (!source) return;
+    if (sourceOf(image) !== source) {
+        image.crossOrigin = "anonymous";
+        image.src = source;
+    }
+    void loadAvatarImage(source).catch(() => undefined);
 }
 
 function restoreOutgoingBackground(state: AnimationState): void {
@@ -96,7 +208,7 @@ export function setAvatarPortrait(
 
     if (reducedMotion || !transition || typeof image.animate !== "function") {
         if (transition && reducedMotion) source = reducedSource;
-        if (sourceOf(image) !== source && source) image.src = source;
+        setSource(image, source);
         states.set(image, { key: "", animation: null, source, outgoingBackground: null });
         return;
     }
@@ -109,7 +221,7 @@ export function setAvatarPortrait(
     };
 
     if (transition.stage === "exit") {
-        if (source && sourceOf(image) !== source) image.src = source;
+        setSource(image, source);
         const animation = image.animate(
             [currentFrame, { opacity: 1, transform: "scale(.82) translateY(3px)" }],
             { duration: 150, easing: "ease-in", fill: "both" },
@@ -123,7 +235,7 @@ export function setAvatarPortrait(
     }
 
     const outgoingBackground = addOutgoingBackground(image, sourceOf(image));
-    if (source && sourceOf(image) !== source) image.src = source;
+    setSource(image, source);
     const animation = image.animate(
         [
             {

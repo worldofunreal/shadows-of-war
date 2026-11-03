@@ -2107,7 +2107,12 @@ fn build_web(paths: &Paths, version: &str) -> Result<PathBuf> {
         && paths.dist_jest.join("index.html").is_file()
         && verify_layout(&web).is_ok()
         && verify_cg_layout(&paths.dist_cg).is_ok()
+        && verify_cg_asset_inventory(&web.join("assets"), &paths.dist_cg.join("assets")).is_ok()
+        && verify_portal_map_inventory(&web.join("maps"), &paths.dist_cg.join("maps")).is_ok()
         && verify_poki_layout(&poki).is_ok()
+        && verify_poki_asset_inventory(&web.join("assets"), &poki.join("assets")).is_ok()
+        && verify_portal_map_inventory(&web.join("maps"), &poki.join("maps")).is_ok()
+        && verify_portal_map_inventory(&web.join("maps"), &paths.dist_jest.join("maps")).is_ok()
         && verify_jest_layout(&paths.dist_jest).is_ok();
     if cached {
         println!("==> Web package unchanged — reusing production candidate");
@@ -2130,7 +2135,7 @@ pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
     let source = super::source_identity(paths)?;
     let source_version = format!("{version}:{}", source.sha);
     input_fingerprint(
-        "web-v10-jest",
+        "web-v11-portal-cdn-assets-maps",
         &source_version,
         &[
             &paths.wasm_input,

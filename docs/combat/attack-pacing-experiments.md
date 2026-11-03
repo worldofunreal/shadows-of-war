@@ -1,10 +1,10 @@
 # Experimentos de ritmo de conquista
 
-Actualizado: 2026-11-01
+Actualizado: 2026-11-02
 
 ## Objetivo
 
-Buscar una curva que haga la conquista más lenta al inicio, conserve el ritmo de media partida y la acelere en late game. El criterio inicial es por tropas efectivas del ataque; todavía no se ha cambiado el ritmo del juego en producción.
+Buscar una curva que haga la conquista más lenta al inicio, conserve el ritmo de media partida y la acelere en late game. Desde 2026-11-02, producción usa una curva por ocupación global solo para ataques contra tierra neutral.
 
 Este documento es el registro de hipótesis, método, resultados y siguientes pasos. Cada corrida nueva debe añadir sus condiciones y resultados aquí para poder retomar el trabajo sin depender del contexto de una sesión.
 
@@ -18,7 +18,33 @@ El dueño del ritmo de conquista es `SowEngine::execute_combat` en [`combat_tile
 4. Aplica el tope de tiles por ataque. Este tope ya depende de tropas: usa 256 tiles en el ancla de 25.000 tropas, se duplica por cada aumento de 10× y está limitado por un techo de 4.096. Por debajo de 25.000, el tope queda anclado en 256; por tanto, ese tope no distingue el early del mid.
 5. En neutral, cada tile cuesta `clamp(2000 × velocidad_del_terreno / effective_troops, 5, 100)` unidades de presupuesto. La pérdida actual por tile neutral es 1 tropa.
 
-El contador de frontera de producción es hoy `to_conquer.len()`. Esa es la longitud de la cola, que puede contener coordenadas repetidas o tiles que ya no son candidatos válidos. La prueba experimental permite comparar ese contador con la cantidad de coordenadas únicas que todavía pertenecen al defensor, son terreno válido y siguen junto al atacante. La ruta pública sigue usando cola y multiplicador 1.0: el experimento no altera el ritmo real.
+El contador de frontera de producción es hoy `to_conquer.len()`. Esa es la longitud de la cola, que puede contener coordenadas repetidas o tiles que ya no son candidatos válidos. La prueba experimental permite comparar ese contador con la cantidad de coordenadas únicas que todavía pertenecen al defensor, son terreno válido y siguen junto al atacante. La producción conserva la cola para el tamaño de frontera; ahora modula solo los ataques neutrales según la ocupación global, mientras PvP conserva el multiplicador 1.0.
+
+## Curva global activa para tierra neutral
+
+La ocupación se calcula una vez por tick como la suma de `player.tile_count` dividida por `total_land_tiles`, que excluye el agua. Se limita al intervalo 0–100% y no requiere escanear el mapa ni guardar estado adicional.
+
+| Ocupación del mapa | Multiplicador neutral |
+| ---: | ---: |
+| Hasta 10% | 0,70× |
+| 50% | 1,00× |
+| Desde 90% | 1,15× |
+
+Los tramos entre anclas interpolan linealmente. El multiplicador se aplica después del tope actual por tropas y antes de resolver capturas; por tanto, el aumento máximo del presupuesto neutral es 15%. Los ataques PvP reciben 1,00× sin importar la ocupación. No hay un disparador fijo de cinco minutos: el máximo depende de cuánto terreno del mapa esté ocupado.
+
+Estos anclajes globales son un punto inicial de balance. Las corridas por territorio propio que siguen abajo no miden esta señal global; se necesita validar esta curva con varios ataques y mapas representativos.
+
+### Corrida sintética de ocupación global
+
+Dos ataques neutrales simultáneos, mapa de 100 × 100 con 80% de tierra y cinco ticks por corrida. Se mantuvo la frontera de ambos ataques; el resto de la ocupación se colocó fuera de esos frentes.
+
+| Ocupación inicial | Semilla 1 | Semilla 2 | Semilla 3 | Media de capturas/s |
+| ---: | ---: | ---: | ---: | ---: |
+| 10% | 234 | 230 | 234 | 232,7 |
+| 50% | 370 | 370 | 368 | 369,3 |
+| 90% | 390 | 394 | 394 | 392,7 |
+
+Repetir las tres ocupaciones para cada semilla produjo los mismos conteos finales. Esta prueba confirma la dirección y el determinismo del harness en un mapa con agua y varios ataques; no sustituye una partida representativa. Una prueba unitaria verifica que PvP conserve el multiplicador de 1,00×.
 
 ## Referencia: OpenFront actual
 
@@ -40,7 +66,7 @@ La diferencia de frontera es la comparación más directa para este problema: Op
 4. **Tropas por sí solas quizá no representen la fase de partida.** Un jugador puede reunir 100.000 tropas temprano o conservar pocas en late game. Si la curva anterior no separa esas situaciones, comparar una curva por territorio relativo al mapa.
 5. **Neutral y PvP pueden requerir escalas distintas.** El resultado neutral no tiene pérdidas defensivas por relación de tropas; en PvP, el ataque puede agotarse antes de que la velocidad de presupuesto sea el factor limitante.
 
-Los multiplicadores propuestos son parámetros de experimento, no valores aprobados de balance.
+Los multiplicadores de las curvas experimentales por tropas y territorio propio no se aprobaron para balance. La curva global de la sección anterior está activa como ajuste inicial y también requiere validación.
 
 ## Experimento 1: cola frente a frontera única
 
@@ -118,7 +144,7 @@ Los ticks al tope están medidos sobre 3.000 ticks activos, salvo PvP/2.500/96, 
 
 ## Experimento 3: curva por territorio propio
 
-**Estado: completado; mejor señal de fase, requiere calibración por modo.** Se dejó fijo el ataque inicial en 25.000 tropas y se varió el territorio atacante inicial en un mapa llano de 256 × 256 tiles, todos de tierra. La señal es la proporción de tiles propios respecto a la tierra total del mapa. Puntos provisionales: 0,70× a 1%, 1,00× a 10% y 1,15× a 30%, con interpolación logarítmica y límites. Se comparó la curva con base sin multiplicador para cada mismo mapa, semilla y frontera.
+**Estado: completado; curva experimental por atacante, no usada en producción.** Se dejó fijo el ataque inicial en 25.000 tropas y se varió el territorio atacante inicial en un mapa llano de 256 × 256 tiles, todos de tierra. La señal es la proporción de tiles propios respecto a la tierra total del mapa. Puntos provisionales: 0,70× a 1%, 1,00× a 10% y 1,15× a 30%, con interpolación logarítmica y límites. Se comparó la curva con base sin multiplicador para cada mismo mapa, semilla y frontera.
 
 **Registro:** misma base SOW y configuración estándar; semillas 1–10, 3.000 ticks por semilla; cambio aislado: multiplicador basado en `tile_count / tierra_total`, recalculado en cada tick. La comparación usa frontera única en ambas ramas.
 
@@ -150,8 +176,8 @@ Cada variante tuvo 3.000 ticks activos (30 segundos nominales × 10 semillas). L
 - 1% de territorio sí ralentiza los dos modos en estos escenarios: −9,2 a −15,3% neutral y −4,7 a −11,9% PvP. La frontera PvP de 96 tiles apenas baja, así que sigue siendo el caso que más cuesta ralentizar.
 - 10% queda cerca de la base, pero la curva se mueve mientras captura: en esos 30 segundos el territorio propio crece y el multiplicador deja 1.00. El efecto medido fue +5,3 a +6,0% neutral y +4,8 a +7,5% PvP.
 - 30% acelera los dos modos, +15,1 a +17,6% neutral y +7,3 a +14,2% PvP. PvP ancho vuelve a quedar por debajo del aumento de 15%, lo que sugiere que pérdidas/tropas y presupuesto se deben modelar junto con la escala.
-- Esta señal representa mejor la etapa global que tropas del ataque, pero los puntos 1/10/30% son provisionales. En PvP cambia también el tamaño del defensor; la comparación base/curva dentro de cada escenario aísla el multiplicador, pero no permite comparar directamente las tasas absolutas entre escenarios.
-- La curva territorial es una alternativa viable para seguir afinando, no un balance final ya validado. Haría falta probar una distribución de mapa y varios ataques simultáneos antes de aceptar una implementación.
+- Esta señal representa mejor la etapa individual que tropas del ataque, pero los puntos 1/10/30% son provisionales. En PvP cambia también el tamaño del defensor; la comparación base/curva dentro de cada escenario aísla el multiplicador, pero no permite comparar directamente las tasas absolutas entre escenarios.
+- Esta curva individual no se activó: puede acelerar más al jugador que ya va adelante. La curva global activa se mide por terreno ocupado entre todos los jugadores y sus anclajes aún requieren corridas representativas.
 
 ## Opciones si la curva territorial aún no cumple los objetivos
 

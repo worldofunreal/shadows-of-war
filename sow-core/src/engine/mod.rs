@@ -3,7 +3,7 @@ use crate::building::{
 };
 use crate::diplomacy::{
     ALLIANCE_REQUEST_COOLDOWN_TICKS, ALLIANCE_REQUEST_TTL_TICKS, AllianceProposal,
-    BETRAYAL_COOLDOWN_TICKS,
+    BETRAYAL_COOLDOWN_TICKS, RESOURCE_REQUEST_COOLDOWN_TICKS,
 };
 use crate::execution::AttackExecution;
 use crate::game::GameState;
@@ -383,6 +383,8 @@ pub struct SowEngine {
     /// Bot id → tick when another betrayal is allowed.
     pub alliance_betray_cooldown_until: std::collections::HashMap<PlayerId, u32>,
     pub resource_requests_proposed: Vec<ResourceRequestProposed>,
+    /// `(proposer, target)` → tick when another resource request is allowed.
+    pub resource_request_cooldown_until: std::collections::HashMap<(PlayerId, PlayerId), u32>,
     /// Campaign progression is episode-local and absent from every other match.
     pub campaign_unlocks: Option<crate::campaign::CampaignUnlocks>,
     pub campaign_unlock_revision: u64,
@@ -513,6 +515,7 @@ impl SowEngine {
             alliance_request_cooldown_until: std::collections::HashMap::new(),
             alliance_betray_cooldown_until: std::collections::HashMap::new(),
             resource_requests_proposed: Vec::new(),
+            resource_request_cooldown_until: std::collections::HashMap::new(),
             campaign_unlocks,
             campaign_unlock_revision: 0,
             campaign_avatars: std::collections::HashMap::new(),
@@ -747,6 +750,8 @@ impl SowEngine {
             .retain(|_, until| *until > tick);
         self.alliance_betray_cooldown_until
             .retain(|_, until| *until > tick);
+        self.resource_request_cooldown_until
+            .retain(|_, until| *until > tick);
         for player in &mut self.state.players {
             if player.traitor && player.traitor_tick > 0 && tick >= player.traitor_tick {
                 player.traitor = false;
@@ -786,6 +791,22 @@ impl SowEngine {
             .current_tick_u32()
             .saturating_add(BETRAYAL_COOLDOWN_TICKS);
         self.alliance_betray_cooldown_until.insert(bot_id, until);
+    }
+
+    #[inline]
+    pub fn can_send_resource_request(&self, proposer: PlayerId, target: PlayerId) -> bool {
+        let tick = self.current_tick_u32();
+        self.resource_request_cooldown_until
+            .get(&(proposer, target))
+            .is_none_or(|until| *until <= tick)
+    }
+
+    pub fn mark_resource_request_cooldown(&mut self, proposer: PlayerId, target: PlayerId) {
+        let until = self
+            .current_tick_u32()
+            .saturating_add(RESOURCE_REQUEST_COOLDOWN_TICKS);
+        self.resource_request_cooldown_until
+            .insert((proposer, target), until);
     }
 
     pub(crate) fn record_alliance_request_lifecycle(

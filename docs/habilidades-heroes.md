@@ -67,7 +67,7 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Artemisia I | Salamis Fleet | Port districts produce 50% more troops. | resource_bonus (port / troops) | 50% | `gameplay/icons/abilities/artemisia_i.webp` |
 | Shajar al-Durr | Crusader Wars | Traitors retreating from your land lose 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/shajar_al_durr.webp` |
 | Ramesses II | Pi-Ramesses Workshops | Factory districts produce 25% more troops. | resource_bonus (factory / troops) | 25% | `gameplay/icons/abilities/ramesses_ii.webp` |
-| Mulan | Northern Wei Defense | Armies retreating from your land lose 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/mulan.webp` |
+| Qin Liangyu | Ming Dynasty Defense | Armies retreating from your land lose 50% more troops. | enemy_retreat_penalty | 50% | `gameplay/icons/abilities/qin_liangyu.webp` |
 | Lobengula | Bulawayo Garrison | Cities raise your troop cap 50% more. | city_troop_capacity | 50% | `gameplay/icons/abilities/lobengula.webp` |
 | Shah Jahan | Monumental Cities | Cities pay 25% more troops. | resource_bonus (city / troops) | 25% | `gameplay/icons/abilities/shah_jahan.webp` |
 | Xerxes I | Host of Xerxes | Attackers lose 25% fewer troops when attacking outnumbered players. | attacker_loss | 25% | `gameplay/icons/abilities/xerxes_i.webp` |
@@ -84,3 +84,4 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Matoaka | Peace of Matoaka | Foreign armies need 25% more effort to conquer your territory. | defense_strength | 25% | `gameplay/icons/abilities/matoaka.webp` |
 | Burebista | Carpathian Fortresses | Armies need 25% more effort to conquer your territory. | defense_strength | 25% | `gameplay/icons/abilities/burebista.webp` |
 | Bolesław II the Bold | Kievan Expeditions | Conquest of foreign players advances 25% faster. | conquest_speed | 25% | `gameplay/icons/abilities/boleslaw_ii.webp` |
+| Abd al-Rahman al-Ghafiqi | Crossing the Pyrenees | Attackers lose 25% fewer troops while conquering mountain tiles. | attacker_loss | 25% | `gameplay/icons/abilities/abd_al_rahman_al_ghafiqi.webp` |

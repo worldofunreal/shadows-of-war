@@ -803,14 +803,23 @@ function renderPurchaseArt(
             esc(skin.name) +
             "' width='256' height='256'>";
     } else {
+        const artSlug = leaderArtSlug(leader);
+        const portrait =
+            typeof window.matchMedia === "function"
+                ? window.matchMedia("(orientation: portrait)").matches
+                : window.innerHeight >= window.innerWidth;
+        const mobileArt = leaderArtUrl(artSlug, "mobile");
+        const desktopArt = leaderArtUrl(artSlug, "desktop");
         art =
             "<picture><source media='(orientation: portrait)' srcset='" +
-            esc(leaderArtUrl(leaderArtSlug(leader), "mobile")) +
+            esc(mobileArt) +
+            "'><source media='(orientation: landscape)' srcset='" +
+            esc(desktopArt) +
             "'><img class='sow-purchase-modal__art-image' src='" +
-            esc(leaderArtUrl(leaderArtSlug(leader), "desktop")) +
+            esc(portrait ? mobileArt : desktopArt) +
             "' alt='" +
             esc(leaderDisplayName(leader)) +
-            "' width='1920' height='1080'></picture>";
+            "'></picture>";
     }
     const effects = success
         ? "<div class='sow-purchase-modal__effects' aria-hidden='true'><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>"

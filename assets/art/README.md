@@ -80,10 +80,11 @@ Los prompts exactos, sus referencias originales en orden y el encargo de animaci
 
 ## Agregar un héroe jugable
 
-1. En `assets/geo_entities.json`, al personaje se le agrega `hero` con `name` (nombre corto guardado en la experiencia; al renombrarlo, migra las claves de `leader_xp` y `leader_stats` en cliente y perfil de cuenta), `ability` y, si tiene carta registrada, `card`. `art_slug` dentro de `hero` nombra sus archivos de arte y, si falta, se usa `id`; cambiarlo no altera la identidad ni la experiencia guardada. La habilidad sale de las clases de efecto que ya existen y debe tener una situación que ningún otro héroe use (misma clase y mismo objetivo o lado; `Ability::situation()`, y lo prueba `every_hero_has_a_unique_situation`). Regla de diseño: el efecto sale de un hecho histórico real del personaje y se ve en esa situación (anillo en el mapa o aviso con su icono, vía `GameEvent::AbilityTriggered`). `free: true` lo deja gratis para siempre. También necesita `territory_color`.
-2. Para sus avatares, un solo archivo: `avatars/heroes/<art_slug>.webp`, con las cuatro caras en una hoja 2 × 2. El icono de habilidad va en `icons/abilities/<art_slug>.webp`. Las escenas del menú y la pantalla de carga van aparte en `heroes/<art_slug>_desktop.webp` y `heroes/<art_slug>_mobile.webp`; si faltan, no detienen la publicación, pero tampoco tienen imagen sustituta.
-3. En los 15 idiomas (`sow-i18n/strings/*/web.toml`): `leader_<id>_name`, `leader_<id>_historical` y `leader_<id>_civilization` en `[heroes]`; `leader_<id>_ability` y `leader_<id>_description` en `[site]`.
+El flujo completo de investigación, catálogo, habilidad, tienda, progreso, idiomas, biografías y pruebas está en la [guía para crear e integrar héroes](../../docs/guia-creacion-heroes.md). Esta sección conserva el contrato de los archivos de arte:
 
-El selector, el perfil y los emotes usan la hoja; las escenas se cargan por separado cuando existen. `./sow p` se detiene si falta un recurso obligatorio o si la habilidad no cambia el juego.
+- Retrato: `avatars/heroes/<art_slug>.webp`, una hoja 2 × 2 en orden Happy, Calm, Fear, Angry. El selector, el perfil y los emotes usan los recortes de esta hoja.
+- Icono de habilidad: `icons/abilities/<art_slug>.webp`, cuadrado y reconocible a tamaño pequeño.
+- Escenas: `heroes/<art_slug>_desktop.webp` y `heroes/<art_slug>_mobile.webp`. Se publican si existen; las variantes faltantes no tienen imagen sustituta.
+- El publicador procesa las hojas y recortes; no edites `assets/generated/` ni `dist/`. Si agregas una carpeta o categoría de arte distinta, registra su dueño en `sow-dist` (`ART_ICONS`/`ART_FOLDERS`) o `sow-tools` (`BADGES`).
 
-Un archivo con un nombre que no encaja en estas carpetas detiene el build, y también un nombre repetido en dos carpetas. Para agregar un espacio nuevo hay que darlo de alta en `sow-dist` (`ART_ICONS`) o en `sow-tools` (`BADGES`).
+El test de assets exige una hoja y un icono por héroe. Para mostrar escenas en selector, menú y página pública, entrega ambas variantes. Registra procedencia y licencia del arte en `assets/SOURCES.toml` cuando la fuente no corresponda a la clasificación existente.

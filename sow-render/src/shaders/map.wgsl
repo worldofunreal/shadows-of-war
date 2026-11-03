@@ -141,77 +141,29 @@ fn get_hex_neighbor(hex: vec2<i32>, direction: i32) -> vec2<i32> {
     return hex + offset;
 }
 
-fn edge_mask_coverage(local_pos: vec2<f32>, edges: vec4<f32>, width: f32, softness: f32) -> f32 {
-    if width <= 0.0 {
-        return 0.0;
-    }
-    var nearest_edge = 99.0;
-    if edges.x > 0.5 { nearest_edge = min(nearest_edge, 0.5 - local_pos.x); }
-    if edges.y > 0.5 { nearest_edge = min(nearest_edge, 0.5 + local_pos.x); }
-    if edges.z > 0.5 { nearest_edge = min(nearest_edge, 0.5 - local_pos.y); }
-    if edges.w > 0.5 { nearest_edge = min(nearest_edge, 0.5 + local_pos.y); }
-    if nearest_edge >= 99.0 {
-        return 0.0;
-    }
-    return 1.0 - smoothstep_safe(max(width - softness, 0.0), max(width, 0.001), nearest_edge);
-}
-
-fn blurred_edge_mask_coverage(
-    local_pos: vec2<f32>,
-    edges: vec4<f32>,
-    width: f32,
-    softness: f32,
-    blur_radius: f32,
-    blur_strength: f32,
-) -> f32 {
-    let center = edge_mask_coverage(local_pos, edges, width, softness);
-    if blur_radius <= 0.0 || blur_strength <= 0.0 {
-        return center;
-    }
-    // A 3x3 binomial filter softens mask coverage in both axes without moving the edge.
-    let x_offset = vec2<f32>(blur_radius, 0.0);
-    let y_offset = vec2<f32>(0.0, blur_radius);
-    let diagonal_offset = vec2<f32>(blur_radius, blur_radius);
-    let filtered = (
-        center * 4.0
-        + (edge_mask_coverage(local_pos + x_offset, edges, width, softness)
-            + edge_mask_coverage(local_pos - x_offset, edges, width, softness)
-            + edge_mask_coverage(local_pos + y_offset, edges, width, softness)
-            + edge_mask_coverage(local_pos - y_offset, edges, width, softness)) * 2.0
-        + edge_mask_coverage(local_pos + diagonal_offset, edges, width, softness)
-        + edge_mask_coverage(local_pos - diagonal_offset, edges, width, softness)
-        + edge_mask_coverage(local_pos + vec2<f32>(blur_radius, -blur_radius), edges, width, softness)
-        + edge_mask_coverage(local_pos + vec2<f32>(-blur_radius, blur_radius), edges, width, softness)
-    ) / 16.0;
-    return mix(center, filtered, clamp(blur_strength, 0.0, 1.0));
-}
-
 fn ocean_shore_edge(cell_hex: vec2<i32>, local_pos: vec2<f32>) -> f32 {
     let width = globals.shader_params[__MAP_WATER_SHORE_WIDTH__].x;
     if width <= 0.0 {
         return 0.0;
     }
-    var edges = vec4<f32>(0.0);
-    var has_land_neighbor = false;
+    const neighbor_dirs = array<vec2<f32>, 4>(
+        vec2<f32>(1.0, 0.0),
+        vec2<f32>(-1.0, 0.0),
+        vec2<f32>(0.0, -1.0),
+        vec2<f32>(0.0, 1.0)
+    );
+    var nearest_edge = 99.0;
     for (var i = 0; i < 4; i = i + 1) {
         let neighbor = get_cell_terrain(get_hex_neighbor(cell_hex, i));
         if (neighbor & 0x80u) != 0u {
-            edges[i] = 1.0;
-            has_land_neighbor = true;
+            nearest_edge = min(nearest_edge, 0.5 - dot(local_pos, neighbor_dirs[i]));
         }
     }
-    if !has_land_neighbor {
+    if nearest_edge >= 99.0 {
         return 0.0;
     }
     let softness = globals.shader_params[__MAP_WATER_SHORE_FADE__].x;
-    return blurred_edge_mask_coverage(
-        local_pos,
-        edges,
-        width,
-        softness,
-        globals.shader_params[__MAP_BORDER_MASK_BLUR_RADIUS__].x,
-        globals.shader_params[__MAP_BORDER_MASK_BLUR_STRENGTH__].x,
-    );
+    return 1.0 - smoothstep_safe(max(width - softness, 0.0), max(width, 0.001), nearest_edge);
 }
 
 fn owner_packed_color(owner_id: u32) -> u32 {
@@ -561,10 +513,7 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
     var is_green_border = false;
     var min_border_dist = 99.0;
     var is_shore_edge = false;
-    var border_edges = vec4<f32>(0.0);
-    var shore_edges = vec4<f32>(0.0);
-    var border_t = 0.0;
-    var shore_t = 0.0;
+    var min_shore_dist = 99.0;
 
     var thickness = globals.border_thickness;
     let border_darkness = globals.border_darkness;
@@ -609,7 +558,10 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
                 let dist_to_edge = 0.5 - dot(local_pos, dir);
 
                 if !neighbor_is_land {
-                    shore_edges[i] = 1.0;
+                    if dist_to_edge < shore_thickness {
+                        is_shore_edge = true;
+                        min_shore_dist = min(min_shore_dist, dist_to_edge);
+                    }
                 } else {
                     if owner_id > 0u && neighbor_owner != owner_id {
                         let green_exists = is_tribe && (neighbor_owner >= 200u);
@@ -618,38 +570,20 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
                             continue;
                         }
 
-                        border_edges[i] = 1.0;
-                        min_border_dist = min(min_border_dist, dist_to_edge);
-                        if green_exists {
-                            is_green_border = true;
+                        if dist_to_edge < thickness {
+                            is_border = true;
+                            min_border_dist = min(min_border_dist, dist_to_edge);
+                            if green_exists {
+                                is_green_border = true;
+                            }
                         }
                     }
                 }
             }
-
-            let blur_radius = globals.shader_params[__MAP_BORDER_MASK_BLUR_RADIUS__].x;
-            let blur_strength = globals.shader_params[__MAP_BORDER_MASK_BLUR_STRENGTH__].x;
-            border_t = blurred_edge_mask_coverage(
-                local_pos,
-                border_edges,
-                thickness,
-                globals.shader_params[__MAP_BORDER_SOFTNESS__].x,
-                blur_radius,
-                blur_strength,
-            );
-            shore_t = blurred_edge_mask_coverage(
-                local_pos,
-                shore_edges,
-                shore_thickness,
-                globals.shader_params[__MAP_COAST_SOFTNESS__].x,
-                blur_radius,
-                blur_strength,
-            );
-            is_border = border_t > 0.0;
-            is_shore_edge = shore_t > 0.0;
         }
 
         if is_shore_edge {
+            let shore_t = 1.0 - smoothstep_safe(shore_thickness - globals.shader_params[__MAP_COAST_SOFTNESS__].x, shore_thickness, min_shore_dist);
             // Sandy coast tint — not the near-black political border line
             var shore_col = globals.shader_params[__MAP_COAST_COLOR__].rgb * shore_darkness;
             if (terrain_byte & 0x40u) != 0u {
@@ -659,6 +593,7 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
         }
 
         if is_border {
+            let border_t = 1.0 - smoothstep_safe(thickness - globals.shader_params[__MAP_BORDER_SOFTNESS__].x, thickness, min_border_dist);
             if is_green_border {
                 let border_col = globals.shader_params[__MAP_BORDER_TRIBE_COLOR__].rgb * border_darkness;
                 base_color = mix(base_color, border_col, border_t);

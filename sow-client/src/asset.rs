@@ -2,6 +2,10 @@ use crate::ClientPhase;
 use crate::MapDownloadEvent;
 use crate::app::SowApp;
 
+fn should_prefetch_avatar_assets(phase: ClientPhase, tutorial_prefetch: bool) -> bool {
+    phase == ClientPhase::MainMenu || tutorial_prefetch
+}
+
 impl SowApp {
     pub(crate) fn start_map_download(&mut self, map_name: String) {
         let map_key = crate::ui::asset_loader::AssetLoader::map_key(&map_name);
@@ -209,12 +213,12 @@ impl SowApp {
                         }
                     }
                 }
-                MapDownloadEvent::AvatarReady { key, bytes } => {
+                MapDownloadEvent::AvatarPixelsReady { key, pixels } => {
                     match self
                         .ui
                         .app
                         .asset_loader
-                        .ingest_avatar_webp_bytes(key.clone(), &bytes)
+                        .ingest_avatar_pixels(key.clone(), &pixels)
                     {
                         Ok(()) => log::debug!("Loaded avatar {:?}", key),
                         Err(e) => {
@@ -222,7 +226,16 @@ impl SowApp {
                             self.ui.app.asset_loader.note_avatar_fetch_failed(key, e);
                         }
                     }
-                    // GPU atlas upload is fed inside `ingest_avatar_webp_bytes`.
+                    // GPU atlas upload is fed inside `ingest_avatar_pixels`.
+                }
+                MapDownloadEvent::AvatarPrefetchReady { key } => {
+                    match self.ui.app.asset_loader.ingest_avatar_prefetch(key.clone()) {
+                        Ok(()) => log::debug!("Prefetched avatar image {:?}", key),
+                        Err(e) => {
+                            log::warn!("Failed to ingest avatar prefetch {:?}: {e}", key);
+                            self.ui.app.asset_loader.note_avatar_fetch_failed(key, e);
+                        }
+                    }
                 }
                 MapDownloadEvent::AvatarFailed { key, reason } => {
                     log::warn!("Avatar fetch failed for {:?}: {reason}", key);
@@ -254,39 +267,112 @@ impl SowApp {
         }
     }
 
-    fn fetch_avatar(
-        url: String,
+    fn fetch_avatar_pixels(
+        path: String,
+        cell_size: u32,
         tx: crate::app::WakeSender<MapDownloadEvent>,
         key: crate::ui::asset_loader::AvatarFetchKey,
     ) {
-        let request = ehttp::Request::get(&url);
-        ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
-            let send = match result {
-                Ok(res) if res.ok => MapDownloadEvent::AvatarReady {
-                    key: key.clone(),
-                    bytes: res.bytes,
-                },
-                Ok(res) => MapDownloadEvent::AvatarFailed {
-                    key: key.clone(),
-                    reason: format!("HTTP {}", res.status),
-                },
-                Err(e) => MapDownloadEvent::AvatarFailed {
+        use wasm_bindgen::JsCast;
+
+        let is_prefetch = matches!(
+            &key,
+            crate::ui::asset_loader::AvatarFetchKey::CatalogPrefetch(_)
+        );
+        let function_name = if is_prefetch {
+            "SOW_prefetchAvatarImage"
+        } else {
+            "SOW_loadAvatarPixels"
+        };
+        let Some(window) = web_sys::window() else {
+            let _ = tx.send(MapDownloadEvent::AvatarFailed {
+                key,
+                reason: "window unavailable for shared avatar loader".into(),
+            });
+            return;
+        };
+        let loader = js_sys::Reflect::get(&window, &wasm_bindgen::JsValue::from_str(function_name));
+        let function = match loader
+            .ok()
+            .and_then(|value| value.dyn_into::<js_sys::Function>().ok())
+        {
+            Some(function) => function,
+            None => {
+                let _ = tx.send(MapDownloadEvent::AvatarFailed {
                     key,
-                    reason: e.to_string(),
+                    reason: "shared avatar loader is unavailable".into(),
+                });
+                return;
+            }
+        };
+        let path_value = wasm_bindgen::JsValue::from_str(&path);
+        let leader_expression = match &key {
+            crate::ui::asset_loader::AvatarFetchKey::Leader(leader) => {
+                Some((leader.art_slug(), "calm"))
+            }
+            crate::ui::asset_loader::AvatarFetchKey::LeaderExpression(leader, expression) => Some((
+                leader.art_slug(),
+                crate::ui::asset_loader::avatar_expression_name(*expression),
+            )),
+            _ => None,
+        };
+        let result = if is_prefetch {
+            function.call1(&window, &path_value)
+        } else if let Some((slug, expression)) = leader_expression {
+            function.call3(
+                &window,
+                &wasm_bindgen::JsValue::from_str(slug),
+                &wasm_bindgen::JsValue::from_f64(cell_size as f64),
+                &wasm_bindgen::JsValue::from_str(expression),
+            )
+        } else {
+            function.call2(
+                &window,
+                &path_value,
+                &wasm_bindgen::JsValue::from_f64(cell_size as f64),
+            )
+        };
+        let promise = match result {
+            Ok(value) => js_sys::Promise::resolve(&value),
+            Err(error) => {
+                let _ = tx.send(MapDownloadEvent::AvatarFailed {
+                    key,
+                    reason: error.as_string().unwrap_or_else(|| format!("{error:?}")),
+                });
+                return;
+            }
+        };
+        wasm_bindgen_futures::spawn_local(async move {
+            let event = match wasm_bindgen_futures::JsFuture::from(promise).await {
+                Ok(_) if is_prefetch => MapDownloadEvent::AvatarPrefetchReady { key },
+                Ok(value) => MapDownloadEvent::AvatarPixelsReady {
+                    key,
+                    pixels: js_sys::Uint8Array::new(&value).to_vec(),
+                },
+                Err(error) => MapDownloadEvent::AvatarFailed {
+                    key,
+                    reason: error.as_string().unwrap_or_else(|| format!("{error:?}")),
                 },
             };
-            let _ = tx.send(send);
+            let _ = tx.send(event);
         });
     }
 
     fn poll_avatar_fetches(&mut self) {
-        use crate::ui::asset_loader::{
-            AssetLoader, MAX_AVATAR_FETCHES_IN_FLIGHT, MAX_AVATAR_PREFETCHES_IN_FLIGHT,
-        };
+        use crate::ui::asset_loader::{AssetLoader, MAX_AVATAR_FETCHES_IN_FLIGHT};
 
-        let priority = crate::ui::asset_loader::AvatarFetchKey::LeaderPortrait(
-            self.ui.app.main_menu_state.selected_leader,
-        );
+        let priority = self
+            .ui
+            .app
+            .asset_loader
+            .leader_fetch_key(self.ui.app.main_menu_state.selected_leader);
+        let menu_prefetch = self.ui.app.phase == ClientPhase::MainMenu;
+        if menu_prefetch && !self.ui.app.asset_loader.avatar_catalog_prefetch_started() {
+            self.ui
+                .app
+                .asset_loader
+                .start_avatar_catalog_prefetch(&self.asset_config.avatar_catalog);
+        }
         let tutorial_prefetch = self.ui.tutorial_active && self.net.is_offline;
         if tutorial_prefetch {
             self.ui
@@ -294,10 +380,9 @@ impl SowApp {
                 .asset_loader
                 .start_tutorial_bot_avatar_prefetch();
         }
-        self.ui
-            .app
-            .asset_loader
-            .pump_tutorial_avatar_prefetch_retries();
+        self.ui.app.asset_loader.pump_avatar_prefetch_retries();
+        let allow_avatar_prefetch =
+            should_prefetch_avatar_assets(self.ui.app.phase, tutorial_prefetch);
 
         if let Some(snapshot) = self.sim.current_snapshot.as_ref() {
             for player in &snapshot.players {
@@ -341,9 +426,7 @@ impl SowApp {
                 .take_next_avatar_fetch_pending(&priority)
             {
                 Some(key) => Some(key),
-                None if self.ui.app.asset_loader.avatar_prefetch_in_flight()
-                    < MAX_AVATAR_PREFETCHES_IN_FLIGHT =>
-                {
+                None if allow_avatar_prefetch => {
                     self.ui.app.asset_loader.take_next_avatar_prefetch_pending()
                 }
                 None => None,
@@ -353,10 +436,9 @@ impl SowApp {
             };
 
             let filename = AssetLoader::avatar_filename(&key);
-            let url = self.asset_config.avatar_url(&filename);
-            log::debug!("Fetching avatar {:?} url={}", key, url);
+            log::debug!("Loading avatar {:?} path={}", key, filename);
             let tx = self.tasks.map_tx.clone();
-            Self::fetch_avatar(url, tx, key);
+            Self::fetch_avatar_pixels(filename, sow_render::text::AVATAR_CELL, tx, key);
         }
     }
 
@@ -881,5 +963,19 @@ impl SowApp {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod avatar_prefetch_phase_tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn catalog_prefetch_runs_in_menu_and_tutorial_but_pauses_in_other_matches() {
+        assert!(should_prefetch_avatar_assets(ClientPhase::MainMenu, false));
+        assert!(should_prefetch_avatar_assets(ClientPhase::Playing, true));
+        assert!(!should_prefetch_avatar_assets(ClientPhase::Playing, false));
+        assert!(!should_prefetch_avatar_assets(ClientPhase::Splash, false));
     }
 }

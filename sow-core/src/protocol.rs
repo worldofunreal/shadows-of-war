@@ -554,6 +554,18 @@ pub struct PlayerSnapshot {
     pub nuke_cooldown_ticks: u32,
 }
 
+impl PlayerSnapshot {
+    /// Whether resources can move between these two players now. Mirrors the server's
+    /// `resources_can_move`, so the client offers only trades the server will accept.
+    pub fn can_trade_with(&self, other: &PlayerSnapshot) -> bool {
+        self.id != other.id
+            && self.alive
+            && other.alive
+            && (self.alliances.contains(&other.id)
+                || (self.team.is_some() && self.team == other.team))
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ResourceRequest {
     pub requester: crate::player::PlayerId,

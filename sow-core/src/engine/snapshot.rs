@@ -49,7 +49,7 @@ impl SowEngine {
 
                 let resource_requests = proposed_resources
                     .iter()
-                    .filter(|r| r.target == p.id)
+                    .filter(|r| r.target == p.id && self.resources_can_move(r.proposer, r.target))
                     .map(|r| crate::protocol::ResourceRequest {
                         requester: r.proposer,
                         gold: r.gold,

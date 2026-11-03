@@ -966,6 +966,20 @@ fn every_hero_has_a_unique_situation() {
     }
 }
 
+#[test]
+fn al_ghafiqi_has_a_mountain_campaign_ability() {
+    let hero = Leader::of("abd_al_rahman_al_ghafiqi");
+    assert_eq!(
+        hero.ability(),
+        Ability::AttackerLoss {
+            when: LossWhen::Mountain,
+            percent: 25,
+        }
+    );
+    assert_eq!(hero.attacker_loss_multiplier(LossWhen::Mountain), 0.75);
+    assert_eq!(hero.attacker_loss_multiplier(LossWhen::Highland), 1.0);
+}
+
 fn send(engine: &mut SowEngine, player_id: u16, intent: GameplayIntent) {
     engine.apply_intents(&[StampedIntent { player_id, intent }]);
 }

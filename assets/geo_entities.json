@@ -3853,8 +3853,7 @@
    "region": "asia",
    "lat": 33.8626,
    "lon": 115.7742,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Hua_Mulan",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tuoba",
    "avatar": "tuoba"
   },
   {
@@ -7434,16 +7433,15 @@
    "avatar": "khurshid_banu_natavan"
   },
   {
-   "id": "nation_mulan",
-   "name": "Mulan",
+   "id": "nation_northern_wei",
+   "name": "Northern Wei",
    "entity": "Northern Wei",
    "role": "nation",
    "region": "asia",
    "lat": 34.62,
    "lon": 112.45,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Hua_Mulan",
-   "avatar": "mulan_nation"
+   "wikipedia": "https://en.wikipedia.org/wiki/Northern_Wei",
+   "avatar": "northern_wei"
   },
   {
    "id": "nation_thusnelda",
@@ -8576,18 +8574,18 @@
   },
   {
    "id": "qin_liangyu",
-   "name": "Mulan",
-   "entity": "Northern Wei",
+   "name": "Qin Liangyu",
+   "entity": "Ming Dynasty",
    "role": "nation",
    "region": "asia",
-   "lat": 34.62,
-   "lon": 112.45,
+   "lat": 30.3,
+   "lon": 108.03,
    "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Hua_Mulan",
-   "avatar": "mulan",
+   "wikipedia": "https://en.wikipedia.org/wiki/Qin_Liangyu",
+   "avatar": "qin_liangyu",
    "hero": {
     "name": "Qin Liangyu",
-    "art_slug": "mulan",
+    "art_slug": "qin_liangyu",
     "ability": {
      "kind": "enemy_retreat_penalty",
      "against": "anyone",
@@ -9223,6 +9221,28 @@
     }
    },
    "territory_color": "#b3242f"
+  },
+  {
+   "id": "abd_al_rahman_al_ghafiqi",
+   "name": "Abd al-Rahman al-Ghafiqi",
+   "entity": "Umayyad al-Andalus",
+   "role": "nation",
+   "region": "europe",
+   "lat": 37.89,
+   "lon": -4.77,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Abd_al-Rahman_ibn_Abd_Allah_al-Ghafiqi",
+   "avatar": "abd_al_rahman_al_ghafiqi",
+   "hero": {
+    "name": "Abd al-Rahman al-Ghafiqi",
+    "art_slug": "abd_al_rahman_al_ghafiqi",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": "mountain",
+     "percent": 25
+    }
+   },
+   "territory_color": "#087c68"
   }
  ]
 }

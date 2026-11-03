@@ -409,7 +409,8 @@ function makeHudDocument() {
 function makePlayerDialogsHarness() {
     const { doc, Element } = makeHudDocument();
     const calls = [],
-        listeners = {};
+        listeners = {},
+        timers = [];
     const context = vm.createContext({
         Element,
         HTMLElement: Element,
@@ -433,6 +434,9 @@ function makePlayerDialogsHarness() {
             addEventListener: (name, listener) => {
                 listeners[name] = listener;
             },
+            setTimeout: (callback, delay) => {
+                timers.push({ callback, delay });
+            },
         },
         asset: (name) => "/assets/" + name,
         SOW_t: (key) => context.window.SOW_LOCALE + ":" + key,
@@ -451,6 +455,7 @@ function makePlayerDialogsHarness() {
     vm.runInContext(
         stateSource +
             part("    function send(", "    function asset(") +
+            part("    function wholeAmount(", "    function hudIcon(") +
             part("    function bindAvatarFallback(", "    function clearNotificationCard(") +
             part("    function createPlayerIdentity(", "    function createInboxRequest(") +
             part(
@@ -476,6 +481,12 @@ function makePlayerDialogsHarness() {
             transferClose: element("button", "sow-hud-transfer-close", "close_transfer"),
             transferGold: element("input", "sow-hud-transfer-gold"),
             transferTroops: element("input", "sow-hud-transfer-troops"),
+            transferSend: element("button", "sow-hud-transfer-send", "send_resources"),
+            transferRequest: element("button", "sow-hud-transfer-request", "request_resources"),
+            transferStockTroops: element("b", "sow-hud-transfer-stock-troops"),
+            transferStockMaxTroops: element("span", "sow-hud-transfer-stock-max-troops"),
+            transferStockGold: element("b", "sow-hud-transfer-stock-gold"),
+            transferHint: element("p", "sow-hud-transfer-hint"),
             transferIdentity: context.createPlayerIdentity(),
             betrayal: element("div", "sow-hud-betrayal-modal"),
             betrayalTarget: element("div", "sow-hud-betrayal-target"),
@@ -523,6 +534,11 @@ function makePlayerDialogsHarness() {
     context.hudRoot.addEventListener = (name, listener) => {
         listeners[name] = listener;
     };
+    const formatStart = hud.indexOf("    function formatNameplateTroops(");
+    vm.runInContext(
+        hud.slice(formatStart, hud.indexOf("    function formatHudMetric(", formatStart)),
+        context,
+    );
     const keyboardStart = hud.search(/if\s*\(hudRoot\)\s*hudRoot\.addEventListener\("keydown",/);
     const keyboardEnd = hud.indexOf('window.addEventListener("resize", updateHudSafeArea);', keyboardStart);
     assert.ok(keyboardStart >= 0 && keyboardEnd > keyboardStart);
@@ -531,6 +547,7 @@ function makePlayerDialogsHarness() {
         context,
         doc,
         calls,
+        timers,
         listeners,
         canvas,
         update: (hudValue, extra = {}) => {
@@ -541,10 +558,11 @@ function makePlayerDialogsHarness() {
             });
             return context.handleHudStateUpdate(raw, JSON.parse(raw));
         },
-        click: (command) => {
+        click: (command, dataset = {}) => {
             const target = new Element("button");
             target.dataset.command = command;
             target.dataset.playerId = "2";
+            Object.assign(target.dataset, dataset);
             context.handleHudClick({ target });
         },
         key: (key, shiftKey = false) => {
@@ -719,9 +737,11 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
     );
 
     context.window.SOW_LOCALE = "es";
-    context.renderInbox([added, alliance, campaign, eliminated]);
+    context.renderInbox([added, ...requests]);
     assert.equal(refs.inboxRequests["alliance:2"].accept.textContent, "es:hud.accept");
     assert.equal(refs.inboxRequests["alliance:2"].type.textContent, "es:hud.alliance_request_title");
+    assert.equal(refs.inboxRequests["resources:3"].accept.textContent, "es:hud.send");
+    assert.equal(refs.inboxRequests["resources:3"].reject.textContent, "es:hud.ignore_request");
     context.renderHud = () => {
         context.hudRefs = makeRefs();
         context.renderInbox(requests);
@@ -1574,20 +1594,32 @@ test("short landscape HUD geometry fits the requested phone widths and heights",
 });
 
 test("transfer acknowledgements release the mobile sidebars without leaving a hidden open panel", () => {
-    const transfer = { target_id: 2, target_name: "Trinovantes", suggested_gold: 12, suggested_troops: 34 };
+    const transfer = {
+        target_id: 2,
+        target_name: "Trinovantes",
+        target_alive: true,
+        target_troops: 100,
+        target_max_troops: 400,
+        target_gold: 50,
+        mode: null,
+    };
+    const own = { troops: 500, gold: 100, max_troops: 1000 };
+    const expected = {
+        close_transfer: { type: "close_transfer" },
+        // A quarter of our stock, within the 300 troops the target has room for.
+        send_resources: { type: "send_resources", target_player_id: 2, gold: 25, troops: 125 },
+        // A quarter of theirs, clipped to their 99 spare troops (one stays home).
+        request_resources: { type: "request_resources", target_player_id: 2, gold: 25, troops: 99 },
+    };
     for (const command of ["close_transfer", "send_resources", "request_resources"]) {
         const { context, calls, update: publish, click } = makePlayerDialogsHarness();
         const panel = context.hudRefs.transfer;
-        const update = (value, extra = {}) => publish({ transfer: value, ...extra });
+        const update = (value, extra = {}) => publish({ transfer: value, ...own, ...extra });
         update(transfer);
         assert.equal(panel.classList.contains("hidden"), false);
         assert.equal(context.hudRoot.dataset.overlayOpen, "true");
         click(command);
-        assert.deepEqual(calls, [
-            command === "close_transfer"
-                ? { type: command }
-                : { type: command, target_player_id: 2, gold: 12, troops: 34 },
-        ]);
+        assert.deepEqual(calls, [expected[command]]);
         context.renderHud();
         assert.equal(
             panel.classList.contains("hidden"),
@@ -1633,8 +1665,8 @@ test("transfer acknowledgements release the mobile sidebars without leaving a hi
             false,
             "a rejected send keeps the authoritative panel open for retry",
         );
-        assert.equal(context.hudRefs.transferGold.value, "12");
-        assert.equal(context.hudRefs.transferTroops.value, "34");
+        assert.equal(context.hudRefs.transferGold.value, "25");
+        assert.equal(context.hudRefs.transferTroops.value, "125");
         update(null);
         assert.equal(
             context.hudRoot.dataset.overlayOpen,
@@ -1644,14 +1676,144 @@ test("transfer acknowledgements release the mobile sidebars without leaving a hi
     }
 });
 
+test("transfer panel shows live stock and sizes presets from the side it acts on", () => {
+    const { context, click, update } = makePlayerDialogsHarness();
+    const offer = {
+        target_id: 2,
+        target_name: "Trinovantes",
+        target_alive: true,
+        target_gold: 23,
+        target_troops: 300,
+        target_max_troops: 400,
+        mode: null,
+    };
+    update({ transfer: offer, troops: 500, gold: 90, max_troops: 1000 });
+    const refs = context.hudRefs;
+    assert.equal(refs.transferStockTroops.textContent, "300");
+    assert.equal(refs.transferStockMaxTroops.textContent, "400");
+    assert.equal(refs.transferStockGold.textContent, "23");
+    // Troops fit the recipient's 100-troop room; gold has no recipient cap.
+    click("set_transfer_amount", { resource: "troops", percent: "50" });
+    assert.equal(refs.transferTroops.value, "100");
+    click("set_transfer_amount", { resource: "gold", percent: "25" });
+    assert.equal(refs.transferGold.value, "22");
+    click("set_transfer_amount", { resource: "gold", percent: "max" });
+    assert.equal(refs.transferGold.value, "90");
+    update({
+        transfer: { ...offer, target_troops: 390, target_gold: 40 },
+        troops: 500,
+        gold: 90,
+        max_troops: 1000,
+    });
+    assert.equal(refs.transferStockTroops.textContent, "390");
+    assert.equal(refs.transferStockGold.textContent, "40");
+    click("set_transfer_amount", { resource: "troops", percent: "max" });
+    assert.equal(refs.transferTroops.value, "10");
+    update({ transfer: { ...offer, mode: "send" }, troops: 3, gold: 0, max_troops: 1000 });
+    click("set_transfer_amount", { resource: "troops", percent: "max" });
+    assert.equal(refs.transferTroops.value, "2", "one troop always stays home");
+    // A request sizes from their stock and our free room, so the presets follow the radial's pick.
+    update({ transfer: { ...offer, mode: "request" }, troops: 500, gold: 90, max_troops: 1000 });
+    click("set_transfer_amount", { resource: "troops", percent: "50" });
+    assert.equal(refs.transferTroops.value, "150", "half of their 300 troops");
+    click("set_transfer_amount", { resource: "troops", percent: "max" });
+    assert.equal(refs.transferTroops.value, "299", "their last troop stays home");
+    click("set_transfer_amount", { resource: "gold", percent: "25" });
+    assert.equal(refs.transferGold.value, "5", "a quarter of their 23 gold");
+    click("set_transfer_amount", { resource: "gold", percent: "max" });
+    assert.equal(refs.transferGold.value, "23");
+});
+
+test("the stronger army leads the transfer CTAs unless the radial picked a side", () => {
+    const { context, update } = makePlayerDialogsHarness();
+    const offer = {
+        target_id: 2,
+        target_name: "Trinovantes",
+        target_alive: true,
+        target_gold: 0,
+        target_troops: 300,
+        target_max_troops: 400,
+        mode: null,
+    };
+    const { transferSend, transferRequest } = context.hudRefs;
+    update({ transfer: offer, troops: 500, gold: 0, max_troops: 1000 });
+    assert.equal(transferSend.classList.contains("is-primary"), true);
+    assert.equal(transferRequest.classList.contains("is-primary"), false);
+    update({ transfer: offer, troops: 100, gold: 0, max_troops: 1000 });
+    assert.equal(transferSend.classList.contains("is-primary"), false);
+    assert.equal(transferRequest.classList.contains("is-primary"), true);
+    update({ transfer: { ...offer, mode: "send" }, troops: 100, gold: 0, max_troops: 1000 });
+    assert.equal(transferSend.classList.contains("is-primary"), true, "the radial's Send leads");
+});
+
+test("a side that cannot move anything is disabled and names the block", () => {
+    const { context, update, click, calls } = makePlayerDialogsHarness();
+    // They are full (no room for troops) and hold no gold, so Send is dead; Request still has troops.
+    const offer = {
+        target_id: 2,
+        target_name: "Trinovantes",
+        target_alive: true,
+        target_gold: 0,
+        target_troops: 400,
+        target_max_troops: 400,
+        mode: null,
+    };
+    update({ transfer: offer, troops: 500, gold: 0, max_troops: 1000 });
+    assert.equal(context.hudRefs.transferSend.disabled, true);
+    assert.equal(context.hudRefs.transferRequest.disabled, false);
+    assert.equal(context.hudRefs.transferHint.hidden, false);
+    assert.equal(context.hudRefs.transferHint.textContent, "en:hud.transfer_blocked_send");
+    const sent = calls.length;
+    click("send_resources");
+    assert.equal(calls.length, sent, "a blocked side sends nothing");
+});
+
+test("a request locks its button for the cooldown, sends nothing meanwhile, and unlocks when its timer fires", () => {
+    const { context, update, click, calls, timers } = makePlayerDialogsHarness();
+    const offer = {
+        target_id: 2,
+        target_name: "Trinovantes",
+        target_alive: true,
+        target_gold: 300,
+        target_troops: 300,
+        target_max_troops: 400,
+        mode: "request",
+    };
+    update({ transfer: offer, troops: 100, gold: 0, max_troops: 1000 });
+    assert.equal(context.hudRefs.transferRequest.disabled, false);
+    click("request_resources");
+    assert.equal(calls.at(-1).type, "request_resources");
+    assert.equal(context.hudRefs.transferRequest.disabled, true, "the lock shows at once");
+    assert.equal(context.hudRefs.transferHint.textContent, "en:hud.transfer_request_cooldown");
+    update({ transfer: offer, troops: 101, gold: 0, max_troops: 1000 });
+    assert.equal(context.hudRefs.transferRequest.disabled, true, "a server update keeps the lock");
+    const sent = calls.length;
+    click("request_resources");
+    assert.equal(calls.length, sent, "a request inside the cooldown is not sent");
+    // The wasm pushes state only when it changes, so the lock lifts through the timer, not a server update.
+    const unlock = timers.at(-1);
+    assert.equal(unlock.delay, 10_000);
+    const later = Date.now() + 10_001;
+    vm.runInContext("Date", context).now = () => later;
+    unlock.callback();
+    assert.equal(context.hudRefs.transferRequest.disabled, false, "the lock lifts when the cooldown ends");
+    assert.equal(context.hudRefs.transferHint.hidden, true);
+});
+
 test("player dialogs share identities, preserve drafts and focus, and prioritize safe keyboard actions", () => {
-    const { context, doc, calls, listeners, update, click, key, canvas } = makePlayerDialogsHarness();
+    const { context, doc, calls, listeners, update: publish, click, key, canvas } = makePlayerDialogsHarness();
+    // Our stock stays out of the way: a request is sized by their 9M gold and 9000 troops within our room.
+    const own = { troops: 0, gold: 500, max_troops: 10000 };
+    const update = (value, extra = {}) => publish({ ...own, ...value }, extra);
     const transfer = {
         target_id: 2,
         target_name: "<img onerror=alert(1)>".repeat(8),
         target_avatar: { kind: "portrait", slug: "caesar" },
-        suggested_gold: 12.9,
-        suggested_troops: 34.9,
+        target_alive: true,
+        target_gold: 9000000,
+        target_troops: 9000,
+        target_max_troops: 10000,
+        mode: "request",
     };
     update({ transfer });
     const first = context.hudRefs,
@@ -1665,14 +1827,14 @@ test("player dialogs share identities, preserve drafts and focus, and prioritize
     assert.equal(first.transferIdentity.name.textContent, transfer.target_name);
     assert.equal(first.transferIdentity.name.children.length, 0);
     assert.equal(first.transferIdentity.portrait.src, "/assets/gameplay/avatars/caesar.webp");
-    assert.equal(gold.value, "12");
+    assert.equal(gold.value, "2250000", "a request seeds a quarter of their gold");
     first.transferIdentity.portrait.onerror.call(first.transferIdentity.portrait);
     assert.equal(first.transferIdentity.portrait.src, "/assets/gameplay/avatars/null.webp");
     gold.value = "1234567";
     troops.value = "7000";
     gold.focus();
     for (let tick = 1; tick <= 5; tick += 1)
-        update({ transfer: { ...transfer, suggested_gold: tick }, tick });
+        update({ transfer, tick });
     assert.equal(context.hudRefs.transferGold, gold);
     assert.equal(gold.value, "1234567");
     assert.equal(troops.value, "7000");
@@ -1681,7 +1843,7 @@ test("player dialogs share identities, preserve drafts and focus, and prioritize
     assert.deepEqual(
         calls.at(-1),
         { type: "request_resources", target_player_id: 2, gold: 1234567, troops: 7000 },
-        "requests are not capped by the sender's balance",
+        "requests are capped by their stock and our room, not by our own balance",
     );
     context.window.SOW_LOCALE = "ar";
     listeners["sow:locale-change"]();
@@ -1702,17 +1864,16 @@ test("player dialogs share identities, preserve drafts and focus, and prioritize
     update({ transfer: null });
     assert.equal(doc.activeElement, canvas);
     update({ transfer });
-    assert.equal(context.hudRefs.transferGold.value, "12", "reopening the same target starts a fresh draft");
+    assert.equal(context.hudRefs.transferGold.value, "2250000", "reopening the same target starts a fresh draft");
     update({
         transfer: {
             ...transfer,
             target_id: 3,
             target_name: "Trinovantes",
             target_avatar: { kind: "portrait", slug: "ndebele" },
-            suggested_gold: 7,
         },
     });
-    assert.equal(context.hudRefs.transferGold.value, "7");
+    assert.equal(context.hudRefs.transferGold.value, "2250000", "a new target gets its own seed");
     assert.equal(context.hudRefs.transferIdentity.portrait.src, "/assets/gameplay/avatars/ndebele.webp");
     assert.equal(context.hudRefs.transferIdentity.emblem.hidden, true);
     update({ transfer: { ...transfer, target_avatar: { kind: "portrait", slug: "boudica" } } });
