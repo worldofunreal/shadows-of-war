@@ -83,6 +83,10 @@ impl SowEngine {
             path_cursor: 0,
             steps_per_tick: 1 + level,
             active: true,
+            source_fleet_id: None,
+            target_fleet_id: None,
+            damage: 0.0,
+            expires_at_tick: u64::MAX,
         });
     }
 }

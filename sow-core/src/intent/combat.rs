@@ -23,13 +23,13 @@ pub fn build_attack_frontier(
     defense_grid: &DefenseGrid,
     player_id: u16,
     target_owner: u16,
-    border_tiles: &crate::bitset::DenseBitSet,
+    border_tiles: impl IntoIterator<Item = u32>,
     rng: &mut WyRand,
     insert_seq_counter: &mut u32,
 ) -> BinaryHeap<PrioritizedTile> {
     let mut to_conquer = BinaryHeap::new();
     let map_w = game.map.width;
-    for raw_idx in border_tiles.ones() {
+    for raw_idx in border_tiles {
         let (bx, by) = (raw_idx % map_w, raw_idx / map_w);
         game.map.for_each_neighbor(bx, by, |nx, ny| {
             if game.map.owner_id(nx, ny) != target_owner {
@@ -80,15 +80,29 @@ pub fn build_attack_frontier(
     to_conquer
 }
 
-pub fn spawn_or_merge_attack_for_fleet_arrival_pure(
+pub fn spawn_attack_for_fleet_arrival(
     engine: &mut SowEngine,
     owner_id: u16,
     target_owner: u16,
     troops: f64,
     fleet_id: u64,
     landed: bool,
+    landing_tile: u32,
 ) {
-    if troops < engine.state.config.attack_cost_neutral || !troops.is_finite() {
+    let scripted_assault = engine.campaign_assault.as_ref().is_some_and(|assault| {
+        assault.attacker_ids.contains(&owner_id) && assault.target_ids.contains(&target_owner)
+    });
+    let target_allowed = target_owner == 0
+        || engine.state.player(target_owner).is_some_and(|target| {
+            target.alive
+                && engine.state.player(owner_id).is_some_and(|owner| {
+                    scripted_assault
+                        || !(owner.alliances.contains(&target_owner)
+                            || target.alliances.contains(&owner_id)
+                            || (owner.team.is_some() && owner.team == target.team))
+                })
+        });
+    if !target_allowed || troops < engine.state.config.attack_cost_neutral || !troops.is_finite() {
         if let Some(p) = engine.state.player_mut(owner_id) {
             p.credit_troops_capped(troops, p.max_troops);
         }
@@ -104,15 +118,15 @@ pub fn spawn_or_merge_attack_for_fleet_arrival_pure(
     let mut rng = WyRand::new(exec_seed);
     let mut initial_seq = 0u32;
     engine.refresh_defense_grid();
-    let Some(player) = engine.state.player(owner_id) else {
+    if engine.state.player(owner_id).is_none() {
         return;
-    };
+    }
     let fresh = build_attack_frontier(
         &engine.state,
         &engine.defense_grid,
         owner_id,
         target_owner,
-        &player.border_tiles,
+        std::iter::once(landing_tile),
         &mut rng,
         &mut initial_seq,
     );
@@ -121,22 +135,6 @@ pub fn spawn_or_merge_attack_for_fleet_arrival_pure(
         if let Some(p) = engine.state.player_mut(owner_id) {
             p.credit_troops_capped(troops, p.max_troops);
         }
-        return;
-    }
-
-    let mut merge_idx = None;
-    for (i, ex) in engine.attacks.iter().enumerate() {
-        if ex.owner_id == owner_id && ex.target_owner == target_owner && !ex.retreating {
-            merge_idx = Some(i);
-            break;
-        }
-    }
-
-    if let Some(i) = merge_idx {
-        let ex = &mut engine.attacks[i];
-        ex.absorb_troops(troops, landed);
-        let merged = merge_frontiers(std::mem::take(&mut ex.to_conquer), fresh);
-        ex.to_conquer = merged;
         return;
     }
 
@@ -306,7 +304,7 @@ impl SowEngine {
             &self.defense_grid,
             player_id,
             target_owner,
-            &player.border_tiles,
+            player.border_tiles.ones(),
             &mut rng,
             &mut initial_seq,
         );
@@ -355,7 +353,7 @@ impl SowEngine {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_attack_frontier, spawn_or_merge_attack_for_fleet_arrival_pure};
+    use super::{build_attack_frontier, spawn_attack_for_fleet_arrival};
     use crate::building::{Building, DEFENSE_GRID_CELL_SIZE, DefenseGrid};
     use crate::game::{BuildingKind, GamePhase, GameState};
     use crate::game_config::GameConfig;
@@ -396,7 +394,8 @@ mod tests {
         let border = game.player(1).unwrap().border_tiles.clone();
         let mut rng = WyRand::new(91);
         let mut sequence = 0;
-        let frontier = build_attack_frontier(&game, &grid, 1, 2, &border, &mut rng, &mut sequence);
+        let frontier =
+            build_attack_frontier(&game, &grid, 1, 2, border.ones(), &mut rng, &mut sequence);
         assert_eq!(frontier.len(), 1);
 
         let influence = grid.influence(3, 3, width, 2, 1, game.seed, &game.config);
@@ -437,7 +436,7 @@ mod tests {
             ticks_until_complete: 0,
         });
         let fleet_id = 9;
-        spawn_or_merge_attack_for_fleet_arrival_pure(&mut engine, 1, 2, 10_000.0, fleet_id, false);
+        spawn_attack_for_fleet_arrival(&mut engine, 1, 2, 10_000.0, fleet_id, false, 3 * width + 2);
 
         let frontier = &engine.attacks[0].to_conquer;
         assert_eq!(frontier.len(), 1);
@@ -490,7 +489,7 @@ mod tests {
         game.player_mut(1).unwrap().troops = 20_000.0;
 
         let mut engine = crate::engine::SowEngine::new(game, WaterComponents::default());
-        spawn_or_merge_attack_for_fleet_arrival_pure(&mut engine, 1, 2, 10_000.0, 9, true);
+        spawn_attack_for_fleet_arrival(&mut engine, 1, 2, 10_000.0, 9, true, 3 * width + 2);
         assert!(engine.attacks[0].landed);
 
         engine.apply_intents(&[crate::protocol::StampedIntent {
@@ -501,7 +500,11 @@ mod tests {
             }),
         }]);
 
-        assert_eq!(engine.attacks.len(), 1, "the ordinary attack merges into the landed one");
+        assert_eq!(
+            engine.attacks.len(),
+            1,
+            "the ordinary attack merges into the landed one"
+        );
         assert!(!engine.attacks[0].landed);
         assert_eq!(engine.attacks[0].troops, 15_000.0);
     }

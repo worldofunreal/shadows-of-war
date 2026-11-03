@@ -115,6 +115,7 @@ impl SowEngine {
 
         for fleet in &self.fleets {
             if fleet.unit_type == crate::game::UnitType::TradeShip
+                && fleet.captured_trade_return.is_none()
                 && let Some(player) = self.state.player_mut(fleet.owner_id)
             {
                 player.credit_gold(config.per_tick(trade_income_per_second(

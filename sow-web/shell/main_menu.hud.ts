@@ -1,6 +1,8 @@
 import {
+    type AvatarExpression,
     avatarAssetUrl,
     avatarPortraitPath,
+    clearAvatarPortrait,
     loadAvatarImage,
     setAvatarPortrait,
 } from "./avatar-presentation.ts";
@@ -82,6 +84,25 @@ type LeaderboardRow = {
     gpsBtn: HTMLButtonElement;
     transferBtn: HTMLButtonElement;
     key: string;
+};
+type LeaderboardTeamRow = {
+    card: HTMLElement;
+    rank: HTMLElement;
+    name: HTMLElement;
+    territory: HTMLElement;
+    key: string;
+};
+type LeaderboardUpdate = {
+    players: HudLeaderboardPlayer[];
+    teams: HudLeaderboardTeam[];
+    playerPositions: Map<string, number>;
+    teamPositions: Map<string, number>;
+    playerIndex: number;
+    teamIndex: number;
+    stalePlayerIds: string[];
+    stalePlayerIndex: number;
+    staleTeamIds: string[];
+    staleTeamIndex: number;
 };
 type CombatOperationRow = {
     element: HTMLElement;
@@ -291,14 +312,19 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     let hudInitialized = false;
     let hudRefs: ReturnType<typeof createHudRefs> | null = null;
     let leaderboardRows: Record<string, LeaderboardRow> = Object.create(null);
+    let leaderboardTeamRows: Record<string, LeaderboardTeamRow> = Object.create(null);
+    let leaderboardWork: LeaderboardUpdate | null = null;
+    let leaderboardFrame = 0;
+    let leaderboardPanelOpen = false;
     // When we may ask each target again: the same ~10s the server enforces per pair.
     const TRANSFER_REQUEST_COOLDOWN_MS = 10_000;
     const transferRequestReadyAt: Record<number, number> = Object.create(null);
     let leaderboardRenderKey = "";
     let leaderboardFilterQuery = "";
     let pendingCounterAttacks: Record<string, number> = Object.create(null);
-    let lastLeaderboardPlayers: HudLeaderboardPlayer[] = [];
     let lastLeaderboardTeams: HudLeaderboardTeam[] = [];
+    let lastLeaderboardPlayersPayload: HudLeaderboardPlayer[] | null = null;
+    let lastLeaderboardTeamsPayload: HudLeaderboardTeam[] | null = null;
     let notificationCursor = 0;
     let notificationTimer: number | null = null;
     let bellRingTimer: number | null = null;
@@ -1618,6 +1644,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             SOW_t("hud.map_action_build_warship") +
             '">' +
             unitIcon("warship") +
+            '<span class="sow-hud__fleet-count" aria-hidden="true">0</span>' +
             tileCost(true) +
             tileLock() +
             "</button>" +
@@ -2818,7 +2845,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         fleet: "cyan",
     };
     const RING_HOLD_ACTIONS: Record<string, boolean> = { nuke: true };
-    const EXPRESSION_CELLS: string[] = ["happy", "calm", "fear", "angry"];
+    const FACE_EXPRESSIONS: readonly string[] = ["happy", "calm", "fear", "angry"];
 
     function ringSlots(mapMenu: HudMapMenu, items: HudMapMenuItem[], hud: HudRingState): (RingSlot | null)[] {
         const slots: (RingSlot | null)[] = new Array(RING_SLOTS).fill(null);
@@ -2963,19 +2990,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     function ringFace(expression: string): HTMLElement {
         const hud = hudState?.hud;
         const leader = leaderById(hud?.player_leader || hudState?.selected_leader);
-        const cell = EXPRESSION_CELLS.indexOf(expression);
+        const slug = leader?.art_slug || leader?.slug;
         const face = document.createElement("span");
         face.className = "sow-hud__ring-face";
         face.innerHTML = hudIcon("emote", "sow-hud__ring-icon");
-        if (cell < 0 || !leader || !(leader.art_slug || leader.slug)) return face;
-        face.style.setProperty("--face-x", String(cell % 2));
-        face.style.setProperty("--face-y", String(Math.floor(cell / 2)));
+        if (!FACE_EXPRESSIONS.includes(expression) || !slug) return face;
         const image = document.createElement("img");
         image.alt = "";
         image.onerror = function () {
             this.remove();
         };
-        image.src = asset("gameplay/avatars/spritesheets/" + (leader.art_slug || leader.slug) + ".webp");
+        image.src = avatarAssetUrl(avatarPortraitPath(slug, expression as AvatarExpression));
         face.appendChild(image);
         return face;
     }
@@ -4242,36 +4267,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         };
     }
 
-    function applyLeaderboardFilter(): void {
-        if (!hudRefs || !hudRefs.rows) return;
-        const q = leaderboardFilterQuery;
-        let visibleCount = 0;
-        const cards = Array.from(hudRefs.rows.querySelectorAll<HTMLElement>(".sow-hud__player-card"));
-        for (const card of cards) {
-            const name = (card.querySelector(".sow-hud__player-name")?.textContent || "").toLowerCase();
-            const rank = (card.querySelector(".sow-hud__player-rank")?.textContent || "").toLowerCase();
-            const match = !q || name.includes(q) || rank.includes(q);
-            card.hidden = !match;
-            if (match) visibleCount++;
-        }
-        if (hudRefs.lbEmpty) {
-            hudRefs.lbEmpty.hidden = visibleCount > 0 || !q;
-        }
-    }
-
     function updateLeaderboard(players: HudLeaderboardPlayer[], teams: HudLeaderboardTeam[]): void {
         if (!hudRefs || !hudRefs.rows) return;
-        if (Array.isArray(players)) {
-            lastLeaderboardPlayers = players;
-        } else {
-            players = lastLeaderboardPlayers;
-        }
-        if (Array.isArray(teams)) {
-            lastLeaderboardTeams = teams;
-        } else {
-            teams = lastLeaderboardTeams;
-        }
-        if (!Array.isArray(players)) return;
+        lastLeaderboardTeams = teams;
+        const teamPositions = new Map<string, number>();
+        teams.forEach(function (team, idx) {
+            teamPositions.set(String(team.team), idx);
+        });
+        const playerPositions = new Map<string, number>();
+        (players || []).forEach(function (player, idx) {
+            playerPositions.set(String(player.id), idx);
+        });
         const teamRenderKey = teams
             .map(function (team, idx) {
                 return [idx, team.team, team.tile_count, team.territory_pct, team.members].join("|");
@@ -4289,6 +4295,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                     player.territory_pct,
                     player.is_alive,
                     player.is_me,
+                    player.can_trade,
                     player.leader,
                     player.avatar,
                     player.avatar_expression,
@@ -4298,166 +4305,285 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             .join("\u001e");
         const renderKey = teamRenderKey + "\u001d" + playerRenderKey;
         if (renderKey === leaderboardRenderKey) return;
-        const nextRows = Object.create(null);
-        const fragment = document.createDocumentFragment();
-        teams.forEach(function (team, idx) {
-            const card = document.createElement("div");
-            const rank = document.createElement("span");
-            const name = document.createElement("b");
-            const territory = document.createElement("span");
+        leaderboardRenderKey = renderKey;
+        leaderboardWork = {
+            players,
+            teams,
+            playerPositions,
+            teamPositions,
+            teamIndex: 0,
+            playerIndex: 0,
+            staleTeamIds: Object.keys(leaderboardTeamRows).filter((id) => !teamPositions.has(id)),
+            staleTeamIndex: 0,
+            stalePlayerIds: Object.keys(leaderboardRows).filter((id) => !playerPositions.has(id)),
+            stalePlayerIndex: 0,
+        };
+        scheduleLeaderboardFrame();
+    }
 
-            card.className = "sow-hud__player-card sow-hud__team-summary";
-            rank.className = "sow-hud__player-rank";
-            name.className = "sow-hud__player-name";
-            territory.className = "sow-hud__player-land";
-            rank.textContent = "#" + (idx + 1);
-            name.textContent = SOW_t(team.team === "Red" ? "lobbies.red_team" : "lobbies.blue_team", {
+    function updateLeaderboardCardFilter(card: HTMLElement): void {
+        const q = leaderboardFilterQuery;
+        const name = (card.querySelector(".sow-hud__player-name")?.textContent || "").toLowerCase();
+        const rank = (card.querySelector(".sow-hud__player-rank")?.textContent || "").toLowerCase();
+        const matches = !q || name.includes(q) || rank.includes(q);
+        card.hidden = !matches;
+    }
+
+    function updateLeaderboardEmptyState(): void {
+        if (!hudRefs || !hudRefs.lbEmpty) return;
+        const hasVisibleRows =
+            Object.values(leaderboardRows).some((row) => !row.card.hidden) ||
+            Object.values(leaderboardTeamRows).some((row) => !row.card.hidden);
+        hudRefs.lbEmpty.hidden = hasVisibleRows || !leaderboardFilterQuery;
+    }
+
+    function applyLeaderboardFilter(): void {
+        if (!hudRefs || !hudRefs.rows) return;
+        const cards = hudRefs.rows.querySelectorAll<HTMLElement>(".sow-hud__player-card");
+        for (const card of Array.from(cards)) updateLeaderboardCardFilter(card);
+        updateLeaderboardEmptyState();
+    }
+
+    function createLeaderboardTeamRow(): LeaderboardTeamRow {
+        const card = document.createElement("div");
+        const rank = document.createElement("span");
+        const name = document.createElement("b");
+        const territory = document.createElement("span");
+        card.className = "sow-hud__player-card sow-hud__team-summary";
+        rank.className = "sow-hud__player-rank";
+        name.className = "sow-hud__player-name";
+        territory.className = "sow-hud__player-land";
+        card.append(rank, name, territory);
+        return { card, rank, name, territory, key: "" };
+    }
+
+    function updateLeaderboardTeamRow(
+        row: LeaderboardTeamRow,
+        team: HudLeaderboardTeam,
+        index: number,
+    ): void {
+        const key = [index, team.team, team.tile_count, team.territory_pct, team.members].join("|");
+        if (row.key !== key) {
+            row.key = key;
+            row.rank.textContent = "#" + (index + 1);
+            row.name.textContent = SOW_t(team.team === "Red" ? "lobbies.red_team" : "lobbies.blue_team", {
                 count: team.members,
             });
-            territory.textContent = Math.round((team.territory_pct || 0) * 100) + "%";
-            card.append(rank, name, territory);
-            fragment.appendChild(card);
+            row.territory.textContent = Math.round((team.territory_pct || 0) * 100) + "%";
+        }
+    }
+
+    function createLeaderboardRow(player: HudLeaderboardPlayer): LeaderboardRow {
+        const card = document.createElement("div");
+        const left = document.createElement("div");
+        const rank = document.createElement("span");
+        const avatarWrap = document.createElement("span");
+        const avatarImg = document.createElement("img");
+        const avatarBadge = document.createElement("span");
+        const nameWrap = document.createElement("div");
+        const name = document.createElement("b");
+        const meta = document.createElement("div");
+        const stats = document.createElement("div");
+        const territory = document.createElement("span");
+        const troops = document.createElement("span");
+        const actions = document.createElement("div");
+        const gps = document.createElement("button");
+        const transfer = document.createElement("button");
+
+        card.className = "sow-hud__player-card";
+        card.dataset.command = "focus_player";
+        card.dataset.playerId = String(player.id);
+        left.className = "sow-hud__player-identity";
+        rank.className = "sow-hud__player-rank";
+        avatarWrap.className = "sow-hud__player-avatar-wrap";
+        avatarImg.className = "sow-hud__player-avatar";
+        avatarImg.alt = "";
+        avatarImg.draggable = false;
+        avatarImg.loading = "lazy";
+        avatarImg.decoding = "async";
+        bindAvatarFallback(avatarImg, () => leaderboardPanelOpen, true);
+        avatarBadge.className = "sow-hud__player-avatar-badge";
+        avatarBadge.hidden = true;
+        avatarWrap.append(avatarImg, avatarBadge);
+        nameWrap.className = "sow-hud__player-name-wrap";
+        name.className = "sow-hud__player-name";
+        nameWrap.appendChild(name);
+        left.append(rank, avatarWrap, nameWrap);
+        meta.className = "sow-hud__player-meta";
+        stats.className = "sow-hud__player-stats";
+        territory.className = "sow-hud__player-land";
+        troops.className = "sow-hud__player-troops";
+        stats.append(territory, troops);
+        actions.className = "sow-hud__player-actions";
+        gps.type = "button";
+        gps.className = "sow-hud__row-action sow-hud__row-action--icon sow-hud__row-action--gps";
+        gps.dataset.command = "focus_player";
+        gps.dataset.playerId = String(player.id);
+        gps.setAttribute("aria-label", SOW_t("hud.center_camera") || "Locate");
+        gps.title = SOW_t("hud.center_camera") || "Locate";
+        gps.innerHTML = leaderboardGpsIcon();
+        transfer.type = "button";
+        transfer.className = "sow-hud__row-action sow-hud__row-action--icon sow-hud__row-action--trade";
+        transfer.dataset.command = "open_transfer";
+        transfer.dataset.playerId = String(player.id);
+        transfer.setAttribute("aria-label", SOW_t("hud.map_action_transfer") || "Trade");
+        transfer.title = SOW_t("hud.map_action_transfer") || "Trade";
+        transfer.innerHTML = leaderboardTradeIcon();
+        actions.append(gps, transfer);
+        meta.append(stats, actions);
+        card.append(left, meta);
+        return {
+            card,
+            rank,
+            avatarWrap,
+            avatarImg,
+            avatarBadge,
+            name,
+            territory,
+            troops,
+            gpsBtn: gps,
+            transferBtn: transfer,
+            key: "",
+        };
+    }
+
+    function updateLeaderboardRow(row: LeaderboardRow, player: HudLeaderboardPlayer, index: number): void {
+        const displayName = player.name || SOW_t("hud.player_name");
+        const rowKey = [
+            player.rank,
+            index,
+            displayName,
+            player.troops,
+            player.tile_count,
+            player.territory_pct,
+            player.is_alive,
+            player.is_me,
+            player.can_trade,
+            player.leader,
+            player.avatar,
+            player.avatar_expression,
+            JSON.stringify(player.avatar_transition),
+        ].join("|");
+        if (row.key === rowKey) return;
+        row.key = rowKey;
+        row.card.classList.toggle("is-me", !!player.is_me);
+        row.card.classList.toggle("is-dead", !player.is_alive);
+        const displayRank = Number.isFinite(Number(player.rank)) ? Number(player.rank) : index + 1;
+        row.card.classList.toggle("is-top-1", displayRank === 1);
+        row.card.classList.toggle("is-top-2", displayRank === 2);
+        row.card.classList.toggle("is-top-3", displayRank === 3);
+        row.rank.textContent = "#" + displayRank;
+        row.name.textContent = displayName;
+        renderAvatarIdentity(row.avatarImg, row.avatarBadge, leaderboardPlayerAvatar(player), true);
+        row.territory.textContent = Math.round((player.territory_pct || 0) * 100) + "%";
+        row.troops.innerHTML =
+            escapeHudText(
+                player.troops > 1000
+                    ? (player.troops / 1000).toFixed(1) + "k"
+                    : Math.floor(player.troops),
+            ) +
+            " " +
+            hudIcon("troops", "sow-hud__inline-icon");
+        row.gpsBtn.dataset.playerId = String(player.id);
+        row.transferBtn.dataset.playerId = String(player.id);
+        row.transferBtn.hidden = !player.can_trade;
+        row.transferBtn.disabled = !player.is_alive;
+        row.gpsBtn.disabled = !player.is_alive;
+    }
+
+    function insertLeaderboardCard(index: number, card: HTMLElement): void {
+        if (!hudRefs || !hudRefs.rows) return;
+        const before = hudRefs.rows.children.item(index);
+        if (before !== card) hudRefs.rows.insertBefore(card, before);
+    }
+
+    function scheduleLeaderboardFrame(): void {
+        if (!leaderboardWork || leaderboardFrame) return;
+        leaderboardFrame = window.requestAnimationFrame(flushLeaderboardFrame);
+    }
+
+    function cancelLeaderboardWork(): void {
+        if (leaderboardFrame) window.cancelAnimationFrame(leaderboardFrame);
+        leaderboardFrame = 0;
+        if (leaderboardWork) leaderboardRenderKey = "";
+        leaderboardWork = null;
+    }
+
+    function closeLeaderboard(): void {
+        const wasOpen = leaderboardPanelOpen;
+        leaderboardPanelOpen = false;
+        cancelLeaderboardWork();
+        if (!wasOpen) return;
+        leaderboardRenderKey = "";
+        lastLeaderboardPlayersPayload = null;
+        lastLeaderboardTeamsPayload = null;
+        Object.values(leaderboardRows).forEach((row) => {
+            avatarIdentityKeys.delete(row.avatarImg);
+            clearAvatarPortrait(row.avatarImg);
+            row.avatarBadge.hidden = true;
+            row.avatarBadge.textContent = "";
+            row.key = "";
         });
-        (players || []).forEach(function (player, idx) {
+    }
+
+    function flushLeaderboardFrame(): void {
+        leaderboardFrame = 0;
+        const work = leaderboardWork;
+        if (!work || !hudRefs || !hudRefs.rows || activeHudPanel !== "leaderboard") return;
+        let budget = 6;
+
+        while (budget > 0 && work.staleTeamIndex < work.staleTeamIds.length) {
+            const teamId = work.staleTeamIds[work.staleTeamIndex++];
+            const row = leaderboardTeamRows[teamId];
+            if (row) {
+                row.card.remove();
+                delete leaderboardTeamRows[teamId];
+            }
+            budget--;
+        }
+        while (budget > 0 && work.teamIndex < work.teams.length) {
+            const rowIndex = work.teamIndex++;
+            const team = work.teams[rowIndex];
+            const key = String(team.team);
+            const index = work.teamPositions.get(key) ?? rowIndex;
+            const row = leaderboardTeamRows[key] || (leaderboardTeamRows[key] = createLeaderboardTeamRow());
+            updateLeaderboardTeamRow(row, team, index);
+            insertLeaderboardCard(index, row.card);
+            updateLeaderboardCardFilter(row.card);
+            budget--;
+        }
+        while (budget > 0 && work.playerIndex < work.players.length) {
+            const index = work.playerIndex++;
+            const player = work.players[index];
             const key = String(player.id);
-            let row = leaderboardRows[key];
-            if (!row) {
-                const card = document.createElement("div");
-                const left = document.createElement("div");
-                const rank = document.createElement("span");
-                const avatarWrap = document.createElement("span");
-                const avatarImg = document.createElement("img");
-                const avatarBadge = document.createElement("span");
-                const nameWrap = document.createElement("div");
-                const name = document.createElement("b");
-                const meta = document.createElement("div");
-                const stats = document.createElement("div");
-                const territory = document.createElement("span");
-                const troops = document.createElement("span");
-                const actions = document.createElement("div");
-                const gps = document.createElement("button");
-                const transfer = document.createElement("button");
-
-                card.className = "sow-hud__player-card";
-                card.dataset.command = "focus_player";
-                card.dataset.playerId = String(player.id);
-
-                left.className = "sow-hud__player-identity";
-                rank.className = "sow-hud__player-rank";
-
-                avatarWrap.className = "sow-hud__player-avatar-wrap";
-                avatarImg.className = "sow-hud__player-avatar";
-                avatarImg.alt = "";
-                avatarImg.draggable = false;
-                bindAvatarFallback(avatarImg);
-
-                avatarBadge.className = "sow-hud__player-avatar-badge";
-                avatarBadge.hidden = true;
-                avatarWrap.append(avatarImg, avatarBadge);
-
-                nameWrap.className = "sow-hud__player-name-wrap";
-                name.className = "sow-hud__player-name";
-                nameWrap.appendChild(name);
-
-                left.append(rank, avatarWrap, nameWrap);
-
-                meta.className = "sow-hud__player-meta";
-                stats.className = "sow-hud__player-stats";
-                territory.className = "sow-hud__player-land";
-                troops.className = "sow-hud__player-troops";
-                stats.append(territory, troops);
-
-                actions.className = "sow-hud__player-actions";
-
-                gps.type = "button";
-                gps.className = "sow-hud__row-action sow-hud__row-action--icon sow-hud__row-action--gps";
-                gps.dataset.command = "focus_player";
-                gps.dataset.playerId = String(player.id);
-                gps.setAttribute("aria-label", SOW_t("hud.center_camera") || "Locate");
-                gps.title = SOW_t("hud.center_camera") || "Locate";
-                gps.innerHTML = leaderboardGpsIcon();
-
-                transfer.type = "button";
-                transfer.className =
-                    "sow-hud__row-action sow-hud__row-action--icon sow-hud__row-action--trade";
-                transfer.dataset.command = "open_transfer";
-                transfer.dataset.playerId = String(player.id);
-                transfer.setAttribute("aria-label", SOW_t("hud.map_action_transfer") || "Trade");
-                transfer.title = SOW_t("hud.map_action_transfer") || "Trade";
-                transfer.innerHTML = leaderboardTradeIcon();
-
-                actions.append(gps, transfer);
-                meta.append(stats, actions);
-
-                card.append(left, meta);
-
-                row = {
-                    card: card,
-                    rank: rank,
-                    avatarWrap: avatarWrap,
-                    avatarImg: avatarImg,
-                    avatarBadge: avatarBadge,
-                    name: name,
-                    territory: territory,
-                    troops: troops,
-                    gpsBtn: gps,
-                    transferBtn: transfer,
-                    key: "",
-                };
+            const playerIndex = work.playerPositions.get(key) ?? index;
+            const row = leaderboardRows[key] || (leaderboardRows[key] = createLeaderboardRow(player));
+            updateLeaderboardRow(row, player, playerIndex);
+            insertLeaderboardCard(work.teams.length + playerIndex, row.card);
+            updateLeaderboardCardFilter(row.card);
+            budget--;
+        }
+        while (budget > 0 && work.stalePlayerIndex < work.stalePlayerIds.length) {
+            const playerId = work.stalePlayerIds[work.stalePlayerIndex++];
+            const row = leaderboardRows[playerId];
+            if (row) {
+                row.card.remove();
+                delete leaderboardRows[playerId];
             }
+            budget--;
+        }
 
-            const displayName = player.name || SOW_t("hud.player_name");
-            const rowKey = [
-                player.rank,
-                idx,
-                displayName,
-                player.troops,
-                player.tile_count,
-                player.territory_pct,
-                player.is_alive,
-                player.is_me,
-                player.can_trade,
-                player.leader,
-                player.avatar,
-                player.avatar_expression,
-                JSON.stringify(player.avatar_transition),
-            ].join("|");
-            if (row.key !== rowKey) {
-                row.key = rowKey;
-                row.card.classList.toggle("is-me", !!player.is_me);
-                row.card.classList.toggle("is-dead", !player.is_alive);
-                const displayRank = Number.isFinite(Number(player.rank)) ? Number(player.rank) : idx + 1;
-                row.card.classList.toggle("is-top-1", displayRank === 1);
-                row.card.classList.toggle("is-top-2", displayRank === 2);
-                row.card.classList.toggle("is-top-3", displayRank === 3);
-                row.rank.textContent = "#" + displayRank;
-                row.name.textContent = displayName;
-
-                renderAvatarIdentity(row.avatarImg, row.avatarBadge, leaderboardPlayerAvatar(player));
-
-                row.territory.textContent = Math.round((player.territory_pct || 0) * 100) + "%";
-                row.troops.innerHTML =
-                    escapeHudText(
-                        player.troops > 1000
-                            ? (player.troops / 1000).toFixed(1) + "k"
-                            : Math.floor(player.troops),
-                    ) +
-                    " " +
-                    hudIcon("troops", "sow-hud__inline-icon");
-
-                row.gpsBtn.dataset.playerId = String(player.id);
-                row.transferBtn.dataset.playerId = String(player.id);
-                row.transferBtn.hidden = !player.can_trade;
-                row.transferBtn.disabled = !player.is_alive;
-                row.gpsBtn.disabled = !player.is_alive;
-            }
-            fragment.appendChild(row.card);
-            nextRows[key] = row;
-        });
-        hudRefs.rows.replaceChildren(fragment);
-        leaderboardRows = nextRows;
-        leaderboardRenderKey = renderKey;
-        applyLeaderboardFilter();
+        if (
+            work.staleTeamIndex >= work.staleTeamIds.length &&
+            work.teamIndex >= work.teams.length &&
+            work.playerIndex >= work.players.length &&
+            work.stalePlayerIndex >= work.stalePlayerIds.length
+        ) {
+            leaderboardWork = null;
+            updateLeaderboardEmptyState();
+            return;
+        }
+        scheduleLeaderboardFrame();
     }
 
     function createNotificationCard(container: HTMLElement, contextual: boolean): HudNotificationCard {
@@ -4496,14 +4622,19 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         return { card: card, seal: seal, avatars: avatars, copy: copy, renderKey: "" };
     }
 
-    function bindAvatarFallback(image: HTMLImageElement): void {
+    function bindAvatarFallback(
+        image: HTMLImageElement,
+        isActive: () => boolean = () => true,
+        deferLoad = false,
+    ): void {
         image.onerror = function () {
+            if (!isActive()) return;
             const fallback = avatarAssetUrl("gameplay/avatars/null.webp");
             if (this.getAttribute("src") !== fallback) {
                 this.hidden = false;
                 this.crossOrigin = "anonymous";
                 this.src = fallback;
-                void loadAvatarImage(fallback).catch(() => undefined);
+                if (!deferLoad) void loadAvatarImage(fallback).catch(() => undefined);
             } else {
                 this.hidden = true;
                 this.removeAttribute("src");
@@ -4515,6 +4646,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         image: HTMLImageElement,
         emblem: HTMLElement,
         presentation: HudAvatarIdentity | null | undefined,
+        deferLoad = false,
     ): void {
         const reducedMotion = Boolean(
             typeof document !== "undefined" &&
@@ -4551,7 +4683,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 presentation.transition ? presentation.transition.to : presentation.expression,
             ),
         );
-        setAvatarPortrait(image, src, presentation.transition, reducedMotion, reducedSource);
+        setAvatarPortrait(image, src, presentation.transition, reducedMotion, reducedSource, deferLoad);
         image.hidden = false;
     }
 
@@ -5547,6 +5679,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     function renderHud(forceNotifications = false): void {
         if (!hudRoot) return;
         if (!hudState || hudState.phase !== "Playing" || !hudState.hud) {
+            closeLeaderboard();
             hudRoot.hidden = true;
             if (hudDevLayer) hudDevLayer.hidden = true;
             clearCompactHudDensity();
@@ -5559,9 +5692,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             hudRoot.dataset.notificationsVisible = "false";
             if (hudRefs && hudRefs.mapMenu) hudRefs.mapMenu.classList.add("hidden");
             leaderboardRows = Object.create(null);
+            leaderboardTeamRows = Object.create(null);
             leaderboardRenderKey = "";
-            lastLeaderboardPlayers = [];
             lastLeaderboardTeams = [];
+            lastLeaderboardPlayersPayload = null;
+            lastLeaderboardTeamsPayload = null;
             if (hudRefs) {
                 hudRefs.inboxRequests = Object.create(null);
                 hudRefs.inboxRequestKeys = [];
@@ -5604,6 +5739,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const settingsOpen = activeHudPanel === "settings";
         const inboxOpen = activeHudPanel === "inbox";
         const leaderboardOpen = activeHudPanel === "leaderboard";
+        if (leaderboardOpen) leaderboardPanelOpen = true;
+        else closeLeaderboard();
         hudRoot.classList.toggle(
             "is-reduced-motion",
             Boolean(hudState.settings && hudState.settings.reduced_motion),
@@ -5879,6 +6016,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 hudRefs!.fleetWarship.hidden = hideWarship;
                 hudRefs!.fleetWarship.style.display = hideWarship ? "none" : "";
                 const warshipCost = Math.max(0, Number(fleetPanel.warship_cost) || 0);
+                const warshipCount = Math.max(0, Math.floor(Number(fleetPanel.warships) || 0));
+                const selectedWarships = Math.max(0, Math.floor(Number(fleetPanel.selected_warships) || 0));
+                const countBadge = hudRefs!.fleetWarship.querySelector<HTMLElement>(".sow-hud__fleet-count");
+                if (countBadge) countBadge.textContent = String(warshipCount);
                 const warshipDisabled =
                     warshipCampaignLocked || !warshipUnlocked || militaryFull || gold < warshipCost;
                 hudRefs!.fleetWarship.disabled = warshipDisabled;
@@ -5907,7 +6048,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                           " · " +
                           Math.floor(warshipCost).toLocaleString() +
                           "g";
-                const warshipLabel = SOW_t("hud.map_action_build_warship") + " · " + warshipReason;
+                const warshipLabel = SOW_t("hud.map_action_build_warship") + " · " + warshipCount +
+                    (selectedWarships > 0 ? " · " + selectedWarships : "") + " · " + warshipReason;
                 hudRefs!.fleetWarship.setAttribute("aria-label", warshipLabel);
                 hudRefs!.fleetWarship.title = warshipLabel;
                 setCampaignLock(hudRefs!.fleetWarship, fleetUnlocks === null && warshipDisabled);
@@ -6119,10 +6261,19 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             if (hudRefs!.lbSearch && hudRefs!.lbSearch.value !== leaderboardFilterQuery) {
                 hudRefs!.lbSearch.value = leaderboardFilterQuery;
             }
-            updateLeaderboard(
-                Array.isArray(hud.leaderboard) ? hud.leaderboard : lastLeaderboardPlayers,
-                Array.isArray(hud.team_leaderboard) ? hud.team_leaderboard : lastLeaderboardTeams,
-            );
+            if (Array.isArray(hud.leaderboard)) {
+                const teams = Array.isArray(hud.team_leaderboard)
+                    ? hud.team_leaderboard
+                    : lastLeaderboardTeams;
+                if (
+                    hud.leaderboard !== lastLeaderboardPlayersPayload ||
+                    teams !== lastLeaderboardTeamsPayload
+                ) {
+                    lastLeaderboardPlayersPayload = hud.leaderboard;
+                    lastLeaderboardTeamsPayload = teams;
+                    updateLeaderboard(hud.leaderboard, teams);
+                }
+            }
         }
 
         // Surrender Modal

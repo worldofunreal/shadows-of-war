@@ -126,6 +126,9 @@ impl SfxDirector {
             return;
         }
         let gap = match kind {
+            CombatSoundKind::NavalShot => Duration::from_millis(140),
+            CombatSoundKind::NavalImpact => Duration::from_millis(180),
+            CombatSoundKind::NavalSink => Duration::from_millis(650),
             CombatSoundKind::WildernessExpansion | CombatSoundKind::AttackTribe => {
                 Duration::from_millis(350)
             }

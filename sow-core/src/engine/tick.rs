@@ -112,7 +112,6 @@ impl SowEngine {
         self.prune_alliance_diplomacy();
         self.execute_ai_think();
         self.execute_construction();
-        self.execute_ship_production();
         self.execute_projectiles();
         self.execute_sam();
         self.execute_combat();

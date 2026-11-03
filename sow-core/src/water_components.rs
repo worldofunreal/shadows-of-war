@@ -4,7 +4,8 @@
 //! Computed once at map-load (terrain is static). Each client does this locally
 //! off the deterministic terrain bytes, so no network payload required.
 
-use std::collections::VecDeque;
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, VecDeque};
 
 use crate::map::{CARDINAL_NEIGHBOR_DELTAS, GameMap, MapTile};
 
@@ -42,6 +43,64 @@ pub struct WaterComponents {
 }
 
 impl WaterComponents {
+    /// Merge the two distance-ordered halves of each shoreline row. Only the
+    /// returned shores consume the caller's candidate budget; row bounds use
+    /// binary searches on the existing, row-major component index.
+    pub(crate) fn nearby_shores(
+        &self,
+        map: &GameMap,
+        component: u32,
+        source: u32,
+        radius: u32,
+        limit: usize,
+    ) -> Vec<u32> {
+        let Some(shores) = self.shoreline_tiles.get(component as usize) else {
+            return Vec::new();
+        };
+        if limit == 0 || map.width == 0 || source >= map.width.saturating_mul(map.height) {
+            return Vec::new();
+        }
+        let (sx, sy) = (source % map.width, source / map.width);
+        let min_x = sx.saturating_sub(radius);
+        let max_x = sx.saturating_add(radius).min(map.width - 1);
+        let min_y = sy.saturating_sub(radius);
+        let max_y = sy.saturating_add(radius).min(map.height - 1);
+        let distance = |tile: u32| sx.abs_diff(tile % map.width) + sy.abs_diff(tile / map.width);
+        let mut heads = BinaryHeap::new();
+        for y in min_y..=max_y {
+            let row = y * map.width;
+            let begin = shores.partition_point(|&tile| tile < row + min_x);
+            let end = shores.partition_point(|&tile| tile <= row + max_x);
+            let split = begin + shores[begin..end].partition_point(|&tile| tile < row + sx);
+            for (index, bound, right) in [
+                (split.checked_sub(1).filter(|&i| i >= begin), begin, false),
+                ((split < end).then_some(split), end, true),
+            ] {
+                if let Some(index) = index {
+                    let tile = shores[index];
+                    heads.push(Reverse((distance(tile), tile, index, bound, right)));
+                }
+            }
+        }
+        let mut nearby = Vec::with_capacity(limit);
+        while nearby.len() < limit {
+            let Some(Reverse((_, tile, index, bound, right))) = heads.pop() else {
+                break;
+            };
+            nearby.push(tile);
+            let next = if right {
+                (index + 1 < bound).then_some(index + 1)
+            } else {
+                index.checked_sub(1).filter(|&i| i >= bound)
+            };
+            if let Some(index) = next {
+                let tile = shores[index];
+                heads.push(Reverse((distance(tile), tile, index, bound, right)));
+            }
+        }
+        nearby
+    }
+
     fn from_components(components: Vec<u32>, count: u32, terrain: &[MapTile]) -> Self {
         let mut shoreline_tiles = vec![Vec::new(); count as usize + 1];
         for (idx, &component) in components.iter().enumerate() {
@@ -314,6 +373,42 @@ mod incremental_tests {
             }
         }
         map
+    }
+
+    #[test]
+    fn nearby_shores_are_bounded_and_sorted_by_distance_then_tile() {
+        let mut map = GameMap::new(31, 27);
+        for (idx, tile) in map.terrain.iter_mut().enumerate() {
+            if idx / 31 % 4 == 0 || idx % 31 % 7 == 0 {
+                *tile = MapTile::from_byte(0x20);
+            }
+        }
+        map.compute_shorelines();
+        let water = WaterComponents::compute(&map, |_| {});
+        for source in [0, 30, 13 * 31 + 15, 26 * 31 + 30] {
+            let component = water.component_of(source);
+            for radius in [0, 1, 5, 150] {
+                let (sx, sy) = (source % 31, source / 31);
+                let mut expected: Vec<_> = water.shoreline_tiles[component as usize]
+                    .iter()
+                    .copied()
+                    .filter(|tile| {
+                        sx.abs_diff(tile % 31) <= radius && sy.abs_diff(tile / 31) <= radius
+                    })
+                    .collect();
+                expected
+                    .sort_by_key(|tile| (sx.abs_diff(tile % 31) + sy.abs_diff(tile / 31), *tile));
+                for limit in [0, 1, 7, 192] {
+                    assert_eq!(
+                        water.nearby_shores(&map, component, source, radius, limit),
+                        expected.iter().copied().take(limit).collect::<Vec<_>>(),
+                        "source={source}, radius={radius}, limit={limit}"
+                    );
+                }
+            }
+        }
+        assert!(water.nearby_shores(&map, u32::MAX, 0, 150, 192).is_empty());
+        assert!(water.nearby_shores(&map, 1, u32::MAX, 150, 192).is_empty());
     }
 
     #[test]

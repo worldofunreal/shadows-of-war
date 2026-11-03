@@ -3783,6 +3783,7 @@ dependencies = [
  "sow-data",
  "sow-i18n",
  "unicode-bidi",
+ "web-sys",
  "web-time",
 ]
 

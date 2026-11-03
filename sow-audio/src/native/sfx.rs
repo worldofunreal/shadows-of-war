@@ -17,6 +17,9 @@ impl Event {
             Self::Combat(CombatSoundKind::AttackEmpire) => 0.39,
             Self::Combat(CombatSoundKind::AttackHuman) => 0.55,
             Self::Combat(CombatSoundKind::CounterAttack) => 0.39,
+            Self::Combat(CombatSoundKind::NavalShot) => 0.28,
+            Self::Combat(CombatSoundKind::NavalImpact) => 0.34,
+            Self::Combat(CombatSoundKind::NavalSink) => 0.85,
             Self::BuildingComplete(_) => 0.50,
             Self::NuclearLaunch => 1.55,
             Self::NuclearImpact(level) => 1.20 + f32::from(level) * 0.30,
@@ -30,6 +33,9 @@ impl Event {
             Self::Combat(CombatSoundKind::AttackEmpire) => 3,
             Self::Combat(CombatSoundKind::AttackHuman) => 4,
             Self::Combat(CombatSoundKind::CounterAttack) => 5,
+            Self::Combat(CombatSoundKind::NavalShot) => 12,
+            Self::Combat(CombatSoundKind::NavalImpact) => 13,
+            Self::Combat(CombatSoundKind::NavalSink) => 14,
             Self::BuildingComplete(BuildingSoundKind::City) => 6,
             Self::BuildingComplete(BuildingSoundKind::Tower) => 7,
             Self::BuildingComplete(BuildingSoundKind::Factory) => 8,
@@ -151,6 +157,13 @@ impl SfxSource {
                     [11.0, 17.0, 25.0],
                     0.42,
                 )
+            }
+            CombatSoundKind::NavalShot => strike(t, 0.0, noise, [78.0, 155.0, 310.0], [5.0, 10.0, 18.0], 0.86),
+            CombatSoundKind::NavalImpact => strike(t, 0.0, noise, [120.0, 255.0, 510.0], [8.0, 16.0, 28.0], 0.72),
+            CombatSoundKind::NavalSink => {
+                let fall = (1.0 - smoothstep(t / 0.72)).max(0.0);
+                ring(t, 105.0 - 48.0 * smoothstep(t / 0.72), 7.0) * fall * 0.7
+                    + noise * (-t * 5.0).exp() * 0.24
             }
         }
     }

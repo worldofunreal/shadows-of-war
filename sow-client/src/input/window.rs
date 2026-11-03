@@ -245,6 +245,11 @@ impl SowApp {
             }
         }
 
+        if code == winit::keyboard::KeyCode::KeyX {
+            self.select_all_warships();
+            return;
+        }
+
         let building = match code {
             winit::keyboard::KeyCode::Digit1 | winit::keyboard::KeyCode::Numpad1 => {
                 Some(sow_core::game::BuildingKind::City)
@@ -274,6 +279,7 @@ impl SowApp {
             self.select_nuke_kind(sow_core::game::NukeKind::AtomBomb);
         }
         if code == winit::keyboard::KeyCode::Escape || code == winit::keyboard::KeyCode::KeyQ {
+            self.input.selected_warships.clear();
             self.clear_placement();
             self.close_map_context_menu();
         }
@@ -374,6 +380,7 @@ impl SowApp {
                     let action_sent = dismisses_radial
                         || (!self.ui.tutorial_camera_only
                             && !build_tool_selected
+                            && !self.input.shift_pressed
                             && !panel_button
                             && self.try_attack_at(x, y));
                     self.input.map_pointer_start = Some(MapPointerStart {
@@ -420,6 +427,10 @@ impl SowApp {
                     self.input.dragging = false;
                 }
                 let distance_sq = (x - start.x).powi(2) + (y - start.y).powi(2);
+                if self.input.shift_pressed && distance_sq > 400.0 {
+                    self.select_warships_in_rect(start.x, start.y, x, y);
+                    return;
+                }
                 if distance_sq > 400.0 || self.ui.app.phase != ClientPhase::Playing {
                     return;
                 }

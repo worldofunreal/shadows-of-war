@@ -1296,6 +1296,20 @@ html[dir="rtl"] #sow-hud-dev-layer {
   cursor: default;
 }
 
+.sow-hud__fleet-count {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  min-width: 14px;
+  padding: 1px 3px;
+  border-radius: 8px;
+  background: rgba(5, 12, 20, 0.86);
+  color: #f5f8ff;
+  font: 750 9px/1 var(--sow-ui-font);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
 .sow-hud__army-allocation {
   display: grid;
   place-items: center;
@@ -3091,16 +3105,13 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   background: rgb(9 14 17);
 }
 
-/* ponytail: assumes square or portrait sheets (all current heroes); a landscape
-   sheet would need a height-based crop like the renderer's centered square. */
 .sow-hud__ring-face img {
   position: absolute;
-  left: 0;
-  top: 50%;
-  width: 200%;
-  height: auto;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   max-width: none;
-  transform: translate(calc(var(--face-x) * -50%), calc(-25% - var(--face-y) * 50%));
+  object-fit: cover;
 }
 
 .sow-hud__ring-badge {

@@ -454,51 +454,93 @@ impl SowEngine {
             GameplayIntent::UpgradeStructure { building_id } => {
                 self.apply_upgrade_structure_intent(stamped.player_id, *building_id);
             }
-            GameplayIntent::BuildShip { port_tile, kind } => {
+            GameplayIntent::BuildShip { target_tile, kind } => {
                 let pid = stamped.player_id;
-                if *kind == crate::game::UnitType::TradeShip {
+                if *kind != crate::game::UnitType::Warship {
                     return;
                 }
                 if *kind == crate::game::UnitType::Warship
                     && !self.campaign_allows_action(crate::campaign::CampaignAction::Warship)
                 {
+                    self.state.events.push(crate::game::GameEvent::NavalActionRejected {
+                        player_id: pid,
+                        reason: crate::game::NavalActionFailure::CampaignLocked,
+                    });
+                    return;
+                }
+                let Some(player) = self.state.player(pid) else {
+                    return;
+                };
+                if !player.alive {
+                    return;
+                }
+                let route = match crate::warp_fleet::resolve_warship_route(
+                    &self.state.map,
+                    &self.water,
+                    &mut self.path_scratch,
+                    &self.buildings,
+                    pid,
+                    *target_tile,
+                ) {
+                    Ok(route) => route,
+                    Err(error) => {
+                        let reason = match error {
+                            crate::warp_fleet::WarshipLaunchError::InvalidTile => crate::game::NavalActionFailure::InvalidTarget,
+                            crate::warp_fleet::WarshipLaunchError::TargetNotWater => crate::game::NavalActionFailure::TargetNotWater,
+                            crate::warp_fleet::WarshipLaunchError::NoPort => crate::game::NavalActionFailure::NoPort,
+                            crate::warp_fleet::WarshipLaunchError::NoConnectedPort => crate::game::NavalActionFailure::NoConnectedPort,
+                            crate::warp_fleet::WarshipLaunchError::NoWaterPath => crate::game::NavalActionFailure::NoWaterPath,
+                        };
+                        self.state.events.push(crate::game::GameEvent::NavalActionRejected {
+                            player_id: pid,
+                            reason,
+                        });
+                        return;
+                    }
+                };
+                let capacity = crate::building::player_fleet_capacity(&self.buildings, pid);
+                if self.boat_slots_used(pid) >= capacity {
+                    self.state.events.push(crate::game::GameEvent::NavalActionRejected {
+                        player_id: pid,
+                        reason: crate::game::NavalActionFailure::CapacityFull,
+                    });
                     return;
                 }
                 let cost = kind.gold_cost();
-                let required_port_level = if self
-                    .state
-                    .player(pid)
-                    .is_some_and(|player| player.player_type == PlayerType::Human)
-                {
-                    1
-                } else {
-                    kind.required_port_level()
-                };
-                let port_id = self
-                    .buildings
-                    .iter()
-                    .find(|b| {
-                        b.tile_idx == *port_tile
-                            && b.owner_id == pid
-                            && !b.under_construction
-                            && b.kind == crate::game::BuildingKind::Port
-                            && b.active_level() >= required_port_level
-                    })
-                    .map(|b| b.id);
-
-                let boat_capacity = crate::building::player_fleet_capacity(&self.buildings, pid);
-                if self.boat_slots_used(pid) < boat_capacity
-                    && let Some(port_id) = port_id
-                    && let Some(player) = self.state.player_mut(pid)
-                    && player.gold >= cost
-                {
-                    player.gold -= cost;
-                    let queue = self.port_queues.entry(port_id).or_default();
-                    queue.push_back(crate::game::ShipProduction {
-                        kind: *kind,
-                        ticks_until_complete: kind.build_duration_ticks(),
+                if player.gold < cost {
+                    self.state.events.push(crate::game::GameEvent::NavalActionRejected {
+                        player_id: pid,
+                        reason: crate::game::NavalActionFailure::InsufficientGold,
                     });
+                    return;
                 }
+                if let Some(player) = self.state.player_mut(pid) {
+                    player.gold -= cost;
+                }
+                let fleet_id = self.state.next_fleet_id;
+                self.state.next_fleet_id = self.state.next_fleet_id.wrapping_add(1).max(1);
+                let mut fleet = crate::warp_fleet::WarpFleet::new(
+                    fleet_id,
+                    pid,
+                    0,
+                    crate::game::UnitType::Warship,
+                    crate::game::UnitType::Warship.max_health(),
+                    (route.src_tile, route.landing_tile),
+                    route.path,
+                );
+                if let Some(warship) = fleet.warship.as_mut() {
+                    warship.patrol_tile = *target_tile;
+                }
+                fleet.set_speed_bonus_percent(crate::building::player_boat_speed_bonus(
+                    &self.buildings,
+                    pid,
+                ));
+                self.add_fleet(fleet);
+                self.state.events.push(crate::game::GameEvent::WarshipSpawned {
+                    owner_id: pid,
+                    fleet_id,
+                    tile: route.src_tile,
+                });
             }
             GameplayIntent::MoveWarships {
                 unit_ids,
@@ -510,8 +552,12 @@ impl SowEngine {
                 let pid = stamped.player_id;
                 let target = *target_tile;
                 let w = self.state.map.width;
+                let order_tick = self.state.tick;
                 let area = w.saturating_mul(self.state.map.height);
-                if target >= area {
+                if target >= area
+                    || !self.state.map.terrain[target as usize].is_water()
+                    || self.water.component_of(target) == 0
+                {
                     return;
                 }
                 for uid in unit_ids {
@@ -520,15 +566,24 @@ impl SowEngine {
                             && f.owner_id == pid
                             && f.unit_type == crate::game::UnitType::Warship
                     }) {
-                        // Route from where the warship is to the clicked tile.
-                        // Port-to-port sea lanes belong to trade ships only.
-                        if let Some(path) = self.path_scratch.astar.find_path(
-                            &self.state.map,
-                            &[fleet.current_tile],
-                            target,
-                        ) {
+                        if self.water.component_of(fleet.current_tile)
+                            == self.water.component_of(target)
+                            && let Some(path) = self.path_scratch.astar.find_path(
+                                &self.state.map,
+                                &[fleet.current_tile],
+                                target,
+                            )
+                        {
                             fleet.replace_path(path);
                             fleet.retreating = false;
+                            if let Some(state) = fleet.warship.as_mut() {
+                                state.mode = crate::warp_fleet::WarshipMode::Patrolling;
+                                state.patrol_tile = target;
+                                state.patrol_target = Some(target);
+                                state.target_fleet = None;
+                                state.retreat_port_id = None;
+                                state.manual_order_tick = order_tick;
+                            }
                         }
                     }
                 }

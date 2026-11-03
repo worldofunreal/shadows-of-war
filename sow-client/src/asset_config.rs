@@ -12,7 +12,6 @@ pub struct AssetConfig {
     pub maps_base: String,
     pub assets_base: String,
     pub database_base: String,
-    pub avatar_catalog: Vec<String>,
 }
 impl AssetConfig {
     /// Resolve once at boot from explicit JavaScript globals.
@@ -21,7 +20,6 @@ impl AssetConfig {
         let maps_base = require_endpoint("SOW_MAPS_URL");
         let assets_base = require_endpoint("SOW_ASSETS_URL");
         let database_base = require_endpoint("SOW_DATABASE_URL");
-        let avatar_catalog = Self::resolve_avatar_catalog();
         log::info!(
             "AssetConfig maps={} assets={} database={}",
             maps_base,
@@ -32,27 +30,7 @@ impl AssetConfig {
             maps_base,
             assets_base,
             database_base,
-            avatar_catalog,
         }
-    }
-
-    fn resolve_avatar_catalog() -> Vec<String> {
-        let Some(window) = web_sys::window() else {
-            return Vec::new();
-        };
-        let Ok(value) = js_sys::Reflect::get(
-            &window,
-            &wasm_bindgen::JsValue::from_str("SOW_AVATAR_ASSETS"),
-        ) else {
-            return Vec::new();
-        };
-        if !js_sys::Array::is_array(&value) {
-            return Vec::new();
-        }
-        js_sys::Array::from(&value)
-            .iter()
-            .filter_map(|entry| entry.as_string())
-            .collect()
     }
 
     pub fn map_url(&self, map_key: &str, file: &str) -> String {

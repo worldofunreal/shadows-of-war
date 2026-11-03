@@ -18,9 +18,62 @@ impl SowEngine {
         });
         self.silo_cooldowns.retain(|_, cd| *cd > 0); // Advance all active projectiles
         let mut detonations = Vec::new();
+        let mut shell_impacts = Vec::new();
+        let fleet_targets: std::collections::HashMap<_, _> = self
+            .fleets
+            .iter()
+            .filter(|fleet| fleet.troops > 0.0)
+            .map(|fleet| (fleet.id, (fleet.owner_id, fleet.unit_type, fleet.current_tile)))
+            .collect();
 
         for proj in &mut self.projectiles {
             if !proj.active {
+                continue;
+            }
+
+            if proj.kind == ProjectileKind::Shell {
+                let Some(target_id) = proj.target_fleet_id else {
+                    proj.active = false;
+                    continue;
+                };
+                let Some(&(target_owner, target_type, target_tile)) = fleet_targets.get(&target_id)
+                else {
+                    proj.active = false;
+                    continue;
+                };
+                if !matches!(
+                    target_type,
+                    crate::game::UnitType::TransportShip | crate::game::UnitType::Warship
+                ) || naval_players_friendly(&self.state, proj.owner_id, target_owner)
+                    || self.state.tick >= proj.expires_at_tick
+                {
+                    proj.active = false;
+                    continue;
+                }
+                let current_tile = proj
+                    .path
+                    .get(proj.path_cursor.min(proj.path.len().saturating_sub(1)))
+                    .copied()
+                    .unwrap_or(proj.src_tile);
+                proj.dst_tile = target_tile;
+                proj.path = crate::pathfinding::bresenham_line(
+                    current_tile,
+                    target_tile,
+                    self.state.map.width,
+                );
+                proj.path_cursor = (proj.steps_per_tick as usize).min(proj.path.len());
+                if proj.path_cursor >= proj.path.len() {
+                    proj.active = false;
+                    shell_impacts.push((
+                        proj.owner_id,
+                        proj.source_fleet_id,
+                        target_id,
+                        target_owner,
+                        target_type,
+                        target_tile,
+                        proj.damage,
+                    ));
+                }
                 continue;
             }
 
@@ -40,15 +93,59 @@ impl SowEngine {
                     ProjectileKind::SAMMissile => {
                         // SAM missiles delete their target on contact — handled in execute_sam
                     }
-                    ProjectileKind::Shell => {
-                        // Shell damage handled separately
-                    }
+                    ProjectileKind::Shell => unreachable!("shells resolve before map projectiles"),
                 }
             }
         }
 
         // Cleanup inactive projectiles
         self.projectiles.retain(|p| p.active);
+
+        for (owner_id, source_id, target_id, target_owner, target_type, tile, damage) in
+            shell_impacts
+        {
+            if !self.naval_target_allowed(owner_id, target_owner) {
+                continue;
+            }
+            let Some(target_index) = self
+                .fleets
+                .iter()
+                .position(|fleet| fleet.id == target_id && fleet.troops > 0.0)
+            else {
+                continue;
+            };
+            let sunk = {
+                let target = &mut self.fleets[target_index];
+                target.troops = (target.troops - damage.max(0.0)).max(0.0);
+                if target.troops <= 0.0 {
+                    target.retreating = false;
+                    if let Some(warship) = target.warship.as_mut() {
+                        warship.target_fleet = None;
+                    }
+                }
+                target.troops <= 0.0
+            };
+            if sunk && let Some(source_id) = source_id {
+                if let Some(source) = self.fleets.iter_mut().find(|fleet| fleet.id == source_id) {
+                    if let Some(warship) = source.warship.as_mut() {
+                        warship.record_progress(if target_type
+                            == crate::game::UnitType::Warship
+                        {
+                            250
+                        } else {
+                            25
+                        });
+                    }
+                }
+            }
+            self.state.events.push(crate::game::GameEvent::NavalImpact {
+                owner_id,
+                target_owner,
+                tile,
+                target_type,
+                sunk,
+            });
+        }
 
         // Process detonations
         let mut territory_changes = Vec::new();
@@ -165,6 +262,15 @@ impl SowEngine {
     }
 }
 
+fn naval_players_friendly(state: &crate::game::GameState, first_id: u16, second_id: u16) -> bool {
+    let (Some(first), Some(second)) = (state.player(first_id), state.player(second_id)) else {
+        return false;
+    };
+    first.alliances.contains(&second_id)
+        || second.alliances.contains(&first_id)
+        || (first.team.is_some() && first.team == second.team)
+}
+
 #[cfg(test)]
 mod tests {
     use super::SowEngine;
@@ -220,6 +326,10 @@ mod tests {
             path_cursor: 0,
             steps_per_tick: 1,
             active: true,
+                    source_fleet_id: None,
+                    target_fleet_id: None,
+                    damage: 0.0,
+                    expires_at_tick: u64::MAX,
         });
 
         engine.execute_projectiles();

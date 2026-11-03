@@ -271,25 +271,17 @@ impl SowApp {
         let placement_can_confirm = self.building_placement_can_confirm();
         if let Some(text) = &mut self.gfx.text_renderer {
             text.begin_frame();
-            let dirty_avatar_slots = std::mem::take(&mut self.ui.app.asset_loader.gpu_avatar_dirty);
-            for &(slot, ref cell) in &self.ui.app.asset_loader.gpu_avatar_cells {
-                if text.avatar_uv(slot).is_none() || dirty_avatar_slots.contains(&slot) {
-                    text.upload_avatar(slot, cell);
-                }
+            if let Some(render_ctx) = &self.gfx.render_ctx {
+                self.gfx.avatars.sync_atlas(text, &render_ctx.context);
             }
             if self.ui.app.phase == ClientPhase::Playing {
-                let campaign_avatar_slots =
-                    std::mem::take(&mut self.ui.app.asset_loader.campaign_avatar_slots);
-                let loaded_campaign_avatars =
-                    std::mem::take(&mut self.ui.app.asset_loader.campaign_avatars);
                 let overlays_started_at = crate::diag::startup_perf_timer();
                 crate::render::world::render_overlays(
                     text,
+                    &self.gfx.avatars,
                     &self.sim,
                     &mut self.ui,
                     &self.input,
-                    &campaign_avatar_slots,
-                    &loaded_campaign_avatars,
                     sf,
                     now,
                     placement_can_confirm,
@@ -300,8 +292,6 @@ impl SowApp {
                         started_at,
                     );
                 }
-                self.ui.app.asset_loader.campaign_avatar_slots = campaign_avatar_slots;
-                self.ui.app.asset_loader.campaign_avatars = loaded_campaign_avatars;
             }
         }
         let menu_publish_started_at = crate::diag::startup_perf_timer();

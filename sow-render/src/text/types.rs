@@ -251,40 +251,23 @@ mod badge_atlas_tests {
     }
 }
 
-// Four expressions per hero plus campaign portraits. Keep each texture side under 4096 px for
-// mobile GPUs: 23×24 cells of 128 px (2944×3072) preserve 552 slots with a smaller fixed atlas.
+// One cell per portrait the match draws. The atlas grows by rows of `AVATAR_COLS` cells and
+// never frees a cell during a match. 32 × 128 px keeps both sides within 4096 px for mobile
+// GPUs while holding every catalog portrait at once.
 pub const AVATAR_CELL: u32 = 128;
-pub const AVATAR_COLS: u32 = 23;
-pub const AVATAR_ROWS: u32 = 24;
-pub const AVATAR_SLOT_COUNT: usize = (AVATAR_COLS * AVATAR_ROWS) as usize;
+pub const AVATAR_COLS: u32 = 32;
+pub const AVATAR_MAX_ROWS: u32 = 32;
+pub const AVATAR_MAX_SLOTS: usize = (AVATAR_COLS * AVATAR_MAX_ROWS) as usize;
 
-pub const AVATAR_EXPRESSIONS: usize = 4;
 pub const AVATAR_FALLBACK_SLOT: usize = 0;
 pub const AVATAR_GOLD_SLOT: usize = 1;
-/// Hero blocks start after the fixed slots, in catalog order.
-const AVATAR_FIRST_HERO_SLOT: usize = 2;
 
-pub fn leader_avatar_slot(
-    leader: sow_core::player::Leader,
-    expression: sow_core::emote::AvatarExpression,
-) -> usize {
-    // ponytail: linear scan per call; precompute a table if nameplates ever profile hot.
-    let block = AVATAR_FIRST_HERO_SLOT
-        + leader.index() * AVATAR_EXPRESSIONS;
-    block + expression as usize
-}
-
-/// Campaign portraits fill the atlas after every hero's block.
-pub fn avatar_campaign_first_slot() -> usize {
-    AVATAR_FIRST_HERO_SLOT + sow_core::player::Leader::count() * AVATAR_EXPRESSIONS
-}
-
-pub fn avatar_slot_uv(slot: usize) -> [f32; 4] {
+pub fn avatar_slot_uv(slot: usize, rows: u32) -> [f32; 4] {
     let i = slot as u32;
     let col = i % AVATAR_COLS;
     let row = i / AVATAR_COLS;
     let aw = (AVATAR_COLS * AVATAR_CELL) as f32;
-    let ah = (AVATAR_ROWS * AVATAR_CELL) as f32;
+    let ah = (rows * AVATAR_CELL) as f32;
     let u0 = ((col * AVATAR_CELL) as f32 + 0.5) / aw;
     let v0 = ((row * AVATAR_CELL) as f32 + 0.5) / ah;
     [
@@ -329,28 +312,31 @@ pub struct TextShaderData {
 
 #[cfg(test)]
 mod avatar_atlas_tests {
-    /// Campaign portraits need room after the hero blocks: a catalog with too
-    /// many heroes must grow the atlas (`AVATAR_ROWS`) instead of overflowing it.
+    /// Cells are never freed during a match, so the full atlas must hold every catalog portrait
+    /// at once: both fixed cells, four faces per hero and every bot. A catalog that outgrows it
+    /// needs a smaller `AVATAR_CELL`, not eviction.
     #[test]
-    fn every_hero_fits_the_avatar_atlas_with_room_for_campaigns() {
-        assert_eq!(super::AVATAR_CELL, 128);
-        assert_eq!(super::AVATAR_SLOT_COUNT, 552);
-        assert_eq!(super::AVATAR_COLS * super::AVATAR_CELL, 2944);
-        assert_eq!(super::AVATAR_ROWS * super::AVATAR_CELL, 3072);
-        assert!(super::avatar_campaign_first_slot() + 106 <= super::AVATAR_SLOT_COUNT);
+    fn full_avatar_atlas_holds_every_catalog_portrait_within_gpu_limits() {
+        use sow_core::geo_entities::{Role, bots};
         assert!(super::AVATAR_COLS * super::AVATAR_CELL <= 4096);
-        assert!(super::AVATAR_ROWS * super::AVATAR_CELL <= 4096);
+        assert!(super::AVATAR_MAX_ROWS * super::AVATAR_CELL <= 4096);
+        let catalog = 2
+            + sow_core::player::Leader::count() * sow_core::emote::AvatarExpression::ALL.len()
+            + bots(Role::Tribe).count()
+            + bots(Role::Nation).count();
+        assert!(catalog <= super::AVATAR_MAX_SLOTS, "{catalog} portraits");
 
-        let expected_u_span = (super::AVATAR_CELL - 1) as f32
-            / (super::AVATAR_COLS * super::AVATAR_CELL) as f32;
-        let expected_v_span = (super::AVATAR_CELL - 1) as f32
-            / (super::AVATAR_ROWS * super::AVATAR_CELL) as f32;
-        for slot in 0..super::AVATAR_SLOT_COUNT {
-            let [u0, v0, u1, v1] = super::avatar_slot_uv(slot);
-            assert!(u0 >= 0.0 && v0 >= 0.0 && u1 <= 1.0 && v1 <= 1.0);
-            assert!(u0 < u1 && v0 < v1);
-            assert!((u1 - u0 - expected_u_span).abs() < 1e-6);
-            assert!((v1 - v0 - expected_v_span).abs() < 1e-6);
+        for rows in [1, 7, super::AVATAR_MAX_ROWS] {
+            let expected_u_span = (super::AVATAR_CELL - 1) as f32
+                / (super::AVATAR_COLS * super::AVATAR_CELL) as f32;
+            let expected_v_span = (super::AVATAR_CELL - 1) as f32 / (rows * super::AVATAR_CELL) as f32;
+            for slot in 0..(rows * super::AVATAR_COLS) as usize {
+                let [u0, v0, u1, v1] = super::avatar_slot_uv(slot, rows);
+                assert!(u0 >= 0.0 && v0 >= 0.0 && u1 <= 1.0 && v1 <= 1.0);
+                assert!(u0 < u1 && v0 < v1);
+                assert!((u1 - u0 - expected_u_span).abs() < 1e-6);
+                assert!((v1 - v0 - expected_v_span).abs() < 1e-6);
+            }
         }
     }
 }

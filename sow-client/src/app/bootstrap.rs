@@ -165,6 +165,7 @@ impl SowApp {
                 map_renderer,
                 mover_renderer,
                 text_renderer,
+                avatars: crate::render::avatars::AvatarSlots::new(),
                 prev_sync_point,
                 needs_first_upload,
                 configured_physical: winit::dpi::PhysicalSize::new(0, 0),

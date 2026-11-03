@@ -132,13 +132,6 @@ mod tests {
             (60, 62),
             vec![60, 61, 62],
         ));
-        original.port_queues.insert(
-            999,
-            std::collections::VecDeque::from([crate::game::ShipProduction {
-                kind: crate::game::UnitType::TradeShip,
-                ticks_until_complete: 30,
-            }]),
-        );
         original.silo_cooldowns.insert(1001, 53);
         original.mirv_launches.insert(1, 3);
         original
@@ -156,7 +149,6 @@ mod tests {
             restored.state.map.ownership_revision(),
             original.state.map.ownership_revision()
         );
-        assert_eq!(restored.port_queues, original.port_queues);
         assert_eq!(restored.silo_cooldowns, original.silo_cooldowns);
         assert_eq!(restored.fleets.len(), original.fleets.len());
         for (a, b) in original.state.players.iter().zip(&restored.state.players) {

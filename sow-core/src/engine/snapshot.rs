@@ -144,6 +144,12 @@ impl SowEngine {
                 movement_progress: f.movement_progress as f32,
                 eta_seconds: f.remaining_eta_seconds(),
                 retreating: f.retreating,
+                max_health: f.warship.as_ref().map_or_else(
+                    || f.unit_type.max_health(),
+                    crate::warp_fleet::WarshipState::max_health,
+                ),
+                warship: f.warship.clone(),
+                captured_trade_return: f.captured_trade_return.is_some(),
             })
             .collect();
 
@@ -225,6 +231,8 @@ impl SowEngine {
                     path: p.path.clone(),
                     path_cursor: p.path_cursor,
                     steps_per_tick: p.steps_per_tick,
+                    source_fleet_id: p.source_fleet_id,
+                    target_fleet_id: p.target_fleet_id,
                 })
                 .collect(),
             nuke_alerts: self

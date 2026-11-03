@@ -154,6 +154,14 @@ pub struct Projectile {
     pub path_cursor: usize,
     pub steps_per_tick: u8,
     pub active: bool,
+    #[serde(default)]
+    pub source_fleet_id: Option<u64>,
+    #[serde(default)]
+    pub target_fleet_id: Option<u64>,
+    #[serde(default)]
+    pub damage: f64,
+    #[serde(default)]
+    pub expires_at_tick: u64,
 }
 
 impl UnitType {
@@ -161,7 +169,7 @@ impl UnitType {
         match self {
             UnitType::TransportShip => 1,
             UnitType::TradeShip => 1,
-            UnitType::Warship => 2,
+            UnitType::Warship => 1,
         }
     }
 
@@ -181,7 +189,7 @@ impl UnitType {
         match self {
             UnitType::TransportShip => 0, // Instant conversion
             UnitType::TradeShip => 50,
-            UnitType::Warship => 150,
+            UnitType::Warship => 0,
         }
     }
 
@@ -194,17 +202,23 @@ impl UnitType {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct ShipProduction {
-    pub kind: UnitType,
-    pub ticks_until_complete: u32,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AllianceRequestStatus {
     Submitted,
     Rejected,
     Expired,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NavalActionFailure {
+    InvalidTarget,
+    TargetNotWater,
+    NoPort,
+    NoConnectedPort,
+    NoWaterPath,
+    InsufficientGold,
+    CapacityFull,
+    CampaignLocked,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -291,6 +305,37 @@ pub enum GameEvent {
         owner_id: u16,
         x: u32,
         y: u32,
+    },
+    WarshipSpawned {
+        owner_id: u16,
+        fleet_id: u64,
+        tile: u32,
+    },
+    NavalActionRejected {
+        player_id: u16,
+        reason: NavalActionFailure,
+    },
+    NavalImpact {
+        owner_id: u16,
+        target_owner: u16,
+        tile: u32,
+        target_type: UnitType,
+        sunk: bool,
+    },
+    NavalShot {
+        owner_id: u16,
+        tile: u32,
+    },
+    TradeShipCaptured {
+        owner_id: u16,
+        fleet_id: u64,
+        tile: u32,
+    },
+    TradeShipDelivered {
+        owner_id: u16,
+        fleet_id: u64,
+        tile: u32,
+        gold: f64,
     },
     /// A hero ability changed what happened in a situation. The effect is shown
     /// at `tile`, or as a notice alone when the action has no place on the map.
@@ -692,7 +737,7 @@ mod naval_requirement_tests {
     #[test]
     fn naval_and_nuclear_unlocks_share_the_canonical_levels() {
         assert_eq!(UnitType::TradeShip.required_port_level(), 1);
-        assert_eq!(UnitType::Warship.required_port_level(), 2);
+        assert_eq!(UnitType::Warship.required_port_level(), 1);
         assert_eq!(
             NukeKind::AtomBomb.required_city_level(),
             BuildingKind::City.max_level()

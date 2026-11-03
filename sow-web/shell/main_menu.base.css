@@ -124,8 +124,11 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  min-height: 58px;
-  padding: 8px 10px 8px 14px;
+  height: 72px;
+  min-height: 72px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 8px 12px;
   border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius-compact);
@@ -147,8 +150,8 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   padding: 0;
   border: 1px solid rgba(243, 177, 43, 0.72);
   border-radius: 8px;
@@ -194,13 +197,14 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   display: block;
   width: 100%;
   min-width: 0;
-  padding: 2px 0;
+  padding: 0;
   border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.22);
   outline: 0;
   background: transparent;
   color: #fff;
   font-size: clamp(16px, 1.8vw, 24px);
+  line-height: 1.15;
   font-weight: var(--sow-button-weight);
   letter-spacing: 0.06em;
   text-transform: none;
@@ -233,80 +237,57 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   align-items: center;
   gap: 10px;
   margin-inline-start: auto;
+  flex: 0 0 auto;
+}
+
+.sow-menu__progress,
+.sow-menu__wallet {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
 }
 
 .sow-menu__progress {
-  display: inline-flex;
-  align-items: stretch;
-  gap: 0;
-  height: 42px;
-  padding: 3px;
-  border-radius: var(--sow-tactical-surface-radius-compact);
-  background: var(--sow-tactical-surface-compact-bg);
-  border: 1px solid var(--sow-tactical-surface-border);
-  border-top-color: var(--sow-tactical-surface-accent-border);
-  box-shadow: var(--sow-tactical-surface-compact-shadow);
-  color: var(--sow-muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  user-select: none;
-}
-
-.sow-menu__progress-cell {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  min-width: 0;
-  padding: 0 10px;
+  gap: 3px 8px;
+  width: 100%;
+  margin-top: 3px;
+  text-align: start;
+  font-size: 11px;
+  line-height: 1.1;
 }
 
 .sow-menu__level {
-  color: #f7f3e9;
-  font-weight: 800;
-  gap: 5px;
-  border-inline-end: 1px solid rgba(255, 255, 255, 0.12);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--sow-gold-bright);
 }
-
 .sow-menu__level small {
-  color: var(--sow-gold);
-  font-size: 10px;
-  font-weight: 800;
+  font-size: inherit;
 }
-
-.sow-menu__xp {
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 3px;
-  min-width: 78px;
-  color: #38bdf8;
-  font-weight: 800;
-  text-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
-}
-
 .sow-menu__xp-value {
-  line-height: 1;
+  color: #38bdf8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.sow-menu__xp small {
-  color: rgba(56, 189, 248, 0.7);
-  font-size: 10px;
-  font-weight: 700;
-}
-
 .sow-menu__xp-track {
+  grid-column: 1 / -1;
   display: block;
-  width: 64px;
+  width: 100%;
   height: 3px;
   overflow: hidden;
   border-radius: 999px;
-  border: 1px solid var(--sow-tactical-track-border);
   background: var(--sow-tactical-track-bg);
-  box-shadow: var(--sow-tactical-track-shadow);
+  border: 1px solid var(--sow-tactical-track-border);
 }
-
 .sow-menu__xp-track i {
   display: block;
   height: 100%;
@@ -314,36 +295,44 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   background: #38bdf8;
   transition: width 160ms ease;
 }
-
+.sow-menu__wallet {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 44px;
+  padding-inline: 12px;
+  border-inline-end: 1px solid var(--sow-tactical-surface-border);
+  font-size: 15px;
+  font-weight: 800;
+}
+.sow-menu__progress-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
 .sow-menu__crowns {
   color: var(--sow-gold-bright);
-  font-weight: 800;
-  text-shadow: 0 0 8px rgba(243, 177, 43, 0.35);
-  gap: 6px;
-  border-inline-start: 1px solid rgba(255, 255, 255, 0.12);
 }
-
 .sow-menu__gems {
   color: #c084fc;
-  font-weight: 800;
-  text-shadow: 0 0 8px rgba(192, 132, 252, 0.35);
-  gap: 6px;
-  border-inline-start: 1px solid rgba(255, 255, 255, 0.12);
 }
-
-.sow-menu__laurels {
-  color: var(--sow-laurel-bright);
-  font-weight: 800;
-  text-shadow: 0 0 8px rgba(192, 132, 252, 0.35);
-  gap: 6px;
-  border-inline-start: 1px solid rgba(255, 255, 255, 0.12);
-}
-
 .sow-menu__currency-icon {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
   flex: 0 0 auto;
   object-fit: contain;
+}
+.sow-menu__topbar .sow-menu__icon-button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  flex-shrink: 0;
+}
+.sow-menu__progress:focus-visible,
+.sow-menu__wallet:focus-visible {
+  outline: var(--sow-tactical-focus-outline);
+  outline-offset: var(--sow-tactical-focus-offset);
 }
 
 .sow-menu__reward-stage {
@@ -688,19 +677,19 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   }
 }
 
-.sow-menu__progress [data-progression-xp-value],
-.sow-menu__progress [data-progression-crowns-value],
-.sow-menu__progress [data-progression-laurels-value],
-.sow-menu__progress [data-progression-gems-value],
-.sow-menu__progress [data-progression-level-value] {
+[data-progression] [data-progression-xp-value],
+[data-progression] [data-progression-crowns-value],
+[data-progression] [data-progression-laurels-value],
+[data-progression] [data-progression-gems-value],
+[data-progression] [data-progression-level-value] {
   display: inline-block;
   transform-origin: center;
 }
 
-.sow-menu__progress [data-progression-xp-value].is-reward-value-hit,
-.sow-menu__progress [data-progression-crowns-value].is-reward-value-hit,
-.sow-menu__progress [data-progression-laurels-value].is-reward-value-hit,
-.sow-menu__progress [data-progression-gems-value].is-reward-value-hit {
+[data-progression] [data-progression-xp-value].is-reward-value-hit,
+[data-progression] [data-progression-crowns-value].is-reward-value-hit,
+[data-progression] [data-progression-laurels-value].is-reward-value-hit,
+[data-progression] [data-progression-gems-value].is-reward-value-hit {
   animation: sow-reward-value-impact 640ms cubic-bezier(0.22, 1.3, 0.36, 1) both;
 }
 
@@ -745,16 +734,15 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sow-menu__progress [data-progression-xp-value].is-reward-value-hit,
-  .sow-menu__progress [data-progression-crowns-value].is-reward-value-hit,
-  .sow-menu__progress [data-progression-laurels-value].is-reward-value-hit,
-  .sow-menu__progress [data-progression-gems-value].is-reward-value-hit,
+  [data-progression] [data-progression-xp-value].is-reward-value-hit,
+  [data-progression] [data-progression-crowns-value].is-reward-value-hit,
+  [data-progression] [data-progression-laurels-value].is-reward-value-hit,
+  [data-progression] [data-progression-gems-value].is-reward-value-hit,
   .sow-menu__level [data-progression-level-value].is-reward-level-up {
     animation: none;
   }
 }
 
-.sow-menu__signin,
 .sow-menu__icon-button,
 .sow-menu__ghost-button {
   border: 1px solid var(--sow-line);
@@ -763,24 +751,6 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   font-weight: var(--sow-button-weight);
   letter-spacing: var(--sow-button-tracking);
   text-transform: uppercase;
-}
-
-.sow-menu__signin {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 42px;
-  padding: 0 18px;
-  border-color: var(--sow-button-primary-border);
-  background: var(--sow-button-primary-bg);
-  box-shadow: var(--sow-button-primary-shadow);
-  color: var(--sow-button-primary-text);
-  font-size: 12px;
-  white-space: nowrap;
-  transition:
-    filter 160ms ease,
-    transform 160ms ease,
-    box-shadow 160ms ease;
 }
 
 .sow-menu__icon-button {
@@ -807,12 +777,6 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   background: var(--sow-button-dark-bg);
   box-shadow: var(--sow-button-dark-shadow);
   color: var(--sow-button-dark-text);
-}
-
-.sow-menu__signin:hover {
-  filter: brightness(1.12);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
 }
 
 .sow-menu__icon-button:hover {
@@ -981,7 +945,6 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   color: #ffb1a2;
 }
 
-.sow-menu__signin:disabled,
 .sow-menu__primary:disabled,
 .sow-menu__secondary:disabled,
 .sow-menu__danger:disabled,
@@ -1873,10 +1836,10 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sow-menu__progress [data-progression-xp-value].is-reward-value-hit,
-  .sow-menu__progress [data-progression-crowns-value].is-reward-value-hit,
-  .sow-menu__progress [data-progression-laurels-value].is-reward-value-hit,
-  .sow-menu__progress [data-progression-gems-value].is-reward-value-hit,
+  [data-progression] [data-progression-xp-value].is-reward-value-hit,
+  [data-progression] [data-progression-crowns-value].is-reward-value-hit,
+  [data-progression] [data-progression-laurels-value].is-reward-value-hit,
+  [data-progression] [data-progression-gems-value].is-reward-value-hit,
   .sow-menu__level [data-progression-level-value].is-reward-level-up,
   .sow-menu__reward-stage,
   .sow-menu__reward-stage::before,

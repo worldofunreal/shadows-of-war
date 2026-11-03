@@ -11,7 +11,10 @@ use super::profile::{AiSlot, AiTier, BotDecision, BotDecisionKind, GhostRetaliat
 const GHOST_RETALIATION_DELAY_SALT: u64 = 0x4752_4459_0000_0001;
 const GHOST_RETALIATION_FORCE_SALT: u64 = 0x4752_4643_0000_0002;
 const BOT_NAVAL_CANDIDATE_BUDGET: usize = 256;
+const BOT_NAVAL_LOCAL_BUDGET: usize = 192;
+const BOT_NAVAL_LOCAL_RADIUS: u32 = 150;
 const BOT_NAVAL_CHANCE_SALT: u64 = 0x4E41_5641_4C00_0003;
+const BOT_NAVAL_SOURCE_SALT: u64 = 0x4E41_5653_5243_0001;
 const HUMAN_ATTACK_GRACE_MS: f64 = 120_000.0;
 
 struct NavalDecisionContext {
@@ -107,6 +110,15 @@ fn campaign_attacks_players(
 }
 
 impl SowEngine {
+    pub(crate) fn naval_target_allowed(&self, attacker_id: u16, target_id: u16) -> bool {
+        self.ai_target_allowed(attacker_id, target_id, None)
+            && !self.players_friendly(attacker_id, target_id)
+            && self
+                .state
+                .player(target_id)
+                .is_some_and(|player| player.alive)
+    }
+
     fn human_attack_grace_elapsed(&self) -> bool {
         let tick_rate_ms =
             if self.state.config.tick_rate_ms.is_finite() && self.state.config.tick_rate_ms > 0.0 {
@@ -386,7 +398,7 @@ impl SowEngine {
         (!gave_up).then_some(result)
     }
 
-    fn players_friendly(&self, first_id: u16, second_id: u16) -> bool {
+    pub(crate) fn players_friendly(&self, first_id: u16, second_id: u16) -> bool {
         let (Some(first), Some(second)) =
             (self.state.player(first_id), self.state.player(second_id))
         else {
@@ -1425,8 +1437,32 @@ impl SowEngine {
         let component_index = cursor.next_component;
         cursor.next_component = (component_index + 1) % cursor.components.len();
         let component_cursor = &mut cursor.components[component_index];
-        let source_tile = component_cursor.source_tile;
         let component = component_cursor.water_component;
+        let mut sources: Vec<u32> = self
+            .bot_naval_shore_sample
+            .iter()
+            .copied()
+            .filter(|&tile| {
+                self.state
+                    .map
+                    .owner_id(tile % self.state.map.width, tile / self.state.map.width)
+                    == bot_id
+                    && self.state.map.terrain[tile as usize].is_land()
+                    && self.state.map.terrain[tile as usize].is_shoreline()
+                    && self.water.component_of(tile) == component
+            })
+            .collect();
+        if !sources.is_empty() {
+            // Keep source selection independent of the bot's combat/diplomacy RNG.
+            let mut rng = WyRand::new(
+                self.state.seed
+                    ^ u64::from(bot_id).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                    ^ self.state.tick.wrapping_mul(0xD6E8_FEB8_6659_FD93)
+                    ^ BOT_NAVAL_SOURCE_SALT,
+            );
+            component_cursor.source_tile = sources[rng.next_int(0, sources.len() as i32) as usize];
+        }
+        let source_tile = component_cursor.source_tile;
         let source_is_valid = self.state.map.owner_id(
             source_tile % self.state.map.width,
             source_tile / self.state.map.width,
@@ -1447,6 +1483,9 @@ impl SowEngine {
             }
             return false;
         }
+        if sources.is_empty() {
+            sources.push(source_tile);
+        }
 
         let Some(shoreline) = self.water.shoreline_tiles.get(component as usize) else {
             return false;
@@ -1455,138 +1494,177 @@ impl SowEngine {
             return false;
         }
         let start = component_cursor.shoreline_cursor % shoreline.len();
-        let examined = shoreline.len().min(BOT_NAVAL_CANDIDATE_BUDGET);
-        component_cursor.shoreline_cursor = (start + examined) % shoreline.len();
-        #[cfg(any(test, feature = "ai-metrics"))]
-        {
-            self.bot_work.shoreline_candidates_examined += examined as u64;
-        }
+        let nearby = self.water.nearby_shores(
+            &self.state.map,
+            component,
+            source_tile,
+            BOT_NAVAL_LOCAL_RADIUS,
+            BOT_NAVAL_LOCAL_BUDGET,
+        );
 
         let reserve_ratio = slot.profile.reserve_ratio;
         let expand_ratio = slot.profile.expand_ratio;
         let trigger_met = troops >= max_troops * slot.profile.trigger_ratio;
         let team_game = self.state.config.game_mode != "FFA";
-        let mut chosen: Option<(u8, f64, u32, u16, f64)> = None;
-        for offset in 0..examined {
-            let target_tile = shoreline[(start + offset) % shoreline.len()];
-            let target_owner = self.state.map.owner_id(
-                target_tile % self.state.map.width,
-                target_tile / self.state.map.width,
-            );
-            if target_owner == bot_id {
-                continue;
-            }
-            if target_owner == 0
-                && (context.defender_target.is_some() || context.campaign_target.is_some())
+        let mut chosen: Option<(u8, u32, f64, u32, u16, f64)> = None;
+        for local_search in [true, false] {
+            let examined = if local_search {
+                nearby.len()
+            } else {
+                let remaining = BOT_NAVAL_CANDIDATE_BUDGET - nearby.len();
+                let examined = shoreline.len().min(remaining);
+                self.bot_naval_cursors[player_index].components[component_index].shoreline_cursor =
+                    (start + examined) % shoreline.len();
+                examined
+            };
+            #[cfg(any(test, feature = "ai-metrics"))]
             {
-                continue;
+                self.bot_work.shoreline_candidates_examined += examined as u64;
             }
-
-            let is_defending = context.defender_target == Some(target_owner);
-            let send = if target_owner == 0 {
-                (troops * 0.20).min((troops - max_troops * expand_ratio).max(0.0))
-            } else {
-                let Some(target) = self.state.player(target_owner) else {
-                    continue;
-                };
-                if !target.alive
-                    || target.id == bot_id
-                    || context.defender_target.is_some_and(|id| id != target_owner)
-                    || context
-                        .campaign_target
-                        .is_some_and(|id| id != target_owner && context.defender_target.is_none())
-                {
-                    continue;
-                }
-                let Some(attacker) = self.state.player(bot_id) else {
-                    continue;
-                };
-                if attacker.alliances.contains(&target_owner)
-                    || (attacker.team.is_some() && attacker.team == target.team)
-                {
-                    continue;
-                }
-                if is_real_human(target)
-                    && !self.ai_target_allowed(bot_id, target_owner, context.defender_target)
-                {
-                    continue;
-                }
-                if slot.tier == AiTier::Ghost
-                    && slot.ghost_retaliation.is_some_and(|retaliation| {
-                        target_owner == retaliation.attacker_id
-                            && !retaliation.is_ready_at(self.state.tick)
-                    })
-                {
-                    continue;
-                }
-                let can_attack_player = context.attacks_players || is_real_human(target);
-                if !is_defending
-                    && (!can_attack_player
-                        || (!trigger_met
-                            && !(slot.tier == AiTier::Nation
-                                && target.player_type == crate::player::PlayerType::Bot)))
-                {
-                    continue;
-                }
-
-                if let Some(retaliation) = slot.ghost_retaliation.filter(|retaliation| {
-                    is_defending
-                        && target_owner == retaliation.attacker_id
-                        && retaliation.is_ready_at(self.state.tick)
-                }) {
-                    ghost_retaliation_send_troops(
-                        self.state.seed,
-                        bot_id,
-                        retaliation,
-                        troops,
-                        max_troops,
-                        reserve_ratio,
-                    )
-                } else if is_defending {
-                    (troops - max_troops * reserve_ratio * 0.5)
-                        .max(0.0)
-                        .min(troops * 0.20)
+            for offset in 0..examined {
+                let target_tile = if local_search {
+                    nearby[offset]
                 } else {
-                    (troops - max_troops * reserve_ratio)
-                        .max(0.0)
-                        .min(troops * 0.20)
-                }
-            };
-            if send < self.state.config.attack_cost_neutral {
-                continue;
-            }
-
-            let (category, strength) = if target_owner == 0 {
-                (0, 0.0)
-            } else {
-                let target = self.state.player(target_owner).unwrap();
-                let odds_ok = is_defending
-                    || team_game
-                    || (target.troops < troops && send >= target.troops.max(0.0) * 0.20);
-                if !odds_ok {
+                    shoreline[(start + offset) % shoreline.len()]
+                };
+                let target_owner = self.state.map.owner_id(
+                    target_tile % self.state.map.width,
+                    target_tile / self.state.map.width,
+                );
+                if target_owner == bot_id {
                     continue;
                 }
-                (
-                    if target.player_type == crate::player::PlayerType::Bot {
-                        1
+                if target_owner == 0
+                    && (context.defender_target.is_some() || context.campaign_target.is_some())
+                {
+                    continue;
+                }
+
+                let is_defending = context.defender_target == Some(target_owner);
+                let send = if target_owner == 0 {
+                    (troops * 0.20).min((troops - max_troops * expand_ratio).max(0.0))
+                } else {
+                    let Some(target) = self.state.player(target_owner) else {
+                        continue;
+                    };
+                    if !target.alive
+                        || target.id == bot_id
+                        || context.defender_target.is_some_and(|id| id != target_owner)
+                        || context.campaign_target.is_some_and(|id| {
+                            id != target_owner && context.defender_target.is_none()
+                        })
+                    {
+                        continue;
+                    }
+                    let Some(attacker) = self.state.player(bot_id) else {
+                        continue;
+                    };
+                    if attacker.alliances.contains(&target_owner)
+                        || (attacker.team.is_some() && attacker.team == target.team)
+                    {
+                        continue;
+                    }
+                    if is_real_human(target)
+                        && !self.ai_target_allowed(bot_id, target_owner, context.defender_target)
+                    {
+                        continue;
+                    }
+                    if slot.tier == AiTier::Ghost
+                        && slot.ghost_retaliation.is_some_and(|retaliation| {
+                            target_owner == retaliation.attacker_id
+                                && !retaliation.is_ready_at(self.state.tick)
+                        })
+                    {
+                        continue;
+                    }
+                    let can_attack_player = context.attacks_players || is_real_human(target);
+                    if !is_defending
+                        && (!can_attack_player
+                            || (!trigger_met
+                                && !(slot.tier == AiTier::Nation
+                                    && target.player_type == crate::player::PlayerType::Bot)))
+                    {
+                        continue;
+                    }
+
+                    if let Some(retaliation) = slot.ghost_retaliation.filter(|retaliation| {
+                        is_defending
+                            && target_owner == retaliation.attacker_id
+                            && retaliation.is_ready_at(self.state.tick)
+                    }) {
+                        ghost_retaliation_send_troops(
+                            self.state.seed,
+                            bot_id,
+                            retaliation,
+                            troops,
+                            max_troops,
+                            reserve_ratio,
+                        )
+                    } else if is_defending {
+                        (troops - max_troops * reserve_ratio * 0.5)
+                            .max(0.0)
+                            .min(troops * 0.20)
                     } else {
-                        2
+                        (troops - max_troops * reserve_ratio)
+                            .max(0.0)
+                            .min(troops * 0.20)
+                    }
+                };
+                if send < self.state.config.attack_cost_neutral {
+                    continue;
+                }
+
+                let (category, strength) = if target_owner == 0 {
+                    (0, 0.0)
+                } else {
+                    let target = self.state.player(target_owner).unwrap();
+                    let odds_ok = is_defending
+                        || team_game
+                        || (target.troops < troops && send >= target.troops.max(0.0) * 0.20);
+                    if !odds_ok {
+                        continue;
+                    }
+                    (
+                        if target.player_type == crate::player::PlayerType::Bot {
+                            0
+                        } else {
+                            1
+                        },
+                        target.troops.max(0.0),
+                    )
+                };
+                let distance = (source_tile % self.state.map.width)
+                    .abs_diff(target_tile % self.state.map.width)
+                    + (source_tile / self.state.map.width)
+                        .abs_diff(target_tile / self.state.map.width);
+                let is_better = chosen.is_none_or(
+                    |(best_category, best_distance, best_strength, best_tile, _, _)| {
+                        category < best_category
+                            || (category == best_category
+                                && (distance < best_distance
+                                    || (distance == best_distance
+                                        && (strength.total_cmp(&best_strength).is_lt()
+                                            || (strength == best_strength
+                                                && target_tile < best_tile)))))
                     },
-                    target.troops.max(0.0),
-                )
-            };
-            let is_better = chosen.is_none_or(|(best_category, best_strength, best_tile, _, _)| {
-                category < best_category
-                    || (category == best_category
-                        && (strength.total_cmp(&best_strength).is_lt()
-                            || (strength == best_strength && target_tile < best_tile)))
-            });
-            if is_better {
-                chosen = Some((category, strength, target_tile, target_owner, send));
+                );
+                if is_better {
+                    chosen = Some((
+                        category,
+                        distance,
+                        strength,
+                        target_tile,
+                        target_owner,
+                        send,
+                    ));
+                }
+            }
+            if chosen.is_some() {
+                break;
             }
         }
 
-        let Some((_, _, target_tile, target_owner, send)) = chosen else {
+        let Some((_, _, _, target_tile, target_owner, send)) = chosen else {
             return false;
         };
         #[cfg(any(test, feature = "ai-metrics"))]
@@ -1596,7 +1674,7 @@ impl SowEngine {
         let Ok(route) = crate::warp_fleet::resolve_fleet_route_between_shores(
             &self.state.map,
             &mut self.path_scratch,
-            source_tile,
+            &sources,
             target_tile,
         ) else {
             return false;

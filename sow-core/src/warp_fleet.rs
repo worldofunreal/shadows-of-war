@@ -11,6 +11,160 @@ use crate::map::{GameMap, TerrainType};
 use crate::pathfinding::WaterPathfinderScratch;
 use crate::water_components::WaterComponents;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum WarshipMode {
+    Patrolling,
+    Retreating,
+    Docked,
+}
+
+/// Authoritative warship lifecycle state. `troops` remains health for warships,
+/// while it continues to mean transported troops for transports.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct WarshipState {
+    pub patrol_tile: u32,
+    pub patrol_target: Option<u32>,
+    pub target_fleet: Option<u64>,
+    pub mode: WarshipMode,
+    pub retreat_port_id: Option<u64>,
+    pub reload_ticks: u32,
+    pub veterancy: u8,
+    /// 250 points per rank; transport kills grant 25, trade captures grant 10.
+    pub veterancy_progress: u16,
+    pub manual_order_tick: u64,
+    pub docked_ticks: u32,
+    pub patrol_cycle: u32,
+}
+
+impl WarshipState {
+    pub fn new(patrol_tile: u32) -> Self {
+        Self {
+            patrol_tile,
+            patrol_target: None,
+            target_fleet: None,
+            mode: WarshipMode::Patrolling,
+            retreat_port_id: None,
+            reload_ticks: 0,
+            veterancy: 0,
+            veterancy_progress: 0,
+            manual_order_tick: 0,
+            docked_ticks: 0,
+            patrol_cycle: 0,
+        }
+    }
+
+    pub fn max_health(&self) -> f64 {
+        1_000.0 * (1.0 + f64::from(self.veterancy) * 0.2)
+    }
+
+    pub fn record_progress(&mut self, points: u16) {
+        if self.veterancy >= 3 {
+            return;
+        }
+        self.veterancy_progress = self.veterancy_progress.saturating_add(points);
+        while self.veterancy_progress >= 250 && self.veterancy < 3 {
+            self.veterancy_progress -= 250;
+            self.veterancy += 1;
+        }
+        if self.veterancy >= 3 {
+            self.veterancy_progress = 0;
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WarshipLaunchError {
+    InvalidTile,
+    TargetNotWater,
+    NoPort,
+    NoConnectedPort,
+    NoWaterPath,
+}
+
+/// Resolves one shared port-to-patrol route for UI preflight and authoritative launch.
+pub fn resolve_warship_route(
+    map: &GameMap,
+    water: &WaterComponents,
+    path_scratch: &mut WaterPathfinderScratch,
+    buildings: &[crate::building::Building],
+    owner_id: u16,
+    target_tile: u32,
+) -> Result<FleetRoute, WarshipLaunchError> {
+    let area = map.width.saturating_mul(map.height);
+    if map.width == 0 || target_tile >= area {
+        return Err(WarshipLaunchError::InvalidTile);
+    }
+    if !map.terrain[target_tile as usize].is_water() {
+        return Err(WarshipLaunchError::TargetNotWater);
+    }
+    let component = water.component_of(target_tile);
+    if component == 0 {
+        return Err(WarshipLaunchError::NoConnectedPort);
+    }
+
+    let mut sources = Vec::new();
+    let mut has_ready_port = false;
+    for port in buildings.iter().filter(|building| {
+        building.owner_id == owner_id
+            && building.kind == crate::game::BuildingKind::Port
+            && !building.under_construction
+            && building.active_level() >= 1
+    }) {
+        has_ready_port = true;
+        let x = port.tile_idx % map.width;
+        let y = port.tile_idx / map.width;
+        let footprint = crate::building::BuildingFootprint::at(
+            crate::game::BuildingKind::Port,
+            x,
+            y,
+        );
+        let mut port_sources = Vec::new();
+        for fy in footprint.top..footprint.top + footprint.height as i32 {
+            for fx in footprint.left..footprint.left + footprint.width as i32 {
+                if !map.is_valid_coord(fx, fy) {
+                    continue;
+                }
+                map.for_each_neighbor(fx as u32, fy as u32, |nx, ny| {
+                    if footprint.contains(nx as i32, ny as i32) {
+                        return;
+                    }
+                    let tile = ny * map.width + nx;
+                    if map.terrain[tile as usize].is_water()
+                        && water.component_of(tile) == component
+                    {
+                        port_sources.push((tile, port.tile_idx));
+                    }
+                });
+            }
+        }
+        port_sources.sort_unstable();
+        port_sources.dedup();
+        sources.extend(port_sources);
+    }
+    if !has_ready_port {
+        return Err(WarshipLaunchError::NoPort);
+    }
+    if sources.is_empty() {
+        return Err(WarshipLaunchError::NoConnectedPort);
+    }
+    sources.sort_unstable_by_key(|&(shore, port)| {
+        let (sx, sy) = (shore % map.width, shore / map.width);
+        let (tx, ty) = (target_tile % map.width, target_tile / map.width);
+        (sx.abs_diff(tx) + sy.abs_diff(ty), port, shore)
+    });
+    let shore_tiles: Vec<_> = sources.iter().map(|&(shore, _)| shore).collect();
+    let path = path_scratch
+        .astar
+        .find_path(map, &shore_tiles, target_tile)
+        .ok_or(WarshipLaunchError::NoWaterPath)?;
+    let src_tile = *path.first().ok_or(WarshipLaunchError::NoWaterPath)?;
+    Ok(FleetRoute {
+        src_tile,
+        landing_tile: target_tile,
+        path,
+    })
+}
+
 /// Resolved water-only route for a transport launch (spawn shore → landing shore).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FleetRoute {
@@ -82,7 +236,8 @@ fn resolve_landing_shore(
 ) -> Result<u32, FleetLaunchError> {
     let (target_owner, target_tile) = target;
     let landing = if target_owner != 0 {
-        let border = target_border.ok_or(FleetLaunchError::TargetPlayerNotFound { target_owner })?;
+        let border =
+            target_border.ok_or(FleetLaunchError::TargetPlayerNotFound { target_owner })?;
         closest_target_shore_for_player(
             map,
             water_components,
@@ -133,13 +288,7 @@ pub fn resolve_fleet_route(
         return Err(FleetLaunchError::NoWaterAccess);
     }
     my_comps.sort_unstable();
-    let landing = resolve_landing_shore(
-        map,
-        water_components,
-        target,
-        &my_comps,
-        target_border,
-    )?;
+    let landing = resolve_landing_shore(map, water_components, target, &my_comps, target_border)?;
     let landing_component = water_components.component_of(landing);
     let starts: Vec<u32> = source_shores
         .into_iter()
@@ -168,17 +317,18 @@ pub fn resolve_fleet_route(
 pub(crate) fn resolve_fleet_route_between_shores(
     map: &GameMap,
     path_scratch: &mut WaterPathfinderScratch,
-    src: u32,
+    sources: &[u32],
     landing: u32,
 ) -> Result<FleetRoute, FleetLaunchError> {
     let area = map.width.saturating_mul(map.height);
-    if src >= area || landing >= area {
+    if sources.is_empty() || sources.iter().any(|&src| src >= area) || landing >= area {
         return Err(FleetLaunchError::InvalidTile);
     }
     let path = path_scratch
         .astar
-        .find_path(map, &[src], landing)
+        .find_path(map, sources, landing)
         .ok_or(FleetLaunchError::NoWaterPath)?;
+    let src = *path.first().ok_or(FleetLaunchError::NoWaterPath)?;
 
     Ok(FleetRoute {
         src_tile: src,
@@ -505,6 +655,13 @@ pub struct WarpFleet {
     pub current_tile: u32,
     pub retreating: bool,
     pub flow_target: Option<u32>,
+    #[serde(default)]
+    pub warship: Option<WarshipState>,
+    /// Captured merchants are routed home once and delivered exactly once.
+    #[serde(default)]
+    pub captured_trade_return: Option<u64>,
+    #[serde(default)]
+    pub piracy_safe_until: u64,
 }
 
 impl WarpFleet {
@@ -519,7 +676,11 @@ impl WarpFleet {
     ) -> Self {
         let (src_tile, dst_tile) = endpoints;
         let current_tile = path.first().copied().unwrap_or(src_tile);
-        let path_cursor = if unit_type == crate::game::UnitType::TransportShip && !path.is_empty() {
+        let path_cursor = if matches!(
+            unit_type,
+            crate::game::UnitType::TransportShip | crate::game::UnitType::Warship
+        ) && !path.is_empty()
+        {
             1
         } else {
             0
@@ -541,6 +702,10 @@ impl WarpFleet {
             current_tile,
             retreating: false,
             flow_target: None,
+            warship: (unit_type == crate::game::UnitType::Warship)
+                .then(|| WarshipState::new(dst_tile)),
+            captured_trade_return: None,
+            piracy_safe_until: 0,
         }
     }
 
@@ -550,7 +715,11 @@ impl WarpFleet {
             self.current_tile = start;
         }
         self.path_cursor =
-            if self.unit_type == crate::game::UnitType::TransportShip && !path.is_empty() {
+            if matches!(
+                self.unit_type,
+                crate::game::UnitType::TransportShip | crate::game::UnitType::Warship
+            ) && !path.is_empty()
+            {
                 1
             } else {
                 0
@@ -843,7 +1012,7 @@ mod route_selection_tests {
         let geometric_route = resolve_fleet_route_between_shores(
             &map,
             &mut geometric_scratch,
-            geometric_source,
+            &[geometric_source],
             expected_landing,
         )
         .unwrap();
@@ -868,9 +1037,11 @@ mod route_selection_tests {
                 + (pair[0] / map.width).abs_diff(pair[1] / map.width);
             assert_eq!(distance, 1);
         }
-        assert!(route.path[1..route.path.len() - 1]
-            .iter()
-            .all(|&idx| !map.terrain[idx as usize].is_land()));
+        assert!(
+            route.path[1..route.path.len() - 1]
+                .iter()
+                .all(|&idx| !map.terrain[idx as usize].is_land())
+        );
 
         let mut repeat_scratch = WaterPathfinderScratch::default();
         assert_eq!(

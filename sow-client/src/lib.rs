@@ -174,17 +174,6 @@ fn spawn_sow_client_connect(
 pub enum MapDownloadEvent {
     CatalogReady(Vec<sow_core::maps::MapCatalogEntry>),
     MapReady(String, Vec<u8>),
-    AvatarPixelsReady {
-        key: crate::ui::asset_loader::AvatarFetchKey,
-        pixels: Vec<u8>,
-    },
-    AvatarPrefetchReady {
-        key: crate::ui::asset_loader::AvatarFetchKey,
-    },
-    AvatarFailed {
-        key: crate::ui::asset_loader::AvatarFetchKey,
-        reason: String,
-    },
     /// Portal identity avatar (CrazyGames profile picture, arbitrary remote URL).
     PortalAvatarReady {
         bytes: Vec<u8>,

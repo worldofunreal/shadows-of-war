@@ -22,7 +22,6 @@ import {
     leaderDisplayName,
     menuIcon,
     menuUi,
-    portalOffersSignIn,
     profileHeroImage,
     reconcileLeaderSelection,
     renderKey,
@@ -603,33 +602,58 @@ window.addEventListener("sow:loader-ready", menuMusicStartAtLoaderEnd, { once: t
 window.addEventListener("sow:wasm-bytes-ready", menuMusicBeginLoading, { once: true });
 document.addEventListener("click", menuMusicUnlockFromClick, true);
 
+function headerBalance(value: number) {
+    const amount = Math.max(0, Math.round(Number(value) || 0));
+    return amount < 10_000
+        ? String(amount)
+        : new Intl.NumberFormat(window.SOW_LOCALE || "en", {
+              notation: "compact",
+              maximumFractionDigits: 1,
+          }).format(amount);
+}
+
+function headerWalletLabel(crowns: number, gems: number) {
+    return (
+        SOW_t("menu.open_profile") +
+        " · " +
+        SOW_t("store.crowns") +
+        ": " +
+        Math.max(0, Math.round(crowns || 0)) +
+        " · " +
+        SOW_t("store.gems") +
+        ": " +
+        Math.max(0, Math.round(gems || 0))
+    );
+}
+
 function renderTopbar() {
     const name = menuUi.state!.player_name || SOW_t("menu.anonymous");
-    const auth: SowAuthState = { linked: false, pending: false };
-    /* POKI_SHARED_AUTH_LOOKUP_BEGIN */
-    if (typeof window.SOW_getAuthState === "function") Object.assign(auth, window.SOW_getAuthState());
-    /* POKI_SHARED_AUTH_LOOKUP_END */
-    const accountXp = Math.max(0, Number(menuUi.state!.xp) || 0);
-    const crowns = menuUi.state!.crowns || 0;
-    const laurels = menuUi.state!.laurels || 0;
-    const gems = menuUi.state!.gems || 0;
-    const showSignIn =
-        portalOffersSignIn() &&
-        (window.SOW_WOU_SESSION_STATUS === "reauthentication_required" ||
-            !(auth.linked || auth.pending));
-    const signInMarkup = { value: "" };
-    /* POKI_SHARED_SIGNIN_MARKUP_BEGIN */
-    signInMarkup.value =
-        "<button class='sow-menu__signin' type='button' data-command='sign_in'>" +
-        esc(SOW_t("menu.sign_in")) +
-        "</button>";
-    /* POKI_SHARED_SIGNIN_MARKUP_END */
+    const xp = Math.max(0, Number(menuUi.state!.xp) || 0);
+    const currencies = (["crowns", "gems"] as const)
+        .map(function (kind) {
+            const amount = Math.max(0, Math.round(Number(menuUi.state![kind]) || 0));
+            const label = SOW_t(kind === "crowns" ? "store.crowns" : "store.gems") + ": " + amount;
+            return (
+                "<span class='sow-menu__progress-cell sow-menu__" +
+                kind +
+                "' title='" +
+                esc(label) +
+                "' aria-label='" +
+                esc(label) +
+                "'><img class='sow-menu__currency-icon' src='" +
+                esc(currencyAsset(kind === "crowns" ? "crown" : "gem")) +
+                "' alt='' aria-hidden='true'><strong data-progression-" +
+                kind +
+                "-value>" +
+                esc(headerBalance(amount)) +
+                "</strong></span>"
+            );
+        })
+        .join("");
     return (
-        "" +
-        "<header class='sow-menu__topbar'>" +
+        "<header class='sow-menu__topbar' data-progression>" +
         "<div class='sow-menu__identity'>" +
-        "<button class='sow-menu__avatar' type='button' data-command='open_leader_picker' " +
-        "aria-label='" +
+        "<button class='sow-menu__avatar' type='button' data-command='open_leader_picker' aria-label='" +
         esc(SOW_t("menu.select_leader")) +
         "' style=\"background-image:url('" +
         esc(avatarImage()) +
@@ -640,56 +664,33 @@ function renderTopbar() {
         "\" maxlength='16' aria-label='" +
         esc(SOW_t("menu.display_name")) +
         "'>" +
-        "</div>" +
-        "</div>" +
-        "<div class='sow-menu__top-actions'>" +
-        "<div class='sow-menu__progress' data-progression data-command='open_profile' role='button' tabindex='0' title='" +
-        esc(SOW_t("menu.open_profile")) +
-        "' aria-label='" +
+        "<button class='sow-menu__progress' type='button' data-command='open_profile' aria-label='" +
         esc(SOW_t("menu.open_profile")) +
         "'>" +
-        "<span class='sow-menu__progress-cell sow-menu__level'><small>" +
+        "<span class='sow-menu__level'><small>" +
         esc(SOW_t("menu.level_short")) +
         "</small><strong data-progression-level-value>" +
         esc(menuUi.state!.level) +
         "</strong></span>" +
-        "<span class='sow-menu__progress-cell sow-menu__xp'><span class='sow-menu__xp-value' data-progression-xp-value>" +
-        esc(Math.floor(accountXp)) +
+        "<span class='sow-menu__xp-value' data-progression-xp-value>" +
+        esc(Math.floor(xp)) +
         " " +
         esc(SOW_t("menu.xp")) +
-        "</span><span class='sow-menu__xp-track' aria-hidden='true'><i data-progression-xp-fill style='width:" +
-        (accountXp % 100) +
-        "%'></i></span></span>" +
-        "<span class='sow-menu__progress-cell sow-menu__crowns'><img class='sow-menu__currency-icon' src='" +
-        esc(currencyAsset("crown")) +
-        "' alt='' aria-hidden='true'><strong data-progression-crowns-value>" +
-        esc(crowns) +
-        "</strong></span>" +
-        "<span class='sow-menu__progress-cell sow-menu__laurels' aria-label='" +
-        esc(SOW_t("profile.laurels")) +
-        "'><img class='sow-menu__currency-icon' src='" +
-        esc(currencyAsset("laurel")) +
-        "' alt='' aria-hidden='true'><strong data-progression-laurels-value>" +
-        esc(laurels) +
-        "</strong></span>" +
-        "<span class='sow-menu__progress-cell sow-menu__gems'><img class='sow-menu__currency-icon' src='" +
-        esc(currencyAsset("gem")) +
-        "' alt='' aria-hidden='true'><strong data-progression-gems-value>" +
-        esc(gems) +
-        "</strong></span>" +
-        "</div>" +
-        (showSignIn
-            ? signInMarkup.value
-            : !portalOffersSignIn()
-              ? "<span class='sow-menu__account-label'>" + esc(SOW_t("menu.anonymous")) + "</span>"
-              : "") +
+        "</span>" +
+        "<span class='sow-menu__xp-track' aria-hidden='true'><i data-progression-xp-fill style='width:" +
+        (xp % 100) +
+        "%'></i></span></button></div></div>" +
+        "<div class='sow-menu__top-actions'>" +
+        "<button class='sow-menu__wallet' type='button' data-command='open_profile' aria-label='" +
+        esc(headerWalletLabel(menuUi.state!.crowns, menuUi.state!.gems)) +
+        "'>" +
+        currencies +
+        "</button>" +
         "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" +
         esc(SOW_t("menu.settings")) +
         "'>" +
         menuIcon("settings") +
-        "</button>" +
-        "</div>" +
-        "</header>"
+        "</button></div></header>"
     );
 }
 
@@ -922,7 +923,7 @@ function syncOverlay(key: string, markup: string) {
     }
 }
 
-function updateTopbar() {
+function updateTopbar(): void {
     const topbar = root.querySelector(".sow-menu__topbar");
     if (!topbar || !menuUi.state) return;
     const nameInput = topbar.querySelector<HTMLInputElement>("[data-role='display-name']");
@@ -933,29 +934,6 @@ function updateTopbar() {
     if (avatar && avatar.dataset.avatarUrl !== avatarUrl) {
         avatar.style.backgroundImage = "url(" + JSON.stringify(avatarUrl) + ")";
         avatar.dataset.avatarUrl = avatarUrl;
-    }
-    const auth: SowAuthState = { linked: false, pending: false };
-    /* POKI_SHARED_AUTH_LOOKUP_BEGIN */
-    if (typeof window.SOW_getAuthState === "function") Object.assign(auth, window.SOW_getAuthState());
-    /* POKI_SHARED_AUTH_LOOKUP_END */
-    const showSignIn =
-        portalOffersSignIn() &&
-        (window.SOW_WOU_SESSION_STATUS === "reauthentication_required" ||
-            !(auth.linked || auth.pending));
-    const actions = topbar.querySelector(".sow-menu__top-actions");
-    const settingsButton = actions && actions.querySelector("[data-command='toggle_settings']");
-    let signIn = actions && actions.querySelector<HTMLButtonElement>(".sow-menu__signin");
-    if (showSignIn) {
-        if (!signIn && actions) {
-            signIn = document.createElement("button");
-            signIn.className = "sow-menu__signin";
-            signIn.type = "button";
-            signIn.dataset.command = "sign_in";
-            actions.insertBefore(signIn, settingsButton);
-        }
-        if (signIn) signIn.textContent = SOW_t("menu.sign_in");
-    } else if (signIn) {
-        signIn.remove();
     }
 }
 
@@ -1187,14 +1165,30 @@ export function writeProgression(values: ProgressionValues) {
     const xpValue = progression.querySelector<HTMLElement>("[data-progression-xp-value]");
     const xpFill = progression.querySelector<HTMLElement>("[data-progression-xp-fill]");
     const crownsValue = progression.querySelector<HTMLElement>("[data-progression-crowns-value]");
-    const laurelsValue = progression.querySelector<HTMLElement>("[data-progression-laurels-value]");
     const gemsValue = progression.querySelector<HTMLElement>("[data-progression-gems-value]");
     if (levelValue) levelValue.textContent = String(displayedProgression.level);
     if (xpValue) xpValue.textContent = Math.floor(displayedProgression.xp) + " " + SOW_t("menu.xp");
     if (xpFill) xpFill.style.width = (displayedProgression.xp % 100) + "%";
-    if (crownsValue) crownsValue.textContent = String(Math.round(displayedProgression.crowns));
-    if (laurelsValue) laurelsValue.textContent = String(Math.round(displayedProgression.laurels));
-    if (gemsValue) gemsValue.textContent = String(Math.round(displayedProgression.gems));
+    const wallet = progression.querySelector<HTMLElement>(".sow-menu__wallet");
+    if (wallet)
+        wallet.setAttribute(
+            "aria-label",
+            headerWalletLabel(displayedProgression.crowns, displayedProgression.gems),
+        );
+    for (const [kind, counter] of [
+        ["crowns", crownsValue],
+        ["gems", gemsValue],
+    ] as const) {
+        if (!counter) continue;
+        const amount = Math.round(displayedProgression[kind]);
+        counter.textContent = headerBalance(amount);
+        const cell = counter.parentElement;
+        const label = SOW_t(kind === "crowns" ? "store.crowns" : "store.gems") + ": " + amount;
+        if (cell) {
+            cell.title = label;
+            cell.setAttribute("aria-label", label);
+        }
+    }
 }
 
 function ensureProgressionDisplay() {

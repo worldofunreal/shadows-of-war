@@ -53,6 +53,11 @@ impl SowApp {
         let mut turn_defeats = crate::player_progress::SessionDefeats::default();
         let mut played_combat_this_tick = false;
         let now_instant = web_time::Instant::now();
+        let alive_warships: std::collections::HashSet<u64> = snap.fleets.iter()
+            .filter(|fleet| fleet.owner_id == my_id && fleet.unit_type == sow_core::game::UnitType::Warship)
+            .map(|fleet| fleet.id)
+            .collect();
+        self.input.selected_warships.retain(|id| alive_warships.contains(id));
         self.sfx.sync_server_phase(&snap.phase);
         self.sfx.begin_tick();
         for event in events {
@@ -92,6 +97,69 @@ impl SowApp {
                             cue_color: None,
                             start_time: now_instant,
                         });
+                }
+                sow_core::game::GameEvent::WarshipSpawned { owner_id, fleet_id, .. } => {
+                    if owner_id == my_id {
+                        self.ui.app.hud_state.selected_warship_build = false;
+                        self.input.selected_warships = vec![fleet_id];
+                    }
+                }
+                sow_core::game::GameEvent::NavalActionRejected { player_id, reason } => {
+                    if player_id != my_id || my_id == 0 { continue; }
+                    let key = match reason {
+                        sow_core::game::NavalActionFailure::InvalidTarget => "hud.fleet_invalid_target",
+                        sow_core::game::NavalActionFailure::TargetNotWater => "hud.fleet_invalid_target",
+                        sow_core::game::NavalActionFailure::NoPort => "hud.fleet_no_water_access",
+                        sow_core::game::NavalActionFailure::NoConnectedPort
+                        | sow_core::game::NavalActionFailure::NoWaterPath => "hud.fleet_no_water_path",
+                        sow_core::game::NavalActionFailure::CapacityFull => "hud.fleet_capacity_full",
+                        sow_core::game::NavalActionFailure::InsufficientGold => "hud.not_enough_gold",
+                        sow_core::game::NavalActionFailure::CampaignLocked => "hud.campaign_unlock_required",
+                    };
+                    let text = if reason == sow_core::game::NavalActionFailure::InsufficientGold {
+                        let available = snap.players.iter().find(|player| player.id == my_id)
+                            .map_or(0.0, |player| player.gold);
+                        crate::ui::UiText::new(key)
+                            .with("cost", sow_core::game::UnitType::Warship.gold_cost().ceil().to_string())
+                            .with("available", available.floor().to_string())
+                    } else {
+                        crate::ui::UiText::new(key)
+                    };
+                    self.ui.app.hud_state.push_notification_for_players(
+                        text, [Some(my_id), None], 3, None, false,
+                    );
+                }
+                sow_core::game::GameEvent::NavalShot { owner_id, tile } => {
+                    let x = tile % self.sim.map_w.max(1);
+                    let y = tile / self.sim.map_w.max(1);
+                    self.sfx.play_combat(
+                        now_instant,
+                        sow_audio::CombatSoundKind::NavalShot,
+                        1.0,
+                        (u32::from(owner_id) << 16) ^ tile,
+                        self.spatial_sound_params(x as f32 + 0.5, y as f32 + 0.5),
+                    );
+                }
+                sow_core::game::GameEvent::NavalImpact { owner_id, tile, sunk, .. } => {
+                    let x = tile % self.sim.map_w.max(1);
+                    let y = tile / self.sim.map_w.max(1);
+                    let color = snap.players.iter().find(|player| player.id == owner_id)
+                        .map(|player| sow_core::player::player_territory_rgb(
+                            player.player_type, player.team, player.color, player.is_campaign_faction,
+                        )).unwrap_or([0.13, 0.83, 0.94]);
+                    if self.ui.transport_impacts.len() == crate::app::MAX_TRANSPORT_IMPACTS {
+                        self.ui.transport_impacts.pop_front();
+                    }
+                    self.ui.transport_impacts.push_back(crate::app::TransportImpact {
+                        tile_x: x, tile_y: y, color, cue_color: None, start_time: now_instant,
+                    });
+                    self.sfx.play_combat(
+                        now_instant,
+                        if sunk { sow_audio::CombatSoundKind::NavalSink } else { sow_audio::CombatSoundKind::NavalImpact },
+                        1.0,
+                        (u32::from(owner_id) << 16) ^ tile,
+                        self.spatial_sound_params(x as f32 + 0.5, y as f32 + 0.5),
+                    );
                 }
                 sow_core::game::GameEvent::AbilityTriggered {
                     owner_id,

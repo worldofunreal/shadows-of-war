@@ -47,14 +47,9 @@ declare global {
         SOWCampaignView: CampaignViewApi;
         SOW_getAuthState?: () => SowAuthState;
         SOW_hudIcon: (name: string) => string;
-        SOW_loadAvatarPixels?: (
-            pathOrSlug: string,
-            cellSize: number,
-            expression?: "happy" | "calm" | "fear" | "angry",
-        ) => Promise<Uint8Array>;
+        SOW_loadAvatarBitmap?: (path: string, size: number) => Promise<ImageBitmap>;
         SOW_leaderArtUrl: (slug: string, variant?: string) => string;
         SOW_prepareLeaderArt: (slug: string, priority?: string) => Promise<boolean>;
-        SOW_prefetchAvatarImage?: (path: string) => Promise<void>;
         SOW_menu_flow: { canGuide(): boolean };
         SOW_menu_guide: {
             update(state: unknown, facts?: unknown): void;

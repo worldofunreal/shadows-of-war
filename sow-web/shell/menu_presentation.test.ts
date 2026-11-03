@@ -389,7 +389,7 @@ test("header keeps only the nickname and sizes it to the available space", () =>
     );
     assert.match(
         layoutCss,
-        /\.sow-menu__profile input\s*\{[^}]*width:\s*100%;[^}]*font-size:\s*clamp\(15px, 4vw, 21px\)/,
+        /\.sow-menu__profile input\s*\{[^}]*font-size:\s*clamp\(16px, 4vw, 21px\)/,
     );
 });
 
@@ -508,6 +508,7 @@ test("settings social links include SVGs and preserve web and Android link behav
         surfacesSource.slice(start, end) + "\nrenderSettingsLink;",
         {
             esc: (value) => String(value),
+            asset: (path) => "/assets/" + path,
             isAndroidTwa: () => android,
             SOW_t: (key) => key,
         },
@@ -1068,7 +1069,9 @@ test("leader display names use the catalog translation keys for every leader", (
 test("one hero briefing renders identity and the named ability without exposing missing translations", () => {
     const start = coreSource.indexOf("function heroBriefingLeader");
     const end = coreSource.indexOf("function mapInfo(", start);
-    assert.ok(start >= 0 && end > start);
+    const abilityStart = coreSource.indexOf("export function abilityIconMarkup(");
+    const abilityEnd = coreSource.indexOf("export function leaderArtUrl(", abilityStart);
+    assert.ok(start >= 0 && end > start && abilityStart >= 0 && abilityEnd > abilityStart);
     const translations = {
         "heroes.leader_amina_de_zazzau_name": "Amina of Zazzau",
         "heroes.leader_amina_de_zazzau_civilization": "Kingdom of Zazzau",
@@ -1093,7 +1096,8 @@ test("one hero briefing renders identity and the named ability without exposing 
         asset: (path) => "/assets/" + path,
     };
     vm.runInNewContext(
-        coreSource.slice(start, end).replace(/\bexport\s+/g, "") +
+        coreSource.slice(abilityStart, abilityEnd).replace(/\bexport\s+/g, "") +
+            coreSource.slice(start, end).replace(/\bexport\s+/g, "") +
             "; this.renderHeroBriefing = renderHeroBriefing; this.hideBrokenHeroBriefingIcon = hideBrokenHeroBriefingIcon;",
         context,
     );
@@ -1970,4 +1974,178 @@ test("ranked result acknowledges before replay, ignores duplicate presses, and t
     assert.deepEqual(commands, ["dismiss_ranked_result", "quick_match"]);
     assert.equal(finished, 1);
     assert.ok(again.disabled && close.disabled);
+});
+
+
+test("header groups identity and XP separately from crowns and gems in one responsive row", () => {
+    const source = shellSource.slice(
+        shellSource.indexOf("function headerBalance("),
+        shellSource.indexOf("function syncDisconnectNotice("),
+    );
+    const state = { player_name: "LongNickname1234", level: 12, xp: 1150, crowns: 12345, gems: 9999 };
+    const api = vm.runInNewContext(source + "\n({renderTopbar, headerBalance});", {
+        menuUi: { state },
+        window: { SOW_LOCALE: "en" },
+        SOW_t: (key) => key,
+        esc: String,
+        avatarImage: () => "random.webp",
+        currencyAsset: (kind) => kind + ".webp",
+        menuIcon: () => "settings",
+    });
+    const markup = api.renderTopbar();
+    assert.match(markup, /<header[^>]+data-progression>/);
+    assert.match(markup, /random.webp/);
+    assert.match(markup, /LongNickname1234/);
+    assert.ok(markup.indexOf("data-progression-xp-fill") < markup.indexOf("sow-menu__top-actions"));
+    assert.match(markup, /data-progression-crowns-value>12.3K/);
+    assert.match(markup, /aria-label='store.crowns: 12345'/);
+    assert.match(markup, /data-progression-gems-value>9999/);
+    assert.doesNotMatch(markup, /sign_in|signin|laurel|account-label/);
+    assert.equal(api.headerBalance(10000), "10K");
+    assert.equal(api.headerBalance(1000000), "1M");
+    assert.equal(api.headerBalance(0), "0");
+    const layout = menuCss["main_menu.layout.css"];
+    assert.doesNotMatch(layout, /identity signin settings|progress progress progress|92px/);
+    assert.match(layout, /sow-menu__wallet[^}]+flex-direction: column/);
+    assert.match(layout, /height: 64px;\s*min-height: 64px/);
+    assert.match(layout, /height: 56px;\s*min-height: 56px/);
+});
+
+test("split header progression updates both blocks and keeps laurels internal", () => {
+    const source = shellSource.slice(
+        shellSource.indexOf("export function writeProgression("),
+        shellSource.indexOf("function ensureProgressionDisplay("),
+    );
+    const counters = Object.fromEntries(
+        ["level-value", "xp-value", "xp-fill", "crowns-value", "gems-value"].map((key) => [
+            "[data-progression-" + key + "]",
+            {
+                textContent: "",
+                style: {},
+                parentElement: {
+                    title: "",
+                    setAttribute(key, value) {
+                        this[key] = value;
+                    },
+                },
+            },
+        ]),
+    );
+    const api = vm.runInNewContext(
+        "let displayedProgression;\n" +
+            source.replace(/export /g, "") +
+            "\n({writeProgression, values: () => displayedProgression});",
+        {
+            root: { querySelector: () => ({ querySelector: (selector) => counters[selector] || null }) },
+            SOW_t: (key) => key,
+            headerBalance: (value) => (value >= 10000 ? "12.3K" : String(value)),
+        },
+    );
+    api.writeProgression({ level: 4, xp: 350, crowns: 12345, gems: 25, laurels: 10 });
+    assert.equal(counters["[data-progression-level-value]"].textContent, "4");
+    assert.equal(counters["[data-progression-xp-value]"].textContent, "350 menu.xp");
+    assert.equal(counters["[data-progression-xp-fill]"].style.width, "50%");
+    assert.equal(counters["[data-progression-crowns-value]"].textContent, "12.3K");
+    assert.equal(counters["[data-progression-crowns-value]"].parentElement.title, "store.crowns: 12345");
+    assert.equal(counters["[data-progression-gems-value]"].textContent, "25");
+    assert.equal(api.values().laurels, 10);
+});
+
+test("Settings owns optional sign-in and respects pending, reauthentication, and portal accounts", () => {
+    let auth = { linked: false, pending: false };
+    let offersSignIn = true;
+    const window = {
+        SOW_getAuthState: () => auth,
+        SOW_getWouSession: () => ({ user: { email: "player@example.com" } }),
+        SOW_WOU_SESSION_STATUS: "",
+    };
+    const renderSettings = vm.runInNewContext(
+        renderSettingsBody(surfacesSource).replace(/export /g, "") + "\nrenderSettings;",
+        {
+            window,
+            menuUi: { state: { settings: {} } },
+            SOW_t: (key) => key,
+            esc: String,
+            portalOffersSignIn: () => offersSignIn,
+            isAndroidTwa: () => false,
+            renderLocaleSettingRow: () => "",
+            renderSettingsPrivacySection: () => "",
+            renderSettingsLinks: () => "",
+            renderSettingsLink: () => "",
+            SOW_renderDropdown: () => "",
+        },
+    );
+    assert.match(renderSettings(), /data-command='sign_in'/);
+    auth = { linked: false, pending: true };
+    assert.doesNotMatch(renderSettings(), /data-command='sign_in'/);
+    assert.match(renderSettings(), /menu.connecting/);
+    auth = { linked: true, pending: false, canSignOut: true };
+    assert.doesNotMatch(renderSettings(), /data-command='sign_in'/);
+    assert.match(renderSettings(), /player@example.com/);
+    assert.match(renderSettings(), /data-command='sign_out'/);
+    window.SOW_WOU_SESSION_STATUS = "reauthentication_required";
+    assert.match(renderSettings(), /data-command='sign_in'/);
+    offersSignIn = false;
+    assert.doesNotMatch(renderSettings(), /data-command='sign_in'/);
+});
+
+test("laurel reward finishes safely without a header destination", async () => {
+    const start = shellSource.indexOf("export function flyRewardCard(");
+    const end = shellSource.indexOf("export function pulseRewardCounter", start);
+    const fly = vm.runInNewContext(
+        shellSource.slice(start, end).replace(/export /g, "") + "\nflyRewardCard;",
+        {
+            root: { querySelector: () => null },
+        },
+    );
+    const card = { style: {} };
+    assert.equal(await fly({ card, stage: { selector: "[data-progression-laurels-value]" } }, 1), true);
+    assert.equal(card.style.visibility, "hidden");
+});
+
+test("header refresh preserves a focused nickname and never recreates login", () => {
+    const start = shellSource.indexOf("function updateTopbar()");
+    const end = shellSource.indexOf("function updateFrameChrome", start);
+    const input = { value: "editing" };
+    const avatar = { dataset: {}, style: {} };
+    const document = { activeElement: input };
+    const refresh = vm.runInNewContext(shellSource.slice(start, end) + "\nupdateTopbar;", {
+        menuUi: { state: { player_name: "server-name" } },
+        document,
+        root: {
+            querySelector: () => ({
+                querySelector: (selector) => (selector.includes("display-name") ? input : avatar),
+            }),
+        },
+        avatarImage: () => "random.webp",
+        SOW_t: (key) => key,
+    });
+    refresh();
+    assert.equal(input.value, "editing");
+    assert.match(avatar.style.backgroundImage, /random.webp/);
+    document.activeElement = null;
+    refresh();
+    assert.equal(input.value, "server-name");
+    assert.doesNotMatch(shellSource.slice(start, end), /sign_in|createElement|innerHTML|replaceWith/);
+});
+
+test("reduced motion suppresses counter effects after splitting the header", () => {
+    const start = shellSource.indexOf("export function pulseRewardCounter(");
+    const end = shellSource.indexOf("function acknowledgeShownReceipts", start);
+    const pulse = vm.runInNewContext(
+        shellSource.slice(start, end).replace(/export /g, "") + "\npulseRewardCounter;",
+        {
+            reducedRewardMotion: () => true,
+            root: {
+                querySelector: () => {
+                    throw new Error("reduced motion must not animate counters");
+                },
+            },
+        },
+    );
+    pulse("[data-progression-level-value]", true);
+    assert.match(
+        menuCss["main_menu.base.css"],
+        /\[data-progression\] \[data-progression-crowns-value\]\.is-reward-value-hit/,
+    );
 });

@@ -17,6 +17,28 @@ pub enum AvatarExpression {
 
 impl AvatarExpression {
     pub const ALL: [Self; 4] = [Self::Happy, Self::Calm, Self::Fear, Self::Angry];
+
+    /// File-name form, the same name the web shell receives through serde.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Happy => "happy",
+            Self::Calm => "calm",
+            Self::Fear => "fear",
+            Self::Angry => "angry",
+        }
+    }
+}
+
+/// Published path of a hero face, relative to the asset root. Calm is the static portrait; the
+/// publisher crops every face from the hero sheet, and the radial and nameplates load these files.
+pub fn hero_portrait_path(art_slug: &str, expression: AvatarExpression) -> String {
+    match expression {
+        AvatarExpression::Calm => format!("gameplay/avatars/{art_slug}.webp"),
+        _ => format!(
+            "gameplay/avatars/expressions/{art_slug}_{}.webp",
+            expression.id()
+        ),
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -162,6 +184,24 @@ pub fn is_recipient(players: &[crate::protocol::PlayerSnapshot], sender: u16, vi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn expression_file_names_match_the_names_the_shell_receives() {
+        for expression in AvatarExpression::ALL {
+            assert_eq!(
+                serde_json::to_string(&expression).unwrap(),
+                format!("\"{}\"", expression.id())
+            );
+        }
+        assert_eq!(
+            hero_portrait_path("boudica", AvatarExpression::Calm),
+            "gameplay/avatars/boudica.webp"
+        );
+        assert_eq!(
+            hero_portrait_path("boudica", AvatarExpression::Fear),
+            "gameplay/avatars/expressions/boudica_fear.webp"
+        );
+    }
 
     fn engine() -> crate::engine::SowEngine {
         let config = crate::game_config::GameConfig::default();

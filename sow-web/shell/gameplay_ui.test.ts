@@ -3,9 +3,18 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { vm } from "./typescript-test-support.ts";
-import { setAvatarPortrait } from "./avatar-presentation.ts";
+import { avatarPortraitPath, setAvatarPortrait } from "./avatar-presentation.ts";
 const shell = __dirname;
 import { bundleTs, loadTypeScriptModule } from "./typescript-test-support.ts";
+
+function avatarAssetUrl(path: string): string {
+    return "/assets/" + path;
+}
+
+function loadAvatarImage(_source: string): Promise<HTMLImageElement> {
+    return Promise.resolve({} as HTMLImageElement);
+}
+
 const tutorialBundle =
     '(function () { if (typeof window === "undefined") return; const providedView = window.SOWCampaignView;\n' +
     bundleTs(path.join(shell, "sow-campaign-view.ts")) +
@@ -439,6 +448,9 @@ function makePlayerDialogsHarness() {
             },
         },
         asset: (name) => "/assets/" + name,
+        avatarAssetUrl,
+        avatarPortraitPath,
+        loadAvatarImage,
         SOW_t: (key) => context.window.SOW_LOCALE + ":" + key,
         setAvatarPortrait,
     });
@@ -612,6 +624,9 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
         activeProgressBars: new Map(),
         activeCelebrations: new Set(),
         setAvatarPortrait,
+        avatarAssetUrl,
+        avatarPortraitPath,
+        loadAvatarImage,
         document: doc,
         hudRefs: makeRefs(),
         hudRoot: new Element("root"),
@@ -893,6 +908,9 @@ test("map feedback reuses one compact card, clamps to the viewport, and releases
         statusIcon: (name) => name,
         SOW_t: (key) => key,
         setAvatarPortrait,
+        avatarAssetUrl,
+        avatarPortraitPath,
+        loadAvatarImage,
         window: {
             innerWidth: 375,
             innerHeight: 667,

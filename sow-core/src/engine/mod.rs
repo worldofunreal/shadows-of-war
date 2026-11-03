@@ -431,8 +431,6 @@ pub struct SowEngine {
     pub campaign_pre_defeat_since: u64,
     /// Player id -> (first debt tick, rebellion already started this debt episode).
     pub(crate) debt_episodes: std::collections::HashMap<PlayerId, (u64, bool)>,
-    pub port_queues:
-        std::collections::HashMap<u64, std::collections::VecDeque<crate::game::ShipProduction>>,
     pub projectiles: Vec<crate::game::Projectile>,
     pub silo_cooldowns: std::collections::HashMap<u64, u32>,
     pub mirv_launches: std::collections::HashMap<u16, u32>,
@@ -541,7 +539,6 @@ impl SowEngine {
             campaign_pre_defeat_pending: None,
             campaign_pre_defeat_since: 0,
             debt_episodes: std::collections::HashMap::new(),
-            port_queues: std::collections::HashMap::new(),
             projectiles: Vec::new(),
             silo_cooldowns: std::collections::HashMap::new(),
             mirv_launches: std::collections::HashMap::new(),

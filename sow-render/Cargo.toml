@@ -19,6 +19,9 @@ image = { workspace = true }
 rustybuzz = "0.20"
 unicode-bidi = "0.3"
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { workspace = true, features = ["ImageBitmap"] }
+
 [dev-dependencies]
 sow-i18n = { workspace = true }
 # Exact same naga blade uses at runtime (incl. the web build) so the

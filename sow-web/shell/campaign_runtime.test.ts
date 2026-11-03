@@ -908,7 +908,7 @@ test("campaign building and action permissions are cumulative, route-safe, and r
     assert.deepEqual(campaign.CAMPAIGN_ACTION_BUILDING_REQUIREMENTS, {
         transport_fleet: null,
         trade_ship: { kind: "Port", level: 1 },
-        warship: { kind: "Port", level: 2 },
+        warship: { kind: "Port", level: 1 },
         nuke: { kind: "City", level: 4 },
     });
     const buildingEnum = rustGame.match(/pub enum BuildingKind \{([\s\S]*?)\n\}/)[1];

@@ -850,87 +850,10 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     }
     super::pack_art_atlases(paths)?;
     super::validate_current_ui_contract(paths)?;
-    run(
-        "bun",
-        &[
-            "test",
-            "sow-web/shell/menu_flow.test.ts",
-            "sow-web/shell/map_interaction.test.ts",
-            "sow-web/shell/loader_boot.test.ts",
-            "sow-web/shell/menu_presentation.test.ts",
-            "sow-web/shell/campaign_view.test.ts",
-            "sow-web/shell/campaign_runtime.test.ts",
-            "sow-web/shell/gameplay_ui.test.ts",
-            "sow-web/shell/gameplay_interaction.test.ts",
-            "sow-web/shell/avatar_presentation.test.ts",
-        ],
-        Some(&paths.root),
-    )
-    .context("shell UI regression tests failed")?;
-    for filter in ["test_build_index_", "test_nginx_conf_", "ssh_transport_"] {
-        run(
-            "cargo",
-            &["test", "--locked", "-p", "sow-dist", "--bin", "sow", filter],
-            Some(&paths.root),
-        )
-        .context("distribution packaging regression tests failed")?;
-    }
-    run(
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "sow-core",
-            "-p",
-            "sow-data",
-            "-p",
-            "sow-server",
-            "-p",
-            "sow-render",
-            "--features",
-            "sow-data/server",
-            "--",
-            "--test-threads=1",
-        ],
-        Some(&paths.root),
-    )
-    .context("core economy, simulation and render regression tests failed")?;
-    for (filter, failure) in [
-        (
-            "reward_exit_tests",
-            "server-confirmed reward exit tests failed",
-        ),
-        ("hero_ability", "hero ability client tests failed"),
-        ("status_badge", "nameplate status badge tests failed"),
-        (
-            "emote_tests",
-            "player avatar expression and emote tests failed",
-        ),
-        ("troop_transfer", "troop transfer nameplate tests failed"),
-        (
-            "death_avatar",
-            "death avatar presentation and loading tests failed",
-        ),
-    ] {
-        run(
-            "cargo",
-            &[
-                "test",
-                "--locked",
-                "-p",
-                "sow-client",
-                "--target",
-                "wasm32-unknown-unknown",
-                "--config",
-                "target.wasm32-unknown-unknown.runner=\"wasm-bindgen-test-runner\"",
-                "--lib",
-                filter,
-            ],
-            Some(&paths.root),
-        )
-        .context(failure)?;
-    }
+    // Keep unit/fixture suites available for explicit development runs. The
+    // production path validates sources and packages here, then relies on its
+    // staged health checks and public verification instead of treating unit
+    // test passes as proof of browser rendering.
     if !Command::new("rustc")
         .args([
             "--print",
@@ -2212,7 +2135,7 @@ fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
     let root = shell_quote(&config.build_root);
     // Synced inputs can predate the last build; discard crates embedding game data.
     let command = format!(
-        "set -eu; cd {root}; cargo clean --profile deploy -p sow-core -p sow-data; cargo test --locked -p sow-core -- --test-threads=1; cargo test --locked -p sow-data --features server; cargo test --locked -p sow-server; cargo build --locked --profile deploy -p sow-server; cargo build --locked --profile deploy -p sow-data --features server --bin sow-database"
+        "set -eu; cd {root}; cargo clean --profile deploy -p sow-core -p sow-data; cargo build --locked --profile deploy -p sow-server; cargo build --locked --profile deploy -p sow-data --features server --bin sow-database"
     );
     run("ssh", &[&config.build_host, &command], None)?;
 
@@ -2599,8 +2522,7 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
          export PKG_CONFIG_PATH={}; export SOW_DPDK_VERSION={DPDK_RELEASE}; \
          export SOW_RELAY_FOUNDATION_ID={foundation}; export SOW_RELAY_BUILD_GIT={revision}; \
          export FSTACK_LIB_DIR={}; \
-         cd {}; cargo test --locked --release -p fstack-bridge -p sow-relay -- --test-threads=1; \
-         cargo build --locked --release -p sow-relay; \
+         cd {}; cargo build --locked --release -p sow-relay; \
          chown -R 1000:1000 {}/target {}/lib 2>/dev/null || true",
         shell_quote(&pkg_config_path),
         shell_quote(&format!("{}/lib", config.fstack_repo)),

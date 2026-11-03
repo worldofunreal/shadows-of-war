@@ -25,7 +25,7 @@ impl CampaignAction {
         match self {
             Self::TransportFleet => None,
             Self::TradeShip => Some((BuildingKind::Port, 1)),
-            Self::Warship => Some((BuildingKind::Port, 2)),
+            Self::Warship => Some((BuildingKind::Port, 1)),
             Self::Nuke => Some((BuildingKind::City, BuildingKind::City.max_level())),
         }
     }

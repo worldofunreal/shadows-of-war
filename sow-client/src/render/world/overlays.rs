@@ -49,11 +49,10 @@ pub(super) fn world_to_screen_values(
 
 pub(crate) fn render_overlays(
     text: &mut TextRenderer,
+    avatars: &crate::render::avatars::AvatarSlots,
     sim: &SimState,
     ui: &mut UiState,
     input: &InputState,
-    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
-    loaded_campaign_avatars: &std::collections::HashSet<String>,
     sf: f32,
     now: Instant,
     placement_can_confirm: bool,
@@ -80,7 +79,7 @@ pub(crate) fn render_overlays(
         &mut ui.nameplates,
         input,
         &dev,
-        campaign_avatar_slots,
+        avatars,
         sf,
         zoom_scaled,
         now,
@@ -105,8 +104,7 @@ pub(crate) fn render_overlays(
         ui,
         input,
         &dev,
-        campaign_avatar_slots,
-        loaded_campaign_avatars,
+        avatars,
         sf,
         now,
     );

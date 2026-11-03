@@ -674,6 +674,7 @@ impl SowApp {
                                 dev.fog_of_war,
                                 self.sim.my_player_id.unwrap_or(0),
                                 &self.sim.fog_visible,
+                                &self.input.selected_warships,
                                 &dev.shader_params,
                             );
                             self.ui.mover_scene.pack_gpu(&pack, mover_r);
