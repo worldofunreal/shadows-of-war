@@ -8,6 +8,7 @@ import {
     localizedText,
     menuIcon,
     menuUi,
+    portalOffersSignIn,
     renderQuickMatchButton,
     renderMainNavMarkup,
 } from "./main_menu.core.ts";
@@ -203,6 +204,15 @@ export function renderSettings() {
         : "<div class='sow-menu__settings-account'><strong class='sow-menu__account-value'>" +
           esc(accountDetail) +
           "</strong></div>";
+    const showSignIn =
+        portalOffersSignIn() &&
+        !auth.pending &&
+        (!auth.linked || window.SOW_WOU_SESSION_STATUS === "reauthentication_required");
+    const signInControl = showSignIn
+        ? "<button class='sow-menu__secondary' type='button' data-command='sign_in'>" +
+          esc(SOW_t("menu.sign_in")) +
+          "</button>"
+        : "";
     let signOutControl = "";
     if (auth.canSignOut) {
         signOutControl = menuUi.signOutConfirmOpen
@@ -244,6 +254,7 @@ export function renderSettings() {
         esc(SOW_t("menu.account")) +
         "</h3>" +
         accountControl +
+        signInControl +
         (signOutControl ? "<div class='sow-menu__settings-actions'>" + signOutControl + "</div>" : "") +
         "</section>" +
         "<section class='sow-menu__settings-section'><h3>" +

@@ -87,7 +87,7 @@ export const CAMPAIGN_ACTION_BUILDING_REQUIREMENTS: Record<string, { kind: strin
     Object.freeze({
         transport_fleet: null,
         trade_ship: Object.freeze({ kind: "Port", level: 1 }),
-        warship: Object.freeze({ kind: "Port", level: 2 }),
+        warship: Object.freeze({ kind: "Port", level: 1 }),
         nuke: Object.freeze({ kind: "City", level: STRUCTURE_LEVEL_LIMITS.City }),
     });
 export const BUILDING_METRIC_KINDS: Record<string, string> = {

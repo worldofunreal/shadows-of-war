@@ -40,5 +40,5 @@ wasm-bindgen = { workspace = true }
 getrandom = { workspace = true, features = ["js"] }
 console_error_panic_hook = { workspace = true }
 console_log = { workspace = true }
-web-sys = { workspace = true, features = ["Window", "Document", "HtmlDocument", "Element", "HtmlElement", "HtmlInputElement", "HtmlAnchorElement", "HtmlCanvasElement", "Navigator", "Clipboard", "CssStyleDeclaration", "Node", "VisibilityState", "Location", "BinaryType", "Worker", "MessageEvent", "Storage", "MediaQueryList", "Blob", "Url", "BlobPropertyBag", "VisualViewport", "Event"] }
+web-sys = { workspace = true, features = ["Window", "Document", "HtmlDocument", "Element", "HtmlElement", "HtmlInputElement", "HtmlAnchorElement", "HtmlCanvasElement", "Navigator", "Clipboard", "CssStyleDeclaration", "Node", "VisibilityState", "Location", "BinaryType", "Worker", "MessageEvent", "Storage", "MediaQueryList", "Blob", "Url", "BlobPropertyBag", "VisualViewport", "Event", "ImageBitmap"] }
 js-sys = { workspace = true }

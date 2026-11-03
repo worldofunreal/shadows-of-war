@@ -9,6 +9,7 @@ use crate::render::{dev_emoji_outline, dev_text_style};
 use crate::theme::dev_config::DevConfig;
 use sow_core::protocol::{AttackSnapshot, SimSnapshot};
 use sow_render::FontAtlas;
+use crate::render::avatars::AvatarSlots;
 use sow_render::text::{AVATAR_GOLD_SLOT, NameplateStatusSprite};
 use web_time::Instant;
 
@@ -86,27 +87,15 @@ pub(crate) fn render(
     ui: &mut UiState,
     input: &InputState,
     dev: &DevConfig,
-    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
-    loaded_campaign_avatars: &std::collections::HashSet<String>,
+    avatars: &AvatarSlots,
     sf: f32,
     now: Instant,
 ) {
     render_click_markers(text, ui, input, dev, sf, now);
     render_transport_targets(text, snapshot, sim, ui, input, dev, sf, now);
     render_transport_impacts(text, ui, input, sf, now);
-    render_death_nameplates(text, ui, input, dev, campaign_avatar_slots, sf, now);
-    render_attack_badges(
-        text,
-        snapshot,
-        sim,
-        ui,
-        input,
-        dev,
-        campaign_avatar_slots,
-        loaded_campaign_avatars,
-        sf,
-        now,
-    );
+    render_death_nameplates(text, ui, input, dev, avatars, sf, now);
+    render_attack_badges(text, snapshot, sim, ui, input, dev, avatars, sf, now);
     render_attack_launch_notices(text, ui, input, dev, sf, now);
 }
 
@@ -424,7 +413,7 @@ fn render_death_nameplates(
     ui: &mut UiState,
     input: &InputState,
     dev: &DevConfig,
-    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
+    avatars: &AvatarSlots,
     sf: f32,
     now: Instant,
 ) {
@@ -624,8 +613,8 @@ fn render_death_nameplates(
         );
         let avatar = crate::render::world::nameplates::prepare_death_avatar(
             text,
+            avatars,
             &animation.avatar,
-            campaign_avatar_slots,
             [row_left + icon_block + icon_size * sf * 0.5, center_px[1]],
             icon_size * sf * 0.5,
         );
@@ -714,8 +703,7 @@ fn render_attack_badges(
     ui: &mut UiState,
     input: &InputState,
     dev: &DevConfig,
-    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
-    loaded_campaign_avatars: &std::collections::HashSet<String>,
+    avatars: &AvatarSlots,
     sf: f32,
     now: Instant,
 ) {
@@ -822,14 +810,10 @@ fn render_attack_badges(
             .players
             .iter()
             .find(|player| player.id == attacker_id);
-        if let Some(slug) = attacker.and_then(|player| player.campaign_avatar.as_deref()) {
-            ui.nameplates.request_avatar(slug);
-        }
         crate::render::world::nameplates::paint_attack_badge_avatar(
             text,
+            avatars,
             attacker,
-            campaign_avatar_slots,
-            loaded_campaign_avatars,
             [screen[0] * sf, (avatar_top + icon_size * 0.5) * sf],
             icon_size * sf,
         );

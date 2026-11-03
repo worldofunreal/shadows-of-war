@@ -470,6 +470,8 @@ struct HudPublishKey {
     spawn_timer_tenths: i32,
     selected_building: Option<crate::ui::hud::state::BuildingPlacement>,
     selected_warship_build: bool,
+    selected_warships: Vec<u64>,
+    warship_count: u32,
     selected_nuke: u8,
     building_costs: [u64; 9],
     settings_mute: bool,
@@ -1969,8 +1971,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .any(|building| building.owner_id == my_pid && building.under_construction)
     });
     let has_active_celebrations = !app.ui.building_celebrations.is_empty();
-    let cold_open = app.ui.show_leaderboard
-        || hud.building_placement.is_some()
+    let cold_open = hud.building_placement.is_some()
         || hud.show_alliance_inbox
         || hud.show_ask_panel.is_some()
         || hud.show_betrayal_warning.is_some()
@@ -2008,6 +2009,12 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .unwrap_or(-1),
         selected_building: hud.building_placement,
         selected_warship_build: hud.selected_warship_build,
+        selected_warships: app.input.selected_warships.clone(),
+        warship_count: app.sim.current_snapshot.as_ref().map_or(0, |snapshot| {
+            snapshot.fleets.iter().filter(|fleet| {
+                fleet.owner_id == my_pid && fleet.unit_type == sow_core::game::UnitType::Warship
+            }).count() as u32
+        }),
         selected_nuke: hud
             .selected_nuke_kind
             .map(|kind| kind as u8)
@@ -4135,6 +4142,12 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "selected_nuke": selected_nuke,
         "fleet_panel": {
             "trade_ships": trade_ships,
+            "warships": app.sim.current_snapshot.as_ref().map_or(0, |snapshot| {
+                snapshot.fleets.iter().filter(|fleet| {
+                    fleet.owner_id == my_pid && fleet.unit_type == sow_core::game::UnitType::Warship
+                }).count()
+            }),
+            "selected_warships": app.input.selected_warships.len(),
             "trade_capacity": port_levels,
             "port_levels": port_levels,
             "city_level": city_level,
@@ -4585,13 +4598,8 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         let include_leaderboard = if app.ui.show_leaderboard {
             let now = Instant::now();
             let due = app.ui.leaderboard_publish_pending
-                || LAST_HUD_KEY.with(|key| {
-                    key.borrow()
-                        .as_ref()
-                        .is_none_or(|key| key.avatar_revision != app.ui.nameplates.avatar_revision)
-                })
                 || app.ui.leaderboard_refresh_at.map_or(true, |last| {
-                    now.duration_since(last) >= Duration::from_millis(250)
+                    now.duration_since(last) >= Duration::from_secs(1)
                 });
             if due {
                 app.ui.leaderboard_refresh_at = Some(now);
@@ -5384,6 +5392,9 @@ mod tests {
             movement_progress: 0.0,
             eta_seconds: None,
             retreating: false,
+            max_health: unit_type.max_health(),
+            warship: None,
+            captured_trade_return: false,
         };
         snapshot.fleets = vec![
             make_snapshot(10, UnitType::TransportShip),
@@ -5594,6 +5605,9 @@ mod tests {
             movement_progress: 0.0,
             eta_seconds: None,
             retreating: false,
+            max_health: unit_type.max_health(),
+            warship: None,
+            captured_trade_return: false,
         };
         snapshot.fleets = vec![
             make_snapshot(10, 1, UnitType::TransportShip),

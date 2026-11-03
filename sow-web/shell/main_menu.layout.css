@@ -38,34 +38,10 @@
     background-position: center top;
   }
 
-  .sow-menu__topbar {
-    min-height: 50px;
-    padding: 5px 6px 5px 8px;
-  }
-
-  .sow-menu__identity {
-    gap: 6px;
-  }
-
   .sow-menu__avatar,
   .sow-menu__icon-button {
     width: 36px;
     height: 36px;
-  }
-
-  .sow-menu__profile input {
-    width: 100%;
-    min-width: 0;
-    font-size: clamp(15px, 4vw, 21px);
-  }
-
-  .sow-menu__profile {
-    min-width: 0;
-  }
-
-  .sow-menu__signin {
-    padding: 9px 6px;
-    font-size: 8px;
   }
 
   .sow-menu__main {
@@ -160,11 +136,7 @@
 }
 
 @media (min-width: 600px) and (max-width: 959px) {
-  .sow-menu__profile input {
-    width: 100%;
-  }
 
-  .sow-menu__signin,
   .sow-menu__icon-button,
   .sow-menu__primary,
   .sow-menu__secondary,
@@ -188,40 +160,10 @@
       max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   }
 
-  .sow-menu__topbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 6px;
-    min-height: 52px;
-    padding: 5px 6px;
-    backdrop-filter: none;
-  }
-
-  .sow-menu__identity {
-    width: 100%;
-    min-width: 0;
-    flex: 0 1 auto;
-    gap: 5px;
-  }
-
   .sow-menu__icon-button {
     width: 36px;
     height: 36px;
     min-width: 36px;
-  }
-
-  .sow-menu__profile {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .sow-menu__profile input {
-    width: 100%;
-    min-width: 0;
-    min-height: 0;
-    height: 24px;
-    font-size: clamp(15px, 4vw, 21px);
   }
 
   .sow-menu__join input,
@@ -230,21 +172,6 @@
     min-width: 0;
     min-height: 44px;
     font-size: 16px;
-  }
-
-  .sow-menu__top-actions {
-    width: auto;
-    min-width: 0;
-    margin-inline-start: 0;
-    justify-content: flex-end;
-    gap: 4px;
-  }
-
-  .sow-menu__signin {
-    min-height: 36px;
-    height: 36px;
-    padding: 0 8px;
-    font-size: 10px;
   }
 
   .sow-menu__main {
@@ -342,18 +269,6 @@
 }
 
 @media (max-width: 359px) and (orientation: portrait) {
-  .sow-menu__identity {
-    gap: 3px;
-  }
-
-  .sow-menu__top-actions {
-    gap: 3px;
-  }
-
-  .sow-menu__signin {
-    padding-inline: 5px;
-    font-size: 7px;
-  }
 
   .sow-menu__command {
     padding: 13px;
@@ -642,10 +557,6 @@
     padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
 
-  #sow-menu .sow-menu__topbar {
-    min-height: 50px;
-  }
-
   #sow-menu[data-screen="home"] .sow-menu__main {
     overflow-x: hidden;
     overflow-y: auto;
@@ -679,47 +590,12 @@
     padding-bottom: 2px;
   }
 
-  #sow-menu .sow-menu__topbar {
-    gap: 8px;
-    padding-inline-end: 6px;
-  }
-
-  #sow-menu .sow-menu__identity {
-    min-width: 0;
-    flex: 1 1 auto;
-  }
-
-  #sow-menu .sow-menu__profile input {
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  #sow-menu .sow-menu__top-actions {
-    flex: 0 0 auto;
-    gap: 5px;
-  }
-
-  #sow-menu .sow-menu__signin {
-    min-height: 36px;
-    padding: 8px 7px;
-  }
 }
 
 @media (hover: none) {
   #sow-menu button:hover,
   #sow-menu a:hover {
     transform: none;
-  }
-}
-
-@media (max-width: 599px) {
-  #sow-menu .sow-menu__profile {
-    min-width: 0;
-    max-width: 100%;
   }
 }
 
@@ -748,37 +624,12 @@
   #sow-menu .sow-menu__shell {
     display: grid;
     grid-template-columns: var(--sow-menu-nav-rail) minmax(0, 1fr);
-    grid-template-rows: 60px minmax(0, 1fr) auto;
+    grid-template-rows: 72px minmax(0, 1fr) auto;
     gap: 12px 16px;
     width: min(calc(100% - 48px), 1440px);
     height: 100%;
     min-height: 0;
     padding: max(18px, env(safe-area-inset-top)) 0 max(18px, env(safe-area-inset-bottom));
-  }
-
-  #sow-menu .sow-menu__topbar {
-    grid-column: 1 / -1;
-    grid-row: 1;
-    width: 100%;
-    min-width: 0;
-    height: 60px;
-    min-height: 60px;
-  }
-
-  #sow-menu .sow-menu__identity,
-  #sow-menu .sow-menu__profile,
-  #sow-menu .sow-menu__top-actions {
-    min-width: 0;
-  }
-
-  #sow-menu .sow-menu__profile input {
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-  }
-
-  #sow-menu .sow-menu__top-actions {
-    flex: 0 0 auto;
   }
 
   #sow-menu .sow-menu__main {
@@ -817,17 +668,11 @@
 
 @media (min-width: 681px) and (orientation: landscape) and (max-height: 560px) {
   #sow-menu .sow-menu__shell {
-    grid-template-rows: 52px minmax(0, 1fr);
+    grid-template-rows: 56px minmax(0, 1fr);
     gap: 8px 12px;
     padding: max(5px, env(safe-area-inset-top)) 0 max(5px, env(safe-area-inset-bottom));
   }
 
-  #sow-menu .sow-menu__topbar {
-    height: 52px;
-    min-height: 52px;
-    padding: 4px 8px;
-    backdrop-filter: none;
-  }
 }
 
 @media (max-width: 680px), (orientation: portrait) {
@@ -847,72 +692,6 @@
   #sow-menu .sow-menu__screen-stage {
     grid-column: 2;
     grid-row: 2;
-  }
-}
-
-@media (max-width: 900px) {
-  #sow-menu .sow-menu__progress {
-    display: inline-flex;
-    height: 36px;
-    max-width: 100%;
-  }
-
-  #sow-menu .sow-menu__progress-cell {
-    padding-inline: 5px;
-    font-size: 10px;
-  }
-
-  #sow-menu .sow-menu__currency-icon {
-    width: 16px;
-    height: 16px;
-  }
-}
-
-@media (max-width: 599px) and (orientation: portrait) {
-  #sow-menu .sow-menu__topbar {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: "identity signin settings" "progress progress progress";
-    min-height: 92px;
-  }
-
-  #sow-menu .sow-menu__identity {
-    grid-area: identity;
-  }
-  #sow-menu .sow-menu__top-actions {
-    display: contents;
-  }
-  #sow-menu .sow-menu__progress {
-    grid-area: progress;
-    width: 100%;
-    justify-content: space-between;
-  }
-  #sow-menu .sow-menu__signin,
-  #sow-menu .sow-menu__account-label {
-    grid-area: signin;
-  }
-  #sow-menu .sow-menu__top-actions > [data-command="toggle_settings"] {
-    grid-area: settings;
-  }
-  #sow-menu .sow-menu__progress-cell {
-    padding-inline: 4px;
-  }
-  #sow-menu .sow-menu__xp {
-    flex: 1 1 auto;
-    min-width: 54px;
-  }
-}
-
-@media (min-width: 681px) and (orientation: landscape) and (max-height: 560px) {
-  #sow-menu .sow-menu__progress {
-    height: 32px;
-  }
-  #sow-menu .sow-menu__progress-cell {
-    padding-inline: 4px;
-    font-size: 9px;
-  }
-  #sow-menu .sow-menu__currency-icon {
-    width: 14px;
-    height: 14px;
   }
 }
 
@@ -951,5 +730,65 @@
     inset-block-start: auto;
     inset-block-end: clamp(16px, 6vh, 40px);
     margin: 0;
+  }
+}
+
+/* Header: one main row; identity owns level/XP, the right side owns balances. */
+@media (max-width: 900px) {
+  #sow-menu .sow-menu__topbar {
+    gap: 8px;
+  }
+  #sow-menu .sow-menu__identity {
+    gap: 8px;
+  }
+  #sow-menu .sow-menu__top-actions {
+    gap: 6px;
+  }
+  #sow-menu .sow-menu__wallet {
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 4px;
+    padding-inline: 4px 8px;
+    font-size: 12px;
+  }
+  #sow-menu .sow-menu__currency-icon {
+    width: 16px;
+    height: 16px;
+  }
+}
+@media (max-width: 680px), (orientation: portrait) {
+  #sow-menu .sow-menu__topbar {
+    height: 64px;
+    min-height: 64px;
+    padding: 6px;
+  }
+  #sow-menu .sow-menu__avatar {
+    width: 44px;
+    height: 44px;
+  }
+  #sow-menu .sow-menu__profile input {
+    font-size: clamp(16px, 4vw, 21px);
+  }
+  #sow-menu .sow-menu__progress {
+    font-size: 10px;
+    gap: 3px 5px;
+  }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  #sow-menu .sow-menu__topbar {
+    height: 56px;
+    min-height: 56px;
+    padding: 4px 8px;
+  }
+  #sow-menu .sow-menu__avatar {
+    width: 44px;
+    height: 44px;
+  }
+  #sow-menu .sow-menu__profile input {
+    font-size: 16px;
+  }
+  #sow-menu .sow-menu__progress {
+    font-size: 10px;
   }
 }

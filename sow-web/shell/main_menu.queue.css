@@ -219,7 +219,7 @@
 
 .sow-menu__teams-roster {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -259,9 +259,11 @@
 
 .sow-menu__roster-row {
   display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  padding: 16px 24px;
   border-radius: var(--sow-tactical-surface-radius-compact);
   border: 1px solid var(--sow-tactical-surface-border);
   background: var(--sow-tactical-surface-subcard-bg);
@@ -278,13 +280,16 @@
 
 .sow-menu__roster-left {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
-  gap: 10px;
+  gap: 20px;
 }
 
 .sow-menu__roster-avatar {
-  width: 28px;
-  height: 28px;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   background-position: center;
   background-size: cover;
@@ -293,45 +298,50 @@
 
 .sow-menu__roster-name-group {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
 }
 
 .sow-menu__roster-name-group strong {
   color: #fff;
-  font-size: 12px;
+  font-size: 24px;
 }
 
 .sow-menu__me-tag {
-  padding: 1px 5px;
+  padding: 2px 10px;
   border-radius: 3px;
   background: rgba(56, 189, 248, 0.2);
   border: 1px solid var(--sow-cyan);
   color: var(--sow-cyan);
-  font-size: 8px;
+  font-size: 16px;
   font-weight: 800;
 }
 
 .sow-menu__host-tag {
-  padding: 1px 5px;
+  padding: 2px 10px;
   border-radius: 3px;
   background: rgba(243, 177, 43, 0.2);
   border: 1px solid var(--sow-gold);
   color: var(--sow-gold-bright);
-  font-size: 8px;
+  font-size: 16px;
   font-weight: 800;
 }
 
 .sow-menu__roster-right {
   display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
 }
 
 .sow-menu__sync-badge {
-  padding: 2px 6px;
+  padding: 4px 12px;
   border-radius: 3px;
-  font-size: 9px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -351,17 +361,18 @@
 
 .sow-menu__player-mod-actions {
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .sow-menu__mod-btn {
-  padding: 3px 6px;
+  padding: 6px 12px;
   border-radius: 6px;
   border: 1px solid var(--sow-button-dark-border);
   background: var(--sow-button-dark-bg);
   box-shadow: var(--sow-button-dark-shadow);
   color: var(--sow-button-dark-text);
-  font-size: 9px;
+  font-size: 18px;
   font-weight: var(--sow-button-weight);
   letter-spacing: var(--sow-button-tracking);
   cursor: pointer;

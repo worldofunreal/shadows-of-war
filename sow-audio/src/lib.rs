@@ -9,6 +9,9 @@ pub enum CombatSoundKind {
     AttackEmpire,
     AttackTribe,
     CounterAttack,
+    NavalShot,
+    NavalImpact,
+    NavalSink,
 }
 
 /// Player archetype for death-sound synthesis.

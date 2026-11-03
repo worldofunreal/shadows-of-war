@@ -296,6 +296,30 @@ impl SowEngine {
                 &mut decisions,
             );
 
+            if slot.do_attack
+                && !self.fleets.iter().any(|fleet| {
+                    fleet.owner_id == bot_id
+                        && fleet.unit_type == crate::game::UnitType::Warship
+                        && fleet.troops > 0.0
+                })
+                && self.state.player(bot_id).is_some_and(|player| {
+                    player.gold >= crate::game::UnitType::Warship.gold_cost()
+                        && self.boat_slots_used(bot_id)
+                            < crate::building::player_fleet_capacity(&self.buildings, bot_id)
+                })
+                && self.campaign_allows_action(crate::campaign::CampaignAction::Warship)
+                && let Some(target_tile) = self.ai_warship_patrol_target(bot_id)
+            {
+                decisions.push(BotDecision {
+                    bot_id,
+                    kind: profile::BotDecisionKind::Build,
+                    intent: crate::protocol::GameplayIntent::BuildShip {
+                        target_tile,
+                        kind: crate::game::UnitType::Warship,
+                    },
+                });
+            }
+
             self.placement_scratch.neighbor_scratch = neighbor_players;
         }
 
@@ -368,6 +392,87 @@ impl SowEngine {
                 self.apply_stamped_intent(&stamped, intent_index as u32);
             }
         }
+    }
+
+    fn ai_warship_patrol_target(&self, owner_id: u16) -> Option<u32> {
+        let width = self.state.map.width;
+        if width == 0 {
+            return None;
+        }
+        let connected_components: std::collections::HashSet<u32> = self.buildings.iter()
+            .filter(|port| port.owner_id == owner_id
+                && port.kind == crate::game::BuildingKind::Port
+                && !port.under_construction
+                && port.active_level() >= 1)
+            .flat_map(|port| {
+                let footprint = crate::building::BuildingFootprint::at(
+                    crate::game::BuildingKind::Port,
+                    port.tile_idx % width,
+                    port.tile_idx / width,
+                );
+                let mut components = Vec::new();
+                for y in footprint.top..footprint.top + footprint.height as i32 {
+                    for x in footprint.left..footprint.left + footprint.width as i32 {
+                        if self.state.map.is_valid_coord(x, y) {
+                            self.state.map.for_each_neighbor(x as u32, y as u32, |nx, ny| {
+                                if !footprint.contains(nx as i32, ny as i32) {
+                                    let tile = ny * width + nx;
+                                    if self.state.map.terrain[tile as usize].is_water() {
+                                        let component = self.water.component_of(tile);
+                                        if component != 0 { components.push(component); }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+                components
+            })
+            .collect();
+        self.fleets.iter()
+            .filter(|fleet| fleet.troops > 0.0
+                && fleet.owner_id != owner_id
+                && self.naval_target_allowed(owner_id, fleet.owner_id)
+                && connected_components.contains(&self.water.component_of(fleet.current_tile)))
+            .min_by_key(|fleet| {
+                let priority = match fleet.unit_type {
+                    crate::game::UnitType::TransportShip => 0,
+                    crate::game::UnitType::Warship => 1,
+                    crate::game::UnitType::TradeShip => 2,
+                };
+                (priority, fleet.id)
+            })
+            .map(|fleet| fleet.current_tile)
+            .or_else(|| self.buildings.iter().filter(|port| {
+                port.owner_id == owner_id
+                    && port.kind == crate::game::BuildingKind::Port
+                    && !port.under_construction
+                    && port.active_level() >= 1
+            }).flat_map(|port| {
+                let footprint = crate::building::BuildingFootprint::at(
+                    crate::game::BuildingKind::Port,
+                    port.tile_idx % width,
+                    port.tile_idx / width,
+                );
+                let mut shores = Vec::new();
+                for y in footprint.top..footprint.top + footprint.height as i32 {
+                    for x in footprint.left..footprint.left + footprint.width as i32 {
+                        if self.state.map.is_valid_coord(x, y) {
+                            self.state.map.for_each_neighbor(x as u32, y as u32, |nx, ny| {
+                                if !footprint.contains(nx as i32, ny as i32) {
+                                    let tile = ny * width + nx;
+                                    if self.state.map.terrain[tile as usize].is_water()
+                                        && connected_components.contains(&self.water.component_of(tile))
+                                    {
+                                        shores.push(tile);
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+                shores
+            }).min())
     }
 }
 

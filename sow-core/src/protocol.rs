@@ -9,8 +9,8 @@ pub use sow_data::MAX_MATCH_PARTICIPANTS;
 
 /// Persisted turn recordings; changing live messages must not change this.
 /// 6: buildings use kind-specific footprints.
-pub const GAMEPLAY_FORMAT_VERSION: u64 = 6;
-pub const LIVE_PROTOCOL_VERSION: u64 = 6;
+pub const GAMEPLAY_FORMAT_VERSION: u64 = 7;
+pub const LIVE_PROTOCOL_VERSION: u64 = 7;
 
 pub fn gameplay_build_identity(public_version: &str) -> String {
     format!(
@@ -53,7 +53,7 @@ pub enum GameplayIntent {
         target_tile: u32,
     },
     BuildShip {
-        port_tile: u32,
+        target_tile: u32,
         kind: crate::game::UnitType,
     },
     MoveWarships {
@@ -618,6 +618,12 @@ pub struct FleetSnapshot {
     #[serde(default)]
     pub eta_seconds: Option<f32>,
     pub retreating: bool,
+    #[serde(default)]
+    pub max_health: f64,
+    #[serde(default)]
+    pub warship: Option<crate::warp_fleet::WarshipState>,
+    #[serde(default)]
+    pub captured_trade_return: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -642,6 +648,10 @@ pub struct ProjectileSnapshot {
     pub path: Vec<u32>,
     pub path_cursor: usize,
     pub steps_per_tick: u8,
+    #[serde(default)]
+    pub source_fleet_id: Option<u64>,
+    #[serde(default)]
+    pub target_fleet_id: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

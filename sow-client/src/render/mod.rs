@@ -1,3 +1,4 @@
+pub(crate) mod avatars;
 pub mod interact;
 pub(crate) mod motion;
 pub mod world;

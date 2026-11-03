@@ -279,7 +279,8 @@ const GENERATED_FILES: [(&str, &str); 3] = [
 ];
 const PORTRAIT_PX: u32 = 192;
 const HERO_PORTRAIT_PX: u32 = 256;
-const HERO_SHEET_PX: u32 = 256;
+const AVATAR_WEBP_QUALITY: u32 = 85;
+const AVATAR_TRANSFORM_RECIPE: &str = "avatar-webp-v1";
 /// Landing shots (assets/site/media/<stem>.<png|jpg|webp>): until the owner drops a
 /// capture, each slot publishes current game art (dir, stem) so nothing stale shows.
 const SITE_STILLS: [(&str, (&str, &str)); 14] = [
@@ -442,19 +443,18 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
             random_avatar.display()
         );
     }
-    publish(
-        &random_avatar,
-        "gameplay/avatars/random.webp",
-        Some(HERO_PORTRAIT_PX),
-    )?;
-    publish(
-        &art.join("avatars/default.webp"),
-        "gameplay/avatars/null.webp",
-        Some(HERO_PORTRAIT_PX),
-    )?;
+    avatar_portraits.push((
+        random_avatar,
+        "gameplay/avatars/random.webp".to_owned(),
+        HERO_PORTRAIT_PX,
+    ));
+    avatar_portraits.push((
+        art.join("avatars/default.webp"),
+        "gameplay/avatars/null.webp".to_owned(),
+        HERO_PORTRAIT_PX,
+    ));
     let hero_crop_dir = tempfile::tempdir().context("create temporary hero avatar crops")?;
-    let mut hero_fresh_crops = Vec::new();
-    let mut hero_sheets = Vec::new();
+    let mut hero_expression_crops = Vec::new();
     for leader in sow_core::player::Leader::all() {
         let base = leader.art_slug();
         let source = art.join("avatars/heroes").join(format!("{base}.webp"));
@@ -471,62 +471,19 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
                 source.display()
             );
         }
-        hero_sheets.push((
-            source.clone(),
-            format!("gameplay/avatars/spritesheets/{base}.webp"),
-        ));
-        let expressions = [
-            (sow_core::emote::AvatarExpression::Happy, "happy"),
-            (sow_core::emote::AvatarExpression::Calm, "calm"),
-            (sow_core::emote::AvatarExpression::Fear, "fear"),
-            (sow_core::emote::AvatarExpression::Angry, "angry"),
-        ];
-        let source_mtime = fs::metadata(&source).and_then(|m| m.modified()).ok();
-        let all_fresh = source_mtime.is_some_and(|sm| {
-            expressions.iter().all(|(expression, name)| {
-                let relative = if *expression == sow_core::emote::AvatarExpression::Calm {
-                    format!("gameplay/avatars/{base}.webp")
-                } else {
-                    format!("gameplay/avatars/expressions/{base}_{name}.webp")
-                };
-                fs::metadata(out.join(relative))
-                    .and_then(|m| m.modified())
-                    .is_ok_and(|dm| dm >= sm)
-            })
-        });
-
-        if all_fresh {
-            for (expression, name) in expressions {
-                let relative = if expression == sow_core::emote::AvatarExpression::Calm {
-                    format!("gameplay/avatars/{base}.webp")
-                } else {
-                    format!("gameplay/avatars/expressions/{base}_{name}.webp")
-                };
-                hero_fresh_crops.push(out.join(relative));
-            }
-        } else {
-            let sheet = image::open(&source)
-                .with_context(|| format!("read hero sheet {}", source.display()))?
-                .to_rgba8();
-            for (expression, name) in expressions {
-                let crop = hero_expression_crop(&sheet, expression)?;
-                let crop_path = hero_crop_dir.path().join(format!("{base}_{name}.png"));
-                crop.save(&crop_path)
-                    .with_context(|| format!("write {name} crop for hero {base}"))?;
-                if expression == sow_core::emote::AvatarExpression::Calm {
-                    publish(
-                        &crop_path,
-                        &format!("gameplay/avatars/{base}.webp"),
-                        Some(HERO_PORTRAIT_PX),
-                    )?;
-                } else {
-                    publish(
-                        &crop_path,
-                        &format!("gameplay/avatars/expressions/{base}_{name}.webp"),
-                        Some(HERO_PORTRAIT_PX),
-                    )?;
-                }
-            }
+        let sheet = image::open(&source)
+            .with_context(|| format!("read hero sheet {}", source.display()))?
+            .to_rgba8();
+        for expression in sow_core::emote::AvatarExpression::ALL {
+            let name = expression.id();
+            let crop = hero_expression_crop(&sheet, expression)?;
+            let crop_path = hero_crop_dir.path().join(format!("{base}_{name}.png"));
+            crop.save(&crop_path)
+                .with_context(|| format!("write {name} crop for hero {base}"))?;
+            hero_expression_crops.push((
+                crop_path,
+                sow_core::emote::hero_portrait_path(base, expression),
+            ));
         }
     }
     // Hero scenes are optional; publish whichever desktop/mobile art is present.
@@ -614,10 +571,9 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
     for (source, relative, max_side) in avatar_portraits {
         publish_avatar_transform(&source, out, &relative, max_side, &mut produced)?;
     }
-    for (source, relative) in hero_sheets {
-        publish_avatar_transform(&source, out, &relative, HERO_SHEET_PX, &mut produced)?;
+    for (source, relative) in hero_expression_crops {
+        publish_avatar_transform(&source, out, &relative, HERO_PORTRAIT_PX, &mut produced)?;
     }
-    produced.extend(hero_fresh_crops);
     for file in fs::read_dir(&media)? {
         let file = file?.path();
         let name = file.file_name().unwrap_or_default().to_string_lossy();
@@ -665,15 +621,14 @@ fn publish_avatar_transform(
     max_side: u32,
     produced: &mut std::collections::BTreeSet<PathBuf>,
 ) -> Result<()> {
-    const QUALITY: u32 = 85;
-    const RECIPE: &str = "avatar-webp-v1";
-
     let destination = out.join(relative);
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent)?;
     }
     let source_hash = file_sha256(source)?;
-    let recipe = format!("{RECIPE};max={max_side};quality={QUALITY};source={source_hash}");
+    let recipe = format!(
+        "{AVATAR_TRANSFORM_RECIPE};max={max_side};quality={AVATAR_WEBP_QUALITY};source={source_hash}"
+    );
     let cache_root = out.parent().unwrap_or(out).join(".avatar-transform-cache");
     let cache_path = cache_root.join(format!("{relative}.recipe"));
     let destination_hash = file_sha256(&destination).ok();
@@ -688,7 +643,7 @@ fn publish_avatar_transform(
             source,
             &destination,
             &format!("{max_side}x{max_side}>"),
-            QUALITY,
+            AVATAR_WEBP_QUALITY,
         )?;
         let (width, height) = image::image_dimensions(&destination)
             .with_context(|| format!("read optimized avatar {}", destination.display()))?;
@@ -803,6 +758,16 @@ fn avatar_asset_catalog(avatars_root: &Path) -> Result<Vec<String>> {
     }
     catalog.sort();
     Ok(catalog)
+}
+
+fn hash_avatar_asset_tree(hash: &mut Sha256, avatars_root: &Path) -> Result<()> {
+    for relative in avatar_asset_catalog(avatars_root)? {
+        hash.update(relative.as_bytes());
+        hash.update([0]);
+        hash.update(file_sha256(&avatars_root.join(relative))?.as_bytes());
+        hash.update([0]);
+    }
+    Ok(())
 }
 
 fn poki_asset_is_excluded(relative: &Path) -> bool {
@@ -2214,7 +2179,6 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     // Avatar files are copied byte-for-byte into portal packages or served from
     // the self-hosted asset CDN, so their cache keys remain stable across builds.
     // Other portal assets can be re-encoded and keep the build-level bust.
-    let avatar_catalog = avatar_asset_catalog(&paths.assets_gameplay.join("avatars"))?;
     let asset_versions = if portal {
         avatar_asset_versions(&paths.assets_gameplay.join("avatars"))?
     } else {
@@ -2463,9 +2427,8 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     }
     let marker = "/* __INLINE_LOADER_JS__ */";
     let loader_with_versions = format!(
-        "window.SOW_ASSET_TS = {};\nwindow.SOW_AVATAR_ASSETS = {};\n{loader}",
-        serde_json::to_string(&asset_versions)?,
-        serde_json::to_string(&avatar_catalog)?
+        "window.SOW_ASSET_TS = {};\n{loader}",
+        serde_json::to_string(&asset_versions)?
     );
     if fh.contains(marker) {
         fh = fh.replacen(marker, &loader_with_versions, 1);
@@ -4978,7 +4941,7 @@ fn native_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.root.join("sow-web/site/fonts"),
         paths.root.join("sow-web/site/manifest.webmanifest"),
     ];
-    // ponytail: size/mtime avoids hashing the asset payload; hash contents if timestamp-preserving edits become an issue.
+    // ponytail: size/mtime for static assets; avatar files use content hashes.
     let mut hash = Sha256::new();
     for stamp in local_source_snapshot(paths)?
         .into_iter()
@@ -4988,6 +4951,7 @@ fn native_static_fingerprint(paths: &Paths) -> Result<String> {
         hash.update(stamp.len.to_le_bytes());
         hash.update(stamp.modified_nanos.to_le_bytes());
     }
+    hash_avatar_asset_tree(&mut hash, &paths.assets_gameplay.join("avatars"))?;
     Ok(format!("{:x}", hash.finalize()))
 }
 
@@ -6059,7 +6023,7 @@ fn local_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.root.join("sow-web/site/fonts"),
     ];
     let mut hash = Sha256::new();
-    hash.update(b"local-static-output-v2\0");
+    hash.update(b"local-static-output-v3\0");
     for stamp in local_source_snapshot(paths)?
         .into_iter()
         .filter(|stamp| roots.iter().any(|root| stamp.path.starts_with(root)))
@@ -6068,6 +6032,7 @@ fn local_static_fingerprint(paths: &Paths) -> Result<String> {
         hash.update(stamp.len.to_le_bytes());
         hash.update(stamp.modified_nanos.to_le_bytes());
     }
+    hash_avatar_asset_tree(&mut hash, &paths.assets_gameplay.join("avatars"))?;
     Ok(format!("{:x}", hash.finalize()))
 }
 
@@ -6889,21 +6854,47 @@ mod tests {
     }
 
     #[test]
-    fn avatar_output_recipe_replaces_stale_hero_sheet_and_reuses_matching_output() -> Result<()> {
+    fn avatar_asset_tree_fingerprint_tracks_content_and_removed_duplicates() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let avatars = temp.path().join("avatars");
+        fs::create_dir_all(avatars.join("expressions"))?;
+        fs::write(avatars.join("hero.webp"), b"base calm portrait")?;
+        fs::write(
+            avatars.join("expressions/hero_calm.webp"),
+            b"duplicate calm",
+        )?;
+        let fingerprint = |root: &Path| -> Result<String> {
+            let mut hash = Sha256::new();
+            hash_avatar_asset_tree(&mut hash, root)?;
+            Ok(format!("{:x}", hash.finalize()))
+        };
+
+        let with_duplicate = fingerprint(&avatars)?;
+        fs::remove_file(avatars.join("expressions/hero_calm.webp"))?;
+        let without_duplicate = fingerprint(&avatars)?;
+        assert_ne!(with_duplicate, without_duplicate);
+
+        fs::write(avatars.join("hero.webp"), b"updated base calm portrait")?;
+        assert_ne!(without_duplicate, fingerprint(&avatars)?);
+        Ok(())
+    }
+
+    #[test]
+    fn avatar_output_recipe_replaces_stale_output_and_reuses_matching_output() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let source = temp.path().join("hero.png");
         image::RgbaImage::from_pixel(512, 512, image::Rgba([32, 64, 96, 255])).save(&source)?;
         let out = temp.path().join("runtime-assets");
-        let relative = "gameplay/avatars/spritesheets/hero.webp";
+        let relative = "gameplay/avatars/hero.webp";
         let destination = out.join(relative);
         fs::create_dir_all(destination.parent().unwrap())?;
-        fs::copy(&source, &destination)?; // Simulate the old unoptimized staged sheet.
+        fs::copy(&source, &destination)?; // Simulate an old unoptimized staged portrait.
         let mut produced = std::collections::BTreeSet::new();
 
-        publish_avatar_transform(&source, &out, relative, HERO_SHEET_PX, &mut produced)?;
+        publish_avatar_transform(&source, &out, relative, HERO_PORTRAIT_PX, &mut produced)?;
         assert_eq!(
             image::image_dimensions(&destination)?,
-            (HERO_SHEET_PX, HERO_SHEET_PX)
+            (HERO_PORTRAIT_PX, HERO_PORTRAIT_PX)
         );
         assert!(produced.contains(&destination));
         let recipe = out
@@ -6914,14 +6905,14 @@ mod tests {
         let cached_recipe = fs::read_to_string(&recipe)?;
         assert!(cached_recipe.contains("avatar-webp-v1;max=256;quality=85;source="));
 
-        publish_avatar_transform(&source, &out, relative, HERO_SHEET_PX, &mut produced)?;
+        publish_avatar_transform(&source, &out, relative, HERO_PORTRAIT_PX, &mut produced)?;
         assert_eq!(fs::read_to_string(&recipe)?, cached_recipe);
 
         fs::write(&recipe, "stale recipe")?;
-        publish_avatar_transform(&source, &out, relative, HERO_SHEET_PX, &mut produced)?;
+        publish_avatar_transform(&source, &out, relative, HERO_PORTRAIT_PX, &mut produced)?;
         assert_eq!(
             image::image_dimensions(&destination)?,
-            (HERO_SHEET_PX, HERO_SHEET_PX)
+            (HERO_PORTRAIT_PX, HERO_PORTRAIT_PX)
         );
         assert_eq!(fs::read_to_string(recipe)?, cached_recipe);
         Ok(())
@@ -7320,41 +7311,22 @@ mod tests {
                 out.path().to_path_buf()
             };
             let html = fs::read_to_string(page_dir.join("index.html"))?;
-            let catalog_marker = "window.SOW_AVATAR_ASSETS = ";
-            let catalog_start = html
-                .find(catalog_marker)
-                .context("avatar catalog injection missing")?
-                + catalog_marker.len();
-            let catalog_end = html[catalog_start..]
-                .find(';')
-                .context("avatar catalog injection unterminated")?
-                + catalog_start;
-            let injected_catalog: Vec<String> =
-                serde_json::from_str(&html[catalog_start..catalog_end])?;
-            assert_eq!(
-                injected_catalog,
-                avatar_asset_catalog(&paths.assets_gameplay.join("avatars"))?,
-                "{target:?}: prefetch catalog must match the staged avatar tree"
-            );
-
             let versions_marker = "window.SOW_ASSET_TS = ";
             let versions_start = html
                 .find(versions_marker)
                 .context("asset versions injection missing")?
                 + versions_marker.len();
             let versions_end = html[versions_start..]
-                .find(";\nwindow.SOW_AVATAR_ASSETS")
+                .find(";\n")
                 .context("asset versions injection unterminated")?
                 + versions_start;
             let injected_versions: serde_json::Value =
                 serde_json::from_str(&html[versions_start..versions_end])?;
-            let sheet_path = paths
-                .assets_gameplay
-                .join("avatars/spritesheets/boudica.webp");
-            let expected_hash = file_sha256(&sheet_path)?[..8].to_string();
+            let portrait_path = paths.assets_gameplay.join("avatars/boudica.webp");
+            let expected_hash = file_sha256(&portrait_path)?[..8].to_string();
             assert_eq!(
                 injected_versions
-                    .get("/assets/gameplay/avatars/spritesheets/boudica.webp")
+                    .get("/assets/gameplay/avatars/boudica.webp")
                     .and_then(serde_json::Value::as_str),
                 Some(expected_hash.as_str()),
                 "{target:?}: avatar URL version must follow its content"

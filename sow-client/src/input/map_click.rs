@@ -357,6 +357,12 @@ impl SowApp {
         if self.select_warships_at(x, y) {
             return;
         }
+        if !self.input.selected_warships.is_empty()
+            && self.map_target(tile_idx).is_some_and(|target| !target.is_land)
+            && self.move_selected_warships(x, y)
+        {
+            return;
+        }
         self.input.selected_warships.clear();
 
         if self
@@ -953,7 +959,7 @@ impl SowApp {
             return false;
         };
         let target_tile = (row * self.sim.map_w as i32 + col) as u32;
-        let unit_ids = std::mem::take(&mut self.input.selected_warships);
+        let unit_ids = self.input.selected_warships.clone();
         self.send_intent(sow_core::protocol::GameplayIntent::MoveWarships {
             unit_ids,
             target_tile,
@@ -1377,44 +1383,56 @@ impl SowApp {
     }
 
     fn build_ship_at(&mut self, tile_idx: u32, kind: sow_core::game::UnitType) -> bool {
-        let Some(target) = self.map_target(tile_idx) else {
-            return false;
-        };
-        if target.owner != target.my_id || !target.is_land {
+        let owner_id = self.sim.my_player_id.unwrap_or(0);
+        let route_result = self.sim.engine.as_mut().map(|engine| {
+            sow_core::warp_fleet::resolve_warship_route(
+                &engine.state.map,
+                &engine.water,
+                &mut engine.path_scratch,
+                &engine.buildings,
+                owner_id,
+                tile_idx,
+            )
+        });
+        if let Some(Err(error)) = &route_result {
+            use sow_core::warp_fleet::WarshipLaunchError as Error;
+            let key = match *error {
+                Error::InvalidTile | Error::TargetNotWater => "hud.fleet_invalid_target",
+                Error::NoPort | Error::NoConnectedPort => "hud.fleet_no_water_access",
+                Error::NoWaterPath => "hud.fleet_no_water_path",
+            };
+            self.add_map_feedback(crate::ui::UiText::new(key));
             return false;
         }
-        let ready_port = self
-            .sim
-            .current_snapshot
-            .as_ref()
-            .and_then(|snapshot| snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx))
-            .is_some_and(|building| {
-                !building.under_construction
-                    && building.kind == sow_core::game::BuildingKind::Port
-                    && building.active_level() >= 1
-            });
-        if !ready_port {
+        if route_result.is_none() {
+            self.add_map_feedback(crate::ui::UiText::new("hud.fleet_no_water_access"));
             return false;
         }
         let Some(player) = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
             snapshot
                 .players
                 .iter()
-                .find(|player| player.id == target.my_id)
+                .find(|player| player.id == owner_id)
         }) else {
             return false;
         };
-        if !kind.uses_military_capacity()
-            || player.boats_in_use >= player.boat_capacity
-            || player.gold < kind.gold_cost()
-        {
+        if player.boats_in_use >= player.boat_capacity {
+            self.add_map_feedback(crate::ui::UiText::new("hud.fleet_capacity_full"));
+            return false;
+        }
+        if player.gold < kind.gold_cost() {
+            self.add_map_feedback(crate::ui::UiText::new("hud.not_enough_gold")
+                .with("cost", kind.gold_cost().ceil().to_string())
+                .with("available", player.gold.floor().to_string()));
+            return false;
+        }
+        if !kind.uses_military_capacity() {
             return false;
         }
         self.send_intent(sow_core::protocol::GameplayIntent::BuildShip {
-            port_tile: tile_idx,
+            target_tile: tile_idx,
             kind,
         });
-        self.ui.app.hud_state.selected_warship_build = false;
         true
     }
 
@@ -1696,8 +1714,55 @@ impl SowApp {
         if selected.is_empty() {
             false
         } else {
-            self.input.selected_warships = selected;
+            if self.input.shift_pressed {
+                for id in selected {
+                    if let Some(position) = self.input.selected_warships.iter().position(|&v| v == id) {
+                        self.input.selected_warships.swap_remove(position);
+                    } else {
+                        self.input.selected_warships.push(id);
+                    }
+                }
+            } else {
+                self.input.selected_warships = selected;
+            }
             true
+        }
+    }
+
+    pub(crate) fn select_all_warships(&mut self) {
+        let my_id = self.sim.my_player_id.unwrap_or(0);
+        self.input.selected_warships = self.sim.current_snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
+            snapshot.fleets.iter()
+                .filter(|fleet| fleet.owner_id == my_id && fleet.unit_type == sow_core::game::UnitType::Warship)
+                .map(|fleet| fleet.id)
+                .collect()
+        });
+    }
+
+    pub(crate) fn select_warships_in_rect(&mut self, x1: f64, y1: f64, x2: f64, y2: f64) {
+        if self.sim.map_w == 0 || self.input.camera_zoom <= 0.0 { return; }
+        let world = |x: f64, y: f64| (
+            (x as f32 - self.input.camera_x) / self.input.camera_zoom,
+            (y as f32 - self.input.camera_y) / self.input.camera_zoom,
+        );
+        let (ax, ay) = world(x1, y1);
+        let (bx, by) = world(x2, y2);
+        let (min_x, max_x) = (ax.min(bx), ax.max(bx));
+        let (min_y, max_y) = (ay.min(by), ay.max(by));
+        let my_id = self.sim.my_player_id.unwrap_or(0);
+        let selected = self.sim.current_snapshot.as_ref().into_iter().flat_map(|snapshot| &snapshot.fleets)
+            .filter(|fleet| fleet.owner_id == my_id && fleet.unit_type == sow_core::game::UnitType::Warship)
+            .filter(|fleet| {
+                let x = (fleet.current_tile % self.sim.map_w) as f32 + 0.5;
+                let y = (fleet.current_tile / self.sim.map_w) as f32 + 0.5;
+                (min_x..=max_x).contains(&x) && (min_y..=max_y).contains(&y)
+            }).map(|fleet| fleet.id).collect::<Vec<_>>();
+        if self.input.shift_pressed {
+            for id in selected {
+                if !self.input.selected_warships.contains(&id) { self.input.selected_warships.push(id); }
+            }
+        } else {
+            self.input.selected_warships = selected;
         }
     }
 
@@ -1933,11 +1998,18 @@ impl SowApp {
                     && building.active_level() >= 1
             })
         });
-        if !has_port
-            || player.boats_in_use >= player.boat_capacity
-            || player.gold < sow_core::game::UnitType::Warship.gold_cost()
-        {
-            self.add_action_feedback("Warship unavailable here.".to_string());
+        if !has_port {
+            self.add_map_feedback(crate::ui::UiText::new("hud.fleet_no_water_access"));
+            return;
+        }
+        if player.boats_in_use >= player.boat_capacity {
+            self.add_map_feedback(crate::ui::UiText::new("hud.fleet_capacity_full"));
+            return;
+        }
+        if player.gold < sow_core::game::UnitType::Warship.gold_cost() {
+            self.add_map_feedback(crate::ui::UiText::new("hud.not_enough_gold")
+                .with("cost", sow_core::game::UnitType::Warship.gold_cost().ceil().to_string())
+                .with("available", player.gold.floor().to_string()));
             return;
         }
         self.ui.app.hud_state.selected_warship_build =

@@ -3853,6 +3853,7 @@
    "region": "asia",
    "lat": 33.8626,
    "lon": 115.7742,
+   "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Tuoba",
    "avatar": "tuoba"
   },
@@ -7440,6 +7441,7 @@
    "region": "asia",
    "lat": 34.62,
    "lon": 112.45,
+   "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Northern_Wei",
    "avatar": "northern_wei"
   },

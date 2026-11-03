@@ -64,10 +64,10 @@ Una campaña jugable es otro sistema. Si el héroe será asesor o recompensa de 
 
 `assets/art/README.md` es la referencia canónica para la preparación del arte. Los originales se guardan en `assets/art/`; registra la procedencia/licencia correcta en `assets/SOURCES.toml` cuando corresponda y no edites `assets/generated/` ni los artefactos publicados.
 
-- Retrato obligatorio: `avatars/heroes/<art_slug>.webp`, una lámina 2×2 en orden Happy, Calm, Fear y Angry. El publicador crea la hoja optimizada y recorta las cuatro expresiones; Calm también es el retrato estático.
+- Retrato obligatorio: `avatars/heroes/<art_slug>.webp`, una lámina 2×2 en orden Happy, Calm, Fear y Angry. El publicador recorta las cuatro expresiones; Calm también es el retrato estático. La lámina no se publica.
 - Icono obligatorio: `icons/abilities/<art_slug>.webp`, cuadrado y reconocible a tamaño pequeño.
 - Escenas recomendadas para menú, carga y página pública: `heroes/<art_slug>_desktop.webp` y `heroes/<art_slug>_mobile.webp`. Se publican en `assets/shell/leaders/`; si falta una variante, su consumidor no tiene imagen de sustitución.
-- Rutas runtime generadas: avatar en `assets/gameplay/avatars/<art_slug>.webp`, expresiones en `assets/gameplay/avatars/expressions/`, hoja en `assets/gameplay/avatars/spritesheets/` e icono en `assets/gameplay/icons/abilities/`. El inventario de assets comprueba la hoja, el icono y los cinco textos en cada idioma.
+- Rutas runtime generadas: avatar en `assets/gameplay/avatars/<art_slug>.webp`, expresiones en `assets/gameplay/avatars/expressions/` e icono en `assets/gameplay/icons/abilities/`. Placas, anillo de emotes y radial cargan esos archivos; ver `docs/nameplates-and-emotes.md`. El inventario de assets comprueba la lámina, el icono y los cinco textos en cada idioma.
 
 Los prompts deben fijar época, ropa, composición, relación de aspecto, espacio de interfaz y elementos que no deben aparecer. Si el arte lo produce otra persona, entrega los prompts y espera sus archivos finales; no rellenes las rutas con una imagen de otra identidad.
 

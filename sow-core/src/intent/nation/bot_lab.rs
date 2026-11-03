@@ -1089,12 +1089,6 @@ fn s16_engine_state_bytes(engine: &SowEngine) -> Vec<u8> {
         .map(|(&player, &tick)| (player, tick))
         .collect();
     betrayal_cooldowns.sort_unstable();
-    let mut port_queues: Vec<_> = engine
-        .port_queues
-        .iter()
-        .map(|(&port, queue)| (port, queue.iter().cloned().collect::<Vec<_>>()))
-        .collect();
-    port_queues.sort_unstable_by_key(|(port, _)| *port);
     let alliance_proposals: Vec<_> = engine
         .alliances_proposed
         .iter()
@@ -1161,7 +1155,6 @@ fn s16_engine_state_bytes(engine: &SowEngine) -> Vec<u8> {
         alliance_cooldowns,
         betrayal_cooldowns,
         &engine.resource_requests_proposed,
-        port_queues,
         silo_cooldowns,
         mirv_launches,
         recent_nuke_counts,
@@ -2060,7 +2053,7 @@ fn naval_full_quota_skips_route_then_uses_released_slot() {
     engine.state.players.pop();
     engine.state.player_lookup.truncate(2);
     engine.state.map.set_owner_id(60, 60, 0);
-    for id in 0..2 {
+    for id in 0..3 {
         engine.fleets.push(crate::warp_fleet::WarpFleet::new(
             100 + id,
             1,
@@ -2081,19 +2074,6 @@ fn naval_full_quota_skips_route_then_uses_released_slot() {
         under_construction: true,
         ticks_until_complete: 10,
     });
-    engine.port_queues.insert(
-        port_id,
-        std::collections::VecDeque::from([
-            crate::game::ShipProduction {
-                kind: crate::game::UnitType::Warship,
-                ticks_until_complete: 10,
-            },
-            crate::game::ShipProduction {
-                kind: crate::game::UnitType::TradeShip,
-                ticks_until_complete: 10,
-            },
-        ]),
-    );
 
     let fleet_before = engine.state.next_fleet_id;
     let mut routes_at_capacity = 0;
@@ -2108,7 +2088,7 @@ fn naval_full_quota_skips_route_then_uses_released_slot() {
     assert_eq!(engine.state.next_fleet_id, fleet_before);
     assert_eq!(routes_at_capacity, 0);
 
-    engine.port_queues.get_mut(&port_id).unwrap().pop_front();
+    engine.fleets.pop();
     let mut routes_after_release = 0;
     for tick in 200..400 {
         engine.state.tick = tick;
@@ -2207,6 +2187,225 @@ fn naval_search_skips_weaker_target_on_unreachable_water() {
         .expect("the ghost should sail to a reachable player");
     assert_eq!(fleet.target_owner, 3);
     assert_eq!(fleet.troops, 1_000.0);
+}
+
+#[test]
+fn naval_world_nearby_tribe_precedes_distant_neutral_voyages() {
+    use crate::map::MapTile;
+    use crate::maps::{WORLD_MAP_BYTES, load_map_from_payload};
+
+    for kind in [PlayerType::Nation, PlayerType::Human] {
+        let mapfile = load_map_from_payload(WORLD_MAP_BYTES).expect("world map decodes");
+        let (w, h) = (mapfile.width, mapfile.height);
+        let config = crate::game_config::GameConfig {
+            game_mode: "Teams".into(),
+            map_control_win_percentage: 2.0,
+            ..Default::default()
+        };
+        let mut game = GameState::new(7, w, h, config.clone());
+        game.phase = GamePhase::Playing;
+        game.map.terrain = mapfile
+            .terrain
+            .iter()
+            .map(|b| MapTile::from_byte(*b))
+            .collect();
+        game.map.compute_shorelines();
+        let water = WaterComponents::compute(&game.map, |_| {});
+        let ocean = (1..water.shoreline_tiles.len())
+            .max_by_key(|&c| water.shoreline_tiles[c].len())
+            .unwrap();
+        let shores = &water.shoreline_tiles[ocean];
+        let bounds = mapfile.geo_bounds.expect("world geo bounds");
+        let coast_at = |lat, lon| {
+            let (x, y) = bounds.project(lat, lon, w, h).unwrap();
+            *shores
+                .iter()
+                .min_by_key(|&&tile| (tile % w).abs_diff(x) + (tile / w).abs_diff(y))
+                .unwrap()
+        };
+        let source = coast_at(42.0, 13.0);
+        let target = coast_at(40.0, 9.0);
+        let distant = [shores[0], shores[256], shores[512]];
+        assert!((source % w).abs_diff(target % w) + (source / w).abs_diff(target / w) <= 20);
+
+        for id in 1..=4 {
+            let mut player = if id == 2 || (id == 1 && kind == PlayerType::Human) {
+                Player::new_human(id, format!("P{id}"), [1.0; 3], &config)
+            } else {
+                Player::new_bot(id, format!("P{id}"), [1.0; 3], &config)
+            };
+            player.has_spawned = true;
+            player.gold = 0.0;
+            player.team = match id {
+                1 | 2 => Some(Team::Red),
+                4 => Some(Team::Blue),
+                _ => None,
+            };
+            if id == 1 {
+                player.player_type = kind;
+                player.is_ai_controlled = kind == PlayerType::Human;
+                player.iq = 170;
+            } else if id == 3 {
+                player.troops = 13_700.0;
+                player.max_troops = 13_700.0;
+            } else if id == 4 {
+                player.player_type = PlayerType::Nation;
+                player.troops = 100_000.0;
+                player.max_troops = 100_000.0;
+            }
+            game.register_player(player);
+        }
+        let total_land = game
+            .map
+            .terrain
+            .iter()
+            .filter(|tile| tile.is_land())
+            .count();
+        let mut assigned = 0;
+        for i in 0..game.map.terrain.len() {
+            if game.map.terrain[i].is_land() {
+                assigned += 1;
+                game.set_tile_owner(
+                    i as u32 % w,
+                    i as u32 / w,
+                    if assigned <= total_land / 2 { 2 } else { 4 },
+                );
+            }
+        }
+        game.set_tile_owner(source % w, source / w, 1);
+        let mut island = std::collections::BTreeSet::new();
+        let mut queue = vec![target];
+        while let Some(tile) = queue.pop() {
+            if !game.map.terrain[tile as usize].is_land() || !island.insert(tile) {
+                continue;
+            }
+            game.map
+                .for_each_neighbor4(tile % w, tile / w, |x, y| queue.push(y * w + x));
+        }
+        for &tile in &island {
+            game.set_tile_owner(tile % w, tile / w, 3);
+        }
+        let (nx, ny) = game
+            .map
+            .neighbors(source % w, source / w)
+            .into_iter()
+            .find(|&(x, y)| game.map.terrain[(y * w + x) as usize].is_land())
+            .unwrap();
+        game.set_tile_owner(nx, ny, 4);
+        for tile in distant {
+            game.set_tile_owner(tile % w, tile / w, 0);
+        }
+        let mut engine = SowEngine::new(game, water);
+        // Hold the other armies/frontiers still to isolate production AI choice
+        // and transport movement, exactly as in the reported five-minute repro.
+        engine.campaign_halted_ids.extend([3, 4]);
+        let mut first_launch = None;
+        let mut captured = None;
+        for tick in 0..3_000 {
+            engine.state.tick = tick;
+            engine.state.events.clear();
+            let actor = engine.state.player_mut(1).unwrap();
+            actor.troops = 60_000.0;
+            actor.max_troops = 60_000.0;
+            actor.iq_points = 500.0;
+            engine.execute_ai_think();
+            assert!(engine.bot_work.naval_routes_calculated <= 1);
+            assert!(engine.bot_work.naval_border_candidates_examined <= 256);
+            assert!(engine.bot_work.shoreline_candidates_examined <= 256);
+            if first_launch.is_none()
+                && let Some(fleet) = engine.fleets.iter().find(|fleet| fleet.owner_id == 1)
+            {
+                assert_eq!(
+                    fleet.target_owner, 3,
+                    "{kind:?} sailed past the nearby tribe"
+                );
+                assert!(island.contains(&fleet.dst_tile));
+                first_launch = Some(tick);
+            }
+            engine.execute_fleets();
+            if island
+                .iter()
+                .any(|&tile| engine.state.map.owner_id(tile % w, tile / w) == 1)
+            {
+                captured = Some(tick);
+                break;
+            }
+        }
+        assert!(
+            captured.is_some(),
+            "{kind:?} ignored the nearby island for five minutes"
+        );
+        if verbose() {
+            eprintln!(
+                "World nearby island {kind:?}: launch={first_launch:?}, capture={captured:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn naval_global_fallback_still_captures_islands_beyond_the_local_window() {
+    const W: u32 = 400;
+    let config = crate::game_config::GameConfig {
+        map_control_win_percentage: 2.0,
+        ..Default::default()
+    };
+    let mut game = GameState::new(31, W, 8, config.clone());
+    game.phase = GamePhase::Playing;
+    game.map.terrain.fill(crate::map::MapTile::from_byte(0x20));
+    let mut ghost = Player::new_human(1, "Ghost".into(), [1.0; 3], &config);
+    ghost.is_ai_controlled = true;
+    ghost.iq = 170;
+    ghost.troops = 5_000.0;
+    ghost.max_troops = 10_000.0;
+    game.register_player(ghost);
+    game.register_player(Player::new_human(2, "Witness".into(), [1.0; 3], &config));
+    for (x, owner) in [(2, 1), (350, 0), (351, 2)] {
+        game.map.terrain[(2 * W + x) as usize] = crate::map::MapTile::from_byte(0x80);
+        game.set_tile_owner(x, 2, owner);
+    }
+    game.map.compute_shorelines();
+    let water = WaterComponents::compute(&game.map, |_| {});
+    let mut engine = SowEngine::new(game, water);
+    for _ in 0..2_500 {
+        engine.tick();
+        assert!(engine.bot_work.naval_routes_calculated <= 1);
+        assert!(engine.bot_work.shoreline_candidates_examined <= 256);
+        if engine.state.map.owner_id(350, 2) == 1 {
+            return;
+        }
+    }
+    panic!("global fallback never captured the distant island");
+}
+
+#[test]
+fn naval_sources_rotate_and_routes_use_the_nearest_sampled_coast() {
+    let mut game = build_lab(512, 8, "FFA", &[LabPlayer::ghost(1, 2, 2)]).state;
+    game.map.terrain.fill(crate::map::MapTile::from_byte(0x20));
+    for (x, owner) in [(2, 1), (4, 0), (498, 0), (500, 1)] {
+        game.map.terrain[2 * 512 + x] = crate::map::MapTile::from_byte(0x80);
+        game.set_tile_owner(x as u32, 2, owner);
+    }
+    game.map.compute_shorelines();
+    let water = WaterComponents::compute(&game.map, |_| {});
+    let mut engine = SowEngine::new(game, water);
+    let mut sources = std::collections::BTreeSet::new();
+    let mut destinations = std::collections::BTreeSet::new();
+    for tick in 0..400 {
+        engine.state.tick = tick;
+        let actor = engine.state.player_mut(1).unwrap();
+        actor.troops = 5_000.0;
+        actor.max_troops = 10_000.0;
+        engine.execute_ai_think();
+        for fleet in &engine.fleets {
+            assert_eq!(fleet.src_tile.abs_diff(fleet.dst_tile), 2);
+            destinations.insert(fleet.dst_tile % 512);
+            sources.insert(engine.bot_naval_cursors[1].components[0].source_tile % 512);
+        }
+        engine.fleets.clear();
+    }
+    assert_eq!(sources, std::collections::BTreeSet::from([2, 500]));
+    assert_eq!(destinations, std::collections::BTreeSet::from([4, 498]));
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -2537,16 +2736,18 @@ fn s16_checkpoint_decision_and_state_reference() {
     // Uses current building footprints; historical footprints are tested below.
     // These checkpoints include Vanilla Tribes' post-grace human-attack policy;
     // the S16 behavior contracts below separately guard progress and survival.
-    // Target planning follows the current OpenFront nation/tribe priorities.
+    // Target planning follows current OpenFront priorities and neutral captures
+    // use the active global occupancy pacing curve.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x5932_2135_8345_f1fe),
-        (500, 0x420f_7ffe_8119_9b45),
-        (750, 0x11b0_ec31_3f75_9ada),
-        (1000, 0xfa16_366f_66d5_b4ab),
-        (1250, 0x210f_06dc_8a7c_5337),
-        (1500, 0x43f6_1e66_3885_99f2),
-        (1750, 0xf56d_9803_4882_1c65),
-        (1848, 0x610a_1762_6f9e_5992),
+        (250, 0x16a6_ddd7_de26_1f76),
+        (500, 0xf4e4_ee71_74ac_0b3a),
+        (750, 0x04ef_c0e9_b811_6ee2),
+        (1000, 0x0108_7cda_60a4_10bb),
+        (1250, 0x6241_7f8a_1f58_c713),
+        (1500, 0xeecd_99c4_c08b_68c8),
+        (1750, 0x0e3e_2959_3821_d551),
+        (2000, 0xb0cb_56c3_5f6c_3003),
+        (2102, 0x2835_5a25_264f_45a8),
     ];
     assert_eq!(
         checkpoints,
@@ -2567,16 +2768,17 @@ fn historical_s16_building_rules_keep_recorded_results() {
         s16_building_rules_trace(true),
         "same seed must reproduce historical-building checkpoints"
     );
-    // Historical building rules with the same fixed leader as the current trace.
+    // Historical building rules with the same leader and current pacing curve.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x3f2d_811a_12e6_6fe3),
-        (500, 0x8054_c141_d673_2837),
-        (750, 0x5656_c626_641c_63d5),
-        (1000, 0x602f_205a_ba3a_b721),
-        (1250, 0xf7d0_4b9a_0708_e6cc),
-        (1500, 0xe273_8498_c304_976f),
-        (1750, 0xdf86_99ac_caad_89aa),
-        (1761, 0x6c82_2cbc_e8eb_e135),
+        (250, 0x9f2d_7cd6_4808_7ced),
+        (500, 0x27b1_ae70_acc5_538d),
+        (750, 0x3aa1_bfef_d479_66e5),
+        (1000, 0xd850_4ebc_282c_c694),
+        (1250, 0x7411_70d6_1f86_3a8a),
+        (1500, 0xf22e_fcd3_2b39_82e1),
+        (1750, 0x38ed_c3e4_d585_8de7),
+        (2000, 0x921b_daa0_8425_918d),
+        (2015, 0xab91_89fe_3308_643e),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

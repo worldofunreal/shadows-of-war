@@ -3,11 +3,19 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { vm } from "./typescript-test-support.ts";
-import { setAvatarPortrait } from "./avatar-presentation.ts";
+import { avatarPortraitPath, setAvatarPortrait } from "./avatar-presentation.ts";
 const shell = __dirname;
 import { bundleTs } from "./typescript-test-support.ts";
 const campaignViewBundle = bundleTs(path.join(shell, "sow-campaign-view.ts"));
 const hud = fs.readFileSync(path.join(shell, "main_menu.hud.ts"), "utf8");
+
+function avatarAssetUrl(path: string): string {
+    return "/assets/" + path;
+}
+
+function loadAvatarImage(_source: string): Promise<HTMLImageElement> {
+    return Promise.resolve({} as HTMLImageElement);
+}
 
 test("gameplay language selection persists through the shared locale setter", () => {
     assert.match(hud, /renderLocaleSettingRow\("hud-settings-language"\) \+/);
@@ -317,6 +325,9 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
         avatarIdentityKeys: new WeakMap(),
         activeProgressBars: new Map(),
         activeCelebrations: new Set(),
+        avatarAssetUrl,
+        avatarPortraitPath,
+        loadAvatarImage,
         setAvatarPortrait,
         hudRoot: new Element("root"),
         hudDevLayer: null,
@@ -472,7 +483,7 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
     click(firstRows[0].querySelectorAll('[data-command="focus_world"]')[0]);
     assert.deepEqual(calls[0], { type: "focus_world", x: 5, y: 4 });
     click(firstRows[2].querySelectorAll('[data-command="focus_world"]')[0]);
-    assert.deepEqual(calls[calls.length - 1], { type: "focus_world", x: 2, y: 3 });
+    assert.deepEqual(calls[calls.length - 1], { type: "focus_world", x: 2, y: 3, fleet_id: 8 });
     click(counter);
     click(counter);
     assert.equal(counters().length, 1);
@@ -653,6 +664,9 @@ test("HUD notifications coalesce, prioritize, reuse both entity avatars, and exp
         hudRefs: { notifications: {} },
         avatarIdentityKeys: new WeakMap(),
         setAvatarPortrait,
+        avatarAssetUrl,
+        avatarPortraitPath,
+        loadAvatarImage,
         hudRoot: { dataset: {} },
         notificationCursor: 0,
         notificationTimer: null,
@@ -990,6 +1004,9 @@ test("notification cards render typed avatars, recover failed art, and clear reu
         document: { createElement: (tagName) => new Element(tagName) },
         avatarIdentityKeys: new WeakMap(),
         asset: (path) => "/assets/" + path,
+        avatarAssetUrl,
+        avatarPortraitPath,
+        loadAvatarImage,
         hudIcon: (name) => name,
         statusIcon: (name) => name,
         SOW_t: (key) => key,
@@ -1074,6 +1091,7 @@ test("hero ability notices show that hero's ability icon in the seal", () => {
     const start = hud.indexOf("    function notificationIcon(");
     const end = hud.indexOf("    function renderNotificationCard(", start);
     const notificationIcon = vm.runInNewContext(hud.slice(start, end) + "\nnotificationIcon;", {
+        window: {},
         asset: (p) => "/assets/" + p,
         hudIcon: (name) => "<svg data-icon='" + name + "'></svg>",
         statusIcon: (name) => "<svg data-icon='" + name + "'></svg>",
@@ -1114,10 +1132,21 @@ test("radial portraits follow live expressions without replacing buttons or canc
     const context = {
         ring: { hot: 2, hold: held, slots: [] },
         asset: (path) => path,
+        avatarAssetUrl: (path) => path,
+        avatarPortraitPath,
         avatarIdentityKeys: new WeakMap(),
+        loadAvatarImage,
         setAvatarPortrait,
+        hudState: { hud: { map_menu: {} } },
         renderRingReadout() {},
-        menu: { querySelector: (selector) => (selector === ".sow-hud__ring-portrait" ? image : emblem) },
+        menu: {
+            querySelector: (selector) =>
+                selector === ".sow-hud__ring-portrait"
+                    ? image
+                    : selector === ".sow-hud__ring-emblem"
+                      ? emblem
+                      : null,
+        },
     };
     vm.runInNewContext(
         part("    function bindAvatarFallback(", "    function clearNotificationCard(") +

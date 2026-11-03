@@ -37,6 +37,8 @@ pub struct GraphicsState {
     pub map_renderer: Option<crate::render::gpu::MapRenderer>,
     pub mover_renderer: Option<crate::render::gpu::MoverRenderer>,
     pub text_renderer: Option<crate::render::gpu::TextRenderer>,
+    /// The portrait each avatar atlas slot holds this match.
+    pub avatars: crate::render::avatars::AvatarSlots,
     pub prev_sync_point: Option<blade_graphics::SyncPoint>,
     pub needs_first_upload: bool,
     pub configured_physical: winit::dpi::PhysicalSize<u32>,

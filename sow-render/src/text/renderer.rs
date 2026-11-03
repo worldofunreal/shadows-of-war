@@ -1,11 +1,11 @@
 use crate::context::RenderContext;
 use crate::text::msdf::{FontAtlas, MsdfChar};
-use crate::text::texture::FontAtlasTexture;
+use crate::text::texture::{AvatarAtlasTexture, FontAtlasTexture};
 use crate::text::types::{
-    AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC, KIND_BUILDING_SPRITE,
-    KIND_CROSS, KIND_DISC, KIND_GLYPH, KIND_HORN, KIND_ICON, KIND_RECT, KIND_RING, KIND_ROUNDED_RECT,
-    KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite, OutlineStyle,
-    TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
+    KIND_ARC, KIND_BUILDING_SPRITE, KIND_CROSS, KIND_DISC, KIND_GLYPH, KIND_HORN, KIND_ICON,
+    KIND_RECT, KIND_RING, KIND_ROUNDED_RECT, KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE,
+    NameplateStatusSprite, OutlineStyle, TextGlobals, TextInstanceGpu, TextPaintStyle,
+    TextShaderData,
 };
 use blade_graphics as gpu;
 
@@ -479,11 +479,9 @@ fn cross_geometry(center: [f32; 2], half_size: f32) -> ([f32; 2], [f32; 2], [f32
 pub struct TextRenderer {
     pub font_atlas_desc: FontAtlas,
     pub font_atlas_tex: FontAtlasTexture,
-    avatar_atlas_tex: FontAtlasTexture,
+    avatar_atlas: AvatarAtlasTexture,
     building_atlas_tex: FontAtlasTexture,
     status_atlas_tex: FontAtlasTexture,
-    avatar_loaded: [bool; AVATAR_SLOT_COUNT],
-    avatar_dirty_slots: Vec<usize>,
     prepared_text_scratch: Vec<PreparedTextItem>,
     pipeline: gpu::RenderPipeline,
     buffer: gpu::Buffer,
@@ -498,13 +496,7 @@ impl TextRenderer {
     pub fn new(context: &gpu::Context, surface_format: gpu::TextureFormat) -> Self {
         let font_atlas_desc = FontAtlas::load_static();
         let font_atlas_tex = FontAtlasTexture::new(context);
-        let avatar_atlas_tex = FontAtlasTexture::blank(
-            context,
-            AVATAR_COLS * AVATAR_CELL,
-            AVATAR_ROWS * AVATAR_CELL,
-            "avatar_atlas",
-            gpu::TextureFormat::Rgba8UnormSrgb, // portraits are sRGB color
-        );
+        let avatar_atlas = AvatarAtlasTexture::new(context);
         let building_atlas_tex = FontAtlasTexture::from_bytes(
             context,
             crate::BUILDING_ATLAS_BYTES,
@@ -606,11 +598,9 @@ impl TextRenderer {
         Self {
             font_atlas_desc,
             font_atlas_tex,
-            avatar_atlas_tex,
+            avatar_atlas,
             building_atlas_tex,
             status_atlas_tex,
-            avatar_loaded: [false; AVATAR_SLOT_COUNT],
-            avatar_dirty_slots: Vec::with_capacity(AVATAR_SLOT_COUNT),
             prepared_text_scratch: Vec::with_capacity(32),
             pipeline,
             buffer,
@@ -626,14 +616,13 @@ impl TextRenderer {
     /// (alongside `upload_atlas`) before any draw.
     pub fn init_textures(&self, encoder: &mut gpu::CommandEncoder) {
         encoder.init_texture(self.font_atlas_tex.texture);
-        encoder.init_texture(self.avatar_atlas_tex.texture);
+        self.avatar_atlas.init(encoder);
         encoder.init_texture(self.building_atlas_tex.texture);
         encoder.init_texture(self.status_atlas_tex.texture);
     }
 
     pub fn upload_atlas(&self, encoder: &mut gpu::CommandEncoder, context: &gpu::Context) {
         self.font_atlas_tex.upload(encoder, context);
-        self.avatar_atlas_tex.upload(encoder, context);
         self.building_atlas_tex.upload(encoder, context);
         self.status_atlas_tex.upload(encoder, context);
     }
@@ -1131,37 +1120,30 @@ impl TextRenderer {
         });
     }
 
-    /// Write a decoded `AVATAR_CELL`×`AVATAR_CELL` RGBA portrait into an atlas slot. The atlas
-    /// re-uploads on the next `draw`. Ignores out-of-range slots or wrong-sized data.
-    pub fn upload_avatar(&mut self, slot: usize, rgba_cell: &[u8]) {
-        let cell = AVATAR_CELL as usize;
-        if slot >= AVATAR_SLOT_COUNT || rgba_cell.len() != cell * cell * 4 {
-            return;
-        }
-        let atlas_w = (AVATAR_COLS * AVATAR_CELL) as usize;
-        let x0 = (slot % AVATAR_COLS as usize) * cell;
-        let y0 = (slot / AVATAR_COLS as usize) * cell;
-        let dst_ptr = self.avatar_atlas_tex.buffer.data();
-        let total = atlas_w * (AVATAR_ROWS * AVATAR_CELL) as usize * 4;
-        let dst = unsafe { std::slice::from_raw_parts_mut(dst_ptr, total) };
-        for y in 0..cell {
-            let s = y * cell * 4;
-            let d = ((y0 + y) * atlas_w + x0) * 4;
-            dst[d..d + cell * 4].copy_from_slice(&rgba_cell[s..s + cell * 4]);
-        }
-        if !self.avatar_dirty_slots.contains(&slot) {
-            self.avatar_dirty_slots.push(slot);
-        }
-        self.avatar_loaded[slot] = true;
+    /// Grow the avatar atlas to hold `slots` cells. Call before this frame reads any `avatar_uv`.
+    pub fn reserve_avatars(&mut self, context: &gpu::Context, slots: usize) {
+        self.avatar_atlas.reserve(context, slots);
     }
 
-    /// UV rect for a loaded avatar slot, or `None` if that slot hasn't been uploaded yet.
+    /// Empty the avatar atlas between matches.
+    pub fn reset_avatars(&mut self, context: &gpu::Context) {
+        self.avatar_atlas.reset(context);
+    }
+
+    /// Copy a browser-decoded portrait into its avatar atlas slot.
+    #[cfg(target_arch = "wasm32")]
+    pub fn upload_avatar(
+        &mut self,
+        context: &gpu::Context,
+        slot: usize,
+        image: &web_sys::ImageBitmap,
+    ) -> Result<(), String> {
+        self.avatar_atlas.upload(context, slot, image)
+    }
+
+    /// UV rect for a filled avatar slot, or `None` until its image arrives.
     pub fn avatar_uv(&self, slot: usize) -> Option<[f32; 4]> {
-        if slot < AVATAR_SLOT_COUNT && self.avatar_loaded[slot] {
-            Some(avatar_slot_uv(slot))
-        } else {
-            None
-        }
+        self.avatar_atlas.uv(slot)
     }
 
     fn write_buffers(&self, context: &gpu::Context) {
@@ -1191,19 +1173,6 @@ impl TextRenderer {
 
         self.write_buffers(context);
 
-        // The atlas was initialized by upload_atlas; update only cells that just arrived.
-        for slot in self.avatar_dirty_slots.drain(..) {
-            let cell = AVATAR_CELL as usize;
-            let x = (slot % AVATAR_COLS as usize) * cell;
-            let y = (slot / AVATAR_COLS as usize) * cell;
-            self.avatar_atlas_tex.upload_region(
-                encoder,
-                context,
-                [x as u32, y as u32],
-                [AVATAR_CELL, AVATAR_CELL],
-            );
-        }
-
         let mut pass = encoder.render(
             "text_pass",
             gpu::RenderTargetSet {
@@ -1226,7 +1195,7 @@ impl TextRenderer {
             globals,
             font_atlas: self.font_atlas_tex.view,
             font_sampler: self.sampler,
-            avatar_atlas: self.avatar_atlas_tex.view,
+            avatar_atlas: self.avatar_atlas.view,
             avatar_sampler: self.avatar_sampler,
             building_atlas: self.building_atlas_tex.view,
             building_sampler: self.building_sampler,
@@ -1258,15 +1227,7 @@ impl TextRenderer {
         render_ctx
             .context
             .destroy_buffer(self.font_atlas_tex.buffer);
-        render_ctx
-            .context
-            .destroy_texture_view(self.avatar_atlas_tex.view);
-        render_ctx
-            .context
-            .destroy_texture(self.avatar_atlas_tex.texture);
-        render_ctx
-            .context
-            .destroy_buffer(self.avatar_atlas_tex.buffer);
+        self.avatar_atlas.destroy(&render_ctx.context);
         render_ctx
             .context
             .destroy_texture_view(self.building_atlas_tex.view);

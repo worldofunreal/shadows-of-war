@@ -1,13 +1,14 @@
 //! Owns live/death avatar presentation; see docs/nameplates-and-emotes.md.
 use super::overlays::world_to_screen_values;
 use crate::app::{InputState, SimState};
+use crate::render::avatars::AvatarSlots;
 use crate::render::gpu::TextRenderer;
 use crate::render::motion::{
     EmoteMotion, emote_motion, smoothstep, spring_overshoot, troop_transfer_motion,
 };
 use crate::theme::dev_config::DevConfig;
 use sow_core::emote::{ActiveEmote, AvatarExpression, EMOTE_DURATION_SECS, EMOTES, EmoteKind};
-use sow_core::player::{Leader, PlayerType};
+use sow_core::player::PlayerType;
 use sow_core::protocol::{PlayerSnapshot, SimSnapshot};
 use sow_render::nameplate::{
     BadgeKind, MapPoint, NAMEPLATE_MAX_BADGES, NAMEPLATE_SAMPLE_TICKS, NameplateCapacityPlan,
@@ -18,7 +19,6 @@ use sow_render::nameplate::{
     size_needs_interpolation as nameplate_size_needs_interpolation,
 };
 use sow_render::text::NameplateStatusSprite;
-use sow_render::text::{AVATAR_FALLBACK_SLOT, leader_avatar_slot};
 use std::collections::{HashMap, HashSet};
 use web_time::{Duration, Instant};
 
@@ -133,14 +133,6 @@ pub(crate) struct NameplateSystem {
     emote_text_style_key: Option<u32>,
     campaign_emote: Option<CampaignEmoteCue>,
     safe_area: [f32; 4],
-    /// Campaign portraits of this frame's full plates; the asset loader requests them next frame.
-    avatar_wants: Vec<String>,
-}
-
-fn request_avatar_want(avatar_wants: &mut Vec<String>, slug: &str) {
-    if !avatar_wants.iter().any(|wanted| wanted == slug) {
-        avatar_wants.push(slug.to_owned());
-    }
 }
 
 struct CampaignEmoteCue {
@@ -989,14 +981,6 @@ impl NameplateSystem {
         }
     }
 
-    pub(crate) fn take_avatar_wants(&mut self) -> Vec<String> {
-        std::mem::take(&mut self.avatar_wants)
-    }
-
-    pub(crate) fn request_avatar(&mut self, slug: &str) {
-        request_avatar_want(&mut self.avatar_wants, slug);
-    }
-
     pub(crate) fn reset(&mut self) {
         let texts = std::mem::take(&mut self.emote_texts);
         let safe_area = self.safe_area;
@@ -1264,7 +1248,7 @@ pub(super) fn render_nameplates(
     system: &mut NameplateSystem,
     input: &InputState,
     dev: &DevConfig,
-    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
+    avatars: &AvatarSlots,
     sf: f32,
     zoom_scaled: f32,
     now: Instant,
@@ -1510,7 +1494,7 @@ pub(super) fn render_nameplates(
             fit_scale,
             style,
             dev,
-            campaign_avatar_slots,
+            avatars,
             badge_animations.entry(player.id).or_default(),
             sf,
             now,
@@ -1576,9 +1560,6 @@ pub(super) fn render_nameplates(
         }
         match plan.presentation {
             NameplatePresentation::Full => {
-                if let Some(slug) = &player.campaign_avatar {
-                    request_avatar_want(&mut system.avatar_wants, slug);
-                }
                 let mut full = plan
                     .full
                     .expect("full presentation requires a complete prepared plate");
@@ -1600,19 +1581,12 @@ pub(super) fn render_nameplates(
                             .copied()
                             .unwrap_or(AvatarExpression::Calm),
                     );
-                    avatar.content = resolve_avatar_content(
-                        text,
-                        sow_core::player::avatar_identity_ref(player),
-                        campaign_avatar_slots,
-                        to,
-                    );
+                    let identity = sow_core::player::avatar_identity_ref(player);
+                    avatar.content = resolve_avatar_content(text, avatars, identity, to);
                     if from != to && mix < 1.0 && decoration_budget > 0 {
-                        if let AvatarContent::Sprite(from_uv) = resolve_avatar_content(
-                            text,
-                            sow_core::player::avatar_identity_ref(player),
-                            campaign_avatar_slots,
-                            from,
-                        ) {
+                        if let AvatarContent::Sprite(from_uv) =
+                            resolve_avatar_content(text, avatars, identity, from)
+                        {
                             avatar.blend = Some((from_uv, mix));
                             decoration_budget -= 1;
                         }
@@ -1623,9 +1597,9 @@ pub(super) fn render_nameplates(
                     let allow_crossfade = decoration_budget > 0;
                     apply_base_avatar_transition(
                         text,
+                        avatars,
                         avatar,
                         player,
-                        campaign_avatar_slots,
                         transition,
                         now,
                         allow_crossfade,
@@ -2762,7 +2736,7 @@ fn prepare_full_nameplate(
     fit_scale: f32,
     style: NameplateStyle,
     dev: &DevConfig,
-    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
+    avatars: &AvatarSlots,
     badge_animations: &mut PlayerStatusBadgeAnimations,
     sf: f32,
     now: Instant,
@@ -2784,14 +2758,7 @@ fn prepare_full_nameplate(
     );
     let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]).scaled(fit_scale);
     let avatar = (layout.avatar_radius() > 0.0).then(|| {
-        prepare_avatar(
-            text,
-            player,
-            campaign_avatar_slots,
-            layout,
-            sf,
-            base_expression,
-        )
+        prepare_avatar(text, avatars, player, layout, sf, base_expression)
     });
     let (badges, badge_count) = prepare_badges(layout, sf, badge_animations, now, reduced_motion);
     let name = dev.vfx_nameplate_names.then_some(TextPlan {
@@ -2837,8 +2804,8 @@ fn prepare_full_nameplate(
 
 pub(crate) fn prepare_death_avatar(
     text: &TextRenderer,
+    avatars: &AvatarSlots,
     identity: &sow_core::player::AvatarIdentity,
-    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     center: [f32; 2],
     radius: f32,
 ) -> AvatarPlan {
@@ -2854,12 +2821,8 @@ pub(crate) fn prepare_death_avatar(
             sow_core::player::AvatarIdentityRef::Fallback
         }
     };
-    let content = resolve_avatar_content(
-        text,
-        identity_ref,
-        campaign_avatar_slots,
-        death_avatar_expression(identity),
-    );
+    let content =
+        resolve_avatar_content(text, avatars, identity_ref, death_avatar_expression(identity));
     avatar_plan(center, radius, content)
 }
 
@@ -2876,92 +2839,42 @@ fn death_avatar_expression(identity: &sow_core::player::AvatarIdentity) -> Avata
 
 fn resolve_avatar_content(
     text: &TextRenderer,
+    avatars: &AvatarSlots,
     identity: sow_core::player::AvatarIdentityRef<'_>,
-    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     expression: AvatarExpression,
 ) -> AvatarContent {
-    match identity {
-        sow_core::player::AvatarIdentityRef::Portrait { slug, leader: None } => {
-            if let Some(leader) = Leader::all().find(|leader| leader.id() == slug) {
-                let slot = leader_avatar_slot(leader, expression);
-                return text
-                    .avatar_uv(slot)
-                    .or_else(|| {
-                        text.avatar_uv(leader_avatar_slot(leader, AvatarExpression::Calm))
-                    })
-                    .or_else(|| text.avatar_uv(AVATAR_FALLBACK_SLOT))
-                    .map_or(AvatarContent::None, AvatarContent::Sprite);
-            }
-            let slot = campaign_avatar_slots
-                .get(slug)
-                .copied()
-                .unwrap_or(AVATAR_FALLBACK_SLOT);
-            text.avatar_uv(slot)
-                .or_else(|| text.avatar_uv(AVATAR_FALLBACK_SLOT))
-                .map_or(AvatarContent::None, AvatarContent::Sprite)
-        }
-        sow_core::player::AvatarIdentityRef::Portrait {
-            leader: Some(leader),
-            ..
-        } => text
-            .avatar_uv(leader_avatar_slot(leader, expression))
-            .or_else(|| text.avatar_uv(leader_avatar_slot(leader, AvatarExpression::Calm)))
-            .or_else(|| text.avatar_uv(AVATAR_FALLBACK_SLOT))
-            .map_or(AvatarContent::None, AvatarContent::Sprite),
-        sow_core::player::AvatarIdentityRef::Fallback => text
-            .avatar_uv(AVATAR_FALLBACK_SLOT)
-            .map_or(AvatarContent::None, AvatarContent::Sprite),
-    }
-}
-
-fn attack_avatar_identity_ref<'a>(
-    player: Option<&'a PlayerSnapshot>,
-    loaded_campaign_avatars: &HashSet<String>,
-) -> sow_core::player::AvatarIdentityRef<'a> {
-    let Some(player) = player else {
-        return sow_core::player::AvatarIdentityRef::Fallback;
-    };
-    let identity = sow_core::player::avatar_identity_ref(player);
-    match identity {
-        sow_core::player::AvatarIdentityRef::Portrait { slug, leader: None }
-            if !Leader::all().any(|leader| leader.id() == slug)
-                && !loaded_campaign_avatars.contains(slug) =>
-        {
-            sow_core::player::AvatarIdentityRef::Fallback
-        }
-        _ => identity,
-    }
+    avatars
+        .uv(text, identity, expression)
+        .map_or(AvatarContent::None, AvatarContent::Sprite)
 }
 
 pub(crate) fn paint_attack_badge_avatar(
     text: &mut TextRenderer,
+    avatars: &AvatarSlots,
     player: Option<&PlayerSnapshot>,
-    campaign_avatar_slots: &HashMap<String, usize>,
-    loaded_campaign_avatars: &HashSet<String>,
     center: [f32; 2],
     diameter: f32,
 ) {
-    let content = resolve_avatar_content(
-        text,
-        attack_avatar_identity_ref(player, loaded_campaign_avatars),
-        campaign_avatar_slots,
-        AvatarExpression::Calm,
+    let identity = player.map_or(
+        sow_core::player::AvatarIdentityRef::Fallback,
+        sow_core::player::avatar_identity_ref,
     );
+    let content = resolve_avatar_content(text, avatars, identity, AvatarExpression::Calm);
     paint_prepared_avatar(text, avatar_plan(center, diameter * 0.5, content), 1.0);
 }
 
 fn prepare_avatar(
     text: &TextRenderer,
+    avatars: &AvatarSlots,
     player: &PlayerSnapshot,
-    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     layout: NameplateLayout,
     sf: f32,
     expression: AvatarExpression,
 ) -> AvatarPlan {
     let content = resolve_avatar_content(
         text,
+        avatars,
         sow_core::player::avatar_identity_ref(player),
-        campaign_avatar_slots,
         expression,
     );
     let center = [
@@ -2994,17 +2907,17 @@ fn apply_emote_avatar_motion(mut avatar: AvatarPlan, motion: EmoteMotion) -> Ava
 
 fn apply_base_avatar_transition(
     text: &TextRenderer,
+    avatars: &AvatarSlots,
     avatar: &mut AvatarPlan,
     player: &PlayerSnapshot,
-    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     transition: AvatarTransition,
     now: Instant,
     allow_crossfade: bool,
 ) {
     let progress = transition.progress(now);
     let identity = sow_core::player::avatar_identity_ref(player);
-    let from_content = resolve_avatar_content(text, identity, campaign_avatar_slots, transition.from);
-    let to_content = resolve_avatar_content(text, identity, campaign_avatar_slots, transition.to);
+    let from_content = resolve_avatar_content(text, avatars, identity, transition.from);
+    let to_content = resolve_avatar_content(text, avatars, identity, transition.to);
     if from_content == to_content {
         avatar.content = to_content;
         return;
@@ -3234,6 +3147,7 @@ fn paint_prepared_nameplate(
 #[cfg(test)]
 mod status_badge_tests {
     use super::*;
+    use sow_core::player::Leader;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     fn snapshot(player_ids: &[u16]) -> SimSnapshot {
@@ -3271,32 +3185,6 @@ mod status_badge_tests {
             };
             assert_eq!(death_avatar_expression(&assigned), AvatarExpression::Calm);
         }
-    }
-
-    #[wasm_bindgen_test]
-    fn attack_avatar_uses_fallback_until_campaign_portrait_is_loaded() {
-        let mut snap = snapshot(&[1]);
-        let player = &mut snap.players[0];
-        player.player_type = PlayerType::Bot;
-        player.campaign_avatar = Some("campaign_portrait".to_owned());
-        let mut loaded = HashSet::new();
-
-        assert_eq!(
-            attack_avatar_identity_ref(Some(player), &loaded),
-            sow_core::player::AvatarIdentityRef::Fallback
-        );
-        loaded.insert("campaign_portrait".to_owned());
-        assert_eq!(
-            attack_avatar_identity_ref(Some(player), &loaded),
-            sow_core::player::AvatarIdentityRef::Portrait {
-                slug: "campaign_portrait",
-                leader: None,
-            }
-        );
-        assert_eq!(
-            attack_avatar_identity_ref(None, &loaded),
-            sow_core::player::AvatarIdentityRef::Fallback
-        );
     }
 
     #[wasm_bindgen_test]

@@ -52,6 +52,7 @@ export function loadAvatarImage(source: string): Promise<HTMLImageElement> {
         imageLoads.set(source, cached);
         return cached;
     }
+    if (typeof Image === "undefined") return Promise.reject(new Error("Image API unavailable"));
 
     const image = new Image();
     image.crossOrigin = "anonymous";
@@ -80,64 +81,44 @@ export function loadAvatarImage(source: string): Promise<HTMLImageElement> {
     return promise;
 }
 
-/** Browser decode/crop path used to transfer a portrait into the existing GPU atlas. */
-export async function loadAvatarPixels(
-    pathOrSlug: string,
-    cellSize: number,
-    expression?: AvatarExpression,
-): Promise<Uint8Array> {
-    const portraitPath = expression
-        ? avatarPortraitPath(pathOrSlug, expression)
-        : "gameplay/avatars/" + pathOrSlug;
-    const source = avatarAssetUrl(portraitPath);
-    let image: HTMLImageElement;
-    try {
-        image = await loadAvatarImage(source);
-    } catch (error) {
-        const fallback = avatarAssetUrl("gameplay/avatars/null.webp");
-        if (source === fallback) throw error;
-        image = await loadAvatarImage(fallback);
-    }
-
-    const size = Math.floor(cellSize);
-    if (!Number.isFinite(size) || size < 1) throw new Error("invalid avatar cell size");
-    const width = image.naturalWidth || image.width;
-    const height = image.naturalHeight || image.height;
-    const side = Math.min(width, height);
-    if (side < 1) throw new Error("avatar image has no pixels");
-
+/** The map atlas half of the shared loader: the radial's decoded image, scaled to one atlas cell off the main thread. */
+export async function loadAvatarBitmap(path: string, size: number): Promise<ImageBitmap> {
+    const image = await loadAvatarImage(avatarAssetUrl(path));
+    const side = Math.min(image.naturalWidth, image.naturalHeight);
+    const sx = (image.naturalWidth - side) / 2;
+    const sy = (image.naturalHeight - side) / 2;
+    const options: ImageBitmapOptions = { premultiplyAlpha: "none", colorSpaceConversion: "none" };
+    const bitmap = await createImageBitmap(image, sx, sy, side, side, {
+        ...options,
+        resizeWidth: size,
+        resizeHeight: size,
+        resizeQuality: "high",
+    });
+    if (bitmap.width === size && bitmap.height === size) return bitmap;
+    bitmap.close(); // browsers that ignore the resize options scale on a canvas
     const canvas = document.createElement("canvas");
     canvas.width = size;
     canvas.height = size;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (!context) throw new Error("avatar canvas context unavailable");
-    context.imageSmoothingEnabled = true;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("avatar canvas unavailable");
     context.imageSmoothingQuality = "high";
-    context.drawImage(image, (width - side) / 2, (height - side) / 2, side, side, 0, 0, size, size);
-    const pixels = context.getImageData(0, 0, size, size).data;
-    return new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength);
+    context.drawImage(image, sx, sy, side, side, 0, 0, size, size);
+    return createImageBitmap(canvas, options);
 }
 
-export async function prefetchAvatarImage(path: string): Promise<void> {
-    await loadAvatarImage(avatarAssetUrl("gameplay/avatars/" + path));
-}
-
-if (typeof window !== "undefined") {
-    window.SOW_loadAvatarPixels = loadAvatarPixels;
-    window.SOW_prefetchAvatarImage = prefetchAvatarImage;
-}
+if (typeof window !== "undefined") window.SOW_loadAvatarBitmap = loadAvatarBitmap;
 
 function sourceOf(image: HTMLImageElement): string {
     return imageSource(image);
 }
 
-function setSource(image: HTMLImageElement, source: string): void {
+function setSource(image: HTMLImageElement, source: string, deferLoad = false): void {
     if (!source) return;
     if (sourceOf(image) !== source) {
         image.crossOrigin = "anonymous";
         image.src = source;
     }
-    void loadAvatarImage(source).catch(() => undefined);
+    if (!deferLoad) void loadAvatarImage(source).catch(() => undefined);
 }
 
 function restoreOutgoingBackground(state: AnimationState): void {
@@ -199,12 +180,27 @@ export function setAvatarPortrait(
     transition: AvatarExpressionTransition | null | undefined,
     reducedMotion: boolean,
     reducedSource: string = source,
+    deferLoad = false,
 ): void {
     const previous = states.get(image);
     const stageKey = transition ? transition.id + ":" + transition.stage : "";
 
-    if (previous && previous.key === stageKey && previous.source === source) return;
+    if (
+        previous &&
+        previous.key === stageKey &&
+        previous.source === source &&
+        sourceOf(image) === source
+    ) {
+        return;
+    }
     settleAnimation(image, previous);
+
+    if (deferLoad) {
+        const nextSource = transition ? reducedSource : source;
+        setSource(image, nextSource, true);
+        states.set(image, { key: "", animation: null, source: nextSource, outgoingBackground: null });
+        return;
+    }
 
     if (reducedMotion || !transition || typeof image.animate !== "function") {
         if (transition && reducedMotion) source = reducedSource;
@@ -255,4 +251,12 @@ export function setAvatarPortrait(
     animation.onfinish = () => {
         if (states.get(image) === state) restoreOutgoingBackground(state);
     };
+}
+
+/** Stop a deferred portrait request and discard any in-flight expression animation. */
+export function clearAvatarPortrait(image: HTMLImageElement): void {
+    settleAnimation(image, states.get(image));
+    image.removeAttribute("src");
+    image.hidden = true;
+    states.delete(image);
 }
