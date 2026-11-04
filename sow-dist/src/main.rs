@@ -1558,6 +1558,10 @@ fn refresh_map_thumbnails(maps_root: &Path, map_sources: &Path) -> Result<()> {
             sow_map::write_map_thumbnail(&map, &thumbnail)
                 .map_err(|error| anyhow::anyhow!("write {} thumbnail: {error}", dir.display()))?;
         }
+        // The landing preview keeps the full frame; cards and portals use the 256x144 thumbnail.
+        let preview = dir.join("preview.webp");
+        fs::rename(&thumbnail, &preview)?;
+        optimize_webp(&preview, &thumbnail, "256x144", 70)?;
     }
     Ok(())
 }
@@ -1565,7 +1569,7 @@ fn refresh_map_thumbnails(maps_root: &Path, map_sources: &Path) -> Result<()> {
 fn thumbnail_cache_bust(maps_root: &Path) -> Result<String> {
     let mut files = fs::read_dir(maps_root)?
         .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path().join("thumbnail.webp"))
+        .flat_map(|entry| ["thumbnail.webp", "preview.webp"].map(|name| entry.path().join(name)))
         .filter(|path| path.is_file())
         .collect::<Vec<_>>();
     files.sort();
@@ -2967,13 +2971,13 @@ fn landing_maps(maps: &Path, sources_path: &Path) -> Result<String> {
         let key = html_text(&entry.key);
         let name = html_text(&official_map_display_name(&entry.key, &entry.display_name));
         html += &format!(
-            r#"<li class="map-card"><button type="button" data-map-select data-map-name="{name}" data-map-image="/maps/{key}/thumbnail.webp?v={bust}" aria-pressed="{active}"><img src="/maps/{key}/thumbnail.webp?v={bust}" alt="" width="512" height="288" loading="lazy" decoding="async"><span>{name}</span></button></li>"#,
+            r#"<li class="map-card"><button type="button" data-map-select data-map-name="{name}" data-map-image="/maps/{key}/preview.webp?v={bust}" aria-pressed="{active}"><img src="/maps/{key}/thumbnail.webp?v={bust}" alt="" width="256" height="144" loading="lazy" decoding="async"><span>{name}</span></button></li>"#,
             active = index == 0
         );
     }
     html.push_str("</ul></nav>");
     html += &format!(
-        r#"<div class="map-theatre" data-map-theatre><button type="button" class="map-nav-arrow map-nav-arrow--prev" data-map-prev aria-label="Previous map" data-i18n="site.previous_map" data-i18n-attr="aria-label">‹</button><button type="button" class="map-nav-arrow map-nav-arrow--next" data-map-next aria-label="Next map" data-i18n="site.next_map" data-i18n-attr="aria-label">›</button><div class="map-theatre-stage"><figure class="map-preview"><div class="map-preview-image" data-map-frame><div class="map-grid-overlay" aria-hidden="true"></div><span class="art-unavailable" data-i18n="site.art_unavailable">Artwork unavailable</span><img data-map-preview-image src="/maps/{key}/thumbnail.webp?v={bust}" alt="{name}" width="1024" height="576" fetchpriority="high" decoding="async"></div><figcaption class="map-hud"><div class="map-hud-meta"><span class="eyebrow" data-i18n="site.maps_in_rotation">Maps in Rotation</span></div><h3 data-map-current-name aria-live="polite">{name}</h3></figcaption></figure></div></div></div>"#,
+        r#"<div class="map-theatre" data-map-theatre><button type="button" class="map-nav-arrow map-nav-arrow--prev" data-map-prev aria-label="Previous map" data-i18n="site.previous_map" data-i18n-attr="aria-label">‹</button><button type="button" class="map-nav-arrow map-nav-arrow--next" data-map-next aria-label="Next map" data-i18n="site.next_map" data-i18n-attr="aria-label">›</button><div class="map-theatre-stage"><figure class="map-preview"><div class="map-preview-image" data-map-frame><div class="map-grid-overlay" aria-hidden="true"></div><span class="art-unavailable" data-i18n="site.art_unavailable">Artwork unavailable</span><img data-map-preview-image src="/maps/{key}/preview.webp?v={bust}" alt="{name}" width="1024" height="576" fetchpriority="high" decoding="async"></div><figcaption class="map-hud"><div class="map-hud-meta"><span class="eyebrow" data-i18n="site.maps_in_rotation">Maps in Rotation</span></div><h3 data-map-current-name aria-live="polite">{name}</h3></figcaption></figure></div></div></div>"#,
         key = first_key,
         name = first_name
     );

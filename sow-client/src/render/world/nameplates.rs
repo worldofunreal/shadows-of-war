@@ -32,7 +32,6 @@ const SPAWN_STICKY_HOLD: Duration = Duration::from_millis(120);
 const SPAWN_SETTLE_DURATION: Duration = Duration::from_millis(180);
 const LOD_DOT_RADIUS: f32 = 2.0;
 const LOD_STAR_DIAMETER: f32 = 12.0;
-const AVATAR_PLACEHOLDER_COLOR: [f32; 4] = [0.16, 0.18, 0.20, 1.0];
 const EMOTE_BUBBLE_FONT_RATIO: f32 = 0.22;
 const EMOTE_BUBBLE_MIN_FONT_SIZE: f32 = 9.0;
 const EMOTE_BUBBLE_HORIZONTAL_PADDING_RATIO: f32 = 0.16;
@@ -99,6 +98,49 @@ impl NameplateVisualState {
     }
 }
 
+struct AvatarEntry {
+    identity: sow_core::player::AvatarIdentity,
+    loaded: bool,
+    started_at: Option<Instant>,
+}
+
+fn observe_avatar_entry(
+    entries: &mut HashMap<u16, AvatarEntry>,
+    player_id: u16,
+    identity: sow_core::player::AvatarIdentity,
+    loaded: bool,
+    now: Instant,
+    reduced_motion: bool,
+) -> Option<f32> {
+    let entry = entries.entry(player_id).or_insert_with(|| AvatarEntry {
+        identity: identity.clone(),
+        loaded: false,
+        started_at: None,
+    });
+    if entry.identity != identity {
+        *entry = AvatarEntry {
+            identity,
+            loaded: false,
+            started_at: None,
+        };
+    }
+    if !loaded {
+        entry.loaded = false;
+        entry.started_at = None;
+        return None;
+    }
+    if !entry.loaded {
+        entry.loaded = true;
+        entry.started_at = (!reduced_motion).then_some(now);
+    } else if reduced_motion {
+        entry.started_at = None;
+    }
+    let age = now
+        .saturating_duration_since(entry.started_at?)
+        .as_secs_f32();
+    (age < AVATAR_TRANSITION_CELEBRATE_SECS).then_some(age)
+}
+
 #[derive(Default)]
 pub(crate) struct NameplateSystem {
     sample_tick: Option<u64>,
@@ -116,6 +158,7 @@ pub(crate) struct NameplateSystem {
     frame_plans: Vec<PreparedNameplate>,
     tutorial_target_hit_bounds: Option<(u16, [f32; 4])>,
     emote_visuals: HashMap<u16, AvatarEmote>,
+    avatar_entries: HashMap<u16, AvatarEntry>,
     badge_animations: HashMap<u16, PlayerStatusBadgeAnimations>,
     emote_tick: Option<u64>,
     campaign_base_expressions: HashMap<u16, AvatarExpression>,
@@ -188,6 +231,7 @@ enum LodMarker {
 struct FullNameplate {
     player_id: u16,
     avatar: Option<AvatarPlan>,
+    avatar_entry_age: Option<f32>,
     badges: [Option<BadgePlan>; NAMEPLATE_RENDER_BADGE_CAPACITY],
     badge_count: usize,
     name: Option<TextPlan>,
@@ -284,11 +328,11 @@ fn avatar_transition_emote(expression: AvatarExpression) -> EmoteKind {
 
 impl AvatarPlan {
     fn base_instance_count(self) -> usize {
-        1
+        usize::from(matches!(self.content, AvatarContent::Sprite(_)))
     }
 
     fn transition_instance_count(self) -> usize {
-        usize::from(self.blend.is_some())
+        usize::from(matches!(self.content, AvatarContent::Sprite(_)) && self.blend.is_some())
     }
 }
 
@@ -1286,6 +1330,10 @@ pub(super) fn render_nameplates(
         crate::diag::record_startup_perf(crate::diag::StartupMetric::NameplateSample, started_at);
     }
     system.observe_status_badges(snapshot, my_id, leaderboard_top_three, now, reduced_motion);
+    let active_ids = &system.active_ids;
+    system
+        .avatar_entries
+        .retain(|player_id, _| active_ids.contains(player_id));
 
     let my_player = snapshot.players.iter().find(|player| player.id == my_id);
     let mut full_labels_drawn = 0usize;
@@ -1295,11 +1343,12 @@ pub(super) fn render_nameplates(
     let alpha = nameplate_sample_alpha(system.sample_at, now, nameplate_sample_duration(sim));
     let inverse_alpha = 1.0 - alpha;
 
-    let (order, visuals, frame_plans, badge_animations) = (
+    let (order, visuals, frame_plans, badge_animations, avatar_entries) = (
         &system.order,
         &mut system.visuals,
         &mut system.frame_plans,
         &mut system.badge_animations,
+        &mut system.avatar_entries,
     );
     frame_plans.clear();
     for &player_index in order.iter() {
@@ -1484,6 +1533,22 @@ pub(super) fn render_nameplates(
             full_labels_drawn += 1;
         }
 
+        let base_expression = system
+            .avatar_bases
+            .get(&player.id)
+            .copied()
+            .unwrap_or(AvatarExpression::Calm);
+        let identity_ref = sow_core::player::avatar_identity_ref(player);
+        let portrait_loaded = layout.avatar_radius() > 0.0
+            && avatars.has_loaded_portrait(text, identity_ref, base_expression);
+        let avatar_entry_age = observe_avatar_entry(
+            avatar_entries,
+            player.id,
+            sow_core::player::avatar_identity(player),
+            portrait_loaded,
+            now,
+            reduced_motion,
+        );
         let full = prepare_full_nameplate(
             text,
             player,
@@ -1499,11 +1564,8 @@ pub(super) fn render_nameplates(
             sf,
             now,
             reduced_motion,
-            system
-                .avatar_bases
-                .get(&player.id)
-                .copied()
-                .unwrap_or(AvatarExpression::Calm),
+            base_expression,
+            avatar_entry_age,
         );
         let tutorial_hit_bounds = (tutorial_target_player == Some(player.id)).then(|| {
             let [half_width, half_height] = layout_bounds.extents_about(center);
@@ -1608,6 +1670,9 @@ pub(super) fn render_nameplates(
                         decoration_budget -= 1;
                     }
                 }
+                if let Some(avatar) = &mut full.avatar {
+                    *avatar = apply_avatar_entry(*avatar, full.avatar_entry_age, reduced_motion);
+                }
                 paint_prepared_nameplate(text, state, full);
             }
             NameplatePresentation::Compact => paint_lod_marker(text, plan.marker, sf),
@@ -1646,7 +1711,10 @@ pub(super) fn render_emote_bubbles(
         if !sow_core::emote::is_visible(&snapshot.players, player, my_id) {
             continue;
         }
-        let Some(avatar) = plan.full.and_then(|full| full.avatar) else {
+        let Some(full) = plan.full else {
+            continue;
+        };
+        let Some(mut avatar) = full.avatar else {
             continue;
         };
         let Some(emote) = system.emote_visuals.get(&player.id).copied() else {
@@ -1654,7 +1722,8 @@ pub(super) fn render_emote_bubbles(
         };
         let age = emote.age(now);
         let motion = emote.motion(age, now, reduced_motion);
-        let avatar = apply_emote_avatar_motion(avatar, motion);
+        avatar = apply_emote_avatar_motion(avatar, motion);
+        avatar = apply_avatar_entry(avatar, full.avatar_entry_age, reduced_motion);
         let prepared = system
             .campaign_emote
             .as_ref()
@@ -2214,6 +2283,89 @@ mod emote_tests {
         assert_eq!(avatar_transition_crossfade(1.0), 1.0);
     }
 
+    #[wasm_bindgen_test]
+    fn loaded_portrait_entry_starts_once_respects_reduced_motion_and_restarts_for_new_identity() {
+        let now = Instant::now();
+        let portrait = |slug: &str| sow_core::player::AvatarIdentity::Portrait {
+            slug: slug.into(),
+            leader: None,
+        };
+        let mut entries = HashMap::new();
+        let identity = portrait("some_portrait");
+
+        assert_eq!(
+            observe_avatar_entry(&mut entries, 1, identity.clone(), false, now, false),
+            None
+        );
+        assert_eq!(
+            observe_avatar_entry(&mut entries, 1, identity.clone(), true, now, false),
+            Some(0.0)
+        );
+        let mid_entry = observe_avatar_entry(
+            &mut entries,
+            1,
+            identity.clone(),
+            true,
+            now + Duration::from_millis(325),
+            false,
+        )
+        .unwrap();
+        assert!((mid_entry - 0.325).abs() < 0.001);
+        assert_eq!(
+            observe_avatar_entry(
+                &mut entries,
+                1,
+                identity.clone(),
+                true,
+                now + Duration::from_millis(700),
+                false,
+            ),
+            None
+        );
+        assert_eq!(
+            observe_avatar_entry(
+                &mut entries,
+                1,
+                identity,
+                true,
+                now + Duration::from_secs(1),
+                false,
+            ),
+            None,
+            "a loaded portrait must not replay its entrance every frame"
+        );
+
+        assert_eq!(
+            observe_avatar_entry(&mut entries, 2, portrait("reduced"), true, now, true),
+            None
+        );
+        assert_eq!(
+            observe_avatar_entry(
+                &mut entries,
+                2,
+                portrait("reduced"),
+                true,
+                now + Duration::from_millis(100),
+                false,
+            ),
+            None,
+            "an entry suppressed by reduced motion must not start later"
+        );
+
+        assert_eq!(
+            observe_avatar_entry(
+                &mut entries,
+                1,
+                portrait("another_portrait"),
+                true,
+                now + Duration::from_secs(2),
+                false,
+            ),
+            Some(0.0),
+            "a different portrait identity gets its own entrance"
+        );
+    }
+
     fn bubble_layout_at(center: [f32; 2], screen: [f32; 2], size: [f32; 2]) -> EmoteBubbleLayout {
         place_emote_bubble(
             avatar_plan(center, 56.0, AvatarContent::None),
@@ -2356,7 +2508,11 @@ mod emote_tests {
     }
 
     #[wasm_bindgen_test]
-    fn portrait_uses_one_instance_and_crossfade_adds_only_the_second_image() {
+    fn pending_avatar_is_invisible_and_crossfade_adds_only_the_second_image() {
+        let pending = avatar_plan([20.0, 30.0], 16.0, AvatarContent::None);
+        assert_eq!(pending.base_instance_count(), 0);
+        assert_eq!(pending.transition_instance_count(), 0);
+
         let portrait = avatar_plan([20.0, 30.0], 16.0, AvatarContent::Sprite([0.0; 4]));
         assert_eq!(portrait.base_instance_count(), 1);
         assert_eq!(portrait.transition_instance_count(), 0);
@@ -2404,17 +2560,29 @@ mod emote_tests {
 
     #[wasm_bindgen_test]
     fn emote_bubble_uses_the_same_avatar_motion_as_the_portrait() {
-        let avatar = avatar_plan([20.0, 30.0], 16.0, AvatarContent::None);
+        let avatar = avatar_plan([20.0, 30.0], 16.0, AvatarContent::Sprite([0.0; 4]));
         let motion = EmoteMotion {
             offset: [0.1, -0.2],
             scale: [1.04, 0.92],
             ..EmoteMotion::default()
         };
-        let moved = apply_emote_avatar_motion(avatar, motion);
-        assert!((moved.center[0] - 23.2).abs() < 0.001);
-        assert!((moved.center[1] - 23.6).abs() < 0.001);
+        let age = 0.5;
+        let entry_motion = avatar_entry_motion(age, false);
+        let moved = apply_avatar_entry(apply_emote_avatar_motion(avatar, motion), Some(age), false);
+        let bubble_anchor =
+            apply_avatar_entry(apply_emote_avatar_motion(avatar, motion), Some(age), false);
+        assert_eq!(moved.center, bubble_anchor.center);
+        assert!((moved.scale[0] - motion.scale[0] * entry_motion.scale[0]).abs() < 0.001);
+        assert!((moved.scale[1] - motion.scale[1] * entry_motion.scale[1]).abs() < 0.001);
+        assert!(
+            (moved.center[0] - 20.0 - (motion.offset[0] + entry_motion.offset[0]) * 32.0).abs()
+                < 0.001
+        );
+        assert!(
+            (moved.center[1] - 30.0 - (motion.offset[1] + entry_motion.offset[1]) * 32.0).abs()
+                < 0.001
+        );
         assert_eq!(moved.radius, 16.0);
-        assert_eq!(moved.scale, [1.04, 0.92]);
     }
 
     #[wasm_bindgen_test]
@@ -2742,6 +2910,7 @@ fn prepare_full_nameplate(
     now: Instant,
     reduced_motion: bool,
     base_expression: AvatarExpression,
+    avatar_entry_age: Option<f32>,
 ) -> FullNameplate {
     let layout = layout.scaled_about(center, fit_scale);
     let font_scale = font_size_scale(dev.font_size_scale);
@@ -2792,6 +2961,7 @@ fn prepare_full_nameplate(
     FullNameplate {
         player_id: player.id,
         avatar,
+        avatar_entry_age,
         badges,
         badge_count,
         name,
@@ -2900,9 +3070,22 @@ fn apply_emote_avatar_motion(mut avatar: AvatarPlan, motion: EmoteMotion) -> Ava
     let diameter = avatar.radius * 2.0;
     for axis in 0..2 {
         avatar.center[axis] += motion.offset[axis] * diameter;
+        avatar.scale[axis] *= motion.scale[axis];
     }
-    avatar.scale = motion.scale;
     avatar
+}
+
+fn avatar_entry_motion(age: f32, reduced_motion: bool) -> EmoteMotion {
+    emote_motion(EmoteKind::Celebrate, age, reduced_motion, true)
+}
+
+fn apply_avatar_entry(avatar: AvatarPlan, age: Option<f32>, reduced_motion: bool) -> AvatarPlan {
+    if !matches!(avatar.content, AvatarContent::Sprite(_)) {
+        return avatar;
+    }
+    age.map_or(avatar, |age| {
+        apply_emote_avatar_motion(avatar, avatar_entry_motion(age, reduced_motion))
+    })
 }
 
 fn apply_base_avatar_transition(
@@ -3572,16 +3755,7 @@ pub(crate) fn paint_prepared_avatar(text: &mut TextRenderer, avatar: AvatarPlan,
                 text.push_sprite(avatar.center, size, uv, tint);
             }
         }
-        AvatarContent::None => text.push_disc(
-            avatar.center,
-            avatar.radius * avatar.scale[0],
-            [
-                AVATAR_PLACEHOLDER_COLOR[0],
-                AVATAR_PLACEHOLDER_COLOR[1],
-                AVATAR_PLACEHOLDER_COLOR[2],
-                alpha,
-            ],
-        ),
+        AvatarContent::None => {}
     }
 }
 

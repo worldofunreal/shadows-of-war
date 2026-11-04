@@ -216,7 +216,8 @@ impl AvatarSlots {
     }
 
     /// The slot to draw for `identity` showing `expression`, given which slots hold their image.
-    /// A hero falls back to their Calm face, and every portrait to the shared fallback.
+    /// Pending reserved portraits stay hidden; heroes use Calm when ready. Unallocated identities
+    /// and explicit fallback identities use the shared fallback.
     fn slot_for(
         &self,
         identity: AvatarIdentityRef<'_>,
@@ -225,15 +226,27 @@ impl AvatarSlots {
     ) -> Option<usize> {
         let filled_slot = |slot: Option<&usize>| slot.copied().filter(|slot| filled(*slot));
         match self.owner(identity) {
-            Some(Owner::Hero(leader)) => filled_slot(self.heroes.get(&(leader, expression)))
-                .or_else(|| filled_slot(self.heroes.get(&(leader, AvatarExpression::Calm)))),
-            Some(Owner::Portrait(slug)) => filled_slot(self.portraits.get(slug)),
-            None => None,
+            Some(Owner::Hero(leader)) => {
+                let expression_slot = self.heroes.get(&(leader, expression));
+                let calm_slot = self.heroes.get(&(leader, AvatarExpression::Calm));
+                filled_slot(expression_slot).or_else(|| filled_slot(calm_slot))
+                    .or_else(|| {
+                        if expression_slot.is_none() && calm_slot.is_none() {
+                            filled(AVATAR_FALLBACK_SLOT).then_some(AVATAR_FALLBACK_SLOT)
+                        } else {
+                            None
+                        }
+                    })
+            }
+            Some(Owner::Portrait(slug)) => match self.portraits.get(slug) {
+                Some(slot) => filled(*slot).then_some(*slot),
+                None => filled(AVATAR_FALLBACK_SLOT).then_some(AVATAR_FALLBACK_SLOT),
+            },
+            None => filled(AVATAR_FALLBACK_SLOT).then_some(AVATAR_FALLBACK_SLOT),
         }
-        .or_else(|| filled(AVATAR_FALLBACK_SLOT).then_some(AVATAR_FALLBACK_SLOT))
     }
 
-    /// The UV rect to draw for `identity`, or `None` while not even the fallback has arrived.
+    /// The UV rect to draw, or `None` while a reserved portrait is still loading.
     pub(crate) fn uv(
         &self,
         text: &TextRenderer,
@@ -242,6 +255,17 @@ impl AvatarSlots {
     ) -> Option<[f32; 4]> {
         self.slot_for(identity, expression, |slot| text.avatar_uv(slot).is_some())
             .and_then(|slot| text.avatar_uv(slot))
+    }
+
+    /// Whether a catalog or hero portrait has a loaded slot of its own, rather than the fallback.
+    pub(crate) fn has_loaded_portrait(
+        &self,
+        text: &TextRenderer,
+        identity: AvatarIdentityRef<'_>,
+        expression: AvatarExpression,
+    ) -> bool {
+        self.slot_for(identity, expression, |slot| text.avatar_uv(slot).is_some())
+            .is_some_and(|slot| slot != AVATAR_FALLBACK_SLOT)
     }
 
     /// Once per frame, before anything reads `avatar_uv`: size or empty the atlas, copy in the
@@ -489,33 +513,53 @@ mod tests {
     }
 
     #[test]
-    fn unloaded_faces_fall_back_to_calm_then_to_the_shared_portrait() {
+    fn reserved_portraits_stay_hidden_until_loaded_and_heroes_use_calm_when_ready() {
         let mut avatars = AvatarSlots::new();
         let leader = Leader::of("boudica");
         avatars.add_identity(human(leader));
         avatars.add_identity(bot("some_portrait"));
         let calm = avatars.heroes[&(leader, AvatarExpression::Calm)];
+        let portrait = avatars.portraits["some_portrait"];
         let only = |filled: &'static [usize]| move |slot| filled.contains(&slot);
 
-        assert_eq!(avatars.slot_for(human(leader), AvatarExpression::Fear, only(&[])), None);
+        assert_eq!(
+            avatars.slot_for(human(leader), AvatarExpression::Fear, only(&[])),
+            None
+        );
         assert_eq!(
             avatars.slot_for(human(leader), AvatarExpression::Fear, only(&[0])),
-            Some(AVATAR_FALLBACK_SLOT)
+            None,
+            "a reserved hero remains hidden until its face or Calm is ready"
         );
         let filled = [AVATAR_FALLBACK_SLOT, calm];
         assert_eq!(
-            avatars.slot_for(human(leader), AvatarExpression::Fear, |slot| filled.contains(&slot)),
+            avatars.slot_for(human(leader), AvatarExpression::Fear, |slot| filled
+                .contains(&slot)),
             Some(calm)
         );
         assert_eq!(
             avatars.slot_for(bot("some_portrait"), AvatarExpression::Calm, |slot| filled
                 .contains(&slot)),
-            Some(AVATAR_FALLBACK_SLOT)
+            None,
+            "a reserved portrait remains hidden while null.webp is ready"
+        );
+        let loaded_portrait = [AVATAR_FALLBACK_SLOT, portrait];
+        assert_eq!(
+            avatars.slot_for(bot("some_portrait"), AvatarExpression::Calm, |slot| loaded_portrait
+                .contains(&slot)),
+            Some(portrait)
         );
         assert_eq!(
-            avatars.slot_for(AvatarIdentityRef::Fallback, AvatarExpression::Calm, |slot| {
-                filled.contains(&slot)
-            }),
+            avatars.slot_for(bot("unallocated"), AvatarExpression::Calm, only(&[0])),
+            Some(AVATAR_FALLBACK_SLOT),
+            "a portrait with no reserved slot keeps the atlas-full fallback"
+        );
+        assert_eq!(
+            avatars.slot_for(
+                AvatarIdentityRef::Fallback,
+                AvatarExpression::Calm,
+                |slot| { filled.contains(&slot) }
+            ),
             Some(AVATAR_FALLBACK_SLOT)
         );
     }
