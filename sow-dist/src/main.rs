@@ -1,5 +1,4 @@
 use anyhow::{Context, Result, bail};
-use base64::Engine as _;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
@@ -16,6 +15,10 @@ use std::{
 mod prod;
 
 const WASM_OPT_TAG: &str = "oz-cli-v1";
+const DISTRIBUTION_RASTER_EXTENSIONS: [&str; 16] = [
+    "png", "webp", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "avif", "ico", "cur", "icns",
+    "tga", "heic", "heif", "jxl",
+];
 const POKI_FORBIDDEN_MARKERS: &[&str] = &[
     "sdk.crazygames.com",
     "js.stripe.com",
@@ -246,6 +249,14 @@ struct ArtOptimizationConfig {
     profiles: std::collections::BTreeMap<String, ArtProfile>,
 }
 
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+struct ImageCacheRecord {
+    source_hash: String,
+    recipe_hash: String,
+    output_hash: String,
+    source_has_transparency: bool,
+}
+
 struct ArtPipeline {
     root: PathBuf,
     cache_root: PathBuf,
@@ -369,12 +380,31 @@ impl ArtPipeline {
             .join(profile_name)
             .join(format!("{source_hash}-{recipe_hash}.{output_format}"));
         fs::create_dir_all(cache_file.parent().context("art cache has no parent")?)?;
-        let source_has_alpha = image_has_transparency(source)?;
+        let mut cache_record = self.read_image_cache_record(
+            profile_name,
+            &source_hash,
+            &recipe_hash,
+            &cache_file,
+        )?;
+        let source_has_transparency = cache_record
+            .as_ref()
+            .map(|record| record.source_has_transparency)
+            .map_or_else(|| image_has_transparency(source), Ok)?;
         let cached = cache_file.is_file()
-            && self.validate_image_output(&cache_file, profile, exact_size, source_has_alpha, !allow_over_cap).is_ok();
+            && self
+                .validate_image_output(
+                    &cache_file,
+                    profile,
+                    exact_size,
+                    source_has_transparency,
+                    !allow_over_cap,
+                    cache_record.is_none(),
+                )
+                .is_ok();
         if !cached {
+            let nonce = rand::thread_rng().next_u64();
             let temp = cache_file.with_file_name(format!(
-                "{}-{}.tmp.{}",
+                "{}-{}-{nonce}.tmp.{}",
                 cache_file.file_stem().unwrap_or_default().to_string_lossy(),
                 std::process::id(),
                 output_format
@@ -418,13 +448,38 @@ impl ArtPipeline {
             if !status.success() {
                 bail!("ImageMagick failed to optimize {}", source.display());
             }
-            if let Err(error) = self.validate_image_output(&temp, profile, exact_size, source_has_alpha, !allow_over_cap) {
+            if let Err(error) = self.validate_image_output(
+                &temp,
+                profile,
+                exact_size,
+                source_has_transparency,
+                !allow_over_cap,
+                true,
+            ) {
                 let _ = fs::remove_file(&temp);
                 return Err(error).with_context(|| format!("validate art output for {}", source.display()));
             }
             fs::rename(&temp, &cache_file)?;
+            cache_record = Some(self.write_image_cache_record(
+                profile_name,
+                &source_hash,
+                &recipe_hash,
+                &cache_file,
+                source_has_transparency,
+            )?);
+        } else if cache_record.is_none() {
+            cache_record = Some(self.write_image_cache_record(
+                profile_name,
+                &source_hash,
+                &recipe_hash,
+                &cache_file,
+                source_has_transparency,
+            )?);
         }
-        if file_sha256(destination).ok().as_deref() != file_sha256(&cache_file).ok().as_deref() {
+        let output_hash = &cache_record
+            .context("validated art cache has no record")?
+            .output_hash;
+        if file_sha256(destination).ok().as_deref() != Some(output_hash.as_str()) {
             if let Some(parent) = destination.parent() {
                 fs::create_dir_all(parent)?;
             }
@@ -432,6 +487,71 @@ impl ArtPipeline {
                 .with_context(|| format!("publish optimized image {}", destination.display()))?;
         }
         Ok(())
+    }
+
+    fn read_image_cache_record(
+        &self,
+        profile_name: &str,
+        source_hash: &str,
+        recipe_hash: &str,
+        cache_file: &Path,
+    ) -> Result<Option<ImageCacheRecord>> {
+        if !cache_file.is_file() {
+            return Ok(None);
+        }
+        let record_path = self.image_cache_record_path(profile_name, source_hash, recipe_hash);
+        let Ok(bytes) = fs::read(record_path) else {
+            return Ok(None);
+        };
+        let Ok(record) = serde_json::from_slice::<ImageCacheRecord>(&bytes) else {
+            return Ok(None);
+        };
+        if record.source_hash != source_hash
+            || record.recipe_hash != recipe_hash
+            || file_sha256(cache_file)? != record.output_hash
+        {
+            return Ok(None);
+        }
+        Ok(Some(record))
+    }
+
+    fn write_image_cache_record(
+        &self,
+        profile_name: &str,
+        source_hash: &str,
+        recipe_hash: &str,
+        cache_file: &Path,
+        source_has_transparency: bool,
+    ) -> Result<ImageCacheRecord> {
+        let record = ImageCacheRecord {
+            source_hash: source_hash.to_owned(),
+            recipe_hash: recipe_hash.to_owned(),
+            output_hash: file_sha256(cache_file)?,
+            source_has_transparency,
+        };
+        let record_path = self.image_cache_record_path(profile_name, source_hash, recipe_hash);
+        fs::create_dir_all(record_path.parent().context("art cache record has no parent")?)?;
+        let nonce = rand::thread_rng().next_u64();
+        let temp = record_path.with_file_name(format!(
+            "{}-{}-{nonce}.tmp.json",
+            record_path.file_stem().unwrap_or_default().to_string_lossy(),
+            std::process::id(),
+        ));
+        fs::write(&temp, serde_json::to_vec(&record)?)?;
+        fs::rename(temp, record_path)?;
+        Ok(record)
+    }
+
+    fn image_cache_record_path(
+        &self,
+        profile_name: &str,
+        source_hash: &str,
+        recipe_hash: &str,
+    ) -> PathBuf {
+        self.cache_root
+            .join("metadata")
+            .join(profile_name)
+            .join(format!("{source_hash}-{recipe_hash}.json"))
     }
 
     fn image_recipe_hash(
@@ -460,8 +580,9 @@ impl ArtPipeline {
         output: &Path,
         profile: &ArtProfile,
         exact_size: Option<(u32, u32)>,
-        source_has_alpha: bool,
+        source_has_transparency: bool,
         enforce_byte_cap: bool,
+        verify_transparency: bool,
     ) -> Result<()> {
         let size = fs::metadata(output)
             .with_context(|| format!("read optimized image {}", output.display()))?
@@ -485,7 +606,7 @@ impl ArtPipeline {
                 output.display(), dimensions.0, dimensions.1, profile.max_width, profile.max_height
             );
         }
-        if source_has_alpha && !image_has_transparency(output)? {
+        if verify_transparency && source_has_transparency && !image_has_transparency(output)? {
             bail!("optimized image {} lost source transparency", output.display());
         }
         Ok(())
@@ -557,7 +678,7 @@ impl ArtPipeline {
         let extension = source.extension().and_then(|ext| ext.to_str()).unwrap_or_default().to_ascii_lowercase();
         match extension.as_str() {
             "svg" => self.publish_svg(source, destination),
-            "png" | "webp" | "jpg" | "jpeg" | "gif" | "bmp" | "tif" | "tiff" | "avif" => {
+            extension if DISTRIBUTION_RASTER_EXTENSIONS.contains(&extension) => {
                 let profile = profile_override
                     .or_else(|| profile_for_distribution_path(public_path))
                     .with_context(|| format!("raster art has no sow-dist profile: {}", public_path.display()))?;
@@ -618,7 +739,7 @@ impl ArtPipeline {
                 }
                 continue;
             }
-            if !["png", "webp", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "avif"].contains(&extension.as_str()) {
+            if !DISTRIBUTION_RASTER_EXTENSIONS.contains(&extension.as_str()) {
                 continue;
             }
             let public_path = relative;
@@ -626,7 +747,7 @@ impl ArtPipeline {
                 .with_context(|| format!("staged image has no distribution profile: {}", path.display()))?;
             let profile = self.profile(profile_name)?;
             let exact_size = staged_icon_size(public_path);
-            self.validate_image_output(path, profile, exact_size, false, true)
+            self.validate_image_output(path, profile, exact_size, false, true, false)
                 .with_context(|| format!("staged image violates {profile_name:?}: {}", path.display()))?;
         }
         Ok(())
@@ -737,6 +858,9 @@ fn profile_for_distribution_path(path: &Path) -> Option<&'static str> {
     if path == "shell/brand/app-icon.png" || path == "icon-192.png" || path == "icon-512.png" || path == "icon-512-maskable.png" {
         return Some("app_icon");
     }
+    if path == "poki-thumbnail.png" {
+        return Some("poki_thumbnail");
+    }
     if path.starts_with("site-icons/") || path.starts_with("android/res/mipmap-") {
         return Some("app_icon");
     }
@@ -763,6 +887,9 @@ fn profile_for_distribution_path(path: &Path) -> Option<&'static str> {
         return Some(if ["trade-ship.webp", "transport-ship.webp", "warship.webp"].contains(&name.as_ref()) { "pixel_art" } else { "unit_icon" });
     }
     if path == "gameplay/buildings/atlas.webp" || path == "gameplay/icons/nameplate_status_atlas.webp" {
+        return Some("atlas_lossless");
+    }
+    if path == "gameplay/icons/abilities-atlas.webp" {
         return Some("atlas_lossless");
     }
     if path.starts_with("site/media/") {
@@ -1528,7 +1655,12 @@ fn copy_cg_assets(source: &Path, packaged: &Path, pipeline: &ArtPipeline) -> Res
         }
         let to = packaged.join("site/media").join(icon);
         fs::create_dir_all(to.parent().context("social icon has no parent")?)?;
-        fs::copy(&from, &to)?;
+        pipeline.publish_asset(
+            &from,
+            &to,
+            Path::new(&format!("site/media/{icon}")),
+            None,
+        )?;
     }
     build_cg_ability_atlas(
         &source.join("gameplay/icons/abilities"),
@@ -1777,26 +1909,6 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
             fs::copy(e.path(), &to)
                 .with_context(|| format!("copy {} to {}", e.path().display(), to.display()))?;
         }
-    }
-    Ok(())
-}
-
-fn optimize_webp(src: &Path, dst: &Path, geometry: &str, quality: u32) -> Result<()> {
-    let status = Command::new("magick")
-        .arg(src)
-        .args([
-            "-resize",
-            geometry,
-            "-strip",
-            "-quality",
-            &quality.to_string(),
-        ])
-        .args(["-define", "webp:method=6"])
-        .arg(dst)
-        .status()
-        .with_context(|| "web packaging requires ImageMagick (magick)")?;
-    if !status.success() {
-        bail!("webp optimization failed for {}", src.display());
     }
     Ok(())
 }
@@ -3074,7 +3186,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             .and_then(|v| v.as_str())
         {
             fh = fh.replace(
-                &format!("{bar}.webp?v=__BUILD_TS__"),
+                &format!("{bar}.webp?v={ts}"),
                 &format!("{bar}.webp?v={hash}"),
             );
         }
@@ -3175,15 +3287,11 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
 fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
     let fav = paths.shell.join("favicon_io");
     if fav.is_dir() {
-        for e in fs::read_dir(&fav)? {
-            let e = e?;
-            let d = out.join(e.file_name());
-            if e.path().is_dir() {
-                copy_dir(&e.path(), &d)?;
-            } else {
-                fs::copy(e.path(), d)?;
-            }
-        }
+        paths.art_pipeline()?.copy_distribution_tree(
+            &fav,
+            out,
+            Path::new("sow-web/shell/favicon_io"),
+        )?;
     }
     fs::copy(
         paths.assets_shell.join("brand/sow.svg"),
@@ -3451,9 +3559,13 @@ fn public_leader_biographies(root: &Path) -> Result<serde_json::Value> {
 fn expand_landing(source: &str, out: &Path, leader_explorer: &str, map_explorer: &str) -> Result<String> {
     let english = serde_json::to_value(sow_i18n::web(sow_i18n::Language::English))?;
     let media = out.join("assets/site/media");
-    let splash_hash = file_sha256(&out.join("assets/shell/loader/sow-splash-desktop.webp"))?[..8].to_owned();
+    let splash_desktop_hash = file_sha256(&out.join("assets/shell/loader/sow-splash-desktop.webp"))?[..8].to_owned();
+    let splash_mobile_hash = file_sha256(&out.join("assets/shell/loader/sow-splash-mobile.webp"))?[..8].to_owned();
     let sections = [
-        ("<!-- SOW_SITE_HERO_MEDIA -->", landing_hero_media(&media, &splash_hash)),
+        (
+            "<!-- SOW_SITE_HERO_MEDIA -->",
+            landing_hero_media(&media, &splash_desktop_hash, &splash_mobile_hash),
+        ),
         ("<!-- SOW_SITE_MAPS -->", map_explorer.to_owned()),
         (
             "<!-- SOW_SITE_TRAILER -->",
@@ -3509,9 +3621,9 @@ fn english_text(english: &serde_json::Value, key: &str) -> Result<String> {
         .with_context(|| format!("English text is missing: {key}"))
 }
 
-fn landing_hero_media(media: &Path, splash_hash: &str) -> String {
-    let desktop = format!("/assets/shell/loader/sow-splash-desktop.webp?v={splash_hash}");
-    let mobile = format!("/assets/shell/loader/sow-splash-mobile.webp?v={splash_hash}");
+fn landing_hero_media(media: &Path, desktop_hash: &str, mobile_hash: &str) -> String {
+    let desktop = format!("/assets/shell/loader/sow-splash-desktop.webp?v={desktop_hash}");
+    let mobile = format!("/assets/shell/loader/sow-splash-mobile.webp?v={mobile_hash}");
     let still = format!(
         "<picture class=\"hero-still\"><source media=\"(max-width: 700px)\" srcset=\"{mobile}\"><img src=\"{desktop}\" alt=\"\" fetchpriority=\"high\" decoding=\"async\" width=\"1600\" height=\"900\"></picture>"
     );
@@ -5529,7 +5641,11 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         if !src.is_dir() {
             bail!("website legal page missing: {}", src.display());
         }
-        copy_dir(&src, &out.join(path))?;
+        paths.art_pipeline()?.copy_distribution_tree(
+            &src,
+            &out.join(path),
+            &Path::new("sow-web/site").join(path),
+        )?;
     }
     if !site.join("fonts").is_dir() {
         bail!(
@@ -5547,6 +5663,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     println!("✅ Website staged at webroot root");
 
     prune_qs(out)?;
+    paths.art_pipeline()?.validate_staged_image_inventory(out)?;
     verify_layout(out)?;
     println!("Load paths: {wasm}, {js}");
     Ok(())
@@ -5726,6 +5843,7 @@ fn package_native_web(
         prepare_native_webroot(out)?;
         fs::write(fingerprint_file, fingerprint)?;
     }
+    paths.art_pipeline()?.validate_staged_image_inventory(out)?;
     out.canonicalize()
         .context("resolve native development webroot")
 }
@@ -5833,6 +5951,7 @@ fn package_cg(
         .replace(&format!("sow_client_{wh}_bg.wasm"), "sow_client_bg.wasm");
     fs::write(&idx, html_out)?;
 
+    paths.art_pipeline()?.validate_staged_image_inventory(out)?;
     verify_cg_asset_inventory(&play_dir.join("assets"), &out.join("assets"))?;
     verify_cg_layout(out)?;
     let inventory = asset_file_inventory(out)?;
@@ -6003,6 +6122,7 @@ fn package_poki(
         bail!("Poki index.html is missing portal slots (sdk={sdk} boot={boot})");
     }
     fs::write(&index, lines.join("\n") + "\n")?;
+    paths.art_pipeline()?.validate_staged_image_inventory(package)?;
     verify_poki_layout(package)?;
 
     if out.exists() {
@@ -6321,6 +6441,7 @@ fn package_jest(
         bail!("Jest index.html is missing portal slots (sdk={sdk} boot={boot})");
     }
     fs::write(&index, lines.join("\n") + "\n")?;
+    paths.art_pipeline()?.validate_staged_image_inventory(out)?;
     verify_jest_layout(out)?;
     println!("✅ Jest bundle ready (self-contained): {}", out.display());
     Ok(())
@@ -6862,7 +6983,11 @@ fn package_local_preview(
     ] {
         let src = site.join(path);
         if src.is_dir() {
-            copy_dir(&src, &out.join(path))?;
+            paths.art_pipeline()?.copy_distribution_tree(
+                &src,
+                &out.join(path),
+                &Path::new("sow-web/site").join(path),
+            )?;
         }
     }
     for name in ["index.html", "styles.css"] {
@@ -6888,6 +7013,7 @@ fn package_local_preview(
     }
     expand_public_site_header(paths, out)?;
 
+    paths.art_pipeline()?.validate_staged_image_inventory(out)?;
     Ok(())
 }
 
@@ -7584,17 +7710,46 @@ mod tests {
         pipeline.publish_image(&source, &destination, "avatar_portrait_192", None, None)?;
         assert_eq!(file_sha256(&destination)?, original_output_hash);
         let cache_dir = pipeline.cache_root.join("avatar_portrait_192");
+        let metadata_dir = pipeline
+            .cache_root
+            .join("metadata/avatar_portrait_192");
         assert_eq!(fs::read_dir(&cache_dir)?.count(), 1, "same source+recipe reuses one derivative");
+        assert_eq!(fs::read_dir(&metadata_dir)?.count(), 1, "validated cache metadata is reused");
+
+        let cached_file = fs::read_dir(&cache_dir)?.next().context("cached derivative missing")??.path();
+        fs::write(&cached_file, b"corrupt cache")?;
+        pipeline.publish_image(&source, &destination, "avatar_portrait_192", None, None)?;
+        assert_eq!(file_sha256(&destination)?, original_output_hash, "corrupt cache is regenerated");
 
         image::RgbaImage::from_pixel(512, 256, image::Rgba([80, 120, 160, 255])).save(&source)?;
         pipeline.publish_image(&source, &destination, "avatar_portrait_192", None, None)?;
         assert_ne!(file_sha256(&destination)?, original_output_hash);
         assert_eq!(fs::read_dir(&cache_dir)?.count(), 2, "changed source creates a new derivative");
+        assert_eq!(fs::read_dir(&metadata_dir)?.count(), 2, "changed source gets new validation metadata");
 
         pipeline.config.profiles.get_mut("avatar_portrait_192").unwrap().recipe_version += 1;
         pipeline.publish_image(&source, &destination, "avatar_portrait_192", None, None)?;
         assert_eq!(fs::read_dir(&cache_dir)?.count(), 3, "changed recipe invalidates its cache key");
+        assert_eq!(fs::read_dir(&metadata_dir)?.count(), 3, "changed recipe gets new validation metadata");
         assert_eq!(image::image_dimensions(&destination)?, (192, 96));
+        Ok(())
+    }
+
+    #[test]
+    fn art_profiles_preserve_real_transparency() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let source = temp.path().join("transparent.png");
+        let mut image = image::RgbaImage::from_pixel(512, 256, image::Rgba([32, 64, 96, 255]));
+        image.put_pixel(128, 96, image::Rgba([32, 64, 96, 0]));
+        image.save(&source)?;
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").canonicalize()?;
+        let mut pipeline = ArtPipeline::load(&root)?;
+        pipeline.cache_root = temp.path().join("art-cache");
+        let destination = temp.path().join("published/transparent.webp");
+        pipeline.publish_image(&source, &destination, "avatar_portrait_192", None, None)?;
+        assert!(image_has_transparency(&destination)?, "transparent pixels must survive WebP conversion");
+        pipeline.publish_image(&source, &destination, "avatar_portrait_192", None, None)?;
+        assert!(image_has_transparency(&destination)?, "cache hits must retain validated transparency");
         Ok(())
     }
 
@@ -7645,6 +7800,8 @@ mod tests {
         for key in [
             "/assets/shell/leaders/boudica_desktop.webp",
             "/assets/shell/mobile-nav/battle.webp",
+            "/assets/shell/loader/sow-splash-desktop.webp",
+            "/assets/shell/loader/sow-splash-mobile.webp",
             "/assets/gameplay/music/shadows-of-war.webm",
         ] {
             let value = versions
@@ -7673,6 +7830,38 @@ mod tests {
                 .get("/assets/shell/loader/loader_empty.webp")
                 .is_none(),
             "loader bars must stay on the build stamp, not a content hash"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn landing_splash_uses_each_optimized_asset_hash() -> Result<()> {
+        let media = tempfile::tempdir()?;
+        let html = landing_hero_media(media.path(), "desktop1234", "mobile5678");
+        assert!(html.contains("sow-splash-desktop.webp?v=desktop1234"));
+        assert!(html.contains("sow-splash-mobile.webp?v=mobile5678"));
+        assert!(!html.contains("sow-splash-mobile.webp?v=desktop1234"));
+        Ok(())
+    }
+
+    #[test]
+    fn unprofiled_raster_art_fails_closed() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let source = temp.path().join("new-art.png");
+        image::RgbaImage::from_pixel(16, 16, image::Rgba([255, 0, 0, 255])).save(&source)?;
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").canonicalize()?;
+        let mut pipeline = ArtPipeline::load(&root)?;
+        pipeline.cache_root = temp.path().join("art-cache");
+        assert!(
+            pipeline
+                .publish_asset(
+                    &source,
+                    &temp.path().join("published/new-art.webp"),
+                    Path::new("new-page/new-art.webp"),
+                    None,
+                )
+                .is_err(),
+            "new raster output without a profile must fail instead of copying"
         );
         Ok(())
     }
@@ -7715,26 +7904,33 @@ mod tests {
     }
 
     #[test]
-    fn web_leader_packaging_recompresses_art_under_the_cap() -> Result<()> {
+    fn web_leader_packaging_uses_profile_without_mutating_master() -> Result<()> {
         let root = tempfile::tempdir()?;
         let leaders = root.path().join("leaders");
         fs::create_dir_all(&leaders)?;
-        let master = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
-            .join("assets/art/heroes/boudica_desktop.webp");
-        let original = fs::metadata(&master)?.len();
-        fs::copy(&master, leaders.join("boudica_desktop.webp"))?;
-        fs::write(leaders.join("boudica_mobile.webp"), b"not-an-image")?;
+            .canonicalize()?;
+        let master = project.join("assets/art/heroes/boudica_desktop.webp");
+        let original_hash = file_sha256(&master)?;
+        let destination = leaders.join("boudica_desktop.webp");
+        let mut pipeline = ArtPipeline::load(&project)?;
+        pipeline.cache_root = root.path().join("art-cache");
+        pipeline.publish_image(&master, &destination, "fullbleed_wide", None, None)?;
+        let (width, height) = image::image_dimensions(&destination)?;
+        let after = fs::metadata(&destination)?.len();
         assert!(
-            compress_web_leaders(&leaders).is_err(),
-            "a corrupt leader webp must fail the build, never ship silently"
+            width <= 1600 && height <= 900 && after <= 400_000,
+            "boudica_desktop output is {width}x{height}, {after} bytes; cap 1600x900 and 400000"
         );
-        fs::remove_file(leaders.join("boudica_mobile.webp"))?;
-        compress_web_leaders(&leaders)?;
-        let after = fs::metadata(leaders.join("boudica_desktop.webp"))?.len();
+        assert_eq!(file_sha256(&master)?, original_hash, "source master must remain untouched");
+        let corrupt = root.path().join("corrupt.webp");
+        fs::write(&corrupt, b"not-an-image")?;
         assert!(
-            after < original && after <= 400_000,
-            "boudica_desktop shrank {original} -> {after}; cap 400000"
+            pipeline
+                .publish_image(&corrupt, &leaders.join("corrupt.webp"), "fullbleed_wide", None, None)
+                .is_err(),
+            "a corrupt image must fail the build, never ship silently"
         );
         Ok(())
     }
@@ -8010,7 +8206,15 @@ mod tests {
                     ] {
                         assert!(!html.contains(marker), "Local shell retains {marker}");
                     }
-                    assert!(html.contains("data:image/webp;base64,"));
+                    assert!(!html.contains("data:image/webp;base64,"));
+                    for name in ["sow-splash-desktop.webp", "sow-splash-mobile.webp"] {
+                        let path = paths.assets_shell.join("loader").join(name);
+                        let hash = file_sha256(&path)?[..8].to_owned();
+                        assert!(
+                            html.contains(&format!("/assets/shell/loader/{name}?v={hash}")),
+                            "local loader must use the published splash hash for {name}"
+                        );
+                    }
                     assert!(html.contains("#sow-menu"));
                     assert!(html.contains("SOW_menu_command"));
                     let bundle = fs::read_to_string(page_dir.join(name))?;

@@ -1,12 +1,23 @@
-# Arte del juego: el único lugar para agregar o reemplazar
+# Arte fuente: dónde reemplazar y cómo se distribuye
 
-Para reemplazar algo, sobrescribe el archivo con el mismo nombre.
+Los originales editables viven en `assets/art/`; las tomas propias del landing y las capturas viven en `assets/site/media/`. Reemplaza el archivo fuente en su carpeta y conserva el nombre esperado por el juego.
 
-- Formato: PNG o WebP, del tamaño que quieras. Lo ideal son unos 1200 px; los barcos pixel art pueden ser diminutos y se amplían conservando los píxeles.
-- Fondo: transparente para íconos, unidades y edificios.
-- `./sow p` y `./sow l` lo optimizan, lo convierten y lo publican.
+- Conserva el original en alta resolución; no lo reduzcas ni lo recomprimas para la distribución.
+- Usa transparencia para íconos, unidades y edificios. Los barcos pixel art conservan sus bordes con un perfil de remuestreo puntual.
+- `sow-dist/art-optimization.toml` define dimensiones, calidad y peso máximo por tipo de salida. `./sow l` y `./sow p` aplican esos perfiles al material de distribución y fallan si falta una receta o se excede un límite.
+- Ejecuta `./sow art-preview` para muestras de perfiles, o `./sow art-preview ability_icon` para revisar todos los iconos de habilidades. El reporte y sus derivados se escriben en `dist/.sow-state/art-preview/`; los originales no se modifican.
 - No toques `assets/generated/`: lo arma la herramienta.
 - Si falta un archivo que el juego necesita, el build se detiene y dice cuál.
+
+## Splash compartido e icono de aplicación
+
+| Arte que reemplazas | Fuente maestra | Salida optimizada |
+|---|---|---|
+| Splash de escritorio | `assets/art/loader/sow-splash-desktop.webp` | `assets/shell/loader/sow-splash-desktop.webp`; lo comparten el loader y la portada del landing. |
+| Splash móvil | `assets/art/loader/sow-splash-mobile.webp` | `assets/shell/loader/sow-splash-mobile.webp`; cada dispositivo usa su propio hash para la caché. |
+| Icono de aplicación | `assets/art/brand/app-icon.png` | Iconos PWA y densidades Android generados por `sow-dist`; no mantengas copias fuente en `assets/site/icons/` ni en `sow-dist/deploy/android/.../res/mipmap-*/`. |
+
+Las escenas de sección (`step-*`, `closing-*`) siguen siendo ilustraciones independientes de `assets/site/media/`. La apertura del landing usa los dos splash maestros de arriba; no hay copias `opening-*` en `assets/site/media/`.
 
 ## Retratos de personajes
 
@@ -44,6 +55,7 @@ Las escenas son independientes de la hoja y se publican si el archivo existe. Si
 | `icons/` | `nav-heroes`, `nav-profile`, `nav-store` | barra de navegación del menú | 128 px |
 | `icons/` | `tutorial-hand` | mano del tutorial | 256 px |
 | `icons/` | `surrender` | rendirse | 256 px |
+| `icons/abilities/` | `<hero-id>.webp` | habilidad de cada héroe | 256 px máximo, WebP, límite 64 KiB; CrazyGames arma su atlas desde estos derivados |
 | `icons/` | `request`, `allied`, `traitor` | solicitud, aliado y traidor en la placa de nombre y el HUD | atlas |
 | `icons/` | `rank-1`, `rank-2`, `rank-3` | 1.º, 2.º y 3.er lugar en la placa de nombre | atlas |
 | `icons/` | `you` | marca "eres tú" en tu placa | atlas |
@@ -55,19 +67,21 @@ Las escenas son independientes de la hoja y se publican si el archivo existe. Si
 | `icons/` | `arrow-up`, `arrow-right`, `arrow-down`, `arrow-left`, `cancel`, `confirm` | flechas y botones al colocar un edificio | atlas |
 | `units/` | `transport-ship`, `trade-ship`, `warship`, `atom-bomb`, `sam-missile` | barcos y misiles que se mueven por el mapa | atlas, celda de 64 px |
 | `store/` | `sow_gems_500`, `sow_gems_1200`, `sow_gems_2600` | paquetes de gemas | 128 px |
-| `brand/`, `loader/`, `skins/`, `music/` | mismo nombre | logo, pantalla de carga, skins, música | sin cambios |
+| `brand/` | `sow.svg`, `sow-long.svg`, `tower.svg`, `app-icon.png` | marca e iconos de la aplicación | SVG minificado; iconos PWA/Android generados del maestro |
+| `loader/` | `sow-splash-*`, `loader_empty`, `loader_full` | apertura compartida y barras de carga | WebP con límite por perfil |
+| `skins/` | mismos SVG | skins | SVG minificado |
+| `music/` | mismo nombre | música del juego | optimizador de audio existente |
 
-"atlas" quiere decir que `./sow p` los junta solo en una imagen (celdas de 128 px; unidades de 64 px). Tú solo cambias el archivo.
+Los iconos fuente pueden conservarse a alta resolución. `sow-dist` los reduce según su perfil; los atlas se generan desde el arte fuente y conservan el tratamiento de bordes configurado. Tú solo reemplazas el archivo maestro.
 
 Los tres sprites de barcos vienen de OpenFront; las bombas y misiles todavía usan imágenes provisionales. Las demás imágenes provisionales están marcadas en `assets/SOURCES.toml`.
 
 ## Arte y tomas del landing (`assets/site/media/`)
 
-Las escenas propias del landing viven aquí; el selector sigue usando los splashes originales de `heroes/`. `./sow l` y `./sow p` convierten y publican estos archivos con el mismo flujo del resto del arte. Los nombres permitidos se registran en `SITE_STILLS` y `SITE_VIDEOS` de `sow-dist`.
+Las escenas propias del landing viven aquí; la portada usa los splash maestros de `assets/art/loader/`. `./sow l` y `./sow p` optimizan las imágenes registradas con perfiles para escenas anchas o altas. Los nombres permitidos se registran en `SITE_STILLS` y `SITE_VIDEOS` de `sow-dist`.
 
 | Archivo | Uso |
 |---|---|
-| `opening-desktop`, `opening-mobile` | Portada: Boudica y Lady Six Sky, con composiciones separadas para el texto en escritorio y móvil. |
 | `step-expand`, `step-expand-mobile` | Expansión: ejército y estandartes avanzando por el valle. |
 | `step-build`, `step-build-mobile` | Economía: puerto egipcio y barcos de comercio. |
 | `step-war`, `step-war-mobile` | Combate: asalto a una frontera fortificada. |
