@@ -6,8 +6,11 @@ use crate::game::{GameEvent, GamePhase, GameState, TerritoryChange};
 use crate::game_config::max_tiles_cap_for_troops;
 use crate::geo_entities::{Ability, LossWhen, Side, Source, Target};
 use crate::map::TerrainType;
-use crate::rng::NextIntExt;
+use crate::rng::{NextIntExt, stable_tile_sample};
 use std::collections::{BTreeSet, HashSet, VecDeque};
+
+const CAPTURE_COST_VARIATION_SALT: u64 = 0xA076_1D64_78BD_642F;
+const CAPTURE_COST_VARIATION: f64 = 0.10;
 
 struct BorderCluster {
     tiles: Vec<u32>,
@@ -944,6 +947,17 @@ impl SowEngine {
 
                     // Determine conquest cost for this specific tile (matching OpenFront's terrain & Tower coefficients)
                     let base_speed = terrain_capture_speed(terrain_type);
+                    let tile_idx = u64::from(target_tile.y) * u64::from(map_w)
+                        + u64::from(target_tile.x);
+                    let sample = stable_tile_sample(
+                        self.state.seed,
+                        execution.owner_id,
+                        execution.target_owner,
+                        tile_idx,
+                        CAPTURE_COST_VARIATION_SALT,
+                    );
+                    let capture_cost_factor =
+                        1.0 + (2.0 * sample - 1.0) * CAPTURE_COST_VARIATION;
 
                     let defense = self.defense_grid.influence(
                         target_tile.x,
@@ -957,7 +971,8 @@ impl SowEngine {
 
                     let tile_cost = if execution.target_owner == 0 {
                         let speed_term = base_speed.max(10.0);
-                        let raw_cost = (2000.0 * speed_term) / effective_troops;
+                        let raw_cost =
+                            ((2000.0 * speed_term) / effective_troops) * capture_cost_factor;
                         raw_cost.clamp(5.0, 100.0)
                     } else {
                         let defender_troops = self
@@ -968,7 +983,7 @@ impl SowEngine {
                             .max(1.0);
                         let ratio = defender_troops / (5.0 * effective_troops);
                         let ratio_clamp = ratio.clamp(0.2, 1.5);
-                        ratio_clamp * base_speed * defense.capture_multiplier
+                        ratio_clamp * base_speed * defense.capture_multiplier * capture_cost_factor
                     };
                     let city_multiplier = city_capture_multiplier(
                         &self.state,
@@ -1269,7 +1284,8 @@ impl SowEngine {
 mod tests {
     use super::{
         attack_pacing_multiplier, neutral_expansion_pacing_multiplier, occupied_land_share,
-        terrain_capture_speed, terrain_loss_multiplier,
+        terrain_capture_speed, terrain_loss_multiplier, CAPTURE_COST_VARIATION,
+        CAPTURE_COST_VARIATION_SALT,
     };
     use crate::building::Building;
     use crate::execution::{AttackExecution, PrioritizedTile};
@@ -2012,9 +2028,19 @@ mod tests {
             engine.state.seed,
             &engine.state.config,
         );
+        let tile_idx = u64::from(3 * width + 3);
+        let sample = crate::rng::stable_tile_sample(
+            engine.state.seed,
+            1,
+            2,
+            tile_idx,
+            CAPTURE_COST_VARIATION_SALT,
+        );
+        let capture_cost_factor = 1.0 + (2.0 * sample - 1.0) * CAPTURE_COST_VARIATION;
         let tile_cost = (1_000.0_f64 / (5.0 * 10_000.0_f64)).clamp(0.2, 1.5)
             * terrain_capture_speed(TerrainType::Land)
-            * current_influence.capture_multiplier;
+            * current_influence.capture_multiplier
+            * capture_cost_factor;
         let mut base_budget = 1.5;
         base_budget *= engine
             .state

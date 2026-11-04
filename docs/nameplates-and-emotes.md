@@ -81,11 +81,12 @@ radial sí muestra el correcto:
    `end_match` libera todo, la textura vuelve a una fila y las imágenes que
    lleguen después se descartan.
 4. **El dibujo solo lee.** `AvatarSlots::uv` devuelve la celda si su imagen ya
-   llegó. Si no, un héroe muestra su Calm y cualquier retrato el respaldo. Nada
-   que se dibuje o se omita en un cuadro pide, encola ni libera imágenes.
-5. **Una falla se ve y se reintenta.** Mientras falla se muestra el respaldo,
-   el registro anota la ruta y se reintenta a los 2 s, duplicando hasta 60 s.
-   Hay como máximo seis cargas a la vez.
+   llegó. Un retrato con slot reservado permanece oculto hasta que cargue; un
+   héroe usa Calm si esa cara ya está lista. Solo las identidades de respaldo o
+   sin slot usan `null.webp`. Dibujar u omitir no pide, encola ni libera imágenes.
+5. **Una falla se reintenta.** El registro anota la ruta y se reintenta a los
+   2 s, duplicando hasta 60 s. El retrato reservado sigue oculto durante los
+   reintentos. Hay como máximo seis cargas a la vez.
 
 | Imagen | Ruta publicada |
 | --- | --- |
@@ -115,6 +116,9 @@ radial sí muestra el correcto:
 - 0–70 ms: anticipación. 70–180 ms: impulso. Hasta 500 ms: aterrizaje.
 - Saludar salta el 10 % del diámetro; Celebrar salta el 20 % y añade un
   segundo rebote hasta 650 ms. El retrato se mueve; nombre y tropas no.
+- Al quedar listo por primera vez, un retrato propio entra con el movimiento de
+  Celebrar. Si coincide con un emote, ambos movimientos se componen y la burbuja
+  sigue anclada al retrato.
 - La burbuja aparece entre 80 y 240 ms. Sin fijar, se desvanece durante los
   últimos 300 ms de los tres segundos.
 - Movimiento reducido conserva la transparencia y quita saltos y deformaciones.

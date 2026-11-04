@@ -122,7 +122,7 @@ CrazyGames permite 250 MB totales y 1,500 archivos. Con el SDK, mide el máximo 
 | Reescalar y recomprimir 162 escenas de héroes para Poki | 72,256,450 B → 13,855,762 B; ahorro de 55.70 MiB en el paquete actual. |
 | Empacar 20 imágenes de edificios en un atlas WebP lossless | 51,465,992 B → 498,178 B entre atlas y manifiesto; ahorro de 48.61 MiB (99.0%). Las fuentes PNG se reducen a celdas de 128 px antes del atlas. |
 | Publicar mapas binarios con Brotli | 22 mapas: 42,788,971 B `.bin` → 2,536,902 B `.br`; ahorro de 40,252,069 B (38.39 MiB, 94.1%). |
-| Reducir miniaturas de mapas para portal | 22 WebP: 2,340,666 B → 61,990 B a 256×144 q70; ahorro de 2,278,676 B (2.17 MiB, 97.4%). |
+| Reducir miniaturas de mapas a 256×144 q70 para portal y tarjetas web; el landing usa `preview.webp` a 512×288 | Portal, 22 WebP: 2,340,666 B → 61,990 B; ahorro de 2,278,676 B (2.17 MiB, 97.4%). Web: falta medir el paquete. |
 | No entregar fuentes Noto como ficheros web | 20,493,774 B de materiales fuente → 152,570 B de ficheros de fuente/estilo en el webroot. El MSDF y el TTF árabe van dentro del WASM; la diferencia no debe restarse otra vez del paquete total. |
 | Omitir el WebM duplicado de campaña en Poki | 5,563,674 B menos; quedan MP4, poster y triggers. |
 | Subir assets, fuentes y mapas a CrazyGames para que los sirva desde su CDN | Reduce egreso estático de SOW; no reduce lo que descarga el jugador. |

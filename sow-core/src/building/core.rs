@@ -1,7 +1,7 @@
 use super::placement::{BuildingFootprint, hex_distance};
 use crate::game::BuildingKind;
+use crate::rng::stable_tile_sample;
 use serde::{Deserialize, Serialize};
-use wyrand::WyRand;
 
 #[inline]
 pub fn upgrade_duration_ticks(kind: BuildingKind, target_level: u8) -> u32 {
@@ -212,12 +212,7 @@ const DEFENSE_OWNER_INDEX_THRESHOLD: usize = 8;
 
 #[inline]
 fn defense_sample(match_seed: u64, attacker_id: u16, target_owner: u16, tile_idx: u64) -> f64 {
-    let key = match_seed
-        .wrapping_add((attacker_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
-        .wrapping_add((target_owner as u64).wrapping_mul(0xD1B5_4A32_D192_ED03))
-        .wrapping_add(tile_idx.wrapping_mul(0x94D0_49BB_1331_11EB));
-    let mut rng = WyRand::new(key);
-    (rng.rand() >> 11) as f64 / 9_007_199_254_740_992.0
+    stable_tile_sample(match_seed, attacker_id, target_owner, tile_idx, 0)
 }
 
 impl DefenseGrid {
