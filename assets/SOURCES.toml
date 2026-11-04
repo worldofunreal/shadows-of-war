@@ -1,8 +1,8 @@
 # Asset provenance and ownership for Shadows of War.
 #
-# assets/art is the only place art is added or replaced (see assets/art/README.md).
-# assets/generated is written by sow-tools. sow-dist publishes both under the
-# runtime URLs (/assets/shell/..., /assets/gameplay/...); there is no other copy.
+# Original game, brand, and loader art is edited in assets/art; landing stills,
+# captures, and video sources live in assets/site/media. See assets/art/README.md.
+# assets/generated is written by sow-tools; sow-dist creates distribution copies.
 
 [avatars]
 path = "assets/art/avatars/"
@@ -46,7 +46,7 @@ notes = "The three OpenFront boat sprites are packed into assets/generated/units
 path = "assets/art/icons/"
 source = "user_supplied"
 license = "Project-owner supplied; cleared for distribution"
-notes = "All iconography: currency (gold, gem, crown, laurel), troops (HUD, menu nav and map), tutorial hand, surrender, mobile navigation, and the nameplate/map badges packed into assets/generated/badges-atlas.* (request/allied/traitor: AGPL-3.0-or-later; rank, you, disconnected, upgrade-sparkle, wilderness, death, radiation, construction, hammer: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art). Hero ability icons are in abilities/<hero-id>.webp and published byte-for-byte. laurel is a generated placeholder pending final art. Burebista and Bolesław II ability icons are provisional crops pending final icons. Abd al-Rahman al-Ghafiqi's icon is a provisional crop of his own Calm avatar sheet pending final ability art."
+notes = "All iconography: currency (gold, gem, crown, laurel), troops (HUD, menu nav and map), tutorial hand, surrender, mobile navigation, and nameplate/map badges packed into assets/generated/badges-atlas.* (request/allied/traitor: AGPL-3.0-or-later; rank, you, disconnected, upgrade-sparkle, wilderness, death, radiation, construction, hammer: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art). Keep ability masters in high resolution at abilities/<hero-id>.webp; sow-dist publishes 256 px WebP derivatives and builds CrazyGames' atlas from optimized output. laurel is a generated placeholder pending final art. Burebista and Bolesław II ability icons are provisional crops pending final icons. Abd al-Rahman al-Ghafiqi's icon is a provisional crop of his own Calm avatar sheet pending final ability art."
 placeholder_source = "Programmatic labeled placeholders created in-repo"
 placeholder_license = "AGPL-3.0-or-later"
 placeholder_files = ["abilities/sitting_bull.webp", "abilities/matoaka.webp"]
@@ -62,13 +62,14 @@ path = "assets/art/brand/"
 source = "original"
 license = "AGPL-3.0-or-later"
 files = ["sow.svg", "tower.svg", "sow-long.svg", "app-icon.png"]
+notes = "Replace app-icon.png as the high-resolution master. sow-dist generates the PWA and Android density variants; the old PNG copies in assets/site/icons and Android mipmap folders are retired."
 
 [loader]
 path = "assets/art/loader/"
 source = "ai_generated_and_placeholder"
 license = "Review per original tool terms; placeholder art is AGPL-3.0-or-later"
 files = ["sow-splash-desktop.webp", "sow-splash-mobile.webp", "loader_empty.webp", "loader_full.webp"]
-notes = "Web shell only. The WASM client does not fetch or embed these files."
+notes = "The desktop and mobile splash masters are shared by the landing opening and loader, then optimized once into the web asset tree. The loader bars remain separate UI assets. The WASM client does not fetch or embed these files."
 
 [skins]
 path = "assets/art/skins/"
@@ -103,13 +104,7 @@ notes = "Written only by sow-tools: buildings-atlas, badges-atlas and units-atla
 [site_media]
 path = "assets/site/media/"
 source = "original_and_ai_generated"
-notes = "Landing artwork in desktop/mobile pairs, Support-page character art, original gameplay captures and optional hero-loop/gameplay videos, plus store badges. Exact landing prompts and references live in assets/site/landing-art.json. sow-dist publishes the registered media; these files are not loaded by the game."
-
-[site_icons]
-path = "assets/site/icons/"
-source = "original"
-license = "AGPL-3.0-or-later"
-files = ["icon-192.png", "icon-512.png", "icon-512-maskable.png"]
+notes = "Independent landing feature/closing scenes, Support-page character art, original gameplay captures and optional hero-loop/gameplay videos, plus store badges. The opening splash masters live in assets/art/loader. Exact landing prompts and references live in assets/site/landing-art.json. sow-dist publishes the registered media; these files are not loaded by the game."
 
 [maps]
 path = "assets/maps/"

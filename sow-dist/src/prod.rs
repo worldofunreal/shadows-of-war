@@ -2692,8 +2692,12 @@ fn assemble_server_only_release(
     .context("copy active immutable release for server-only update")?;
 
     let server = work.join("bin/sow-server");
-    fs::copy(binaries.join("sow-server"), &server)?;
-    fs::set_permissions(&server, fs::Permissions::from_mode(0o550))?;
+    let server_temp = work
+        .join("bin")
+        .join(format!(".sow-server.{}.tmp", std::process::id()));
+    fs::copy(binaries.join("sow-server"), &server_temp)?;
+    fs::set_permissions(&server_temp, fs::Permissions::from_mode(0o550))?;
+    fs::rename(&server_temp, &server)?;
     require_file(&work.join("web/game-manifest.json"), "active game manifest")?;
     require_file(&work.join("maps/world/map.bin"), "active server map")?;
     require_file(&work.join("bin/sow-database"), "active database binary")?;
@@ -2783,7 +2787,7 @@ fn assemble_release(
     if web_maps.is_dir() {
         fs::rename(&web_maps, work.join("maps"))?;
     } else {
-        copy_dir(&paths.assets_maps, &work.join("maps"))?;
+        bail!("release web package is missing optimized maps; build the web package before assembling the release");
     }
     for name in ["sow-server", "sow-database"] {
         let destination = work.join("bin").join(name);

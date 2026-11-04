@@ -246,5 +246,5 @@ alpha = "preserve"
 resample = "lanczos"
 lossless = true
 crop = "center_square"
-max_bytes = 300000
+max_bytes = 750000
 recipe_version = 1
