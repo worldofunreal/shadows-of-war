@@ -24,10 +24,6 @@
     linear-gradient(0deg, rgba(8, 10, 14, 0.45), transparent 55%);
 }
 
-#sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
-  width: min(1240px, calc(100% - 48px));
-}
-
 #sow-menu[data-screen="profile"] .sow-profile__main {
   display: block;
   flex: 1 1 auto;
@@ -888,9 +884,6 @@
 }
 
 @media (max-width: 900px) {
-  #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
-    width: min(100% - 28px, 720px);
-  }
 
   #sow-menu[data-screen="profile"] .sow-profile__identity-card {
     padding: 30px;
@@ -907,9 +900,6 @@
 }
 
 @media (max-width: 700px), (orientation: portrait) {
-  #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
-    width: calc(100% - 24px);
-  }
 
   #sow-menu[data-screen="profile"] .sow-profile__heading {
     min-height: 0;
@@ -1100,10 +1090,31 @@
   outline-offset: var(--sow-tactical-focus-offset);
 }
 
-/* Store: leader art carries the visual weight; cards carry the commerce state. */
-#sow-menu[data-screen="store"] .sow-menu__shell.sow-menu__store {
-  width: min(1240px, calc(100% - 48px));
-  gap: 16px;
+#sow-menu[data-screen="profile"] .sow-ranked__overview { padding: clamp(18px, 3vw, 28px); border: 1px solid #7b653d; border-radius: 12px; background: radial-gradient(ellipse at 0 0, #65513533, transparent 60%), linear-gradient(135deg, #1b2029, #0d111a); }
+.sow-ranked__hero { display: flex; gap: 28px; align-items: center; }
+.sow-ranked__summary { display: grid; flex: 1; min-width: 0; gap: 12px; }
+.sow-ranked__summary h2 { margin: 0; color: #fff0d2; font-family: var(--font-display, serif); font-size: clamp(24px, 3vw, 34px); }
+.sow-ranked__summary .sow-ranked__placements { justify-content: start; margin: 0; }
+.sow-ranked__leagues { list-style: none; display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); padding: 20px 0 0; margin: 24px 0 0; border-top: 1px solid #424650; gap: 8px; }
+.sow-ranked__leagues li { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 8px 2px; border: 1px solid transparent; border-radius: 8px; color: #aab4c5; }
+.sow-ranked__leagues .sow-ranked__emblem { width: min(100%, 72px); }
+.sow-ranked__leagues strong { font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.sow-ranked__leagues small { color: #bac4d2; font-variant-numeric: tabular-nums; font-size: 11px; }
+.sow-ranked__leagues .is-current { color: #ffe1a1; background: #b98c3422; border-color: #bca069; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row { grid-template-columns: 32px 48px minmax(0,1fr) auto; min-height: 76px; transition: background 140ms, border-color 140ms; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row .sow-ranked__emblem { width: 48px; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row .sow-ranked__emblem b { font-size: 8px; padding: 1px 4px; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row.is-self { border-color: #d2ad67; background: #c1973c18; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row > strong { display: grid; text-align: end; gap: 3px; font-variant-numeric: tabular-nums; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row > strong small { font-weight: 400; color: #bac3d3; font-size: 10px; }
+@media (max-width: 600px) {
+  .sow-ranked__hero { flex-direction: column; gap: 14px; text-align: center; }
+  .sow-ranked__hero > .sow-ranked__emblem { width: 132px; }
+  .sow-ranked__summary { width: 100%; }
+  .sow-ranked__summary .sow-ranked__placements { justify-content: center; }
+  .sow-ranked__leagues { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px 4px; }
+  #sow-menu[data-screen="profile"] .sow-profile__ranked-row { grid-template-columns: 26px 40px minmax(0,1fr) auto; gap: 8px; padding: 12px 8px; }
+  #sow-menu[data-screen="profile"] .sow-profile__ranked-row .sow-ranked__emblem { width: 40px; }
 }
 
 #sow-menu[data-screen="store"] .sow-menu__backdrop {
@@ -1564,9 +1575,6 @@
 }
 
 @media (max-width: 680px), (orientation: portrait) {
-  #sow-menu[data-screen="store"] .sow-menu__shell.sow-menu__store {
-    width: 100%;
-  }
 
   #sow-menu[data-screen="store"] .sow-menu__main.sow-menu__main--store {
     padding-inline: 0;
@@ -1586,12 +1594,6 @@
   .sow-store__bundle-grid {
     grid-template-columns: 1fr;
   }
-}
-
-/* Heroes: a first-class roster screen, not a modal leader picker. */
-#sow-menu[data-screen="heroes"] .sow-menu__shell.sow-menu__heroes {
-  width: min(1240px, calc(100% - 48px));
-  gap: 16px;
 }
 
 #sow-menu[data-screen="heroes"] .sow-menu__backdrop {
@@ -1642,6 +1644,10 @@
   justify-content: end;
   overflow: hidden;
   container-type: size;
+  /* The skill's icon, title and body all derive from one body size, so their hierarchy holds at every width. */
+  --skill-body: 14px;
+  --skill-title: calc(var(--skill-body) * 1.5);
+  --skill-icon: calc(var(--skill-body) * 4.5);
   border: 1px solid var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius-compact);
   background: var(--sow-tactical-panel-base);
@@ -1815,18 +1821,6 @@
   line-height: 1;
 }
 
-.sow-heroes__rotation-countdown {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: normal;
-  line-height: 1.2;
-  text-transform: none;
-}
-
-.sow-heroes__rotation-countdown[hidden] {
-  display: none;
-}
-
 .sow-heroes__rotation[hidden],
 .sow-heroes__perk[hidden] {
   display: none;
@@ -1933,10 +1927,10 @@
 
 .sow-hero-briefing__icon-slot {
   display: grid;
-  flex: 0 0 40px;
+  flex: 0 0 48px;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   overflow: hidden;
   border: 1px solid var(--sow-tactical-surface-accent-border-soft);
   border-radius: var(--sow-tactical-surface-radius-tight);
@@ -1961,7 +1955,7 @@
 .sow-hero-briefing__ability-name {
   margin: 0 0 3px;
   color: #f1bd4b;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 900;
   line-height: 1.2;
 }
@@ -1979,6 +1973,23 @@
 .sow-hero-briefing__random-copy {
   min-width: 0;
   color: rgba(245, 241, 232, 0.86);
+}
+
+/* Heroes skill: a large icon, a title clearly above its body text, and tokens set per breakpoint below. */
+.sow-heroes__featured .sow-hero-briefing__icon-slot {
+  flex-basis: var(--skill-icon);
+  width: var(--skill-icon);
+  height: var(--skill-icon);
+}
+
+.sow-heroes__featured .sow-hero-briefing__ability-name {
+  font-size: var(--skill-title);
+  line-height: 1.1;
+}
+
+.sow-heroes__featured .sow-hero-briefing__description {
+  font-size: var(--skill-body);
+  line-height: 1.45;
 }
 
 .sow-menu__leader-copy .sow-hero-briefing {
@@ -2009,6 +2020,17 @@
   margin-top: 12px;
 }
 
+.sow-menu__leader-copy .sow-hero-briefing__icon-slot {
+  flex-basis: 56px;
+  width: 56px;
+  height: 56px;
+}
+
+.sow-menu__leader-copy .sow-hero-briefing__ability-name {
+  font-size: clamp(16px, 1.8vw, 20px);
+  line-height: 1.1;
+}
+
 @media (orientation: landscape) {
   .sow-menu__leader-copy .sow-hero-briefing__ability {
     flex-direction: row-reverse;
@@ -2017,7 +2039,7 @@
 
 .sow-menu__leader-copy .sow-hero-briefing__description {
   color: rgba(255, 255, 255, 0.86);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.45;
 }
@@ -2257,6 +2279,8 @@
   #sow-menu[data-screen="heroes"] .sow-heroes__featured {
     flex: 0 0 clamp(220px, 34dvh, 280px);
     height: auto;
+    --skill-body: 12px;
+    --skill-icon: 52px;
   }
 
   #sow-menu[data-screen="heroes"] .sow-heroes__roster {
@@ -2269,9 +2293,6 @@
 }
 
 @media (max-width: 680px), (orientation: portrait) {
-  #sow-menu[data-screen="heroes"] .sow-menu__shell.sow-menu__heroes {
-    width: 100%;
-  }
 
   #sow-menu[data-screen="heroes"] .sow-menu__main.sow-menu__main--heroes {
     padding-inline: 0;
@@ -2284,10 +2305,12 @@
     padding-top: 2px;
   }
 
-  .sow-heroes__featured {
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured {
     min-height: 0;
-    flex: 0 0 clamp(220px, 34dvh, 280px);
+    flex: 0 0 clamp(260px, 44dvh, 360px);
     height: auto;
+    --skill-body: 13px;
+    --skill-icon: 56px;
   }
 
   #sow-menu[data-screen="heroes"] .sow-heroes__roster {
@@ -2313,12 +2336,12 @@
     gap: 8px;
   }
   .sow-hero-briefing__icon-slot {
-    flex-basis: 34px;
-    width: 34px;
-    height: 34px;
+    flex-basis: 48px;
+    width: 48px;
+    height: 48px;
   }
   .sow-hero-briefing__description {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   #sow-menu[data-screen="home"] .sow-menu__leader-copy .sow-hero-briefing__civilization {
@@ -2337,14 +2360,14 @@
   }
 
   #sow-menu[data-screen="home"] .sow-menu__leader-copy .sow-hero-briefing__icon-slot {
-    flex-basis: 26px;
-    width: 26px;
-    height: 26px;
+    flex-basis: 48px;
+    width: 48px;
+    height: 48px;
   }
 
   #sow-menu[data-screen="home"] .sow-menu__leader-copy .sow-hero-briefing__description {
-    font-size: 10px;
-    line-height: 1.25;
+    font-size: 12px;
+    line-height: 1.4;
   }
 
   .sow-heroes__grid {
@@ -2352,31 +2375,15 @@
   }
 }
 
-@media (max-width: 390px) {
-  .sow-heroes__grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (max-width: 340px) {
   #sow-menu[data-screen="heroes"] .sow-heroes__featured {
-    flex-basis: 220px;
+    flex-basis: 260px;
+    --skill-body: 12px;
+    --skill-icon: 48px;
   }
 
   .sow-heroes__featured-copy {
     padding: 10px 12px;
-  }
-
-  .sow-hero-briefing__ability-name {
-    font-size: 10px;
-  }
-  .sow-hero-briefing__description {
-    font-size: 10px;
-  }
-  .sow-hero-briefing__icon-slot {
-    flex-basis: 30px;
-    width: 30px;
-    height: 30px;
   }
 
   .sow-heroes__filters {
@@ -2407,6 +2414,15 @@
   flex: 0 0 148px;
   width: 148px;
   min-width: 148px;
+}
+
+/* Skins are global, so this entry sits with the roster filters and stays off the hero card. */
+#sow-menu[data-screen="heroes"] .sow-heroes__skins {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
 }
 
 .sow-heroes__search input {
@@ -2466,9 +2482,6 @@
 }
 
 @media (max-width: 680px) {
-  #sow-menu[data-screen="heroes"] .sow-menu__shell.sow-menu__heroes {
-    width: 100%;
-  }
 
   #sow-menu[data-screen="heroes"] .sow-menu__main.sow-menu__main--heroes {
     padding-inline: 0;
@@ -2476,6 +2489,20 @@
 
   .sow-heroes__featured-copy {
     padding: 14px 16px;
+  }
+
+  /* Narrow screens: search takes a full row; region and skins share the next one. */
+  #sow-menu[data-screen="heroes"] .sow-heroes__filters {
+    flex-wrap: wrap;
+  }
+  #sow-menu[data-screen="heroes"] .sow-heroes__search {
+    flex-basis: 100%;
+  }
+  #sow-menu[data-screen="heroes"] .sow-heroes__region,
+  #sow-menu[data-screen="heroes"] .sow-heroes__skins {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
   }
 
   #sow-menu[data-screen="heroes"] .sow-heroes__featured-copy h2 {
@@ -2537,29 +2564,13 @@
   }
 }
 
-@media (max-width: 340px) {
-  .sow-hero-briefing__ability-name {
-    font-size: 10px;
-  }
-  .sow-hero-briefing__description {
-    font-size: 10px;
-  }
-  .sow-hero-briefing__icon-slot {
-    flex-basis: 30px;
-    width: 30px;
-    height: 30px;
-  }
-}
-
-@media (max-width: 390px) {
-  .sow-heroes__grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (orientation: landscape) and (max-height: 560px) {
   #sow-menu[data-screen="heroes"] .sow-heroes__workspace {
     gap: 10px;
+  }
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured {
+    --skill-body: 12px;
+    --skill-icon: 48px;
   }
   .sow-heroes__featured-copy {
     padding: 14px;
@@ -2578,18 +2589,6 @@
   .sow-hero-briefing__ability {
     gap: 7px;
   }
-  .sow-hero-briefing__icon-slot {
-    flex-basis: 32px;
-    width: 32px;
-    height: 32px;
-  }
-  .sow-hero-briefing__ability-name {
-    font-size: 10px;
-  }
-  .sow-hero-briefing__description {
-    font-size: 10px;
-    line-height: 1.3;
-  }
   #sow-menu[data-screen="heroes"] .sow-heroes__featured-copy .sow-hero-briefing__name {
     font-size: clamp(17px, 3vh, 22px);
   }
@@ -2602,40 +2601,7 @@
 }
 
 @media (min-width: 681px) and (orientation: landscape) {
-  #sow-menu[data-screen="store"] .sow-menu__shell.sow-menu__store,
-  #sow-menu[data-screen="heroes"] .sow-menu__shell.sow-menu__heroes {
-    width: min(calc(100% - 48px), 1440px);
-    gap: 12px 16px;
-  }
-
-  #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
-    width: min(calc(100% - 48px), 1440px);
-  }
+  /* Widescreen landscape bounds are unified in main_menu.layout.css */
 }
 
-#sow-menu[data-screen="profile"] .sow-ranked__overview { padding: clamp(18px, 3vw, 28px); border: 1px solid #7b653d; border-radius: 12px; background: radial-gradient(ellipse at 0 0, #65513533, transparent 60%), linear-gradient(135deg, #1b2029, #0d111a); }
-.sow-ranked__hero { display: flex; gap: 28px; align-items: center; }
-.sow-ranked__summary { display: grid; flex: 1; min-width: 0; gap: 12px; }
-.sow-ranked__summary h2 { margin: 0; color: #fff0d2; font-family: var(--font-display, serif); font-size: clamp(24px, 3vw, 34px); }
-.sow-ranked__summary .sow-ranked__placements { justify-content: start; margin: 0; }
-.sow-ranked__leagues { list-style: none; display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); padding: 20px 0 0; margin: 24px 0 0; border-top: 1px solid #424650; gap: 8px; }
-.sow-ranked__leagues li { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 8px 2px; border: 1px solid transparent; border-radius: 8px; color: #aab4c5; }
-.sow-ranked__leagues .sow-ranked__emblem { width: min(100%, 72px); }
-.sow-ranked__leagues strong { font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
-.sow-ranked__leagues small { color: #bac4d2; font-variant-numeric: tabular-nums; font-size: 11px; }
-.sow-ranked__leagues .is-current { color: #ffe1a1; background: #b98c3422; border-color: #bca069; }
-#sow-menu[data-screen="profile"] .sow-profile__ranked-row { grid-template-columns: 32px 48px minmax(0,1fr) auto; min-height: 76px; transition: background 140ms, border-color 140ms; }
-#sow-menu[data-screen="profile"] .sow-profile__ranked-row .sow-ranked__emblem { width: 48px; }
-#sow-menu[data-screen="profile"] .sow-profile__ranked-row .sow-ranked__emblem b { font-size: 8px; padding: 1px 4px; }
-#sow-menu[data-screen="profile"] .sow-profile__ranked-row.is-self { border-color: #d2ad67; background: #c1973c18; }
-#sow-menu[data-screen="profile"] .sow-profile__ranked-row > strong { display: grid; text-align: end; gap: 3px; font-variant-numeric: tabular-nums; }
-#sow-menu[data-screen="profile"] .sow-profile__ranked-row > strong small { font-weight: 400; color: #bac3d3; font-size: 10px; }
-@media (max-width: 600px) {
-  .sow-ranked__hero { flex-direction: column; gap: 14px; text-align: center; }
-  .sow-ranked__hero > .sow-ranked__emblem { width: 132px; }
-  .sow-ranked__summary { width: 100%; }
-  .sow-ranked__summary .sow-ranked__placements { justify-content: center; }
-  .sow-ranked__leagues { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px 4px; }
-  #sow-menu[data-screen="profile"] .sow-profile__ranked-row { grid-template-columns: 26px 40px minmax(0,1fr) auto; gap: 8px; padding: 12px 8px; }
-  #sow-menu[data-screen="profile"] .sow-profile__ranked-row .sow-ranked__emblem { width: 40px; }
-}
+

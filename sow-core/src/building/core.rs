@@ -80,6 +80,10 @@ pub struct BuildingAggregate {
     pub farm_income_level_weight: f64,
     /// Sum of 1.5x marginal level weights across active Ports.
     pub port_income_level_weight: f64,
+    /// Sum of 1.5x marginal level weights across active Factories.
+    pub factory_income_level_weight: f64,
+    /// Sum of 1.5x marginal level weights across active Cities.
+    pub city_income_level_weight: f64,
     pub has_completed_port: bool,
     /// Ready cities only (for bot `city_equivalent` base).
     pub ready_city_count: u32,
@@ -145,6 +149,7 @@ pub fn aggregate_buildings_per_player(
         match b.kind {
             BuildingKind::City => {
                 a.city_levels += active_lvl as u32;
+                a.city_income_level_weight += income_level_weight(active_lvl);
                 a.ready_city_count += 1;
             }
             BuildingKind::Tower => {
@@ -152,6 +157,7 @@ pub fn aggregate_buildings_per_player(
             }
             BuildingKind::Factory => {
                 a.factory_levels += active_lvl as u32;
+                a.factory_income_level_weight += income_level_weight(active_lvl);
                 a.ready_factory_count += 1;
             }
             BuildingKind::Port => {

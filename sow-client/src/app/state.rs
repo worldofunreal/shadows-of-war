@@ -350,6 +350,14 @@ pub struct ClickMarker {
     pub world_x: f32,
     pub world_y: f32,
     pub start_time: web_time::Instant,
+    pub kind: ClickMarkerKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClickMarkerKind {
+    Generic,
+    TransportOrder,
+    WarshipOrder,
 }
 
 #[derive(Clone, Debug)]

@@ -17,6 +17,7 @@ use web_time::Instant;
 const TROOP_NOTICE_ICON_SCALE: f32 = 0.91;
 
 const CLICK_MARKER_DURATION: f32 = 0.16;
+const NAVAL_ORDER_MARKER_DURATION: f32 = 0.58;
 const ATTACK_LAUNCH_NOTICE_DURATION: f32 = 1.5;
 const ATTACK_LAUNCH_NOTICE_FONT_SIZE: f32 = 14.0;
 const FLOATING_NOTICE_RISE: f32 = 6.5;
@@ -29,10 +30,11 @@ const DEATH_NAMEPLATE_FONT_SIZE: f32 = 24.0;
 const DEATH_NAMEPLATE_RISE: f32 = 5.0;
 const DEATH_NAMEPLATE_ARC_OFFSET: f32 = 0.75;
 const DEATH_NAMEPLATE_ICON_SIZE: f32 = 24.0;
+const DEATH_NAMEPLATE_SCALE: f32 = 0.92;
 const GOLD_REWARD_FONT_SIZE: f32 = 22.0;
 const GOLD_REWARD_COIN_SIZE: f32 = 26.0;
 const GOLD_REWARD_ASSIST_SIZE: f32 = 28.0;
-const GOLD_REWARD_SCALE: f32 = 0.94;
+const GOLD_REWARD_SCALE: f32 = 0.9;
 const GOLD_REWARD_MAX_TEXT_SCALE: f32 = 1.2;
 const DEATH_GOLD_ROW_GAP: f32 = 8.0;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
@@ -477,7 +479,8 @@ fn render_death_nameplates(
         let badge_size = GOLD_REWARD_ASSIST_SIZE * reward_scale * sf;
         let coin_size = GOLD_REWARD_COIN_SIZE * reward_scale * sf;
         let gap = DEATH_GOLD_ROW_GAP * 0.5 * reward_scale * sf;
-        let death_font_size = DEATH_NAMEPLATE_FONT_SIZE * font_scale * sf;
+        let death_scale = font_scale * DEATH_NAMEPLATE_SCALE;
+        let death_font_size = DEATH_NAMEPLATE_FONT_SIZE * death_scale * sf;
         let death_measure = animation.prepared_name.measure_at(death_font_size);
         let death_bounds = animation
             .prepared_name
@@ -501,10 +504,14 @@ fn render_death_nameplates(
             + dev.font_shadow_y.abs()
             + dev.font_underlay_softness.max(0.0))
             * sf;
-        let death_baseline = death_measure.height * 0.35;
-        let death_half = DEATH_NAMEPLATE_ICON_SIZE * font_scale * sf * 0.5;
-        let death_bottom = (death_half + outline_clearance)
-            .max(death_baseline + death_bounds[3] + outline_clearance);
+        let death_icon_size = DEATH_NAMEPLATE_ICON_SIZE * death_scale * sf;
+        let death_gap = 3.0 * death_scale * sf;
+        let death_stack_height = death_icon_size + death_gap + death_measure.height;
+        let death_stack_top = -death_stack_height * 0.5;
+        let death_name_baseline =
+            death_stack_top + death_icon_size + death_gap + death_measure.height * 0.85;
+        let death_bottom = (death_icon_size * 0.5 + outline_clearance)
+            .max(death_name_baseline + death_bounds[3] + outline_clearance);
         let gold_half = badge_size.max(coin_size) * 0.5;
         let reward_baseline = max_reward_measure.height * 0.35;
         let gold_top = (-gold_half).min(reward_baseline + max_reward_bounds[1] - outline_clearance);
@@ -563,7 +570,8 @@ fn render_death_nameplates(
         if alpha <= 0.0 {
             continue;
         }
-        let font_size = DEATH_NAMEPLATE_FONT_SIZE * font_scale;
+        let death_scale = font_scale * DEATH_NAMEPLATE_SCALE;
+        let font_size = DEATH_NAMEPLATE_FONT_SIZE * death_scale;
         let arc = 4.0 * eased * (1.0 - eased);
         let center = world_to_screen(
             animation.world_x + animation.curve_direction * DEATH_NAMEPLATE_ARC_OFFSET * arc,
@@ -571,10 +579,10 @@ fn render_death_nameplates(
             input,
             sf,
         );
-        let icon_size = DEATH_NAMEPLATE_ICON_SIZE * font_scale;
-        let gap = 3.0 * font_scale;
-        let rough_width =
-            animation.name.chars().count() as f32 * font_size + 2.0 * (icon_size + gap);
+        let icon_size = DEATH_NAMEPLATE_ICON_SIZE * death_scale;
+        let gap = 3.0 * death_scale;
+        let rough_name_width = animation.name.chars().count() as f32 * font_size;
+        let rough_width = icon_size + gap + rough_name_width.max(icon_size);
         if center[0] < -(rough_width * 0.5 + 8.0)
             || center[0] > screen_w + rough_width * 0.5 + 8.0
             || center[1] < -64.0
@@ -585,10 +593,13 @@ fn render_death_nameplates(
 
         prepare_death_nameplate_text(text, animation, char_spacing);
         let name_measure = animation.prepared_name.measure_at(font_size * sf);
-        let icon_block = icon_size * sf + gap * sf;
+        let icon_block = (icon_size + gap) * sf;
+        let avatar_size = icon_size * sf;
+        let name_stack_width = name_measure.width.max(avatar_size);
+        let stack_height = avatar_size + gap * sf + name_measure.height;
         let death_icon = death_icon(animation.by_nuke);
-        let row_width = icon_block * 2.0 + name_measure.width;
-        let margin = row_width * 0.5 + 8.0;
+        let row_width = icon_block + name_stack_width;
+        let margin = row_width.max(stack_height) * 0.5 + 8.0;
         if center[0] < -margin
             || center[0] > screen_w + margin
             || center[1] < -margin
@@ -603,6 +614,8 @@ fn render_death_nameplates(
         }
         let center_px = [center[0] * sf, center[1] * sf];
         let row_left = center_px[0] - row_width * 0.5;
+        let stack_top = center_px[1] - stack_height * 0.5;
+        let name_left = row_left + icon_block + (name_stack_width - name_measure.width) * 0.5;
         let emoji_outline = dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]);
         text.push_icon(
             death_icon,
@@ -615,15 +628,18 @@ fn render_death_nameplates(
             text,
             avatars,
             &animation.avatar,
-            [row_left + icon_block + icon_size * sf * 0.5, center_px[1]],
-            icon_size * sf * 0.5,
+            [
+                row_left + icon_block + name_stack_width * 0.5,
+                stack_top + avatar_size * 0.5,
+            ],
+            avatar_size * 0.5,
         );
         crate::render::world::nameplates::paint_prepared_avatar(text, avatar, alpha);
         let _ = text.push_prepared_text(
             &animation.prepared_name,
             [
-                row_left + icon_block * 2.0,
-                center_px[1] + name_measure.height * 0.35,
+                name_left,
+                stack_top + avatar_size + gap * sf + name_measure.height * 0.85,
             ],
             font_size * sf,
             [
@@ -674,11 +690,16 @@ fn render_click_markers(
 
     ui.click_markers.retain(|marker| {
         let elapsed = now.duration_since(marker.start_time).as_secs_f32();
-        if elapsed >= CLICK_MARKER_DURATION {
+        let duration = match marker.kind {
+            crate::app::ClickMarkerKind::Generic => CLICK_MARKER_DURATION,
+            crate::app::ClickMarkerKind::TransportOrder
+            | crate::app::ClickMarkerKind::WarshipOrder => NAVAL_ORDER_MARKER_DURATION,
+        };
+        if elapsed >= duration {
             return false;
         }
 
-        let t = (elapsed / CLICK_MARKER_DURATION).clamp(0.0, 1.0);
+        let t = (elapsed / duration).clamp(0.0, 1.0);
         let center = world_to_screen(marker.world_x, marker.world_y, input, sf);
         if center[0] < -80.0
             || center[0] > screen_w + 80.0
@@ -688,10 +709,26 @@ fn render_click_markers(
             return true;
         }
 
-        let color = [1.0, 1.0, 1.0, (1.0 - t) * 200.0 / 255.0];
         let center = [center[0] * sf, center[1] * sf];
-        text.push_ring(center, 24.0 * t * zoom_scaled * sf, color, 1.5 * sf);
-        text.push_cross(center, 4.0 * zoom_scaled * (1.0 - t) * sf, color, 1.0 * sf);
+        match marker.kind {
+            crate::app::ClickMarkerKind::Generic => {
+                let color = [1.0, 1.0, 1.0, (1.0 - t) * 200.0 / 255.0];
+                text.push_ring(center, 24.0 * t * zoom_scaled * sf, color, 1.5 * sf);
+                text.push_cross(center, 4.0 * zoom_scaled * (1.0 - t) * sf, color, 1.0 * sf);
+            }
+            crate::app::ClickMarkerKind::TransportOrder => {
+                let color = [0.28, 0.88, 1.0, (1.0 - t) * 0.95];
+                text.push_ring(center, 34.0 * t * zoom_scaled * sf, color, 2.2 * sf);
+                text.push_cross(center, 5.0 * zoom_scaled * (1.0 - t) * sf, color, 1.5 * sf);
+            }
+            crate::app::ClickMarkerKind::WarshipOrder => {
+                let color = [1.0, 0.78, 0.3, (1.0 - t) * 0.98];
+                let radius = 36.0 * t * zoom_scaled * sf;
+                text.push_ring(center, radius, color, 2.4 * sf);
+                text.push_ring(center, radius * 0.64, [1.0, 0.92, 0.65, color[3] * 0.8], 1.5 * sf);
+                text.push_cross(center, 5.0 * zoom_scaled * (1.0 - t) * sf, color, 1.5 * sf);
+            }
+        }
         true
     });
 }

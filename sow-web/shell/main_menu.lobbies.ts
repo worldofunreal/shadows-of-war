@@ -6,7 +6,10 @@ import {
     esc,
     findLobby,
     formatMapName,
+    leaderArtSlug,
+    leaderArtUrl,
     leaderById,
+    leaderDisplayName,
     lobbyThumb,
     localizedText,
     mapInfo,
@@ -336,17 +339,180 @@ function discoverCampaignCinematics(episodes: MenuCampaignEpisode[]) {
     });
 }
 
-function renderCampaignEpisode(episode: MenuCampaignEpisode, continueId: string) {
+export function campaignEpisodeHeroSlug(episodeId: string): string {
+    const id = String(episodeId || "").trim();
+    if (id === "boudica") return "boudica";
+    if (id.startsWith("six_sky")) return "lady_six_sky";
+    const prefixMatch = id.match(/^([a-z0-9_]+)_(?:ep\d+|\d+)$/);
+    const candidate = prefixMatch ? prefixMatch[1] : id;
+    if (candidate === "six_sky") return "lady_six_sky";
+    if (/^[a-z0-9_]+$/.test(candidate)) return candidate;
+    const leader = leaderById(candidate);
+    if (leader) return leaderArtSlug(leader);
+    return "boudica";
+}
+
+export function campaignEpisodeMapName(episodeId: string): string {
+    const id = String(episodeId || "").trim();
+    if (id === "boudica") return "eastanglia";
+    if (id.startsWith("six_sky")) return "northamerica";
+    return "world";
+}
+
+export function campaignEpisodeSagaId(episodeId: string): string {
+    const id = String(episodeId || "").trim();
+    if (id === "boudica") return "boudica";
+    if (id.startsWith("six_sky")) return "six_sky";
+    const prefixMatch = id.match(/^([a-z0-9_]+)_(?:ep\d+|\d+)$/);
+    return prefixMatch ? prefixMatch[1] : id;
+}
+
+export function campaignSagaTitle(sagaId: string): string {
+    if (sagaId === "all") return SOW_t("lobbies.the_saga") || "The Saga";
+    if (sagaId === "boudica") return SOW_t("lobbies.campaign_boudica_title") || "Rise of the Iceni";
+    if (sagaId === "six_sky") return SOW_t("leaders.lady_six_sky") || "Lady Six Sky";
+    const leader = leaderById(sagaId);
+    if (leader) return leaderDisplayName(leader);
+    return sagaId.charAt(0).toUpperCase() + sagaId.slice(1).replace(/_/g, " ");
+}
+
+export function campaignEpisodeHeroArt(heroSlug: string) {
+    return {
+        band: leaderArtUrl(heroSlug, "desktop"),
+        column: leaderArtUrl(heroSlug, "mobile"),
+    };
+}
+
+export function campaignHeroImage(episodeId?: string | null): string {
+    const id = episodeId || menuUi.selectedCampaignEpisode || "boudica";
+    const heroSlug = campaignEpisodeHeroSlug(id);
+    const compact =
+        typeof window.matchMedia === "function"
+            ? window.matchMedia("(max-width: 900px), (orientation: portrait)").matches
+            : window.innerWidth <= 900 || window.innerHeight >= window.innerWidth;
+    return leaderArtUrl(heroSlug, compact ? "desktop" : "mobile");
+}
+
+export function updateCampaignSelection(episodeId: string): boolean {
+    const campaign = menuUi.state && menuUi.state.campaign;
+    const episodes = campaign && Array.isArray(campaign.episodes) ? campaign.episodes : [];
+    const episode = episodes.find((e) => e.id === episodeId);
+    if (!episode) return false;
+
+    const panel = activeScreenPanel() || root;
+    const campaignPanel = panel.querySelector<HTMLElement>(".sow-campaign");
+    if (!campaignPanel) return false;
+
+    // Update active selection on episode cards
+    const cards = campaignPanel.querySelectorAll<HTMLElement>(".sow-campaign__episode");
+    cards.forEach((card) => {
+        const isSelected = card.dataset.episodeId === episodeId;
+        card.classList.toggle("is-selected", isSelected);
+        card.setAttribute("aria-pressed", isSelected ? "true" : "false");
+    });
+
+    // Update the featured hero showcase
+    const featured = campaignPanel.querySelector<HTMLElement>(".sow-campaign__featured");
+    if (!featured) return false;
+
+    const heroSlug = campaignEpisodeHeroSlug(episodeId);
+    const heroArt = campaignEpisodeHeroArt(heroSlug);
+    const heroLeader = leaderById(heroSlug);
+    const heroName = heroLeader ? leaderDisplayName(heroLeader) : heroSlug;
+    const picture = featured.querySelector<HTMLPictureElement>(".sow-campaign__hero-picture");
+    const source = picture && picture.querySelector<HTMLSourceElement>("source");
+    const img = picture && picture.querySelector<HTMLImageElement>("img");
+
+    if (img && img.dataset.heroSlug !== heroSlug) {
+        img.dataset.heroSlug = heroSlug;
+        img.alt = heroName;
+        featured.classList.add("is-transitioning");
+        if (source) source.srcset = heroArt.band;
+        img.src = heroArt.column;
+        featured.classList.remove("is-transitioning");
+        featured.classList.add("is-hero-entering");
+        window.setTimeout(() => {
+            featured.classList.remove("is-hero-entering");
+        }, 420);
+    }
+
+    const titleNode = featured.querySelector<HTMLElement>(".sow-campaign__featured-title");
+    if (titleNode) titleNode.textContent = localizedText(episode.title);
+
+    const subtitleNode = featured.querySelector<HTMLElement>(".sow-campaign__featured-subtitle");
+    if (subtitleNode) subtitleNode.textContent = localizedText(episode.subtitle);
+
+    const chapterTag = featured.querySelector<HTMLElement>(".sow-campaign__chapter-tag");
+    if (chapterTag) {
+        chapterTag.textContent = campaignSagaTitle(campaignEpisodeSagaId(episode.id));
+    }
+
+    const continueId = (campaign && campaign.continue_episode) || "";
+    const completed = !!episode.completed;
+    const unlocked = !!episode.unlocked;
+    const isNext = unlocked && !completed && episode.id === continueId;
+    const statusLabel = completed
+        ? SOW_t("lobbies.completed")
+        : unlocked
+          ? isNext
+              ? SOW_t("lobbies.next")
+              : SOW_t("lobbies.available")
+          : SOW_t("lobbies.locked");
+    const statusClass = completed ? "is-complete" : unlocked ? (isNext ? "is-next" : "is-unlocked") : "is-locked";
+
+    const statusNode = featured.querySelector<HTMLElement>(".sow-campaign__featured-status");
+    if (statusNode) {
+        statusNode.textContent = statusLabel;
+        statusNode.className = "sow-campaign__episode-status sow-campaign__featured-status " + statusClass;
+    }
+
+    const mapName = campaignEpisodeMapName(episodeId);
+    const mapThumb = featured.querySelector<HTMLImageElement>(".sow-campaign__map-thumb");
+    if (mapThumb) mapThumb.src = lobbyThumb({ map_name: mapName });
+    const mapLabel = featured.querySelector<HTMLElement>(".sow-campaign__meta-map strong");
+    if (mapLabel) mapLabel.textContent = formatMapName(mapName);
+
+    const advisorAvatar = featured.querySelector<HTMLImageElement>(".sow-campaign__advisor-avatar");
+    if (advisorAvatar) advisorAvatar.src = asset("gameplay/avatars/" + heroSlug + ".webp");
+    const advisorName = featured.querySelector<HTMLElement>(".sow-campaign__meta-advisor strong");
+    if (advisorName) advisorName.textContent = heroName;
+
+    const playBtn = featured.querySelector<HTMLButtonElement>(".sow-campaign__action-play");
+    if (playBtn) {
+        playBtn.dataset.episodeId = episode.id;
+        playBtn.disabled = !unlocked;
+        const labelText = completed
+            ? SOW_t("lobbies.replay")
+            : isNext
+              ? SOW_t("lobbies.continue")
+              : SOW_t("lobbies.play");
+        const actionIcon = completed ? "↺" : "▶";
+        playBtn.innerHTML = `<span>${esc(labelText)}</span> <i>${actionIcon}</i>`;
+    }
+
+    const watchBtn = featured.querySelector<HTMLButtonElement>(".sow-campaign__action-watch");
+    if (watchBtn) {
+        watchBtn.dataset.episodeId = episode.id;
+        watchBtn.hidden = !campaignCinematicAvailability[episode.id];
+    }
+
+    return true;
+}
+
+function renderCampaignEpisode(
+    episode: MenuCampaignEpisode,
+    continueId: string,
+    isSelected: boolean = false,
+) {
     const completed = !!episode.completed;
     const unlocked = !!episode.unlocked;
     const isNext = unlocked && !completed && episode.id === continueId;
     const title = localizedText(episode.title);
     const subtitle = localizedText(episode.subtitle);
-    const mapName = episode.id === "boudica" ? "eastanglia" : "northamerica";
+    const mapName = campaignEpisodeMapName(episode.id);
     const mapArt = lobbyThumb({ map_name: mapName });
-    const avatar = asset(
-        "gameplay/avatars/" + (episode.id === "boudica" ? "boudica" : "lady_six_sky") + ".webp",
-    );
+    const heroSlug = campaignEpisodeHeroSlug(episode.id);
+    const avatar = asset("gameplay/avatars/" + heroSlug + ".webp");
     const status = completed
         ? SOW_t("lobbies.completed")
         : unlocked
@@ -364,7 +530,9 @@ function renderCampaignEpisode(episode: MenuCampaignEpisode, continueId: string)
           esc(episode.id) +
           "'>" +
           esc(label) +
-          " <span>↗</span></button>"
+          " <span>" +
+          (completed ? "↺" : "↗") +
+          "</span></button>"
         : "<button class='sow-menu__secondary sow-campaign__play' type='button' disabled>" +
           esc(SOW_t("lobbies.locked")) +
           "</button>";
@@ -379,6 +547,11 @@ function renderCampaignEpisode(episode: MenuCampaignEpisode, continueId: string)
         "<article class='sow-campaign__episode" +
         (completed ? " is-complete" : unlocked ? " is-unlocked" : " is-locked") +
         (isNext ? " is-next" : "") +
+        (isSelected ? " is-selected" : "") +
+        "' data-command='select_campaign_episode' data-episode-id='" +
+        esc(episode.id) +
+        "' role='button' tabindex='0' aria-pressed='" +
+        isSelected +
         "'>" +
         "<div class='sow-campaign__episode-art' aria-hidden='true'><img class='sow-campaign__map-art' src='" +
         esc(mapArt) +
@@ -408,49 +581,248 @@ export function renderCampaign() {
     const episodes = campaign && Array.isArray(campaign.episodes) ? campaign.episodes : [];
     discoverCampaignCinematics(episodes);
     const continueId = (campaign && campaign.continue_episode) || "";
+
+    // Determine selected episode
+    let selectedId = menuUi.selectedCampaignEpisode || "";
+    if (!selectedId || !episodes.some((e) => e.id === selectedId)) {
+        if (continueId && episodes.some((e) => e.id === continueId)) {
+            selectedId = continueId;
+        } else {
+            const firstAvailable = episodes.find((e) => e.unlocked && !e.completed);
+            selectedId = firstAvailable ? firstAvailable.id : episodes[0] ? episodes[0].id : "";
+        }
+    }
+    menuUi.selectedCampaignEpisode = selectedId;
+    const selectedEpisode = episodes.find((e) => e.id === selectedId) || episodes[0] || null;
+
+    // Group into Sagas
+    const sagasMap = new Map<string, { id: string; title: string; count: number; completed: number; heroSlug: string }>();
+    episodes.forEach((ep) => {
+        const sagaId = campaignEpisodeSagaId(ep.id);
+        let s = sagasMap.get(sagaId);
+        if (!s) {
+            s = {
+                id: sagaId,
+                title: campaignSagaTitle(sagaId),
+                count: 0,
+                completed: 0,
+                heroSlug: campaignEpisodeHeroSlug(ep.id),
+            };
+            sagasMap.set(sagaId, s);
+        }
+        s.count++;
+        if (ep.completed) s.completed++;
+    });
+
+    const totalCompleted = episodes.filter((e) => e.completed).length;
+    const activeSaga = menuUi.selectedCampaignSaga || "all";
+
+    const filteredEpisodes =
+        activeSaga === "all"
+            ? episodes
+            : episodes.filter((ep) => campaignEpisodeSagaId(ep.id) === activeSaga);
+
+    let featuredHtml = "";
+    if (selectedEpisode) {
+        const heroSlug = campaignEpisodeHeroSlug(selectedEpisode.id);
+        const heroArt = campaignEpisodeHeroArt(heroSlug);
+        const heroLeader = leaderById(heroSlug);
+        const heroName = heroLeader ? leaderDisplayName(heroLeader) : heroSlug;
+        const mapName = campaignEpisodeMapName(selectedEpisode.id);
+        const mapThumb = lobbyThumb({ map_name: mapName });
+        const mapDisplayName = formatMapName(mapName);
+        const avatar = asset("gameplay/avatars/" + heroSlug + ".webp");
+        const completed = !!selectedEpisode.completed;
+        const unlocked = !!selectedEpisode.unlocked;
+        const isNext = unlocked && !completed && selectedEpisode.id === continueId;
+        const statusLabel = completed
+            ? SOW_t("lobbies.completed")
+            : unlocked
+              ? isNext
+                  ? SOW_t("lobbies.next")
+                  : SOW_t("lobbies.available")
+              : SOW_t("lobbies.locked");
+        const statusClass = completed ? "is-complete" : unlocked ? (isNext ? "is-next" : "is-unlocked") : "is-locked";
+        const chapterTitle = campaignSagaTitle(campaignEpisodeSagaId(selectedEpisode.id));
+        const playLabel = completed
+            ? SOW_t("lobbies.replay")
+            : isNext
+              ? SOW_t("lobbies.continue")
+              : SOW_t("lobbies.play");
+        const playIcon = completed ? "↺" : "▶";
+
+        const playAction = unlocked
+            ? "<button class='sow-menu__primary sow-campaign__action-play' type='button' data-command='start_campaign_episode' data-episode-id='" +
+              esc(selectedEpisode.id) +
+              "'><span>" +
+              esc(playLabel) +
+              "</span> <i>" +
+              playIcon +
+              "</i></button>"
+            : "<button class='sow-menu__primary sow-campaign__action-play' type='button' disabled><span>" +
+              esc(SOW_t("lobbies.locked")) +
+              "</span> <i>🔒</i></button>";
+
+        const watchAction = campaignCinematicAvailability[selectedEpisode.id]
+            ? "<button class='sow-menu__secondary sow-campaign__action-watch' type='button' data-command='watch_campaign_cinematic' data-episode-id='" +
+              esc(selectedEpisode.id) +
+              "'><span>" +
+              esc(SOW_t("tutorial.watch_cinematic")) +
+              "</span> <i>▶</i></button>"
+            : "";
+
+        featuredHtml =
+            "<section class='sow-campaign__featured' aria-labelledby='sow-campaign-selected-title'>" +
+            "<div class='sow-campaign__hero-backdrop' aria-hidden='true'>" +
+            "<picture class='sow-campaign__hero-picture'>" +
+            "<source media='(max-width: 900px), (orientation: portrait)' srcset='" +
+            esc(heroArt.band) +
+            "'>" +
+            "<img class='sow-campaign__hero-img' src='" +
+            esc(heroArt.column) +
+            "' alt='" +
+            esc(heroName) +
+            "' data-campaign-hero-art data-hero-slug='" +
+            esc(heroSlug) +
+            "' fetchpriority='high'>" +
+            "</picture>" +
+            "<div class='sow-campaign__hero-vignette'></div>" +
+            "<div class='sow-campaign__hero-glow'></div>" +
+            "</div>" +
+            "<div class='sow-campaign__featured-content'>" +
+            "<div class='sow-campaign__featured-badges'>" +
+            "<span class='sow-campaign__chapter-tag'>" +
+            esc(chapterTitle) +
+            "</span>" +
+            "<div class='sow-campaign__episode-status sow-campaign__featured-status " +
+            statusClass +
+            "'>" +
+            esc(statusLabel) +
+            "</div>" +
+            "</div>" +
+            "<div class='sow-campaign__featured-titles'>" +
+            "<h2 class='sow-campaign__featured-title' id='sow-campaign-selected-title'>" +
+            esc(localizedText(selectedEpisode.title)) +
+            "</h2>" +
+            "<p class='sow-campaign__featured-subtitle'>" +
+            esc(localizedText(selectedEpisode.subtitle)) +
+            "</p>" +
+            "</div>" +
+            "<div class='sow-campaign__featured-meta'>" +
+            "<div class='sow-campaign__meta-item sow-campaign__meta-advisor'>" +
+            "<img class='sow-campaign__advisor-avatar' src='" +
+            esc(avatar) +
+            "' alt='' loading='lazy'>" +
+            "<div><small class='sow-campaign__meta-label'>" +
+            esc(SOW_t("menu.heroes")) +
+            "</small><strong>" +
+            esc(heroName) +
+            "</strong></div>" +
+            "</div>" +
+            "<div class='sow-campaign__meta-item sow-campaign__meta-map'>" +
+            "<img class='sow-campaign__map-thumb' src='" +
+            esc(mapThumb) +
+            "' alt='' loading='lazy'>" +
+            "<div><small class='sow-campaign__meta-label'>" +
+            esc(SOW_t("lobbies.map")) +
+            "</small><strong>" +
+            esc(mapDisplayName) +
+            "</strong></div>" +
+            "</div>" +
+            "</div>" +
+            "<div class='sow-campaign__featured-actions'>" +
+            playAction +
+            watchAction +
+            "</div>" +
+            "</div>" +
+            "</section>";
+    }
+
+    const sagaTabsHtml =
+        "<button class='sow-campaign__saga-tab" +
+        (activeSaga === "all" ? " is-active" : "") +
+        "' type='button' data-command='select_campaign_saga' data-saga-id='all'>" +
+        "<span class='sow-campaign__saga-name'>" +
+        esc(SOW_t("lobbies.the_saga")) +
+        "</span>" +
+        "<span class='sow-campaign__saga-count'>" +
+        totalCompleted +
+        "/" +
+        episodes.length +
+        "</span></button>" +
+        Array.from(sagasMap.values())
+            .map(
+                (saga) =>
+                    "<button class='sow-campaign__saga-tab" +
+                    (activeSaga === saga.id ? " is-active" : "") +
+                    "' type='button' data-command='select_campaign_saga' data-saga-id='" +
+                    esc(saga.id) +
+                    "'>" +
+                    "<img class='sow-campaign__saga-avatar' src='" +
+                    esc(asset("gameplay/avatars/" + saga.heroSlug + ".webp")) +
+                    "' alt='' loading='lazy'>" +
+                    "<span class='sow-campaign__saga-name'>" +
+                    esc(saga.title) +
+                    "</span>" +
+                    "<span class='sow-campaign__saga-count'>" +
+                    saga.completed +
+                    "/" +
+                    saga.count +
+                    "</span></button>",
+            )
+            .join("");
+
+    const isSagaComplete = episodes.length > 0 && totalCompleted === episodes.length;
+
     const continueButton = continueId
         ? "<button class='sow-menu__primary' type='button' data-command='start_campaign_episode' data-episode-id='" +
           esc(continueId) +
           "'>" +
           esc(SOW_t("lobbies.continue_campaign")) +
           " <span>↗</span></button>"
-        : episodes.length &&
-            episodes.every(function (episode) {
-                return episode && episode.completed;
-            })
+        : isSagaComplete
           ? "<div class='sow-campaign__complete'>" + esc(SOW_t("lobbies.saga_complete")) + "</div>"
           : "";
+
     return (
         "<main class='sow-menu__main sow-campaign' data-screen-panel='campaign'>" +
         "<section class='sow-menu__command sow-campaign__intro'>" +
+        "<div class='sow-campaign__header-group'>" +
         "<p class='sow-menu__eyebrow'>" +
         esc(SOW_t("lobbies.single_player")) +
         "</p>" +
         "<h1>" +
         esc(SOW_t("lobbies.campaign_chronicles")).replace("\n", "<br>") +
         "</h1>" +
+        "</div>" +
         "<button class='sow-menu__secondary' type='button' data-command='close_campaign'>← " +
         esc(SOW_t("lobbies.back")) +
         "</button>" +
         "</section>" +
-        "<section class='sow-menu__battlefield sow-campaign__battlefield'>" +
-        "<div class='sow-campaign__heading'><div><p class='sow-menu__eyebrow'>" +
+        "<nav class='sow-campaign__sagas-nav' aria-label='" +
         esc(SOW_t("lobbies.the_saga")) +
+        "'><div class='sow-campaign__sagas-rail'>" +
+        sagaTabsHtml +
+        "</div></nav>" +
+        "<div class='sow-campaign__workspace'>" +
+        featuredHtml +
+        "<section class='sow-menu__battlefield sow-campaign__battlefield sow-campaign__roster'>" +
+        "<div class='sow-campaign__heading'><div><p class='sow-menu__eyebrow'>" +
+        esc(campaignSagaTitle(activeSaga)) +
         "</p><h2>" +
         esc(SOW_t("lobbies.episodes")) +
         "</h2></div>" +
         continueButton +
         "</div>" +
         "<div class='sow-campaign__episodes'>" +
-        (episodes.length
-            ? episodes
-                  .map(function (episode) {
-                      return renderCampaignEpisode(episode, continueId);
-                  })
+        (filteredEpisodes.length
+            ? filteredEpisodes
+                  .map((episode) => renderCampaignEpisode(episode, continueId, episode.id === selectedId))
                   .join("")
             : "<p class='sow-menu__empty'>" + esc(SOW_t("lobbies.campaign_unavailable")) + "</p>") +
         "</div>" +
         "</section>" +
+        "</div>" +
         "</main>"
     );
 }
@@ -1009,14 +1381,23 @@ function renderQueueRoster(lobby: MenuLobby | null) {
         );
     }
 
-    return (
-        "<div class='sow-menu__ffa-roster'>" +
-        players
+    const renderRows = function (group: MenuLobbyPlayer[]) {
+        return group
             .map(function (player) {
                 return renderQueuePlayerRow(player, lobby);
             })
-            .join("") +
-        "</div>"
+            .join("");
+    };
+    if (players.length < 2) return "<div class='sow-menu__ffa-roster'>" + renderRows(players) + "</div>";
+
+    const splitAt = Math.ceil(players.length / 2);
+    return (
+        "<div class='sow-menu__ffa-roster sow-menu__ffa-roster--split'>" +
+        "<div class='sow-menu__team-list'>" +
+        renderRows(players.slice(0, splitAt)) +
+        "</div><div class='sow-menu__team-list'>" +
+        renderRows(players.slice(splitAt)) +
+        "</div></div>"
     );
 }
 

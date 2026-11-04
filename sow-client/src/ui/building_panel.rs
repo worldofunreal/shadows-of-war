@@ -61,55 +61,91 @@ pub(crate) fn building_metrics(
     use sow_core::geo_entities::{District, Resource, Source};
     let level_weight = sow_core::building::income_level_weight(level);
     let level = f64::from(level);
-    let per_minute = config.global_speed_multiplier * 60.0;
+    let per_second = config.global_speed_multiplier;
     let hero = |district, resource| leader.resource_bonus_multiplier(Source::District(district), resource);
+    let hero_bonus = |district, resource| {
+        leader.resource_bonus_hero_bonus(Source::District(district), resource)
+    };
     match kind {
-        BuildingKind::City => vec![
-            BuildingMetric::new(
-                Icon::Troops,
-                config.city_max_troops * level * leader.city_troop_capacity_multiplier(),
-                "+",
-                "",
-            ),
-            BuildingMetric::new(
-                Icon::Troops,
-                config.city_troop_income
-                    * level
-                    * hero(District::City, Resource::Troops)
-                    * per_minute,
-                "+",
-                "",
-            ),
-        ],
-        BuildingKind::Port => vec![
-            BuildingMetric::new(Icon::Boat, level, "+", ""),
-            BuildingMetric::new(Icon::Speed, level, "+", "%"),
-            BuildingMetric::new(
+        BuildingKind::City => {
+            let mut metrics = vec![
+                BuildingMetric::new(
+                    Icon::Troops,
+                    config.city_max_troops * level * leader.city_troop_capacity_multiplier(),
+                    "+",
+                    " cap",
+                ),
+                BuildingMetric::new(
+                    Icon::Troops,
+                    config.city_troop_income
+                        * level
+                        * hero(District::City, Resource::Troops)
+                        * per_second,
+                    "+",
+                    "/s",
+                ),
+            ];
+            if let Some(bonus) = hero_bonus(District::City, Resource::Gold) {
+                metrics.push(BuildingMetric::new(
+                    Icon::Gold,
+                    config.hero_city_gold_income * level_weight * bonus * per_second,
+                    "+",
+                    "/s",
+                ));
+            }
+            metrics
+        }
+        BuildingKind::Port => {
+            let mut metrics = vec![
+                BuildingMetric::new(Icon::Boat, level, "+", ""),
+                BuildingMetric::new(Icon::Speed, level, "+", "%"),
+                BuildingMetric::new(
+                    Icon::Gold,
+                    config.port_gold_income
+                        * level_weight
+                        * hero(District::Port, Resource::Gold)
+                        * per_second,
+                    "+",
+                    "/s",
+                ),
+                // Merchant income with trade routes, at most.
+                BuildingMetric::new(
+                    Icon::Gold,
+                    config.trade_ship_gold_income * level * per_second,
+                    "+",
+                    "/s",
+                ),
+            ];
+            if let Some(bonus) = hero_bonus(District::Port, Resource::Troops) {
+                metrics.push(BuildingMetric::new(
+                    Icon::Troops,
+                    config.hero_port_troop_income * level * bonus * per_second,
+                    "+",
+                    "/s",
+                ));
+            }
+            metrics
+        }
+        BuildingKind::Factory => {
+            let mut metrics = vec![BuildingMetric::new(
                 Icon::Gold,
-                config.port_gold_income
+                config.factory_gold_income
                     * level_weight
-                    * hero(District::Port, Resource::Gold)
-                    * per_minute,
+                    * hero(District::Factory, Resource::Gold)
+                    * per_second,
                 "+",
-                "",
-            ),
-            // Merchant income with trade routes, at most.
-            BuildingMetric::new(
-                Icon::Gold,
-                config.trade_ship_gold_income * level * per_minute,
-                "+",
-                "",
-            ),
-        ],
-        BuildingKind::Factory => vec![BuildingMetric::new(
-            Icon::Gold,
-            config.factory_gold_income
-                * level
-                * hero(District::Factory, Resource::Gold)
-                * per_minute,
-            "+",
-            "",
-        )],
+                "/s",
+            )];
+            if let Some(bonus) = hero_bonus(District::Factory, Resource::Troops) {
+                metrics.push(BuildingMetric::new(
+                    Icon::Troops,
+                    config.hero_factory_troop_income * level * bonus * per_second,
+                    "+",
+                    "/s",
+                ));
+            }
+            metrics
+        }
         BuildingKind::Tower => {
             let range = f64::from(sow_core::building::tower_range_for_level(
                 level as u8,
@@ -139,20 +175,20 @@ pub(crate) fn building_metrics(
             BuildingMetric::new(
                 Icon::Troops,
                 config.farm_troop_income
-                    * level_weight
+                    * level
                     * hero(District::Farm, Resource::Troops)
-                    * per_minute,
+                    * per_second,
                 "+",
-                "",
+                "/s",
             ),
             BuildingMetric::new(
                 Icon::Gold,
                 config.farm_gold_income
                     * level_weight
                     * hero(District::Farm, Resource::Gold)
-                    * per_minute,
+                    * per_second,
                 "+",
-                "",
+                "/s",
             ),
         ],
     }
@@ -364,19 +400,65 @@ mod tests {
         let config = sow_core::game_config::GameConfig::default();
         let caesar = sow_core::player::Leader::of("caesar");
         let port = building_metrics(BuildingKind::Port, 2, caesar, &config);
+        let port_weight = sow_core::building::income_level_weight(2);
         assert!(port.contains(&BuildingMetric::new(Icon::Boat, 2.0, "+", "")));
-        assert!(port.contains(&BuildingMetric::new(Icon::Gold, 30.0, "+", "")));
-        assert!(port.contains(&BuildingMetric::new(Icon::Gold, 24.0, "+", "")));
-        let cleopatra = building_metrics(
-            BuildingKind::Port,
-            2,
-            sow_core::player::Leader::of("cleopatra"),
-            &config,
-        );
-        assert!(cleopatra.contains(&BuildingMetric::new(Icon::Gold, 45.0, "+", "")));
+        assert!(port.contains(&BuildingMetric::new(
+            Icon::Gold,
+            config.port_gold_income
+                * port_weight
+                * caesar.resource_bonus_multiplier(
+                    sow_core::geo_entities::Source::District(sow_core::geo_entities::District::Port),
+                    sow_core::geo_entities::Resource::Gold,
+                )
+                * config.global_speed_multiplier,
+            "+",
+            "/s",
+        )));
+        assert!(port.contains(&BuildingMetric::new(
+            Icon::Gold,
+            config.trade_ship_gold_income * 2.0 * config.global_speed_multiplier,
+            "+",
+            "/s",
+        )));
+        let cleopatra_leader = sow_core::player::Leader::of("cleopatra");
+        let cleopatra = building_metrics(BuildingKind::Port, 2, cleopatra_leader, &config);
+        assert!(cleopatra.contains(&BuildingMetric::new(
+            Icon::Gold,
+            config.port_gold_income
+                * port_weight
+                * cleopatra_leader.resource_bonus_multiplier(
+                    sow_core::geo_entities::Source::District(sow_core::geo_entities::District::Port),
+                    sow_core::geo_entities::Resource::Gold,
+                )
+                * config.global_speed_multiplier,
+            "+",
+            "/s",
+        )));
         let farm = building_metrics(BuildingKind::Farm, 2, caesar, &config);
-        assert!(farm.contains(&BuildingMetric::new(Icon::Troops, 100.0, "+", "")));
-        assert!(farm.contains(&BuildingMetric::new(Icon::Gold, 10.0, "+", "")));
+        assert!(farm.contains(&BuildingMetric::new(
+            Icon::Troops,
+            config.farm_troop_income
+                * 2.0
+                * caesar.resource_bonus_multiplier(
+                    sow_core::geo_entities::Source::District(sow_core::geo_entities::District::Farm),
+                    sow_core::geo_entities::Resource::Troops,
+                )
+                * config.global_speed_multiplier,
+            "+",
+            "/s",
+        )));
+        assert!(farm.contains(&BuildingMetric::new(
+            Icon::Gold,
+            config.farm_gold_income
+                * port_weight
+                * caesar.resource_bonus_multiplier(
+                    sow_core::geo_entities::Source::District(sow_core::geo_entities::District::Farm),
+                    sow_core::geo_entities::Resource::Gold,
+                )
+                * config.global_speed_multiplier,
+            "+",
+            "/s",
+        )));
         let tower = building_metrics(BuildingKind::Tower, 2, caesar, &config);
         assert!(tower.contains(&BuildingMetric::new(Icon::Shield, 10.0, "+", "%")));
         assert!(tower.contains(&BuildingMetric::new(Icon::Range, 8.0, "", "")));

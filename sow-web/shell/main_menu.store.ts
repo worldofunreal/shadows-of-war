@@ -609,13 +609,15 @@ export function renderLeaderPurchase(leader: MenuLeader) {
         !offer || offer.owned || offer.permanently_free
             ? ""
             : renderLeaderCurrencyButton(offer, "crowns") + renderLeaderCurrencyButton(offer, "gems");
+    return leaderActions ? "<div class='sow-heroes__purchase-actions'>" + leaderActions + "</div>" : "";
+}
+
+// Skins are one catalogue for every hero, so their entry sits beside the roster filters, not on a hero card.
+export function renderSkinsButton() {
     return (
-        "<div class='sow-heroes__purchase-actions'>" +
-        leaderActions +
-        "<button class='sow-store__buy sow-store__buy--primary' type='button' data-command='open_skin_picker'>" +
+        "<button class='sow-heroes__skins sow-store__buy' type='button' data-command='open_skin_picker'>" +
         esc(SOW_t("store.skins")) +
-        "</button>" +
-        "</div>"
+        "</button>"
     );
 }
 

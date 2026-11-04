@@ -1296,6 +1296,25 @@ html[dir="rtl"] #sow-hud-dev-layer {
   cursor: default;
 }
 
+.sow-hud__building-btn[data-fleet-kind="trade"],
+.sow-hud__building-btn[data-fleet-kind="transport"],
+.sow-hud__building-btn[data-fleet-kind="warship"] {
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  min-height: 62px;
+}
+
+.sow-hud__fleet-kind-label {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--sow-text-muted);
+  font: 750 8px/1 var(--sow-ui-font);
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .sow-hud__fleet-count {
   position: absolute;
   top: 2px;
@@ -1308,6 +1327,88 @@ html[dir="rtl"] #sow-hud-dev-layer {
   font: 750 9px/1 var(--sow-ui-font);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
+}
+
+.sow-hud__fleet-selection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 48%, transparent);
+  border-inline-start: 3px solid var(--sow-gold-bright);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--sow-gold) 13%, var(--sow-panel-card)), var(--sow-panel-card));
+  box-shadow: var(--sow-tactical-surface-highlight);
+}
+.sow-hud__fleet-selection[hidden] {
+  display: none !important;
+}
+.sow-hud__fleet-selection-copy {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.sow-hud__fleet-selection-copy > .sow-hud__building-icon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+}
+.sow-hud__fleet-selection-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.sow-hud__fleet-selection-text strong {
+  overflow: hidden;
+  color: var(--sow-gold-bright);
+  font: 800 11px/1.15 var(--sow-ui-font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sow-hud__fleet-selection-text small {
+  color: var(--sow-text-muted);
+  font: 550 9px/1.3 var(--sow-ui-font);
+}
+.sow-hud__fleet-selection-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.sow-hud__fleet-selection-actions button {
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-radius: var(--sow-tactical-surface-radius-tight);
+  background: var(--sow-tactical-surface-subcard-bg);
+  color: var(--sow-text-primary);
+  font: 750 9px/1.1 var(--sow-ui-font);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.sow-hud__fleet-selection-actions button:hover,
+.sow-hud__fleet-selection-actions button:focus-visible {
+  border-color: var(--sow-gold-bright);
+  color: var(--sow-gold-bright);
+}
+
+@media (max-width: 599px) {
+  .sow-hud__fleet-selection {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px;
+  }
+  .sow-hud__fleet-selection-actions button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: 8px;
+  }
 }
 
 .sow-hud__army-allocation {
@@ -2883,13 +2984,26 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__exit-card {
-  width: min(520px, calc(100vw - 32px));
-  padding: 30px 32px 32px;
-  border-radius: 7px 7px 20px 4px;
+  position: relative;
+  width: min(560px, calc(100vw - 24px));
+  padding: 24px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--sow-control-accent) 42%, var(--sow-line));
+  border-top-color: var(--sow-control-accent-bright);
+  border-radius: 8px 8px 16px 6px;
+  background:
+    linear-gradient(115deg, color-mix(in srgb, var(--sow-control-accent) 7%, transparent), transparent 40%),
+    radial-gradient(ellipse at 100% 0%, rgb(221 155 76 / 10%), transparent 46%),
+    var(--sow-panel-card);
+  box-shadow:
+    var(--sow-tactical-modal-shadow),
+    inset 0 1px 0 rgb(255 255 255 / 7%);
+  -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
 }
 
 .sow-hud__exit-card .sow-hud__endgame-actions {
-  margin-top: 22px;
+  margin-top: 16px;
 }
 
 /* Command ring: one fixed six-slot shape for every context and submenu.
@@ -4358,6 +4472,11 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   gap: 20px;
 }
 
+.sow-hud__exit-card .sow-hud__endgame-hero {
+  justify-content: flex-start;
+  gap: 16px;
+}
+
 .sow-hud__endgame-hero-copy {
   flex: 1;
   min-width: 0;
@@ -4381,6 +4500,12 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   transition:
     border-color 0.3s ease,
     box-shadow 0.3s ease;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-portrait-wrap {
+  width: 124px;
+  height: 124px;
+  border-radius: 10px;
 }
 
 .sow-hud__endgame-card[data-result="defeat"] .sow-hud__endgame-portrait-wrap {
@@ -4409,6 +4534,28 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   text-shadow: 0 5px 24px rgb(0 0 0 / 45%);
 }
 
+#sow-hud .sow-hud__exit-card .sow-hud__endgame-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f0aaa0;
+  font-size: clamp(34px, 6vw, 48px);
+  letter-spacing: 0.045em;
+  line-height: 1;
+  white-space: nowrap;
+  -webkit-text-stroke: 0;
+  paint-order: normal;
+  text-shadow: 0 2px 12px rgb(0 0 0 / 36%);
+}
+
+.sow-hud__exit-card .sow-hud__endgame-banner .sow-hud__inline-icon {
+  flex: 0 0 0.88em;
+  width: 0.88em;
+  height: 0.88em;
+  vertical-align: 0;
+  filter: drop-shadow(0 2px 5px rgb(0 0 0 / 42%));
+}
+
 .sow-hud__endgame-card[data-result="defeat"] .sow-hud__endgame-banner {
   color: #fca5a5;
   text-shadow: 0 0 24px rgba(248, 113, 113, 0.28);
@@ -4420,6 +4567,23 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   color: var(--sow-muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.sow-hud__exit-copy {
+  min-height: 0;
+  margin: 14px 0 0;
+  overflow: hidden;
+  color: color-mix(in srgb, #dce4e2 84%, var(--sow-muted));
+  font-size: 13px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-stats {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 14px 0 0;
+  border-color: color-mix(in srgb, var(--sow-control-accent) 25%, var(--sow-line));
 }
 
 .sow-hud__endgame-stat {
@@ -4559,8 +4723,37 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   color: var(--sow-button-primary-text);
 }
 
+.sow-hud__exit-card .sow-hud__endgame-primary {
+  border-radius: 6px;
+  box-shadow:
+    0 4px 16px rgb(245 158 11 / 20%),
+    inset 0 1px 0 rgb(255 255 255 / 28%);
+  font-size: 12px;
+  transition:
+    filter 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-primary .sow-hud__inline-icon {
+  width: 18px;
+  height: 18px;
+}
+
 .sow-hud__endgame-primary:hover {
   filter: brightness(1.06);
+}
+
+.sow-hud__exit-card .sow-hud__endgame-primary:hover {
+  box-shadow:
+    0 5px 20px rgb(245 158 11 / 30%),
+    inset 0 1px 0 rgb(255 255 255 / 32%);
+  transform: translateY(-1px);
+}
+
+.sow-hud__exit-card .sow-hud__endgame-primary:active {
+  filter: brightness(0.96);
+  transform: translateY(1px);
 }
 
 .sow-hud__endgame-secondary {
@@ -5671,8 +5864,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     border-radius: 14px;
   }
   .sow-hud__exit-card {
+    width: min(560px, 100%);
     min-height: 0;
     max-height: min(calc(100dvh - var(--sow-sat) - var(--sow-sab) - 16px), 60svh);
+    padding: 18px;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -5688,6 +5883,19 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     font-size: 9px;
     letter-spacing: 0;
     white-space: nowrap;
+  }
+  .sow-hud__exit-card .sow-hud__endgame-primary {
+    font-size: 11px;
+  }
+  .sow-hud__exit-card .sow-hud__endgame-hero {
+    gap: 12px;
+  }
+  .sow-hud__exit-card .sow-hud__endgame-portrait-wrap {
+    width: 92px;
+    height: 92px;
+  }
+  .sow-hud__exit-card .sow-hud__exit-copy {
+    font-size: 12px;
   }
   .sow-hud__endgame-hero {
     gap: 12px;
@@ -5853,6 +6061,17 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   #sow-hud[data-compact="true"] .sow-hud__building-btn {
     flex: 0 0 44px;
     min-height: 44px;
+  }
+  #sow-hud[data-compact="true"] .sow-hud__building-btn[data-fleet-kind] {
+    flex-basis: 52px;
+    min-height: 54px;
+  }
+  #sow-hud[data-compact="true"] .sow-hud__building-btn[data-fleet-kind] .sow-hud__building-icon {
+    width: 24px;
+    height: 24px;
+  }
+  #sow-hud[data-compact="true"] .sow-hud__fleet-kind-label {
+    font-size: 7px;
   }
   #sow-hud[data-compact="true"] .sow-hud__building-icon {
     width: 28px;
@@ -6174,5 +6393,21 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__right-rail {
   .sow-hud__building-icon {
     width: 32px;
     height: 32px;
+  }
+  .sow-hud__exit-card .sow-hud__endgame-stat {
+    gap: 2px;
+    padding-inline: 1px;
+  }
+  .sow-hud__exit-card .sow-hud__endgame-stat-icon,
+  .sow-hud__exit-card .sow-hud__endgame-stat-icon :is(svg, img) {
+    flex-basis: 16px;
+    width: 16px;
+    height: 16px;
+  }
+  .sow-hud__exit-card .sow-hud__endgame-stat b {
+    font-size: 10px;
+  }
+  .sow-hud__exit-card .sow-hud__exit-copy {
+    font-size: 11px;
   }
 }

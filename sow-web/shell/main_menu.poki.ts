@@ -30,6 +30,7 @@ export {
     renderLeaderPurchase,
     renderPurchaseModal,
     renderSkinPickerModal,
+    renderSkinsButton,
     renderStore,
     requestAuthOtp,
     resetAuthFlow,

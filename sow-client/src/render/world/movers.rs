@@ -937,91 +937,40 @@ impl MoverScene {
                     renderer,
                     &arc_scratch,
                     arc_scratch[0],
-                    if slot.selected { 1.6 } else { 0.9 },
-                    if slot.selected { [1.0, 0.9, 0.5, 0.9] } else { status_color },
+                    if slot.selected { 2.6 } else { 0.9 },
+                    if slot.selected { [1.0, 0.93, 0.62, 1.0] } else { status_color },
                     false,
                     1.0,
                     0.0,
                 );
                 arc_scratch.clear();
-                if slot.health_fraction < 0.999 {
-                    let segments = 12;
-                    for segment in 0..=segments {
-                        let angle = std::f32::consts::TAU * segment as f32 / segments as f32;
-                        let radius = radius * (1.18 + f32::from(slot.veterancy) * 0.06);
-                        arc_scratch.push([wx + angle.cos() * radius, wy + angle.sin() * radius]);
+                if slot.selected {
+                    let outer_radius = radius * 1.45;
+                    for segment in 0..=28 {
+                        let angle = std::f32::consts::TAU * segment as f32 / 28.0;
+                        arc_scratch.push([
+                            wx + angle.cos() * outer_radius,
+                            wy + angle.sin() * outer_radius,
+                        ]);
                     }
-                    let visible = ((segments as f32) * slot.health_fraction).ceil() as usize;
-                    if visible > 0 {
-                        self.push_trail_segments(
-                            renderer,
-                            &arc_scratch[..=visible.min(segments)],
-                            arc_scratch[visible.min(segments)],
-                            1.4,
-                            [0.3 + 0.7 * (1.0 - slot.health_fraction), 0.85 * slot.health_fraction, 0.35, 0.9],
-                            false,
-                            1.0,
-                            0.0,
-                        );
-                    }
-                }
-                arc_scratch.clear();
-                if slot.selected && let Some((px, py)) = slot.patrol_center {
-                    let center_radius = 2.0_f32.max(sprite_size * 0.22);
-                    arc_scratch.extend([
-                        [px - center_radius, py - center_radius],
-                        [px + center_radius, py - center_radius],
-                        [px + center_radius, py + center_radius],
-                        [px - center_radius, py + center_radius],
-                        [px - center_radius, py - center_radius],
-                    ]);
                     self.push_trail_segments(
                         renderer,
                         &arc_scratch,
                         arc_scratch[0],
-                        1.0,
-                        [0.7, 0.94, 1.0, 0.7],
+                        1.8,
+                        [1.0, 0.86, 0.42, 0.9],
                         false,
                         1.0,
                         0.0,
                     );
                     arc_scratch.clear();
                 }
-            }
-
-            if slot.is_owned_warship {
-                arc_scratch.clear();
-                let status_color = match slot.warship_mode {
-                    Some(sow_core::warp_fleet::WarshipMode::Retreating) => [1.0, 0.35, 0.28, 0.82],
-                    Some(sow_core::warp_fleet::WarshipMode::Docked) => [0.35, 0.95, 0.78, 0.78],
-                    _ => [0.78, 0.9, 1.0, 0.66],
-                };
-                let radius = sprite_size * if slot.selected { 0.96 } else { 0.80 };
-                let segments = if slot.selected { 20 } else { 14 };
-                for segment in 0..=segments {
-                    let angle = std::f32::consts::TAU * segment as f32 / segments as f32;
-                    arc_scratch.push([wx + angle.cos() * radius, wy + angle.sin() * radius]);
-                }
-                self.push_trail_segments(
-                    renderer,
-                    &arc_scratch,
-                    arc_scratch[0],
-                    if slot.selected { 1.6 } else { 0.9 },
-                    if slot.selected { [1.0, 0.9, 0.5, 0.9] } else { status_color },
-                    false,
-                    1.0,
-                    0.0,
-                );
-                arc_scratch.clear();
                 if slot.health_fraction < 0.999 {
                     let segments = 12;
-                    let health_radius = radius * (1.18 + f32::from(slot.veterancy) * 0.06);
                     for segment in 0..=segments {
                         let angle = std::f32::consts::TAU * segment as f32 / segments as f32;
-                        arc_scratch.push([
-                            wx + angle.cos() * health_radius,
-                            wy + angle.sin() * health_radius,
-                        ]);
+                        let radius = radius * (1.18 + f32::from(slot.veterancy) * 0.06);
+                        arc_scratch.push([wx + angle.cos() * radius, wy + angle.sin() * radius]);
                     }
                     let visible = ((segments as f32) * slot.health_fraction).ceil() as usize;
                     if visible > 0 {

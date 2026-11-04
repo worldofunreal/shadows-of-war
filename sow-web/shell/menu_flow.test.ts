@@ -369,6 +369,8 @@ function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = 
     const rewardStageSets = [],
         rewardStageRuns = [],
         rewardPulses = [],
+        rewardImpacts = [],
+        rewardFills = [],
         acknowledgements = [],
         logs = [];
     let holdReveal = false,
@@ -385,6 +387,8 @@ function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = 
         rewardStageSets,
         rewardStageRuns,
         rewardPulses,
+        rewardImpacts,
+        rewardFills,
         acknowledgements,
         logs,
         screen: initialScreen,
@@ -449,6 +453,9 @@ function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = 
                 level: context.displayedProgression && context.displayedProgression.level,
             });
         },
+        playRewardImpact(selector, kind, power, level) {
+            rewardImpacts.push({ kind, power, level });
+        },
         removeRewardStage() {
             context.activeRewardStage = null;
         },
@@ -485,11 +492,11 @@ function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = 
     };
     const rewardSource = (progressionSource + presentationSource + handoffSource).replace(/\bexport\s+/g, "");
     const animationShim =
-        "function animateProgressionTo(target, duration, token, levelOverride) { var values = Object.assign({}, target); if (levelOverride != null) values.level = levelOverride; writeProgression(values); return Promise.resolve(true); }\n";
+        "function animateProgressionTo(target, duration, token, levelOverride) { var values = Object.assign({}, target); if (levelOverride != null) values.level = levelOverride; rewardFills.push([values.xp, values.level]); writeProgression(values); return Promise.resolve(true); }\n";
     vm.runInNewContext(
         rewardSource +
             animationShim +
-            "this.menuRewardApi = { maybePresentRewards, menuGuideFacts, setState(value) { state = value; menuUi.state = value; }, setRunning(value) { rewardAnimationRunning = value; }, setScreen(value) { screen = value; storeOpen = false; }, getScreen() { return screen; }, holdPresentation, releasePresentation, get phase() { return menuFlow.phase(); }, get shownReceipts() { return Array.from(rewardAnimationShown); }, get pendingReceipts() { return pendingRewardReceipts().map(function (receipt) { return receipt.id; }); }, get progression() { return displayedProgression; }, get facts() { return menuGuideFacts(); }, rewardStageSets, rewardStageRuns, rewardPulses, acknowledgements, logs };",
+            "this.menuRewardApi = { maybePresentRewards, menuGuideFacts, setState(value) { state = value; menuUi.state = value; }, setRunning(value) { rewardAnimationRunning = value; }, setScreen(value) { screen = value; storeOpen = false; }, getScreen() { return screen; }, holdPresentation, releasePresentation, get phase() { return menuFlow.phase(); }, get shownReceipts() { return Array.from(rewardAnimationShown); }, get pendingReceipts() { return pendingRewardReceipts().map(function (receipt) { return receipt.id; }); }, get progression() { return displayedProgression; }, get facts() { return menuGuideFacts(); }, rewardStageSets, rewardStageRuns, rewardPulses, rewardImpacts, rewardFills, acknowledgements, logs };",
         context,
     );
     return context.menuRewardApi;
@@ -774,6 +781,30 @@ test("menu return shows every server receipt level before releasing its guide", 
         shell.rewardPulses.map((pulse) => pulse.level),
         [1, 1, 1, 2, 3, 4],
         "the level counter changes after currency cards, once for each earned level",
+    );
+    assert.deepEqual(
+        shell.rewardFills.map(([xp, level]) => [xp, level]),
+        [
+            [100, 1],
+            [100, 1],
+            [100, 1],
+            [200, 2],
+            [300, 3],
+            [350, 4],
+        ],
+        "XP fills the current level only; every new level refills its own bar up to the remainder",
+    );
+    assert.deepEqual(
+        shell.rewardImpacts.map((impact) => [impact.kind, impact.power, impact.level]),
+        [
+            ["xp", 1, undefined],
+            ["crowns", 1, undefined],
+            ["laurels", 1, undefined],
+            ["level", 1, 2],
+            ["level", 1.3, 3],
+            ["level", 1.6, 4],
+        ],
+        "each card lands with light, and consecutive levels escalate",
     );
     assert.deepEqual(Array.from(shell.shownReceipts), ["tutorial"]);
     assert.equal(shell.phase, "guide", "only the completed reward presentation releases the guide");

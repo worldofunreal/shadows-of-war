@@ -1,10 +1,10 @@
 # Experimentos de ritmo de conquista
 
-Actualizado: 2026-11-02
+Actualizado: 2026-11-04
 
 ## Objetivo
 
-Buscar una curva que haga la conquista más lenta al inicio, conserve el ritmo de media partida y la acelere en late game. Desde 2026-11-02, producción usa una curva por ocupación global solo para ataques contra tierra neutral.
+Buscar una curva que haga la conquista más lenta al inicio, conserve el ritmo de media partida y la acelere en late game. Desde 2026-11-02, el motor usa una curva por ocupación global solo para ataques contra tierra neutral.
 
 Este documento es el registro de hipótesis, método, resultados y siguientes pasos. Cada corrida nueva debe añadir sus condiciones y resultados aquí para poder retomar el trabajo sin depender del contexto de una sesión.
 
@@ -14,7 +14,7 @@ El dueño del ritmo de conquista es `SowEngine::execute_combat` en [`combat_tile
 
 1. Calcula `effective_troops` con los modificadores de ataque y defensa.
 2. Para neutral, usa un presupuesto base de `2 × tamaño_de_frontera`. Para PvP, multiplica la frontera por un factor basado en la relación entre tropas atacantes y defensoras.
-3. Escala por duración del tick y `global_speed_multiplier` (por defecto, 0.5).
+3. Escala por duración del tick y `global_speed_multiplier` (0.26 en la iteración actual; 0.02 fue la prueba diagnóstica temporal y 0.5 el ritmo anterior).
 4. Aplica el tope de tiles por ataque. Este tope ya depende de tropas: usa 256 tiles en el ancla de 25.000 tropas, se duplica por cada aumento de 10× y está limitado por un techo de 4.096. Por debajo de 25.000, el tope queda anclado en 256; por tanto, ese tope no distingue el early del mid.
 5. En neutral, cada tile cuesta `clamp(2000 × velocidad_del_terreno / effective_troops, 5, 100)` unidades de presupuesto. La pérdida actual por tile neutral es 1 tropa.
 
@@ -45,6 +45,12 @@ Dos ataques neutrales simultáneos, mapa de 100 × 100 con 80% de tierra y cinco
 | 90% | 390 | 394 | 394 | 392,7 |
 
 Repetir las tres ocupaciones para cada semilla produjo los mismos conteos finales. Esta prueba confirma la dirección y el determinismo del harness en un mapa con agua y varios ataques; no sustituye una partida representativa. Una prueba unitaria verifica que PvP conserve el multiplicador de 1,00×.
+
+### Prueba diagnóstica global temporal
+
+El 2026-11-04 se bajó `GameConfig::default().global_speed_multiplier` de 0.5 a 0.02 para hacer visible el efecto del ritmo global: es 25× menos presupuesto por segundo para ataques neutrales y PvP, además de reducir otros sistemas que usan el mismo dial. Las capturas/s de la corrida sintética anterior se midieron con 0.5 y no representan esta configuración.
+
+Tras probar ese bajón en partida, la iteración actual sube el valor a 0.26, el punto medio aritmético entre 0.02 y 0.5. Eso deja los sistemas escalados por el dial 48% más lentos que el ritmo anterior y 13× más rápidos que la prueba diagnóstica. Falta evaluar esta iteración en partida.
 
 ## Referencia: OpenFront actual
 

@@ -1922,20 +1922,6 @@ fn strip_portal_menu_sections(source: &str) -> Result<String> {
     ] {
         source = strip_marked_section(&source, begin, end)?;
     }
-    for (begin, end) in [
-        (
-            "/* POKI_SHARED_AUTH_LOOKUP_BEGIN */",
-            "/* POKI_SHARED_AUTH_LOOKUP_END */",
-        ),
-        (
-            "/* POKI_SHARED_SIGNIN_MARKUP_BEGIN */",
-            "/* POKI_SHARED_SIGNIN_MARKUP_END */",
-        ),
-    ] {
-        while source.contains(begin) {
-            source = strip_marked_section(&source, begin, end)?;
-        }
-    }
     Ok(source)
 }
 

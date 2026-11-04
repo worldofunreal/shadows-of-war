@@ -82,6 +82,8 @@ interface MenuUi {
     heroInfoOpen: boolean;
     heroesOpen: boolean;
     campaignOpen: boolean;
+    selectedCampaignEpisode: string | null;
+    selectedCampaignSaga: string | null;
     createDraft: MenuState["custom_game_config"] | null;
     createOffline: boolean;
     createPrivate: boolean;
@@ -144,6 +146,8 @@ export const menuUi: MenuUi = {
     heroInfoOpen: false,
     heroesOpen: false,
     campaignOpen: false,
+    selectedCampaignEpisode: null,
+    selectedCampaignSaga: "all",
     createDraft: null,
     createOffline: false,
     createPrivate: false,
@@ -662,6 +666,11 @@ export function portalOffersSignIn() {
     return ["poki", "jest", "crazygames"].indexOf(window.SOW_PORTAL) === -1;
 }
 
+// Poki and Jest builds ship without the shop (their surfaces drop it from the nav).
+export function portalOffersStore() {
+    return ["poki", "jest"].indexOf(window.SOW_PORTAL) === -1;
+}
+
 export function currentScreen() {
     if (!menuUi.state) return "boot";
     if (menuUi.profileOpen) return "profile";
@@ -792,7 +801,6 @@ export function renderKey(): string {
         store: state.store && {
             gems: state.store.gems,
             crowns: state.store.crowns,
-            rotation_ends_at: state.store.rotation_ends_at,
             leaders: (state.store.leaders || []).map(function (leader) {
                 return [
                     leader.id,

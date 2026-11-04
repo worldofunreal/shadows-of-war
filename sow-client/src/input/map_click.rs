@@ -959,6 +959,12 @@ impl SowApp {
             return false;
         };
         let target_tile = (row * self.sim.map_w as i32 + col) as u32;
+        if !self
+            .map_target(target_tile)
+            .is_some_and(|target| !target.is_land)
+        {
+            return false;
+        }
         let unit_ids = self.input.selected_warships.clone();
         self.send_intent(sow_core::protocol::GameplayIntent::MoveWarships {
             unit_ids,
@@ -1199,6 +1205,7 @@ impl SowApp {
                 world_x: x,
                 world_y: y,
                 start_time: web_time::Instant::now(),
+                kind: crate::app::ClickMarkerKind::Generic,
             });
             self.sfx.play_placement(
                 web_time::Instant::now(),
@@ -1408,21 +1415,28 @@ impl SowApp {
             self.add_map_feedback(crate::ui::UiText::new("hud.fleet_no_water_access"));
             return false;
         }
-        let Some(player) = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
-            snapshot
-                .players
-                .iter()
-                .find(|player| player.id == owner_id)
-        }) else {
+        let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
+            return false;
+        };
+        let owned_warships = snapshot
+            .fleets
+            .iter()
+            .filter(|fleet| {
+                fleet.owner_id == owner_id
+                    && fleet.unit_type == sow_core::game::UnitType::Warship
+            })
+            .count() as u32;
+        let cost = kind.gold_cost_with_owned_count(owned_warships);
+        let Some(player) = snapshot.players.iter().find(|player| player.id == owner_id) else {
             return false;
         };
         if player.boats_in_use >= player.boat_capacity {
             self.add_map_feedback(crate::ui::UiText::new("hud.fleet_capacity_full"));
             return false;
         }
-        if player.gold < kind.gold_cost() {
+        if player.gold < cost {
             self.add_map_feedback(crate::ui::UiText::new("hud.not_enough_gold")
-                .with("cost", kind.gold_cost().ceil().to_string())
+                .with("cost", cost.ceil().to_string())
                 .with("available", player.gold.floor().to_string()));
             return false;
         }
@@ -1739,6 +1753,38 @@ impl SowApp {
         });
     }
 
+    pub(crate) fn center_selected_warships(&mut self) {
+        if self.sim.map_w == 0 || self.input.selected_warships.is_empty() {
+            return;
+        }
+        let my_id = self.sim.my_player_id.unwrap_or(0);
+        let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
+            return;
+        };
+        let (sum_x, sum_y, count) = snapshot
+            .fleets
+            .iter()
+            .filter(|fleet| {
+                fleet.owner_id == my_id
+                    && fleet.unit_type == sow_core::game::UnitType::Warship
+                    && self.input.selected_warships.contains(&fleet.id)
+            })
+            .fold((0.0_f32, 0.0_f32, 0_u32), |(sum_x, sum_y, count), fleet| {
+                (
+                    sum_x + (fleet.current_tile % self.sim.map_w) as f32 + 0.5,
+                    sum_y + (fleet.current_tile / self.sim.map_w) as f32 + 0.5,
+                    count + 1,
+                )
+            });
+        if count > 0 {
+            self.focus_camera_on_world(
+                sum_x / count as f32,
+                sum_y / count as f32,
+                self.input.camera_zoom,
+            );
+        }
+    }
+
     pub(crate) fn select_warships_in_rect(&mut self, x1: f64, y1: f64, x2: f64, y2: f64) {
         if self.sim.map_w == 0 || self.input.camera_zoom <= 0.0 { return; }
         let world = |x: f64, y: f64| (
@@ -1781,6 +1827,7 @@ impl SowApp {
             world_x: col as f32 + 0.5,
             world_y: row as f32 + 0.5,
             start_time: web_time::Instant::now(),
+            kind: crate::app::ClickMarkerKind::Generic,
         });
     }
 
@@ -2006,9 +2053,21 @@ impl SowApp {
             self.add_map_feedback(crate::ui::UiText::new("hud.fleet_capacity_full"));
             return;
         }
-        if player.gold < sow_core::game::UnitType::Warship.gold_cost() {
+        let owned_warships = self.sim.current_snapshot.as_ref().map_or(0, |snapshot| {
+            snapshot
+                .fleets
+                .iter()
+                .filter(|fleet| {
+                    fleet.owner_id == owner_id
+                        && fleet.unit_type == sow_core::game::UnitType::Warship
+                })
+                .count() as u32
+        });
+        let cost = sow_core::game::UnitType::Warship
+            .gold_cost_with_owned_count(owned_warships);
+        if player.gold < cost {
             self.add_map_feedback(crate::ui::UiText::new("hud.not_enough_gold")
-                .with("cost", sow_core::game::UnitType::Warship.gold_cost().ceil().to_string())
+                .with("cost", cost.ceil().to_string())
                 .with("available", player.gold.floor().to_string()));
             return;
         }

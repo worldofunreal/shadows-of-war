@@ -181,7 +181,15 @@ impl UnitType {
         match self {
             UnitType::TransportShip => 0.0, // Free, converted from land troops
             UnitType::TradeShip => 250.0,
-            UnitType::Warship => 2_000.0,
+            UnitType::Warship => 200.0,
+        }
+    }
+
+    pub fn gold_cost_with_owned_count(self, owned_count: u32) -> f64 {
+        match self {
+            UnitType::Warship => (self.gold_cost() * 1.1_f64.powi(owned_count.min(25) as i32))
+                .min(self.gold_cost() * 10.0),
+            _ => self.gold_cost(),
         }
     }
 

@@ -506,7 +506,12 @@ impl SowEngine {
                     });
                     return;
                 }
-                let cost = kind.gold_cost();
+                let owned_warships = self
+                    .fleets
+                    .iter()
+                    .filter(|fleet| fleet.owner_id == pid && fleet.unit_type == *kind)
+                    .count() as u32;
+                let cost = kind.gold_cost_with_owned_count(owned_warships);
                 if player.gold < cost {
                     self.state.events.push(crate::game::GameEvent::NavalActionRejected {
                         player_id: pid,

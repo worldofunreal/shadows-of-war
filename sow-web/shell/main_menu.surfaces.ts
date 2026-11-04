@@ -606,6 +606,7 @@ export {
     renderLeaderPurchase,
     renderPurchaseModal,
     renderSkinPickerModal,
+    renderSkinsButton,
     renderStore,
     resolvePurchaseModal,
     resumeExternalPurchaseDelivery,

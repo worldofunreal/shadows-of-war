@@ -1,3 +1,4 @@
+import { formatCompactNumber as formatEndgameCompact } from "./number-format.ts";
 import {
     type AvatarExpression,
     avatarAssetUrl,
@@ -179,8 +180,12 @@ type HudRefs = {
     buildingButtons: HTMLButtonElement[];
     fleetStrip: HTMLElement;
     fleetTrade: HTMLElement;
+    fleetTransport: HTMLElement;
     fleetWarship: HTMLButtonElement;
     fleetNuke: HTMLButtonElement;
+    fleetSelection: HTMLElement;
+    fleetSelectionTitle: HTMLElement;
+    fleetSelectionHint: HTMLElement;
     panelButtons: HTMLButtonElement[];
     leaderboard: HTMLElement;
     rows: HTMLElement;
@@ -218,7 +223,6 @@ type HudRefs = {
     surrenderDesc: HTMLElement;
     surrenderStats: HTMLElement;
     surrenderStatValues: HudEndgameRefs;
-    surrenderSaveNote: HTMLElement;
     surrenderPortrait: HTMLImageElement;
     surrenderCancel: HTMLElement;
     surrenderActionLabel: HTMLElement;
@@ -300,7 +304,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     let emoteTextTarget: Window["SOW_menu_command"] | null = null;
     let hudSafeArea = [0, 0, 0, 0];
     let surrenderModalOpen = false;
-    let surrenderMessage: string | null = null;
     let devSidebarOpen = false;
     let devToolsSchemaKey = "";
     let devTab = "";
@@ -373,14 +376,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         show_dev_tools: false,
         show_dev_tools_available: false,
     };
-
-    const surrenderMessageKeys = [
-        "endgame.match_message_1",
-        "endgame.match_message_2",
-        "endgame.match_message_3",
-        "endgame.match_message_4",
-        "endgame.match_message_5",
-    ];
 
     function send(type: string, extra?: HudCommandPayload): boolean {
         if (typeof window.SOW_menu_command !== "function") return false;
@@ -823,17 +818,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         return String(Math.max(0, Math.trunc(Number(value) || 0)));
     }
 
-    function formatEndgameCompact(value: number | string | null | undefined): string {
-        const amount = Number(value);
-        if (!Number.isFinite(amount) || amount <= 0) return "0";
-        if (amount < 1000) return String(Math.round(amount));
-        const suffix = amount >= 1000000 ? "M" : "K";
-        const divisor = suffix === "M" ? 1000000 : 1000;
-        const rounded = Math.round((amount / divisor) * 10) / 10;
-        if (suffix === "K" && rounded >= 1000) return "1M";
-        return String(rounded).replace(/\.0$/, "") + suffix;
-    }
-
     function endgameStatsMarkup(prefix: string): string {
         return (
             '<div class="sow-hud__endgame-stats" id="sow-hud-' +
@@ -1253,8 +1237,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             ),
             fleetStrip: requiredHudElement("sow-hud-fleet-strip"),
             fleetTrade: requiredHudQuery(root, "[data-fleet-kind='trade']"),
+            fleetTransport: requiredHudQuery(root, "[data-fleet-kind='transport']"),
             fleetWarship: requiredHudButtonQuery(root, "[data-fleet-kind='warship']"),
             fleetNuke: requiredHudButtonQuery(root, "[data-fleet-kind='nuke']"),
+            fleetSelection: requiredHudElement("sow-hud-fleet-selection"),
+            fleetSelectionTitle: requiredHudElement("sow-hud-fleet-selection-title"),
+            fleetSelectionHint: requiredHudElement("sow-hud-fleet-selection-hint"),
             panelButtons: Array.from(
                 root.querySelectorAll<HTMLButtonElement>(".sow-hud__topbar [data-command^='toggle_']"),
             ),
@@ -1294,7 +1282,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             surrenderDesc: requiredHudElement("sow-hud-surrender-desc"),
             surrenderStats: requiredHudElement("sow-hud-surrender-stats"),
             surrenderStatValues: endgameStatRefs("surrender"),
-            surrenderSaveNote: requiredHudElement("sow-hud-surrender-save-note"),
             surrenderPortrait: requiredHudImage("sow-hud-surrender-portrait"),
             surrenderCancel: requiredHudElement("sow-hud-surrender-cancel"),
             surrenderActionLabel: requiredHudElement("sow-hud-surrender-action-label"),
@@ -1352,9 +1339,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '<header class="sow-hud__topbar">' +
             '  <div class="sow-hud__status-right">' +
             '    <button class="sow-hud__icon-btn sow-hud__exit-pill" type="button" data-command="prompt_surrender" aria-label="' +
-            SOW_t("hud.leave_match") +
+            SOW_t("hud.leave") +
             '" title="' +
-            SOW_t("hud.leave_match") +
+            SOW_t("hud.leave") +
             '">' +
             hudIcon("leave", "sow-hud__action-icon") +
             "</button>" +
@@ -1632,10 +1619,23 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "      </div>" +
             '      <div class="sow-hud__fleet-strip" id="sow-hud-fleet-strip">' +
             '        <span class="sow-hud__building-btn sow-hud__fleet-status" data-fleet-kind="trade" role="img" aria-label="' +
-            SOW_t("hud.map_action_fleet") +
+            SOW_t("hud.fleet_trade_label") +
             '">' +
             unitIcon("trade-ship") +
-            tileCost(false) +
+            '<span class="sow-hud__fleet-count" aria-hidden="true">0</span>' +
+            '<span class="sow-hud__fleet-kind-label">' +
+            SOW_t("hud.fleet_trade_label") +
+            "</span>" +
+            tileLock() +
+            "</span>" +
+            '        <span class="sow-hud__building-btn sow-hud__fleet-status" data-fleet-kind="transport" role="img" aria-label="' +
+            SOW_t("hud.fleet_transport_label") +
+            '">' +
+            unitIcon("transport-ship") +
+            '<span class="sow-hud__fleet-count" aria-hidden="true">0</span>' +
+            '<span class="sow-hud__fleet-kind-label">' +
+            SOW_t("hud.fleet_transport_label") +
+            "</span>" +
             tileLock() +
             "</span>" +
             '        <button type="button" class="sow-hud__building-btn" data-command="select_warship" data-fleet-kind="warship" aria-label="' +
@@ -1645,6 +1645,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '">' +
             unitIcon("warship") +
             '<span class="sow-hud__fleet-count" aria-hidden="true">0</span>' +
+            '<span class="sow-hud__fleet-kind-label">' +
+            SOW_t("hud.fleet_warship_label") +
+            "</span>" +
             tileCost(true) +
             tileLock() +
             "</button>" +
@@ -1659,6 +1662,20 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "</button>" +
             "      </div>" +
             "    </div>" +
+            '    <section class="sow-hud__fleet-selection" id="sow-hud-fleet-selection" hidden aria-live="polite">' +
+            '      <div class="sow-hud__fleet-selection-copy">' +
+            unitIcon("warship") +
+            '        <div class="sow-hud__fleet-selection-text"><strong id="sow-hud-fleet-selection-title"></strong><small id="sow-hud-fleet-selection-hint"></small></div>' +
+            "      </div>" +
+            '      <div class="sow-hud__fleet-selection-actions">' +
+            '<button type="button" data-command="select_all_warships">' +
+            SOW_t("hud.fleet_select_all") +
+            '</button><button type="button" data-command="center_selected_warships">' +
+            SOW_t("hud.fleet_center") +
+            '</button><button type="button" data-command="clear_warship_selection">' +
+            SOW_t("hud.fleet_clear_selection") +
+            "</button></div>" +
+            "    </section>" +
             "  </div>" +
             "</footer>" +
             '<aside class="sow-hud__operations" id="sow-hud-operations" hidden aria-label="' +
@@ -1786,24 +1803,23 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '        <h2 class="sow-hud__endgame-banner" id="sow-hud-surrender-banner">' +
             hudIcon("surrender", "sow-hud__inline-icon") +
             ' <span id="sow-hud-surrender-title">' +
-            SOW_t("endgame.leave_match") +
+            SOW_t("endgame.leave") +
             "</span></h2>" +
-            '        <p class="sow-hud__endgame-desc" id="sow-hud-surrender-desc">' +
-            SOW_t("endgame.your_battle_will_end") +
-            "</p>" +
             "      </div>" +
             "    </div>" +
-            "    " +
-            endgameStatsMarkup("surrender") +
-            '    <p class="sow-hud__endgame-desc" id="sow-hud-surrender-save-note">' +
+            '    <p class="sow-hud__endgame-desc sow-hud__exit-copy" id="sow-hud-surrender-desc">' +
             SOW_t("endgame.leave_rewards_saved") +
             "</p>" +
+            "    " +
+            endgameStatsMarkup("surrender") +
             '    <div class="sow-hud__endgame-actions">' +
             '      <button class="sow-hud__endgame-secondary" type="button" data-command="close_surrender_modal" id="sow-hud-surrender-cancel">' +
             SOW_t("endgame.cancel") +
             "</button>" +
-            '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_surrender"><span aria-hidden="true">⌂</span> <span id="sow-hud-surrender-action-label">' +
-            SOW_t("endgame.leave_match") +
+            '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_surrender">' +
+            hudIcon("surrender", "sow-hud__inline-icon") +
+            ' <span id="sow-hud-surrender-action-label">' +
+            SOW_t("endgame.leave") +
             "</span></button>" +
             "    </div>" +
             "  </section>" +
@@ -5984,6 +6000,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             const tradeCampaignLocked =
                 !campaignAllowsAction(fleetUnlocks, "trade_ship") ||
                 !campaignAllowsBuilding(fleetUnlocks, "Port", tradeRequiredPortLevel);
+            const transportCampaignLocked = !campaignAllowsAction(fleetUnlocks, "transport_fleet");
             const warshipCampaignLocked =
                 !campaignAllowsAction(fleetUnlocks, "warship") ||
                 !campaignAllowsBuilding(fleetUnlocks, "Port", warshipRequiredPortLevel);
@@ -6001,7 +6018,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 hudRefs!.fleetTrade.style.display = hideTrade ? "none" : "";
                 const tradeCount = Math.floor(Number(fleetPanel.trade_ships) || 0);
                 const tradeCapacity = Math.floor(Number(fleetPanel.trade_capacity) || 0);
-                let tradeStatus = SOW_t("hud.map_action_fleet") + " · " + tradeCount + "/" + tradeCapacity;
+                const countBadge = hudRefs!.fleetTrade.querySelector<HTMLElement>(".sow-hud__fleet-count");
+                if (countBadge) countBadge.textContent = String(tradeCount);
+                let tradeStatus = SOW_t("hud.fleet_trade_label") + " · " + tradeCount + "/" + tradeCapacity;
                 const tradeReason = !tradeUnlocked
                     ? SOW_t("hud.map_action_port") + " " + tradeRequiredPortLevel
                     : "";
@@ -6010,6 +6029,18 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 hudRefs!.fleetTrade.title = tradeStatus;
                 hudRefs!.fleetTrade.classList.toggle("is-locked", !tradeUnlocked);
                 setCampaignLock(hudRefs!.fleetTrade, fleetUnlocks === null && !tradeUnlocked);
+            }
+            if (hudRefs!.fleetTransport) {
+                const hideTransport = fleetUnlocks !== null && transportCampaignLocked;
+                hudRefs!.fleetTransport.hidden = hideTransport;
+                hudRefs!.fleetTransport.style.display = hideTransport ? "none" : "";
+                const transportCount = Math.max(0, Math.floor(Number(fleetPanel.transport_ships) || 0));
+                const countBadge = hudRefs!.fleetTransport.querySelector<HTMLElement>(".sow-hud__fleet-count");
+                if (countBadge) countBadge.textContent = String(transportCount);
+                const transportLabel = SOW_t("hud.fleet_transport_label") + " · " + transportCount;
+                hudRefs!.fleetTransport.setAttribute("aria-label", transportLabel);
+                hudRefs!.fleetTransport.title = transportLabel;
+                setCampaignLock(hudRefs!.fleetTransport, fleetUnlocks !== null && transportCampaignLocked);
             }
             if (hudRefs!.fleetWarship) {
                 const hideWarship = fleetUnlocks !== null && warshipCampaignLocked;
@@ -6054,6 +6085,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 hudRefs!.fleetWarship.title = warshipLabel;
                 setCampaignLock(hudRefs!.fleetWarship, fleetUnlocks === null && warshipDisabled);
                 setTileCost(hudRefs!.fleetWarship, warshipCost);
+                hudRefs!.fleetSelection.hidden = isDeploying || hideWarship || selectedWarships === 0;
+                hudRefs!.fleetSelectionTitle.textContent =
+                    SOW_t("hud.warship_selection_title") +
+                    " · " +
+                    SOW_t("hud.fleet_selected_count", { count: selectedWarships });
+                hudRefs!.fleetSelectionHint.textContent = SOW_t("hud.warship_order_hint");
+                const selectAllButton = hudRefs!.fleetSelection.querySelector<HTMLButtonElement>(
+                    '[data-command="select_all_warships"]',
+                );
+                if (selectAllButton) selectAllButton.hidden = selectedWarships >= warshipCount;
             }
             if (hudRefs!.fleetNuke) {
                 const hideNuke = fleetUnlocks !== null && nukeCampaignLocked;
@@ -6096,6 +6137,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             }
             hasFleetItems =
                 (hudRefs!.fleetTrade && !hudRefs!.fleetTrade.hidden) ||
+                (hudRefs!.fleetTransport && !hudRefs!.fleetTransport.hidden) ||
                 (hudRefs!.fleetWarship && !hudRefs!.fleetWarship.hidden) ||
                 (hudRefs!.fleetNuke && !hudRefs!.fleetNuke.hidden);
             hudRefs!.fleetStrip.style.display = isDeploying || !hasFleetItems ? "none" : "flex";
@@ -6283,29 +6325,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             const surrenderLeader = leaderById(
                 (hud && hud.player_leader) || (hudState && hudState.selected_leader),
             );
-            if (surrenderModalOpen && !tutorialActive && surrenderMessage == null) {
-                const messages = surrenderMessageKeys.map(function (key) {
-                    return SOW_t(key);
-                });
-                surrenderMessage = messages.length
-                    ? messages[Math.floor(Math.random() * messages.length)]
-                    : "";
-            }
-            if (tutorialActive) surrenderMessage = null;
             if (hudRefs!.surrenderTitle)
                 hudRefs!.surrenderTitle.textContent = tutorialActive
                     ? SOW_t("endgame.leave_tutorial")
-                    : SOW_t("endgame.leave_match");
+                    : SOW_t("endgame.leave");
             if (hudRefs!.surrenderDesc)
                 hudRefs!.surrenderDesc.textContent = tutorialActive
                     ? SOW_t("endgame.tutorial_description")
-                    : surrenderMessage || SOW_t("endgame.your_battle_will_end");
+                    : SOW_t("endgame.leave_rewards_saved");
             if (hudRefs!.surrenderStats) hudRefs!.surrenderStats.classList.toggle("hidden", tutorialActive);
             renderEndgameStats(hudRefs!.surrenderStatValues, hud.player_endgame_stats);
-            if (hudRefs!.surrenderSaveNote) {
-                hudRefs!.surrenderSaveNote.textContent = SOW_t("endgame.leave_rewards_saved");
-                hudRefs!.surrenderSaveNote.classList.toggle("hidden", tutorialActive);
-            }
             if (hudRefs!.surrenderPortrait) {
                 hudRefs!.surrenderPortrait.src = asset(
                     "gameplay/avatars/" + (surrenderLeader.art_slug || surrenderLeader.slug) + ".webp",
@@ -6316,7 +6345,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             if (hudRefs!.surrenderActionLabel)
                 hudRefs!.surrenderActionLabel.textContent = tutorialActive
                     ? SOW_t("endgame.leave_tutorial")
-                    : SOW_t("endgame.leave_match");
+                    : SOW_t("endgame.leave");
         }
 
         // Endgame Screen
@@ -6729,16 +6758,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             } else if (cmd === "prompt_surrender") {
                 send("request_endgame_stats");
                 surrenderModalOpen = true;
-                surrenderMessage = null;
                 renderHud();
             } else if (cmd === "close_surrender_modal") {
                 send("clear_endgame_stats");
                 surrenderModalOpen = false;
-                surrenderMessage = null;
                 renderHud();
             } else if (cmd === "confirm_surrender") {
                 surrenderModalOpen = false;
-                surrenderMessage = null;
                 send("return_to_menu");
                 renderHud();
             } else if (cmd === "zoom_in") {
@@ -6761,6 +6787,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 if (kind) send("select_building", { kind });
             } else if (cmd === "select_warship") {
                 send("select_warship");
+            } else if (cmd === "select_all_warships") {
+                send("select_all_warships");
+            } else if (cmd === "center_selected_warships") {
+                send("center_selected_warships");
+            } else if (cmd === "clear_warship_selection") {
+                send("clear_warship_selection");
             } else if (cmd === "select_nuke") {
                 send("select_nuke");
             } else if (cmd === "confirm_endgame_leave") {

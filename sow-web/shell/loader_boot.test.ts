@@ -67,6 +67,17 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         /@media \(orientation: landscape\) and \(max-height: 560px\) and \(min-width: 600px\)[\s\S]*?sow-hero-briefing__icon/,
         "the loader briefing has a compact-landscape size",
     );
+    assert.match(loaderTemplate, /sow-hero-briefing__icon-slot,[\s\S]*?flex: 0 0 56px/);
+    assert.match(loaderTemplate, /sow-hero-briefing__ability-name\s*\{[^}]*font: 800 16px/);
+    assert.match(loaderTemplate, /sow-hero-briefing__description\s*\{[^}]*font-size: 13px/);
+    const compactLandscapeStart = loaderTemplate.indexOf(
+        "@media (orientation: landscape) and (max-height: 560px) and (min-width: 600px)",
+    );
+    const compactLandscapeEnd = loaderTemplate.indexOf("\n        @media ", compactLandscapeStart + 1);
+    const compactLandscape = loaderTemplate.slice(compactLandscapeStart, compactLandscapeEnd);
+    assert.match(compactLandscape, /sow-hero-briefing__icon-slot,[\s\S]*?flex-basis: 44px/);
+    assert.match(compactLandscape, /sow-hero-briefing__ability-name\s*\{\s*font-size: 14px/);
+    assert.match(compactLandscape, /sow-hero-briefing__description\s*\{\s*font-size: 12px/);
     assert.equal(
         (webMenu.match(/"loader_info_leader":/g) || []).length,
         2,

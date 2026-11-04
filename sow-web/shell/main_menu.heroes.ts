@@ -16,12 +16,9 @@ import {
 import { activeScreenPanel } from "./main_menu.shell.ts";
 import { syncDropdownScope } from "./sow-dropdown.ts";
 import type { MenuLeader } from "./main_menu.state.ts";
-import { renderLeaderPurchase } from "./main_menu.surfaces.ts";
+import { renderLeaderPurchase, renderSkinsButton } from "./main_menu.surfaces.ts";
 
 // Hero selection, filtering, dropdowns, and preview updates.
-
-let heroesRotationCountdownInterval: number | null = null;
-const HEROES_ROTATION_COUNTDOWN_SECS = 4 * 24 * 60 * 60;
 
 function isWeeklyFreeRotation(leader: MenuLeader | null) {
     return !!leader && leader.available === true && leader.free_rotation === true && leader.owned === false;
@@ -248,67 +245,8 @@ root.addEventListener("focusout", function (event) {
 function heroesStatusLabel(leader: MenuLeader) {
     if (!leader || leader.id === "Boudica") return "";
     if (leader.permanently_free) return SOW_t("heroes.always_free");
+    if (isWeeklyFreeRotation(leader)) return SOW_t("heroes.weekly_free_rotation");
     return "";
-}
-
-function rotationCountdownText(leader: MenuLeader | null, rotationEndsAt: number | null, nowSeconds: number) {
-    if (!isWeeklyFreeRotation(leader)) return "";
-    const remaining = Number(rotationEndsAt) - Number(nowSeconds);
-    if (!Number.isFinite(remaining) || remaining <= 0 || remaining > HEROES_ROTATION_COUNTDOWN_SECS)
-        return "";
-    const total = Math.ceil(remaining);
-    const days = Math.floor(total / 86400);
-    const hours = Math.floor(total / 3600) % 24;
-    const minutes = Math.floor(total / 60) % 60;
-    const seconds = total % 60;
-    return SOW_t("heroes.rotation_available_for", {
-        days: days,
-        hours: String(hours).padStart(2, "0"),
-        minutes: String(minutes).padStart(2, "0"),
-        seconds: String(seconds).padStart(2, "0"),
-    });
-}
-
-function updateHeroesRotationCountdown() {
-    const countdown = root.querySelector<HTMLElement>("[data-hero-rotation-countdown]");
-    if (!countdown) return;
-    const randomSelected =
-        menuUi.tempSelectedRandom ||
-        (!menuUi.tempSelectedLeader && menuUi.state && menuUi.state.prefer_random_leader);
-    const activeLeader = randomSelected
-        ? null
-        : leaderById(menuUi.tempSelectedLeader || (menuUi.state && menuUi.state.selected_leader) || "Caesar");
-    const endsAt = menuUi.state && menuUi.state.store && menuUi.state.store.rotation_ends_at;
-    const value =
-        menuUi.state && menuUi.state.phase === "MainMenu"
-            ? rotationCountdownText(activeLeader, endsAt, Date.now() / 1000)
-            : "";
-    countdown.textContent = value;
-    countdown.hidden = !value;
-    const status = root.querySelector<HTMLElement>("[data-hero-status]");
-    const statusLabel = status && status.querySelector<HTMLElement>("[data-hero-status-label]");
-    if (statusLabel) statusLabel.hidden = !!value;
-    if (status) status.hidden = !value && (!statusLabel || !statusLabel.textContent.trim());
-}
-
-export function syncHeroesRotationCountdown() {
-    const shouldRun =
-        !!menuUi.state &&
-        menuUi.state.phase === "MainMenu" &&
-        !root.hidden &&
-        currentScreen() === "heroes" &&
-        document.visibilityState === "visible";
-    if (!shouldRun) {
-        if (heroesRotationCountdownInterval !== null) {
-            window.clearInterval(heroesRotationCountdownInterval);
-            heroesRotationCountdownInterval = null;
-        }
-        return;
-    }
-    if (heroesRotationCountdownInterval === null) {
-        heroesRotationCountdownInterval = window.setInterval(updateHeroesRotationCountdown, 1000);
-    }
-    updateHeroesRotationCountdown();
 }
 
 // OWNER DECISION — DO NOT "FIX" THIS MAPPING.
@@ -496,7 +434,7 @@ export function updateHeroesPreview() {
         ? randomLeaderOption()
         : leaderById(menuUi.tempSelectedLeader || (menuUi.state && menuUi.state.selected_leader) || "Caesar");
     const panel = activeScreenPanel() || root;
-    const featured = panel.querySelector(".sow-heroes__featured");
+    const featured = panel.querySelector<HTMLElement>(".sow-heroes__featured");
     if (!activeLeader || !featured) return false;
     const picture = featured.querySelector("picture");
     const source = picture && picture.querySelector("source");
@@ -565,7 +503,6 @@ export function updateHeroesPreview() {
         else status.textContent = statusLabel;
         status.hidden = !statusLabel;
     }
-    updateHeroesRotationCountdown();
     const purchase = featured.querySelector("[data-hero-purchase]");
     if (purchase) purchase.innerHTML = randomSelected ? "" : renderLeaderPurchase(activeLeader);
     const cards = panel.querySelectorAll<HTMLElement>("[data-command='preview_leader']");
@@ -730,7 +667,7 @@ export function renderHeroes() {
         (!statusLabel ? " hidden" : "") +
         "><span data-hero-status-label>" +
         esc(statusLabel) +
-        "</span><span class='sow-heroes__rotation-countdown' data-hero-rotation-countdown hidden></span></p><div data-hero-briefing>" +
+        "</span></p><div data-hero-briefing>" +
         renderHeroBriefing(activeRandom ? "random" : activeLeader, "selection", "sow-heroes-selected") +
         "</div><div class='sow-heroes__actions'><div data-hero-purchase>" +
         (activeRandom ? "" : renderLeaderPurchase(activeLeader)) +
@@ -746,6 +683,7 @@ export function renderHeroes() {
         esc(menuUi.heroesSearchQuery) +
         "\" autocomplete='off' spellcheck='false'></label>" +
         renderHeroesRegionDropdown() +
+        renderSkinsButton() +
         "</div></div><div class='sow-heroes__grid' data-heroes-roster aria-live='polite'>" +
         renderHeroesRoster(activeId, activeRandom) +
         "</div></section>" +

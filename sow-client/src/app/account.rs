@@ -1900,7 +1900,7 @@ pub(crate) mod reward_exit_tests {
                 .replace(/([A-Za-z_$][\w$]*)!(?=[.[(])/g, '$1');
             const ElementStub = class {};
             const click = new Function('send', 'renderHud', 'Element',
-                'let surrenderModalOpen = true, surrenderMessage = null; ' + handler + '; return handleHudClick;')(
+                'let surrenderModalOpen = true; ' + handler + '; return handleHudClick;')(
                 type => command(JSON.stringify({ type })), () => {}, ElementStub);
             const button = { dataset: { command: 'confirm_surrender' } };
             const target = new ElementStub();
@@ -2828,6 +2828,7 @@ pub(crate) mod reward_exit_tests {
         );
         app.process_web_menu_commands();
         assert!(app.waiting_menu_return());
+        let mut receipt_elapsed = None;
         while app.waiting_menu_return() || app.ui.app.splash_state.gpu_load_step < 2 {
             assert!(
                 web_time::Instant::now() < deadline,
@@ -2837,6 +2838,15 @@ pub(crate) mod reward_exit_tests {
             app.update_net(now);
             app.update_assets();
             app.poll_reward_profile_sync(now);
+            if receipt_elapsed.is_none()
+                && let Some(started_at) = app
+                    .menu_return
+                    .as_ref()
+                    .filter(|context| context.status == "confirmed")
+                    .and_then(|context| context.started_at)
+            {
+                receipt_elapsed = Some(started_at.elapsed());
+            }
             app.update_loader();
             if app.waiting_menu_return() {
                 assert!(
@@ -2854,12 +2864,7 @@ pub(crate) mod reward_exit_tests {
                 .unwrap();
         }
         assert_eq!(app.menu_return.as_ref().unwrap().status, "confirmed");
-        let return_elapsed = app
-            .menu_return
-            .as_ref()
-            .and_then(|context| context.started_at)
-            .expect("live return timing must start when the player exits")
-            .elapsed();
+        let return_elapsed = receipt_elapsed.expect("live return receipt timing was not captured");
         assert!(
             return_elapsed <= web_time::Duration::from_secs(2),
             "live WASM exit receipt exceeded 2 seconds: {} ms",
