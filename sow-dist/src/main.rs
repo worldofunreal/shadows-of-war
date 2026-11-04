@@ -842,7 +842,8 @@ struct ArtPreviewAsset {
 
 fn profile_for_distribution_path(path: &Path) -> Option<&'static str> {
     let path = path.to_string_lossy().replace('\\', "/");
-    let name = Path::new(&path).file_name()?.to_string_lossy();
+    let path = path.strip_prefix("assets/").unwrap_or(&path);
+    let name = Path::new(path).file_name()?.to_string_lossy();
     if path.starts_with("shell/loader/") {
         if name == "sow-splash-desktop.webp" {
             return Some("fullbleed_wide");
