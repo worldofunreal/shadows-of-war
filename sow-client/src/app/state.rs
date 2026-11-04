@@ -216,6 +216,8 @@ pub struct NetState {
     pub ws_url: String,
     pub orchestrator_url: String,
     pub is_offline: bool,
+    /// Idle orchestrator socket kept through an offline match; the menu return takes it back.
+    pub parked_client: Option<sow_net::client::SowClient>,
     pub ws_connect_fail_backoff_ms: u64,
     pub ws_connect_not_before: web_time::Instant,
     pub ws_reconnect_after_resume: bool,

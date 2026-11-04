@@ -249,7 +249,7 @@ test("bottom bar tiles draw ships as building art, show the gold price and lock 
     for (const unit of ["trade-ship", "warship", "atom-bomb"]) {
         const icon = tiles.unitIcon(unit);
         assert.ok(icon.includes("is-pixel-art"), unit);
-        assert.ok(icon.includes("/assets/gameplay/units/" + unit + ".png"), unit);
+        assert.ok(icon.includes("/assets/gameplay/units/" + unit + ".webp"), unit);
         assert.ok(fs.existsSync(path.join(shell, "../../assets/art/units", unit + ".png")), unit);
     }
     assert.equal(tiles.tileCost(false).includes("<b>"), false);

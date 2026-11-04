@@ -5426,6 +5426,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   cursor: not-allowed;
 }
 
+#sow-hud-transfer .sow-hud__transfer-cta[hidden] {
+  display: none !important;
+}
+
 .sow-hud__transfer-hint {
   margin: 0;
   padding: 10px 14px 0;

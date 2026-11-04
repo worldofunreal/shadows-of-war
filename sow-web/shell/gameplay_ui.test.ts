@@ -1745,7 +1745,7 @@ test("transfer panel shows live stock and sizes presets from the side it acts on
     assert.equal(refs.transferGold.value, "23");
 });
 
-test("the stronger army leads the transfer CTAs unless the radial picked a side", () => {
+test("the stronger army leads the one transfer CTA unless the radial picked a side", () => {
     const { context, update } = makePlayerDialogsHarness();
     const offer = {
         target_id: 2,
@@ -1760,11 +1760,35 @@ test("the stronger army leads the transfer CTAs unless the radial picked a side"
     update({ transfer: offer, troops: 500, gold: 0, max_troops: 1000 });
     assert.equal(transferSend.classList.contains("is-primary"), true);
     assert.equal(transferRequest.classList.contains("is-primary"), false);
+    assert.equal(transferSend.hidden, false);
+    assert.equal(transferRequest.hidden, true, "the other side's CTA is not offered");
     update({ transfer: offer, troops: 100, gold: 0, max_troops: 1000 });
     assert.equal(transferSend.classList.contains("is-primary"), false);
     assert.equal(transferRequest.classList.contains("is-primary"), true);
+    assert.equal(transferSend.hidden, true);
+    assert.equal(transferRequest.hidden, false);
     update({ transfer: { ...offer, mode: "send" }, troops: 100, gold: 0, max_troops: 1000 });
     assert.equal(transferSend.classList.contains("is-primary"), true, "the radial's Send leads");
+    assert.equal(transferSend.hidden, false);
+    assert.equal(transferRequest.hidden, true);
+});
+
+test("the hint names only the side in focus, never the hidden side's block", () => {
+    const { context, update } = makePlayerDialogsHarness();
+    // Send has room for 100 troops. Request is dead: we are full of troops and they hold no gold.
+    const offer = {
+        target_id: 2,
+        target_name: "Trinovantes",
+        target_alive: true,
+        target_gold: 0,
+        target_troops: 300,
+        target_max_troops: 400,
+        mode: "send",
+    };
+    update({ transfer: offer, troops: 1000, gold: 0, max_troops: 1000 });
+    assert.equal(context.hudRefs.transferRequest.hidden, true);
+    assert.equal(context.hudRefs.transferSend.disabled, false);
+    assert.equal(context.hudRefs.transferHint.hidden, true, "Request's block is not shown");
 });
 
 test("a side that cannot move anything is disabled and names the block", () => {

@@ -3689,6 +3689,7 @@ dependencies = [
  "image",
  "minifier",
  "rand",
+ "serde",
  "serde_json",
  "sha2",
  "sow-core",

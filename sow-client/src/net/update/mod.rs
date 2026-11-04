@@ -49,6 +49,13 @@ impl SowApp {
             }
             match res {
                 Ok(client) => {
+                    if self.net.is_offline {
+                        log::info!(
+                            "[CLIENT NET] Closing connection that finished during an offline match"
+                        );
+                        self.ui.app.main_menu_state.is_connecting = false;
+                        continue;
+                    }
                     log::info!(
                         "[CLIENT NET] Received successfully connected WebSocket client from channel!"
                     );

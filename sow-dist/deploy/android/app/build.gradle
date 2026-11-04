@@ -26,10 +26,20 @@ def escapedPlayGamesWebClientId = playGamesWebClientId.replace("\\", "\\\\").rep
 def escapedPlayGamesAuthUrl = playGamesAuthUrl.replace("\\", "\\\\").replace('"', '\\"')
 def escapedSowSourceSha = sowSourceSha.replace("\\", "\\\\").replace('"', '\\"')
 def escapedSowSourceUrl = sowSourceUrl.replace("\\", "\\\\").replace('"', '\\"')
+def sowGeneratedResDir = project.findProperty("sowGeneratedResDir")
+if (sowGeneratedResDir == null || !file(sowGeneratedResDir).isDirectory()) {
+    throw new GradleException("sowGeneratedResDir is required; use ./sow a to stage optimized app icons")
+}
 
 android {
     namespace = 'com.shadowsofwar'
     compileSdk 36
+
+    sourceSets {
+        main {
+            res.srcDirs = [file(sowGeneratedResDir)]
+        }
+    }
 
     defaultConfig {
         applicationId "com.shadowsofwar"

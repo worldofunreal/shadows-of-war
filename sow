@@ -20,6 +20,7 @@ COMMANDS:
    a, android           Build the Android AAB and publish it to Google Play alpha
    poki                 Build the self-contained Poki upload folder (no upload/deploy)
    jest                 Build the self-contained Jest bundle + dist/jest.zip (no deploy)
+   art-preview [profile] Generate art quality/size previews without credentials or publishing
    help, -h, --help     Show this help message
 
 EXAMPLES:
@@ -30,8 +31,10 @@ EXAMPLES:
   SOW_NATIVE_RELEASE=1 ./sow  # Compare with optimized WASM in Electron, without an installer
    ./sow p              # Production build and deploy to IONOS & Azure
    ./sow p -v           # Production deploy with public version bump
+  ./sow p --server-only # Deploy only the FreeBSD game server
    ./sow poki           # Build dist/poki for local review and Poki Inspector
    ./sow jest           # Jest bundle + upload zip (upload via console/MCP, never auto)
+   ./sow art-preview ability_icon # Compare distribution quality for all ability icons
   ./sow a              # Android AAB + Play alpha upload (each upload restarts Play review)
 EOF
 }
@@ -232,6 +235,14 @@ case "${CMD}" in
   poki)
     load_dist_env
     run_dist poki "$@"
+    ;;
+  art-preview)
+    shift || true
+    export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-${ROOT}/target}"
+    mkdir -p "${CARGO_TARGET_DIR}"
+    BIN="${CARGO_TARGET_DIR}/debug/sow"
+    cargo build -p sow-dist
+    exec "${BIN}" art-preview "$@"
     ;;
   *)
     echo "Unknown command: ${CMD}" >&2

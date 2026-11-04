@@ -202,6 +202,9 @@ impl SowApp {
             should_use_exit_game_loader(phase) || (entering_game && !self.net.is_offline);
         let was_playing = phase == crate::ClientPhase::Playing;
         let was_offline = self.net.is_offline;
+        // A socket parked by the offline match is reused unless lobby work needs a new session.
+        let keep_parked = was_offline && !self.menu_has_lobby_intent();
+        let parked_socket = self.net.parked_client.take().filter(|_| keep_parked);
         let was_spectating = self.ui.is_spectating;
         let campaign_episode = if was_playing && was_offline && self.ui.tutorial_active {
             self.pending_campaign_exit.take()
@@ -265,10 +268,10 @@ impl SowApp {
         self.ui.app.main_menu_state.server_address = self.net.ws_url.clone();
         self.net.relay_handoff_done = false;
 
-        // Drop relay connection and force orchestrator reconnect
-        self.net.client = None;
+        // Drop relay connection and force orchestrator reconnect, unless a parked socket remains
+        self.net.client = parked_socket;
         self.net.current_ping_ms = None;
-        self.ui.app.main_menu_state.is_connected = false;
+        self.ui.app.main_menu_state.is_connected = self.net.client.is_some();
         self.ui.app.main_menu_state.is_connecting = false;
         if entering_game {
             self.reset_game_session();
@@ -380,6 +383,16 @@ impl SowApp {
             || self.net.ws_url.contains("/relay/")
             || self.net.ws_url.contains("relay.shadowsofwar.io")
             || self.net.ws_url.contains("2557")
+    }
+
+    /// Lobby, matchmaking or invite work that needs a fresh orchestrator session.
+    pub(crate) fn menu_has_lobby_intent(&self) -> bool {
+        let menu = &self.ui.app.main_menu_state;
+        menu.is_waiting
+            || menu.joined_lobby_id.is_some()
+            || menu.pending_join_lobby_id.is_some()
+            || menu.host_private_pending
+            || menu.ranked_search_active
     }
 }
 

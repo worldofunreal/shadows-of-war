@@ -183,7 +183,10 @@ impl Drop for RelayAdmissionPause<'_> {
     }
 }
 
-pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
+pub(super) fn execute(paths: &Paths, bump: bool, server_only: bool) -> Result<()> {
+    if server_only && bump {
+        bail!("--server-only cannot bump the public version");
+    }
     let config = Config::load();
     ensure_shared_identity_secret()?;
     require_secret("SOW_DB_SECRET")?;
@@ -205,8 +208,8 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     require_config("SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID")?;
     require_secret("SOW_PLAY_GAMES_WEB_CLIENT_SECRET")?;
     require_secret("WOU_SOW_IDENTITY_SECRET")?;
-    println!("==> 1/8 Preflight and asset preparation");
-    preflight(paths, &config)?;
+    println!("==> 1/8 Preflight{}", if server_only { " (server-only)" } else { " and asset preparation" });
+    preflight(paths, &config, server_only)?;
     let version = version(paths, bump)?;
     println!("==> Production {version}");
     let runtime_inputs = [
@@ -236,24 +239,30 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     // and runs only when a new build is actually ready for review.
 
     println!("==> 2/8 Build candidates");
-    let (web, backend, _relay) = std::thread::scope(|scope| {
-        let web = scope.spawn(|| build_web(paths, &version));
-        let backend = scope.spawn(|| build_freebsd(paths, &config));
-        let relay = scope.spawn(|| build_relay(paths, &config));
-        let web = web
-            .join()
-            .map_err(|_| anyhow::anyhow!("web build panicked"))??;
-        let backend = backend
-            .join()
-            .map_err(|_| anyhow::anyhow!("FreeBSD build panicked"))??;
-        let relay = relay
-            .join()
-            .map_err(|_| anyhow::anyhow!("relay build panicked"))??;
-        Ok::<_, anyhow::Error>((web, backend, relay))
-    })?;
+    let release = if server_only {
+        let backend = build_freebsd(paths, &config)?;
+        println!("==> 3/8 Package server-only immutable release");
+        assemble_server_only_release(paths, &backend, &version, &config)?
+    } else {
+        let (web, backend, _relay) = std::thread::scope(|scope| {
+            let web = scope.spawn(|| build_web(paths, &version));
+            let backend = scope.spawn(|| build_freebsd(paths, &config));
+            let relay = scope.spawn(|| build_relay(paths, &config));
+            let web = web
+                .join()
+                .map_err(|_| anyhow::anyhow!("web build panicked"))??;
+            let backend = backend
+                .join()
+                .map_err(|_| anyhow::anyhow!("FreeBSD build panicked"))??;
+            let relay = relay
+                .join()
+                .map_err(|_| anyhow::anyhow!("relay build panicked"))??;
+            Ok::<_, anyhow::Error>((web, backend, relay))
+        })?;
 
-    println!("==> 3/8 Package immutable release");
-    let release = assemble_release(paths, &web, &backend, &version, &config)?;
+        println!("==> 3/8 Package immutable release");
+        assemble_release(paths, &web, &backend, &version, &config)?
+    };
     println!("  release {}", release.id);
     if input_fingerprint("production-runtime-v1", "", &runtime_inputs)? != runtime_snapshot {
         bail!(
@@ -304,6 +313,9 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
         println!("  runtime auth drift: relay-only reward settlement credential");
         plan.database = true;
         plan.relay = true;
+    }
+    if server_only && (plan.web || plan.maps || plan.database || plan.ops || plan.relay) {
+        bail!("server-only deployment refused: a non-server component also needs activation ({plan:?})");
     }
     println!("  plan: {plan:?}");
 
@@ -517,12 +529,15 @@ fn version(paths: &Paths, bump: bool) -> Result<String> {
     Ok(next)
 }
 
-fn android_inputs(paths: &Paths) -> Vec<PathBuf> {
+fn android_inputs(paths: &Paths) -> Result<Vec<PathBuf>> {
     let project = paths.root.join(ANDROID_PROJECT);
-    vec![
+    Ok(vec![
         project.join("app/build.gradle"),
         project.join("app/proguard-rules.pro"),
         project.join("app/src/main"),
+        paths.android_resources.clone(),
+        paths.root.join("assets/art/brand/app-icon.png"),
+        paths.art_pipeline()?.config_path.clone(),
         project.join("build.gradle"),
         project.join("settings.gradle"),
         project.join("gradle.properties"),
@@ -530,14 +545,14 @@ fn android_inputs(paths: &Paths) -> Vec<PathBuf> {
         project.join("gradle/wrapper/gradle-wrapper.properties"),
         project.join("gradlew"),
         project.join("key.properties"),
-    ]
+    ])
 }
 
 fn android_fingerprint(paths: &Paths, version: &str, version_code: u32) -> Result<String> {
-    let inputs = android_inputs(paths);
+    let inputs = android_inputs(paths)?;
     let input_refs = inputs.iter().map(PathBuf::as_path).collect::<Vec<_>>();
     input_fingerprint(
-        "android-v1",
+        "android-v2",
         &format!("{version}:{version_code}"),
         &input_refs,
     )
@@ -665,6 +680,7 @@ fn build_android(
         .context("SOW_PLAY_GAMES_WEB_CLIENT_ID must be provided via sow-dist/.env")?;
     let play_games_app_id_arg = format!("-PsowPlayGamesAppId={play_games_app_id}");
     let play_games_client_id_arg = format!("-PsowPlayGamesWebClientId={play_games_client_id}");
+    let generated_res_arg = format!("-PsowGeneratedResDir={}", paths.android_resources.display());
     run(
         "./gradlew",
         &[
@@ -681,6 +697,7 @@ fn build_android(
             &revenuecat_key_arg,
             &play_games_app_id_arg,
             &play_games_client_id_arg,
+            &generated_res_arg,
         ],
         Some(&project),
     )?;
@@ -808,10 +825,13 @@ fn publish_android(paths: &Paths, version_code: u32) -> Result<()> {
     Ok(())
 }
 
-fn preflight(paths: &Paths, config: &Config) -> Result<()> {
-    for command in [
-        "bun", "cargo", "curl", "magick", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt",
-    ] {
+fn preflight(paths: &Paths, config: &Config, server_only: bool) -> Result<()> {
+    let commands: &[&str] = if server_only {
+        &["cargo", "curl", "rsync", "rustc", "scp", "ssh"]
+    } else {
+        &["bun", "cargo", "curl", "magick", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt"]
+    };
+    for command in commands {
         if !Command::new("/bin/sh")
             .args(["-c", &format!("command -v {command} >/dev/null")])
             .status()?
@@ -820,6 +840,7 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             bail!("{command} is required");
         }
     }
+    if !server_only {
     for (entry, context) in [
         (
             "sow-web/shell/sow-campaign.ts",
@@ -850,11 +871,12 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     }
     super::pack_art_atlases(paths)?;
     super::validate_current_ui_contract(paths)?;
+    }
     // Keep unit/fixture suites available for explicit development runs. The
     // production path validates sources and packages here, then relies on its
     // staged health checks and public verification instead of treating unit
     // test passes as proof of browser rendering.
-    if !Command::new("rustc")
+    if !server_only && !Command::new("rustc")
         .args([
             "--print",
             "target-libdir",
@@ -2058,7 +2080,7 @@ pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
     let source = super::source_identity(paths)?;
     let source_version = format!("{version}:{}", source.sha);
     input_fingerprint(
-        "web-v11-portal-cdn-assets-maps",
+        "web-v12-art-profiles",
         &source_version,
         &[
             &paths.wasm_input,
@@ -2078,6 +2100,7 @@ pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
             &paths.root.join("docs/legal/LICENSE-ASSETS"),
             &paths.root.join("docs/legal/WASM-THIRD-PARTY-NOTICES.zip"),
             &paths.root.join("sow-dist/src/main.rs"),
+            &paths.art_pipeline()?.config_path,
         ],
     )
 }
@@ -2616,6 +2639,128 @@ fn input_fingerprint(tag: &str, value: &str, inputs: &[&Path]) -> Result<String>
         }
     }
     Ok(format!("{:x}", hash.finalize()))
+}
+
+fn assemble_server_only_release(
+    paths: &Paths,
+    binaries: &Path,
+    version: &str,
+    config: &Config,
+) -> Result<Release> {
+    let current = output(
+        "ssh",
+        &[&config.control_host, "readlink /srv/sow/current"],
+    )?;
+    let current = current
+        .trim()
+        .strip_prefix("releases/")
+        .context("current production link is not a release")?;
+    let Some((release_version, release_hash)) = current.rsplit_once('-') else {
+        bail!("current production release id is malformed: {current}");
+    };
+    if release_version.split('.').count() != 3
+        || !release_version
+            .split('.')
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+        || release_hash.len() != 12
+        || !release_hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        bail!("current production release id is malformed: {current}");
+    }
+
+    let work = paths.root.join("dist/.release-server-only");
+    if work.exists() {
+        fs::remove_dir_all(&work)?;
+    }
+    fs::create_dir_all(&work)?;
+    let source = format!(
+        "{}:{REMOTE_RELEASES}/{current}/",
+        config.control_host
+    );
+    let destination = format!("{}/", work.display());
+    run(
+        "rsync",
+        &[
+            "-rzc",
+            "--delete",
+            "--rsync-path=sudo rsync",
+            &source,
+            &destination,
+        ],
+        Some(&paths.root),
+    )
+    .context("copy active immutable release for server-only update")?;
+
+    let server = work.join("bin/sow-server");
+    fs::copy(binaries.join("sow-server"), &server)?;
+    fs::set_permissions(&server, fs::Permissions::from_mode(0o550))?;
+    require_file(&work.join("web/game-manifest.json"), "active game manifest")?;
+    require_file(&work.join("maps/world/map.bin"), "active server map")?;
+    require_file(&work.join("bin/sow-database"), "active database binary")?;
+
+    let mut components = parse_components(&fs::read_to_string(work.join("COMPONENTS"))?);
+    components.insert("server".to_string(), file_sha256(&server)?);
+    let component_names = ["web", "maps", "server", "database", "ops", "relay"];
+    let component_text = component_names
+        .iter()
+        .map(|name| {
+            components
+                .get(*name)
+                .map(|hash| format!("{name}={hash}"))
+                .with_context(|| format!("active release is missing {name} component hash"))
+        })
+        .collect::<Result<Vec<_>>>()?
+        .join("\n");
+    fs::write(work.join("COMPONENTS"), format!("{component_text}\n"))?;
+    fs::write(work.join("VERSION"), format!("{version}\n"))?;
+
+    let source = super::source_identity(paths)?;
+    let revision = output("git", &["rev-parse", "--short=12", "HEAD"])?;
+    let dirty_files = workspace_dirty_files(paths)?;
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(work.join("web/game-manifest.json"))?)?;
+    let web_source_sha = manifest
+        .get("source_sha")
+        .and_then(serde_json::Value::as_str)
+        .context("active game manifest has no source revision")?;
+    let release_json_path = work.join("release.json");
+    let mut release_json: serde_json::Value =
+        serde_json::from_slice(&fs::read(&release_json_path)?)?;
+    release_json["version"] = json!(version);
+    release_json["git"] = json!(revision.trim());
+    release_json["source_sha"] = json!(source.sha);
+    release_json["source_url"] = json!(source.url);
+    release_json["web_source_sha"] = json!(web_source_sha);
+    release_json["server_only"] = json!(true);
+    release_json["dirty"] = json!(!dirty_files.is_empty());
+    release_json["dirty_files"] = json!(dirty_files);
+    release_json["components"] = json!(component_names
+        .iter()
+        .map(|name| json!({"name": name, "sha256": components[*name]}))
+        .collect::<Vec<_>>());
+    fs::write(&release_json_path, serde_json::to_vec_pretty(&release_json)?)?;
+
+    let manifest = write_manifest(&work)?;
+    let id = format!("{version}-{}", &file_sha256(&manifest)?[..12]);
+    let releases = paths.root.join("dist/releases");
+    fs::create_dir_all(&releases)?;
+    let dir = releases.join(&id);
+    if dir.exists() {
+        fs::remove_dir_all(&dir)?;
+    }
+    if fs::rename(&work, &dir).is_err() {
+        if dir.exists() {
+            fs::remove_dir_all(&dir)?;
+        }
+        copy_dir(&work, &dir)?;
+        fs::remove_dir_all(&work)?;
+    }
+    println!("  carrying forward web, maps, database and relay from {current}");
+    Ok(Release {
+        id,
+        version: version.to_string(),
+        dir,
+    })
 }
 
 fn assemble_release(

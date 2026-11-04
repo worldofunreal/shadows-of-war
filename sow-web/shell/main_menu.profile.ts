@@ -1,6 +1,7 @@
 import { rankEmblem, rankLabel as rankLabelText, rankName, rankOverview, rankedPointsBreakdownMarkup } from "./main_menu.ranked.ts";
 import {
     asset,
+    avatarImage,
     currentScreen,
     esc,
     formatMapName,
@@ -496,9 +497,19 @@ export function syncProfilePreload(nextState: MenuState) {
     }
 }
 
-export function openProfile(id: string | null) {
+export function openProfile(id: string | null, isNavigation = false) {
     const targetId = id || (menuUi.state && menuUi.state.account_id);
     if (!targetId) return;
+    if (menuUi.profileOpen && menuUi.profileAccountId && menuUi.profileAccountId !== targetId && !isNavigation) {
+        if (!menuUi.profileNavStack) menuUi.profileNavStack = [];
+        menuUi.profileNavStack.push({
+            accountId: menuUi.profileAccountId,
+            tab: menuUi.profileTab || "overview",
+        });
+    }
+    if (!id && !isNavigation) {
+        menuUi.profileNavStack = [];
+    }
     menuUi.reportOpen = false;
     menuUi.reportTarget = null;
     menuUi.reportSent = false;
@@ -544,6 +555,21 @@ export function openProfile(id: string | null) {
     activateProfileEntry(targetId);
     loadProfile(targetId);
     render();
+}
+
+export function popProfileNav(): boolean {
+    if (menuUi.profileNavStack && menuUi.profileNavStack.length > 0) {
+        const previous = menuUi.profileNavStack.pop()!;
+        openProfile(previous.accountId, true);
+        menuUi.profileTab = previous.tab || "overview";
+        return true;
+    }
+    const ownId = menuUi.profileOwnId || (menuUi.state && menuUi.state.account_id);
+    if (menuUi.profileAccountId && ownId && menuUi.profileAccountId !== ownId) {
+        openProfile(ownId, true);
+        return true;
+    }
+    return false;
 }
 
 function isBlockedAccountId(accountId: string) {
@@ -683,16 +709,51 @@ function profileHeaderMarkup(data: ProfileData | null, own: boolean | null) {
               esc(SOW_t("profile.try_again")) +
               "</button></div>"
             : "<div class='sow-profile__status' data-profile-status aria-live='polite' hidden></div>";
+    const preferred = data && data.preferred_leader ? leaderById(data.preferred_leader) : null;
+    const avatarUrl = preferred ? asset("gameplay/avatars/" + leaderArtSlug(preferred) + ".webp") : avatarImage();
+    const rankedRating = (data?.ratings || []).find(function (r) {
+        return r.queue === "Ranked1v1" && r.mode === "FFA";
+    });
+    const rankBadge = rankedRating && rankedRating.placements_complete
+        ? "<span class='sow-profile__rank-badge' title='" + esc(rankLabelText(rankedRating)) + "'>" +
+          rankEmblem(rankedRating.tier, rankedRating.division) +
+          "<b>" + esc(rankName(rankedRating.tier, rankedRating.division)) + "</b>" +
+          "</span>"
+        : "";
+    const hasNavBack = !own || (menuUi.profileNavStack && menuUi.profileNavStack.length > 0);
+    const backLabel = hasNavBack ? "← " + SOW_t("lobbies.back") : SOW_t("lobbies.back");
+    const myProfileButton = !own
+        ? "<button type='button' class='sow-profile__my-profile-btn' data-command='back_to_my_profile'>" +
+          esc(SOW_t("profile.your_profile")) +
+          "</button>"
+        : "";
     return (
-        "<section class='sow-profile__heading' data-profile-heading aria-labelledby='sow-profile-title'><div class='sow-profile__identity-card'><div class='sow-profile__heading-top'><span class='sow-profile__kicker'>" +
-        esc(title) +
-        "</span><button type='button' class='sow-profile__back' data-command='close_profile'>" +
-        esc(SOW_t("lobbies.back")) +
-        "</button></div><div class='sow-profile__identity-main'><div class='sow-profile__identity-copy'><h1 id='sow-profile-title' data-profile-display-name>" +
-        esc(displayName) +
-        "</h1><p class='sow-profile__handle' data-profile-handle>" +
-        esc(handle) +
-        "</p>" +
+        "<section class='sow-profile__heading' data-profile-heading data-profile-cover aria-labelledby='sow-profile-title'>" +
+        "<div class='sow-profile__cover-overlay'></div>" +
+        "<div class='sow-profile__heading-top'>" +
+        "<div class='sow-profile__breadcrumbs'>" +
+        "<span class='sow-profile__kicker'>" + esc(title) + "</span>" +
+        (!own ? "<span class='sow-profile__viewing-tag'>· " + esc(displayName) + "</span>" : "") +
+        "</div>" +
+        "<div class='sow-profile__heading-actions'>" +
+        myProfileButton +
+        "<button type='button' class='sow-profile__back' data-command='close_profile'>" +
+        esc(backLabel) +
+        "</button>" +
+        "</div>" +
+        "</div>" +
+        "<div class='sow-profile__identity-card'>" +
+        "<div class='sow-profile__avatar-container'>" +
+        "<img class='sow-profile__avatar' data-profile-avatar src='" + esc(avatarUrl) + "' alt='' width='88' height='88'>" +
+        "<div class='sow-profile__level' title='" + esc(SOW_t("profile.level_label")) + "'><small>" + esc(SOW_t("profile.level_label")) + "</small><strong data-profile-level>" + esc(level) + "</strong></div>" +
+        "</div>" +
+        "<div class='sow-profile__identity-main'>" +
+        "<div class='sow-profile__identity-copy'>" +
+        "<div class='sow-profile__identity-title-row'>" +
+        "<h1 id='sow-profile-title' data-profile-display-name>" + esc(displayName) + "</h1>" +
+        rankBadge +
+        "</div>" +
+        "<p class='sow-profile__handle' data-profile-handle>" + (handle ? "@" + esc(handle.replace(/^@/, "")) : "") + "</p>" +
         (data && data.is_bot
             ? "<p class='sow-profile__bot-meta'><span>" +
               esc(SOW_t("profile.bot")) +
@@ -704,11 +765,28 @@ function profileHeaderMarkup(data: ProfileData | null, own: boolean | null) {
         profilePreferredCommanderMarkup(data) +
         "</div>" +
         status +
-        "</div><div class='sow-profile__level'><small>" +
-        esc(SOW_t("profile.level_label")) +
-        "</small><strong data-profile-level>" +
-        esc(level) +
-        "</strong></div></div></div></section>"
+        "</div>" +
+        "</div>" +
+        "</div>" +
+        profileStatsRibbonMarkup(data) +
+        "</section>"
+    );
+}
+
+function profileStatsRibbonMarkup(data: ProfileData | null) {
+    if (!data) return "";
+    const matches = profileStat(data.matches_played);
+    const wins = profileStat(data.wins);
+    const winRate = matches ? Math.round((wins / matches) * 100) : 0;
+    const laurels = profileStat(data.laurels);
+    return (
+        "<div class='sow-profile__stats' data-profile-stats>" +
+        "<div class='sow-profile__stat-cell'><strong>" + esc(matches) + "</strong><span>" + esc(SOW_t("profile.matches")) + "</span></div>" +
+        "<div class='sow-profile__stat-cell'><strong>" + esc(wins) + "</strong><span>" + esc(SOW_t("profile.wins")) + "</span></div>" +
+        "<div class='sow-profile__stat-cell'><strong>" + esc(winRate) + "%</strong><span>" + esc(SOW_t("profile.win_rate")) + "</span></div>" +
+        "<div class='sow-profile__stat-cell sow-profile__stat-laurels'><strong>" + esc(laurels) + "</strong><span>" + esc(SOW_t("profile.laurels")) + "</span></div>" +
+        "<div class='sow-profile__stat-cell sow-profile__stat-kda'><strong><i>" + esc(data.kills || 0) + "</i><i>" + esc(data.deaths || 0) + "</i><i>" + esc(data.assists || 0) + "</i></strong><span>" + esc(SOW_t("profile.kda")) + "</span></div>" +
+        "</div>"
     );
 }
 
@@ -795,46 +873,29 @@ function profileContentMarkup(data: ProfileData | null) {
             : "<p class='sow-profile__empty'>" +
               esc(profileSnapshotError() || SOW_t("profile.loading_profile")) +
               "</p>";
+        const topLeaders = complete && data.leaders && data.leaders.length
+            ? "<section class='sow-profile__section sow-profile__section--widget'><div class='sow-profile__section-head'><h3>" +
+              esc(SOW_t("profile.most_played_leaders")) +
+              "</h3><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='leaders'>" +
+              esc(SOW_t("profile.view_all")) +
+              "</button></div><div class='sow-profile__top-leaders'>" +
+              data.leaders.slice(0, 3).map(profileLeaderCard).join("") +
+              "</div></section>"
+            : "";
         content =
             "<div class='sow-profile__overview'>" +
-            rankedPanel +
-            "<div class='sow-profile__stats'>" +
-            "<div><strong>" +
-            esc(data.matches_played) +
-            "</strong><span>" +
-            esc(SOW_t("profile.matches")) +
-            "</span></div>" +
-            "<div><strong>" +
-            esc(data.wins) +
-            "</strong><span>" +
-            esc(SOW_t("profile.wins")) +
-            "</span></div>" +
-            "<div><strong>" +
-            esc(Math.round((data.win_rate || 0) * 100)) +
-            "%</strong><span>" +
-            esc(SOW_t("profile.win_rate")) +
-            "</span></div>" +
-            "<div class='sow-profile__stat-laurels'><strong>" +
-            esc(data.laurels == null ? 0 : data.laurels) +
-            "</strong><span>" +
-            esc(SOW_t("profile.laurels")) +
-            "</span></div>" +
-            "<div class='sow-profile__stat-kda'><strong><i>" +
-            esc(data.kills) +
-            "</i><i>" +
-            esc(data.deaths) +
-            "</i><i>" +
-            esc(data.assists) +
-            "</i></strong><span>" +
-            esc(SOW_t("profile.kda")) +
-            "</span></div>" +
-            "</div><section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
+            "<div class='sow-profile__overview-feed'>" +
+            "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
             esc(SOW_t("profile.recent_matches")) +
             "</h2><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='history'>" +
             esc(SOW_t("profile.view_all")) +
             "</button></div>" +
             recent +
-            "</section></div>";
+            "</section></div>" +
+            (rankedPanel || topLeaders
+                ? "<aside class='sow-profile__overview-sidebar'>" + rankedPanel + topLeaders + "</aside>"
+                : "") +
+            "</div>";
     } else if (data && menuUi.profileTab === "leaders") {
         const leaderList = complete
             ? (data.leaders || []).map(profileLeaderCard).join("") ||
@@ -1082,10 +1143,24 @@ export function syncProfileDom() {
     if (level) level.textContent = data && data.level != null ? String(data.level) : "—";
     const preferred = panel.querySelector("[data-profile-preferred]");
     if (preferred) preferred.innerHTML = profilePreferredCommanderMarkup(data);
+    const avatar = panel.querySelector<HTMLImageElement>("[data-profile-avatar]");
+    if (avatar) {
+        const preferredLeader = data && data.preferred_leader ? leaderById(data.preferred_leader) : null;
+        const avatarUrl = preferredLeader ? asset("gameplay/avatars/" + leaderArtSlug(preferredLeader) + ".webp") : avatarImage();
+        if (avatar.src !== avatarUrl) avatar.src = avatarUrl;
+    }
     const hero = profileHeroImage(data && data.preferred_leader);
     if (root && root.dataset.hero !== hero) {
         root.style.setProperty("--sow-hero", 'url("' + hero + '")');
         root.dataset.hero = hero;
+    }
+    const cover = panel.querySelector<HTMLElement>("[data-profile-cover]");
+    if (cover) {
+        cover.style.setProperty("--sow-hero", 'url("' + hero + '")');
+    }
+    const statsContainer = panel.querySelector("[data-profile-stats]");
+    if (statsContainer && data) {
+        statsContainer.outerHTML = profileStatsRibbonMarkup(data);
     }
     const status = panel.querySelector<HTMLElement>("[data-profile-status]");
     const snapshotError = data && profileSnapshotError();

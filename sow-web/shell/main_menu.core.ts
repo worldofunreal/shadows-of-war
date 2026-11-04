@@ -77,6 +77,7 @@ interface MenuUi {
     profileDetailRequestKey: string | null;
     profileOwnId: string | null;
     profileLastPhase: string | null;
+    profileNavStack: { accountId: string; tab: string }[];
     storeOpen: boolean;
     skinPickerOpen: boolean;
     heroInfoOpen: boolean;
@@ -141,6 +142,7 @@ export const menuUi: MenuUi = {
     profileDetailRequestKey: null,
     profileOwnId: null,
     profileLastPhase: null,
+    profileNavStack: [],
     storeOpen: false,
     skinPickerOpen: false,
     heroInfoOpen: false,
