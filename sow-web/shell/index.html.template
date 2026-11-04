@@ -574,7 +574,11 @@
                 } catch (error) {
                     // Keep local play available; the SDK retries identity
                     // recovery and online actions wait until it succeeds.
-                    console.warn("WOU-ID session recovery is pending:", error);
+                    // 401/403 is a sign-in state (reauthentication_required), not a fault.
+                    const status = Number(error && error.status || 0);
+                    if (status !== 401 && status !== 403) {
+                        console.warn("WOU-ID session recovery is pending:", error);
+                    }
                 }
             }
             /* POKI_WOU_AUTH_END */

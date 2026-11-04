@@ -2,11 +2,11 @@
  * WouID SDK loader — Shadows of War site edition.
  *
  * Single source of truth is the npm package @worldofunreal/id.
- * This file is a PINNED LOADER, not a fork: to upgrade, bump
- * WOU_ID_VERSION below (must be a published version) and deploy.
+ * This file is a LOADER, not a fork. WOU_ID_VERSION is a major range on
+ * purpose: the newest 2.x loads without a deploy per SDK patch.
  * No auth logic lives here on purpose.
  */
-const WOU_ID_VERSION = "2.0.5";
+const WOU_ID_VERSION = "2";
 const WOU_ID_CDNS = [
   `https://cdn.jsdelivr.net/npm/@worldofunreal/id@${WOU_ID_VERSION}/dist/index.js`,
   `https://unpkg.com/@worldofunreal/id@${WOU_ID_VERSION}/dist/index.js`,
