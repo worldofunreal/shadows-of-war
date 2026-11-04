@@ -46,6 +46,7 @@ import {
     campaignEpisodeSagaId,
     campaignHeroImage,
     cloneConfig,
+    cycleCreateMap,
     joinedLobby,
     lobbyLabel,
     lobbyPlayerCount,
@@ -56,6 +57,8 @@ import {
     renderHome,
     renderPasswordModal,
     renderQueue,
+    selectCreateMap,
+    stepCreateSlider,
     syncCreateDraft,
     updateCampaignSelection,
     updateLobbyViews,
@@ -71,6 +74,7 @@ import {
     loadRankedLeaderboard,
     loadVictoryLeaderboard,
     openProfile,
+    popProfileNav,
     profileApi,
     renderProfile,
     renderProfileDetail,
@@ -656,8 +660,10 @@ function renderTopbar() {
         esc(avatarImage()) +
         "')\"></button>" +
         "<button class='sow-menu__level' type='button' data-command='open_profile' aria-label='" +
-        esc(SOW_t("profile.level", { level })) + "'><strong data-progression-level-value>" +
-        esc(level) + "</strong></button></span>" +
+        esc(SOW_t("profile.level", { level })) +
+        "'><strong data-progression-level-value>" +
+        esc(level) +
+        "</strong></button></span>" +
         "<label class='sow-menu__name'><input data-role='display-name' name='display_name' value=\"" +
         esc(name) +
         "\" maxlength='16' aria-label='" +
@@ -666,8 +672,10 @@ function renderTopbar() {
         "<button class='sow-menu__progress' type='button' data-command='open_profile' aria-label='" +
         esc(SOW_t("menu.open_profile")) +
         "' aria-describedby='sow-menu-account-xp'><span class='sow-menu__xp-track' role='progressbar' aria-label='" +
-        esc(SOW_t("menu.xp")) + "' aria-valuemin='0' aria-valuemax='100' aria-valuenow='" +
-        levelXp + "'><i data-progression-xp-fill style='width:" +
+        esc(SOW_t("menu.xp")) +
+        "' aria-valuemin='0' aria-valuemax='100' aria-valuenow='" +
+        levelXp +
+        "'><i data-progression-xp-fill style='width:" +
         levelXp +
         "%'></i><span class='sow-menu__xp-value' id='sow-menu-account-xp'><b data-progression-xp-value>" +
         esc(levelXp + "/100") +
@@ -1147,7 +1155,10 @@ export function writeProgression(values: ProgressionValues) {
     const gemsValue = progression.querySelector<HTMLElement>("[data-progression-gems-value]");
     if (levelValue) {
         levelValue.textContent = String(displayedProgression.level);
-        levelValue.parentElement?.setAttribute("aria-label", SOW_t("profile.level", { level: displayedProgression.level }));
+        levelValue.parentElement?.setAttribute(
+            "aria-label",
+            SOW_t("profile.level", { level: displayedProgression.level }),
+        );
     }
     const levelXp = headerXp(displayedProgression.xp, displayedProgression.level);
     if (xpValue) xpValue.textContent = levelXp + "/100";
@@ -2281,6 +2292,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "close_profile") {
+        if (popProfileNav()) return;
         menuUi.profileOpen = false;
         menuUi.storeOpen = false;
         menuUi.heroesOpen = false;
@@ -2289,7 +2301,13 @@ root.addEventListener("click", function (event) {
         menuUi.profileMatchDetail = null;
         menuUi.profileDetailLoading = false;
         menuUi.profileDetailRequestKey = null;
+        menuUi.profileNavStack = [];
         render();
+        return;
+    }
+    if (command === "back_to_my_profile") {
+        menuUi.profileNavStack = [];
+        openProfile(menuUi.profileOwnId || (menuUi.state && menuUi.state.account_id) || null);
         return;
     }
     if (command === "profile_tab") {
@@ -2669,6 +2687,28 @@ root.addEventListener("click", function (event) {
         render();
         return;
     }
+    if (command === "cycle_create_map") {
+        cycleCreateMap(Number(target.dataset.dir) || 1);
+        render();
+        return;
+    }
+    if (command === "select_create_map") {
+        const mapKey = target.dataset.mapKey;
+        if (mapKey) {
+            selectCreateMap(mapKey);
+            render();
+        }
+        return;
+    }
+    if (command === "step_create_slider") {
+        const field = target.dataset.field;
+        const step = Number(target.dataset.step) || 0;
+        if (field && step) {
+            stepCreateSlider(field, step);
+            render();
+        }
+        return;
+    }
     if (command === "toggle_settings") {
         menuUi.settingsOpen = !menuUi.settingsOpen;
         if (!menuUi.settingsOpen) {
@@ -2807,8 +2847,7 @@ document.addEventListener("pointercancel", finishMenuPointer);
 window.addEventListener("wou:auth-state-change", function () {
     if (!menuUi.state || root.hidden) return;
     const auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() || {} : {};
-    const reauthenticationRequired =
-        window.SOW_WOU_SESSION_STATUS === "reauthentication_required";
+    const reauthenticationRequired = window.SOW_WOU_SESSION_STATUS === "reauthentication_required";
     if (auth.linked && !reauthenticationRequired && menuUi.authModalOpen) {
         menuUi.authModalOpen = false;
         resetAuthFlow();
@@ -3146,6 +3185,24 @@ root.addEventListener("input", function (event) {
         syncCreateDraft(createForm);
         const valBadge = createForm.querySelector<HTMLElement>("[data-val-for='" + input.name + "']");
         if (valBadge) valBadge.textContent = input.value;
+        if (input instanceof HTMLInputElement && input.type === "range") {
+            const min = Number(input.min) || 0;
+            const max = Number(input.max) || 100;
+            const cur = Number(input.value) || 0;
+            const pct =
+                max > min ? Math.max(0, Math.min(100, Math.round(((cur - min) / (max - min)) * 100))) : 0;
+            input.style.setProperty("--sow-slider-fill", pct + "%");
+        }
+        if (menuUi.createDraft) {
+            const totalBadge = createForm.querySelector<HTMLElement>("[data-create-total-forces] b");
+            if (totalBadge) {
+                const mp = Number(menuUi.createDraft.max_players) || 8;
+                const bc = menuUi.createDraft.bot_count != null ? Number(menuUi.createDraft.bot_count) : 128;
+                const nc =
+                    menuUi.createDraft.nation_count != null ? Number(menuUi.createDraft.nation_count) : 32;
+                totalBadge.textContent = String(mp + bc + nc);
+            }
+        }
     }
     if (input.dataset.setting === "music_volume") {
         const pct = Math.round(Number(input.value) * 100);

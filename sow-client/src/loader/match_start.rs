@@ -203,7 +203,12 @@ impl SowApp {
         self.ui.tutorial_paused_action = None;
         self.sim.paused = self.ui.tutorial_waiting_for_first_attack;
         self.sim.tutorial_observation.reset();
-        self.net.client = None;
+        // An idle orchestrator socket waits out the offline match for the menu return;
+        // relay and lobby sockets close as before.
+        let idle_socket = !self.ws_on_relay() && !self.menu_has_lobby_intent();
+        if let Some(client) = self.net.client.take() {
+            self.net.parked_client = idle_socket.then_some(client);
+        }
         self.net.current_ping_ms = None;
         self.begin_enter_game_loader(leader);
         self.ui.app.splash_state.show_hero_briefing = !tutorial;

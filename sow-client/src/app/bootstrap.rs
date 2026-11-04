@@ -178,6 +178,7 @@ impl SowApp {
                 ws_url,
                 orchestrator_url,
                 is_offline: false,
+                parked_client: None,
                 ws_connect_fail_backoff_ms,
                 ws_connect_not_before,
                 ws_reconnect_after_resume,

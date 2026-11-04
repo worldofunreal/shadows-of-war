@@ -26,7 +26,8 @@ if (typeof (globalThis as any).document === "undefined") {
         innerHeight: 800,
         addEventListener() {},
         SOW_t: (k: string) => k,
-        SOW_leaderArtUrl: (slug: string, variant?: string) => `/assets/leaders/${slug}_${variant || "desktop"}.webp`,
+        SOW_leaderArtUrl: (slug: string, variant?: string) =>
+            `/assets/leaders/${slug}_${variant || "desktop"}.webp`,
     };
     (globalThis as any).SOW_t = (k: string) => k;
     (globalThis as any).HTMLInputElement = class HTMLInputElement {};
@@ -120,14 +121,20 @@ function loadCampaignHarness() {
         SOW_t: (key: string) => (strings as Record<string, string>)[key] || key,
         menuUi: mockMenuUi,
         asset: (p: string) => "/assets/" + p,
-        leaderArtUrl: (slug: string, variant: string = "desktop") => `/assets/leaders/${slug}_${variant}.webp`,
+        leaderArtUrl: (slug: string, variant: string = "desktop") =>
+            `/assets/leaders/${slug}_${variant}.webp`,
         leaderArtSlug: (leader: any) => (leader && leader.slug) || "boudica",
         leaderById: (id: string) => ({ id, slug: id, name: id }),
         leaderDisplayName: (leader: any) => (leader && leader.name) || "Hero",
         formatMapName: (name: string) => name,
         lobbyThumb: (opt: any) => `/maps/${opt.map_name}/thumbnail.webp`,
-        localizedText: (val: any) => (val && val.key ? (strings as Record<string, string>)[val.key] || val.key : String(val || "")),
-        esc: (s: any) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/'/g, "&#39;"),
+        localizedText: (val: any) =>
+            val && val.key ? (strings as Record<string, string>)[val.key] || val.key : String(val || ""),
+        esc: (s: any) =>
+            String(s || "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/'/g, "&#39;"),
         render: () => {},
         activeScreenPanel: () => null,
         root: { dataset: {} },
@@ -231,7 +238,10 @@ test("campaign render generates featured hero showcase, responsive picture, and 
     menuUi.selectedCampaignSaga = "six_sky";
     const htmlFiltered = lobbies.renderCampaign();
     assert.match(htmlFiltered, /data-episode-id=['"]six_sky_ep1['"]/);
-    assert.doesNotMatch(htmlFiltered, /class=['"][^'"]*sow-campaign__episode[^'"]*data-episode-id=['"]boudica['"]/);
+    assert.doesNotMatch(
+        htmlFiltered,
+        /class=['"][^'"]*sow-campaign__episode[^'"]*data-episode-id=['"]boudica['"]/,
+    );
 });
 
 test("campaign expandability: handles 40+ episodes across multiple sagas with correct grouping and hero art", async () => {
@@ -249,7 +259,7 @@ test("campaign expandability: handles 40+ episodes across multiple sagas with co
                 title: `${leader} Mission ${i}`,
                 subtitle: `${leader} Campaign ${i}`,
                 completed: i <= 3, // first 3 completed
-                unlocked: i <= 4,  // 4th unlocked, rest locked
+                unlocked: i <= 4, // 4th unlocked, rest locked
                 replayable: i <= 3,
             });
         }
@@ -296,7 +306,10 @@ test("campaign expandability: handles 40+ episodes across multiple sagas with co
     assert.match(htmlAlexander, /data-hero-slug=['"]alexander['"]/);
     assert.match(htmlAlexander, /data-episode-id=['"]alexander_ep1['"]/);
     assert.match(htmlAlexander, /data-episode-id=['"]alexander_ep8['"]/);
-    assert.doesNotMatch(htmlAlexander, /class=['"][^'"]*sow-campaign__episode[^'"]*data-episode-id=['"]caesar_ep1['"]/);
+    assert.doesNotMatch(
+        htmlAlexander,
+        /class=['"][^'"]*sow-campaign__episode[^'"]*data-episode-id=['"]caesar_ep1['"]/,
+    );
 });
 
 test("campaign CSS includes full responsive rules for desktop, mobile vertical, and mobile compact horizontal", () => {
@@ -332,4 +345,105 @@ test("campaign CSS includes full responsive rules for desktop, mobile vertical, 
 
     // Reduced motion support
     assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+});
+
+test("custom game war room renders visual map theatre, in-art arrows, thumbnail strip, and icon-driven controls", async () => {
+    (globalThis as any).SOW_renderDropdown = (cfg: any) =>
+        `<div class="sow-control-dropdown" data-control-dropdown data-dropdown-key="${cfg.key}"><input data-dropdown-input name="${cfg.name || ""}" value="${cfg.value || ""}"></div>`;
+    const lobbies = await import("./main_menu.lobbies.ts");
+    const { menuUi } = await import("./main_menu.core.ts");
+
+    menuUi.state = {
+        phase: "MainMenu",
+        map_catalog: [
+            {
+                key: "world",
+                name: "World",
+                width: 2000,
+                height: 1000,
+                default_roster: "classic",
+                roster_presets: [{ id: "classic", name: "Classic" }],
+            },
+            {
+                key: "europe",
+                name: "Europe",
+                width: 1600,
+                height: 1200,
+                default_roster: null,
+                roster_presets: [],
+            },
+            {
+                key: "eastasia",
+                name: "East Asia",
+                width: 1500,
+                height: 1400,
+                default_roster: null,
+                roster_presets: [],
+            },
+        ],
+        custom_game_config: {
+            map_name: "world",
+            map_width: 2000,
+            map_height: 1000,
+            game_mode: "FFA",
+            bot_difficulty: "Vanilla",
+            random_spawn: true,
+            max_players: 8,
+            bot_count: 128,
+            nation_count: 32,
+            seed: 42,
+        },
+        bot_limits: { tribes: 400, nations: 200 },
+    } as any;
+    menuUi.createDraft = null;
+    menuUi.createOffline = false;
+    menuUi.createPrivate = false;
+
+    const htmlOnline = lobbies.renderCreate();
+    assert.match(htmlOnline, /data-create-map-stage/);
+    assert.match(htmlOnline, /data-command=['"]cycle_create_map['"][^>]*data-dir=['"]-1['"]/);
+    assert.match(htmlOnline, /data-command=['"]cycle_create_map['"][^>]*data-dir=['"]1['"]/);
+    assert.match(htmlOnline, /class=['"][^'"]*sow-create__map-strip/);
+    assert.match(htmlOnline, /data-command=['"]select_create_map['"][^>]*data-map-key=['"]europe['"]/);
+    assert.match(htmlOnline, /class=['"][^'"]*sow-create__mode-grid/);
+    assert.match(htmlOnline, /data-command=['"]step_create_slider['"][^>]*data-field=['"]max_players['"]/);
+    assert.match(htmlOnline, /data-command=['"]open_campaign['"]/);
+
+    // Cycle to next map triggers directional entrance animation
+    lobbies.cycleCreateMap(1);
+    assert.equal(menuUi.createDraft?.map_name, "europe");
+    const htmlNext = lobbies.renderCreate();
+    assert.match(htmlNext, /is-animating-enter-next/);
+
+    // Direct map selection triggers directional entrance animation
+    lobbies.selectCreateMap("world");
+    assert.equal(menuUi.createDraft?.map_name, "world");
+    const htmlPrev = lobbies.renderCreate();
+    assert.match(htmlPrev, /is-animating-enter-prev/);
+
+    // Step slider helper clamps and increments accurately
+    lobbies.stepCreateSlider("max_players", 2);
+    assert.equal(menuUi.createDraft?.max_players, 10);
+    lobbies.stepCreateSlider("bot_count", -16);
+    assert.equal(menuUi.createDraft?.bot_count, 112);
+
+    // Browser screen renders compact war room header and toolbar
+    const browserHtml = lobbies.renderBrowser();
+    assert.match(browserHtml, /class=['"][^'"]*sow-browser__header/);
+    assert.match(browserHtml, /class=['"][^'"]*sow-browser__toolbar/);
+    assert.match(browserHtml, /data-command=['"]open_create['"]/);
+});
+
+test("custom game and lobby browser CSS support desktop, mobile vertical, and mobile compact horizontal", () => {
+    const createCss = fs.readFileSync(path.join(shell, "main_menu.create.css"), "utf8");
+    const lobbiesCss = fs.readFileSync(path.join(shell, "main_menu.lobbies.css"), "utf8");
+
+    assert.match(createCss, /@keyframes\s+sow-create-map-enter-next/);
+    assert.match(createCss, /@keyframes\s+sow-create-map-enter-prev/);
+    assert.match(createCss, /@media\s*\(max-width:\s*680px\),\s*\(orientation:\s*portrait\)/);
+    assert.match(createCss, /@media\s*\(orientation:\s*landscape\)\s*and\s*\(max-height:\s*560px\)/);
+
+    assert.match(lobbiesCss, /\.sow-browser__header/);
+    assert.match(lobbiesCss, /@media\s*\(max-width:\s*680px\),\s*\(orientation:\s*portrait\)/);
+    assert.match(lobbiesCss, /@media\s*\(orientation:\s*landscape\)\s*and\s*\(max-height:\s*560px\)/);
 });

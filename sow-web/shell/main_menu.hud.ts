@@ -928,7 +928,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     function unitIcon(name: string): string {
         return (
             '<span class="sow-hud__building-icon is-pixel-art" style="background-image:url(&quot;' +
-            escapeHudText(asset("gameplay/units/" + name + ".png")) +
+            escapeHudText(asset("gameplay/units/" + name + ".webp")) +
             '&quot;);background-size:contain;" aria-hidden="true"></span>'
         );
     }
@@ -6243,14 +6243,15 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 const side = transferSide(transferLive, hud);
                 const sendBlock = transferBlockReason("send", transferLive, hud);
                 const requestBlock = transferBlockReason("request", transferLive, hud);
+                // The panel carries one action, the side in focus; the other CTA is hidden, not greyed out.
+                hudRefs!.transferSend.hidden = side !== "send";
+                hudRefs!.transferRequest.hidden = side !== "request";
                 hudRefs!.transferSend.disabled = sendBlock !== null;
                 hudRefs!.transferRequest.disabled = requestBlock !== null;
                 hudRefs!.transferSend.classList.toggle("is-primary", side === "send");
                 hudRefs!.transferRequest.classList.toggle("is-primary", side === "request");
-                // The side in focus explains its block first; the other side's block is the fallback.
-                const hint =
-                    (side === "send" ? sendBlock : requestBlock) ??
-                    (side === "send" ? requestBlock : sendBlock);
+                // Only the side in focus can explain a block; a hidden side's reason must not show.
+                const hint = side === "send" ? sendBlock : requestBlock;
                 hudRefs!.transferHint.textContent = hint ?? "";
                 hudRefs!.transferHint.hidden = hint === null;
                 if (

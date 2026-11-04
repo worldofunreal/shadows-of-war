@@ -31,6 +31,11 @@ impl SowApp {
         let mut natural_finish = None;
         let mut map_download_to_start = None;
 
+        // Parked sockets only keep the session alive; their traffic is discarded.
+        if let Some(parked) = self.net.parked_client.as_ref() {
+            while parked.rx.try_recv().is_ok() {}
+        }
+
         // Process network messages
         if let Some(c) = self.net.client.as_ref()
             && !ws_disconnected

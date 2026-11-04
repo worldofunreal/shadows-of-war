@@ -157,35 +157,44 @@ struct Paths {
     wasm_cache: PathBuf,
     site_media: PathBuf,
     runtime_assets: PathBuf,
+    app_icons: PathBuf,
+    android_resources: PathBuf,
+    art_pipeline: Option<ArtPipeline>,
 }
 
 impl Paths {
     fn discover() -> Result<Self> {
-        Self::discover_with_runtime_assets("runtime-assets")
+        Self::discover_with_runtime_assets("runtime-assets", true)
     }
 
-    fn discover_for_prod() -> Result<Self> {
-        Self::discover_with_runtime_assets("prod-runtime-assets")
+    fn discover_for_prod(server_only: bool) -> Result<Self> {
+        Self::discover_with_runtime_assets("prod-runtime-assets", !server_only)
     }
 
     fn discover_for_poki() -> Result<Self> {
-        Self::discover_with_runtime_assets("poki-runtime-assets")
+        Self::discover_with_runtime_assets("poki-runtime-assets", true)
     }
 
-    fn discover_with_runtime_assets(runtime_assets_name: &str) -> Result<Self> {
+    fn discover_with_runtime_assets(runtime_assets_name: &str, prepare_art: bool) -> Result<Self> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .canonicalize()?;
+        let art_pipeline = prepare_art.then(|| ArtPipeline::load(&root)).transpose()?;
         let t = env::var("CARGO_TARGET_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| root.join("target"));
         let s = root.join("dist/.sow-state");
         let runtime_assets = s.join(runtime_assets_name);
-        stage_runtime_assets(&root, &runtime_assets)?;
+        if let Some(art_pipeline) = &art_pipeline {
+            stage_runtime_assets(&root, &runtime_assets, art_pipeline)?;
+        }
         Ok(Self {
             wasm_input: t.join("wasm32-unknown-unknown/wasm-release/sow_client.wasm"),
             wasm_cache: s.join("wasm-opt-cache"),
             site_media: runtime_assets.join("site/media"),
+            app_icons: runtime_assets.join("site-icons"),
+            android_resources: runtime_assets.join("android/res"),
+            art_pipeline,
             shell: root.join("sow-web/shell"),
             assets_shell: runtime_assets.join("shell"),
             assets_gameplay: runtime_assets.join("gameplay"),
@@ -202,56 +211,756 @@ impl Paths {
             runtime_assets,
         })
     }
+
+    fn art_pipeline(&self) -> Result<&ArtPipeline> {
+        self.art_pipeline
+            .as_ref()
+            .context("art pipeline is unavailable in server-only mode")
+    }
 }
 
-/// Icons and store art: (file stem in assets/art/<dir>/, published path, max side in px).
-const ART_ICONS: [(&str, &str, &str, u32); 14] = [
-    ("icons", "gold", "gameplay/currency/gold.webp", 128),
-    ("icons", "gem", "gameplay/currency/gem.webp", 128),
-    ("icons", "crown", "gameplay/currency/crown.webp", 128),
-    ("icons", "laurel", "gameplay/currency/laurel.webp", 128),
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct ArtProfile {
+    format: String,
+    max_width: u32,
+    max_height: u32,
+    quality: u32,
+    alpha: String,
+    resample: String,
+    lossless: bool,
+    #[serde(default)]
+    crop: Option<String>,
+    max_bytes: u64,
+    recipe_version: u32,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct ArtOptimizationConfig {
+    version: u32,
+    webp_method: u32,
+    svgo_version: String,
+    svg_max_bytes: u64,
+    svg_recipe_version: u32,
+    profiles: std::collections::BTreeMap<String, ArtProfile>,
+}
+
+struct ArtPipeline {
+    root: PathBuf,
+    cache_root: PathBuf,
+    config_path: PathBuf,
+    config: ArtOptimizationConfig,
+    magick_version: String,
+    svgo_version: String,
+}
+
+impl ArtPipeline {
+    fn load(root: &Path) -> Result<Self> {
+        let config_path = root.join("sow-dist/art-optimization.toml");
+        let config_text = fs::read_to_string(&config_path)
+            .with_context(|| format!("read art optimization profiles: {}", config_path.display()))?;
+        let config: ArtOptimizationConfig = toml::from_str(&config_text)
+            .with_context(|| format!("parse art optimization profiles: {}", config_path.display()))?;
+        if config.version != 1 || config.webp_method > 6 || config.profiles.is_empty() || config.svg_max_bytes == 0 || config.svg_recipe_version == 0 {
+            bail!("unsupported or empty art optimization profile set in {}", config_path.display());
+        }
+        for (name, profile) in &config.profiles {
+            if !["png", "webp"].contains(&profile.format.as_str())
+                || profile.max_width == 0
+                || profile.max_height == 0
+                || profile.quality > 100
+                || profile.max_bytes == 0
+                || profile.recipe_version == 0
+                || profile.alpha != "preserve"
+                || !["lanczos", "point"].contains(&profile.resample.as_str())
+                || profile.crop.as_deref().is_some_and(|crop| crop != "center_square")
+                || (profile.lossless && profile.format != "webp" && profile.format != "png")
+            {
+                bail!("invalid art optimization profile {name:?} in {}", config_path.display());
+            }
+        }
+        let magick_version = output("magick", &["-version"])
+            .context("art distribution requires ImageMagick (magick)")?
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .to_owned();
+        let svgo_version = output("svgo", &["--version"])
+            .context("art distribution requires SVGO (svgo)")?;
+        if svgo_version.trim() != config.svgo_version {
+            bail!(
+                "art profiles require SVGO {}, found {}; update the pinned profile/tool together",
+                config.svgo_version,
+                svgo_version.trim()
+            );
+        }
+        let pipeline = Self {
+            root: root.to_path_buf(),
+            cache_root: root.join("dist/.sow-state/art-optimization-cache"),
+            config_path,
+            config,
+            magick_version,
+            svgo_version: svgo_version.trim().to_owned(),
+        };
+        pipeline.validate_profile_set()?;
+        Ok(pipeline)
+    }
+
+    fn profile(&self, name: &str) -> Result<&ArtProfile> {
+        self.config
+            .profiles
+            .get(name)
+            .with_context(|| format!("missing art optimization profile {name:?}"))
+    }
+
+    fn publish_image(
+        &self,
+        source: &Path,
+        destination: &Path,
+        profile_name: &str,
+        exact_size: Option<(u32, u32)>,
+        quality_override: Option<u32>,
+    ) -> Result<()> {
+        self.publish_image_with_options(source, destination, profile_name, exact_size, quality_override, false)
+    }
+
+    fn publish_preview_image(
+        &self,
+        source: &Path,
+        destination: &Path,
+        profile_name: &str,
+        exact_size: Option<(u32, u32)>,
+        quality_override: Option<u32>,
+    ) -> Result<()> {
+        self.publish_image_with_options(source, destination, profile_name, exact_size, quality_override, true)
+    }
+
+    fn publish_image_with_options(
+        &self,
+        source: &Path,
+        destination: &Path,
+        profile_name: &str,
+        exact_size: Option<(u32, u32)>,
+        quality_override: Option<u32>,
+        allow_over_cap: bool,
+    ) -> Result<()> {
+        let profile = self.profile(profile_name)?;
+        let output_format = profile.format.as_str();
+        if destination.extension().and_then(|ext| ext.to_str()) != Some(output_format) {
+            bail!(
+                "art profile {profile_name:?} outputs .{output_format}, but destination is {}",
+                destination.display()
+            );
+        }
+        if let Some((width, height)) = exact_size {
+            if width == 0 || height == 0 || width > profile.max_width || height > profile.max_height {
+                bail!("requested {width}x{height} exceeds art profile {profile_name:?}");
+            }
+        }
+        let quality = quality_override.unwrap_or(profile.quality);
+        if quality > 100 || (quality_override.is_some() && profile.lossless) {
+            bail!("invalid quality override for art profile {profile_name:?}");
+        }
+        let source_hash = file_sha256(source)?;
+        let recipe_hash = self.image_recipe_hash(profile_name, profile, exact_size, quality, allow_over_cap)?;
+        let cache_file = self
+            .cache_root
+            .join(profile_name)
+            .join(format!("{source_hash}-{recipe_hash}.{output_format}"));
+        fs::create_dir_all(cache_file.parent().context("art cache has no parent")?)?;
+        let source_has_alpha = image_has_transparency(source)?;
+        let cached = cache_file.is_file()
+            && self.validate_image_output(&cache_file, profile, exact_size, source_has_alpha, !allow_over_cap).is_ok();
+        if !cached {
+            let temp = cache_file.with_file_name(format!(
+                "{}-{}.tmp.{}",
+                cache_file.file_stem().unwrap_or_default().to_string_lossy(),
+                std::process::id(),
+                output_format
+            ));
+            let mut magick = command("magick");
+            magick.arg(source).args(["-filter", profile.resample.as_str()]);
+            if let Some((width, height)) = exact_size {
+                let geometry = format!("{width}x{height}!");
+                magick.args(["-resize", geometry.as_str()]);
+            } else if let Some("center_square") = profile.crop.as_deref() {
+                let side = profile.max_width.min(profile.max_height);
+                let geometry = format!("{side}x{side}^");
+                let extent = format!("{side}x{side}");
+                magick
+                    .args(["-resize", geometry.as_str(), "-gravity", "center", "-extent", extent.as_str()]);
+            } else {
+                let geometry = format!("{}x{}>", profile.max_width, profile.max_height);
+                magick.args(["-resize", geometry.as_str()]);
+            }
+            magick.arg("-strip");
+            if output_format == "webp" {
+                let method = format!("webp:method={}", self.config.webp_method);
+                magick.args(["-quality", &quality.to_string(), "-define", method.as_str()]);
+                if profile.lossless {
+                    magick.args(["-define", "webp:lossless=true"]);
+                } else {
+                    magick.args(["-define", "webp:alpha-quality=100"]);
+                }
+            } else {
+                magick.args([
+                    "-define",
+                    "png:compression-level=9",
+                    "-define",
+                    "png:compression-filter=5",
+                ]);
+            }
+            let status = magick
+                .arg(&temp)
+                .status()
+                .with_context(|| format!("optimize image {} with ImageMagick", source.display()))?;
+            if !status.success() {
+                bail!("ImageMagick failed to optimize {}", source.display());
+            }
+            if let Err(error) = self.validate_image_output(&temp, profile, exact_size, source_has_alpha, !allow_over_cap) {
+                let _ = fs::remove_file(&temp);
+                return Err(error).with_context(|| format!("validate art output for {}", source.display()));
+            }
+            fs::rename(&temp, &cache_file)?;
+        }
+        if file_sha256(destination).ok().as_deref() != file_sha256(&cache_file).ok().as_deref() {
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(&cache_file, destination)
+                .with_context(|| format!("publish optimized image {}", destination.display()))?;
+        }
+        Ok(())
+    }
+
+    fn image_recipe_hash(
+        &self,
+        profile_name: &str,
+        profile: &ArtProfile,
+        exact_size: Option<(u32, u32)>,
+        quality: u32,
+        allow_over_cap: bool,
+    ) -> Result<String> {
+        let recipe = serde_json::json!({
+            "profile": profile_name,
+            "settings": profile,
+            "exact_size": exact_size,
+            "quality": quality,
+            "allow_over_cap": allow_over_cap,
+            "magick": self.magick_version,
+            "optimization_version": self.config.version,
+            "webp_method": self.config.webp_method,
+        });
+        Ok(hex::encode(Sha256::digest(serde_json::to_vec(&recipe)?)))
+    }
+
+    fn validate_image_output(
+        &self,
+        output: &Path,
+        profile: &ArtProfile,
+        exact_size: Option<(u32, u32)>,
+        source_has_alpha: bool,
+        enforce_byte_cap: bool,
+    ) -> Result<()> {
+        let size = fs::metadata(output)
+            .with_context(|| format!("read optimized image {}", output.display()))?
+            .len();
+        if size == 0 || (enforce_byte_cap && size > profile.max_bytes) {
+            bail!(
+                "optimized image {} weighs {size} bytes; profile cap is {}",
+                output.display(),
+                profile.max_bytes
+            );
+        }
+        let dimensions = image::image_dimensions(output)
+            .with_context(|| format!("read optimized image dimensions {}", output.display()))?;
+        if let Some(expected) = exact_size {
+            if dimensions != expected {
+                bail!("optimized image {} is {dimensions:?}; expected {expected:?}", output.display());
+            }
+        } else if dimensions.0 > profile.max_width || dimensions.1 > profile.max_height {
+            bail!(
+                "optimized image {} is {}x{}; profile maximum is {}x{}",
+                output.display(), dimensions.0, dimensions.1, profile.max_width, profile.max_height
+            );
+        }
+        if source_has_alpha && !image_has_transparency(output)? {
+            bail!("optimized image {} lost source transparency", output.display());
+        }
+        Ok(())
+    }
+
+    fn publish_svg(&self, source: &Path, destination: &Path) -> Result<()> {
+        let source_hash = file_sha256(source)?;
+        let recipe = serde_json::json!({
+            "source": source_hash,
+            "svgo": self.svgo_version,
+            "config_version": self.config.version,
+            "recipe_version": self.config.svg_recipe_version,
+            "max_bytes": self.config.svg_max_bytes,
+        });
+        let recipe_hash = hex::encode(Sha256::digest(serde_json::to_vec(&recipe)?));
+        let cache_file = self
+            .cache_root
+            .join("svg")
+            .join(format!("{}-{recipe_hash}.svg", source_hash));
+        fs::create_dir_all(cache_file.parent().context("SVG cache has no parent")?)?;
+        let valid_cache = fs::read_to_string(&cache_file).is_ok_and(|svg| {
+            svg.contains("<svg")
+                && !svg.trim().is_empty()
+                && fs::metadata(&cache_file)
+                    .is_ok_and(|metadata| metadata.len() <= self.config.svg_max_bytes)
+        });
+        if !valid_cache {
+            let temp = cache_file.with_file_name(format!(
+                "{}-{}.tmp.svg",
+                cache_file.file_stem().unwrap_or_default().to_string_lossy(),
+                std::process::id()
+            ));
+            let status = command("svgo")
+                .args(["--multipass", "--quiet", "-i"])
+                .arg(source)
+                .arg("-o")
+                .arg(&temp)
+                .status()
+                .with_context(|| format!("minify SVG {} with SVGO", source.display()))?;
+            if !status.success() {
+                bail!("SVGO failed to minify {}", source.display());
+            }
+            let optimized = fs::read_to_string(&temp)
+                .with_context(|| format!("read minified SVG {}", temp.display()))?;
+            let size = fs::metadata(&temp)?.len();
+            if !optimized.contains("<svg") || optimized.trim().is_empty() || size > self.config.svg_max_bytes {
+                let _ = fs::remove_file(&temp);
+                bail!("minified SVG {} is invalid or exceeds {} bytes", source.display(), self.config.svg_max_bytes);
+            }
+            fs::rename(&temp, &cache_file)?;
+        }
+        if file_sha256(destination).ok().as_deref() != file_sha256(&cache_file).ok().as_deref() {
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(&cache_file, destination)
+                .with_context(|| format!("publish minified SVG {}", destination.display()))?;
+        }
+        Ok(())
+    }
+
+    fn publish_asset(
+        &self,
+        source: &Path,
+        destination: &Path,
+        public_path: &Path,
+        profile_override: Option<&str>,
+    ) -> Result<()> {
+        let extension = source.extension().and_then(|ext| ext.to_str()).unwrap_or_default().to_ascii_lowercase();
+        match extension.as_str() {
+            "svg" => self.publish_svg(source, destination),
+            "png" | "webp" | "jpg" | "jpeg" | "gif" | "bmp" | "tif" | "tiff" | "avif" => {
+                let profile = profile_override
+                    .or_else(|| profile_for_distribution_path(public_path))
+                    .with_context(|| format!("raster art has no sow-dist profile: {}", public_path.display()))?;
+                self.publish_image(source, destination, profile, None, None)
+            }
+            _ => {
+                if let Some(parent) = destination.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::copy(source, destination)
+                    .with_context(|| format!("copy distribution file {}", source.display()))?;
+                Ok(())
+            }
+        }
+    }
+
+    fn copy_distribution_tree(&self, source: &Path, destination: &Path, public_prefix: &Path) -> Result<()> {
+        fs::create_dir_all(destination)?;
+        for entry in walkdir::WalkDir::new(source).sort_by_file_name() {
+            let entry = entry?;
+            let relative = entry.path().strip_prefix(source)?;
+            if entry.file_type().is_dir() {
+                fs::create_dir_all(destination.join(relative))?;
+                continue;
+            }
+            let public_path = public_prefix.join(relative);
+            self.publish_asset(entry.path(), &destination.join(relative), &public_path, None)?;
+        }
+        Ok(())
+    }
+
+    fn validate_profile_set(&self) -> Result<()> {
+        for required in [
+            "ability_icon", "avatar_portrait_192", "avatar_portrait_256", "fullbleed_wide", "fullbleed_tall",
+            "poki_leader_wide", "poki_leader_tall",
+            "site_still_wide", "site_still_tall", "ui_icon_128", "ui_icon_256",
+            "unit_icon", "pixel_art", "atlas_lossless", "loader_ui", "app_icon",
+            "map_preview", "map_thumbnail", "campaign_poster", "video_poster", "guide_image", "poki_thumbnail",
+        ] {
+            self.profile(required)?;
+        }
+        Ok(())
+    }
+
+    fn validate_staged_image_inventory(&self, staged_root: &Path) -> Result<()> {
+        for entry in walkdir::WalkDir::new(staged_root) {
+            let entry = entry?;
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let path = entry.path();
+            let relative = path.strip_prefix(staged_root)?;
+            let extension = path.extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase();
+            if extension == "svg" {
+                let svg = fs::read_to_string(path).with_context(|| format!("read staged SVG {}", path.display()))?;
+                if !svg.contains("<svg") || fs::metadata(path)?.len() > self.config.svg_max_bytes {
+                    bail!("staged SVG is invalid or over its profile cap: {}", path.display());
+                }
+                continue;
+            }
+            if !["png", "webp", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "avif"].contains(&extension.as_str()) {
+                continue;
+            }
+            let public_path = relative;
+            let profile_name = profile_for_distribution_path(public_path)
+                .with_context(|| format!("staged image has no distribution profile: {}", path.display()))?;
+            let profile = self.profile(profile_name)?;
+            let exact_size = staged_icon_size(public_path);
+            self.validate_image_output(path, profile, exact_size, false, true)
+                .with_context(|| format!("staged image violates {profile_name:?}: {}", path.display()))?;
+        }
+        Ok(())
+    }
+
+    fn run_preview(&self, selected_profile: Option<&str>) -> Result<PathBuf> {
+        let mut assets = collect_art_preview_assets(&self.root)?;
+        assets.sort_by(|left, right| left.profile.cmp(&right.profile).then_with(|| left.source.cmp(&right.source)));
+        if let Some(profile) = selected_profile {
+            if profile != "svg" {
+                self.profile(profile)?;
+            }
+            assets.retain(|asset| asset.profile == profile);
+            if assets.is_empty() {
+                bail!("no source art is mapped to preview profile {profile:?}");
+            }
+        } else {
+            let mut seen = std::collections::BTreeSet::new();
+            assets.retain(|asset| seen.insert(asset.profile.clone()));
+        }
+
+        let output = self.root.join("dist/.sow-state/art-preview");
+        if output.exists() {
+            fs::remove_dir_all(&output)?;
+        }
+        fs::create_dir_all(&output)?;
+        let mut html = String::from("<!doctype html><meta charset=\"utf-8\"><title>SOW art preview</title><style>body{font:16px system-ui;background:#111;color:#eee;margin:2rem}h1,h2{color:#d9b768}table{border-collapse:collapse;width:100%;margin:1rem 0 3rem}th,td{border:1px solid #444;padding:.6rem;text-align:left;vertical-align:top}img{max-width:320px;max-height:320px;object-fit:contain;background:#222}figure{margin:0}small{color:#aaa}a{color:#9cf}</style><h1>Shadows of War — art preview</h1><p>Masters remain untouched. Variants use the distribution recipes; byte-cap overruns are shown for comparison.</p>");
+        let mut rows = Vec::new();
+        for asset in &assets {
+            let source_bytes = fs::metadata(&asset.source)?.len();
+            let relative_source = asset.source.strip_prefix(&self.root).unwrap_or(&asset.source).to_string_lossy().into_owned();
+            let safe_id = hex::encode(Sha256::digest(relative_source.as_bytes()));
+            let source_url = format!("file://{}", asset.source.display());
+            let folder = output.join(&asset.profile);
+            fs::create_dir_all(&folder)?;
+            let mut figures = String::new();
+            let mut metrics = Vec::new();
+            if asset.profile == "svg" {
+                let destination = folder.join(format!("{safe_id}.svg"));
+                self.publish_svg(&asset.source, &destination)?;
+                let bytes = fs::metadata(&destination)?.len();
+                let candidate = destination.strip_prefix(&output)?.to_string_lossy();
+                figures.push_str(&format!("<td><figure><a href=\"{}\"><img src=\"{}\" alt=\"minified SVG\"></a><figcaption>SVGO · {bytes} bytes</figcaption></figure></td>", html_text(&candidate), html_text(&candidate)));
+                metrics.push(format!("SVG {source_bytes} → {bytes} bytes"));
+            } else {
+                let profile = self.profile(&asset.profile)?;
+                let qualities = if profile.format == "webp" && !profile.lossless {
+                    let base = profile.quality;
+                    let mut values = vec![base.saturating_sub(10).max(45), base, (base + 10).min(95)];
+                    values.sort_unstable();
+                    values.dedup();
+                    values.into_iter().map(Some).collect::<Vec<_>>()
+                } else {
+                    vec![None]
+                };
+                for quality in qualities {
+                    let label = quality.map_or_else(|| "lossless".to_owned(), |value| format!("q{value}"));
+                    let destination = folder.join(format!("{safe_id}-{label}.{}", profile.format));
+                    self.publish_preview_image(&asset.source, &destination, &asset.profile, asset.exact_size, quality)?;
+                    let bytes = fs::metadata(&destination)?.len();
+                    let dimensions = image::image_dimensions(&destination)?;
+                    let candidate = destination.strip_prefix(&output)?.to_string_lossy();
+                    let cap_note = if bytes > profile.max_bytes { format!(" · sobre límite {}", profile.max_bytes) } else { String::new() };
+                    figures.push_str(&format!("<td><figure><a href=\"{}\"><img src=\"{}\" alt=\"{}\"></a><figcaption>{label} · {}×{} · {bytes} bytes{cap_note} · {:.1}% menor</figcaption></figure></td>", html_text(&candidate), html_text(&candidate), html_text(&relative_source), dimensions.0, dimensions.1, (1.0 - bytes as f64 / source_bytes.max(1) as f64) * 100.0));
+                    metrics.push(format!("{label} {}×{} {bytes} bytes", dimensions.0, dimensions.1));
+                }
+            }
+            html.push_str(&format!("<h2>{} · {}</h2><table><thead><tr><th>Original de alta resolución</th><th colspan=\"3\">Alternativas para distribución</th></tr></thead><tbody><tr><td><a href=\"{}\">{}</a><br><small>{source_bytes} bytes</small></td>{figures}</tr></tbody></table>", html_text(&asset.profile), html_text(&relative_source), html_text(&source_url), html_text(&relative_source)));
+            rows.push(format!("{}\t{}\t{}\t{}", asset.profile, relative_source, source_bytes, metrics.join(" | ")));
+        }
+        let report = output.join("index.html");
+        fs::write(&report, html)?;
+        fs::write(output.join("report.tsv"), format!("profile\tsource\tsource_bytes\tcandidates\n{}\n", rows.join("\n")))?;
+        println!("Art preview: {} source(s) -> {}", assets.len(), report.display());
+        Ok(report)
+    }
+}
+
+fn image_has_transparency(path: &Path) -> Result<bool> {
+    let image = image::open(path).with_context(|| format!("decode image alpha {}", path.display()))?;
+    if !image.color().has_alpha() {
+        return Ok(false);
+    }
+    Ok(image.into_rgba8().pixels().any(|pixel| pixel.0[3] < 255))
+}
+
+struct ArtPreviewAsset {
+    source: PathBuf,
+    profile: String,
+    exact_size: Option<(u32, u32)>,
+}
+
+fn profile_for_distribution_path(path: &Path) -> Option<&'static str> {
+    let path = path.to_string_lossy().replace('\\', "/");
+    let name = Path::new(&path).file_name()?.to_string_lossy();
+    if path.starts_with("shell/loader/") {
+        if name == "sow-splash-desktop.webp" {
+            return Some("fullbleed_wide");
+        }
+        if name == "sow-splash-mobile.webp" {
+            return Some("fullbleed_tall");
+        }
+        return Some("loader_ui");
+    }
+    if path.starts_with("shell/leaders/") {
+        return Some(if name.contains("_mobile.") { "fullbleed_tall" } else { "fullbleed_wide" });
+    }
+    if path == "shell/brand/app-icon.png" || path == "icon-192.png" || path == "icon-512.png" || path == "icon-512-maskable.png" {
+        return Some("app_icon");
+    }
+    if path.starts_with("site-icons/") || path.starts_with("android/res/mipmap-") {
+        return Some("app_icon");
+    }
+    if path.starts_with("shell/brand/") || path.starts_with("shell/ranked/") || path.starts_with("gameplay/skins/") {
+        return (name.ends_with(".svg")).then_some("svg");
+    }
+    if path.starts_with("gameplay/icons/abilities/") {
+        return Some("ability_icon");
+    }
+    if path.starts_with("gameplay/currency/")
+        || path.starts_with("gameplay/store/")
+        || path.starts_with("shell/mobile-nav/")
+        || path == "gameplay/icons/battle_icon_cutout.webp"
+    {
+        return Some("ui_icon_128");
+    }
+    if path == "gameplay/icons/tutorial_hand.webp" || path == "gameplay/icons/surrender_flag.webp" {
+        return Some("ui_icon_256");
+    }
+    if path.starts_with("gameplay/avatars/") {
+        return Some("avatar_portrait_256");
+    }
+    if path.starts_with("gameplay/units/") {
+        return Some(if ["trade-ship.webp", "transport-ship.webp", "warship.webp"].contains(&name.as_ref()) { "pixel_art" } else { "unit_icon" });
+    }
+    if path == "gameplay/buildings/atlas.webp" || path == "gameplay/icons/nameplate_status_atlas.webp" {
+        return Some("atlas_lossless");
+    }
+    if path.starts_with("site/media/") {
+        if name == "hero-loop.webp" || name == "gameplay.webp" {
+            return Some("video_poster");
+        }
+        return Some(if name.contains("-mobile.") || name == "support-six-sky.webp" { "site_still_tall" } else { "site_still_wide" });
+    }
+    if path.starts_with("maps/") {
+        if name == "thumbnail.webp" { return Some("map_thumbnail"); }
+        if name == "preview.webp" { return Some("map_preview"); }
+    }
+    if path.starts_with("campaign/") && name.ends_with(".poster.webp") {
+        return Some("campaign_poster");
+    }
+    if path.starts_with("guides/") {
+        return Some("guide_image");
+    }
+    if path.starts_with("sow-web/site/") && name.ends_with(".svg") {
+        return Some("svg");
+    }
+    None
+}
+
+fn staged_icon_size(path: &Path) -> Option<(u32, u32)> {
+    let name = path.file_name()?.to_str()?;
+    match name {
+        "icon-192.png" => Some((192, 192)),
+        "icon-512.png" | "icon-512-maskable.png" => Some((512, 512)),
+        "ic_launcher.png" | "ic_launcher_round.png" => {
+            let density = path.parent()?.file_name()?.to_str()?;
+            let side = match density {
+                "mipmap-mdpi" => 48,
+                "mipmap-hdpi" => 72,
+                "mipmap-xhdpi" => 96,
+                "mipmap-xxhdpi" => 144,
+                "mipmap-xxxhdpi" => 192,
+                _ => return None,
+            };
+            Some((side, side))
+        }
+        _ => None,
+    }
+}
+
+fn preview_source_named(dir: &Path, stem: &str) -> Option<PathBuf> {
+    ["webp", "png", "jpg", "jpeg"]
+        .iter()
+        .map(|extension| dir.join(format!("{stem}.{extension}")))
+        .find(|path| path.is_file())
+}
+
+fn push_preview_asset(
+    assets: &mut Vec<ArtPreviewAsset>,
+    source: PathBuf,
+    profile: &str,
+    exact_size: Option<(u32, u32)>,
+) {
+    if source.is_file() {
+        assets.push(ArtPreviewAsset {
+            source,
+            profile: profile.to_owned(),
+            exact_size,
+        });
+    }
+}
+
+fn collect_art_preview_assets(root: &Path) -> Result<Vec<ArtPreviewAsset>> {
+    let mut assets = Vec::new();
+    let art = root.join("assets/art");
+    for entry in walkdir::WalkDir::new(&art).sort_by_file_name() {
+        let entry = entry?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        let relative = path.strip_prefix(&art)?.to_string_lossy().replace('\\', "/");
+        let name = path.file_name().unwrap_or_default().to_string_lossy();
+        let extension = path.extension().and_then(|value| value.to_str()).unwrap_or_default();
+        if extension == "svg" {
+            push_preview_asset(&mut assets, path.to_path_buf(), "svg", None);
+        } else if relative.starts_with("icons/abilities/") {
+            push_preview_asset(&mut assets, path.to_path_buf(), "ability_icon", None);
+        } else if relative.starts_with("heroes/") {
+            let profile = if name.contains("_mobile.") { "fullbleed_tall" } else { "fullbleed_wide" };
+            push_preview_asset(&mut assets, path.to_path_buf(), profile, None);
+            let portal_profile = if name.contains("_mobile.") { "poki_leader_tall" } else { "poki_leader_wide" };
+            push_preview_asset(&mut assets, path.to_path_buf(), portal_profile, None);
+        } else if relative.starts_with("avatars/heroes/") {
+            // These are 2x2 source sheets. The distributor previews their cropped expressions.
+        } else if relative.starts_with("avatars/nations/") || relative.starts_with("avatars/tribes/") || relative.starts_with("avatars/campaign/") {
+            push_preview_asset(&mut assets, path.to_path_buf(), "avatar_portrait_192", None);
+        } else if relative == "avatars/random.webp" || relative == "avatars/default.webp" {
+            push_preview_asset(&mut assets, path.to_path_buf(), "avatar_portrait_256", None);
+        } else if relative == "brand/app-icon.png" {
+            push_preview_asset(&mut assets, path.to_path_buf(), "app_icon", Some((512, 512)));
+            push_preview_asset(&mut assets, path.to_path_buf(), "poki_thumbnail", None);
+        } else if relative == "loader/sow-splash-desktop.webp" {
+            push_preview_asset(&mut assets, path.to_path_buf(), "fullbleed_wide", None);
+        } else if relative == "loader/sow-splash-mobile.webp" {
+            push_preview_asset(&mut assets, path.to_path_buf(), "fullbleed_tall", None);
+        } else if relative.starts_with("loader/") {
+            push_preview_asset(&mut assets, path.to_path_buf(), "loader_ui", None);
+        } else if relative.starts_with("units/") {
+            let profile = if ["transport-ship.png", "trade-ship.png", "warship.png"].contains(&name.as_ref()) { "pixel_art" } else { "unit_icon" };
+            push_preview_asset(&mut assets, path.to_path_buf(), profile, None);
+        }
+    }
+    for entry in walkdir::WalkDir::new(root.join("assets/site/media")).sort_by_file_name() {
+        let entry = entry?;
+        if entry.file_type().is_file() && entry.path().extension().is_some_and(|ext| ext == "svg") {
+            push_preview_asset(&mut assets, entry.path().to_path_buf(), "svg", None);
+        }
+    }
+    for (dir, stem, _, profile) in ART_ICONS {
+        if let Some(source) = preview_source_named(&art.join(dir), stem) {
+            push_preview_asset(&mut assets, source, profile, None);
+        }
+    }
+    for (stem, (fallback_dir, fallback_stem)) in SITE_STILLS {
+        let source = preview_source_named(&root.join("assets/site/media"), stem)
+            .or_else(|| preview_source_named(&root.join(fallback_dir), fallback_stem));
+        if let Some(source) = source {
+            let profile = if stem.ends_with("-mobile") || stem == "support-six-sky" { "site_still_tall" } else { "site_still_wide" };
+            push_preview_asset(&mut assets, source, profile, None);
+        }
+    }
+    for entry in walkdir::WalkDir::new(root.join("assets/maps")).sort_by_file_name() {
+        let entry = entry?;
+        if entry.file_type().is_file() && entry.file_name() == "thumbnail.webp" {
+            push_preview_asset(&mut assets, entry.path().to_path_buf(), "map_thumbnail", None);
+            push_preview_asset(&mut assets, entry.path().to_path_buf(), "map_preview", None);
+        }
+    }
+    for entry in walkdir::WalkDir::new(root.join("assets/campaign")).sort_by_file_name() {
+        let entry = entry?;
+        if entry.file_type().is_file() && entry.file_name().to_string_lossy().ends_with(".poster.webp") {
+            push_preview_asset(&mut assets, entry.path().to_path_buf(), "campaign_poster", None);
+        }
+    }
+    for name in ["buildings-atlas.webp", "badges-atlas.webp"] {
+        let source = root.join("assets/generated").join(name);
+        push_preview_asset(&mut assets, source, "atlas_lossless", None);
+    }
+    if let Some(source) = preview_source_named(&root.join("assets/site/media"), "game-war") {
+        push_preview_asset(&mut assets, source, "video_poster", None);
+    }
+    Ok(assets)
+}
+
+/// UI icon masters and their published path/profile.
+const ART_ICONS: [(&str, &str, &str, &str); 14] = [
+    ("icons", "gold", "gameplay/currency/gold.webp", "ui_icon_128"),
+    ("icons", "gem", "gameplay/currency/gem.webp", "ui_icon_128"),
+    ("icons", "crown", "gameplay/currency/crown.webp", "ui_icon_128"),
+    ("icons", "laurel", "gameplay/currency/laurel.webp", "ui_icon_128"),
     (
         "icons",
         "troops",
         "gameplay/icons/battle_icon_cutout.webp",
-        128,
+        "ui_icon_128",
     ),
     (
         "icons",
         "tutorial-hand",
         "gameplay/icons/tutorial_hand.webp",
-        256,
+        "ui_icon_256",
     ),
     (
         "icons",
         "surrender",
         "gameplay/icons/surrender_flag.webp",
-        256,
+        "ui_icon_256",
     ),
-    ("icons", "troops", "shell/mobile-nav/battle.webp", 128),
-    ("icons", "nav-heroes", "shell/mobile-nav/heroes.webp", 128),
-    ("icons", "nav-profile", "shell/mobile-nav/profile.webp", 128),
-    ("icons", "nav-store", "shell/mobile-nav/store.webp", 128),
+    ("icons", "troops", "shell/mobile-nav/battle.webp", "ui_icon_128"),
+    ("icons", "nav-heroes", "shell/mobile-nav/heroes.webp", "ui_icon_128"),
+    ("icons", "nav-profile", "shell/mobile-nav/profile.webp", "ui_icon_128"),
+    ("icons", "nav-store", "shell/mobile-nav/store.webp", "ui_icon_128"),
     (
         "store",
         "sow_gems_500",
         "gameplay/store/gem_bundles/sow_gems_500.webp",
-        128,
+        "ui_icon_128",
     ),
     (
         "store",
         "sow_gems_1200",
         "gameplay/store/gem_bundles/sow_gems_1200.webp",
-        128,
+        "ui_icon_128",
     ),
     (
         "store",
         "sow_gems_2600",
         "gameplay/store/gem_bundles/sow_gems_2600.webp",
-        128,
+        "ui_icon_128",
     ),
 ];
-/// Folders published byte-for-byte: (assets/art/<dir>, published folder).
+/// Art folders routed into the runtime asset tree.
 const ART_FOLDERS: [(&str, &str); 7] = [
     ("brand", "shell/brand"),
     ("ranked", "shell/ranked"),
@@ -262,11 +971,11 @@ const ART_FOLDERS: [(&str, &str); 7] = [
     ("units", "gameplay/units"),
 ];
 const GAMEPLAY_UNIT_ART: [&str; 5] = [
-    "transport-ship.png",
-    "trade-ship.png",
-    "warship.png",
-    "atom-bomb.png",
-    "sam-missile.png",
+    "transport-ship.webp",
+    "trade-ship.webp",
+    "warship.webp",
+    "atom-bomb.webp",
+    "sam-missile.webp",
 ];
 /// Tool output in assets/generated: (file, published path).
 const GENERATED_FILES: [(&str, &str); 3] = [
@@ -279,19 +988,12 @@ const GENERATED_FILES: [(&str, &str); 3] = [
 ];
 const PORTRAIT_PX: u32 = 192;
 const HERO_PORTRAIT_PX: u32 = 256;
-const AVATAR_WEBP_QUALITY: u32 = 85;
-const AVATAR_TRANSFORM_RECIPE: &str = "avatar-webp-v1";
 /// Landing shots (assets/site/media/<stem>.<png|jpg|webp>): until the owner drops a
 /// capture, each slot publishes current game art (dir, stem) so nothing stale shows.
-const SITE_STILLS: [(&str, (&str, &str)); 14] = [
+const SITE_STILLS: [(&str, (&str, &str)); 12] = [
     ("game-expand", ("assets/maps/world", "thumbnail")),
     ("game-build", ("assets/maps/world", "thumbnail")),
     ("game-war", ("assets/maps/world", "thumbnail")),
-    (
-        "opening-desktop",
-        ("assets/art/loader", "sow-splash-desktop"),
-    ),
-    ("opening-mobile", ("assets/art/loader", "sow-splash-mobile")),
     (
         "closing-desktop",
         ("assets/art/loader", "sow-splash-desktop"),
@@ -342,8 +1044,6 @@ const SITE_SOURCE_ONLY_MEDIA: [&str; 10] = [
     "shadows-of-war-gameplay.mp4",
     "shadowsofwar-scroll.vp9.webm",
 ];
-const SITE_STILL_PX: u32 = 1600;
-
 fn site_media_ready(out: &Path) -> bool {
     let media = out.join("assets/site/media");
     SITE_BADGES
@@ -359,37 +1059,14 @@ fn site_media_ready(out: &Path) -> bool {
 /// single place that turns them into the published tree (/assets/shell, /assets/gameplay)
 /// used by the shell, the WASM client and the CDN. Unknown art fails the build so a
 /// dropped file can never sit unused or unpublished.
-fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
+fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Result<()> {
     let art = root.join("assets/art");
     verify_playable_hero_icons(&art.join("icons/abilities"), "source art")?;
     let generated = root.join("assets/generated");
     let mut produced = std::collections::BTreeSet::new();
-    let mut publish = |src: &Path, rel: &str, max_side: Option<u32>| -> Result<()> {
+    let mut publish = |src: &Path, rel: &str, profile: Option<&str>| -> Result<()> {
         let dst = out.join(rel);
-        if let Some(parent) = dst.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        let is_webp = src.extension().is_some_and(|ext| ext == "webp");
-        let oversized = match max_side {
-            Some(max) => {
-                let (w, h) = image::image_dimensions(src)
-                    .with_context(|| format!("read art {}", src.display()))?;
-                w > max || h > max
-            }
-            None => false,
-        };
-        let needs_webp = rel.ends_with(".webp") && !is_webp;
-        if oversized || needs_webp {
-            let fresh = fs::metadata(&dst)
-                .and_then(|d| Ok(d.modified()? >= fs::metadata(src)?.modified()?))
-                .unwrap_or(false);
-            if !fresh {
-                let max = max_side.unwrap_or(4096);
-                optimize_webp(src, &dst, &format!("{max}x{max}>"), 85)?;
-            }
-        } else if fs::read(&dst).ok() != Some(fs::read(src)?) {
-            fs::copy(src, &dst).with_context(|| format!("publish {}", src.display()))?;
-        }
+        pipeline.publish_asset(src, &dst, Path::new(rel), profile)?;
         produced.insert(dst);
         Ok(())
     };
@@ -508,11 +1185,11 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
                 .with_context(|| format!("missing art: assets/art/icons/{stem}.png"))?,
         );
     }
-    for (dir, stem, rel, max) in ART_ICONS {
+    for (dir, stem, rel, profile) in ART_ICONS {
         let src = source_named(&art.join(dir), stem)
             .with_context(|| format!("missing art: assets/art/{dir}/{stem}.png"))?;
         known_icons.insert(src.clone());
-        publish(&src, rel, Some(max))?;
+        publish(&src, rel, Some(profile))?;
     }
     for dir in ["icons", "store"] {
         for file in fs::read_dir(art.join(dir))? {
@@ -539,7 +1216,12 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .into_owned();
-            publish(&file, &format!("{rel_dir}/{name}"), None)?;
+            let relative = if dir == "units" {
+                format!("{rel_dir}/{}.webp", file_stem(&file))
+            } else {
+                format!("{rel_dir}/{name}")
+            };
+            publish(&file, &relative, None)?;
         }
     }
     // A fresh checkout may not have the packed atlases yet: `pack_art_atlases`
@@ -550,6 +1232,7 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
         }
         publish(&generated.join(name), rel, None)?;
     }
+
     let media = root.join("assets/site/media");
     for badge in SITE_BADGES {
         publish(&media.join(badge), &format!("site/media/{badge}"), None)?;
@@ -561,18 +1244,36 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
         let src = source_named(&media, stem)
             .or_else(|| source_named(&root.join(dir), provisional))
             .with_context(|| format!("landing shot {stem} has no capture and no art"))?;
-        publish(
-            &src,
-            &format!("site/media/{stem}.webp"),
-            Some(SITE_STILL_PX),
-        )?;
+        let relative = format!("site/media/{stem}.webp");
+        let profile = if stem.ends_with("-mobile") || stem == "support-six-sky" {
+            "site_still_tall"
+        } else {
+            "site_still_wide"
+        };
+        publish(&src, &relative, Some(profile))?;
     }
     drop(publish);
+    let icon_master = art.join("brand/app-icon.png");
+    let app_icons = out.join("site-icons");
+    for (name, side) in [
+        ("icon-192.png", 192),
+        ("icon-512.png", 512),
+        ("icon-512-maskable.png", 512),
+    ] {
+        let destination = app_icons.join(name);
+        pipeline.publish_image(&icon_master, &destination, "app_icon", Some((side, side)), None)?;
+        produced.insert(destination);
+    }
+    stage_android_icons(root, out, &icon_master, pipeline, &mut produced)?;
+
     for (source, relative, max_side) in avatar_portraits {
-        publish_avatar_transform(&source, out, &relative, max_side, &mut produced)?;
+        let profile = if max_side <= PORTRAIT_PX { "avatar_portrait_192" } else { "avatar_portrait_256" };
+        pipeline.publish_image(&source, &out.join(&relative), profile, None, None)?;
+        produced.insert(out.join(&relative));
     }
     for (source, relative) in hero_expression_crops {
-        publish_avatar_transform(&source, out, &relative, HERO_PORTRAIT_PX, &mut produced)?;
+        pipeline.publish_image(&source, &out.join(&relative), "avatar_portrait_256", None, None)?;
+        produced.insert(out.join(&relative));
     }
     for file in fs::read_dir(&media)? {
         let file = file?.path();
@@ -600,7 +1301,7 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
         else {
             continue;
         };
-        produced.extend(publish_site_video(&src, &out.join("site/media"), stem)?);
+        produced.extend(publish_site_video(&src, &out.join("site/media"), stem, pipeline)?);
     }
 
     for entry in walkdir::WalkDir::new(out).contents_first(true) {
@@ -611,59 +1312,45 @@ fn stage_runtime_assets(root: &Path, out: &Path) -> Result<()> {
             let _ = fs::remove_dir(entry.path());
         }
     }
+    pipeline.validate_staged_image_inventory(out)?;
     Ok(())
 }
 
-fn publish_avatar_transform(
-    source: &Path,
+fn stage_android_icons(
+    root: &Path,
     out: &Path,
-    relative: &str,
-    max_side: u32,
+    icon_master: &Path,
+    pipeline: &ArtPipeline,
     produced: &mut std::collections::BTreeSet<PathBuf>,
 ) -> Result<()> {
-    let destination = out.join(relative);
-    if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent)?;
+    let source_res = root.join("sow-dist/deploy/android/app/src/main/res");
+    let generated_res = out.join("android/res");
+    if generated_res.exists() {
+        fs::remove_dir_all(&generated_res)?;
     }
-    let source_hash = file_sha256(source)?;
-    let recipe = format!(
-        "{AVATAR_TRANSFORM_RECIPE};max={max_side};quality={AVATAR_WEBP_QUALITY};source={source_hash}"
-    );
-    let cache_root = out.parent().unwrap_or(out).join(".avatar-transform-cache");
-    let cache_path = cache_root.join(format!("{relative}.recipe"));
-    let destination_hash = file_sha256(&destination).ok();
-    let cached = destination_hash.as_ref().is_some_and(|hash| {
-        fs::read_to_string(&cache_path)
-            .is_ok_and(|value| value == format!("{recipe};output={hash}"))
-            && image::image_dimensions(&destination)
-                .is_ok_and(|(width, height)| width <= max_side && height <= max_side)
-    });
-    if !cached {
-        optimize_webp(
-            source,
-            &destination,
-            &format!("{max_side}x{max_side}>"),
-            AVATAR_WEBP_QUALITY,
-        )?;
-        let (width, height) = image::image_dimensions(&destination)
-            .with_context(|| format!("read optimized avatar {}", destination.display()))?;
-        if width > max_side || height > max_side {
-            bail!(
-                "optimized avatar {} is {width}x{height}, over {max_side}px",
-                destination.display()
-            );
+    copy_dir(&source_res, &generated_res)
+        .with_context(|| format!("stage Android resources from {}", source_res.display()))?;
+    for entry in walkdir::WalkDir::new(&generated_res) {
+        let entry = entry?;
+        if entry.file_type().is_file() {
+            produced.insert(entry.path().to_path_buf());
         }
-        let destination_hash = file_sha256(&destination)?;
-        fs::create_dir_all(cache_path.parent().unwrap_or(&cache_root))?;
-        let temporary = cache_path.with_file_name(format!(
-            "{}.{}.tmp",
-            cache_path.file_name().unwrap_or_default().to_string_lossy(),
-            std::process::id()
-        ));
-        fs::write(&temporary, format!("{recipe};output={destination_hash}"))?;
-        fs::rename(temporary, &cache_path)?;
     }
-    produced.insert(destination);
+    for (density, side) in [
+        ("mdpi", 48),
+        ("hdpi", 72),
+        ("xhdpi", 96),
+        ("xxhdpi", 144),
+        ("xxxhdpi", 192),
+    ] {
+        for icon in ["ic_launcher.png", "ic_launcher_round.png"] {
+            let destination = generated_res
+                .join(format!("mipmap-{density}"))
+                .join(icon);
+            pipeline.publish_image(icon_master, &destination, "app_icon", Some((side, side)), None)?;
+            produced.insert(destination);
+        }
+    }
     Ok(())
 }
 
@@ -704,15 +1391,16 @@ fn asset_versions(paths: &Paths, locales_dir: &Path) -> Result<serde_json::Value
                 roots.push((path, rel));
                 continue;
             }
-            // shell/loader/ is deliberately NOT tracked: its URLs are baked into
-            // index.html with ?v=__BUILD_TS__ and loader.js re-assigns the same
-            // nodes; a content-hash variant here made the browser fetch both.
+            // Progress bars retain build-stamped URLs. The shared splash art
+            // uses a content hash so landing and loader reuse one cache key.
             let track = matches!(
                 rel.as_str(),
                 s if s.starts_with("shell/leaders/")
                     || s.starts_with("shell/mobile-nav/")
                     || s.starts_with("gameplay/music/")
                     || s.starts_with("gameplay/avatars/")
+                    || s == "shell/loader/sow-splash-desktop.webp"
+                    || s == "shell/loader/sow-splash-mobile.webp"
             );
             if track && path.extension().is_some_and(|e| e == "webp" || e == "webm") {
                 map.insert(
@@ -821,7 +1509,7 @@ fn cg_asset_inventory(root: &Path) -> Result<Vec<PathBuf>> {
         .collect())
 }
 
-fn copy_cg_assets(source: &Path, packaged: &Path) -> Result<serde_json::Value> {
+fn copy_cg_assets(source: &Path, packaged: &Path, pipeline: &ArtPipeline) -> Result<serde_json::Value> {
     copy_dir(source, packaged)?;
     for excluded in [
         "shell/brand",
@@ -845,10 +1533,11 @@ fn copy_cg_assets(source: &Path, packaged: &Path) -> Result<serde_json::Value> {
     build_cg_ability_atlas(
         &source.join("gameplay/icons/abilities"),
         &packaged.join("gameplay/icons/abilities-atlas.webp"),
+        pipeline,
     )
 }
 
-fn build_cg_ability_atlas(source: &Path, destination: &Path) -> Result<serde_json::Value> {
+fn build_cg_ability_atlas(source: &Path, destination: &Path, pipeline: &ArtPipeline) -> Result<serde_json::Value> {
     const CELL_SIZE: u32 = 256;
     const COLUMNS: u32 = 9;
 
@@ -900,7 +1589,10 @@ fn build_cg_ability_atlas(source: &Path, destination: &Path) -> Result<serde_jso
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(destination, encoded)?;
+    let raw = destination.with_file_name("abilities-atlas-source.webp");
+    fs::write(&raw, encoded)?;
+    pipeline.publish_image(&raw, destination, "atlas_lossless", None, None)?;
+    fs::remove_file(raw)?;
     let sha256 = file_sha256(destination)?;
 
     Ok(serde_json::json!({
@@ -1173,19 +1865,33 @@ fn hero_expression_crop(
 
 /// A landing capture becomes `<stem>.webm` (VP9), `<stem>.mp4` (H.264) and a
 /// `<stem>.webp` poster. Encoding is slow, so outputs newer than the capture are kept.
-fn publish_site_video(src: &Path, dir: &Path, stem: &str) -> Result<Vec<PathBuf>> {
+fn publish_site_video(src: &Path, dir: &Path, stem: &str, pipeline: &ArtPipeline) -> Result<Vec<PathBuf>> {
     fs::create_dir_all(dir)?;
     let webm = dir.join(format!("{stem}.webm"));
     let mp4 = dir.join(format!("{stem}.mp4"));
     let poster = dir.join(format!("{stem}.webp"));
     let outputs = vec![webm.clone(), mp4.clone(), poster.clone()];
     let source_time = fs::metadata(src)?.modified()?;
-    let fresh = outputs.iter().all(|path| {
+    let videos_fresh = [&webm, &mp4].iter().all(|path| {
         fs::metadata(path)
             .and_then(|meta| meta.modified())
             .is_ok_and(|time| time >= source_time)
     });
-    if fresh {
+    let source_hash = file_sha256(src)?;
+    let poster_profile = pipeline.profile("video_poster")?;
+    let poster_recipe = pipeline.image_recipe_hash(
+        "video_poster",
+        poster_profile,
+        None,
+        poster_profile.quality,
+        false,
+    )?;
+    let poster_record = pipeline.cache_root.join("video-posters").join(format!("{stem}-{source_hash}.txt"));
+    let poster_hash = file_sha256(&poster).ok();
+    let poster_fresh = poster_hash.as_ref().is_some_and(|hash| {
+        fs::read_to_string(&poster_record).is_ok_and(|record| record == format!("{poster_recipe};{hash}"))
+    });
+    if videos_fresh && poster_fresh {
         return Ok(outputs);
     }
     // The background loop plays muted; the gameplay video keeps its sound.
@@ -1227,7 +1933,9 @@ fn publish_site_video(src: &Path, dir: &Path, stem: &str) -> Result<Vec<PathBuf>
         "1",
     ];
     args.extend_from_slice(webm_audio);
-    ffmpeg(&args, &webm)?;
+    if !videos_fresh {
+        ffmpeg(&args, &webm)?;
+    }
     let mut args = vec![
         "-vf",
         scale,
@@ -1243,73 +1951,23 @@ fn publish_site_video(src: &Path, dir: &Path, stem: &str) -> Result<Vec<PathBuf>
         "+faststart",
     ];
     args.extend_from_slice(mp4_audio);
-    ffmpeg(&args, &mp4)?;
+    if !videos_fresh {
+        ffmpeg(&args, &mp4)?;
+    }
     let frame = dir.join(format!("{stem}.poster.png"));
     ffmpeg(&["-vf", scale, "-frames:v", "1"], &frame)?;
-    optimize_webp(
-        &frame,
-        &poster,
-        &format!("{SITE_STILL_PX}x{SITE_STILL_PX}>"),
-        80,
-    )?;
+    pipeline.publish_image(&frame, &poster, "video_poster", None, None)?;
     fs::remove_file(&frame)?;
+    fs::create_dir_all(poster_record.parent().context("video poster cache has no parent")?)?;
+    fs::write(poster_record, format!("{poster_recipe};{}", file_sha256(&poster)?))?;
     Ok(outputs)
 }
 
-/// Full-bleed loader/menu leader art ships recompressed: the repo masters are
-/// 400-950 KB each and the loader waits on this art at match exit. Cap keeps a
-/// regression (a new unoptimized master) from silently re-inflating the boot.
-fn compress_web_leaders(leaders: &Path) -> Result<()> {
-    const MAX_LEADER_BYTES: u64 = 400_000;
-    for entry in fs::read_dir(leaders)? {
-        let entry = entry?;
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if !name.ends_with(".webp") {
-            continue;
-        }
-        let path = entry.path();
-        let geometry = if name.ends_with("_mobile.webp") {
-            "900x1600>"
-        } else {
-            "1600x900>"
-        };
-        let tmp = path.with_extension("webp.optimizing");
-        optimize_webp(&path, &tmp, geometry, 75)?;
-        fs::rename(&tmp, &path)?;
-        let size = fs::metadata(&path)?.len();
-        if size > MAX_LEADER_BYTES {
-            bail!(
-                "leader art {name} weighs {size} bytes after optimization; cap is {MAX_LEADER_BYTES}"
-            );
-        }
-    }
-    Ok(())
+fn optimize_poki_thumbnail(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()> {
+    pipeline.publish_image(src, dst, "poki_thumbnail", None, None)
 }
 
-fn optimize_poki_thumbnail(src: &Path, dst: &Path) -> Result<()> {
-    let status = Command::new("magick")
-        .arg(src)
-        .args([
-            "-resize",
-            "628x628^",
-            "-gravity",
-            "center",
-            "-extent",
-            "628x628",
-            "-strip",
-            "-define",
-            "png:compression-level=9",
-        ])
-        .arg(dst)
-        .status()
-        .with_context(|| "Poki packaging requires ImageMagick (magick)")?;
-    if !status.success() {
-        bail!("Poki thumbnail optimization failed for {}", src.display());
-    }
-    Ok(())
-}
-
-fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
+fn copy_poki_assets(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()> {
     copy_dir(src, dst)?;
     for excluded in [
         "gameplay/store",
@@ -1340,16 +1998,17 @@ fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
         if !name.ends_with(".webp") {
             continue;
         }
-        let geometry = if name.ends_with("_mobile.webp") {
-            "540x960"
+        let profile = if name.ends_with("_mobile.webp") {
+            "poki_leader_tall"
         } else {
-            "960x540"
+            "poki_leader_wide"
         };
-        optimize_webp(
+        pipeline.publish_image(
             &entry.path(),
             &dst.join("shell/leaders").join(entry.file_name()),
-            geometry,
-            70,
+            profile,
+            None,
+            None,
         )?;
     }
     Ok(())
@@ -1382,7 +2041,7 @@ fn copy_campaign_for_poki(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-fn copy_portal_maps(src: &Path, dst: &Path) -> Result<()> {
+fn copy_portal_maps(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()> {
     fs::create_dir_all(dst)?;
     fs::copy(src.join("catalog.bin"), dst.join("catalog.bin"))?;
     fs::copy(src.join("NOTICE"), dst.join("NOTICE"))
@@ -1398,9 +2057,15 @@ fn copy_portal_maps(src: &Path, dst: &Path) -> Result<()> {
         if map.is_file() {
             fs::copy(&map, out_dir.join("map.bin.br"))?;
         }
-        let thumbnail = entry.path().join("thumbnail.webp");
-        if thumbnail.is_file() {
-            optimize_webp(&thumbnail, &out_dir.join("thumbnail.webp"), "256x144", 70)?;
+        let preview = entry.path().join("preview.webp");
+        if preview.is_file() {
+            pipeline.publish_image(
+                &preview,
+                &out_dir.join("thumbnail.webp"),
+                "map_thumbnail",
+                None,
+                None,
+            )?;
         }
     }
     Ok(())
@@ -1464,7 +2129,7 @@ fn verify_portal_map_inventory(source: &Path, packaged: &Path) -> Result<()> {
     Ok(())
 }
 
-fn refresh_map_thumbnails(maps_root: &Path, map_sources: &Path) -> Result<()> {
+fn refresh_map_thumbnails(maps_root: &Path, map_sources: &Path, pipeline: &ArtPipeline) -> Result<()> {
     let manifest_path = map_sources.join("thumbnail_frames.json");
     let manifest = if manifest_path.is_file() {
         let value: serde_json::Value = serde_json::from_str(
@@ -1513,7 +2178,7 @@ fn refresh_map_thumbnails(maps_root: &Path, map_sources: &Path) -> Result<()> {
             fs::read(&map_path).with_context(|| format!("read map {}", map_path.display()))?;
         let map = sow_core::map_file::parse(&bytes)
             .map_err(|error| anyhow::anyhow!("parse {}: {error}", map_path.display()))?;
-        let thumbnail = dir.join("thumbnail.webp");
+        let raw_render = dir.join(".thumbnail-source.webp");
         let frame = manifest
             .as_ref()
             .and_then(|value| value.get("maps"))
@@ -1552,16 +2217,19 @@ fn refresh_map_thumbnails(maps_root: &Path, map_sources: &Path) -> Result<()> {
             let rendered = rendered_sources
                 .get(&source_path)
                 .expect("source inserted above");
-            sow_map::write_rendered_source_thumbnail(rendered, frame, &thumbnail)
+            sow_map::write_rendered_source_thumbnail(rendered, frame, &raw_render)
                 .map_err(|error| anyhow::anyhow!("write {} thumbnail: {error}", dir.display()))?;
         } else {
-            sow_map::write_map_thumbnail(&map, &thumbnail)
+            sow_map::write_map_thumbnail(&map, &raw_render)
                 .map_err(|error| anyhow::anyhow!("write {} thumbnail: {error}", dir.display()))?;
         }
-        // The landing preview keeps the full frame; cards and portals use the 256x144 thumbnail.
+        // Both derivatives come from the same fresh render, so portal compression never
+        // compounds the map preview's lossy WebP encoding.
         let preview = dir.join("preview.webp");
-        fs::rename(&thumbnail, &preview)?;
-        optimize_webp(&preview, &thumbnail, "256x144", 70)?;
+        let thumbnail = dir.join("thumbnail.webp");
+        pipeline.publish_image(&raw_render, &preview, "map_preview", None, None)?;
+        pipeline.publish_image(&raw_render, &thumbnail, "map_thumbnail", None, None)?;
+        fs::remove_file(raw_render)?;
     }
     Ok(())
 }
@@ -1651,7 +2319,7 @@ fn pack_art_atlases(paths: &Paths) -> Result<()> {
     for (name, _) in GENERATED_FILES {
         require_file(&generated.join(name), "packed atlas")?;
     }
-    stage_runtime_assets(&paths.root, &paths.runtime_assets)
+    stage_runtime_assets(&paths.root, &paths.runtime_assets, paths.art_pipeline()?)
 }
 
 fn compile_wasm_profile(paths: &Paths, profile: &str, dev: bool) -> Result<PathBuf> {
@@ -2174,8 +2842,6 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     } else {
         asset_versions(paths, &out.join("locales"))?
     };
-    let splash_desktop = inline_webp(&paths.assets_shell.join("loader/sow-splash-desktop.webp"))?;
-    let splash_mobile = inline_webp(&paths.assets_shell.join("loader/sow-splash-mobile.webp"))?;
     let locale_codes = serde_json::to_string(
         &sow_i18n::Language::published_registry()
             .map(|(_, code, _)| code)
@@ -2217,8 +2883,6 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         )
         .replace("__SOW_LOCALE_CODES__", &locale_codes)
         .replace("__MAPS_CACHE_BUST__", maps_cache_bust)
-        .replace("__SOW_SPLASH_DESKTOP_DATA__", &splash_desktop)
-        .replace("__SOW_SPLASH_MOBILE_DATA__", &splash_mobile)
         .replace(
             "__ASSETS_UI_BASE__",
             if cg {
@@ -2404,7 +3068,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         }
     }
     let mut fh = fs::read_to_string(&index)?;
-    for bar in ["loader_empty", "loader_full"] {
+    for bar in ["loader_empty", "loader_full", "sow-splash-desktop", "sow-splash-mobile"] {
         if let Some(hash) = asset_versions
             .get(format!("/assets/shell/loader/{bar}.webp"))
             .and_then(|v| v.as_str())
@@ -2508,15 +3172,6 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     Ok(())
 }
 
-fn inline_webp(path: &Path) -> Result<String> {
-    let bytes =
-        fs::read(path).with_context(|| format!("read critical loader asset {}", path.display()))?;
-    Ok(format!(
-        "data:image/webp;base64,{}",
-        base64::engine::general_purpose::STANDARD.encode(bytes)
-    ))
-}
-
 fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
     let fav = paths.shell.join("favicon_io");
     if fav.is_dir() {
@@ -2538,10 +3193,7 @@ fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
         target,
         WebTarget::CrazyGames | WebTarget::Poki | WebTarget::Jest
     ) {
-        fs::copy(
-            paths.assets_site.join("icons/icon-192.png"),
-            out.join("icon-192.png"),
-        )?;
+        fs::copy(paths.app_icons.join("icon-192.png"), out.join("icon-192.png"))?;
     }
     if paths.assets_shell.join("brand/sow-long.svg").is_file() {
         fs::copy(
@@ -2799,8 +3451,9 @@ fn public_leader_biographies(root: &Path) -> Result<serde_json::Value> {
 fn expand_landing(source: &str, out: &Path, leader_explorer: &str, map_explorer: &str) -> Result<String> {
     let english = serde_json::to_value(sow_i18n::web(sow_i18n::Language::English))?;
     let media = out.join("assets/site/media");
+    let splash_hash = file_sha256(&out.join("assets/shell/loader/sow-splash-desktop.webp"))?[..8].to_owned();
     let sections = [
-        ("<!-- SOW_SITE_HERO_MEDIA -->", landing_hero_media(&media)),
+        ("<!-- SOW_SITE_HERO_MEDIA -->", landing_hero_media(&media, &splash_hash)),
         ("<!-- SOW_SITE_MAPS -->", map_explorer.to_owned()),
         (
             "<!-- SOW_SITE_TRAILER -->",
@@ -2856,14 +3509,18 @@ fn english_text(english: &serde_json::Value, key: &str) -> Result<String> {
         .with_context(|| format!("English text is missing: {key}"))
 }
 
-fn landing_hero_media(media: &Path) -> String {
-    let still = r#"<picture class="hero-still"><source media="(max-width: 700px)" srcset="/assets/site/media/opening-mobile.webp"><img src="/assets/site/media/opening-desktop.webp" alt="" fetchpriority="high" decoding="async" width="1600" height="900"></picture>"#;
+fn landing_hero_media(media: &Path, splash_hash: &str) -> String {
+    let desktop = format!("/assets/shell/loader/sow-splash-desktop.webp?v={splash_hash}");
+    let mobile = format!("/assets/shell/loader/sow-splash-mobile.webp?v={splash_hash}");
+    let still = format!(
+        "<picture class=\"hero-still\"><source media=\"(max-width: 700px)\" srcset=\"{mobile}\"><img src=\"{desktop}\" alt=\"\" fetchpriority=\"high\" decoding=\"async\" width=\"1600\" height=\"900\"></picture>"
+    );
     if media.join("hero-loop.webm").is_file() {
         format!(
-            r#"{still}<video class="hero-video" hidden loop muted playsinline preload="none" aria-hidden="true" poster="/assets/site/media/opening-desktop.webp"><source src="/assets/site/media/hero-loop.webm" type="video/webm"><source src="/assets/site/media/hero-loop.mp4" type="video/mp4"></video>"#
+            "{still}<video class=\"hero-video\" hidden loop muted playsinline preload=\"none\" aria-hidden=\"true\" poster=\"{desktop}\"><source src=\"/assets/site/media/hero-loop.webm\" type=\"video/webm\"><source src=\"/assets/site/media/hero-loop.mp4\" type=\"video/mp4\"></video>"
         )
     } else {
-        still.to_owned()
+        still
     }
 }
 
@@ -4715,7 +5372,6 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
 
     let assets = out.join("assets");
     copy_dir(&paths.assets_shell, &assets.join("shell"))?;
-    compress_web_leaders(&assets.join("shell/leaders"))?;
     copy_dir(
         &paths.assets_gameplay.join("avatars"),
         &assets.join("gameplay/avatars"),
@@ -4748,18 +5404,23 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         &paths.assets_gameplay.join("music"),
         &assets.join("gameplay/music"),
     )?;
-    copy_dir(
+    paths.art_pipeline()?.copy_distribution_tree(
         &paths.root.join("assets/campaign"),
         &assets.join("campaign"),
+        Path::new("campaign"),
     )?;
-    copy_dir(&paths.root.join("assets/guides"), &assets.join("guides"))?;
+    paths.art_pipeline()?.copy_distribution_tree(
+        &paths.root.join("assets/guides"),
+        &assets.join("guides"),
+        Path::new("guides"),
+    )?;
     copy_dir(&paths.site_media, &assets.join("site/media"))?;
     let maps = out.join("maps");
     fs::create_dir_all(&maps)?;
     if paths.assets_maps.is_dir() {
         copy_dir(&paths.assets_maps, &maps)?;
     }
-    refresh_map_thumbnails(&maps, &paths.map_sources)?;
+    refresh_map_thumbnails(&maps, &paths.map_sources, paths.art_pipeline()?)?;
     let maps_cache_bust = thumbnail_cache_bust(&maps)?;
 
     if let Some((previous_js, previous_wasm, previous_js_br, previous_wasm_br)) = previous_artifacts
@@ -4849,7 +5510,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         )?;
     }
     for name in ["icon-192.png", "icon-512.png", "icon-512-maskable.png"] {
-        fs::copy(paths.assets_site.join("icons").join(name), out.join(name))?;
+        fs::copy(paths.app_icons.join(name), out.join(name))?;
     }
     for path in [
         "privacy",
@@ -4925,7 +5586,8 @@ fn native_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.root.join("assets/campaign"),
         paths.root.join("assets/guides"),
         paths.assets_site.join("media"),
-        paths.assets_site.join("icons"),
+        paths.app_icons.clone(),
+        paths.art_pipeline()?.config_path.clone(),
         paths.assets_maps.clone(),
         paths.map_sources.clone(),
         paths.root.join("sow-web/site/fonts"),
@@ -4942,6 +5604,7 @@ fn native_static_fingerprint(paths: &Paths) -> Result<String> {
         hash.update(stamp.modified_nanos.to_le_bytes());
     }
     hash_avatar_asset_tree(&mut hash, &paths.assets_gameplay.join("avatars"))?;
+    hash.update(file_sha256(&paths.art_pipeline()?.config_path)?.as_bytes());
     Ok(format!("{:x}", hash.finalize()))
 }
 
@@ -4979,7 +5642,6 @@ fn package_native_web(
         fs::create_dir_all(out)?;
         let assets = out.join("assets");
         copy_dir(&paths.assets_shell, &assets.join("shell"))?;
-        compress_web_leaders(&assets.join("shell/leaders"))?;
         for name in [
             "avatars",
             "skins",
@@ -4994,14 +5656,19 @@ fn package_native_web(
                 &assets.join("gameplay").join(name),
             )?;
         }
-        copy_dir(
+        paths.art_pipeline()?.copy_distribution_tree(
             &paths.root.join("assets/campaign"),
             &assets.join("campaign"),
+            Path::new("campaign"),
         )?;
-        copy_dir(&paths.root.join("assets/guides"), &assets.join("guides"))?;
+        paths.art_pipeline()?.copy_distribution_tree(
+            &paths.root.join("assets/guides"),
+            &assets.join("guides"),
+            Path::new("guides"),
+        )?;
         copy_dir(&paths.site_media, &assets.join("site/media"))?;
         copy_dir(&paths.assets_maps, &out.join("maps"))?;
-        refresh_map_thumbnails(&out.join("maps"), &paths.map_sources)?;
+        refresh_map_thumbnails(&out.join("maps"), &paths.map_sources, paths.art_pipeline()?)?;
         copy_shell(paths, out, WebTarget::Native)?;
 
         let site = paths.root.join("sow-web/site");
@@ -5011,7 +5678,7 @@ fn package_native_web(
             out.join("manifest.webmanifest"),
         )?;
         for name in ["icon-192.png", "icon-512.png", "icon-512-maskable.png"] {
-            fs::copy(paths.assets_site.join("icons").join(name), out.join(name))?;
+            fs::copy(paths.app_icons.join(name), out.join(name))?;
         }
     }
 
@@ -5108,8 +5775,8 @@ fn package_cg(
         play_dir.join(format!("sow_client_{wh}_bg.wasm")),
         out.join("sow_client_bg.wasm"),
     )?;
-    let ability_atlas = copy_cg_assets(&play_dir.join("assets"), &out.join("assets"))?;
-    copy_portal_maps(&play_dir.join("maps"), &out.join("maps"))?;
+    let ability_atlas = copy_cg_assets(&play_dir.join("assets"), &out.join("assets"), paths.art_pipeline()?)?;
+    copy_portal_maps(&play_dir.join("maps"), &out.join("maps"), paths.art_pipeline()?)?;
     verify_portal_map_inventory(&play_dir.join("maps"), &out.join("maps"))?;
     copy_shell(paths, out, WebTarget::CrazyGames)?;
     copy_web_fonts(&paths.root.join("sow-web/site/fonts"), &out.join("fonts"))?;
@@ -5226,9 +5893,9 @@ fn package_poki(
         package.join("sow_client_bg.wasm"),
     )?;
 
-    copy_poki_assets(&play_dir.join("assets"), &package.join("assets"))?;
+    copy_poki_assets(&play_dir.join("assets"), &package.join("assets"), paths.art_pipeline()?)?;
     verify_poki_asset_inventory(&play_dir.join("assets"), &package.join("assets"))?;
-    copy_portal_maps(&play_dir.join("maps"), &package.join("maps"))?;
+    copy_portal_maps(&play_dir.join("maps"), &package.join("maps"), paths.art_pipeline()?)?;
     verify_portal_map_inventory(&play_dir.join("maps"), &package.join("maps"))?;
     copy_web_fonts(
         &paths.root.join("sow-web/site/fonts"),
@@ -5240,11 +5907,12 @@ fn package_poki(
         fs::remove_file(stale_bridge)?;
     }
     optimize_poki_thumbnail(
-        &paths.assets_shell.join("brand/app-icon.png"),
+        &paths.root.join("assets/art/brand/app-icon.png"),
         &package
             .parent()
             .context("Poki staging directory has no parent")?
             .join("poki-thumbnail.png"),
+        paths.art_pipeline()?,
     )?;
     fs::write(
         package.join("manifest.webmanifest"),
@@ -5558,8 +6226,8 @@ fn package_jest(
         out.join("sow_client_bg.wasm"),
     )?;
 
-    copy_poki_assets(&play_dir.join("assets"), &out.join("assets"))?;
-    copy_portal_maps(&play_dir.join("maps"), &out.join("maps"))?;
+    copy_poki_assets(&play_dir.join("assets"), &out.join("assets"), paths.art_pipeline()?)?;
+    copy_portal_maps(&play_dir.join("maps"), &out.join("maps"), paths.art_pipeline()?)?;
     verify_portal_map_inventory(&play_dir.join("maps"), &out.join("maps"))?;
     copy_web_fonts(&paths.root.join("sow-web/site/fonts"), &out.join("fonts"))?;
     copy_shell(paths, out, WebTarget::Jest)?;
@@ -6005,7 +6673,7 @@ fn local_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.root.join("assets/art"),
         paths.root.join("assets/generated"),
         paths.root.join("assets/site/media"),
-        paths.root.join("assets/site/icons"),
+        paths.art_pipeline()?.config_path.clone(),
         paths.root.join("assets/campaign"),
         paths.root.join("assets/guides"),
         paths.assets_maps.clone(),
@@ -6013,7 +6681,7 @@ fn local_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.root.join("sow-web/site/fonts"),
     ];
     let mut hash = Sha256::new();
-    hash.update(b"local-static-output-v3\0");
+    hash.update(b"local-static-output-v4-art-profiles\0");
     for stamp in local_source_snapshot(paths)?
         .into_iter()
         .filter(|stamp| roots.iter().any(|root| stamp.path.starts_with(root)))
@@ -6023,6 +6691,7 @@ fn local_static_fingerprint(paths: &Paths) -> Result<String> {
         hash.update(stamp.modified_nanos.to_le_bytes());
     }
     hash_avatar_asset_tree(&mut hash, &paths.assets_gameplay.join("avatars"))?;
+    hash.update(file_sha256(&paths.art_pipeline()?.config_path)?.as_bytes());
     Ok(format!("{:x}", hash.finalize()))
 }
 
@@ -6077,11 +6746,16 @@ fn package_local_preview(
                 &assets.join("gameplay").join(name),
             )?;
         }
-        copy_dir(
+        paths.art_pipeline()?.copy_distribution_tree(
             &paths.root.join("assets/campaign"),
             &assets.join("campaign"),
+            Path::new("campaign"),
         )?;
-        copy_dir(&paths.root.join("assets/guides"), &assets.join("guides"))?;
+        paths.art_pipeline()?.copy_distribution_tree(
+            &paths.root.join("assets/guides"),
+            &assets.join("guides"),
+            Path::new("guides"),
+        )?;
         copy_dir(&paths.site_media, &assets.join("site/media"))?;
         let maps = out.join("maps");
         fs::create_dir_all(&maps)?;
@@ -6094,7 +6768,7 @@ fn package_local_preview(
             copy_web_fonts(&site.join("fonts"), &out.join("fonts"))?;
         }
         for name in ["icon-192.png", "icon-512.png", "icon-512-maskable.png"] {
-            let icon = paths.assets_site.join("icons").join(name);
+            let icon = paths.app_icons.join(name);
             if icon.is_file() {
                 fs::copy(&icon, out.join(name))?;
             }
@@ -6155,6 +6829,7 @@ fn package_local_preview(
 
     copy_shell(paths, out, WebTarget::Local)?;
     export_locales_for_local_preview(out)?;
+    refresh_map_thumbnails(&out.join("maps"), &paths.map_sources, paths.art_pipeline()?)?;
     let maps_cache_bust = thumbnail_cache_bust(&out.join("maps"))?;
     build_index(
         paths,
@@ -6217,7 +6892,7 @@ fn package_local_preview(
 }
 
 fn build_local_preview(paths: &Paths, version: &str, compile: bool) -> Result<()> {
-    stage_runtime_assets(&paths.root, &paths.runtime_assets)?;
+    stage_runtime_assets(&paths.root, &paths.runtime_assets, paths.art_pipeline()?)?;
     if compile {
         compile_wasm(paths, true)?;
     }
@@ -6666,6 +7341,14 @@ fn main() -> Result<()> {
         .join("..")
         .canonicalize()?;
     let args: Vec<String> = env::args().skip(1).collect();
+    if args.first().is_some_and(|arg| arg == "art-preview") {
+        if args.len() > 2 {
+            bail!("usage: ./sow art-preview [profile]");
+        }
+        let pipeline = ArtPipeline::load(&root)?;
+        pipeline.run_preview(args.get(1).map(String::as_str))?;
+        return Ok(());
+    }
     if args.iter().any(|arg| arg == "--rotate-secrets") {
         rotate_deployment_secrets(&root)?;
     }
@@ -6677,11 +7360,13 @@ fn main() -> Result<()> {
 
     let mut cmd = String::new();
     let mut bump = false;
+    let mut server_only = false;
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "-v" | "--version" => bump = true,
+            "--server-only" => server_only = true,
             "--rotate-secrets" => {}
             _ if cmd.is_empty() => cmd = args[i].clone(),
             other => bail!("unknown argument: {other}"),
@@ -6689,8 +7374,12 @@ fn main() -> Result<()> {
         i += 1;
     }
 
+    if server_only && cmd != "p" && cmd != "prod" {
+        bail!("--server-only is only valid with ./sow p");
+    }
+
     let paths = if cmd == "p" || cmd == "prod" {
-        Paths::discover_for_prod()?
+        Paths::discover_for_prod(server_only)?
     } else if cmd == "poki" {
         Paths::discover_for_poki()?
     } else {
@@ -6698,14 +7387,14 @@ fn main() -> Result<()> {
     };
 
     match cmd.as_str() {
-        "p" | "prod" => prod::execute(&paths, bump),
+        "p" | "prod" => prod::execute(&paths, bump, server_only),
         "a" | "android" => prod::execute_android(&paths),
         "jest" => cmd_jest(&paths),
         "poki" => cmd_poki(&paths),
         "native" => cmd_native(&paths),
         "local" | "l" | "" => cmd_local(&paths),
         _ => {
-            eprintln!("Usage: ./sow [native|l|p|a|poki|jest]");
+            eprintln!("Usage: ./sow [native|l|p|a|poki|jest|art-preview]");
             std::process::exit(1);
         }
     }
@@ -6742,7 +7431,10 @@ mod tests {
             fs::write(path, relative.as_bytes())?;
         }
 
-        copy_poki_assets(&source, &packaged)?;
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").canonicalize()?;
+        let mut pipeline = ArtPipeline::load(&root)?;
+        pipeline.cache_root = temp.path().join("art-cache");
+        copy_poki_assets(&source, &packaged, &pipeline)?;
         verify_poki_asset_inventory(&source, &packaged)?;
 
         let expected = [
@@ -6870,91 +7562,39 @@ mod tests {
     }
 
     #[test]
-    fn avatar_output_recipe_replaces_stale_output_and_reuses_matching_output() -> Result<()> {
+    fn art_profiles_cache_by_content_and_recipe_without_mutating_masters() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let source = temp.path().join("hero.png");
-        image::RgbaImage::from_pixel(512, 512, image::Rgba([32, 64, 96, 255])).save(&source)?;
+        image::RgbaImage::from_pixel(512, 256, image::Rgba([32, 64, 96, 255])).save(&source)?;
+        let source_hash = file_sha256(&source)?;
         let out = temp.path().join("runtime-assets");
         let relative = "gameplay/avatars/hero.webp";
         let destination = out.join(relative);
-        fs::create_dir_all(destination.parent().unwrap())?;
-        fs::copy(&source, &destination)?; // Simulate an old unoptimized staged portrait.
-        let mut produced = std::collections::BTreeSet::new();
-
-        publish_avatar_transform(&source, &out, relative, HERO_PORTRAIT_PX, &mut produced)?;
-        assert_eq!(
-            image::image_dimensions(&destination)?,
-            (HERO_PORTRAIT_PX, HERO_PORTRAIT_PX)
-        );
-        assert!(produced.contains(&destination));
-        let recipe = out
-            .parent()
-            .unwrap()
-            .join(".avatar-transform-cache")
-            .join(format!("{relative}.recipe"));
-        let cached_recipe = fs::read_to_string(&recipe)?;
-        assert!(cached_recipe.contains("avatar-webp-v1;max=256;quality=85;source="));
-
-        publish_avatar_transform(&source, &out, relative, HERO_PORTRAIT_PX, &mut produced)?;
-        assert_eq!(fs::read_to_string(&recipe)?, cached_recipe);
-
-        fs::write(&recipe, "stale recipe")?;
-        publish_avatar_transform(&source, &out, relative, HERO_PORTRAIT_PX, &mut produced)?;
-        assert_eq!(
-            image::image_dimensions(&destination)?,
-            (HERO_PORTRAIT_PX, HERO_PORTRAIT_PX)
-        );
-        assert_eq!(fs::read_to_string(recipe)?, cached_recipe);
-        Ok(())
-    }
-
-    #[test]
-    fn avatar_portrait_recipe_downscales_and_replaces_stale_output_without_mutating_source()
-    -> Result<()> {
-        let temp = tempfile::tempdir()?;
-        let source = temp.path().join("tribe.png");
-        image::RgbaImage::from_pixel(512, 256, image::Rgba([80, 120, 160, 255])).save(&source)?;
-        let source_hash = file_sha256(&source)?;
-        let out = temp.path().join("runtime-assets");
-        let relative = "gameplay/avatars/tribe.webp";
-        let destination = out.join(relative);
-        let mut produced = std::collections::BTreeSet::new();
-        fs::create_dir_all(destination.parent().unwrap())?;
-        optimize_webp(&source, &destination, "256x256>", 85)?;
-        assert_eq!(image::image_dimensions(&destination)?, (256, 128));
-        assert!(
-            fs::metadata(&destination)?.modified()? >= fs::metadata(&source)?.modified()?,
-            "the previous output simulates a fresh timestamp-only cache hit"
-        );
-        let recipe = out
-            .parent()
-            .unwrap()
-            .join(".avatar-transform-cache")
-            .join(format!("{relative}.recipe"));
-        fs::create_dir_all(recipe.parent().unwrap())?;
-        let old_recipe = format!(
-            "avatar-webp-v1;max=256;quality=85;source={source_hash};output={}",
-            file_sha256(&destination)?
-        );
-        fs::write(&recipe, old_recipe)?;
-
-        publish_avatar_transform(&source, &out, relative, PORTRAIT_PX, &mut produced)?;
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").canonicalize()?;
+        let mut pipeline = ArtPipeline::load(&root)?;
+        pipeline.cache_root = temp.path().join("art-cache");
+        pipeline.publish_image(&source, &destination, "avatar_portrait_192", None, None)?;
         assert_eq!(image::image_dimensions(&destination)?, (192, 96));
         assert_eq!(
             image::guess_format(&fs::read(&destination)?)?,
             image::ImageFormat::WebP
         );
-        assert!(produced.contains(&destination));
         assert_eq!(file_sha256(&source)?, source_hash);
+        let original_output_hash = file_sha256(&destination)?;
+        pipeline.publish_image(&source, &destination, "avatar_portrait_192", None, None)?;
+        assert_eq!(file_sha256(&destination)?, original_output_hash);
+        let cache_dir = pipeline.cache_root.join("avatar_portrait_192");
+        assert_eq!(fs::read_dir(&cache_dir)?.count(), 1, "same source+recipe reuses one derivative");
 
-        let cached_recipe = fs::read_to_string(&recipe)?;
-        assert!(cached_recipe.contains("avatar-webp-v1;max=192;quality=85;source="));
+        image::RgbaImage::from_pixel(512, 256, image::Rgba([80, 120, 160, 255])).save(&source)?;
+        pipeline.publish_image(&source, &destination, "avatar_portrait_192", None, None)?;
+        assert_ne!(file_sha256(&destination)?, original_output_hash);
+        assert_eq!(fs::read_dir(&cache_dir)?.count(), 2, "changed source creates a new derivative");
 
-        fs::copy(&source, &destination)?; // A newer, oversized prior output must not pass as fresh.
-        publish_avatar_transform(&source, &out, relative, PORTRAIT_PX, &mut produced)?;
+        pipeline.config.profiles.get_mut("avatar_portrait_192").unwrap().recipe_version += 1;
+        pipeline.publish_image(&source, &destination, "avatar_portrait_192", None, None)?;
+        assert_eq!(fs::read_dir(&cache_dir)?.count(), 3, "changed recipe invalidates its cache key");
         assert_eq!(image::image_dimensions(&destination)?, (192, 96));
-        assert_eq!(file_sha256(&source)?, source_hash);
-        assert_eq!(fs::read_to_string(recipe)?, cached_recipe);
         Ok(())
     }
 

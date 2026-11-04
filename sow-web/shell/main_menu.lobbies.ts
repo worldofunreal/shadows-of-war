@@ -370,7 +370,9 @@ export function campaignEpisodeSagaId(episodeId: string): string {
 export function campaignSagaTitle(sagaId: string): string {
     if (sagaId === "all") return SOW_t("lobbies.the_saga") || "The Saga";
     if (sagaId === "boudica") return SOW_t("lobbies.campaign_boudica_title") || "Rise of the Iceni";
-    if (sagaId === "six_sky") return SOW_t("leaders.lady_six_sky") || "Lady Six Sky";
+    if (sagaId === "six_sky") {
+        return leaderDisplayName(leaderById("lady_six_sky")) || "Lady Six Sky";
+    }
     const leader = leaderById(sagaId);
     if (leader) return leaderDisplayName(leader);
     return sagaId.charAt(0).toUpperCase() + sagaId.slice(1).replace(/_/g, " ");
@@ -458,7 +460,13 @@ export function updateCampaignSelection(episodeId: string): boolean {
               ? SOW_t("lobbies.next")
               : SOW_t("lobbies.available")
           : SOW_t("lobbies.locked");
-    const statusClass = completed ? "is-complete" : unlocked ? (isNext ? "is-next" : "is-unlocked") : "is-locked";
+    const statusClass = completed
+        ? "is-complete"
+        : unlocked
+          ? isNext
+              ? "is-next"
+              : "is-unlocked"
+          : "is-locked";
 
     const statusNode = featured.querySelector<HTMLElement>(".sow-campaign__featured-status");
     if (statusNode) {
@@ -596,7 +604,10 @@ export function renderCampaign() {
     const selectedEpisode = episodes.find((e) => e.id === selectedId) || episodes[0] || null;
 
     // Group into Sagas
-    const sagasMap = new Map<string, { id: string; title: string; count: number; completed: number; heroSlug: string }>();
+    const sagasMap = new Map<
+        string,
+        { id: string; title: string; count: number; completed: number; heroSlug: string }
+    >();
     episodes.forEach((ep) => {
         const sagaId = campaignEpisodeSagaId(ep.id);
         let s = sagasMap.get(sagaId);
@@ -642,7 +653,13 @@ export function renderCampaign() {
                   ? SOW_t("lobbies.next")
                   : SOW_t("lobbies.available")
               : SOW_t("lobbies.locked");
-        const statusClass = completed ? "is-complete" : unlocked ? (isNext ? "is-next" : "is-unlocked") : "is-locked";
+        const statusClass = completed
+            ? "is-complete"
+            : unlocked
+              ? isNext
+                  ? "is-next"
+                  : "is-unlocked"
+              : "is-locked";
         const chapterTitle = campaignSagaTitle(campaignEpisodeSagaId(selectedEpisode.id));
         const playLabel = completed
             ? SOW_t("lobbies.replay")
@@ -829,21 +846,35 @@ export function renderCampaign() {
 
 export function renderBrowser() {
     return (
-        "<main class='sow-menu__main' data-screen-panel='browser'>" +
-        "<section class='sow-menu__command'>" +
+        "<main class='sow-menu__main sow-browser' data-screen-panel='browser'>" +
+        "<section class='sow-menu__command sow-browser__header'>" +
+        "<div class='sow-browser__title-bar'>" +
+        "<button class='sow-menu__secondary sow-browser__back-btn' type='button' data-command='close_overlay'>← " +
+        esc(SOW_t("lobbies.back")) +
+        "</button>" +
+        "<div class='sow-browser__titles'>" +
         "<p class='sow-menu__eyebrow'>" +
         esc(SOW_t("menu.lobby_browser")) +
         "</p>" +
         "<h1>" +
-        esc(SOW_t("lobbies.active_matches")).replace("\n", "<br>") +
+        esc(SOW_t("lobbies.active_matches")).replace("\n", " ") +
         "</h1>" +
-        "<p class='sow-menu__tagline'>" +
-        esc(SOW_t("lobbies.browser_tagline")) +
-        "</p>" +
-        "<button class='sow-menu__secondary' type='button' data-command='close_overlay'>← " +
-        esc(SOW_t("lobbies.back")) +
-        "</button>" +
-        "<form class='sow-menu__join' data-form='join'>" +
+        "</div>" +
+        "</div>" +
+        "<div class='sow-browser__toolbar'>" +
+        "<div class='sow-menu__browser-search'>" +
+        "<span class='sow-browser__search-icon' aria-hidden='true'>" +
+        createTacticalIcon("search") +
+        "</span>" +
+        "<input data-role='browser-search' type='search' placeholder='" +
+        esc(SOW_t("lobbies.search_map_host")) +
+        "' value=\"" +
+        esc(menuUi.browserSearchQuery) +
+        "\" aria-label='" +
+        esc(SOW_t("lobbies.search_map_host")) +
+        "'>" +
+        "</div>" +
+        "<form class='sow-menu__join sow-browser__join' data-form='join'>" +
         "<input name='code' inputmode='numeric' autocomplete='off' placeholder='" +
         esc(SOW_t("menu.lobby_code")) +
         "' aria-label='" +
@@ -853,27 +884,133 @@ export function renderBrowser() {
         esc(SOW_t("menu.join")) +
         "</button>" +
         "</form>" +
-        "<button class='sow-menu__secondary' type='button' data-command='open_create'>" +
+        "<button class='sow-menu__primary sow-browser__create-btn' type='button' data-command='open_create'>" +
+        createTacticalIcon("plus") +
+        " <span>" +
         esc(SOW_t("menu.create_custom_game")) +
-        " <span>+</span></button>" +
+        "</span></button>" +
+        "</div>" +
         renderFeedback() +
         "</section>" +
-        "<section class='sow-menu__battlefield'>" +
-        "<section class='sow-menu__public'>" +
-        "<div class='sow-menu__browser-search'>" +
-        "<input data-role='browser-search' type='search' placeholder='" +
-        esc(SOW_t("lobbies.search_map_host")) +
-        "' value=\"" +
-        esc(menuUi.browserSearchQuery) +
-        "\" aria-label='" +
-        esc(SOW_t("lobbies.search_map_host")) +
-        "'>" +
-        "</div>" +
+        "<section class='sow-menu__battlefield sow-browser__workspace'>" +
+        "<section class='sow-menu__public sow-browser__public'>" +
         "<div class='sow-menu__lobbies' data-lobby-list='browser'></div>" +
         "</section>" +
         "</section>" +
         "</main>"
     );
+}
+
+const CREATE_TACTICAL_ICONS: Record<string, string> = {
+    ffa: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='m14.5 17.5-11-11V3h3.5l11 11'/><path d='m13 19 6-6'/><path d='m16 16 4 4'/><path d='m19 21 2-2'/><path d='m9.5 17.5 11-11V3H17L6 14'/><path d='m11 19-6-6'/><path d='m8 16-4 4'/><path d='m5 21-2-2'/></svg>",
+    teams: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z'/><path d='M12 4v17'/><path d='M5 10h14'/></svg>",
+    hvn: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14'/></svg>",
+    vanilla:
+        "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 22s7-3.5 7-9.5V6l-7-3-7 3v6.5C5 18.5 12 22 12 22Z'/><path d='m9 12 2 2 4-4'/></svg>",
+    terminator:
+        "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M13 2 4 14h7l-1 8 9-12h-7l1-8Z'/></svg>",
+    spawn_random:
+        "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><rect x='3' y='3' width='18' height='18' rx='3'/><circle cx='8.5' cy='8.5' r='1' fill='currentColor'/><circle cx='15.5' cy='8.5' r='1' fill='currentColor'/><circle cx='12' cy='12' r='1' fill='currentColor'/><circle cx='8.5' cy='15.5' r='1' fill='currentColor'/><circle cx='15.5' cy='15.5' r='1' fill='currentColor'/></svg>",
+    spawn_preset:
+        "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10Z'/><circle cx='12' cy='11' r='2.5'/></svg>",
+    public: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='9'/><path d='M3 12h18'/><path d='M12 3a14 14 0 0 1 0 18'/><path d='M12 3a14 14 0 0 0 0 18'/></svg>",
+    private:
+        "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><rect x='5' y='11' width='14' height='10' rx='2'/><path d='M8 11V7a4 4 0 0 1 8 0v4'/></svg>",
+    solo: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='8' r='4'/><path d='M5 20a7 7 0 0 1 14 0'/></svg>",
+    players:
+        "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M22 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>",
+    tribes: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 20h18L12 4 3 20Z'/><path d='m9.5 20 2.5-6 2.5 6'/></svg>",
+    nations:
+        "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 21h16'/><path d='M6 21V8l3 2 3-4 3 4 3-2v13'/><path d='M10 21v-5h4v5'/></svg>",
+    seed: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M10 3 8 21'/><path d='M16 3l-2 18'/><path d='M4 9h17'/><path d='M3 15h17'/></svg>",
+    map: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><polygon points='3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21'/><line x1='9' y1='3' x2='9' y2='18'/><line x1='15' y1='6' x2='15' y2='21'/></svg>",
+    roster: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M8 6h13'/><path d='M8 12h13'/><path d='M8 18h13'/><path d='M3 6h.01'/><path d='M3 12h.01'/><path d='M3 18h.01'/></svg>",
+    prev: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='m15 18-6-6 6-6'/></svg>",
+    next: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='m9 18 6-6-6-6'/></svg>",
+    plus: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 5v14M5 12h14'/></svg>",
+    minus: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14'/></svg>",
+    search: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>",
+    campaign:
+        "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20'/></svg>",
+    play: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'><path d='M8 5v14l11-7z'/></svg>",
+};
+
+export function createTacticalIcon(name: string): string {
+    return CREATE_TACTICAL_ICONS[name] || menuIcon(name) || "";
+}
+
+let createMapAnimDirection: -1 | 0 | 1 = 0;
+
+function availableMapCatalog() {
+    const catalog = (menuUi.state && menuUi.state.map_catalog) || [];
+    if (catalog.length) return catalog;
+    return [mapInfo((menuUi.createDraft && menuUi.createDraft.map_name) || "world")];
+}
+
+function applyCreateMapSelection(mapKey: string, direction: -1 | 1) {
+    if (!menuUi.createDraft) menuUi.createDraft = cloneConfig();
+    const draft = menuUi.createDraft;
+    const map = mapInfo(mapKey);
+    if (!map) return;
+    draft.map_name = map.key;
+    draft.map_width = map.width;
+    draft.map_height = map.height;
+    const presets = Array.isArray(map.roster_presets) ? map.roster_presets : [];
+    if (!presets.some((preset) => preset.id === draft.map_roster_preset)) {
+        draft.map_roster_preset = map.default_roster || (presets[0] && presets[0].id) || null;
+    }
+    createMapAnimDirection = direction;
+}
+
+export function cycleCreateMap(direction: number) {
+    const catalog = availableMapCatalog();
+    if (!catalog.length) return;
+    if (!menuUi.createDraft) menuUi.createDraft = cloneConfig();
+    const currentKey = menuUi.createDraft.map_name || "world";
+    const currentIndex = Math.max(
+        0,
+        catalog.findIndex((m) => m.key === currentKey),
+    );
+    const step = direction < 0 ? -1 : 1;
+    const nextIndex = (currentIndex + step + catalog.length) % catalog.length;
+    applyCreateMapSelection(catalog[nextIndex].key, step);
+}
+
+export function selectCreateMap(mapKey: string) {
+    if (!mapKey) return;
+    const catalog = availableMapCatalog();
+    if (!menuUi.createDraft) menuUi.createDraft = cloneConfig();
+    const currentKey = menuUi.createDraft.map_name || "world";
+    if (currentKey === mapKey) return;
+    const prevIdx = catalog.findIndex((m) => m.key === currentKey);
+    const nextIdx = catalog.findIndex((m) => m.key === mapKey);
+    const dir: -1 | 1 = nextIdx >= prevIdx ? 1 : -1;
+    applyCreateMapSelection(mapKey, dir);
+}
+
+export function stepCreateSlider(field: string, delta: number) {
+    if (!menuUi.createDraft) menuUi.createDraft = cloneConfig();
+    const draft = menuUi.createDraft;
+    if (field === "max_players") {
+        const cur = Number(draft.max_players) || 8;
+        draft.max_players = Math.max(2, Math.min(16, cur + delta));
+    } else if (field === "bot_count") {
+        const maxTribes = botLimit("tribes", 400);
+        const cur = draft.bot_count != null ? Number(draft.bot_count) : 128;
+        draft.bot_count = Math.max(0, Math.min(maxTribes, cur + delta));
+    } else if (field === "nation_count") {
+        const maxNations = botLimit("nations", 200);
+        const cur = draft.nation_count != null ? Number(draft.nation_count) : 32;
+        draft.nation_count = Math.max(0, Math.min(maxNations, cur + delta));
+    } else if (field === "seed") {
+        const cur = Number(draft.seed) || 42;
+        draft.seed = Math.max(1, Math.min(9999, cur + delta));
+    }
+}
+
+function sliderFillPercent(val: number, min: number, max: number): number {
+    if (max <= min) return 0;
+    return Math.max(0, Math.min(100, Math.round(((val - min) / (max - min)) * 100)));
 }
 
 // One bot per catalog character: the sliders stop at the catalog size.
@@ -889,6 +1026,7 @@ export function cloneConfig(): MenuCustomGameConfig {
 export function syncCreateDraft(form: HTMLFormElement) {
     if (!menuUi.createDraft) menuUi.createDraft = cloneConfig();
     const draft = menuUi.createDraft;
+    const prevMap = draft.map_name || "world";
     Array.prototype.forEach.call(form.elements, function (field: Element) {
         if (!(field instanceof HTMLInputElement) || !field.name) return;
         if (field.name === "session_mode") {
@@ -905,6 +1043,12 @@ export function syncCreateDraft(form: HTMLFormElement) {
         ) {
             draft[field.name] = Number(field.value);
         } else if (field.name === "map_name") {
+            if (field.value && field.value !== prevMap) {
+                const catalog = availableMapCatalog();
+                const prevIdx = catalog.findIndex((m) => m.key === prevMap);
+                const nextIdx = catalog.findIndex((m) => m.key === field.value);
+                createMapAnimDirection = nextIdx >= prevIdx ? 1 : -1;
+            }
             draft.map_name = field.value;
             const map = mapInfo(field.value);
             if (map) {
@@ -968,52 +1112,90 @@ export function renderCreate() {
     const isSp = menuUi.createOffline;
     const selectedMap = mapInfo(config.map_name || "world");
     const mapThumbUrl = lobbyThumb({ map_name: selectedMap.key });
+    const catalog = availableMapCatalog();
+    const mapIndex = Math.max(
+        0,
+        catalog.findIndex((m) => m.key === selectedMap.key),
+    );
+    const animClass =
+        createMapAnimDirection === 1
+            ? " is-animating-enter-next"
+            : createMapAnimDirection === -1
+              ? " is-animating-enter-prev"
+              : "";
+    createMapAnimDirection = 0;
 
+    const modeMeta: Record<string, { label: string; icon: string }> = {
+        FFA: { label: SOW_t("lobbies.free_for_all"), icon: createTacticalIcon("ffa") },
+        Teams: { label: SOW_t("lobbies.teams_two"), icon: createTacticalIcon("teams") },
+        HumansVsNations: { label: SOW_t("lobbies.hvn"), icon: createTacticalIcon("hvn") },
+    };
+
+    const currentMode = config.game_mode || "FFA";
     const modeOptionsHtml = ["FFA", "Teams", "HumansVsNations"]
         .map(function (mode) {
-            const labels: Record<string, string> = {
-                FFA: SOW_t("lobbies.free_for_all"),
-                Teams: SOW_t("lobbies.teams_two"),
-                HumansVsNations: SOW_t("lobbies.hvn"),
-            };
-            const isSelected = (config.game_mode || "FFA") === mode;
+            const meta = modeMeta[mode] || { label: mode, icon: "" };
+            const isSelected = currentMode === mode;
             return (
-                "<button type='button' class='sow-menu__pill" +
+                "<button type='button' class='sow-menu__pill sow-create__mode-card" +
                 (isSelected ? " active" : "") +
                 "' data-command='set_create_mode' data-mode='" +
                 mode +
+                "' aria-pressed='" +
+                String(isSelected) +
                 "'>" +
-                esc(labels[mode] || mode) +
+                "<span class='sow-create__mode-icon'>" +
+                meta.icon +
+                "</span>" +
+                "<span class='sow-create__mode-label'>" +
+                esc(meta.label) +
+                "</span>" +
                 "</button>"
             );
         })
         .join("");
 
+    const currentDiff = config.bot_difficulty || "Vanilla";
     const diffOptionsHtml = ["Vanilla", "Terminator"]
         .map(function (diff) {
-            const isSelected = (config.bot_difficulty || "Vanilla") === diff;
+            const isSelected = currentDiff === diff;
+            const icon = createTacticalIcon(diff === "Vanilla" ? "vanilla" : "terminator");
+            const label = diff === "Vanilla" ? SOW_t("lobbies.vanilla") : SOW_t("lobbies.terminator");
             return (
-                "<button type='button' class='sow-menu__pill" +
+                "<button type='button' class='sow-menu__pill sow-create__toggle-pill" +
                 (isSelected ? " active" : "") +
                 "' data-command='set_create_diff' data-diff='" +
                 diff +
+                "' aria-pressed='" +
+                String(isSelected) +
                 "'>" +
-                esc(diff === "Vanilla" ? SOW_t("lobbies.vanilla") : SOW_t("lobbies.terminator")) +
+                icon +
+                "<span>" +
+                esc(label) +
+                "</span>" +
                 "</button>"
             );
         })
         .join("");
 
+    const currentSpawn = config.random_spawn !== false;
     const spawnOptionsHtml = [true, false]
         .map(function (val) {
-            const isSelected = (config.random_spawn !== false) === val;
+            const isSelected = currentSpawn === val;
+            const icon = createTacticalIcon(val ? "spawn_random" : "spawn_preset");
+            const label = val ? SOW_t("lobbies.random_on") : SOW_t("lobbies.preset_off");
             return (
-                "<button type='button' class='sow-menu__pill" +
+                "<button type='button' class='sow-menu__pill sow-create__toggle-pill" +
                 (isSelected ? " active" : "") +
                 "' data-command='set_create_spawn' data-spawn='" +
                 String(val) +
+                "' aria-pressed='" +
+                String(isSelected) +
                 "'>" +
-                esc(val ? SOW_t("lobbies.random_on") : SOW_t("lobbies.preset_off")) +
+                icon +
+                "<span>" +
+                esc(label) +
+                "</span>" +
                 "</button>"
             );
         })
@@ -1022,21 +1204,61 @@ export function renderCreate() {
     const visOptionsHtml = [false, true]
         .map(function (val) {
             const isSelected = menuUi.createPrivate === val;
+            const icon = createTacticalIcon(val ? "private" : "public");
+            const label = val ? SOW_t("lobbies.private_code") : SOW_t("lobbies.public");
             return (
-                "<button type='button' class='sow-menu__pill" +
+                "<button type='button' class='sow-menu__pill sow-create__toggle-pill" +
                 (isSelected ? " active" : "") +
                 "' data-command='set_create_private' data-private='" +
                 String(val) +
+                "' aria-pressed='" +
+                String(isSelected) +
                 "'>" +
-                esc(val ? SOW_t("lobbies.private_code") : SOW_t("lobbies.public")) +
+                icon +
+                "<span>" +
+                esc(label) +
+                "</span>" +
                 "</button>"
             );
         })
         .join("");
 
-    const mapCatalogOptions = ((menuUi.state && menuUi.state.map_catalog) || []).map(function (m) {
+    const mapCatalogOptions = catalog.map(function (m) {
         return { value: m.key, label: formatMapName(m) + " (" + m.width + "×" + m.height + ")" };
     });
+
+    const mapThumbsStripHtml =
+        catalog.length > 1
+            ? "<div class='sow-create__map-strip' role='listbox' aria-label='" +
+              esc(SOW_t("lobbies.select_map")) +
+              "'>" +
+              catalog
+                  .map(function (m) {
+                      const active = m.key === selectedMap.key;
+                      const thumb = lobbyThumb({ map_name: m.key });
+                      return (
+                          "<button type='button' role='option' aria-selected='" +
+                          String(active) +
+                          "' class='sow-create__map-thumb" +
+                          (active ? " is-active" : "") +
+                          "' data-command='select_create_map' data-map-key='" +
+                          esc(m.key) +
+                          "' title='" +
+                          esc(formatMapName(m)) +
+                          "'>" +
+                          "<img src='" +
+                          esc(thumb) +
+                          "' alt='' loading='lazy' decoding='async'>" +
+                          "<span>" +
+                          esc(formatMapName(m)) +
+                          "</span>" +
+                          "</button>"
+                      );
+                  })
+                  .join("") +
+              "</div>"
+            : "";
+
     const rosterPresets = Array.isArray(selectedMap.roster_presets) ? selectedMap.roster_presets : [];
     if (
         !rosterPresets.some(function (preset) {
@@ -1047,7 +1269,10 @@ export function renderCreate() {
             selectedMap.default_roster || (rosterPresets[0] && rosterPresets[0].id) || null;
     }
     const rosterControl = rosterPresets.length
-        ? "<label class='sow-menu__form-field sow-create__map-select'>Roster" +
+        ? "<label class='sow-menu__form-field sow-create__map-select sow-create__roster-select'>" +
+          "<span class='sow-create__field-chip'>" +
+          createTacticalIcon("roster") +
+          "<span>Roster</span></span>" +
           SOW_renderDropdown({
               key: "create-map-roster",
               name: "map_roster_preset",
@@ -1055,99 +1280,196 @@ export function renderCreate() {
               options: rosterPresets.map(function (preset) {
                   return {
                       value: preset.id,
-                      label: preset.name + (preset.id === selectedMap.default_roster ? " (map default)" : ""),
+                      label: preset.name + (preset.id === selectedMap.default_roster ? " ★" : ""),
                   };
               }),
           }) +
           "</label>"
         : "";
 
+    const seedVal = Number(config.seed) || 42;
+    const seedPct = sliderFillPercent(seedVal, 1, 9999);
+
     const spControls = isSp
-        ? "<div class='sow-menu__slider-field'>" +
-          "<div class='sow-menu__slider-label'><span>" +
+        ? "<div class='sow-create__session-bar sow-create__session-bar--seed'>" +
+          "<div class='sow-create__force-header'>" +
+          "<span class='sow-create__force-title'>" +
+          createTacticalIcon("seed") +
+          "<span>" +
           esc(SOW_t("lobbies.procedural_seed")) +
-          "</span><b data-val-for='seed'>" +
-          esc(config.seed || 42) +
-          "</b></div>" +
-          "<div class='sow-menu__slider-row'>" +
+          "</span></span>" +
+          "<b class='sow-create__force-val' data-val-for='seed'>" +
+          esc(seedVal) +
+          "</b>" +
+          "</div>" +
+          "<div class='sow-menu__slider-row sow-create__seed-row'>" +
           "<input class='sow-menu__range' name='seed' type='range' min='1' max='9999' step='1' value='" +
-          esc(config.seed || 42) +
-          "'>" +
-          "<button class='sow-menu__ghost-mini' type='button' data-command='randomize_seed' aria-label='" +
+          esc(seedVal) +
+          "' style='--sow-slider-fill:" +
+          seedPct +
+          "%'>" +
+          "<button class='sow-menu__ghost-mini sow-create__dice-btn' type='button' data-command='randomize_seed' aria-label='" +
+          esc(SOW_t("lobbies.randomize_seed")) +
+          "' title='" +
           esc(SOW_t("lobbies.randomize_seed")) +
           "'>" +
           menuIcon("dice") +
+          createTacticalIcon("spawn_random") +
           "</button>" +
           "</div>" +
           "</div>"
-        : "<div>" +
-          "<label class='sow-menu__form-field'>" +
+        : "<div class='sow-create__session-bar sow-create__session-bar--online'>" +
+          "<div class='sow-create__rule-block'>" +
+          "<span class='sow-create__rule-label'>" +
+          createTacticalIcon(menuUi.createPrivate ? "private" : "public") +
+          "<span>" +
           esc(SOW_t("lobbies.visibility")) +
-          "<div class='sow-menu__pill-group'>" +
+          "</span></span>" +
+          "<div class='sow-menu__pill-group sow-create__segmented'>" +
           visOptionsHtml +
           "</div>" +
-          "</label>" +
+          "</div>" +
           (menuUi.createPrivate
-              ? "<label class='sow-menu__form-field' style='margin-top:10px;'>" +
-                esc(SOW_t("lobbies.password_optional")) +
+              ? "<label class='sow-menu__form-field sow-create__password-inline'>" +
+                "<span class='sow-create__password-icon'>" +
+                createTacticalIcon("private") +
+                "</span>" +
                 "<input class='sow-menu__field' name='password' type='password' autocomplete='new-password' value='" +
                 esc(menuUi.createPassword) +
                 "' placeholder='" +
-                esc(SOW_t("lobbies.password_empty_hint")) +
+                esc(SOW_t("lobbies.password_optional")) +
+                "' aria-label='" +
+                esc(SOW_t("lobbies.password_optional")) +
                 "'>" +
                 "</label>"
               : "") +
           "</div>";
 
+    const maxPlayersVal = Number(config.max_players) || 8;
+    const maxPlayersPct = sliderFillPercent(maxPlayersVal, 2, 16);
+
+    const maxTribesLimit = botLimit("tribes", 400);
+    const botCountVal = config.bot_count != null ? Number(config.bot_count) : 128;
+    const botCountPct = sliderFillPercent(botCountVal, 0, maxTribesLimit);
+
+    const maxNationsLimit = botLimit("nations", 200);
+    const nationCountVal = config.nation_count != null ? Number(config.nation_count) : 32;
+    const nationCountPct = sliderFillPercent(nationCountVal, 0, maxNationsLimit);
+
+    const totalEntities = maxPlayersVal + botCountVal + nationCountVal;
+    const activeModeMeta = modeMeta[currentMode] || modeMeta.FFA;
+
     return (
         "<main class='sow-menu__main sow-menu__main--custom sow-create' data-screen-panel='create'>" +
         "<section class='sow-menu__command sow-create__rail'>" +
+        "<div class='sow-create__header-left'>" +
+        "<button class='sow-menu__secondary sow-create__back-btn' type='button' data-command='close_overlay' aria-label='" +
+        esc(SOW_t("lobbies.back")) +
+        "'>← <span>" +
+        esc(SOW_t("lobbies.back")) +
+        "</span></button>" +
+        "<div class='sow-create__title-group'>" +
         "<p class='sow-menu__eyebrow'>" +
         esc(SOW_t("lobbies.custom_game")) +
         "</p>" +
         "<h1>" +
-        esc(SOW_t("lobbies.match_settings")).replace("\n", "<br>") +
+        esc(SOW_t("lobbies.match_settings")).replace("\n", " ") +
         "</h1>" +
-        "<p class='sow-menu__tagline'>" +
-        esc(SOW_t(isSp ? "lobbies.offline_hint" : "lobbies.online_hint")) +
-        "</p>" +
-        "<div class='sow-menu__mode-switcher'>" +
-        "<button type='button' class='sow-menu__mode-tab" +
+        "</div>" +
+        "</div>" +
+        "<div class='sow-create__header-right'>" +
+        "<div class='sow-menu__mode-switcher' role='tablist' aria-label='" +
+        esc(SOW_t("lobbies.custom_game")) +
+        "'>" +
+        "<button type='button' role='tab' aria-selected='" +
+        String(isSp) +
+        "' class='sow-menu__mode-tab" +
         (isSp ? " active" : "") +
         "' data-command='set_session_mode' data-mode='offline'>" +
-        menuIcon("solo") +
-        " " +
+        createTacticalIcon("solo") +
+        " <span>" +
         esc(SOW_t("lobbies.solo_practice")) +
-        "</button>" +
-        "<button type='button' class='sow-menu__mode-tab" +
+        "</span></button>" +
+        "<button type='button' role='tab' aria-selected='" +
+        String(!isSp) +
+        "' class='sow-menu__mode-tab" +
         (!isSp ? " active" : "") +
         "' data-command='set_session_mode' data-mode='online'>" +
-        menuIcon("globe") +
-        " " +
+        createTacticalIcon("public") +
+        " <span>" +
         esc(SOW_t("lobbies.online_lobby")) +
-        "</button>" +
+        "</span></button>" +
+        "</div>" +
+        "<button type='button' class='sow-menu__secondary sow-create__campaign-shortcut' data-command='open_campaign' title='" +
+        esc(SOW_t("menu.campaign")) +
+        "'>" +
+        createTacticalIcon("campaign") +
+        " <span>" +
+        esc(SOW_t("menu.campaign")) +
+        "</span></button>" +
         "</div>" +
         "</section>" +
         "<section class='sow-menu__battlefield sow-create__workspace'>" +
         "<form class='sow-create__form' data-form='create'>" +
         "<div class='sow-create__scroll'>" +
         "<div class='sow-create__columns'>" +
-        "<div class='sow-create__column'>" +
+        "<div class='sow-create__column sow-create__column--stage'>" +
         "<section class='sow-menu__custom-card sow-create__map-panel'>" +
-        "<div class='sow-menu__map-preview-wrap' style=\"background-image:url('" +
+        "<div class='sow-menu__map-preview-wrap" +
+        animClass +
+        "' data-create-map-stage style=\"background-image:url('" +
         esc(mapThumbUrl) +
         "')\">" +
+        "<img class='sow-create__map-art' src='" +
+        esc(mapThumbUrl) +
+        "' alt='" +
+        esc(formatMapName(selectedMap)) +
+        "' loading='eager' decoding='async'>" +
+        "<div class='sow-create__map-vignette' aria-hidden='true'></div>" +
+        "<div class='sow-create__map-hud-top'>" +
+        "<span class='sow-create__hud-chip sow-create__hud-chip--mode'>" +
+        activeModeMeta.icon +
+        "<span>" +
+        esc(activeModeMeta.label) +
+        "</span></span>" +
+        "<span class='sow-create__hud-chip sow-create__hud-chip--forces' data-create-total-forces>" +
+        createTacticalIcon("players") +
+        "<b>" +
+        totalEntities +
+        "</b></span>" +
+        "</div>" +
+        (catalog.length > 1
+            ? "<button type='button' class='sow-create__map-nav sow-create__map-nav--prev' data-command='cycle_create_map' data-dir='-1' aria-label='Previous map'>" +
+              createTacticalIcon("prev") +
+              "</button>" +
+              "<button type='button' class='sow-create__map-nav sow-create__map-nav--next' data-command='cycle_create_map' data-dir='1' aria-label='Next map'>" +
+              createTacticalIcon("next") +
+              "</button>"
+            : "") +
         "<div class='sow-menu__map-preview-meta'>" +
+        "<div class='sow-create__map-title-block'>" +
         "<strong>" +
         esc(formatMapName(selectedMap)) +
         "</strong>" +
+        (catalog.length > 1
+            ? "<span class='sow-create__map-counter'>" + (mapIndex + 1) + " / " + catalog.length + "</span>"
+            : "") +
+        "</div>" +
         "<small>" +
         esc(SOW_t("lobbies.tiles", { width: selectedMap.width, height: selectedMap.height })) +
         "</small>" +
         "</div>" +
         "</div>" +
+        mapThumbsStripHtml +
+        "<div class='sow-create__map-select-row" +
+        (rosterControl ? " has-roster" : "") +
+        "'>" +
         "<label class='sow-menu__form-field sow-create__map-select'>" +
+        "<span class='sow-create__field-chip'>" +
+        createTacticalIcon("map") +
+        "<span>" +
         esc(SOW_t("lobbies.select_map")) +
+        "</span></span>" +
         SOW_renderDropdown({
             key: "create-map",
             name: "map_name",
@@ -1156,71 +1478,122 @@ export function renderCreate() {
         }) +
         "</label>" +
         rosterControl +
+        "</div>" +
         "</section>" +
-        "<section class='sow-menu__custom-card'>" +
-        "<label class='sow-menu__form-field'>" +
+        "</div>" +
+        "<div class='sow-create__column sow-create__column--controls'>" +
+        "<section class='sow-menu__custom-card sow-create__rules-card'>" +
+        "<div class='sow-menu__pill-group sow-create__mode-grid' role='group' aria-label='" +
         esc(SOW_t("lobbies.game_type")) +
-        "<div class='sow-menu__pill-group'>" +
+        "'>" +
         modeOptionsHtml +
         "</div>" +
-        "</label>" +
         "<div class='sow-menu__form-row sow-create__rules-row'>" +
-        "<label class='sow-menu__form-field'>" +
+        "<div class='sow-create__rule-block'>" +
+        "<span class='sow-create__rule-label'>" +
+        createTacticalIcon(currentDiff === "Vanilla" ? "vanilla" : "terminator") +
+        "<span>" +
         esc(SOW_t("lobbies.bot_difficulty")) +
-        "<div class='sow-menu__pill-group'>" +
+        "</span></span>" +
+        "<div class='sow-menu__pill-group sow-create__segmented'>" +
         diffOptionsHtml +
         "</div>" +
-        "</label>" +
-        "<label class='sow-menu__form-field'>" +
+        "</div>" +
+        "<div class='sow-create__rule-block'>" +
+        "<span class='sow-create__rule-label'>" +
+        createTacticalIcon(currentSpawn ? "spawn_random" : "spawn_preset") +
+        "<span>" +
         esc(SOW_t("lobbies.spawn_rules")) +
-        "<div class='sow-menu__pill-group'>" +
+        "</span></span>" +
+        "<div class='sow-menu__pill-group sow-create__segmented'>" +
         spawnOptionsHtml +
         "</div>" +
-        "</label>" +
         "</div>" +
-        "</section>" +
-        "<section class='sow-menu__custom-card'>" +
+        "</div>" +
         spControls +
         "</section>" +
-        "</div>" +
-        "<div class='sow-create__column'>" +
-        "<section class='sow-menu__custom-card'>" +
-        "<p class='sow-menu__panel-sublabel'>" +
-        esc(SOW_t("lobbies.population_scale")) +
-        "</p>" +
-        "<div class='sow-menu__slider-field'>" +
-        "<div class='sow-menu__slider-label'><span>" +
+        "<section class='sow-menu__custom-card sow-create__forces-card'>" +
+        "<div class='sow-menu__slider-field sow-create__force-row'>" +
+        "<div class='sow-menu__slider-label sow-create__force-header'>" +
+        "<span class='sow-create__force-title'>" +
+        "<i class='sow-create__force-badge sow-create__force-badge--players'>" +
+        createTacticalIcon("players") +
+        "</i>" +
+        "<span>" +
         esc(SOW_t("lobbies.max_human_players")) +
-        "</span><b data-val-for='max_players'>" +
-        (config.max_players || 8) +
+        "</span></span>" +
+        "<b class='sow-create__force-val' data-val-for='max_players'>" +
+        maxPlayersVal +
         "</b></div>" +
+        "<div class='sow-create__slider-control'>" +
+        "<button type='button' class='sow-create__step-btn' data-command='step_create_slider' data-field='max_players' data-step='-1' aria-label='-'>" +
+        createTacticalIcon("minus") +
+        "</button>" +
         "<input class='sow-menu__range' name='max_players' type='range' min='2' max='16' step='1' value='" +
-        (config.max_players || 8) +
-        "'>" +
+        maxPlayersVal +
+        "' style='--sow-slider-fill:" +
+        maxPlayersPct +
+        "%'>" +
+        "<button type='button' class='sow-create__step-btn' data-command='step_create_slider' data-field='max_players' data-step='1' aria-label='+'>" +
+        createTacticalIcon("plus") +
+        "</button>" +
         "</div>" +
-        "<div class='sow-menu__slider-field'>" +
-        "<div class='sow-menu__slider-label'><span>" +
+        "</div>" +
+        "<div class='sow-menu__slider-field sow-create__force-row'>" +
+        "<div class='sow-menu__slider-label sow-create__force-header'>" +
+        "<span class='sow-create__force-title'>" +
+        "<i class='sow-create__force-badge sow-create__force-badge--tribes'>" +
+        createTacticalIcon("tribes") +
+        "</i>" +
+        "<span>" +
         esc(SOW_t("lobbies.neutral_bots")) +
-        "</span><b data-val-for='bot_count'>" +
-        (config.bot_count != null ? config.bot_count : 128) +
+        "</span></span>" +
+        "<b class='sow-create__force-val' data-val-for='bot_count'>" +
+        botCountVal +
         "</b></div>" +
+        "<div class='sow-create__slider-control'>" +
+        "<button type='button' class='sow-create__step-btn' data-command='step_create_slider' data-field='bot_count' data-step='-8' aria-label='-'>" +
+        createTacticalIcon("minus") +
+        "</button>" +
         "<input class='sow-menu__range' name='bot_count' type='range' min='0' max='" +
-        botLimit("tribes", 400) +
+        maxTribesLimit +
         "' step='8' value='" +
-        (config.bot_count != null ? config.bot_count : 128) +
-        "'>" +
+        botCountVal +
+        "' style='--sow-slider-fill:" +
+        botCountPct +
+        "%'>" +
+        "<button type='button' class='sow-create__step-btn' data-command='step_create_slider' data-field='bot_count' data-step='8' aria-label='+'>" +
+        createTacticalIcon("plus") +
+        "</button>" +
         "</div>" +
-        "<div class='sow-menu__slider-field'>" +
-        "<div class='sow-menu__slider-label'><span>" +
+        "</div>" +
+        "<div class='sow-menu__slider-field sow-create__force-row'>" +
+        "<div class='sow-menu__slider-label sow-create__force-header'>" +
+        "<span class='sow-create__force-title'>" +
+        "<i class='sow-create__force-badge sow-create__force-badge--nations'>" +
+        createTacticalIcon("nations") +
+        "</i>" +
+        "<span>" +
         esc(SOW_t("lobbies.complex_ai")) +
-        "</span><b data-val-for='nation_count'>" +
-        (config.nation_count != null ? config.nation_count : 32) +
+        "</span></span>" +
+        "<b class='sow-create__force-val' data-val-for='nation_count'>" +
+        nationCountVal +
         "</b></div>" +
+        "<div class='sow-create__slider-control'>" +
+        "<button type='button' class='sow-create__step-btn' data-command='step_create_slider' data-field='nation_count' data-step='-4' aria-label='-'>" +
+        createTacticalIcon("minus") +
+        "</button>" +
         "<input class='sow-menu__range' name='nation_count' type='range' min='0' max='" +
-        botLimit("nations", 200) +
+        maxNationsLimit +
         "' step='4' value='" +
-        (config.nation_count != null ? config.nation_count : 32) +
-        "'>" +
+        nationCountVal +
+        "' style='--sow-slider-fill:" +
+        nationCountPct +
+        "%'>" +
+        "<button type='button' class='sow-create__step-btn' data-command='step_create_slider' data-field='nation_count' data-step='4' aria-label='+'>" +
+        createTacticalIcon("plus") +
+        "</button>" +
+        "</div>" +
         "</div>" +
         "</section>" +
         renderFeedback() +
@@ -1229,8 +1602,9 @@ export function renderCreate() {
         "</div>" +
         "<div class='sow-create__actions'>" +
         "<button class='sow-menu__primary sow-menu__custom-launch-btn' type='submit'>" +
+        "<span>" +
         esc(SOW_t(isSp ? "lobbies.start_simulation" : "lobbies.create_lobby")) +
-        " <span>↗</span>" +
+        "</span> <i>▶</i>" +
         "</button>" +
         "<button class='sow-menu__ghost-button sow-create__cancel-btn' type='button' data-command='close_overlay'>" +
         esc(SOW_t("lobbies.cancel")) +
@@ -1432,21 +1806,35 @@ export function updateRankedQueue() {
     const state = menuUi.state;
     if (!panel || !state) return;
     const timer = panel.querySelector<HTMLElement>("[data-ranked-elapsed]");
-    if (timer) timer.textContent = SOW_t("lobbies.ranked_searching", { seconds: state.ranked_search_elapsed_secs || 0 });
+    if (timer)
+        timer.textContent = SOW_t("lobbies.ranked_searching", {
+            seconds: state.ranked_search_elapsed_secs || 0,
+        });
     const status = panel.querySelector<HTMLElement>("[data-ranked-sync]");
-    if (status) status.textContent = state.map_download_error ? SOW_t("lobbies.map_download_failed")
-        : state.downloading_map ? SOW_t("lobbies.sync", { progress: state.map_download_progress || 0 }) : SOW_t("menu.loading");
+    if (status)
+        status.textContent = state.map_download_error
+            ? SOW_t("lobbies.map_download_failed")
+            : state.downloading_map
+              ? SOW_t("lobbies.sync", { progress: state.map_download_progress || 0 })
+              : SOW_t("menu.loading");
     const retry = panel.querySelector<HTMLButtonElement>("[data-command=retry_map_download]");
     if (retry) retry.hidden = !state.map_download_error;
     const progress = panel.querySelector<HTMLProgressElement>("[data-ranked-download]");
-    if (progress) { progress.value = state.map_download_progress || 0; progress.hidden = !state.downloading_map; }
+    if (progress) {
+        progress.value = state.map_download_progress || 0;
+        progress.hidden = !state.downloading_map;
+    }
     const label = panel.querySelector<HTMLElement>(".sow-ranked__player > span:last-child");
     if (label) label.textContent = rankLabel(menuUi.rankedRating);
     const badge = panel.querySelector<HTMLElement>(".sow-ranked__player .sow-ranked__emblem");
     const rating = menuUi.rankedRating;
     const tier = rating?.placements_complete ? rating.tier : "unranked";
     const division = rating?.placements_complete ? rating.division : null;
-    if (badge && (badge.dataset.tier !== rankTier(tier) || (badge.querySelector("b")?.textContent || "") !== (division || "")))
+    if (
+        badge &&
+        (badge.dataset.tier !== rankTier(tier) ||
+            (badge.querySelector("b")?.textContent || "") !== (division || ""))
+    )
         badge.outerHTML = rankEmblem(tier, division);
 }
 
@@ -1454,11 +1842,27 @@ export function renderQueue() {
     const lobby = joinedLobby();
     const rankedSearch = !!menuUi.state!.ranked_search_active && !lobby;
     if (rankedSearch || lobby?.kind === "Ranked1v1") {
-        return "<main class='sow-menu__main sow-menu__main--ranked' data-screen-panel='queue'>" +
-            renderRankedDuel(lobby) + "<footer class='sow-ranked__queue-footer'>" +
-            (lobby ? "<span data-ranked-sync role='status'></span><progress data-ranked-download max='100' aria-label='" + esc(SOW_t("menu.loading")) + "'></progress><button type='button' class='sow-menu__secondary' data-command='retry_map_download' hidden>" + esc(SOW_t("lobbies.map_download_retry")) + "</button>"
-            : "<span data-ranked-elapsed>" + esc(SOW_t("lobbies.ranked_searching", { seconds: menuUi.state!.ranked_search_elapsed_secs || 0 })) + "</span>") +
-            "<button type='button' class='sow-menu__secondary' data-command='leave_lobby'>" + esc(SOW_t("lobbies.cancel")) + "</button></footer></main>";
+        return (
+            "<main class='sow-menu__main sow-menu__main--ranked' data-screen-panel='queue'>" +
+            renderRankedDuel(lobby) +
+            "<footer class='sow-ranked__queue-footer'>" +
+            (lobby
+                ? "<span data-ranked-sync role='status'></span><progress data-ranked-download max='100' aria-label='" +
+                  esc(SOW_t("menu.loading")) +
+                  "'></progress><button type='button' class='sow-menu__secondary' data-command='retry_map_download' hidden>" +
+                  esc(SOW_t("lobbies.map_download_retry")) +
+                  "</button>"
+                : "<span data-ranked-elapsed>" +
+                  esc(
+                      SOW_t("lobbies.ranked_searching", {
+                          seconds: menuUi.state!.ranked_search_elapsed_secs || 0,
+                      }),
+                  ) +
+                  "</span>") +
+            "<button type='button' class='sow-menu__secondary' data-command='leave_lobby'>" +
+            esc(SOW_t("lobbies.cancel")) +
+            "</button></footer></main>"
+        );
     }
     const elapsed = menuUi.state!.ranked_search_elapsed_secs || 0;
     const title = lobby

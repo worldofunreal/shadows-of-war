@@ -1,0 +1,250 @@
+# Canonical distribution image recipes. Source files stay under assets/; sow-dist
+# writes derivatives to dist/.sow-state and applies the same profiles to packages.
+version = 1
+webp_method = 4
+svgo_version = "4.1.0"
+svg_max_bytes = 1048576
+svg_recipe_version = 1
+
+[profiles.ability_icon]
+format = "webp"
+max_width = 256
+max_height = 256
+quality = 75
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 65536
+recipe_version = 1
+
+[profiles.avatar_portrait_192]
+format = "webp"
+max_width = 192
+max_height = 192
+quality = 85
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 131072
+recipe_version = 1
+
+[profiles.avatar_portrait_256]
+format = "webp"
+max_width = 256
+max_height = 256
+quality = 85
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 131072
+recipe_version = 1
+
+[profiles.fullbleed_wide]
+format = "webp"
+max_width = 1600
+max_height = 900
+quality = 75
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 400000
+recipe_version = 1
+
+[profiles.fullbleed_tall]
+format = "webp"
+max_width = 900
+max_height = 1600
+quality = 75
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 400000
+recipe_version = 1
+
+[profiles.poki_leader_wide]
+format = "webp"
+max_width = 960
+max_height = 540
+quality = 70
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 250000
+recipe_version = 1
+
+[profiles.poki_leader_tall]
+format = "webp"
+max_width = 540
+max_height = 960
+quality = 70
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 250000
+recipe_version = 1
+
+[profiles.site_still_wide]
+format = "webp"
+max_width = 1600
+max_height = 900
+quality = 78
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 450000
+recipe_version = 1
+
+[profiles.site_still_tall]
+format = "webp"
+max_width = 900
+max_height = 1600
+quality = 78
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 450000
+recipe_version = 1
+
+[profiles.ui_icon_128]
+format = "webp"
+max_width = 128
+max_height = 128
+quality = 82
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 32768
+recipe_version = 1
+
+[profiles.ui_icon_256]
+format = "webp"
+max_width = 256
+max_height = 256
+quality = 82
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 65536
+recipe_version = 1
+
+[profiles.unit_icon]
+format = "webp"
+max_width = 128
+max_height = 128
+quality = 82
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 32768
+recipe_version = 1
+
+[profiles.pixel_art]
+format = "webp"
+max_width = 512
+max_height = 512
+quality = 100
+alpha = "preserve"
+resample = "point"
+lossless = true
+max_bytes = 262144
+recipe_version = 1
+
+[profiles.atlas_lossless]
+format = "webp"
+max_width = 4096
+max_height = 4096
+quality = 100
+alpha = "preserve"
+resample = "point"
+lossless = true
+max_bytes = 8388608
+recipe_version = 1
+
+[profiles.loader_ui]
+format = "webp"
+max_width = 1032
+max_height = 256
+quality = 82
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 50000
+recipe_version = 1
+
+[profiles.app_icon]
+format = "png"
+max_width = 512
+max_height = 512
+quality = 100
+alpha = "preserve"
+resample = "lanczos"
+lossless = true
+max_bytes = 600000
+recipe_version = 1
+
+[profiles.map_preview]
+format = "webp"
+max_width = 1600
+max_height = 900
+quality = 78
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 500000
+recipe_version = 1
+
+[profiles.map_thumbnail]
+format = "webp"
+max_width = 256
+max_height = 144
+quality = 70
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 65536
+recipe_version = 1
+
+[profiles.campaign_poster]
+format = "webp"
+max_width = 1280
+max_height = 720
+quality = 80
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 131072
+recipe_version = 1
+
+[profiles.video_poster]
+format = "webp"
+max_width = 1600
+max_height = 900
+quality = 80
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 450000
+recipe_version = 1
+
+[profiles.guide_image]
+format = "webp"
+max_width = 1600
+max_height = 1600
+quality = 80
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 450000
+recipe_version = 1
+
+[profiles.poki_thumbnail]
+format = "png"
+max_width = 628
+max_height = 628
+quality = 100
+alpha = "preserve"
+resample = "lanczos"
+lossless = true
+crop = "center_square"
+max_bytes = 300000
+recipe_version = 1

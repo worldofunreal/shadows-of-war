@@ -353,9 +353,9 @@
 <body>
     <div id="web-loader" aria-live="polite" aria-busy="true" aria-hidden="false">
         <picture class="splash-picture">
-            <source media="(max-width: 599px)" srcset="__SOW_SPLASH_MOBILE_DATA__">
+            <source media="(max-width: 599px)" srcset="__ASSETS_UI_BASE__sow-splash-mobile.webp?v=__BUILD_TS__">
             <img id="splash-bg" class="splash-bg" alt="" decoding="sync" fetchpriority="high"
-                src="__SOW_SPLASH_DESKTOP_DATA__">
+                src="__ASSETS_UI_BASE__sow-splash-desktop.webp?v=__BUILD_TS__">
         </picture>
         <div id="loader-footer" class="loader-footer">
             <section id="loader-map-error" class="loader-map-error" hidden aria-live="assertive">
