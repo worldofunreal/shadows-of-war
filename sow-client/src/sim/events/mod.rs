@@ -106,24 +106,37 @@ impl SowApp {
                 }
                 sow_core::game::GameEvent::NavalActionRejected { player_id, reason } => {
                     if player_id != my_id || my_id == 0 { continue; }
-                    let key = match reason {
-                        sow_core::game::NavalActionFailure::InvalidTarget => "hud.fleet_invalid_target",
-                        sow_core::game::NavalActionFailure::TargetNotWater => "hud.fleet_invalid_target",
-                        sow_core::game::NavalActionFailure::NoPort => "hud.fleet_no_water_access",
+                    // Literal keys: the publisher validates every UiText key against the catalog.
+                    let text = match reason {
+                        sow_core::game::NavalActionFailure::InvalidTarget
+                        | sow_core::game::NavalActionFailure::TargetNotWater => {
+                            crate::ui::UiText::new("hud.fleet_invalid_target")
+                        }
+                        sow_core::game::NavalActionFailure::NoPort => {
+                            crate::ui::UiText::new("hud.fleet_no_water_access")
+                        }
                         sow_core::game::NavalActionFailure::NoConnectedPort
-                        | sow_core::game::NavalActionFailure::NoWaterPath => "hud.fleet_no_water_path",
-                        sow_core::game::NavalActionFailure::CapacityFull => "hud.fleet_capacity_full",
-                        sow_core::game::NavalActionFailure::InsufficientGold => "hud.not_enough_gold",
-                        sow_core::game::NavalActionFailure::CampaignLocked => "hud.campaign_unlock_required",
-                    };
-                    let text = if reason == sow_core::game::NavalActionFailure::InsufficientGold {
-                        let available = snap.players.iter().find(|player| player.id == my_id)
-                            .map_or(0.0, |player| player.gold);
-                        crate::ui::UiText::new(key)
-                            .with("cost", sow_core::game::UnitType::Warship.gold_cost().ceil().to_string())
-                            .with("available", available.floor().to_string())
-                    } else {
-                        crate::ui::UiText::new(key)
+                        | sow_core::game::NavalActionFailure::NoWaterPath => {
+                            crate::ui::UiText::new("hud.fleet_no_water_path")
+                        }
+                        sow_core::game::NavalActionFailure::CapacityFull => {
+                            crate::ui::UiText::new("hud.fleet_capacity_full")
+                        }
+                        sow_core::game::NavalActionFailure::InsufficientGold => {
+                            let available = snap.players.iter().find(|player| player.id == my_id)
+                                .map_or(0.0, |player| player.gold);
+                            let owned_warships = snap.fleets.iter().filter(|fleet| {
+                                fleet.owner_id == my_id
+                                    && fleet.unit_type == sow_core::game::UnitType::Warship
+                            }).count() as u32;
+                            crate::ui::UiText::new("hud.not_enough_gold")
+                                .with("cost", sow_core::game::UnitType::Warship
+                                    .gold_cost_with_owned_count(owned_warships).ceil().to_string())
+                                .with("available", available.floor().to_string())
+                        }
+                        sow_core::game::NavalActionFailure::CampaignLocked => {
+                            crate::ui::UiText::new("hud.campaign_unlock_required")
+                        }
                     };
                     self.ui.app.hud_state.push_notification_for_players(
                         text, [Some(my_id), None], 3, None, false,

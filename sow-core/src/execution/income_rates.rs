@@ -29,7 +29,7 @@ pub fn troop_income_per_second(
             * agg.city_levels as f64
             * leader.resource_bonus_multiplier(Source::District(District::City), Resource::Troops)
         + cfg.farm_troop_income
-            * agg.farm_income_level_weight
+            * agg.farm_levels as f64
             * leader.resource_bonus_multiplier(Source::District(District::Farm), Resource::Troops)
         + hero_only_income(
             leader.resource_bonus_hero_bonus(Source::District(District::Factory), Resource::Troops),
@@ -37,7 +37,7 @@ pub fn troop_income_per_second(
         )
         + hero_only_income(
             leader.resource_bonus_hero_bonus(Source::District(District::Port), Resource::Troops),
-            cfg.hero_port_troop_income * agg.port_income_level_weight,
+            cfg.hero_port_troop_income * agg.port_levels as f64,
         )
         + territory_rate(
             tiles_owned,
@@ -56,7 +56,7 @@ pub fn gold_income_per_second(
     use crate::geo_entities::{District, Resource, Source};
     cfg.gold_base_income
         + cfg.factory_gold_income
-            * agg.factory_levels as f64
+            * agg.factory_income_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::Factory), Resource::Gold)
         + cfg.farm_gold_income
             * agg.farm_income_level_weight
@@ -66,7 +66,7 @@ pub fn gold_income_per_second(
             * leader.resource_bonus_multiplier(Source::District(District::Port), Resource::Gold)
         + hero_only_income(
             leader.resource_bonus_hero_bonus(Source::District(District::City), Resource::Gold),
-            cfg.hero_city_gold_income * agg.city_levels as f64,
+            cfg.hero_city_gold_income * agg.city_income_level_weight,
         )
         + territory_rate(tiles, cfg.territory_gold_amount, cfg.territory_gold_tiles)
             * leader.resource_bonus_multiplier(Source::Territory, Resource::Gold)
@@ -211,16 +211,24 @@ mod tests {
     }
 
     #[test]
-    fn farm_and_port_marginal_income_grows_by_one_and_a_half_per_level() {
+    fn farm_troops_scale_linearly_while_farm_and_port_gold_are_weighted() {
         let cfg = default_cfg();
         let agg = BuildingAggregate {
+            farm_levels: 2,
             farm_income_level_weight: 4.75,
             port_income_level_weight: 4.75,
             ..Default::default()
         };
-        let troop_rate = troop_income_per_second(0, agg, Leader::of("caesar"), &cfg);
+        let caesar = Leader::of("caesar");
+        let troop_rate = troop_income_per_second(0, agg, caesar, &cfg);
         let gold_rate = gold_income_per_second(0, agg, Leader::of("caesar"), &cfg);
-        assert!((troop_rate - (175.0 + 4.75 * 40.0 / 21.0)).abs() < 1e-12);
+        let farm_troop_bonus = caesar.resource_bonus_multiplier(
+            crate::geo_entities::Source::District(crate::geo_entities::District::Farm),
+            crate::geo_entities::Resource::Troops,
+        );
+        assert!(
+            (troop_rate - (175.0 + cfg.farm_troop_income * 2.0 * farm_troop_bonus)).abs() < 1e-12
+        );
         assert!((gold_rate - (1.0 + 4.75 * (4.0 + 12.0) / 21.0)).abs() < 1e-12);
 
         let ragnar_gold = gold_income_per_second(0, agg, Leader::of("cleopatra"), &cfg);
@@ -228,7 +236,7 @@ mod tests {
     }
 
     #[test]
-    fn port_generates_no_troops_for_any_leader() {
+    fn port_troops_are_hero_only_and_scale_linearly() {
         let cfg = default_cfg();
         let agg = BuildingAggregate {
             port_levels: 4,
@@ -241,6 +249,17 @@ mod tests {
         assert_eq!(
             troop_income_per_second(0, agg, Leader::of("cleopatra"), &cfg),
             cfg.troop_base_income
+        );
+        let anacaona = Leader::of("anacaona");
+        let port_troop_bonus = anacaona
+            .resource_bonus_hero_bonus(
+                crate::geo_entities::Source::District(crate::geo_entities::District::Port),
+                crate::geo_entities::Resource::Troops,
+            )
+            .unwrap();
+        assert_eq!(
+            troop_income_per_second(0, agg, anacaona, &cfg),
+            cfg.troop_base_income + cfg.hero_port_troop_income * 4.0 * port_troop_bonus
         );
     }
 

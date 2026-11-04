@@ -22,6 +22,9 @@ export function openSkinPurchase() {}
 export function renderLeaderPurchase() {
     return "";
 }
+export function renderSkinsButton() {
+    return "";
+}
 export function renderPurchaseModal() {
     return "";
 }

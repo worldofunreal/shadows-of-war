@@ -303,7 +303,17 @@ impl SowEngine {
                         && fleet.troops > 0.0
                 })
                 && self.state.player(bot_id).is_some_and(|player| {
-                    player.gold >= crate::game::UnitType::Warship.gold_cost()
+                    let owned_warships = self
+                        .fleets
+                        .iter()
+                        .filter(|fleet| {
+                            fleet.owner_id == bot_id
+                                && fleet.unit_type == crate::game::UnitType::Warship
+                        })
+                        .count() as u32;
+                    player.gold
+                        >= crate::game::UnitType::Warship
+                            .gold_cost_with_owned_count(owned_warships)
                         && self.boat_slots_used(bot_id)
                             < crate::building::player_fleet_capacity(&self.buildings, bot_id)
                 })

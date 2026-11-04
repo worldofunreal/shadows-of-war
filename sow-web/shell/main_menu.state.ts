@@ -173,7 +173,6 @@ export interface MenuStore {
     crowns: number;
     gems: number;
     rotation_period: number;
-    rotation_ends_at: number;
     free_leaders: string[];
     leaders: MenuLeaderOffer[];
     skins: MenuSkinOffer[];
@@ -538,6 +537,9 @@ export interface MenuHudPayload {
     selected_nuke: string | null;
     fleet_panel: {
         trade_ships: number;
+        transport_ships: number;
+        warships: number;
+        selected_warships: number;
         trade_capacity: number;
         port_levels: number;
         city_level: number;

@@ -200,6 +200,9 @@ enum WebMenuCommand {
         direction: String,
     },
     SelectWarship,
+    SelectAllWarships,
+    CenterSelectedWarships,
+    ClearWarshipSelection,
     SelectNuke,
     ToggleInbox,
     AcceptAlliance {
@@ -472,6 +475,8 @@ struct HudPublishKey {
     selected_warship_build: bool,
     selected_warships: Vec<u64>,
     warship_count: u32,
+    trade_ship_count: u32,
+    transport_ship_count: u32,
     selected_nuke: u8,
     building_costs: [u64; 9],
     settings_mute: bool,
@@ -1175,6 +1180,19 @@ impl SowApp {
                     if !self.ui.tutorial_camera_only {
                         self.select_warship_build_mode();
                     }
+                }
+                WebMenuCommand::SelectAllWarships => {
+                    if !self.ui.tutorial_camera_only {
+                        self.select_all_warships();
+                    }
+                }
+                WebMenuCommand::CenterSelectedWarships => {
+                    if !self.ui.tutorial_camera_only {
+                        self.center_selected_warships();
+                    }
+                }
+                WebMenuCommand::ClearWarshipSelection => {
+                    self.input.selected_warships.clear();
                 }
                 WebMenuCommand::SelectNuke => {
                     if !self.ui.tutorial_camera_only {
@@ -1994,6 +2012,29 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         app.ui.manual_endgame_stats
     };
     let inbox_count = me.map(|player| player.inbox_count).unwrap_or(0);
+    let (warship_count, trade_ship_count, transport_ship_count) = snapshot.map_or(
+        (0, 0, 0),
+        |snapshot| {
+            snapshot.fleets.iter().fold(
+                (0, 0, 0),
+                |(warships, trade_ships, transports), fleet| {
+                    if fleet.owner_id != my_pid {
+                        return (warships, trade_ships, transports);
+                    }
+                    match fleet.unit_type {
+                        sow_core::game::UnitType::Warship => (warships + 1, trade_ships, transports),
+                        sow_core::game::UnitType::TradeShip if fleet.troops > 0.0 => {
+                            (warships, trade_ships + 1, transports)
+                        }
+                        sow_core::game::UnitType::TransportShip if fleet.troops > 0.0 => {
+                            (warships, trade_ships, transports + 1)
+                        }
+                        _ => (warships, trade_ships, transports),
+                    }
+                },
+            )
+        },
+    );
     HudPublishKey {
         fps: app.time.current_fps,
         ping_ms: app.net.current_ping_ms,
@@ -2010,11 +2051,9 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         selected_building: hud.building_placement,
         selected_warship_build: hud.selected_warship_build,
         selected_warships: app.input.selected_warships.clone(),
-        warship_count: app.sim.current_snapshot.as_ref().map_or(0, |snapshot| {
-            snapshot.fleets.iter().filter(|fleet| {
-                fleet.owner_id == my_pid && fleet.unit_type == sow_core::game::UnitType::Warship
-            }).count() as u32
-        }),
+        warship_count,
+        trade_ship_count,
+        transport_ship_count,
         selected_nuke: hud
             .selected_nuke_kind
             .map(|kind| kind as u8)
@@ -3908,7 +3947,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         sow_core::game::NukeKind::AtomBomb => "AtomBomb",
     });
     let costs = &hud.building_costs;
-    let (port_levels, city_level, trade_ships) = snapshot
+    let (port_levels, city_level, trade_ships, transport_ships, warship_count) = snapshot
         .map(|snapshot| {
             let port_levels = snapshot
                 .buildings
@@ -3938,7 +3977,24 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                         && fleet.unit_type == sow_core::game::UnitType::TradeShip
                 })
                 .count() as u32;
-            (port_levels, city_level, trade_ships)
+            let transport_ships = snapshot
+                .fleets
+                .iter()
+                .filter(|fleet| {
+                    fleet.owner_id == my_pid
+                        && fleet.troops > 0.0
+                        && fleet.unit_type == sow_core::game::UnitType::TransportShip
+                })
+                .count() as u32;
+            let warship_count = snapshot
+                .fleets
+                .iter()
+                .filter(|fleet| {
+                    fleet.owner_id == my_pid
+                        && fleet.unit_type == sow_core::game::UnitType::Warship
+                })
+                .count() as u32;
+            (port_levels, city_level, trade_ships, transport_ships, warship_count)
         })
         .unwrap_or_default();
     let trade_ship = sow_core::game::UnitType::TradeShip;
@@ -4142,19 +4198,26 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "selected_nuke": selected_nuke,
         "fleet_panel": {
             "trade_ships": trade_ships,
+            "transport_ships": transport_ships,
             "warships": app.sim.current_snapshot.as_ref().map_or(0, |snapshot| {
                 snapshot.fleets.iter().filter(|fleet| {
                     fleet.owner_id == my_pid && fleet.unit_type == sow_core::game::UnitType::Warship
                 }).count()
             }),
-            "selected_warships": app.input.selected_warships.len(),
+            "selected_warships": app.sim.current_snapshot.as_ref().map_or(0, |snapshot| {
+                snapshot.fleets.iter().filter(|fleet| {
+                    fleet.owner_id == my_pid
+                        && fleet.unit_type == sow_core::game::UnitType::Warship
+                        && app.input.selected_warships.contains(&fleet.id)
+                }).count()
+            }),
             "trade_capacity": port_levels,
             "port_levels": port_levels,
             "city_level": city_level,
             "trade_required_port_level": trade_ship.required_port_level(),
             "warship_required_port_level": 1,
             "nuke_required_city_level": 1,
-            "warship_cost": warship.gold_cost(),
+            "warship_cost": warship.gold_cost_with_owned_count(warship_count),
             "nuke_cost": app.sim.config.nuke_cost,
             "nuke_available": me.map(|player| player.nuke_available).unwrap_or(false),
             "nuke_cooldown_ticks": me.map(|player| player.nuke_cooldown_ticks).unwrap_or(0),

@@ -1,3 +1,4 @@
+import { formatCompactNumber } from "./number-format.ts";
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -382,15 +383,15 @@ test("header keeps only the nickname and sizes it to the available space", () =>
 
     const baseCss = menuCss["main_menu.base.css"];
     const layoutCss = menuCss["main_menu.layout.css"];
-    assert.match(baseCss, /\.sow-menu__profile\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-width:\s*0;/);
+    assert.match(baseCss, /\.sow-menu__name\s*\{[^}]*min-width:\s*0;[^}]*font-size:\s*var\(--sow-topbar-name-size\)/);
     assert.match(
         baseCss,
-        /#sow-menu \.sow-menu__profile input\s*\{[^}]*width:\s*100%;[^}]*font-size:\s*clamp\(16px, 1\.8vw, 24px\)/,
+        /#sow-menu \.sow-menu__name input\s*\{[^}]*width:\s*100%;[^}]*text-overflow:\s*ellipsis/,
     );
-    assert.match(
-        layoutCss,
-        /\.sow-menu__profile input\s*\{[^}]*font-size:\s*clamp\(16px, 4vw, 21px\)/,
+    const nameSizes = [...(baseCss + layoutCss).matchAll(/--sow-topbar-name-size:\s*(\d+)px/g)].map(
+        (match) => Number(match[1]),
     );
+    assert.ok(nameSizes.length >= 4 && nameSizes.every((size) => size >= 16 && size <= 24), String(nameSizes));
 });
 
 test("desktop navigation stacks battle, heroes, profile, and shop", () => {
@@ -1155,146 +1156,40 @@ test("one hero briefing renders identity and the named ability without exposing 
     );
 });
 
-test("weekly free rotation is a splash-only status", () => {
-    const cardStart = heroesSource.indexOf("function renderHeroesCard");
-    const cardEnd = heroesSource.indexOf("function heroesRoster", cardStart);
-    assert.ok(cardStart >= 0 && cardEnd > cardStart);
+test("weekly free rotation always keeps its localized hero tag", () => {
     const predicateStart = heroesSource.indexOf("function isWeeklyFreeRotation");
-    const predicateEnd = heroesSource.indexOf("function renderHeroesCard", predicateStart);
+    const predicateEnd = heroesSource.indexOf("\n}", predicateStart) + 2;
+    const labelStart = heroesSource.indexOf("function heroesStatusLabel");
+    const labelEnd = heroesSource.indexOf("\n}", labelStart) + 2;
     assert.ok(predicateStart >= 0 && predicateEnd > predicateStart);
-    const context = { root: { addEventListener() {} } };
+    assert.ok(labelStart >= 0 && labelEnd > labelStart);
+    const context = { SOW_t: (key) => key };
     vm.runInNewContext(
-        heroesSource.slice(predicateStart, predicateEnd).replace(/\bexport\s+/g, "") +
-            "this.isWeeklyFreeRotation = isWeeklyFreeRotation;",
+        heroesSource.slice(predicateStart, predicateEnd) +
+            "\n" +
+            heroesSource.slice(labelStart, labelEnd) +
+            "\nthis.heroesStatusLabel = heroesStatusLabel;",
         context,
     );
-    assert.equal(
-        context.isWeeklyFreeRotation({ available: false, free_rotation: true, owned: false }),
-        false,
-    );
-    assert.equal(context.isWeeklyFreeRotation({ available: true, free_rotation: true, owned: false }), true);
-});
-
-test("weekly rotation countdown replaces its label, observes the four-day window, and updates only its own nodes", () => {
-    const helperStart = heroesSource.indexOf("function isWeeklyFreeRotation");
-    const helperEnd = heroesSource.indexOf("// OWNER DECISION", helperStart);
-    assert.ok(helperStart >= 0 && helperEnd > helperStart);
-    const countdownNode = { textContent: "", hidden: true };
-    const statusLabelNode = { textContent: "", hidden: false };
-    const statusNode = { hidden: true, querySelector: () => statusLabelNode };
     const weeklyLeader = { id: "free", available: true, free_rotation: true, owned: false };
-    const ownedLeader = { id: "owned", available: true, free_rotation: false, owned: true };
-    const leaders = { free: weeklyLeader, owned: ownedLeader };
-    let locale = "en";
-    let nowMs = 1_700_000_000_000;
-    let screen = "heroes";
-    let nextTimerId = 1;
-    const timers = new Map();
-    const cleared = [];
-    let renders = 0;
-    const context = {
-        SOW_t(key, values) {
-            assert.equal(key, "heroes.rotation_available_for");
-            return `${locale}: Available for ${values.days}d ${values.hours}h ${values.minutes}m ${values.seconds}s`;
-        },
-        Date: { now: () => nowMs },
-        state: { phase: "MainMenu", selected_leader: "free", store: { rotation_ends_at: 0 } },
-        menuUi: {
-            state: null,
-            tempSelectedLeader: "",
-            tempSelectedRandom: false,
-        },
-        tempSelectedLeader: "",
-        tempSelectedRandom: false,
-        leaderById: (id) => leaders[id],
-        currentScreen: () => screen,
-        root: {
-            hidden: false,
-            addEventListener() {},
-            querySelector(selector) {
-                return selector === "[data-hero-status]" ? statusNode : countdownNode;
-            },
-        },
-        document: { visibilityState: "visible" },
-        window: {
-            setInterval(callback, delay) {
-                assert.equal(delay, 1000);
-                const id = nextTimerId++;
-                timers.set(id, callback);
-                return id;
-            },
-            clearInterval(id) {
-                cleared.push(id);
-                timers.delete(id);
-            },
-        },
-        render() {
-            renders++;
-        },
-    };
-    context.menuUi.state = context.state;
-    context.state.store.rotation_ends_at = nowMs / 1000 + 4 * 86400;
-    vm.runInNewContext(
-        "var HEROES_ROTATION_COUNTDOWN_SECS = 4 * 24 * 60 * 60; var heroesRotationCountdownInterval = null;\n" +
-            heroesSource.slice(helperStart, helperEnd).replace(/\bexport\s+/g, "") +
-            "this.heroesStatusLabel = heroesStatusLabel; this.rotationCountdownText = rotationCountdownText; this.syncHeroesRotationCountdown = syncHeroesRotationCountdown;",
-        context,
-    );
-
+    assert.equal(context.heroesStatusLabel(weeklyLeader), "heroes.weekly_free_rotation");
     assert.equal(
-        context.heroesStatusLabel(weeklyLeader),
+        context.heroesStatusLabel({ ...weeklyLeader, available: false }),
         "",
-        "the weekly title is omitted when the countdown is shown",
+        "unavailable heroes do not get the free-rotation tag",
     );
-    context.syncHeroesRotationCountdown();
-    assert.equal(timers.size, 1);
-    assert.equal(countdownNode.textContent, "en: Available for 4d 00h 00m 00s");
-    assert.equal(statusNode.hidden, false, "the countdown badge is visible without the weekly title");
-    assert.equal(statusLabelNode.hidden, true, "the countdown always replaces the badge label");
-    nowMs += 1000;
-    [...timers.values()][0]();
-    assert.equal(countdownNode.textContent, "en: Available for 3d 23h 59m 59s");
-    assert.equal(renders, 0, "each tick writes to the countdown node without rendering the menu");
-
-    screen = "profile";
-    context.syncHeroesRotationCountdown();
-    assert.equal(timers.size, 0, "the timer stops outside the heroes panel");
-    assert.deepEqual(cleared, [1]);
-    context.document.visibilityState = "hidden";
-    screen = "heroes";
-    context.syncHeroesRotationCountdown();
-    assert.equal(timers.size, 0, "the timer stays stopped while the app is hidden");
-
-    context.document.visibilityState = "visible";
-    context.state.selected_leader = "owned";
-    locale = "es";
-    context.syncHeroesRotationCountdown();
-    assert.equal(timers.size, 1, "the timer resumes when the heroes panel becomes visible again");
-    assert.equal(countdownNode.textContent, "", "a newly selected non-rotation hero has no countdown");
-    assert.equal(statusNode.hidden, true, "the empty countdown badge is hidden for other heroes");
-    assert.equal(statusLabelNode.hidden, false, "the badge label is restored when there is no countdown");
-    context.state.selected_leader = "free";
-    [...timers.values()][0]();
     assert.equal(
-        countdownNode.textContent,
-        "es: Available for 3d 23h 59m 59s",
-        "the countdown follows the selected hero and uses the current locale",
+        context.heroesStatusLabel({ ...weeklyLeader, owned: true }),
+        "",
+        "owned heroes do not get the free-rotation tag",
     );
-    context.state.store.rotation_ends_at = nowMs / 1000;
-    [...timers.values()][0]();
-    assert.equal(countdownNode.textContent, "", "the countdown hides when the rotation ends");
-    screen = "profile";
-    context.syncHeroesRotationCountdown();
-    assert.equal(timers.size, 0);
+    assert.equal(
+        context.heroesStatusLabel({ ...weeklyLeader, permanently_free: true }),
+        "heroes.always_free",
+        "permanently free heroes keep their own tag",
+    );
+    assert.match(heroesSource, /data-hero-status-label/);
 
-    const leader = { available: true, free_rotation: true, owned: false };
-    const nowSeconds = nowMs / 1000;
-    assert.equal(context.rotationCountdownText(leader, nowSeconds + 4 * 86400 + 1, nowSeconds), "");
-    assert.equal(context.rotationCountdownText(leader, nowSeconds, nowSeconds), "");
-    assert.equal(context.rotationCountdownText({ ...leader, owned: true }, nowSeconds + 60, nowSeconds), "");
-});
-
-test("weekly rotation countdown is compact and localized in all 15 locales", () => {
     const locales = [
         "en",
         "es",
@@ -1317,28 +1212,12 @@ test("weekly rotation countdown is compact and localized in all 15 locales", () 
             path.join(shell, `../../sow-i18n/strings/${locale}/web.toml`),
             "utf8",
         );
-        const line = catalog.split("\n").find((entry) => entry.startsWith("rotation_available_for ="));
-        assert.ok(line, `heroes.rotation_available_for must exist in ${locale}`);
         assert.match(
-            line,
-            /\{days\}\S+.*\{hours\}\S+.*\{minutes\}\S+.*\{seconds\}\S+/,
-            `each localized number must touch its unit in ${locale}`,
-        );
-        assert.doesNotMatch(
             catalog,
             /^weekly_free_rotation\s*=/m,
-            `the duplicate weekly title must not remain in ${locale}`,
+            `the free-rotation tag exists in ${locale}`,
         );
     }
-    assert.doesNotMatch(heroesSource, /heroes\.weekly_free_rotation/);
-    assert.match(heroesSource, /data-hero-status-label/);
-    assert.match(heroesSource, /data-hero-rotation-countdown/);
-    assert.match(shellSource, /function updateDynamic\(\) \{\s*syncHeroesRotationCountdown\(\);/);
-    assert.match(
-        shellSource,
-        /document\.addEventListener\("visibilitychange", function \(\) \{\s*syncHeroesRotationCountdown\(\);/,
-    );
-    assert.match(coreSource, /rotation_ends_at:\s*state\.store\.rotation_ends_at/);
 });
 
 test("heroes preview never resolves the random option through leader i18n keys", () => {
@@ -1433,9 +1312,12 @@ test("hero selection stacks the skill below identity and the home briefing stays
         /\.sow-heroes__featured-copy\s*\{[^}]*padding:\s*14px/,
         "compact landscape reduces the featured-card padding",
     );
-    assert.match(compact, /\.sow-hero-briefing__ability-name\s*\{\s*font-size:\s*10px/);
-    assert.match(compact, /\.sow-hero-briefing__description\s*\{\s*font-size:\s*10px/);
-    assert.match(compact, /\.sow-hero-briefing__icon-slot\s*\{\s*flex-basis:\s*32px;\s*width:\s*32px/);
+    assert.match(compact, /--skill-body:\s*12px;[\s\S]*--skill-icon:\s*48px;/);
+    assert.doesNotMatch(compact, /font-size:\s*10px|32px/);
+    assert.match(profileCss, /--skill-title:\s*calc\(var\(--skill-body\)\s*\*\s*1\.5\)/);
+    assert.match(profileCss, /\.sow-hero-briefing__ability-name\s*\{[^}]*font-size:\s*14px/);
+    assert.match(profileCss, /\.sow-menu__leader-copy \.sow-hero-briefing__ability-name\s*\{[^}]*font-size:\s*clamp\(16px/);
+    assert.match(profileCss, /\.sow-menu__leader-copy \.sow-hero-briefing__icon-slot\s*\{[^}]*width:\s*56px/);
     assert.doesNotMatch(
         compact,
         /\.sow-hero-briefing--selection\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*\.92fr/,
@@ -1465,6 +1347,11 @@ test("hero selection stacks the skill below identity and the home briefing stays
         /#sow-menu\[data-screen="home"\] \.sow-menu__battlefield\s*\{[^}]*position:\s*absolute[^}]*pointer-events:\s*none/,
         "narrow home hero copy must overlay the background without taking layout space",
     );
+    assert.match(
+        menuCss["main_menu.layout.css"],
+        /@media \(orientation: landscape\)[\s\S]*?#sow-menu\[data-screen="home"\] \.sow-menu__battlefield\s*\{[^}]*justify-content:\s*flex-end/,
+        "landscape hero details stay anchored near the bottom",
+    );
     assert.doesNotMatch(
         menuCss["main_menu.layout.css"],
         /#sow-menu\[data-screen="home"\] \.sow-menu__battlefield\s*\{[^}]*order:\s*-1/,
@@ -1477,8 +1364,8 @@ test("hero selection stacks the skill below identity and the home briefing stays
     );
     assert.match(
         menuCss["main_menu.layout.css"],
-        /#sow-menu\[data-screen="home"\] \.sow-menu__leader-copy\s*\{[^}]*position:\s*absolute[^}]*inset-block-start:\s*0[^}]*inset-inline-end:\s*10px[^}]*pointer-events:\s*none/,
-        "the narrow home briefing stays positioned without reserving layout space",
+        /#sow-menu\[data-screen="home"\] \.sow-menu__leader-copy\s*\{[^}]*position:\s*absolute[^}]*inset-block-end:\s*clamp\(16px,\s*6vh,\s*40px\)[^}]*inset-inline-end:\s*10px[^}]*pointer-events:\s*none/,
+        "the narrow home briefing sits near the bottom without reserving layout space",
     );
     assert.match(
         menuCss["main_menu.layout.css"],
@@ -1686,6 +1573,44 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
         /SOWCampaign\.create\(\s*data\.definition,\s*data\.definition\.entry,\s*data\.roster,?\s*\)/,
     );
     assert.doesNotMatch(watchFlow, /send\("start_campaign_episode"/);
+});
+
+test("campaign featured stage selects hero art, switches PLAY and REPLAY, and supports multi-viewport responsive layout", () => {
+    const campaignCss = menuCss["main_menu.campaign.css"];
+
+    // Featured hero backdrop and picture elements
+    assert.match(campaignCss, /\.sow-campaign__featured\s*\{/);
+    assert.match(campaignCss, /\.sow-campaign__hero-backdrop\s*\{/);
+    assert.match(campaignCss, /\.sow-campaign__hero-img\s*\{[^}]*object-fit:\s*cover/);
+    assert.match(campaignCss, /@keyframes\s+sow-campaign-hero-enter/);
+
+    // Dynamic action button (PLAY / REPLAY / LOCKED)
+    assert.match(campaignCss, /\.sow-campaign__action-play\s*\{/);
+    assert.match(campaignCss, /\.sow-campaign__episode\.is-selected/);
+
+    // Expandable Sagas navigation rail
+    assert.match(campaignCss, /\.sow-campaign__sagas-nav\s*\{/);
+    assert.match(campaignCss, /\.sow-campaign__sagas-rail\s*\{/);
+    assert.match(campaignCss, /\.sow-campaign__saga-tab\s*\{/);
+
+    // Mobile vertical responsiveness
+    assert.match(
+        campaignCss,
+        /@media\s*\(max-width:\s*680px\),\s*\(orientation:\s*portrait\)[\s\S]*?\.sow-campaign__featured\s*\{/,
+    );
+
+    // Mobile horizontal compact responsiveness
+    assert.match(
+        campaignCss,
+        /@media\s*\(orientation:\s*landscape\)\s*and\s*\(max-height:\s*560px\)[\s\S]*?\.sow-campaign__featured\s*\{/,
+    );
+
+    // Logic in lobbiesSource
+    assert.match(lobbiesSource, /function campaignEpisodeHeroSlug\(/);
+    assert.match(lobbiesSource, /function campaignEpisodeHeroArt\(/);
+    assert.match(lobbiesSource, /function updateCampaignSelection\(/);
+    assert.match(lobbiesSource, /lobbies\.replay/);
+    assert.match(lobbiesSource, /lobbies\.play/);
 });
 
 function rankedPresentationHarness() {
@@ -1977,13 +1902,14 @@ test("ranked result acknowledges before replay, ignores duplicate presses, and t
 });
 
 
-test("header groups identity and XP separately from crowns and gems in one responsive row", () => {
+test("header nameplate owns avatar, nickname, level and XP bar; balances and settings sit at the end", () => {
     const source = shellSource.slice(
-        shellSource.indexOf("function headerBalance("),
+        shellSource.indexOf("function headerXp("),
         shellSource.indexOf("function syncDisconnectNotice("),
     );
     const state = { player_name: "LongNickname1234", level: 12, xp: 1150, crowns: 12345, gems: 9999 };
-    const api = vm.runInNewContext(source + "\n({renderTopbar, headerBalance});", {
+    let shop = true;
+    const api = vm.runInNewContext(source + "\n({renderTopbar, formatCompactNumber});", {
         menuUi: { state },
         window: { SOW_LOCALE: "en" },
         SOW_t: (key) => key,
@@ -1991,24 +1917,71 @@ test("header groups identity and XP separately from crowns and gems in one respo
         avatarImage: () => "random.webp",
         currencyAsset: (kind) => kind + ".webp",
         menuIcon: () => "settings",
+        portalOffersStore: () => shop,
+        formatCompactNumber,
     });
     const markup = api.renderTopbar();
     assert.match(markup, /<header[^>]+data-progression>/);
-    assert.match(markup, /random.webp/);
-    assert.match(markup, /LongNickname1234/);
-    assert.ok(markup.indexOf("data-progression-xp-fill") < markup.indexOf("sow-menu__top-actions"));
-    assert.match(markup, /data-progression-crowns-value>12.3K/);
-    assert.match(markup, /aria-label='store.crowns: 12345'/);
-    assert.match(markup, /data-progression-gems-value>9999/);
-    assert.doesNotMatch(markup, /sign_in|signin|laurel|account-label/);
-    assert.equal(api.headerBalance(10000), "10K");
-    assert.equal(api.headerBalance(1000000), "1M");
-    assert.equal(api.headerBalance(0), "0");
+    const plate = markup.slice(
+        markup.indexOf("sow-menu__nameplate"),
+        markup.indexOf("sow-menu__top-actions"),
+    );
+    assert.match(plate, /data-command='open_leader_picker'[^>]+random.webp/);
+    assert.match(plate, /<label class='sow-menu__name'><input data-role='display-name'[^>]+LongNickname1234/);
+    assert.match(plate, /data-command='open_profile'/);
+    assert.match(plate, /sow-menu__level'[^>]*><strong data-progression-level-value>12</);
+    const portrait = plate.slice(0, plate.indexOf("<label"));
+    assert.match(portrait, /data-progression-level-value>12</);
+    assert.doesNotMatch(plate, /level_short|<small>menu.level/);
+    assert.match(plate, /data-progression-xp-fill style='width:50%'/);
+    assert.match(plate, /role='progressbar'[^>]*aria-valuenow='50'/);
+    assert.match(plate, /aria-describedby='sow-menu-account-xp'/);
+    assert.match(plate, /data-progression-xp-value>50\/100<\/b><small>menu.xp</);
+    const actions = markup.slice(markup.indexOf("sow-menu__top-actions"));
+    assert.match(
+        actions,
+        /<button class='sow-menu__currency sow-menu__crowns' type='button' data-command='main_nav' data-nav-screen='store'/,
+    );
+    assert.match(actions, /data-progression-crowns-value>12.3K/);
+    assert.match(actions, /aria-label='store.crowns: 12345'/);
+    assert.match(actions, /data-progression-gems-value>10K/);
+    assert.ok(actions.indexOf("sow-menu__gems") < actions.indexOf("toggle_settings"));
+    assert.doesNotMatch(markup, /sign_in|signin|laurel|account-label|wallet/);
+    shop = false;
+    const portal = api.renderTopbar();
+    assert.match(portal, /<span class='sow-menu__currency sow-menu__gems' title=/);
+    assert.doesNotMatch(portal, /data-nav-screen='store'/);
+    assert.equal(api.formatCompactNumber(10000), "10K");
+    assert.equal(api.formatCompactNumber(1000000), "1M");
+    assert.equal(api.formatCompactNumber(0), "0");
+    assert.match(
+        shellSource,
+        /querySelectorAll<HTMLElement>\("\.sow-menu__main-nav-item\[data-nav-screen\]"\)/,
+        "only nav items mirror the active screen; header balances also carry data-nav-screen",
+    );
+});
+
+test("header spans the desktop grid and draws a real XP bar at every size", () => {
+    const base = menuCss["main_menu.base.css"];
     const layout = menuCss["main_menu.layout.css"];
-    assert.doesNotMatch(layout, /identity signin settings|progress progress progress|92px/);
-    assert.match(layout, /sow-menu__wallet[^}]+flex-direction: column/);
-    assert.match(layout, /height: 64px;\s*min-height: 64px/);
-    assert.match(layout, /height: 56px;\s*min-height: 56px/);
+    const desktopStart = layout.indexOf("@media (min-width: 681px) and (orientation: landscape) {");
+    const desktop = layout.slice(desktopStart, layout.indexOf("\n}\n", desktopStart));
+    assert.match(desktop, /\.sow-menu__topbar\s*\{\s*grid-column:\s*1 \/ -1;\s*grid-row:\s*1;/);
+    const meters = [...(base + layout).matchAll(/--sow-topbar-meter-height:\s*(\d+)px/g)].map((match) =>
+        Number(match[1]),
+    );
+    assert.ok(meters.length >= 1 && meters.every((height) => height >= 14), String(meters));
+    assert.match(
+        base,
+        /\.sow-menu__xp-track\s*\{[^}]*height:\s*var\(--sow-topbar-meter-height\)[^}]*background:\s*var\(--sow-tactical-track-bg\)/,
+    );
+    assert.match(base, /\.sow-menu__xp-track i\s*\{[^}]*background:\s*var\(--sow-fill-xp-gradient\)/);
+    assert.match(controlsCss, /--sow-fill-xp-gradient:\s*linear-gradient\(\s*to top,/);
+    assert.match(base, /\.sow-menu__top-actions\s*\{[^}]*display: flex/);
+    assert.doesNotMatch(layout, /\.sow-menu__top-actions\s*\{[^}]*display: grid/);
+    assert.match(base, /\.sow-menu__progress\s*\{[^}]*max-width: 116px/);
+    assert.match(base, /\.sow-menu__xp-track\s*\{[^}]*border-radius: 3px/);
+    assert.doesNotMatch(layout, /identity signin settings|progress progress progress/);
 });
 
 test("split header progression updates both blocks and keeps laurels internal", () => {
@@ -2031,24 +2004,46 @@ test("split header progression updates both blocks and keeps laurels internal", 
             },
         ]),
     );
+    const xpStart = shellSource.indexOf("function headerXp(");
+    const headerXp = shellSource.slice(xpStart, shellSource.indexOf("\n}\n", xpStart) + 2);
     const api = vm.runInNewContext(
         "let displayedProgression;\n" +
+            headerXp +
             source.replace(/export /g, "") +
             "\n({writeProgression, values: () => displayedProgression});",
         {
             root: { querySelector: () => ({ querySelector: (selector) => counters[selector] || null }) },
-            SOW_t: (key) => key,
-            headerBalance: (value) => (value >= 10000 ? "12.3K" : String(value)),
+            SOW_t: (key, values) => (values ? key + ":" + values.level : key),
+            formatCompactNumber,
         },
     );
     api.writeProgression({ level: 4, xp: 350, crowns: 12345, gems: 25, laurels: 10 });
     assert.equal(counters["[data-progression-level-value]"].textContent, "4");
-    assert.equal(counters["[data-progression-xp-value]"].textContent, "350 menu.xp");
+    assert.equal(counters["[data-progression-level-value]"].parentElement["aria-label"], "profile.level:4");
+    assert.equal(counters["[data-progression-xp-value]"].textContent, "50/100");
     assert.equal(counters["[data-progression-xp-fill]"].style.width, "50%");
     assert.equal(counters["[data-progression-crowns-value]"].textContent, "12.3K");
     assert.equal(counters["[data-progression-crowns-value]"].parentElement.title, "store.crowns: 12345");
     assert.equal(counters["[data-progression-gems-value]"].textContent, "25");
     assert.equal(api.values().laurels, 10);
+    // The server XP arrives first; each new level is presented afterwards.
+    // The bar must stay full under a held level, and reset only with the level change.
+    for (const [xp, level, progress] of [
+        [99, 1, 99],
+        [100, 1, 100],
+        [100, 2, 0],
+        [350, 1, 100],
+        [350, 2, 100],
+        [350, 3, 100],
+        [350, 4, 50],
+        [0, 1, 0],
+    ]) {
+        api.writeProgression({ level, xp, crowns: 12345, gems: 25, laurels: 10 });
+        assert.equal(counters["[data-progression-level-value]"].textContent, String(level));
+        assert.equal(counters["[data-progression-xp-value]"].textContent, progress + "/100");
+        assert.equal(counters["[data-progression-xp-fill]"].style.width, progress + "%");
+        assert.equal(counters["[data-progression-xp-fill]"].parentElement["aria-valuenow"], String(progress));
+    }
 });
 
 test("Settings owns optional sign-in and respects pending, reauthentication, and portal accounts", () => {
@@ -2148,4 +2143,226 @@ test("reduced motion suppresses counter effects after splitting the header", () 
         menuCss["main_menu.base.css"],
         /\[data-progression\] \[data-progression-crowns-value\]\.is-reward-value-hit/,
     );
+});
+
+test("heroes skill scales its title above its body, and skins live with the roster filters", () => {
+    assert.match(profileCss, /\.sow-heroes__featured\s*\{[^}]*--skill-title:\s*calc\(var\(--skill-body\) \* 1\.5\)/);
+    assert.match(profileCss, /\.sow-heroes__featured \.sow-hero-briefing__ability-name\s*\{\s*font-size:\s*var\(--skill-title\)/);
+    assert.match(profileCss, /\.sow-heroes__featured \.sow-hero-briefing__description\s*\{\s*font-size:\s*var\(--skill-body\)/);
+    assert.match(profileCss, /\.sow-heroes__featured \.sow-hero-briefing__icon-slot\s*\{[^}]*width:\s*var\(--skill-icon\)/);
+    const bodies = [...profileCss.matchAll(/--skill-body:\s*(\d+)px/g)].map((match) => Number(match[1]));
+    assert.ok(bodies.length >= 5, "every heroes breakpoint sets its own body size");
+    assert.ok(Math.min(...bodies) >= 11, "no heroes breakpoint drops the skill text below 11px");
+    assert.ok(Math.max(...bodies) >= 14, "desktop keeps the largest skill text");
+
+    const store = fs.readFileSync(path.join(shell, "main_menu.store.ts"), "utf8");
+    const leaderStart = store.indexOf("export function renderLeaderPurchase(");
+    const skinsStart = store.indexOf("export function renderSkinsButton(", leaderStart);
+    const skinsEnd = store.indexOf("export function renderSkinPickerModal", skinsStart);
+    assert.ok(leaderStart >= 0 && skinsStart > leaderStart && skinsEnd > skinsStart);
+    assert.doesNotMatch(
+        store.slice(leaderStart, skinsStart),
+        /open_skin_picker/,
+        "a hero's buy row no longer carries the skins entry",
+    );
+    assert.match(store.slice(skinsStart, skinsEnd), /data-command='open_skin_picker'/);
+    assert.match(
+        heroesSource,
+        /renderHeroesRegionDropdown\(\) \+\s*renderSkinsButton\(\)/,
+        "skins sit beside the roster filters",
+    );
+    for (const file of ["main_menu.surfaces.ts", "main_menu.poki.ts", "main_menu.jest.ts"]) {
+        assert.match(fs.readFileSync(path.join(shell, file), "utf8"), /renderSkinsButton,/, file);
+    }
+    assert.match(
+        fs.readFileSync(path.join(shell, "main_menu.portal-stubs.ts"), "utf8"),
+        /export function renderSkinsButton\(\) \{\s*return "";/,
+        "portal builds without the store keep the entry hidden",
+    );
+});
+
+test("reward landings light their header plate and escalate above the curtain", () => {
+    const start = shellSource.indexOf("function restartRewardClass(");
+    const end = shellSource.indexOf("function acknowledgeShownReceipts", start);
+    const element = (name) => {
+        const node = {
+            name,
+            classes: new Set(),
+            children: [],
+            style: {
+                setProperty(key, value) {
+                    this[key] = value;
+                },
+            },
+            offsetWidth: 1,
+            classList: {
+                add: (value) => node.classes.add(value),
+                remove: (value) => node.classes.delete(value),
+            },
+            setAttribute() {},
+            appendChild: (child) => node.children.push(child),
+            getBoundingClientRect: () => ({ left: 10, top: 5, width: 20, height: 10 }),
+            remove() {},
+        };
+        return node;
+    };
+    const nameplate = element("nameplate");
+    const pill = element("pill");
+    const counters = {
+        "[data-progression-level-value]": Object.assign(element("level"), { closest: () => nameplate }),
+        "[data-progression-crowns-value]": Object.assign(element("crowns"), {
+            closest: (selector) => (selector.includes(".sow-menu__currency") ? pill : null),
+        }),
+    };
+    let reduced = false;
+    const layer = element("layer");
+    const context = {
+        reducedRewardMotion: () => reduced,
+        activeRewardStage: layer,
+        root: { querySelector: (selector) => counters[selector] || null },
+        document: { createElement: element },
+        window: { setTimeout: () => 0 },
+        Math,
+        String,
+        SOW_t: (key, values) => key + ":" + values.level,
+    };
+    const api = vm.runInNewContext(
+        shellSource.slice(start, end).replace(/export /g, "") + "\n({pulseRewardCounter, playRewardImpact});",
+        context,
+    );
+    api.pulseRewardCounter("[data-progression-crowns-value]", false);
+    assert.ok(counters["[data-progression-crowns-value]"].classes.has("is-reward-value-hit"));
+    assert.ok(pill.classes.has("is-reward-hit"), "the currency pill flashes with its counter");
+    api.pulseRewardCounter("[data-progression-level-value]", true);
+    assert.ok(nameplate.classes.has("is-level-up"), "a level-up flashes the whole nameplate");
+
+    api.playRewardImpact("[data-progression-level-value]", "level", 1.6, 4);
+    const impact = layer.children.at(-1);
+    assert.match(impact.className, /sow-menu__reward-impact--level/);
+    assert.equal(impact.style["--fx-power"], "1.6");
+    assert.equal(impact.children.filter((part) => part.className.endsWith("-spark")).length, 12);
+    assert.equal(impact.children.at(-1).textContent, "profile.level:4");
+    api.playRewardImpact("[data-progression-crowns-value]", "crowns", 1);
+    assert.equal(
+        layer.children.at(-1).children.some((part) => part.className.endsWith("-rays")),
+        false,
+    );
+
+    reduced = true;
+    const drawn = layer.children.length;
+    api.playRewardImpact("[data-progression-level-value]", "level", 1, 2);
+    assert.equal(layer.children.length, drawn, "reduced motion draws no arrival light");
+
+    const base = menuCss["main_menu.base.css"];
+    assert.match(
+        base,
+        /\.sow-menu__xp-track\.is-filling i,\s*\.sow-menu__nameplate\.is-level-up \.sow-menu__xp-track i \{\s*transition: none/,
+    );
+    assert.match(
+        base,
+        /\.sow-menu__nameplate\.is-level-up \.sow-menu__xp-track::before \{[^}]*animation: sow-xp-flash/,
+    );
+    assert.match(
+        base,
+        /@keyframes sow-xp-flash \{\s*from \{\s*opacity: 0\.95/,
+        "the reset happens under a full flash",
+    );
+    assert.match(base, /data-reduced-motion="true"\] \.sow-menu__topbar \*::before/);
+});
+
+test("header sizing shares its grid height, clips XP to the track, and compacts narrow landscape windows", () => {
+    const base = menuCss["main_menu.base.css"];
+    const layout = menuCss["main_menu.layout.css"];
+    assert.match(base, /--sow-menu-header-height: 56px/);
+    assert.match(base, /\.sow-menu__topbar\s*\{[^}]*min-height: var\(--sow-menu-header-height\)/);
+    assert.match(layout, /grid-template-rows: var\(--sow-menu-header-height\) minmax\(0, 1fr\) auto/);
+    const compactStart = layout.indexOf("@media (max-width: 680px) {", layout.indexOf("/* Header height"));
+    assert.ok(compactStart > 0, "narrow layouts compact without depending on orientation");
+    assert.match(layout.slice(compactStart), /\.sow-menu__top-actions\s*\{[^}]*gap: 4px/);
+    assert.doesNotMatch(layout.slice(compactStart), /grid-template-rows: auto auto/);
+    assert.match(base, /\.sow-menu__xp-track\s*\{[^}]*overflow: hidden/);
+    assert.match(
+        base,
+        /\.sow-menu__currency strong\s*\{[^}]*max-width: 6ch;[^}]*overflow: hidden;[^}]*text-overflow: ellipsis/,
+    );
+    assert.match(base, /data-reduced-motion="true"[^}]*transition: none;[^}]*animation: none/);
+    assert.doesNotMatch(layout, /--sow-topbar-button: 40px/);
+});
+
+test("account balances share compact totals with match results and retain full accessible amounts", () => {
+    assert.match(shellSource, /import \{ formatCompactNumber \} from "\.\/number-format\.ts"/);
+    assert.match(
+        hudSource,
+        /import \{ formatCompactNumber as formatEndgameCompact \} from "\.\/number-format\.ts"/,
+    );
+    for (const [value, text] of [
+        [0, "0"],
+        [475, "475"],
+        [1000, "1K"],
+        [1250, "1.3K"],
+        [12345, "12.3K"],
+        [999950, "1M"],
+        [1500000, "1.5M"],
+    ]) {
+        assert.equal(formatCompactNumber(value), text);
+    }
+});
+
+test("compact account header bounds bars, padding and balance glyphs without shrinking amounts to 11px", () => {
+    const base = menuCss["main_menu.base.css"];
+    const layout = menuCss["main_menu.layout.css"];
+    assert.match(base, /\.sow-menu__topbar\s*\{[^}]*width: 100%/);
+    assert.match(base, /\.sow-menu__nameplate\s*\{[^}]*grid-template-rows: auto auto;[^}]*padding: 0;/);
+    assert.match(base, /--sow-topbar-pill-text: 18px/);
+    assert.match(layout, /--sow-topbar-pill-text: 16px/);
+    assert.match(layout, /--sow-topbar-pill-text: 14px/);
+    assert.doesNotMatch(
+        base + layout,
+        /--sow-topbar-pill-min|--sow-topbar-plate-height|--sow-topbar-plate-width/,
+    );
+    assert.match(base, /\.sow-menu__currency\s*\{[^}]*justify-content: flex-start;[^}]*width: auto/);
+    for (const value of [
+        0,
+        999,
+        1000,
+        999949,
+        999950,
+        999949000,
+        999950000,
+        1e9,
+        1e12,
+        1e15,
+        1e18,
+        Number(2n ** 64n - 1n),
+    ]) {
+        const text = formatCompactNumber(value);
+        assert.ok(text.length <= 6, `${value}: ${text}`);
+        assert.ok((text.match(/\d/g) || []).length <= 4, text);
+    }
+    assert.equal(formatCompactNumber(999950000), "1B");
+    assert.equal(formatCompactNumber(1e12), "1T");
+});
+
+
+test("main navigation keeps a single outer frame across battle, profile, heroes and store", () => {
+    const start = shellSource.indexOf("function renderFrame(");
+    const end = shellSource.indexOf("function panelFromMarkup(", start);
+    const renderFrame = vm.runInNewContext(shellSource.slice(start, end) + "\nrenderFrame;", {
+        screenBackdropClass: (screen) => "backdrop-" + screen,
+        renderTopbar: () => "<header data-progression></header>",
+        renderScreenPanel: (screen) => "<main data-screen-panel='" + screen + "'></main>",
+        renderMainNav: () => "<nav></nav>", screenNav: (screen) => screen,
+        renderMenuAttribution: () => "", renderPasswordModal: () => "", renderProfileDetail: () => "",
+    });
+    for (const screen of ["home", "profile", "heroes", "store"]) {
+        const markup = renderFrame(screen);
+        assert.match(markup, /<div class='sow-menu__shell'><header data-progression>/, screen);
+        assert.match(markup, new RegExp("data-screen-panel='" + screen + "'"));
+    }
+    assert.doesNotMatch(profileCss, /\.sow-menu__shell/,
+        "screen styles must not resize the common header and navigation container");
+    assert.doesNotMatch(menuCss["main_menu.layout.css"], /width: min\([^;]*680px\)/,
+        "battle must not retain a narrower outer frame on tablets");
+    const chrome = shellSource.slice(shellSource.indexOf("function updateFrameChrome("), shellSource.indexOf("export function activeScreenPanel("));
+    assert.doesNotMatch(chrome, /shell\.className|screenShellClass/);
 });

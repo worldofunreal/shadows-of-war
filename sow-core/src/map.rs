@@ -22,7 +22,8 @@ impl MapTile {
     pub fn is_water(&self) -> bool {
         !self.is_land()
     }
-    pub fn terrain_type(&self) -> TerrainType {
+
+        pub fn terrain_type(&self) -> TerrainType {
         if self.is_land() {
             let m = self.magnitude();
             if m < 10 {

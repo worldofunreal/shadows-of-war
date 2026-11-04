@@ -1,3 +1,4 @@
+import { formatCompactNumber as formatEndgameCompact } from "./number-format.ts";
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -147,6 +148,7 @@ test("endgame shows the five match stats with exact combat counts and compact to
     assert.ok(formatterStart >= 0 && formatterEnd > formatterStart);
     const format = vm.runInNewContext(
         hud.slice(formatterStart, formatterEnd) + "\n({ formatEndgameExact, formatEndgameCompact });",
+        { formatEndgameCompact },
     );
     assert.equal(format.formatEndgameExact(1234), "1234");
     assert.equal(format.formatEndgameCompact(999), "999");
@@ -161,6 +163,7 @@ test("endgame shows the five match stats with exact combat counts and compact to
     const helpers = vm.runInNewContext(
         hud.slice(statsMarkupStart, statsMarkupEnd) + "\n({ endgameStatsMarkup, renderEndgameStats });",
         {
+            formatEndgameCompact,
             hudIcon: (name) => `<icon>${name}</icon>`,
             statusIcon: (name) => `<status>${name}</status>`,
             SOW_t: (key) => key,
@@ -190,7 +193,7 @@ test("endgame shows the five match stats with exact combat counts and compact to
     assert.ok(hud.includes('endgameStatsMarkup("surrender")'));
     assert.ok(hud.includes('endgameStatsMarkup("endgame")'));
     assert.doesNotMatch(hud, /sow-hud__exit-content/);
-    assert.ok(hud.includes('id="sow-hud-surrender-save-note"'));
+    assert.ok(hud.includes('id="sow-hud-surrender-desc"'));
     assert.ok(hud.includes("renderEndgameStats(hudRefs!.surrenderStatValues, hud.player_endgame_stats)"));
     assert.ok(hud.includes('send("request_endgame_stats")'));
     assert.ok(hud.includes('send("clear_endgame_stats")'));

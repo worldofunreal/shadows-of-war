@@ -47,11 +47,11 @@ fn default_territory_gold_tiles() -> u32 {
 }
 
 fn default_city_troop_income() -> f64 {
-    6.25
+    625.0
 }
 
 fn default_farm_troop_income() -> f64 {
-    40.0 / 21.0
+    625.0
 }
 
 fn default_farm_gold_income() -> f64 {
@@ -275,12 +275,12 @@ pub struct GameConfig {
     // ==========================================
     // Buildings (separate foundations plus explicit level upgrades)
     // ==========================================
-    /// Max troop capacity added per City.
+    /// Max troop capacity added per City level.
     pub city_max_troops: f64,
     /// Troop income per game second added per City level.
     #[serde(default = "default_city_troop_income")]
     pub city_troop_income: f64,
-    /// Troop income per game second added per weighted Farm level. Farms never affect capacity.
+    /// Troop income per game second added per Farm level. Farms never affect capacity.
     #[serde(default = "default_farm_troop_income")]
     pub farm_troop_income: f64,
     /// Gold income per game second added per weighted Farm level.
@@ -292,20 +292,20 @@ pub struct GameConfig {
     pub tower_priority: f64,
     /// Defensive troop loss multiplier per Tower within range.
     pub tower_strength: f64,
-    /// Gold income per game second added per Factory level.
+    /// Gold income per game second added per weighted Factory level.
     pub factory_gold_income: f64,
     /// Gold income per game second added per weighted Port level.
     #[serde(default = "default_port_gold_income")]
     pub port_gold_income: f64,
     // Hero-only bases: each one pays only the hero whose ability produces it, so the
     // economy of every other player is unchanged.
-    /// Gold income per game second per City level, paid to Empress Gi only.
+    /// Gold income per game second per weighted City level, paid to Empress Gi only.
     #[serde(default = "default_hero_city_gold_income")]
     pub hero_city_gold_income: f64,
     /// Troop income per game second per Factory level, paid to Ashoka only.
     #[serde(default = "default_city_troop_income")]
     pub hero_factory_troop_income: f64,
-    /// Troop income per game second per weighted Port level, paid to Anacaona only.
+    /// Troop income per game second per Port level, paid to Anacaona only.
     #[serde(default = "default_city_troop_income")]
     pub hero_port_troop_income: f64,
     /// Gold income per game second per active alliance, paid to Sālote Tupou III only.
@@ -427,7 +427,7 @@ impl Default for GameConfig {
 
             // Core Simulation Pacing
             tick_rate_ms: 100.0, // Server clock ticks every 100ms (10 ticks per second)
-            global_speed_multiplier: 0.5,
+            global_speed_multiplier: 0.26, // Interim midpoint between diagnostic 0.02 and previous 0.5 pace.
 
             // Combat & Expansion Mechanics
             attack_cost_enemy: 2.0,
@@ -455,8 +455,8 @@ impl Default for GameConfig {
             territory_troop_tiles: default_territory_troop_tiles(),
 
             // Buildings (stacking)
-            city_max_troops: 1250.0,
-            city_troop_income: 6.25,
+            city_max_troops: 18_750.0,
+            city_troop_income: 625.0,
             farm_troop_income: default_farm_troop_income(),
             farm_gold_income: default_farm_gold_income(),
             tower_range: 6.0,

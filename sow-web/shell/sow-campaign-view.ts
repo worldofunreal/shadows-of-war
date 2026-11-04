@@ -1202,7 +1202,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             button.hidden = !dismissVisible;
             button.setAttribute(
                 "aria-label",
-                t(dismissContinues || step.type === "choice" ? "tutorial.continue" : "hud.leave_match"),
+                t(dismissContinues || step.type === "choice" ? "tutorial.continue" : "hud.leave"),
             );
         });
         setText(objectiveTitle, t(step.title_key));

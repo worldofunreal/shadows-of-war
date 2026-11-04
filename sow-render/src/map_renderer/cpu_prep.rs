@@ -89,12 +89,38 @@ pub(crate) fn get_neighbors(idx: u32, width: u32, height: u32) -> [Option<u32>; 
     neighbors
 }
 
+/// 8-connected neighbors. Borders are a continuous distance field, so a
+/// diagonal contact (staircase step) must still flag and repack the tile.
+pub(crate) fn get_neighbors_8(idx: u32, width: u32, height: u32) -> [Option<u32>; 8] {
+    let x = idx % width;
+    let y = idx / width;
+    let deltas = [
+        (1, 0),
+        (-1, 0),
+        (0, -1),
+        (0, 1),
+        (1, -1),
+        (-1, -1),
+        (1, 1),
+        (-1, 1),
+    ];
+    let mut neighbors = [None; 8];
+    for (i, &(dx, dy)) in deltas.iter().enumerate() {
+        let nx = x as i32 + dx;
+        let ny = y as i32 + dy;
+        if nx >= 0 && nx < width as i32 && ny >= 0 && ny < height as i32 {
+            neighbors[i] = Some((ny as u32) * width + (nx as u32));
+        }
+    }
+    neighbors
+}
+
 pub(crate) fn compute_has_border(idx: u32, owners: &[u16], width: u32, height: u32) -> bool {
     let owner = owners[idx as usize];
     if owner == 0 {
         return false;
     }
-    let neighbors = get_neighbors(idx, width, height);
+    let neighbors = get_neighbors_8(idx, width, height);
     for &n_idx in &neighbors {
         if let Some(n) = n_idx {
             if owners[n as usize] != owner {

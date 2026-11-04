@@ -167,14 +167,24 @@ impl SowApp {
             return false;
         }
         match &intent {
-            sow_core::protocol::GameplayIntent::LaunchFleet { target_tile, .. }
-            | sow_core::protocol::GameplayIntent::MoveWarships { target_tile, .. } => {
+            sow_core::protocol::GameplayIntent::LaunchFleet { target_tile, .. } => {
                 let wx = (*target_tile % self.sim.map_w) as f32 + 0.5;
                 let wy = (*target_tile / self.sim.map_w) as f32 + 0.5;
                 self.ui.click_markers.push(crate::app::ClickMarker {
                     world_x: wx,
                     world_y: wy,
                     start_time: web_time::Instant::now(),
+                    kind: crate::app::ClickMarkerKind::TransportOrder,
+                });
+            }
+            sow_core::protocol::GameplayIntent::MoveWarships { target_tile, .. } => {
+                let wx = (*target_tile % self.sim.map_w) as f32 + 0.5;
+                let wy = (*target_tile / self.sim.map_w) as f32 + 0.5;
+                self.ui.click_markers.push(crate::app::ClickMarker {
+                    world_x: wx,
+                    world_y: wy,
+                    start_time: web_time::Instant::now(),
+                    kind: crate::app::ClickMarkerKind::WarshipOrder,
                 });
             }
             sow_core::protocol::GameplayIntent::Spawn { x, y } => {
@@ -184,6 +194,7 @@ impl SowApp {
                     world_x: wx,
                     world_y: wy,
                     start_time: web_time::Instant::now(),
+                    kind: crate::app::ClickMarkerKind::Generic,
                 });
                 self.sfx
                     .play_deploy(web_time::Instant::now(), self.spatial_sound_params(wx, wy));

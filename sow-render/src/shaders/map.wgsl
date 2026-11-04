@@ -152,13 +152,41 @@ fn ocean_shore_edge(cell_hex: vec2<i32>, local_pos: vec2<f32>) -> f32 {
         vec2<f32>(0.0, -1.0),
         vec2<f32>(0.0, 1.0)
     );
+    var card_is_land = array<bool, 4>(false, false, false, false);
     var nearest_edge = 99.0;
     for (var i = 0; i < 4; i = i + 1) {
         let neighbor = get_cell_terrain(get_hex_neighbor(cell_hex, i));
-        if (neighbor & 0x80u) != 0u {
+        let is_land = (neighbor & 0x80u) != 0u;
+        card_is_land[i] = is_land;
+        if is_land {
             nearest_edge = min(nearest_edge, 0.5 - dot(local_pos, neighbor_dirs[i]));
         }
     }
+
+    // Reflex corners for water foam around land corners
+    const diag_card_x = array<i32, 4>(0, 1, 0, 1);
+    const diag_card_y = array<i32, 4>(2, 2, 3, 3);
+    const diag_signs = array<vec2<f32>, 4>(
+        vec2<f32>(1.0, -1.0),
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(1.0, 1.0),
+        vec2<f32>(-1.0, 1.0)
+    );
+
+    for (var d = 0; d < 4; d = d + 1) {
+        let cx = diag_card_x[d];
+        let cy = diag_card_y[d];
+        // Reflex corner: water on both cardinals, but land on diagonal
+        if !card_is_land[cx] && !card_is_land[cy] {
+            let diag_terrain = get_cell_terrain(get_hex_neighbor(cell_hex, 4 + d));
+            if (diag_terrain & 0x80u) != 0u {
+                let s = diag_signs[d];
+                let dist = max(0.5 - local_pos.x * s.x, 0.5 - local_pos.y * s.y);
+                nearest_edge = min(nearest_edge, dist);
+            }
+        }
+    }
+
     if nearest_edge >= 99.0 {
         return 0.0;
     }
@@ -548,11 +576,17 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
                 vec2<f32>(0.0, 1.0)   // South
             );
 
+            var card_owner = array<u32, 4>(0u, 0u, 0u, 0u);
+            var card_is_land = array<bool, 4>(false, false, false, false);
+
             for (var i = 0; i < 4; i = i + 1) {
                 let neighbor_hex = get_hex_neighbor(cell_hex, i);
                 let neighbor_terrain = get_cell_terrain(neighbor_hex);
                 let neighbor_owner = get_cell_owner(neighbor_hex);
                 let neighbor_is_land = (neighbor_terrain & 0x80u) != 0u;
+
+                card_owner[i] = neighbor_owner;
+                card_is_land[i] = neighbor_is_land;
 
                 let dir = neighbor_dirs[i];
                 let dist_to_edge = 0.5 - dot(local_pos, dir);
@@ -573,6 +607,62 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
                         if dist_to_edge < thickness {
                             is_border = true;
                             min_border_dist = min(min_border_dist, dist_to_edge);
+                            if green_exists {
+                                is_green_border = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Reflex corners: close diagonal staircase steps without rounded circular scallops.
+            // A diagonal neighbor only connects when both adjacent cardinal neighbors match this cell,
+            // preserving straight 90-degree corners and eliminating linear cliff cutoffs.
+            const diag_card_x = array<i32, 4>(0, 1, 0, 1);
+            const diag_card_y = array<i32, 4>(2, 2, 3, 3);
+            const diag_signs = array<vec2<f32>, 4>(
+                vec2<f32>(1.0, -1.0),  // Northeast
+                vec2<f32>(-1.0, -1.0), // Northwest
+                vec2<f32>(1.0, 1.0),   // Southeast
+                vec2<f32>(-1.0, 1.0)   // Southwest
+            );
+
+            for (var d = 0; d < 4; d = d + 1) {
+                let cx = diag_card_x[d];
+                let cy = diag_card_y[d];
+
+                let is_border_candidate = owner_id > 0u && card_is_land[cx] && card_is_land[cy] && card_owner[cx] == owner_id && card_owner[cy] == owner_id;
+                let is_shore_candidate = card_is_land[cx] && card_is_land[cy];
+
+                if !is_border_candidate && !is_shore_candidate {
+                    continue;
+                }
+
+                let diag_hex = get_hex_neighbor(cell_hex, 4 + d);
+                let diag_terrain = get_cell_terrain(diag_hex);
+                let diag_is_land = (diag_terrain & 0x80u) != 0u;
+
+                let s = diag_signs[d];
+                let dist = max(0.5 - local_pos.x * s.x, 0.5 - local_pos.y * s.y);
+
+                if is_shore_candidate && !diag_is_land {
+                    if dist < shore_thickness {
+                        is_shore_edge = true;
+                        min_shore_dist = min(min_shore_dist, dist);
+                    }
+                }
+
+                if is_border_candidate && diag_is_land {
+                    let diag_owner = get_cell_owner(diag_hex);
+                    if diag_owner != owner_id {
+                        let green_exists = is_tribe && (diag_owner >= 200u);
+                        if globals.zoom < globals.shader_params[__MAP_TRIBE_ZOOM_CUTOFF__].x && green_exists {
+                            continue;
+                        }
+
+                        if dist < thickness {
+                            is_border = true;
+                            min_border_dist = min(min_border_dist, dist);
                             if green_exists {
                                 is_green_border = true;
                             }

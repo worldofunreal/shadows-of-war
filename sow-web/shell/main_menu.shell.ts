@@ -1,3 +1,4 @@
+import { formatCompactNumber } from "./number-format.ts";
 import {
     animateRankResult,
     rankEmblem,
@@ -22,6 +23,7 @@ import {
     leaderDisplayName,
     menuIcon,
     menuUi,
+    portalOffersStore,
     profileHeroImage,
     reconcileLeaderSelection,
     renderKey,
@@ -38,10 +40,11 @@ import {
     settleHeroesFeaturedArt,
     setDropdownOpen,
     syncDropdowns,
-    syncHeroesRotationCountdown,
     updateHeroesPreview,
 } from "./main_menu.heroes.ts";
 import {
+    campaignEpisodeSagaId,
+    campaignHeroImage,
     cloneConfig,
     joinedLobby,
     lobbyLabel,
@@ -54,6 +57,7 @@ import {
     renderPasswordModal,
     renderQueue,
     syncCreateDraft,
+    updateCampaignSelection,
     updateLobbyViews,
     updateQueueRoster,
     updateRankedQueue,
@@ -602,41 +606,32 @@ window.addEventListener("sow:loader-ready", menuMusicStartAtLoaderEnd, { once: t
 window.addEventListener("sow:wasm-bytes-ready", menuMusicBeginLoading, { once: true });
 document.addEventListener("click", menuMusicUnlockFromClick, true);
 
-function headerBalance(value: number) {
-    const amount = Math.max(0, Math.round(Number(value) || 0));
-    return amount < 10_000
-        ? String(amount)
-        : new Intl.NumberFormat(window.SOW_LOCALE || "en", {
-              notation: "compact",
-              maximumFractionDigits: 1,
-          }).format(amount);
+// Rewards hold the displayed level until its own presentation finishes. Keep a full
+// bar for that level instead of wrapping the new XP underneath the previous level.
+function headerXp(xp: number, level: number) {
+    return Math.min(100, Math.max(0, Math.floor(xp) - (Math.max(1, level) - 1) * 100));
 }
 
-function headerWalletLabel(crowns: number, gems: number) {
-    return (
-        SOW_t("menu.open_profile") +
-        " · " +
-        SOW_t("store.crowns") +
-        ": " +
-        Math.max(0, Math.round(crowns || 0)) +
-        " · " +
-        SOW_t("store.gems") +
-        ": " +
-        Math.max(0, Math.round(gems || 0))
-    );
-}
-
+// Nameplate (avatar, editable name, level and XP bar) on the start side; balances and settings on the end side.
 function renderTopbar() {
     const name = menuUi.state!.player_name || SOW_t("menu.anonymous");
     const xp = Math.max(0, Number(menuUi.state!.xp) || 0);
-    const currencies = (["crowns", "gems"] as const)
+    const level = Math.max(1, Number(menuUi.state!.level) || Math.floor(xp / 100) + 1);
+    const levelXp = headerXp(xp, level);
+    const shop = portalOffersStore();
+    const balances = (["crowns", "gems"] as const)
         .map(function (kind) {
             const amount = Math.max(0, Math.round(Number(menuUi.state![kind]) || 0));
             const label = SOW_t(kind === "crowns" ? "store.crowns" : "store.gems") + ": " + amount;
+            const tag = shop ? "button" : "span";
             return (
-                "<span class='sow-menu__progress-cell sow-menu__" +
+                "<" +
+                tag +
+                " class='sow-menu__currency sow-menu__" +
                 kind +
-                "' title='" +
+                "'" +
+                (shop ? " type='button' data-command='main_nav' data-nav-screen='store'" : "") +
+                " title='" +
                 esc(label) +
                 "' aria-label='" +
                 esc(label) +
@@ -645,47 +640,42 @@ function renderTopbar() {
                 "' alt='' aria-hidden='true'><strong data-progression-" +
                 kind +
                 "-value>" +
-                esc(headerBalance(amount)) +
-                "</strong></span>"
+                esc(formatCompactNumber(amount)) +
+                "</strong></" +
+                tag +
+                ">"
             );
         })
         .join("");
     return (
         "<header class='sow-menu__topbar' data-progression>" +
-        "<div class='sow-menu__identity'>" +
-        "<button class='sow-menu__avatar' type='button' data-command='open_leader_picker' aria-label='" +
+        "<div class='sow-menu__nameplate'>" +
+        "<span class='sow-menu__portrait'><button class='sow-menu__avatar' type='button' data-command='open_leader_picker' aria-label='" +
         esc(SOW_t("menu.select_leader")) +
         "' style=\"background-image:url('" +
         esc(avatarImage()) +
         "')\"></button>" +
-        "<div class='sow-menu__profile'>" +
-        "<input data-role='display-name' name='display_name' value=\"" +
+        "<button class='sow-menu__level' type='button' data-command='open_profile' aria-label='" +
+        esc(SOW_t("profile.level", { level })) + "'><strong data-progression-level-value>" +
+        esc(level) + "</strong></button></span>" +
+        "<label class='sow-menu__name'><input data-role='display-name' name='display_name' value=\"" +
         esc(name) +
         "\" maxlength='16' aria-label='" +
         esc(SOW_t("menu.display_name")) +
-        "'>" +
+        "'></label>" +
         "<button class='sow-menu__progress' type='button' data-command='open_profile' aria-label='" +
         esc(SOW_t("menu.open_profile")) +
-        "'>" +
-        "<span class='sow-menu__level'><small>" +
-        esc(SOW_t("menu.level_short")) +
-        "</small><strong data-progression-level-value>" +
-        esc(menuUi.state!.level) +
-        "</strong></span>" +
-        "<span class='sow-menu__xp-value' data-progression-xp-value>" +
-        esc(Math.floor(xp)) +
-        " " +
+        "' aria-describedby='sow-menu-account-xp'><span class='sow-menu__xp-track' role='progressbar' aria-label='" +
+        esc(SOW_t("menu.xp")) + "' aria-valuemin='0' aria-valuemax='100' aria-valuenow='" +
+        levelXp + "'><i data-progression-xp-fill style='width:" +
+        levelXp +
+        "%'></i><span class='sow-menu__xp-value' id='sow-menu-account-xp'><b data-progression-xp-value>" +
+        esc(levelXp + "/100") +
+        "</b><small>" +
         esc(SOW_t("menu.xp")) +
-        "</span>" +
-        "<span class='sow-menu__xp-track' aria-hidden='true'><i data-progression-xp-fill style='width:" +
-        (xp % 100) +
-        "%'></i></span></button></div></div>" +
+        "</small></span></span></button></div>" +
         "<div class='sow-menu__top-actions'>" +
-        "<button class='sow-menu__wallet' type='button' data-command='open_profile' aria-label='" +
-        esc(headerWalletLabel(menuUi.state!.crowns, menuUi.state!.gems)) +
-        "'>" +
-        currencies +
-        "</button>" +
+        balances +
         "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" +
         esc(SOW_t("menu.settings")) +
         "'>" +
@@ -840,19 +830,6 @@ function screenNav(screen: string) {
             : "battle";
 }
 
-function screenShellClass(screen: string) {
-    return (
-        "sow-menu__shell" +
-        (screen === "store"
-            ? " sow-menu__store"
-            : screen === "heroes"
-              ? " sow-menu__heroes"
-              : screen === "profile"
-                ? " sow-profile"
-                : "")
-    );
-}
-
 function screenBackdropClass(screen: string) {
     return (
         "sow-menu__backdrop" +
@@ -865,9 +842,7 @@ function renderFrame(screen: string) {
         "<div class='" +
         screenBackdropClass(screen) +
         "' data-menu-backdrop></div>" +
-        "<div class='" +
-        screenShellClass(screen) +
-        "'>" +
+        "<div class='sow-menu__shell'>" +
         renderTopbar() +
         "<div class='sow-menu__screen-stage' data-screen-stage>" +
         renderScreenPanel(screen) +
@@ -937,14 +912,25 @@ function updateTopbar(): void {
     }
 }
 
+function updateHeroBackdrop(screen: string): void {
+    const nextHero =
+        screen === "profile"
+            ? profileHeroImage(menuUi.profileData && menuUi.profileData.preferred_leader)
+            : screen === "campaign"
+              ? campaignHeroImage(menuUi.selectedCampaignEpisode)
+              : heroImage();
+    if (root.dataset.hero !== nextHero) {
+        root.style.setProperty("--sow-hero", 'url("' + nextHero + '")');
+        root.dataset.hero = nextHero;
+    }
+}
+
 function updateFrameChrome(screen: string) {
     const backdrop = root.querySelector<HTMLElement>("[data-menu-backdrop]");
-    const shell = root.querySelector<HTMLElement>(".sow-menu__shell");
     const backdropClass = screenBackdropClass(screen);
-    const shellClass = screenShellClass(screen);
     if (backdrop && backdrop.className !== backdropClass) backdrop.className = backdropClass;
-    if (shell && shell.className !== shellClass) shell.className = shellClass;
-    root.querySelectorAll<HTMLElement>("[data-nav-screen]").forEach(function (item) {
+    // Only the nav bar mirrors the screen; header balances and store links also carry data-nav-screen.
+    root.querySelectorAll<HTMLElement>(".sow-menu__main-nav-item[data-nav-screen]").forEach(function (item) {
         const active = item.dataset.navScreen === screenNav(screen);
         const navItem = MAIN_NAV_ITEMS.find(function (candidate) {
             return candidate[0] === item.dataset.navScreen;
@@ -1010,14 +996,7 @@ export function render() {
         menuUi.createPassword = "";
     }
     menuUi.previousScreen = screen;
-    const nextHero =
-        screen === "profile"
-            ? profileHeroImage(menuUi.profileData && menuUi.profileData.preferred_leader)
-            : heroImage();
-    if (root.dataset.hero !== nextHero) {
-        root.style.setProperty("--sow-hero", 'url("' + nextHero + '")');
-        root.dataset.hero = nextHero;
-    }
+    updateHeroBackdrop(screen);
     root.dataset.screen = screen;
     root.dataset.ready = typeof window.SOW_menu_command === "function" ? "true" : "false";
     root.hidden = menuUi.state.phase !== "MainMenu";
@@ -1166,22 +1145,23 @@ export function writeProgression(values: ProgressionValues) {
     const xpFill = progression.querySelector<HTMLElement>("[data-progression-xp-fill]");
     const crownsValue = progression.querySelector<HTMLElement>("[data-progression-crowns-value]");
     const gemsValue = progression.querySelector<HTMLElement>("[data-progression-gems-value]");
-    if (levelValue) levelValue.textContent = String(displayedProgression.level);
-    if (xpValue) xpValue.textContent = Math.floor(displayedProgression.xp) + " " + SOW_t("menu.xp");
-    if (xpFill) xpFill.style.width = (displayedProgression.xp % 100) + "%";
-    const wallet = progression.querySelector<HTMLElement>(".sow-menu__wallet");
-    if (wallet)
-        wallet.setAttribute(
-            "aria-label",
-            headerWalletLabel(displayedProgression.crowns, displayedProgression.gems),
-        );
+    if (levelValue) {
+        levelValue.textContent = String(displayedProgression.level);
+        levelValue.parentElement?.setAttribute("aria-label", SOW_t("profile.level", { level: displayedProgression.level }));
+    }
+    const levelXp = headerXp(displayedProgression.xp, displayedProgression.level);
+    if (xpValue) xpValue.textContent = levelXp + "/100";
+    if (xpFill) {
+        xpFill.style.width = levelXp + "%";
+        xpFill.parentElement?.setAttribute("aria-valuenow", String(levelXp));
+    }
     for (const [kind, counter] of [
         ["crowns", crownsValue],
         ["gems", gemsValue],
     ] as const) {
         if (!counter) continue;
         const amount = Math.round(displayedProgression[kind]);
-        counter.textContent = headerBalance(amount);
+        counter.textContent = formatCompactNumber(amount);
         const cell = counter.parentElement;
         const label = SOW_t(kind === "crowns" ? "store.crowns" : "store.gems") + ": " + amount;
         if (cell) {
@@ -1229,7 +1209,14 @@ export function animateProgressionTo(
     }
     progressionAnimationTarget = Object.assign({}, target);
     const start = performance.now();
-    return new Promise<boolean>(function (resolve) {
+    // A filling bar drops its width easing and shows a moving shine with a lit leading edge.
+    const track = from.xp !== target.xp ? root.querySelector<HTMLElement>(".sow-menu__xp-track") : null;
+    track?.classList.add("is-filling");
+    return new Promise<boolean>(function (done) {
+        function resolve(shown: boolean) {
+            track?.classList.remove("is-filling");
+            done(shown);
+        }
         let frameId = 0;
         function frame(now: number) {
             if (token !== rewardAnimationToken) {
@@ -1428,14 +1415,18 @@ export function flyRewardCard(item: RewardFlyItem, token: number): Promise<boole
     const bend = Math.min(160, Math.max(70, Math.hypot(dx, dy) * 0.2));
     const controlX = dx / 2 + (dx < 0 ? -bend * 0.6 : bend * 0.6);
     const controlY = dy / 2 - bend;
-    const path: Keyframe[] = [];
-    for (let i = 0; i <= 12; i++) {
+    // A short wind-up sells the launch before the card arcs into its counter.
+    const path: Keyframe[] = [
+        { offset: 0, transform: "translate3d(0,0,0) scale(1) rotate(0deg)", opacity: 1 },
+        { offset: 0.08, transform: "translate3d(0,8px,0) scale(1.07) rotate(0deg)", opacity: 1 },
+    ];
+    for (let i = 1; i <= 12; i++) {
         const t = i / 12;
         const inverse = 1 - t;
         const x = 2 * inverse * t * controlX + t * t * dx;
         const y = 2 * inverse * t * controlY + t * t * dy;
         path.push({
-            offset: t,
+            offset: 0.08 + 0.92 * t,
             transform:
                 "translate3d(" +
                 x +
@@ -1451,7 +1442,7 @@ export function flyRewardCard(item: RewardFlyItem, token: number): Promise<boole
     }
     return new Promise<boolean>(function (resolve) {
         const motion = item.card.animate(path, {
-            duration: 520,
+            duration: 600,
             easing: "cubic-bezier(.45,0,.55,1)",
             fill: "forwards",
         });
@@ -1465,19 +1456,71 @@ export function flyRewardCard(item: RewardFlyItem, token: number): Promise<boole
     });
 }
 
+function restartRewardClass(element: HTMLElement, className: string, duration: number) {
+    element.classList.remove(className);
+    void element.offsetWidth;
+    element.classList.add(className);
+    window.setTimeout(function () {
+        element.classList.remove(className);
+    }, duration);
+}
+
 export function pulseRewardCounter(selector: string, levelUp: boolean) {
     if (reducedRewardMotion()) return;
     const counter = root.querySelector<HTMLElement>(selector);
     if (!counter) return;
-    const className = levelUp ? "is-reward-level-up" : "is-reward-value-hit";
-    counter.classList.remove(className);
-    void counter.offsetWidth;
-    counter.classList.add(className);
+    restartRewardClass(counter, levelUp ? "is-reward-level-up" : "is-reward-value-hit", levelUp ? 900 : 640);
+    // The plate around the counter answers too: its currency pill or XP track, or the whole nameplate on a level-up.
+    const plate = counter.closest<HTMLElement>(
+        levelUp ? ".sow-menu__nameplate" : ".sow-menu__currency, .sow-menu__xp-track",
+    );
+    if (plate) restartRewardClass(plate, levelUp ? "is-level-up" : "is-reward-hit", levelUp ? 900 : 640);
+}
+
+// Arrival light is drawn on the reward layer, above its curtain, centered on the header destination.
+export function playRewardImpact(selector: string, kind: RewardStage["kind"], power: number, level?: number) {
+    const layer = activeRewardStage;
+    if (!layer || reducedRewardMotion()) return;
+    const target = root.querySelector<HTMLElement>(selector);
+    if (!target) return;
+    const box = layer.getBoundingClientRect();
+    const to = target.getBoundingClientRect();
+    const impact = document.createElement("span");
+    impact.className = "sow-menu__reward-impact sow-menu__reward-impact--" + kind;
+    impact.setAttribute("aria-hidden", "true");
+    impact.style.left = to.left + to.width / 2 - box.left + "px";
+    impact.style.top = to.top + to.height / 2 - box.top + "px";
+    impact.style.setProperty("--fx-power", String(power));
+    const levelUp = kind === "level";
+    const parts = ["flash", "ring"].concat(levelUp ? ["ring", "rays"] : []);
+    parts.forEach(function (part) {
+        const layerPart = document.createElement("i");
+        layerPart.className = "sow-menu__reward-impact-" + part;
+        impact.appendChild(layerPart);
+    });
+    const sparks = levelUp ? 12 : 7;
+    for (let i = 0; i < sparks; i++) {
+        const spark = document.createElement("i");
+        spark.className = "sow-menu__reward-impact-spark";
+        spark.style.setProperty("--a", (360 / sparks) * i + Math.random() * 18 + "deg");
+        spark.style.setProperty(
+            "--d",
+            String(Math.round((levelUp ? 34 : 20) + Math.random() * (levelUp ? 26 : 14))),
+        );
+        impact.appendChild(spark);
+    }
+    if (levelUp && level) {
+        const label = document.createElement("b");
+        label.className = "sow-menu__reward-impact-label";
+        label.textContent = SOW_t("profile.level", { level });
+        impact.appendChild(label);
+    }
+    layer.appendChild(impact);
     window.setTimeout(
         function () {
-            counter.classList.remove(className);
+            impact.remove();
         },
-        levelUp ? 900 : 640,
+        levelUp ? 1300 : 800,
     );
 }
 
@@ -1578,7 +1621,8 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
     const stages: RewardStage[] = [
         { kind: "xp" as const, amount: totals.xp, selector: "[data-progression-xp-value]" },
         { kind: "crowns" as const, amount: totals.crowns, selector: "[data-progression-crowns-value]" },
-        { kind: "laurels" as const, amount: totals.laurels, selector: "[data-progression-laurels-value]" },
+        // Laurels live in the profile, so their card lands on the player's portrait.
+        { kind: "laurels" as const, amount: totals.laurels, selector: ".sow-menu__portrait" },
         ...leaderStages,
         ...levelStages,
     ].filter(function (stage) {
@@ -1640,13 +1684,17 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
             }, 900);
             return;
         }
-        const nextValues = Object.assign({}, displayedProgression || progressionFromState());
+        const current = displayedProgression || progressionFromState();
+        const nextValues = Object.assign({}, current);
         const oldLevel = nextValues.level;
         if (stage.kind === "level") {
             nextValues.level = stage.level;
         } else {
             nextValues[stage.kind] = target[stage.kind];
             nextValues.level = levelStages.length ? oldLevel : Math.floor(nextValues.xp / 100) + 1;
+            // XP fills only the current level; each level card then refills the bar it opens.
+            if (stage.kind === "xp" && levelStages.length)
+                nextValues.xp = Math.min(target.xp, (Math.min(...Array.from(gainedLevels)) - 1) * 100);
         }
         flyRewardCard({ card: item.card, stage: stage }, token).then(function (arrived) {
             if (!arrived) {
@@ -1654,15 +1702,33 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
                 return;
             }
             if (stage.kind === "level") {
+                // Flash, reset the bar under the flash, then fill the new level up to the next one or the remainder.
+                const combo = levelStages.indexOf(stage);
                 writeProgression(nextValues);
                 pulseRewardCounter(stage.selector, true);
+                playRewardImpact(stage.selector, "level", 1 + 0.3 * combo, stage.level);
+                const refill = Object.assign({}, nextValues, {
+                    xp: Math.max(nextValues.xp, Math.min(target.xp, stage.level * 100)),
+                });
                 window.setTimeout(function () {
-                    next(index + 1);
-                }, 250);
+                    if (token !== rewardAnimationToken) return;
+                    animateProgressionTo(
+                        refill,
+                        320 + Math.min(100, refill.xp - nextValues.xp) * 5,
+                        token,
+                        stage.level,
+                    ).then(function (shown) {
+                        if (shown) next(index + 1);
+                        else finish(false);
+                    });
+                }, 340);
                 return;
             }
+            playRewardImpact(stage.selector, stage.kind, 1);
             const heldLevel = levelStages.length ? oldLevel : null;
-            animateProgressionTo(nextValues, 380, token, heldLevel).then(function (shown) {
+            const duration =
+                stage.kind === "xp" ? 360 + Math.min(100, nextValues.xp - current.xp) * 4.4 : 380;
+            animateProgressionTo(nextValues, duration, token, heldLevel).then(function (shown) {
                 if (!shown) {
                     finish(false);
                     return;
@@ -1873,7 +1939,6 @@ function menuGuideFacts() {
 }
 
 function updateDynamic() {
-    syncHeroesRotationCountdown();
     if (!menuUi.state) return;
     root.dataset.reducedMotion = String(reducedRewardMotion());
     if (root.hidden) return;
@@ -2065,11 +2130,43 @@ root.addEventListener("click", function (event) {
         menuUi.storeOpen = false;
         menuUi.campaignOpen = true;
         render();
+        updateHeroBackdrop("campaign");
         return;
     }
     if (command === "close_campaign") {
         menuUi.campaignOpen = false;
         render();
+        updateHeroBackdrop(currentScreen());
+        return;
+    }
+    if (command === "select_campaign_episode") {
+        const episodeId = target.dataset.episodeId;
+        if (episodeId) {
+            menuUi.selectedCampaignEpisode = episodeId;
+            if (!updateCampaignSelection(episodeId)) render();
+            updateHeroBackdrop("campaign");
+        }
+        return;
+    }
+    if (command === "select_campaign_saga") {
+        const sagaId = target.dataset.sagaId || "all";
+        if (menuUi.selectedCampaignSaga !== sagaId) {
+            menuUi.selectedCampaignSaga = sagaId;
+            const campaign = menuUi.state && menuUi.state.campaign;
+            const episodes = campaign && Array.isArray(campaign.episodes) ? campaign.episodes : [];
+            if (sagaId !== "all") {
+                const sagaEpisodes = episodes.filter((ep) => campaignEpisodeSagaId(ep.id) === sagaId);
+                if (
+                    sagaEpisodes.length &&
+                    !sagaEpisodes.some((ep) => ep.id === menuUi.selectedCampaignEpisode)
+                ) {
+                    const firstAvailable = sagaEpisodes.find((ep) => ep.unlocked && !ep.completed);
+                    menuUi.selectedCampaignEpisode = firstAvailable ? firstAvailable.id : sagaEpisodes[0].id;
+                }
+            }
+            render();
+            updateHeroBackdrop("campaign");
+        }
         return;
     }
     if (command === "watch_campaign_cinematic") {
@@ -2442,6 +2539,7 @@ root.addEventListener("click", function (event) {
         menuUi.tempSelectedRandom = false;
         if (!updateHeroesPreview()) render();
         updateTopbar();
+        updateHeroBackdrop(currentScreen());
         if (persistSelection) scheduleLeaderPersist(false, leaderId);
         maybePresentRewards();
         return;
@@ -2452,6 +2550,7 @@ root.addEventListener("click", function (event) {
         menuUi.tempSelectedRandom = true;
         if (!updateHeroesPreview()) render();
         updateTopbar();
+        updateHeroBackdrop(currentScreen());
         scheduleLeaderPersist(true, null);
         return;
     }
@@ -3164,7 +3263,6 @@ window.addEventListener("sow:loader-cycle-ready", function (event) {
 });
 
 document.addEventListener("visibilitychange", function () {
-    syncHeroesRotationCountdown();
     if (document.visibilityState !== "visible") {
         flushLeaderPersist();
         if (window.SOW_menu_guide) window.SOW_menu_guide.pause();
@@ -3198,6 +3296,7 @@ function handleMenuStateUpdate(raw: string, parsed: MenuState) {
         return;
     latestLoaderCycleId = menuUi.state!.loader_cycle_id;
     menuUi.state = normalizeCompletedExitState(menuUi.state);
+    reconcileLeaderSelection(menuUi.state);
     syncDisconnectNotice(menuUi.state);
     syncMenuMusic(menuUi.state, false);
     const accountId = menuUi.state!.account_id || "";
