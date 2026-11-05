@@ -124,12 +124,6 @@ fn observe_avatar_entry(
             started_at: None,
         };
     }
-    #[cfg(target_arch = "wasm32")]
-    let debug_entry = matches!(
-        &entry.identity,
-        sow_core::player::AvatarIdentity::Portrait { slug, .. }
-            if matches!(slug.as_str(), "boudica" | "roman_outpost")
-    );
     if !loaded {
         entry.loaded = false;
         entry.started_at = None;
@@ -138,26 +132,12 @@ fn observe_avatar_entry(
     if !entry.loaded {
         entry.loaded = true;
         entry.started_at = (!reduced_motion).then_some(now);
-        #[cfg(target_arch = "wasm32")]
-        if debug_entry {
-            log::warn!(
-                "SOW_AVATAR_ENTRY_START id={} identity={:?} reduced_motion={} started={}",
-                player_id,
-                entry.identity,
-                reduced_motion,
-                entry.started_at.is_some()
-            );
-        }
     } else if reduced_motion {
         entry.started_at = None;
     }
     let age = now
         .saturating_duration_since(entry.started_at?)
         .as_secs_f32();
-    #[cfg(target_arch = "wasm32")]
-    if debug_entry && (0.15..0.20).contains(&age) {
-        log::warn!("SOW_AVATAR_ENTRY_AGE id={} age={age:.3}", player_id);
-    }
     (age < AVATAR_TRANSITION_CELEBRATE_SECS).then_some(age)
 }
 

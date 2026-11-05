@@ -54,6 +54,8 @@ impl SowEngine {
                         requester: r.proposer,
                         gold: r.gold,
                         troops: r.troops,
+                        pay_gold: r.pay_gold,
+                        pay_troops: r.pay_troops,
                     })
                     .collect();
 

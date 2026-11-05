@@ -1991,6 +1991,9 @@ mod bot_iq_alliance_tests {
                 target: 1,
                 gold: 100.0,
                 troops: 50.0,
+                pay_gold: 0.0,
+                pay_troops: 0.0,
+                created_tick: 0,
             });
 
         let mut decisions = Vec::new();

@@ -111,7 +111,14 @@ fn campaign_attacks_players(
 
 impl SowEngine {
     pub(crate) fn naval_target_allowed(&self, attacker_id: u16, target_id: u16) -> bool {
-        self.ai_target_allowed(attacker_id, target_id, None)
+        let respect_human_attack_grace =
+            !self.state.player(attacker_id).is_some_and(is_real_human);
+        self.ai_target_allowed_with_grace(
+            attacker_id,
+            target_id,
+            None,
+            respect_human_attack_grace,
+        )
             && !self.players_friendly(attacker_id, target_id)
             && self
                 .state
@@ -158,6 +165,16 @@ impl SowEngine {
         target_id: u16,
         defender_target: Option<u16>,
     ) -> bool {
+        self.ai_target_allowed_with_grace(attacker_id, target_id, defender_target, true)
+    }
+
+    fn ai_target_allowed_with_grace(
+        &self,
+        attacker_id: u16,
+        target_id: u16,
+        defender_target: Option<u16>,
+        respect_human_attack_grace: bool,
+    ) -> bool {
         if defender_target == Some(target_id) || self.is_attacked_by(attacker_id, target_id) {
             return true;
         }
@@ -180,6 +197,7 @@ impl SowEngine {
                 .player(attacker_id)
                 .is_some_and(|attacker| attacker.player_type == crate::player::PlayerType::Nation))
             || target.disconnected
+            || !respect_human_attack_grace
             || self.human_attack_grace_elapsed()
     }
 

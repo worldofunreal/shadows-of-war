@@ -10,6 +10,8 @@ pub const ALLIANCE_REQUEST_TTL_TICKS: u32 = 200;
 pub const ALLIANCE_REQUEST_COOLDOWN_TICKS: u32 = 300;
 /// Minimum delay before the same pair can send another resource request (~10s).
 pub const RESOURCE_REQUEST_COOLDOWN_TICKS: u32 = 100;
+/// A resource request or trade offer left unanswered this long is withdrawn (~30s).
+pub const RESOURCE_REQUEST_TTL_TICKS: u32 = 300;
 /// Last ~30s of an alliance: renewal proposals may be attempted (throttled by RNG).
 pub const ALLIANCE_RENEWAL_WINDOW_TICKS: u32 = 300;
 /// Minimum time between betrayals for one bot (~60s).

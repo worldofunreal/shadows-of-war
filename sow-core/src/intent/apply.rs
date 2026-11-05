@@ -348,6 +348,88 @@ impl SowEngine {
         requested.max(0.0).min(spare).min(room)
     }
 
+    /// Records a request, or a trade when it carries a price. A plain request is cut to
+    /// what will actually move; a trade keeps its agreed amounts and settles on accept.
+    fn propose_resources(
+        &mut self,
+        proposer: u16,
+        target: u16,
+        gold: f64,
+        troops: f64,
+        pay_gold: f64,
+        pay_troops: f64,
+    ) {
+        let amounts = [gold, troops, pay_gold, pay_troops];
+        if amounts.iter().any(|v| !v.is_finite() || *v < 0.0)
+            || !self.resources_can_move(proposer, target)
+            || !self.can_send_resource_request(proposer, target)
+        {
+            return;
+        }
+        let request = if pay_gold > 0.0 || pay_troops > 0.0 {
+            // Each resource flows one way, and the proposer must hold its price now.
+            let one_way = !(gold > 0.0 && pay_gold > 0.0) && !(troops > 0.0 && pay_troops > 0.0);
+            let can_pay = self.gold_transferable(proposer, pay_gold) >= pay_gold
+                && self.troops_transferable(proposer, target, pay_troops) >= pay_troops;
+            if !one_way || !can_pay || (gold <= 0.0 && troops <= 0.0) {
+                return;
+            }
+            crate::engine::ResourceRequestProposed {
+                proposer,
+                target,
+                gold,
+                troops,
+                pay_gold,
+                pay_troops,
+                created_tick: self.current_tick_u32(),
+            }
+        } else {
+            // Only what the target can pay now and the proposer can hold, so the
+            // request shows the amount that will actually move.
+            let g = self.gold_transferable(target, gold);
+            let t = self.troops_transferable(target, proposer, troops);
+            if g <= 0.0 && t <= 0.0 {
+                return;
+            }
+            crate::engine::ResourceRequestProposed {
+                proposer,
+                target,
+                gold: g,
+                troops: t,
+                pay_gold: 0.0,
+                pay_troops: 0.0,
+                created_tick: self.current_tick_u32(),
+            }
+        };
+        // One pending request per pair; a new one replaces it.
+        self.resource_requests_proposed
+            .retain(|r| !(r.proposer == proposer && r.target == target));
+        self.resource_requests_proposed.push(request);
+        self.mark_resource_request_cooldown(proposer, target);
+    }
+
+    /// Whether both sides of a trade can pay in full right now.
+    pub(crate) fn trade_settles(&self, trade: &crate::engine::ResourceRequestProposed) -> bool {
+        let (proposer, acceptor) = (trade.proposer, trade.target);
+        self.resources_can_move(acceptor, proposer)
+            && self.gold_transferable(acceptor, trade.gold) >= trade.gold
+            && self.troops_transferable(acceptor, proposer, trade.troops) >= trade.troops
+            && self.gold_transferable(proposer, trade.pay_gold) >= trade.pay_gold
+            && self.troops_transferable(proposer, acceptor, trade.pay_troops) >= trade.pay_troops
+    }
+
+    /// Moves amounts already checked by the caller.
+    fn move_resources(&mut self, payer: u16, receiver: u16, gold: f64, troops: f64) {
+        if let Some(p) = self.state.player_mut(payer) {
+            p.gold -= gold;
+            p.troops -= troops;
+        }
+        if let Some(r) = self.state.player_mut(receiver) {
+            r.credit_gold(gold);
+            r.credit_troops(troops);
+        }
+    }
+
     pub fn apply_stamped_intent(&mut self, stamped: &StampedIntent, intent_index: u32) {
         if self.state.config.ranked_1v1 {
             let target = match &stamped.intent {
@@ -355,6 +437,7 @@ impl SowEngine {
                 | GameplayIntent::AcceptAlliance { target_player }
                 | GameplayIntent::SendResources { target_player, .. }
                 | GameplayIntent::RequestResources { target_player, .. }
+                | GameplayIntent::OfferTrade { target_player, .. }
                 | GameplayIntent::AcceptResourceRequest { target_player } => Some(*target_player),
                 _ => None,
             };
@@ -865,30 +948,21 @@ impl SowEngine {
                 target_player,
                 gold,
                 troops,
-            } => {
-                let proposer = stamped.player_id;
-                let target = *target_player;
-                // Only what the target can pay now and the proposer can hold, so the
-                // request shows the amount that will actually move.
-                let g = self.gold_transferable(target, *gold);
-                let t = self.troops_transferable(target, proposer, *troops);
-                if (g > 0.0 || t > 0.0)
-                    && self.resources_can_move(proposer, target)
-                    && self.can_send_resource_request(proposer, target)
-                {
-                    // Clear any existing request between these two
-                    self.resource_requests_proposed
-                        .retain(|r| !(r.proposer == proposer && r.target == target));
-                    self.resource_requests_proposed
-                        .push(crate::engine::ResourceRequestProposed {
-                            proposer,
-                            target,
-                            gold: g,
-                            troops: t,
-                        });
-                    self.mark_resource_request_cooldown(proposer, target);
-                }
-            }
+            } => self.propose_resources(stamped.player_id, *target_player, *gold, *troops, 0.0, 0.0),
+            GameplayIntent::OfferTrade {
+                target_player,
+                gold,
+                troops,
+                pay_gold,
+                pay_troops,
+            } => self.propose_resources(
+                stamped.player_id,
+                *target_player,
+                *gold,
+                *troops,
+                *pay_gold,
+                *pay_troops,
+            ),
             GameplayIntent::AcceptResourceRequest { target_player } => {
                 let acceptor = stamped.player_id;
                 let target = *target_player; // target here is the proposer
@@ -897,6 +971,22 @@ impl SowEngine {
                     .iter()
                     .position(|r| r.proposer == target && r.target == acceptor)
                 {
+                    if self.resource_requests_proposed[pos].is_trade() {
+                        // A trade settles in full or not at all; an unpayable one stays pending.
+                        let req = self.resource_requests_proposed[pos].clone();
+                        if self.trade_settles(&req) {
+                            // An offer sent to every ally sells once: the first accept takes it
+                            // and withdraws its copies from the other allies.
+                            self.resource_requests_proposed.retain(|r| {
+                                !(r.proposer == req.proposer
+                                    && (r.gold, r.troops, r.pay_gold, r.pay_troops)
+                                        == (req.gold, req.troops, req.pay_gold, req.pay_troops))
+                            });
+                            self.move_resources(acceptor, target, req.gold, req.troops);
+                            self.move_resources(target, acceptor, req.pay_gold, req.pay_troops);
+                        }
+                        return;
+                    }
                     let req = self.resource_requests_proposed.remove(pos);
                     if !self.resources_can_move(acceptor, target) {
                         return;
@@ -1341,6 +1431,9 @@ mod tests {
                 target: 2,
                 gold: 0.0,
                 troops: 50.0,
+                pay_gold: 0.0,
+                pay_troops: 0.0,
+                created_tick: 0,
             });
 
         engine.apply_stamped_intent(
@@ -1383,6 +1476,139 @@ mod tests {
         engine.state.tick += u64::from(crate::diplomacy::RESOURCE_REQUEST_COOLDOWN_TICKS);
         engine.apply_stamped_intent(&request, 2);
         assert_eq!(engine.resource_requests_proposed.len(), 1);
+    }
+
+    #[test]
+    fn trade_settles_both_sides_at_once_or_waits() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 4, 4, config.clone());
+        for id in 1..=2 {
+            let mut player = Player::new_human(id, format!("Player {id}"), [1.0; 3], &config);
+            player.gold = 100.0;
+            player.troops = 500.0;
+            player.max_troops = 1_000.0;
+            player.alliances.push(if id == 1 { 2 } else { 1 });
+            state.register_player(player);
+        }
+        let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+        // Player 1 sells 300 troops to player 2 for 200 gold.
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::OfferTrade {
+                    target_player: 2,
+                    gold: 200.0,
+                    troops: 0.0,
+                    pay_gold: 0.0,
+                    pay_troops: 300.0,
+                },
+            },
+            0,
+        );
+        let trade = engine.resource_requests_proposed[0].clone();
+        assert_eq!((trade.gold, trade.pay_troops), (200.0, 300.0), "a trade keeps its price");
+
+        let accept = StampedIntent {
+            player_id: 2,
+            intent: GameplayIntent::AcceptResourceRequest { target_player: 1 },
+        };
+        // The buyer holds only 100 gold: nothing moves and the offer waits.
+        engine.apply_stamped_intent(&accept, 1);
+        assert_eq!(engine.state.player(1).unwrap().troops, 500.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 100.0);
+        assert_eq!(engine.resource_requests_proposed.len(), 1);
+
+        engine.state.player_mut(2).unwrap().gold = 250.0;
+        engine.apply_stamped_intent(&accept, 2);
+        let (seller, buyer) = (engine.state.player(1).unwrap(), engine.state.player(2).unwrap());
+        assert_eq!((seller.troops, seller.gold), (200.0, 300.0));
+        assert_eq!((buyer.troops, buyer.gold), (800.0, 50.0));
+        assert!(engine.resource_requests_proposed.is_empty());
+    }
+
+    #[test]
+    fn an_offer_to_every_ally_sells_once_and_lapses_unanswered() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 4, 4, config.clone());
+        for id in 1..=3 {
+            let mut player = Player::new_human(id, format!("Player {id}"), [1.0; 3], &config);
+            player.gold = 500.0;
+            player.troops = 500.0;
+            player.max_troops = 1_000.0;
+            player.alliances = (1..=3).filter(|other| *other != id).collect();
+            state.register_player(player);
+        }
+        let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+        // Player 1 offers 300 troops for 200 gold to both allies.
+        for (index, ally) in [2, 3].into_iter().enumerate() {
+            engine.apply_stamped_intent(
+                &StampedIntent {
+                    player_id: 1,
+                    intent: GameplayIntent::OfferTrade {
+                        target_player: ally,
+                        gold: 200.0,
+                        troops: 0.0,
+                        pay_gold: 0.0,
+                        pay_troops: 300.0,
+                    },
+                },
+                index as u32,
+            );
+        }
+        assert_eq!(engine.resource_requests_proposed.len(), 2);
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 3,
+                intent: GameplayIntent::AcceptResourceRequest { target_player: 1 },
+            },
+            2,
+        );
+        assert!(engine.resource_requests_proposed.is_empty(), "the copy for player 2 is withdrawn");
+        assert_eq!(engine.state.player(1).unwrap().troops, 200.0, "the seller pays once");
+        assert_eq!(engine.state.player(3).unwrap().troops, 800.0);
+
+        engine.state.tick += u64::from(crate::diplomacy::RESOURCE_REQUEST_COOLDOWN_TICKS);
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 2,
+                intent: GameplayIntent::RequestResources { target_player: 1, gold: 50.0, troops: 0.0 },
+            },
+            3,
+        );
+        engine.state.tick += u64::from(crate::diplomacy::RESOURCE_REQUEST_TTL_TICKS);
+        engine.prune_alliance_diplomacy();
+        assert_eq!(engine.resource_requests_proposed.len(), 1, "still answerable at the deadline");
+        engine.state.tick += 1;
+        engine.prune_alliance_diplomacy();
+        assert!(engine.resource_requests_proposed.is_empty(), "an unanswered request lapses");
+    }
+
+    #[test]
+    fn trade_offers_need_the_price_in_hand_and_one_way_resources() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 4, 4, config.clone());
+        for id in 1..=2 {
+            let mut player = Player::new_human(id, format!("Player {id}"), [1.0; 3], &config);
+            player.gold = 100.0;
+            player.troops = 100.0;
+            player.max_troops = 1_000.0;
+            player.alliances.push(if id == 1 { 2 } else { 1 });
+            state.register_player(player);
+        }
+        let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+        let offer = |gold, pay_gold| StampedIntent {
+            player_id: 1,
+            intent: GameplayIntent::OfferTrade {
+                target_player: 2,
+                gold,
+                troops: 10.0,
+                pay_gold,
+                pay_troops: 0.0,
+            },
+        };
+        engine.apply_stamped_intent(&offer(0.0, 500.0), 0);
+        engine.apply_stamped_intent(&offer(5.0, 50.0), 1);
+        assert!(engine.resource_requests_proposed.is_empty());
     }
 
     #[test]

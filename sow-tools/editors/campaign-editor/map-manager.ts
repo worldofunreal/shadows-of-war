@@ -17,7 +17,7 @@
     const label = document.createElement("code");
     label.textContent = name;
     const remove = document.createElement("button");
-    remove.textContent = "Delete from server";
+    remove.textContent = "Delete uploaded copy";
     remove.addEventListener("click", () => deleteMap(name, remove));
     item.append(label, remove);
     return item;
@@ -38,7 +38,12 @@
   }
 
   async function deleteMap(name: string, button: HTMLButtonElement) {
-    if (!confirm(`Delete ${name} from the server? Players lose it right away.`)) return;
+    if (
+      !confirm(
+        `Delete the uploaded copy of ${name}? A copy already included in an active release will remain available.`,
+      )
+    )
+      return;
     button.disabled = true;
     setStatus(`Deleting ${name}…`);
     try {
@@ -49,7 +54,7 @@
         button.disabled = false;
         return;
       }
-      setStatus(`Deleted ${name} from the server.`);
+      setStatus(`Deleted ${name} from the uploaded map library.`);
       await loadMaps();
     } catch (error) {
       setStatus(String(error), true);

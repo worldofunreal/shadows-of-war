@@ -66,10 +66,13 @@ type PlayerIdentityParts = {
     copy: HTMLElement;
     name: HTMLElement;
 };
+// What the requester asks for, then what a trade gives back.
+type InboxAmount = "gold" | "troops" | "pay_gold" | "pay_troops";
 type InboxRequestParts = PlayerIdentityParts & {
     type: HTMLElement;
     resources: HTMLElement;
-    amounts: Record<"gold" | "troops", { element: HTMLElement; value: HTMLElement }>;
+    amounts: Record<InboxAmount, { element: HTMLElement; value: HTMLElement }>;
+    swap: HTMLElement;
     accept: HTMLButtonElement;
     reject: HTMLButtonElement;
 };
@@ -209,6 +212,9 @@ type HudRefs = {
     transferHint: HTMLElement;
     transferSend: HTMLButtonElement;
     transferRequest: HTMLButtonElement;
+    transferTrade: HTMLButtonElement;
+    transferDirTroops: HTMLButtonElement;
+    transferDirGold: HTMLButtonElement;
     transferStockTroops: HTMLElement;
     transferStockMaxTroops: HTMLElement;
     transferStockGold: HTMLElement;
@@ -710,11 +716,40 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         );
     }
 
+    // Flips a row between Give and Ask; the CTA follows the rows.
+    function transferDirButton(resource: string): string {
+        return (
+            '<button class="sow-hud__transfer-dir" id="sow-hud-transfer-dir-' +
+            resource +
+            '" type="button" data-command="flip_transfer_row" data-resource="' +
+            resource +
+            '"></button>'
+        );
+    }
+
     type TransferSide = "send" | "request";
+    type TransferKind = TransferSide | "trade";
+    type TransferResource = "troops" | "gold";
     type TransferOffer = NonNullable<MenuHudPayload["transfer"]>;
 
     function wholeAmount(value: number): number {
         return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+    }
+
+    // Rows the player flipped away from the panel's side; a fresh panel flips none.
+    const transferFlips: Record<string, boolean> = Object.create(null);
+
+    // A row gives on Send and asks on Request, unless the player flipped it.
+    function transferRowSide(resource: TransferResource, offer: TransferOffer, own: MenuHudPayload): TransferSide {
+        const side = transferSide(offer, own);
+        if (!transferFlips[resource]) return side;
+        return side === "send" ? "request" : "send";
+    }
+
+    // The one CTA the rows add up to: all Give is Send, all Ask is Request, a mix is a trade.
+    function transferKind(offer: TransferOffer, own: MenuHudPayload): TransferKind {
+        const troops = transferRowSide("troops", offer, own);
+        return troops === transferRowSide("gold", offer, own) ? troops : "trade";
     }
 
     // The side the panel acts on: the radial's pick, else the stronger army leads.
@@ -742,7 +777,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         offer: TransferOffer,
         own: MenuHudPayload,
     ): number {
-        const side = transferSide(offer, own);
+        const side = transferRowSide(resource, offer, own);
         const cap = transferCaps(side, offer, own)[resource];
         if (percent === "max") return cap;
         const stock =
@@ -752,13 +787,20 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         return Math.min(cap, wholeAmount((Number(stock[resource]) * Number(percent)) / 100));
     }
 
-    // Why a side cannot send right now, or null when its button is live.
-    function transferBlockReason(side: TransferSide, offer: TransferOffer, own: MenuHudPayload): string | null {
-        const waitMs = side === "request" ? (transferRequestReadyAt[offer.target_id] || 0) - Date.now() : 0;
+    // Why a CTA cannot act right now, or null when it is live. A trade needs both of its sides.
+    function transferBlockReason(kind: TransferKind, offer: TransferOffer, own: MenuHudPayload): string | null {
+        // A gift names its ally; the all-allies panel only asks or trades.
+        if (kind === "send" && offer.all_allies) return SOW_t("hud.transfer_all_allies_send");
+        const waitMs = kind !== "send" ? (transferRequestReadyAt[offer.target_id] || 0) - Date.now() : 0;
         if (waitMs > 0) return SOW_t("hud.transfer_request_cooldown");
-        const caps = transferCaps(side, offer, own);
-        if (!offer.target_alive || (caps.troops === 0 && caps.gold === 0))
-            return SOW_t(side === "send" ? "hud.transfer_blocked_send" : "hud.transfer_blocked_request");
+        for (const side of kind === "trade" ? (["send", "request"] as const) : [kind]) {
+            const caps = transferCaps(side, offer, own);
+            const stuck = (["troops", "gold"] as const).every(function (resource) {
+                return (kind === "trade" && transferRowSide(resource, offer, own) !== side) || caps[resource] === 0;
+            });
+            if (!offer.target_alive || stuck)
+                return SOW_t(side === "send" ? "hud.transfer_blocked_send" : "hud.transfer_blocked_request");
+        }
         return null;
     }
 
@@ -1268,6 +1310,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             transferHint: requiredHudElement("sow-hud-transfer-hint"),
             transferSend: requiredHudButton("sow-hud-transfer-send"),
             transferRequest: requiredHudButton("sow-hud-transfer-request"),
+            transferTrade: requiredHudButton("sow-hud-transfer-trade"),
+            transferDirTroops: requiredHudButton("sow-hud-transfer-dir-troops"),
+            transferDirGold: requiredHudButton("sow-hud-transfer-dir-gold"),
             transferStockTroops: requiredHudElement("sow-hud-transfer-stock-troops"),
             transferStockMaxTroops: requiredHudElement("sow-hud-transfer-stock-max-troops"),
             transferStockGold: requiredHudElement("sow-hud-transfer-stock-gold"),
@@ -1742,13 +1787,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '" alt=""><b id="sow-hud-transfer-stock-gold">0</b></span>' +
             "</p>" +
             '  <div class="sow-hud__transfer-fields">' +
-            '    <div class="sow-hud__transfer-field"><label><span>' +
+            '    <div class="sow-hud__transfer-field">' +
+            transferDirButton("troops") +
+            "<label><span>" +
             hudIcon("troops", "sow-hud__inline-icon") +
             SOW_t("hud.troops") +
             '</span><input id="sow-hud-transfer-troops" type="number" inputmode="numeric" min="0" step="1" value="0"></label>' +
             transferPresetButtons("troops") +
             "</div>" +
-            '    <div class="sow-hud__transfer-field"><label><span><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' +
+            '    <div class="sow-hud__transfer-field">' +
+            transferDirButton("gold") +
+            '<label><span><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' +
             currencyAsset("gold") +
             '" alt="">' +
             SOW_t("hud.gold") +
@@ -1768,6 +1817,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             hudIcon("request", "sow-hud__cta-icon") +
             "<span>" +
             SOW_t("hud.request") +
+            "</span></button>" +
+            '<button class="sow-hud__transfer-cta sow-hud__transfer-trade" id="sow-hud-transfer-trade" type="button" data-command="offer_trade">' +
+            hudIcon("transfer", "sow-hud__cta-icon") +
+            "<span>" +
+            SOW_t("hud.trade") +
             "</span></button>" +
             "</div>" +
             "</aside>" +
@@ -5116,25 +5170,33 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         type.className = "sow-hud__request-type";
         const resources = document.createElement("div");
         resources.className = "sow-hud__request-resources";
-        const amounts: InboxRequestParts["amounts"] = {
-            gold: { element: document.createElement("span"), value: document.createElement("bdi") },
-            troops: { element: document.createElement("span"), value: document.createElement("bdi") },
-        };
-        (["gold", "troops"] as const).forEach(function (kind) {
-            const metric = amounts[kind].element;
-            metric.className = "sow-hud__request-metric";
-            if (kind === "gold") {
+        // A trade's price sits after the swap mark: what they ask ⇄ what they give.
+        const swap = document.createElement("span");
+        swap.className = "sow-hud__request-swap";
+        swap.setAttribute("aria-hidden", "true");
+        swap.textContent = "⇄";
+        const metric = function (kind: InboxAmount) {
+            const element = document.createElement("span");
+            element.className = "sow-hud__request-metric" + (kind.startsWith("pay_") ? " is-gain" : "");
+            if (kind === "pay_gold") resources.appendChild(swap);
+            if (kind === "gold" || kind === "pay_gold") {
                 const icon = document.createElement("img");
                 icon.className = "sow-hud__currency-icon sow-hud__currency-icon--gold";
                 icon.src = currencyAsset("gold");
                 icon.alt = "";
-                metric.appendChild(icon);
-            } else metric.innerHTML = hudIcon("troops", "sow-hud__inline-icon");
-            const value = amounts[kind].value;
-            metric.appendChild(value);
-            resources.appendChild(metric);
-            amounts[kind] = { element: metric, value: value };
-        });
+                element.appendChild(icon);
+            } else element.innerHTML = hudIcon("troops", "sow-hud__inline-icon");
+            const value = document.createElement("bdi");
+            element.appendChild(value);
+            resources.appendChild(element);
+            return { element: element, value: value };
+        };
+        const amounts = {
+            gold: metric("gold"),
+            troops: metric("troops"),
+            pay_gold: metric("pay_gold"),
+            pay_troops: metric("pay_troops"),
+        };
         identity.copy.append(type, resources);
         const actions = document.createElement("div");
         actions.className = "sow-hud__request-actions";
@@ -5158,6 +5220,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             type: type,
             resources: resources,
             amounts: amounts,
+            swap: swap,
             accept: buttons[0],
             reject: buttons[1],
         };
@@ -5188,29 +5251,43 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             const row = previous[key] || createInboxRequest(request);
             const name = request.name || SOW_t("hud.player_name");
             renderPlayerIdentity(row, name, request.avatar);
-            row.type.textContent = SOW_t(
-                request.kind === "resources" ? "hud.resource_request_title" : "hud.alliance_request_title",
-            );
             const values: Record<string, string> = { name: name };
-            (["gold", "troops"] as const).forEach(function (kind) {
+            let trade = false;
+            (["gold", "troops", "pay_gold", "pay_troops"] as const).forEach(function (kind) {
                 let value = Number(request[kind]);
                 value = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+                if (value > 0 && kind.startsWith("pay_")) trade = true;
                 values[kind] = numbers.format(value);
                 row.amounts[kind].value.textContent = values[kind];
                 row.amounts[kind].element.hidden = value === 0;
                 row.amounts[kind].element.setAttribute(
                     "aria-label",
-                    SOW_t(kind === "gold" ? "hud.gold" : "hud.troops") + ": " + values[kind],
+                    SOW_t(kind.endsWith("gold") ? "hud.gold" : "hud.troops") + ": " + values[kind],
                 );
             });
+            row.swap.hidden = !trade;
+            row.type.textContent = SOW_t(
+                request.kind !== "resources"
+                    ? "hud.alliance_request_title"
+                    : trade
+                      ? "hud.trade_offer_title"
+                      : "hud.resource_request_title",
+            );
             row.resources.hidden = request.kind !== "resources";
             row.element.setAttribute(
                 "aria-label",
-                SOW_t(request.kind === "resources" ? "hud.resource_request" : "hud.alliance_request", values),
+                SOW_t(
+                    request.kind !== "resources"
+                        ? "hud.alliance_request"
+                        : trade
+                          ? "hud.trade_offer"
+                          : "hud.resource_request",
+                    values,
+                ),
             );
-            // A resource request is answered with Send, or Ignore; alliances keep Accept and Reject.
+            // A request is answered with Send or Ignore, a trade with Accept or Ignore; alliances keep Accept and Reject.
             const resourceRequest = request.kind === "resources";
-            row.accept.textContent = SOW_t(resourceRequest ? "hud.send" : "hud.accept");
+            row.accept.textContent = SOW_t(resourceRequest && !trade ? "hud.send" : "hud.accept");
             row.reject.textContent = SOW_t(resourceRequest ? "hud.ignore_request" : "hud.reject");
             row.accept.disabled = request.active === false;
             row.accept.title = row.accept.disabled ? SOW_t("hud.action_unavailable") : "";
@@ -6223,15 +6300,18 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             hudRefs!.transfer.classList.toggle("hidden", !hud.transfer);
             if (hud.transfer) {
                 hudRefs!.transfer.dataset.targetId = String(hud.transfer.target_id);
-                renderPlayerIdentity(
-                    hudRefs!.transferIdentity,
-                    hud.transfer.target_name,
-                    hud.transfer.target_avatar,
-                );
+                // The self-click panel speaks to every ally, so it names them all and hides one ally's stock.
+                const allAllies = Number(hud.transfer.all_allies) || 0;
+                const targetName =
+                    allAllies > 0
+                        ? SOW_t("hud.transfer_all_allies", { count: String(allAllies) })
+                        : hud.transfer.target_name;
+                hudRefs!.transfer.dataset.allAllies = String(allAllies > 0);
+                renderPlayerIdentity(hudRefs!.transferIdentity, targetName, hud.transfer.target_avatar);
                 hudRefs!.transferTarget.setAttribute(
                     "aria-label",
                     SOW_t("hud.target_player", {
-                        name: hud.transfer.target_name || SOW_t("hud.player_name"),
+                        name: targetName || SOW_t("hud.player_name"),
                     }),
                 );
                 const transferLive = hud.transfer;
@@ -6240,24 +6320,36 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                     transferLive.target_max_troops,
                 );
                 hudRefs!.transferStockGold.textContent = formatNameplateTroops(transferLive.target_gold);
-                const side = transferSide(transferLive, hud);
-                const sendBlock = transferBlockReason("send", transferLive, hud);
-                const requestBlock = transferBlockReason("request", transferLive, hud);
-                // The panel carries one action, the side in focus; the other CTA is hidden, not greyed out.
-                hudRefs!.transferSend.hidden = side !== "send";
-                hudRefs!.transferRequest.hidden = side !== "request";
-                hudRefs!.transferSend.disabled = sendBlock !== null;
-                hudRefs!.transferRequest.disabled = requestBlock !== null;
-                hudRefs!.transferSend.classList.toggle("is-primary", side === "send");
-                hudRefs!.transferRequest.classList.toggle("is-primary", side === "request");
-                // Only the side in focus can explain a block; a hidden side's reason must not show.
-                const hint = side === "send" ? sendBlock : requestBlock;
+                const reseed =
+                    transferWasHidden ||
+                    hudRefs!.transfer.dataset.seededTarget !== String(transferLive.target_id);
+                if (reseed) {
+                    delete transferFlips.troops;
+                    delete transferFlips.gold;
+                }
+                (["troops", "gold"] as const).forEach(function (resource) {
+                    const toggle = resource === "troops" ? hudRefs!.transferDirTroops : hudRefs!.transferDirGold;
+                    const asks = transferRowSide(resource, transferLive, hud) === "request";
+                    toggle.textContent = SOW_t(asks ? "hud.transfer_want" : "hud.transfer_give");
+                    toggle.classList.toggle("is-want", asks);
+                });
+                const kind = transferKind(transferLive, hud);
+                // The panel carries one action, the one the rows add up to; the others are hidden, not greyed out.
+                const ctas = [
+                    [hudRefs!.transferSend, "send"],
+                    [hudRefs!.transferRequest, "request"],
+                    [hudRefs!.transferTrade, "trade"],
+                ] as const;
+                ctas.forEach(function (entry) {
+                    entry[0].hidden = entry[1] !== kind;
+                    entry[0].disabled = transferBlockReason(entry[1], transferLive, hud) !== null;
+                    entry[0].classList.toggle("is-primary", entry[1] === kind);
+                });
+                // Only the CTA in focus can explain a block; a hidden one's reason must not show.
+                const hint = transferBlockReason(kind, transferLive, hud);
                 hudRefs!.transferHint.textContent = hint ?? "";
                 hudRefs!.transferHint.hidden = hint === null;
-                if (
-                    transferWasHidden ||
-                    hudRefs!.transfer.dataset.seededTarget !== String(transferLive.target_id)
-                ) {
+                if (reseed) {
                     hudRefs!.transfer.dataset.seededTarget = String(transferLive.target_id);
                     hudRefs!.transferGold.value = String(transferPresetAmount("gold", "25", transferLive, hud));
                     hudRefs!.transferTroops.value = String(
@@ -6679,25 +6771,65 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                             live,
                         ),
                     );
-            } else if (cmd === "send_resources" || cmd === "request_resources") {
-                const side = cmd === "send_resources" ? "send" : "request";
+            } else if (cmd === "flip_transfer_row") {
+                const live = hudState && hudState.hud;
+                const offer = live && live.transfer;
+                const resource = btn.dataset.resource === "gold" ? "gold" : "troops";
+                if (live && offer && hudRefs) {
+                    transferFlips[resource] = !transferFlips[resource];
+                    // The row now sizes from the other stock, so it restarts at a quarter of it.
+                    (resource === "gold" ? hudRefs.transferGold : hudRefs.transferTroops).value = String(
+                        transferPresetAmount(resource, "25", offer, live),
+                    );
+                    renderHud();
+                }
+            } else if (cmd === "send_resources" || cmd === "request_resources" || cmd === "offer_trade") {
+                const kind = cmd === "send_resources" ? "send" : cmd === "request_resources" ? "request" : "trade";
                 const live = hudState && hudState.hud;
                 const offer = live && live.transfer;
                 const targetId = hudRefs && hudRefs.transfer ? Number(hudRefs.transfer.dataset.targetId) : 0;
-                // Poka-yoke: each button sends only what its side can move, so nothing is clipped silently.
-                if (live && offer && hudRefs && targetId > 0 && transferBlockReason(side, offer, live) === null) {
-                    const caps = transferCaps(side, offer, live);
-                    const gold = Math.min(wholeAmount(Number(hudRefs.transferGold.value)), caps.gold);
-                    const troops = Math.min(wholeAmount(Number(hudRefs.transferTroops.value)), caps.troops);
-                    if (gold > 0 || troops > 0) {
-                        if (side === "request") {
-                            transferRequestReadyAt[targetId] = Date.now() + TRANSFER_REQUEST_COOLDOWN_MS;
-                            // The wasm pushes state only when it changes, so re-render when the lock lifts.
-                            window.setTimeout(renderHud, TRANSFER_REQUEST_COOLDOWN_MS);
-                        }
-                        send(cmd, { target_player_id: targetId, gold: gold, troops: troops });
-                        renderHud();
+                // Poka-yoke: each row sends only what its side can move, so nothing is clipped silently.
+                if (live && offer && hudRefs && targetId > 0 && transferBlockReason(kind, offer, live) === null) {
+                    const give = { gold: 0, troops: 0 };
+                    const ask = { gold: 0, troops: 0 };
+                    (["troops", "gold"] as const).forEach(function (resource) {
+                        const side = kind === "trade" ? transferRowSide(resource, offer, live) : kind;
+                        const input = resource === "gold" ? hudRefs!.transferGold : hudRefs!.transferTroops;
+                        const amount = Math.min(
+                            wholeAmount(Number(input.value)),
+                            transferCaps(side, offer, live)[resource],
+                        );
+                        (side === "send" ? give : ask)[resource] = amount;
+                    });
+                    const gives = give.gold > 0 || give.troops > 0;
+                    const asks = ask.gold > 0 || ask.troops > 0;
+                    if (asks) {
+                        transferRequestReadyAt[targetId] = Date.now() + TRANSFER_REQUEST_COOLDOWN_MS;
+                        // The wasm pushes state only when it changes, so re-render when the lock lifts.
+                        window.setTimeout(renderHud, TRANSFER_REQUEST_COOLDOWN_MS);
                     }
+                    // A row left at zero turns a trade back into a plain Send or Request.
+                    if (offer.all_allies) {
+                        if (asks)
+                            send("offer_to_allies", {
+                                gold: ask.gold,
+                                troops: ask.troops,
+                                pay_gold: give.gold,
+                                pay_troops: give.troops,
+                            });
+                    } else if (gives && asks)
+                        send("offer_trade", {
+                            target_player_id: targetId,
+                            gold: ask.gold,
+                            troops: ask.troops,
+                            pay_gold: give.gold,
+                            pay_troops: give.troops,
+                        });
+                    else if (gives)
+                        send("send_resources", { target_player_id: targetId, gold: give.gold, troops: give.troops });
+                    else if (asks)
+                        send("request_resources", { target_player_id: targetId, gold: ask.gold, troops: ask.troops });
+                    if (gives || asks) renderHud();
                 }
             } else if (
                 cmd === "accept_alliance" ||
@@ -7021,6 +7153,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                       target: hudRefs.transfer.dataset.targetId,
                       gold: hudRefs.transferGold!.value,
                       troops: hudRefs.transferTroops!.value,
+                      flips: { troops: transferFlips.troops, gold: transferFlips.gold },
                       focus: hudRefs.transfer.contains(active) ? active!.id : null,
                       returnFocus: hudRefs.transferReturnFocus,
                   }
@@ -7052,6 +7185,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             refreshedRefs &&
             refreshedRefs.transfer.dataset.targetId === transferDraft.target
         ) {
+            transferFlips.troops = transferDraft.flips.troops;
+            transferFlips.gold = transferDraft.flips.gold;
+            renderHud();
             refreshedRefs.transferGold.value = transferDraft.gold;
             refreshedRefs.transferTroops.value = transferDraft.troops;
             refreshedRefs.transferReturnFocus = transferDraft.returnFocus;

@@ -299,6 +299,20 @@ pub struct ResourceRequestProposed {
     pub target: crate::player::PlayerId,
     pub gold: f64,
     pub troops: f64,
+    /// The price the proposer pays on accept; zero for a plain request.
+    #[serde(default)]
+    pub pay_gold: f64,
+    #[serde(default)]
+    pub pay_troops: f64,
+    /// When it was made; it lapses `RESOURCE_REQUEST_TTL_TICKS` later.
+    #[serde(default)]
+    pub created_tick: u32,
+}
+
+impl ResourceRequestProposed {
+    pub fn is_trade(&self) -> bool {
+        self.pay_gold > 0.0 || self.pay_troops > 0.0
+    }
 }
 
 pub type SeaLaneCalcState = (usize, Vec<crate::sea_lane::SeaLane>, Vec<(u64, u32, u32)>);
@@ -749,6 +763,10 @@ impl SowEngine {
             .retain(|_, until| *until > tick);
         self.resource_request_cooldown_until
             .retain(|_, until| *until > tick);
+        // Unanswered resource requests and trade offers lapse, so a stale price cannot be taken later.
+        self.resource_requests_proposed.retain(|r| {
+            tick.saturating_sub(r.created_tick) <= crate::diplomacy::RESOURCE_REQUEST_TTL_TICKS
+        });
         for player in &mut self.state.players {
             if player.traitor && player.traitor_tick > 0 && tick >= player.traitor_tick {
                 player.traitor = false;

@@ -225,6 +225,20 @@ enum WebMenuCommand {
         gold: f64,
         troops: f64,
     },
+    OfferTrade {
+        target_player_id: u16,
+        gold: f64,
+        troops: f64,
+        pay_gold: f64,
+        pay_troops: f64,
+    },
+    /// The self-click panel: the same request or trade sent to every ally and teammate.
+    OfferToAllies {
+        gold: f64,
+        troops: f64,
+        pay_gold: f64,
+        pay_troops: f64,
+    },
     AcceptResourceRequest {
         target_player_id: u16,
     },
@@ -1248,6 +1262,62 @@ impl SowApp {
                         gold: gold.max(0.0),
                         troops: troops.max(0.0),
                     });
+                    self.ui.app.hud_state.show_ask_panel = None;
+                    self.ui.app.hud_state.transfer_confirm_pending = false;
+                }
+                WebMenuCommand::OfferTrade {
+                    target_player_id,
+                    gold,
+                    troops,
+                    pay_gold,
+                    pay_troops,
+                } => {
+                    self.send_intent(sow_core::protocol::GameplayIntent::OfferTrade {
+                        target_player: target_player_id,
+                        gold: gold.max(0.0),
+                        troops: troops.max(0.0),
+                        pay_gold: pay_gold.max(0.0),
+                        pay_troops: pay_troops.max(0.0),
+                    });
+                    self.ui.app.hud_state.show_ask_panel = None;
+                    self.ui.app.hud_state.transfer_confirm_pending = false;
+                }
+                WebMenuCommand::OfferToAllies {
+                    gold,
+                    troops,
+                    pay_gold,
+                    pay_troops,
+                } => {
+                    let (gold, troops) = (gold.max(0.0), troops.max(0.0));
+                    let (pay_gold, pay_troops) = (pay_gold.max(0.0), pay_troops.max(0.0));
+                    let my_id = self.sim.my_player_id.unwrap_or_default();
+                    let partners: Vec<u16> = self
+                        .sim
+                        .current_snapshot
+                        .as_ref()
+                        .and_then(|snapshot| {
+                            let me = snapshot.players.iter().find(|player| player.id == my_id)?;
+                            Some(me.trade_partners(&snapshot.players).map(|player| player.id).collect())
+                        })
+                        .unwrap_or_default();
+                    // Each ally gets its own copy; the server sells a trade to the first who accepts.
+                    for target_player in partners {
+                        self.send_intent(if pay_gold > 0.0 || pay_troops > 0.0 {
+                            sow_core::protocol::GameplayIntent::OfferTrade {
+                                target_player,
+                                gold,
+                                troops,
+                                pay_gold,
+                                pay_troops,
+                            }
+                        } else {
+                            sow_core::protocol::GameplayIntent::RequestResources {
+                                target_player,
+                                gold,
+                                troops,
+                            }
+                        });
+                    }
                     self.ui.app.hud_state.show_ask_panel = None;
                     self.ui.app.hud_state.transfer_confirm_pending = false;
                 }
@@ -3478,6 +3548,8 @@ fn build_inbox(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) -> serde
                 "active": requester.alive,
                 "gold": request.gold,
                 "troops": request.troops,
+                "pay_gold": request.pay_gold,
+                "pay_troops": request.pay_troops,
             }));
         }
     }
@@ -4309,7 +4381,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             payload["inbox"] = cached_inbox_payload(snapshot, my_pid);
         }
     }
-    append_player_dialog_payloads(&mut payload, snapshot, hud);
+    append_player_dialog_payloads(&mut payload, snapshot, hud, my_pid);
     if let Some(snapshot) = snapshot {
         for (field, id_field) in [
             ("players", "id"),
@@ -4410,14 +4482,35 @@ fn append_player_dialog_payloads(
     payload: &mut serde_json::Value,
     snapshot: Option<&sow_core::protocol::SimSnapshot>,
     hud: &crate::ui::hud::HudState,
+    my_pid: u16,
 ) {
     let players = snapshot
         .map(|snapshot| snapshot.players.as_slice())
         .unwrap_or_default();
-    if let Some(target) = hud
+    let target = hud
         .show_ask_panel
-        .and_then(|id| players.iter().find(|player| player.id == id))
-    {
+        .and_then(|id| players.iter().find(|player| player.id == id));
+    if let Some(me) = target.filter(|target| target.id == my_pid) {
+        // Our own id stands for every ally. The richest one sizes the Ask presets and the
+        // roomiest one the Give presets; the server still caps each copy for its ally.
+        let partners: Vec<_> = me.trade_partners(players).collect();
+        let most = |value: fn(&sow_core::protocol::PlayerSnapshot) -> f64| {
+            partners.iter().map(|player| value(player)).fold(0.0, f64::max)
+        };
+        let troops = most(|player| player.troops);
+        payload["transfer"] = serde_json::json!({
+            "target_id": me.id,
+            "target_name": "",
+            "target_avatar": sow_core::player::avatar_identity(me),
+            "target_alive": !partners.is_empty(),
+            "target_gold": most(|player| player.gold),
+            "target_troops": troops,
+            "target_max_troops": troops + most(|player| (player.max_troops - player.troops).max(0.0)),
+            "confirm_pending": hud.transfer_confirm_pending,
+            "mode": hud.transfer_mode.map(crate::ui::hud::state::TransferMode::as_str),
+            "all_allies": partners.len(),
+        });
+    } else if let Some(target) = target {
         payload["transfer"] = serde_json::json!({
             "target_id": target.id,
             "target_name": &target.name,
@@ -5308,6 +5401,8 @@ mod tests {
                 requester,
                 gold: 25.0,
                 troops: 10.0,
+                pay_gold: 0.0,
+                pay_troops: 0.0,
             })
             .collect();
         let mut human = test_player(2, 5, 100.0);
@@ -5349,6 +5444,29 @@ mod tests {
     }
 
     #[wasm_bindgen_test::wasm_bindgen_test]
+    fn self_transfer_panel_addresses_every_ally_and_sizes_from_the_best_one() {
+        let mut me = test_player(1, 5, 10.0);
+        me.alliances = vec![2, 3];
+        let mut rich = test_player(2, 5, 80.0);
+        rich.gold = 900.0;
+        let mut roomy = test_player(3, 5, 20.0);
+        roomy.max_troops = 500.0;
+        let stranger = test_player(4, 5, 99.0);
+        let snapshot = test_snapshot(vec![me, rich, roomy, stranger]);
+        let mut hud = crate::ui::hud::HudState::default();
+        hud.show_ask_panel = Some(1);
+        hud.transfer_mode = Some(crate::ui::hud::state::TransferMode::Request);
+        let mut payload = serde_json::json!({});
+        append_player_dialog_payloads(&mut payload, Some(&snapshot), &hud, 1);
+        let transfer = &payload["transfer"];
+        assert_eq!(transfer["all_allies"], 2, "the stranger is not an audience");
+        assert_eq!(transfer["target_gold"], 900.0);
+        assert_eq!(transfer["target_troops"], 80.0);
+        assert_eq!(transfer["target_max_troops"], 80.0 + 480.0, "room comes from the roomiest ally");
+        assert_eq!(transfer["target_alive"], true);
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn player_dialogs_use_snapshot_identity_and_keep_pending_intents_unchanged() {
         let mut players = vec![
             test_player(1, 5, 100.0),
@@ -5374,7 +5492,7 @@ mod tests {
             hud.transfer_mode = Some(crate::ui::hud::state::TransferMode::Request);
             hud.betrayal_warning_cached = Some((player.id, intent.clone()));
             let mut payload = serde_json::json!({});
-            append_player_dialog_payloads(&mut payload, Some(&snapshot), &hud);
+            append_player_dialog_payloads(&mut payload, Some(&snapshot), &hud, 0);
             let identity = serde_json::to_value(sow_core::player::avatar_identity(player)).unwrap();
             assert_eq!(payload["transfer"]["target_avatar"], identity);
             assert_eq!(payload["betrayal"]["ally_avatar"], identity);
@@ -5389,7 +5507,7 @@ mod tests {
             hud.show_ask_panel = None;
             hud.betrayal_warning_cached = None;
             let mut closed = serde_json::json!({});
-            append_player_dialog_payloads(&mut closed, Some(&snapshot), &hud);
+            append_player_dialog_payloads(&mut closed, Some(&snapshot), &hud, 0);
             assert!(closed.get("transfer").is_none() && closed.get("betrayal").is_none());
         }
         let mut hud = crate::ui::hud::HudState::default();
@@ -5400,7 +5518,7 @@ mod tests {
         ));
         for missing in [None, Some(&snapshot)] {
             let mut payload = serde_json::json!({});
-            append_player_dialog_payloads(&mut payload, missing, &hud);
+            append_player_dialog_payloads(&mut payload, missing, &hud, 0);
             assert!(payload.get("transfer").is_none());
             assert_eq!(payload["betrayal"]["ally_name"], "");
             assert_eq!(payload["betrayal"]["ally_avatar"]["kind"], "fallback");

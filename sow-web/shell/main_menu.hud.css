@@ -2013,6 +2013,7 @@ html[dir="rtl"] .sow-hud__leaderboard-search {
 .sow-hud__inbox-list[hidden],
 .sow-hud__inbox-empty[hidden],
 .sow-hud__request-resources[hidden],
+.sow-hud__request-swap[hidden],
 .sow-hud__request-metric[hidden] {
   display: none;
 }
@@ -2078,6 +2079,17 @@ html[dir="rtl"] .sow-hud__leaderboard-search {
   inline-size: 1em;
   block-size: 1em;
   flex: 0 0 auto;
+}
+.sow-hud__request-swap {
+  align-self: center;
+  color: var(--sow-muted);
+  font-size: 16px;
+  font-weight: 800;
+}
+/* What a trade gives back reads as a gain, apart from what it asks. */
+.sow-hud__request-metric.is-gain {
+  border-color: color-mix(in srgb, var(--sow-gold) 45%, transparent);
+  background: color-mix(in srgb, var(--sow-gold) 10%, transparent);
 }
 .sow-hud__request-metric bdi {
   min-inline-size: 0;
@@ -5256,6 +5268,40 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   background: rgb(4 9 12 / 36%);
 }
 
+/* Give / Ask toggle: one tap flips the row, and the CTA follows. */
+#sow-hud .sow-hud__transfer-dir {
+  justify-self: start;
+  min-block-size: 2rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sow-gold) 14%, transparent);
+  color: var(--sow-gold-bright);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  touch-action: manipulation;
+}
+#sow-hud .sow-hud__transfer-dir::before {
+  content: "↑ ";
+}
+#sow-hud .sow-hud__transfer-dir.is-want {
+  border-color: var(--sow-line);
+  background: rgb(255 255 255 / 6%);
+  color: #fff5d8;
+}
+#sow-hud .sow-hud__transfer-dir.is-want::before {
+  content: "↓ ";
+}
+@media (pointer: coarse) {
+  #sow-hud .sow-hud__transfer-dir {
+    min-block-size: 2.75rem;
+  }
+}
+
 .sow-hud__transfer label {
   display: grid;
   gap: 0.625rem;
@@ -5424,6 +5470,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 #sow-hud-transfer .sow-hud__transfer-cta:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+#sow-hud-transfer[data-all-allies="true"] .sow-hud__transfer-stock {
+  display: none;
 }
 
 #sow-hud-transfer .sow-hud__transfer-cta[hidden] {

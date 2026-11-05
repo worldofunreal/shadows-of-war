@@ -800,7 +800,7 @@ impl SowApp {
                         }
                     }
                 } else if action == MapMenuAction::RequestAllies {
-                    reason_key = self.ally_resource_requests().err();
+                    reason_key = (!self.has_trade_partners()).then_some("hud.resources_no_allies");
                     reason_key.is_some()
                 } else {
                     false
@@ -893,10 +893,11 @@ impl SowApp {
                 self.open_transfer_from_tile(tile_idx, TransferMode::Request);
             }
             MapMenuAction::RequestAllies => {
-                if let Ok(intents) = self.ally_resource_requests() {
-                    for intent in intents {
-                        self.send_intent(intent);
-                    }
+                // Our own id aims the panel at every ally; it sends one offer to each.
+                if let Some(my_id) = self.sim.my_player_id
+                    && self.has_trade_partners()
+                {
+                    self.open_transfer(my_id, TransferMode::Request);
                 }
             }
             MapMenuAction::Alliance => {
@@ -1574,53 +1575,27 @@ impl SowApp {
             self.add_map_feedback(crate::ui::UiText::new("hud.resources_allies_only"));
             return false;
         }
-        self.ui.app.hud_state.show_ask_panel = Some(target.owner);
-        self.ui.app.hud_state.transfer_mode = Some(mode);
-        self.ui.app.hud_state.transfer_confirm_pending = false;
+        self.open_transfer(target.owner, mode);
         true
     }
 
-    /// One request to each living ally or teammate, asking a quarter of their stock. Troops stop
-    /// at our free room. The server applies the same caps when it pays.
-    fn ally_resource_requests(
-        &self,
-    ) -> Result<Vec<sow_core::protocol::GameplayIntent>, &'static str> {
-        const ASK_SHARE: f64 = 0.25;
+    fn open_transfer(&mut self, target: u16, mode: TransferMode) {
+        self.ui.app.hud_state.show_ask_panel = Some(target);
+        self.ui.app.hud_state.transfer_mode = Some(mode);
+        self.ui.app.hud_state.transfer_confirm_pending = false;
+    }
+
+    /// Whether we have a living ally or teammate; the self-click panel needs one.
+    fn has_trade_partners(&self) -> bool {
         let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
-            return Err("hud.resources_no_allies");
+            return false;
         };
         let my_id = self.sim.my_player_id.unwrap_or_default();
-        let Some(me) = snapshot.players.iter().find(|player| player.id == my_id) else {
-            return Err("hud.resources_no_allies");
-        };
-        let room = (me.max_troops - me.troops).max(0.0);
-        let partners: Vec<_> = snapshot
+        snapshot
             .players
             .iter()
-            .filter(|player| me.can_trade_with(player))
-            .collect();
-        if partners.is_empty() {
-            return Err("hud.resources_no_allies");
-        }
-        let intents: Vec<_> = partners
-            .into_iter()
-            .filter_map(|player| {
-                let gold = (player.gold * ASK_SHARE).floor().max(0.0);
-                let troops = (player.troops * ASK_SHARE).floor().min(room).max(0.0);
-                (gold > 0.0 || troops > 0.0).then_some(
-                    sow_core::protocol::GameplayIntent::RequestResources {
-                        target_player: player.id,
-                        gold,
-                        troops,
-                    },
-                )
-            })
-            .collect();
-        if intents.is_empty() {
-            Err("hud.resources_nothing_to_ask")
-        } else {
-            Ok(intents)
-        }
+            .find(|player| player.id == my_id)
+            .is_some_and(|me| me.trade_partners(&snapshot.players).next().is_some())
     }
 
     fn alliance_from_tile(&mut self, tile_idx: u32) -> bool {
