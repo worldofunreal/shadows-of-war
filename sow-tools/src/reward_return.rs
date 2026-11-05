@@ -331,7 +331,38 @@ async fn verify_handover(url: &Url, base: &Url, http: &reqwest::Client, version:
     pass(&format!("Live handover preserved old streams (turns={counts:?}, max_gap_ms={}); replacement served and settled a new match", max_gap.as_millis()));
 }
 
+const WASM_RETURN_TEST: [&str; 9] = [
+    "test",
+    "--locked",
+    "-p",
+    "sow-client",
+    "--target",
+    "wasm32-unknown-unknown",
+    "--config",
+    "target.wasm32-unknown-unknown.runner=\"wasm-bindgen-test-runner\"",
+    "--lib",
+];
+
+/// Kills the WASM return test when verification unwinds, so a failed run cannot keep
+/// acting on the live relay or keep the production lock (inherited fd) after it exits.
+struct KillOnDrop(std::process::Child);
+
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::path::Path>, handover_host: Option<&str>, handover_binary: Option<&str>) {
+    // Compile before any live match exists: a cold build inside the return deadline
+    // failed verification twice. The timed run below then pays only for the return.
+    let built = Command::new("cargo")
+        .args(WASM_RETURN_TEST)
+        .arg("--no-run")
+        .status()
+        .unwrap();
+    assert!(built.success(), "WASM return test build failed");
     let http = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
         .build()
@@ -556,33 +587,27 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
     file.write_all(serde_json::to_string(&fixture).unwrap().as_bytes())
         .unwrap();
     drop(file);
-    let mut client = Command::new("cargo")
-        .args([
-            "test",
-            "--locked",
-            "-p",
-            "sow-client",
-            "--target",
-            "wasm32-unknown-unknown",
-            "--config",
-            "target.wasm32-unknown-unknown.runner=\"wasm-bindgen-test-runner\"",
-            "--lib",
-            "reward_exit_tests::multiplayer_exit_survives_closed_port_delay_and_reload",
-            "--",
-            "--nocapture",
-        ])
-        .env("SOW_LIVE_MATCH_EXIT_FILE", &fixture_path)
-        .env("WASM_BINDGEN_TEST_TIMEOUT", "120")
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .unwrap();
+    let mut client = KillOnDrop(
+        Command::new("cargo")
+            .args(WASM_RETURN_TEST)
+            .args([
+                "reward_exit_tests::multiplayer_exit_survives_closed_port_delay_and_reload",
+                "--",
+                "--nocapture",
+            ])
+            .env("SOW_LIVE_MATCH_EXIT_FILE", &fixture_path)
+            .env("WASM_BINDGEN_TEST_TIMEOUT", "120")
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap(),
+    );
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(180);
     let mut child_poll = tokio::time::interval(std::time::Duration::from_millis(20));
     child_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut last_relay_message = tokio::time::Instant::now();
     let status = loop {
-        if let Some(status) = client.try_wait().unwrap() {
+        if let Some(status) = client.0.try_wait().unwrap() {
             break status;
         }
         assert!(
