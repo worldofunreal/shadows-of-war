@@ -448,14 +448,14 @@ impl Default for GameConfig {
             territory_gold_tiles: default_territory_gold_tiles(),
             troop_base_income: default_troop_base_income(),
             max_troops_base: 10.0,
-            max_troops_scale: 157.5,
+            max_troops_scale: 55.0,
             troop_upkeep_per_1000: default_troop_upkeep_per_1000(),
             trade_ship_gold_income: default_trade_ship_gold_income(),
             territory_troop_amount: default_territory_troop_amount(),
             territory_troop_tiles: default_territory_troop_tiles(),
 
             // Buildings (stacking)
-            city_max_troops: 9_375.0,
+            city_max_troops: 3_300.0,
             city_troop_income: default_city_troop_income(),
             farm_troop_income: default_farm_troop_income(),
             farm_gold_income: default_farm_gold_income(),
