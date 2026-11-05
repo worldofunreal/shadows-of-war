@@ -538,6 +538,13 @@ leader_abd_al_rahman_al_ghafiqi_name = "Abd al-Rahman al-Ghafiqi"
 leader_abd_al_rahman_al_ghafiqi_historical = "ʿAbd al-Raḥmān ibn ʿAbd Allāh al-Ghāfiqī"
 leader_abd_al_rahman_al_ghafiqi_civilization = "Al-Andalus Umayyah"
 
+leader_tribe_wiradjuri_name = "Windradyne"
+leader_tribe_wiradjuri_historical = "Pemimpin perlawanan Wiradjuri (sekitar 1800–1829)"
+leader_tribe_wiradjuri_civilization = "Wiradjuri"
+leader_nation_yagan_name = "Yagan"
+leader_nation_yagan_historical = "Prajurit Whadjuk Noongar dan tokoh perlawanan (sekitar 1795–1833)"
+leader_nation_yagan_civilization = "Whadjuk Noongar"
+
 [profile]
 ranked_1v1 = "Peringkat 1v1"
 unranked = "Tanpa peringkat"
@@ -1404,6 +1411,11 @@ leader_boleslaw_ii_description = "Penaklukan pemain asing berlangsung 25% lebih 
 
 leader_abd_al_rahman_al_ghafiqi_ability = "Melintasi Pegunungan Pyrenees"
 leader_abd_al_rahman_al_ghafiqi_description = "Pasukan penyerang kehilangan 25% lebih sedikit prajurit saat menaklukkan petak pegunungan."
+
+leader_tribe_wiradjuri_ability = "Pertahanan Wiradjuri"
+leader_tribe_wiradjuri_description = "Pasukan bertahan mendapat kekuatan 15% lebih besar saat diserang oleh lawan yang menguasai lebih banyak wilayah."
+leader_nation_yagan_ability = "Perlawanan Whadjuk"
+leader_nation_yagan_description = "Serangan terhadap bangsa atau kerajaan lain mendapat kekuatan 15% lebih besar."
 
 [ranked]
 my_rank = "Peringkat saya"

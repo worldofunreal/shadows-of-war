@@ -538,6 +538,13 @@ leader_abd_al_rahman_al_ghafiqi_name = "Abd al-Rahman al-Ghafiqi"
 leader_abd_al_rahman_al_ghafiqi_historical = "ʿAbd al-Raḥmān ibn ʿAbd Allāh al-Ghāfiqī"
 leader_abd_al_rahman_al_ghafiqi_civilization = "al-Andalus omíada"
 
+leader_tribe_wiradjuri_name = "Windradyne"
+leader_tribe_wiradjuri_historical = "Líder da resistência wiradjuri (c. 1800–1829)"
+leader_tribe_wiradjuri_civilization = "Wiradjuri"
+leader_nation_yagan_name = "Yagan"
+leader_nation_yagan_historical = "Guerreiro whadjuk noongar e figura da resistência (c. 1795–1833)"
+leader_nation_yagan_civilization = "Whadjuk Noongar"
+
 [profile]
 ranked_1v1 = "Ranqueda 1x1"
 unranked = "Sem classificação"
@@ -1404,6 +1411,11 @@ leader_boleslaw_ii_description = "A conquista de jogadores estrangeiros avança 
 
 leader_abd_al_rahman_al_ghafiqi_ability = "Travessia dos Pireneus"
 leader_abd_al_rahman_al_ghafiqi_description = "Atacantes perdem 25% menos tropas ao conquistar terrenos montanhosos."
+
+leader_tribe_wiradjuri_ability = "Defesa wiradjuri"
+leader_tribe_wiradjuri_description = "Defensores recebem 15% mais força quando atacados por um rival que controla mais território."
+leader_nation_yagan_ability = "Resistência whadjuk"
+leader_nation_yagan_description = "Ataques contra outro povo ou reino recebem 15% mais força."
 
 [ranked]
 my_rank = "Meu ranque"

@@ -176,6 +176,24 @@ export function renderSettings() {
     const settings = menuUi.state!.settings || {};
     const vol = settings.music_volume == null ? 0.8 : settings.music_volume;
     const volPct = Math.round(vol * 100);
+    const gearSvg =
+        "<svg class='sow-menu__settings-head-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='3'/><path d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z'/></svg>";
+    const slidersSvg =
+        "<svg class='sow-menu__settings-sec-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><line x1='4' y1='21' x2='4' y2='14'/><line x1='4' y1='10' x2='4' y2='3'/><line x1='12' y1='21' x2='12' y2='12'/><line x1='12' y1='8' x2='12' y2='3'/><line x1='20' y1='21' x2='20' y2='16'/><line x1='20' y1='12' x2='20' y2='3'/><line x1='2' y1='14' x2='6' y2='14'/><line x1='10' y1='8' x2='14' y2='8'/><line x1='18' y1='16' x2='22' y2='16'/></svg>";
+    const userSvg =
+        "<svg class='sow-menu__settings-sec-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>";
+    const linksSvg =
+        "<svg class='sow-menu__settings-sec-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/></svg>";
+    const musicSvg =
+        "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><polygon points='11 5 6 9 2 9 2 15 6 15 11 19 11 5'/><path d='M15.54 8.46a5 5 0 0 1 0 7.07'/><path d='M19.07 4.93a10 10 0 0 1 0 14.14'/></svg>";
+    const motionSvg =
+        "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M13 2 3 14h9l-1 8 10-12h-9l1-8z'/></svg>";
+    const zoomSvg =
+        "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><polyline points='15 3 21 3 21 9'/><polyline points='9 21 3 21 3 15'/><line x1='21' y1='3' x2='14' y2='10'/><line x1='3' y1='21' x2='10' y2='14'/></svg>";
+    const fpsSvg =
+        "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'/></svg>";
+    const devSvg =
+        "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><polyline points='16 18 22 12 16 6'/><polyline points='8 6 2 12 8 18'/></svg>";
     const auth =
         typeof window.SOW_getAuthState === "function"
             ? window.SOW_getAuthState()
@@ -197,11 +215,16 @@ export function renderSettings() {
     const accountDetail = auth.linked
         ? accountEmail || providerLabel || SOW_t("menu.anonymous")
         : SOW_t("menu.anonymous");
+    const accountStatusClass = auth.pending ? "is-pending" : auth.linked ? "is-linked" : "is-guest";
     const accountControl = auth.pending
-        ? "<div class='sow-menu__settings-account sow-menu__settings-account--pending'><strong class='sow-menu__account-pending'>" +
+        ? "<div class='sow-menu__settings-account sow-menu__settings-account--pending " +
+          accountStatusClass +
+          "'><span class='sow-menu__account-dot' aria-hidden='true'></span><strong class='sow-menu__account-pending'>" +
           esc(SOW_t("menu.connecting")) +
           "</strong></div>"
-        : "<div class='sow-menu__settings-account'><strong class='sow-menu__account-value'>" +
+        : "<div class='sow-menu__settings-account " +
+          accountStatusClass +
+          "'><span class='sow-menu__account-dot' aria-hidden='true'></span><strong class='sow-menu__account-value'>" +
           esc(accountDetail) +
           "</strong></div>";
     const showSignIn =
@@ -209,7 +232,7 @@ export function renderSettings() {
         !auth.pending &&
         (!auth.linked || window.SOW_WOU_SESSION_STATUS === "reauthentication_required");
     const signInControl = showSignIn
-        ? "<button class='sow-menu__secondary' type='button' data-command='sign_in'>" +
+        ? "<button class='sow-menu__secondary sow-menu__settings-signin' type='button' data-command='sign_in'>" +
           esc(SOW_t("menu.sign_in")) +
           "</button>"
         : "";
@@ -235,35 +258,41 @@ export function renderSettings() {
               esc(SOW_t("menu.sign_out")) +
               "</button>";
     }
+    const inlineAccountAction = !menuUi.signOutConfirmOpen ? signInControl || signOutControl : "";
+    const confirmSignOutBlock =
+        menuUi.signOutConfirmOpen && signOutControl
+            ? "<div class='sow-menu__settings-actions'>" + signOutControl + "</div>"
+            : "";
     return (
         "" +
         "<div class='sow-menu__overlay' data-menu-overlay='settings'>" +
         "<section class='sow-menu__modal sow-menu__settings-modal'>" +
         "<div class='sow-menu__modal-head'>" +
-        "<div>" +
+        "<div class='sow-menu__settings-title-group'>" +
+        "<span class='sow-menu__settings-head-badge' aria-hidden='true'>" +
+        gearSvg +
+        "</span>" +
         "<h2>" +
         esc(SOW_t("menu.settings")) +
         "</h2>" +
         "</div>" +
-        "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" +
+        "<button class='sow-menu__icon-button sow-menu__settings-close' type='button' data-command='toggle_settings' aria-label='" +
         esc(SOW_t("menu.close")) +
         "'>×</button>" +
         "</div>" +
         "<div class='sow-menu__settings-body'>" +
-        "<section class='sow-menu__settings-section'><h3>" +
-        esc(SOW_t("menu.account")) +
-        "</h3>" +
-        accountControl +
-        signInControl +
-        (signOutControl ? "<div class='sow-menu__settings-actions'>" + signOutControl + "</div>" : "") +
-        "</section>" +
-        "<section class='sow-menu__settings-section'><h3>" +
+        "<div class='sow-menu__settings-col sow-menu__settings-col--primary'>" +
+        "<section class='sow-menu__settings-section sow-menu__settings-section--preferences'><h3>" +
+        slidersSvg +
+        "<span>" +
         esc(SOW_t("menu.settings_preferences")) +
-        "</h3><div class='sow-menu__settings-controls'>" +
+        "</span></h3><div class='sow-menu__settings-controls'>" +
         "<label class='sow-hud__setting-row sow-hud__setting-row--slider'>" +
-        "<div class='sow-menu__slider-label'><span>" +
+        "<div class='sow-menu__slider-label'><span class='sow-menu__settings-row-label'>" +
+        musicSvg +
+        "<span>" +
         esc(SOW_t("menu.music_volume")) +
-        "</span><b data-val-for='music_vol'>" +
+        "</span></span><b data-val-for='music_vol'>" +
         volPct +
         "%</b></div>" +
         "<input type='range' name='music_volume' min='0' max='1' step='0.01' value='" +
@@ -272,10 +301,13 @@ export function renderSettings() {
         volPct +
         "%;' data-setting='music_volume'>" +
         "</label>" +
+        renderLocaleSettingRow() +
         "<div class='sow-hud__setting-row sow-menu__settings-dropdown-row'>" +
+        "<span class='sow-menu__settings-row-label'>" +
+        motionSvg +
         "<span>" +
         esc(SOW_t("menu.motion_animation")) +
-        "</span>" +
+        "</span></span>" +
         SOW_renderDropdown({
             key: "settings-motion",
             className: "sow-menu__settings-dropdown",
@@ -289,42 +321,63 @@ export function renderSettings() {
             ],
         }) +
         "</div>" +
-        "<label class='sow-hud__setting-row'>" +
+        "<label class='sow-hud__setting-row sow-menu__settings-switch-row'>" +
+        "<span class='sow-menu__settings-row-label'>" +
+        zoomSvg +
         "<span>" +
         esc(SOW_t("menu.free_zoom_out")) +
-        "</span>" +
+        "</span></span>" +
         "<input class='sow-hud__switch' type='checkbox' role='switch' name='free_zoom_out' data-setting='free_zoom_out'" +
         (settings.free_zoom_out ? " checked" : "") +
         ">" +
         "</label>" +
-        "<label class='sow-hud__setting-row'>" +
+        "<label class='sow-hud__setting-row sow-menu__settings-switch-row'>" +
+        "<span class='sow-menu__settings-row-label'>" +
+        fpsSvg +
         "<span>" +
         esc(SOW_t("menu.show_fps_ping")) +
-        "</span>" +
+        "</span></span>" +
         "<input class='sow-hud__switch' type='checkbox' role='switch' name='show_fps_ping' data-setting='show_fps_ping'" +
         (settings.show_fps_ping === true ? " checked" : "") +
         ">" +
         "</label>" +
         (settings.show_dev_tools_available
-            ? "<label class='sow-hud__setting-row'>" +
+            ? "<label class='sow-hud__setting-row sow-menu__settings-switch-row'>" +
+              "<span class='sow-menu__settings-row-label'>" +
+              devSvg +
               "<span>" +
               esc(SOW_t("menu.show_dev_tools")) +
-              "</span>" +
+              "</span></span>" +
               "<input class='sow-hud__switch' type='checkbox' role='switch' name='show_dev_tools' data-setting='show_dev_tools'" +
               (settings.show_dev_tools ? " checked" : "") +
               ">" +
               "</label>"
             : "") +
-        renderLocaleSettingRow() +
         "</div></section>" +
-        renderSettingsPrivacySection(renderSettingsLink("https://shadowsofwar.io/privacy/", "menu.privacy")) +
-        "<section class='sow-menu__settings-section'><h3>" +
+        "</div>" +
+        "<div class='sow-menu__settings-col sow-menu__settings-col--secondary'>" +
+        "<section class='sow-menu__settings-section sow-menu__settings-section--account'><h3>" +
+        userSvg +
+        "<span>" +
+        esc(SOW_t("menu.account")) +
+        "</span></h3>" +
+        "<div class='sow-menu__settings-account-deck'>" +
+        accountControl +
+        inlineAccountAction +
+        "</div>" +
+        confirmSignOutBlock +
+        "</section>" +
+        "<section class='sow-menu__settings-section sow-menu__settings-section--links'><h3>" +
+        linksSvg +
+        "<span>" +
         esc(SOW_t("menu.game_links")) +
-        "</h3><nav class='sow-menu__settings-links' aria-label='" +
+        "</span></h3><nav class='sow-menu__settings-links' aria-label='" +
         esc(SOW_t("menu.game_links")) +
         "'>" +
         renderSettingsLinks() +
         "</nav></section>" +
+        renderSettingsPrivacySection(renderSettingsLink("https://shadowsofwar.io/privacy/", "menu.privacy")) +
+        "</div>" +
         "</div>" +
         "</section>" +
         "</div>"

@@ -538,6 +538,13 @@ leader_abd_al_rahman_al_ghafiqi_name = "アブド・アッラフマーン・ア�
 leader_abd_al_rahman_al_ghafiqi_historical = "アブド・アッラフマーン・イブン・アブドゥッラー・アル＝ガーフィキー"
 leader_abd_al_rahman_al_ghafiqi_civilization = "ウマイヤ朝のアル＝アンダルス"
 
+leader_tribe_wiradjuri_name = "ウィンドラディン"
+leader_tribe_wiradjuri_historical = "ウィラジュリの抵抗指導者（1800年頃–1829年）"
+leader_tribe_wiradjuri_civilization = "ウィラジュリ"
+leader_nation_yagan_name = "ヤーガン"
+leader_nation_yagan_historical = "ワジュク・ヌーンガーの戦士、抵抗運動の人物（1795年頃–1833年）"
+leader_nation_yagan_civilization = "ワジュク・ヌーンガー"
+
 [profile]
 ranked_1v1 = "ランク1対1"
 unranked = "未ランク"
@@ -1404,6 +1411,11 @@ leader_boleslaw_ii_description = "他国のプレイヤーの征服速度が25%�
 
 leader_abd_al_rahman_al_ghafiqi_ability = "ピレネー越え"
 leader_abd_al_rahman_al_ghafiqi_description = "攻撃側は山岳タイルを征服する際の兵の損失が25%少なくなります。"
+
+leader_tribe_wiradjuri_ability = "ウィラジュリの防衛"
+leader_tribe_wiradjuri_description = "より多くの領土を支配する敵に攻撃されたとき、防衛側の戦力が15%上昇します。"
+leader_nation_yagan_ability = "ワジュクの抵抗"
+leader_nation_yagan_description = "異なる民族または王国への攻撃の戦力が15%上昇します。"
 
 [ranked]
 my_rank = "自分のランク"

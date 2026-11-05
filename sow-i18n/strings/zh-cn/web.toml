@@ -538,6 +538,13 @@ leader_abd_al_rahman_al_ghafiqi_name = "阿卜杜勒-拉赫曼·加菲基"
 leader_abd_al_rahman_al_ghafiqi_historical = "阿卜杜勒-拉赫曼·伊本·阿卜杜拉·加菲基"
 leader_abd_al_rahman_al_ghafiqi_civilization = "倭马亚王朝时期的安达卢斯"
 
+leader_tribe_wiradjuri_name = "温德拉丁"
+leader_tribe_wiradjuri_historical = "维拉朱里抵抗运动领袖（约1800–1829）"
+leader_tribe_wiradjuri_civilization = "维拉朱里"
+leader_nation_yagan_name = "亚甘"
+leader_nation_yagan_historical = "瓦朱克努加尔战士与抵抗运动人物（约1795–1833）"
+leader_nation_yagan_civilization = "瓦朱克努加尔"
+
 [profile]
 ranked_1v1 = "排位 1v1"
 unranked = "未定级"
@@ -1404,6 +1411,11 @@ leader_boleslaw_ii_description = "征服外国玩家的速度加快25%。"
 
 leader_abd_al_rahman_al_ghafiqi_ability = "翻越比利牛斯山脉"
 leader_abd_al_rahman_al_ghafiqi_description = "进攻方征服山地格时损失的兵力减少25%。"
+
+leader_tribe_wiradjuri_ability = "维拉朱里防御"
+leader_tribe_wiradjuri_description = "当领土更多的对手进攻时，防守方的战力提高15%。"
+leader_nation_yagan_ability = "瓦朱克抵抗"
+leader_nation_yagan_description = "攻击其他民族或王国时，战力提高15%。"
 
 [ranked]
 my_rank = "我的段位"

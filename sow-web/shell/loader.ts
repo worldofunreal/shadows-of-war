@@ -157,7 +157,8 @@
             image.onerror = function () {
                 finish(false);
             };
-            if (isCrossOriginAssetUrl(url)) image.crossOrigin = "anonymous";
+            // Leader art is only displayed; no canvas read needs CORS. Keep the
+            // preload in normal image mode so the menu backdrop's cached URL is reusable.
             image.src = url;
         });
         const prepared: LeaderArt = { slug, variant, url, image, ready: false, promise };

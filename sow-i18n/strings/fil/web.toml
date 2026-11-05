@@ -538,6 +538,13 @@ leader_abd_al_rahman_al_ghafiqi_name = "Abd al-Rahman al-Ghafiqi"
 leader_abd_al_rahman_al_ghafiqi_historical = "ʿAbd al-Raḥmān ibn ʿAbd Allāh al-Ghāfiqī"
 leader_abd_al_rahman_al_ghafiqi_civilization = "Umayyad al-Andalus"
 
+leader_tribe_wiradjuri_name = "Windradyne"
+leader_tribe_wiradjuri_historical = "Pinuno ng paglaban ng Wiradjuri (c. 1800–1829)"
+leader_tribe_wiradjuri_civilization = "Wiradjuri"
+leader_nation_yagan_name = "Yagan"
+leader_nation_yagan_historical = "Mandirigmang Whadjuk Noongar at personalidad ng paglaban (c. 1795–1833)"
+leader_nation_yagan_civilization = "Whadjuk Noongar"
+
 [profile]
 ranked_1v1 = "Ranggo 1v1"
 unranked = "Walang ranggo"
@@ -1404,6 +1411,11 @@ leader_boleslaw_ii_description = "Mas mabilis ng 25% ang pananakop sa mga dayuha
 
 leader_abd_al_rahman_al_ghafiqi_ability = "Pagtawid sa Pyrenees"
 leader_abd_al_rahman_al_ghafiqi_description = "25% na mas kaunting kawal ang nawawala sa mga umaatake kapag sinasakop ang mga parisukat sa kabundukan."
+
+leader_tribe_wiradjuri_ability = "Depensa ng Wiradjuri"
+leader_tribe_wiradjuri_description = "Nagkakaroon ng 15% dagdag na lakas ang mga tagapagtanggol kapag sinalakay sila ng karibal na may mas malawak na teritoryo."
+leader_nation_yagan_ability = "Paglaban ng Whadjuk"
+leader_nation_yagan_description = "Nagkakaroon ng 15% dagdag na lakas ang mga pag-atake laban sa ibang pangkat o kaharian."
 
 [ranked]
 my_rank = "Ranggo ko"

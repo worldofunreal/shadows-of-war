@@ -631,7 +631,7 @@ pub fn best_shore_spawn_for_transport(
 }
 
 /// Baseline transport speed at 1x game speed.
-pub const TRANSPORT_BASE_SPEED_TILES_PER_SECOND: f64 = 4.5;
+pub const TRANSPORT_BASE_SPEED_TILES_PER_SECOND: f64 = 9.0;
 
 /// Moving fleet over water.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

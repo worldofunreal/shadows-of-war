@@ -47,11 +47,11 @@ fn default_territory_gold_tiles() -> u32 {
 }
 
 fn default_city_troop_income() -> f64 {
-    550.0
+    275.0
 }
 
 fn default_farm_troop_income() -> f64 {
-    550.0
+    275.0
 }
 
 fn default_farm_gold_income() -> f64 {

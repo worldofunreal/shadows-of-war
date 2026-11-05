@@ -538,6 +538,13 @@ leader_abd_al_rahman_al_ghafiqi_name = "Abd al-Rahman el-Gafiki"
 leader_abd_al_rahman_al_ghafiqi_historical = "Abd al-Rahman ibn Abd Allah al-Ghāfiqī"
 leader_abd_al_rahman_al_ghafiqi_civilization = "Emevî Endülüsü"
 
+leader_tribe_wiradjuri_name = "Windradyne"
+leader_tribe_wiradjuri_historical = "Wiradjuri direnişinin önderi (yaklaşık 1800–1829)"
+leader_tribe_wiradjuri_civilization = "Wiradjuri"
+leader_nation_yagan_name = "Yagan"
+leader_nation_yagan_historical = "Whadjuk Noongar savaşçısı ve direniş figürü (yaklaşık 1795–1833)"
+leader_nation_yagan_civilization = "Whadjuk Noongar"
+
 [profile]
 ranked_1v1 = "Dereceli 1'e 1"
 unranked = "Derecesiz"
@@ -1408,6 +1415,11 @@ leader_boleslaw_ii_description = "Yabancı oyuncuların fethi %25 daha hızlı i
 
 leader_abd_al_rahman_al_ghafiqi_ability = "Pirene Geçişi"
 leader_abd_al_rahman_al_ghafiqi_description = "Saldıranlar dağlık kareleri fethederken %25 daha az asker kaybeder."
+
+leader_tribe_wiradjuri_ability = "Wiradjuri savunması"
+leader_tribe_wiradjuri_description = "Daha fazla toprağı kontrol eden bir rakip saldırdığında savunmacılar %15 daha güçlü olur."
+leader_nation_yagan_ability = "Whadjuk direnişi"
+leader_nation_yagan_description = "Başka bir halk veya krallığa karşı saldırılar %15 daha güçlü olur."
 
 [ranked]
 my_rank = "Derecem"

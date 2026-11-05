@@ -538,6 +538,13 @@ leader_abd_al_rahman_al_ghafiqi_name = "عبد الرحمن الغافقي"
 leader_abd_al_rahman_al_ghafiqi_historical = "عبد الرحمن بن عبد الله الغافقي"
 leader_abd_al_rahman_al_ghafiqi_civilization = "الأندلس في العصر الأموي"
 
+leader_tribe_wiradjuri_name = "ويندرادين"
+leader_tribe_wiradjuri_historical = "زعيم مقاومة ويرادجوري (نحو 1800–1829)"
+leader_tribe_wiradjuri_civilization = "ويرادجوري"
+leader_nation_yagan_name = "ياغان"
+leader_nation_yagan_historical = "محارب من الوادجوك نونغار وشخصية في المقاومة (نحو 1795–1833)"
+leader_nation_yagan_civilization = "الوادجوك نونغار"
+
 [profile]
 ranked_1v1 = "مصنّف 1 ضد 1"
 unranked = "غير مصنّف"
@@ -1404,6 +1411,11 @@ leader_boleslaw_ii_description = "تتقدم سرعة احتلال اللاعب�
 
 leader_abd_al_rahman_al_ghafiqi_ability = "عبور جبال البرانس"
 leader_abd_al_rahman_al_ghafiqi_description = "تفقد الجيوش المهاجمة قوات أقل بنسبة 25٪ عند احتلال مربعات جبلية."
+
+leader_tribe_wiradjuri_ability = "دفاع ويرادجوري"
+leader_tribe_wiradjuri_description = "تزداد قوة المدافعين بنسبة 15% عندما يهاجمهم خصم يسيطر على أراضٍ أكثر."
+leader_nation_yagan_ability = "مقاومة الوادجوك"
+leader_nation_yagan_description = "تزداد قوة الهجمات بنسبة 15% ضد خصم ينتمي إلى شعب أو مملكة أخرى."
 
 [ranked]
 my_rank = "رتبتي"

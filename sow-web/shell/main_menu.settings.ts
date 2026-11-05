@@ -1,5 +1,8 @@
 import { esc } from "./main_menu.core.ts";
 
+const GLOBE_SVG =
+    "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='9'/><path d='M3 12h18'/><path d='M12 3a14 14 0 0 1 0 18'/><path d='M12 3a14 14 0 0 0 0 18'/></svg>";
+
 export function localeOptions() {
     const codes =
         typeof window.SOW_getSupportedLocales === "function" ? window.SOW_getSupportedLocales() : [];
@@ -17,9 +20,12 @@ export function localeOptions() {
 export function renderLocaleSettingRow(dropdownKey = "settings-language") {
     const label = SOW_t("menu.language");
     return (
-        "<div class='sow-hud__setting-row sow-hud__setting-card sow-menu__settings-dropdown-row'><span>" +
+        "<div class='sow-hud__setting-row sow-hud__setting-card sow-menu__settings-dropdown-row'>" +
+        "<span class='sow-menu__settings-row-label'>" +
+        GLOBE_SVG +
+        "<span>" +
         esc(label) +
-        "</span>" +
+        "</span></span>" +
         SOW_renderDropdown({
             key: dropdownKey,
             className: "sow-menu__settings-dropdown",

@@ -13779,6 +13779,46 @@ sources = [
   { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
 ]
 
+[articles.article_windradyne_en]
+text = "Windradyne was a Wiradjuri resistance leader in central-western New South Wales during the conflicts known as the Bathurst Wars."
+title = "Windradyne"
+lang = "en"
+url = "https://adb.anu.edu.au/biography/windradyne-13251"
+intro = [
+  "Windradyne (c. 1800–1829) was a Wiradjuri resistance leader from the upper Macquarie River region of central-western New South Wales. British settlement expanded into Wiradjuri country in the 1820s, and the resulting conflict around Bathurst is often called the Bathurst Wars.",
+  "The historical record is uneven. Much of what is written about Windradyne comes from colonial sources, which described him as a leader and sometimes blamed him for violence. The Australian Dictionary of Biography cautions that these accounts must be read in their colonial context; details of his death and its date have also been reported differently.",
+]
+sections = [
+  { "title" = "Resistance in Wiradjuri country", "paragraphs" = [
+      "As settlers moved beyond the Bathurst region, Wiradjuri communities faced the loss of access to their country, food sources, and waterways. Conflict intensified in the early 1820s. Museums and historical accounts describe Windradyne as one of the Wiradjuri leaders who resisted this expansion. His significance rests on the collective defense of Wiradjuri land, rather than on a documented claim that he ruled every Wiradjuri community.",
+      "The conflicts known as the Bathurst Wars involved several years of resistance and reprisals. Colonial accounts often reduced Indigenous resistance to the actions of particular individuals; they did not record the full range of Wiradjuri decision-making or perspectives. Windradyne's name became especially prominent in those records, while the experiences of the communities he represented remain less fully documented.",
+    ] },
+  { "title" = "The historical record", "paragraphs" = [
+      "Colonists also called Windradyne “Saturday,” a name that appears in contemporary records. Descriptions that label him an instigator come from those same colonial accounts and should not be treated as a neutral account of the conflict. The surviving evidence supports his place as a Wiradjuri resistance leader, but leaves uncertainty about particular events and the circumstances of his death in 1829.",
+      "Windradyne is remembered as a figure of Wiradjuri resistance during the expansion of British settlement in New South Wales. His story is best understood alongside the wider history of Wiradjuri communities and the limits of the written record, which was largely produced by the colonial society against which they were defending their country.",
+    ] },
+]
+
+[articles.article_yagan_en]
+text = "Yagan was a Whadjuk Noongar warrior in the Swan River region whose name became closely associated with resistance to British settlement."
+title = "Yagan"
+lang = "en"
+url = "https://ia.anu.edu.au/biography/yagan-2826"
+intro = [
+  "Yagan (c. 1795–1833) was a Whadjuk Noongar man from the Swan River region of Western Australia. Historical accounts describe him as a skilled spear warrior who took part in resistance after the British founded the Swan River Colony in 1829. His life is chiefly recorded in colonial documents, which reflect the viewpoint of the settlers who were taking Noongar land.",
+  "The Australian Dictionary of Biography presents an important limit to how his role should be described: Yagan was not a chief, and the evidence does not show him seeking to unite the local groups under one political leader. He was a prominent warrior and resistance figure, but should not be portrayed as a sovereign ruler of all Noongar people.",
+]
+sections = [
+  { "title" = "Whadjuk resistance", "paragraphs" = [
+      "Yagan lived in Whadjuk country, within the broader Noongar region around the Swan and Canning Rivers. The arrival of British settlers brought conflict over land and resources. Colonial records place Yagan among the people who resisted the new settlement and describe his skill with a spear. These sources tell us about his actions, but they were written by colonists and cannot fully represent Whadjuk or other Noongar perspectives.",
+      "Yagan's resistance took place within a wider Noongar response to colonisation. Noongar communities were diverse, and the evidence does not support treating them as a single political unit under Yagan's command. His historical importance comes from his own role as a warrior and from the way his story became associated with the defense of Noongar country.",
+    ] },
+  { "title" = "Death and remembrance", "paragraphs" = [
+      "Yagan was killed by settlers in 1833 after colonial authorities placed a bounty on him. His death became a well-known episode in the history of the Swan River Colony and of Noongar resistance. Later accounts often called him a leader, but that description should not erase the distinction between a prominent warrior and a chief with authority over all local groups.",
+      "Yagan remains an important figure in Noongar history and in public discussions of colonisation, resistance, and the treatment of Indigenous people in historical records. Reading his story with care means recognising both the documented actions attributed to him and the boundaries of a record created largely by his opponents.",
+    ] },
+]
+
 [leaders.en]
 caesar = "article_958dfa969fd8f92d"
 cleopatra = "article_2d80f84e9d379a2e"
@@ -13861,6 +13901,8 @@ matoaka = "article_5a55ad9791296bb9"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_en"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.es]
 caesar = "article_2d118dcb71e97315"
@@ -13944,6 +13986,8 @@ matoaka = "article_5a55ad9791296bb9"
 burebista = "article_f31bb8ed0f8bbdb6"
 boleslaw_ii = "article_0b8c7b7c1bf5207d"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_es"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.fr]
 caesar = "article_1f320d58da5e1836"
@@ -14027,6 +14071,8 @@ matoaka = "article_3eed1e78becc1afb"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_5ba775318ef9fed1"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_fr"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.de]
 caesar = "article_958dfa969fd8f92d"
@@ -14110,6 +14156,8 @@ matoaka = "article_c2d399f3ca8e15f6"
 burebista = "article_c8a3307d1c8331a4"
 boleslaw_ii = "article_fa61c8d15113252a"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_de"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.it]
 caesar = "article_c0a45f5281cc7699"
@@ -14193,6 +14241,8 @@ matoaka = "article_2715496637460c3b"
 burebista = "article_d395fa1dc200d604"
 boleslaw_ii = "article_ebac36937dd75c06"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_it"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.tr]
 caesar = "article_958dfa969fd8f92d"
@@ -14276,6 +14326,8 @@ matoaka = "article_5a55ad9791296bb9"
 burebista = "article_b7a8c875d611df4c"
 boleslaw_ii = "article_ebac36937dd75c06"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_tr"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.zh-CN]
 caesar = "article_41502e8862c4d0cb"
@@ -14359,6 +14411,8 @@ matoaka = "article_235f0593be7f5ffb"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_zh_cn"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.ja]
 caesar = "article_f8f991956ad63a2d"
@@ -14442,6 +14496,8 @@ matoaka = "article_62b0d1b702d9792c"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_ja"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.ko]
 caesar = "article_958dfa969fd8f92d"
@@ -14525,6 +14581,8 @@ matoaka = "article_e3ea177ae0b3d362"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_ko"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.ar]
 caesar = "article_958dfa969fd8f92d"
@@ -14608,6 +14666,8 @@ matoaka = "article_f8549d6e7bb262f2"
 burebista = "article_a63542510368c748"
 boleslaw_ii = "article_ebac36937dd75c06"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_ar"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.ru]
 caesar = "article_d2c71771aaca05ea"
@@ -14691,6 +14751,8 @@ matoaka = "article_d57c8edaeba408bf"
 burebista = "article_ac662fd078bf91c3"
 boleslaw_ii = "article_39b89fbe687969de"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_ru"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.vi]
 caesar = "article_cf81c2d30a248557"
@@ -14774,6 +14836,8 @@ matoaka = "article_f4e695193bb7690a"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_vi"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.id]
 caesar = "article_958dfa969fd8f92d"
@@ -14857,6 +14921,8 @@ matoaka = "article_5a55ad9791296bb9"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_bf5973d18390907d"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_id"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.fil]
 caesar = "article_c2c77d5178a1ed5b"
@@ -14940,6 +15006,8 @@ matoaka = "article_5a55ad9791296bb9"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_fil"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"
 
 [leaders.pt-BR]
 caesar = "article_5feff0b7dce369c5"
@@ -15023,3 +15091,5 @@ matoaka = "article_243adee95405a892"
 burebista = "article_57d0607a75ad9cd8"
 boleslaw_ii = "article_ebac36937dd75c06"
 abd_al_rahman_al_ghafiqi = "article_al_ghafiqi_pt_br"
+tribe_wiradjuri = "article_windradyne_en"
+nation_yagan = "article_yagan_en"

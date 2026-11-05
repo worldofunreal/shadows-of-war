@@ -56,18 +56,45 @@ test("in-game GUI panels, tracks, and semantic fills share the tactical theme to
     assert.match(controlsCss, /--sow-fill-pending-wash:/);
     assert.match(controlsCss, /--sow-fill-construction-gradient:/);
 
-    assert.match(menuCss["main_menu.base.css"], /\.sow-menu__topbar\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
-    assert.match(menuCss["main_menu.layout.css"], /\.sow-menu__main-nav\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
-    assert.match(menuCss["main_menu.lobbies.css"], /\.sow-menu__lobby-chip,[\s\S]*?background: var\(--sow-tactical-surface-compact-bg\)/);
-    assert.match(menuCss["main_menu.create.css"], /\.sow-menu__custom-card\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
-    assert.match(menuCss["main_menu.queue.css"], /\.sow-menu__queue-summary-card\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
-    assert.match(menuCss["main_menu.settings.css"], /\.sow-menu__settings-modal\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
-    assert.match(menuCss["main_menu.campaign.css"], /\.sow-campaign__episode\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
+    assert.match(
+        menuCss["main_menu.base.css"],
+        /\.sow-menu__topbar\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/,
+    );
+    assert.match(
+        menuCss["main_menu.layout.css"],
+        /\.sow-menu__main-nav\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/,
+    );
+    assert.match(
+        menuCss["main_menu.lobbies.css"],
+        /\.sow-menu__lobby-chip,[\s\S]*?background: var\(--sow-tactical-surface-compact-bg\)/,
+    );
+    assert.match(
+        menuCss["main_menu.create.css"],
+        /\.sow-menu__custom-card\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/,
+    );
+    assert.match(
+        menuCss["main_menu.queue.css"],
+        /\.sow-menu__queue-summary-card\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/,
+    );
+    assert.match(
+        menuCss["main_menu.settings.css"],
+        /\.sow-menu__settings-modal\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/,
+    );
+    assert.match(
+        menuCss["main_menu.campaign.css"],
+        /\.sow-campaign__episode\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/,
+    );
     assert.match(profileCss, /--sow-profile-panel: var\(--sow-tactical-surface-card-bg\)/);
     assert.match(hudCss, /--sow-nameplate-troop-fill: var\(--sow-fill-army-gradient\)/);
     assert.match(hudCss, /var\(--sow-fill-pending-wash\)/);
-    assert.match(hudCss, /\.sow-hud__building-progress-fill\s*\{[^}]*background: var\(--sow-fill-construction-gradient\)/);
-    assert.match(tutorialCss, /\.sow-story__dialog\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/);
+    assert.match(
+        hudCss,
+        /\.sow-hud__building-progress-fill\s*\{[^}]*background: var\(--sow-fill-construction-gradient\)/,
+    );
+    assert.match(
+        tutorialCss,
+        /\.sow-story__dialog\s*\{[^}]*background: var\(--sow-tactical-surface-card-bg\)/,
+    );
 
     const themedUiCss = [
         menuCss["main_menu.base.css"],
@@ -383,15 +410,21 @@ test("header keeps only the nickname and sizes it to the available space", () =>
 
     const baseCss = menuCss["main_menu.base.css"];
     const layoutCss = menuCss["main_menu.layout.css"];
-    assert.match(baseCss, /\.sow-menu__name\s*\{[^}]*min-width:\s*0;[^}]*font-size:\s*var\(--sow-topbar-name-size\)/);
+    assert.match(
+        baseCss,
+        /\.sow-menu__name\s*\{[^}]*min-width:\s*0;[^}]*font-size:\s*var\(--sow-topbar-name-size\)/,
+    );
     assert.match(
         baseCss,
         /#sow-menu \.sow-menu__name input\s*\{[^}]*width:\s*100%;[^}]*text-overflow:\s*ellipsis/,
     );
-    const nameSizes = [...(baseCss + layoutCss).matchAll(/--sow-topbar-name-size:\s*(\d+)px/g)].map(
-        (match) => Number(match[1]),
+    const nameSizes = [...(baseCss + layoutCss).matchAll(/--sow-topbar-name-size:\s*(\d+)px/g)].map((match) =>
+        Number(match[1]),
     );
-    assert.ok(nameSizes.length >= 4 && nameSizes.every((size) => size >= 16 && size <= 24), String(nameSizes));
+    assert.ok(
+        nameSizes.length >= 4 && nameSizes.every((size) => size >= 16 && size <= 24),
+        String(nameSizes),
+    );
 });
 
 test("desktop navigation stacks battle, heroes, profile, and shop", () => {
@@ -465,10 +498,7 @@ test("match history row shows the leader and verified KDA while provisional exit
 });
 
 test("settings panel keeps only useful controls and real account state", () => {
-    const settings = [
-        renderSettingsBody(surfacesSource),
-        renderSettingsBody(pokiSource),
-    ];
+    const settings = [renderSettingsBody(surfacesSource), renderSettingsBody(pokiSource)];
     for (const body of settings) {
         assert.match(body, /menu\.settings/);
         assert.match(body, /menu\.settings_preferences/);
@@ -486,18 +516,40 @@ test("settings panel keeps only useful controls and real account state", () => {
             /system_configuration|menu\.done|master_audio|settings-mute|account-row|WOU-ID|\+1/,
         );
     }
-    assert.match(
-        renderSettingsBody(jestSource),
-        /renderSettingsPrivacySection/,
-    );
-    assert.match(
-        renderSettingsBody(jestSource),
-        /renderLocaleSettingRow\(\)/,
-    );
+    assert.match(renderSettingsBody(jestSource), /renderSettingsPrivacySection/);
+    assert.match(renderSettingsBody(jestSource), /renderLocaleSettingRow\(\)/);
     assert.match(settingsSource, /SOW_t\("menu\.language"\)/);
     assert.match(settingsSource, /key: dropdownKey/);
     assert.match(settingsSource, /SOW_renderDropdown\([\s\S]*?options: localeOptions\(\)/);
     assert.match(settingsSource, /setting: "locale"/);
+    assert.match(settingsSource, /sow-menu__settings-row-icon/);
+});
+
+test("settings command deck supports desktop 2-column, mobile vertical full-screen, and compact horizontal viewports", () => {
+    const settingsCss = menuCss["main_menu.settings.css"];
+    assert.match(settingsCss, /\.sow-menu__settings-modal\s*\{[^}]*backdrop-filter:\s*none;/);
+    assert.match(
+        settingsCss,
+        /\.sow-menu__settings-body\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1\.08fr\)\s*minmax\(0,\s*0\.92fr\)/,
+    );
+    assert.match(
+        settingsCss,
+        /@media\s*\(max-width:\s*680px\),\s*\(orientation:\s*portrait\)[\s\S]*?\.sow-menu__settings-modal\s*\{[^}]*height:\s*100%;[^}]*max-height:\s*none;/,
+    );
+    assert.match(
+        settingsCss,
+        /@media\s*\(orientation:\s*landscape\)\s*and\s*\(max-height:\s*640px\),\s*\(orientation:\s*landscape\)\s*and\s*\(max-width:\s*960px\)/,
+    );
+    for (const body of [
+        renderSettingsBody(surfacesSource),
+        renderSettingsBody(pokiSource),
+        renderSettingsBody(jestSource),
+    ]) {
+        assert.match(body, /sow-menu__settings-col--primary/);
+        assert.match(body, /sow-menu__settings-col--secondary/);
+        assert.match(body, /sow-menu__settings-head-icon/);
+        assert.match(body, /sow-menu__settings-row-icon/);
+    }
 });
 
 test("settings social links include SVGs and preserve web and Android link behavior", () => {
@@ -1212,11 +1264,7 @@ test("weekly free rotation always keeps its localized hero tag", () => {
             path.join(shell, `../../sow-i18n/strings/${locale}/web.toml`),
             "utf8",
         );
-        assert.match(
-            catalog,
-            /^weekly_free_rotation\s*=/m,
-            `the free-rotation tag exists in ${locale}`,
-        );
+        assert.match(catalog, /^weekly_free_rotation\s*=/m, `the free-rotation tag exists in ${locale}`);
     }
 });
 
@@ -1316,7 +1364,10 @@ test("hero selection stacks the skill below identity and the home briefing stays
     assert.doesNotMatch(compact, /font-size:\s*10px|32px/);
     assert.match(profileCss, /--skill-title:\s*calc\(var\(--skill-body\)\s*\*\s*1\.5\)/);
     assert.match(profileCss, /\.sow-hero-briefing__ability-name\s*\{[^}]*font-size:\s*14px/);
-    assert.match(profileCss, /\.sow-menu__leader-copy \.sow-hero-briefing__ability-name\s*\{[^}]*font-size:\s*clamp\(16px/);
+    assert.match(
+        profileCss,
+        /\.sow-menu__leader-copy \.sow-hero-briefing__ability-name\s*\{[^}]*font-size:\s*clamp\(16px/,
+    );
     assert.match(profileCss, /\.sow-menu__leader-copy \.sow-hero-briefing__icon-slot\s*\{[^}]*width:\s*56px/);
     assert.doesNotMatch(
         compact,
@@ -1901,7 +1952,6 @@ test("ranked result acknowledges before replay, ignores duplicate presses, and t
     assert.ok(again.disabled && close.disabled);
 });
 
-
 test("header nameplate owns avatar, nickname, level and XP bar; balances and settings sit at the end", () => {
     const source = shellSource.slice(
         shellSource.indexOf("function headerXp("),
@@ -2146,10 +2196,22 @@ test("reduced motion suppresses counter effects after splitting the header", () 
 });
 
 test("heroes skill scales its title above its body, and skins live with the roster filters", () => {
-    assert.match(profileCss, /\.sow-heroes__featured\s*\{[^}]*--skill-title:\s*calc\(var\(--skill-body\) \* 1\.5\)/);
-    assert.match(profileCss, /\.sow-heroes__featured \.sow-hero-briefing__ability-name\s*\{\s*font-size:\s*var\(--skill-title\)/);
-    assert.match(profileCss, /\.sow-heroes__featured \.sow-hero-briefing__description\s*\{\s*font-size:\s*var\(--skill-body\)/);
-    assert.match(profileCss, /\.sow-heroes__featured \.sow-hero-briefing__icon-slot\s*\{[^}]*width:\s*var\(--skill-icon\)/);
+    assert.match(
+        profileCss,
+        /\.sow-heroes__featured\s*\{[^}]*--skill-title:\s*calc\(var\(--skill-body\) \* 1\.5\)/,
+    );
+    assert.match(
+        profileCss,
+        /\.sow-heroes__featured \.sow-hero-briefing__ability-name\s*\{\s*font-size:\s*var\(--skill-title\)/,
+    );
+    assert.match(
+        profileCss,
+        /\.sow-heroes__featured \.sow-hero-briefing__description\s*\{\s*font-size:\s*var\(--skill-body\)/,
+    );
+    assert.match(
+        profileCss,
+        /\.sow-heroes__featured \.sow-hero-briefing__icon-slot\s*\{[^}]*width:\s*var\(--skill-icon\)/,
+    );
     const bodies = [...profileCss.matchAll(/--skill-body:\s*(\d+)px/g)].map((match) => Number(match[1]));
     assert.ok(bodies.length >= 5, "every heroes breakpoint sets its own body size");
     assert.ok(Math.min(...bodies) >= 11, "no heroes breakpoint drops the skill text below 11px");
@@ -2343,7 +2405,6 @@ test("compact account header bounds bars, padding and balance glyphs without shr
     assert.equal(formatCompactNumber(1e12), "1T");
 });
 
-
 test("main navigation keeps a single outer frame across battle, profile, heroes and store", () => {
     const start = shellSource.indexOf("function renderFrame(");
     const end = shellSource.indexOf("function panelFromMarkup(", start);
@@ -2351,18 +2412,30 @@ test("main navigation keeps a single outer frame across battle, profile, heroes 
         screenBackdropClass: (screen) => "backdrop-" + screen,
         renderTopbar: () => "<header data-progression></header>",
         renderScreenPanel: (screen) => "<main data-screen-panel='" + screen + "'></main>",
-        renderMainNav: () => "<nav></nav>", screenNav: (screen) => screen,
-        renderMenuAttribution: () => "", renderPasswordModal: () => "", renderProfileDetail: () => "",
+        renderMainNav: () => "<nav></nav>",
+        screenNav: (screen) => screen,
+        renderMenuAttribution: () => "",
+        renderPasswordModal: () => "",
+        renderProfileDetail: () => "",
     });
     for (const screen of ["home", "profile", "heroes", "store"]) {
         const markup = renderFrame(screen);
         assert.match(markup, /<div class='sow-menu__shell'><header data-progression>/, screen);
         assert.match(markup, new RegExp("data-screen-panel='" + screen + "'"));
     }
-    assert.doesNotMatch(profileCss, /\.sow-menu__shell/,
-        "screen styles must not resize the common header and navigation container");
-    assert.doesNotMatch(menuCss["main_menu.layout.css"], /width: min\([^;]*680px\)/,
-        "battle must not retain a narrower outer frame on tablets");
-    const chrome = shellSource.slice(shellSource.indexOf("function updateFrameChrome("), shellSource.indexOf("export function activeScreenPanel("));
+    assert.doesNotMatch(
+        profileCss,
+        /\.sow-menu__shell/,
+        "screen styles must not resize the common header and navigation container",
+    );
+    assert.doesNotMatch(
+        menuCss["main_menu.layout.css"],
+        /width: min\([^;]*680px\)/,
+        "battle must not retain a narrower outer frame on tablets",
+    );
+    const chrome = shellSource.slice(
+        shellSource.indexOf("function updateFrameChrome("),
+        shellSource.indexOf("export function activeScreenPanel("),
+    );
     assert.doesNotMatch(chrome, /shell\.className|screenShellClass/);
 });
