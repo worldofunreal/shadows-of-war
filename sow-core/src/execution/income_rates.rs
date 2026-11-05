@@ -174,10 +174,10 @@ mod tests {
         assert!((gold_per_game_minute(cfg.gold_base_income) - 60.0).abs() < 1e-9);
         assert!((gold_per_game_minute(cfg.factory_gold_income) - 60.0 * (8.0 / 7.0)).abs() < 1e-9);
         assert_eq!(cfg.troop_base_income, 175.0);
-        assert_eq!(cfg.city_troop_income, 550.0);
-        assert_eq!(cfg.farm_troop_income, 550.0);
-        assert_eq!(cfg.hero_factory_troop_income, 550.0);
-        assert_eq!(cfg.hero_port_troop_income, 550.0);
+        assert_eq!(cfg.city_troop_income, 275.0);
+        assert_eq!(cfg.farm_troop_income, 275.0);
+        assert_eq!(cfg.hero_factory_troop_income, 275.0);
+        assert_eq!(cfg.hero_port_troop_income, 275.0);
         assert_eq!(cfg.city_max_troops, 3_300.0);
         assert_eq!(cfg.territory_troop_amount, 0.75);
         assert_eq!(cfg.max_troops_scale, 55.0);
@@ -199,7 +199,7 @@ mod tests {
         };
         let troop_rate = troop_income_per_second(0, agg, Leader::of("caesar"), &cfg);
         assert!(
-            ((troop_rate - cfg.troop_base_income) * cfg.global_speed_multiplier - 572.0).abs()
+            ((troop_rate - cfg.troop_base_income) * cfg.global_speed_multiplier - 286.0).abs()
                 < 1e-10
         );
     }

@@ -583,26 +583,31 @@ function isBlockedAccountId(accountId: string) {
 function profileLeaderCard(leader: ProfileLeader) {
     const summary = leader || {};
     const leaderInfo = leaderById(summary.leader);
+    const winRate = Math.round((summary.win_rate || 0) * 100);
+    const level = 1 + Math.floor((summary.xp || 0) / 100);
     return (
         "<article class='sow-profile__leader'>" +
+        "<div class='sow-profile__leader-avatar-frame'>" +
         "<img src='" +
         esc(asset("gameplay/avatars/" + leaderArtSlug(leaderInfo) + ".webp")) +
-        "' alt='' width='48' height='48' loading='lazy'>" +
-        "<div><strong>" +
-        esc(leaderDisplayName(leaderInfo)) +
-        "</strong>" +
+        "' alt='' width='52' height='52' loading='lazy'>" +
+        "<span class='sow-profile__leader-badge'>" + esc(level) + "</span>" +
+        "</div>" +
+        "<div class='sow-profile__leader-info'>" +
+        "<div class='sow-profile__leader-header'>" +
+        "<strong>" + esc(leaderDisplayName(leaderInfo)) + "</strong>" +
+        "<b>" + esc(SOW_t("profile.level", { level: level })) + "</b>" +
+        "</div>" +
+        "<div class='sow-profile__leader-track' aria-hidden='true'><i style='width:" + winRate + "%'></i></div>" +
         "<span>" +
         esc(
             SOW_t("profile.commander_stats", {
                 matches: summary.matches_played || 0,
                 wins: summary.wins || 0,
-                rate: Math.round((summary.win_rate || 0) * 100),
+                rate: winRate,
             }),
         ) +
         "</span></div>" +
-        "<b>" +
-        esc(SOW_t("profile.level", { level: 1 + Math.floor((summary.xp || 0) / 100) })) +
-        "</b>" +
         "</article>"
     );
 }
@@ -637,19 +642,27 @@ function profileMatchRow(match: ProfileMatch) {
     const leader = match.leader ? leaderById(match.leader) : null;
     const context =
         profileMatchDate(match.completed_at) + " · " + profileMatchDuration(match.duration_seconds);
+    const statusModifier = verified ? (match.won ? "is-win" : "is-loss") : "is-pending";
+    const deltaMarkup =
+        match.rating_delta == null
+            ? ""
+            : "<span class='sow-profile__match-delta " + (match.rating_delta > 0 ? "is-positive" : match.rating_delta < 0 ? "is-negative" : "") + "'>" +
+              (match.ranked_points_breakdown
+                  ? esc(SOW_t("lobbies.rank_score", { score: (match.rating_delta > 0 ? "+" : "") + match.rating_delta }))
+                  : (match.rating_delta > 0 ? "+" : "") + esc(match.rating_delta) + " MMR") +
+              "</span>";
     return (
-        "<button type='button' class='sow-profile__match' data-command='open_match' data-match-id='" +
+        "<button type='button' class='sow-profile__match " + statusModifier + "' data-command='open_match' data-match-id='" +
         esc(match.match_id) +
         "'>" +
-        "<span class='sow-profile__match-result " +
-        (verified ? (match.won ? "is-win" : "is-loss") : "is-pending") +
-        "'>" +
+        "<span class='sow-profile__match-blade' aria-hidden='true'></span>" +
+        "<span class='sow-profile__match-result " + statusModifier + "'>" +
         esc(result) +
         "</span>" +
         (leader
-            ? "<img class='sow-profile__match-avatar' src='" +
+            ? "<div class='sow-profile__match-avatar-frame'><img class='sow-profile__match-avatar' src='" +
               esc(asset("gameplay/avatars/" + leaderArtSlug(leader) + ".webp")) +
-              "' alt='' width='40' height='40' loading='lazy'>"
+              "' alt='' width='44' height='44' loading='lazy'></div>"
             : "<span class='sow-profile__match-avatar' aria-hidden='true'></span>") +
         "<span class='sow-profile__match-context'><strong>" +
         esc(mode) +
@@ -678,9 +691,11 @@ function profileMatchRow(match: ProfileMatch) {
               esc(SOW_t("profile.kda"))
             : "") +
         "</small></span>" +
+        deltaMarkup +
         "<span class='sow-profile__match-time'>" +
         esc(context) +
         "</span>" +
+        "<span class='sow-profile__match-chevron' aria-hidden='true'>›</span>" +
         "</button>"
     );
 }
@@ -727,8 +742,9 @@ function profileHeaderMarkup(data: ProfileData | null, own: boolean | null) {
           esc(SOW_t("profile.your_profile")) +
           "</button>"
         : "";
+    const heroArt = profileHeroImage(data && data.preferred_leader);
     return (
-        "<section class='sow-profile__heading' data-profile-heading data-profile-cover aria-labelledby='sow-profile-title'>" +
+        "<section class='sow-profile__heading' data-profile-heading data-profile-cover aria-labelledby='sow-profile-title' style=\"--sow-hero:url('" + esc(heroArt) + "')\">" +
         "<div class='sow-profile__cover-overlay'></div>" +
         "<div class='sow-profile__heading-top'>" +
         "<div class='sow-profile__breadcrumbs'>" +
@@ -744,7 +760,9 @@ function profileHeaderMarkup(data: ProfileData | null, own: boolean | null) {
         "</div>" +
         "<div class='sow-profile__identity-card'>" +
         "<div class='sow-profile__avatar-container'>" +
+        "<div class='sow-profile__avatar-medallion'>" +
         "<img class='sow-profile__avatar' data-profile-avatar src='" + esc(avatarUrl) + "' alt='' width='88' height='88'>" +
+        "</div>" +
         "<div class='sow-profile__level' title='" + esc(SOW_t("profile.level_label")) + "'><small>" + esc(SOW_t("profile.level_label")) + "</small><strong data-profile-level>" + esc(level) + "</strong></div>" +
         "</div>" +
         "<div class='sow-profile__identity-main'>" +
@@ -781,11 +799,27 @@ function profileStatsRibbonMarkup(data: ProfileData | null) {
     const laurels = profileStat(data.laurels);
     return (
         "<div class='sow-profile__stats' data-profile-stats>" +
-        "<div class='sow-profile__stat-cell'><strong>" + esc(matches) + "</strong><span>" + esc(SOW_t("profile.matches")) + "</span></div>" +
-        "<div class='sow-profile__stat-cell'><strong>" + esc(wins) + "</strong><span>" + esc(SOW_t("profile.wins")) + "</span></div>" +
-        "<div class='sow-profile__stat-cell'><strong>" + esc(winRate) + "%</strong><span>" + esc(SOW_t("profile.win_rate")) + "</span></div>" +
-        "<div class='sow-profile__stat-cell sow-profile__stat-laurels'><strong>" + esc(laurels) + "</strong><span>" + esc(SOW_t("profile.laurels")) + "</span></div>" +
-        "<div class='sow-profile__stat-cell sow-profile__stat-kda'><strong><i>" + esc(data.kills || 0) + "</i><i>" + esc(data.deaths || 0) + "</i><i>" + esc(data.assists || 0) + "</i></strong><span>" + esc(SOW_t("profile.kda")) + "</span></div>" +
+        "<div class='sow-profile__stat-cell sow-profile__stat-matches'>" +
+        "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14.5 17.5L3 6V3h3l11.5 11.5'/><path d='m13 19 6-6'/><path d='M16 16l4 4'/><path d='M19 21l2-2'/></svg></span>" +
+        "<div class='sow-profile__stat-body'><strong>" + esc(matches) + "</strong><span>" + esc(SOW_t("profile.matches")) + "</span></div>" +
+        "</div>" +
+        "<div class='sow-profile__stat-cell sow-profile__stat-wins'>" +
+        "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9H4.5a2.5 2.5 0 0 1 0-5H6'/><path d='M18 9h1.5a2.5 2.5 0 0 0 0-5H18'/><path d='M4 22h16'/><path d='M10 14.66V17c0 .55-.45 1-1 1H8c-.55 0-1 .45-1 1v1h10v-1c0-.55-.45-1-1-1h-1c-.55 0-1-.45-1-1v-2.34'/><path d='M18 4H6v7a6 6 0 0 0 12 0V4Z'/></svg></span>" +
+        "<div class='sow-profile__stat-body'><strong>" + esc(wins) + "</strong><span>" + esc(SOW_t("profile.wins")) + "</span></div>" +
+        "</div>" +
+        "<div class='sow-profile__stat-cell sow-profile__stat-winrate'>" +
+        "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='m4.93 4.93 4.24 4.24'/><path d='m14.83 9.17 4.24-4.24'/><path d='m14.83 14.83 4.24 4.24'/><path d='m9.17 14.83-4.24 4.24'/><circle cx='12' cy='12' r='4'/></svg></span>" +
+        "<div class='sow-profile__stat-body'><strong>" + esc(winRate) + "%</strong><span>" + esc(SOW_t("profile.win_rate")) + "</span>" +
+        "<div class='sow-profile__stat-gauge' aria-hidden='true'><i style='width:" + winRate + "%'></i></div></div>" +
+        "</div>" +
+        "<div class='sow-profile__stat-cell sow-profile__stat-laurels'>" +
+        "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 3a9 9 0 0 0-5 8c0 4.97 3.58 9 8 9M16 3a9 9 0 0 1 5 8c0 4.97-3.58 9-8 9M9 7l3 3M15 7l-3 3M8 12l4 2M16 12l-4 2'/></svg></span>" +
+        "<div class='sow-profile__stat-body'><strong>" + esc(laurels) + "</strong><span>" + esc(SOW_t("profile.laurels")) + "</span></div>" +
+        "</div>" +
+        "<div class='sow-profile__stat-cell sow-profile__stat-kda'>" +
+        "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='22' y1='12' x2='18' y2='12'/><line x1='6' y1='12' x2='2' y2='12'/><line x1='12' y1='6' x2='12' y2='2'/><line x1='12' y1='22' x2='12' y2='18'/></svg></span>" +
+        "<div class='sow-profile__stat-body'><strong><i>" + esc(data.kills || 0) + "</i><i>" + esc(data.deaths || 0) + "</i><i>" + esc(data.assists || 0) + "</i></strong><span>" + esc(SOW_t("profile.kda")) + "</span></div>" +
+        "</div>" +
         "</div>"
     );
 }

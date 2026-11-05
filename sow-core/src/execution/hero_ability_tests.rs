@@ -227,7 +227,18 @@ fn attack_with_rival_troops(
     ticks: u32,
     rival_troops: f64,
 ) -> Marks {
-    engine.state.player_mut(1).unwrap().troops = 20_000.0;
+    attack_with_troops(engine, target_owner, ticks, 20_000.0, 10_000.0, rival_troops)
+}
+
+fn attack_with_troops(
+    engine: &mut SowEngine,
+    target_owner: u16,
+    ticks: u32,
+    attacker_troops: f64,
+    army: f64,
+    rival_troops: f64,
+) -> Marks {
+    engine.state.player_mut(1).unwrap().troops = attacker_troops;
     if let Some(defender) = engine.state.player_mut(2) {
         defender.troops = rival_troops;
     }
@@ -235,7 +246,7 @@ fn attack_with_rival_troops(
         player_id: 1,
         intent: GameplayIntent::Attack(AttackIntent {
             target_owner,
-            troops: Some(10_000.0),
+            troops: Some(army),
         }),
     }]);
     let mut marks = [0; 4];
@@ -263,10 +274,22 @@ fn neutral_conquest(leader: Leader) -> (u32, i64) {
 fn district_income(leader: Leader, district: District, resource: Resource) -> f64 {
     let mut agg = BuildingAggregate::default();
     match district {
-        District::City => agg.city_levels = 3,
-        District::Factory => agg.factory_levels = 3,
-        District::Port => agg.port_income_level_weight = 3.0,
-        District::Farm => agg.farm_income_level_weight = 3.0,
+        District::City => {
+            agg.city_levels = 3;
+            agg.city_income_level_weight = 3.0;
+        }
+        District::Factory => {
+            agg.factory_levels = 3;
+            agg.factory_income_level_weight = 3.0;
+        }
+        District::Port => {
+            agg.port_levels = 3;
+            agg.port_income_level_weight = 3.0;
+        }
+        District::Farm => {
+            agg.farm_levels = 3;
+            agg.farm_income_level_weight = 3.0;
+        }
     }
     let cfg = GameConfig::default();
     match resource {
@@ -313,10 +336,12 @@ fn attacker_troops_against_tower(defender: Leader) -> (f64, Marks) {
     let mut engine = arena(24, 4, Leader::of("cleopatra"), Some(defender));
     // Amplify the tower signal so a 50% hero modifier is measurable over this short fight.
     engine.state.config.tower_strength = 1.0;
-    add_building(&mut engine, 2, 6, 12, BuildingKind::Tower);
+    for y in [2, 12, 22] {
+        add_building(&mut engine, 2, 6, y, BuildingKind::Tower);
+    }
     engine.refresh_defense_grid();
     let marks = attack(&mut engine, 2, 20);
-    (attacker_troops_left(&engine) as f64, marks)
+    (attacker_troop_total(&engine), marks)
 }
 
 fn elimination_gold(conqueror: Leader) -> (f64, Marks) {
@@ -491,9 +516,13 @@ fn shape_subject(engine: &mut SowEngine, subject: u16, target: Target) {
 /// other target is a rival (player 2) shaped to fit it, so the ability's rule decides.
 /// Returns the engine and the marks shown.
 fn attack_target(attacker: Leader, target: Target) -> (SowEngine, Marks) {
+    attack_target_for_ticks(attacker, target, 20)
+}
+
+fn attack_target_for_ticks(attacker: Leader, target: Target, ticks: u32) -> (SowEngine, Marks) {
     let mut engine = launch_target(attacker, target);
     let mut marks = [0; 4];
-    tick_counting(&mut engine, 20, &mut marks);
+    tick_counting(&mut engine, ticks, &mut marks);
     (engine, marks)
 }
 
@@ -511,7 +540,9 @@ fn launch_target(attacker: Leader, target: Target) -> SowEngine {
         };
         let mut engine = arena(width, own, attacker, Some(Leader::of("caesar")));
         shape_subject(&mut engine, 2, target);
-        let rival_troops = if target == Target::Outnumbered {
+        let rival_troops = if target == Target::Outnumbering {
+            20_000.0
+        } else if target == Target::Outnumbered {
             5_000.0
         } else {
             20_000.0
@@ -522,11 +553,16 @@ fn launch_target(attacker: Leader, target: Target) -> SowEngine {
         defender.troops = rival_troops;
     }
     engine.state.player_mut(1).unwrap().troops = 20_000.0;
+    let army = if target == Target::Outnumbering {
+        1_000.0
+    } else {
+        10_000.0
+    };
     engine.apply_intents(&[StampedIntent {
         player_id: 1,
         intent: GameplayIntent::Attack(AttackIntent {
             target_owner,
-            troops: Some(10_000.0),
+            troops: Some(army),
         }),
     }]);
     engine
@@ -540,9 +576,10 @@ fn tiles_against(attacker: Leader, target: Target) -> (u32, Marks) {
 
 /// Tiles kept by a nation attacking this defender, with the defender's marks.
 fn tiles_against_defense(defender: Leader, target: Target) -> (u32, Marks) {
-    let mut engine = arena(24, 4, Leader::of("caesar"), Some(defender));
+    let own = if target == Target::Larger { 13 } else { 4 };
+    let mut engine = arena(24, own, Leader::of("caesar"), Some(defender));
     shape_subject(&mut engine, 1, target);
-    let marks = attack(&mut engine, 2, 20);
+    let marks = attack_with_troops(&mut engine, 2, 20, 1_000.0, 500.0, 2_000.0);
     (engine.state.player(1).unwrap().tile_count, marks)
 }
 
@@ -612,7 +649,9 @@ fn attacker_troops_left(engine: &SowEngine) -> i64 {
 fn tower_siege_troops(attacker: Leader) -> (f64, Marks) {
     let mut engine = arena(24, 4, attacker, Some(Leader::of("caesar")));
     engine.state.config.tower_strength = 1.0;
-    add_building(&mut engine, 2, 6, 12, BuildingKind::Tower);
+    for y in [2, 12, 22] {
+        add_building(&mut engine, 2, 6, y, BuildingKind::Tower);
+    }
     engine.refresh_defense_grid();
     let marks = attack(&mut engine, 2, 20);
     (attacker_troop_total(&engine), marks)
@@ -718,8 +757,12 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
                 (tiles < control_tiles, shown[2], control_shown[2])
             }
             Ability::ConquestSpeed { against, .. } => {
-                let (tiles, shown) = tiles_against(hero, against);
-                let (control_tiles, control_shown) = tiles_against(plain, against);
+                // Measure early: otherwise a heavily favored attack can nearly clear the board
+                // before a speed difference becomes visible, or the rival can stop qualifying.
+                let (strengthened, shown) = attack_target_for_ticks(hero, against, 4);
+                let (control, control_shown) = attack_target_for_ticks(plain, against, 4);
+                let tiles = strengthened.state.player(1).unwrap().tile_count;
+                let control_tiles = control.state.player(1).unwrap().tile_count;
                 (tiles > control_tiles, shown[1], control_shown[1])
             }
             Ability::EnemyRetreatPenalty { against, .. } => {
@@ -978,6 +1021,52 @@ fn al_ghafiqi_has_a_mountain_campaign_ability() {
     );
     assert_eq!(hero.attacker_loss_multiplier(LossWhen::Mountain), 0.75);
     assert_eq!(hero.attacker_loss_multiplier(LossWhen::Highland), 1.0);
+}
+
+#[test]
+fn windradyne_defends_against_a_larger_rival() {
+    let hero = Leader::of("tribe_wiradjuri");
+    assert_eq!(
+        hero.ability(),
+        Ability::DefenseStrength {
+            against: Target::Larger,
+            percent: 15,
+        }
+    );
+
+    let (tiles, marks) = tiles_against_defense(hero, Target::Larger);
+    let (control_tiles, control_marks) =
+        tiles_against_defense(Leader::of("caesar"), Target::Larger);
+    assert!(
+        tiles < control_tiles,
+        "the bonus reduces the attacker's gains: hero {tiles} {marks:?}, control {control_tiles} {control_marks:?}"
+    );
+    assert!(marks[2] >= 1, "Windradyne shows the defense mark");
+    assert_eq!(control_marks[2], 0, "a hero without the ability shows no mark");
+}
+
+#[test]
+fn yagan_attacks_foreign_people_with_strength() {
+    let hero = Leader::of("nation_yagan");
+    assert_eq!(
+        hero.ability(),
+        Ability::AttackStrength {
+            against: Target::Foreign,
+            percent: 15,
+        }
+    );
+    assert_eq!(hero.civilization(), "Whadjuk Noongar");
+
+    let (empowered, marks) = attack_target(hero, Target::Foreign);
+    let (control, control_marks) = attack_target(Leader::of("caesar"), Target::Foreign);
+    assert!(
+        empowered.state.player(1).unwrap().tile_count
+            > control.state.player(1).unwrap().tile_count
+            || attacker_troops_left(&empowered) > attacker_troops_left(&control),
+        "Yagan's attack bonus changes the battle"
+    );
+    assert_eq!(marks[1], 1, "Yagan shows the attack mark");
+    assert_eq!(control_marks[1], 0, "a hero without the ability shows no mark");
 }
 
 fn send(engine: &mut SowEngine, player_id: u16, intent: GameplayIntent) {

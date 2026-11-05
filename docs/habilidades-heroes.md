@@ -85,3 +85,5 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Burebista | Carpathian Fortresses | Armies need 25% more effort to conquer your territory. | defense_strength | 25% | `gameplay/icons/abilities/burebista.webp` |
 | Bolesław II the Bold | Kievan Expeditions | Conquest of foreign players advances 25% faster. | conquest_speed | 25% | `gameplay/icons/abilities/boleslaw_ii.webp` |
 | Abd al-Rahman al-Ghafiqi | Crossing the Pyrenees | Attackers lose 25% fewer troops while conquering mountain tiles. | attacker_loss | 25% | `gameplay/icons/abilities/abd_al_rahman_al_ghafiqi.webp` |
+| Windradyne | Wiradjuri Defense | Defenders gain 15% strength when attacked by a rival who controls more territory. | defense_strength | 15% | `gameplay/icons/abilities/windradyne.webp` |
+| Yagan | Whadjuk Resistance | Attacks against a different people or realm gain 15% strength. | attack_strength | 15% | `gameplay/icons/abilities/yagan_noongar.webp` |

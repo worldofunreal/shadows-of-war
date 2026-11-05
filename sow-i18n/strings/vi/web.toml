@@ -538,6 +538,13 @@ leader_abd_al_rahman_al_ghafiqi_name = "Abd al-Rahman al-Ghafiqi"
 leader_abd_al_rahman_al_ghafiqi_historical = "ʿAbd al-Raḥmān ibn ʿAbd Allāh al-Ghāfiqī"
 leader_abd_al_rahman_al_ghafiqi_civilization = "Al-Andalus thời Umayyad"
 
+leader_tribe_wiradjuri_name = "Windradyne"
+leader_tribe_wiradjuri_historical = "Thủ lĩnh kháng chiến Wiradjuri (khoảng 1800–1829)"
+leader_tribe_wiradjuri_civilization = "Wiradjuri"
+leader_nation_yagan_name = "Yagan"
+leader_nation_yagan_historical = "Chiến binh Whadjuk Noongar và nhân vật kháng chiến (khoảng 1795–1833)"
+leader_nation_yagan_civilization = "Whadjuk Noongar"
+
 [profile]
 ranked_1v1 = "Xếp hạng 1v1"
 unranked = "Chưa xếp hạng"
@@ -1404,6 +1411,11 @@ leader_boleslaw_ii_description = "Việc chinh phục người chơi nước ngo
 
 leader_abd_al_rahman_al_ghafiqi_ability = "Vượt dãy Pyrenees"
 leader_abd_al_rahman_al_ghafiqi_description = "Quân tấn công mất ít hơn 25% binh lính khi chiếm ô núi."
+
+leader_tribe_wiradjuri_ability = "Phòng thủ Wiradjuri"
+leader_tribe_wiradjuri_description = "Quân phòng thủ mạnh hơn 15% khi bị đối thủ kiểm soát nhiều lãnh thổ hơn tấn công."
+leader_nation_yagan_ability = "Kháng chiến Whadjuk"
+leader_nation_yagan_description = "Các đòn tấn công nhằm vào một dân tộc hoặc vương quốc khác mạnh hơn 15%."
 
 [ranked]
 my_rank = "Hạng của tôi"

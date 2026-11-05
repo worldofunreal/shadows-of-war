@@ -1,34 +1,147 @@
-/* Settings domain: account, privacy, preferences, and sign-out. */
+/* Settings domain: tactical command configuration deck across Desktop, Mobile Vertical, and Horizontal Compact. */
+
+/* ─────────────────────────────────────────────────────────────
+   1. OVERLAY & COMMAND MODAL SHELL (BASE / DESKTOP HORIZONTAL)
+   ───────────────────────────────────────────────────────────── */
+#sow-menu .sow-menu__overlay[data-menu-overlay="settings"] {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background: radial-gradient(circle at 50% 24%, rgb(16 24 34 / 72%), rgb(4 6 10 / 88%));
+  animation: sow-settings-backdrop-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
 
 .sow-menu__settings-modal {
-  width: min(100%, 480px);
+  width: min(94vw, 860px);
+  max-height: min(88dvh, 720px);
   display: flex;
   flex-direction: column;
   gap: 14px;
+  padding: 18px 20px;
   border: 1px solid var(--sow-tactical-surface-border);
-  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-top: 2px solid var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius);
   background: var(--sow-tactical-surface-card-bg);
-  box-shadow: var(--sow-tactical-modal-shadow);
+  box-shadow:
+    var(--sow-tactical-modal-shadow),
+    0 0 36px rgb(0 0 0 / 55%);
+  overflow: hidden;
   /* A filtered ancestor traps fixed dropdowns inside the scrolling modal. */
   backdrop-filter: none;
+  animation: sow-settings-modal-in 210ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes sow-settings-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sow-settings-modal-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   2. COMMAND HEADER BAR
+   ───────────────────────────────────────────────────────────── */
 .sow-menu__settings-modal .sow-menu__modal-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
 }
 
+.sow-menu__settings-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sow-menu__settings-head-badge {
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 52%, transparent);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgb(243 177 43 / 18%), rgb(12 18 24 / 85%));
+  color: var(--sow-gold-bright);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%);
+}
+
+.sow-menu__settings-head-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.sow-menu__settings-modal h2 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(20px, 2.1vw, 26px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sow-menu__settings-close {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  font-size: 20px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   3. 2-COLUMN TACTICAL WORKSPACE BODY
+   ───────────────────────────────────────────────────────────── */
 .sow-menu__settings-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  gap: 14px;
+  align-items: start;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+.sow-menu__settings-col {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  min-width: 0;
 }
 
 .sow-menu__settings-section {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px;
+  padding: 13px 14px;
   border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: var(--sow-tactical-surface-accent-border-soft);
   border-radius: var(--sow-tactical-surface-radius-compact);
@@ -37,75 +150,215 @@
 }
 
 .sow-menu__settings-section:last-child {
-  padding: 12px;
+  padding: 13px 14px;
 }
 
 .sow-menu__settings-section > h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   margin: 0;
   color: var(--sow-gold-bright);
   font-size: 11px;
+  font-weight: 900;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
-.sow-menu__settings-links {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.sow-menu__settings-sec-icon {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  color: var(--sow-gold);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   4. PREFERENCES, SLIDER, DROPDOWNS & TACTILE SWITCHES
+   ───────────────────────────────────────────────────────────── */
+.sow-menu__settings-controls {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
-.sow-menu__settings-privacy-links {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.sow-menu__settings-link {
-  display: inline-flex;
-  min-width: 0;
-  min-height: 52px;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 10px 12px;
+#sow-menu .sow-menu__settings-controls > .sow-hud__setting-row {
+  box-sizing: border-box;
+  min-height: 50px;
+  margin: 0;
+  padding: 8px 12px;
   border: 1px solid var(--sow-tactical-surface-border);
-  border-top-color: var(--sow-tactical-surface-accent-border-soft);
-  border-radius: var(--sow-button-radius);
+  border-top-color: color-mix(in srgb, var(--sow-accent) 30%, var(--sow-tactical-surface-border));
+  border-radius: 8px;
   background: var(--sow-tactical-surface-compact-bg);
-  box-shadow: var(--sow-tactical-surface-compact-shadow);
-  color: #f5f1e8;
-  font: inherit;
-  font-size: 12px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+  font-size: 13px;
   font-weight: 800;
-  line-height: 1.35;
-  text-align: start;
-  text-decoration: none;
-  cursor: pointer;
+  color: #f5f1e8;
   transition:
-    background 120ms,
-    border-color 120ms,
-    color 120ms,
-    transform 120ms;
+    border-color 140ms ease,
+    background-color 140ms ease;
 }
 
-.sow-menu__settings-link:hover,
-.sow-menu__settings-link:focus-visible {
-  border-color: var(--sow-accent);
-  background: linear-gradient(180deg, rgb(240 169 43 / 14%), rgb(15 21 25 / 72%));
-  color: var(--sow-accent-bright);
-  outline: var(--sow-tactical-focus-outline);
-  outline-offset: var(--sow-tactical-focus-offset);
+#sow-menu .sow-menu__settings-controls > .sow-hud__setting-row:hover {
+  border-color: color-mix(in srgb, var(--sow-gold) 45%, var(--sow-tactical-surface-border));
+}
+
+#sow-menu .sow-menu__settings-controls > .sow-hud__setting-row--slider {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.sow-menu__settings-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sow-menu__settings-row-label > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sow-menu__settings-row-icon {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  padding: 5px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  border: 1px solid rgb(243 177 43 / 24%);
+  background: rgb(243 177 43 / 9%);
+  color: var(--sow-gold-bright);
+}
+
+#sow-menu .sow-menu__settings-controls .sow-menu__slider-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  color: #f5f1e8;
+}
+
+#sow-menu .sow-menu__settings-controls .sow-menu__slider-label b {
+  font-size: 12px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgb(243 177 43 / 36%);
+  background: rgb(9 13 18 / 82%);
+  color: var(--sow-gold-bright);
+}
+
+#sow-menu .sow-menu__settings-controls input[type="range"] {
+  width: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Elevate the mobile-style switches inside settings */
+#sow-menu .sow-menu__settings-switch-row {
+  cursor: pointer;
+}
+
+#sow-menu .sow-menu__settings-controls .sow-hud__switch {
+  border: 1px solid rgb(255 255 255 / 16%);
+  background: rgb(9 13 18 / 78%);
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 55%);
+  cursor: pointer;
+}
+
+#sow-menu .sow-menu__settings-controls .sow-hud__switch:checked {
+  border-color: color-mix(in srgb, var(--sow-gold-bright) 70%, transparent);
+  background: linear-gradient(90deg, var(--sow-gold), var(--sow-gold-bright));
+  box-shadow: 0 0 12px rgb(243 177 43 / 35%);
+}
+
+/* Dropdowns */
+.sow-menu__settings-dropdown-row > span {
+  flex: 1 1 8.5rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sow-menu__settings-dropdown {
+  flex: 0 1 200px;
+  width: min(100%, 200px);
+  min-width: 0;
+}
+
+.sow-menu__settings-dropdown .sow-control-dropdown__trigger {
+  height: 40px;
+  border-top-color: color-mix(in srgb, var(--sow-accent) 42%, transparent);
+  border-radius: 7px;
+  background: var(--sow-button-dark-bg);
+  box-shadow:
+    var(--sow-button-dark-shadow),
+    inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+.sow-menu__settings-modal .sow-menu__secondary:hover,
+.sow-menu__settings-modal .sow-menu__danger:hover,
+.sow-menu__settings-dropdown .sow-control-dropdown__trigger:hover {
   transform: translateY(-1px);
 }
-.sow-menu__settings-social-icon {
-  flex: 0 0 18px;
-  width: 18px;
-  height: 18px;
-  margin-inline-end: 8px;
+
+.sow-menu__settings-dropdown .sow-control-dropdown__trigger:hover {
+  border-color: var(--sow-accent);
+  filter: brightness(1.06);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   5. ACCOUNT & IDENTITY DECK
+   ───────────────────────────────────────────────────────────── */
+.sow-menu__settings-account-deck {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 11px;
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-radius: 8px;
+  background: var(--sow-tactical-surface-compact-bg);
 }
 
 .sow-menu__settings-account {
   display: flex;
   align-items: center;
+  gap: 8px;
+  min-width: 0;
   min-height: 28px;
-  padding-bottom: 2px;
+  flex: 1 1 140px;
+}
+
+.sow-menu__account-dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  box-shadow: 0 0 6px rgb(148 163 184 / 45%);
+}
+
+.sow-menu__settings-account.is-linked .sow-menu__account-dot {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgb(34 197 94 / 70%);
+}
+
+.sow-menu__settings-account.is-pending .sow-menu__account-dot {
+  background: var(--sow-gold-bright);
+  box-shadow: 0 0 8px rgb(243 177 43 / 75%);
 }
 
 .sow-menu__account-value {
@@ -128,82 +381,110 @@
   letter-spacing: 0.1em;
 }
 
-.sow-menu__settings-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-#sow-menu .sow-menu__settings-controls > .sow-hud__setting-row {
-  box-sizing: border-box;
-  min-height: 54px;
-  margin: 0;
-  padding: 8px 12px;
-  border: 1px solid var(--sow-tactical-surface-border);
-  border-top-color: color-mix(in srgb, var(--sow-accent) 30%, var(--sow-tactical-surface-border));
-  border-radius: 8px;
-  background: var(--sow-tactical-surface-subcard-bg);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
-  font-size: 14px;
-}
-
-#sow-menu .sow-menu__settings-controls > .sow-hud__setting-row + .sow-hud__setting-row {
-  border-top-color: color-mix(in srgb, var(--sow-accent) 30%, var(--sow-tactical-surface-border));
-}
-
-.sow-menu__settings-dropdown-row > span {
-  flex: 1 1 10rem;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.sow-menu__settings-dropdown {
-  flex: 0 1 220px;
-  width: min(100%, 220px);
-  min-width: 0;
-}
-
-.sow-menu__settings-dropdown .sow-control-dropdown__trigger {
-  height: 48px;
-  border-top-color: color-mix(in srgb, var(--sow-accent) 42%, transparent);
-  border-radius: 8px;
-  background: var(--sow-button-dark-bg);
-  box-shadow:
-    var(--sow-button-dark-shadow),
-    inset 0 1px 0 rgb(255 255 255 / 5%);
-}
-
-.sow-menu__settings-modal .sow-menu__secondary:hover,
-.sow-menu__settings-modal .sow-menu__danger:hover,
-.sow-menu__settings-dropdown .sow-control-dropdown__trigger:hover {
-  transform: translateY(-1px);
-}
-
-.sow-menu__settings-dropdown .sow-control-dropdown__trigger:hover {
-  border-color: var(--sow-accent);
-  filter: brightness(1.06);
+.sow-menu__settings-signin,
+.sow-menu__settings-signout {
+  width: auto !important;
+  flex: 0 0 auto;
+  min-height: 38px;
+  margin: 0 !important;
+  padding: 6px 14px;
+  font-size: 11px;
 }
 
 .sow-menu__settings-actions {
-  padding-top: 18px;
-  border-top: 1px solid var(--sow-line);
+  padding-top: 6px;
 }
 
-.sow-menu__settings-signout {
-  margin-top: 0;
+/* ─────────────────────────────────────────────────────────────
+   6. COMMUNITY & LEGAL LINKS
+   ───────────────────────────────────────────────────────────── */
+.sow-menu__settings-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.sow-menu__settings-link {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px 11px;
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border-soft);
+  border-radius: var(--sow-button-radius);
+  background: var(--sow-tactical-surface-compact-bg);
+  box-shadow: var(--sow-tactical-surface-compact-shadow);
+  color: #f5f1e8;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 120ms,
+    border-color 120ms,
+    color 120ms,
+    transform 120ms;
+}
+
+.sow-menu__settings-link--social {
+  border-color: color-mix(in srgb, var(--sow-gold) 34%, var(--sow-tactical-surface-border));
+  background: linear-gradient(180deg, rgb(243 177 43 / 9%), rgb(12 17 22 / 84%));
+}
+
+.sow-menu__settings-link:hover,
+.sow-menu__settings-link:focus-visible {
+  border-color: var(--sow-accent);
+  background: linear-gradient(180deg, rgb(240 169 43 / 16%), rgb(15 21 25 / 78%));
+  color: var(--sow-accent-bright);
+  outline: var(--sow-tactical-focus-outline);
+  outline-offset: var(--sow-tactical-focus-offset);
+  transform: translateY(-1px);
+}
+
+.sow-menu__settings-social-icon {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin-inline-end: 7px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   7. PRIVACY & DANGER ZONE
+   ───────────────────────────────────────────────────────────── */
+.sow-menu__settings-privacy-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+
+.sow-menu__settings-privacy-row.is-armed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sow-menu__settings-privacy-links {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .sow-menu__settings-delete {
-  min-height: 48px;
-  justify-content: flex-start;
-  margin-top: 0;
+  width: 100%;
+  min-height: 42px;
+  justify-content: center;
+  margin: 0 !important;
+  padding: 8px 12px;
+  font-size: 11.5px;
 }
 
 .sow-menu__settings-delete-status,
 .sow-menu__settings-delete-error {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .sow-menu__settings-delete-status {
@@ -217,16 +498,16 @@
 .sow-menu__settings-confirm {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid rgba(236, 104, 78, 0.55);
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgb(236 104 78 / 55%);
   border-radius: var(--sow-button-radius);
-  background: rgba(35, 17, 18, 0.72);
+  background: rgb(35 17 18 / 76%);
 }
 
 .sow-menu__settings-confirm > strong {
   color: #ffb1a2;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -234,8 +515,8 @@
 .sow-menu__settings-confirm > p {
   margin: 0;
   color: #ffb1a2;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .sow-menu__settings-confirm-actions {
@@ -246,24 +527,57 @@
 
 .sow-menu__settings-confirm-actions .sow-menu__secondary,
 .sow-menu__settings-confirm-actions .sow-menu__danger {
-  min-height: 44px;
+  min-height: 40px;
   margin-top: 0;
 }
 
-@media (max-width: 520px) {
+/* ─────────────────────────────────────────────────────────────
+   8. MOBILE VERTICAL — FULL-SCREEN SECTION (PORTRAIT / <= 680px)
+   ───────────────────────────────────────────────────────────── */
+@media (max-width: 680px), (orientation: portrait) {
+  #sow-menu .sow-menu__overlay[data-menu-overlay="settings"] {
+    align-items: stretch;
+    padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+      max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+    background: rgb(6 9 14 / 96%);
+  }
+
   .sow-menu__settings-modal {
-    gap: 10px;
+    width: 100%;
+    height: 100%;
+    max-height: none;
     padding: 14px;
+    gap: 12px;
+    border-radius: var(--sow-tactical-surface-radius);
   }
 
-  .sow-menu__settings-section {
-    padding: 10px;
+  .sow-menu__settings-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
   }
 
+  .sow-menu__settings-col {
+    gap: 10px;
+  }
+
+  .sow-menu__settings-section,
   .sow-menu__settings-section:last-child {
-    padding: 10px;
+    padding: 12px;
+    gap: 9px;
   }
 
+  #sow-menu .sow-menu__settings-controls > .sow-hud__setting-row {
+    min-height: 50px;
+    padding: 8px 11px;
+  }
+
+  .sow-menu__settings-dropdown {
+    flex: 0 1 175px;
+    width: min(100%, 175px);
+  }
+}
+
+@media (max-width: 399px) and (orientation: portrait) {
   .sow-menu__settings-dropdown-row {
     flex-wrap: wrap;
   }
@@ -272,5 +586,179 @@
   .sow-menu__settings-dropdown {
     flex: 1 1 100%;
     width: 100%;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   9. HORIZONTAL COMPACT — MOBILE LANDSCAPE & EMBEDDED PORTALS
+      (Poki / CrazyGames reduced height <= 640px or landscape <= 960px)
+   ───────────────────────────────────────────────────────────── */
+@media (orientation: landscape) and (max-height: 640px), (orientation: landscape) and (max-width: 960px) {
+  #sow-menu .sow-menu__overlay[data-menu-overlay="settings"] {
+    padding: max(6px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+      max(6px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  }
+
+  .sow-menu__settings-modal {
+    width: min(100%, 920px);
+    height: auto;
+    max-height: calc(100dvh - 12px);
+    padding: 10px 14px;
+    gap: 8px;
+    border-radius: var(--sow-tactical-surface-radius-compact);
+  }
+
+  .sow-menu__settings-modal .sow-menu__modal-head {
+    padding-bottom: 6px;
+    gap: 8px;
+  }
+
+  .sow-menu__settings-head-badge {
+    flex: 0 0 26px;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+  }
+
+  .sow-menu__settings-head-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .sow-menu__settings-modal h2 {
+    font-size: clamp(15px, 3.2vh, 19px);
+  }
+
+  .sow-menu__settings-close {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
+    font-size: 16px;
+  }
+
+  .sow-menu__settings-body {
+    grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr);
+    gap: 8px 10px;
+  }
+
+  .sow-menu__settings-col {
+    gap: 8px;
+  }
+
+  .sow-menu__settings-section,
+  .sow-menu__settings-section:last-child {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .sow-menu__settings-section > h3 {
+    font-size: 9.5px;
+    gap: 5px;
+  }
+
+  .sow-menu__settings-controls {
+    gap: 5px;
+  }
+
+  #sow-menu .sow-menu__settings-controls > .sow-hud__setting-row {
+    min-height: 38px;
+    padding: 4px 9px;
+    font-size: 11.5px;
+    border-radius: 6px;
+  }
+
+  #sow-menu .sow-menu__settings-controls > .sow-hud__setting-row--slider {
+    gap: 4px;
+    padding: 6px 9px;
+  }
+
+  .sow-menu__settings-row-icon {
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
+    padding: 3px;
+    border-radius: 5px;
+  }
+
+  #sow-menu .sow-menu__settings-controls .sow-menu__slider-label {
+    font-size: 11.5px;
+  }
+
+  #sow-menu .sow-menu__settings-controls .sow-menu__slider-label b {
+    font-size: 10.5px;
+    padding: 1px 6px;
+  }
+
+  .sow-menu__settings-dropdown {
+    flex: 0 1 150px;
+    width: min(100%, 150px);
+  }
+
+  .sow-menu__settings-dropdown .sow-control-dropdown__trigger {
+    height: 30px;
+    min-height: 30px;
+    padding-block: 2px;
+    font-size: 11px;
+  }
+
+  #sow-menu .sow-menu__settings-controls .sow-hud__switch {
+    width: 46px;
+    height: 26px;
+    border-radius: 13px;
+  }
+
+  #sow-menu .sow-menu__settings-controls .sow-hud__switch::after {
+    inset-block-start: 2px;
+    inset-inline-start: 2px;
+    width: 20px;
+    height: 20px;
+  }
+
+  #sow-menu .sow-menu__settings-controls .sow-hud__switch:checked::after {
+    transform: translateX(20px);
+  }
+
+  html[dir="rtl"] #sow-menu .sow-menu__settings-controls .sow-hud__switch:checked::after {
+    transform: translateX(-20px);
+  }
+
+  .sow-menu__settings-account-deck {
+    padding: 5px 9px;
+    gap: 6px;
+  }
+
+  .sow-menu__account-value {
+    font-size: 11.5px;
+  }
+
+  .sow-menu__settings-signin,
+  .sow-menu__settings-signout {
+    min-height: 30px;
+    padding: 4px 10px;
+    font-size: 10px;
+  }
+
+  .sow-menu__settings-links {
+    gap: 5px;
+  }
+
+  .sow-menu__settings-link {
+    min-height: 32px;
+    padding: 5px 8px;
+    font-size: 10.5px;
+  }
+
+  .sow-menu__settings-social-icon {
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
+    margin-inline-end: 5px;
+  }
+
+  .sow-menu__settings-delete {
+    min-height: 32px;
+    padding: 5px 8px;
+    font-size: 10.5px;
   }
 }

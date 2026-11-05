@@ -538,6 +538,13 @@ leader_abd_al_rahman_al_ghafiqi_name = "압드 알라흐만 알가피키"
 leader_abd_al_rahman_al_ghafiqi_historical = "압드 알라흐만 이븐 압둘라 알가피키"
 leader_abd_al_rahman_al_ghafiqi_civilization = "우마이야 왕조의 알안달루스"
 
+leader_tribe_wiradjuri_name = "윈드라딘"
+leader_tribe_wiradjuri_historical = "위라주리 저항 지도자(1800년경–1829년)"
+leader_tribe_wiradjuri_civilization = "위라주리"
+leader_nation_yagan_name = "야간"
+leader_nation_yagan_historical = "와주크 눙가르 전사이자 저항 운동 인물(1795년경–1833년)"
+leader_nation_yagan_civilization = "와주크 눙가르"
+
 [profile]
 ranked_1v1 = "랭크 1대1"
 unranked = "미배치"
@@ -1404,6 +1411,11 @@ leader_boleslaw_ii_description = "외국 플레이어 정복 속도가 25% 빨�
 
 leader_abd_al_rahman_al_ghafiqi_ability = "피레네 산맥 횡단"
 leader_abd_al_rahman_al_ghafiqi_description = "공격군은 산악 타일을 정복할 때 병력 손실이 25% 감소합니다."
+
+leader_tribe_wiradjuri_ability = "위라주리의 방어"
+leader_tribe_wiradjuri_description = "더 넓은 영토를 지배하는 상대가 공격할 때 방어군의 전투력이 15% 증가합니다."
+leader_nation_yagan_ability = "와주크의 저항"
+leader_nation_yagan_description = "다른 민족이나 왕국을 상대로 한 공격의 전투력이 15% 증가합니다."
 
 [ranked]
 my_rank = "내 랭크"

@@ -538,6 +538,13 @@ leader_abd_al_rahman_al_ghafiqi_name = "Абд ар-Рахман аль-Гафи
 leader_abd_al_rahman_al_ghafiqi_historical = "Абд ар-Рахман ибн Абдаллах аль-Гафики"
 leader_abd_al_rahman_al_ghafiqi_civilization = "Омейский аль-Андалус"
 
+leader_tribe_wiradjuri_name = "Виндрадин"
+leader_tribe_wiradjuri_historical = "Лидер сопротивления вирраджури (ок. 1800–1829)"
+leader_tribe_wiradjuri_civilization = "Вирраджури"
+leader_nation_yagan_name = "Яган"
+leader_nation_yagan_historical = "Воин народа ваджук-нунгар и участник сопротивления (ок. 1795–1833)"
+leader_nation_yagan_civilization = "Ваджук-нунгар"
+
 [profile]
 ranked_1v1 = "Рейтинг 1 на 1"
 unranked = "Без рейтинга"
@@ -1404,6 +1411,11 @@ leader_boleslaw_ii_description = "Завоевание иностранных и
 
 leader_abd_al_rahman_al_ghafiqi_ability = "Переход через Пиренеи"
 leader_abd_al_rahman_al_ghafiqi_description = "Атакующие теряют на 25% меньше войск при захвате горных клеток."
+
+leader_tribe_wiradjuri_ability = "Оборона вирраджури"
+leader_tribe_wiradjuri_description = "Защитники получают на 15% больше силы, когда на них нападает соперник, контролирующий больше земель."
+leader_nation_yagan_ability = "Сопротивление ваджук"
+leader_nation_yagan_description = "Атаки против другого народа или царства получают на 15% больше силы."
 
 [ranked]
 my_rank = "Мой ранг"

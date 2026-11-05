@@ -2574,18 +2574,6 @@
    "avatar": "makea_takau_ariki"
   },
   {
-   "id": "nation_yagan",
-   "name": "Yagan",
-   "entity": "Noongar people / Australia",
-   "role": "nation",
-   "region": "oceania",
-   "lat": -26,
-   "lon": 121,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Yagan",
-   "avatar": "yagan"
-  },
-  {
    "id": "nation_maria_angata",
    "name": "Angata",
    "entity": "Rapa Nui",
@@ -7026,18 +7014,6 @@
    "avatar": "volcae_arecomici"
   },
   {
-   "id": "tribe_wiradjuri",
-   "name": "Wiradjuri",
-   "entity": "Wiradjuri",
-   "role": "tribe",
-   "region": "oceania",
-   "lat": -33.8333,
-   "lon": 147.5,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Windradyne",
-   "avatar": "wiradjuri"
-  },
-  {
    "id": "tribe_wangal",
    "name": "Wangal (eora)",
    "entity": "Wangal (eora)",
@@ -9245,6 +9221,50 @@
     }
    },
    "territory_color": "#087c68"
+  },
+  {
+   "id": "tribe_wiradjuri",
+   "name": "Wiradjuri",
+   "entity": "Wiradjuri",
+   "role": "tribe",
+   "region": "oceania",
+   "lat": -33.4194,
+   "lon": 149.5806,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Windradyne",
+   "avatar": "wiradjuri",
+   "hero": {
+    "name": "Windradyne",
+    "art_slug": "windradyne",
+    "ability": {
+     "kind": "defense_strength",
+     "against": "larger",
+     "percent": 15
+    }
+   },
+   "territory_color": "#9a5d37"
+  },
+  {
+   "id": "nation_yagan",
+   "name": "Yagan",
+   "entity": "Whadjuk Noongar",
+   "role": "nation",
+   "region": "oceania",
+   "lat": -31.95,
+   "lon": 116.0,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Yagan",
+   "avatar": "yagan",
+   "hero": {
+    "name": "Yagan",
+    "art_slug": "yagan_noongar",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "foreign",
+     "percent": 15
+    }
+   },
+   "territory_color": "#397b86"
   }
  ]
 }
