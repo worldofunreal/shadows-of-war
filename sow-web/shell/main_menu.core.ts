@@ -831,7 +831,6 @@ export function renderKey(): string {
         private_game: state.custom_game_is_private,
         single_player: state.custom_game_is_sp,
         downloading: state.ranked_matchup ? null : state.downloading_map,
-        download_progress: state.ranked_matchup ? null : state.map_download_progress,
         download_error: state.map_download_error,
         match_preparing: state.match_preparing,
         error: state.error,

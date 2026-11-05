@@ -148,7 +148,10 @@ test("primary click selects owned buildings without changing other map gestures"
     assert.match(actionBody, /!self\.map_menu_actions\(tile_idx\)\.contains\(&action\)/);
     assert.match(actionBody, /MapMenuAction::Send => \{\s*self\.open_transfer_from_tile\(tile_idx, TransferMode::Send\);/);
     assert.match(actionBody, /MapMenuAction::Request => \{\s*self\.open_transfer_from_tile\(tile_idx, TransferMode::Request\);/);
-    assert.match(actionBody, /MapMenuAction::RequestAllies => \{\s*if let Ok\(intents\) = self\.ally_resource_requests\(\)/);
+    assert.match(
+        actionBody,
+        /MapMenuAction::RequestAllies => \{[^}]*self\.has_trade_partners\(\)\s*\{\s*self\.open_transfer\(my_id, TransferMode::Request\);/,
+    );
 });
 
 test("out-of-range primary clicks reuse fleet routing and report full capacity", () => {

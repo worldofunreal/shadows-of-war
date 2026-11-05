@@ -123,6 +123,15 @@ pub enum GameplayIntent {
     ScuttleFleet {
         fleet_id: u64,
     },
+    /// A request with a price: the target pays `gold`/`troops` and receives
+    /// `pay_gold`/`pay_troops`. Accepting settles both sides at once or not at all.
+    OfferTrade {
+        target_player: crate::player::PlayerId,
+        gold: f64,
+        troops: f64,
+        pay_gold: f64,
+        pay_troops: f64,
+    },
 }
 
 /// Boat control frame for INK TIDE lockstep turns.
@@ -564,6 +573,14 @@ impl PlayerSnapshot {
             && (self.alliances.contains(&other.id)
                 || (self.team.is_some() && self.team == other.team))
     }
+
+    /// Everyone in `players` this player can trade with: the self-click panel's audience.
+    pub fn trade_partners<'a>(
+        &'a self,
+        players: &'a [PlayerSnapshot],
+    ) -> impl Iterator<Item = &'a PlayerSnapshot> + 'a {
+        players.iter().filter(move |other| self.can_trade_with(other))
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -571,6 +588,11 @@ pub struct ResourceRequest {
     pub requester: crate::player::PlayerId,
     pub gold: f64,
     pub troops: f64,
+    /// What the requester gives in return; zero for a plain request.
+    #[serde(default)]
+    pub pay_gold: f64,
+    #[serde(default)]
+    pub pay_troops: f64,
 }
 
 /// A single tile whose owner changed during a tick.

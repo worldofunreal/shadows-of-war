@@ -159,7 +159,7 @@ mod tests {
         );
         assert_eq!(
             troop_income_per_second(400, agg, Leader::of("caesar"), &cfg),
-            cfg.troop_base_income + 400.0 / 16.0
+            cfg.troop_base_income + 400.0 / 16.0 * 0.75
         );
     }
 
@@ -174,6 +174,13 @@ mod tests {
         assert!((gold_per_game_minute(cfg.gold_base_income) - 60.0).abs() < 1e-9);
         assert!((gold_per_game_minute(cfg.factory_gold_income) - 60.0 * (8.0 / 7.0)).abs() < 1e-9);
         assert_eq!(cfg.troop_base_income, 175.0);
+        assert_eq!(cfg.city_troop_income, 550.0);
+        assert_eq!(cfg.farm_troop_income, 550.0);
+        assert_eq!(cfg.hero_factory_troop_income, 550.0);
+        assert_eq!(cfg.hero_port_troop_income, 550.0);
+        assert_eq!(cfg.city_max_troops, 9_375.0);
+        assert_eq!(cfg.territory_troop_amount, 0.75);
+        assert_eq!(cfg.max_troops_scale, 157.5);
         assert_eq!(cfg.territory_troop_tiles, 16);
         assert_eq!(cfg.territory_gold_tiles, 1_024);
         assert_eq!(cfg.cost_city, 200.0);
@@ -181,6 +188,20 @@ mod tests {
         assert_eq!(cfg.cost_factory, 175.0);
         assert_eq!(cfg.cost_port, 200.0);
         assert_eq!(cfg.cost_farm, 125.0);
+    }
+
+    #[test]
+    fn level_four_city_matches_tuned_troop_rate() {
+        let cfg = default_cfg();
+        let agg = BuildingAggregate {
+            city_levels: 4,
+            ..Default::default()
+        };
+        let troop_rate = troop_income_per_second(0, agg, Leader::of("caesar"), &cfg);
+        assert!(
+            ((troop_rate - cfg.troop_base_income) * cfg.global_speed_multiplier - 572.0).abs()
+                < 1e-10
+        );
     }
 
     #[test]
@@ -250,22 +271,22 @@ mod tests {
             troop_income_per_second(0, agg, Leader::of("cleopatra"), &cfg),
             cfg.troop_base_income
         );
-        let anacaona = Leader::of("anacaona");
-        let port_troop_bonus = anacaona
+        let artemisia = Leader::of("artemisia_i");
+        let port_troop_bonus = artemisia
             .resource_bonus_hero_bonus(
                 crate::geo_entities::Source::District(crate::geo_entities::District::Port),
                 crate::geo_entities::Resource::Troops,
             )
             .unwrap();
         assert_eq!(
-            troop_income_per_second(0, agg, anacaona, &cfg),
+            troop_income_per_second(0, agg, artemisia, &cfg),
             cfg.troop_base_income + cfg.hero_port_troop_income * 4.0 * port_troop_bonus
         );
     }
 
     #[test]
     fn aggregation_preserves_level_progression_for_each_building() {
-        use crate::building::{Building, aggregate_buildings_per_player};
+        use crate::building::{aggregate_buildings_per_player, Building};
         use crate::game::BuildingKind;
 
         let make = |id, kind, level| Building {

@@ -1,5 +1,7 @@
-# Online map library (rsync → VPS SOW_MAPS_ROOT, served at /maps/).
+# Published map library served at /maps/; `[recipes.<map>]` is the release allowlist.
 # Additional map folders here are gitignored; only `world/` is tracked as the seed map.
+# Map Generator outputs share this folder for local editing and are excluded from
+# release packages unless registered here; upload them through Campaign Studio.
 # Each folder carries info.toml with its weighted-rotation frequency
 # (OpenFront `multiplayer_frequency`; 0 = out of rotation).
 # The `[recipes.<map>]` tables below keep provenance and artifact hashes for the

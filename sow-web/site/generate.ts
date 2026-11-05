@@ -20,12 +20,13 @@ export async function publish(
     leaders: Leader[];
     pages: string[];
     englishOnly?: string[];
+    localPreview?: boolean;
     biographies: { leaders: Record<string, Record<string, any>> };
     mapExplorer: string;
   },
   source = import.meta.dir,
 ) {
-  const { leaders } = input;
+  const { leaders, localPreview = false } = input;
   const bases = input.pages.map((page) => {
     if (!page.endsWith("index.html")) throw Error(`Invalid public template ${page}`);
     return page.slice(0, -"index.html".length);
@@ -130,30 +131,36 @@ export async function publish(
       }),
     ),
   );
+  const english = localPreview ? JSON.parse(await read(join(out, "locales", "en"))).strings : undefined;
   let count = 0;
   for (const language of languages) {
     const code = language.code;
     const catalog = JSON.parse(await read(join(out, "locales", code.toLowerCase()))).strings;
     const t = (key: string, values: Record<string, unknown> = {}) => {
       let value: any = key.split(".").reduce((v: any, k) => v?.[k], catalog);
-      if (typeof value !== "string" || !value.trim())
-        throw Error(`Missing public translation ${code}: ${key}`);
+      if (typeof value !== "string" || !value.trim()) {
+        if (!localPreview) throw Error(`Missing public translation ${code}: ${key}`);
+        value = key.split(".").reduce((v: any, k) => v?.[k], english);
+        if (typeof value !== "string" || !value.trim()) value = `[${key}]`;
+      }
       value = value.replace(/\{(\w+)\}/g, (m: string, k: string) => (k in values ? String(values[k]) : m));
       return value as string;
     };
-    for (const h of leaders) {
-      const bio = biographies[code]?.[h.id];
-      const historyLength =
-        (bio?.highlight ?? "").length +
-        (bio?.intro ?? []).join("").length +
-        (bio?.sections ?? []).flatMap((section: any) => section.paragraphs ?? []).join("").length;
-      if (
-        historyLength < (bio?.shortArticle ? 700 : 1200) ||
-        (!bio?.sections?.length && !bio?.shortArticle) ||
-        !bio?.url?.startsWith("https://") ||
-        !bio?.lang
-      )
-        throw Error(`Missing public biography ${code}: ${h.id}`);
+    if (!localPreview) {
+      for (const h of leaders) {
+        const bio = biographies[code]?.[h.id];
+        const historyLength =
+          (bio?.highlight ?? "").length +
+          (bio?.intro ?? []).join("").length +
+          (bio?.sections ?? []).flatMap((section: any) => section.paragraphs ?? []).join("").length;
+        if (
+          historyLength < (bio?.shortArticle ? 700 : 1200) ||
+          (!bio?.sections?.length && !bio?.shortArticle) ||
+          !bio?.url?.startsWith("https://") ||
+          !bio?.lang
+        )
+          throw Error(`Missing public biography ${code}: ${h.id}`);
+      }
     }
     const text = (h: Leader, key: string) =>
       t(`${key === "ability" || key === "description" ? "site" : "heroes"}.leader_${h.id}_${key}`);
@@ -489,47 +496,49 @@ export async function publish(
         })
         .transform(new Response(html))
         .text();
-      // Inserted markup is not revisited by HTMLRewriter. Check the actual output,
-      // including responsive artwork and scripts, before a package can publish.
-      const required = {
-        "header.site-nav": 0,
-        h1: 0,
-        title: 0,
-        'link[rel="canonical"]': 0,
-        'meta[name="description"]': 0,
-      };
-      const verify = new HTMLRewriter();
-      for (const selector of Object.keys(required))
-        verify.on(selector, {
-          element(e) {
-            required[selector]++;
-            if (e.tagName === "meta" && !e.getAttribute("content")?.trim())
-              throw Error(`Empty public description ${url}`);
-          },
-        });
-      const reference = (value: string) => {
-        const target = new URL(value, url);
-        if (target.origin === origin) localLinks.add(target.pathname);
-      };
-      await verify
-        .on("*", {
-          element(e) {
-            for (const attr of ["href", "src", "poster"]) {
-              const value = e.getAttribute(attr);
-              if (value) reference(value);
-            }
-            const srcset = e.getAttribute("srcset");
-            if (srcset)
-              for (const candidate of srcset.split(",")) reference(candidate.trim().split(/\s+/)[0]);
-          },
-        })
-        .transform(new Response(html))
-        .text();
-      for (const [selector, total] of Object.entries(required)) {
-        if (total !== 1) throw Error(`Public page ${url} must contain one ${selector}; found ${total}`);
+      if (!localPreview) {
+        // Inserted markup is not revisited by HTMLRewriter. Check the actual output,
+        // including responsive artwork and scripts, before a package can publish.
+        const required = {
+          "header.site-nav": 0,
+          h1: 0,
+          title: 0,
+          'link[rel="canonical"]': 0,
+          'meta[name="description"]': 0,
+        };
+        const verify = new HTMLRewriter();
+        for (const selector of Object.keys(required))
+          verify.on(selector, {
+            element(e) {
+              required[selector]++;
+              if (e.tagName === "meta" && !e.getAttribute("content")?.trim())
+                throw Error(`Empty public description ${url}`);
+            },
+          });
+        const reference = (value: string) => {
+          const target = new URL(value, url);
+          if (target.origin === origin) localLinks.add(target.pathname);
+        };
+        await verify
+          .on("*", {
+            element(e) {
+              for (const attr of ["href", "src", "poster"]) {
+                const value = e.getAttribute(attr);
+                if (value) reference(value);
+              }
+              const srcset = e.getAttribute("srcset");
+              if (srcset)
+                for (const candidate of srcset.split(",")) reference(candidate.trim().split(/\s+/)[0]);
+            },
+          })
+          .transform(new Response(html))
+          .text();
+        for (const [selector, total] of Object.entries(required)) {
+          if (total !== 1) throw Error(`Public page ${url} must contain one ${selector}; found ${total}`);
+        }
+        if (html.includes("<!-- SOW_SITE_") || html.includes("<!-- LEADER_"))
+          throw Error(`Unexpanded page ${url}`);
       }
-      if (html.includes("<!-- SOW_SITE_") || html.includes("<!-- LEADER_"))
-        throw Error(`Unexpanded page ${url}`);
       const destination = join(out, prefix(code), route, "index.html");
       await mkdir(dirname(destination), { recursive: true });
       await writeFile(destination, html);
@@ -570,7 +579,7 @@ export async function publish(
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((url) => `<url><loc>${escape(url)}</loc></url>`).join("\n")}\n</urlset>\n`,
   );
   console.log(
-    `✅ Public site: ${count} pages, ${languages.length} languages, ${leaders.length} leaders; links verified`,
+    `✅ Public site: ${count} pages, ${languages.length} languages, ${leaders.length} leaders${localPreview ? "" : "; links verified"}`,
   );
 }
 if (import.meta.main) {

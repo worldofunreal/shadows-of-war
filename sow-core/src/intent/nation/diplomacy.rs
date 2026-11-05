@@ -242,7 +242,10 @@ impl SowEngine {
                     continue;
                 }
 
-                let accept = if bot_iq >= 130 {
+                // A trade the bot cannot settle now is declined instead of retried forever.
+                let accept = if req.is_trade() && !self.trade_settles(req) {
+                    false
+                } else if bot_iq >= 130 {
                     if let (Some(p_me), Some(p_req)) =
                         (self.state.player(bot_id), self.state.player(requester))
                     {

@@ -1631,12 +1631,13 @@ function renderQueuePlayerRow(player: MenuLobbyPlayer, lobby: MenuLobby | null) 
     const isHost = lobby && lobby.host_name === player.name;
     const canModerate = lobby && lobby.kind === "Custom" && menuUi.state!.is_lobby_host && !isMe;
 
+    const status = queuePlayerStatus(player);
     const statusBadge =
-        player.download_progress === 100 || player.is_ready
-            ? "<span class='sow-menu__sync-badge ready'>" + esc(SOW_t("lobbies.ready")) + "</span>"
-            : "<span class='sow-menu__sync-badge syncing'>" +
-              esc(SOW_t("lobbies.sync", { progress: player.download_progress || 0 })) +
-              "</span>";
+        "<span class='sow-menu__sync-badge " +
+        status.className +
+        "'>" +
+        esc(status.label) +
+        "</span>";
 
     const controls = canModerate
         ? "<div class='sow-menu__player-mod-actions'>" +
@@ -1670,6 +1671,8 @@ function renderQueuePlayerRow(player: MenuLobbyPlayer, lobby: MenuLobby | null) 
         "" +
         "<div class='sow-menu__roster-row" +
         (isMe ? " is-me" : "") +
+        "' data-player-id='" +
+        player.player_id +
         "'>" +
         "<div class='sow-menu__roster-left'>" +
         "<div class='sow-menu__roster-avatar' style=\"background-image:url('" +
@@ -1691,6 +1694,16 @@ function renderQueuePlayerRow(player: MenuLobbyPlayer, lobby: MenuLobby | null) 
     );
 }
 
+function queuePlayerStatus(player: MenuLobbyPlayer) {
+    const ready = player.download_progress === 100 || player.is_ready;
+    return {
+        className: ready ? "ready" : "syncing",
+        label: ready
+            ? SOW_t("lobbies.ready")
+            : SOW_t("lobbies.sync", { progress: player.download_progress || 0 }),
+    };
+}
+
 function queueRosterKey(lobby: MenuLobby | null) {
     if (!lobby) return "";
     return JSON.stringify({
@@ -1701,14 +1714,7 @@ function queueRosterKey(lobby: MenuLobby | null) {
         owner: menuUi.state!.is_lobby_host,
         me: menuUi.state!.my_player_id,
         players: (lobby.players || []).map(function (player) {
-            return [
-                player.player_id,
-                player.name,
-                player.leader,
-                player.team,
-                player.is_ready,
-                player.download_progress,
-            ];
+            return [player.player_id, player.name, player.leader, player.team];
         }),
     });
 }
@@ -1755,24 +1761,14 @@ function renderQueueRoster(lobby: MenuLobby | null) {
         );
     }
 
-    const renderRows = function (group: MenuLobbyPlayer[]) {
-        return group
-            .map(function (player) {
-                return renderQueuePlayerRow(player, lobby);
-            })
-            .join("");
-    };
-    if (players.length < 2) return "<div class='sow-menu__ffa-roster'>" + renderRows(players) + "</div>";
-
-    const splitAt = Math.ceil(players.length / 2);
-    return (
-        "<div class='sow-menu__ffa-roster sow-menu__ffa-roster--split'>" +
-        "<div class='sow-menu__team-list'>" +
-        renderRows(players.slice(0, splitAt)) +
-        "</div><div class='sow-menu__team-list'>" +
-        renderRows(players.slice(splitAt)) +
-        "</div></div>"
-    );
+    const rows = players
+        .map(function (player) {
+            return renderQueuePlayerRow(player, lobby);
+        })
+        .join("");
+    return players.length < 2
+        ? "<div class='sow-menu__ffa-roster'>" + rows + "</div>"
+        : "<div class='sow-menu__ffa-roster sow-menu__ffa-roster--split'>" + rows + "</div>";
 }
 
 export function updateQueueRoster(lobby: MenuLobby | null) {
@@ -1788,6 +1784,22 @@ export function updateQueueRoster(lobby: MenuLobby | null) {
             roster.dataset.rosterKey = key;
             roster.scrollTop = scrollTop;
         }
+        const playersById = new Map<number, MenuLobbyPlayer>(
+            (lobby ? lobby.players : []).map(function (player): [number, MenuLobbyPlayer] {
+                return [player.player_id, player];
+            }),
+        );
+        roster
+            .querySelectorAll<HTMLElement>(".sow-menu__roster-row[data-player-id]")
+            .forEach(function (row) {
+                const player = playersById.get(Number(row.dataset.playerId));
+                const badge = row.querySelector<HTMLElement>(".sow-menu__sync-badge");
+                if (!player || !badge) return;
+                const status = queuePlayerStatus(player);
+                const className = "sow-menu__sync-badge " + status.className;
+                if (badge.className !== className) badge.className = className;
+                if (badge.textContent !== status.label) badge.textContent = status.label;
+            });
     }
 
     const count = panel.querySelector("[data-queue-player-count]");
@@ -1799,6 +1811,24 @@ export function updateQueueRoster(lobby: MenuLobby | null) {
               })
             : "—";
     }
+}
+
+export function updateQueueDownloadProgress() {
+    const panel = activeScreenPanel();
+    const state = menuUi.state;
+    if (!panel || !state || !state.downloading_map) return;
+    const text = panel.querySelector<HTMLElement>(".sow-menu__map-download-text");
+    const fill = panel.querySelector<HTMLElement>(".sow-menu__map-download-fill");
+    if (!text && !fill) return;
+
+    const lobby = joinedLobby();
+    const progress = state.map_download_progress || 0;
+    const label = SOW_t("lobbies.downloading_map", {
+        map: lobby ? formatMapName(lobby).toUpperCase() : SOW_t("lobbies.matchmaking"),
+        progress,
+    });
+    if (text && text.textContent !== label) text.textContent = label;
+    if (fill && fill.style.width !== progress + "%") fill.style.width = progress + "%";
 }
 
 export function updateRankedQueue() {

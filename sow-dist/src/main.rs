@@ -167,28 +167,34 @@ struct Paths {
 
 impl Paths {
     fn discover() -> Result<Self> {
-        Self::discover_with_runtime_assets("runtime-assets", true)
+        Self::discover_with_runtime_assets("runtime-assets", true, false)
+    }
+
+    fn discover_for_local() -> Result<Self> {
+        Self::discover_with_runtime_assets("local-runtime-assets", true, true)
     }
 
     fn discover_for_prod(server_only: bool) -> Result<Self> {
-        Self::discover_with_runtime_assets("prod-runtime-assets", !server_only)
+        Self::discover_with_runtime_assets("prod-runtime-assets", !server_only, false)
     }
 
     fn discover_for_poki() -> Result<Self> {
-        Self::discover_with_runtime_assets("poki-runtime-assets", true)
+        Self::discover_with_runtime_assets("poki-runtime-assets", true, false)
     }
 
-    fn discover_with_runtime_assets(runtime_assets_name: &str, prepare_art: bool) -> Result<Self> {
+    fn discover_with_runtime_assets(runtime_assets_name: &str, prepare_art: bool, local_preview: bool) -> Result<Self> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .canonicalize()?;
-        let art_pipeline = prepare_art.then(|| ArtPipeline::load(&root)).transpose()?;
+        let art_pipeline = prepare_art
+            .then(|| ArtPipeline::load_for(&root, local_preview))
+            .transpose()?;
         let t = env::var("CARGO_TARGET_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| root.join("target"));
         let s = root.join("dist/.sow-state");
         let runtime_assets = s.join(runtime_assets_name);
-        if let Some(art_pipeline) = &art_pipeline {
+        if let Some(art_pipeline) = &art_pipeline && !local_preview {
             stage_runtime_assets(&root, &runtime_assets, art_pipeline)?;
         }
         Ok(Self {
@@ -213,6 +219,10 @@ impl Paths {
             root,
             runtime_assets,
         })
+    }
+
+    fn is_local_preview(&self) -> bool {
+        self.art_pipeline.as_ref().is_some_and(|pipeline| pipeline.local_preview)
     }
 
     fn art_pipeline(&self) -> Result<&ArtPipeline> {
@@ -258,6 +268,7 @@ struct ImageCacheRecord {
 }
 
 struct ArtPipeline {
+    local_preview: bool,
     root: PathBuf,
     cache_root: PathBuf,
     config_path: PathBuf,
@@ -268,6 +279,10 @@ struct ArtPipeline {
 
 impl ArtPipeline {
     fn load(root: &Path) -> Result<Self> {
+        Self::load_for(root, false)
+    }
+
+    fn load_for(root: &Path, local_preview: bool) -> Result<Self> {
         let config_path = root.join("sow-dist/art-optimization.toml");
         let config_text = fs::read_to_string(&config_path)
             .with_context(|| format!("read art optimization profiles: {}", config_path.display()))?;
@@ -291,15 +306,13 @@ impl ArtPipeline {
                 bail!("invalid art optimization profile {name:?} in {}", config_path.display());
             }
         }
-        let magick_version = output("magick", &["-version"])
-            .context("art distribution requires ImageMagick (magick)")?
+        let magick_version = Self::tool_version("magick", "-version", local_preview)?
             .lines()
             .next()
             .unwrap_or_default()
             .to_owned();
-        let svgo_version = output("svgo", &["--version"])
-            .context("art distribution requires SVGO (svgo)")?;
-        if svgo_version.trim() != config.svgo_version {
+        let svgo_version = Self::tool_version("svgo", "--version", local_preview)?;
+        if !local_preview && svgo_version.trim() != config.svgo_version {
             bail!(
                 "art profiles require SVGO {}, found {}; update the pinned profile/tool together",
                 config.svgo_version,
@@ -307,6 +320,7 @@ impl ArtPipeline {
             );
         }
         let pipeline = Self {
+            local_preview,
             root: root.to_path_buf(),
             cache_root: root.join("dist/.sow-state/art-optimization-cache"),
             config_path,
@@ -314,8 +328,17 @@ impl ArtPipeline {
             magick_version,
             svgo_version: svgo_version.trim().to_owned(),
         };
-        pipeline.validate_profile_set()?;
+        if !local_preview {
+            pipeline.validate_profile_set()?;
+        }
         Ok(pipeline)
+    }
+
+    fn tool_version(tool: &str, arg: &str, local_preview: bool) -> Result<String> {
+        if local_preview {
+            return Ok(output(tool, &[arg]).unwrap_or_default());
+        }
+        output(tool, &[arg]).with_context(|| format!("art distribution requires {tool}"))
     }
 
     fn profile(&self, name: &str) -> Result<&ArtProfile> {
@@ -333,7 +356,27 @@ impl ArtPipeline {
         exact_size: Option<(u32, u32)>,
         quality_override: Option<u32>,
     ) -> Result<()> {
-        self.publish_image_with_options(source, destination, profile_name, exact_size, quality_override, false)
+        let result = self.publish_image_with_options(
+            source, destination, profile_name, exact_size, quality_override, false,
+        );
+        self.preview_art_fallback(source, destination, result)
+    }
+
+    fn preview_art_fallback(&self, source: &Path, destination: &Path, result: Result<()>) -> Result<()> {
+        if !self.local_preview {
+            return result;
+        }
+        if let Err(error) = result {
+            eprintln!("⚠ Local art {}: {error:#}", source.display());
+            if source.is_file() && source.extension() == destination.extension() {
+                if let Some(parent) = destination.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::copy(source, destination)?;
+            }
+            // A derivative that requires conversion can keep its previous output.
+        }
+        Ok(())
     }
 
     fn publish_preview_image(
@@ -676,13 +719,13 @@ impl ArtPipeline {
         profile_override: Option<&str>,
     ) -> Result<()> {
         let extension = source.extension().and_then(|ext| ext.to_str()).unwrap_or_default().to_ascii_lowercase();
-        match extension.as_str() {
+        let result = match extension.as_str() {
             "svg" => self.publish_svg(source, destination),
             extension if DISTRIBUTION_RASTER_EXTENSIONS.contains(&extension) => {
-                let profile = profile_override
-                    .or_else(|| profile_for_distribution_path(public_path))
-                    .with_context(|| format!("raster art has no sow-dist profile: {}", public_path.display()))?;
-                self.publish_image(source, destination, profile, None, None)
+                match profile_override.or_else(|| profile_for_distribution_path(public_path)) {
+                    Some(profile) => return self.publish_image(source, destination, profile, None, None),
+                    None => Err(anyhow::anyhow!("raster art has no sow-dist profile: {}", public_path.display())),
+                }
             }
             _ => {
                 if let Some(parent) = destination.parent() {
@@ -692,7 +735,8 @@ impl ArtPipeline {
                     .with_context(|| format!("copy distribution file {}", source.display()))?;
                 Ok(())
             }
-        }
+        };
+        self.preview_art_fallback(source, destination, result)
     }
 
     fn copy_distribution_tree(&self, source: &Path, destination: &Path, public_prefix: &Path) -> Result<()> {
@@ -842,7 +886,8 @@ struct ArtPreviewAsset {
 
 fn profile_for_distribution_path(path: &Path) -> Option<&'static str> {
     let path = path.to_string_lossy().replace('\\', "/");
-    let name = Path::new(&path).file_name()?.to_string_lossy();
+    let path = path.strip_prefix("assets/").unwrap_or(&path);
+    let name = Path::new(path).file_name()?.to_string_lossy();
     if path.starts_with("shell/loader/") {
         if name == "sow-splash-desktop.webp" {
             return Some("fullbleed_wide");
@@ -1188,7 +1233,9 @@ fn site_media_ready(out: &Path) -> bool {
 /// dropped file can never sit unused or unpublished.
 fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Result<()> {
     let art = root.join("assets/art");
-    verify_playable_hero_icons(&art.join("icons/abilities"), "source art")?;
+    if !pipeline.local_preview {
+        verify_playable_hero_icons(&art.join("icons/abilities"), "source art")?;
+    }
     let generated = root.join("assets/generated");
     let mut produced = std::collections::BTreeSet::new();
     let mut publish = |src: &Path, rel: &str, profile: Option<&str>| -> Result<()> {
@@ -1214,6 +1261,9 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         for file in sorted_files(&art.join("avatars").join(folder))? {
             let stem = file_stem(&file);
             if folder == "heroes" {
+                if pipeline.local_preview {
+                    continue;
+                }
                 if expression_part(&stem).is_some() {
                     bail!(
                         "hero faces now belong in one 2 x 2 sheet: remove {}",
@@ -1228,7 +1278,7 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
                     file.display()
                 );
             }
-            if let Some(first) = avatar_sources.insert(stem.clone(), file.clone()) {
+            if let Some(first) = avatar_sources.insert(stem.clone(), file.clone()) && !pipeline.local_preview {
                 bail!(
                     "avatar {stem} is in two folders: {} and {}",
                     first.display(),
@@ -1239,8 +1289,9 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         }
     }
     let random_avatar = source_named(&art.join("avatars"), "random")
+        .or_else(|| pipeline.local_preview.then(|| art.join("avatars/default.webp")))
         .context("missing art: assets/art/avatars/random.webp")?;
-    if let Some(first) = avatar_sources.insert("random".to_owned(), random_avatar.clone()) {
+    if let Some(first) = avatar_sources.insert("random".to_owned(), random_avatar.clone()) && !pipeline.local_preview {
         bail!(
             "avatar random is in two folders: {} and {}",
             first.display(),
@@ -1262,25 +1313,37 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
     for leader in sow_core::player::Leader::all() {
         let base = leader.art_slug();
         let source = art.join("avatars/heroes").join(format!("{base}.webp"));
-        if !source.is_file() {
+        if !source.is_file() && !pipeline.local_preview {
             bail!(
                 "hero art {base} needs one 2 x 2 sheet at {}",
                 source.display()
             );
         }
-        if let Some(first) = avatar_sources.insert(base.to_owned(), source.clone()) {
+        if let Some(first) = avatar_sources.insert(base.to_owned(), source.clone()) && !pipeline.local_preview {
             bail!(
                 "avatar {base} is in two folders: {} and {}",
                 first.display(),
                 source.display()
             );
         }
-        let sheet = image::open(&source)
-            .with_context(|| format!("read hero sheet {}", source.display()))?
-            .to_rgba8();
+        let sheet = match image::open(&source) {
+            Ok(sheet) => sheet.to_rgba8(),
+            Err(error) if pipeline.local_preview => {
+                eprintln!("⚠ Local hero sheet {}: {error}", source.display());
+                continue;
+            }
+            Err(error) => return Err(error).with_context(|| format!("read hero sheet {}", source.display())),
+        };
         for expression in sow_core::emote::AvatarExpression::ALL {
             let name = expression.id();
-            let crop = hero_expression_crop(&sheet, expression)?;
+            let crop = match hero_expression_crop(&sheet, expression) {
+                Ok(crop) => crop,
+                Err(error) if pipeline.local_preview => {
+                    eprintln!("⚠ Local hero crop {}: {error:#}", source.display());
+                    break;
+                }
+                Err(error) => return Err(error),
+            };
             let crop_path = hero_crop_dir.path().join(format!("{base}_{name}.png"));
             crop.save(&crop_path)
                 .with_context(|| format!("write {name} crop for hero {base}"))?;
@@ -1294,6 +1357,9 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
     for file in sorted_files(&art.join("heroes"))? {
         let stem = file_stem(&file);
         if !stem.ends_with("_desktop") && !stem.ends_with("_mobile") {
+            if pipeline.local_preview {
+                continue;
+            }
             bail!(
                 "unknown hero scene {}: use <avatar>_desktop or <avatar>_mobile",
                 file.display()
@@ -1303,22 +1369,30 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
     }
     let mut known_icons = std::collections::BTreeSet::new();
     // Badge icons are packed by sow-tools into badges-atlas, not published one by one.
-    let badges: serde_json::Value =
-        serde_json::from_slice(&fs::read(generated.join("badges-atlas.json"))?)?;
-    for cell in badges["cells"].as_array().into_iter().flatten() {
-        let stem = cell.as_str().unwrap_or_default();
-        known_icons.insert(
-            source_named(&art.join("icons"), stem)
-                .with_context(|| format!("missing art: assets/art/icons/{stem}.png"))?,
-        );
+    if !pipeline.local_preview {
+        let badges: serde_json::Value =
+            serde_json::from_slice(&fs::read(generated.join("badges-atlas.json"))?)?;
+        for cell in badges["cells"].as_array().into_iter().flatten() {
+            let stem = cell.as_str().unwrap_or_default();
+            known_icons.insert(
+                source_named(&art.join("icons"), stem)
+                    .with_context(|| format!("missing art: assets/art/icons/{stem}.png"))?,
+            );
+        }
     }
     for (dir, stem, rel, profile) in ART_ICONS {
-        let src = source_named(&art.join(dir), stem)
-            .with_context(|| format!("missing art: assets/art/{dir}/{stem}.png"))?;
+        let Some(src) = source_named(&art.join(dir), stem) else {
+            if pipeline.local_preview {
+                eprintln!("⚠ Local art missing: assets/art/{dir}/{stem}");
+                publish(&art.join(dir).join(format!("{stem}.png")), rel, Some(profile))?;
+                continue;
+            }
+            bail!("missing art: assets/art/{dir}/{stem}.png");
+        };
         known_icons.insert(src.clone());
         publish(&src, rel, Some(profile))?;
     }
-    for dir in ["icons", "store"] {
+    for dir in ["icons", "store"].into_iter().filter(|_| !pipeline.local_preview) {
         for file in fs::read_dir(art.join(dir))? {
             let file = file?.path();
             if ART_FOLDERS
@@ -1368,9 +1442,14 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         publish(&media.join(asset), &format!("site/media/{asset}"), None)?;
     }
     for (stem, (dir, provisional)) in SITE_STILLS {
-        let src = source_named(&media, stem)
-            .or_else(|| source_named(&root.join(dir), provisional))
-            .with_context(|| format!("landing shot {stem} has no capture and no art"))?;
+        let src = source_named(&media, stem).or_else(|| source_named(&root.join(dir), provisional));
+        let Some(src) = src else {
+            if pipeline.local_preview {
+                eprintln!("⚠ Local landing shot {stem} has no capture and no art");
+                continue;
+            }
+            bail!("landing shot {stem} has no capture and no art");
+        };
         let relative = format!("site/media/{stem}.webp");
         let profile = if stem.ends_with("-mobile") || stem == "support-six-sky" {
             "site_still_tall"
@@ -1391,7 +1470,9 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         pipeline.publish_image(&icon_master, &destination, "app_icon", Some((side, side)), None)?;
         produced.insert(destination);
     }
-    stage_android_icons(root, out, &icon_master, pipeline, &mut produced)?;
+    if !pipeline.local_preview {
+        stage_android_icons(root, out, &icon_master, pipeline, &mut produced)?;
+    }
 
     for (source, relative, max_side) in avatar_portraits {
         let profile = if max_side <= PORTRAIT_PX { "avatar_portrait_192" } else { "avatar_portrait_256" };
@@ -1402,7 +1483,7 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         pipeline.publish_image(&source, &out.join(&relative), "avatar_portrait_256", None, None)?;
         produced.insert(out.join(&relative));
     }
-    for file in fs::read_dir(&media)? {
+    for file in fs::read_dir(&media)?.filter(|_| !pipeline.local_preview) {
         let file = file?.path();
         let name = file.file_name().unwrap_or_default().to_string_lossy();
         let stem = file.file_stem().unwrap_or_default().to_string_lossy();
@@ -1428,7 +1509,14 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         else {
             continue;
         };
-        produced.extend(publish_site_video(&src, &out.join("site/media"), stem, pipeline)?);
+        match publish_site_video(&src, &out.join("site/media"), stem, pipeline) {
+            Ok(outputs) => produced.extend(outputs),
+            Err(error) if pipeline.local_preview => {
+                eprintln!("⚠ Local landing video {stem}: {error:#}");
+                produced.extend(["webm", "mp4", "webp"].map(|ext| out.join(format!("site/media/{stem}.{ext}"))));
+            }
+            Err(error) => return Err(error),
+        }
     }
 
     for entry in walkdir::WalkDir::new(out).contents_first(true) {
@@ -1439,7 +1527,9 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
             let _ = fs::remove_dir(entry.path());
         }
     }
-    pipeline.validate_staged_image_inventory(out)?;
+    if !pipeline.local_preview {
+        pipeline.validate_staged_image_inventory(out)?;
+    }
     Ok(())
 }
 
@@ -2153,6 +2243,50 @@ fn copy_campaign_for_poki(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Release builds include only maps with a recorded recipe. Map Generator output
+/// stays local until uploaded to SOW_MAPS_UPLOAD_ROOT, even though it shares the
+/// assets/maps workspace used by the authored map library.
+fn copy_release_maps(src: &Path, dst: &Path, sources_path: &Path) -> Result<()> {
+    let sources: toml::Value = fs::read_to_string(sources_path)?
+        .parse()
+        .context("parse official map source catalog")?;
+    let recipes = sources
+        .get("recipes")
+        .and_then(toml::Value::as_table)
+        .context("map source catalog has no recipes")?;
+    let mut published = recipes.keys().cloned().collect::<Vec<_>>();
+    published.sort();
+    let published_set = published.iter().cloned().collect::<HashSet<_>>();
+    let mut catalog = sow_core::map_file::parse_catalog(&fs::read(src.join("catalog.bin"))?)
+        .map_err(|error| anyhow::anyhow!("read map catalog: {error}"))?;
+    catalog
+        .entries
+        .retain(|entry| published_set.contains(&entry.key));
+    if catalog.entries.len() != published.len() {
+        bail!(
+            "map source catalog lists {} maps, but assets/maps/catalog.bin contains {} of them",
+            published.len(),
+            catalog.entries.len()
+        );
+    }
+
+    fs::create_dir_all(dst)?;
+    fs::copy(src.join("NOTICE"), dst.join("NOTICE"))?;
+    fs::copy(src.join("SOURCES.toml"), dst.join("SOURCES.toml"))?;
+    for map_id in &published {
+        let map_dir = src.join(map_id);
+        for name in ["map.bin", "map.bin.br"] {
+            require_file(&map_dir.join(name), &format!("release map {map_id}/{name}"))?;
+        }
+        copy_dir(&map_dir, &dst.join(map_id))?;
+    }
+    fs::write(
+        dst.join("catalog.bin"),
+        sow_core::map_file::encode_catalog(&catalog),
+    )?;
+    Ok(())
+}
+
 fn copy_portal_maps(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()> {
     fs::create_dir_all(dst)?;
     fs::copy(src.join("catalog.bin"), dst.join("catalog.bin"))?;
@@ -2255,7 +2389,7 @@ fn refresh_map_thumbnails(maps_root: &Path, map_sources: &Path, pipeline: &ArtPi
                 manifest_path.display()
             );
         }
-        if let Some(sources) = value.get("sources").and_then(|v| v.as_object()) {
+        if let Some(sources) = value.get("sources").and_then(|v| v.as_object()) && !pipeline.local_preview {
             for (name, metadata) in sources {
                 let path = map_sources.join(name);
                 require_file(&path, "thumbnail source")?;
@@ -2431,7 +2565,10 @@ fn pack_art_atlases(paths: &Paths) -> Result<()> {
     for (name, _) in GENERATED_FILES {
         require_file(&generated.join(name), "packed atlas")?;
     }
-    stage_runtime_assets(&paths.root, &paths.runtime_assets, paths.art_pipeline()?)
+    if !paths.is_local_preview() {
+        stage_runtime_assets(&paths.root, &paths.runtime_assets, paths.art_pipeline()?)?;
+    }
+    Ok(())
 }
 
 fn compile_wasm_profile(paths: &Paths, profile: &str, dev: bool) -> Result<PathBuf> {
@@ -2441,7 +2578,12 @@ fn compile_wasm_profile(paths: &Paths, profile: &str, dev: bool) -> Result<PathB
         "wasm-release" => "wasm-release",
         _ => bail!("unsupported WASM profile: {profile}"),
     };
-    pack_art_atlases(paths)?;
+    if let Err(error) = pack_art_atlases(paths) {
+        if !paths.is_local_preview() {
+            return Err(error);
+        }
+        eprintln!("⚠ Local atlas generation: {error:#}");
+    }
     println!("==> Compiling WASM ({profile})...");
     let mut a = vec!["build"];
     if profile != "dev" {
@@ -2604,18 +2746,25 @@ fn compile_browser_ts(path: &Path, format: &str, context: &str) -> Result<String
     String::from_utf8(output.stdout).with_context(|| format!("TypeScript {context} is not UTF-8"))
 }
 
-fn read_shell_bundle(shell: &Path, manifest: &str, parts: &[&str]) -> Result<String> {
-    let manifest_source = fs::read_to_string(shell.join(manifest))?;
+fn read_shell_bundle(shell: &Path, manifest: &str, parts: &[&str], local_preview: bool) -> Result<String> {
+    let manifest_source = if local_preview {
+        None
+    } else {
+        Some(fs::read_to_string(shell.join(manifest))?)
+    };
     // The part banner is attached first so it stays visible in the output.
     let mut bundle = format!("/* shell bundle parts: {} */\n", parts.join(" "));
     for part in parts {
-        if !manifest_source.contains(part) {
+        if manifest_source.as_ref().is_some_and(|source| !source.contains(part)) {
             bail!("{manifest}: missing bundle part {part}");
         }
-        bundle.push_str(
-            &fs::read_to_string(shell.join(part))
-                .with_context(|| format!("read shell bundle part {part}"))?,
-        );
+        let source = fs::read_to_string(shell.join(part))
+            .with_context(|| format!("read shell bundle part {part}"));
+        match source {
+            Ok(source) => bundle.push_str(&source),
+            Err(error) if local_preview => eprintln!("⚠ Local CSS: {error:#}"),
+            Err(error) => return Err(error),
+        }
         bundle.push('\n');
     }
     Ok(bundle)
@@ -2625,7 +2774,11 @@ fn read_shell_bundle(shell: &Path, manifest: &str, parts: &[&str]) -> Result<Str
 /// Portal builds compile a copy of the shell in which the surface seam
 /// (main_menu.surfaces.ts) is the portal's surface, so every importer of the
 /// seam gets the portal implementation, not only the entry.
-fn read_menu_bundle(shell: &Path, portal_surface: Option<&str>) -> Result<String> {
+fn read_menu_bundle(
+    shell: &Path,
+    portal_surface: Option<&str>,
+    local_preview: bool,
+) -> Result<String> {
     let scratch = tempfile::Builder::new()
         .prefix(".sow-menu-")
         .tempdir_in(shell.parent().context("shell directory has no parent")?)
@@ -2640,14 +2793,18 @@ fn read_menu_bundle(shell: &Path, portal_surface: Option<&str>) -> Result<String
         fs::write(&shell_file, strip_portal_menu_sections(&source)?)?;
     }
     let code = compile_browser_ts(&build.join("main_menu.ts"), "iife", "main menu")?;
-    ensure_shell_entry_runs("main_menu.ts", &code)?;
+    if !local_preview {
+        ensure_shell_entry_runs("main_menu.ts", &code)?;
+    }
     // Bun strips comments while bundling, so the banner is attached after.
     let surface = portal_surface.unwrap_or("main_menu.surfaces.ts");
     let mut bundle = format!("/* menu bundle: main_menu.ts surface {surface} */\n{code}");
     if !bundle.ends_with('\n') {
         bundle.push('\n');
     }
-    validate_web_bundle(&bundle)?;
+    if !local_preview {
+        validate_web_bundle(&bundle)?;
+    }
     Ok(bundle)
 }
 
@@ -2933,11 +3090,11 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     let experience_events =
         compile_shell_ts(&paths.shell, "experience_events.ts")?.replace("</script>", "<\\/script>");
     let experience_events_slot = "/* __INLINE_EXPERIENCE_EVENTS_JS__ */";
-    if tpl.matches(experience_events_slot).count() != 1 {
+    if !paths.is_local_preview() && tpl.matches(experience_events_slot).count() != 1 {
         bail!("game HTML template must contain one experience-events slot");
     }
     let source_slot = "<!-- __SOW_SOURCE_IDENTITY_SLOT__ -->";
-    if tpl.matches(source_slot).count() != 1 {
+    if !paths.is_local_preview() && tpl.matches(source_slot).count() != 1 {
         bail!("game HTML template must contain one source identity slot");
     }
     let source = source_identity(paths)?;
@@ -3108,8 +3265,9 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     } else {
         "name=\"sow-media-artwork\" content=\"../icon-192.png\""
     };
-    if html.matches("name=\"sow-media-artwork\"").count() != 1
-        || !html.contains(media_artwork_reference)
+    if !paths.is_local_preview()
+        && (html.matches("name=\"sow-media-artwork\"").count() != 1
+            || !html.contains(media_artwork_reference))
     {
         bail!("index.html has an invalid game music artwork path");
     }
@@ -3119,7 +3277,6 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         out.join("play/index.html")
     };
     fs::create_dir_all(index.parent().unwrap())?;
-    fs::write(&index, &html)?;
     let mut loader = compile_shell_ts(&paths.shell, "loader.ts")?;
     if poki || jest {
         loader = strip_optional_marked_section(
@@ -3146,6 +3303,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "main_menu.tutorial.css",
             "main_menu.profile.css",
         ],
+        paths.is_local_preview(),
     )?;
     let menu_surface = if poki {
         Some("main_menu.poki.ts")
@@ -3154,18 +3312,25 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     } else {
         None
     };
-    let building_manifest: serde_json::Value = serde_json::from_slice(
-        &fs::read(paths.assets_gameplay.join("buildings/atlas.json"))
-            .context("building atlas manifest missing; run pack-building-atlas")?,
-    )
-    .context("building atlas manifest is invalid JSON")?;
+    let building_manifest = fs::read(paths.assets_gameplay.join("buildings/atlas.json"))
+        .context("read building atlas manifest")
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes)
+            .context("parse building atlas manifest"));
+    let building_manifest = match building_manifest {
+        Ok(manifest) => manifest,
+        Err(error) if paths.is_local_preview() => {
+            eprintln!("⚠ Local building atlas: {error:#}");
+            serde_json::Value::Null
+        }
+        Err(error) => return Err(error),
+    };
     let building_manifest_js = format!(
         "window.SOW_BUILDING_ART = {};\n",
         serde_json::to_string(&building_manifest)?
     );
     let mut menu_js = format!(
         "{building_manifest_js}{}",
-        read_menu_bundle(&paths.shell, menu_surface)?
+        read_menu_bundle(&paths.shell, menu_surface, paths.is_local_preview())?
     )
     .replace("</script>", "<\\/script>");
     if poki || jest {
@@ -3179,7 +3344,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             menu_js = menu_js.replace(forbidden, "about:blank");
         }
     }
-    let mut fh = fs::read_to_string(&index)?;
+    let mut fh = html;
     for bar in ["loader_empty", "loader_full", "sow-splash-desktop", "sow-splash-mobile"] {
         if let Some(hash) = asset_versions
             .get(format!("/assets/shell/loader/{bar}.webp"))
@@ -3214,7 +3379,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         bail!("index.html: no loader injection point");
     }
     let menu_css_marker = "/* __INLINE_MAIN_MENU_CSS__ */";
-    if !fh.contains(menu_css_marker) {
+    if !paths.is_local_preview() && !fh.contains(menu_css_marker) {
         bail!("index.html: no main menu CSS injection point");
     }
     fh = fh.replacen(menu_css_marker, &menu_css, 1);
@@ -3281,6 +3446,17 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             );
     }
     fs::write(&index, fh)?;
+    if paths.is_local_preview() && let Ok(entries) = fs::read_dir(out.join("play")) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with("main_menu_")
+                && name.ends_with(".js")
+                && !menu_js_injection.contains(name.as_str())
+            {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
     Ok(())
 }
 
@@ -3293,10 +3469,10 @@ fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
             Path::new("sow-web/shell/favicon_io"),
         )?;
     }
-    fs::copy(
-        paths.assets_shell.join("brand/sow.svg"),
-        out.join("sow.svg"),
-    )?;
+    let logo = paths.assets_shell.join("brand/sow.svg");
+    if logo.is_file() || !paths.is_local_preview() {
+        fs::copy(logo, out.join("sow.svg"))?;
+    }
     if matches!(
         target,
         WebTarget::CrazyGames | WebTarget::Poki | WebTarget::Jest
@@ -3357,7 +3533,10 @@ fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
             "WASM-THIRD-PARTY-NOTICES.zip",
         ),
     ] {
-        fs::copy(paths.root.join(source), out.join(destination))?;
+        let source = paths.root.join(source);
+        if source.is_file() || !paths.is_local_preview() {
+            fs::copy(source, out.join(destination))?;
+        }
     }
     Ok(())
 }
@@ -3389,7 +3568,12 @@ const ENGLISH_ONLY_PAGES: [&str; 5] = [
 
 fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
     // The landing's generated sections and every localized page share one publisher.
-    let english = serde_json::to_value(sow_i18n::web(sow_i18n::Language::English))?;
+    let english = if paths.is_local_preview() {
+        let payload: serde_json::Value = serde_json::from_slice(&fs::read(out.join("locales/en"))?)?;
+        payload["strings"].clone()
+    } else {
+        serde_json::to_value(sow_i18n::web(sow_i18n::Language::English))?
+    };
     let leader_explorer = landing_leader_explorer(&paths.root.join("sow-web/site"), &english)?;
     let map_explorer = landing_maps(&out.join("maps"), &paths.root.join("assets/maps/SOURCES.toml"))?;
     let landing = expand_landing(&fs::read_to_string(out.join("index.html"))?, out, &leader_explorer, &map_explorer)?;
@@ -3404,7 +3588,7 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
     }).collect::<Vec<_>>();
     let biographies = public_leader_biographies(&paths.root)?;
     let mut metadata = tempfile::NamedTempFile::new()?;
-    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "mapExplorer": map_explorer }))?;
+    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "mapExplorer": map_explorer, "localPreview": paths.is_local_preview() }))?;
     run("bun", &[
         "run", paths.root.join("sow-web/site/generate.ts").to_str().context("site generator path")?,
         out.to_str().context("site output path")?,
@@ -4139,10 +4323,6 @@ fn validate_web_catalogs(report_equal_values: bool) -> Result<serde_json::Value>
     validate_web_catalogs_with_missing(report_equal_values, false)
 }
 
-fn validate_web_catalogs_for_local_preview() -> Result<serde_json::Value> {
-    validate_web_catalogs_with_missing(false, true)
-}
-
 fn validate_web_catalogs_with_missing(
     report_equal_values: bool,
     allow_missing_translations: bool,
@@ -4732,22 +4912,11 @@ if (menuReport.errors.length) process.exitCode = 1;
 }
 
 fn export_locales(out: &Path) -> Result<()> {
-    export_locales_with_missing_translations(out, false)
+    validate_web_catalogs(false)?;
+    write_locales(out, None)
 }
 
-fn export_locales_for_local_preview(out: &Path) -> Result<()> {
-    export_locales_with_missing_translations(out, true)
-}
-
-fn export_locales_with_missing_translations(
-    out: &Path,
-    allow_missing_translations: bool,
-) -> Result<()> {
-    if allow_missing_translations {
-        validate_web_catalogs_for_local_preview()?;
-    } else {
-        validate_web_catalogs(false)?;
-    }
+fn write_locales(out: &Path, local_root: Option<&Path>) -> Result<()> {
     let d = out.join("locales");
     fs::create_dir_all(&d)?;
     let languages = sow_i18n::Language::published_registry()
@@ -4763,12 +4932,30 @@ fn export_locales_with_missing_translations(
     )?;
     for (language, code, _) in sow_i18n::Language::published_registry() {
         let folder = locale_folder(code);
+        let strings = if let Some(root) = local_root {
+            let source = root.join("sow-i18n/strings").join(&folder).join("web.toml");
+            let catalog = fs::read_to_string(&source)
+                .map_err(anyhow::Error::from)
+                .and_then(|text| toml::from_str::<sow_i18n::WebStrings>(&text).map_err(anyhow::Error::from));
+            match catalog {
+                Ok(catalog) => serde_json::to_value(catalog)?,
+                Err(error) => {
+                    eprintln!("⚠ Local locale {}: {error:#}", source.display());
+                    if d.join(&folder).is_file() {
+                        continue;
+                    }
+                    serde_json::json!({})
+                }
+            }
+        } else {
+            serde_json::to_value(sow_i18n::web(language))?
+        };
         let payload = serde_json::json!({
             "schema": 1,
             "version": sow_i18n::WEB_CATALOG_VERSION,
             "locale": folder.clone(),
             "languages": languages.clone(),
-            "strings": sow_i18n::web(language),
+            "strings": strings,
         });
         fs::write(d.join(folder), serde_json::to_string_pretty(&payload)?)?;
     }
@@ -5530,7 +5717,11 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     let maps = out.join("maps");
     fs::create_dir_all(&maps)?;
     if paths.assets_maps.is_dir() {
-        copy_dir(&paths.assets_maps, &maps)?;
+        copy_release_maps(
+            &paths.assets_maps,
+            &maps,
+            &paths.root.join("assets/maps/SOURCES.toml"),
+        )?;
     }
     refresh_map_thumbnails(&maps, &paths.map_sources, paths.art_pipeline()?)?;
     let maps_cache_bust = thumbnail_cache_bust(&maps)?;
@@ -5784,7 +5975,11 @@ fn package_native_web(
             Path::new("guides"),
         )?;
         copy_dir(&paths.site_media, &assets.join("site/media"))?;
-        copy_dir(&paths.assets_maps, &out.join("maps"))?;
+        copy_release_maps(
+            &paths.assets_maps,
+            &out.join("maps"),
+            &paths.root.join("assets/maps/SOURCES.toml"),
+        )?;
         refresh_map_thumbnails(&out.join("maps"), &paths.map_sources, paths.art_pipeline()?)?;
         copy_shell(paths, out, WebTarget::Native)?;
 
@@ -6813,7 +7008,40 @@ fn local_static_fingerprint(paths: &Paths) -> Result<String> {
     }
     hash_avatar_asset_tree(&mut hash, &paths.assets_gameplay.join("avatars"))?;
     hash.update(file_sha256(&paths.art_pipeline()?.config_path)?.as_bytes());
+    if let Ok(staged) = fs::read(paths.runtime_assets.join(".fingerprint")) {
+        hash.update(staged);
+    }
     Ok(format!("{:x}", hash.finalize()))
+}
+
+fn prepare_local_art(paths: &Paths) -> Result<()> {
+    let pipeline = paths.art_pipeline()?;
+    let roots = [
+        paths.root.join("assets/art"),
+        paths.root.join("assets/generated"),
+        paths.root.join("assets/site/media"),
+        pipeline.config_path.clone(),
+    ];
+    let mut hash = Sha256::new();
+    hash.update(b"local-runtime-art-v1\0");
+    hash.update(pipeline.magick_version.as_bytes());
+    hash.update(pipeline.svgo_version.as_bytes());
+    for stamp in local_source_snapshot(paths)?
+        .into_iter()
+        .filter(|stamp| roots.iter().any(|root| stamp.path.starts_with(root)))
+    {
+        hash.update(stamp.path.to_string_lossy().as_bytes());
+        hash.update(stamp.len.to_le_bytes());
+        hash.update(stamp.modified_nanos.to_le_bytes());
+    }
+    let fingerprint = format!("{:x}", hash.finalize());
+    let marker = paths.runtime_assets.join(".fingerprint");
+    if fs::read_to_string(&marker).is_ok_and(|cached| cached == fingerprint) {
+        return Ok(());
+    }
+    stage_runtime_assets(&paths.root, &paths.runtime_assets, pipeline)?;
+    fs::write(marker, fingerprint)?;
+    Ok(())
 }
 
 fn package_local_preview(
@@ -6862,21 +7090,17 @@ fn package_local_preview(
             "units",
             "music",
         ] {
-            copy_dir(
-                &paths.assets_gameplay.join(name),
-                &assets.join("gameplay").join(name),
-            )?;
+            let source = paths.assets_gameplay.join(name);
+            if source.is_dir() {
+                copy_dir(&source, &assets.join("gameplay").join(name))?;
+            }
         }
-        paths.art_pipeline()?.copy_distribution_tree(
-            &paths.root.join("assets/campaign"),
-            &assets.join("campaign"),
-            Path::new("campaign"),
-        )?;
-        paths.art_pipeline()?.copy_distribution_tree(
-            &paths.root.join("assets/guides"),
-            &assets.join("guides"),
-            Path::new("guides"),
-        )?;
+        for name in ["campaign", "guides"] {
+            let source = paths.root.join("assets").join(name);
+            if source.is_dir() {
+                copy_dir(&source, &assets.join(name))?;
+            }
+        }
         copy_dir(&paths.site_media, &assets.join("site/media"))?;
         let maps = out.join("maps");
         fs::create_dir_all(&maps)?;
@@ -6885,8 +7109,14 @@ fn package_local_preview(
         }
 
         let site = paths.root.join("sow-web/site");
-        if site.join("fonts").is_dir() {
-            copy_web_fonts(&site.join("fonts"), &out.join("fonts"))?;
+        if site.join("fonts").is_dir()
+            && let Err(error) = copy_web_fonts(&site.join("fonts"), &out.join("fonts"))
+        {
+            eprintln!("⚠ Local web fonts: {error:#}");
+            let css = site.join("fonts/fonts.css");
+            if css.is_file() {
+                fs::copy(css, out.join("fonts/fonts.css"))?;
+            }
         }
         for name in ["icon-192.png", "icon-512.png", "icon-512-maskable.png"] {
             let icon = paths.app_icons.join(name);
@@ -6908,7 +7138,11 @@ fn package_local_preview(
             "User-agent: *\nAllow: /\nDisallow: /internal/\nDisallow: /api/\nDisallow: /*.wasm$\nDisallow: /*.wasm.br$\n",
         )?;
 
-        fs::write(&fingerprint_file, &fingerprint)?;
+        if let Err(error) = refresh_map_thumbnails(&maps, &paths.map_sources, paths.art_pipeline()?) {
+            eprintln!("⚠ Local map thumbnails: {error:#}");
+        } else {
+            fs::write(&fingerprint_file, &fingerprint)?;
+        }
     }
 
     require_file(&paths.wasm_input, "WASM client binary")?;
@@ -6918,10 +7152,7 @@ fn package_local_preview(
     let js_name = format!("{bindgen_name}.js");
     let wasm_name = format!("{bindgen_name}_bg.wasm");
 
-    let wasm_ready = static_ready
-        && out.join(&wasm_name).is_file()
-        && out.join(&js_name).is_file()
-        && out.join("play/index.html").is_file();
+    let wasm_ready = out.join(&wasm_name).is_file() && out.join(&js_name).is_file();
 
     if !wasm_ready {
         for entry in fs::read_dir(out)? {
@@ -6938,20 +7169,12 @@ fn package_local_preview(
         run_bindgen(&paths.wasm_input, out, &bindgen_name)?;
     }
 
-    // Clean up old main_menu bundles in play/ before building new index
-    if let Ok(entries) = fs::read_dir(out.join("play")) {
-        for entry in entries.flatten() {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if name.starts_with("main_menu_") && name.ends_with(".js") {
-                let _ = fs::remove_file(entry.path());
-            }
-        }
-    }
-
     copy_shell(paths, out, WebTarget::Local)?;
-    export_locales_for_local_preview(out)?;
-    refresh_map_thumbnails(&out.join("maps"), &paths.map_sources, paths.art_pipeline()?)?;
-    let maps_cache_bust = thumbnail_cache_bust(&out.join("maps"))?;
+    write_locales(out, Some(&paths.root))?;
+    let maps_cache_bust = thumbnail_cache_bust(&out.join("maps")).unwrap_or_else(|error| {
+        eprintln!("⚠ Local map thumbnails: {error:#}");
+        ts.to_owned()
+    });
     build_index(
         paths,
         out,
@@ -6997,7 +7220,6 @@ fn package_local_preview(
         }
     }
     for (source, destination, format) in [
-        ("analytics.ts", "analytics.js", "iife"),
         ("app.ts", "app.js", "iife"),
         ("site-chrome.ts", "site-chrome.js", "iife"),
         ("wou-auth.ts", "wou-auth.js", "esm"),
@@ -7011,17 +7233,23 @@ fn package_local_preview(
             )?;
         }
     }
-    expand_public_site_header(paths, out)?;
-
-    paths.art_pipeline()?.validate_staged_image_inventory(out)?;
+    if let Err(error) = expand_public_site_header(paths, out) {
+        eprintln!("⚠ Local landing pages: {error:#}. The game is available at /play/.");
+    }
     Ok(())
 }
 
 fn build_local_preview(paths: &Paths, version: &str, compile: bool) -> Result<()> {
-    stage_runtime_assets(&paths.root, &paths.runtime_assets, paths.art_pipeline()?)?;
     if compile {
         compile_wasm(paths, true)?;
     }
+    if let Err(error) = prepare_local_art(paths) {
+        eprintln!("⚠ Local art staging: {error:#}");
+    }
+    for folder in [&paths.assets_shell, &paths.assets_gameplay, &paths.site_media] {
+        fs::create_dir_all(folder)?;
+    }
+    fs::create_dir_all(paths.assets_gameplay.join("avatars"))?;
     package_local_preview(paths, &paths.dist_web, version, compile)?;
     Ok(())
 }
@@ -7479,10 +7707,6 @@ fn main() -> Result<()> {
         rotate_deployment_secrets(&root)?;
     }
     load_dotenv(&root.join("sow-dist/.env"));
-    ensure_generated_secret(&root, "SOW_DB_SECRET")?;
-    ensure_generated_secret(&root, "SOW_RELAY_CONTROL_SECRET")?;
-    ensure_generated_secret(&root, "SOW_RELAY_SETTLEMENT_SECRET")?;
-    ensure_generated_secret(&root, "SOW_REVENUECAT_WEBHOOK_SECRET")?;
 
     let mut cmd = String::new();
     let mut bump = false;
@@ -7504,7 +7728,17 @@ fn main() -> Result<()> {
         bail!("--server-only is only valid with ./sow p");
     }
 
-    let paths = if cmd == "p" || cmd == "prod" {
+    let local_preview = matches!(cmd.as_str(), "l" | "local" | "");
+    if !local_preview {
+        ensure_generated_secret(&root, "SOW_DB_SECRET")?;
+        ensure_generated_secret(&root, "SOW_RELAY_CONTROL_SECRET")?;
+        ensure_generated_secret(&root, "SOW_RELAY_SETTLEMENT_SECRET")?;
+        ensure_generated_secret(&root, "SOW_REVENUECAT_WEBHOOK_SECRET")?;
+    }
+
+    let paths = if local_preview {
+        Paths::discover_for_local()?
+    } else if cmd == "p" || cmd == "prod" {
         Paths::discover_for_prod(server_only)?
     } else if cmd == "poki" {
         Paths::discover_for_poki()?
@@ -8612,7 +8846,7 @@ mod tests {
         // entry the factory is never invoked and the menu/campaign runtime never
         // reaches `window`, which leaves the loader stuck on "Loading...".
         let paths = Paths::discover()?;
-        let bundle = read_menu_bundle(&paths.shell, None)?;
+        let bundle = read_menu_bundle(&paths.shell, None, false)?;
         assert!(
             bundle.contains("window.SOWCampaign ="),
             "shell bundle lost the campaign runtime"

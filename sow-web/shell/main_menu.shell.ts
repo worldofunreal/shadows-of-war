@@ -62,6 +62,7 @@ import {
     syncCreateDraft,
     updateCampaignSelection,
     updateLobbyViews,
+    updateQueueDownloadProgress,
     updateQueueRoster,
     updateRankedQueue,
 } from "./main_menu.lobbies.ts";
@@ -2020,6 +2021,7 @@ function updateDynamic() {
               ? SOW_t("lobbies.starting_in", { seconds: Math.ceil(lobby.timer_secs) })
               : SOW_t("lobbies.waiting_for_players");
     updateQueueRoster(lobby);
+    updateQueueDownloadProgress();
     updateRankedQueue();
     const cardStatuses = panel.querySelectorAll<HTMLElement>("[data-lobby-status-for]");
     for (let i = 0; i < cardStatuses.length; i++) {

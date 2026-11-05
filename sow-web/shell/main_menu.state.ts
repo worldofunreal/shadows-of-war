@@ -461,6 +461,9 @@ export interface HudInboxRequest {
     active: boolean;
     gold?: number;
     troops?: number;
+    /** A trade's price: what the requester gives in return. */
+    pay_gold?: number;
+    pay_troops?: number;
 }
 
 export interface HudCombatOperation {
@@ -603,6 +606,8 @@ export interface MenuHudPayload {
         confirm_pending: boolean;
         /** The radial's pick; null when the panel was opened from the leaderboard. */
         mode: "send" | "request" | null;
+        /** Set when the panel addresses every ally at once (the self-click); the ally count. */
+        all_allies?: number;
     } | null;
     betrayal?: { ally_id: number; ally_name: string; ally_avatar: HudAvatarIdentity } | null;
     sync?: { [key: string]: string | number | boolean | null } | null;

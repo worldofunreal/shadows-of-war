@@ -35,7 +35,7 @@ fn default_territory_gold_amount() -> f64 {
     1.0
 }
 fn default_territory_troop_amount() -> f64 {
-    1.0
+    0.75
 }
 
 fn default_territory_troop_tiles() -> u32 {
@@ -47,11 +47,11 @@ fn default_territory_gold_tiles() -> u32 {
 }
 
 fn default_city_troop_income() -> f64 {
-    625.0
+    550.0
 }
 
 fn default_farm_troop_income() -> f64 {
-    625.0
+    550.0
 }
 
 fn default_farm_gold_income() -> f64 {
@@ -299,13 +299,13 @@ pub struct GameConfig {
     pub port_gold_income: f64,
     // Hero-only bases: each one pays only the hero whose ability produces it, so the
     // economy of every other player is unchanged.
-    /// Gold income per game second per weighted City level, paid to Empress Gi only.
+    /// Gold income per game second per weighted City level, paid to Ashoka only.
     #[serde(default = "default_hero_city_gold_income")]
     pub hero_city_gold_income: f64,
-    /// Troop income per game second per Factory level, paid to Ashoka only.
+    /// Troop income per game second per Factory level, paid to Ramesses II only.
     #[serde(default = "default_city_troop_income")]
     pub hero_factory_troop_income: f64,
-    /// Troop income per game second per Port level, paid to Anacaona only.
+    /// Troop income per game second per Port level, paid to Artemisia I only.
     #[serde(default = "default_city_troop_income")]
     pub hero_port_troop_income: f64,
     /// Gold income per game second per active alliance, paid to Sālote Tupou III only.
@@ -448,15 +448,15 @@ impl Default for GameConfig {
             territory_gold_tiles: default_territory_gold_tiles(),
             troop_base_income: default_troop_base_income(),
             max_troops_base: 10.0,
-            max_troops_scale: 350.0,
+            max_troops_scale: 157.5,
             troop_upkeep_per_1000: default_troop_upkeep_per_1000(),
             trade_ship_gold_income: default_trade_ship_gold_income(),
-            territory_troop_amount: 1.0,
+            territory_troop_amount: default_territory_troop_amount(),
             territory_troop_tiles: default_territory_troop_tiles(),
 
             // Buildings (stacking)
-            city_max_troops: 18_750.0,
-            city_troop_income: 625.0,
+            city_max_troops: 9_375.0,
+            city_troop_income: default_city_troop_income(),
             farm_troop_income: default_farm_troop_income(),
             farm_gold_income: default_farm_gold_income(),
             tower_range: 6.0,

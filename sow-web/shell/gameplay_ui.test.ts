@@ -498,6 +498,9 @@ function makePlayerDialogsHarness() {
             transferTroops: element("input", "sow-hud-transfer-troops"),
             transferSend: element("button", "sow-hud-transfer-send", "send_resources"),
             transferRequest: element("button", "sow-hud-transfer-request", "request_resources"),
+            transferTrade: element("button", "sow-hud-transfer-trade", "offer_trade"),
+            transferDirTroops: element("button", "sow-hud-transfer-dir-troops", "flip_transfer_row"),
+            transferDirGold: element("button", "sow-hud-transfer-dir-gold", "flip_transfer_row"),
             transferStockTroops: element("b", "sow-hud-transfer-stock-troops"),
             transferStockMaxTroops: element("span", "sow-hud-transfer-stock-max-troops"),
             transferStockGold: element("b", "sow-hud-transfer-stock-gold"),
@@ -721,6 +724,16 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
     assert.equal(cards["resources:5"].reject.disabled, false, "obsolete requests can still be dismissed");
     cards["alliance:2"].portrait.onerror.call(cards["alliance:2"].portrait);
     assert.equal(cards["alliance:2"].portrait.src, "/assets/gameplay/avatars/null.webp");
+    assert.equal(cards["resources:3"].swap.hidden, true, "a plain request shows no price");
+    assert.equal(cards["resources:3"].accept.textContent, "en:hud.send");
+    context.renderInbox([alliance, { ...resources, pay_troops: 300 }, campaign, eliminated]);
+    const trade = refs.inboxRequests["resources:3"];
+    assert.equal(trade.swap.hidden, false);
+    assert.equal(trade.amounts.pay_troops.value.textContent, "300");
+    assert.equal(trade.amounts.pay_gold.element.hidden, true);
+    assert.equal(trade.type.textContent, "en:hud.trade_offer_title");
+    assert.equal(trade.accept.textContent, "en:hud.accept", "a trade is accepted, not sent");
+    context.renderInbox(requests);
 
     const pressed = cards["resources:3"].accept;
     pressed.focus();
@@ -1771,6 +1784,98 @@ test("the stronger army leads the one transfer CTA unless the radial picked a si
     assert.equal(transferSend.classList.contains("is-primary"), true, "the radial's Send leads");
     assert.equal(transferSend.hidden, false);
     assert.equal(transferRequest.hidden, true);
+});
+
+test("flipping one row turns the panel into a trade with one CTA and sends the price", () => {
+    const { context, update, click, calls } = makePlayerDialogsHarness();
+    const offer = {
+        target_id: 2,
+        target_name: "Trinovantes",
+        target_alive: true,
+        target_gold: 400,
+        target_troops: 300,
+        target_max_troops: 1000,
+        mode: "send",
+    };
+    const own = { troops: 800, gold: 0, max_troops: 1000 };
+    update({ transfer: offer, ...own });
+    const refs = context.hudRefs;
+    assert.equal(refs.transferDirGold.textContent, "en:hud.transfer_give");
+    assert.equal(refs.transferTrade.hidden, true);
+    click("flip_transfer_row", { resource: "gold" });
+    assert.equal(refs.transferDirGold.textContent, "en:hud.transfer_want");
+    assert.equal(refs.transferDirTroops.textContent, "en:hud.transfer_give");
+    assert.equal(refs.transferGold.value, "100", "the flipped row restarts at a quarter of their gold");
+    assert.equal(refs.transferSend.hidden, true);
+    assert.equal(refs.transferRequest.hidden, true);
+    assert.equal(refs.transferTrade.hidden, false, "a mix of Give and Ask is a trade");
+    assert.equal(refs.transferTrade.disabled, false);
+    click("offer_trade");
+    assert.deepEqual(calls.at(-1), {
+        type: "offer_trade",
+        target_player_id: 2,
+        gold: 100,
+        troops: 0,
+        pay_gold: 0,
+        pay_troops: 200,
+    });
+    assert.equal(refs.transferTrade.disabled, true, "a trade asks, so it shares the request cooldown");
+    // Flipping both rows lands on a plain Request; a reopened panel starts unflipped.
+    update(null);
+    update({ transfer: offer, ...own });
+    assert.equal(refs.transferDirGold.textContent, "en:hud.transfer_give");
+    assert.equal(refs.transferSend.hidden, false);
+});
+
+test("the self-click panel asks or trades with every ally, never gifts", () => {
+    const { context, update, click, calls } = makePlayerDialogsHarness();
+    const offer = {
+        target_id: 1,
+        target_name: "",
+        target_alive: true,
+        target_gold: 900,
+        target_troops: 80,
+        target_max_troops: 560,
+        mode: "request",
+        all_allies: 2,
+    };
+    update({ transfer: offer, troops: 10, gold: 0, max_troops: 100 });
+    const refs = context.hudRefs;
+    assert.equal(refs.transferIdentity.name.textContent, "en:hud.transfer_all_allies");
+    assert.equal(refs.transfer.dataset.allAllies, "true", "one ally's stock is hidden");
+    click("flip_transfer_row", { resource: "troops" });
+    click("flip_transfer_row", { resource: "gold" });
+    assert.equal(refs.transferSend.hidden, false);
+    assert.equal(refs.transferSend.disabled, true);
+    assert.equal(refs.transferHint.textContent, "en:hud.transfer_all_allies_send");
+    click("flip_transfer_row", { resource: "troops" });
+    click("flip_transfer_row", { resource: "gold" });
+    click("request_resources");
+    assert.deepEqual(calls.at(-1), {
+        type: "offer_to_allies",
+        gold: 225,
+        troops: 20,
+        pay_gold: 0,
+        pay_troops: 0,
+    });
+});
+
+test("a trade with its price at zero falls back to a plain Send", () => {
+    const { context, update, click, calls } = makePlayerDialogsHarness();
+    const offer = {
+        target_id: 3,
+        target_name: "Iceni",
+        target_alive: true,
+        target_gold: 400,
+        target_troops: 300,
+        target_max_troops: 1000,
+        mode: "send",
+    };
+    update({ transfer: offer, troops: 800, gold: 0, max_troops: 1000 });
+    click("flip_transfer_row", { resource: "gold" });
+    context.hudRefs.transferGold.value = "0";
+    click("offer_trade");
+    assert.deepEqual(calls.at(-1), { type: "send_resources", target_player_id: 3, gold: 0, troops: 200 });
 });
 
 test("the hint names only the side in focus, never the hidden side's block", () => {

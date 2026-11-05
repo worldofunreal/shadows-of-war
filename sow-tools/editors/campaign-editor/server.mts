@@ -187,6 +187,10 @@ function parseUploadTarget(value) {
   return { host: value.slice(0, index), dir: value.slice(index + 1).replace(/\/+$/, "") };
 }
 
+function shellQuote(value) {
+  return "'" + value.replace(/'/g, "'\\''") + "'";
+}
+
 // Water controls for one map; ranges match the sow-tools import-map-source flags.
 function waterArgs(water) {
   if (!water || typeof water !== "object") return null;
@@ -926,7 +930,7 @@ async function handle(req, res) {
       return;
     }
     // The upload folder belongs to root, so the listing runs as root on the server too.
-    const listed = await runCommand("ssh", [uploadTarget.host, `sudo ls -1 ${uploadTarget.dir}`]);
+    const listed = await runCommand("ssh", [uploadTarget.host, `sudo ls -1 ${shellQuote(uploadTarget.dir)}`]);
     if (listed.code !== 0) {
       reply(res, 502, listed.stderr.trim() || "Could not read the server's map folder.");
       return;
@@ -953,9 +957,18 @@ async function handle(req, res) {
     mapUploading = true;
     try {
       // The folder belongs to the game server user, so the removal runs as root on the server.
-      const removed = await runCommand("ssh", [uploadTarget.host, `sudo rm -rf -- ${uploadTarget.dir}/${mapKey}`]);
+      const mapDir = shellQuote(`${uploadTarget.dir}/${mapKey}`);
+      const removed = await runCommand("ssh", [
+        uploadTarget.host,
+        `if ! sudo test -d ${mapDir}; then echo "No uploaded copy of ${mapKey}; a copy in the active release may remain." >&2; exit 44; fi; sudo rm -rf -- ${mapDir}`,
+      ]);
       if (removed.code !== 0) {
-        reply(res, 502, removed.stderr.trim() || "Could not delete the map on the server.");
+        const missing = removed.code === 44;
+        reply(
+          res,
+          missing ? 404 : 502,
+          removed.stderr.trim() || (missing ? "No uploaded copy of that map exists." : "Could not delete the uploaded map."),
+        );
         return;
       }
       const reloaded = await reloadServerMaps();

@@ -1897,6 +1897,7 @@ pub(crate) mod reward_exit_tests {
             const handlerEnd = source.indexOf('hudRoot.addEventListener("click", handleHudClick)', bodyStart);
             const handler = 'function handleHudClick(event) {' + source.slice(bodyStart + 1, handlerEnd)
                 .replace(/\.(closest|querySelector|querySelectorAll)<[^>\n]+>/g, '.$1')
+                .replace(/\s+as const\b/g, '')
                 .replace(/([A-Za-z_$][\w$]*)!(?=[.[(])/g, '$1');
             const ElementStub = class {};
             const click = new Function('send', 'renderHud', 'Element',
