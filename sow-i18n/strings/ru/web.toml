@@ -948,6 +948,18 @@ elimination_bounty = "Игрок {victim} уничтожен; +{gold} золот
 elimination = "Вы уничтожили игрока {victim}."
 elimination_assist = "Вы помогли уничтожить игрока {victim}; +{gold} золота."
 ability_notice = "{ability}"
+ability_state_ready = "Готово"
+ability_state_conditional = "Ожидание"
+ability_state_active = "Активно"
+ability_state_triggered = "Сработало"
+ability_state_spent = "Использовано"
+ability_state_unavailable = "Недоступно"
+ability_automatic = "Автоматическая способность"
+ability_remaining = "{seconds}с"
+ability_restriction_campaign_only = "Доступно только в кампании."
+ability_restriction_buildings_disabled = "В этой игре здания отключены."
+ability_restriction_defeated = "Ваш герой больше не участвует в игре."
+
 
 [endgame]
 stat_kills = "Убийства"

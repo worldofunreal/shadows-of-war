@@ -948,6 +948,18 @@ elimination_bounty = "{victim} yenildi; +{gold} altın."
 elimination = "{victim} yenildi."
 elimination_assist = "{victim} yenilgisine yardım ettin; +{gold} altın."
 ability_notice = "{ability}"
+ability_state_ready = "Hazır"
+ability_state_conditional = "Bekliyor"
+ability_state_active = "Etkin"
+ability_state_triggered = "Tetiklendi"
+ability_state_spent = "Tükendi"
+ability_state_unavailable = "Kullanılamaz"
+ability_automatic = "Otomatik yetenek"
+ability_remaining = "{seconds}sn"
+ability_restriction_campaign_only = "Yalnızca senaryoda kullanılabilir."
+ability_restriction_buildings_disabled = "Bu maçta binalar devre dışı."
+ability_restriction_defeated = "Kahramanın artık maçta değil."
+
 
 [endgame]
 stat_kills = "Öldürme"

@@ -771,6 +771,8 @@
   background: linear-gradient(180deg, rgba(22, 24, 28, 0.85) 0%, rgba(13, 14, 18, 0.98) 100%);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   position: relative;
+  content-visibility: auto;
+  contain-intrinsic-size: 120px;
   transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
 
@@ -828,6 +830,62 @@
   width: 26px;
   height: 26px;
   object-fit: contain;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__ach-hero-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: cover;
+  display: block;
+  transition: filter 150ms ease;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__achievement.is-locked .sow-profile__ach-hero-avatar {
+  filter: grayscale(100%) brightness(0.6) opacity(0.65);
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__achievement.is-unlocked .sow-profile__ach-hero-avatar {
+  filter: brightness(1.05) drop-shadow(0 0 6px rgba(245, 197, 66, 0.4));
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__ach-search-wrap {
+  margin-bottom: 16px;
+  position: relative;
+  max-width: 420px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__ach-search-input {
+  width: 100%;
+  padding: 10px 16px 10px 38px;
+  background: rgba(14, 15, 18, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #f1f5f9;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: all 150ms ease;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__ach-search-input:focus {
+  border-color: var(--sow-gold, #f5c542);
+  box-shadow: 0 0 12px rgba(245, 197, 66, 0.25);
+  background: rgba(20, 22, 28, 0.98);
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__ach-search-wrap::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  pointer-events: none;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__achievement-check {

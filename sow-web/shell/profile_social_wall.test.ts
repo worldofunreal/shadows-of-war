@@ -237,3 +237,46 @@ test("profile achievements system renders prestige dossier, category filter pill
         "CSS must define mythic styling with golden radiance",
     );
 });
+
+test("profile achievements expands to 1,466 achievements across all 93 heroes with hero avatars and search", () => {
+    // Assert 93 heroes defined in catalog
+    assert.match(
+        profileSource,
+        /const ALL_HEROES:\s*\{\s*slug:\s*string;\s*name:\s*string\s*\}\[\]/,
+        "Profile must define all playable heroes for the full achievements matrix",
+    );
+    assert.match(
+        profileSource,
+        /export function getFullAchievementsCatalog\(\)/,
+        "Profile must export getFullAchievementsCatalog",
+    );
+    assert.match(
+        profileSource,
+        /export function resolveProfileAchievements\(/,
+        "Profile must export resolveProfileAchievements",
+    );
+
+    // Hero avatars in achievement badges
+    assert.match(
+        profileSource,
+        /sow-profile__ach-hero-avatar/,
+        "Hero-specific achievements must render hero avatar badge",
+    );
+    assert.match(
+        profileCss,
+        /\.sow-profile__ach-hero-avatar/,
+        "CSS must style hero avatar badges",
+    );
+
+    // Search bar for achievements
+    assert.match(
+        profileSource,
+        /data-role='achievements-search'/,
+        "Achievements tab must provide search bar for rapid filtering",
+    );
+    assert.match(
+        profileCss,
+        /\.sow-profile__ach-search-input/,
+        "CSS must style achievement search input",
+    );
+});

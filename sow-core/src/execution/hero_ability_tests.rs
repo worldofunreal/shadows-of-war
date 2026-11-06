@@ -2176,63 +2176,79 @@ fn redesigned_building(
 
 #[test]
 fn redesigned_peter_founds_a_legal_port_during_real_conquest() {
-    let mut e = arena(
-        64,
-        32,
-        Leader::of("peter_the_great"),
-        Some(Leader::of("cleopatra")),
-    );
-    for y in 0..4 {
-        for x in 0..64 {
-            e.state.map.terrain[(y * 64 + x) as usize] = MapTile::from_byte(0x20);
+    for landed in [false, true] {
+        let mut e = arena(
+            64,
+            32,
+            Leader::of("peter_the_great"),
+            Some(Leader::of("cleopatra")),
+        );
+        for y in 0..4 {
+            for x in 0..64 {
+                e.state.map.terrain[(y * 64 + x) as usize] = MapTile::from_byte(0x20);
+            }
         }
-    }
-    e.state.map.compute_shorelines();
-    // An otherwise identical neutral coast cannot consume the one-use founding.
-    e.state.events.push(GameEvent::TileCaptured {
-        x: 31,
-        y: 4,
-        new_owner: 1,
-        previous_owner: 0,
-        troops: 100.0,
-    });
-    e.hero_coastal_foundings();
-    assert!(e.buildings.is_empty());
-    e.state.player_mut(1).unwrap().troops = 30_000.0;
-    send(
-        &mut e,
-        1,
-        GameplayIntent::Attack(AttackIntent {
-            target_owner: 2,
-            troops: Some(20_000.0),
-        }),
-    );
-    for _ in 0..200 {
-        e.state.tick += 1;
-        e.execute_combat();
-        if !e.buildings.is_empty() {
-            break;
+        e.state.map.compute_shorelines();
+        // An otherwise identical neutral coast cannot consume the one-use founding.
+        e.state.events.push(GameEvent::TileCaptured {
+            x: 31,
+            y: 4,
+            new_owner: 1,
+            previous_owner: 0,
+            troops: 100.0,
+        });
+        e.hero_coastal_foundings();
+        assert!(e.buildings.is_empty());
+        if landed {
+            let shore = 4 * 64 + 32;
+            e.add_fleet(WarpFleet::new(
+                1,
+                1,
+                2,
+                UnitType::TransportShip,
+                10_000.0,
+                (shore, shore),
+                vec![shore],
+            ));
+            e.execute_fleets();
+        } else {
+            e.state.player_mut(1).unwrap().troops = 30_000.0;
+            send(
+                &mut e,
+                1,
+                GameplayIntent::Attack(AttackIntent {
+                    target_owner: 2,
+                    troops: Some(20_000.0),
+                }),
+            );
+            for _ in 0..200 {
+                e.state.tick += 1;
+                e.execute_combat();
+                if !e.buildings.is_empty() {
+                    break;
+                }
+            }
         }
+        assert_eq!(e.buildings.len(), 1);
+        let port = e.buildings[0];
+        assert_eq!(port.kind, BuildingKind::Port);
+        assert!(!port.under_construction);
+        assert!(
+            crate::building::validate_structure_site(
+                &e.state.map,
+                1,
+                BuildingKind::Port,
+                port.tile_idx,
+                &crate::building::BuildingGrid::default()
+            )
+            .is_ok()
+        );
+        let gold = e.state.player(1).unwrap().gold;
+        e.hero_coastal_foundings();
+        assert_eq!(e.buildings.len(), 1);
+        assert_eq!(e.state.player(1).unwrap().gold, gold);
+        assert_eq!(owner_marks(&e)[1], 1);
     }
-    assert_eq!(e.buildings.len(), 1);
-    let port = e.buildings[0];
-    assert_eq!(port.kind, BuildingKind::Port);
-    assert!(!port.under_construction);
-    assert!(
-        crate::building::validate_structure_site(
-            &e.state.map,
-            1,
-            BuildingKind::Port,
-            port.tile_idx,
-            &crate::building::BuildingGrid::default()
-        )
-        .is_ok()
-    );
-    let gold = e.state.player(1).unwrap().gold;
-    e.hero_coastal_foundings();
-    assert_eq!(e.buildings.len(), 1);
-    assert_eq!(e.state.player(1).unwrap().gold, gold);
-    assert_eq!(owner_marks(&e)[1], 1);
 }
 
 #[test]
@@ -2441,4 +2457,118 @@ fn redesigned_hero_claims_and_return_windows_survive_checkpoints() {
     assert_eq!(e.hero_claims, restored.hero_claims);
     assert_eq!(e.hero_income_active, restored.hero_income_active);
     assert_eq!(attack_strength(&restored.state, 1, 2, 100.0), 1.35);
+}
+
+#[test]
+fn every_hero_has_live_feedback_for_its_automatic_ability() {
+    use super::hero_effects::{AbilityRestriction, AbilityState};
+    for hero in Leader::all() {
+        let e = arena(64, 32, hero, Some(Leader::of("cleopatra")));
+        let status = e.hero_ability_feedback(1).expect("every hero has feedback");
+        assert_ne!(
+            status.state,
+            AbilityState::Triggered,
+            "a persistent state cannot invent an activation"
+        );
+        if matches!(hero.ability(), Ability::AllianceCost { .. }) {
+            assert_eq!(status.state, AbilityState::Unavailable);
+            assert_eq!(status.restriction, Some(AbilityRestriction::CampaignOnly));
+        }
+    }
+}
+
+#[test]
+fn hero_feedback_tracks_consumption_return_timer_income_and_required_structures() {
+    use super::hero_effects::AbilityState::*;
+    let mut e = arena(
+        64,
+        32,
+        Leader::of("peter_the_great"),
+        Some(Leader::of("cleopatra")),
+    );
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+    e.hero_claims.insert((1, 0, 0));
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Spent);
+    e.state.player_mut(1).unwrap().leader = Leader::of("empress_suiko");
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+    e.state.player_mut(1).unwrap().alliances.push(2);
+    e.state.player_mut(2).unwrap().alliances.push(1);
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+    e.state.player_mut(1).unwrap().leader = Leader::of("muhammad_of_ghor");
+    e.state.tick = 100;
+    e.state.player_mut(1).unwrap().return_campaign = Some((2, 400));
+    assert_eq!(
+        e.hero_ability_feedback(1).unwrap().remaining_seconds,
+        Some(30)
+    );
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+    // End the alliance so the attack is legal and the timer can be used.
+    e.state.player_mut(1).unwrap().alliances.clear();
+    e.state.player_mut(2).unwrap().alliances.clear();
+    e.state.player_mut(1).unwrap().troops = 10_000.0;
+    send(
+        &mut e,
+        1,
+        GameplayIntent::Attack(AttackIntent {
+            target_owner: 2,
+            troops: Some(1_000.0),
+        }),
+    );
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Active);
+    e.state.tick = 200;
+    assert_eq!(
+        e.hero_ability_feedback(1).unwrap().remaining_seconds,
+        Some(20)
+    );
+    e.state.tick = 400;
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+    assert_eq!(e.hero_ability_feedback(1).unwrap().remaining_seconds, None);
+    e.attacks.clear();
+    e.state.player_mut(1).unwrap().leader = Leader::of("nebuchadnezzar_ii");
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+    e.add_building(redesigned_building(1, 1, BuildingKind::City, 10, 10, 1));
+    e.add_building(redesigned_building(2, 1, BuildingKind::Tower, 18, 10, 1));
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+    e.state.player_mut(1).unwrap().leader = Leader::of("sarraounia_mangou");
+    e.state.player_mut(1).unwrap().troops = e.state.player(1).unwrap().max_troops;
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+    e.state.player_mut(1).unwrap().troops = 1.0;
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+    e.hero_claims.insert((1, 1, 0));
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+    e.state.player_mut(1).unwrap().leader = Leader::of("king_david");
+    e.add_building(redesigned_building(3, 2, BuildingKind::City, 40, 40, 1));
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+    e.hero_claims.insert((1, 3, 0));
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+    e.state.player_mut(1).unwrap().leader = Leader::of("ewuare");
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+    e.add_building(redesigned_building(4, 1, BuildingKind::Factory, 12, 15, 1));
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Active);
+    e.state.player_mut(1).unwrap().leader = Leader::of("pertinax");
+    e.refresh_building_aggregates();
+    e.state.player_mut(1).unwrap().troops = e.state.player(1).unwrap().max_troops;
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Active);
+    e.state.player_mut(1).unwrap().troops = 0.0;
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+    e.state.player_mut(1).unwrap().leader = Leader::of("puyi");
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+    e.state.player_mut(1).unwrap().alliances.push(2);
+    e.state.player_mut(2).unwrap().alliances.push(1);
+    e.state.set_tile_owner(31, 30, 2);
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Active);
+    e.state.player_mut(1).unwrap().leader = Leader::of("veleda");
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+    e.add_fleet(WarpFleet::new(
+        1,
+        1,
+        2,
+        UnitType::Warship,
+        1_000.0,
+        (1, 1),
+        vec![],
+    ));
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+    e.state.config.buildings_enabled = false;
+    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Unavailable);
 }

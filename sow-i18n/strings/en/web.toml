@@ -1403,6 +1403,18 @@ elimination_bounty = "Defeated {victim}; +{gold} gold."
 elimination = "You defeated {victim}."
 elimination_assist = "Helped defeat {victim}; +{gold} gold."
 ability_notice = "{ability}"
+ability_state_ready = "Ready"
+ability_state_conditional = "Waiting"
+ability_state_active = "Active"
+ability_state_triggered = "Triggered"
+ability_state_spent = "Used up"
+ability_state_unavailable = "Unavailable"
+ability_automatic = "Automatic ability"
+ability_remaining = "{seconds}s"
+ability_restriction_campaign_only = "Only available in campaign."
+ability_restriction_buildings_disabled = "Buildings are disabled in this match."
+ability_restriction_defeated = "Your hero is no longer in the match."
+
 
 [endgame]
 stat_kills = "Kills"

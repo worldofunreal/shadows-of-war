@@ -529,6 +529,11 @@ export interface MenuHudPayload {
     troop_rate: number;
     gold_rate: number;
     hero_income_rate?: number;
+    hero_ability?: {
+        state: "ready" | "conditional" | "active" | "triggered" | "spent" | "unavailable";
+        remaining_seconds: number | null;
+        restriction: "campaign_only" | "buildings_disabled" | "defeated" | null;
+    } | null;
     attack_ratio: number;
     operations: HudCombatOperation[];
     spawn_timer_secs: number | null;
