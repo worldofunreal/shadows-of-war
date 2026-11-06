@@ -501,10 +501,17 @@ function landingExplorer({ video = false } = {}) {
   };
 }
 
-test("landing explorer selects all 80 catalog leaders and keeps failed or late art matched", () => {
+// The roster is every hero in the game catalog, and new leaders keep joining it.
+function catalogHeroCount() {
+  const catalog = JSON.parse(fs.readFileSync(path.join(__dirname, "../../assets/geo_entities.json"), "utf8"));
+  return catalog.entities.filter((entity) => entity.hero).length;
+}
+
+test("landing explorer selects every catalog leader and keeps failed or late art matched", () => {
   const app = landingExplorer();
-  assert.equal(app.cards.length, 80);
-  assert.equal(app.node("leader-total").textContent, "80");
+  const heroCount = catalogHeroCount();
+  assert.equal(app.cards.length, heroCount);
+  assert.equal(app.node("leader-total").textContent, String(heroCount));
   for (const [index, card] of app.cards.entries()) {
     card.emit("click");
     assert.equal(app.node("detail-name").textContent, card.dataset.name);
@@ -518,16 +525,16 @@ test("landing explorer selects all 80 catalog leaders and keeps failed or late a
     assert.equal(app.node("detail-portrait").src, `/assets/gameplay/avatars/${card.dataset.artSlug}.webp`);
     assert.equal(card.getAttribute("aria-pressed"), "true");
     assert.equal(app.cards.filter((item) => item.classList.contains("is-active")).length, 1);
-    assert.ok(app.node("leader-position").textContent.endsWith(`${index + 1} / 80`));
+    assert.ok(app.node("leader-position").textContent.endsWith(`${index + 1} / ${heroCount}`));
   }
   app.cards[0].emit("click");
-  app.cards[79].emit("click");
+  app.cards[app.cards.length - 1].emit("click");
   const image = app.node("detail-image");
   image.currentSrc = `/assets/shell/leaders/${app.cards[0].dataset.artSlug}_desktop.webp`;
   image.complete = true;
   image.naturalWidth = 1600;
   app.cards[1].emit("click");
-  app.cards[79].emit("click");
+  app.cards[app.cards.length - 1].emit("click");
   image.emit("load");
   assert.ok(
     app.node("detail-art").classList.contains("is-loading"),
@@ -541,10 +548,10 @@ test("landing explorer selects all 80 catalog leaders and keeps failed or late a
   assert.equal(app.node("detail-art").classList.contains("is-unavailable"), false);
   app.click("leader-next");
   assert.equal(app.cards[0].getAttribute("aria-pressed"), "true");
-  app.cards[79].bounds = { top: 800, bottom: 920 };
+  app.cards[app.cards.length - 1].bounds = { top: 800, bottom: 920 };
   app.node("roster-scroll").bounds = { top: 100, bottom: 500 };
   app.click("leader-prev");
-  assert.equal(app.cards[79].getAttribute("aria-pressed"), "true");
+  assert.equal(app.cards[app.cards.length - 1].getAttribute("aria-pressed"), "true");
   assert.equal(app.node("roster-scroll").scrollTop, 420);
   assert.equal(app.win.scrollY, 620, "revealing the selection must not move the preview");
 });
@@ -566,12 +573,12 @@ test("landing explorer searches localized names and civilizations, preserves sel
   assert.equal(app.node("roster-empty").hidden, false);
   app.click("clear-search");
   assert.equal(app.node("leader-search").value, "");
-  assert.equal(app.cards.filter((card) => !card.hidden).length, 80);
+  assert.equal(app.cards.filter((card) => !card.hidden).length, catalogHeroCount());
   assert.equal(app.node("roster-empty").hidden, true);
   assert.equal(app.node("detail-name").textContent, app.t("heroes.leader_bolivar_name"));
   app.cards[0].focus();
   app.node("leaders-grid").emit("keydown", { key: "End" });
-  assert.equal(app.doc.activeElement, app.cards[79]);
+  assert.equal(app.doc.activeElement, app.cards[app.cards.length - 1]);
   app.doc.documentElement.dir = "rtl";
   app.cards[10].focus();
   app.node("leaders-grid").emit("keydown", { key: "ArrowRight" });
@@ -587,15 +594,19 @@ test("landing explorer moves one roster into the mobile picker and restores the 
   assert.equal(picker.open, true);
   assert.equal(browser.parent, picker);
   assert.equal(app.doc.activeElement, app.node("leader-search"));
-  app.cards[79].emit("click");
+  app.cards[app.cards.length - 1].emit("click");
   assert.equal(picker.open, false);
   assert.equal(browser.parent, app.node("leader-browser-home"));
-  assert.equal(app.cards[79].getAttribute("aria-pressed"), "true");
+  assert.equal(app.cards[app.cards.length - 1].getAttribute("aria-pressed"), "true");
   assert.equal(app.win.scrollY, 620);
   assert.equal(app.doc.activeElement, app.node("leader-browse"));
   app.click("leader-browse");
   app.click("picker-close");
-  assert.equal(app.cards[79].getAttribute("aria-pressed"), "true", "cancel preserves selection");
+  assert.equal(
+    app.cards[app.cards.length - 1].getAttribute("aria-pressed"),
+    "true",
+    "cancel preserves selection",
+  );
   app.click("leader-browse");
   picker.close(); // Native Escape follows the same close event.
   assert.equal(browser.parent, app.node("leader-browser-home"));
@@ -625,11 +636,11 @@ test("landing explorer switches avatar expressions on hover and selection for de
   secondCard.emit("mouseleave");
   assert.equal(secondImg.src, `/assets/gameplay/avatars/${secondSlug}.webp`);
 
-  // Hover selected: becomes happy
+  // Hover selected: stays angry, because the active leader keeps its expression
   firstCard.emit("mouseenter");
-  assert.equal(firstImg.src, `/assets/gameplay/avatars/expressions/${firstSlug}_happy.webp`);
+  assert.equal(firstImg.src, `/assets/gameplay/avatars/expressions/${firstSlug}_angry.webp`);
 
-  // Leave selected: restores to angry
+  // Leave selected: stays angry
   firstCard.emit("mouseleave");
   assert.equal(firstImg.src, `/assets/gameplay/avatars/expressions/${firstSlug}_angry.webp`);
 
@@ -651,6 +662,8 @@ test("landing explorer switches map previews and pauses optional video for visib
   assert.equal(app.maps[0].getAttribute("aria-pressed"), "false");
   assert.equal(app.maps[1].getAttribute("aria-pressed"), "true");
   app.node("map-image").currentSrc = app.node("map-image").src;
+  // A real <img> reflects its src property into the attribute that the handler reads.
+  app.node("map-image").setAttribute("src", app.node("map-image").src);
   app.node("map-image").emit("error");
   assert.ok(app.node("map-frame").classList.contains("is-unavailable"));
   const player = app.nodes.get(".hero-video");
@@ -817,6 +830,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
       {
         id: "caesar",
         artSlug: "caesar",
+        legacyIds: [],
         region: "europe",
         wikipedia: "https://en.wikipedia.org/wiki/Julius_Caesar",
       },
@@ -962,7 +976,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
     catalogs.es.site.leader_caesar_description = effect;
     await put(path.join(out, "locales/es"), JSON.stringify({ strings: catalogs.es }));
     await resetLanding();
-    await rm(path.join(out, "assets/shell/leaders/caesar_mobile.webp"));
+    await rm(path.join(out, "assets/gameplay/avatars/caesar.webp"));
     await assert.rejects(
       publish(
         out,
@@ -979,7 +993,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         },
         source,
       ),
-      /Broken public reference \/assets\/shell\/leaders\/caesar_mobile.webp/,
+      /Broken public reference \/assets\/gameplay\/avatars\/caesar.webp/,
     );
     await resetLanding();
     await put(path.join(source, "site-header.html"), "<div>Missing header</div>");

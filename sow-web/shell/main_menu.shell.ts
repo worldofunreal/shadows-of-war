@@ -171,6 +171,14 @@ interface MenuMusicCrossfade {
 
 interface MenuMusicState {
     decks: HTMLAudioElement[] | null;
+    audioContext: AudioContext | null;
+    spectrumSources: Array<MediaElementAudioSourceNode | null> | null;
+    spectrumGains: Array<GainNode | null> | null;
+    spectrumAnalyzers: Array<AnalyserNode | null> | null;
+    spectrumData: Array<Uint8Array<ArrayBuffer> | null> | null;
+    spectrumPending: boolean;
+    spectrumUnavailable: boolean;
+    spectrumFrame: number;
     active: number;
     state: MenuState | null;
     activated: boolean;
@@ -203,6 +211,14 @@ interface RewardFlyItem {
 
 const menuMusic: MenuMusicState = {
     decks: null,
+    audioContext: null,
+    spectrumSources: null,
+    spectrumGains: null,
+    spectrumAnalyzers: null,
+    spectrumData: null,
+    spectrumPending: false,
+    spectrumUnavailable: false,
+    spectrumFrame: 0,
     active: 0,
     state: null,
     activated: false,
@@ -251,8 +267,276 @@ function menuMusicSetVolumes(mixes: number[], fade?: number) {
     const base = menuMusicMuted() ? 0 : menuMusicVolume();
     const factor = fade == null ? 1 : fade;
     menuMusic.decks.forEach(function (deck, index) {
-        deck.volume = base * (mixes[index] || 0) * factor;
+        const volume = base * (mixes[index] || 0) * factor;
+        const gain = menuMusic.spectrumGains && menuMusic.spectrumGains[index];
+        if (gain) gain.gain.value = volume;
+        else deck.volume = volume;
     });
+}
+
+function menuMusicSpectrumCanvas(): HTMLCanvasElement | null {
+    return root.querySelector<HTMLCanvasElement>("[data-menu-music-spectrum]");
+}
+
+function menuMusicCancelSpectrumFrame() {
+    if (menuMusic.spectrumFrame) window.cancelAnimationFrame(menuMusic.spectrumFrame);
+    menuMusic.spectrumFrame = 0;
+}
+
+function menuMusicSpectrumIsActive(canvas: HTMLCanvasElement | null) {
+    return (
+        !!canvas &&
+        menuUi.settingsOpen &&
+        !root.hidden &&
+        !!menuUi.state &&
+        menuUi.state.phase === "MainMenu" &&
+        !menuMusicLoaderActive(menuUi.state) &&
+        !menuMusic.cinematicActive &&
+        document.visibilityState === "visible"
+    );
+}
+
+function menuMusicSpectrumSameOrigin() {
+    if (!menuMusic.decks || !window.location || !window.location.origin) return true;
+    try {
+        return menuMusic.decks.every(function (deck) {
+            return (
+                new window.URL(deck.currentSrc || deck.src, document.baseURI).origin ===
+                window.location.origin
+            );
+        });
+    } catch {
+        return false;
+    }
+}
+
+function menuMusicConnectSpectrum(context: AudioContext) {
+    if (!menuMusic.decks || menuMusic.spectrumGains) return;
+    const sources: Array<MediaElementAudioSourceNode | null> = [];
+    const gains: Array<GainNode | null> = [];
+    const analyzers: Array<AnalyserNode | null> = [];
+    const data: Array<Uint8Array<ArrayBuffer> | null> = [];
+    menuMusic.decks.forEach(function (deck) {
+        let source: MediaElementAudioSourceNode | null = null;
+        let gain: GainNode | null = null;
+        let analyser: AnalyserNode | null = null;
+        try {
+            source = context.createMediaElementSource(deck);
+            gain = context.createGain();
+            gain.gain.value = deck.volume;
+            try {
+                analyser = context.createAnalyser();
+                analyser.fftSize = 512;
+                analyser.smoothingTimeConstant = 0.72;
+                analyser.minDecibels = -84;
+                analyser.maxDecibels = -24;
+                source.connect(gain);
+                gain.connect(analyser);
+                analyser.connect(context.destination);
+            } catch {
+                try {
+                    source.disconnect();
+                    gain.disconnect();
+                    if (analyser) analyser.disconnect();
+                } catch {}
+                analyser = null;
+                source.connect(gain);
+                gain.connect(context.destination);
+            }
+            deck.volume = 1;
+        } catch (error) {
+            if (source) {
+                try {
+                    if (gain) {
+                        gain.gain.value = deck.volume;
+                        source.disconnect();
+                        gain.disconnect();
+                        source.connect(gain);
+                        gain.connect(context.destination);
+                        deck.volume = 1;
+                    } else source.connect(context.destination);
+                } catch {}
+            }
+            console.warn("[SOW MUSIC] spectrum analysis unavailable for a music deck:", error);
+            analyser = null;
+        }
+        sources.push(source);
+        gains.push(gain);
+        analyzers.push(analyser);
+        data.push(analyser ? new Uint8Array(analyser.frequencyBinCount) : null);
+    });
+    menuMusic.spectrumSources = sources;
+    menuMusic.spectrumGains = gains;
+    menuMusic.spectrumAnalyzers = analyzers;
+    menuMusic.spectrumData = data;
+}
+
+function menuMusicPrepareSpectrum() {
+    if (!menuMusic.decks || menuMusic.spectrumPending || menuMusic.spectrumUnavailable) return;
+    if (menuMusic.audioContext) {
+        if (menuMusic.audioContext.state === "suspended") {
+            menuMusic.spectrumPending = true;
+            menuMusic.audioContext
+                .resume()
+                .then(function () {
+                    menuMusic.spectrumPending = false;
+                    menuMusicSyncSpectrum();
+                })
+                .catch(function () {
+                    menuMusic.spectrumPending = false;
+                });
+        }
+        return;
+    }
+    if (!menuMusicSpectrumSameOrigin()) {
+        menuMusic.spectrumUnavailable = true;
+        const canvas = menuMusicSpectrumCanvas();
+        if (canvas) canvas.hidden = true;
+        return;
+    }
+    const AudioContextConstructor = window.AudioContext;
+    if (typeof AudioContextConstructor !== "function") {
+        menuMusic.spectrumUnavailable = true;
+        const canvas = menuMusicSpectrumCanvas();
+        if (canvas) canvas.hidden = true;
+        return;
+    }
+    let context: AudioContext;
+    try {
+        context = new AudioContextConstructor();
+    } catch {
+        menuMusic.spectrumUnavailable = true;
+        const canvas = menuMusicSpectrumCanvas();
+        if (canvas) canvas.hidden = true;
+        return;
+    }
+    menuMusic.audioContext = context;
+    menuMusic.spectrumPending = true;
+    context
+        .resume()
+        .then(function () {
+            if (context.state !== "running") throw new Error("Web Audio context did not resume");
+            menuMusicConnectSpectrum(context);
+            menuMusic.spectrumPending = false;
+            if (!menuMusic.spectrumAnalyzers?.some(Boolean)) {
+                menuMusic.spectrumUnavailable = true;
+                const canvas = menuMusicSpectrumCanvas();
+                if (canvas) canvas.hidden = true;
+                return;
+            }
+            menuMusicSyncSpectrum();
+        })
+        .catch(function () {
+            menuMusic.spectrumPending = false;
+            menuMusic.audioContext = null;
+            menuMusic.spectrumUnavailable = true;
+            try {
+                void context.close();
+            } catch {}
+            const canvas = menuMusicSpectrumCanvas();
+            if (canvas) canvas.hidden = true;
+        });
+}
+
+function menuMusicDrawSpectrum(canvas: HTMLCanvasElement) {
+    const context = canvas.getContext("2d");
+    if (!context) {
+        canvas.hidden = true;
+        return;
+    }
+    const width = Math.max(1, canvas.clientWidth || canvas.width || 240);
+    const height = Math.max(1, canvas.clientHeight || canvas.height || 20);
+    const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
+    const pixelWidth = Math.round(width * pixelRatio);
+    const pixelHeight = Math.round(height * pixelRatio);
+    if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+    if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    canvas.hidden = false;
+
+    const analyzers = menuMusic.spectrumAnalyzers || [];
+    if (menuMusicMuted() || menuMusicVolume() <= 0) {
+        context.fillStyle = "rgb(243 177 43 / 42%)";
+        context.fillRect(0, height - 1, width, 1);
+        return;
+    }
+    if (!analyzers.some(Boolean)) {
+        canvas.hidden = true;
+        return;
+    }
+
+    const barCount = 24;
+    const levels = new Float32Array(barCount);
+    analyzers.forEach(function (analyser, deckIndex) {
+        const bins = menuMusic.spectrumData && menuMusic.spectrumData[deckIndex];
+        if (!analyser || !bins) return;
+        analyser.getByteFrequencyData(bins);
+        for (let bar = 0; bar < barCount; bar += 1) {
+            const start = Math.floor((bar / barCount) ** 2 * bins.length);
+            const end = Math.max(start + 1, Math.floor(((bar + 1) / barCount) ** 2 * bins.length));
+            let total = 0;
+            for (let bin = start; bin < Math.min(end, bins.length); bin += 1) total += bins[bin];
+            levels[bar] = Math.min(255, levels[bar] + total / Math.max(1, end - start));
+        }
+    });
+
+    const gap = 2;
+    const barWidth = Math.max(1, (width - gap * (barCount - 1)) / barCount);
+    context.fillStyle = "#f3b12b";
+    levels.forEach(function (level, bar) {
+        const barHeight = (level / 255) * height;
+        if (barHeight > 0.5)
+            context.fillRect(bar * (barWidth + gap), height - barHeight, barWidth, barHeight);
+    });
+}
+
+function menuMusicScheduleSpectrumFrame() {
+    if (menuMusic.spectrumFrame) return;
+    menuMusic.spectrumFrame = window.requestAnimationFrame(function () {
+        menuMusic.spectrumFrame = 0;
+        const canvas = menuMusicSpectrumCanvas();
+        if (!menuMusicSpectrumIsActive(canvas)) {
+            menuMusicCancelSpectrumFrame();
+            return;
+        }
+        if (menuMusic.audioContext?.state !== "running") {
+            menuMusicCancelSpectrumFrame();
+            return;
+        }
+        if (reducedRewardMotion()) {
+            menuMusicCancelSpectrumFrame();
+            if (canvas) menuMusicDrawSpectrum(canvas);
+            return;
+        }
+        if (canvas) menuMusicDrawSpectrum(canvas);
+        menuMusicScheduleSpectrumFrame();
+    });
+}
+
+function menuMusicSyncSpectrum() {
+    const canvas = menuMusicSpectrumCanvas();
+    if (!menuMusicSpectrumIsActive(canvas)) {
+        menuMusicCancelSpectrumFrame();
+        return;
+    }
+    if (menuMusicMuted() || menuMusicVolume() <= 0) {
+        if (canvas) menuMusicDrawSpectrum(canvas);
+        menuMusicCancelSpectrumFrame();
+        return;
+    }
+    menuMusicPrepareSpectrum();
+    if (menuMusic.spectrumUnavailable || !menuMusic.spectrumAnalyzers?.some(Boolean)) {
+        if (!menuMusic.spectrumPending && canvas) canvas.hidden = true;
+        menuMusicCancelSpectrumFrame();
+        return;
+    }
+    if (canvas) menuMusicDrawSpectrum(canvas);
+    if (reducedRewardMotion() || menuMusic.audioContext?.state !== "running") {
+        menuMusicCancelSpectrumFrame();
+        return;
+    }
+    menuMusicScheduleSpectrumFrame();
 }
 
 function menuMusicCancelFrame() {
@@ -776,8 +1060,6 @@ function handleSystemNoticeCommand(command: string | undefined) {
 }
 
 export function renderSettingsPrivacySection(privacyLinkMarkup: string) {
-    const shieldSvg =
-        "<svg class='sow-menu__settings-sec-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z'/><path d='m9 12 2 2 4-4'/></svg>";
     let deleteControl = "";
     if (selfCreds()) {
         deleteControl = deleteBusy
@@ -808,20 +1090,15 @@ export function renderSettingsPrivacySection(privacyLinkMarkup: string) {
           privacyLinkMarkup +
           "</nav>"
         : "";
+    if (!deleteControl && !error && !privacyLink) return "";
     return (
-        "<section class='sow-menu__settings-section sow-menu__settings-privacy'><h3>" +
-        shieldSvg +
-        "<span>" +
-        esc(SOW_t("menu.privacy")) +
-        "</span></h3>" +
         "<div class='sow-menu__settings-privacy-row" +
         (menuUi.deleteArmed ? " is-armed" : "") +
         "'>" +
         privacyLink +
         deleteControl +
-        "</div>" +
         error +
-        "</section>"
+        "</div>"
     );
 }
 
@@ -907,6 +1184,14 @@ function syncOverlay(key: string, markup: string) {
             root.appendChild(next);
         }
     } else if (current.outerHTML !== next.outerHTML) {
+        if (key === "settings") {
+            const activeRange = current.querySelector<HTMLInputElement>(
+                "input[type='range']:active, input[type='range']:focus",
+            );
+            if (activeRange || (activeMenuPointerId !== null && current.contains(document.activeElement))) {
+                return;
+            }
+        }
         current.replaceWith(next);
         if (key === "system-notice") {
             const primary = next.querySelector<HTMLButtonElement>("button");
@@ -1961,6 +2246,7 @@ function menuGuideFacts() {
 function updateDynamic() {
     if (!menuUi.state) return;
     root.dataset.reducedMotion = String(reducedRewardMotion());
+    menuMusicSyncSpectrum();
     if (root.hidden) return;
     if (menuUi.storeOpen && typeof loadStoreCatalog === "function") loadStoreCatalog();
     ensureProgressionDisplay();
@@ -1998,16 +2284,16 @@ function updateDynamic() {
     const panel = activeScreenPanel() || root;
     const settings = menuUi.state.settings;
     const musicInput = root.querySelector<HTMLInputElement>("[data-setting='music_volume']");
-    const motionInput = root.querySelector<HTMLInputElement | HTMLSelectElement>(
-        "[data-setting='reduced_motion']",
-    );
     const freeZoomInput = root.querySelector<HTMLInputElement>("[data-setting='free_zoom_out']");
     const fpsPingInput = root.querySelector<HTMLInputElement>("[data-setting='show_fps_ping']");
     const devToolsInput = root.querySelector<HTMLInputElement>("[data-setting='show_dev_tools']");
-    if (musicInput && document.activeElement !== musicInput)
+    const musicInteracting =
+        musicInput &&
+        (document.activeElement === musicInput ||
+            musicInput.matches(":active") ||
+            activeMenuPointerId !== null);
+    if (musicInput && !musicInteracting)
         musicInput.value = String(settings.music_volume == null ? 0.8 : settings.music_volume);
-    if (motionInput && document.activeElement !== motionInput)
-        motionInput.value = settings.reduced_motion ? "reduced" : "full";
     if (fpsPingInput && document.activeElement !== fpsPingInput)
         fpsPingInput.checked = settings.show_fps_ping === true;
     if (devToolsInput && document.activeElement !== devToolsInput)
@@ -2337,6 +2623,11 @@ root.addEventListener("click", function (event) {
             loadRankedLeaderboard();
             loadVictoryLeaderboard();
         }
+        return;
+    }
+    if (command === "profile_achievement_filter") {
+        menuUi.profileAchievementFilter = target.dataset.achievementFilter || "all";
+        render();
         return;
     }
     if (command === "open_play_games") {
@@ -3215,12 +3506,17 @@ root.addEventListener("input", function (event) {
         }
     }
     if (input.dataset.setting === "music_volume") {
-        const pct = Math.round(Number(input.value) * 100);
+        const val = Number(input.value);
+        const pct = Math.round(val * 100);
         input.style.setProperty("--sow-music-fill", pct + "%");
         const musicValBadge = root.querySelector<HTMLElement>("[data-val-for='music_vol']");
         if (musicValBadge) musicValBadge.textContent = pct + "%";
-        if (menuUi.state && menuUi.state.phase === "MainMenu")
-            syncMenuMusic(menuUi.state, true, Number(input.value));
+        if (menuUi.state) {
+            if (!menuUi.state.settings) menuUi.state.settings = {} as any;
+            menuUi.state.settings.music_volume = val;
+        }
+        if (menuUi.state && menuUi.state.phase === "MainMenu") syncMenuMusic(menuUi.state, true, val);
+        menuMusicSyncSpectrum();
     }
     if (input.name === "password" && input.closest("form[data-form='password']")) {
         menuUi.passwordDraft = input.value;
@@ -3246,9 +3542,14 @@ root.addEventListener("change", function (event) {
         return;
     }
     if (!input.dataset.setting) return;
-    if (input.dataset.setting === "music_volume") send("set_music_volume", { value: Number(input.value) });
-    if (input.dataset.setting === "reduced_motion")
-        send("set_reduced_motion", { value: input.value === "reduced" });
+    if (input.dataset.setting === "music_volume") {
+        const val = Number(input.value);
+        if (menuUi.state) {
+            if (!menuUi.state.settings) menuUi.state.settings = {} as any;
+            menuUi.state.settings.music_volume = val;
+        }
+        send("set_music_volume", { value: val });
+    }
     if (input instanceof HTMLInputElement && input.dataset.setting === "free_zoom_out")
         send("set_free_zoom_out", { value: input.checked });
     if (input instanceof HTMLInputElement && input.dataset.setting === "show_fps_ping")
@@ -3331,6 +3632,7 @@ window.addEventListener("sow:loader-cycle-ready", function (event) {
 
 document.addEventListener("visibilitychange", function () {
     if (document.visibilityState !== "visible") {
+        menuMusicCancelSpectrumFrame();
         flushLeaderPersist();
         if (window.SOW_menu_guide) window.SOW_menu_guide.pause();
         if (menuUi.state && (rewardAnimationRunning || progressionAnimationTarget)) {
@@ -3344,6 +3646,7 @@ document.addEventListener("visibilitychange", function () {
         return;
     }
     if (!menuUi.state || menuUi.state.phase !== "MainMenu") return;
+    menuMusicSyncSpectrum();
     if (typeof resumeExternalPurchaseDelivery === "function") resumeExternalPurchaseDelivery(true);
     if (!rewardPresentationReady) scheduleRewardPresentation(0);
     else maybePresentRewards();

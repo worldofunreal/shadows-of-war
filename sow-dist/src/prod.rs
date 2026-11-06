@@ -234,6 +234,9 @@ pub(super) fn execute(paths: &Paths, bump: bool, server_only: bool) -> Result<()
         .map(PathBuf::as_path)
         .collect::<Vec<_>>();
     let runtime_snapshot = input_fingerprint("production-runtime-v1", "", &runtime_inputs)?;
+    let runtime_unchanged = || -> Result<bool> {
+        Ok(input_fingerprint("production-runtime-v1", "", &runtime_inputs)? == runtime_snapshot)
+    };
     // Android is deliberately NOT part of this pipeline: every Play upload
     // resets Google's review clock, so AAB publication lives in `./sow a`
     // and runs only when a new build is actually ready for review.
@@ -264,7 +267,7 @@ pub(super) fn execute(paths: &Paths, bump: bool, server_only: bool) -> Result<()
         assemble_release(paths, &web, &backend, &version, &config)?
     };
     println!("  release {}", release.id);
-    if input_fingerprint("production-runtime-v1", "", &runtime_inputs)? != runtime_snapshot {
+    if !runtime_unchanged()? {
         bail!(
             "runtime sources or deployment templates changed during the build; refusing a mixed release"
         );
@@ -401,6 +404,13 @@ pub(super) fn execute(paths: &Paths, bump: bool, server_only: bool) -> Result<()
     println!("==> 8/8 Public verification");
     verify_public(paths, &config, &release)?;
     if !hot {
+        // The verifier builds the tree as it is now; drift since the release would test other code.
+        if !runtime_unchanged()? {
+            bail!(
+                "runtime sources changed after release {} was built; the reward verifier would test different code, rerun ./sow p",
+                release.id
+            );
+        }
         let handover_pending = relay_handover_pending(&config)?;
         verify_live_reward_return(paths, &config, handover_pending.then_some(RELAY_EXEC))?;
         if handover_pending {

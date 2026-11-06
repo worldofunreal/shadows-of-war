@@ -403,6 +403,7 @@ pub fn ability_cue_rgb(cue: sow_core::geo_entities::Cue) -> [f32; 3] {
         Cue::Losses => [0.13, 0.77, 0.37],
         Cue::Alliance => [0.18, 0.83, 0.75],
         Cue::Retreat => [0.51, 0.55, 0.97],
+        Cue::Naval => [0.08, 0.48, 0.92],
     }
 }
 

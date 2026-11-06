@@ -1,4 +1,4 @@
-/* eslint-disable no-var -- these must be `var` so they appear on typeof globalThis, where the page scripts assign them */
+// These must be `var` so they appear on typeof globalThis, where the page scripts assign them.
 // Globals that the editor pages read from scripts the page loads before its own script.
 
 interface AtlasEntity {

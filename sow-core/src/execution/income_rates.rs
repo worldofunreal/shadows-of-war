@@ -180,6 +180,7 @@ mod tests {
         assert_eq!(cfg.hero_port_troop_income, 275.0);
         assert_eq!(cfg.city_max_troops, 3_300.0);
         assert_eq!(cfg.territory_troop_amount, 0.75);
+        assert_eq!(cfg.max_troops_base, 5_000.0);
         assert_eq!(cfg.max_troops_scale, 55.0);
         assert_eq!(cfg.territory_troop_tiles, 16);
         assert_eq!(cfg.territory_gold_tiles, 1_024);

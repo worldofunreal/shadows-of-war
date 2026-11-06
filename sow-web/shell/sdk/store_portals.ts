@@ -496,6 +496,11 @@
         );
     };
 
+    // Full account from wouAuth.getMe(), in memory only. The SDK saves a public card
+    // with linked identities blanked, so the saved card cannot show them.
+    let wouAccount = null;
+    let wouAccountToken = "";
+
     function readWouSession() {
         try {
             let token = window.localStorage.getItem("wou_session_token") || "";
@@ -524,6 +529,7 @@
         ) {
             return { token: "", accountId: "", user: session.user };
         }
+        if (wouAccount && session.token === wouAccountToken) session.user = wouAccount;
         return session;
     };
 
@@ -1091,8 +1097,33 @@
         return true;
     };
 
+    function refreshWouAccount() {
+        const token = readWouSession().token;
+        if (
+            !token ||
+            token === wouAccountToken ||
+            window.SOW_WOU_SESSION_STATUS !== "ready" ||
+            !window.wouAuth ||
+            typeof window.wouAuth.getMe !== "function"
+        ) {
+            return;
+        }
+        wouAccountToken = token;
+        wouAccount = null;
+        window.wouAuth.getMe().then(function (account) {
+            if (wouAccountToken !== token) return;
+            if (!account) {
+                wouAccountToken = "";
+                return;
+            }
+            wouAccount = account;
+            emitAuthStateChange();
+        });
+    }
+
     function emitAuthStateChange() {
         window.SOW_AUTH_CHANGED = true;
+        refreshWouAccount();
         try {
             window.dispatchEvent(
                 new CustomEvent("wou:auth-state-change", {

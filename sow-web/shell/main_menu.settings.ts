@@ -1,5 +1,9 @@
 import { esc } from "./main_menu.core.ts";
 
+export function renderMusicSpectrum() {
+    return "<canvas class='sow-menu__music-spectrum' data-menu-music-spectrum aria-hidden='true' hidden></canvas>";
+}
+
 const GLOBE_SVG =
     "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='9'/><path d='M3 12h18'/><path d='M12 3a14 14 0 0 1 0 18'/><path d='M12 3a14 14 0 0 0 0 18'/></svg>";
 

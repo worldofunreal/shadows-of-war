@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- page lookups are read as their element kind at each use site.
+  // Page lookups are read using their element type at each call site.
   function $<T extends HTMLElement = any>(selector: string): T {
     return document.querySelector<T>(selector) as T;
   }

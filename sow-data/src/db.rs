@@ -198,7 +198,7 @@ redis.call('SADD', KEYS[3], ARGV[3]); redis.call('EXPIRE', KEYS[3], ARGV[1])
 redis.call('SADD', KEYS[14], ARGV[3]); redis.call('EXPIRE', KEYS[14], ARGV[1])
 local build = ARGV[5]
 if build == '' then build = 'unknown' end
-if not redis.call('SISMEMBER', KEYS[11], build) then
+if redis.call('SISMEMBER', KEYS[11], build) == 0 then
   if redis.call('SCARD', KEYS[11]) < 16 then
     redis.call('SADD', KEYS[11], build)
   else
@@ -240,6 +240,23 @@ end
 if (event_name == 'tutorial_step' or event_name == 'tutorial_exit_early') and ARGV[8] ~= '' then
   redis.call('HINCRBY', KEYS[15], ARGV[8], 1)
   redis.call('EXPIRE', KEYS[15], ARGV[1])
+end
+local source = ARGV[9] or ''
+if source ~= '' then
+  redis.call('SET', KEYS[16], source, 'EX', 86400)
+else
+  source = redis.call('GET', KEYS[16])
+end
+if source then
+  if redis.call('SISMEMBER', KEYS[17], source) == 0 then
+    if redis.call('SCARD', KEYS[17]) < 32 then
+      redis.call('SADD', KEYS[17], source); redis.call('EXPIRE', KEYS[17], ARGV[1])
+    else
+      source = 'other'
+    end
+  end
+  redis.call('HINCRBY', KEYS[18], source .. '|' .. event_name, 1)
+  redis.call('EXPIRE', KEYS[18], ARGV[1])
 end
 return 1
 "#;
@@ -814,35 +831,25 @@ impl PlayerProfile {
         true
     }
 
-    fn achievement_progress(&self, id: &str) -> u64 {
-        crate::rewards::achievement_progress(
-            id,
-            crate::rewards::AchievementTotals {
-                matches_played: self.matches_played as u64,
-                wins: self.verified_wins as u64,
-                laurels: self.laurels,
-                leader_matches_played: self
-                    .leader_stats
-                    .values()
-                    .map(|stats| stats.matches_played as u64)
-                    .sum(),
-                leader_wins: self
-                    .leader_stats
-                    .values()
-                    .map(|stats| stats.verified_wins as u64)
-                    .sum(),
-                distinct_leaders: self.leader_stats.len() as u64,
-                best_leader_xp: self.leader_xp.values().copied().max().unwrap_or_default() as u64,
-            },
-        )
-    }
-
-    /// Unlock achievements from server-owned aggregates. The set and laurel
-    /// total are updated together, so retries cannot pay an achievement twice.
-    pub fn refresh_achievements(&mut self) {
-        let totals = crate::rewards::AchievementTotals {
+    fn achievement_totals(&self) -> crate::rewards::AchievementTotals {
+        let mut leader_matches = std::collections::BTreeMap::new();
+        let mut leader_wins_map = std::collections::BTreeMap::new();
+        for (name, stats) in &self.leader_stats {
+            leader_matches.insert(name.clone(), stats.matches_played as u64);
+            leader_wins_map.insert(name.clone(), (stats.verified_wins as u64).max(stats.wins as u64));
+        }
+        let mut owned_set = self.owned_leaders.clone();
+        for leader in &self.purchased_leaders {
+            owned_set.insert(leader.clone());
+        }
+        for (name, stats) in &self.leader_stats {
+            if stats.matches_played > 0 {
+                owned_set.insert(name.clone());
+            }
+        }
+        crate::rewards::AchievementTotals {
             matches_played: self.matches_played as u64,
-            wins: self.verified_wins as u64,
+            wins: (self.verified_wins as u64).max(self.wins as u64),
             laurels: self.laurels,
             leader_matches_played: self
                 .leader_stats
@@ -852,13 +859,34 @@ impl PlayerProfile {
             leader_wins: self
                 .leader_stats
                 .values()
-                .map(|stats| stats.verified_wins as u64)
+                .map(|stats| (stats.verified_wins as u64).max(stats.wins as u64))
                 .sum(),
             distinct_leaders: self.leader_stats.len() as u64,
             best_leader_xp: self.leader_xp.values().copied().max().unwrap_or_default() as u64,
-        };
+            kills: self.kills as u64,
+            assists: self.assists as u64,
+            players_defeated: self.players_defeated as u64,
+            empires_defeated: self.empires_defeated as u64,
+            tribes_defeated: self.tribes_defeated as u64,
+            completed_episodes: self.completed_episodes.len() as u64,
+            owned_leaders_count: owned_set.len() as u64,
+            owned_leaders: owned_set,
+            leader_matches,
+            leader_wins_map,
+        }
+    }
+
+    fn achievement_progress(&self, id: &str) -> u64 {
+        let totals = self.achievement_totals();
+        crate::rewards::achievement_progress(id, &totals)
+    }
+
+    /// Unlock achievements from server-owned aggregates. The set and laurel
+    /// total are updated together, so retries cannot pay an achievement twice.
+    pub fn refresh_achievements(&mut self) {
+        let totals = self.achievement_totals();
         for achievement in
-            crate::rewards::newly_unlocked_achievements(totals, &self.unlocked_achievements)
+            crate::rewards::newly_unlocked_achievements(&totals, &self.unlocked_achievements)
         {
             self.unlocked_achievements
                 .insert(achievement.id.to_string());
@@ -867,7 +895,7 @@ impl PlayerProfile {
     }
 
     pub fn achievement_views(&self) -> Vec<crate::profile::AchievementView> {
-        crate::rewards::ACHIEVEMENTS
+        crate::rewards::all_achievements()
             .iter()
             .map(|achievement| crate::profile::AchievementView {
                 id: achievement.id.to_string(),
@@ -1286,9 +1314,16 @@ impl PlayerDb {
                     ))
                 })
                 .unwrap_or_default();
+            let source_ref = event
+                .props
+                .as_ref()
+                .filter(|_| event.name == "landing_visit")
+                .and_then(|props| props.get("ref"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
             pipe.cmd("EVAL")
                 .arg(RECORD_ANALYTICS_EVENT)
-                .arg(15)
+                .arg(18)
                 .arg(format!(
                     "sow:analytics:event_id:{portal}:{}",
                     event.event_id
@@ -1313,6 +1348,12 @@ impl PlayerDb {
                     event.name
                 ))
                 .arg(format!("sow:analytics:tutorial_steps:{portal}:{date}"))
+                .arg(format!(
+                    "sow:analytics:session_ref:{portal}:{}",
+                    event.session_id
+                ))
+                .arg(format!("sow:analytics:refs:{portal}:{date}"))
+                .arg(format!("sow:analytics:by_ref:{portal}:{date}"))
                 .arg(ANALYTICS_TTL_SECONDS)
                 .arg(day_number)
                 .arg(&event.session_id)
@@ -1320,7 +1361,8 @@ impl PlayerDb {
                 .arg(event.build.as_deref().unwrap_or("unknown"))
                 .arg(event.device_class.as_deref().unwrap_or("unknown"))
                 .arg(&event.name)
-                .arg(tutorial_step);
+                .arg(tutorial_step)
+                .arg(source_ref);
         }
         let outcomes: Vec<i64> = pipe.query_async(&mut con).await?;
         outcomes
@@ -1436,7 +1478,9 @@ impl PlayerDb {
                 .cmd("HGETALL")
                 .arg(format!("sow:analytics:by_build:{portal}:{date}"))
                 .cmd("HGETALL")
-                .arg(format!("sow:analytics:by_device:{portal}:{date}"));
+                .arg(format!("sow:analytics:by_device:{portal}:{date}"))
+                .cmd("HGETALL")
+                .arg(format!("sow:analytics:by_ref:{portal}:{date}"));
         }
         let dimensions: Vec<std::collections::HashMap<String, u64>> =
             dimensions_pipe.query_async(&mut con).await?;
@@ -1444,15 +1488,17 @@ impl PlayerDb {
             std::collections::HashMap::<String, std::collections::HashMap<String, u64>>::new();
         let mut by_device =
             std::collections::HashMap::<String, std::collections::HashMap<String, u64>>::new();
+        let mut by_ref =
+            std::collections::HashMap::<String, std::collections::HashMap<String, u64>>::new();
         for (index, dimension_rows) in dimensions.iter().enumerate() {
             for (field, count) in dimension_rows {
                 let Some((dimension, event)) = field.split_once('|') else {
                     continue;
                 };
-                let target = if index % 2 == 0 {
-                    &mut by_build
-                } else {
-                    &mut by_device
+                let target = match index % 3 {
+                    0 => &mut by_build,
+                    1 => &mut by_device,
+                    _ => &mut by_ref,
                 };
                 let total = target
                     .entry(dimension.to_string())
@@ -1562,6 +1608,7 @@ impl PlayerDb {
             "dimensions": {
                 "build": by_build,
                 "device_class": by_device,
+                "source": by_ref,
             },
             "daily": daily_rows,
             "retention": { "site": retention },
@@ -6893,9 +6940,10 @@ mod tests {
         let mut profile = PlayerProfile::default();
         profile.matches_played = 1;
         let views = profile.achievement_views();
-        assert_eq!(views.len(), 9);
+        assert_eq!(views.len(), crate::rewards::all_achievements().len());
+        assert!(views.len() > 1000, "Must contain hundreds of achievements across all heroes");
         assert_eq!(
-            views
+            views[..9]
                 .iter()
                 .map(|view| view.category.as_str())
                 .collect::<Vec<_>>(),

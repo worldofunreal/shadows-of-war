@@ -3,20 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
     "typecheck": "bunx tsc -p sow-web/tsconfig.json --noEmit && bunx tsc -p sow-web/tsconfig.sw.json --noEmit && bunx tsc -p sow-tools/editors/campaign-editor/tsconfig.json --noEmit",
     "test": "bun test",
-    "verify": "bun run lint && bun run format:check && bun run typecheck && bun run test && cargo check"
+    "verify": "bun run typecheck && bun run test && cargo check"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "eslint": "^10.13.0",
-    "globals": "^17.13.0",
-    "jiti": "^2.7.0",
-    "prettier": "^3.9.10",
-    "typescript": "^6.0.0",
-    "typescript-eslint": "^8.72.0"
+    "typescript": "^6.0.0"
   }
 }

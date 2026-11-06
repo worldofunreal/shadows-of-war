@@ -746,6 +746,14 @@
   #sow-menu .sow-menu__nameplate {
     column-gap: 6px;
   }
+  #sow-menu .sow-menu__level {
+    min-width: 18px;
+    height: 17px;
+    padding-inline: 4px;
+  }
+  #sow-menu .sow-menu__level strong {
+    font-size: 11px;
+  }
   #sow-menu .sow-menu__currency {
     padding-inline: 0;
     gap: 2px;

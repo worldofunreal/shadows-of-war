@@ -262,6 +262,7 @@ interface TutorialRuntime {
         stepId: string,
         fields: CampaignRecord,
         isCurrent?: () => boolean,
+        delayMs = TUTORIAL_CAMERA_MOVE_DELAY_MS,
     ) {
         if (runtime.cameraFocusKey === key) return true;
         clearTutorialCameraMove();
@@ -283,7 +284,7 @@ interface TutorialRuntime {
             )
                 return;
             send("focus_world", fields);
-        }, TUTORIAL_CAMERA_MOVE_DELAY_MS);
+        }, delayMs);
         runtime.cameraFocusTimer = timer;
         return true;
     }
@@ -939,14 +940,26 @@ interface TutorialRuntime {
                 Number.isFinite(Number(faction.centroid_y))
             ) {
                 const reactionInstance = String(machineView.reactionInstance || "");
+                const preDefeat = machineView.reactionData.when?.type === "pre_defeat";
+                const player = campaignPlayer(hud, "player");
+                const cameraMove: CampaignRecord = {
+                    x: Number(faction.centroid_x) + 0.5,
+                    y: Number(faction.centroid_y) + 0.5,
+                };
+                if (preDefeat && onMap(player)) {
+                    cameraMove.shot = {
+                        kind: "approach",
+                        from_x: Number(player.centroid_x) + 0.5,
+                        from_y: Number(player.centroid_y) + 0.5,
+                        seconds: 1.5,
+                        machinima: true,
+                    };
+                }
                 if (
                     scheduleTutorialCameraMove(
                         "reaction:" + reactionInstance + ":" + machineView.reactionTarget,
                         String(runtime.machine.state.id || machineView.step.id),
-                        {
-                            x: Number(faction.centroid_x) + 0.5,
-                            y: Number(faction.centroid_y) + 0.5,
-                        },
+                        cameraMove,
                         function () {
                             const activeReaction = runtime.machine && runtime.machine.view();
                             return Boolean(
@@ -955,6 +968,7 @@ interface TutorialRuntime {
                                 activeReaction.reactionTarget === machineView.reactionTarget,
                             );
                         },
+                        preDefeat ? 0 : undefined,
                     )
                 ) {
                     runtime.cameraReactionTarget = machineView.reactionTarget;

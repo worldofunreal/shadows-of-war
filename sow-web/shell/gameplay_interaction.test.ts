@@ -359,6 +359,7 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
         clearCompactHudDensity() {},
         clearMapFeedback() {},
         clearNotificationCard() {},
+        closeLeaderboard() {},
     });
     const stateSource = hud
         .slice(hud.indexOf("    let hudState:"), hud.indexOf("    function send("))
@@ -1080,6 +1081,17 @@ test("notification cards render typed avatars, recover failed art, and clear reu
     assert.equal(parts.avatars[0].wrapper.hidden, true);
     assert.equal(parts.avatars[1].emblem.hidden, false, "unclaimed land shows its icon");
     assert.doesNotMatch(parts.avatars[1].wrapper.className, /--overlap/);
+
+    context.SOW_t = (key, values) => key === "hud.ability_notice" ? values.ability
+        : key === "site.leader_king_david_ability" ? "Botín de Siclag"
+        : key === "site.leader_king_david_description" ? "Reparte 200 de oro con tus aliados." : key;
+    context.renderNotificationCard(parts, {
+        entry: { id: 4, key: "hud.ability_notice", values: {
+            ability_key: "site.leader_king_david_ability",
+            description_key: "site.leader_king_david_description",
+        } }, priority: 3,
+    }, false);
+    assert.equal(parts.copy.textContent, "Botín de Siclag · Reparte 200 de oro con tus aliados.");
 
     context.clearNotificationCard(parts);
     assert.equal(parts.avatars[0].wrapper.hidden, true);

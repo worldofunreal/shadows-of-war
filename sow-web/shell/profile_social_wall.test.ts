@@ -177,3 +177,63 @@ test("profile source code contains social wall markup, cover banner, and bio sta
         "Header must include back_to_my_profile command for quick return",
     );
 });
+
+test("profile achievements system renders prestige dossier, category filter pills, and mythic progression", () => {
+    // Assert presence of Prestige Header with Laurel icon and progress
+    assert.match(
+        profileSource,
+        /sow-profile__achievements-laurel-card/,
+        "Profile must include laurel callout card in prestige dossier",
+    );
+    assert.match(
+        profileSource,
+        /currencyAsset\("laurel"\)/,
+        "Laurel callouts must render the canonical laurel asset",
+    );
+    assert.match(
+        profileSource,
+        /sow-profile__achievements-progress-card/,
+        "Profile must include total achievements progress card",
+    );
+
+    // Assert presence of Category Filter Bar & Chips
+    assert.match(
+        profileSource,
+        /sow-profile__ach-filter-bar/,
+        "Profile must include category filter navigation bar",
+    );
+    assert.match(
+        profileSource,
+        /data-command='profile_achievement_filter'/,
+        "Filter chips must trigger profile_achievement_filter command",
+    );
+    assert.match(
+        profileSource,
+        /profileAchievementFilter/,
+        "Menu state must track active achievement filter",
+    );
+
+    // Assert Mythic Tier milestone support
+    assert.match(
+        profileSource,
+        /isMythic = target >= 1000/,
+        "Target >= 1000 milestones must be classified as Mythic",
+    );
+    assert.match(
+        profileSource,
+        /sow-profile__achievement-mythic-pill/,
+        "Mythic achievements must render radiant mythic pill",
+    );
+
+    // Assert CSS defines mythic styles and category filter chips
+    assert.match(
+        profileCss,
+        /\.sow-profile__ach-filter-chip\.is-active/,
+        "CSS must define active state for filter chips",
+    );
+    assert.match(
+        profileCss,
+        /\.sow-profile__achievement\.is-mythic/,
+        "CSS must define mythic styling with golden radiance",
+    );
+});

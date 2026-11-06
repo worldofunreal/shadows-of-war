@@ -1,6 +1,6 @@
 use crate::config;
 use crate::map::GameMap;
-use crate::player::{Player, PlayerId};
+use crate::player::{Leader, Player, PlayerId};
 use serde::{Deserialize, Serialize};
 
 pub const DEPLOYMENT_PHASE_DURATION_MS: f32 = 15_000.0;
@@ -190,6 +190,20 @@ impl UnitType {
             UnitType::Warship => (self.gold_cost() * 1.1_f64.powi(owned_count.min(25) as i32))
                 .min(self.gold_cost() * 10.0),
             _ => self.gold_cost(),
+        }
+    }
+
+    pub fn gold_cost_with_owned_count_for_leader(
+        self,
+        owned_count: u32,
+        leader: Leader,
+    ) -> f64 {
+        let cost = self.gold_cost_with_owned_count(owned_count);
+        match (self, leader.ability()) {
+            (UnitType::Warship, crate::geo_entities::Ability::WarshipCost { percent }) => {
+                cost * (1.0 - f64::from(percent.min(100)) / 100.0)
+            }
+            _ => cost,
         }
     }
 

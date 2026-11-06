@@ -4849,6 +4849,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             renderAvatarIdentity(slot.image, slot.emblem, presentation);
         });
         parts.copy.textContent = SOW_t(key, withAbilityName(entry.values || {}));
+        const descriptionKey = (entry.values || {}).description_key;
+        if (descriptionKey && key === "hud.ability_notice") {
+            parts.copy.textContent += " · " + SOW_t(descriptionKey, {});
+        }
     }
 
     function positionMapFeedback(entry: HudMapFeedback, card: HudNotificationCard): void {
@@ -5905,7 +5909,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             hudRefs!.plateGold.textContent = goldText;
             hudRefs!.plateGold.dataset.val = goldText;
         }
+        const heroIncome = Number(hud.hero_income_rate) || 0;
         const goldRateText = formatHudRate(goldRate);
+        if (hudRefs!.plateGoldRate) {
+            hudRefs!.plateGoldRate.classList.toggle("is-hero-active", heroIncome > 0);
+            hudRefs!.plateGoldRate.title = heroIncome > 0
+                ? SOW_t("site.leader_" + hud.player_leader + "_ability", {}) + " · +" + formatHudRate(heroIncome)
+                : SOW_t("hud.gold_net_rate");
+        }
         if (hudRefs!.plateGoldRate && hudRefs!.plateGoldRate.textContent !== goldRateText) {
             hudRefs!.plateGoldRate.textContent = goldRateText;
         }

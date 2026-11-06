@@ -11,6 +11,7 @@ use std::collections::{BTreeSet, HashSet, VecDeque};
 
 const CAPTURE_COST_VARIATION_SALT: u64 = 0xA076_1D64_78BD_642F;
 const CAPTURE_COST_VARIATION: f64 = 0.10;
+const NEUTRAL_CAPTURE_SPEED_MULTIPLIER: f64 = 3.0;
 
 struct BorderCluster {
     tiles: Vec<u32>,
@@ -68,20 +69,24 @@ fn neutral_expansion_pacing_multiplier(occupied_share: f64) -> f64 {
     }
 }
 
-fn attack_pacing_multiplier(target_owner: u16, neutral_pacing: f64) -> f64 {
+fn attack_pacing_multiplier(
+    target_owner: u16,
+    neutral_pacing: f64,
+    neutral_capture_speed_multiplier: f64,
+) -> f64 {
     if target_owner == 0 {
-        neutral_pacing
+        neutral_pacing * neutral_capture_speed_multiplier
     } else {
         1.0
     }
 }
 
-/// Hero "against the odds" ability: `attacker` fights a player with more troops.
+/// Whether an army is empowered by an outnumbered or return-campaign situation.
 /// Shared by the strength formula and the player snapshot, so the visual and the
 /// combat can never disagree.
 /// `army` is the troops this attack sends, so an attack that is itself outnumbered
 /// is judged by its own numbers, not by what the attacker keeps at home.
-pub(crate) fn outnumbered_bonus_applies(
+pub(crate) fn empowered_attack_applies(
     state: &GameState,
     attacker: u16,
     target: u16,
@@ -90,7 +95,7 @@ pub(crate) fn outnumbered_bonus_applies(
     let Some(p) = state.player(attacker) else {
         return false;
     };
-    matches!(
+    let outnumbered = matches!(
         p.leader.ability(),
         Ability::AttackStrength {
             against: Target::Outnumbering,
@@ -99,7 +104,8 @@ pub(crate) fn outnumbered_bonus_applies(
     ) && target != 0
         && state
             .player(target)
-            .is_some_and(|rival| rival.troops > army)
+            .is_some_and(|rival| rival.troops > army);
+    outnumbered || return_campaign_multiplier(state, attacker, target) > 1.0
 }
 
 /// Whether `target` describes `subject` (0 = neutral land) for an action by `actor`
@@ -181,6 +187,7 @@ pub(crate) fn announce_attack_abilities(
         Ability::AttackStrength { against, .. } | Ability::ConquestSpeed { against, .. } => {
             target_applies(state, attacker, target, army, against)
         }
+        Ability::ReturnCampaign { .. } => return_campaign_multiplier(state, attacker, target) > 1.0,
         _ => false,
     };
     if applies {
@@ -196,7 +203,23 @@ pub(crate) fn attack_strength(state: &GameState, attacker: u16, target: u16, arm
     };
     targeted_multiplier(state, attacker, target, army, |t| {
         p.leader.attack_strength_multiplier(t)
-    })
+    }) * return_campaign_multiplier(state, attacker, target)
+}
+
+fn return_campaign_multiplier(state: &GameState, attacker: u16, target: u16) -> f64 {
+    match state.player(attacker) {
+        Some(p)
+            if p.return_campaign.is_some_and(|(enemy, until)| {
+                target != 0 && enemy == target && state.tick < until
+            }) =>
+        {
+            match p.leader.ability() {
+                Ability::ReturnCampaign { percent } => 1.0 + f64::from(percent) / 100.0,
+                _ => 1.0,
+            }
+        }
+        _ => 1.0,
+    }
 }
 
 /// How much harder a defender's land is to conquer because of its hero ability.
@@ -294,10 +317,14 @@ fn city_capture_multiplier(
     (tile_x, tile_y): (u32, u32),
     attacker: u16,
     defender: u16,
+    army: f64,
 ) -> f64 {
-    let defense = state
-        .player(defender)
-        .map_or(1.0, |p| p.leader.city_capture_multiplier(Side::Defender));
+    let defense = state.player(defender).map_or(1.0, |p| {
+        p.leader.city_capture_multiplier(Side::Defender)
+            * targeted_multiplier(state, defender, attacker, army, |target| {
+                p.leader.city_defense_multiplier(target)
+            })
+    });
     let assault = state
         .player(attacker)
         .map_or(1.0, |p| p.leader.city_capture_multiplier(Side::Attacker));
@@ -699,7 +726,13 @@ impl SowEngine {
         let neutral_pacing = neutral_expansion_pacing_multiplier(occupied_land_share(&self.state));
         self.execute_combat_using(
             |attack, _| attack.to_conquer.len(),
-            move |_, attack, _| attack_pacing_multiplier(attack.target_owner, neutral_pacing),
+            move |_, attack, _| {
+                attack_pacing_multiplier(
+                    attack.target_owner,
+                    neutral_pacing,
+                    NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
+                )
+            },
         );
     }
 
@@ -718,6 +751,9 @@ impl SowEngine {
         let map_h = self.state.map.height;
 
         let tick_now = self.state.tick;
+        let return_min_ticks = (3_000.0 / self.state.config.tick_rate_ms.max(1.0)).ceil() as u64;
+        let return_window_ticks =
+            (30_000.0 / self.state.config.tick_rate_ms.max(1.0)).ceil() as u64;
         let held_target = self
             .campaign_assault
             .as_ref()
@@ -782,6 +818,13 @@ impl SowEngine {
                     let back = refund * factor;
                     if let Some(player) = self.state.player_mut(execution.owner_id) {
                         player.credit_troops_capped(back, player.max_troops);
+                        if execution.target_owner != 0
+                            && matches!(player.leader.ability(), Ability::ReturnCampaign { .. })
+                            && tick_now.saturating_sub(execution.created_tick) >= return_min_ticks
+                        {
+                            player.return_campaign =
+                                Some((execution.target_owner, tick_now + return_window_ticks));
+                        }
                     }
                 }
                 to_remove.push(i);
@@ -947,8 +990,8 @@ impl SowEngine {
 
                     // Determine conquest cost for this specific tile (matching OpenFront's terrain & Tower coefficients)
                     let base_speed = terrain_capture_speed(terrain_type);
-                    let tile_idx = u64::from(target_tile.y) * u64::from(map_w)
-                        + u64::from(target_tile.x);
+                    let tile_idx =
+                        u64::from(target_tile.y) * u64::from(map_w) + u64::from(target_tile.x);
                     let sample = stable_tile_sample(
                         self.state.seed,
                         execution.owner_id,
@@ -956,8 +999,7 @@ impl SowEngine {
                         tile_idx,
                         CAPTURE_COST_VARIATION_SALT,
                     );
-                    let capture_cost_factor =
-                        1.0 + (2.0 * sample - 1.0) * CAPTURE_COST_VARIATION;
+                    let capture_cost_factor = 1.0 + (2.0 * sample - 1.0) * CAPTURE_COST_VARIATION;
 
                     let defense = self.defense_grid.influence(
                         target_tile.x,
@@ -991,6 +1033,7 @@ impl SowEngine {
                         (target_tile.x, target_tile.y),
                         execution.owner_id,
                         execution.target_owner,
+                        execution.troops,
                     );
                     if city_multiplier != 1.0 {
                         // The side whose city ability decided the cost is the one shown,
@@ -1276,6 +1319,7 @@ impl SowEngine {
         for (victim, conqueror, x, y) in elimination_candidates {
             self.eliminate_player(victim, conqueror, x, y, false);
         }
+        self.hero_coastal_foundings();
         self.campaign_pre_defeat_pending = pre_defeat_pending;
     }
 }
@@ -1283,9 +1327,9 @@ impl SowEngine {
 #[cfg(test)]
 mod tests {
     use super::{
+        CAPTURE_COST_VARIATION, CAPTURE_COST_VARIATION_SALT, NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
         attack_pacing_multiplier, neutral_expansion_pacing_multiplier, occupied_land_share,
-        terrain_capture_speed, terrain_loss_multiplier, CAPTURE_COST_VARIATION,
-        CAPTURE_COST_VARIATION_SALT,
+        terrain_capture_speed, terrain_loss_multiplier,
     };
     use crate::building::Building;
     use crate::execution::{AttackExecution, PrioritizedTile};
@@ -1356,10 +1400,27 @@ mod tests {
 
     #[test]
     fn occupancy_pacing_only_changes_neutral_attacks() {
-        assert_eq!(attack_pacing_multiplier(0, 0.70), 0.70);
-        assert_eq!(attack_pacing_multiplier(0, 1.15), 1.15);
-        assert_eq!(attack_pacing_multiplier(2, 0.70), 1.0);
-        assert_eq!(attack_pacing_multiplier(2, 1.15), 1.0);
+        assert!(
+            (attack_pacing_multiplier(0, 0.70, NEUTRAL_CAPTURE_SPEED_MULTIPLIER) - 2.10).abs()
+                < 1e-12
+        );
+        assert_eq!(
+            attack_pacing_multiplier(0, 1.00, NEUTRAL_CAPTURE_SPEED_MULTIPLIER),
+            3.00
+        );
+        assert!(
+            (attack_pacing_multiplier(0, 1.15, NEUTRAL_CAPTURE_SPEED_MULTIPLIER) - 3.45).abs()
+                < 1e-12
+        );
+        assert_eq!(attack_pacing_multiplier(0, 0.70, 1.0), 0.70);
+        assert_eq!(
+            attack_pacing_multiplier(2, 0.70, NEUTRAL_CAPTURE_SPEED_MULTIPLIER),
+            1.0
+        );
+        assert_eq!(
+            attack_pacing_multiplier(2, 1.15, NEUTRAL_CAPTURE_SPEED_MULTIPLIER),
+            1.0
+        );
     }
 
     fn multi_neutral_attack_engine(
@@ -1459,14 +1520,37 @@ mod tests {
     fn multi_neutral_attack_capture_rate(
         seed: u64,
         initial_occupied_share: f64,
+        neutral_capture_speed_multiplier: f64,
+        fixed_frontier: bool,
     ) -> (f64, Vec<u32>) {
         const TICKS: u64 = 5;
         let mut engine = multi_neutral_attack_engine(seed, initial_occupied_share);
+        let initial_frontier_size = engine
+            .attacks
+            .first()
+            .map_or(1, |attack| attack.to_conquer.len());
         let mut captures = 0u64;
         for tick in 0..TICKS {
             engine.state.tick = tick;
             engine.state.events.clear();
-            engine.execute_combat();
+            let neutral_pacing =
+                neutral_expansion_pacing_multiplier(occupied_land_share(&engine.state));
+            engine.execute_combat_using(
+                move |attack, _| {
+                    if fixed_frontier {
+                        initial_frontier_size
+                    } else {
+                        attack.to_conquer.len()
+                    }
+                },
+                move |_, attack, _| {
+                    attack_pacing_multiplier(
+                        attack.target_owner,
+                        neutral_pacing,
+                        neutral_capture_speed_multiplier,
+                    )
+                },
+            );
             captures += engine
                 .state
                 .events
@@ -1487,18 +1571,122 @@ mod tests {
     #[test]
     fn global_occupancy_curve_speeds_neutral_multi_attacks_deterministically() {
         for seed in 1..=3 {
-            let early = multi_neutral_attack_capture_rate(seed, 0.10);
-            let middle = multi_neutral_attack_capture_rate(seed, 0.50);
-            let late = multi_neutral_attack_capture_rate(seed, 0.90);
+            let early_baseline = multi_neutral_attack_capture_rate(seed, 0.10, 1.0, false);
+            let middle_baseline = multi_neutral_attack_capture_rate(seed, 0.50, 1.0, false);
+            let late_baseline = multi_neutral_attack_capture_rate(seed, 0.90, 1.0, false);
+            let early = multi_neutral_attack_capture_rate(
+                seed,
+                0.10,
+                NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
+                false,
+            );
+            let middle = multi_neutral_attack_capture_rate(
+                seed,
+                0.50,
+                NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
+                false,
+            );
+            let late = multi_neutral_attack_capture_rate(
+                seed,
+                0.90,
+                NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
+                false,
+            );
             assert!(early.0 < middle.0, "seed {seed}: {early:?} >= {middle:?}");
             assert!(middle.0 < late.0, "seed {seed}: {middle:?} >= {late:?}");
-            println!(
-                "global_neutral_pacing seed={seed} occupied=10/50/90 captures_per_second={:.2}/{:.2}/{:.2}",
-                early.0, middle.0, late.0
+            assert!(
+                early.0 > early_baseline.0
+                    && middle.0 > middle_baseline.0
+                    && late.0 > late_baseline.0,
+                "seed {seed}: tripled neutral speed must increase capture rate at each occupancy"
             );
-            assert_eq!(early, multi_neutral_attack_capture_rate(seed, 0.10));
-            assert_eq!(middle, multi_neutral_attack_capture_rate(seed, 0.50));
-            assert_eq!(late, multi_neutral_attack_capture_rate(seed, 0.90));
+            println!(
+                "global_neutral_pacing seed={seed} occupied=10/50/90 baseline_captures_per_second={:.2}/{:.2}/{:.2} accelerated_captures_per_second={:.2}/{:.2}/{:.2} ratios={:.3}/{:.3}/{:.3}",
+                early_baseline.0,
+                middle_baseline.0,
+                late_baseline.0,
+                early.0,
+                middle.0,
+                late.0,
+                early.0 / early_baseline.0,
+                middle.0 / middle_baseline.0,
+                late.0 / late_baseline.0,
+            );
+            assert_eq!(
+                early_baseline,
+                multi_neutral_attack_capture_rate(seed, 0.10, 1.0, false)
+            );
+            assert_eq!(
+                middle_baseline,
+                multi_neutral_attack_capture_rate(seed, 0.50, 1.0, false)
+            );
+            assert_eq!(
+                late_baseline,
+                multi_neutral_attack_capture_rate(seed, 0.90, 1.0, false)
+            );
+            assert_eq!(
+                early,
+                multi_neutral_attack_capture_rate(
+                    seed,
+                    0.10,
+                    NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
+                    false,
+                )
+            );
+            assert_eq!(
+                middle,
+                multi_neutral_attack_capture_rate(
+                    seed,
+                    0.50,
+                    NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
+                    false,
+                )
+            );
+            assert_eq!(
+                late,
+                multi_neutral_attack_capture_rate(
+                    seed,
+                    0.90,
+                    NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
+                    false,
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn neutral_capture_speedup_approaches_three_times_at_occupancy_anchors() {
+        for seed in 1..=3 {
+            for occupied_share in [0.10, 0.50, 0.90] {
+                let baseline = multi_neutral_attack_capture_rate(seed, occupied_share, 1.0, true);
+                let accelerated = multi_neutral_attack_capture_rate(
+                    seed,
+                    occupied_share,
+                    NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
+                    true,
+                );
+                let ratio = accelerated.0 / baseline.0;
+                println!(
+                    "neutral_capture_speedup_fixed_frontier seed={seed} occupied={:.0}% baseline_captures_per_second={:.2} accelerated_captures_per_second={:.2} ratio={ratio:.3}",
+                    occupied_share * 100.0,
+                    baseline.0,
+                    accelerated.0,
+                );
+                assert!(
+                    (2.5..=3.5).contains(&ratio),
+                    "seed={seed} occupied={:.0}% baseline={baseline:?} accelerated={accelerated:?} ratio={ratio:.3}",
+                    occupied_share * 100.0
+                );
+                assert_eq!(
+                    accelerated,
+                    multi_neutral_attack_capture_rate(
+                        seed,
+                        occupied_share,
+                        NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
+                        true,
+                    )
+                );
+            }
         }
     }
 

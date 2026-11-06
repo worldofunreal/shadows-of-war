@@ -6,6 +6,7 @@ Follow the workspace rules in `../AGENTS.md`. Keep this file limited to game and
 
 - `./sow p` is the only Web/backend/relay deployment path. Read the current `sow-dist/src/prod.rs`; it owns stage order and recovery. `./sow help` and the launcher dispatch are the source of truth for supported commands. Do not add or remove commands to match stale documentation.
 - When a task authorizes production work, that includes the pipeline's normal build, staging, activation, certificate renewal, health checks, public verification, and safe retries. Do not ask again for those steps and never replace them with manual SSH, file copies, or service restarts.
+- The release is built from the HEAD of the folder `./sow p` runs in. `sow-dist/src/prod.rs` stamps it with `git rev-parse HEAD` and does not compare that HEAD with `origin`. Run it only from a checkout whose HEAD contains the commit you intend to ship; a worktree behind it ships older code.
 - Before starting, check whether a production run is already active. Do not stop, duplicate, or overlap it; continue when it finishes.
 - On failure, use the log to find the underlying command and numbered stage. A cache message, warning, optional test skip, or the wrapper's label is not itself a failure.
 - Compare the failed expectation with the accepted game behavior. Fix incorrect game code, asset source, or publishing flow at its owner. For a broken public reference, keep the asset and reference, trace where publication dropped it, repair that path, then rerun the check and the full pipeline.

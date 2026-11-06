@@ -250,8 +250,17 @@ fn valid_props(name: &str, props: &serde_json::Value) -> bool {
                 | "ready_sent"
         ),
         ("boot_route_decision", "route", Some("menu" | "intro")) => true,
+        ("landing_visit", "ref", Some(value)) => is_source_ref(value),
         _ => false,
     }
+}
+
+/// Short lowercase tag from a shared link (`?ref=reddit`), never free text.
+pub fn is_source_ref(value: &str) -> bool {
+    (1..=32).contains(&value.len())
+        && value.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-')
+        })
 }
 
 fn is_episode_id(value: &str) -> bool {
@@ -561,6 +570,25 @@ mod tests {
         event.build = Some(String::new());
         event.locale = Some(String::new());
         assert!(event.validate(NOW_MS).is_ok());
+    }
+
+    #[test]
+    fn landing_visit_accepts_only_a_short_source_tag() {
+        let mut event = sample("landing_visit");
+        event.props = Some(serde_json::json!({ "ref": "reddit" }));
+        assert!(event.validate(NOW_MS).is_ok());
+        for bad in [
+            serde_json::json!({ "ref": "Reddit" }),
+            serde_json::json!({ "ref": "me@example.com" }),
+            serde_json::json!({ "ref": "a".repeat(33) }),
+            serde_json::json!({ "ref": "reddit", "extra": "x" }),
+        ] {
+            event.props = Some(bad);
+            assert_eq!(event.validate(NOW_MS), Err("unsupported event properties"));
+        }
+        let mut other = sample("play_now_click");
+        other.props = Some(serde_json::json!({ "ref": "reddit" }));
+        assert!(other.validate(NOW_MS).is_err());
     }
 
     #[test]

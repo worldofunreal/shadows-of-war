@@ -13,6 +13,7 @@ impl SowEngine {
 
         // buildings are maintained sorted by id on insertion.
 
+        let mut completed = Vec::new();
         for b in &mut self.buildings {
             if !b.under_construction {
                 continue;
@@ -42,7 +43,11 @@ impl SowEngine {
                     tile_idx: b.tile_idx,
                     kind: b.kind,
                 });
+                completed.push(*b);
             }
+        }
+        for building in completed {
+            self.hero_structure_ready(building);
         }
     }
 

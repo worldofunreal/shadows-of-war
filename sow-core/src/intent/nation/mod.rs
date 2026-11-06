@@ -313,7 +313,7 @@ impl SowEngine {
                         .count() as u32;
                     player.gold
                         >= crate::game::UnitType::Warship
-                            .gold_cost_with_owned_count(owned_warships)
+                            .gold_cost_with_owned_count_for_leader(owned_warships, player.leader)
                         && self.boat_slots_used(bot_id)
                             < crate::building::player_fleet_capacity(&self.buildings, bot_id)
                 })

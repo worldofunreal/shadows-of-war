@@ -1,169 +1,187 @@
-import { rankEmblem, rankLabel as rankLabelText, rankName, rankOverview, rankedPointsBreakdownMarkup } from "./main_menu.ranked.ts";
 import {
-    asset,
-    avatarImage,
-    currentScreen,
-    esc,
-    formatMapName,
-    leaderById,
-    leaderArtSlug,
-    leaderDisplayName,
-    menuUi,
-    profileCache,
-    profileHeroImage,
-    root,
-    selfCreds,
+  rankEmblem,
+  rankLabel as rankLabelText,
+  rankName,
+  rankOverview,
+  rankedPointsBreakdownMarkup,
+} from "./main_menu.ranked.ts";
+import {
+  asset,
+  avatarImage,
+  currencyAsset,
+  currentScreen,
+  esc,
+  formatMapName,
+  leaderById,
+  leaderArtSlug,
+  leaderDisplayName,
+  menuUi,
+  profileCache,
+  profileHeroImage,
+  root,
+  selfCreds,
 } from "./main_menu.core.ts";
-import { REPORT_REASONS, activeScreenPanel, render, reportBusy } from "./main_menu.shell.ts";
-import type { MenuState, RankedLadder, RankedPointsBreakdown } from "./main_menu.state.ts";
+import {
+  REPORT_REASONS,
+  activeScreenPanel,
+  render,
+  reportBusy,
+} from "./main_menu.shell.ts";
+import type {
+  MenuState,
+  RankedLadder,
+  RankedPointsBreakdown,
+} from "./main_menu.state.ts";
 
 // Profile data, rendering, history, and match details.
 
 // Shapes served by sow-data (sow-data/src/profile.rs is the source of truth); only the
 // fields the profile screen reads or seeds are described.
 export interface ProfileData {
-    account_id: string;
-    handle: string;
-    display_name: string;
-    is_bot?: boolean;
-    ranked_bot_iq?: number | null;
-    level: number;
-    matches_played: number;
-    wins: number;
-    win_rate: number;
-    kills: number;
-    deaths: number;
-    assists: number;
-    laurels: number;
-    players_defeated: number;
-    empires_defeated: number;
-    tribes_defeated: number;
-    preferred_leader: string | null;
-    // The seed built from menu state has no achievements until the server snapshot arrives.
-    achievements?: ProfileAchievement[];
-    leaders: ProfileLeader[];
-    recent_matches: ProfileMatch[];
-    ratings?: ProfileRating[];
-    ranked_ladder?: RankedLadder | null;
+  account_id: string;
+  handle: string;
+  display_name: string;
+  is_bot?: boolean;
+  ranked_bot_iq?: number | null;
+  level: number;
+  matches_played: number;
+  wins: number;
+  win_rate: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  laurels: number;
+  players_defeated: number;
+  empires_defeated: number;
+  tribes_defeated: number;
+  preferred_leader: string | null;
+  // The seed built from menu state has no achievements until the server snapshot arrives.
+  achievements?: ProfileAchievement[];
+  leaders: ProfileLeader[];
+  recent_matches: ProfileMatch[];
+  ratings?: ProfileRating[];
+  ranked_ladder?: RankedLadder | null;
 }
 
 export interface ProfileRating {
-    season_id: number;
-    season_name: string;
-    queue: string;
-    mode: string;
-    games_played: number;
-    wins: number;
-    placements_complete: boolean;
-    score: number;
-    tier: string;
-    division: string | null;
-    peak_score: number;
+  season_id: number;
+  season_name: string;
+  queue: string;
+  mode: string;
+  games_played: number;
+  wins: number;
+  placements_complete: boolean;
+  score: number;
+  tier: string;
+  division: string | null;
+  peak_score: number;
 }
 
 interface ProfileLeader {
-    leader: string;
-    matches_played: number;
-    wins: number;
-    win_rate: number;
-    xp: number;
+  leader: string;
+  matches_played: number;
+  wins: number;
+  win_rate: number;
+  xp: number;
 }
 
 interface ProfileAchievement {
-    id: string;
-    category: string;
-    points: number;
-    progress: number;
-    target: number;
-    unlocked: boolean;
+  id: string;
+  category: string;
+  title?: string;
+  description?: string;
+  points: number;
+  progress: number;
+  target: number;
+  unlocked: boolean;
 }
 
 export interface ProfileMatch {
-    match_id: string;
-    completed_at: number;
-    queue: string;
-    mode: string;
-    map_name: string;
-    duration_seconds: number;
-    won: boolean;
-    leader: string | null;
-    kills: number;
-    deaths: number;
-    assists: number;
-    verified: boolean;
-    provisional: boolean;
-    rating_delta?: number | null;
-    ranked_bot_iq?: number | null;
-    ranked_points_breakdown?: RankedPointsBreakdown | null;
+  match_id: string;
+  completed_at: number;
+  queue: string;
+  mode: string;
+  map_name: string;
+  duration_seconds: number;
+  won: boolean;
+  leader: string | null;
+  kills: number;
+  deaths: number;
+  assists: number;
+  verified: boolean;
+  provisional: boolean;
+  rating_delta?: number | null;
+  ranked_bot_iq?: number | null;
+  ranked_points_breakdown?: RankedPointsBreakdown | null;
 }
 
 interface ProfileMatchParticipant {
-    account_id: string;
-    handle: string;
-    leader: string | null;
-    won: boolean;
-    kills: number;
-    deaths: number;
-    assists: number;
-    is_bot: boolean;
-    rating_delta?: number | null;
-    rating_before?: number | null;
-    rating_after?: number | null;
-    ranked_points_breakdown?: RankedPointsBreakdown | null;
+  account_id: string;
+  handle: string;
+  leader: string | null;
+  won: boolean;
+  kills: number;
+  deaths: number;
+  assists: number;
+  is_bot: boolean;
+  rating_delta?: number | null;
+  rating_before?: number | null;
+  rating_after?: number | null;
+  ranked_points_breakdown?: RankedPointsBreakdown | null;
 }
 
 export interface ProfileMatchDetail {
-    completed_at: number;
-    queue: string;
-    mode: string;
-    map_name: string;
-    duration_seconds: number;
-    verified: boolean;
-    provisional: boolean;
-    ranked_bot_iq?: number | null;
-    participants: ProfileMatchParticipant[];
+  completed_at: number;
+  queue: string;
+  mode: string;
+  map_name: string;
+  duration_seconds: number;
+  verified: boolean;
+  provisional: boolean;
+  ranked_bot_iq?: number | null;
+  participants: ProfileMatchParticipant[];
 }
 
 interface ProfileVictoryLeader {
-    rank: number;
-    account_id: string;
-    handle: string;
-    level: number;
-    matches_played: number;
-    wins: number;
+  rank: number;
+  account_id: string;
+  handle: string;
+  level: number;
+  matches_played: number;
+  wins: number;
 }
 
 interface ProfileRankedLeader {
-    rank: number;
-    account_id: string;
-    handle: string;
-    is_bot: boolean;
-    score: number;
-    tier: string;
-    division: string | null;
-    games_played: number;
-    wins: number;
+  rank: number;
+  account_id: string;
+  handle: string;
+  is_bot: boolean;
+  score: number;
+  tier: string;
+  division: string | null;
+  games_played: number;
+  wins: number;
 }
 
 interface ProfilePage<Item> {
-    items: Item[];
-    next_cursor: number | null;
+  items: Item[];
+  next_cursor: number | null;
 }
 
 export interface ProfileCacheEntry {
-    data: ProfileData | null;
-    complete: boolean;
-    stale: boolean;
-    error: string;
-    request: Promise<ProfileData | null> | null;
-    history: ProfileMatch[];
-    historyCursor: number;
-    historyLoaded: boolean;
-    historyHasMore: boolean;
-    historyError: string;
-    historyRequest: Promise<void> | null;
-    details: Record<string, ProfileMatchDetail>;
-    detailRequests: Record<string, Promise<void> | undefined>;
+  data: ProfileData | null;
+  complete: boolean;
+  stale: boolean;
+  error: string;
+  request: Promise<ProfileData | null> | null;
+  history: ProfileMatch[];
+  historyCursor: number;
+  historyLoaded: boolean;
+  historyHasMore: boolean;
+  historyError: string;
+  historyRequest: Promise<void> | null;
+  details: Record<string, ProfileMatchDetail>;
+  detailRequests: Record<string, Promise<void> | undefined>;
 }
 
 let profileVictoryLeaderboard: ProfileVictoryLeader[] | null = null;
@@ -179,1206 +197,1693 @@ let profileRankedLeaderboardRequest: Promise<void> | null = null;
 let profileRankedLeaderboardRevision = 0;
 
 export function profileApi(path: string) {
-    const base = String(window.SOW_DATABASE_URL || "/api").replace(/\/$/, "");
-    return base + path;
+  const base = String(window.SOW_DATABASE_URL || "/api").replace(/\/$/, "");
+  return base + path;
 }
 
 function profileCacheEntry(id: string | null): ProfileCacheEntry | null {
-    if (!id) return null;
-    if (!profileCache[id]) {
-        profileCache[id] = {
-            data: null,
-            complete: false,
-            stale: false,
-            error: "",
-            request: null,
-            history: [],
-            historyCursor: 0,
-            historyLoaded: false,
-            historyHasMore: false,
-            historyError: "",
-            historyRequest: null,
-            details: Object.create(null),
-            detailRequests: Object.create(null),
-        };
-    }
-    return profileCache[id];
+  if (!id) return null;
+  if (!profileCache[id]) {
+    profileCache[id] = {
+      data: null,
+      complete: false,
+      stale: false,
+      error: "",
+      request: null,
+      history: [],
+      historyCursor: 0,
+      historyLoaded: false,
+      historyHasMore: false,
+      historyError: "",
+      historyRequest: null,
+      details: Object.create(null),
+      detailRequests: Object.create(null),
+    };
+  }
+  return profileCache[id];
 }
 
 function profileStat(value: number) {
-    const number = Number(value);
-    return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0;
 }
 
 function profileSeedFromState(id: string): ProfileData | null {
-    if (!menuUi.state || menuUi.state.account_id !== id) return null;
-    const stats = menuUi.state.profile_stats || {};
-    const matches = profileStat(stats.matches_played);
-    const wins = profileStat(stats.wins);
-    return {
-        account_id: id,
-        handle: menuUi.state.player_name || "",
-        display_name: menuUi.state.player_name || SOW_t("menu.anonymous"),
-        level: profileStat(menuUi.state.level) || 1,
-        matches_played: matches,
-        wins: wins,
-        win_rate: matches ? wins / matches : 0,
-        kills: profileStat(stats.kills),
-        deaths: profileStat(stats.deaths),
-        assists: profileStat(stats.assists),
-        laurels: profileStat(menuUi.state.laurels),
-        players_defeated: profileStat(stats.players_defeated),
-        empires_defeated: profileStat(stats.empires_defeated),
-        tribes_defeated: profileStat(stats.tribes_defeated),
-        preferred_leader: menuUi.state.selected_leader || null,
-        leaders: [],
-        recent_matches: [],
-        ratings: [],
-    };
+  if (!menuUi.state || menuUi.state.account_id !== id) return null;
+  const stats = menuUi.state.profile_stats || {};
+  const matches = profileStat(stats.matches_played);
+  const wins = profileStat(stats.wins);
+  return {
+    account_id: id,
+    handle: menuUi.state.player_name || "",
+    display_name: menuUi.state.player_name || SOW_t("menu.anonymous"),
+    level: profileStat(menuUi.state.level) || 1,
+    matches_played: matches,
+    wins: wins,
+    win_rate: matches ? wins / matches : 0,
+    kills: profileStat(stats.kills),
+    deaths: profileStat(stats.deaths),
+    assists: profileStat(stats.assists),
+    laurels: profileStat(menuUi.state.laurels),
+    players_defeated: profileStat(stats.players_defeated),
+    empires_defeated: profileStat(stats.empires_defeated),
+    tribes_defeated: profileStat(stats.tribes_defeated),
+    preferred_leader: menuUi.state.selected_leader || null,
+    leaders: [],
+    recent_matches: [],
+    ratings: [],
+  };
 }
 
 function cacheProfileSeed(id: string, seed: ProfileData | null) {
-    const entry = profileCacheEntry(id);
-    if (!entry || !seed || entry.complete) return entry;
-    entry.data = Object.assign({}, entry.data || {}, seed);
-    return entry;
+  const entry = profileCacheEntry(id);
+  if (!entry || !seed || entry.complete) return entry;
+  entry.data = Object.assign({}, entry.data || {}, seed);
+  return entry;
 }
 
 function activateProfileEntry(id: string) {
-    const entry = profileCacheEntry(id);
-    if (!entry) return null;
-    menuUi.profileData = entry.data;
-    menuUi.profileHistory = entry.history;
-    return entry;
+  const entry = profileCacheEntry(id);
+  if (!entry) return null;
+  menuUi.profileData = entry.data;
+  menuUi.profileHistory = entry.history;
+  return entry;
 }
 
 export function activeProfileEntry() {
-    return profileCacheEntry(menuUi.profileAccountId);
+  return profileCacheEntry(menuUi.profileAccountId);
 }
 
 function profileDataComplete() {
-    const entry = activeProfileEntry();
-    return !!(entry && entry.complete);
+  const entry = activeProfileEntry();
+  return !!(entry && entry.complete);
 }
 
 function profileSnapshotError() {
-    const entry = activeProfileEntry();
-    return entry ? entry.error : "";
+  const entry = activeProfileEntry();
+  return entry ? entry.error : "";
 }
 
 function applyProfileSnapshot(id: string, data: ProfileData) {
-    const entry = profileCacheEntry(id);
-    if (!entry) return;
-    const recent = Array.isArray(data.recent_matches) ? data.recent_matches.slice() : [];
-    entry.data = data;
-    entry.complete = true;
-    entry.stale = false;
-    entry.error = "";
-    entry.history = recent;
-    entry.historyCursor = recent.length;
-    entry.historyLoaded = true;
-    entry.historyHasMore = profileStat(data.matches_played) > recent.length;
-    entry.historyError = "";
-    if (menuUi.profileOwnId === id) {
-        menuUi.rankedLadder = data.ranked_ladder || null;
-        menuUi.rankedRating =
-            (data.ratings || []).find(function (rating) {
-                return rating.queue === "Ranked1v1" && rating.mode === "FFA";
-            }) || null;
-        const rankLabel = root.querySelector<HTMLElement>("[data-ranked-current]");
-        if (rankLabel) {
-            const rating = menuUi.rankedRating;
-            rankLabel.textContent = rankLabelText(rating);
-            const emblem = root.querySelector<HTMLElement>("[data-ranked-emblem]");
-            if (emblem) emblem.innerHTML = rankEmblem(rating?.placements_complete ? rating.tier : "unranked", rating?.placements_complete ? rating.division : null);
-        }
+  const entry = profileCacheEntry(id);
+  if (!entry) return;
+  const recent = Array.isArray(data.recent_matches)
+    ? data.recent_matches.slice()
+    : [];
+  entry.data = data;
+  entry.complete = true;
+  entry.stale = false;
+  entry.error = "";
+  entry.history = recent;
+  entry.historyCursor = recent.length;
+  entry.historyLoaded = true;
+  entry.historyHasMore = profileStat(data.matches_played) > recent.length;
+  entry.historyError = "";
+  if (menuUi.profileOwnId === id) {
+    menuUi.rankedLadder = data.ranked_ladder || null;
+    menuUi.rankedRating =
+      (data.ratings || []).find(function (rating) {
+        return rating.queue === "Ranked1v1" && rating.mode === "FFA";
+      }) || null;
+    const rankLabel = root.querySelector<HTMLElement>("[data-ranked-current]");
+    if (rankLabel) {
+      const rating = menuUi.rankedRating;
+      rankLabel.textContent = rankLabelText(rating);
+      const emblem = root.querySelector<HTMLElement>("[data-ranked-emblem]");
+      if (emblem)
+        emblem.innerHTML = rankEmblem(
+          rating?.placements_complete ? rating.tier : "unranked",
+          rating?.placements_complete ? rating.division : null,
+        );
     }
-    if (menuUi.profileAccountId === id) activateProfileEntry(id);
+  }
+  if (menuUi.profileAccountId === id) activateProfileEntry(id);
 }
 
 export function loadProfile(id: string | null): Promise<ProfileData | null> {
-    const entry = profileCacheEntry(id);
-    if (!id || !entry) return Promise.resolve(null);
-    if (entry.complete && !entry.stale) {
-        if (menuUi.profileAccountId === id) activateProfileEntry(id);
-        return Promise.resolve(entry.data);
-    }
-    if (entry.request) {
-        if (menuUi.profileAccountId === id) menuUi.profileSnapshotLoading = true;
-        return entry.request;
-    }
-    if (menuUi.profileAccountId === id) {
-        menuUi.profileSnapshotLoading = true;
-    }
-    entry.request = fetch(profileApi("/profiles/" + encodeURIComponent(id)), {
-        headers: { Accept: "application/json" },
-    })
-        .then(function (response) {
-            if (!response.ok) throw new Error("profile request failed");
-            return response.json();
-        })
-        .then(function (data: ProfileData | null) {
-            if (!data || typeof data !== "object") throw new Error("invalid profile response");
-            applyProfileSnapshot(id, data);
-            return data;
-        })
-        .catch(function () {
-            entry.error = SOW_t("profile.profile_unavailable");
-            return null;
-        })
-        .finally(function () {
-            entry.request = null;
-            if (menuUi.profileOpen && menuUi.profileAccountId === id) {
-                menuUi.profileSnapshotLoading = false;
-                activateProfileEntry(id);
-                syncProfileDom();
-            }
-        });
+  const entry = profileCacheEntry(id);
+  if (!id || !entry) return Promise.resolve(null);
+  if (entry.complete && !entry.stale) {
+    if (menuUi.profileAccountId === id) activateProfileEntry(id);
+    return Promise.resolve(entry.data);
+  }
+  if (entry.request) {
+    if (menuUi.profileAccountId === id) menuUi.profileSnapshotLoading = true;
     return entry.request;
+  }
+  if (menuUi.profileAccountId === id) {
+    menuUi.profileSnapshotLoading = true;
+  }
+  entry.request = fetch(profileApi("/profiles/" + encodeURIComponent(id)), {
+    headers: { Accept: "application/json" },
+  })
+    .then(function (response) {
+      if (!response.ok) throw new Error("profile request failed");
+      return response.json();
+    })
+    .then(function (data: ProfileData | null) {
+      if (!data || typeof data !== "object")
+        throw new Error("invalid profile response");
+      applyProfileSnapshot(id, data);
+      return data;
+    })
+    .catch(function () {
+      entry.error = SOW_t("profile.profile_unavailable");
+      return null;
+    })
+    .finally(function () {
+      entry.request = null;
+      if (menuUi.profileOpen && menuUi.profileAccountId === id) {
+        menuUi.profileSnapshotLoading = false;
+        activateProfileEntry(id);
+        syncProfileDom();
+      }
+    });
+  return entry.request;
 }
 
 export function loadMoreProfileHistory() {
-    const id = menuUi.profileAccountId;
-    const entry = activeProfileEntry();
-    if (!id || !entry || menuUi.profileHistoryLoading || entry.historyRequest) return;
-    if (!entry.complete || entry.stale) {
-        menuUi.profileHistoryLoading = true;
-        loadProfile(id).then(function (data) {
-            if (menuUi.profileOpen && menuUi.profileAccountId === id) {
-                menuUi.profileHistoryLoading = false;
-                if (data) loadMoreProfileHistory();
-                else syncProfileDom();
-            }
-        });
-        return;
-    }
-    if (!entry.historyHasMore) return;
+  const id = menuUi.profileAccountId;
+  const entry = activeProfileEntry();
+  if (!id || !entry || menuUi.profileHistoryLoading || entry.historyRequest)
+    return;
+  if (!entry.complete || entry.stale) {
     menuUi.profileHistoryLoading = true;
-    entry.historyError = "";
-    entry.historyRequest = fetch(
-        profileApi(
-            "/profiles/" + encodeURIComponent(id) + "/matches?cursor=" + entry.historyCursor + "&limit=20",
-        ),
-        {
-            headers: { Accept: "application/json" },
-        },
-    )
-        .then(function (response) {
-            if (!response.ok) throw new Error("history request failed");
-            return response.json();
-        })
-        .then(function (data: ProfilePage<ProfileMatch>) {
-            const items = Array.isArray(data.items) ? data.items : [];
-            entry.history = entry.history.concat(items);
-            entry.historyCursor =
-                data.next_cursor == null ? entry.historyCursor + items.length : Number(data.next_cursor);
-            entry.historyLoaded = true;
-            entry.historyHasMore = data.next_cursor != null && items.length > 0;
-            if (menuUi.profileAccountId === id) activateProfileEntry(id);
-        })
-        .catch(function () {
-            entry.historyError = SOW_t("profile.match_history_unavailable");
-        })
-        .finally(function () {
-            entry.historyRequest = null;
-            if (menuUi.profileOpen && menuUi.profileAccountId === id) {
-                menuUi.profileHistoryLoading = false;
-                syncProfileDom();
-            }
-        });
+    loadProfile(id).then(function (data) {
+      if (menuUi.profileOpen && menuUi.profileAccountId === id) {
+        menuUi.profileHistoryLoading = false;
+        if (data) loadMoreProfileHistory();
+        else syncProfileDom();
+      }
+    });
+    return;
+  }
+  if (!entry.historyHasMore) return;
+  menuUi.profileHistoryLoading = true;
+  entry.historyError = "";
+  entry.historyRequest = fetch(
+    profileApi(
+      "/profiles/" +
+        encodeURIComponent(id) +
+        "/matches?cursor=" +
+        entry.historyCursor +
+        "&limit=20",
+    ),
+    {
+      headers: { Accept: "application/json" },
+    },
+  )
+    .then(function (response) {
+      if (!response.ok) throw new Error("history request failed");
+      return response.json();
+    })
+    .then(function (data: ProfilePage<ProfileMatch>) {
+      const items = Array.isArray(data.items) ? data.items : [];
+      entry.history = entry.history.concat(items);
+      entry.historyCursor =
+        data.next_cursor == null
+          ? entry.historyCursor + items.length
+          : Number(data.next_cursor);
+      entry.historyLoaded = true;
+      entry.historyHasMore = data.next_cursor != null && items.length > 0;
+      if (menuUi.profileAccountId === id) activateProfileEntry(id);
+    })
+    .catch(function () {
+      entry.historyError = SOW_t("profile.match_history_unavailable");
+    })
+    .finally(function () {
+      entry.historyRequest = null;
+      if (menuUi.profileOpen && menuUi.profileAccountId === id) {
+        menuUi.profileHistoryLoading = false;
+        syncProfileDom();
+      }
+    });
 }
 
 export function loadVictoryLeaderboard(append?: boolean) {
-    if (profileVictoryLeaderboardRequest || (profileVictoryLeaderboard !== null && !append)) return;
-    const appendItems = !!append && profileVictoryLeaderboard !== null;
-    if (appendItems && !profileVictoryLeaderboardHasMore) return;
-    const cursor = appendItems ? profileVictoryLeaderboardCursor : 0;
-    profileVictoryLeaderboardLoading = true;
-    profileVictoryLeaderboardError = "";
-    profileVictoryLeaderboardRequest = fetch(
-        profileApi("/seasons/1/leaderboard?kind=victories&cursor=" + cursor + "&limit=25"),
-        {
-            headers: { Accept: "application/json" },
-        },
-    )
-        .then(function (response) {
-            if (!response.ok) throw new Error("victories leaderboard failed");
-            return response.json();
-        })
-        .then(function (data: ProfilePage<ProfileVictoryLeader>) {
-            const items = Array.isArray(data.items) ? data.items : [];
-            profileVictoryLeaderboard = appendItems ? profileVictoryLeaderboard!.concat(items) : items;
-            profileVictoryLeaderboardCursor = data.next_cursor == null ? cursor : Number(data.next_cursor);
-            profileVictoryLeaderboardHasMore = data.next_cursor != null && items.length > 0;
-        })
-        .catch(function () {
-            profileVictoryLeaderboardError = SOW_t("profile.leaderboard_unavailable");
-        })
-        .finally(function () {
-            profileVictoryLeaderboardRequest = null;
-            profileVictoryLeaderboardLoading = false;
-            if (menuUi.profileOpen) syncProfileDom();
-        });
+  if (
+    profileVictoryLeaderboardRequest ||
+    (profileVictoryLeaderboard !== null && !append)
+  )
+    return;
+  const appendItems = !!append && profileVictoryLeaderboard !== null;
+  if (appendItems && !profileVictoryLeaderboardHasMore) return;
+  const cursor = appendItems ? profileVictoryLeaderboardCursor : 0;
+  profileVictoryLeaderboardLoading = true;
+  profileVictoryLeaderboardError = "";
+  profileVictoryLeaderboardRequest = fetch(
+    profileApi(
+      "/seasons/1/leaderboard?kind=victories&cursor=" + cursor + "&limit=25",
+    ),
+    {
+      headers: { Accept: "application/json" },
+    },
+  )
+    .then(function (response) {
+      if (!response.ok) throw new Error("victories leaderboard failed");
+      return response.json();
+    })
+    .then(function (data: ProfilePage<ProfileVictoryLeader>) {
+      const items = Array.isArray(data.items) ? data.items : [];
+      profileVictoryLeaderboard = appendItems
+        ? profileVictoryLeaderboard!.concat(items)
+        : items;
+      profileVictoryLeaderboardCursor =
+        data.next_cursor == null ? cursor : Number(data.next_cursor);
+      profileVictoryLeaderboardHasMore =
+        data.next_cursor != null && items.length > 0;
+    })
+    .catch(function () {
+      profileVictoryLeaderboardError = SOW_t("profile.leaderboard_unavailable");
+    })
+    .finally(function () {
+      profileVictoryLeaderboardRequest = null;
+      profileVictoryLeaderboardLoading = false;
+      if (menuUi.profileOpen) syncProfileDom();
+    });
 }
 
 export function loadRankedLeaderboard(retry = false) {
-    if (profileRankedLeaderboardRequest || (!retry && profileRankedLeaderboard !== null)) return;
-    const revision = profileRankedLeaderboardRevision;
-    profileRankedLeaderboardLoading = true;
-    profileRankedLeaderboardError = "";
-    profileRankedLeaderboardRequest = fetch(
-        profileApi("/seasons/1/leaderboard?queue=Ranked1v1&mode=FFA&limit=100"),
-        { headers: { Accept: "application/json" } },
-    )
-        .then(function (response) {
-            if (!response.ok) throw new Error("ranked leaderboard failed");
-            return response.json();
-        })
-        .then(function (data: ProfilePage<ProfileRankedLeader>) {
-            if (revision === profileRankedLeaderboardRevision) profileRankedLeaderboard = Array.isArray(data.items) ? data.items : [];
-        })
-        .catch(function () {
-            if (revision === profileRankedLeaderboardRevision) profileRankedLeaderboardError = SOW_t("profile.leaderboard_unavailable");
-        })
-        .finally(function () {
-            profileRankedLeaderboardRequest = null;
-            profileRankedLeaderboardLoading = false;
-            if (revision !== profileRankedLeaderboardRevision && menuUi.profileOpen && menuUi.profileTab === "victories") loadRankedLeaderboard();
-            if (menuUi.profileOpen) syncProfileDom();
-        });
+  if (
+    profileRankedLeaderboardRequest ||
+    (!retry && profileRankedLeaderboard !== null)
+  )
+    return;
+  const revision = profileRankedLeaderboardRevision;
+  profileRankedLeaderboardLoading = true;
+  profileRankedLeaderboardError = "";
+  profileRankedLeaderboardRequest = fetch(
+    profileApi("/seasons/1/leaderboard?queue=Ranked1v1&mode=FFA&limit=100"),
+    { headers: { Accept: "application/json" } },
+  )
+    .then(function (response) {
+      if (!response.ok) throw new Error("ranked leaderboard failed");
+      return response.json();
+    })
+    .then(function (data: ProfilePage<ProfileRankedLeader>) {
+      if (revision === profileRankedLeaderboardRevision)
+        profileRankedLeaderboard = Array.isArray(data.items) ? data.items : [];
+    })
+    .catch(function () {
+      if (revision === profileRankedLeaderboardRevision)
+        profileRankedLeaderboardError = SOW_t(
+          "profile.leaderboard_unavailable",
+        );
+    })
+    .finally(function () {
+      profileRankedLeaderboardRequest = null;
+      profileRankedLeaderboardLoading = false;
+      if (
+        revision !== profileRankedLeaderboardRevision &&
+        menuUi.profileOpen &&
+        menuUi.profileTab === "victories"
+      )
+        loadRankedLeaderboard();
+      if (menuUi.profileOpen) syncProfileDom();
+    });
 }
 
 export function invalidateProfileCache(id: string | null) {
-    const entry = profileCacheEntry(id);
-    if (!entry) return;
-    entry.stale = true;
-    entry.error = "";
-    entry.historyLoaded = false;
-    entry.historyError = "";
+  const entry = profileCacheEntry(id);
+  if (!entry) return;
+  entry.stale = true;
+  entry.error = "";
+  entry.historyLoaded = false;
+  entry.historyError = "";
 }
 
 export function syncProfilePreload(nextState: MenuState) {
-    const nextId = nextState && nextState.account_id ? nextState.account_id : null;
-    const previousId = menuUi.profileOwnId;
-    const returnedToMenu =
-        menuUi.profileLastPhase && menuUi.profileLastPhase !== "MainMenu" && nextState.phase === "MainMenu";
-    if (previousId && previousId !== nextId && menuUi.profileOpen && menuUi.profileAccountId === previousId) {
-        menuUi.profileOpen = false;
-        menuUi.profileAccountId = null;
-        menuUi.profileData = null;
-        menuUi.profileHistory = [];
-        menuUi.profileMatchDetail = null;
-        menuUi.profileDetailError = "";
-        menuUi.profileDetailId = null;
-        menuUi.profileDetailLoading = false;
-        menuUi.profileDetailRequestKey = null;
-    }
-    if (previousId && previousId !== nextId) invalidateProfileCache(previousId);
-    menuUi.profileOwnId = nextId;
-    if (previousId !== nextId) { menuUi.rankedRating = null; menuUi.rankedLadder = null; }
-    menuUi.profileLastPhase = nextState.phase;
-    if (!nextId) return;
-    const entry = cacheProfileSeed(nextId, profileSeedFromState(nextId));
-    if (returnedToMenu) {
-        invalidateProfileCache(nextId);
-        profileRankedLeaderboardRevision++;
-        profileRankedLeaderboard = null;
-        profileRankedLeaderboardError = "";
-    }
-    if (entry && !entry.complete) {
-        if (menuUi.profileAccountId === nextId) activateProfileEntry(nextId);
-    }
-    if (
-        previousId !== nextId ||
-        returnedToMenu ||
-        (entry && !entry.complete && !entry.request && !entry.error)
-    ) {
-        loadProfile(nextId);
-    }
-}
-
-export function openProfile(id: string | null, isNavigation = false) {
-    const targetId = id || (menuUi.state && menuUi.state.account_id);
-    if (!targetId) return;
-    if (menuUi.profileOpen && menuUi.profileAccountId && menuUi.profileAccountId !== targetId && !isNavigation) {
-        if (!menuUi.profileNavStack) menuUi.profileNavStack = [];
-        menuUi.profileNavStack.push({
-            accountId: menuUi.profileAccountId,
-            tab: menuUi.profileTab || "overview",
-        });
-    }
-    if (!id && !isNavigation) {
-        menuUi.profileNavStack = [];
-    }
-    menuUi.reportOpen = false;
-    menuUi.reportTarget = null;
-    menuUi.reportSent = false;
-    menuUi.deleteArmed = false;
-    try {
-        if (typeof window.SOW_isBlockedId === "function" && window.SOW_isBlockedId(targetId)) {
-            menuUi.profileOpen = true;
-            menuUi.profileAccountId = targetId;
-            menuUi.profileTab = "overview";
-            const blockedEntry = profileCacheEntry(targetId)!;
-            blockedEntry.data = null;
-            blockedEntry.complete = false;
-            blockedEntry.stale = false;
-            blockedEntry.error = SOW_t("profile.blocked_player");
-            menuUi.profileData = null;
-            menuUi.profileHistory = blockedEntry.history = [];
-            blockedEntry.historyCursor = 0;
-            blockedEntry.historyLoaded = true;
-            blockedEntry.historyHasMore = false;
-            menuUi.profileMatchDetail = null;
-            menuUi.profileDetailError = "";
-            menuUi.profileDetailId = null;
-            menuUi.profileSnapshotLoading = false;
-            menuUi.profileHistoryLoading = false;
-            menuUi.profileDetailLoading = false;
-            menuUi.profileDetailRequestKey = null;
-            render();
-            return;
-        }
-    } catch {}
-    menuUi.profileOpen = true;
-    menuUi.profileAccountId = targetId;
-    menuUi.profileTab = "overview";
-    menuUi.profileSnapshotLoading = false;
-    menuUi.profileHistoryLoading = false;
-    menuUi.profileDetailLoading = false;
+  const nextId =
+    nextState && nextState.account_id ? nextState.account_id : null;
+  const previousId = menuUi.profileOwnId;
+  const returnedToMenu =
+    menuUi.profileLastPhase &&
+    menuUi.profileLastPhase !== "MainMenu" &&
+    nextState.phase === "MainMenu";
+  if (
+    previousId &&
+    previousId !== nextId &&
+    menuUi.profileOpen &&
+    menuUi.profileAccountId === previousId
+  ) {
+    menuUi.profileOpen = false;
+    menuUi.profileAccountId = null;
+    menuUi.profileData = null;
+    menuUi.profileHistory = [];
     menuUi.profileMatchDetail = null;
     menuUi.profileDetailError = "";
     menuUi.profileDetailId = null;
+    menuUi.profileDetailLoading = false;
     menuUi.profileDetailRequestKey = null;
-    if (menuUi.state && menuUi.state.account_id === targetId) invalidateProfileCache(targetId);
-    cacheProfileSeed(targetId, profileSeedFromState(targetId));
-    activateProfileEntry(targetId);
-    loadProfile(targetId);
-    render();
+  }
+  if (previousId && previousId !== nextId) invalidateProfileCache(previousId);
+  menuUi.profileOwnId = nextId;
+  if (previousId !== nextId) {
+    menuUi.rankedRating = null;
+    menuUi.rankedLadder = null;
+  }
+  menuUi.profileLastPhase = nextState.phase;
+  if (!nextId) return;
+  const entry = cacheProfileSeed(nextId, profileSeedFromState(nextId));
+  if (returnedToMenu) {
+    invalidateProfileCache(nextId);
+    profileRankedLeaderboardRevision++;
+    profileRankedLeaderboard = null;
+    profileRankedLeaderboardError = "";
+  }
+  if (entry && !entry.complete) {
+    if (menuUi.profileAccountId === nextId) activateProfileEntry(nextId);
+  }
+  if (
+    previousId !== nextId ||
+    returnedToMenu ||
+    (entry && !entry.complete && !entry.request && !entry.error)
+  ) {
+    loadProfile(nextId);
+  }
+}
+
+export function openProfile(id: string | null, isNavigation = false) {
+  const targetId = id || (menuUi.state && menuUi.state.account_id);
+  if (!targetId) return;
+  if (
+    menuUi.profileOpen &&
+    menuUi.profileAccountId &&
+    menuUi.profileAccountId !== targetId &&
+    !isNavigation
+  ) {
+    if (!menuUi.profileNavStack) menuUi.profileNavStack = [];
+    menuUi.profileNavStack.push({
+      accountId: menuUi.profileAccountId,
+      tab: menuUi.profileTab || "overview",
+    });
+  }
+  if (!id && !isNavigation) {
+    menuUi.profileNavStack = [];
+  }
+  menuUi.reportOpen = false;
+  menuUi.reportTarget = null;
+  menuUi.reportSent = false;
+  menuUi.deleteArmed = false;
+  try {
+    if (
+      typeof window.SOW_isBlockedId === "function" &&
+      window.SOW_isBlockedId(targetId)
+    ) {
+      menuUi.profileOpen = true;
+      menuUi.profileAccountId = targetId;
+      menuUi.profileTab = "overview";
+      const blockedEntry = profileCacheEntry(targetId)!;
+      blockedEntry.data = null;
+      blockedEntry.complete = false;
+      blockedEntry.stale = false;
+      blockedEntry.error = SOW_t("profile.blocked_player");
+      menuUi.profileData = null;
+      menuUi.profileHistory = blockedEntry.history = [];
+      blockedEntry.historyCursor = 0;
+      blockedEntry.historyLoaded = true;
+      blockedEntry.historyHasMore = false;
+      menuUi.profileMatchDetail = null;
+      menuUi.profileDetailError = "";
+      menuUi.profileDetailId = null;
+      menuUi.profileSnapshotLoading = false;
+      menuUi.profileHistoryLoading = false;
+      menuUi.profileDetailLoading = false;
+      menuUi.profileDetailRequestKey = null;
+      render();
+      return;
+    }
+  } catch {}
+  menuUi.profileOpen = true;
+  menuUi.profileAccountId = targetId;
+  menuUi.profileTab = "overview";
+  menuUi.profileSnapshotLoading = false;
+  menuUi.profileHistoryLoading = false;
+  menuUi.profileDetailLoading = false;
+  menuUi.profileMatchDetail = null;
+  menuUi.profileDetailError = "";
+  menuUi.profileDetailId = null;
+  menuUi.profileDetailRequestKey = null;
+  if (menuUi.state && menuUi.state.account_id === targetId)
+    invalidateProfileCache(targetId);
+  cacheProfileSeed(targetId, profileSeedFromState(targetId));
+  activateProfileEntry(targetId);
+  loadProfile(targetId);
+  render();
 }
 
 export function popProfileNav(): boolean {
-    if (menuUi.profileNavStack && menuUi.profileNavStack.length > 0) {
-        const previous = menuUi.profileNavStack.pop()!;
-        openProfile(previous.accountId, true);
-        menuUi.profileTab = previous.tab || "overview";
-        return true;
-    }
-    const ownId = menuUi.profileOwnId || (menuUi.state && menuUi.state.account_id);
-    if (menuUi.profileAccountId && ownId && menuUi.profileAccountId !== ownId) {
-        openProfile(ownId, true);
-        return true;
-    }
-    return false;
+  if (menuUi.profileNavStack && menuUi.profileNavStack.length > 0) {
+    const previous = menuUi.profileNavStack.pop()!;
+    openProfile(previous.accountId, true);
+    menuUi.profileTab = previous.tab || "overview";
+    return true;
+  }
+  const ownId =
+    menuUi.profileOwnId || (menuUi.state && menuUi.state.account_id);
+  if (menuUi.profileAccountId && ownId && menuUi.profileAccountId !== ownId) {
+    openProfile(ownId, true);
+    return true;
+  }
+  return false;
 }
 
 function isBlockedAccountId(accountId: string) {
-    try {
-        return typeof window.SOW_isBlockedId === "function" && window.SOW_isBlockedId(accountId);
-    } catch {
-        return false;
-    }
+  try {
+    return (
+      typeof window.SOW_isBlockedId === "function" &&
+      window.SOW_isBlockedId(accountId)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function profileLeaderCard(leader: ProfileLeader) {
-    const summary = leader || {};
-    const leaderInfo = leaderById(summary.leader);
-    const winRate = Math.round((summary.win_rate || 0) * 100);
-    const level = 1 + Math.floor((summary.xp || 0) / 100);
-    return (
-        "<article class='sow-profile__leader'>" +
-        "<div class='sow-profile__leader-avatar-frame'>" +
-        "<img src='" +
-        esc(asset("gameplay/avatars/" + leaderArtSlug(leaderInfo) + ".webp")) +
-        "' alt='' width='52' height='52' loading='lazy'>" +
-        "<span class='sow-profile__leader-badge'>" + esc(level) + "</span>" +
-        "</div>" +
-        "<div class='sow-profile__leader-info'>" +
-        "<div class='sow-profile__leader-header'>" +
-        "<strong>" + esc(leaderDisplayName(leaderInfo)) + "</strong>" +
-        "<b>" + esc(SOW_t("profile.level", { level: level })) + "</b>" +
-        "</div>" +
-        "<div class='sow-profile__leader-track' aria-hidden='true'><i style='width:" + winRate + "%'></i></div>" +
-        "<span>" +
-        esc(
-            SOW_t("profile.commander_stats", {
-                matches: summary.matches_played || 0,
-                wins: summary.wins || 0,
-                rate: winRate,
-            }),
-        ) +
-        "</span></div>" +
-        "</article>"
-    );
+  const summary = leader || {};
+  const leaderInfo = leaderById(summary.leader);
+  const winRate = Math.round((summary.win_rate || 0) * 100);
+  const level = 1 + Math.floor((summary.xp || 0) / 100);
+  return (
+    "<article class='sow-profile__leader'>" +
+    "<div class='sow-profile__leader-avatar-frame'>" +
+    "<img src='" +
+    esc(asset("gameplay/avatars/" + leaderArtSlug(leaderInfo) + ".webp")) +
+    "' alt='' width='52' height='52' loading='lazy'>" +
+    "<span class='sow-profile__leader-badge'>" +
+    esc(level) +
+    "</span>" +
+    "</div>" +
+    "<div class='sow-profile__leader-info'>" +
+    "<div class='sow-profile__leader-header'>" +
+    "<strong>" +
+    esc(leaderDisplayName(leaderInfo)) +
+    "</strong>" +
+    "<b>" +
+    esc(SOW_t("profile.level", { level: level })) +
+    "</b>" +
+    "</div>" +
+    "<div class='sow-profile__leader-track' aria-hidden='true'><i style='width:" +
+    winRate +
+    "%'></i></div>" +
+    "<span>" +
+    esc(
+      SOW_t("profile.commander_stats", {
+        matches: summary.matches_played || 0,
+        wins: summary.wins || 0,
+        rate: winRate,
+      }),
+    ) +
+    "</span></div>" +
+    "</article>"
+  );
 }
 
 function profileMatchDate(timestamp: number) {
-    const seconds = Number(timestamp);
-    if (!Number.isFinite(seconds) || seconds <= 0) return "—";
-    try {
-        return new Intl.DateTimeFormat(document.documentElement.lang || undefined, {
-            dateStyle: "medium",
-        }).format(new Date(seconds * 1000));
-    } catch {
-        return new Date(seconds * 1000).toLocaleDateString();
-    }
+  const seconds = Number(timestamp);
+  if (!Number.isFinite(seconds) || seconds <= 0) return "—";
+  try {
+    return new Intl.DateTimeFormat(document.documentElement.lang || undefined, {
+      dateStyle: "medium",
+    }).format(new Date(seconds * 1000));
+  } catch {
+    return new Date(seconds * 1000).toLocaleDateString();
+  }
 }
 
 function profileMatchDuration(seconds: number) {
-    const duration = Math.max(0, Math.floor(Number(seconds) || 0));
-    if (!duration) return "—";
-    return Math.floor(duration / 60) + "m " + (duration % 60) + "s";
+  const duration = Math.max(0, Math.floor(Number(seconds) || 0));
+  if (!duration) return "—";
+  return Math.floor(duration / 60) + "m " + (duration % 60) + "s";
 }
 
 function profileMatchRow(match: ProfileMatch) {
-    const verified = !!match.verified;
-    const result = verified
-        ? match.won
-            ? SOW_t("profile.win")
-            : SOW_t("profile.loss")
-        : SOW_t(match.provisional ? "profile.match_pending" : "profile.match_unverified");
-    const mode = match.mode || SOW_t("profile.ffa");
-    const map = formatMapName(match);
-    const leader = match.leader ? leaderById(match.leader) : null;
-    const context =
-        profileMatchDate(match.completed_at) + " · " + profileMatchDuration(match.duration_seconds);
-    const statusModifier = verified ? (match.won ? "is-win" : "is-loss") : "is-pending";
-    const deltaMarkup =
-        match.rating_delta == null
-            ? ""
-            : "<span class='sow-profile__match-delta " + (match.rating_delta > 0 ? "is-positive" : match.rating_delta < 0 ? "is-negative" : "") + "'>" +
-              (match.ranked_points_breakdown
-                  ? esc(SOW_t("lobbies.rank_score", { score: (match.rating_delta > 0 ? "+" : "") + match.rating_delta }))
-                  : (match.rating_delta > 0 ? "+" : "") + esc(match.rating_delta) + " MMR") +
-              "</span>";
-    return (
-        "<button type='button' class='sow-profile__match " + statusModifier + "' data-command='open_match' data-match-id='" +
-        esc(match.match_id) +
-        "'>" +
-        "<span class='sow-profile__match-blade' aria-hidden='true'></span>" +
-        "<span class='sow-profile__match-result " + statusModifier + "'>" +
-        esc(result) +
-        "</span>" +
-        (leader
-            ? "<div class='sow-profile__match-avatar-frame'><img class='sow-profile__match-avatar' src='" +
-              esc(asset("gameplay/avatars/" + leaderArtSlug(leader) + ".webp")) +
-              "' alt='' width='44' height='44' loading='lazy'></div>"
-            : "<span class='sow-profile__match-avatar' aria-hidden='true'></span>") +
-        "<span class='sow-profile__match-context'><strong>" +
-        esc(mode) +
-        "</strong><small>" +
-        esc(map) +
-        " · " +
-        esc(match.queue || SOW_t("profile.matchmaking_queue")) +
-        (match.rating_delta == null
-            ? ""
-            : " · " + (match.ranked_points_breakdown
-                  ? esc(SOW_t("lobbies.rank_score", { score: (match.rating_delta > 0 ? "+" : "") + match.rating_delta }))
-                  : (match.rating_delta > 0 ? "+" : "") + esc(match.rating_delta) + " MMR")) +
-        "</small></span>" +
-        "<span class='sow-profile__match-kda'><strong>" +
-        esc(leader ? leaderDisplayName(leader) : "—") +
-        "</strong><small>" +
-        (verified
-            ? esc(
-                  SOW_t("profile.kda_value", {
-                      kills: match.kills || 0,
-                      deaths: match.deaths || 0,
-                      assists: match.assists || 0,
-                  }),
-              ) +
-              " " +
-              esc(SOW_t("profile.kda"))
+  const verified = !!match.verified;
+  const result = verified
+    ? match.won
+      ? SOW_t("profile.win")
+      : SOW_t("profile.loss")
+    : SOW_t(
+        match.provisional
+          ? "profile.match_pending"
+          : "profile.match_unverified",
+      );
+  const mode = match.mode || SOW_t("profile.ffa");
+  const map = formatMapName(match);
+  const leader = match.leader ? leaderById(match.leader) : null;
+  const context =
+    profileMatchDate(match.completed_at) +
+    " · " +
+    profileMatchDuration(match.duration_seconds);
+  const statusModifier = verified
+    ? match.won
+      ? "is-win"
+      : "is-loss"
+    : "is-pending";
+  const deltaMarkup =
+    match.rating_delta == null
+      ? ""
+      : "<span class='sow-profile__match-delta " +
+        (match.rating_delta > 0
+          ? "is-positive"
+          : match.rating_delta < 0
+            ? "is-negative"
             : "") +
-        "</small></span>" +
-        deltaMarkup +
-        "<span class='sow-profile__match-time'>" +
-        esc(context) +
-        "</span>" +
-        "<span class='sow-profile__match-chevron' aria-hidden='true'>›</span>" +
-        "</button>"
-    );
+        "'>" +
+        (match.ranked_points_breakdown
+          ? esc(
+              SOW_t("lobbies.rank_score", {
+                score: (match.rating_delta > 0 ? "+" : "") + match.rating_delta,
+              }),
+            )
+          : (match.rating_delta > 0 ? "+" : "") +
+            esc(match.rating_delta) +
+            " MMR") +
+        "</span>";
+  return (
+    "<button type='button' class='sow-profile__match " +
+    statusModifier +
+    "' data-command='open_match' data-match-id='" +
+    esc(match.match_id) +
+    "'>" +
+    "<span class='sow-profile__match-blade' aria-hidden='true'></span>" +
+    "<span class='sow-profile__match-result " +
+    statusModifier +
+    "'>" +
+    esc(result) +
+    "</span>" +
+    (leader
+      ? "<div class='sow-profile__match-avatar-frame'><img class='sow-profile__match-avatar' src='" +
+        esc(asset("gameplay/avatars/" + leaderArtSlug(leader) + ".webp")) +
+        "' alt='' width='44' height='44' loading='lazy'></div>"
+      : "<span class='sow-profile__match-avatar' aria-hidden='true'></span>") +
+    "<span class='sow-profile__match-context'><strong>" +
+    esc(mode) +
+    "</strong><small>" +
+    esc(map) +
+    " · " +
+    esc(match.queue || SOW_t("profile.matchmaking_queue")) +
+    (match.rating_delta == null
+      ? ""
+      : " · " +
+        (match.ranked_points_breakdown
+          ? esc(
+              SOW_t("lobbies.rank_score", {
+                score: (match.rating_delta > 0 ? "+" : "") + match.rating_delta,
+              }),
+            )
+          : (match.rating_delta > 0 ? "+" : "") +
+            esc(match.rating_delta) +
+            " MMR")) +
+    "</small></span>" +
+    "<span class='sow-profile__match-kda'><strong>" +
+    esc(leader ? leaderDisplayName(leader) : "—") +
+    "</strong><small>" +
+    (verified
+      ? esc(
+          SOW_t("profile.kda_value", {
+            kills: match.kills || 0,
+            deaths: match.deaths || 0,
+            assists: match.assists || 0,
+          }),
+        ) +
+        " " +
+        esc(SOW_t("profile.kda"))
+      : "") +
+    "</small></span>" +
+    deltaMarkup +
+    "<span class='sow-profile__match-time'>" +
+    esc(context) +
+    "</span>" +
+    "<span class='sow-profile__match-chevron' aria-hidden='true'>›</span>" +
+    "</button>"
+  );
 }
 
 function profileHeaderMarkup(data: ProfileData | null, own: boolean | null) {
-    const title = own ? SOW_t("profile.your_profile") : SOW_t("profile.player_profile");
-    const snapshotError = profileSnapshotError();
-    const displayName =
-        data && data.display_name
-            ? data.display_name
-            : menuUi.profileSnapshotLoading
-              ? SOW_t("profile.loading_profile")
-              : SOW_t("profile.profile_unavailable");
-    const handle =
-        data && data.handle
-            ? data.handle
-            : menuUi.profileSnapshotLoading
-              ? SOW_t("profile.fetching_player_data")
-              : "";
-    const level = data && data.level != null ? data.level : "—";
-    const status =
-        data && snapshotError
-            ? "<div class='sow-profile__status' data-profile-status aria-live='polite'>" +
-              esc(snapshotError) +
-              " <button type='button' class='sow-profile__status-action' data-command='retry_profile'>" +
-              esc(SOW_t("profile.try_again")) +
-              "</button></div>"
-            : "<div class='sow-profile__status' data-profile-status aria-live='polite' hidden></div>";
-    const preferred = data && data.preferred_leader ? leaderById(data.preferred_leader) : null;
-    const avatarUrl = preferred ? asset("gameplay/avatars/" + leaderArtSlug(preferred) + ".webp") : avatarImage();
-    const rankedRating = (data?.ratings || []).find(function (r) {
-        return r.queue === "Ranked1v1" && r.mode === "FFA";
-    });
-    const rankBadge = rankedRating && rankedRating.placements_complete
-        ? "<span class='sow-profile__rank-badge' title='" + esc(rankLabelText(rankedRating)) + "'>" +
-          rankEmblem(rankedRating.tier, rankedRating.division) +
-          "<b>" + esc(rankName(rankedRating.tier, rankedRating.division)) + "</b>" +
-          "</span>"
+  const title = own
+    ? SOW_t("profile.your_profile")
+    : SOW_t("profile.player_profile");
+  const snapshotError = profileSnapshotError();
+  const displayName =
+    data && data.display_name
+      ? data.display_name
+      : menuUi.profileSnapshotLoading
+        ? SOW_t("profile.loading_profile")
+        : SOW_t("profile.profile_unavailable");
+  const handle =
+    data && data.handle
+      ? data.handle
+      : menuUi.profileSnapshotLoading
+        ? SOW_t("profile.fetching_player_data")
         : "";
-    const hasNavBack = !own || (menuUi.profileNavStack && menuUi.profileNavStack.length > 0);
-    const backLabel = hasNavBack ? "← " + SOW_t("lobbies.back") : SOW_t("lobbies.back");
-    const myProfileButton = !own
-        ? "<button type='button' class='sow-profile__my-profile-btn' data-command='back_to_my_profile'>" +
-          esc(SOW_t("profile.your_profile")) +
-          "</button>"
-        : "";
-    const heroArt = profileHeroImage(data && data.preferred_leader);
-    return (
-        "<section class='sow-profile__heading' data-profile-heading data-profile-cover aria-labelledby='sow-profile-title' style=\"--sow-hero:url('" + esc(heroArt) + "')\">" +
-        "<div class='sow-profile__cover-overlay'></div>" +
-        "<div class='sow-profile__heading-top'>" +
-        "<div class='sow-profile__breadcrumbs'>" +
-        "<span class='sow-profile__kicker'>" + esc(title) + "</span>" +
-        (!own ? "<span class='sow-profile__viewing-tag'>· " + esc(displayName) + "</span>" : "") +
-        "</div>" +
-        "<div class='sow-profile__heading-actions'>" +
-        myProfileButton +
-        "<button type='button' class='sow-profile__back' data-command='close_profile'>" +
-        esc(backLabel) +
-        "</button>" +
-        "</div>" +
-        "</div>" +
-        "<div class='sow-profile__identity-card'>" +
-        "<div class='sow-profile__avatar-container'>" +
-        "<div class='sow-profile__avatar-medallion'>" +
-        "<img class='sow-profile__avatar' data-profile-avatar src='" + esc(avatarUrl) + "' alt='' width='88' height='88'>" +
-        "</div>" +
-        "<div class='sow-profile__level' title='" + esc(SOW_t("profile.level_label")) + "'><small>" + esc(SOW_t("profile.level_label")) + "</small><strong data-profile-level>" + esc(level) + "</strong></div>" +
-        "</div>" +
-        "<div class='sow-profile__identity-main'>" +
-        "<div class='sow-profile__identity-copy'>" +
-        "<div class='sow-profile__identity-title-row'>" +
-        "<h1 id='sow-profile-title' data-profile-display-name>" + esc(displayName) + "</h1>" +
-        rankBadge +
-        "</div>" +
-        "<p class='sow-profile__handle' data-profile-handle>" + (handle ? "@" + esc(handle.replace(/^@/, "")) : "") + "</p>" +
-        (data && data.is_bot
-            ? "<p class='sow-profile__bot-meta'><span>" +
-              esc(SOW_t("profile.bot")) +
-              "</span> · " +
-              esc(SOW_t("profile.ranked_bot_iq", { iq: data.ranked_bot_iq || 0 })) +
-              "</p>"
-            : "") +
-        "<div data-profile-preferred>" +
-        profilePreferredCommanderMarkup(data) +
-        "</div>" +
-        status +
-        "</div>" +
-        "</div>" +
-        "</div>" +
-        profileStatsRibbonMarkup(data) +
-        "</section>"
-    );
+  const level = data && data.level != null ? data.level : "—";
+  const status =
+    data && snapshotError
+      ? "<div class='sow-profile__status' data-profile-status aria-live='polite'>" +
+        esc(snapshotError) +
+        " <button type='button' class='sow-profile__status-action' data-command='retry_profile'>" +
+        esc(SOW_t("profile.try_again")) +
+        "</button></div>"
+      : "<div class='sow-profile__status' data-profile-status aria-live='polite' hidden></div>";
+  const preferred =
+    data && data.preferred_leader ? leaderById(data.preferred_leader) : null;
+  const avatarUrl = preferred
+    ? asset("gameplay/avatars/" + leaderArtSlug(preferred) + ".webp")
+    : avatarImage();
+  const rankedRating = (data?.ratings || []).find(function (r) {
+    return r.queue === "Ranked1v1" && r.mode === "FFA";
+  });
+  const rankBadge =
+    rankedRating && rankedRating.placements_complete
+      ? "<span class='sow-profile__rank-badge' title='" +
+        esc(rankLabelText(rankedRating)) +
+        "'>" +
+        rankEmblem(rankedRating.tier, rankedRating.division) +
+        "<b>" +
+        esc(rankName(rankedRating.tier, rankedRating.division)) +
+        "</b>" +
+        "</span>"
+      : "";
+  const hasNavBack =
+    !own || (menuUi.profileNavStack && menuUi.profileNavStack.length > 0);
+  const backLabel = hasNavBack
+    ? "← " + SOW_t("lobbies.back")
+    : SOW_t("lobbies.back");
+  const myProfileButton = !own
+    ? "<button type='button' class='sow-profile__my-profile-btn' data-command='back_to_my_profile'>" +
+      esc(SOW_t("profile.your_profile")) +
+      "</button>"
+    : "";
+  const heroArt = profileHeroImage(data && data.preferred_leader);
+  return (
+    "<section class='sow-profile__heading' data-profile-heading data-profile-cover aria-labelledby='sow-profile-title' style=\"--sow-hero:url('" +
+    esc(heroArt) +
+    "')\">" +
+    "<div class='sow-profile__cover-overlay'></div>" +
+    "<div class='sow-profile__heading-top'>" +
+    "<div class='sow-profile__breadcrumbs'>" +
+    "<span class='sow-profile__kicker'>" +
+    esc(title) +
+    "</span>" +
+    (!own
+      ? "<span class='sow-profile__viewing-tag'>· " +
+        esc(displayName) +
+        "</span>"
+      : "") +
+    "</div>" +
+    "<div class='sow-profile__heading-actions'>" +
+    myProfileButton +
+    "<button type='button' class='sow-profile__back' data-command='close_profile'>" +
+    esc(backLabel) +
+    "</button>" +
+    "</div>" +
+    "</div>" +
+    "<div class='sow-profile__identity-card'>" +
+    "<div class='sow-profile__avatar-container'>" +
+    "<div class='sow-profile__avatar-medallion'>" +
+    "<img class='sow-profile__avatar' data-profile-avatar src='" +
+    esc(avatarUrl) +
+    "' alt='' width='88' height='88'>" +
+    "</div>" +
+    "<div class='sow-profile__level' title='" +
+    esc(SOW_t("profile.level_label")) +
+    "'><small>" +
+    esc(SOW_t("profile.level_label")) +
+    "</small><strong data-profile-level>" +
+    esc(level) +
+    "</strong></div>" +
+    "</div>" +
+    "<div class='sow-profile__identity-main'>" +
+    "<div class='sow-profile__identity-copy'>" +
+    "<div class='sow-profile__identity-title-row'>" +
+    "<h1 id='sow-profile-title' data-profile-display-name>" +
+    esc(displayName) +
+    "</h1>" +
+    rankBadge +
+    "</div>" +
+    "<p class='sow-profile__handle' data-profile-handle>" +
+    (handle ? "@" + esc(handle.replace(/^@/, "")) : "") +
+    "</p>" +
+    (data && data.is_bot
+      ? "<p class='sow-profile__bot-meta'><span>" +
+        esc(SOW_t("profile.bot")) +
+        "</span> · " +
+        esc(SOW_t("profile.ranked_bot_iq", { iq: data.ranked_bot_iq || 0 })) +
+        "</p>"
+      : "") +
+    status +
+    "</div>" +
+    "</div>" +
+    "</div>" +
+    profileStatsRibbonMarkup(data) +
+    "</section>"
+  );
 }
 
 function profileStatsRibbonMarkup(data: ProfileData | null) {
-    if (!data) return "";
-    const matches = profileStat(data.matches_played);
-    const wins = profileStat(data.wins);
-    const winRate = matches ? Math.round((wins / matches) * 100) : 0;
-    const laurels = profileStat(data.laurels);
-    return (
-        "<div class='sow-profile__stats' data-profile-stats>" +
-        "<div class='sow-profile__stat-cell sow-profile__stat-matches'>" +
-        "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14.5 17.5L3 6V3h3l11.5 11.5'/><path d='m13 19 6-6'/><path d='M16 16l4 4'/><path d='M19 21l2-2'/></svg></span>" +
-        "<div class='sow-profile__stat-body'><strong>" + esc(matches) + "</strong><span>" + esc(SOW_t("profile.matches")) + "</span></div>" +
-        "</div>" +
-        "<div class='sow-profile__stat-cell sow-profile__stat-wins'>" +
-        "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9H4.5a2.5 2.5 0 0 1 0-5H6'/><path d='M18 9h1.5a2.5 2.5 0 0 0 0-5H18'/><path d='M4 22h16'/><path d='M10 14.66V17c0 .55-.45 1-1 1H8c-.55 0-1 .45-1 1v1h10v-1c0-.55-.45-1-1-1h-1c-.55 0-1-.45-1-1v-2.34'/><path d='M18 4H6v7a6 6 0 0 0 12 0V4Z'/></svg></span>" +
-        "<div class='sow-profile__stat-body'><strong>" + esc(wins) + "</strong><span>" + esc(SOW_t("profile.wins")) + "</span></div>" +
-        "</div>" +
-        "<div class='sow-profile__stat-cell sow-profile__stat-winrate'>" +
-        "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='m4.93 4.93 4.24 4.24'/><path d='m14.83 9.17 4.24-4.24'/><path d='m14.83 14.83 4.24 4.24'/><path d='m9.17 14.83-4.24 4.24'/><circle cx='12' cy='12' r='4'/></svg></span>" +
-        "<div class='sow-profile__stat-body'><strong>" + esc(winRate) + "%</strong><span>" + esc(SOW_t("profile.win_rate")) + "</span>" +
-        "<div class='sow-profile__stat-gauge' aria-hidden='true'><i style='width:" + winRate + "%'></i></div></div>" +
-        "</div>" +
-        "<div class='sow-profile__stat-cell sow-profile__stat-laurels'>" +
-        "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 3a9 9 0 0 0-5 8c0 4.97 3.58 9 8 9M16 3a9 9 0 0 1 5 8c0 4.97-3.58 9-8 9M9 7l3 3M15 7l-3 3M8 12l4 2M16 12l-4 2'/></svg></span>" +
-        "<div class='sow-profile__stat-body'><strong>" + esc(laurels) + "</strong><span>" + esc(SOW_t("profile.laurels")) + "</span></div>" +
-        "</div>" +
-        "<div class='sow-profile__stat-cell sow-profile__stat-kda'>" +
-        "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='22' y1='12' x2='18' y2='12'/><line x1='6' y1='12' x2='2' y2='12'/><line x1='12' y1='6' x2='12' y2='2'/><line x1='12' y1='22' x2='12' y2='18'/></svg></span>" +
-        "<div class='sow-profile__stat-body'><strong><i>" + esc(data.kills || 0) + "</i><i>" + esc(data.deaths || 0) + "</i><i>" + esc(data.assists || 0) + "</i></strong><span>" + esc(SOW_t("profile.kda")) + "</span></div>" +
-        "</div>" +
-        "</div>"
-    );
+  if (!data) return "";
+  const matches = profileStat(data.matches_played);
+  const wins = profileStat(data.wins);
+  const winRate = matches ? Math.round((wins / matches) * 100) : 0;
+  const laurels = profileStat(data.laurels);
+  return (
+    "<div class='sow-profile__stats' data-profile-stats>" +
+    "<div class='sow-profile__stat-cell sow-profile__stat-matches'>" +
+    "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14.5 17.5L3 6V3h3l11.5 11.5'/><path d='m13 19 6-6'/><path d='M16 16l4 4'/><path d='M19 21l2-2'/></svg></span>" +
+    "<div class='sow-profile__stat-body'><strong>" +
+    esc(matches) +
+    "</strong><span>" +
+    esc(SOW_t("profile.matches")) +
+    "</span></div>" +
+    "</div>" +
+    "<div class='sow-profile__stat-cell sow-profile__stat-wins'>" +
+    "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9H4.5a2.5 2.5 0 0 1 0-5H6'/><path d='M18 9h1.5a2.5 2.5 0 0 0 0-5H18'/><path d='M4 22h16'/><path d='M10 14.66V17c0 .55-.45 1-1 1H8c-.55 0-1 .45-1 1v1h10v-1c0-.55-.45-1-1-1h-1c-.55 0-1-.45-1-1v-2.34'/><path d='M18 4H6v7a6 6 0 0 0 12 0V4Z'/></svg></span>" +
+    "<div class='sow-profile__stat-body'><strong>" +
+    esc(wins) +
+    "</strong><span>" +
+    esc(SOW_t("profile.wins")) +
+    "</span></div>" +
+    "</div>" +
+    "<div class='sow-profile__stat-cell sow-profile__stat-winrate'>" +
+    "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='m4.93 4.93 4.24 4.24'/><path d='m14.83 9.17 4.24-4.24'/><path d='m14.83 14.83 4.24 4.24'/><path d='m9.17 14.83-4.24 4.24'/><circle cx='12' cy='12' r='4'/></svg></span>" +
+    "<div class='sow-profile__stat-body'><strong>" +
+    esc(winRate) +
+    "%</strong><span>" +
+    esc(SOW_t("profile.win_rate")) +
+    "</span>" +
+    "<div class='sow-profile__stat-gauge' aria-hidden='true'><i style='width:" +
+    winRate +
+    "%'></i></div></div>" +
+    "</div>" +
+    "<div class='sow-profile__stat-cell sow-profile__stat-laurels'>" +
+    "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 3a9 9 0 0 0-5 8c0 4.97 3.58 9 8 9M16 3a9 9 0 0 1 5 8c0 4.97-3.58 9-8 9M9 7l3 3M15 7l-3 3M8 12l4 2M16 12l-4 2'/></svg></span>" +
+    "<div class='sow-profile__stat-body'><strong>" +
+    esc(laurels) +
+    "</strong><span>" +
+    esc(SOW_t("profile.laurels")) +
+    "</span></div>" +
+    "</div>" +
+    "<div class='sow-profile__stat-cell sow-profile__stat-kda'>" +
+    "<span class='sow-profile__stat-icon' aria-hidden='true'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='22' y1='12' x2='18' y2='12'/><line x1='6' y1='12' x2='2' y2='12'/><line x1='12' y1='6' x2='12' y2='2'/><line x1='12' y1='22' x2='12' y2='18'/></svg></span>" +
+    "<div class='sow-profile__stat-body'><strong><i>" +
+    esc(data.kills || 0) +
+    "</i><i>" +
+    esc(data.deaths || 0) +
+    "</i><i>" +
+    esc(data.assists || 0) +
+    "</i></strong><span>" +
+    esc(SOW_t("profile.kda")) +
+    "</span></div>" +
+    "</div>" +
+    "</div>"
+  );
 }
 
-function profilePreferredCommanderMarkup(data: ProfileData | null) {
-    const preferred = data && data.preferred_leader ? leaderById(data.preferred_leader) : null;
-    return preferred
-        ? "<p class='sow-profile__preferred'><img src='" +
-              esc(asset("gameplay/avatars/" + leaderArtSlug(preferred) + ".webp")) +
-              "' alt='' width='40' height='40' loading='lazy'><span>" +
-              esc(SOW_t("profile.preferred_commander")) +
-              " · " +
-              esc(leaderDisplayName(preferred)) +
-              "</span></p>"
-        : "";
+function achievementCategoryTitle(category: string): string {
+  if (category === "battles")
+    return SOW_t("profile.achievement_category_battles");
+  if (category === "victories")
+    return SOW_t("profile.achievement_category_victories");
+  if (category === "commanders")
+    return SOW_t("profile.achievement_category_commanders");
+  if (category === "laurels")
+    return SOW_t("profile.achievement_category_laurels");
+  if (category === "combat") {
+    const t = SOW_t("profile.achievement_category_combat");
+    return t !== "profile.achievement_category_combat" ? t : "Combate";
+  }
+  if (category === "campaign") {
+    const t = SOW_t("profile.achievement_category_campaign");
+    return t !== "profile.achievement_category_campaign" ? t : "Campaña";
+  }
+  return category;
 }
 
 function profileAchievementCard(achievement: ProfileAchievement) {
-    const category = achievement.category || "commanders";
-    const prefix = "profile.achievement_" + achievement.id;
-    const progress = Math.max(0, Number(achievement.progress) || 0);
-    const target = Math.max(1, Number(achievement.target) || 1);
-    return {
-        category: category,
-        markup:
-            "<article class='sow-profile__achievement" +
-            (achievement.unlocked ? " is-unlocked" : "") +
-            "'><strong>" +
-            esc(SOW_t(prefix + "_title")) +
-            "</strong><span>" +
-            esc(SOW_t(prefix + "_description")) +
-            "</span><b>" +
-            esc(progress) +
-            "/" +
-            esc(target) +
-            " · " +
-            esc(achievement.points) +
-            " " +
-            esc(SOW_t("profile.laurels")) +
-            "</b></article>",
-    };
+  const category = achievement.category || "commanders";
+  const prefix = "profile.achievement_" + achievement.id;
+  const progress = Math.max(0, Number(achievement.progress) || 0);
+  const target = Math.max(1, Number(achievement.target) || 1);
+  const percent = Math.min(100, Math.round((progress / target) * 100));
+  const unlocked = !!achievement.unlocked;
+  const isMythic = target >= 1000;
+
+  const rawTitle = SOW_t(prefix + "_title");
+  const title =
+    rawTitle !== prefix + "_title"
+      ? rawTitle
+      : achievement.title || achievement.id;
+  const rawDesc = SOW_t(prefix + "_description");
+  const desc =
+    rawDesc !== prefix + "_description"
+      ? rawDesc
+      : achievement.description || "";
+
+  let badgeIcon = "";
+  if (category === "battles") {
+    badgeIcon =
+      "<svg class='sow-profile__ach-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>" +
+      "<path d='M6.92 5L5 6.92l4.95 4.95-1.41 1.41L5 9.75 3.59 11.16l4.24 4.24 1.41-1.41-3.53-3.54 1.41-1.41 4.95 4.95L13.99 12 6.92 5zm11.75 1.58L17.25 5 12.3 9.95l1.41 1.41 3.54-3.53 1.41 1.41-4.95 4.95 1.92 1.92 7.07-7.07-4.23-4.24-1.41 1.41 3.53 3.53-1.41 1.41zM3 19.5L4.5 21l3.5-3.5-1.5-1.5L3 19.5zm16.5 0l-3.5-3.5-1.5 1.5 3.5 3.5 1.5-1.5z'/>" +
+      "</svg>";
+  } else if (category === "victories") {
+    badgeIcon =
+      "<svg class='sow-profile__ach-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>" +
+      "<path d='M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94A5.01 5.01 0 0011 15.9V19H7v2h10v-2h-4v-3.1a5.01 5.01 0 003.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z'/>" +
+      "</svg>";
+  } else if (category === "combat") {
+    badgeIcon =
+      "<svg class='sow-profile__ach-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>" +
+      "<path d='M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z'/>" +
+      "</svg>";
+  } else if (category === "campaign") {
+    badgeIcon =
+      "<svg class='sow-profile__ach-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>" +
+      "<path d='M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z'/>" +
+      "</svg>";
+  } else if (category === "laurels") {
+    badgeIcon =
+      "<img src='" +
+      esc(currencyAsset("laurel")) +
+      "' alt='' width='28' height='28' class='sow-profile__ach-laurel-badge' />";
+  } else {
+    badgeIcon =
+      "<svg class='sow-profile__ach-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>" +
+      "<path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'/>" +
+      "</svg>";
+  }
+
+  return {
+    category: category,
+    markup:
+      "<article class='sow-profile__achievement" +
+      (unlocked ? " is-unlocked" : " is-locked") +
+      (isMythic ? " is-mythic" : "") +
+      "'>" +
+      "<div class='sow-profile__achievement-header'>" +
+      "<div class='sow-profile__achievement-badge-frame" +
+      (unlocked ? " is-unlocked" : "") +
+      (isMythic ? " is-mythic" : "") +
+      "'>" +
+      badgeIcon +
+      (unlocked
+        ? "<span class='sow-profile__achievement-check' aria-hidden='true'>✓</span>"
+        : "") +
+      "</div>" +
+      "<div class='sow-profile__achievement-info'>" +
+      "<div class='sow-profile__achievement-top-row'>" +
+      "<div class='sow-profile__achievement-title-wrap'>" +
+      "<strong>" +
+      esc(title) +
+      "</strong>" +
+      (isMythic
+        ? "<span class='sow-profile__achievement-mythic-pill'>MYTHIC</span>"
+        : "") +
+      "</div>" +
+      "<span class='sow-profile__achievement-reward-pill" +
+      (isMythic ? " is-mythic" : "") +
+      "'>" +
+      "<img src='" +
+      esc(currencyAsset("laurel")) +
+      "' alt='' width='14' height='14' />" +
+      "<span>+" +
+      esc(achievement.points) +
+      "</span>" +
+      "</span>" +
+      "</div>" +
+      "<span>" +
+      esc(desc) +
+      "</span>" +
+      "</div>" +
+      "</div>" +
+      "<div class='sow-profile__achievement-progress-wrap'>" +
+      "<div class='sow-profile__achievement-track" +
+      (isMythic ? " is-mythic" : "") +
+      "' role='progressbar' aria-valuenow='" +
+      esc(progress) +
+      "' aria-valuemax='" +
+      esc(target) +
+      "'>" +
+      "<i style='width: " +
+      esc(percent) +
+      "%'></i>" +
+      "</div>" +
+      "<div class='sow-profile__achievement-meta'>" +
+      "<span class='sow-profile__achievement-status" +
+      (unlocked ? " is-done" : "") +
+      "'>" +
+      (unlocked ? "COMPLETADO" : percent + "%") +
+      "</span>" +
+      "<b>" +
+      esc(progress) +
+      "/" +
+      esc(target) +
+      " · " +
+      esc(achievement.points) +
+      " " +
+      esc(SOW_t("profile.laurels")) +
+      "</b>" +
+      "</div>" +
+      "</div>" +
+      "</article>",
+  };
 }
 
 function profileAchievementsMarkup(data: ProfileData, complete: boolean) {
-    if (!complete)
+  if (!complete)
+    return (
+      "<p class='sow-profile__empty'>" +
+      esc(profileSnapshotError() || SOW_t("profile.loading_profile")) +
+      "</p>"
+    );
+  const achievements = data.achievements || [];
+  const unlockedCount = achievements.filter(function (a) {
+    return !!a.unlocked;
+  }).length;
+  const totalCount = achievements.length;
+  const percent =
+    totalCount > 0 ? Math.round((unlockedCount / totalCount) * 100) : 0;
+  const laurels = profileStat(data.laurels);
+
+  const summaryDossier =
+    "<div class='sow-profile__achievements-dossier'>" +
+    "<div class='sow-profile__achievements-laurel-card'>" +
+    "<div class='sow-profile__achievements-laurel-icon'>" +
+    "<img src='" +
+    esc(currencyAsset("laurel")) +
+    "' alt='' width='40' height='40' />" +
+    "</div>" +
+    "<div class='sow-profile__achievements-laurel-info'>" +
+    "<span class='sow-profile__achievements-laurel-title'>" +
+    esc(SOW_t("profile.laurels")) +
+    "</span>" +
+    "<strong class='sow-profile__achievements-laurel-val'>" +
+    esc(laurels) +
+    "</strong>" +
+    "</div>" +
+    "</div>" +
+    "<div class='sow-profile__achievements-progress-card'>" +
+    "<div class='sow-profile__achievements-progress-header'>" +
+    "<span>" +
+    esc(SOW_t("profile.achievements")) +
+    "</span>" +
+    "<strong>" +
+    esc(unlockedCount) +
+    " / " +
+    esc(totalCount) +
+    " (" +
+    esc(percent) +
+    "%)</strong>" +
+    "</div>" +
+    "<div class='sow-profile__achievements-progress-track' role='progressbar' aria-valuenow='" +
+    esc(percent) +
+    "' aria-valuemin='0' aria-valuemax='100'>" +
+    "<i style='width: " +
+    esc(percent) +
+    "%'></i>" +
+    "</div>" +
+    "</div>" +
+    "</div>";
+
+  const allCategories = [
+    "battles",
+    "victories",
+    "commanders",
+    "combat",
+    "campaign",
+    "laurels",
+  ];
+  const grouped: Record<string, string[]> = {};
+  allCategories.forEach(function (cat) {
+    grouped[cat] = [];
+  });
+
+  achievements.forEach(function (achievement) {
+    const card = profileAchievementCard(achievement);
+    const cat = grouped[card.category] ? card.category : "commanders";
+    grouped[cat].push(card.markup);
+  });
+
+  const activeFilter = menuUi.profileAchievementFilter || "all";
+  const filterTabs = [
+    { id: "all", label: "Todos", count: totalCount },
+    {
+      id: "battles",
+      label: achievementCategoryTitle("battles"),
+      count: (grouped.battles || []).length,
+    },
+    {
+      id: "victories",
+      label: achievementCategoryTitle("victories"),
+      count: (grouped.victories || []).length,
+    },
+    {
+      id: "commanders",
+      label: achievementCategoryTitle("commanders"),
+      count: (grouped.commanders || []).length,
+    },
+    {
+      id: "combat",
+      label: achievementCategoryTitle("combat"),
+      count: (grouped.combat || []).length,
+    },
+    {
+      id: "campaign",
+      label: achievementCategoryTitle("campaign"),
+      count: (grouped.campaign || []).length,
+    },
+    {
+      id: "laurels",
+      label: achievementCategoryTitle("laurels"),
+      count: (grouped.laurels || []).length,
+    },
+  ];
+
+  const filterChips =
+    "<nav class='sow-profile__ach-filter-bar' aria-label='Categorías de Logros'>" +
+    filterTabs
+      .filter(function (tab) {
+        return tab.id === "all" || tab.count > 0;
+      })
+      .map(function (tab) {
+        const isActive = activeFilter === tab.id;
         return (
-            "<p class='sow-profile__empty'>" +
-            esc(profileSnapshotError() || SOW_t("profile.loading_profile")) +
-            "</p>"
+          "<button type='button' class='sow-profile__ach-filter-chip" +
+          (isActive ? " is-active" : "") +
+          "' data-command='profile_achievement_filter' data-achievement-filter='" +
+          esc(tab.id) +
+          "'>" +
+          "<span>" +
+          esc(tab.label) +
+          "</span>" +
+          "<b class='sow-profile__ach-filter-count'>" +
+          esc(tab.count) +
+          "</b>" +
+          "</button>"
         );
-    const grouped: Record<string, string[]> = { battles: [], victories: [], commanders: [], laurels: [] };
-    (data.achievements || []).forEach(function (achievement) {
-        const card = profileAchievementCard(achievement);
-        (grouped[card.category] || grouped.commanders).push(card.markup);
-    });
-    const groups = ["battles", "victories", "commanders", "laurels"]
-        .map(function (category) {
-            const cards = grouped[category];
-            if (!cards.length) return "";
-            return (
-                "<section class='sow-profile__achievement-group'><h3>" +
-                esc(SOW_t("profile.achievement_category_" + category)) +
-                "</h3><div class='sow-profile__achievement-grid'>" +
-                cards.join("") +
-                "</div></section>"
-            );
-        })
-        .join("");
-    return groups || "<p class='sow-profile__empty'>" + esc(SOW_t("profile.achievements")) + "</p>";
+      })
+      .join("") +
+    "</nav>";
+
+  const categoriesToRender =
+    activeFilter === "all" ? allCategories : [activeFilter];
+
+  const groups = categoriesToRender
+    .map(function (category) {
+      const cards = grouped[category] || [];
+      if (!cards.length) return "";
+      return (
+        "<section class='sow-profile__achievement-group'><h3>" +
+        esc(achievementCategoryTitle(category)) +
+        "</h3><div class='sow-profile__achievement-grid'>" +
+        cards.join("") +
+        "</div></section>"
+      );
+    })
+    .join("");
+
+  return (
+    summaryDossier +
+    filterChips +
+    (groups ||
+      "<p class='sow-profile__empty'>" +
+        esc(SOW_t("profile.achievements")) +
+        "</p>")
+  );
 }
 
 function profileContentMarkup(data: ProfileData | null) {
-    const entry = activeProfileEntry();
-    const complete = profileDataComplete();
-    let content = "";
-    if (data && menuUi.profileTab === "overview") {
-        const ranked = (data.ratings || []).find(function (rating) {
-            return rating.queue === "Ranked1v1" && rating.mode === "FFA";
-        });
-        const rankedPanel = complete ? rankOverview(ranked || null, data.ranked_ladder,
-            data.account_id === menuUi.state?.account_id) : "";
-        const recent = complete
-            ? menuUi.profileHistory.slice(0, 10).map(profileMatchRow).join("") ||
-              "<p class='sow-profile__empty'>" + esc(SOW_t("profile.no_completed_matches")) + "</p>"
-            : "<p class='sow-profile__empty'>" +
-              esc(profileSnapshotError() || SOW_t("profile.loading_profile")) +
-              "</p>";
-        const topLeaders = complete && data.leaders && data.leaders.length
-            ? "<section class='sow-profile__section sow-profile__section--widget'><div class='sow-profile__section-head'><h3>" +
-              esc(SOW_t("profile.most_played_leaders")) +
-              "</h3><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='leaders'>" +
-              esc(SOW_t("profile.view_all")) +
-              "</button></div><div class='sow-profile__top-leaders'>" +
-              data.leaders.slice(0, 3).map(profileLeaderCard).join("") +
-              "</div></section>"
-            : "";
-        content =
-            "<div class='sow-profile__overview'>" +
-            "<div class='sow-profile__overview-feed'>" +
-            "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
-            esc(SOW_t("profile.recent_matches")) +
-            "</h2><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='history'>" +
-            esc(SOW_t("profile.view_all")) +
-            "</button></div>" +
-            recent +
-            "</section></div>" +
-            (rankedPanel || topLeaders
-                ? "<aside class='sow-profile__overview-sidebar'>" + rankedPanel + topLeaders + "</aside>"
-                : "") +
-            "</div>";
-    } else if (data && menuUi.profileTab === "leaders") {
-        const leaderList = complete
-            ? (data.leaders || []).map(profileLeaderCard).join("") ||
-              "<p class='sow-profile__empty'>" + esc(SOW_t("profile.no_leader_history")) + "</p>"
-            : "<p class='sow-profile__empty'>" +
-              esc(profileSnapshotError() || SOW_t("profile.loading_profile")) +
-              "</p>";
-        content =
-            "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
-            esc(SOW_t("profile.tab_commanders")) +
-            "</h2><span class='sow-profile__section-note'>" +
-            esc(SOW_t("profile.leader_count", { count: complete ? (data.leaders || []).length : "—" })) +
-            "</span></div><div class='sow-profile__leaders'>" +
-            leaderList +
-            "</div></section>";
-    } else if (menuUi.profileTab === "history") {
-        const historyList = !complete
-            ? "<p class='sow-profile__empty'>" +
-              esc(profileSnapshotError() || SOW_t("profile.loading_profile")) +
-              "</p>"
-            : menuUi.profileHistory.map(profileMatchRow).join("") ||
-              "<p class='sow-profile__empty'>" + esc(SOW_t("profile.no_completed_matches")) + "</p>";
-        const canLoadMore = !!(entry && complete && (entry.historyHasMore || entry.historyError));
-        const historyAction =
-            menuUi.profileAccountId && (canLoadMore || !complete)
-                ? "<button type='button' class='sow-profile__load-more' data-command='load_profile_more'" +
-                  (menuUi.profileHistoryLoading ? " disabled" : "") +
-                  ">" +
-                  (menuUi.profileHistoryLoading
-                      ? esc(SOW_t("profile.loading_more"))
-                      : entry && entry.historyError
-                        ? esc(SOW_t("profile.try_again"))
-                        : esc(SOW_t("profile.load_more_matches"))) +
-                  "</button>"
-                : "";
-        content =
-            "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
-            esc(SOW_t("profile.match_history")) +
-            "</h2><span class='sow-profile__section-note'>" +
-            esc(SOW_t("profile.match_count", { count: data ? data.matches_played : 0 })) +
-            "</span></div><div class='sow-profile__history'>" +
-            historyList +
-            "</div>" +
-            historyAction +
-            "</section>";
-    } else if (data && menuUi.profileTab === "achievements") {
-        content =
-            "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
-            esc(SOW_t("profile.achievements")) +
-            "</h2><span class='sow-profile__section-note'>" +
-            esc(data.laurels || 0) +
-            " " +
-            esc(SOW_t("profile.laurels")) +
-            "</span></div>" +
-            profileAchievementsMarkup(data, complete) +
-            "</section>";
-    } else if (menuUi.profileTab === "victories") {
-        const rankedRows = profileRankedLeaderboard === null
-            ? "<p class='sow-profile__empty'>" +
-              esc(profileRankedLeaderboardError || SOW_t("profile.leaderboard_loading")) +
-              "</p>"
-            : profileRankedLeaderboard.map(function (entry) {
-                  return (
-                      "<button type='button' class='sow-profile__victory-row sow-profile__ranked-row" + (entry.account_id === menuUi.state?.account_id ? " is-self" : "") + "' data-command='open_profile' data-account-id='" +
-                      esc(entry.account_id) +
-                      "'><b>#" +
-                      esc(entry.rank) +
-                      "</b>" + rankEmblem(entry.tier, entry.division) + "<div><strong>" +
-                      esc(entry.handle || entry.account_id) +
-                      "</strong><span>" +
-                      (entry.is_bot ? "<i>" + esc(SOW_t("profile.bot")) + "</i> · " : "") +
-                      esc(rankName(entry.tier, entry.division)) +
-                      " · " +
-                      esc(entry.games_played) +
-                      " " +
-                      esc(SOW_t("profile.matches")) +
-                      "</span></div><strong>" +
-                      esc(SOW_t("lobbies.rank_score", { score: entry.score })) +
-                      "</strong></button>"
-                  );
-              }).join("") ||
-              "<p class='sow-profile__empty'>" + esc(SOW_t("profile.no_ranked_leaders")) + "</p>";
-        const victoryRows =
-            profileVictoryLeaderboard === null
-                ? "<p class='sow-profile__empty'>" +
-                  esc(profileVictoryLeaderboardError || SOW_t("profile.leaderboard_loading")) +
-                  "</p>"
-                : profileVictoryLeaderboard
-                      .map(function (entry) {
-                          return (
-                              "<article class='sow-profile__victory-row'><b>#" +
-                              esc(entry.rank) +
-                              "</b><div><strong>" +
-                              esc(entry.handle || entry.account_id) +
-                              "</strong><span>" +
-                              esc(SOW_t("profile.level", { level: entry.level || 1 })) +
-                              "</span></div><strong>" +
-                              esc(entry.wins || 0) +
-                              " " +
-                              esc(SOW_t("profile.wins")) +
-                              "</strong><small>" +
-                              esc(entry.matches_played || 0) +
-                              " " +
-                              esc(SOW_t("profile.matches")) +
-                              "</small></article>"
-                          );
-                      })
-                      .join("") ||
-                  "<p class='sow-profile__empty'>" + esc(SOW_t("profile.no_victory_leaders")) + "</p>";
-        const victoryAction =
-            profileVictoryLeaderboardHasMore || profileVictoryLeaderboardError
-                ? "<button type='button' class='sow-profile__load-more' data-command='load_victory_more'" +
-                  (profileVictoryLeaderboardLoading ? " disabled" : "") +
-                  ">" +
-                  esc(
-                      profileVictoryLeaderboardLoading
-                          ? SOW_t("profile.loading_more")
-                          : profileVictoryLeaderboardError
-                            ? SOW_t("profile.try_again")
-                            : SOW_t("profile.load_more_matches"),
-                  ) +
-                  "</button>"
-                : "";
-        content =
-            "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
-            esc(SOW_t("profile.ranked_leaderboard")) +
-            "</h2><span class='sow-profile__section-note'>Ranked 1v1</span></div><div class='sow-profile__victory-list'>" +
-            rankedRows +
-            "</div>" + (profileRankedLeaderboardError ? "<button type='button' class='sow-menu__secondary' data-command='retry_ranked_board'>" + esc(SOW_t("profile.try_again")) + "</button>" : "") + "</section>" +
-            "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
-            esc(SOW_t("profile.leaderboards")) +
-            "</h2><span class='sow-profile__section-note'>" +
-            esc(SOW_t("profile.verified_wins")) +
-            "</span></div><div class='sow-profile__victory-list'>" +
-            victoryRows +
-            "</div>" +
-            victoryAction +
-            "</section>";
-    } else if (!data) {
-        content =
-            "<section class='sow-profile__state' aria-live='polite'><strong>" +
-            esc(
-                menuUi.profileSnapshotLoading
-                    ? SOW_t("profile.loading_profile")
-                    : SOW_t("profile.profile_unavailable"),
-            ) +
-            "</strong><span>" +
-            esc(profileSnapshotError() || SOW_t("profile.return_to_menu")) +
-            "</span>" +
-            (menuUi.profileSnapshotLoading
-                ? ""
-                : "<button type='button' class='sow-profile__load-more' data-command='retry_profile'>" +
-                  esc(SOW_t("profile.try_again")) +
-                  "</button>") +
-            "</section>";
-    }
-    return (
-        "<div id='sow-profile-panel-active' class='sow-profile__panel-content' role='tabpanel' aria-labelledby='sow-profile-tab-" +
-        menuUi.profileTab +
-        "'>" +
-        content +
-        "</div>"
+  const entry = activeProfileEntry();
+  const complete = profileDataComplete();
+  let content = "";
+  if (data && menuUi.profileTab === "overview") {
+    const ranked = (data.ratings || []).find(function (rating) {
+      return rating.queue === "Ranked1v1" && rating.mode === "FFA";
+    });
+    const rankedPanel = complete
+      ? rankOverview(
+          ranked || null,
+          data.ranked_ladder,
+          data.account_id === menuUi.state?.account_id,
+        )
+      : "";
+    const recent = complete
+      ? menuUi.profileHistory.slice(0, 10).map(profileMatchRow).join("") ||
+        "<p class='sow-profile__empty'>" +
+          esc(SOW_t("profile.no_completed_matches")) +
+          "</p>"
+      : "<p class='sow-profile__empty'>" +
+        esc(profileSnapshotError() || SOW_t("profile.loading_profile")) +
+        "</p>";
+    const topLeaders =
+      complete && data.leaders && data.leaders.length
+        ? "<section class='sow-profile__section sow-profile__section--widget'><div class='sow-profile__section-head'><h3>" +
+          esc(SOW_t("profile.most_played_leaders")) +
+          "</h3><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='leaders'>" +
+          esc(SOW_t("profile.view_all")) +
+          "</button></div><div class='sow-profile__top-leaders'>" +
+          data.leaders.slice(0, 3).map(profileLeaderCard).join("") +
+          "</div></section>"
+        : "";
+    content =
+      "<div class='sow-profile__overview'>" +
+      "<div class='sow-profile__overview-feed'>" +
+      "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
+      esc(SOW_t("profile.recent_matches")) +
+      "</h2><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='history'>" +
+      esc(SOW_t("profile.view_all")) +
+      "</button></div>" +
+      recent +
+      "</section></div>" +
+      (rankedPanel || topLeaders
+        ? "<aside class='sow-profile__overview-sidebar'>" +
+          rankedPanel +
+          topLeaders +
+          "</aside>"
+        : "") +
+      "</div>";
+  } else if (data && menuUi.profileTab === "leaders") {
+    const leaderList = complete
+      ? (data.leaders || []).map(profileLeaderCard).join("") ||
+        "<p class='sow-profile__empty'>" +
+          esc(SOW_t("profile.no_leader_history")) +
+          "</p>"
+      : "<p class='sow-profile__empty'>" +
+        esc(profileSnapshotError() || SOW_t("profile.loading_profile")) +
+        "</p>";
+    content =
+      "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
+      esc(SOW_t("profile.tab_commanders")) +
+      "</h2><span class='sow-profile__section-note'>" +
+      esc(
+        SOW_t("profile.leader_count", {
+          count: complete ? (data.leaders || []).length : "—",
+        }),
+      ) +
+      "</span></div><div class='sow-profile__leaders'>" +
+      leaderList +
+      "</div></section>";
+  } else if (menuUi.profileTab === "history") {
+    const historyList = !complete
+      ? "<p class='sow-profile__empty'>" +
+        esc(profileSnapshotError() || SOW_t("profile.loading_profile")) +
+        "</p>"
+      : menuUi.profileHistory.map(profileMatchRow).join("") ||
+        "<p class='sow-profile__empty'>" +
+          esc(SOW_t("profile.no_completed_matches")) +
+          "</p>";
+    const canLoadMore = !!(
+      entry &&
+      complete &&
+      (entry.historyHasMore || entry.historyError)
     );
+    const historyAction =
+      menuUi.profileAccountId && (canLoadMore || !complete)
+        ? "<button type='button' class='sow-profile__load-more' data-command='load_profile_more'" +
+          (menuUi.profileHistoryLoading ? " disabled" : "") +
+          ">" +
+          (menuUi.profileHistoryLoading
+            ? esc(SOW_t("profile.loading_more"))
+            : entry && entry.historyError
+              ? esc(SOW_t("profile.try_again"))
+              : esc(SOW_t("profile.load_more_matches"))) +
+          "</button>"
+        : "";
+    content =
+      "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
+      esc(SOW_t("profile.match_history")) +
+      "</h2><span class='sow-profile__section-note'>" +
+      esc(
+        SOW_t("profile.match_count", { count: data ? data.matches_played : 0 }),
+      ) +
+      "</span></div><div class='sow-profile__history'>" +
+      historyList +
+      "</div>" +
+      historyAction +
+      "</section>";
+  } else if (data && menuUi.profileTab === "achievements") {
+    content =
+      "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
+      esc(SOW_t("profile.achievements")) +
+      "</h2><span class='sow-profile__section-note'>" +
+      esc(data.laurels || 0) +
+      " " +
+      esc(SOW_t("profile.laurels")) +
+      "</span></div>" +
+      profileAchievementsMarkup(data, complete) +
+      "</section>";
+  } else if (menuUi.profileTab === "victories") {
+    const rankedRows =
+      profileRankedLeaderboard === null
+        ? "<p class='sow-profile__empty'>" +
+          esc(
+            profileRankedLeaderboardError ||
+              SOW_t("profile.leaderboard_loading"),
+          ) +
+          "</p>"
+        : profileRankedLeaderboard
+            .map(function (entry) {
+              return (
+                "<button type='button' class='sow-profile__victory-row sow-profile__ranked-row" +
+                (entry.account_id === menuUi.state?.account_id
+                  ? " is-self"
+                  : "") +
+                "' data-command='open_profile' data-account-id='" +
+                esc(entry.account_id) +
+                "'><b>#" +
+                esc(entry.rank) +
+                "</b>" +
+                rankEmblem(entry.tier, entry.division) +
+                "<div><strong>" +
+                esc(entry.handle || entry.account_id) +
+                "</strong><span>" +
+                (entry.is_bot
+                  ? "<i>" + esc(SOW_t("profile.bot")) + "</i> · "
+                  : "") +
+                esc(rankName(entry.tier, entry.division)) +
+                " · " +
+                esc(entry.games_played) +
+                " " +
+                esc(SOW_t("profile.matches")) +
+                "</span></div><strong>" +
+                esc(SOW_t("lobbies.rank_score", { score: entry.score })) +
+                "</strong></button>"
+              );
+            })
+            .join("") ||
+          "<p class='sow-profile__empty'>" +
+            esc(SOW_t("profile.no_ranked_leaders")) +
+            "</p>";
+    const victoryRows =
+      profileVictoryLeaderboard === null
+        ? "<p class='sow-profile__empty'>" +
+          esc(
+            profileVictoryLeaderboardError ||
+              SOW_t("profile.leaderboard_loading"),
+          ) +
+          "</p>"
+        : profileVictoryLeaderboard
+            .map(function (entry) {
+              return (
+                "<article class='sow-profile__victory-row'><b>#" +
+                esc(entry.rank) +
+                "</b><div><strong>" +
+                esc(entry.handle || entry.account_id) +
+                "</strong><span>" +
+                esc(SOW_t("profile.level", { level: entry.level || 1 })) +
+                "</span></div><strong>" +
+                esc(entry.wins || 0) +
+                " " +
+                esc(SOW_t("profile.wins")) +
+                "</strong><small>" +
+                esc(entry.matches_played || 0) +
+                " " +
+                esc(SOW_t("profile.matches")) +
+                "</small></article>"
+              );
+            })
+            .join("") ||
+          "<p class='sow-profile__empty'>" +
+            esc(SOW_t("profile.no_victory_leaders")) +
+            "</p>";
+    const victoryAction =
+      profileVictoryLeaderboardHasMore || profileVictoryLeaderboardError
+        ? "<button type='button' class='sow-profile__load-more' data-command='load_victory_more'" +
+          (profileVictoryLeaderboardLoading ? " disabled" : "") +
+          ">" +
+          esc(
+            profileVictoryLeaderboardLoading
+              ? SOW_t("profile.loading_more")
+              : profileVictoryLeaderboardError
+                ? SOW_t("profile.try_again")
+                : SOW_t("profile.load_more_matches"),
+          ) +
+          "</button>"
+        : "";
+    content =
+      "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
+      esc(SOW_t("profile.ranked_leaderboard")) +
+      "</h2><span class='sow-profile__section-note'>Ranked 1v1</span></div><div class='sow-profile__victory-list'>" +
+      rankedRows +
+      "</div>" +
+      (profileRankedLeaderboardError
+        ? "<button type='button' class='sow-menu__secondary' data-command='retry_ranked_board'>" +
+          esc(SOW_t("profile.try_again")) +
+          "</button>"
+        : "") +
+      "</section>" +
+      "<section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" +
+      esc(SOW_t("profile.leaderboards")) +
+      "</h2><span class='sow-profile__section-note'>" +
+      esc(SOW_t("profile.verified_wins")) +
+      "</span></div><div class='sow-profile__victory-list'>" +
+      victoryRows +
+      "</div>" +
+      victoryAction +
+      "</section>";
+  } else if (!data) {
+    content =
+      "<section class='sow-profile__state' aria-live='polite'><strong>" +
+      esc(
+        menuUi.profileSnapshotLoading
+          ? SOW_t("profile.loading_profile")
+          : SOW_t("profile.profile_unavailable"),
+      ) +
+      "</strong><span>" +
+      esc(profileSnapshotError() || SOW_t("profile.return_to_menu")) +
+      "</span>" +
+      (menuUi.profileSnapshotLoading
+        ? ""
+        : "<button type='button' class='sow-profile__load-more' data-command='retry_profile'>" +
+          esc(SOW_t("profile.try_again")) +
+          "</button>") +
+      "</section>";
+  }
+  return (
+    "<div id='sow-profile-panel-active' class='sow-profile__panel-content' role='tabpanel' aria-labelledby='sow-profile-tab-" +
+    menuUi.profileTab +
+    "'>" +
+    content +
+    "</div>"
+  );
 }
 
 export function renderProfile() {
-    const data = menuUi.profileData;
-    const own = menuUi.state && menuUi.state.account_id === menuUi.profileAccountId;
-    const header = profileHeaderMarkup(data, own);
-    const tabs = ["overview", "leaders", "history", "achievements", "victories"]
-        .map(function (tab) {
-            const active = menuUi.profileTab === tab;
-            const label =
-                tab === "victories"
-                    ? SOW_t("profile.leaderboards")
-                    : SOW_t("profile.tab_" + (tab === "leaders" ? "commanders" : tab));
-            return (
-                "<button type='button' role='tab' id='sow-profile-tab-" +
-                tab +
-                "' class='sow-profile__tab" +
-                (active ? " is-active" : "") +
-                "' aria-selected='" +
-                active +
-                "' aria-controls='sow-profile-panel-active' data-command='profile_tab' data-profile-tab='" +
-                tab +
-                "'>" +
-                esc(label) +
-                "</button>"
-            );
-        })
-        .join("");
-    let playGamesActions = "";
-    if (typeof window.SOW_isAndroidTwa === "function" && window.SOW_isAndroidTwa()) {
-        playGamesActions =
-            "<section class='sow-profile__section' aria-label='" +
-            esc(SOW_t("profile.google_play_games")) +
-            "'><div class='sow-profile__section-head'><h2>" +
-            esc(SOW_t("profile.google_play_games")) +
-            "</h2><span class='sow-profile__section-note'>" +
-            esc(SOW_t("profile.android")) +
-            "</span></div><div class='sow-profile__actions'><button type='button' class='sow-menu__ghost-button' data-command='open_play_games' data-play-games-section='achievements'>" +
-            esc(SOW_t("profile.achievements")) +
-            "</button><button type='button' class='sow-menu__ghost-button' data-command='open_play_games' data-play-games-section='leaderboards'>" +
-            esc(SOW_t("profile.leaderboards")) +
-            "</button></div></section>";
-    }
-    const profileActions = playGamesActions + renderModeration(own);
-    return (
-        "<main class='sow-menu__main sow-profile__main' data-screen-panel='profile'><section class='sow-profile__page'><div class='sow-profile__dossier'>" +
-        header +
-        "<nav class='sow-profile__tabs' role='tablist' aria-label='" +
-        esc(SOW_t("profile.profile_sections")) +
+  const data = menuUi.profileData;
+  const own =
+    menuUi.state && menuUi.state.account_id === menuUi.profileAccountId;
+  const header = profileHeaderMarkup(data, own);
+  const tabs = ["overview", "leaders", "history", "achievements", "victories"]
+    .map(function (tab) {
+      const active = menuUi.profileTab === tab;
+      const label =
+        tab === "victories"
+          ? SOW_t("profile.leaderboards")
+          : SOW_t("profile.tab_" + (tab === "leaders" ? "commanders" : tab));
+      return (
+        "<button type='button' role='tab' id='sow-profile-tab-" +
+        tab +
+        "' class='sow-profile__tab" +
+        (active ? " is-active" : "") +
+        "' aria-selected='" +
+        active +
+        "' aria-controls='sow-profile-panel-active' data-command='profile_tab' data-profile-tab='" +
+        tab +
         "'>" +
-        tabs +
-        "</nav><div data-profile-content class='sow-profile__content'>" +
-        profileContentMarkup(data) +
-        "</div></div>" +
-        (profileActions ? "<aside class='sow-profile__tools'>" + profileActions + "</aside>" : "") +
-        "</section></main>"
-    );
+        esc(label) +
+        "</button>"
+      );
+    })
+    .join("");
+  let playGamesActions = "";
+  if (
+    typeof window.SOW_isAndroidTwa === "function" &&
+    window.SOW_isAndroidTwa()
+  ) {
+    playGamesActions =
+      "<section class='sow-profile__section' aria-label='" +
+      esc(SOW_t("profile.google_play_games")) +
+      "'><div class='sow-profile__section-head'><h2>" +
+      esc(SOW_t("profile.google_play_games")) +
+      "</h2><span class='sow-profile__section-note'>" +
+      esc(SOW_t("profile.android")) +
+      "</span></div><div class='sow-profile__actions'><button type='button' class='sow-menu__ghost-button' data-command='open_play_games' data-play-games-section='achievements'>" +
+      esc(SOW_t("profile.achievements")) +
+      "</button><button type='button' class='sow-menu__ghost-button' data-command='open_play_games' data-play-games-section='leaderboards'>" +
+      esc(SOW_t("profile.leaderboards")) +
+      "</button></div></section>";
+  }
+  const profileActions = playGamesActions + renderModeration(own);
+  return (
+    "<main class='sow-menu__main sow-profile__main' data-screen-panel='profile'><section class='sow-profile__page'><div class='sow-profile__dossier'>" +
+    header +
+    "<nav class='sow-profile__tabs' role='tablist' aria-label='" +
+    esc(SOW_t("profile.profile_sections")) +
+    "'>" +
+    tabs +
+    "</nav><div data-profile-content class='sow-profile__content'>" +
+    profileContentMarkup(data) +
+    "</div></div>" +
+    (profileActions
+      ? "<aside class='sow-profile__tools'>" + profileActions + "</aside>"
+      : "") +
+    "</section></main>"
+  );
 }
 
 export function syncProfileDom() {
-    if (!menuUi.profileOpen || currentScreen() !== "profile") return;
-    const panel = activeScreenPanel();
-    if (!panel) return;
-    const data = menuUi.profileData;
-    const displayName = panel.querySelector("[data-profile-display-name]");
-    const handle = panel.querySelector("[data-profile-handle]");
-    const level = panel.querySelector("[data-profile-level]");
-    if (displayName)
-        displayName.textContent =
-            data && data.display_name
-                ? data.display_name
-                : menuUi.profileSnapshotLoading
-                  ? SOW_t("profile.loading_profile")
-                  : SOW_t("profile.profile_unavailable");
-    if (handle)
-        handle.textContent =
-            data && data.handle
-                ? data.handle
-                : menuUi.profileSnapshotLoading
-                  ? SOW_t("profile.fetching_player_data")
-                  : "";
-    if (level) level.textContent = data && data.level != null ? String(data.level) : "—";
-    const preferred = panel.querySelector("[data-profile-preferred]");
-    if (preferred) preferred.innerHTML = profilePreferredCommanderMarkup(data);
-    const avatar = panel.querySelector<HTMLImageElement>("[data-profile-avatar]");
-    if (avatar) {
-        const preferredLeader = data && data.preferred_leader ? leaderById(data.preferred_leader) : null;
-        const avatarUrl = preferredLeader ? asset("gameplay/avatars/" + leaderArtSlug(preferredLeader) + ".webp") : avatarImage();
-        if (avatar.src !== avatarUrl) avatar.src = avatarUrl;
+  if (!menuUi.profileOpen || currentScreen() !== "profile") return;
+  const panel = activeScreenPanel();
+  if (!panel) return;
+  const data = menuUi.profileData;
+  const displayName = panel.querySelector("[data-profile-display-name]");
+  const handle = panel.querySelector("[data-profile-handle]");
+  const level = panel.querySelector("[data-profile-level]");
+  if (displayName)
+    displayName.textContent =
+      data && data.display_name
+        ? data.display_name
+        : menuUi.profileSnapshotLoading
+          ? SOW_t("profile.loading_profile")
+          : SOW_t("profile.profile_unavailable");
+  if (handle)
+    handle.textContent =
+      data && data.handle
+        ? data.handle
+        : menuUi.profileSnapshotLoading
+          ? SOW_t("profile.fetching_player_data")
+          : "";
+  if (level)
+    level.textContent = data && data.level != null ? String(data.level) : "—";
+  const avatar = panel.querySelector<HTMLImageElement>("[data-profile-avatar]");
+  if (avatar) {
+    const preferredLeader =
+      data && data.preferred_leader ? leaderById(data.preferred_leader) : null;
+    const avatarUrl = preferredLeader
+      ? asset("gameplay/avatars/" + leaderArtSlug(preferredLeader) + ".webp")
+      : avatarImage();
+    if (avatar.src !== avatarUrl) avatar.src = avatarUrl;
+  }
+  const hero = profileHeroImage(data && data.preferred_leader);
+  if (root && root.dataset.hero !== hero) {
+    root.style.setProperty("--sow-hero", 'url("' + hero + '")');
+    root.dataset.hero = hero;
+  }
+  const cover = panel.querySelector<HTMLElement>("[data-profile-cover]");
+  if (cover) {
+    cover.style.setProperty("--sow-hero", 'url("' + hero + '")');
+  }
+  const statsContainer = panel.querySelector("[data-profile-stats]");
+  if (statsContainer && data) {
+    statsContainer.outerHTML = profileStatsRibbonMarkup(data);
+  }
+  const status = panel.querySelector<HTMLElement>("[data-profile-status]");
+  const snapshotError = data && profileSnapshotError();
+  if (status) {
+    status.hidden = !snapshotError;
+    status.textContent = snapshotError ? snapshotError + " " : "";
+    if (snapshotError) {
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.className = "sow-profile__status-action";
+      retry.dataset.command = "retry_profile";
+      retry.textContent = SOW_t("profile.try_again");
+      status.appendChild(retry);
     }
-    const hero = profileHeroImage(data && data.preferred_leader);
-    if (root && root.dataset.hero !== hero) {
-        root.style.setProperty("--sow-hero", 'url("' + hero + '")');
-        root.dataset.hero = hero;
-    }
-    const cover = panel.querySelector<HTMLElement>("[data-profile-cover]");
-    if (cover) {
-        cover.style.setProperty("--sow-hero", 'url("' + hero + '")');
-    }
-    const statsContainer = panel.querySelector("[data-profile-stats]");
-    if (statsContainer && data) {
-        statsContainer.outerHTML = profileStatsRibbonMarkup(data);
-    }
-    const status = panel.querySelector<HTMLElement>("[data-profile-status]");
-    const snapshotError = data && profileSnapshotError();
-    if (status) {
-        status.hidden = !snapshotError;
-        status.textContent = snapshotError ? snapshotError + " " : "";
-        if (snapshotError) {
-            const retry = document.createElement("button");
-            retry.type = "button";
-            retry.className = "sow-profile__status-action";
-            retry.dataset.command = "retry_profile";
-            retry.textContent = SOW_t("profile.try_again");
-            status.appendChild(retry);
-        }
-    }
-    const content = panel.querySelector("[data-profile-content]");
-    if (content) content.innerHTML = profileContentMarkup(data);
+  }
+  const content = panel.querySelector("[data-profile-content]");
+  if (content) content.innerHTML = profileContentMarkup(data);
 }
 
 export function renderProfileDetail() {
-    const detail = menuUi.profileMatchDetail;
-    if (!detail) {
-        if (!menuUi.profileDetailError) return "";
-        return (
-            "<div class='sow-profile__detail-backdrop' data-menu-overlay='profile-detail'><section class='sow-profile__detail' role='dialog' aria-modal='true' aria-labelledby='sow-profile-detail-title' tabindex='-1'><button type='button' class='sow-profile__detail-close' data-command='close_match' aria-label='" +
-            esc(SOW_t("profile.close_match_details")) +
-            "'>×</button><span class='sow-profile__kicker'>" +
-            esc(SOW_t("profile.match_details")) +
-            "</span><h2 id='sow-profile-detail-title'>" +
-            esc(SOW_t("profile.unavailable")) +
-            "</h2><p class='sow-profile__empty' aria-live='polite'>" +
-            esc(menuUi.profileDetailError) +
-            "</p><button type='button' class='sow-profile__load-more' data-command='open_match' data-match-id='" +
-            esc(menuUi.profileDetailId) +
-            "'>" +
-            esc(SOW_t("profile.try_again")) +
-            "</button></section></div>"
-        );
-    }
+  const detail = menuUi.profileMatchDetail;
+  if (!detail) {
+    if (!menuUi.profileDetailError) return "";
     return (
-        "<div class='sow-profile__detail-backdrop' data-menu-overlay='profile-detail'><section class='sow-profile__detail' role='dialog' aria-modal='true' aria-labelledby='sow-profile-detail-title' tabindex='-1'><button type='button' class='sow-profile__detail-close' data-command='close_match' aria-label='" +
-        esc(SOW_t("profile.close_match_details")) +
-        "'>×</button><span class='sow-profile__kicker'>" +
-        esc(SOW_t("profile.match_details")) +
-        "</span><h2 id='sow-profile-detail-title'>" +
-        esc(detail.mode || SOW_t("profile.match")) +
-        "</h2><p>" +
-        esc(formatMapName(detail)) +
-        " · " +
-        esc(detail.queue || SOW_t("profile.matchmaking_queue")) +
-        (detail.ranked_bot_iq == null
-            ? ""
-            : " · " + esc(SOW_t("profile.ranked_bot_iq", { iq: detail.ranked_bot_iq }))) +
-        " · " +
-        esc(profileMatchDate(detail.completed_at)) +
-        " · " +
-        esc(profileMatchDuration(detail.duration_seconds)) +
-        "</p><div class='sow-profile__detail-players'>" +
-        (detail.participants || [])
-            .map(function (participant) {
-                const status = detail.verified
-                    ? participant.won
-                        ? SOW_t("profile.win")
-                        : SOW_t("profile.loss")
-                    : SOW_t(detail.provisional ? "profile.match_pending" : "profile.match_unverified");
-                const stats = detail.verified
-                    ? SOW_t("profile.kda_value", {
-                          kills: participant.kills || 0,
-                          deaths: participant.deaths || 0,
-                          assists: participant.assists || 0,
-                      })
-                    : "";
-                const name = detail.queue === "Ranked1v1"
-                    ? "<button type='button' class='sow-profile__player-profile' data-command='open_profile' data-account-id='" +
-                      esc(participant.account_id) +
-                      "'>" +
-                      esc(participant.handle || participant.account_id) +
-                      "</button>"
-                    : "<strong>" +
-                      esc(participant.handle || participant.account_id) +
-                      "</strong>";
-                return (
-                    "<div>" +
-                    name +
-                    "<span>" +
-                    esc(participant.leader ? leaderDisplayName(leaderById(participant.leader)) : "—") +
-                    (stats ? " · " + esc(stats) : "") +
-                    (participant.rating_delta == null
-                        ? ""
-                        : " · " +
-                          (participant.ranked_points_breakdown
-                              ? esc(SOW_t("lobbies.rank_score", {
-                                    score: (participant.rating_delta > 0 ? "+" : "") + participant.rating_delta,
-                                }))
-                              : (participant.rating_delta > 0 ? "+" : "") +
-                                esc(participant.rating_delta) +
-                                " MMR")) +
-                    "</span>" +
-                    (detail.queue === "Ranked1v1" && participant.ranked_points_breakdown
-                        ? rankedPointsBreakdownMarkup(participant.ranked_points_breakdown)
-                        : "") +
-                    "<b>" +
-                    esc(status) +
-                    "</b></div>"
-                );
-            })
-            .join("") +
-        "</div></section></div>"
+      "<div class='sow-profile__detail-backdrop' data-menu-overlay='profile-detail'><section class='sow-profile__detail' role='dialog' aria-modal='true' aria-labelledby='sow-profile-detail-title' tabindex='-1'><button type='button' class='sow-profile__detail-close' data-command='close_match' aria-label='" +
+      esc(SOW_t("profile.close_match_details")) +
+      "'>×</button><span class='sow-profile__kicker'>" +
+      esc(SOW_t("profile.match_details")) +
+      "</span><h2 id='sow-profile-detail-title'>" +
+      esc(SOW_t("profile.unavailable")) +
+      "</h2><p class='sow-profile__empty' aria-live='polite'>" +
+      esc(menuUi.profileDetailError) +
+      "</p><button type='button' class='sow-profile__load-more' data-command='open_match' data-match-id='" +
+      esc(menuUi.profileDetailId) +
+      "'>" +
+      esc(SOW_t("profile.try_again")) +
+      "</button></section></div>"
     );
+  }
+  return (
+    "<div class='sow-profile__detail-backdrop' data-menu-overlay='profile-detail'><section class='sow-profile__detail' role='dialog' aria-modal='true' aria-labelledby='sow-profile-detail-title' tabindex='-1'><button type='button' class='sow-profile__detail-close' data-command='close_match' aria-label='" +
+    esc(SOW_t("profile.close_match_details")) +
+    "'>×</button><span class='sow-profile__kicker'>" +
+    esc(SOW_t("profile.match_details")) +
+    "</span><h2 id='sow-profile-detail-title'>" +
+    esc(detail.mode || SOW_t("profile.match")) +
+    "</h2><p>" +
+    esc(formatMapName(detail)) +
+    " · " +
+    esc(detail.queue || SOW_t("profile.matchmaking_queue")) +
+    (detail.ranked_bot_iq == null
+      ? ""
+      : " · " +
+        esc(SOW_t("profile.ranked_bot_iq", { iq: detail.ranked_bot_iq }))) +
+    " · " +
+    esc(profileMatchDate(detail.completed_at)) +
+    " · " +
+    esc(profileMatchDuration(detail.duration_seconds)) +
+    "</p><div class='sow-profile__detail-players'>" +
+    (detail.participants || [])
+      .map(function (participant) {
+        const status = detail.verified
+          ? participant.won
+            ? SOW_t("profile.win")
+            : SOW_t("profile.loss")
+          : SOW_t(
+              detail.provisional
+                ? "profile.match_pending"
+                : "profile.match_unverified",
+            );
+        const stats = detail.verified
+          ? SOW_t("profile.kda_value", {
+              kills: participant.kills || 0,
+              deaths: participant.deaths || 0,
+              assists: participant.assists || 0,
+            })
+          : "";
+        const name =
+          detail.queue === "Ranked1v1"
+            ? "<button type='button' class='sow-profile__player-profile' data-command='open_profile' data-account-id='" +
+              esc(participant.account_id) +
+              "'>" +
+              esc(participant.handle || participant.account_id) +
+              "</button>"
+            : "<strong>" +
+              esc(participant.handle || participant.account_id) +
+              "</strong>";
+        return (
+          "<div>" +
+          name +
+          "<span>" +
+          esc(
+            participant.leader
+              ? leaderDisplayName(leaderById(participant.leader))
+              : "—",
+          ) +
+          (stats ? " · " + esc(stats) : "") +
+          (participant.rating_delta == null
+            ? ""
+            : " · " +
+              (participant.ranked_points_breakdown
+                ? esc(
+                    SOW_t("lobbies.rank_score", {
+                      score:
+                        (participant.rating_delta > 0 ? "+" : "") +
+                        participant.rating_delta,
+                    }),
+                  )
+                : (participant.rating_delta > 0 ? "+" : "") +
+                  esc(participant.rating_delta) +
+                  " MMR")) +
+          "</span>" +
+          (detail.queue === "Ranked1v1" && participant.ranked_points_breakdown
+            ? rankedPointsBreakdownMarkup(participant.ranked_points_breakdown)
+            : "") +
+          "<b>" +
+          esc(status) +
+          "</b></div>"
+        );
+      })
+      .join("") +
+    "</div></section></div>"
+  );
 }
 
 // Other-player profiles can be reported here; account deletion lives in Settings.
 function renderModeration(own: boolean | null) {
-    if (own || menuUi.profileData?.is_bot || !menuUi.profileAccountId || !selfCreds()) return "";
-    if (menuUi.reportSent) {
-        return (
-            "<section class='sow-profile__section' aria-label='" +
-            esc(SOW_t("profile.report_filed")) +
-            "'><div class='sow-profile__section-head'><h2>" +
-            esc(SOW_t("profile.report_filed")) +
-            "</h2></div><p class='sow-profile__empty'>" +
-            esc(SOW_t("profile.thanks_report")) +
-            "</p></section>"
-        );
-    }
-    if (isBlockedAccountId(menuUi.profileAccountId)) {
-        return (
-            "<section class='sow-profile__section' aria-label='" +
-            esc(SOW_t("profile.blocked")) +
-            "'><div class='sow-profile__section-head'><h2>" +
-            esc(SOW_t("profile.blocked")) +
-            "</h2></div><p class='sow-profile__empty'>" +
-            esc(SOW_t("profile.blocked_player")) +
-            "</p></section>"
-        );
-    }
-    if (!menuUi.reportOpen || menuUi.reportTarget !== menuUi.profileAccountId) {
-        return (
-            "<section class='sow-profile__section' aria-label='" +
-            esc(SOW_t("profile.conduct")) +
-            "'><div class='sow-profile__section-head'><h2>" +
-            esc(SOW_t("profile.conduct")) +
-            "</h2></div><button type='button' class='sow-menu__ghost-button' data-command='open_report' data-account-id='" +
-            esc(menuUi.profileAccountId) +
-            "'>" +
-            esc(SOW_t("profile.report_player")) +
-            "</button></section>"
-        );
-    }
+  if (
+    own ||
+    menuUi.profileData?.is_bot ||
+    !menuUi.profileAccountId ||
+    !selfCreds()
+  )
+    return "";
+  if (menuUi.reportSent) {
     return (
-        "<section class='sow-profile__section' aria-label='" +
-        esc(SOW_t("profile.report_player")) +
-        "'><div class='sow-profile__section-head'><h2>" +
-        esc(SOW_t("profile.report_player")) +
-        "</h2></div>" +
-        "<form data-form='report'>" +
-        "<label for='sow-report-reason'>" +
-        esc(SOW_t("profile.reason")) +
-        "</label>" +
-        SOW_renderDropdown({
-            key: "report-reason",
-            name: "reason",
-            value: REPORT_REASONS[0][0],
-            options: REPORT_REASONS.map(function (r) {
-                return { value: r[0], label: SOW_t(r[1]) };
-            }),
-        }) +
-        "<label for='sow-report-details'>" +
-        esc(SOW_t("profile.report_details")) +
-        "</label>" +
-        "<textarea id='sow-report-details' name='details' rows='3' maxlength='500' placeholder='" +
-        esc(SOW_t("profile.what_happened")) +
-        "'></textarea>" +
-        "<p class='sow-profile__empty'>" +
-        esc(SOW_t("profile.report_notice")) +
-        "</p>" +
-        "<button type='submit'" +
-        (reportBusy ? " disabled" : "") +
-        ">" +
-        esc(reportBusy ? SOW_t("profile.sending_report") : SOW_t("profile.send_report_block")) +
-        "</button> " +
-        "<button type='button' class='sow-menu__ghost-button' data-command='cancel_report'>" +
-        esc(SOW_t("profile.cancel_report")) +
-        "</button>" +
-        "</form></section>"
+      "<section class='sow-profile__section' aria-label='" +
+      esc(SOW_t("profile.report_filed")) +
+      "'><div class='sow-profile__section-head'><h2>" +
+      esc(SOW_t("profile.report_filed")) +
+      "</h2></div><p class='sow-profile__empty'>" +
+      esc(SOW_t("profile.thanks_report")) +
+      "</p></section>"
     );
+  }
+  if (isBlockedAccountId(menuUi.profileAccountId)) {
+    return (
+      "<section class='sow-profile__section' aria-label='" +
+      esc(SOW_t("profile.blocked")) +
+      "'><div class='sow-profile__section-head'><h2>" +
+      esc(SOW_t("profile.blocked")) +
+      "</h2></div><p class='sow-profile__empty'>" +
+      esc(SOW_t("profile.blocked_player")) +
+      "</p></section>"
+    );
+  }
+  if (!menuUi.reportOpen || menuUi.reportTarget !== menuUi.profileAccountId) {
+    return (
+      "<section class='sow-profile__section' aria-label='" +
+      esc(SOW_t("profile.conduct")) +
+      "'><div class='sow-profile__section-head'><h2>" +
+      esc(SOW_t("profile.conduct")) +
+      "</h2></div><button type='button' class='sow-menu__ghost-button' data-command='open_report' data-account-id='" +
+      esc(menuUi.profileAccountId) +
+      "'>" +
+      esc(SOW_t("profile.report_player")) +
+      "</button></section>"
+    );
+  }
+  return (
+    "<section class='sow-profile__section' aria-label='" +
+    esc(SOW_t("profile.report_player")) +
+    "'><div class='sow-profile__section-head'><h2>" +
+    esc(SOW_t("profile.report_player")) +
+    "</h2></div>" +
+    "<form data-form='report'>" +
+    "<label for='sow-report-reason'>" +
+    esc(SOW_t("profile.reason")) +
+    "</label>" +
+    SOW_renderDropdown({
+      key: "report-reason",
+      name: "reason",
+      value: REPORT_REASONS[0][0],
+      options: REPORT_REASONS.map(function (r) {
+        return { value: r[0], label: SOW_t(r[1]) };
+      }),
+    }) +
+    "<label for='sow-report-details'>" +
+    esc(SOW_t("profile.report_details")) +
+    "</label>" +
+    "<textarea id='sow-report-details' name='details' rows='3' maxlength='500' placeholder='" +
+    esc(SOW_t("profile.what_happened")) +
+    "'></textarea>" +
+    "<p class='sow-profile__empty'>" +
+    esc(SOW_t("profile.report_notice")) +
+    "</p>" +
+    "<button type='submit'" +
+    (reportBusy ? " disabled" : "") +
+    ">" +
+    esc(
+      reportBusy
+        ? SOW_t("profile.sending_report")
+        : SOW_t("profile.send_report_block"),
+    ) +
+    "</button> " +
+    "<button type='button' class='sow-menu__ghost-button' data-command='cancel_report'>" +
+    esc(SOW_t("profile.cancel_report")) +
+    "</button>" +
+    "</form></section>"
+  );
 }

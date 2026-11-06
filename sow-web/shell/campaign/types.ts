@@ -1,7 +1,7 @@
 export type CampaignStepType = "scene" | "choice" | "objective" | "guide" | "end";
 // Campaign definitions are open data: the validator owns field-specific checks,
 // while this record preserves unknown authored fields through edit and playback.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- campaign JSON is intentionally open-ended.
+// Campaign JSON stays open-ended; the validator owns field-specific checks.
 export type CampaignRecord = Record<string, any>;
 
 export interface CampaignStep extends CampaignRecord {

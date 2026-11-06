@@ -1,6 +1,51 @@
 use crate::engine::SowEngine;
 
 impl SowEngine {
+    pub(crate) fn sync_building_ownership(&mut self) {
+        let mut transfers = Vec::new();
+        for b in &mut self.buildings {
+            let col = b.tile_idx % self.state.map.width;
+            let row = b.tile_idx / self.state.map.width;
+            let tile_owner = self.state.map.owner_id(col, row);
+
+            // Only transfer if the tile has a new valid owner
+            if tile_owner != 0 && tile_owner != b.owner_id {
+                let old_owner = b.owner_id;
+                let new_owner = tile_owner;
+                let kind = b.kind;
+
+                // Transfer ownership
+                b.owner_id = new_owner;
+                transfers.push((*b, old_owner));
+                self.building_aggregates_dirty = true;
+                if kind == crate::game::BuildingKind::Port {
+                    self.sea_lanes_dirty = true;
+                }
+                if kind == crate::game::BuildingKind::Tower {
+                    self.defense_grid_dirty = true;
+                }
+
+                // Update player counts if necessary
+                if kind == crate::game::BuildingKind::City {
+                    if old_owner != 0
+                        && let Some(p) = self.state.player_mut(old_owner)
+                    {
+                        p.cities = p.cities.saturating_sub(1);
+                    }
+                    if new_owner != 0
+                        && let Some(p) = self.state.player_mut(new_owner)
+                    {
+                        p.cities += 1;
+                    }
+                }
+            }
+        }
+
+        for (building, old_owner) in transfers {
+            self.hero_city_transferred(building, old_owner);
+        }
+    }
+
     pub fn tick(&mut self) {
         if let crate::game::GamePhase::Spawning { end_tick } = self.state.phase {
             self.state.tick += 1;
@@ -118,44 +163,7 @@ impl SowEngine {
         self.apply_campaign_support();
         self.update_campaign_assault();
 
-        // Sync building ownership with tile ownership
-        for b in &mut self.buildings {
-            let col = b.tile_idx % self.state.map.width;
-            let row = b.tile_idx / self.state.map.width;
-            let tile_owner = self.state.map.owner_id(col, row);
-
-            // Only transfer if the tile has a new valid owner
-            if tile_owner != 0 && tile_owner != b.owner_id {
-                let old_owner = b.owner_id;
-                let new_owner = tile_owner;
-                let kind = b.kind;
-
-                // Transfer ownership
-                b.owner_id = new_owner;
-                self.building_aggregates_dirty = true;
-                if kind == crate::game::BuildingKind::Port {
-                    self.sea_lanes_dirty = true;
-                }
-                if kind == crate::game::BuildingKind::Tower {
-                    self.defense_grid_dirty = true;
-                }
-
-                // Update player counts if necessary
-                if kind == crate::game::BuildingKind::City {
-                    if old_owner != 0
-                        && let Some(p) = self.state.player_mut(old_owner)
-                    {
-                        p.cities = p.cities.saturating_sub(1);
-                    }
-                    if new_owner != 0
-                        && let Some(p) = self.state.player_mut(new_owner)
-                    {
-                        p.cities += 1;
-                    }
-                }
-            }
-        }
-
+        self.sync_building_ownership();
         self.execute_trade_ships();
         self.execute_fleets();
         self.check_winner();
@@ -350,7 +358,9 @@ impl SowEngine {
         if contenders.len() != 2 {
             return;
         }
-        let winner = contenders.iter().filter(|p| p.alive && p.tile_count > 0)
+        let winner = contenders
+            .iter()
+            .filter(|p| p.alive && p.tile_count > 0)
             .filter(|p| p.tile_count >= win_threshold)
             .max_by_key(|p| (p.tile_count, std::cmp::Reverse(p.id)))
             .map(|p| p.id);
@@ -823,8 +833,7 @@ mod tests {
                         (3, Team::Red, leading_tiles - 40),
                         (2, Team::Blue, 99 - leading_tiles),
                     ] {
-                        let mut player =
-                            Player::new_human(id, format!("P{id}"), [1.0; 3], &config);
+                        let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &config);
                         player.team = Some(team);
                         player.tile_count = tiles;
                         player.alive = true;
@@ -833,8 +842,7 @@ mod tests {
                     }
                 } else {
                     for (id, tiles) in [(1, leading_tiles), (2, 99 - leading_tiles)] {
-                        let mut player =
-                            Player::new_human(id, format!("P{id}"), [1.0; 3], &config);
+                        let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &config);
                         player.tile_count = tiles;
                         player.alive = true;
                         player.has_spawned = true;
@@ -844,9 +852,15 @@ mod tests {
 
                 let mut engine = SowEngine::new(state, WaterComponents::default());
                 engine.check_winner();
-                assert_eq!(engine.state.winner, expected_winner, "mode={mode}, ranked={ranked_1v1}, land={leading_tiles}");
+                assert_eq!(
+                    engine.state.winner, expected_winner,
+                    "mode={mode}, ranked={ranked_1v1}, land={leading_tiles}"
+                );
                 if mode == "Teams" || mode == "HumansVsNations" {
-                    assert_eq!(engine.state.winning_team, expected_winner.map(|_| Team::Red));
+                    assert_eq!(
+                        engine.state.winning_team,
+                        expected_winner.map(|_| Team::Red)
+                    );
                 }
             }
         }
@@ -854,10 +868,17 @@ mod tests {
 
     #[test]
     fn ranked_duel_ends_when_a_contender_is_eliminated_even_with_tribes_alive() {
-        let config = GameConfig { ranked_1v1: true, ..Default::default() };
+        let config = GameConfig {
+            ranked_1v1: true,
+            ..Default::default()
+        };
         let mut state = GameState::new(42, 10, 10, config.clone());
         state.total_land_tiles = 100;
-        for (id, tiles, kind) in [(1, 10, PlayerType::Human), (2, 0, PlayerType::Human), (3, 10, PlayerType::Bot)] {
+        for (id, tiles, kind) in [
+            (1, 10, PlayerType::Human),
+            (2, 0, PlayerType::Human),
+            (3, 10, PlayerType::Bot),
+        ] {
             let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &config);
             player.player_type = kind;
             player.tile_count = tiles;
@@ -873,7 +894,10 @@ mod tests {
 
     #[test]
     fn ranked_duel_awards_win_to_living_player_without_territory_after_forfeit() {
-        let config = GameConfig { ranked_1v1: true, ..Default::default() };
+        let config = GameConfig {
+            ranked_1v1: true,
+            ..Default::default()
+        };
         let mut state = GameState::new(42, 10, 10, config.clone());
         state.total_land_tiles = 100;
         for (id, alive) in [(1, false), (2, true)] {

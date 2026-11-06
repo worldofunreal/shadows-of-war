@@ -14,7 +14,7 @@ import {
 } from "./main_menu.core.ts";
 import { renderPublicPanel } from "./main_menu.lobbies.ts";
 import { render, renderSettingsPrivacySection } from "./main_menu.shell.ts";
-import { renderLocaleSettingRow } from "./main_menu.settings.ts";
+import { renderLocaleSettingRow, renderMusicSpectrum } from "./main_menu.settings.ts";
 import { isAndroidTwa } from "./main_menu.store.ts";
 
 export function renderCommandPanel() {
@@ -139,33 +139,39 @@ function renderSettingsLinks() {
               esc(SOW_t("menu.cookie_settings")) +
               "</button>"
             : "";
-    return (
-        renderSettingsLink("https://shadowsofwar.io/#faq", "site.faq") +
-        renderSettingsLink("https://shadowsofwar.io/support/", "menu.support") +
-        renderSettingsLink("https://shadowsofwar.io/terms/", "menu.terms") +
-        renderSettingsLink("https://shadowsofwar.io/cookies/", "menu.cookies") +
-        cookieSettings +
+    const socialButtons =
+        "<div class='sow-menu__settings-social-row'>" +
         renderSettingsLink(
             "https://discord.gg/4mBM6zJyG",
             "menu.discord",
-            "sow-menu__settings-link--social",
+            "sow-menu__settings-link--social social-icon-link",
             "discord",
         ) +
         renderSettingsLink(
             "https://t.me/shadowsofwario",
             "menu.telegram",
-            "sow-menu__settings-link--social",
+            "sow-menu__settings-link--social social-icon-link",
             "telegram",
         ) +
         renderSettingsLink(
             sourceUrl,
             "menu.source_code",
-            "sow-menu__source-link sow-menu__settings-link--social",
+            "sow-menu__source-link sow-menu__settings-link--social social-icon-link",
             "github",
         ) +
+        "</div>";
+    const textLinks =
+        "<div class='sow-menu__settings-links-grid'>" +
+        renderSettingsLink("https://shadowsofwar.io/#faq", "site.faq") +
+        renderSettingsLink("https://shadowsofwar.io/support/", "menu.support") +
+        renderSettingsLink("https://shadowsofwar.io/terms/", "menu.terms") +
+        renderSettingsLink("https://shadowsofwar.io/privacy/", "menu.privacy") +
+        renderSettingsLink("https://shadowsofwar.io/cookies/", "menu.cookies") +
+        cookieSettings +
         renderSettingsLink(licenseUrl, "menu.license", "sow-menu__license-link") +
-        androidOssLicenses
-    );
+        androidOssLicenses +
+        "</div>";
+    return socialButtons + textLinks;
 }
 
 export function renderMainNav(active: string | null | undefined) {
@@ -186,8 +192,6 @@ export function renderSettings() {
         "<svg class='sow-menu__settings-sec-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/></svg>";
     const musicSvg =
         "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><polygon points='11 5 6 9 2 9 2 15 6 15 11 19 11 5'/><path d='M15.54 8.46a5 5 0 0 1 0 7.07'/><path d='M19.07 4.93a10 10 0 0 1 0 14.14'/></svg>";
-    const motionSvg =
-        "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M13 2 3 14h9l-1 8 10-12h-9l1-8z'/></svg>";
     const zoomSvg =
         "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><polyline points='15 3 21 3 21 9'/><polyline points='9 21 3 21 3 15'/><line x1='21' y1='3' x2='14' y2='10'/><line x1='3' y1='21' x2='10' y2='14'/></svg>";
     const fpsSvg =
@@ -295,6 +299,7 @@ export function renderSettings() {
         "</span></span><b data-val-for='music_vol'>" +
         volPct +
         "%</b></div>" +
+        renderMusicSpectrum() +
         "<input type='range' name='music_volume' min='0' max='1' step='0.01' value='" +
         esc(vol) +
         "' style='--sow-music-fill: " +
@@ -302,25 +307,6 @@ export function renderSettings() {
         "%;' data-setting='music_volume'>" +
         "</label>" +
         renderLocaleSettingRow() +
-        "<div class='sow-hud__setting-row sow-menu__settings-dropdown-row'>" +
-        "<span class='sow-menu__settings-row-label'>" +
-        motionSvg +
-        "<span>" +
-        esc(SOW_t("menu.motion_animation")) +
-        "</span></span>" +
-        SOW_renderDropdown({
-            key: "settings-motion",
-            className: "sow-menu__settings-dropdown",
-            label: SOW_t("menu.motion_animation"),
-            name: "reduced_motion",
-            setting: "reduced_motion",
-            value: settings.reduced_motion ? "reduced" : "full",
-            options: [
-                { value: "full", label: SOW_t("menu.full") },
-                { value: "reduced", label: SOW_t("menu.reduced_motion") },
-            ],
-        }) +
-        "</div>" +
         "<label class='sow-hud__setting-row sow-menu__settings-switch-row'>" +
         "<span class='sow-menu__settings-row-label'>" +
         zoomSvg +
@@ -375,8 +361,9 @@ export function renderSettings() {
         esc(SOW_t("menu.game_links")) +
         "'>" +
         renderSettingsLinks() +
-        "</nav></section>" +
-        renderSettingsPrivacySection(renderSettingsLink("https://shadowsofwar.io/privacy/", "menu.privacy")) +
+        "</nav>" +
+        renderSettingsPrivacySection("") +
+        "</section>" +
         "</div>" +
         "</div>" +
         "</section>" +

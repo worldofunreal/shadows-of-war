@@ -9265,6 +9265,214 @@
     }
    },
    "territory_color": "#397b86"
+  },
+  {
+   "id": "peter_the_great",
+   "name": "Peter the Great",
+   "entity": "Russia",
+   "role": "nation",
+   "region": "europe",
+   "lat": 55.7506,
+   "lon": 37.6175,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Peter_the_Great",
+   "avatar": "peter_the_great",
+   "hero": {
+    "name": "Peter the Great",
+    "art_slug": "peter_the_great",
+    "ability": {
+     "kind": "coastal_founding"
+    }
+   },
+   "territory_color": "#c85a4b"
+  },
+  {
+   "id": "empress_suiko",
+   "name": "Empress Suiko",
+   "entity": "Yamato Japan",
+   "role": "nation",
+   "region": "asia",
+   "lat": 34.47,
+   "lon": 135.82,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Empress_Suiko",
+   "avatar": "empress_suiko",
+   "hero": {
+    "name": "Empress Suiko",
+    "art_slug": "empress_suiko",
+    "ability": {
+     "kind": "allied_city_grant",
+     "gold": 50
+    }
+   },
+   "territory_color": "#7d58a3"
+  },
+  {
+   "id": "nebuchadnezzar_ii",
+   "name": "Nebuchadnezzar II",
+   "entity": "Neo-Babylonian Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 32.54,
+   "lon": 44.42,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Nebuchadnezzar_II",
+   "avatar": "nebuchadnezzar_ii",
+   "hero": {
+    "name": "Nebuchadnezzar II",
+    "art_slug": "nebuchadnezzar_ii",
+    "ability": {
+     "kind": "city_tower_upgrade"
+    }
+   },
+   "territory_color": "#9d7042"
+  },
+  {
+   "id": "king_david",
+   "name": "King David",
+   "entity": "Kingdom of Israel",
+   "role": "nation",
+   "region": "asia",
+   "lat": 31.78,
+   "lon": 35.23,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/David",
+   "avatar": "king_david",
+   "hero": {
+    "name": "King David",
+    "art_slug": "king_david",
+    "ability": {
+     "kind": "shared_city_spoils",
+     "gold": 200
+    }
+   },
+   "territory_color": "#5772a8"
+  },
+  {
+   "id": "sarraounia_mangou",
+   "name": "Sarraounia Mangou",
+   "entity": "Azna of Lougou",
+   "role": "tribe",
+   "region": "africa",
+   "lat": 13.87,
+   "lon": 4.23,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Sarraounia",
+   "avatar": "sarraounia_mangou",
+   "hero": {
+    "name": "Sarraounia Mangou",
+    "art_slug": "sarraounia_mangou",
+    "ability": {
+     "kind": "city_evacuation",
+     "troops": 1500
+    }
+   },
+   "territory_color": "#873d42"
+  },
+  {
+   "id": "muhammad_of_ghor",
+   "name": "Muhammad of Ghor",
+   "entity": "Ghurid Sultanate",
+   "role": "nation",
+   "region": "asia",
+   "lat": 34.35,
+   "lon": 64.9,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Muhammad_of_Ghor",
+   "avatar": "muhammad_of_ghor",
+   "hero": {
+    "name": "Muhammad of Ghor",
+    "art_slug": "muhammad_of_ghor",
+    "ability": {
+     "kind": "return_campaign",
+     "percent": 35
+    }
+   },
+   "territory_color": "#4c8c7c"
+  },
+  {
+   "id": "puyi",
+   "name": "Puyi",
+   "entity": "Qing dynasty",
+   "role": "nation",
+   "region": "asia",
+   "lat": 39.92,
+   "lon": 116.39,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Puyi",
+   "avatar": "puyi",
+   "hero": {
+    "name": "Puyi",
+    "art_slug": "puyi",
+    "ability": {
+     "kind": "ally_patronage",
+     "percent": 20
+    }
+   },
+   "territory_color": "#98854a"
+  },
+  {
+   "id": "pertinax",
+   "name": "Pertinax",
+   "entity": "Roman Empire",
+   "role": "nation",
+   "region": "europe",
+   "lat": 44.7,
+   "lon": 8.5,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Pertinax",
+   "avatar": "pertinax",
+   "hero": {
+    "name": "Pertinax",
+    "art_slug": "pertinax",
+    "ability": {
+     "kind": "surplus_treasury",
+     "troops_per_gold": 1000
+    }
+   },
+   "territory_color": "#7e594a"
+  },
+  {
+   "id": "ewuare",
+   "name": "Ewuare",
+   "entity": "Kingdom of Benin",
+   "role": "nation",
+   "region": "africa",
+   "lat": 6.34,
+   "lon": 5.62,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ewuare",
+   "avatar": "ewuare",
+   "hero": {
+    "name": "Ewuare the Great",
+    "art_slug": "ewuare",
+    "ability": {
+     "kind": "guild_network",
+     "gold_per_second": 1
+    }
+   },
+   "territory_color": "#79563a"
+  },
+  {
+   "id": "veleda",
+   "name": "Veleda",
+   "entity": "Bructeri",
+   "role": "tribe",
+   "region": "europe",
+   "lat": 51.86,
+   "lon": 7.63,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Veleda",
+   "avatar": "veleda",
+   "hero": {
+    "name": "Veleda",
+    "art_slug": "veleda",
+    "ability": {
+     "kind": "warship_prize",
+     "percent": 25
+    }
+   },
+   "territory_color": "#5e718e"
   }
  ]
 }

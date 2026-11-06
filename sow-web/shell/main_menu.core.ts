@@ -1,5 +1,12 @@
 import { rankEmblem, rankLabel } from "./main_menu.ranked.ts";
-import type { LocalizedText, MenuLeader, MenuLobby, MenuMap, MenuState, RankedLadder } from "./main_menu.state.ts";
+import type {
+    LocalizedText,
+    MenuLeader,
+    MenuLobby,
+    MenuMap,
+    MenuState,
+    RankedLadder,
+} from "./main_menu.state.ts";
 import type {
     ProfileCacheEntry,
     ProfileData,
@@ -64,6 +71,7 @@ interface MenuUi {
     profileOpen: boolean;
     profileAccountId: string | null;
     profileTab: string;
+    profileAchievementFilter: string;
     profileData: ProfileData | null;
     rankedRating: ProfileRating | null;
     rankedLadder: RankedLadder | null;
@@ -129,6 +137,7 @@ export const menuUi: MenuUi = {
     profileOpen: false,
     profileAccountId: null,
     profileTab: "overview",
+    profileAchievementFilter: "all",
     profileData: null,
     rankedRating: null,
     rankedLadder: null,
@@ -196,7 +205,12 @@ export function renderQuickMatchButton(): string {
         esc(SOW_t("lobbies.ranked_1v1")) +
         "</strong><small data-ranked-current>" +
         esc(rankedLabel) +
-        "</small></div><span data-ranked-emblem>" + rankEmblem(ranked?.placements_complete ? ranked.tier : "unranked", ranked?.placements_complete ? ranked.division : null) + "</span></button>"
+        "</small></div><span data-ranked-emblem>" +
+        rankEmblem(
+            ranked?.placements_complete ? ranked.tier : "unranked",
+            ranked?.placements_complete ? ranked.division : null,
+        ) +
+        "</span></button>"
     );
 }
 
@@ -284,10 +298,21 @@ export function asset(path: string): string {
     return window.SOW_assetUrl ? window.SOW_assetUrl(url) : url;
 }
 
+export function renderShowcaseLoader(gradientId: string): string {
+    return (
+        "<div class='showcase-loader' aria-hidden='true'><svg class='showcase-loader-ring' viewBox='0 0 120 120' focusable='false'><defs><linearGradient id='" +
+        esc(gradientId) +
+        "' x1='0' y1='0' x2='1' y2='1'><stop offset='0' class='showcase-loader-head'></stop><stop offset='.45' class='showcase-loader-body'></stop><stop offset='1' class='showcase-loader-tail'></stop></linearGradient></defs><circle class='showcase-loader-orbit' cx='60' cy='60' r='58.5' pathLength='100'></circle><circle class='showcase-loader-track' cx='60' cy='60' r='54'></circle><circle class='showcase-loader-arc' cx='60' cy='60' r='54' pathLength='100' style='stroke:url(#" +
+        esc(gradientId) +
+        ")'></circle></svg></div>"
+    );
+}
+
 export function abilityIconMarkup(
     artSlug: string,
     className: string,
     imageAttributes = "",
+    trackHeroSelection = false,
 ): string {
     const slug = String(artSlug || "");
     if (!/^[a-z0-9_]+$/.test(slug)) return "";
@@ -319,12 +344,21 @@ export function abilityIconMarkup(
             "% " +
             y +
             "%;background-repeat:no-repeat";
+        const preload = trackHeroSelection
+            ? "<img src='" +
+              esc(asset(atlas.path)) +
+              "' alt='' aria-hidden='true' data-hero-skill-icon data-hero-skill-art-slug='" +
+              esc(slug) +
+              "' fetchpriority='high' style='position:absolute;width:1px;height:1px;opacity:0;pointer-events:none'>"
+            : "";
         return (
             "<span class='" +
             esc(className) +
             " sow-ability-atlas-icon' aria-hidden='true' style='" +
             esc(style) +
-            "'></span>"
+            "'>" +
+            preload +
+            "</span>"
         );
     }
     return (
@@ -333,6 +367,9 @@ export function abilityIconMarkup(
         "' src='" +
         esc(asset("gameplay/icons/abilities/" + slug + ".webp")) +
         "' alt=''" +
+        (trackHeroSelection
+            ? " data-hero-skill-icon data-hero-skill-art-slug='" + esc(slug) + "' fetchpriority='high'"
+            : "") +
         (imageAttributes ? " " + imageAttributes : "") +
         ">"
     );
@@ -541,6 +578,7 @@ export function renderHeroBriefing(leaderOrSlug: unknown, surface?: string, head
                 "</p></div>";
     } else if (abilityName || description) {
         const artSlug = leaderArtSlug(leader) || slug;
+        const trackHeroSelection = surfaceName === "selection";
         const icon =
             artSlug && /^[a-z0-9_]+$/.test(artSlug)
                 ? "<span class='sow-hero-briefing__icon-slot'>" +
@@ -548,7 +586,9 @@ export function renderHeroBriefing(leaderOrSlug: unknown, surface?: string, head
                       artSlug,
                       "sow-heroes__ability-icon sow-hero-briefing__icon",
                       "decoding='async'",
+                      trackHeroSelection,
                   ) +
+                  (trackHeroSelection ? renderShowcaseLoader("showcase-loader-arc-skill") : "") +
                   "</span>"
                 : "";
         ability =
@@ -581,6 +621,14 @@ window.SOW_renderHeroBriefing = renderHeroBriefing;
 function hideBrokenHeroBriefingIcon(event: Event): void {
     const image = event && (event.target as Element | null);
     const slot = image && (image.parentNode as Element | null);
+    if (
+        image &&
+        image.hasAttribute &&
+        image.hasAttribute("data-hero-skill-icon") &&
+        image.closest &&
+        image.closest(".sow-heroes__featured")
+    )
+        return;
     if (
         image &&
         image.classList &&

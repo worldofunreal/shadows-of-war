@@ -76,6 +76,16 @@ impl SowEngine {
             }
             self.state.players[idx].max_troops = max_tr;
 
+            let hero_gold = self.hero_gold_per_second(player_id);
+            if hero_gold > 0.0 {
+                if self.hero_income_active.insert(player_id) {
+                    let home = self.state.players[idx].home;
+                    self.state.announce_leader_ability(player_id, home);
+                }
+            } else {
+                self.hero_income_active.remove(&player_id);
+            }
+
             let troop_ps = troop_income_per_second(tiles_owned, agg, leader, &config)
                 + alliance_troops_per_second(
                     self.state.players[idx].alliances.len(),
@@ -106,7 +116,7 @@ impl SowEngine {
             if is_standard_bot {
                 gold_income *= 0.75;
             }
-            self.state.players[idx].credit_gold(gold_income);
+            self.state.players[idx].credit_gold(gold_income + config.per_tick(hero_gold));
 
             let iq_gain = config.per_tick(self.state.players[idx].iq as f64 / 100.0);
             self.state.players[idx].iq_points =

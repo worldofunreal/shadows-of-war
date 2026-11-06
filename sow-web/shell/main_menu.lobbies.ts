@@ -678,7 +678,7 @@ export function renderCampaign() {
               "</i></button>"
             : "<button class='sow-menu__primary sow-campaign__action-play' type='button' disabled><span>" +
               esc(SOW_t("lobbies.locked")) +
-              "</span> <i>🔒</i></button>";
+              "</span> <i>" + menuIcon("lock") + "</i></button>";
 
         const watchAction = campaignCinematicAvailability[selectedEpisode.id]
             ? "<button class='sow-menu__secondary sow-campaign__action-watch' type='button' data-command='watch_campaign_cinematic' data-episode-id='" +
@@ -1280,7 +1280,7 @@ export function renderCreate() {
               options: rosterPresets.map(function (preset) {
                   return {
                       value: preset.id,
-                      label: preset.name + (preset.id === selectedMap.default_roster ? " ★" : ""),
+                      label: preset.name + (preset.id === selectedMap.default_roster ? " *" : ""),
                   };
               }),
           }) +

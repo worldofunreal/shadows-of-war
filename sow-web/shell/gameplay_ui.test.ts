@@ -1054,55 +1054,28 @@ test("Roman Outpost emotes keep its guided objective visible on desktop and mobi
     }
 });
 
-test("Boudica's Iceni meeting guides point to Snettisham, then Thetford", async () => {
+test("Boudica's Iceni meetings are border events, not main objectives", () => {
     const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
     const campaignDir = path.join(shell, "../../assets/campaign");
     const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
     const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
 
-    for (const [index, [stepId, factionId]] of [
-        ["boudica_second_contact", "snettisham"],
-        ["boudica_third_contact", "thetford"],
-    ].entries()) {
-        const anchor = { x: 210 + index * 80, y: 300 + index * 60 };
-        const hud = {
-            tutorial: {
-                active: true,
-                episode_id: "boudica",
-                campaign_session_id: 22,
-                target_nameplate: { ...anchor, offscreen: false },
-                facts: {
-                    contact_faction_ids: [],
-                    defeated_faction_ids: [],
-                    eliminated_faction_ids: [],
-                    pre_defeat_faction_ids: [],
-                    tiles_gained: 0,
-                },
-            },
-            players: [
-                { id: 1, is_me: true, is_alive: true, centroid_x: 10, centroid_y: 12 },
-                { id: 2, campaign_faction_id: factionId, is_alive: true, centroid_x: 15, centroid_y: 12 },
-            ],
-            settings: {},
-        };
-        const harness = makeCampaignTutorialHarness({
-            campaign,
-            definition,
-            roster,
-            initialStep: stepId,
-            hud,
-            width: 390,
-            height: 844,
-        });
-        await harness.start();
-
-        assert.equal(harness.rendered.step.id, stepId);
-        assert.equal(harness.rendered.step.guide.target, "nameplate");
-        assert.deepEqual(
-            [harness.renderContext.anchor.x, harness.renderContext.anchor.y],
-            [anchor.x, anchor.y],
-            `${factionId}'s hand points to that tribe's live nameplate`,
-        );
+    assert.equal(
+        definition.steps.some((step) => ["boudica_second_contact", "boudica_third_contact"].includes(step.id)),
+        false,
+    );
+    assert.equal(
+        definition.steps.find((step) => step.id === "boudica_build_city").next,
+        "boudica_city_construction_wait",
+    );
+    for (const [reactionId, factionId] of [
+        ["contact_snettisham", "snettisham"],
+        ["contact_thetford", "thetford"],
+    ]) {
+        const reaction = definition.reactions.find((item) => item.id === reactionId);
+        assert.equal(reaction.when.type, "contact");
+        assert.equal(reaction.when.target, factionId);
+        assert.equal(reaction.pause_game, false);
     }
 });
 

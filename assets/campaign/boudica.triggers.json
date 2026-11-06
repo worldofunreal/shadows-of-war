@@ -42,7 +42,7 @@
         },
         {
           "speaker": "boudica",
-          "emote": "celebrate",
+          "emote": "greet",
           "emote_text_key": "tutorial.campaign_boudica_boudica_stonea_reply_emote"
         },
         {
@@ -993,7 +993,7 @@
       },
       "pause_game": true,
       "paused_action": "build_until_started",
-      "next": "boudica_second_contact"
+      "next": "boudica_city_construction_wait"
     },
     {
       "id": "boudica_city_construction_wait",
@@ -1018,152 +1018,11 @@
       "exchange": [
         {
           "speaker": "boudica",
-          "emote": "celebrate",
+          "emote": "greet",
           "emote_text_key": "tutorial.campaign_boudica_boudica_home_rebuilt_emote"
         }
       ],
       "next": "boudica_outpost_colonia_veterans"
-    },
-    {
-      "id": "boudica_second_contact",
-      "type": "objective",
-      "title_key": "tutorial.campaign_boudica_boudica_second_contact_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_second_contact_hint",
-      "speaker": "boudica",
-      "trigger": {
-        "type": "contact",
-        "target": "snettisham",
-        "value": 1,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "snettisham"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "nameplate",
-        "gesture": "tap"
-      },
-      "routes": [
-        {
-          "when": {
-            "choice": "contact_snettisham",
-            "equals": "refuse"
-          },
-          "next": "boudica_snettisham_refuse_reply"
-        }
-      ],
-      "next": "boudica_snettisham_accept_wait",
-      "camera": {
-        "shot": "approach",
-        "to": "snettisham",
-        "seconds": 1.5
-      },
-      "body_key": "tutorial.campaign_boudica_second_contact_body"
-    },
-    {
-      "id": "boudica_snettisham_refuse_reply",
-      "type": "scene",
-      "exchange": [
-        {
-          "speaker": "snettisham",
-          "emote": "threat",
-          "emote_text_key": "tutorial.campaign_boudica_snettisham_refuse_emote"
-        },
-        {
-          "speaker": "boudica",
-          "emote": "threat",
-          "emote_text_key": "tutorial.campaign_boudica_boudica_refuse_reply_emote"
-        }
-      ],
-      "next": "boudica_third_contact",
-      "camera": {
-        "shot": "link",
-        "from": "snettisham",
-        "to": "snettisham",
-        "seconds": 3
-      }
-    },
-    {
-      "id": "boudica_snettisham_accept_wait",
-      "type": "objective",
-      "title_key": "tutorial.campaign_boudica_boudica_snettisham_rebuild_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_snettisham_rebuild_hint",
-      "speaker": "snettisham",
-      "trigger": {
-        "type": "structure_level",
-        "kind": "City",
-        "value": 1,
-        "scope": "total",
-        "faction": "snettisham"
-      },
-      "marker": {
-        "target": "snettisham"
-      },
-      "next": "boudica_snettisham_accept_reply",
-      "camera": {
-        "shot": "approach",
-        "to": "snettisham",
-        "seconds": 1.5
-      },
-      "exchange": [
-        {
-          "speaker": "snettisham",
-          "emote": "greet",
-          "emote_text_key": "tutorial.campaign_boudica_snettisham_wait_emote"
-        }
-      ]
-    },
-    {
-      "id": "boudica_snettisham_accept_reply",
-      "type": "scene",
-      "exchange": [
-        {
-          "speaker": "snettisham",
-          "emote": "celebrate",
-          "emote_text_key": "tutorial.campaign_boudica_snettisham_accept_emote"
-        },
-        {
-          "speaker": "boudica",
-          "emote": "greet",
-          "emote_text_key": "tutorial.campaign_boudica_boudica_accept_reply_emote"
-        }
-      ],
-      "next": "boudica_third_contact",
-      "camera": {
-        "shot": "link",
-        "from": "snettisham",
-        "to": "player",
-        "seconds": 3
-      }
-    },
-    {
-      "id": "boudica_third_contact",
-      "type": "objective",
-      "title_key": "tutorial.campaign_boudica_boudica_third_contact_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_third_contact_hint",
-      "speaker": "boudica",
-      "trigger": {
-        "type": "contact",
-        "target": "thetford",
-        "value": 1,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "thetford"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "nameplate",
-        "gesture": "tap"
-      },
-      "next": "boudica_city_construction_wait",
-      "camera": {
-        "shot": "approach",
-        "to": "thetford",
-        "seconds": 1.5
-      },
-      "body_key": "tutorial.campaign_boudica_third_contact_body"
     },
     {
       "id": "boudica_select_city_upgrade",
@@ -2117,7 +1976,7 @@
         },
         {
           "speaker": "boudica",
-          "emote": "celebrate",
+          "emote": "greet",
           "emote_text_key": "tutorial.campaign_boudica_boudica_last_stand_resist_emote"
         }
       ],

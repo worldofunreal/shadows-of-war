@@ -27,7 +27,6 @@ node_modules/
 *.log
 dump.rdb
 *debug*.txt
-eslint_out.txt
 *.bak_*
 /outputs/
 

@@ -14,7 +14,7 @@ import {
 } from "./main_menu.core.ts";
 import { renderPublicPanel } from "./main_menu.lobbies.ts";
 import { renderSettingsPrivacySection } from "./main_menu.shell.ts";
-import { renderLocaleSettingRow } from "./main_menu.settings.ts";
+import { renderLocaleSettingRow, renderMusicSpectrum } from "./main_menu.settings.ts";
 
 export {
     abandonExternalPurchaseAttempt,
@@ -119,8 +119,6 @@ export function renderSettings() {
         "<svg class='sow-menu__settings-sec-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>";
     const musicSvg =
         "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><polygon points='11 5 6 9 2 9 2 15 6 15 11 19 11 5'/><path d='M15.54 8.46a5 5 0 0 1 0 7.07'/><path d='M19.07 4.93a10 10 0 0 1 0 14.14'/></svg>";
-    const motionSvg =
-        "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M13 2 3 14h9l-1 8 10-12h-9l1-8z'/></svg>";
     const accountControl =
         "<div class='sow-menu__settings-account is-guest'><span class='sow-menu__account-dot' aria-hidden='true'></span><strong class='sow-menu__account-value'>" +
         esc(SOW_t("menu.anonymous")) +
@@ -152,30 +150,14 @@ export function renderSettings() {
         esc(SOW_t("menu.music_volume")) +
         "</span></span><b data-val-for='music_vol'>" +
         volPct +
-        "%</b></div><input type='range' name='music_volume' min='0' max='1' step='0.01' value='" +
+        "%</b></div>" +
+        renderMusicSpectrum() +
+        "<input type='range' name='music_volume' min='0' max='1' step='0.01' value='" +
         esc(vol) +
         "' style='--sow-music-fill: " +
         volPct +
         "%;' data-setting='music_volume'></label>" +
         renderLocaleSettingRow() +
-        "<div class='sow-hud__setting-row sow-menu__settings-dropdown-row'><span class='sow-menu__settings-row-label'>" +
-        motionSvg +
-        "<span>" +
-        esc(SOW_t("menu.motion_animation")) +
-        "</span></span>" +
-        SOW_renderDropdown({
-            key: "settings-motion",
-            className: "sow-menu__settings-dropdown",
-            label: SOW_t("menu.motion_animation"),
-            name: "reduced_motion",
-            setting: "reduced_motion",
-            value: settings.reduced_motion ? "reduced" : "full",
-            options: [
-                { value: "full", label: SOW_t("menu.full") },
-                { value: "reduced", label: SOW_t("menu.reduced_motion") },
-            ],
-        }) +
-        "</div>" +
         "</div></section>" +
         "</div>" +
         "<div class='sow-menu__settings-col sow-menu__settings-col--secondary'>" +

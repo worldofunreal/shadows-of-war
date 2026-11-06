@@ -23,7 +23,12 @@ impl SowEngine {
             .fleets
             .iter()
             .filter(|fleet| fleet.troops > 0.0)
-            .map(|fleet| (fleet.id, (fleet.owner_id, fleet.unit_type, fleet.current_tile)))
+            .map(|fleet| {
+                (
+                    fleet.id,
+                    (fleet.owner_id, fleet.unit_type, fleet.current_tile),
+                )
+            })
             .collect();
 
         for proj in &mut self.projectiles {
@@ -114,6 +119,11 @@ impl SowEngine {
             else {
                 continue;
             };
+            // Earlier impacts in this batch may have taken this ship as a prize.
+            // Recheck its current owner before applying another queued shell.
+            if !self.naval_target_allowed(owner_id, self.fleets[target_index].owner_id) {
+                continue;
+            }
             let sunk = {
                 let target = &mut self.fleets[target_index];
                 target.troops = (target.troops - damage.max(0.0)).max(0.0);
@@ -128,9 +138,7 @@ impl SowEngine {
             if sunk && let Some(source_id) = source_id {
                 if let Some(source) = self.fleets.iter_mut().find(|fleet| fleet.id == source_id) {
                     if let Some(warship) = source.warship.as_mut() {
-                        warship.record_progress(if target_type
-                            == crate::game::UnitType::Warship
-                        {
+                        warship.record_progress(if target_type == crate::game::UnitType::Warship {
                             250
                         } else {
                             25
@@ -138,12 +146,13 @@ impl SowEngine {
                     }
                 }
             }
+            let captured = sunk && self.hero_warship_prize(owner_id, target_index);
             self.state.events.push(crate::game::GameEvent::NavalImpact {
                 owner_id,
                 target_owner,
                 tile,
                 target_type,
-                sunk,
+                sunk: sunk && !captured,
             });
         }
 
@@ -326,10 +335,10 @@ mod tests {
             path_cursor: 0,
             steps_per_tick: 1,
             active: true,
-                    source_fleet_id: None,
-                    target_fleet_id: None,
-                    damage: 0.0,
-                    expires_at_tick: u64::MAX,
+            source_fleet_id: None,
+            target_fleet_id: None,
+            damage: 0.0,
+            expires_at_tick: u64::MAX,
         });
 
         engine.execute_projectiles();
