@@ -640,14 +640,18 @@ export function create(
     function view() {
         currentTimeMs = readClock();
         const step = byId.get(state.id)!;
+        const expansionStarted =
+            step!.paused_action === "expand_once_then_resume" &&
+            Number(facts.wilderness_orders_accepted || 0) > Number(baseline.wilderness_orders_accepted || 0);
+        const stepPaused = pausesForStep(step!) && !expansionStarted;
         if (exchange) {
             const exchangeLine = exchange.lines[exchange.index];
             const paused =
                 exchange.phase === "dialogue" ||
                 (exchange.reactionInstance !== null &&
                 typeof activeReaction?.reaction.pause_game === "boolean"
-                    ? activeReaction.reaction.pause_game
-                    : pausesForStep(step!));
+                    ? activeReaction.reaction.pause_game || stepPaused
+                    : stepPaused);
             const modalLine: CampaignStep | null =
                 exchange.phase === "dialogue"
                     ? {
@@ -712,7 +716,7 @@ export function create(
                 step: response,
                 line: response,
                 progress: progress(),
-                paused: true,
+                paused: reaction.pause_game === false ? stepPaused : true,
                 paused_action: null,
                 done: false,
                 choices: reaction.choices || [],
@@ -728,10 +732,7 @@ export function create(
         }
         const line = step!.lines ? step!.lines[state.line] : step;
         const waitRemainingMs = waitUntilMs === null ? 0 : Math.max(0, waitUntilMs - currentTimeMs);
-        const expansionStarted =
-            step!.paused_action === "expand_once_then_resume" &&
-            Number(facts.wilderness_orders_accepted || 0) > Number(baseline.wilderness_orders_accepted || 0);
-        const paused = pausesForStep(step!) && !expansionStarted;
+        const paused = stepPaused;
         return {
             definition,
             step,
@@ -779,6 +780,10 @@ export function create(
     }
     function beginExchange(lines: CampaignRecord[], reactionInstance: string | null) {
         const next: QueuedExchange = { lines, reactionInstance, ownerStepId: state.id };
+        if (!exchange && reactionInstance === null && activeReaction?.reaction.pause_game === false) {
+            exchangeQueue.push(next);
+            return;
+        }
         if (exchange && exchange.phase !== "dialogue") {
             exchangeQueue.push(next);
             return;
@@ -925,6 +930,7 @@ export function create(
         if (hooks && typeof hooks.onStepComplete === "function") hooks.onStepComplete(reaction);
         if (hooks && typeof hooks.onReactionComplete === "function")
             hooks.onReactionComplete(reaction, target);
+        startQueuedExchange();
     }
     function advance(choiceId?: string | null, expectedStepId?: string, allowUnavailable = false) {
         if (state.done || externallyPaused) return false;
@@ -1061,7 +1067,12 @@ export function create(
                     }
                 }
             }
-            if (activeReaction && (!exchange || exchange.phase === "dialogue")) return view();
+            if (
+                activeReaction &&
+                activeReaction.reaction.pause_game !== false &&
+                (!exchange || exchange.phase === "dialogue")
+            )
+                return view();
             // Exchange-only scenes move the hand immediately for emotes and after Continue for dialogue.
             if (exchangeOnlyScene(step!) && (!exchange || backgroundExchangeScene(step!))) {
                 if (!advance(null, step!.id)) break;

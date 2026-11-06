@@ -388,6 +388,12 @@ pub struct SowEngine {
     pub legacy_elimination_rewards: bool,
     pub building_aggregates: Vec<BuildingAggregate>,
     pub building_aggregates_dirty: bool,
+    /// Claims survive checkpoints; a recaptured city cannot mint another reward.
+    #[serde(default)]
+    pub(crate) hero_claims: std::collections::BTreeSet<(PlayerId, u64, u8)>,
+    /// Continuous economy cues fire on entry, rather than every income tick.
+    #[serde(default)]
+    pub(crate) hero_income_active: std::collections::BTreeSet<PlayerId>,
     pub sea_lanes_dirty: bool,
     pub sea_lane_calc: Option<SeaLaneCalcState>,
 
@@ -520,6 +526,8 @@ impl SowEngine {
             legacy_elimination_rewards: false,
             building_aggregates: Vec::with_capacity(256),
             building_aggregates_dirty: true,
+            hero_claims: Default::default(),
+            hero_income_active: Default::default(),
             sea_lanes_dirty: true,
             sea_lane_calc: None,
 
@@ -671,9 +679,6 @@ impl SowEngine {
     /// Ticks a final capture may wait for its last line before it resolves without a reply (10 ticks per second).
     pub(crate) const PRE_DEFEAT_HOLD_TICKS: u64 = 600;
 
-    /// Share of its peak land (in percent) a watched faction may keep before its last-words exchange holds the next capture (65% lost).
-    pub(crate) const PRE_DEFEAT_REMAINING_PERCENT: u64 = 35;
-
     /// Whether this owner's final capture is part of an active pre-defeat watch.
     pub(crate) fn pre_defeat_watches(
         targets: &std::collections::HashSet<PlayerId>,
@@ -683,11 +688,9 @@ impl SowEngine {
         targets.contains(&owner) || pending == Some(owner)
     }
 
-    /// Whether a watched faction has lost enough land to hold for its last-words exchange; the final tile always does.
+    /// Whether a watched faction is down to its final tile before the last capture.
     pub(crate) fn pre_defeat_reached(player: &crate::player::Player) -> bool {
         player.tile_count <= 1
-            || u64::from(player.tile_count) * 100
-                <= u64::from(player.max_tile_count) * Self::PRE_DEFEAT_REMAINING_PERCENT
     }
 
     /// Lets a waiting final capture resolve when its last line never finishes.
@@ -695,7 +698,12 @@ impl SowEngine {
         let Some(owner) = self.campaign_pre_defeat_pending else {
             return;
         };
-        if self.state.tick.saturating_sub(self.campaign_pre_defeat_since) < Self::PRE_DEFEAT_HOLD_TICKS {
+        if self
+            .state
+            .tick
+            .saturating_sub(self.campaign_pre_defeat_since)
+            < Self::PRE_DEFEAT_HOLD_TICKS
+        {
             return;
         }
         self.campaign_pre_defeat_pending = None;
@@ -708,7 +716,10 @@ impl SowEngine {
             .iter()
             .filter_map(|faction_id| self.campaign_player_id(faction_id))
             .collect();
-        if self.campaign_pre_defeat_pending.is_some_and(|player_id| !self.campaign_pre_defeat_targets.contains(&player_id)) {
+        if self
+            .campaign_pre_defeat_pending
+            .is_some_and(|player_id| !self.campaign_pre_defeat_targets.contains(&player_id))
+        {
             self.campaign_pre_defeat_pending = None;
         }
     }
@@ -1014,15 +1025,12 @@ impl SowEngine {
         self.clear_campaign_assaults_for(victim_id);
 
         // 2. Transfer gold and award kill/assists (hero elimination-gold ability).
-        let killer_multiplier = self
-            .state
-            .player(conqueror_id)
-            .map_or(1.0, |player| {
-                player.leader.resource_bonus_multiplier(
-                    crate::geo_entities::Source::Elimination,
-                    crate::geo_entities::Resource::Gold,
-                )
-            });
+        let killer_multiplier = self.state.player(conqueror_id).map_or(1.0, |player| {
+            player.leader.resource_bonus_multiplier(
+                crate::geo_entities::Source::Elimination,
+                crate::geo_entities::Resource::Gold,
+            )
+        });
         let troop_bounty = self.state.player(conqueror_id).map_or(0.0, |player| {
             crate::execution::income_rates::elimination_troop_bounty(
                 player.leader,
@@ -1907,12 +1915,20 @@ mod tests {
         let mut state = GameState::new(1, 4, 4, GameConfig::default());
         state.config.tutorial = true;
         let mut engine = SowEngine::new(state, WaterComponents::default());
-        engine.campaign_faction_ids.insert(7, "colonia_veterans".into());
+        engine
+            .campaign_faction_ids
+            .insert(7, "colonia_veterans".into());
         engine.set_campaign_pre_defeat_targets(&["colonia_veterans".into(), "unknown".into()]);
-        assert_eq!(engine.campaign_pre_defeat_targets, std::collections::HashSet::from([7]));
+        assert_eq!(
+            engine.campaign_pre_defeat_targets,
+            std::collections::HashSet::from([7])
+        );
 
         engine.campaign_pre_defeat_pending = Some(7);
-        assert_eq!(engine.campaign_pre_defeat_faction_id(), Some("colonia_veterans"));
+        assert_eq!(
+            engine.campaign_pre_defeat_faction_id(),
+            Some("colonia_veterans")
+        );
         assert!(!engine.continue_campaign_pre_defeat("tax_collectors"));
         assert_eq!(engine.campaign_pre_defeat_pending, Some(7));
         assert!(engine.continue_campaign_pre_defeat("colonia_veterans"));
@@ -1922,7 +1938,10 @@ mod tests {
         engine.set_campaign_pre_defeat_targets(&["colonia_veterans".into()]);
         engine.campaign_pre_defeat_pending = Some(7);
         engine.set_campaign_pre_defeat_targets(&[]);
-        assert_eq!(engine.campaign_pre_defeat_pending, None, "removing the active story hold releases a stale final capture");
+        assert_eq!(
+            engine.campaign_pre_defeat_pending, None,
+            "removing the active story hold releases a stale final capture"
+        );
     }
 
     #[test]
@@ -1930,7 +1949,9 @@ mod tests {
         let mut state = GameState::new(1, 4, 4, GameConfig::default());
         state.config.tutorial = true;
         let mut engine = SowEngine::new(state, WaterComponents::default());
-        engine.campaign_faction_ids.insert(7, "colonia_veterans".into());
+        engine
+            .campaign_faction_ids
+            .insert(7, "colonia_veterans".into());
         engine.set_campaign_pre_defeat_targets(&["colonia_veterans".into()]);
         engine.campaign_pre_defeat_pending = Some(7);
         engine.campaign_pre_defeat_since = 10;
@@ -2203,18 +2224,59 @@ mod tests {
             engine.campaign_relations.get(&trinovantes),
             Some(&CampaignRelation::Allied)
         );
-        assert!(engine.state.player(1).unwrap().alliances.contains(&trinovantes));
-        assert!(engine.state.player(trinovantes).unwrap().alliances.contains(&1));
+        assert!(
+            engine
+                .state
+                .player(1)
+                .unwrap()
+                .alliances
+                .contains(&trinovantes)
+        );
+        assert!(
+            engine
+                .state
+                .player(trinovantes)
+                .unwrap()
+                .alliances
+                .contains(&1)
+        );
 
-        assert!(!engine.campaign_faction_emote("missing_faction", Some(crate::emote::EmoteKind::Greet), false));
-        assert!(engine.campaign_faction_emote("trinovantes", Some(crate::emote::EmoteKind::Greet), false));
+        assert!(!engine.campaign_faction_emote(
+            "missing_faction",
+            Some(crate::emote::EmoteKind::Greet),
+            false
+        ));
+        assert!(engine.campaign_faction_emote(
+            "trinovantes",
+            Some(crate::emote::EmoteKind::Greet),
+            false
+        ));
         assert_eq!(
-            engine.state.player(trinovantes).unwrap().active_emote.map(|emote| emote.kind),
+            engine
+                .state
+                .player(trinovantes)
+                .unwrap()
+                .active_emote
+                .map(|emote| emote.kind),
             Some(crate::emote::EmoteKind::Greet)
         );
-        assert!(engine.state.player(trinovantes).unwrap().active_emote.is_some_and(|emote| emote.scripted));
+        assert!(
+            engine
+                .state
+                .player(trinovantes)
+                .unwrap()
+                .active_emote
+                .is_some_and(|emote| emote.scripted)
+        );
         assert!(engine.campaign_faction_emote("trinovantes", None, false));
-        assert!(engine.state.player(trinovantes).unwrap().active_emote.is_none());
+        assert!(
+            engine
+                .state
+                .player(trinovantes)
+                .unwrap()
+                .active_emote
+                .is_none()
+        );
 
         assert!(!engine.halt_campaign_faction("missing_faction"));
         engine.campaign_support_next_tick.insert(trinovantes, 100);

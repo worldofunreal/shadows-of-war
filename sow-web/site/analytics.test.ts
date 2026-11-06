@@ -51,6 +51,7 @@ function element(tag) {
 function start({
   fetchImpl = async () => ({ ok: true }),
   pathname = "/",
+  search = "",
   gameShell = false,
   choice = null,
 } = {}) {
@@ -82,7 +83,7 @@ function start({
     },
   };
   const window = {
-    location: { hostname: "shadowsofwar.io", pathname, search: "" },
+    location: { hostname: "shadowsofwar.io", pathname, search },
     addEventListener(name, handler) {
       windowListeners.set(name, handler);
     },
@@ -207,6 +208,16 @@ test("accepting sends consented events only to the first-party endpoint", () => 
   assert.equal(batch.events[0].portal, "site");
   assert.equal(batch.events[0].platform, "web");
   assert.equal(batch.events[0].device_class, "mobile");
+});
+
+test("landing visit keeps only a short lowercase source tag from the link", () => {
+  const tagged = start({ search: "?ref=Reddit", choice: "accepted" });
+  const [visit] = JSON.parse(tagged.session.getItem("sow_analytics_queue_v2"));
+  assert.equal(visit.name, "landing_visit");
+  assert.deepEqual(visit.props, { ref: "reddit" });
+
+  const unsafe = start({ search: "?ref=me@example.com", choice: "accepted" });
+  assert.equal(JSON.parse(unsafe.session.getItem("sow_analytics_queue_v2"))[0].props, undefined);
 });
 
 test("direct game entry does not prompt or create/send analytics without consent", () => {

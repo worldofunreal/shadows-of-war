@@ -41,9 +41,18 @@ def main():
         kind = ability["kind"] + (f" ({extra})" if extra else "")
         icon = f"gameplay/icons/abilities/{hero['hero'].get('art_slug') or hero['id']}.webp"
         hero_name = heroes_strings.get(f"leader_{hero_id}_name", hero["hero"]["name"])
+        number = (
+            f"{ability['percent']}%" if 'percent' in ability else
+            f"{ability['gold']} gold" if 'gold' in ability else
+            f"{ability['troops']} troops" if 'troops' in ability else
+            f"{ability['troops_per_gold']} troops/gold" if 'troops_per_gold' in ability else
+            f"{ability['gold_per_second']} gold/s/level" if 'gold_per_second' in ability else
+            "1 port/match" if ability['kind'] == 'coastal_founding' else
+            "1 tower level/city upgrade"
+        )
         lines.append(
             f"| {hero_name} | {name} | {description} | {kind} | "
-            f"{ability['percent']}% | `{icon}` |"
+            f"{number} | `{icon}` |"
         )
 
     OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")

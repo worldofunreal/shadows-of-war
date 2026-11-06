@@ -72,6 +72,8 @@ pub enum Ability {
     /// City tiles: a defender's city needs `percent` more effort to capture;
     /// an attacker captures city tiles `percent` faster.
     CityCapture { side: Side, percent: u32 },
+    /// City tiles resist attacks from `against` by `percent` more capture effort.
+    CityDefense { against: Target, percent: u32 },
     /// Attackers lose `percent` fewer troops when `when` holds.
     AttackerLoss { when: LossWhen, percent: u32 },
     /// Cities raise the troop cap more.
@@ -80,9 +82,31 @@ pub enum Ability {
     TowerRange { percent: u32 },
     /// Campaign alliances with `against` cost this much less gold.
     AllianceCost { against: Target, percent: u32 },
+    /// Building a warship costs this much less gold.
+    WarshipCost { percent: u32 },
     /// Enemy armies of `against` retreating from this hero's land keep fewer
     /// troops: the retreat penalty is multiplied by `1 + percent/100`.
     EnemyRetreatPenalty { against: Target, percent: u32 },
+    /// Establish one free port after gaining an enemy coast with a legal site.
+    CoastalFounding,
+    /// A living ally's newly completed city pays both rulers once.
+    AlliedCityGrant { gold: u32 },
+    /// Completing a city upgrade raises a nearby ready tower by one level.
+    CityTowerUpgrade,
+    /// A newly captured enemy city pays a fixed purse shared with living allies.
+    SharedCitySpoils { gold: u32 },
+    /// Losing a city mobilizes reserves once per city, within the troop cap.
+    CityEvacuation { troops: u32 },
+    /// A retreat after at least three seconds opens a thirty-second return window.
+    ReturnCampaign { percent: u32 },
+    /// Receive a share of the strongest larger ally's ordinary gold production.
+    AllyPatronage { percent: u32 },
+    /// At peace, convert otherwise wasted troop production into gold.
+    SurplusTreasury { troops_per_gold: u32 },
+    /// Factory levels near a ready city pay additional gold.
+    GuildNetwork { gold_per_second: u32 },
+    /// A lethal naval shell takes an enemy warship as a damaged prize.
+    WarshipPrize { percent: u32 },
 }
 
 /// Who an attack, conquest or retreat is aimed at. `Larger`, `Smaller`, `Richer`,
@@ -197,15 +221,28 @@ impl Ability {
             | Ability::ResourceBonus { percent, .. }
             | Ability::TowerLoss { percent, .. }
             | Ability::CityCapture { percent, .. }
+            | Ability::CityDefense { percent, .. }
             | Ability::AttackerLoss { percent, .. }
             | Ability::CityTroopCapacity { percent }
             | Ability::TowerRange { percent }
             | Ability::AllianceCost { percent, .. }
+            | Ability::WarshipCost { percent }
+            | Ability::ReturnCampaign { percent }
+            | Ability::AllyPatronage { percent }
+            | Ability::WarshipPrize { percent }
             | Ability::EnemyRetreatPenalty { percent, .. } => percent,
+            Ability::CoastalFounding
+            | Ability::AlliedCityGrant { .. }
+            | Ability::CityTowerUpgrade
+            | Ability::SharedCitySpoils { .. }
+            | Ability::CityEvacuation { .. }
+            | Ability::SurplusTreasury { .. }
+            | Ability::GuildNetwork { .. } => 0,
         }
     }
 
-    /// The same ability with size zero, used to select a control case for effect tests.
+    /// The same situation with its magnitude removed; fixed actions stay unchanged.
+    /// Used for uniqueness and to select control cases in effect tests.
     pub fn situation(self) -> Ability {
         match self {
             Ability::AttackStrength { against, .. } => Ability::AttackStrength {
@@ -229,6 +266,10 @@ impl Ability {
             },
             Ability::TowerLoss { side, .. } => Ability::TowerLoss { side, percent: 0 },
             Ability::CityCapture { side, .. } => Ability::CityCapture { side, percent: 0 },
+            Ability::CityDefense { against, .. } => Ability::CityDefense {
+                against,
+                percent: 0,
+            },
             Ability::AttackerLoss { when, .. } => Ability::AttackerLoss { when, percent: 0 },
             Ability::CityTroopCapacity { .. } => Ability::CityTroopCapacity { percent: 0 },
             Ability::TowerRange { .. } => Ability::TowerRange { percent: 0 },
@@ -236,10 +277,20 @@ impl Ability {
                 against,
                 percent: 0,
             },
+            Ability::WarshipCost { .. } => Ability::WarshipCost { percent: 0 },
             Ability::EnemyRetreatPenalty { against, .. } => Ability::EnemyRetreatPenalty {
                 against,
                 percent: 0,
             },
+            Ability::ReturnCampaign { .. } => Ability::ReturnCampaign { percent: 0 },
+            Ability::AllyPatronage { .. } => Ability::AllyPatronage { percent: 0 },
+            Ability::WarshipPrize { .. } => Ability::WarshipPrize { percent: 0 },
+            Ability::AlliedCityGrant { .. } => Ability::AlliedCityGrant { gold: 0 },
+            Ability::SharedCitySpoils { .. } => Ability::SharedCitySpoils { gold: 0 },
+            Ability::CityEvacuation { .. } => Ability::CityEvacuation { troops: 0 },
+            Ability::SurplusTreasury { .. } => Ability::SurplusTreasury { troops_per_gold: 0 },
+            Ability::GuildNetwork { .. } => Ability::GuildNetwork { gold_per_second: 0 },
+            Ability::CoastalFounding | Ability::CityTowerUpgrade => self,
         }
     }
 
@@ -250,10 +301,21 @@ impl Ability {
             Ability::ConquestSpeed { .. } => Cue::Conquest,
             Ability::ResourceBonus { .. } => Cue::Income,
             Ability::TowerLoss { .. } | Ability::TowerRange { .. } => Cue::Tower,
-            Ability::CityCapture { .. } | Ability::CityTroopCapacity { .. } => Cue::City,
+            Ability::CityCapture { .. }
+            | Ability::CityDefense { .. }
+            | Ability::CityTroopCapacity { .. } => Cue::City,
             Ability::AttackerLoss { .. } => Cue::Losses,
             Ability::AllianceCost { .. } => Cue::Alliance,
+            Ability::WarshipCost { .. } => Cue::Naval,
             Ability::EnemyRetreatPenalty { .. } => Cue::Retreat,
+            Ability::CoastalFounding | Ability::WarshipPrize { .. } => Cue::Naval,
+            Ability::AlliedCityGrant { .. }
+            | Ability::SharedCitySpoils { .. }
+            | Ability::AllyPatronage { .. } => Cue::Alliance,
+            Ability::CityTowerUpgrade => Cue::Tower,
+            Ability::CityEvacuation { .. } => Cue::Retreat,
+            Ability::ReturnCampaign { .. } => Cue::Strength,
+            Ability::SurplusTreasury { .. } | Ability::GuildNetwork { .. } => Cue::Income,
         }
     }
 }
@@ -270,11 +332,12 @@ pub enum Cue {
     Losses,
     Alliance,
     Retreat,
+    Naval,
 }
 
 impl Cue {
     /// Every family, so each one can be checked for its own colour.
-    pub const ALL: [Cue; 8] = [
+    pub const ALL: [Cue; 9] = [
         Cue::Strength,
         Cue::Conquest,
         Cue::Income,
@@ -283,6 +346,7 @@ impl Cue {
         Cue::Losses,
         Cue::Alliance,
         Cue::Retreat,
+        Cue::Naval,
     ];
 }
 

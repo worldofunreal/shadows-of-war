@@ -528,6 +528,7 @@ export interface MenuHudPayload {
     max_troops: number;
     troop_rate: number;
     gold_rate: number;
+    hero_income_rate?: number;
     attack_ratio: number;
     operations: HudCombatOperation[];
     spawn_timer_secs: number | null;

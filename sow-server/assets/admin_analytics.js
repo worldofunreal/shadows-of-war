@@ -1,6 +1,7 @@
 (() => {
   // sow-server/assets/admin_analytics.ts
   var DEVICE_EVENTS = ["matchmaking_joined", "match_started_client", "match_ended_client", "match_exit"];
+  var SOURCE_EVENTS = ["landing_visit", "play_now_click", "match_started_client", "match_ended_client"];
   function $(id) {
     return document.getElementById(id);
   }
@@ -43,13 +44,13 @@
       return box;
     }));
   }
-  function renderDimensions(id, dimensions) {
+  function renderDimensions(id, dimensions, columns = DEVICE_EVENTS) {
     const total = (counts) => Object.values(counts).reduce((sum, value) => sum + value, 0);
-    rows($(id), Object.entries(dimensions || {}).sort((a, b) => total(b[1]) - total(a[1])), (row, [label, events]) => {
+    rows($(id), Object.entries(dimensions || {}).sort((a, b) => total(b[1]) - total(a[1])), (row, [label, counts]) => {
       cell(row, label);
-      cell(row, total(events).toLocaleString());
-      for (const name of DEVICE_EVENTS)
-        cell(row, Number(events[name] || 0).toLocaleString());
+      cell(row, total(counts).toLocaleString());
+      for (const name of columns)
+        cell(row, Number(counts[name] || 0).toLocaleString());
     });
   }
   function renderRetention(windows) {
@@ -81,6 +82,7 @@
     });
     renderDimensions("by-build", report.dimensions?.build);
     renderDimensions("by-device", report.dimensions?.device_class);
+    renderDimensions("by-source", report.dimensions?.source, SOURCE_EVENTS);
     rows($("tutorial-steps"), report.tutorial_steps || [], (row, step) => {
       cell(row, step.episode_id);
       cell(row, String(step.step_id || "").replaceAll("_", " "));

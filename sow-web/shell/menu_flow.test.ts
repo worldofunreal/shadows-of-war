@@ -1094,6 +1094,61 @@ test("SOW retries a rejected profile once per login and preserves the selected a
     assert.equal(refreshCalls, 2);
 });
 
+test("SOW takes linked identities from the full account, not the saved card", async () => {
+    const getStart = portalSource.indexOf("window.SOW_getWouSession = function ()");
+    const getEnd = portalSource.indexOf("window.SOW_getAuthState = function ()", getStart);
+    const refreshStart = portalSource.indexOf("function refreshWouAccount()");
+    const refreshEnd = portalSource.indexOf("function emitAuthStateChange()", refreshStart);
+    assert.ok(getStart >= 0 && getEnd > getStart && refreshStart >= 0 && refreshEnd > refreshStart);
+    const savedCard = { account_id: "account-1", linked_identities: [] };
+    const fullAccount = {
+        account_id: "account-1",
+        email: "player@example.com",
+        linked_identities: [{ provider: "email", external_id: "player@example.com" }],
+    };
+    let getMeCalls = 0;
+    const context = vm.createContext({
+        window: {
+            SOW_WOU_SESSION_STATUS: "ready",
+            SOW_isSowProductionHost: () => true,
+            currentSession: { token: "jwt-1", accountId: "account-1", user: savedCard },
+            wouAuth: {
+                getMe() {
+                    getMeCalls += 1;
+                    return Promise.resolve(fullAccount);
+                },
+            },
+            authEvents: 0,
+        },
+    });
+    vm.runInContext(
+        [
+            "let wouAccount = null;",
+            'let wouAccountToken = "";',
+            "function readWouSession() { return Object.assign({}, window.currentSession); }",
+            "function emitAuthStateChange() { window.authEvents += 1; }",
+            portalSource.slice(refreshStart, refreshEnd),
+            portalSource.slice(getStart, getEnd),
+            "this.__refreshWouAccount = refreshWouAccount;",
+        ].join("\n"),
+        context,
+    );
+
+    assert.deepEqual(context.window.SOW_getWouSession().user, savedCard);
+    context.__refreshWouAccount();
+    context.__refreshWouAccount();
+    assert.equal(getMeCalls, 1);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(context.window.authEvents, 1);
+    assert.deepEqual(context.window.SOW_getWouSession().user, fullAccount);
+
+    context.window.currentSession = { token: "jwt-2", accountId: "account-1", user: savedCard };
+    assert.deepEqual(context.window.SOW_getWouSession().user, savedCard);
+
+    context.window.SOW_WOU_SESSION_STATUS = "reauthentication_required";
+    assert.equal(context.window.SOW_getWouSession().token, "");
+});
+
 test("SOW account acceptance requires confirmation before changing WOU-ID accounts", () => {
     const acceptStart = portalSource.indexOf("window.SOW_acceptWouSession = function (data)");
     const signOutStart = portalSource.indexOf("window.SOW_signOutWou = function ()", acceptStart);

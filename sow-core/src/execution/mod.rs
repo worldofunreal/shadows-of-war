@@ -9,6 +9,7 @@ use wyrand::WyRand;
 pub mod combat;
 #[cfg(test)]
 mod hero_ability_tests;
+pub mod hero_effects;
 pub mod income;
 pub mod income_rates;
 pub mod nukes;
@@ -154,9 +155,15 @@ mod troop_return_tests {
 
         refund_fleet_troops_to_player(&mut state, 1, 250.0);
         assert_eq!(state.player(1).unwrap().troops, 1_000.0);
-        assert_eq!(state.player(1).unwrap().troops_received, received_before + 100.0);
+        assert_eq!(
+            state.player(1).unwrap().troops_received,
+            received_before + 100.0
+        );
 
         state.player_mut(1).unwrap().troops -= 500.0;
-        assert_eq!(state.player(1).unwrap().troops_received, received_before + 100.0);
+        assert_eq!(
+            state.player(1).unwrap().troops_received,
+            received_before + 100.0
+        );
     }
 }

@@ -25,6 +25,16 @@ use crate::water_components::WaterComponents;
 /// Targeted kinds get one experiment per target, shared by all their situations.
 fn measurement(ability: Ability) -> u16 {
     match ability.situation() {
+        Ability::CoastalFounding => 400,
+        Ability::AlliedCityGrant { .. } => 401,
+        Ability::CityTowerUpgrade => 402,
+        Ability::SharedCitySpoils { .. } => 403,
+        Ability::CityEvacuation { .. } => 404,
+        Ability::ReturnCampaign { .. } => 405,
+        Ability::AllyPatronage { .. } => 406,
+        Ability::SurplusTreasury { .. } => 407,
+        Ability::GuildNetwork { .. } => 408,
+        Ability::WarshipPrize { .. } => 409,
         Ability::AttackStrength { against, .. } => 100 + target_index(against),
         Ability::ConquestSpeed { against, .. } => 120 + target_index(against),
         Ability::DefenseStrength { against, .. } => 300 + target_index(against),
@@ -67,7 +77,9 @@ fn measurement(ability: Ability) -> u16 {
             side: Side::Attacker,
             ..
         } => 9,
+        Ability::CityDefense { against, .. } => 240 + target_index(against),
         Ability::AllianceCost { against, .. } => 200 + target_index(against),
+        Ability::WarshipCost { .. } => 42,
         Ability::ResourceBonus {
             source: Source::Alliance,
             resource: Resource::Gold,
@@ -227,7 +239,14 @@ fn attack_with_rival_troops(
     ticks: u32,
     rival_troops: f64,
 ) -> Marks {
-    attack_with_troops(engine, target_owner, ticks, 20_000.0, 10_000.0, rival_troops)
+    attack_with_troops(
+        engine,
+        target_owner,
+        ticks,
+        20_000.0,
+        10_000.0,
+        rival_troops,
+    )
 }
 
 fn attack_with_troops(
@@ -628,6 +647,20 @@ fn tiles_taken_from_city(attacker: Leader, defender: Leader) -> (f64, Marks) {
     (f64::from(engine.state.player(1).unwrap().tile_count), marks)
 }
 
+/// City capture against a defender, with the attacker shaped to fit a targeted ability.
+fn tiles_taken_from_city_against(
+    attacker: Leader,
+    defender: Leader,
+    target: Target,
+) -> (f64, Marks) {
+    let mut engine = arena(24, 4, attacker, Some(defender));
+    shape_subject(&mut engine, 1, target);
+    add_building(&mut engine, 2, 6, 12, BuildingKind::City);
+    engine.refresh_building_grid();
+    let marks = attack(&mut engine, 2, 20);
+    (f64::from(engine.state.player(1).unwrap().tile_count), marks)
+}
+
 /// Exact troops player 1 has left: at home plus still attacking.
 fn attacker_troop_total(engine: &SowEngine) -> f64 {
     let player = engine.state.player(1).unwrap();
@@ -743,9 +776,25 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
         let base = baseline_for(hero);
         let ability = hero.ability();
         let (changed, shown, control) = match ability.situation() {
+            Ability::CoastalFounding
+            | Ability::AlliedCityGrant { .. }
+            | Ability::CityTowerUpgrade
+            | Ability::SharedCitySpoils { .. }
+            | Ability::CityEvacuation { .. }
+            | Ability::ReturnCampaign { .. }
+            | Ability::AllyPatronage { .. }
+            | Ability::SurplusTreasury { .. }
+            | Ability::GuildNetwork { .. }
+            | Ability::WarshipPrize { .. } => {
+                let (value, shown) = redesigned_effect(hero, ability);
+                let (plain_value, control) = redesigned_effect(base, ability);
+                (value > plain_value, shown, control)
+            }
+
             Ability::AttackStrength { against, .. } => {
-                let (strengthened, shown) = attack_target(hero, against);
-                let (control, control_shown) = attack_target(plain, against);
+                let ticks = if against == Target::Neutral { 4 } else { 20 };
+                let (strengthened, shown) = attack_target_for_ticks(hero, against, ticks);
+                let (control, control_shown) = attack_target_for_ticks(plain, against, ticks);
                 let changed = strengthened.state.player(1).unwrap().tile_count
                     > control.state.player(1).unwrap().tile_count
                     || attacker_troops_left(&strengthened) > attacker_troops_left(&control);
@@ -853,10 +902,21 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
                 let (base_taken, control_shown) = tiles_taken_from_city(plain, plain);
                 (taken > base_taken, shown[1], control_shown[1])
             }
+            Ability::CityDefense { against, .. } => {
+                let (taken, shown) = tiles_taken_from_city_against(plain, hero, against);
+                let (base_taken, control_shown) =
+                    tiles_taken_from_city_against(plain, plain, against);
+                (taken < base_taken, shown[2], control_shown[2])
+            }
             Ability::AllianceCost { against, .. } => {
                 let (price, shown) = alliance_price_against(hero, against);
                 let (plain_price, control_shown) = alliance_price_against(plain, against);
                 (price < plain_price, shown[1], control_shown[1])
+            }
+            Ability::WarshipCost { .. } => {
+                let (price, shown) = warship_purchase(hero);
+                let (plain_price, control_shown) = warship_purchase(plain);
+                (price < plain_price, shown, control_shown)
             }
             Ability::ResourceBonus {
                 source: Source::Alliance,
@@ -983,14 +1043,53 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
     }
 }
 
+/// Build one real warship through the authoritative intent path and return its price
+/// and ability marks. The all-water map gives the port and target one connected sea.
+fn warship_purchase(leader: Leader) -> (f64, usize) {
+    let mut engine = engine_with_ports(&[port(1, 1, 10 * 64 + 10)], vec![]);
+    engine.state.player_mut(1).unwrap().leader = leader;
+    engine.state.player_mut(1).unwrap().gold = 1_000.0;
+    engine.state.map.terrain.fill(MapTile::from_byte(0x20));
+    engine.state.map.terrain[10 * 64 + 10] = MapTile::from_byte(0x80);
+    engine.state.map.compute_shorelines();
+    engine.water = WaterComponents::compute(&engine.state.map, |_| {});
+    send(
+        &mut engine,
+        1,
+        GameplayIntent::BuildShip {
+            target_tile: 20 * 64 + 20,
+            kind: UnitType::Warship,
+        },
+    );
+    assert!(
+        engine
+            .state
+            .events
+            .iter()
+            .any(|event| matches!(event, GameEvent::WarshipSpawned { owner_id: 1, .. })),
+        "{leader:?} warship purchase failed: {:?}",
+        engine.state.events
+    );
+    let cost = 1_000.0 - engine.state.player(1).unwrap().gold;
+    let marks = owner_marks(&engine)[1];
+    (cost, marks)
+}
+
 #[test]
 fn every_hero_has_a_catalog_ability() {
     for hero in Leader::all() {
         let ability = hero.ability();
-        assert!(
-            ability.percent() > 0,
-            "{hero:?} has a zero-strength ability"
-        );
+        // Fixed actions and resource amounts have no percentage. Validate their
+        // actual magnitude instead of inventing a percentage for them.
+        let magnitude = match ability {
+            Ability::CoastalFounding | Ability::CityTowerUpgrade => 1,
+            Ability::AlliedCityGrant { gold } | Ability::SharedCitySpoils { gold } => gold,
+            Ability::CityEvacuation { troops } => troops,
+            Ability::SurplusTreasury { troops_per_gold } => troops_per_gold,
+            Ability::GuildNetwork { gold_per_second } => gold_per_second,
+            _ => ability.percent(),
+        };
+        assert!(magnitude > 0, "{hero:?} has a zero-strength ability");
     }
 }
 
@@ -1042,7 +1141,10 @@ fn windradyne_defends_against_a_larger_rival() {
         "the bonus reduces the attacker's gains: hero {tiles} {marks:?}, control {control_tiles} {control_marks:?}"
     );
     assert!(marks[2] >= 1, "Windradyne shows the defense mark");
-    assert_eq!(control_marks[2], 0, "a hero without the ability shows no mark");
+    assert_eq!(
+        control_marks[2], 0,
+        "a hero without the ability shows no mark"
+    );
 }
 
 #[test]
@@ -1060,13 +1162,15 @@ fn yagan_attacks_foreign_people_with_strength() {
     let (empowered, marks) = attack_target(hero, Target::Foreign);
     let (control, control_marks) = attack_target(Leader::of("caesar"), Target::Foreign);
     assert!(
-        empowered.state.player(1).unwrap().tile_count
-            > control.state.player(1).unwrap().tile_count
+        empowered.state.player(1).unwrap().tile_count > control.state.player(1).unwrap().tile_count
             || attacker_troops_left(&empowered) > attacker_troops_left(&control),
         "Yagan's attack bonus changes the battle"
     );
     assert_eq!(marks[1], 1, "Yagan shows the attack mark");
-    assert_eq!(control_marks[1], 0, "a hero without the ability shows no mark");
+    assert_eq!(
+        control_marks[1], 0,
+        "a hero without the ability shows no mark"
+    );
 }
 
 fn send(engine: &mut SowEngine, player_id: u16, intent: GameplayIntent) {
@@ -1396,7 +1500,8 @@ fn army_loss_per_tile(engine: &mut SowEngine, ticks: u32) -> (f64, Marks) {
 /// `attack_target`), and the marks shown.
 fn cost_per_tile_against(attacker: Leader, target: Target) -> (f64, Marks) {
     let mut engine = launch_target(attacker, target);
-    army_loss_per_tile(&mut engine, 20)
+    let ticks = if target == Target::Neutral { 1 } else { 20 };
+    army_loss_per_tile(&mut engine, ticks)
 }
 
 /// Troops the attacking army loses per tile when its first front runs through a plain
@@ -1778,4 +1883,562 @@ fn boleslaw_conquest_announces_to_a_foreign_target_only() {
             "{target:?} must not announce"
         );
     }
+}
+
+/// Exercise the live completion, ownership, projectile and income paths for the
+/// redesigned situations. Controls use the identical world and another leader.
+fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
+    let mut e = arena(64, 32, leader, Some(Leader::of("cleopatra")));
+    let make = |id, owner_id, kind, x: u32, y: u32, level, under| Building {
+        id,
+        owner_id,
+        kind,
+        tile_idx: y * 64 + x,
+        level,
+        under_construction: under,
+        ticks_until_complete: u32::from(under),
+    };
+    match situation {
+        Ability::CoastalFounding => {
+            for x in 0..64 {
+                for y in 0..4 {
+                    e.state.map.terrain[(y * 64 + x) as usize] = MapTile::from_byte(0x20);
+                }
+            }
+            e.state.map.compute_shorelines();
+            // An enemy-coast capture opens a valid port site on our bank.
+            e.state.set_tile_owner(32, 4, 1);
+            e.state.events.push(GameEvent::TileCaptured {
+                x: 32,
+                y: 4,
+                new_owner: 1,
+                previous_owner: 2,
+                troops: 100.0,
+            });
+            e.hero_coastal_foundings();
+            let count = e.buildings.len();
+            e.hero_coastal_foundings();
+            assert_eq!(e.buildings.len(), count, "founding is once per match");
+            (count as f64, owner_marks(&e)[1])
+        }
+        Ability::AlliedCityGrant { .. } => {
+            e.state.player_mut(1).unwrap().alliances.push(2);
+            e.state.player_mut(2).unwrap().alliances.push(1);
+            e.add_building(make(1, 2, BuildingKind::City, 40, 40, 1, true));
+            let before = e.state.player(1).unwrap().gold;
+            e.execute_construction();
+            let value = e.state.player(1).unwrap().gold - before;
+            assert_eq!(
+                e.state.player(2).unwrap().gold - before,
+                value,
+                "both receive the grant"
+            );
+            (value, owner_marks(&e)[1])
+        }
+        Ability::CityTowerUpgrade => {
+            e.add_building(make(1, 1, BuildingKind::City, 16, 16, 2, true));
+            e.add_building(make(2, 1, BuildingKind::Tower, 24, 16, 1, false));
+            e.execute_construction();
+            (f64::from(e.buildings[1].level), owner_marks(&e)[1])
+        }
+        Ability::SharedCitySpoils { .. } => {
+            let before = e.state.player(1).unwrap().gold;
+            e.add_building(make(1, 2, BuildingKind::City, 40, 40, 1, false));
+            e.state.set_tile_owner(40, 40, 1);
+            e.sync_building_ownership();
+            let value = e.state.player(1).unwrap().gold - before;
+            e.state.set_tile_owner(40, 40, 2);
+            e.sync_building_ownership();
+            e.state.set_tile_owner(40, 40, 1);
+            e.sync_building_ownership();
+            assert_eq!(
+                e.state.player(1).unwrap().gold - before,
+                value,
+                "recapture cannot mint gold again"
+            );
+            (value, owner_marks(&e)[1])
+        }
+        Ability::CityEvacuation { .. } => {
+            e.state.player_mut(1).unwrap().troops = 100.0;
+            e.state.player_mut(1).unwrap().max_troops = 10_000.0;
+            e.add_building(make(1, 1, BuildingKind::City, 16, 16, 1, false));
+            e.state.set_tile_owner(16, 16, 2);
+            e.sync_building_ownership();
+            let value = e.state.player(1).unwrap().troops;
+            e.state.set_tile_owner(16, 16, 1);
+            e.sync_building_ownership();
+            e.state.set_tile_owner(16, 16, 2);
+            e.sync_building_ownership();
+            assert_eq!(
+                e.state.player(1).unwrap().troops,
+                value,
+                "each city has one reserve"
+            );
+            (value, owner_marks(&e)[1])
+        }
+        Ability::ReturnCampaign { .. } => {
+            e.state.player_mut(1).unwrap().troops = 20_000.0;
+            send(
+                &mut e,
+                1,
+                GameplayIntent::Attack(AttackIntent {
+                    target_owner: 2,
+                    troops: Some(5_000.0),
+                }),
+            );
+            let id = e.attacks[0].id;
+            e.state.tick = 31;
+            send(&mut e, 1, GameplayIntent::CancelAttack { attack_id: id });
+            e.execute_combat();
+            e.state.events.clear();
+            send(
+                &mut e,
+                1,
+                GameplayIntent::Attack(AttackIntent {
+                    target_owner: 2,
+                    troops: Some(1_000.0),
+                }),
+            );
+            let strength = attack_strength(&e.state, 1, 2, 1_000.0);
+            let shown = owner_marks(&e)[1];
+            if matches!(leader.ability(), Ability::ReturnCampaign { .. }) {
+                assert!(
+                    e.build_snapshot()
+                        .players
+                        .iter()
+                        .find(|p| p.id == 1)
+                        .unwrap()
+                        .empowered_attack
+                );
+                e.state.tick = 331;
+                assert!(
+                    !e.build_snapshot()
+                        .players
+                        .iter()
+                        .find(|p| p.id == 1)
+                        .unwrap()
+                        .empowered_attack
+                );
+            }
+            (strength, shown)
+        }
+        Ability::AllyPatronage { .. }
+        | Ability::SurplusTreasury { .. }
+        | Ability::GuildNetwork { .. } => {
+            match situation {
+                Ability::AllyPatronage { .. } => {
+                    e.state.player_mut(1).unwrap().alliances.push(2);
+                    e.state.player_mut(2).unwrap().alliances.push(1);
+                    e.state.set_tile_owner(31, 20, 2);
+                }
+                Ability::SurplusTreasury { .. } => {
+                    e.state.player_mut(1).unwrap().troops = 1e9;
+                }
+                Ability::GuildNetwork { .. } => {
+                    e.add_building(make(1, 1, BuildingKind::City, 16, 16, 1, false));
+                    e.add_building(make(2, 1, BuildingKind::Factory, 24, 16, 1, false));
+                }
+                _ => unreachable!(),
+            }
+            e.refresh_building_aggregates();
+            let before = e.state.player(1).unwrap().gold;
+            let agg = e.building_aggregates[1];
+            let ordinary = e.state.config.per_tick(gold_income_per_second(
+                e.state.player(1).unwrap().tile_count,
+                agg,
+                leader,
+                &e.state.config,
+            ));
+            e.execute_income();
+            let value = e.state.player(1).unwrap().gold - before - ordinary;
+            let shown = owner_marks(&e)[1];
+            e.state.events.clear();
+            e.execute_income();
+            assert_eq!(
+                owner_marks(&e)[1],
+                0,
+                "continuous income does not spam activation every tick"
+            );
+            (value, shown)
+        }
+        Ability::WarshipPrize { .. } => {
+            let tile = 8;
+            e.state.map.terrain[tile as usize] = MapTile::from_byte(0x20);
+            e.add_fleet(WarpFleet::new(
+                1,
+                2,
+                1,
+                UnitType::Warship,
+                100.0,
+                (tile, tile),
+                vec![],
+            ));
+            e.projectiles.push(crate::game::Projectile {
+                id: 1,
+                kind: crate::game::ProjectileKind::Shell,
+                owner_id: 1,
+                src_tile: tile,
+                dst_tile: tile,
+                path: vec![tile],
+                path_cursor: 0,
+                steps_per_tick: 3,
+                active: true,
+                source_fleet_id: None,
+                target_fleet_id: Some(1),
+                damage: 200.0,
+                expires_at_tick: 50,
+            });
+            e.execute_projectiles();
+            (
+                e.fleets
+                    .iter()
+                    .filter(|f| f.owner_id == 1)
+                    .map(|f| f.troops)
+                    .sum(),
+                owner_marks(&e)[1],
+            )
+        }
+        _ => panic!("not a redesigned situation"),
+    }
+}
+
+#[test]
+fn redesigned_heroes_require_their_actual_situation() {
+    for id in ["puyi", "pertinax", "ewuare"] {
+        let mut e = arena(64, 32, Leader::of(id), Some(Leader::of("cleopatra")));
+        e.state.player_mut(1).unwrap().troops = 100.0;
+        e.state.player_mut(1).unwrap().max_troops = 10_000.0;
+        e.refresh_building_aggregates();
+        assert_eq!(
+            e.hero_gold_per_second(1),
+            0.0,
+            "{id} has no unconditional income bonus"
+        );
+        e.execute_income();
+        assert_eq!(
+            owner_marks(&e)[1],
+            0,
+            "{id} stays unmarked outside its situation"
+        );
+    }
+    let mut e = arena(
+        64,
+        32,
+        Leader::of("muhammad_of_ghor"),
+        Some(Leader::of("cleopatra")),
+    );
+    e.state.player_mut(1).unwrap().return_campaign = Some((2, 300));
+    assert_eq!(attack_strength(&e.state, 1, 2, 100.0), 1.35);
+    assert_eq!(attack_strength(&e.state, 1, 0, 100.0), 1.0);
+    e.state.tick = 300;
+    assert_eq!(
+        attack_strength(&e.state, 1, 2, 100.0),
+        1.0,
+        "the return window expires"
+    );
+    e.state.player_mut(1).unwrap().troops = 10_000.0;
+    send(
+        &mut e,
+        1,
+        GameplayIntent::Attack(AttackIntent {
+            target_owner: 2,
+            troops: Some(1_000.0),
+        }),
+    );
+    let id = e.attacks[0].id;
+    send(&mut e, 1, GameplayIntent::CancelAttack { attack_id: id });
+    e.execute_combat();
+    assert_eq!(
+        attack_strength(&e.state, 1, 2, 100.0),
+        1.0,
+        "an immediate cancellation grants no return bonus"
+    );
+}
+
+fn redesigned_building(
+    id: u64,
+    owner_id: u16,
+    kind: BuildingKind,
+    x: u32,
+    y: u32,
+    level: u8,
+) -> Building {
+    Building {
+        id,
+        owner_id,
+        kind,
+        tile_idx: y * 64 + x,
+        level,
+        under_construction: false,
+        ticks_until_complete: 0,
+    }
+}
+
+#[test]
+fn redesigned_peter_founds_a_legal_port_during_real_conquest() {
+    let mut e = arena(
+        64,
+        32,
+        Leader::of("peter_the_great"),
+        Some(Leader::of("cleopatra")),
+    );
+    for y in 0..4 {
+        for x in 0..64 {
+            e.state.map.terrain[(y * 64 + x) as usize] = MapTile::from_byte(0x20);
+        }
+    }
+    e.state.map.compute_shorelines();
+    // An otherwise identical neutral coast cannot consume the one-use founding.
+    e.state.events.push(GameEvent::TileCaptured {
+        x: 31,
+        y: 4,
+        new_owner: 1,
+        previous_owner: 0,
+        troops: 100.0,
+    });
+    e.hero_coastal_foundings();
+    assert!(e.buildings.is_empty());
+    e.state.player_mut(1).unwrap().troops = 30_000.0;
+    send(
+        &mut e,
+        1,
+        GameplayIntent::Attack(AttackIntent {
+            target_owner: 2,
+            troops: Some(20_000.0),
+        }),
+    );
+    for _ in 0..200 {
+        e.state.tick += 1;
+        e.execute_combat();
+        if !e.buildings.is_empty() {
+            break;
+        }
+    }
+    assert_eq!(e.buildings.len(), 1);
+    let port = e.buildings[0];
+    assert_eq!(port.kind, BuildingKind::Port);
+    assert!(!port.under_construction);
+    assert!(
+        crate::building::validate_structure_site(
+            &e.state.map,
+            1,
+            BuildingKind::Port,
+            port.tile_idx,
+            &crate::building::BuildingGrid::default()
+        )
+        .is_ok()
+    );
+    let gold = e.state.player(1).unwrap().gold;
+    e.hero_coastal_foundings();
+    assert_eq!(e.buildings.len(), 1);
+    assert_eq!(e.state.player(1).unwrap().gold, gold);
+    assert_eq!(owner_marks(&e)[1], 1);
+}
+
+#[test]
+fn redesigned_city_rewards_require_allies_upgrades_and_range() {
+    let mut e = arena(
+        64,
+        32,
+        Leader::of("empress_suiko"),
+        Some(Leader::of("cleopatra")),
+    );
+    let mut city = redesigned_building(1, 2, BuildingKind::City, 40, 40, 1);
+    city.under_construction = true;
+    city.ticks_until_complete = 1;
+    e.add_building(city);
+    let gold = e.state.player(1).unwrap().gold;
+    e.execute_construction();
+    assert_eq!(
+        e.state.player(1).unwrap().gold,
+        gold,
+        "a rival's new city pays nothing"
+    );
+    e.state.player_mut(1).unwrap().alliances.push(2);
+    e.state.player_mut(2).unwrap().alliances.push(1);
+    e.buildings[0].level = 2;
+    e.buildings[0].under_construction = true;
+    e.buildings[0].ticks_until_complete = 1;
+    e.execute_construction();
+    assert_eq!(
+        e.state.player(1).unwrap().gold,
+        gold,
+        "allied upgrades are not new foundations"
+    );
+    e.state.player_mut(1).unwrap().leader = Leader::of("nebuchadnezzar_ii");
+    e.buildings.clear();
+    e.building_grid = Default::default();
+    city = redesigned_building(2, 1, BuildingKind::City, 10, 10, 2);
+    e.add_building(city);
+    e.add_building(redesigned_building(3, 1, BuildingKind::Tower, 31, 10, 1));
+    e.hero_structure_ready(city);
+    assert_eq!(e.buildings[1].level, 1, "a distant tower cannot be raised");
+    e.buildings[1].tile_idx = 20 * 64 + 10;
+    e.buildings[1].level = 4;
+    e.hero_structure_ready(city);
+    assert_eq!(
+        e.buildings[1].level, 4,
+        "a tower cannot exceed the level cap"
+    );
+    e.buildings[1].level = 2;
+    e.hero_structure_ready(city);
+    assert_eq!(e.buildings[1].level, 3);
+}
+
+#[test]
+fn redesigned_city_spoils_are_shared_and_evacuation_respects_the_cap() {
+    let mut e = arena(
+        64,
+        32,
+        Leader::of("king_david"),
+        Some(Leader::of("cleopatra")),
+    );
+    e.state.player_mut(1).unwrap().alliances.push(3);
+    e.state.player_mut(3).unwrap().alliances.push(1);
+    let mine = e.state.player(1).unwrap().gold;
+    let ally = e.state.player(3).unwrap().gold;
+    e.add_building(redesigned_building(1, 2, BuildingKind::City, 40, 40, 1));
+    e.state.set_tile_owner(40, 40, 1);
+    e.sync_building_ownership();
+    assert_eq!(e.state.player(1).unwrap().gold - mine, 100.0);
+    assert_eq!(e.state.player(3).unwrap().gold - ally, 100.0);
+    assert!(e.state.events.iter().any(|event| matches!(event, GameEvent::AbilityTriggered { affected, .. } if affected.contains(&3))));
+    let mut e = arena(
+        64,
+        32,
+        Leader::of("sarraounia_mangou"),
+        Some(Leader::of("cleopatra")),
+    );
+    e.state.player_mut(1).unwrap().troops = 900.0;
+    e.state.player_mut(1).unwrap().max_troops = 1_000.0;
+    e.add_building(redesigned_building(1, 1, BuildingKind::City, 16, 16, 1));
+    e.state.set_tile_owner(16, 16, 2);
+    e.sync_building_ownership();
+    assert_eq!(e.state.player(1).unwrap().troops, 1_000.0);
+    e.state.player_mut(1).unwrap().alive = false;
+    e.add_building(redesigned_building(2, 1, BuildingKind::City, 20, 20, 1));
+    e.state.set_tile_owner(20, 20, 2);
+    e.sync_building_ownership();
+    assert!(
+        !e.state.player(1).unwrap().alive,
+        "losing a city cannot resurrect a defeated player"
+    );
+}
+
+#[test]
+fn redesigned_income_stops_when_its_condition_ends_and_matches_the_hud_rate() {
+    let mut e = arena(64, 16, Leader::of("puyi"), Some(Leader::of("cleopatra")));
+    e.state.player_mut(1).unwrap().alliances.push(2);
+    e.state.player_mut(2).unwrap().alliances.push(1);
+    e.refresh_building_aggregates();
+    let extra = e.hero_gold_per_second(1);
+    assert!(extra > 0.0);
+    let ordinary = gold_income_per_second(
+        e.state.player(1).unwrap().tile_count,
+        e.building_aggregates[1],
+        Leader::of("puyi"),
+        &e.state.config,
+    );
+    let before = e.state.player(1).unwrap().gold;
+    e.execute_income();
+    assert!(
+        (e.state.player(1).unwrap().gold - before - e.state.config.per_tick(ordinary + extra))
+            .abs()
+            < 1e-9
+    );
+    e.state.player_mut(2).unwrap().alliances.clear();
+    assert_eq!(e.hero_gold_per_second(1), 0.0);
+    e.state.player_mut(1).unwrap().leader = Leader::of("pertinax");
+    e.state.player_mut(1).unwrap().troops = e.state.player(1).unwrap().max_troops;
+    assert!(e.hero_gold_per_second(1) > 0.0);
+    e.state.player_mut(2).unwrap().troops = 10_000.0;
+    send(
+        &mut e,
+        2,
+        GameplayIntent::Attack(AttackIntent {
+            target_owner: 1,
+            troops: Some(1_000.0),
+        }),
+    );
+    assert_eq!(
+        e.hero_gold_per_second(1),
+        0.0,
+        "an incoming attack ends austerity"
+    );
+    e.state.player_mut(1).unwrap().leader = Leader::of("ewuare");
+    e.add_building(redesigned_building(1, 1, BuildingKind::City, 10, 10, 1));
+    e.add_building(redesigned_building(2, 1, BuildingKind::Factory, 15, 10, 2));
+    assert_eq!(e.hero_gold_per_second(1), 2.0);
+    e.add_building(redesigned_building(3, 1, BuildingKind::City, 10, 15, 1));
+    assert_eq!(
+        e.hero_gold_per_second(1),
+        2.0,
+        "the same factory is counted only once"
+    );
+    e.buildings[0].owner_id = 2;
+    e.buildings[2].owner_id = 2;
+    assert_eq!(
+        e.hero_gold_per_second(1),
+        0.0,
+        "losing the supporting cities ends the guild income"
+    );
+}
+
+#[test]
+fn redesigned_veleda_prizes_survive_other_shells_in_the_same_batch() {
+    let mut e = arena(64, 32, Leader::of("veleda"), Some(Leader::of("cleopatra")));
+    e.add_fleet(WarpFleet::new(
+        1,
+        2,
+        1,
+        UnitType::Warship,
+        100.0,
+        (8, 8),
+        vec![],
+    ));
+    for id in 1..=2 {
+        e.projectiles.push(crate::game::Projectile {
+            id,
+            kind: crate::game::ProjectileKind::Shell,
+            owner_id: 1,
+            src_tile: 8,
+            dst_tile: 8,
+            path: vec![8],
+            path_cursor: 0,
+            steps_per_tick: 3,
+            active: true,
+            source_fleet_id: None,
+            target_fleet_id: Some(1),
+            damage: 1_000.0,
+            expires_at_tick: 50,
+        });
+    }
+    e.execute_projectiles();
+    assert_eq!(e.fleets[0].owner_id, 1);
+    assert_eq!(e.fleets[0].troops, 250.0);
+    assert_eq!(e.fleets[0].warship.as_ref().unwrap().veterancy, 0);
+    assert!(
+        !e.state
+            .events
+            .iter()
+            .any(|event| matches!(event, GameEvent::NavalImpact { sunk: true, .. }))
+    );
+}
+
+#[test]
+fn redesigned_hero_claims_and_return_windows_survive_checkpoints() {
+    let mut e = arena(
+        64,
+        32,
+        Leader::of("muhammad_of_ghor"),
+        Some(Leader::of("cleopatra")),
+    );
+    e.hero_claims.insert((1, 10, 0));
+    e.hero_income_active.insert(1);
+    e.state.player_mut(1).unwrap().return_campaign = Some((2, 300));
+    let bytes = bincode::serialize(&e).unwrap();
+    let restored: SowEngine = bincode::deserialize(&bytes).unwrap();
+    assert_eq!(e.hero_claims, restored.hero_claims);
+    assert_eq!(e.hero_income_active, restored.hero_income_active);
+    assert_eq!(attack_strength(&restored.state, 1, 2, 100.0), 1.35);
 }

@@ -36,12 +36,17 @@ interface AnalyticsReport {
   funnel?: Counts;
   funnel_sessions?: Counts;
   sources?: Record<string, SourceStatus>;
-  dimensions?: { build?: Record<string, Counts>; device_class?: Record<string, Counts> };
+  dimensions?: {
+    build?: Record<string, Counts>;
+    device_class?: Record<string, Counts>;
+    source?: Record<string, Counts>;
+  };
   tutorial_steps?: TutorialStep[];
   retention?: { site?: Record<string, RetentionWindow> };
 }
 
 const DEVICE_EVENTS = ["matchmaking_joined", "match_started_client", "match_ended_client", "match_exit"];
+const SOURCE_EVENTS = ["landing_visit", "play_now_click", "match_started_client", "match_ended_client"];
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -93,15 +98,19 @@ function renderMetrics(funnel: Counts, today: DailyTotals): void {
   );
 }
 
-function renderDimensions(id: string, dimensions: Record<string, Counts> | undefined): void {
+function renderDimensions(
+  id: string,
+  dimensions: Record<string, Counts> | undefined,
+  columns: string[] = DEVICE_EVENTS,
+): void {
   const total = (counts: Counts) => Object.values(counts).reduce((sum, value) => sum + value, 0);
   rows(
     $(id),
     Object.entries(dimensions || {}).sort((a, b) => total(b[1]) - total(a[1])),
-    (row, [label, events]) => {
+    (row, [label, counts]) => {
       cell(row, label);
-      cell(row, total(events).toLocaleString());
-      for (const name of DEVICE_EVENTS) cell(row, Number(events[name] || 0).toLocaleString());
+      cell(row, total(counts).toLocaleString());
+      for (const name of columns) cell(row, Number(counts[name] || 0).toLocaleString());
     },
   );
 }
@@ -151,6 +160,7 @@ function renderReport(report: AnalyticsReport): void {
   );
   renderDimensions("by-build", report.dimensions?.build);
   renderDimensions("by-device", report.dimensions?.device_class);
+  renderDimensions("by-source", report.dimensions?.source, SOURCE_EVENTS);
   rows($("tutorial-steps"), report.tutorial_steps || [], (row, step) => {
     cell(row, step.episode_id);
     cell(row, String(step.step_id || "").replaceAll("_", " "));

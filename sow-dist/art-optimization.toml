@@ -8,14 +8,14 @@ svg_recipe_version = 1
 
 [profiles.ability_icon]
 format = "webp"
-max_width = 256
-max_height = 256
+max_width = 128
+max_height = 128
 quality = 75
 alpha = "preserve"
 resample = "lanczos"
 lossless = false
 max_bytes = 65536
-recipe_version = 1
+recipe_version = 2
 
 [profiles.avatar_portrait_192]
 format = "webp"

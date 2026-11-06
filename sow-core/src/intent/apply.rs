@@ -594,7 +594,7 @@ impl SowEngine {
                     .iter()
                     .filter(|fleet| fleet.owner_id == pid && fleet.unit_type == *kind)
                     .count() as u32;
-                let cost = kind.gold_cost_with_owned_count(owned_warships);
+                let cost = kind.gold_cost_with_owned_count_for_leader(owned_warships, player.leader);
                 if player.gold < cost {
                     self.state.events.push(crate::game::GameEvent::NavalActionRejected {
                         player_id: pid,
@@ -629,6 +629,16 @@ impl SowEngine {
                     fleet_id,
                     tile: route.src_tile,
                 });
+                if matches!(
+                    self.state.player(pid).map(|player| player.leader.ability()),
+                    Some(crate::geo_entities::Ability::WarshipCost { .. })
+                ) {
+                    let width = self.state.map.width.max(1);
+                    self.state.announce_leader_ability(
+                        pid,
+                        Some((route.src_tile % width, route.src_tile / width)),
+                    );
+                }
             }
             GameplayIntent::MoveWarships {
                 unit_ids,

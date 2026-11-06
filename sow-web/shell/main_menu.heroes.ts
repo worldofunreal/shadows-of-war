@@ -11,6 +11,7 @@ import {
     menuUi,
     prepareLeaderArt,
     renderHeroBriefing,
+    renderShowcaseLoader,
     root,
 } from "./main_menu.core.ts";
 import { activeScreenPanel } from "./main_menu.shell.ts";
@@ -105,7 +106,8 @@ function setHeroesAvatar(image: HTMLImageElement | null, slug: string, expressio
         heroesAvatarAnimations.set(image, animation);
     };
     if (image.complete) {
-        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(animateLoadedAvatar);
+        if (typeof window.requestAnimationFrame === "function")
+            window.requestAnimationFrame(animateLoadedAvatar);
         else animateLoadedAvatar();
     } else {
         image.addEventListener("load", animateLoadedAvatar, { once: true });
@@ -137,7 +139,8 @@ function clearHeroesFeaturedAnimation(featured: HTMLElement) {
 function heroesLeaderDirection(previousId: string, nextId: string) {
     if (!previousId) return 1;
     const leaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
-    const previousIndex = previousId === "random" ? -1 : leaders.findIndex((leader) => leader.id === previousId);
+    const previousIndex =
+        previousId === "random" ? -1 : leaders.findIndex((leader) => leader.id === previousId);
     const nextIndex = nextId === "random" ? -1 : leaders.findIndex((leader) => leader.id === nextId);
     if (previousIndex < 0 && previousId !== "random") return 1;
     if (nextIndex < 0 && nextId !== "random") return 1;
@@ -165,12 +168,10 @@ function setFeaturedArtAvailability(image: HTMLImageElement, unavailable: boolea
         return;
     const featured = image.closest<HTMLElement>(".sow-heroes__featured");
     if (!featured) return;
+    const skillIcon = featured.querySelector<HTMLImageElement>("[data-hero-skill-icon]");
+    if (!image.complete || (skillIcon && !skillIcon.complete)) return;
     const animateEntrance = featured.classList.contains("is-transitioning");
-    featured.classList.remove(
-        "is-loading",
-        "is-unavailable",
-        "is-transitioning",
-    );
+    featured.classList.remove("is-loading", "is-unavailable", "is-transitioning");
     if (unavailable) {
         clearHeroesFeaturedAnimation(featured);
         featured.classList.add("is-unavailable");
@@ -197,7 +198,14 @@ root.addEventListener(
     "load",
     function (event) {
         const image = event.target instanceof HTMLImageElement ? event.target : null;
-        if (image && image.hasAttribute("data-hero-featured-art")) setFeaturedArtAvailability(image, false);
+        if (!image) return;
+        if (image.hasAttribute("data-hero-featured-art")) setFeaturedArtAvailability(image, false);
+        if (image.hasAttribute("data-hero-skill-icon")) {
+            const featured = image.closest<HTMLElement>(".sow-heroes__featured");
+            const art = featured?.querySelector<HTMLImageElement>("[data-hero-featured-art]");
+            if (art && image.dataset.heroSkillArtSlug === art.dataset.heroArtSlug)
+                setFeaturedArtAvailability(art, art.naturalWidth === 0);
+        }
     },
     true,
 );
@@ -207,6 +215,13 @@ root.addEventListener(
         const image = event.target instanceof HTMLImageElement ? event.target : null;
         if (!image) return;
         if (image.hasAttribute("data-hero-featured-art")) setFeaturedArtAvailability(image, true);
+        if (image.hasAttribute("data-hero-skill-icon")) {
+            const featured = image.closest<HTMLElement>(".sow-heroes__featured");
+            const art = featured?.querySelector<HTMLImageElement>("[data-hero-featured-art]");
+            if (art && image.dataset.heroSkillArtSlug === art.dataset.heroArtSlug)
+                setFeaturedArtAvailability(art, art.naturalWidth === 0);
+            image.closest(".sow-hero-briefing__icon-slot")?.remove();
+        }
         if (image.hasAttribute("data-hero-art-avatar")) image.hidden = true;
     },
     true,
@@ -475,7 +490,8 @@ export function updateHeroesPreview() {
                     const settle = function () {
                         setFeaturedArtAvailability(image, image.naturalWidth === 0);
                     };
-                    if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(settle);
+                    if (typeof window.requestAnimationFrame === "function")
+                        window.requestAnimationFrame(settle);
                     else settle();
                 }
             };
@@ -614,8 +630,10 @@ export function selectDropdown(key: string, value: string) {
 
 function renderHeroesArtLoader(avatarSlug: string) {
     return (
-        "<div class='showcase-loader' data-hero-art-loader aria-hidden='true'>" +
-        "<svg class='showcase-loader-ring' viewBox='0 0 120 120' focusable='false'><defs><linearGradient id='showcase-loader-arc' x1='0' y1='0' x2='1' y2='1'><stop offset='0' class='showcase-loader-head'></stop><stop offset='.45' class='showcase-loader-body'></stop><stop offset='1' class='showcase-loader-tail'></stop></linearGradient></defs><circle class='showcase-loader-orbit' cx='60' cy='60' r='58.5' pathLength='100'></circle><circle class='showcase-loader-track' cx='60' cy='60' r='54'></circle><circle class='showcase-loader-arc' cx='60' cy='60' r='54' pathLength='100'></circle></svg>" +
+        renderShowcaseLoader("showcase-loader-arc-art").replace(
+            "class='showcase-loader'",
+            "class='showcase-loader' data-hero-art-loader",
+        ) +
         "<img class='showcase-portrait' data-hero-art-avatar src='" +
         esc(heroesAvatarUrl(avatarSlug, "calm")) +
         "' alt='' width='256' height='256' decoding='async'></div>"

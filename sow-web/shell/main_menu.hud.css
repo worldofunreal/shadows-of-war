@@ -442,6 +442,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__nameplate-stat--gold-rate {
   color: #a9d79c;
 }
+#sow-hud-nameplate-gold-rate.is-hero-active {
+  color: var(--sow-coin);
+  text-shadow: 0 0 8px rgb(255 210 80 / 65%);
+}
 .sow-hud__nameplate-stat--troop-rate {
   color: var(--sow-cyan);
 }

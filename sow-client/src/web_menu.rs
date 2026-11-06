@@ -483,6 +483,7 @@ struct HudPublishKey {
     max_troops: u64,
     troop_rate: u64,
     gold_rate: u64,
+    hero_income_rate: u64,
     attack_ratio: u32,
     spawn_timer_tenths: i32,
     selected_building: Option<crate::ui::hud::state::BuildingPlacement>,
@@ -1297,7 +1298,11 @@ impl SowApp {
                         .as_ref()
                         .and_then(|snapshot| {
                             let me = snapshot.players.iter().find(|player| player.id == my_id)?;
-                            Some(me.trade_partners(&snapshot.players).map(|player| player.id).collect())
+                            Some(
+                                me.trade_partners(&snapshot.players)
+                                    .map(|player| player.id)
+                                    .collect(),
+                            )
                         })
                         .unwrap_or_default();
                     // Each ally gets its own copy; the server sells a trade to the first who accepts.
@@ -1671,7 +1676,12 @@ impl SowApp {
                                 })
                             {
                                 sow_core::emote::express(player, None, false, true, tick);
-                                self.sim.current_snapshot = Some(engine.build_snapshot());
+                                let mut snapshot = engine.build_snapshot();
+                                self.apply_snapshot_fx(
+                                    &mut snapshot,
+                                    self.sim.my_player_id.unwrap_or(0),
+                                );
+                                self.sim.current_snapshot = Some(snapshot);
                             }
                         }
                         continue;
@@ -1761,7 +1771,9 @@ impl SowApp {
                             .clear_campaign_emote(token.as_deref(), player_id);
                     }
                     // Story commands publish immediately, including while the simulation is paused.
-                    self.sim.current_snapshot = Some(engine.build_snapshot());
+                    let mut snapshot = engine.build_snapshot();
+                    self.apply_snapshot_fx(&mut snapshot, self.sim.my_player_id.unwrap_or(0));
+                    self.sim.current_snapshot = Some(snapshot);
                 }
                 WebMenuCommand::SetCampaignPreDefeatTargets {
                     faction_ids,
@@ -1852,18 +1864,13 @@ impl SowApp {
                     self.ui.nameplates.set_emote_texts(texts, safe_area);
                 }
                 WebMenuCommand::FocusPlayer { player_id } => {
-                    let has_land = self
-                        .sim
-                        .current_snapshot
-                        .as_ref()
-                        .is_some_and(|snapshot| {
-                            snapshot.players.iter().any(|player| {
-                                player.id == player_id && player.tile_count > 0 && player.alive
-                            })
-                        });
+                    let has_land = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                        snapshot.players.iter().any(|player| {
+                            player.id == player_id && player.tile_count > 0 && player.alive
+                        })
+                    });
                     if has_land
-                        && let Some([world_x, world_y]) =
-                            self.ui.nameplates.anchor_for(player_id)
+                        && let Some([world_x, world_y]) = self.ui.nameplates.anchor_for(player_id)
                     {
                         self.input.tutorial_camera_focus = false;
                         self.focus_camera_on_world(world_x, world_y, 8.0);
@@ -1888,14 +1895,12 @@ impl SowApp {
                     }
                     if let Some(fleet_id) = fleet_id {
                         let my_id = self.sim.my_player_id.unwrap_or(0);
-                        let is_my_fleet = self
-                            .sim
-                            .current_snapshot
-                            .as_ref()
-                            .is_some_and(|snapshot| {
-                                snapshot.fleets.iter().any(|fleet| {
-                                    fleet.id == fleet_id && fleet.owner_id == my_id
-                                })
+                        let is_my_fleet =
+                            self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                                snapshot
+                                    .fleets
+                                    .iter()
+                                    .any(|fleet| fleet.id == fleet_id && fleet.owner_id == my_id)
                             });
                         if is_my_fleet {
                             self.ui.mover_scene.highlight_fleet(fleet_id);
@@ -2082,17 +2087,19 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         app.ui.manual_endgame_stats
     };
     let inbox_count = me.map(|player| player.inbox_count).unwrap_or(0);
-    let (warship_count, trade_ship_count, transport_ship_count) = snapshot.map_or(
-        (0, 0, 0),
-        |snapshot| {
-            snapshot.fleets.iter().fold(
-                (0, 0, 0),
-                |(warships, trade_ships, transports), fleet| {
+    let (warship_count, trade_ship_count, transport_ship_count) =
+        snapshot.map_or((0, 0, 0), |snapshot| {
+            snapshot
+                .fleets
+                .iter()
+                .fold((0, 0, 0), |(warships, trade_ships, transports), fleet| {
                     if fleet.owner_id != my_pid {
                         return (warships, trade_ships, transports);
                     }
                     match fleet.unit_type {
-                        sow_core::game::UnitType::Warship => (warships + 1, trade_ships, transports),
+                        sow_core::game::UnitType::Warship => {
+                            (warships + 1, trade_ships, transports)
+                        }
                         sow_core::game::UnitType::TradeShip if fleet.troops > 0.0 => {
                             (warships, trade_ships + 1, transports)
                         }
@@ -2101,10 +2108,8 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
                         }
                         _ => (warships, trade_ships, transports),
                     }
-                },
-            )
-        },
-    );
+                })
+        });
     HudPublishKey {
         fps: app.time.current_fps,
         ping_ms: app.net.current_ping_ms,
@@ -2113,6 +2118,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         max_troops: hud.max_troops.to_bits(),
         troop_rate: hud.troop_rate.to_bits(),
         gold_rate: hud.gold_rate.to_bits(),
+        hero_income_rate: hud.hero_income_rate.to_bits(),
         attack_ratio: hud.attack_ratio.to_bits(),
         spawn_timer_tenths: hud
             .spawn_timer_secs
@@ -4062,11 +4068,16 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 .fleets
                 .iter()
                 .filter(|fleet| {
-                    fleet.owner_id == my_pid
-                        && fleet.unit_type == sow_core::game::UnitType::Warship
+                    fleet.owner_id == my_pid && fleet.unit_type == sow_core::game::UnitType::Warship
                 })
                 .count() as u32;
-            (port_levels, city_level, trade_ships, transport_ships, warship_count)
+            (
+                port_levels,
+                city_level,
+                trade_ships,
+                transport_ships,
+                warship_count,
+            )
         })
         .unwrap_or_default();
     let trade_ship = sow_core::game::UnitType::TradeShip;
@@ -4136,9 +4147,10 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 .filter(|b| b.owner_id == my_pid && b.under_construction)
                 .map(|building| {
                     let active_level = building.active_level();
-                    let remaining_seconds =
-                        (f64::from(building.ticks_until_complete) * f64::from(tick_rate_ms) / 1000.0)
-                            .max(0.0);
+                    let remaining_seconds = (f64::from(building.ticks_until_complete)
+                        * f64::from(tick_rate_ms)
+                        / 1000.0)
+                        .max(0.0);
                     let progress = crate::render::world::overlays::construction_progress(
                         building.kind,
                         active_level,
@@ -4258,6 +4270,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "max_troops": me.map(|player| player.max_troops).unwrap_or(hud.max_troops),
         "troop_rate": hud.troop_rate,
         "gold_rate": hud.gold_rate,
+        "hero_income_rate": hud.hero_income_rate,
         "attack_ratio": hud.attack_ratio,
         "operations": operations,
         "spawn_timer_secs": hud.spawn_timer_secs,
@@ -4289,7 +4302,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "trade_required_port_level": trade_ship.required_port_level(),
             "warship_required_port_level": 1,
             "nuke_required_city_level": 1,
-            "warship_cost": warship.gold_cost_with_owned_count(warship_count),
+            "warship_cost": me.map_or(warship.gold_cost_with_owned_count(warship_count), |player| {
+                warship.gold_cost_with_owned_count_for_leader(warship_count, player.leader)
+            }),
             "nuke_cost": app.sim.config.nuke_cost,
             "nuke_available": me.map(|player| player.nuke_available).unwrap_or(false),
             "nuke_cooldown_ticks": me.map(|player| player.nuke_cooldown_ticks).unwrap_or(0),
@@ -4495,7 +4510,10 @@ fn append_player_dialog_payloads(
         // roomiest one the Give presets; the server still caps each copy for its ally.
         let partners: Vec<_> = me.trade_partners(players).collect();
         let most = |value: fn(&sow_core::protocol::PlayerSnapshot) -> f64| {
-            partners.iter().map(|player| value(player)).fold(0.0, f64::max)
+            partners
+                .iter()
+                .map(|player| value(player))
+                .fold(0.0, f64::max)
         };
         let troops = most(|player| player.troops);
         payload["transfer"] = serde_json::json!({
@@ -5462,7 +5480,11 @@ mod tests {
         assert_eq!(transfer["all_allies"], 2, "the stranger is not an audience");
         assert_eq!(transfer["target_gold"], 900.0);
         assert_eq!(transfer["target_troops"], 80.0);
-        assert_eq!(transfer["target_max_troops"], 80.0 + 480.0, "room comes from the roomiest ally");
+        assert_eq!(
+            transfer["target_max_troops"],
+            80.0 + 480.0,
+            "room comes from the roomiest ally"
+        );
         assert_eq!(transfer["target_alive"], true);
     }
 

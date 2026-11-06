@@ -1222,7 +1222,7 @@ test("Boudica spoken cards and contact responses require named existing portrait
     );
     const exchangeWithDialogue = structuredClone(definition);
     const replyScene = exchangeWithDialogue.steps.find(
-        (step) => step.id === "boudica_snettisham_refuse_reply",
+        (step) => step.id === "boudica_trinovantes_supplies",
     );
     replyScene.body_key = "tutorial.campaign_boudica_snettisham_refuse_detail";
     assert.ok(

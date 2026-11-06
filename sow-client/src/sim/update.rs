@@ -383,6 +383,7 @@ impl SowApp {
             self.ui.app.hud_state.max_troops = player.max_troops;
             self.ui.observing = !player.alive && player.has_spawned;
 
+            self.ui.app.hud_state.hero_income_rate = 0.0;
             // Compute correct actual troop rate
             if let Some(e) = &self.sim.engine {
                 let my_pid = self.sim.my_player_id.unwrap_or(1);
@@ -399,20 +400,23 @@ impl SowApp {
                             && fleet.unit_type == sow_core::game::UnitType::TradeShip
                     })
                     .count() as u32;
-                self.ui.app.hud_state.troop_rate = (sow_core::execution::income_rates::troop_income_per_second(
-                    player.tile_count,
-                    agg,
-                    player.leader,
-                    &self.sim.config,
-                ) + sow_core::execution::income_rates::alliance_troops_per_second(
-                    player.alliances.len(),
-                    player.leader,
-                    &self.sim.config,
-                ) + sow_core::execution::income_rates::trade_troops_per_second(
-                    trade_ships,
-                    player.leader,
-                    &self.sim.config,
-                )) * self.sim.config.global_speed_multiplier;
+                self.ui.app.hud_state.troop_rate =
+                    (sow_core::execution::income_rates::troop_income_per_second(
+                        player.tile_count,
+                        agg,
+                        player.leader,
+                        &self.sim.config,
+                    ) + sow_core::execution::income_rates::alliance_troops_per_second(
+                        player.alliances.len(),
+                        player.leader,
+                        &self.sim.config,
+                    ) + sow_core::execution::income_rates::trade_troops_per_second(
+                        trade_ships,
+                        player.leader,
+                        &self.sim.config,
+                    )) * self.sim.config.global_speed_multiplier;
+                self.ui.app.hud_state.hero_income_rate =
+                    e.hero_gold_per_second(my_pid) * self.sim.config.global_speed_multiplier;
                 self.ui.app.hud_state.gold_rate =
                     (sow_core::execution::income_rates::gold_income_per_second(
                         player.tile_count,
@@ -427,7 +431,8 @@ impl SowApp {
                         trade_ships,
                         player.leader,
                         &self.sim.config,
-                    )) * self.sim.config.global_speed_multiplier;
+                    ) + e.hero_gold_per_second(my_pid))
+                        * self.sim.config.global_speed_multiplier;
             }
         }
     }

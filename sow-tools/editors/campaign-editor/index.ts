@@ -60,7 +60,6 @@
   let MAPW = 896,
     MAPH = 504;
   let terrain: Uint8Array | null = null; // Uint8Array length MAPW*MAPH, bit7 = land
-  // prettier-ignore
   let roster: Roster = { map: "eastanglia", player_spawn: [696, 45], player_color: PLAYER_COLOR, factions: [] };
   let avatarCatalog: string[] = [];
   let entityCatalog: AtlasEntity[] | null = null;

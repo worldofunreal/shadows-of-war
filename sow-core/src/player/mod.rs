@@ -161,6 +161,9 @@ pub struct Player {
     /// Ticks left in which attacks on `recapture_target` cost less.
     #[serde(default)]
     pub recapture_ticks: u32,
+    /// Enemy and expiry tick of a return campaign following a paid retreat.
+    #[serde(default)]
+    pub return_campaign: Option<(u16, u64)>,
     #[serde(default)]
     pub traitor: bool,
     #[serde(default)]
@@ -230,6 +233,7 @@ impl Player {
             betrayal_retaliation_ticks: 0,
             recapture_target: 0,
             recapture_ticks: 0,
+            return_campaign: None,
             traitor: false,
             traitor_tick: 0,
             leader: Leader::default(),
@@ -296,6 +300,7 @@ impl Player {
             betrayal_retaliation_ticks: 0,
             recapture_target: 0,
             recapture_ticks: 0,
+            return_campaign: None,
             traitor: false,
             traitor_tick: 0,
             leader,
@@ -354,6 +359,7 @@ impl Player {
             betrayal_retaliation_ticks: 0,
             recapture_target: 0,
             recapture_ticks: 0,
+            return_campaign: None,
             traitor: false,
             traitor_tick: 0,
             leader,

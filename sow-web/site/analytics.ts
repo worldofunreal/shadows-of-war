@@ -181,6 +181,8 @@
 
   function validProps(name, props) {
     if (props == null) return null;
+    if (name === "landing_visit" && Object.keys(props).length === 1 && /^[a-z0-9_-]{1,32}$/.test(props.ref))
+      return { ref: props.ref };
     if (
       name === "load_stage" &&
       [
@@ -388,7 +390,8 @@
   function recordLanding() {
     if (landingRecorded) return;
     landingRecorded = true;
-    track("landing_visit");
+    const ref = (new URLSearchParams(window.location.search).get("ref") || "").toLowerCase();
+    track("landing_visit", ref ? { ref } : undefined);
   }
 
   window.SOW_analyticsTrack = track;

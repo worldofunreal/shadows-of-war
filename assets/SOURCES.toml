@@ -12,7 +12,7 @@ license = "CC-BY-SA-4.0"
 license_doc = "docs/legal/LICENSE-ASSETS"
 placeholder_source = "Programmatic labeled placeholders created in-repo"
 placeholder_license = "AGPL-3.0-or-later"
-placeholder_files = ["heroes/sitting_bull.webp", "heroes/matoaka.webp", "tribes/lakota.webp", "heroes/windradyne.webp", "heroes/yagan_noongar.webp"]
+placeholder_files = ["heroes/sitting_bull.webp", "heroes/matoaka.webp", "tribes/lakota.webp", "heroes/windradyne.webp", "heroes/yagan_noongar.webp", "heroes/peter_the_great.webp", "heroes/empress_suiko.webp", "heroes/nebuchadnezzar_ii.webp", "heroes/king_david.webp", "heroes/sarraounia_mangou.webp", "heroes/muhammad_of_ghor.webp", "heroes/puyi.webp", "heroes/pertinax.webp", "heroes/ewuare.webp", "heroes/veleda.webp"]
 notes = "One avatar source per playable hero: heroes/<id>.webp is a 2x2 Happy, Calm, Fear, Angry sheet; Calm also supplies its static portrait. nations/ (nation bots), tribes/ (tribe bots and tutorial tribes), and campaign/ (tutorial figures that are not tribes) keep one portrait each. default.webp is the face of a player without a portrait and of any character whose own portrait is still missing. random.webp at this folder root is original dice-and-map art for the random leader option (AGPL-3.0-or-later). The listed labeled placeholders need owner replacement. Burebista and Bolesław II use provisional sheets cropped from the owner-supplied Downloads art pending final portraits."
 
 [heroes]
@@ -21,7 +21,7 @@ source = "ai_generated_and_user_supplied"
 tool = "Gemini / Meta AI / Midjourney / OpenAI ImageGen (mixed, historical)"
 license = "CC-BY-SA-4.0 for AI-generated scenes; project-owner supplied scenes follow owner terms"
 license_doc = "docs/legal/LICENSE-ASSETS"
-notes = "Optional web menu and loader scenes: <id>_desktop and <id>_mobile are published when present. A missing variant has no image fallback in its consumer. Burebista and Bolesław II ship provisional scenes from the owner-supplied Downloads art pending final scenes. Windradyne and Yagan-Noongar desktop/mobile scenes are project-owner supplied JPEG source masters."
+notes = "Optional web menu and loader scenes: <id>_desktop and <id>_mobile are published when present. A missing variant has no image fallback in its consumer. Burebista and Bolesław II ship provisional scenes from the owner-supplied Downloads art pending final scenes. Windradyne, Yagan-Noongar, Peter the Great, and Empress Suiko desktop/mobile scenes are project-owner supplied JPEG source masters."
 restored = ["alexander", "caesar", "cleopatra", "genghis_khan", "ragnar", "sun_tzu"]
 themed_placeholder = ["boudica", "leonidas", "napoleon", "richard_the_lionheart", "vercingetorix", "lady_six_sky", "sitting_bull", "matoaka"]
 placeholder_source = "Programmatic labeled placeholders created in-repo"
@@ -46,10 +46,10 @@ notes = "The three OpenFront boat sprites are packed into assets/generated/units
 path = "assets/art/icons/"
 source = "user_supplied"
 license = "Project-owner supplied; cleared for distribution"
-notes = "All iconography: currency (gold, gem, crown, laurel), troops (HUD, menu nav and map), tutorial hand, surrender, mobile navigation, and nameplate/map badges packed into assets/generated/badges-atlas.* (request/allied/traitor: AGPL-3.0-or-later; rank, you, disconnected, upgrade-sparkle, wilderness, death, radiation, construction, hammer: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art). Keep ability masters in high resolution at abilities/<hero-id>.webp; sow-dist publishes 256 px WebP derivatives and builds CrazyGames' atlas from optimized output. laurel is a generated placeholder pending final art. Burebista and Bolesław II ability icons are provisional crops pending final icons. Abd al-Rahman al-Ghafiqi's icon is a provisional crop of his own Calm avatar sheet pending final ability art. Windradyne and Yagan-Noongar ability icons are temporary labeled placeholders pending owner art."
+notes = "All iconography: currency (gold, gem, crown, laurel), troops (HUD, menu nav and map), tutorial hand, surrender, mobile navigation, and nameplate/map badges packed into assets/generated/badges-atlas.* (request/allied/traitor: AGPL-3.0-or-later; rank, you, disconnected, upgrade-sparkle, wilderness, death, radiation, construction, hammer: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art). Keep ability masters in high resolution at abilities/<hero-id>.webp; sow-dist publishes 256 px WebP derivatives and builds CrazyGames' atlas from optimized output. laurel is a generated placeholder pending final art. Burebista and Bolesław II ability icons are provisional crops pending final icons. Abd al-Rahman al-Ghafiqi's icon is a provisional crop of his own Calm avatar sheet pending final ability art. Windradyne, Yagan-Noongar, Peter the Great, Empress Suiko, Nebuchadnezzar II, King David, Sarraounia Mangou, Muhammad of Ghor, Puyi, Pertinax, Ewuare, and Veleda ability icons are temporary labeled placeholders pending owner art."
 placeholder_source = "Programmatic labeled placeholders created in-repo"
 placeholder_license = "AGPL-3.0-or-later"
-placeholder_files = ["abilities/sitting_bull.webp", "abilities/matoaka.webp", "abilities/windradyne.webp", "abilities/yagan_noongar.webp"]
+placeholder_files = ["abilities/sitting_bull.webp", "abilities/matoaka.webp", "abilities/windradyne.webp", "abilities/yagan_noongar.webp", "abilities/peter_the_great.webp", "abilities/empress_suiko.webp", "abilities/nebuchadnezzar_ii.webp", "abilities/king_david.webp", "abilities/sarraounia_mangou.webp", "abilities/muhammad_of_ghor.webp", "abilities/puyi.webp", "abilities/pertinax.webp", "abilities/ewuare.webp", "abilities/veleda.webp"]
 
 [store]
 path = "assets/art/store/"

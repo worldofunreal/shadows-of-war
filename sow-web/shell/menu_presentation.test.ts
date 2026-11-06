@@ -506,7 +506,8 @@ test("settings panel keeps only useful controls and real account state", () => {
         assert.match(body, /sow-menu__settings-section/);
         assert.match(body, /data-command='toggle_settings'/);
         assert.match(body, /menu\.music_volume/);
-        assert.match(body, /menu\.motion_animation/);
+        assert.match(body, /renderMusicSpectrum\(\)/);
+        assert.doesNotMatch(body, /menu\.motion_animation|settings-motion|data-setting='reduced_motion'/);
         assert.match(body, /renderLocaleSettingRow\(\)/);
         assert.match(body, /renderSettingsPrivacySection/);
         assert.match(body, /account-value/);
@@ -518,11 +519,15 @@ test("settings panel keeps only useful controls and real account state", () => {
     }
     assert.match(renderSettingsBody(jestSource), /renderSettingsPrivacySection/);
     assert.match(renderSettingsBody(jestSource), /renderLocaleSettingRow\(\)/);
+    assert.match(renderSettingsBody(jestSource), /renderMusicSpectrum\(\)/);
     assert.match(settingsSource, /SOW_t\("menu\.language"\)/);
     assert.match(settingsSource, /key: dropdownKey/);
     assert.match(settingsSource, /SOW_renderDropdown\([\s\S]*?options: localeOptions\(\)/);
     assert.match(settingsSource, /setting: "locale"/);
     assert.match(settingsSource, /sow-menu__settings-row-icon/);
+    assert.match(settingsSource, /data-menu-music-spectrum/);
+    assert.match(menuCss["main_menu.settings.css"], /\.sow-menu__music-spectrum/);
+    assert.match(hudSource, /data-hud-setting="reduced_motion"/);
 });
 
 test("settings command deck supports desktop 2-column, mobile vertical full-screen, and compact horizontal viewports", () => {
@@ -671,11 +676,14 @@ test("Opus theme preserves its crossfade and resumes from ordinary trusted click
 
     function createHarness(assetsUrl = "https://cdn.test/assets/") {
         const audios = [];
+        const audioContexts = [];
         const mediaMetadata = [];
         const frames = new Map();
+        const spectrumDraws = [];
         const logs = [];
         const windowListeners = new Map();
         const documentListeners = new Map();
+        let reducedMotion = false;
         const body = {
             children: [],
             appendChild(element) {
@@ -737,11 +745,103 @@ test("Opus theme preserves its crossfade and resumes from ordinary trusted click
                 mediaMetadata.push(this);
             }
         }
+        class FakeAudioNode {
+            constructor() {
+                this.connections = [];
+            }
+            connect(node) {
+                this.connections.push(node);
+            }
+            disconnect() {
+                this.connections = [];
+            }
+        }
+        class FakeGainNode extends FakeAudioNode {
+            constructor() {
+                super();
+                this.gain = { value: 1 };
+            }
+            connect(node) {
+                super.connect(node);
+                if (node instanceof FakeAnalyserNode) node.inputGain = this;
+            }
+        }
+        class FakeAnalyserNode extends FakeAudioNode {
+            constructor() {
+                super();
+                this.fftSize = 256;
+                this.frequencyBinCount = 128;
+                this.smoothingTimeConstant = 0;
+                this.minDecibels = -100;
+                this.maxDecibels = -30;
+                this.bins = new Uint8Array(this.frequencyBinCount);
+                this.inputGain = null;
+            }
+            getByteFrequencyData(target) {
+                const gain = this.inputGain ? this.inputGain.gain.value : 1;
+                for (let index = 0; index < target.length; index += 1)
+                    target[index] = Math.round(this.bins[index] * gain);
+            }
+        }
+        class FakeAudioContext {
+            constructor() {
+                this.state = "suspended";
+                this.destination = new FakeAudioNode();
+                this.sources = [];
+                this.gains = [];
+                this.analyzers = [];
+                audioContexts.push(this);
+            }
+            resume() {
+                this.state = "running";
+                return Promise.resolve();
+            }
+            close() {
+                this.state = "closed";
+                return Promise.resolve();
+            }
+            createMediaElementSource(deck) {
+                const source = new FakeAudioNode();
+                source.mediaElement = deck;
+                this.sources.push(source);
+                return source;
+            }
+            createGain() {
+                const gain = new FakeGainNode();
+                this.gains.push(gain);
+                return gain;
+            }
+            createAnalyser() {
+                const analyser = new FakeAnalyserNode();
+                this.analyzers.push(analyser);
+                return analyser;
+            }
+        }
+        const spectrumCanvasContext = {
+            setTransform() {},
+            clearRect() {},
+            fillRect(...args) {
+                spectrumDraws.push(args);
+            },
+        };
+        const spectrumCanvas = {
+            hidden: true,
+            width: 300,
+            height: 20,
+            clientWidth: 300,
+            clientHeight: 20,
+            getContext(type) {
+                return type === "2d" ? spectrumCanvasContext : null;
+            },
+        };
         const mediaSession = { metadata: null };
         const window = {
             Audio: FakeAudio,
+            AudioContext: FakeAudioContext,
             MediaMetadata: FakeMediaMetadata,
             URL,
+            location: { origin: "https://cdn.test" },
+            devicePixelRatio: 1,
             navigator: { mediaSession },
             SOW_ASSETS_URL: assetsUrl,
             SOW_BUILD_TS: "build-42",
@@ -769,13 +869,18 @@ test("Opus theme preserves its crossfade and resumes from ordinary trusted click
             },
         };
         const root = {
+            hidden: false,
             contains(target) {
                 return Boolean(target && target.insideMenu);
+            },
+            querySelector(selector) {
+                return selector === "[data-menu-music-spectrum]" ? spectrumCanvas : null;
             },
         };
         const document = {
             body,
             baseURI: "https://cdn.test/play/",
+            visibilityState: "visible",
             querySelector(selector) {
                 return selector === 'meta[name="sow-media-artwork"]' ? { content: "../icon-192.png" } : null;
             },
@@ -804,6 +909,8 @@ test("Opus theme preserves its crossfade and resumes from ordinary trusted click
             window,
             document,
             root,
+            menuUi: { settingsOpen: false, state: null },
+            reducedRewardMotion: () => reducedMotion,
             Node: Object,
             console: {
                 error: (...args) => logs.push(["error", ...args]),
@@ -812,7 +919,7 @@ test("Opus theme preserves its crossfade and resumes from ordinary trusted click
         };
         vm.runInNewContext(
             shellSource.slice(start, end) +
-                "this.musicApi = { syncMenuMusic, menuMusic, menuMusicFinishLoaderCycle, menuMusicSetCinematicActive };",
+                "this.musicApi = { syncMenuMusic, menuMusic, menuMusicFinishLoaderCycle, menuMusicSetCinematicActive, menuMusicSyncSpectrum, menuMusicDrawSpectrum, menuMusicMixes, menuMusicSetVolumes };",
             context,
         );
         return {
@@ -821,6 +928,14 @@ test("Opus theme preserves its crossfade and resumes from ordinary trusted click
             logs,
             mediaMetadata,
             mediaSession,
+            audioContexts,
+            spectrumCanvas,
+            spectrumDraws,
+            menuUi: context.menuUi,
+            setReducedMotion(value) {
+                reducedMotion = value;
+            },
+            frames,
             window,
             document,
             body,
@@ -1064,6 +1179,87 @@ test("Opus theme preserves its crossfade and resumes from ordinary trusted click
         "../assets/gameplay/music/shadows-of-war.webm?v=build-42",
         "Tauri resolves the same music through its local SOW_ASSETS_URL",
     );
+
+    const spectrum = createHarness();
+    const mainMenu = state("MainMenu", 0.8, false, "Idle");
+    spectrum.api.syncMenuMusic(mainMenu, true);
+    spectrum.menuUi.state = mainMenu;
+    spectrum.menuUi.settingsOpen = true;
+    spectrum.api.menuMusicSyncSpectrum();
+    await flushPlay();
+    assert.equal(spectrum.audioContexts.length, 1, "opening settings creates one lazy Web Audio graph");
+    assert.equal(spectrum.audioContexts[0].sources.length, 2, "both existing music decks feed the graph");
+    assert.equal(spectrum.api.menuMusic.spectrumAnalyzers.filter(Boolean).length, 2);
+    assert.equal(spectrum.api.menuMusic.spectrumGains[0].gain.value, 0.8);
+    assert.equal(spectrum.api.menuMusic.decks[0].volume, 1, "the graph preserves the deck's effective gain");
+    assert.equal(spectrum.spectrumCanvas.hidden, false);
+    spectrum.audioContexts[0].analyzers[0].bins.fill(160);
+    spectrum.api.menuMusicDrawSpectrum(spectrum.spectrumCanvas);
+    assert.ok(spectrum.spectrumDraws.length > 0, "live frequency bins render as bars");
+    const fullVolumeBarHeight = spectrum.spectrumDraws[0][3];
+
+    spectrum.api.syncMenuMusic(state("MainMenu", 0.4, false, "Idle"), true, 0.4);
+    assert.equal(
+        spectrum.api.menuMusic.spectrumGains[0].gain.value,
+        0.4,
+        "the slider lowers the analyzed signal",
+    );
+    spectrum.spectrumDraws.length = 0;
+    spectrum.api.menuMusicDrawSpectrum(spectrum.spectrumCanvas);
+    assert.ok(
+        spectrum.spectrumDraws[0][3] < fullVolumeBarHeight,
+        "the fixed spectrum scale visibly shrinks when the music slider is lowered",
+    );
+    spectrum.api.menuMusic.crossfade = { outgoing: 0, incoming: 1, progress: 0.5, startedAt: 0 };
+    spectrum.api.menuMusicSetVolumes(spectrum.api.menuMusicMixes());
+    assert.equal(spectrum.api.menuMusic.spectrumGains[0].gain.value, 0.2);
+    assert.equal(
+        spectrum.api.menuMusic.spectrumGains[1].gain.value,
+        0.2,
+        "crossfade keeps both deck gains aligned",
+    );
+
+    spectrum.api.syncMenuMusic(state("MainMenu", 0, false, "Idle"), true, 0);
+    spectrum.spectrumDraws.length = 0;
+    spectrum.api.menuMusicSyncSpectrum();
+    assert.deepEqual(spectrum.spectrumDraws.at(-1), [0, 19, 300, 1], "zero volume draws a flat trace");
+    spectrum.api.syncMenuMusic(state("MainMenu", 0.4, true, "Idle"), false, 0.4);
+    spectrum.spectrumDraws.length = 0;
+    spectrum.api.menuMusicSyncSpectrum();
+    assert.deepEqual(spectrum.spectrumDraws.at(-1), [0, 19, 300, 1], "global mute draws a flat trace");
+
+    spectrum.api.syncMenuMusic(state("MainMenu", 0.4, false, "Idle"), true, 0.4);
+    spectrum.setReducedMotion(true);
+    spectrum.api.menuMusicSyncSpectrum();
+    assert.equal(spectrum.api.menuMusic.spectrumFrame, 0, "reduced motion freezes the live spectrum");
+    spectrum.setReducedMotion(false);
+    spectrum.api.menuMusicSyncSpectrum();
+    const spectrumFrame = spectrum.api.menuMusic.spectrumFrame;
+    assert.ok(spectrumFrame, "the visible settings panel schedules spectrum frames");
+    spectrum.document.visibilityState = "hidden";
+    spectrum.api.menuMusicSyncSpectrum();
+    assert.equal(spectrum.api.menuMusic.spectrumFrame, 0, "a hidden tab stops spectrum sampling");
+    assert.equal(spectrum.frames.has(spectrumFrame), false);
+    spectrum.document.visibilityState = "visible";
+    spectrum.api.menuMusicSyncSpectrum();
+    spectrum.menuUi.settingsOpen = false;
+    spectrum.api.menuMusicSyncSpectrum();
+    assert.equal(spectrum.api.menuMusic.spectrumFrame, 0, "closing settings stops spectrum sampling");
+
+    const fallback = createHarness();
+    fallback.window.AudioContext = undefined;
+    const fallbackState = state("MainMenu", 0.7, false, "Idle");
+    fallback.api.syncMenuMusic(fallbackState, true);
+    fallback.menuUi.state = fallbackState;
+    fallback.menuUi.settingsOpen = true;
+    fallback.api.menuMusicSyncSpectrum();
+    assert.equal(fallback.api.menuMusic.decks[0].paused, false, "unsupported analysis keeps music playing");
+    assert.equal(
+        fallback.api.menuMusic.decks[0].volume,
+        0.7,
+        "unsupported analysis keeps native volume control",
+    );
+    assert.equal(fallback.spectrumCanvas.hidden, true);
 });
 
 test("music volume no longer controls SFX and music assets reach every shared-shell package", () => {
@@ -1122,9 +1318,18 @@ test("leader display names use the catalog translation keys for every leader", (
 test("one hero briefing renders identity and the named ability without exposing missing translations", () => {
     const start = coreSource.indexOf("function heroBriefingLeader");
     const end = coreSource.indexOf("function mapInfo(", start);
+    const loaderStart = coreSource.indexOf("export function renderShowcaseLoader(");
+    const loaderEnd = coreSource.indexOf("export function abilityIconMarkup(", loaderStart);
     const abilityStart = coreSource.indexOf("export function abilityIconMarkup(");
     const abilityEnd = coreSource.indexOf("export function leaderArtUrl(", abilityStart);
-    assert.ok(start >= 0 && end > start && abilityStart >= 0 && abilityEnd > abilityStart);
+    assert.ok(
+        start >= 0 &&
+            end > start &&
+            loaderStart >= 0 &&
+            loaderEnd > loaderStart &&
+            abilityStart >= 0 &&
+            abilityEnd > abilityStart,
+    );
     const translations = {
         "heroes.leader_amina_de_zazzau_name": "Amina of Zazzau",
         "heroes.leader_amina_de_zazzau_civilization": "Kingdom of Zazzau",
@@ -1149,7 +1354,8 @@ test("one hero briefing renders identity and the named ability without exposing 
         asset: (path) => "/assets/" + path,
     };
     vm.runInNewContext(
-        coreSource.slice(abilityStart, abilityEnd).replace(/\bexport\s+/g, "") +
+        coreSource.slice(loaderStart, loaderEnd).replace(/\bexport\s+/g, "") +
+            coreSource.slice(abilityStart, abilityEnd).replace(/\bexport\s+/g, "") +
             coreSource.slice(start, end).replace(/\bexport\s+/g, "") +
             "; this.renderHeroBriefing = renderHeroBriefing; this.hideBrokenHeroBriefingIcon = hideBrokenHeroBriefingIcon;",
         context,
@@ -1313,6 +1519,27 @@ test("skill icons stay beside full hero details and out of compact avatar cards"
         /menuUi\.state!\.prefer_random_leader \? "random" : leaderById\(menuUi\.state!\.selected_leader\)/,
     );
     assert.match(home, /renderHeroBriefing\(leader, "home", "sow-home-selected"\)/);
+});
+
+test("hero selection waits for its skill icon and uses the shared loader", () => {
+    const availabilityStart = heroesSource.indexOf("function setFeaturedArtAvailability(");
+    const availabilityEnd = heroesSource.indexOf("\n}", availabilityStart);
+    const availability = heroesSource.slice(availabilityStart, availabilityEnd);
+    assert.match(availability, /\[data-hero-skill-icon\]/);
+    assert.match(availability, /if \(!image\.complete \|\| \(skillIcon && !skillIcon\.complete\)\) return/);
+    assert.match(heroesSource, /image\.dataset\.heroSkillArtSlug === art\.dataset\.heroArtSlug/);
+    assert.match(coreSource, /renderShowcaseLoader\("showcase-loader-arc-skill"\)/);
+    assert.match(coreSource, /data-hero-skill-icon[\s\S]*?fetchpriority='high'/);
+    assert.match(
+        profileCss,
+        /\.sow-heroes__featured\.is-loading \.sow-hero-briefing--selection \.sow-hero-briefing__icon\s*\{\s*opacity:\s*0;/,
+    );
+
+    const artProfiles = fs.readFileSync(path.join(shell, "../../sow-dist/art-optimization.toml"), "utf8");
+    const abilityProfile = artProfiles.match(/\[profiles\.ability_icon\]([\s\S]*?)(?=\n\[|$)/)?.[1] || "";
+    assert.match(abilityProfile, /max_width = 128/);
+    assert.match(abilityProfile, /max_height = 128/);
+    assert.match(abilityProfile, /recipe_version = 2/);
 });
 
 test("hero cards confirm selection without a lock notice or a confirm button", () => {
@@ -2114,6 +2341,7 @@ test("Settings owns optional sign-in and respects pending, reauthentication, and
             portalOffersSignIn: () => offersSignIn,
             isAndroidTwa: () => false,
             renderLocaleSettingRow: () => "",
+            renderMusicSpectrum: () => "",
             renderSettingsPrivacySection: () => "",
             renderSettingsLinks: () => "",
             renderSettingsLink: () => "",

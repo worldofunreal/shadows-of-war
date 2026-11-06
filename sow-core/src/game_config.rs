@@ -447,7 +447,7 @@ impl Default for GameConfig {
             territory_gold_amount: default_territory_gold_amount(),
             territory_gold_tiles: default_territory_gold_tiles(),
             troop_base_income: default_troop_base_income(),
-            max_troops_base: 10.0,
+            max_troops_base: 5_000.0,
             max_troops_scale: 55.0,
             troop_upkeep_per_1000: default_troop_upkeep_per_1000(),
             trade_ship_gold_income: default_trade_ship_gold_income(),

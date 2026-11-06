@@ -234,6 +234,13 @@ impl Leader {
         )
     }
 
+    /// `1 + percent/100` on city-tile defense against the matching attacker.
+    pub fn city_defense_multiplier(self, target: Target) -> f64 {
+        self.ability_multiplier(
+            |a| matches!(a, Ability::CityDefense { against, .. } if against == target),
+        )
+    }
+
     /// `1 - percent/100` on the troops this hero's armies lose when `when` holds, else `1`.
     pub fn attacker_loss_multiplier(self, when: LossWhen) -> f64 {
         match self.ability() {

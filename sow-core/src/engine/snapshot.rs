@@ -90,7 +90,7 @@ impl SowEngine {
                     leader: p.leader,
                     empowered_attack: self.attacks.iter().any(|a| {
                         a.owner_id == p.id
-                            && crate::execution::combat::outnumbered_bonus_applies(
+                            && crate::execution::combat::empowered_attack_applies(
                                 &self.state,
                                 p.id,
                                 a.target_owner,

@@ -1427,10 +1427,10 @@ impl SowApp {
                     && fleet.unit_type == sow_core::game::UnitType::Warship
             })
             .count() as u32;
-        let cost = kind.gold_cost_with_owned_count(owned_warships);
         let Some(player) = snapshot.players.iter().find(|player| player.id == owner_id) else {
             return false;
         };
+        let cost = kind.gold_cost_with_owned_count_for_leader(owned_warships, player.leader);
         if player.boats_in_use >= player.boat_capacity {
             self.add_map_feedback(crate::ui::UiText::new("hud.fleet_capacity_full"));
             return false;
@@ -2039,7 +2039,7 @@ impl SowApp {
                 .count() as u32
         });
         let cost = sow_core::game::UnitType::Warship
-            .gold_cost_with_owned_count(owned_warships);
+            .gold_cost_with_owned_count_for_leader(owned_warships, player.leader);
         if player.gold < cost {
             self.add_map_feedback(crate::ui::UiText::new("hud.not_enough_gold")
                 .with("cost", cost.ceil().to_string())
