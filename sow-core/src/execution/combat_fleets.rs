@@ -176,7 +176,8 @@ impl SowEngine {
                             && !port.under_construction
                             && port.active_level() >= 1
                     })
-                    && (port.tile_idx % w).abs_diff(fleet.current_tile % w)
+                    && (port.tile_idx % w)
+                        .abs_diff(fleet.current_tile % w)
                         .max((port.tile_idx / w).abs_diff(fleet.current_tile / w))
                         <= WARSHIP_DOCKING_RANGE
                 {
@@ -355,6 +356,7 @@ impl SowEngine {
             self.eliminate_player(victim, conqueror, x, y, false);
         }
         self.execute_warship_ai();
+        self.hero_coastal_foundings();
     }
 }
 
@@ -379,8 +381,10 @@ impl SowEngine {
         for (index, fleet) in self.fleets.iter().enumerate() {
             if fleet.troops > 0.0 {
                 spatial
-                    .entry((fleet.current_tile % width / FLEET_SPATIAL_CELL,
-                            fleet.current_tile / width / FLEET_SPATIAL_CELL))
+                    .entry((
+                        fleet.current_tile % width / FLEET_SPATIAL_CELL,
+                        fleet.current_tile / width / FLEET_SPATIAL_CELL,
+                    ))
                     .or_default()
                     .push(index);
             }
@@ -389,10 +393,14 @@ impl SowEngine {
             indices.sort_unstable_by_key(|&index| self.fleets[index].id);
         }
         let mut docked_per_port = std::collections::HashMap::<u64, usize>::new();
-        let connected_port_components: std::collections::HashSet<(u16, u32)> = self.buildings.iter()
-            .filter(|port| port.kind == crate::game::BuildingKind::Port
-                && !port.under_construction
-                && port.active_level() >= 1)
+        let connected_port_components: std::collections::HashSet<(u16, u32)> = self
+            .buildings
+            .iter()
+            .filter(|port| {
+                port.kind == crate::game::BuildingKind::Port
+                    && !port.under_construction
+                    && port.active_level() >= 1
+            })
             .flat_map(|port| {
                 let mut components = Vec::new();
                 let footprint = crate::building::BuildingFootprint::at(
@@ -403,15 +411,19 @@ impl SowEngine {
                 for y in footprint.top..footprint.top + footprint.height as i32 {
                     for x in footprint.left..footprint.left + footprint.width as i32 {
                         if self.state.map.is_valid_coord(x, y) {
-                            self.state.map.for_each_neighbor(x as u32, y as u32, |nx, ny| {
-                                if !footprint.contains(nx as i32, ny as i32) {
-                                    let tile = ny * width + nx;
-                                    if self.state.map.terrain[tile as usize].is_water() {
-                                        let component = self.water.component_of(tile);
-                                        if component != 0 { components.push((port.owner_id, component)); }
+                            self.state
+                                .map
+                                .for_each_neighbor(x as u32, y as u32, |nx, ny| {
+                                    if !footprint.contains(nx as i32, ny as i32) {
+                                        let tile = ny * width + nx;
+                                        if self.state.map.terrain[tile as usize].is_water() {
+                                            let component = self.water.component_of(tile);
+                                            if component != 0 {
+                                                components.push((port.owner_id, component));
+                                            }
+                                        }
                                     }
-                                }
-                            });
+                                });
                         }
                     }
                 }
@@ -448,12 +460,12 @@ impl SowEngine {
                 .map_or(current, |state| state.patrol_tile);
             let has_connected_port = connected_port_components.contains(&(owner_id, component));
             let min_cell_x = cx.saturating_sub(WARSHIP_TARGET_RANGE) / FLEET_SPATIAL_CELL;
-            let max_cell_x = cx.saturating_add(WARSHIP_TARGET_RANGE).min(width - 1)
-                / FLEET_SPATIAL_CELL;
+            let max_cell_x =
+                cx.saturating_add(WARSHIP_TARGET_RANGE).min(width - 1) / FLEET_SPATIAL_CELL;
             let map_height = self.state.map.height;
             let min_cell_y = cy.saturating_sub(WARSHIP_TARGET_RANGE) / FLEET_SPATIAL_CELL;
-            let max_cell_y = cy.saturating_add(WARSHIP_TARGET_RANGE).min(map_height - 1)
-                / FLEET_SPATIAL_CELL;
+            let max_cell_y =
+                cy.saturating_add(WARSHIP_TARGET_RANGE).min(map_height - 1) / FLEET_SPATIAL_CELL;
             candidate_indices.clear();
             for by in min_cell_y..=max_cell_y {
                 for bx in min_cell_x..=max_cell_x {
@@ -499,7 +511,10 @@ impl SowEngine {
                             if fleet.piracy_safe_until > self.state.tick
                                 || !has_connected_port
                                 || patrol_distance_sq > WARSHIP_PATROL_RANGE * WARSHIP_PATROL_RANGE
-                                || self.trade_ship_destination_is_friendly(owner_id, fleet.target_owner)
+                                || self.trade_ship_destination_is_friendly(
+                                    owner_id,
+                                    fleet.target_owner,
+                                )
                                 || self.trade_ship_is_protected_by_port(candidate)
                             {
                                 return None;
@@ -540,7 +555,8 @@ impl SowEngine {
                         .map_or(0, |state| state.manual_order_tick),
                 ) >= 50
                 && self.fleets[index].troops * 100.0 < max_health * WARSHIP_RETREAT_HEALTH_PERCENT
-                && let Some((port_id, port_tile, path)) = self.nearest_port_route(owner_id, current, Some(&docked_per_port))
+                && let Some((port_id, port_tile, path)) =
+                    self.nearest_port_route(owner_id, current, Some(&docked_per_port))
             {
                 let fleet = &mut self.fleets[index];
                 let state = fleet.warship.get_or_insert_with(|| {
@@ -591,7 +607,8 @@ impl SowEngine {
                 if let Some(state) = self.fleets[index].warship.as_mut() {
                     state.target_fleet = None;
                 }
-                if !is_retreating && self.fleets[index].path_cursor >= self.fleets[index].path.len() {
+                if !is_retreating && self.fleets[index].path_cursor >= self.fleets[index].path.len()
+                {
                     self.set_next_patrol_route(index);
                 }
             }
@@ -621,7 +638,9 @@ impl SowEngine {
                 && !port.under_construction
                 && port.active_level() >= 1
                 && port.owner_id == fleet.owner_id
-                && (port.tile_idx % width).abs_diff(x).max((port.tile_idx / width).abs_diff(y))
+                && (port.tile_idx % width)
+                    .abs_diff(x)
+                    .max((port.tile_idx / width).abs_diff(y))
                     <= WARSHIP_DOCKING_RANGE
         })
     }
@@ -650,15 +669,11 @@ impl SowEngine {
             let dx = (port.tile_idx % width).abs_diff(tile % width);
             let dy = (port.tile_idx / width).abs_diff(tile / width);
             dx * dx + dy * dy <= 150 * 150
-                && self.port_has_water_component(
-                    port.tile_idx,
-                    self.water.component_of(tile),
-                )
+                && self.port_has_water_component(port.tile_idx, self.water.component_of(tile))
         });
         if passive_port {
-            self.fleets[index].troops = (self.fleets[index].troops
-                + self.state.config.per_tick(10.0))
-            .min(max_health);
+            self.fleets[index].troops =
+                (self.fleets[index].troops + self.state.config.per_tick(10.0)).min(max_health);
         }
         let Some(state) = self.fleets[index].warship.as_ref() else {
             return;
@@ -698,13 +713,15 @@ impl SowEngine {
             .warship
             .as_ref()
             .and_then(|state| state.retreat_port_id);
-        let valid_port = retreat_port_id.is_some_and(|port_id| self.buildings.iter().any(|port| {
-            port.id == port_id
-                && port.owner_id == owner_id
-                && port.kind == crate::game::BuildingKind::Port
-                && !port.under_construction
-                && port.active_level() >= 1
-        }));
+        let valid_port = retreat_port_id.is_some_and(|port_id| {
+            self.buildings.iter().any(|port| {
+                port.id == port_id
+                    && port.owner_id == owner_id
+                    && port.kind == crate::game::BuildingKind::Port
+                    && !port.under_construction
+                    && port.active_level() >= 1
+            })
+        });
         if !valid_port {
             if let Some((port_id, tile, path)) =
                 self.nearest_port_route(owner_id, current_tile, Some(docked_per_port))
@@ -719,8 +736,8 @@ impl SowEngine {
                 fleet.replace_path(path);
             } else {
                 if let Some(state) = self.fleets[index].warship.as_mut() {
-                state.mode = crate::warp_fleet::WarshipMode::Patrolling;
-                state.retreat_port_id = None;
+                    state.mode = crate::warp_fleet::WarshipMode::Patrolling;
+                    state.retreat_port_id = None;
                 }
                 self.fleets[index].retreating = false;
             }
@@ -774,9 +791,11 @@ impl SowEngine {
                 && !port.under_construction
                 && port.active_level() >= 1
         }) else {
-            if let Some((new_port, tile, path)) =
-                self.nearest_port_route(self.fleets[index].owner_id, self.fleets[index].current_tile, Some(docked_per_port))
-            {
+            if let Some((new_port, tile, path)) = self.nearest_port_route(
+                self.fleets[index].owner_id,
+                self.fleets[index].current_tile,
+                Some(docked_per_port),
+            ) {
                 let fleet = &mut self.fleets[index];
                 if let Some(state) = fleet.warship.as_mut() {
                     state.retreat_port_id = Some(new_port);
@@ -788,7 +807,8 @@ impl SowEngine {
         };
         let width = self.state.map.width;
         let tile = self.fleets[index].current_tile;
-        let distance = (port.tile_idx % width).abs_diff(tile % width)
+        let distance = (port.tile_idx % width)
+            .abs_diff(tile % width)
             .max((port.tile_idx / width).abs_diff(tile / width));
         if distance > WARSHIP_DOCKING_RANGE {
             return;
@@ -799,7 +819,8 @@ impl SowEngine {
                 self.fleets[index].owner_id,
                 self.fleets[index].current_tile,
                 Some(docked_per_port),
-            ) && new_port != port_id {
+            ) && new_port != port_id
+            {
                 if let Some(state) = self.fleets[index].warship.as_mut() {
                     state.retreat_port_id = Some(new_port);
                 }
@@ -826,9 +847,11 @@ impl SowEngine {
         if self.fleets[index].path_cursor < self.fleets[index].path.len() {
             return;
         }
-        if let Some((port_id, tile, path)) =
-            self.nearest_port_route(self.fleets[index].owner_id, self.fleets[index].current_tile, Some(docked_per_port))
-        {
+        if let Some((port_id, tile, path)) = self.nearest_port_route(
+            self.fleets[index].owner_id,
+            self.fleets[index].current_tile,
+            Some(docked_per_port),
+        ) {
             let fleet = &mut self.fleets[index];
             if let Some(state) = fleet.warship.as_mut() {
                 state.retreat_port_id = Some(port_id);
@@ -897,14 +920,16 @@ impl SowEngine {
         for y in footprint.top..footprint.top + footprint.height as i32 {
             for x in footprint.left..footprint.left + footprint.width as i32 {
                 if self.state.map.is_valid_coord(x, y) {
-                    self.state.map.for_each_neighbor(x as u32, y as u32, |nx, ny| {
-                        if !footprint.contains(nx as i32, ny as i32) {
-                            let tile = ny * width + nx;
-                            if self.state.map.terrain[tile as usize].is_water() {
-                                tiles.push(tile);
+                    self.state
+                        .map
+                        .for_each_neighbor(x as u32, y as u32, |nx, ny| {
+                            if !footprint.contains(nx as i32, ny as i32) {
+                                let tile = ny * width + nx;
+                                if self.state.map.terrain[tile as usize].is_water() {
+                                    tiles.push(tile);
+                                }
                             }
-                        }
-                    });
+                        });
                 }
             }
         }
@@ -932,14 +957,16 @@ impl SowEngine {
                     continue;
                 }
                 let mut found = false;
-                self.state.map.for_each_neighbor(x as u32, y as u32, |nx, ny| {
-                    if found || footprint.contains(nx as i32, ny as i32) {
-                        return;
-                    }
-                    let tile = ny * width + nx;
-                    found = self.state.map.terrain[tile as usize].is_water()
-                        && self.water.component_of(tile) == component;
-                });
+                self.state
+                    .map
+                    .for_each_neighbor(x as u32, y as u32, |nx, ny| {
+                        if found || footprint.contains(nx as i32, ny as i32) {
+                            return;
+                        }
+                        let tile = ny * width + nx;
+                        found = self.state.map.terrain[tile as usize].is_water()
+                            && self.water.component_of(tile) == component;
+                    });
                 if found {
                     return true;
                 }
@@ -959,14 +986,9 @@ impl SowEngine {
             .warship
             .as_ref()
             .map_or(0, |state| state.patrol_cycle);
-        let target = deterministic_patrol_tile(
-            &self.state.map,
-            &self.water,
-            center,
-            fleet_id,
-            cycle,
-        )
-        .unwrap_or(center);
+        let target =
+            deterministic_patrol_tile(&self.state.map, &self.water, center, fleet_id, cycle)
+                .unwrap_or(center);
         if let Some(path) = self
             .path_scratch
             .astar
@@ -989,7 +1011,8 @@ impl SowEngine {
             + (from / width).abs_diff(target_tile / width);
         if distance <= WARSHIP_DOCKING_RANGE {
             let owner_id = self.fleets[warship_index].owner_id;
-            let Some((port_id, port_water, path)) = self.nearest_port_route(owner_id, target_tile, None)
+            let Some((port_id, port_water, path)) =
+                self.nearest_port_route(owner_id, target_tile, None)
             else {
                 return;
             };
@@ -1006,11 +1029,13 @@ impl SowEngine {
                 state.record_progress(10);
                 state.target_fleet = None;
             }
-            self.state.events.push(crate::game::GameEvent::TradeShipCaptured {
-                owner_id,
-                fleet_id,
-                tile: target_tile,
-            });
+            self.state
+                .events
+                .push(crate::game::GameEvent::TradeShipCaptured {
+                    owner_id,
+                    fleet_id,
+                    tile: target_tile,
+                });
             return;
         }
         let target_id = self.fleets[target_index].id;
@@ -1026,13 +1051,14 @@ impl SowEngine {
             .is_some_and(|state| {
                 state.target_fleet != Some(target_id)
                     || target_moved
-                    || self.fleets[warship_index].path_cursor >= self.fleets[warship_index].path.len()
+                    || self.fleets[warship_index].path_cursor
+                        >= self.fleets[warship_index].path.len()
             });
         if should_repath
-            && let Some(path) = self
-                .path_scratch
-                .astar
-                .find_path(&self.state.map, &[from], target_tile)
+            && let Some(path) =
+                self.path_scratch
+                    .astar
+                    .find_path(&self.state.map, &[from], target_tile)
         {
             self.fleets[warship_index].dst_tile = target_tile;
             self.fleets[warship_index].replace_path(path);
@@ -1044,11 +1070,10 @@ impl SowEngine {
         let target_id = self.fleets[target_index].id;
         let target_type = self.fleets[target_index].unit_type;
         if target_type == crate::game::UnitType::TransportShip
-            && self
-                .projectiles
-                .iter()
-                .any(|projectile| projectile.kind == crate::game::ProjectileKind::Shell
-                    && projectile.target_fleet_id == Some(target_id))
+            && self.projectiles.iter().any(|projectile| {
+                projectile.kind == crate::game::ProjectileKind::Shell
+                    && projectile.target_fleet_id == Some(target_id)
+            })
         {
             return;
         }

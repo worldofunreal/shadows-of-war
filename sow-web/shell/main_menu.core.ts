@@ -72,6 +72,7 @@ interface MenuUi {
     profileAccountId: string | null;
     profileTab: string;
     profileAchievementFilter: string;
+    profileAchievementSearch: string;
     profileData: ProfileData | null;
     rankedRating: ProfileRating | null;
     rankedLadder: RankedLadder | null;
@@ -138,6 +139,7 @@ export const menuUi: MenuUi = {
     profileAccountId: null,
     profileTab: "overview",
     profileAchievementFilter: "all",
+    profileAchievementSearch: "",
     profileData: null,
     rankedRating: null,
     rankedLadder: null,

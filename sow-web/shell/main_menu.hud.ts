@@ -160,6 +160,13 @@ type HudRefs = {
     plateGoldWrap: HTMLElement;
     plateGoldRate: HTMLElement;
     plateTroopRate: HTMLElement;
+    heroAbility: HTMLDetailsElement;
+    heroAbilityIcon: HTMLElement;
+    heroAbilityName: HTMLElement;
+    heroAbilityState: HTMLElement;
+    heroAbilityTimer: HTMLElement;
+    heroAbilityRule: HTMLElement;
+    heroAbilityRestriction: HTMLElement;
     inboxCount: HTMLElement;
     hoverCard: HTMLElement;
     hoverName: HTMLElement;
@@ -1254,6 +1261,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             plateGoldWrap: requiredHudQuery(root, ".sow-hud__nameplate-stat--gold"),
             plateGoldRate: requiredHudElement("sow-hud-nameplate-gold-rate"),
             plateTroopRate: requiredHudElement("sow-hud-nameplate-troop-rate"),
+            heroAbility: requiredHudElement("sow-hud-hero-ability") as HTMLDetailsElement,
+            heroAbilityIcon: requiredHudElement("sow-hud-hero-ability-icon"),
+            heroAbilityName: requiredHudElement("sow-hud-hero-ability-name"),
+            heroAbilityState: requiredHudElement("sow-hud-hero-ability-state"),
+            heroAbilityTimer: requiredHudElement("sow-hud-hero-ability-timer"),
+            heroAbilityRule: requiredHudElement("sow-hud-hero-ability-rule"),
+            heroAbilityRestriction: requiredHudElement("sow-hud-hero-ability-restriction"),
             inboxCount: requiredHudElement("sow-hud-inbox-count"),
             hoverCard: requiredHudElement("sow-hud-hover-card"),
             hoverName: requiredHudElement("sow-hud-hover-name"),
@@ -1426,9 +1440,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "    </div>" +
             "  </div>" +
             "</header>" +
-            '<div class="sow-hud__nameplate" id="sow-hud-nameplate" data-command="center_camera" role="button" tabindex="0" aria-label="' +
+            '<div class="sow-hud__nameplate" id="sow-hud-nameplate" hidden><div class="sow-hud__nameplate-home" data-command="center_camera" role="button" tabindex="0" aria-label="' +
             SOW_t("hud.center_camera") +
-            '" hidden>' +
+            '">' +
             '  <div class="sow-hud__nameplate-avatar-wrap"><img class="sow-hud__nameplate-avatar" id="sow-hud-nameplate-avatar" alt="" draggable="false"></div>' +
             '  <div class="sow-hud__nameplate-copy"><strong id="sow-hud-nameplate-name"></strong>' +
             '  <div class="sow-hud__nameplate-bar"><i id="sow-hud-nameplate-fill"></i><i id="sow-hud-nameplate-pending-troops" class="sow-hud__nameplate-pending" aria-hidden="true"></i><span class="sow-hud__nameplate-readout"><span id="sow-hud-nameplate-troops"></span>' +
@@ -1456,7 +1470,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '">' +
             hudIcon("troops", "sow-hud__inline-icon") +
             '<b id="sow-hud-nameplate-troop-rate">0/s</b></span>' +
-            "  </div></div>" +
+            "  </div></div></div>" +
+            '<details class="sow-hud__hero-ability" id="sow-hud-hero-ability" hidden>' +
+            '<summary><span id="sow-hud-hero-ability-icon" aria-hidden="true"></span>' +
+            '<span id="sow-hud-hero-ability-name"></span>' +
+            '<b id="sow-hud-hero-ability-state" role="status" aria-live="polite" aria-atomic="true"></b>' +
+            '<span id="sow-hud-hero-ability-timer"></span></summary>' +
+            '<div class="sow-hud__hero-ability-description"><b>' + esc(SOW_t("hud.ability_automatic")) + '</b>' +
+            '<p id="sow-hud-hero-ability-rule"></p><p id="sow-hud-hero-ability-restriction" hidden></p></div></details>' +
             "</div>" +
             '<div class="sow-hud__hover-card hidden" id="sow-hud-hover-card">' +
             '  <div class="sow-hud__hover-header"><b id="sow-hud-hover-name">' +
@@ -5773,6 +5794,33 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         }
     }
 
+    function renderHeroAbility(hud: MenuHudPayload): void {
+        const parts = hudRefs!;
+        const feedback = hud.hero_ability;
+        const hero = hud.player_leader;
+        parts.heroAbility.hidden = !feedback || !hero;
+        if (!feedback || !hero) {
+            parts.heroAbility.open = false;
+            return;
+        }
+        const state = feedback.state;
+        if (parts.heroAbilityIcon.dataset.hero !== hero) {
+            parts.heroAbilityIcon.dataset.hero = hero;
+            parts.heroAbilityIcon.innerHTML = notificationIcon("hud.ability_notice", { hero });
+        }
+        parts.heroAbility.dataset.state = state;
+        parts.heroAbilityName.textContent = SOW_t("site.leader_" + hero + "_ability", {});
+        const label = SOW_t("hud.ability_state_" + state, {});
+        if (parts.heroAbilityState.textContent !== label) parts.heroAbilityState.textContent = label;
+        parts.heroAbilityRule.textContent = SOW_t("site.leader_" + hero + "_description", {});
+        parts.heroAbilityRestriction.hidden = !feedback.restriction;
+        parts.heroAbilityRestriction.textContent = feedback.restriction
+            ? SOW_t("hud.ability_restriction_" + feedback.restriction, {}) : "";
+        const seconds = feedback.remaining_seconds;
+        parts.heroAbilityTimer.hidden = seconds == null;
+        parts.heroAbilityTimer.textContent = seconds == null ? "" : SOW_t("hud.ability_remaining", { seconds });
+    }
+
     function renderHud(forceNotifications = false): void {
         if (!hudRoot) return;
         if (!hudState || hudState.phase !== "Playing" || !hudState.hud) {
@@ -5927,6 +5975,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             hudRefs!.plateTroopRate.textContent = troopRateText;
         }
 
+        renderHeroAbility(hud);
         const playerPlateHidden = Boolean(hud.is_spectating);
         if (hudRefs!.nameplate) {
             if (hudRefs!.nameplate.hidden !== playerPlateHidden)
@@ -7017,6 +7066,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
     if (hudRoot)
         hudRoot.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && hudRefs?.heroAbility.open) {
+                event.preventDefault();
+                event.stopPropagation();
+                hudRefs.heroAbility.open = false;
+                hudRefs.heroAbility.querySelector("summary")?.focus();
+                return;
+            }
             if (handleHudDropdownKeydown(event)) return;
             if (
                 (event.key === "Enter" || event.key === " ") &&

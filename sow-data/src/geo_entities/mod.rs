@@ -524,7 +524,9 @@ mod tests {
                 "{} has no people/realm",
                 entity.id
             );
-            if entity.role == Role::Tribe {
+            // Tribe bots are named for their people; playable tribal leaders
+            // keep their personal name and their tribe as the civilization.
+            if entity.role == Role::Tribe && entity.hero.is_none() {
                 assert_eq!(
                     entity.name, entity.entity,
                     "{} must be named after its people",

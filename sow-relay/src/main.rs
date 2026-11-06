@@ -837,7 +837,7 @@ struct PlayerEntry {
     name: String,
     database_account_id: Option<String>,
     #[serde(default)]
-    leader: Leader,
+    leader: serde_json::Value,
     #[serde(default)]
     team: Option<Team>,
     #[serde(default)]

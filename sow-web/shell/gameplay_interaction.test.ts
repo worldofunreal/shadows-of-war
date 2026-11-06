@@ -1122,7 +1122,7 @@ test("hero ability notices show that hero's ability icon in the seal", () => {
 test("player nameplate in HUD acts as an alternate home button targeting center_camera", () => {
     assert.match(
         hud,
-        /<div class="sow-hud__nameplate" id="sow-hud-nameplate" [^>]*data-command="center_camera"[^>]*role="button"[^>]*tabindex="0"/,
+        /<div class="sow-hud__nameplate" id="sow-hud-nameplate" hidden><div class="sow-hud__nameplate-home" [^>]*data-command="center_camera"[^>]*role="button"[^>]*tabindex="0"/,
     );
     assert.match(hudCss, /\.sow-hud__nameplate\s*\{[^}]*pointer-events:\s*auto;[^}]*cursor:\s*pointer;/);
 });
@@ -1591,4 +1591,47 @@ test("attack ratio slider card matches the latest tactical HUD theme and style",
     assert.match(css, /\.sow-hud__army-allocation::before\s*\{[^}]*background:\s*var\(--sow-fill-army-highlight\)/);
     assert.match(controlsCss, /--sow-fill-army-highlight:\s*#a4ea4a/);
     assert.match(css, /\.sow-hud__army-allocation strong\s*\{[^}]*text-shadow:\s*0 0 12px/);
+});
+
+
+test("hero ability feedback preserves details and shows real availability and a timed window", () => {
+    const start = hud.indexOf("    function renderHeroAbility(");
+    const end = hud.indexOf("    function renderHud(", start);
+    const element = () => ({ hidden: false, open: false, textContent: "", innerHTML: "", dataset: {} });
+    const refs = Object.fromEntries([
+        "heroAbility", "heroAbilityIcon", "heroAbilityName", "heroAbilityState",
+        "heroAbilityTimer", "heroAbilityRule", "heroAbilityRestriction",
+    ].map(key => [key, element()]));
+    let iconLoads = 0;
+    const render = vm.runInNewContext(hud.slice(start, end) + "\nrenderHeroAbility;", {
+        hudRefs: refs,
+        notificationIcon: (_, values) => { iconLoads++; return "icon:" + values.hero; },
+        SOW_t: (key, values) => key === "hud.ability_remaining" ? values.seconds + "s" : key,
+    });
+    const payload = { player_leader: "peter_the_great", hero_ability: { state: "ready", restriction: null, remaining_seconds: null } };
+    render(payload);
+    assert.equal(refs.heroAbility.hidden, false);
+    assert.equal(refs.heroAbility.dataset.state, "ready");
+    assert.equal(refs.heroAbilityState.textContent, "hud.ability_state_ready");
+    assert.equal(refs.heroAbilityRule.textContent, "site.leader_peter_the_great_description");
+    refs.heroAbility.open = true;
+    payload.hero_ability.state = "spent";
+    render(payload);
+    assert.equal(refs.heroAbility.dataset.state, "spent");
+    assert.equal(refs.heroAbility.open, true, "updates do not close the reader's open rule");
+    assert.equal(iconLoads, 1, "the same hero's icon is retained");
+    payload.player_leader = "muhammad_of_ghor";
+    payload.hero_ability = { state: "active", remaining_seconds: 27, restriction: null };
+    render(payload);
+    assert.equal(refs.heroAbilityTimer.textContent, "27s");
+    assert.equal(refs.heroAbilityTimer.hidden, false);
+    assert.equal(refs.heroAbilityState.textContent, "hud.ability_state_active");
+    payload.hero_ability = { state: "unavailable", remaining_seconds: null, restriction: "campaign_only" };
+    render(payload);
+    assert.equal(refs.heroAbilityRestriction.textContent, "hud.ability_restriction_campaign_only");
+    assert.equal(refs.heroAbilityTimer.hidden, true);
+    payload.hero_ability = null;
+    render(payload);
+    assert.equal(refs.heroAbility.hidden, true, "recordings without authoritative availability never invent ready state");
+    assert.equal(refs.heroAbility.open, false);
 });

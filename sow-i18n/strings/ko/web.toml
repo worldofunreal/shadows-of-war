@@ -948,6 +948,18 @@ elimination_bounty = "{victim} 처치; 골드 +{gold}."
 elimination = "{victim}을(를) 처치했습니다."
 elimination_assist = "{victim} 처치 지원; 골드 +{gold}."
 ability_notice = "{ability}"
+ability_state_ready = "준비됨"
+ability_state_conditional = "대기 중"
+ability_state_active = "활성"
+ability_state_triggered = "발동됨"
+ability_state_spent = "소진됨"
+ability_state_unavailable = "사용 불가"
+ability_automatic = "자동 능력"
+ability_remaining = "{seconds}초"
+ability_restriction_campaign_only = "캠페인에서만 사용할 수 있습니다."
+ability_restriction_buildings_disabled = "이 경기에서는 건물이 비활성화되어 있습니다."
+ability_restriction_defeated = "영웅이 더 이상 경기에 참여하지 않습니다."
+
 
 [endgame]
 stat_kills = "처치"

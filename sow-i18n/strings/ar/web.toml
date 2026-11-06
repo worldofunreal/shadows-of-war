@@ -948,6 +948,18 @@ elimination_bounty = "هزمت {victim}؛ +{gold} ذهب."
 elimination = "هزمت {victim}."
 elimination_assist = "ساعدت في هزيمة {victim}؛ +{gold} ذهب."
 ability_notice = "{ability}"
+ability_state_ready = "جاهزة"
+ability_state_conditional = "بانتظار الشرط"
+ability_state_active = "نشطة"
+ability_state_triggered = "تم التفعيل"
+ability_state_spent = "مستهلكة"
+ability_state_unavailable = "غير متاحة"
+ability_automatic = "قدرة تلقائية"
+ability_remaining = "{seconds}ث"
+ability_restriction_campaign_only = "متاحة في الحملة فقط."
+ability_restriction_buildings_disabled = "المباني معطلة في هذه المباراة."
+ability_restriction_defeated = "بطلك لم يعد مشاركاً في المباراة."
+
 
 [endgame]
 stat_kills = "الإقصاءات"
