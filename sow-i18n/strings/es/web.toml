@@ -577,6 +577,9 @@ leader_ewuare_civilization = "Reino de Benín"
 leader_veleda_name = "Veleda"
 leader_veleda_historical = "Profetisa bructera cuya autoridad y predicciones se conocen sobre todo por el relato romano de Tácito sobre la revuelta bátava."
 leader_veleda_civilization = "Bructeros"
+leader_amir_timur_name = "Amir Timur"
+leader_amir_timur_historical = "Conquistador turcomongol (1336-1405) que gobernó desde Samarcanda y forjó un imperio del Volga al Ganges."
+leader_amir_timur_civilization = "Imperio timúrida"
 
 [profile]
 laurels = "Laureles"
@@ -1471,6 +1474,8 @@ leader_ewuare_ability = "Barrios de gremios"
 leader_ewuare_description = "Cada nivel activo de fábrica situado a 20 casillas o menos de una ciudad propia activa genera 1 de oro extra por segundo de juego. Varias ciudades no acumulan el efecto."
 leader_veleda_ability = "Presa del Rin"
 leader_veleda_description = "Tus proyectiles navales capturan los barcos de guerra enemigos derrotados en lugar de hundirlos. Cambian de bando con 25% de vida y sin veteranía."
+leader_amir_timur_ability = "Persecución de la horda"
+leader_amir_timur_description = "Las tribus que se retiran de tu territorio pierden un 35% más de tropas."
 
 [ranked]
 my_rank = "Mi rango"

@@ -574,6 +574,9 @@ leader_ewuare_civilization = "Royaume du Bénin"
 leader_veleda_name = "Veleda"
 leader_veleda_historical = "Prophétesse bructère dont l’autorité et les prédictions sont surtout connues par le récit romain de Tacite sur la révolte batave."
 leader_veleda_civilization = "Bructères"
+leader_amir_timur_name = "Amir Timur"
+leader_amir_timur_historical = "Conquérant turco-mongol (1336-1405) qui régna depuis Samarcande et bâtit un empire de la Volga au Gange."
+leader_amir_timur_civilization = "Empire timouride"
 
 [profile]
 ranked_1v1 = "Classé 1v1"
@@ -1468,6 +1471,8 @@ leader_ewuare_ability = "Quartiers des guildes"
 leader_ewuare_description = "Chaque niveau actif d’usine à 20 cases ou moins d’une ville active vous appartenant produit 1 pièce d’or supplémentaire par seconde de jeu. Plusieurs villes ne cumulent pas l’effet."
 leader_veleda_ability = "Prise du Rhin"
 leader_veleda_description = "Vos obus navals capturent les navires de guerre ennemis vaincus au lieu de les couler. Ils changent de camp avec 25% de santé et sans expérience."
+leader_amir_timur_ability = "Poursuite de la Horde"
+leader_amir_timur_description = "Les tribus qui se retirent de votre territoire perdent 35 % de troupes en plus."
 
 [ranked]
 my_rank = "Mon rang"

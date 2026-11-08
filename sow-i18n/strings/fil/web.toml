@@ -574,6 +574,9 @@ leader_ewuare_civilization = "Kaharian ng Benin"
 leader_veleda_name = "Veleda"
 leader_veleda_historical = "Propetisa ng mga Bructeri na pangunahing nakikilala sa mga tala ni Tacitus tungkol sa pag-aalsa ng mga Batavi."
 leader_veleda_civilization = "Mga Bructeri"
+leader_amir_timur_name = "Amir Timur"
+leader_amir_timur_historical = "Mananakop na Turko-Mongol (1336–1405) na naghari mula sa Samarkand at nagtayo ng imperyo mula Volga hanggang Ganges."
+leader_amir_timur_civilization = "Imperyong Timurid"
 
 [profile]
 ranked_1v1 = "Ranggo 1v1"
@@ -1468,6 +1471,8 @@ leader_ewuare_ability = "Mga Distrito ng Samahan"
 leader_ewuare_description = "Bawat aktibong antas ng pabrikang nasa loob ng 20 tile ng sarili mong aktibong lungsod ay nagbibigay ng 1 dagdag na ginto bawat segundo ng laro. Hindi nagsasama ang epekto ng maraming lungsod."
 leader_veleda_ability = "Bihag ng Rhine"
 leader_veleda_description = "Binibihag ng mga bala ng iyong barko ang natalong barkong pandigma ng kaaway sa halip na palubugin ito. Lilipat ito sa iyong panig na may 25% kalusugan at walang karanasan."
+leader_amir_timur_ability = "Paghahabol sa Tribu"
+leader_amir_timur_description = "Ang mga tribong umuurong mula sa lupain mo ay nawawalan ng 35% higit pang tropa."
 
 [ranked]
 my_rank = "Ranggo ko"

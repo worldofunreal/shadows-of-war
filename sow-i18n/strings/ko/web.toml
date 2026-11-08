@@ -574,6 +574,9 @@ leader_ewuare_civilization = "베닌 왕국"
 leader_veleda_name = "벨레다"
 leader_veleda_historical = "바타비 반란에 관한 타키투스의 로마 기록을 통해 권위와 예언이 주로 전해지는 브룩테리족 예언자."
 leader_veleda_civilization = "브룩테리족"
+leader_amir_timur_name = "아미르 티무르"
+leader_amir_timur_historical = "사마르칸트에서 통치하며 볼가강에서 갠지스강에 이르는 제국을 세운 투르크-몽골계 정복자(1336–1405)."
+leader_amir_timur_civilization = "티무르 제국"
 
 [profile]
 ranked_1v1 = "랭크 1대1"
@@ -1468,6 +1471,8 @@ leader_ewuare_ability = "길드 구역"
 leader_ewuare_description = "가동 중인 자기 도시에서 20칸 이내의 공장은 가동 레벨마다 게임 시간 1초당 금 1을 추가 생산한다. 여러 도시의 효과는 중첩되지 않는다."
 leader_veleda_ability = "라인강의 포획선"
 leader_veleda_description = "함포로 격파한 적 군함을 침몰시키지 않고 포획한다. 체력 25%, 숙련도 없음 상태로 아군이 된다."
+leader_amir_timur_ability = "초원의 추격"
+leader_amir_timur_description = "내 영토에서 퇴각하는 부족은 병력을 35% 더 잃습니다."
 
 [ranked]
 my_rank = "내 랭크"

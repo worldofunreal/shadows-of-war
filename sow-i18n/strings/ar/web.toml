@@ -574,6 +574,9 @@ leader_ewuare_civilization = "مملكة بنين"
 leader_veleda_name = "فيلدا"
 leader_veleda_historical = "كاهنة من قبيلة بروكتيري، لا تُعرف سلطتها ونبوءاتها إلا أساسًا من رواية تاسيتوس الرومانية عن ثورة الباتافيين."
 leader_veleda_civilization = "البروكتيري"
+leader_amir_timur_name = "أمير تيمور"
+leader_amir_timur_historical = "فاتح تركي مغولي (1336–1405) حكم من سمرقند وأقام إمبراطورية من الفولغا إلى الغانج."
+leader_amir_timur_civilization = "الإمبراطورية التيمورية"
 
 [profile]
 ranked_1v1 = "مصنّف 1 ضد 1"
@@ -1468,6 +1471,8 @@ leader_ewuare_ability = "أحياء النقابات"
 leader_ewuare_description = "كل مستوى مصنع فعّال ضمن 20 خانة من مدينة فعّالة لك ينتج ذهباً إضافياً واحداً كل ثانية لعب. لا تتراكم آثار المدن المتعددة."
 leader_veleda_ability = "غنيمة الراين"
 leader_veleda_description = "تأسر قذائفك البحرية سفن العدو الحربية المهزومة بدلاً من إغراقها. تنضم إليك بصحة 25% ودون خبرة قتالية."
+leader_amir_timur_ability = "مطاردة القبائل"
+leader_amir_timur_description = "القبائل التي تنسحب من أرضك تخسر جنودًا أكثر بنسبة 35%."
 
 [ranked]
 my_rank = "رتبتي"

@@ -574,6 +574,9 @@ leader_ewuare_civilization = "ベニン王国"
 leader_veleda_name = "ウェレダ"
 leader_veleda_historical = "ブルクテリ族の巫女。権威と予言は、バタウィ族の反乱を記したタキトゥスのローマ側の記録を通じて主に知られる。"
 leader_veleda_civilization = "ブルクテリ族"
+leader_amir_timur_name = "アミール・ティムール"
+leader_amir_timur_historical = "サマルカンドを拠点に、ヴォルガ川からガンジス川に至る帝国を築いたテュルク・モンゴル系の征服者（1336–1405）。"
+leader_amir_timur_civilization = "ティムール朝"
 
 [profile]
 ranked_1v1 = "ランク1対1"
@@ -1468,6 +1471,8 @@ leader_ewuare_ability = "職人組合の街区"
 leader_ewuare_description = "稼働中の自軍都市から20マス以内にある工場は、稼働レベルごとにゲーム内1秒あたり金1を追加生産する。複数都市による重複はない。"
 leader_veleda_ability = "ライン川の鹵獲船"
 leader_veleda_description = "艦砲で撃破した敵軍艦を沈めずに鹵獲する。耐久力25%、熟練度なしで味方になる。"
+leader_amir_timur_ability = "草原の追撃"
+leader_amir_timur_description = "あなたの土地から撤退する部族は、失う兵が35%増える。"
 
 [ranked]
 my_rank = "自分のランク"

@@ -97,3 +97,4 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Pertinax | Treasury of Austerity | With no active land attacks against players by you or against you, every 1,000 troops of production wasted at your troop cap become 1 gold. | surplus_treasury | 1000 troops/gold | `gameplay/icons/abilities/pertinax.webp` |
 | Ewuare the Great | Guild Wards | Each active factory level within 20 tiles of one of your active cities generates 1 extra gold per game second. Multiple cities do not stack. | guild_network | 1 gold/s/level | `gameplay/icons/abilities/ewuare.webp` |
 | Veleda | Prize of the Rhine | Your naval shells capture defeated enemy warships instead of sinking them. Prizes change sides with 25% health and no veterancy. | warship_prize | 25% | `gameplay/icons/abilities/veleda.webp` |
+| Amir Timur | Pursuit of the Horde | Tribes retreating from your land lose 35% more troops. | enemy_retreat_penalty | 35% | `gameplay/icons/abilities/amir_timur.webp` |

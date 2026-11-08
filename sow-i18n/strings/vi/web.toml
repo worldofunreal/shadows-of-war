@@ -574,6 +574,9 @@ leader_ewuare_civilization = "Vương quốc Benin"
 leader_veleda_name = "Veleda"
 leader_veleda_historical = "Nữ tiên tri của người Bructeri; uy tín và lời tiên tri của bà chủ yếu được biết qua ghi chép La Mã của Tacitus về cuộc nổi dậy Batavi."
 leader_veleda_civilization = "Người Bructeri"
+leader_amir_timur_name = "Amir Timur"
+leader_amir_timur_historical = "Nhà chinh phục Turk-Mông Cổ (1336–1405) cai trị từ Samarkand và dựng nên đế quốc từ Volga đến sông Hằng."
+leader_amir_timur_civilization = "Đế quốc Timurid"
 
 [profile]
 ranked_1v1 = "Xếp hạng 1v1"
@@ -1468,6 +1471,8 @@ leader_ewuare_ability = "Phường hội thợ"
 leader_ewuare_description = "Mỗi cấp nhà máy đang hoạt động trong phạm vi 20 ô của một thành phố đang hoạt động thuộc bạn tạo thêm 1 vàng mỗi giây trong game. Nhiều thành phố không cộng dồn hiệu ứng."
 leader_veleda_ability = "Chiến hạm sông Rhine"
 leader_veleda_description = "Đạn hải quân của bạn bắt giữ chiến hạm địch bị đánh bại thay vì đánh chìm. Chiến hạm đổi phe với 25% máu và không có kinh nghiệm."
+leader_amir_timur_ability = "Truy kích bộ lạc"
+leader_amir_timur_description = "Các bộ lạc rút khỏi lãnh thổ của bạn mất thêm 35% quân."
 
 [ranked]
 my_rank = "Hạng của tôi"
