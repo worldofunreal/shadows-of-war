@@ -7066,11 +7066,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
     if (hudRoot)
         hudRoot.addEventListener("keydown", function (event) {
-            if (event.key === "Escape" && hudRefs?.heroAbility.open) {
+            const ability = hudRefs?.heroAbility;
+            if (event.key === "Escape" && ability?.open) {
                 event.preventDefault();
                 event.stopPropagation();
-                hudRefs.heroAbility.open = false;
-                hudRefs.heroAbility.querySelector("summary")?.focus();
+                ability.open = false;
+                ability.querySelector("summary")?.focus();
                 return;
             }
             if (handleHudDropdownKeydown(event)) return;
