@@ -951,6 +951,18 @@ elimination_bounty = "{victim} besiegt; +{gold} Gold."
 elimination = "Du hast {victim} besiegt."
 elimination_assist = "Bei der Niederlage von {victim} geholfen; +{gold} Gold."
 ability_notice = "{ability}"
+ability_state_ready = "Bereit"
+ability_state_conditional = "Wartet"
+ability_state_active = "Aktiv"
+ability_state_triggered = "Ausgelöst"
+ability_state_spent = "Verbraucht"
+ability_state_unavailable = "Nicht verfügbar"
+ability_automatic = "Automatische Fähigkeit"
+ability_remaining = "{seconds}s"
+ability_restriction_campaign_only = "Nur in der Kampagne verfügbar."
+ability_restriction_buildings_disabled = "Gebäude sind in dieser Partie deaktiviert."
+ability_restriction_defeated = "Dein Held ist nicht mehr im Spiel."
+
 
 [endgame]
 stat_kills = "Abschüsse"

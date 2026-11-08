@@ -484,6 +484,7 @@ struct HudPublishKey {
     troop_rate: u64,
     gold_rate: u64,
     hero_income_rate: u64,
+    hero_ability: Option<sow_core::execution::hero_effects::AbilityFeedback>,
     attack_ratio: u32,
     spawn_timer_tenths: i32,
     selected_building: Option<crate::ui::hud::state::BuildingPlacement>,
@@ -2033,6 +2034,26 @@ fn endgame_stats_snapshot(app: &SowApp, player_id: u16) -> Option<[u64; 5]> {
         })
 }
 
+fn hero_ability_feedback(
+    app: &SowApp,
+) -> Option<sow_core::execution::hero_effects::AbilityFeedback> {
+    use sow_core::execution::hero_effects::AbilityState;
+    let owner = app.sim.my_player_id?;
+    let mut feedback = app.sim.engine.as_ref()?.hero_ability_feedback(owner)?;
+    // Reuse the actual activation notice; no guessed activation or second timer.
+    if feedback.state != AbilityState::Active
+        && feedback.state != AbilityState::Unavailable
+        && app.ui.app.hud_state.hud_notifications.iter().any(|notice| {
+            notice.text.key == "hud.ability_notice"
+                && notice.players[0] == Some(owner)
+                && notice.spawned_at.elapsed().as_secs_f64() < 3.0
+        })
+    {
+        feedback.state = AbilityState::Triggered;
+    }
+    Some(feedback)
+}
+
 fn hud_publish_key(app: &SowApp) -> HudPublishKey {
     let hud = &app.ui.app.hud_state;
     let tutorial_active = app.ui.tutorial_active && app.net.is_offline;
@@ -2119,6 +2140,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         troop_rate: hud.troop_rate.to_bits(),
         gold_rate: hud.gold_rate.to_bits(),
         hero_income_rate: hud.hero_income_rate.to_bits(),
+        hero_ability: hero_ability_feedback(app),
         attack_ratio: hud.attack_ratio.to_bits(),
         spawn_timer_tenths: hud
             .spawn_timer_secs
@@ -4271,6 +4293,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "troop_rate": hud.troop_rate,
         "gold_rate": hud.gold_rate,
         "hero_income_rate": hud.hero_income_rate,
+        "hero_ability": hero_ability_feedback(app),
         "attack_ratio": hud.attack_ratio,
         "operations": operations,
         "spawn_timer_secs": hud.spawn_timer_secs,

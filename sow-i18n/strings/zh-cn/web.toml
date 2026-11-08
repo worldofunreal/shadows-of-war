@@ -951,6 +951,18 @@ elimination_bounty = "击败了{victim}；获得{gold}金币。"
 elimination = "你击败了{victim}。"
 elimination_assist = "协助击败了{victim}；获得{gold}金币。"
 ability_notice = "{ability}"
+ability_state_ready = "已就绪"
+ability_state_conditional = "等待条件"
+ability_state_active = "生效中"
+ability_state_triggered = "已触发"
+ability_state_spent = "已用尽"
+ability_state_unavailable = "不可用"
+ability_automatic = "自动触发能力"
+ability_remaining = "{seconds}秒"
+ability_restriction_campaign_only = "仅可在战役中使用。"
+ability_restriction_buildings_disabled = "本局已禁用建筑。"
+ability_restriction_defeated = "你的英雄已退出本局。"
+
 
 [endgame]
 stat_kills = "击杀"

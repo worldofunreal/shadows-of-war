@@ -313,12 +313,24 @@ async fn register_relay(rc: &RelayCandidate, worker: &RelayWorker) -> Result<(),
         worker.mgmt_url.trim_end_matches('/')
     );
 
+    let relay_players: Vec<serde_json::Value> = rc
+        .relay_players_json
+        .iter()
+        .map(|p| {
+            let mut obj = p.clone();
+            if let Some(map) = obj.as_object_mut() {
+                map.remove("leader");
+            }
+            obj
+        })
+        .collect();
+
     let relay_config = serde_json::json!({
         "lobby_id": rc.lobby_id,
         "relay_port": rc.relay_port,
         "ticket_expires_at": rc.ticket_expires_at,
         "tick_number": 0,
-        "players": rc.relay_players_json,
+        "players": relay_players,
         "tick_rate_ms": rc.tick_rate_ms,
         "config": rc.config,
         "kind": rc.kind,
@@ -351,10 +363,11 @@ async fn register_relay(rc: &RelayCandidate, worker: &RelayWorker) -> Result<(),
                 return Ok(());
             }
             Ok(res) => {
+                let status = res.status();
+                let err_text = res.text().await.unwrap_or_default();
                 log::warn!(
-                    "[RELAY] register lobby {}: relay returned HTTP {} (attempt {}/5)",
+                    "[RELAY] register lobby {}: relay returned HTTP {status}: {err_text} (attempt {}/5)",
                     rc.lobby_id,
-                    res.status(),
                     attempt
                 );
             }

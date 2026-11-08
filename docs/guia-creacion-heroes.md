@@ -34,12 +34,14 @@ Una entrada necesita identidad y origen (`id`, `name`, `entity`, `role`, `region
 
 Las habilidades viven en `sow-data/src/geo_entities/mod.rs` y se ejecutan en `sow-core`. Reutiliza una situación ya soportada siempre que represente bien la evidencia: tipo de objetivo, terreno, edificio, alianza, retirada o momento del combate.
 
-Cada héroe debe tener una situación propia. `Ability::situation()` quita el porcentaje y permite comprobar que dos héroes no compartan el mismo caso. Una habilidad situacional hace que el efecto tenga una condición visible y comprobable; evita bonos globales que no expresen la historia o que se activen en cualquier momento.
+Cada héroe debe tener una situación propia. `Ability::situation()` elimina su magnitud y permite comprobar que dos héroes no compartan el mismo caso. Las acciones fijas, como fundar un puerto, conservan su tipo. Una habilidad situacional hace que el efecto tenga una condición visible y comprobable; evita bonos globales que no expresen la historia o que se activen en cualquier momento.
 
 - Revisa todos los héroes actuales antes de escoger: `every_hero_has_a_unique_situation` comprueba la unicidad.
 - No agregues un tipo de habilidad para darle un nombre exclusivo a un héroe. Si el motor no puede expresar una acción respaldada por fuentes, extiende el modelo y el flujo real de combate, ingreso o campaña, no solo el texto.
 - El efecto real debe pasar por la fórmula existente y emitir `GameEvent::AbilityTriggered` cuando se aplica. `Ability::cue()` selecciona su familia visual para el mapa o HUD.
 - Mantén nombre y descripción del efecto acordes con la regla, el porcentaje y la condición exactos. La tabla `docs/habilidades-heroes.md` es generada y no se edita a mano.
+- Los efectos de construcción, captura, ingresos situacionales y presas navales se integran mediante `sow-core/src/execution/hero_effects.rs`, llamado desde sus dueños de ejecución. Los límites por ciudad o partida se guardan en el checkpoint. El cálculo de ingreso adicional es compartido con el HUD; los avisos muestran el icono, el nombre y la regla localizada.
+- El mismo dueño deriva `hero_ability_feedback`: lista para su disparador automático, esperando condición, activa, agotada o no disponible, con segundos restantes cuando existe una ventana real. El HUD añade «Se activó» a partir del aviso real de activación. El indicador junto a los recursos permite abrir la regla con ratón, teclado o toque; una habilidad automática no se presenta como botón para lanzarla. Cada héroe debe tener estado comprobable, además de su señal de activación.
 
 ## 4. Textos en los idiomas publicados
 

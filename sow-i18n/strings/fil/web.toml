@@ -951,6 +951,18 @@ elimination_bounty = "Natalo si {victim}; +{gold} ginto."
 elimination = "Natalo mo si {victim}."
 elimination_assist = "Tumulong kang talunin si {victim}; +{gold} ginto."
 ability_notice = "{ability}"
+ability_state_ready = "Handa"
+ability_state_conditional = "Naghihintay"
+ability_state_active = "Aktibo"
+ability_state_triggered = "Nagamit"
+ability_state_spent = "Naubos"
+ability_state_unavailable = "Di magagamit"
+ability_automatic = "Awtomatikong kakayahan"
+ability_remaining = "{seconds}s"
+ability_restriction_campaign_only = "Magagamit lamang sa kampanya."
+ability_restriction_buildings_disabled = "Hindi pinapagana ang mga gusali sa laban na ito."
+ability_restriction_defeated = "Wala na sa laban ang iyong bayani."
+
 
 [endgame]
 stat_kills = "Napatay"

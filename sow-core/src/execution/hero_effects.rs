@@ -5,6 +5,34 @@ use crate::engine::SowEngine;
 use crate::game::{BuildingKind, GameEvent, UnitType};
 use crate::geo_entities::Ability;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AbilityState {
+    Ready,
+    Conditional,
+    Active,
+    Triggered,
+    Spent,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AbilityRestriction {
+    CampaignOnly,
+    BuildingsDisabled,
+    Defeated,
+}
+
+/// Local HUD feedback, derived from the same state that executes the effect.
+/// `Ready` means armed for its automatic trigger, never a manual cast button.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct AbilityFeedback {
+    pub state: AbilityState,
+    pub remaining_seconds: Option<u32>,
+    pub restriction: Option<AbilityRestriction>,
+}
+
 pub(crate) fn allied(state: &crate::game::GameState, a: u16, b: u16) -> bool {
     a != b
         && matches!((state.player(a), state.player(b)), (Some(a), Some(b))
@@ -19,6 +47,293 @@ fn nearby(a: u32, b: u32, width: u32) -> bool {
 }
 
 impl SowEngine {
+    pub fn hero_ability_feedback(&self, owner: u16) -> Option<AbilityFeedback> {
+        use crate::geo_entities::{District, LossWhen, Resource, Side, Source};
+        use AbilityState::*;
+        let p = self.state.player(owner)?;
+        let ability = p.leader.ability();
+        let mut feedback = AbilityFeedback {
+            state: Conditional,
+            remaining_seconds: None,
+            restriction: None,
+        };
+        let has = |kind| {
+            self.buildings
+                .iter()
+                .any(|b| b.owner_id == owner && b.kind == kind && b.active_level() > 0)
+        };
+        let ready = |condition| if condition { Ready } else { Conditional };
+        let enemy_has = |kind| {
+            self.buildings.iter().any(|b| {
+                b.owner_id != 0
+                    && b.owner_id != owner
+                    && b.kind == kind
+                    && b.active_level() > 0
+                    && !allied(&self.state, owner, b.owner_id)
+            })
+        };
+        if !p.alive {
+            feedback.restriction = Some(AbilityRestriction::Defeated);
+        } else if p.tile_count == 0 {
+            return Some(feedback);
+        } else if matches!(ability, Ability::AllianceCost { .. }) && !self.state.config.tutorial {
+            feedback.restriction = Some(AbilityRestriction::CampaignOnly);
+        } else if !self.state.config.buildings_enabled
+            && matches!(
+                ability,
+                Ability::CoastalFounding
+                    | Ability::AlliedCityGrant { .. }
+                    | Ability::CityTowerUpgrade
+                    | Ability::SharedCitySpoils { .. }
+                    | Ability::CityEvacuation { .. }
+                    | Ability::GuildNetwork { .. }
+                    | Ability::CityCapture { .. }
+                    | Ability::CityDefense { .. }
+                    | Ability::CityTroopCapacity { .. }
+                    | Ability::TowerRange { .. }
+                    | Ability::TowerLoss { .. }
+                    | Ability::WarshipCost { .. }
+                    | Ability::WarshipPrize { .. }
+                    | Ability::ResourceBonus {
+                        source: Source::District(_),
+                        ..
+                    }
+                    | Ability::AttackerLoss {
+                        when: LossWhen::City,
+                        ..
+                    }
+            )
+        {
+            feedback.restriction = Some(AbilityRestriction::BuildingsDisabled);
+        }
+        if feedback.restriction.is_some() {
+            feedback.state = Unavailable;
+            return Some(feedback);
+        }
+        feedback.state = match ability {
+            Ability::CoastalFounding => {
+                if self.hero_claims.contains(&(owner, 0, 0)) {
+                    Spent
+                } else {
+                    Ready
+                }
+            }
+            Ability::ReturnCampaign { .. } => {
+                if let Some((target, until)) = p
+                    .return_campaign
+                    .filter(|(_, until)| self.state.tick < *until)
+                {
+                    feedback.remaining_seconds = Some(
+                        ((until - self.state.tick) as f64
+                            * f64::from(self.state.config.tick_rate_ms)
+                            / 1_000.0)
+                            .ceil() as u32,
+                    );
+                    if self.attacks.iter().any(|a| {
+                        a.owner_id == owner
+                            && a.target_owner == target
+                            && !a.retreating
+                            && a.troops > 0.0
+                    }) {
+                        Active
+                    } else {
+                        Ready
+                    }
+                } else {
+                    Conditional
+                }
+            }
+            Ability::AllyPatronage { .. }
+            | Ability::SurplusTreasury { .. }
+            | Ability::GuildNetwork { .. } => {
+                if self.hero_gold_per_second(owner) > 0.0 {
+                    Active
+                } else {
+                    Conditional
+                }
+            }
+            Ability::AlliedCityGrant { .. } => ready(
+                self.state
+                    .players
+                    .iter()
+                    .any(|ally| allied(&self.state, owner, ally.id)),
+            ),
+            Ability::CityTowerUpgrade => ready(self.buildings.iter().any(|city| {
+                city.owner_id == owner
+                    && city.kind == BuildingKind::City
+                    && city.active_level() > 0
+                    && (city.under_construction || city.level < city.kind.max_level())
+                    && self.city_upgrade_tower(city.tile_idx, owner).is_some()
+            })),
+            Ability::SharedCitySpoils { .. } => ready(self.buildings.iter().any(|b| {
+                b.kind == BuildingKind::City
+                    && !b.under_construction
+                    && b.owner_id != 0
+                    && b.owner_id != owner
+                    && !allied(&self.state, owner, b.owner_id)
+                    && !self.hero_claims.contains(&(owner, b.id, 0))
+            })),
+            Ability::CityEvacuation { .. } => ready(
+                p.troops < p.max_troops
+                    && self.buildings.iter().any(|b| {
+                        b.owner_id == owner
+                            && b.kind == BuildingKind::City
+                            && !self.hero_claims.contains(&(owner, b.id, 0))
+                    }),
+            ),
+            Ability::WarshipPrize { .. } => ready(self.fleets.iter().any(|f| {
+                f.owner_id == owner && f.unit_type == UnitType::Warship && f.troops > 0.0
+            })),
+            Ability::ResourceBonus {
+                source, resource, ..
+            } => {
+                let produces = match source {
+                    Source::District(district) => has(match district {
+                        District::City => BuildingKind::City,
+                        District::Factory => BuildingKind::Factory,
+                        District::Port => BuildingKind::Port,
+                        District::Farm => BuildingKind::Farm,
+                    }),
+                    Source::Territory => true,
+                    Source::Alliance => !p.alliances.is_empty(),
+                    Source::Trade => self.fleets.iter().any(|f| {
+                        f.owner_id == owner
+                            && f.unit_type == UnitType::TradeShip
+                            && f.captured_trade_return.is_none()
+                            && f.troops > 0.0
+                    }),
+                    Source::Elimination => {
+                        return Some(AbilityFeedback {
+                            state: Ready,
+                            ..feedback
+                        });
+                    }
+                };
+                if produces && (resource == Resource::Gold || p.troops < p.max_troops) {
+                    Active
+                } else {
+                    Conditional
+                }
+            }
+            Ability::AttackStrength { against, .. } | Ability::ConquestSpeed { against, .. } => {
+                if self.attacks.iter().any(|a| {
+                    a.owner_id == owner
+                        && !a.retreating
+                        && a.troops > 0.0
+                        && super::combat::target_applies(
+                            &self.state,
+                            owner,
+                            a.target_owner,
+                            a.troops,
+                            against,
+                        )
+                }) {
+                    Active
+                } else {
+                    Conditional
+                }
+            }
+            Ability::DefenseStrength { against, .. } => {
+                if self.attacks.iter().any(|a| {
+                    a.target_owner == owner
+                        && !a.retreating
+                        && a.troops > 0.0
+                        && super::combat::target_applies(
+                            &self.state,
+                            owner,
+                            a.owner_id,
+                            a.troops,
+                            against,
+                        )
+                }) {
+                    Active
+                } else {
+                    Conditional
+                }
+            }
+            Ability::TowerRange { .. } => {
+                if has(BuildingKind::Tower) {
+                    Active
+                } else {
+                    Conditional
+                }
+            }
+            Ability::CityTroopCapacity { .. } => {
+                if has(BuildingKind::City) {
+                    Active
+                } else {
+                    Conditional
+                }
+            }
+            Ability::TowerLoss { side, .. } => ready(match side {
+                Side::Defender => has(BuildingKind::Tower),
+                Side::Attacker => enemy_has(BuildingKind::Tower),
+            }),
+            Ability::CityCapture { side, .. } => ready(match side {
+                Side::Defender => has(BuildingKind::City),
+                Side::Attacker => enemy_has(BuildingKind::City),
+            }),
+            Ability::CityDefense { .. } => ready(has(BuildingKind::City)),
+            Ability::AttackerLoss {
+                when: LossWhen::City,
+                ..
+            } => ready(enemy_has(BuildingKind::City)),
+            Ability::AttackerLoss {
+                when: LossWhen::RecaptureWindow,
+                ..
+            } => {
+                if p.recapture_ticks > 0 {
+                    feedback.remaining_seconds = Some(
+                        (f64::from(p.recapture_ticks) * f64::from(self.state.config.tick_rate_ms)
+                            / 1_000.0)
+                            .ceil() as u32,
+                    );
+                    Ready
+                } else {
+                    Conditional
+                }
+            }
+            Ability::AttackerLoss {
+                when: LossWhen::Retreat,
+                ..
+            } => ready(
+                self.attacks
+                    .iter()
+                    .any(|a| a.owner_id == owner && a.target_owner != 0 && a.troops > 0.0),
+            ),
+            Ability::WarshipCost { .. } => ready(
+                has(BuildingKind::Port)
+                    && p.gold
+                        >= UnitType::Warship.gold_cost_with_owned_count_for_leader(
+                            self.fleets
+                                .iter()
+                                .filter(|f| f.owner_id == owner && f.unit_type == UnitType::Warship)
+                                .count() as u32,
+                            p.leader,
+                        ),
+            ),
+            Ability::EnemyRetreatPenalty { .. } => Ready,
+            Ability::AttackerLoss { .. } | Ability::AllianceCost { .. } => Conditional,
+        };
+        Some(feedback)
+    }
+
+    fn city_upgrade_tower(&self, city_tile: u32, owner: u16) -> Option<usize> {
+        self.buildings
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| {
+                b.owner_id == owner
+                    && b.kind == BuildingKind::Tower
+                    && !b.under_construction
+                    && b.level < b.kind.max_level()
+                    && self.campaign_allows_building(b.kind, b.level + 1)
+                    && nearby(b.tile_idx, city_tile, self.state.map.width)
+            })
+            .min_by_key(|(_, b)| (b.level, b.id))
+            .map(|(i, _)| i)
+    }
+
     pub(crate) fn hero_structure_ready(&mut self, building: Building) {
         if building.kind != BuildingKind::City {
             return;
@@ -60,20 +375,7 @@ impl SowEngine {
             .player(building.owner_id)
             .is_some_and(|p| p.alive && p.leader.ability() == Ability::CityTowerUpgrade)
         {
-            let tower = self
-                .buildings
-                .iter()
-                .enumerate()
-                .filter(|(_, b)| {
-                    b.owner_id == building.owner_id
-                        && b.kind == BuildingKind::Tower
-                        && !b.under_construction
-                        && b.level < b.kind.max_level()
-                        && self.campaign_allows_building(b.kind, b.level + 1)
-                        && nearby(b.tile_idx, building.tile_idx, self.state.map.width)
-                })
-                .min_by_key(|(_, b)| (b.level, b.id))
-                .map(|(i, _)| i);
+            let tower = self.city_upgrade_tower(building.tile_idx, building.owner_id);
             if let Some(index) = tower {
                 self.buildings[index].level += 1;
                 let tower = self.buildings[index];

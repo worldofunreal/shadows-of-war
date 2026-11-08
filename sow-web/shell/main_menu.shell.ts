@@ -3481,6 +3481,10 @@ root.addEventListener("input", function (event) {
         menuUi.heroesSearchQuery = input.value;
         refreshHeroesRoster(true);
     }
+    if (input.dataset.role === "achievements-search") {
+        menuUi.profileAchievementSearch = input.value;
+        render();
+    }
     const createForm = input.closest("form[data-form='create']");
     if (createForm instanceof HTMLFormElement) {
         syncCreateDraft(createForm);
