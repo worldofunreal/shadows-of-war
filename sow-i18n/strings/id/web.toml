@@ -951,6 +951,18 @@ elimination_bounty = "Mengalahkan {victim}; +{gold} emas."
 elimination = "Kamu mengalahkan {victim}."
 elimination_assist = "Membantu mengalahkan {victim}; +{gold} emas."
 ability_notice = "{ability}"
+ability_state_ready = "Siap"
+ability_state_conditional = "Menunggu"
+ability_state_active = "Aktif"
+ability_state_triggered = "Terpicu"
+ability_state_spent = "Habis"
+ability_state_unavailable = "Tidak tersedia"
+ability_automatic = "Kemampuan otomatis"
+ability_remaining = "{seconds}d"
+ability_restriction_campaign_only = "Hanya tersedia dalam kampanye."
+ability_restriction_buildings_disabled = "Bangunan dinonaktifkan dalam pertandingan ini."
+ability_restriction_defeated = "Pahlawanmu tidak lagi berada dalam pertandingan."
+
 
 [endgame]
 stat_kills = "Kill"

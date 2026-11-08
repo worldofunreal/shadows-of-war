@@ -951,6 +951,18 @@ elimination_bounty = "Đã hạ {victim}; nhận {gold} vàng."
 elimination = "Bạn đã hạ {victim}."
 elimination_assist = "Hỗ trợ hạ {victim}; nhận {gold} vàng."
 ability_notice = "{ability}"
+ability_state_ready = "Sẵn sàng"
+ability_state_conditional = "Đang chờ"
+ability_state_active = "Đang hiệu lực"
+ability_state_triggered = "Đã kích hoạt"
+ability_state_spent = "Đã dùng hết"
+ability_state_unavailable = "Không khả dụng"
+ability_automatic = "Kỹ năng tự động"
+ability_remaining = "{seconds}giây"
+ability_restriction_campaign_only = "Chỉ có trong chiến dịch."
+ability_restriction_buildings_disabled = "Công trình bị tắt trong trận này."
+ability_restriction_defeated = "Anh hùng của bạn không còn trong trận."
+
 
 [endgame]
 stat_kills = "Hạ gục"

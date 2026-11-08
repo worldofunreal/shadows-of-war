@@ -1020,6 +1020,1150 @@ function achievementCategoryTitle(category: string): string {
   return category;
 }
 
+const ALL_HEROES: { slug: string; name: string }[] = [
+  { slug: "caesar", name: "Caesar" },
+  { slug: "cleopatra", name: "Cleopatra" },
+  { slug: "ragnar", name: "Ragnar" },
+  { slug: "sun_tzu", name: "Sun Tzu" },
+  { slug: "alexander", name: "Alexander" },
+  { slug: "genghis_khan", name: "Genghis Khan" },
+  { slug: "richard_the_lionheart", name: "Richard the Lionheart" },
+  { slug: "vercingetorix", name: "Vercingetorix" },
+  { slug: "boudica", name: "Boudica" },
+  { slug: "lady_six_sky", name: "Lady Six Sky" },
+  { slug: "leonidas", name: "Leonidas" },
+  { slug: "napoleon", name: "Napoleon" },
+  { slug: "amina_de_zazzau", name: "Amina of Zazzau" },
+  { slug: "yaa_asantewaa", name: "Yaa Asantewaa" },
+  { slug: "anacaona", name: "Anacaona" },
+  { slug: "lozen", name: "Lozen" },
+  { slug: "tipu_sultan", name: "Tipu Sultan" },
+  { slug: "william_the_conqueror", name: "William the Conqueror" },
+  { slug: "hongi_hika", name: "Hongi Hika" },
+  { slug: "salote_tupou_iii", name: "Sālote Tupou III" },
+  { slug: "makeda", name: "Makeda" },
+  { slug: "rani_durgavati", name: "Rani Durgavati" },
+  { slug: "empress_gi", name: "Empress Gi" },
+  { slug: "ashoka", name: "Ashoka" },
+  { slug: "hannibal", name: "Hannibal" },
+  { slug: "bolivar", name: "Simón Bolívar" },
+  { slug: "joan_of_arc", name: "Joan of Arc" },
+  { slug: "catherine_the_great", name: "Catherine the Great" },
+  { slug: "isabella_of_castile", name: "Isabella I of Castile" },
+  { slug: "cyrus_the_great", name: "Cyrus the Great" },
+  { slug: "saladin", name: "Saladin" },
+  { slug: "suleiman", name: "Suleiman the Magnificent" },
+  { slug: "tomoe_gozen", name: "Tomoe Gozen" },
+  { slug: "trieu_thi_trinh", name: "Lady Triệu" },
+  { slug: "musa_i", name: "Mansa Musa" },
+  { slug: "shaka", name: "Shaka" },
+  { slug: "nzinga", name: "Nzinga" },
+  { slug: "kamehameha", name: "Kamehameha I" },
+  { slug: "gajah_mada", name: "Gajah Mada" },
+  { slug: "solomon", name: "Solomon" },
+  { slug: "sayyid_said", name: "Sayyid Said" },
+  { slug: "lapu_lapu", name: "Lapu-Lapu" },
+  { slug: "constantine", name: "Constantine" },
+  { slug: "vlad_iii", name: "Vlad III" },
+  { slug: "mary_of_burgundy", name: "Mary of Burgundy" },
+  { slug: "semiramis", name: "Semiramis" },
+  { slug: "shima_kalingga", name: "Shima" },
+  { slug: "tomyris", name: "Tomyris" },
+  { slug: "gorgo", name: "Gorgo" },
+  { slug: "artigas", name: "Artigas" },
+  { slug: "bernardo_ohiggins", name: "Bernardo O'Higgins" },
+  { slug: "nezahualcoyotl", name: "Nezahualcóyotl" },
+  { slug: "tlacaelel", name: "Tlacaelel" },
+  { slug: "tenamaxtli", name: "Tenamaxtli" },
+  { slug: "cosijoeza", name: "Cosijoeza" },
+  { slug: "mangas_coloradas", name: "Mangas Coloradas" },
+  { slug: "tomochichi", name: "Tomochichi" },
+  { slug: "eight_deer", name: "Eight Deer" },
+  { slug: "nemequene", name: "Nemequene" },
+  { slug: "thanadelthur", name: "Thanadelthur" },
+  { slug: "artemisia_i", name: "Artemisia I" },
+  { slug: "shajar_al_durr", name: "Shajar al-Durr" },
+  { slug: "ramesses_ii", name: "Ramesses II" },
+  { slug: "qin_liangyu", name: "Qin Liangyu" },
+  { slug: "lobengula", name: "Lobengula" },
+  { slug: "shah_jahan", name: "Shah Jahan" },
+  { slug: "xerxes_i", name: "Xerxes" },
+  { slug: "marcus_aurelius", name: "Marcus Aurelius" },
+  { slug: "justinian_ii_hero", name: "Justinian II" },
+  { slug: "totila", name: "Totila" },
+  { slug: "chilperic_i", name: "Chilperic I" },
+  { slug: "lothair_i", name: "Lothair I" },
+  { slug: "frederick_barbarossa", name: "Barbarossa" },
+  { slug: "charles_v", name: "Charles V" },
+  { slug: "wanli", name: "Wanli" },
+  { slug: "jayaatu_khan", name: "Jayaatu Khan" },
+  { slug: "sitting_bull", name: "Sitting Bull" },
+  { slug: "matoaka", name: "Matoaka" },
+  { slug: "burebista", name: "Burebista" },
+  { slug: "boleslaw_ii", name: "Bolesław II" },
+  { slug: "abd_al_rahman_al_ghafiqi", name: "Abd al-Rahman al-Ghafiqi" },
+  { slug: "tribe_wiradjuri", name: "Windradyne" },
+  { slug: "nation_yagan", name: "Yagan" },
+  { slug: "peter_the_great", name: "Peter the Great" },
+  { slug: "empress_suiko", name: "Empress Suiko" },
+  { slug: "nebuchadnezzar_ii", name: "Nebuchadnezzar II" },
+  { slug: "king_david", name: "King David" },
+  { slug: "sarraounia_mangou", name: "Sarraounia Mangou" },
+  { slug: "muhammad_of_ghor", name: "Muhammad of Ghor" },
+  { slug: "puyi", name: "Puyi" },
+  { slug: "pertinax", name: "Pertinax" },
+  { slug: "ewuare", name: "Ewuare the Great" },
+  { slug: "veleda", name: "Veleda" },
+];
+
+const MASTERY_TIERS: [number, number, string][] = [
+  [3, 15, "Vanguard"],
+  [10, 30, "Centurion"],
+  [25, 50, "Veteran"],
+  [50, 75, "Champion"],
+  [100, 100, "Warlord"],
+  [250, 200, "Warmaster"],
+  [500, 350, "Juggernaut"],
+  [1000, 1000, "Ascendant"],
+];
+
+const WIN_TIERS: [number, number, string][] = [
+  [1, 25, "Victor"],
+  [5, 50, "Triumph"],
+  [25, 100, "Conqueror"],
+  [100, 200, "Overlord"],
+  [500, 500, "Imperator"],
+  [1000, 1000, "Sovereign"],
+];
+
+function getSpecialHeroMasteryTitle(
+  slug: string,
+  target: number,
+): string | null {
+  const specials: Record<string, Record<number, string>> = {
+    boudica: {
+      3: "Wildfire",
+      10: "Fury",
+      25: "Iceni",
+      50: "Uprising",
+      100: "Vengeance",
+      250: "War Queen",
+      500: "Blood Mother",
+      1000: "Nemesis",
+    },
+    caesar: {
+      3: "Tribune",
+      10: "Centurion",
+      25: "Legatus",
+      50: "Rubicon",
+      100: "Imperium",
+      250: "Dictator",
+      500: "Colossus",
+      1000: "Veni Vidi Vici",
+    },
+    lady_six_sky: {
+      3: "Eclipse",
+      10: "Sun Priest",
+      25: "Starlight",
+      50: "Wikal",
+      100: "Cosmos",
+      250: "Serpent",
+      500: "Sky Empress",
+      1000: "Ascension",
+    },
+    alexander: {
+      3: "Phaistos",
+      10: "Phalanx",
+      25: "Gordian",
+      50: "Issus",
+      100: "Alexandria",
+      250: "Hegemon",
+      500: "Amun",
+      1000: "World's End",
+    },
+    genghis_khan: {
+      3: "Rider",
+      10: "Steppe Wolf",
+      25: "Karakorum",
+      50: "Golden Horde",
+      100: "Tengri",
+      250: "Great Khan",
+      500: "Earth Shaker",
+      1000: "Scourge of God",
+    },
+    leonidas: {
+      3: "Spartiate",
+      10: "Shield Wall",
+      25: "Molon Labe",
+      50: "Hot Gates",
+      100: "Thermopylae",
+      250: "Lion of Sparta",
+      500: "Immortal Bane",
+      1000: "Last Stand",
+    },
+    sun_tzu: {
+      3: "Strategist",
+      10: "The Art of War",
+      25: "Subtle Dragon",
+      50: "Silent Wind",
+      100: "Formless",
+      250: "Grand Tactician",
+      500: "Supreme Art",
+      1000: "Master of War",
+    },
+    cleopatra: {
+      3: "Nile Lotus",
+      10: "Pharaoh's Grace",
+      25: "Alexandrine",
+      50: "Siren of Kings",
+      100: "Ptolemaic Throne",
+      250: "Queen of Kings",
+      500: "Isis Reborn",
+      1000: "Eternal Nile",
+    },
+    hannibal: {
+      3: "Barca",
+      10: "Alpine March",
+      25: "Cannae",
+      50: "Double Envelopment",
+      100: "Rome's Terror",
+      250: "Carthaginian Lion",
+      500: "Ad Portas",
+      1000: "Thunderbolt",
+    },
+    napoleon: {
+      3: "Corsican",
+      10: "Artillery Officer",
+      25: "Austerlitz",
+      50: "Sun of Austerlitz",
+      100: "Grande Armée",
+      250: "First Consul",
+      500: "Emperor of France",
+      1000: "Eagle of Destiny",
+    },
+  };
+  return (specials[slug] && specials[slug][target]) || null;
+}
+
+let catalogCache: ProfileAchievement[] | null = null;
+
+export function getFullAchievementsCatalog(): ProfileAchievement[] {
+  if (catalogCache) return catalogCache;
+  const list: ProfileAchievement[] = [
+    // 9 Canonical Google Play / Core achievements
+    {
+      id: "first_command",
+      category: "battles",
+      title: "First Command",
+      description: "Complete your first match.",
+      points: 10,
+      target: 1,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "first_victory",
+      category: "victories",
+      title: "First Victory",
+      description: "Win a verified match.",
+      points: 25,
+      target: 1,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "battle_hardened",
+      category: "battles",
+      title: "Battle Hardened",
+      description: "Complete 10 matches.",
+      points: 25,
+      target: 10,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "victory_march",
+      category: "victories",
+      title: "Victory March",
+      description: "Win 10 verified matches.",
+      points: 50,
+      target: 10,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "laurel_hoard",
+      category: "laurels",
+      title: "Laurel Hoard",
+      description: "Earn 100 achievement points.",
+      points: 50,
+      target: 100,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "commander_victorious",
+      category: "victories",
+      title: "Commander Victorious",
+      description: "Win with a commander.",
+      points: 25,
+      target: 1,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "veteran_commander",
+      category: "commanders",
+      title: "Veteran Commander",
+      description: "Complete 10 matches with commanders.",
+      points: 50,
+      target: 10,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "banner_collector",
+      category: "commanders",
+      title: "Banner Collector",
+      description: "Command three different leaders.",
+      points: 50,
+      target: 3,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "leader_path",
+      category: "commanders",
+      title: "Leader Path",
+      description: "Earn 1,000 leader experience.",
+      points: 100,
+      target: 1000,
+      unlocked: false,
+      progress: 0,
+    },
+
+    // Tiered Battles Matrix
+    {
+      id: "battles_3",
+      category: "battles",
+      title: "Vanguard",
+      description: "Complete 3 matches.",
+      points: 15,
+      target: 3,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "battles_25",
+      category: "battles",
+      title: "Ironclad",
+      description: "Complete 25 matches.",
+      points: 50,
+      target: 25,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "battles_50",
+      category: "battles",
+      title: "Centurion",
+      description: "Complete 50 matches.",
+      points: 75,
+      target: 50,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "battles_100",
+      category: "battles",
+      title: "Warlord",
+      description: "Complete 100 matches.",
+      points: 100,
+      target: 100,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "battles_250",
+      category: "battles",
+      title: "Warmaster",
+      description: "Complete 250 matches.",
+      points: 200,
+      target: 250,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "battles_500",
+      category: "battles",
+      title: "Juggernaut",
+      description: "Complete 500 matches.",
+      points: 350,
+      target: 500,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "battles_1000",
+      category: "battles",
+      title: "Oblivion",
+      description: "Complete 1,000 matches.",
+      points: 1000,
+      target: 1000,
+      unlocked: false,
+      progress: 0,
+    },
+
+    // Tiered Victories Matrix
+    {
+      id: "victories_3",
+      category: "victories",
+      title: "Blood Oath",
+      description: "Win 3 verified matches.",
+      points: 30,
+      target: 3,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "victories_25",
+      category: "victories",
+      title: "Triumph",
+      description: "Win 25 verified matches.",
+      points: 75,
+      target: 25,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "victories_50",
+      category: "victories",
+      title: "Conqueror",
+      description: "Win 50 verified matches.",
+      points: 100,
+      target: 50,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "victories_100",
+      category: "victories",
+      title: "Overlord",
+      description: "Win 100 verified matches.",
+      points: 150,
+      target: 100,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "victories_250",
+      category: "victories",
+      title: "Dominion",
+      description: "Win 250 verified matches.",
+      points: 250,
+      target: 250,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "victories_500",
+      category: "victories",
+      title: "Imperator",
+      description: "Win 500 verified matches.",
+      points: 500,
+      target: 500,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "victories_1000",
+      category: "victories",
+      title: "Sovereign",
+      description: "Win 1,000 verified matches.",
+      points: 1000,
+      target: 1000,
+      unlocked: false,
+      progress: 0,
+    },
+
+    // Combat Supremacy
+    {
+      id: "kills_10",
+      category: "combat",
+      title: "First Blood",
+      description: "Defeat 10 enemy units.",
+      points: 20,
+      target: 10,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "kills_25",
+      category: "combat",
+      title: "Skirmisher",
+      description: "Defeat 25 enemy units.",
+      points: 35,
+      target: 25,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "kills_50",
+      category: "combat",
+      title: "Reaper",
+      description: "Defeat 50 enemy units.",
+      points: 50,
+      target: 50,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "kills_100",
+      category: "combat",
+      title: "Slayer",
+      description: "Defeat 100 enemy units.",
+      points: 75,
+      target: 100,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "kills_250",
+      category: "combat",
+      title: "Executioner",
+      description: "Defeat 250 enemy units.",
+      points: 150,
+      target: 250,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "kills_500",
+      category: "combat",
+      title: "Warbringer",
+      description: "Defeat 500 enemy units.",
+      points: 250,
+      target: 500,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "kills_1000",
+      category: "combat",
+      title: "Death Incarnate",
+      description: "Defeat 1,000 enemy units.",
+      points: 500,
+      target: 1000,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "kills_2500",
+      category: "combat",
+      title: "Doom of Empires",
+      description: "Defeat 2,500 enemy units.",
+      points: 750,
+      target: 2500,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "kills_5000",
+      category: "combat",
+      title: "Lord of the Grave",
+      description: "Defeat 5,000 enemy units.",
+      points: 1000,
+      target: 5000,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "assists_10",
+      category: "combat",
+      title: "Wingman",
+      description: "Record 10 combat assists.",
+      points: 15,
+      target: 10,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "assists_50",
+      category: "combat",
+      title: "Vanguard Shield",
+      description: "Record 50 combat assists.",
+      points: 50,
+      target: 50,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "assists_250",
+      category: "combat",
+      title: "Tactical Hand",
+      description: "Record 250 combat assists.",
+      points: 150,
+      target: 250,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "assists_1000",
+      category: "combat",
+      title: "Master of Cohorts",
+      description: "Record 1,000 combat assists.",
+      points: 500,
+      target: 1000,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "players_5",
+      category: "combat",
+      title: "Duelist Initiate",
+      description: "Eliminate 5 rival commanders.",
+      points: 15,
+      target: 5,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "players_10",
+      category: "combat",
+      title: "Duelist",
+      description: "Eliminate 10 rival commanders.",
+      points: 30,
+      target: 10,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "players_25",
+      category: "combat",
+      title: "Champion Slayer",
+      description: "Eliminate 25 rival commanders.",
+      points: 50,
+      target: 25,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "players_50",
+      category: "combat",
+      title: "Crown Breaker",
+      description: "Eliminate 50 rival commanders.",
+      points: 100,
+      target: 50,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "players_100",
+      category: "combat",
+      title: "Sovereign Hunter",
+      description: "Eliminate 100 rival commanders.",
+      points: 200,
+      target: 100,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "players_250",
+      category: "combat",
+      title: "Kingmaker",
+      description: "Eliminate 250 rival commanders.",
+      points: 500,
+      target: 250,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "empires_5",
+      category: "combat",
+      title: "Border Raider",
+      description: "Overthrow 5 rival empires.",
+      points: 25,
+      target: 5,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "empires_10",
+      category: "combat",
+      title: "Empire Slayer",
+      description: "Overthrow 10 rival empires.",
+      points: 50,
+      target: 10,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "empires_25",
+      category: "combat",
+      title: "Dynasty Fall",
+      description: "Overthrow 25 rival empires.",
+      points: 100,
+      target: 25,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "empires_50",
+      category: "combat",
+      title: "World Breaker",
+      description: "Overthrow 50 rival empires.",
+      points: 250,
+      target: 50,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "empires_100",
+      category: "combat",
+      title: "Scourge of Realms",
+      description: "Overthrow 100 rival empires.",
+      points: 500,
+      target: 100,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "tribes_10",
+      category: "combat",
+      title: "Chieftain Bane",
+      description: "Subjugate 10 native tribes.",
+      points: 25,
+      target: 10,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "tribes_25",
+      category: "combat",
+      title: "Subjugator",
+      description: "Subjugate 25 native tribes.",
+      points: 50,
+      target: 25,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "tribes_50",
+      category: "combat",
+      title: "Steppe Dominator",
+      description: "Subjugate 50 native tribes.",
+      points: 100,
+      target: 50,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "tribes_100",
+      category: "combat",
+      title: "Overlord of the Wild",
+      description: "Subjugate 100 native tribes.",
+      points: 250,
+      target: 100,
+      unlocked: false,
+      progress: 0,
+    },
+
+    // Campaign Chronicles
+    {
+      id: "campaign_1",
+      category: "campaign",
+      title: "Pathfinder",
+      description: "Complete 1 campaign episode.",
+      points: 25,
+      target: 1,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "campaign_3",
+      category: "campaign",
+      title: "Trailblazer",
+      description: "Complete 3 campaign episodes.",
+      points: 35,
+      target: 3,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "campaign_5",
+      category: "campaign",
+      title: "Saga Victor",
+      description: "Complete 5 campaign episodes.",
+      points: 50,
+      target: 5,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "campaign_10",
+      category: "campaign",
+      title: "Epic Historian",
+      description: "Complete 10 campaign episodes.",
+      points: 75,
+      target: 10,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "campaign_15",
+      category: "campaign",
+      title: "Chronicles of War",
+      description: "Complete 15 campaign episodes.",
+      points: 100,
+      target: 15,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "campaign_25",
+      category: "campaign",
+      title: "Grand Campaigner",
+      description: "Complete 25 campaign episodes.",
+      points: 150,
+      target: 25,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "campaign_40",
+      category: "campaign",
+      title: "Master of History",
+      description: "Complete 40 campaign episodes.",
+      points: 250,
+      target: 40,
+      unlocked: false,
+      progress: 0,
+    },
+
+    // Laurels & Prestige
+    {
+      id: "laurels_250",
+      category: "laurels",
+      title: "Gilded Crown",
+      description: "Earn 250 achievement points.",
+      points: 50,
+      target: 250,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "laurels_500",
+      category: "laurels",
+      title: "Imperial Grace",
+      description: "Earn 500 achievement points.",
+      points: 100,
+      target: 500,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "laurels_1000",
+      category: "laurels",
+      title: "Vault of Glory",
+      description: "Earn 1,000 achievement points.",
+      points: 200,
+      target: 1000,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "laurels_2500",
+      category: "laurels",
+      title: "Golden Emperor",
+      description: "Earn 2,500 achievement points.",
+      points: 500,
+      target: 2500,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "laurels_5000",
+      category: "laurels",
+      title: "Immortal Renown",
+      description: "Earn 5,000 achievement points.",
+      points: 1000,
+      target: 5000,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "laurels_10000",
+      category: "laurels",
+      title: "Demigod of War",
+      description: "Earn 10,000 achievement points.",
+      points: 2500,
+      target: 10000,
+      unlocked: false,
+      progress: 0,
+    },
+
+    // Hero Roster Milestones
+    {
+      id: "roster_1",
+      category: "commanders",
+      title: "First Recruit",
+      description: "Command or own 1 hero.",
+      points: 25,
+      target: 1,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "roster_3",
+      category: "commanders",
+      title: "Cohort",
+      description: "Command or own 3 heroes.",
+      points: 50,
+      target: 3,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "roster_5",
+      category: "commanders",
+      title: "Council of War",
+      description: "Command or own 5 heroes.",
+      points: 75,
+      target: 5,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "roster_10",
+      category: "commanders",
+      title: "Grand Legion",
+      description: "Command or own 10 heroes.",
+      points: 100,
+      target: 10,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "roster_25",
+      category: "commanders",
+      title: "High Command",
+      description: "Command or own 25 heroes.",
+      points: 200,
+      target: 25,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "roster_50",
+      category: "commanders",
+      title: "Army of Legends",
+      description: "Command or own 50 heroes.",
+      points: 350,
+      target: 50,
+      unlocked: false,
+      progress: 0,
+    },
+    {
+      id: "roster_80",
+      category: "commanders",
+      title: "Pantheon of War",
+      description: "Command or own 80 heroes.",
+      points: 1000,
+      target: 80,
+      unlocked: false,
+      progress: 0,
+    },
+  ];
+
+  for (const hero of ALL_HEROES) {
+    const slug = hero.slug;
+    const name = hero.name;
+
+    // 1. Recruit
+    list.push({
+      id: "recruit_" + slug,
+      category: "commanders",
+      title: "Recruit " + name,
+      description: "Unlock or recruit " + name + " into your vanguard.",
+      points: 25,
+      target: 1,
+      unlocked: false,
+      progress: 0,
+    });
+
+    // 2. Mastery (3 to 1000)
+    for (const [target, points, tierTitle] of MASTERY_TIERS) {
+      const special = getSpecialHeroMasteryTitle(slug, target);
+      const title = special || name + " " + tierTitle;
+      list.push({
+        id: slug + "_mastery_" + target,
+        category: "commanders",
+        title: title,
+        description: "Command " + name + " in " + target + " battles.",
+        points: points,
+        target: target,
+        unlocked: false,
+        progress: 0,
+      });
+    }
+
+    // 3. Wins (1 to 1000)
+    for (const [target, points, tierTitle] of WIN_TIERS) {
+      list.push({
+        id: slug + "_wins_" + target,
+        category: "victories",
+        title: name + " " + tierTitle,
+        description: "Win " + target + " battles commanding " + name + ".",
+        points: points,
+        target: target,
+        unlocked: false,
+        progress: 0,
+      });
+    }
+  }
+
+  catalogCache = list;
+  return list;
+}
+
+export function resolveProfileAchievements(
+  data: ProfileData,
+): ProfileAchievement[] {
+  if (data.achievements && data.achievements.length >= 1000) {
+    return data.achievements;
+  }
+  const catalog = getFullAchievementsCatalog();
+  const serverMap = new Map<string, ProfileAchievement>();
+  if (Array.isArray(data.achievements)) {
+    for (const ach of data.achievements) {
+      if (ach && ach.id) {
+        serverMap.set(ach.id, ach);
+      }
+    }
+  }
+
+  const matches = Math.max(0, Number(data.matches_played) || 0);
+  const wins = Math.max(0, Number(data.wins) || 0);
+  const kills = Math.max(0, Number(data.kills) || 0);
+  const assists = Math.max(0, Number(data.assists) || 0);
+  const playersDefeated = Math.max(0, Number(data.players_defeated) || 0);
+  const empiresDefeated = Math.max(0, Number(data.empires_defeated) || 0);
+  const tribesDefeated = Math.max(0, Number(data.tribes_defeated) || 0);
+  const laurels = Math.max(0, Number(data.laurels) || 0);
+
+  const leadersList = Array.isArray(data.leaders) ? data.leaders : [];
+  const leaderMatchesMap = new Map<string, number>();
+  const leaderWinsMap = new Map<string, number>();
+  const ownedSet = new Set<string>();
+
+  for (const l of leadersList) {
+    if (l && l.leader) {
+      const slug = String(l.leader).toLowerCase().trim();
+      const m = Math.max(0, Number(l.matches_played) || 0);
+      const w = Math.max(0, Number(l.wins) || 0);
+      leaderMatchesMap.set(slug, m);
+      leaderWinsMap.set(slug, w);
+      if (m > 0 || w > 0 || (Number(l.xp) || 0) > 0) {
+        ownedSet.add(slug);
+      }
+    }
+  }
+
+  if (
+    menuUi.state &&
+    menuUi.state.account_id === data.account_id &&
+    Array.isArray(menuUi.state.leaders)
+  ) {
+    for (const l of menuUi.state.leaders) {
+      if (l && l.slug && (l.owned || l.permanently_free)) {
+        ownedSet.add(l.slug.toLowerCase().trim());
+      }
+    }
+  }
+
+  const ownedCount = Math.max(ownedSet.size, leadersList.length);
+  const totalLeaderXp = leadersList.reduce(
+    (acc, l) => acc + (Number(l.xp) || 0),
+    0,
+  );
+
+  return catalog.map(function (def) {
+    const srv = serverMap.get(def.id);
+    let progress = 0;
+    const target = def.target;
+
+    if (def.id === "first_command") {
+      progress = matches >= 1 ? 1 : 0;
+    } else if (def.id === "first_victory") {
+      progress = wins >= 1 ? 1 : 0;
+    } else if (def.id === "battle_hardened") {
+      progress = Math.min(10, matches);
+    } else if (def.id === "victory_march") {
+      progress = Math.min(10, wins);
+    } else if (def.id === "commander_victorious") {
+      progress = wins >= 1 ? 1 : 0;
+    } else if (def.id === "veteran_commander") {
+      progress = Math.min(10, matches);
+    } else if (def.id === "banner_collector") {
+      progress = Math.min(3, ownedCount);
+    } else if (def.id === "leader_path") {
+      progress = Math.min(1000, totalLeaderXp);
+    } else if (def.id === "laurel_hoard") {
+      progress = Math.min(100, laurels);
+    } else if (def.id.startsWith("battles_")) {
+      progress = Math.min(target, matches);
+    } else if (def.id.startsWith("victories_")) {
+      progress = Math.min(target, wins);
+    } else if (def.id.startsWith("kills_")) {
+      progress = Math.min(target, kills);
+    } else if (def.id.startsWith("assists_")) {
+      progress = Math.min(target, assists);
+    } else if (def.id.startsWith("players_")) {
+      progress = Math.min(target, playersDefeated);
+    } else if (def.id.startsWith("empires_")) {
+      progress = Math.min(target, empiresDefeated);
+    } else if (def.id.startsWith("tribes_")) {
+      progress = Math.min(target, tribesDefeated);
+    } else if (def.id.startsWith("campaign_")) {
+      progress = srv ? Number(srv.progress) || 0 : 0;
+    } else if (def.id.startsWith("laurels_")) {
+      progress = Math.min(target, laurels);
+    } else if (def.id.startsWith("roster_")) {
+      progress = Math.min(target, ownedCount);
+    } else if (def.id.startsWith("recruit_")) {
+      const heroSlug = def.id.slice(8);
+      progress = ownedSet.has(heroSlug) ? 1 : 0;
+    } else if (def.id.includes("_mastery_")) {
+      const parts = def.id.split("_mastery_");
+      const heroSlug = parts[0];
+      progress = Math.min(target, leaderMatchesMap.get(heroSlug) || 0);
+    } else if (def.id.includes("_wins_")) {
+      const parts = def.id.split("_wins_");
+      const heroSlug = parts[0];
+      progress = Math.min(target, leaderWinsMap.get(heroSlug) || 0);
+    } else {
+      progress = srv ? Number(srv.progress) || 0 : 0;
+    }
+
+    if (srv && Number(srv.progress) > progress) {
+      progress = Number(srv.progress);
+    }
+
+    const unlocked = !!(srv && srv.unlocked) || progress >= target;
+
+    return {
+      id: def.id,
+      category: def.category,
+      title: def.title,
+      description: def.description,
+      points: def.points,
+      target: def.target,
+      progress: Math.min(target, progress),
+      unlocked: unlocked,
+    };
+  });
+}
+
 function profileAchievementCard(achievement: ProfileAchievement) {
   const category = achievement.category || "commanders";
   const prefix = "profile.achievement_" + achievement.id;
@@ -1041,7 +2185,21 @@ function profileAchievementCard(achievement: ProfileAchievement) {
       : achievement.description || "";
 
   let badgeIcon = "";
-  if (category === "battles") {
+  let heroSlug: string | null = null;
+  if (achievement.id.startsWith("recruit_")) {
+    heroSlug = achievement.id.slice(8);
+  } else if (achievement.id.includes("_mastery_")) {
+    heroSlug = achievement.id.split("_mastery_")[0];
+  } else if (achievement.id.includes("_wins_")) {
+    heroSlug = achievement.id.split("_wins_")[0];
+  }
+
+  if (heroSlug) {
+    badgeIcon =
+      "<img src='" +
+      esc(asset("gameplay/avatars/" + heroSlug + ".webp")) +
+      "' alt='' width='36' height='36' class='sow-profile__ach-hero-avatar' loading='lazy' />";
+  } else if (category === "battles") {
     badgeIcon =
       "<svg class='sow-profile__ach-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>" +
       "<path d='M6.92 5L5 6.92l4.95 4.95-1.41 1.41L5 9.75 3.59 11.16l4.24 4.24 1.41-1.41-3.53-3.54 1.41-1.41 4.95 4.95L13.99 12 6.92 5zm11.75 1.58L17.25 5 12.3 9.95l1.41 1.41 3.54-3.53 1.41 1.41-4.95 4.95 1.92 1.92 7.07-7.07-4.23-4.24-1.41 1.41 3.53 3.53-1.41 1.41zM3 19.5L4.5 21l3.5-3.5-1.5-1.5L3 19.5zm16.5 0l-3.5-3.5-1.5 1.5 3.5 3.5 1.5-1.5z'/>" +
@@ -1156,11 +2314,11 @@ function profileAchievementsMarkup(data: ProfileData, complete: boolean) {
       esc(profileSnapshotError() || SOW_t("profile.loading_profile")) +
       "</p>"
     );
-  const achievements = data.achievements || [];
-  const unlockedCount = achievements.filter(function (a) {
+  const allAchievements = resolveProfileAchievements(data);
+  const unlockedCount = allAchievements.filter(function (a) {
     return !!a.unlocked;
   }).length;
-  const totalCount = achievements.length;
+  const totalCount = allAchievements.length;
   const percent =
     totalCount > 0 ? Math.round((unlockedCount / totalCount) * 100) : 0;
   const laurels = profileStat(data.laurels);
@@ -1214,11 +2372,33 @@ function profileAchievementsMarkup(data: ProfileData, complete: boolean) {
     "laurels",
   ];
   const grouped: Record<string, string[]> = {};
+  const categoryTotals: Record<string, number> = {};
   allCategories.forEach(function (cat) {
     grouped[cat] = [];
+    categoryTotals[cat] = 0;
   });
 
-  achievements.forEach(function (achievement) {
+  allAchievements.forEach(function (achievement) {
+    const cat = grouped[achievement.category]
+      ? achievement.category
+      : "commanders";
+    categoryTotals[cat] = (categoryTotals[cat] || 0) + 1;
+  });
+
+  const searchQuery = (menuUi.profileAchievementSearch || "")
+    .trim()
+    .toLowerCase();
+  const filteredAchievements = searchQuery
+    ? allAchievements.filter(function (a) {
+        return (
+          (a.title || "").toLowerCase().includes(searchQuery) ||
+          (a.description || "").toLowerCase().includes(searchQuery) ||
+          a.id.toLowerCase().includes(searchQuery)
+        );
+      })
+    : allAchievements;
+
+  filteredAchievements.forEach(function (achievement) {
     const card = profileAchievementCard(achievement);
     const cat = grouped[card.category] ? card.category : "commanders";
     grouped[cat].push(card.markup);
@@ -1230,34 +2410,43 @@ function profileAchievementsMarkup(data: ProfileData, complete: boolean) {
     {
       id: "battles",
       label: achievementCategoryTitle("battles"),
-      count: (grouped.battles || []).length,
+      count: categoryTotals.battles || 0,
     },
     {
       id: "victories",
       label: achievementCategoryTitle("victories"),
-      count: (grouped.victories || []).length,
+      count: categoryTotals.victories || 0,
     },
     {
       id: "commanders",
       label: achievementCategoryTitle("commanders"),
-      count: (grouped.commanders || []).length,
+      count: categoryTotals.commanders || 0,
     },
     {
       id: "combat",
       label: achievementCategoryTitle("combat"),
-      count: (grouped.combat || []).length,
+      count: categoryTotals.combat || 0,
     },
     {
       id: "campaign",
       label: achievementCategoryTitle("campaign"),
-      count: (grouped.campaign || []).length,
+      count: categoryTotals.campaign || 0,
     },
     {
       id: "laurels",
       label: achievementCategoryTitle("laurels"),
-      count: (grouped.laurels || []).length,
+      count: categoryTotals.laurels || 0,
     },
   ];
+
+  const searchBox =
+    "<div class='sow-profile__ach-search-wrap'>" +
+    "<input type='search' class='sow-profile__ach-search-input' placeholder='" +
+    esc(SOW_t("heroes.search_leaders")) +
+    "...' value='" +
+    esc(menuUi.profileAchievementSearch || "") +
+    "' data-role='achievements-search' />" +
+    "</div>";
 
   const filterChips =
     "<nav class='sow-profile__ach-filter-bar' aria-label='Categorías de Logros'>" +
@@ -1304,6 +2493,7 @@ function profileAchievementsMarkup(data: ProfileData, complete: boolean) {
 
   return (
     summaryDossier +
+    searchBox +
     filterChips +
     (groups ||
       "<p class='sow-profile__empty'>" +

@@ -951,6 +951,18 @@ elimination_bounty = "{victim}を撃破；{gold}ゴールド獲得。"
 elimination = "{victim}を撃破しました。"
 elimination_assist = "{victim}の撃破を支援；{gold}ゴールド獲得。"
 ability_notice = "{ability}"
+ability_state_ready = "準備完了"
+ability_state_conditional = "待機中"
+ability_state_active = "発動中"
+ability_state_triggered = "発動した"
+ability_state_spent = "使用済み"
+ability_state_unavailable = "利用不可"
+ability_automatic = "自動発動の能力"
+ability_remaining = "{seconds}秒"
+ability_restriction_campaign_only = "キャンペーンでのみ利用できます。"
+ability_restriction_buildings_disabled = "この試合では建物が無効です。"
+ability_restriction_defeated = "あなたの英雄はすでに試合から脱落しています。"
+
 
 [endgame]
 stat_kills = "キル"
